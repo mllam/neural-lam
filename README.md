@@ -69,7 +69,14 @@ You will have to adjust the `CUDA` variable to match the CUDA version on your sy
 
 ## Data
 Datasets should be stored in a directory called `data`.
-We are working on releasing a small example dataset that can be used to try out Neural-LAM.
+See the [repository format section](#format-of-data-directory) for details on the directory structure.
+
+We are looking into releasing the full MEPS dataset used in the paper.
+In the meantime, a tiny subset of the data (named `meps_example`) is available in `example_data.zip`, which can be downloaded from [here](https://liuonline-my.sharepoint.com/:f:/g/personal/joeos82_liu_se/EuiUuiGzFIFHruPWpfxfUmYBSjhqMUjNExlJi9W6ULMZ1w?e=97pnGX).
+Download the file and unzip in the neural-lam directory.
+All graphs used in the paper are also available for download at the same link (but can as easily be re-generated using `create_mesh.py`).
+Note that this is far too little data to train any useful models, but all scripts can be ran with it.
+It should thus be useful to make sure that your python environment is set up correctly and that all the code can be ran without any issues.
 
 ## Pre-processing
 An overview of how the different scripts and files depend on each other is given in this figure:
@@ -157,6 +164,8 @@ To train Hi-LAM-Parallel use
 ```
 python train_model.py --model hi_lam_parallel --graph hierarchical ...
 ```
+
+Checkpoint files for our models trained on the MEPS data are available upon request.
 
 ## Evaluate Models
 Evaluation is also done using `train_model.py`, but using the `--eval` option.
