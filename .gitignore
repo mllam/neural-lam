@@ -1,5 +1,6 @@
 ### Project Specific ###
 wandb
+slurm_log*
 saved_models
 data
 graphs

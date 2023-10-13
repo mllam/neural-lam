@@ -11,7 +11,7 @@ from neural_lam.models.hi_lam import HiLAM
 from neural_lam.models.hi_lam_parallel import HiLAMParallel
 
 from neural_lam.weather_dataset import WeatherDataset
-from neural_lam import constants
+from neural_lam import constants, utils
 
 MODELS = {
     "graph_lam": GraphLAM,
@@ -100,19 +100,17 @@ def main():
         torch.set_float32_matmul_precision("high") # Allows using Tensor Cores on A100s
     else:
         device_name = "cpu"
-    device = torch.device(device_name)
 
     # Load model parameters Use new args for model
     model_class = MODELS[args.model]
     if args.load:
-        model = model_class.load_from_checkpoint(args.load, args=args,
-                init_device=device)
+        model = model_class.load_from_checkpoint(args.load, args=args)
         if args.restore_opt:
             # Save for later
             # Unclear if this works for multi-GPU
             model.opt_state = torch.load(args.load)["optimizer_states"][0]
     else:
-        model = model_class(args, device)
+        model = model_class(args)
 
     prefix = "subset-" if args.subset_ds else ""
     if args.eval:
@@ -124,10 +122,14 @@ def main():
             monitor="val_mean_loss", mode="min", save_last=True)
     logger = pl.loggers.WandbLogger(project=constants.wandb_project, name=run_name,
             config=args)
-    trainer = pl.Trainer(max_epochs=args.epochs, deterministic=True,
+    trainer = pl.Trainer(max_epochs=args.epochs, deterministic=True, strategy="ddp",
             accelerator=device_name, logger=logger, log_every_n_steps=1,
             callbacks=[checkpoint_callback], check_val_every_n_epoch=args.val_interval,
             precision=args.precision)
+
+    # Only init once, on rank 0 only
+    if trainer.global_rank == 0:
+        utils.init_wandb_metrics() # Do after wandb.init
 
     if args.eval:
         if args.eval == "val":

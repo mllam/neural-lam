@@ -24,12 +24,15 @@ def main():
     args = parser.parse_args()
 
     # Load graph data
-    hierarchical, g2m_edge_index, m2g_edge_index, m2m_edge_index,\
-        mesh_up_edge_index, mesh_down_edge_index,\
-        _, _, _,\
-        _, _,\
-        mesh_static_features  = utils.load_graph(args.graph, "cpu")
-    _, grid_static_features, _, _, _, _, _ = utils.load_static_data(args.dataset, "cpu")
+    hierarchical, graph_ldict = utils.load_graph(args.graph)
+    g2m_edge_index, m2g_edge_index, m2m_edge_index, =\
+        graph_ldict["g2m_edge_index"], graph_ldict["m2g_edge_index"],\
+        graph_ldict["m2m_edge_index"]
+    mesh_up_edge_index, mesh_down_edge_index = graph_ldict["mesh_up_edge_index"],\
+            graph_ldict["mesh_down_edge_index"]
+    mesh_static_features = graph_ldict["mesh_static_features"]
+
+    grid_static_features = utils.load_static_data(args.dataset)["grid_static_features"]
 
     # Extract values needed, turn to numpy
     grid_pos = grid_static_features[:, :2].numpy()

@@ -11,8 +11,8 @@ class GraphLAM(BaseGraphModel):
     Mainly based on GraphCast, but the model from Keisler (2022) almost identical.
     Used for GC-LAM and L1-LAM in Oskarsson et al. (2023).
     """
-    def __init__(self, args, init_device):
-        super().__init__(args, init_device)
+    def __init__(self, args):
+        super().__init__(args)
 
         assert not self.hierarchical, "GraphLAM does not use a hierarchical mesh graph"
 

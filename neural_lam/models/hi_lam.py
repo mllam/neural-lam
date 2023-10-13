@@ -11,8 +11,8 @@ class HiLAM(BaseHiGraphModel):
     the hierarchy during processing.
     The Hi-LAM model from Oskarsson et al. (2023)
     """
-    def __init__(self, args, init_device):
-        super().__init__(args, init_device)
+    def __init__(self, args):
+        super().__init__(args)
 
         # Make down GNNs, both for down edges and same level
         self.mesh_down_gnns = nn.ModuleList([self.make_down_gnns() for _ in

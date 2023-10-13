@@ -9,7 +9,7 @@ class InteractionNet(pyg.nn.MessagePassing):
         assert aggr in ("sum", "mean"), f"Unknown aggregation method: {aggr}"
         super().__init__(aggr=aggr)
 
-        self.edge_index = edge_index
+        self.register_buffer("edge_index", edge_index, persistent=False)
         self.edge_mlp = edge_mlp
         self.aggr_mlp = aggr_mlp
 

@@ -11,17 +11,18 @@ class BaseGraphModel(ARModel):
     Base (abstract) class for graph-based models building on
     the encode-process-decode idea.
     """
-    def __init__(self, args, init_device):
-        super().__init__(args, init_device)
+    def __init__(self, args):
+        super().__init__(args)
 
         # Load graph with static features
         # NOTE: (IMPORTANT!) mesh nodes MUST have the first N_mesh indices,
-        self.hierarchical,\
-            self.g2m_edge_index, self.m2g_edge_index, self.m2m_edge_index,\
-            self.mesh_up_edge_index, self.mesh_down_edge_index,\
-            self.g2m_features, self.m2g_features, self.m2m_features,\
-            self.mesh_up_features, self.mesh_down_features,\
-            self.mesh_static_features = utils.load_graph(args.graph, device=init_device)
+        self.hierarchical, graph_ldict = utils.load_graph(args.graph)
+        for name, attr_value in graph_ldict.items():
+            # Make BufferLists module members and register tensors as buffers
+            if isinstance(attr_value, torch.Tensor):
+                self.register_buffer(name, attr_value, persistent=False)
+            else:
+                setattr(self, name, attr_value)
 
         # Specify dimensions of data
         self.N_grid, grid_static_dim = self.grid_static_features.shape # 63784 = 268x238

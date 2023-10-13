@@ -12,13 +12,13 @@ class HiLAMParallel(BaseHiGraphModel):
 
     This is a somewhat simpler alternative to the sequential message passing of Hi-LAM.
     """
-    def __init__(self, args, init_device):
-        super().__init__(args, init_device)
+    def __init__(self, args):
+        super().__init__(args)
 
         # Processor GNNs
         # Create the complete total edge_index combining all edges for processing
-        total_edge_index_list = self.m2m_edge_index +\
-                self.mesh_up_edge_index + self.mesh_down_edge_index
+        total_edge_index_list = list(self.m2m_edge_index) +\
+                list(self.mesh_up_edge_index) + list(self.mesh_down_edge_index)
         total_edge_index = torch.cat(total_edge_index_list, dim=1)
         self.edge_split_sections = [ei.shape[1] for ei in total_edge_index_list]
 

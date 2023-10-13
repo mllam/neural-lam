@@ -1,8 +1,12 @@
 import cartopy
+import numpy as np
 
 wandb_project = "neural-lam"
 
 seconds_in_year = 365*24*60*60 # Assuming no leap years in dataset (2024 is next)
+
+# Log prediction error for these lead times
+val_step_log_errors = np.array([1, 2, 3, 5, 10, 15, 19])
 
 # Variable names
 param_names = [
