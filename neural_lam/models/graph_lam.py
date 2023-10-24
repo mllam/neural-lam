@@ -32,12 +32,10 @@ class GraphLAM(BaseGraphModel):
         # GNNs
         # processor
         processor_nets = [InteractionNet(self.m2m_edge_index,
-                utils.make_mlp(self.edge_mlp_blueprint),
-                utils.make_mlp(self.aggr_mlp_blueprint),
-                aggr=args.mesh_aggr)
+                args.hidden_dim, hidden_layers=args.hidden_layers, aggr=args.mesh_aggr)
             for _ in range(args.processor_layers)]
-        self.processor = pyg.nn.Sequential("x, edge_attr", [
-                (net, "x, edge_attr -> x, edge_attr")
+        self.processor = pyg.nn.Sequential("mesh_rep, edge_rep", [
+                (net, "mesh_rep, mesh_rep, edge_rep -> mesh_rep, edge_rep")
             for net in processor_nets])
 
     def get_num_mesh(self):

@@ -385,3 +385,19 @@ class ARModel(pl.LightningModule):
                 wandb.run.dir, 'mean_spatial_loss.pt'))
 
         self.spatial_loss_maps.clear()
+
+    def on_load_checkpoint(self, ckpt):
+        """
+        Perform any changes to state dict before loading checkpoint
+        """
+        loaded_state_dict = ckpt["state_dict"]
+
+        # Fix for loading older models after IneractionNet refactoring, where the
+        # grid MLP was moved outside the encoder InteractionNet class
+        if "g2m_gnn.grid_mlp.0.weight" in loaded_state_dict:
+            replace_keys = list(filter(lambda key: key.startswith("g2m_gnn.grid_mlp"),
+                    loaded_state_dict.keys()))
+            for old_key in replace_keys:
+                new_key = old_key.replace("g2m_gnn.grid_mlp", "encoding_grid_mlp")
+                loaded_state_dict[new_key] = loaded_state_dict[old_key]
+                del loaded_state_dict[old_key]

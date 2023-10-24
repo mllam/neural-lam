@@ -3,8 +3,7 @@ import torch_geometric as pyg
 
 from neural_lam import utils
 from neural_lam.models.ar_model import ARModel
-from neural_lam.interaction_net import InteractionNet, EncoderInteractionNet,\
-    DecoderInteractionNet
+from neural_lam.interaction_net import InteractionNet
 
 class BaseGraphModel(ARModel):
     """
@@ -37,12 +36,8 @@ class BaseGraphModel(ARModel):
         self.m2g_edges, m2g_dim = self.m2g_features.shape
 
         # Define sub-models
-        # Some MLP blueprints
-        self.mlp_blueprint_end = [args.hidden_dim]*(args.hidden_layers + 1)
-        self.edge_mlp_blueprint = [3*args.hidden_dim] + self.mlp_blueprint_end
-        self.aggr_mlp_blueprint = [2*args.hidden_dim] + self.mlp_blueprint_end
-
         # Feature embedders for grid
+        self.mlp_blueprint_end = [args.hidden_dim]*(args.hidden_layers + 1)
         self.grid_embedder = utils.make_mlp([grid_dim] +
                 self.mlp_blueprint_end)
         self.g2m_embedder = utils.make_mlp([g2m_dim] +
@@ -52,16 +47,14 @@ class BaseGraphModel(ARModel):
 
         # GNNs
         # encoder
-        self.g2m_gnn = EncoderInteractionNet(self.g2m_edge_index,
-                utils.make_mlp(self.edge_mlp_blueprint),
-                utils.make_mlp(self.aggr_mlp_blueprint),
-                utils.make_mlp([args.hidden_dim] + self.mlp_blueprint_end),
-                self.N_mesh, N_mesh_ignore)
+        self.g2m_gnn = InteractionNet(self.g2m_edge_index,
+                args.hidden_dim, hidden_layers=args.hidden_layers, update_edges=False)
+        self.encoding_grid_mlp = utils.make_mlp([args.hidden_dim]
+                + self.mlp_blueprint_end)
 
         # decoder
-        self.m2g_gnn = DecoderInteractionNet(self.m2g_edge_index,
-                utils.make_mlp(self.edge_mlp_blueprint),
-                utils.make_mlp(self.aggr_mlp_blueprint), self.N_mesh, self.N_grid)
+        self.m2g_gnn = InteractionNet(self.m2g_edge_index,
+                args.hidden_dim, hidden_layers=args.hidden_layers, update_edges=False)
 
         # Output mapping (hidden_dim -> output_dim)
         self.output_map = utils.make_mlp([args.hidden_dim]*(args.hidden_layers + 1) +\
@@ -113,22 +106,21 @@ class BaseGraphModel(ARModel):
         mesh_emb = self.embedd_mesh_nodes()
 
         # Map from grid to mesh
-        mesh_emb_expanded = self.expand_to_batch(mesh_emb, batch_size)
-        node_rep = torch.cat((mesh_emb_expanded, grid_emb), dim=1) # (B, N, d_h)
+        mesh_emb_expanded = self.expand_to_batch(mesh_emb, batch_size) # (B, N_mesh, d_h)
         g2m_emb_expanded = self.expand_to_batch(g2m_emb, batch_size)
 
         # This also splits representation into grid and mesh
-        grid_rep, mesh_rep = self.g2m_gnn(node_rep,
-                edge_attr=g2m_emb_expanded) # (B, N_grid, d_h) and (B, N_mesh, d_h)
+        mesh_rep = self.g2m_gnn(grid_emb, mesh_emb_expanded,
+                g2m_emb_expanded) # (B, N_mesh, d_h)
+        # Also MLP with residual for grid representation
+        grid_rep = grid_emb + self.encoding_grid_mlp(grid_emb) # (B, N_grid, d_h)
 
         # Run processor step
         mesh_rep = self.process_step(mesh_rep)
 
         # Map back from mesh to grid
-        # Put full node representation back together
-        node_rep = torch.cat((mesh_rep, grid_rep), dim=1) # (B, N, d_h)
         m2g_emb_expanded = self.expand_to_batch(m2g_emb, batch_size)
-        grid_rep = self.m2g_gnn(node_rep, m2g_emb_expanded) # (B, N_grid, d_h)
+        grid_rep = self.m2g_gnn(mesh_rep, grid_rep, m2g_emb_expanded) # (B, N_grid, d_h)
 
         # Map to output dimension, only for grid
         net_output = self.output_map(grid_rep) # (B, N_grid, d_f)
