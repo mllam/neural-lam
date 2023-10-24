@@ -45,7 +45,8 @@ Currently we are using these models on a limited area covering the Nordic region
 There are still some parts of the code that is quite specific for the MEPS area use case.
 This is in particular true for the mesh graph creation (`create_mesh.py`) and some of the constants used (`neural_lam/constants.py`).
 If there is interest to use Neural-LAM for other areas it is not a substantial undertaking to refactor the code to be fully area-agnostic.
-We would be happy to assist with such changes.
+We would be happy to support such enhancements.
+See the issues https://github.com/joeloskarsson/neural-lam/issues/2, https://github.com/joeloskarsson/neural-lam/issues/3 and https://github.com/joeloskarsson/neural-lam/issues/4 for some initial ideas on how this could be done.
 
 # Using Neural-LAM
 Below follows instructions on how to use Neural-LAM to train and evaluate models.
@@ -71,8 +72,8 @@ You will have to adjust the `CUDA` variable to match the CUDA version on your sy
 Datasets should be stored in a directory called `data`.
 See the [repository format section](#format-of-data-directory) for details on the directory structure.
 
-We are looking into releasing the full MEPS dataset used in the paper.
-In the meantime, a tiny subset of the data (named `meps_example`) is available in `example_data.zip`, which can be downloaded from [here](https://liuonline-my.sharepoint.com/:f:/g/personal/joeos82_liu_se/EuiUuiGzFIFHruPWpfxfUmYBSjhqMUjNExlJi9W6ULMZ1w?e=97pnGX).
+The full MEPS dataset can be shared with other researchers on request, contact us for this.
+A tiny subset of the data (named `meps_example`) is available in `example_data.zip`, which can be downloaded from [here](https://liuonline-my.sharepoint.com/:f:/g/personal/joeos82_liu_se/EuiUuiGzFIFHruPWpfxfUmYBSjhqMUjNExlJi9W6ULMZ1w?e=97pnGX).
 Download the file and unzip in the neural-lam directory.
 All graphs used in the paper are also available for download at the same link (but can as easily be re-generated using `create_mesh.py`).
 Note that this is far too little data to train any useful models, but all scripts can be ran with it.
