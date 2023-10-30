@@ -1,93 +1,93 @@
-import cartopy
+import cartopy.crs as ccrs
+import numpy as np
 
 wandb_project = "neural-lam"
 
-seconds_in_year = 365*24*60*60 # Assuming no leap years in dataset (2024 is next)
+# TODO: fix for leap years
+# Assuming no leap years in dataset (2024 is next)
+seconds_in_year = 365 * 24 * 60 * 60
 
-# Variable names
+# Full names
 param_names = [
-    'pres_heightAboveGround_0_instant',
-    'pres_heightAboveSea_0_instant',
-    'nlwrs_heightAboveGround_0_accum',
-    'nswrs_heightAboveGround_0_accum',
-    'r_heightAboveGround_2_instant',
-    'r_hybrid_65_instant',
-    't_heightAboveGround_2_instant',
-    't_hybrid_65_instant',
-    't_isobaricInhPa_500_instant',
-    't_isobaricInhPa_850_instant',
-    'u_hybrid_65_instant',
-    'u_isobaricInhPa_850_instant',
-    'v_hybrid_65_instant',
-    'v_isobaricInhPa_850_instant',
-    'wvint_entireAtmosphere_0_instant',
-    'z_isobaricInhPa_1000_instant',
-    'z_isobaricInhPa_500_instant'
+    'Temperature',
+    'Zonal wind component',
+    'Meridional wind component',
+    'Relative humidity',
+]
+# Short names
+param_names_short = [
+    'T',
+    'U',
+    'V',
+    'RELHUM',
 ]
 
-param_names_short = [
-    'pres_0g',
-    'pres_0s',
-    'nlwrs_0',
-    'nswrs_0',
-    'r_2',
-    'r_65',
-    't_2',
-    't_65',
-    't_500',
-    't_850',
-    'u_65',
-    'u_850',
-    'v_65',
-    'v_850',
-    'wvint_0',
-    'z_1000',
-    'z_500'
-]
+# Units
 param_units = [
-    'Pa',
-    'Pa',
-    'W/m\\textsuperscript{2}',
-    'W/m\\textsuperscript{2}',
-    '-', # unitless
-    '-',
-    'K',
-    'K',
-    'K',
     'K',
     'm/s',
     'm/s',
-    'm/s',
-    'm/s',
-    'kg/m\\textsuperscript{2}',
-    'm\\textsuperscript{2}/s\\textsuperscript{2}',
-    'm\\textsuperscript{2}/s\\textsuperscript{2}'
+    'Perc.',
 ]
+
+# Parameter weights
+param_weights = {
+    'T': 1,
+    'U': 1,
+    'V': 1,
+    'RELHUM': 1,
+}
+
+# Vertical levels
+vertical_levels = [
+    1,
+    5,
+    13,
+    22,
+    38,
+    41,
+    60
+]
+
+# Vertical level weights
+level_weights = {
+    1: 1,
+    5: 1,
+    13: 1,
+    22: 1,
+    38: 1,
+    41: 1,
+    60: 1
+}
 
 # Projection and grid
-# TODO Do not hard code this, make part of static dataset files
-grid_shape = (268, 238) # (y, x)
+grid_shape = (582, 390)  # (x, y)
 
-lambert_proj_params = {
-     'a': 6367470,
-     'b': 6367470,
-     'lat_0': 63.3,
-     'lat_1': 63.3,
-     'lat_2': 63.3,
-     'lon_0': 15.0,
-     'proj': 'lcc'
- }
-
-grid_limits = [ # In projection
-    -1059506.5523409774, # min x
-    1310493.4476590226, # max x
-    -1331732.4471934352, # min y
-    1338267.5528065648, # max y
+grid_limits = [  # In projection
+    -0.6049805,  # min x
+    17.48751,  # max x
+    42.1798,  # min y
+    50.35996,  # max y
 ]
 
-# Create projection
-lambert_proj = cartopy.crs.LambertConformal(
-        central_longitude=lambert_proj_params['lon_0'],
-        central_latitude=lambert_proj_params['lat_0'],
-        standard_parallels=(lambert_proj_params['lat_1'],
-        lambert_proj_params['lat_2']))
+cosmo_proj = ccrs.PlateCarree()
+selected_proj = cosmo_proj
+pollon = -170.0
+pollat = 43.0
+
+# Plotting
+fig_size = (9, 11)
+example_file = "data/cosmo/samples/train/laf2015112800_extr.nc"
+
+# Time step prediction during training / prediction (eval)
+train_horizon = 3  # hours (t-1 + t -> t+1)
+eval_horizon = 25  # hours (autoregressive)
+
+# Log prediction error for these time steps forward
+val_step_log_errors = np.arange(1, eval_horizon - 1)
+metrics_initialized = False
+
+# Some constants useful for sub-classes
+batch_static_feature_dim = 0  # Only open water?
+grid_forcing_dim = 0  # 5 features for 3 time-step window
+grid_state_dim = len(vertical_levels) * len(param_names)  # 7*4=28

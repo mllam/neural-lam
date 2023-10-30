@@ -2,8 +2,9 @@ import torch
 import torch_geometric as pyg
 
 from neural_lam import utils
-from neural_lam.models.base_graph_model import BaseGraphModel
 from neural_lam.interaction_net import InteractionNet
+from neural_lam.models.base_graph_model import BaseGraphModel
+
 
 class GraphLAM(BaseGraphModel):
     """
@@ -11,34 +12,46 @@ class GraphLAM(BaseGraphModel):
     Mainly based on GraphCast, but the model from Keisler (2022) almost identical.
     Used for GC-LAM and L1-LAM in Oskarsson et al. (2023).
     """
-    def __init__(self, args, init_device):
-        super().__init__(args, init_device)
+
+    def __init__(self, args):
+        super().__init__(args)
 
         assert not self.hierarchical, "GraphLAM does not use a hierarchical mesh graph"
 
         # grid_dim from data + static + batch_static
         mesh_dim = self.mesh_static_features.shape[1]
         m2m_edges, m2m_dim = self.m2m_features.shape
-        print(f"Edges in subgraphs: m2m={m2m_edges}, g2m={self.g2m_edges}, "
-                f"m2g={self.m2g_edges}")
+        if torch.distributed.get_rank == 0:
+            print(f"Edges in subgraphs: m2m={m2m_edges}, g2m={self.g2m_edges}, "
+                  f"m2g={self.m2g_edges}")
 
         # Define sub-models
         # Feature embedders for mesh
         self.mesh_embedder = utils.make_mlp([mesh_dim] +
-                self.mlp_blueprint_end)
+                                            self.mlp_blueprint_end)
         self.m2m_embedder = utils.make_mlp([m2m_dim] +
-                self.mlp_blueprint_end)
+                                           self.mlp_blueprint_end)
+        self.args = args
 
+    def setup(self, stage=None):
+        super().setup(stage)
         # GNNs
         # processor
-        processor_nets = [InteractionNet(self.m2m_edge_index,
-                utils.make_mlp(self.edge_mlp_blueprint),
-                utils.make_mlp(self.aggr_mlp_blueprint),
-                aggr=args.mesh_aggr)
-            for _ in range(args.processor_layers)]
+        processor_nets = [
+            InteractionNet(
+                self.m2m_edge_index.to(self.device),
+                utils.make_mlp(self.edge_mlp_blueprint).to(
+                    self.device),
+                utils.make_mlp(self.aggr_mlp_blueprint).to(
+                    self.device),
+                aggr=self.args.mesh_aggr)
+            for _ in range(self.args.processor_layers)]
         self.processor = pyg.nn.Sequential("x, edge_attr", [
-                (net, "x, edge_attr -> x, edge_attr")
+            (net, "x, edge_attr -> x, edge_attr")
             for net in processor_nets])
+        # Move the entire processor to the device
+        for net in self.processor:
+            net.to(self.device)
 
     def get_num_mesh(self):
         """
@@ -52,7 +65,8 @@ class GraphLAM(BaseGraphModel):
         Embedd static mesh features
         Returns tensor of shape (N_mesh, d_h)
         """
-        return self.mesh_embedder(self.mesh_static_features) # (N_mesh, d_h)
+        return self.mesh_embedder(
+            self.mesh_static_features.to(self.device))  # (N_mesh, d_h)
 
     def process_step(self, mesh_rep):
         """
@@ -64,8 +78,8 @@ class GraphLAM(BaseGraphModel):
         """
         # Embedd m2m here first
         batch_size = mesh_rep.shape[0]
-        m2m_emb = self.m2m_embedder(self.m2m_features) # (M_mesh, d_h)
-        m2m_emb_expanded = self.expand_to_batch(m2m_emb, batch_size) # (B, M_mesh, d_h)
+        m2m_emb = self.m2m_embedder(self.m2m_features)  # (M_mesh, d_h)
+        m2m_emb_expanded = self.expand_to_batch(m2m_emb, batch_size)  # (B, M_mesh, d_h)
 
-        mesh_rep, _ = self.processor(mesh_rep, m2m_emb_expanded) # (B, N_mesh, d_h)
+        mesh_rep, _ = self.processor(mesh_rep, m2m_emb_expanded)  # (B, N_mesh, d_h)
         return mesh_rep
