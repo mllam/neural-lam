@@ -18,13 +18,14 @@ class WeatherDataset(torch.utils.data.Dataset):
     d_forcing = 5
     """
     def __init__(self, dataset_name, pred_length=19, split="train", subsample_step=3,
-            standardize=True, subset=False):
+            standardize=True, subset=False, control_only=False):
         super().__init__()
 
         assert split in ("train", "val", "test"), "Unknown dataset split"
         self.sample_dir_path = os.path.join("data", dataset_name, "samples", split)
 
-        sample_paths = glob.glob(os.path.join(self.sample_dir_path, "nwp*mbr*.npy"))
+        member_file_regexp = "nwp*mbr000.npy" if control_only else "nwp*mbr*.npy"
+        sample_paths = glob.glob(os.path.join(self.sample_dir_path, member_file_regexp))
         self.sample_names = [path.split("/")[-1][4:-4] for path in sample_paths]
         # Now on form "yyymmddhh_mbrXXX"
 

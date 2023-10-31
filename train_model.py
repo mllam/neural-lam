@@ -59,6 +59,8 @@ def main():
     # Training options
     parser.add_argument('--ar_steps', type=int, default=1,
         help='Number of steps to unroll prediction for in loss (1-19) (default: 1)')
+    parser.add_argument('--control_only', type=int, default=0,
+        help='Train only on control member of ensemble data (default: 0 (False))')
     parser.add_argument('--loss', type=str, default="mse",
         help='Loss function to use (default: mse)')
     parser.add_argument('--step_length', type=int, default=3,
@@ -86,12 +88,14 @@ def main():
     # Load data
     train_loader = torch.utils.data.DataLoader(
             WeatherDataset(args.dataset, pred_length=args.ar_steps, split="train",
-                subsample_step=args.step_length, subset=bool(args.subset_ds)),
+                subsample_step=args.step_length, subset=bool(args.subset_ds),
+                control_only=args.control_only),
             args.batch_size, shuffle=True, num_workers=args.n_workers)
     max_pred_length = (65 // args.step_length) - 2 # 19
     val_loader = torch.utils.data.DataLoader(
             WeatherDataset(args.dataset, pred_length=max_pred_length, split="val",
-                subsample_step=args.step_length, subset=bool(args.subset_ds)),
+                subsample_step=args.step_length, subset=bool(args.subset_ds),
+                control_only=args.control_only),
             args.batch_size, shuffle=False, num_workers=args.n_workers)
 
     # Instatiate model + trainer
