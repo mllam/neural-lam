@@ -7,7 +7,7 @@ graphs
 *.sif
 sweeps
 test_*.sh
-logs
+lightning_logs
 
 ### Python ###
 # Byte-compiled / optimized / DLL files

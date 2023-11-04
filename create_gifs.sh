@@ -14,3 +14,4 @@ for param in "${params[@]}"; do
         convert -delay 20 -loop 0 ${output_dir}/${param}_lvl_${level}_t_* ${output_dir}/${param}_lvl_${level}.gif
     done
 done
+convert -delay 20 -loop 0 ${output_dir}/test_loss* ${output_dir}/test_loss.gif
