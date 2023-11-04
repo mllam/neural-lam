@@ -377,7 +377,6 @@ class ARModel(pl.LightningModule):
                             wandb.run.dir,
                             f'example_target_{self.plotted_examples}.pt'))
 
-    @pl.utilities.rank_zero_only
     def on_test_epoch_end(self):
         """
         Compute test metrics and make plots at the end of test epoch.
@@ -393,7 +392,7 @@ class ARModel(pl.LightningModule):
         if self.trainer.is_global_zero:
             test_mae_rescaled = torch.mean(test_mae_tensor,
                                            dim=0) * self.data_std  # (pred_steps, d_f)
-            #BUG: does that work?
+            # BUG: does that work?
             test_rmse_rescaled = torch.sqrt(
                 torch.mean(
                     test_mae_tensor,
@@ -416,6 +415,7 @@ class ARModel(pl.LightningModule):
             np.savetxt(os.path.join(wandb.run.dir, "test_rmse.csv"),
                        test_rmse_rescaled.cpu().numpy(), delimiter=",")
 
+        torch.distributed.barrier()  # Wait for all ranks to finish plotting
         self.test_maes.clear()  # Free memory
 
         # Plot spatial loss maps
@@ -427,9 +427,12 @@ class ARModel(pl.LightningModule):
             mean_spatial_loss = torch.mean(
                 spatial_loss_tensor, dim=0)  # (N_log, N_grid)
 
+            vrange = (mean_spatial_loss.min(), mean_spatial_loss.max())
+
             loss_map_figs = [vis.plot_spatial_error(
                 loss_map, self.interior_mask[:, 0],
-                title=f"Test loss, t={t_i} ({self.step_length*t_i} h)")
+                title=f"Test loss, t={t_i} ({self.step_length*t_i} h)",
+                vrange=vrange)
                 for t_i,
                 loss_map
                 in zip(constants.val_step_log_errors, mean_spatial_loss)]

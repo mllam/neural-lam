@@ -119,7 +119,7 @@ def plot_spatial_error(error, obs_mask, title=None, vrange=None):
         vmin = error.min().cpu().item()
         vmax = error.max().cpu().item()
     else:
-        vmin, vmax = vrange
+        vmin, vmax = vrange[0].cpu().item(), vrange[1].cpu().item()
 
     # get test data
     data_latlon = xr.open_dataset(constants.example_file)
