@@ -78,7 +78,7 @@ pollat = 43.0
 # Plotting
 fig_size = (9, 11)
 example_file = "data/cosmo/samples/train/laf2015112800_extr.nc"
-eval_sample = 240  # First sample to use for evaluation
+eval_sample = 340  # First sample to use for evaluation
 
 # Time step prediction during training / prediction (eval)
 train_horizon = 3  # hours (t-1 + t -> t+1)
