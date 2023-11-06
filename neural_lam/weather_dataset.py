@@ -31,10 +31,10 @@ class WeatherDataset(torch.utils.data.Dataset):
         # Now on form "yyymmddhh_mbrXXX"
 
         if subset:
-            # Limit to 50 samples
+            # Limit to 200 samples
             self.sample_names = self.sample_names[constants.
                                                   eval_sample: constants.eval_sample +
-                                                  50]
+                                                  200]
 
         # Set up for standardization
         self.standardize = standardize

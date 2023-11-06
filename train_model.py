@@ -51,7 +51,6 @@ def init_wandb(args):
     return logger, run_name
 
 
-@rank_zero_only
 def init_checkpoint_callback(run_name):
     checkpoint_callback = pl.callbacks.ModelCheckpoint(
         dirpath=f"saved_models/{run_name}", filename="min_val_loss",
