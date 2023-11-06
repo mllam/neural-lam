@@ -147,9 +147,9 @@ def load_graph(graph_name, device="cpu"):
             [edge_features / longest_edge for edge_features in mesh_up_features],
             persistent=False)
         mesh_down_features = BufferList([edge_features / longest_edge
-                                         for edge_features in mesh_down_features])
+                                         for edge_features in mesh_down_features], persistent=False)
 
-        mesh_static_features = BufferList(mesh_static_features)
+        mesh_static_features = BufferList(mesh_static_features, persistent=False)
     else:
         # Extract single mesh level
         m2m_edge_index = m2m_edge_index[0]
