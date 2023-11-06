@@ -338,7 +338,7 @@ class ARModel(pl.LightningModule):
         if self.trainer.is_global_zero:
             test_mae_rescaled = torch.mean(test_mae_tensor,
                     dim=0) * self.data_std # (pred_steps, d_f)
-            test_rmse_rescaled = torch.sqrt(torch.mean(test_mae_tensor,
+            test_rmse_rescaled = torch.sqrt(torch.mean(test_mse_tensor,
                     dim=0)) * self.data_std # (pred_steps, d_f)
 
             mae_fig = vis.plot_error_map(test_mae_rescaled, step_length=self.step_length)
