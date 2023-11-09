@@ -173,8 +173,6 @@ def main():
 
     checkpoint_callback = init_checkpoint_callback(run_name)
 
-    utils.init_wandb_metrics()  # Do after wandb.init
-
     if args.eval:
         use_distributed_sampler = False
     else:
@@ -206,6 +204,9 @@ def main():
         # limit_val_batches=0
         # fast_dev_run=True
     )
+    # Only init once, on rank 0 only
+    if trainer.global_rank == 0:
+        utils.init_wandb_metrics(logger)  # Do after wandb.init
     if args.eval:
         print_eval(args.eval)
         if args.eval == "val":

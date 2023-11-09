@@ -6,7 +6,6 @@ import torch.nn as nn
 from pytorch_lightning.utilities import rank_zero_only
 from tueplots import bundles, figsizes
 
-import wandb
 from neural_lam import constants
 
 
@@ -146,8 +145,9 @@ def load_graph(graph_name, device="cpu"):
         mesh_up_features = BufferList(
             [edge_features / longest_edge for edge_features in mesh_up_features],
             persistent=False)
-        mesh_down_features = BufferList([edge_features / longest_edge
-                                         for edge_features in mesh_down_features], persistent=False)
+        mesh_down_features = BufferList(
+            [edge_features / longest_edge for edge_features in mesh_down_features],
+            persistent=False)
 
         mesh_static_features = BufferList(mesh_static_features, persistent=False)
     else:
@@ -212,10 +212,11 @@ def fractional_plot_bundle(fraction):
 
 
 @rank_zero_only
-def init_wandb_metrics():
+def init_wandb_metrics(wandb_logger):
     """
     Set up wandb metrics to track
     """
-    wandb.define_metric("val_mean_loss", summary="min")
+    experiment = wandb_logger.experiment
+    experiment.define_metric("val_mean_loss", summary="min")
     for step in constants.val_step_log_errors:
-        wandb.define_metric(f"val_loss_unroll{step}", summary="min")
+        experiment.define_metric(f"val_loss_unroll{step}", summary="min")
