@@ -3,7 +3,6 @@ import torch
 import torch.nn as nn
 import numpy as np
 from tueplots import bundles, figsizes
-import wandb
 
 from neural_lam import constants
 
@@ -196,10 +195,11 @@ def fractional_plot_bundle(fraction):
     bundle["figure.figsize"] = (original_figsize[0]/fraction, original_figsize[1])
     return bundle
 
-def init_wandb_metrics():
+def init_wandb_metrics(wandb_logger):
     """
     Set up wandb metrics to track
     """
-    wandb.define_metric("val_mean_loss", summary="min")
+    experiment = wandb_logger.experiment
+    experiment.define_metric("val_mean_loss", summary="min")
     for step in constants.val_step_log_errors:
-        wandb.define_metric(f"val_loss_unroll{step}", summary="min")
+        experiment.define_metric(f"val_loss_unroll{step}", summary="min")
