@@ -180,7 +180,8 @@ def main():
         g = mk_2d_graph(xy, n, n)
         if args.plot:
             plot_graph(from_networkx(g), title=f"Mesh graph, level {lev}")
-            plt.show()
+            # save figure
+            plt.savefig(os.path.join(graph_dir_path, f"mesh_graph_{lev}.png"))
 
         G.append(g)
 
@@ -252,10 +253,10 @@ def main():
 
             if args.plot:
                 plot_graph(pyg_down, title=f"Down graph, {from_level} -> {to_level}")
-                plt.show()
+                plt.savefig(os.path.join(graph_dir_path, f"mesh_down_graph_{from_level}.png"))
 
                 plot_graph(pyg_down, title=f"Up graph, {to_level} -> {from_level}")
-                plt.show()
+                plt.savefig(os.path.join(graph_dir_path, f"mesh_up_graph_{to_level}.png"))
 
         # Save up and down edges
         save_edges_list(up_graphs, "mesh_up", graph_dir_path)
@@ -309,7 +310,7 @@ def main():
 
         if args.plot:
             plot_graph(pyg_m2m, title="Mesh-to-mesh")
-            plt.show()
+            plt.savefig(os.path.join(graph_dir_path, "mesh_graph.png"))
 
     # Save m2m edges
     save_edges_list(m2m_graphs, "m2m", graph_dir_path)
@@ -383,7 +384,7 @@ def main():
 
     if args.plot:
         plot_graph(pyg_g2m, title="Grid-to-mesh")
-        plt.show()
+        plt.savefig(os.path.join(graph_dir_path, "grid_to_mesh.png"))
 
     #
     # Mesh2Grid
@@ -417,7 +418,7 @@ def main():
 
     if args.plot:
         plot_graph(pyg_m2g, title="Mesh-to-grid")
-        plt.show()
+        plt.savefig(os.path.join(graph_dir_path, "mesh_to_grid.png"))
 
     # Save g2m and m2g everything
     # g2m
