@@ -236,7 +236,10 @@ class ARModel(pl.LightningModule):
 
         returns: (K*d1, d2, ...)
         """
-        return self.all_gather(tensor_to_gather).flatten(0, 1)
+        if torch.distributed.is_available() and torch.distributed.is_initialized():
+            if torch.distributed.get_world_size() > 1:
+                tensor_to_gather = self.all_gather(tensor_to_gather).flatten(0, 1)
+        return tensor_to_gather
 
     def validation_step(self, batch, batch_idx):
         """
@@ -253,8 +256,9 @@ class ARModel(pl.LightningModule):
                         for step in self.val_step_log_errors}
         val_log_dict["val_mean_loss"] = mean_loss
 
-        maes = self.per_var_error(prediction, target)  # (B, pred_steps, d_f)
-        self.val_maes.append(maes)
+        errs = self.per_var_error(
+            prediction, target, error=self.loss_name)  # (B, pred_steps, d_f)
+        self.val_errs.append(errs)
 
         self.log_dict(val_log_dict, on_step=False, on_epoch=True, sync_dist=True)
 
@@ -262,22 +266,22 @@ class ARModel(pl.LightningModule):
         """
         Compute val metrics at the end of val epoch
         """
-
-        val_mae_tensor = self.all_gather_cat(torch.cat(
-            self.val_maes, dim=0))  # (N_val, pred_steps, d_f)
+        val_err_tensor = self.all_gather_cat(torch.cat(
+            self.val_errs, dim=0))  # (N_val, pred_steps, d_f)
 
         if self.trainer.is_global_zero:
-            val_mae_total = torch.mean(val_mae_tensor, dim=0)  # (pred_steps, d_f)
-            val_mae_rescaled = val_mae_total * self.data_std  # (pred_steps, d_f)
+            val_err_total = torch.mean(val_err_tensor, dim=0)  # (pred_steps, d_f)
+            val_err_rescaled = val_err_total * self.data_std  # (pred_steps, d_f)
 
             if not self.trainer.sanity_checking:
                 # Don't log this during sanity checking
-                mae_fig = vis.plot_error_map(val_mae_rescaled, title="Validation MAE",
-                                             step_length=self.step_length)
-                self.log_image("val_mae", mae_fig)
+                val_err_fig = vis.plot_error_map(
+                    val_err_rescaled, title="Validation MAE",
+                    step_length=self.step_length)
+                wandb.log({"val_err": wandb.Image(val_err_fig)})
                 plt.close("all")
 
-        self.val_maes.clear()  # Free memory
+        self.val_errs.clear()  # Free memory
 
     def test_step(self, batch, batch_idx):
         """
@@ -298,7 +302,8 @@ class ARModel(pl.LightningModule):
         self.log_dict(test_log_dict, on_step=False, on_epoch=True, sync_dist=True)
 
         # For error maps
-        maes = self.per_var_error(prediction, target)  # (B, pred_steps, d_f)
+        maes = self.per_var_error(
+            prediction, target, error="mae")  # (B, pred_steps, d_f)
         self.test_maes.append(maes)
         mses = self.per_var_error(
             prediction, target, error="mse")  # (B, pred_steps, d_f)
@@ -368,6 +373,7 @@ class ARModel(pl.LightningModule):
                             # Close all figs for this time step, saves memory
                             plt.close("all")
 
+                if constants.store_example_data:
                     # Save pred and target as .pt files
                     torch.save(pred_slice.cpu(), os.path.join(
                         wandb.run.dir, f'example_pred_{self.plotted_examples}.pt'))
@@ -384,38 +390,44 @@ class ARModel(pl.LightningModule):
         """
 
         # Create error maps for RMSE and MAE
+
         test_mae_tensor = self.all_gather_cat(
             torch.cat(self.test_maes, dim=0))  # (N_test, pred_steps, d_f)
-        # test_mse_tensor = self.all_gather_cat(
-        #     torch.cat(self.test_mses, dim=0))  # (N_test, pred_steps, d_f)
+        test_mse_tensor = self.all_gather_cat(
+            torch.cat(self.test_mses, dim=0))  # (N_test, pred_steps, d_f)
 
         if self.trainer.is_global_zero:
             test_mae_rescaled = torch.mean(test_mae_tensor,
                                            dim=0) * self.data_std  # (pred_steps, d_f)
-            # BUG: does that work?
+
             test_rmse_rescaled = torch.sqrt(
                 torch.mean(
-                    test_mae_tensor,
+                    test_mse_tensor,
                     dim=0)) * self.data_std  # (pred_steps, d_f)
 
+            # Create plots only for these instances
             mae_fig = vis.plot_error_map(
-                test_mae_rescaled, step_length=self.step_length)
+                test_mae_rescaled[self.val_step_log_errors - 1],
+                step_length=self.step_length)
             rmse_fig = vis.plot_error_map(
-                test_rmse_rescaled, step_length=self.step_length)
+                test_rmse_rescaled[self.val_step_log_errors - 1],
+                step_length=self.step_length)
+
             wandb.log({  # Log png:s
                 "test_mae": wandb.Image(mae_fig),
                 "test_rmse": wandb.Image(rmse_fig),
             })
+
             # Save pdf:s
             mae_fig.savefig(os.path.join(wandb.run.dir, "test_mae.pdf"))
             rmse_fig.savefig(os.path.join(wandb.run.dir, "test_rmse.pdf"))
             # Save errors also as csv:s
+
             np.savetxt(os.path.join(wandb.run.dir, "test_mae.csv"),
                        test_mae_rescaled.cpu().numpy(), delimiter=",")
             np.savetxt(os.path.join(wandb.run.dir, "test_rmse.csv"),
                        test_rmse_rescaled.cpu().numpy(), delimiter=",")
 
-        torch.distributed.barrier()  # Wait for all ranks to finish plotting
         self.test_maes.clear()  # Free memory
 
         # Plot spatial loss maps
@@ -423,28 +435,25 @@ class ARModel(pl.LightningModule):
             torch.cat(
                 self.spatial_loss_maps,
                 dim=0))  # (N_test, N_log, N_grid)
+
         if self.trainer.is_global_zero:
             mean_spatial_loss = torch.mean(
                 spatial_loss_tensor, dim=0)  # (N_log, N_grid)
 
-            vrange = (mean_spatial_loss.min(), mean_spatial_loss.max())
-
+            # Create plots and PDFs only for these instances
             loss_map_figs = [vis.plot_spatial_error(
-                loss_map, self.interior_mask[:, 0],
-                title=f"Test loss, t={t_i} ({self.step_length*t_i} h)",
-                vrange=vrange)
-                for t_i,
-                loss_map
-                in zip(constants.val_step_log_errors, mean_spatial_loss)]
+                mean_spatial_loss[i],
+                title=f"Test loss, t={val_step}, ({self.step_length*val_step} h)")
+                for i, val_step in enumerate(self.val_step_log_errors)]
 
-            # log all to same wandb key, sequentially
+            # Log all to same wandb key, sequentially
             for fig in loss_map_figs:
                 wandb.log({"test_loss": wandb.Image(fig)})
 
-            # also make without title and save as pdf
+            # Also make without title and save as PDF
             pdf_loss_map_figs = [
-                vis.plot_spatial_error(loss_map, self.interior_mask[:, 0])
-                for loss_map in mean_spatial_loss]
+                vis.plot_spatial_error(
+                    mean_spatial_loss[i]) for i in range(len(self.val_step_log_errors))]
             pdf_loss_maps_dir = os.path.join(wandb.run.dir, "spatial_loss_maps")
             os.makedirs(pdf_loss_maps_dir, exist_ok=True)
             for t_i, fig in zip(constants.val_step_log_errors, pdf_loss_map_figs):
@@ -454,3 +463,19 @@ class ARModel(pl.LightningModule):
                 wandb.run.dir, 'mean_spatial_loss.pt'))
 
         self.spatial_loss_maps.clear()
+
+    def on_load_checkpoint(self, ckpt):
+        """
+        Perform any changes to state dict before loading checkpoint
+        """
+        loaded_state_dict = ckpt["state_dict"]
+
+        # Fix for loading older models after IneractionNet refactoring, where the
+        # grid MLP was moved outside the encoder InteractionNet class
+        if "g2m_gnn.grid_mlp.0.weight" in loaded_state_dict:
+            replace_keys = list(filter(lambda key: key.startswith("g2m_gnn.grid_mlp"),
+                                       loaded_state_dict.keys()))
+            for old_key in replace_keys:
+                new_key = old_key.replace("g2m_gnn.grid_mlp", "encoding_grid_mlp")
+                loaded_state_dict[new_key] = loaded_state_dict[old_key]
+                del loaded_state_dict[old_key]

@@ -147,7 +147,7 @@ def load_graph(graph_name, device="cpu"):
             [edge_features / longest_edge for edge_features in mesh_up_features],
             persistent=False)
         mesh_down_features = BufferList([edge_features / longest_edge
-                for edge_features in mesh_down_features], persistent=False)
+                                         for edge_features in mesh_down_features], persistent=False)
 
         mesh_static_features = BufferList(mesh_static_features, persistent=False)
     else:

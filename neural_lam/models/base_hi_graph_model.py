@@ -2,7 +2,7 @@ import torch
 from torch import nn
 
 from neural_lam import utils
-from neural_lam.interaction_net import MeshInitNet, MeshReadOutNet
+from neural_lam.interaction_net import InteractionNet
 from neural_lam.models.base_graph_model import BaseGraphModel
 
 
@@ -56,37 +56,16 @@ class BaseHiGraphModel(BaseGraphModel):
              for _ in range(self.N_levels - 1)])
 
         # Instantiate GNNs
-        # First node index at each level
-        first_index_levels = torch.cat((
-            torch.zeros(1, dtype=torch.int64),
-            torch.cumsum(N_mesh_levels_torch, dim=0)
-        ), dim=0)
-        self.register_buffer("first_index_levels", first_index_levels, persistent=False)
-
         # Init GNNs
-        self.mesh_init_gnns = nn.ModuleList([MeshInitNet(
-            edge_index - bottom_first_index,  # Adjust
-            utils.make_mlp(self.edge_mlp_blueprint),
-            utils.make_mlp(self.aggr_mlp_blueprint),
-            N_from_nodes, N_to_nodes)
-            for edge_index, bottom_first_index, N_from_nodes, N_to_nodes in zip(
-                self.mesh_up_edge_index,
-                self.first_index_levels[:-1],
-                self.N_mesh_levels[:-1],
-                self.N_mesh_levels[1:]
-        )])
+        self.mesh_init_gnns = nn.ModuleList([InteractionNet(
+            edge_index, args.hidden_dim, hidden_layers=args.hidden_layers)
+            for edge_index in self.mesh_up_edge_index])
 
         # Read out GNNs
-        self.mesh_read_gnns = nn.ModuleList([MeshReadOutNet(
-            edge_index - bottom_first_index,  # Adjust
-            utils.make_mlp(self.edge_mlp_blueprint),
-            utils.make_mlp(self.aggr_mlp_blueprint),
-            N_to_nodes)
-            for edge_index, bottom_first_index, N_to_nodes in zip(
-                self.mesh_down_edge_index,
-                self.first_index_levels[:-1],  # Do not reverse order here
-                self.N_mesh_levels[:-1]
-        )])
+        self.mesh_read_gnns = nn.ModuleList([InteractionNet(
+            edge_index, args.hidden_dim, hidden_layers=args.hidden_layers,
+            update_edges=False)
+            for edge_index in self.mesh_down_edge_index])
 
     def get_num_mesh(self):
         """
@@ -100,13 +79,10 @@ class BaseHiGraphModel(BaseGraphModel):
     def embedd_mesh_nodes(self):
         """
         Embedd static mesh features
-        Returns tensor of shape (N_mesh, d_h)
+        This embedds only bottom level, rest is done at beginning of processing step
+        Returns tensor of shape (N_mesh[0], d_h)
         """
-        levels_embedded = [emb(node_static_features) for emb, node_static_features in
-                           zip(self.mesh_embedders, self.mesh_static_features)]
-        # List of (N_level[l], d_h)
-
-        return torch.cat(levels_embedded, dim=0)  # (N_mesh, d_h)
+        return self.mesh_embedders[0](self.mesh_static_features[0])
 
     def process_step(self, mesh_rep):
         """
@@ -117,6 +93,14 @@ class BaseHiGraphModel(BaseGraphModel):
         Returns mesh_rep: (B, N_mesh, d_h)
         """
         batch_size = mesh_rep.shape[0]
+
+        # EMBEDD REMAINING MESH NODES (levels >= 1) -
+        # Create list of mesh node representations for each level,
+        # each of size (B, N_mesh[l], d_h)
+        mesh_rep_levels = [mesh_rep] + [self.expand_to_batch(
+            emb(node_static_features), batch_size) for
+            emb, node_static_features in
+            zip(list(self.mesh_embedders)[1:], list(self.mesh_static_features)[1:])]
 
         # - EMBEDD EDGES -
         # Embedd edges, expand with batch dimension
@@ -142,22 +126,16 @@ class BaseHiGraphModel(BaseGraphModel):
                 self.mesh_down_embedders,
                 self.mesh_down_features)]
 
-        # Create list of mesh node representations for each level,
-        # each of size (B, N_mesh[l], d_h)
-        mesh_rep_levels = list(torch.split(mesh_rep, self.N_mesh_levels, dim=1))
-
         # - MESH INIT. -
         # Let level_l go from 1 to L
         for level_l, gnn in enumerate(self.mesh_init_gnns, start=1):
             # Extract representations
-            node_reps = torch.cat(
-                (mesh_rep_levels[level_l - 1],
-                 mesh_rep_levels[level_l]),
-                dim=1)  # (B, N_mesh[l-1]+N_mesh[l], d_h)
+            send_node_rep = mesh_rep_levels[level_l - 1]  # (B, N_mesh[l-1], d_h)
+            rec_node_rep = mesh_rep_levels[level_l]  # (B, N_mesh[l], d_h)
             edge_rep = mesh_up_rep[level_l - 1]
 
             # Apply GNN
-            new_node_rep, new_edge_rep = gnn(node_reps, edge_rep)
+            new_node_rep, new_edge_rep = gnn(send_node_rep, rec_node_rep, edge_rep)
 
             # Update node and edge vectors in lists
             mesh_rep_levels[level_l] = new_node_rep  # (B, N_mesh[l], d_h)
@@ -173,21 +151,18 @@ class BaseHiGraphModel(BaseGraphModel):
                 range(self.N_levels - 2, -1, -1),
                 reversed(self.mesh_read_gnns)):
             # Extract representations
-            node_reps = torch.cat(
-                (mesh_rep_levels[level_l],
-                 mesh_rep_levels[level_l + 1]),
-                dim=1)  # (B, N_mesh[l]+N_mesh[l+1], d_h)
+            send_node_rep = mesh_rep_levels[level_l + 1]  # (B, N_mesh[l+1], d_h)
+            rec_node_rep = mesh_rep_levels[level_l]  # (B, N_mesh[l], d_h)
             edge_rep = mesh_down_rep[level_l]
 
             # Apply GNN
-            new_node_rep = gnn(node_reps, edge_rep)
+            new_node_rep = gnn(send_node_rep, rec_node_rep, edge_rep)
 
             # Update node and edge vectors in lists
             mesh_rep_levels[level_l] = new_node_rep  # (B, N_mesh[l], d_h)
 
-        # Combine before returning
-        mesh_rep = torch.cat(mesh_rep_levels, dim=1)  # (B, N_mesh, d_h)
-        return mesh_rep
+        # Return only bottom level representation
+        return mesh_rep_levels[0]  # (B, N_mesh[0], d_h)
 
     def hi_processor_step(self, mesh_rep_levels, mesh_same_rep, mesh_up_rep,
                           mesh_down_rep):

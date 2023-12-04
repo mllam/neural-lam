@@ -3,7 +3,7 @@ import torch_geometric as pyg
 
 from neural_lam import utils
 from neural_lam.models.base_hi_graph_model import BaseHiGraphModel
-from neural_lam.interaction_net import HiInteractionNet
+from neural_lam.interaction_net import InteractionNet
 
 class HiLAMParallel(BaseHiGraphModel):
     """
@@ -25,15 +25,13 @@ class HiLAMParallel(BaseHiGraphModel):
         if args.processor_layers == 0:
             self.processor = (lambda x, edge_attr: (x, edge_attr))
         else:
-            processor_nets = [HiInteractionNet(total_edge_index,
-                    [utils.make_mlp(self.edge_mlp_blueprint) for _ in
-                        range(len(self.edge_split_sections))],
-                    [utils.make_mlp(self.aggr_mlp_blueprint) for _ in
-                        range(self.N_levels)],
-                    self.edge_split_sections, self.N_mesh_levels, aggr=args.mesh_aggr)
+            processor_nets = [InteractionNet(total_edge_index, args.hidden_dim,
+                hidden_layers=args.hidden_layers,
+                edge_chunk_sizes=self.edge_split_sections,
+                aggr_chunk_sizes=self.N_mesh_levels)
                 for _ in range(args.processor_layers)]
-            self.processor = pyg.nn.Sequential("x, edge_attr", [
-                    (net, "x, edge_attr -> x, edge_attr")
+            self.processor = pyg.nn.Sequential("mesh_rep, edge_rep", [
+                (net, "mesh_rep, mesh_rep, edge_rep -> mesh_rep, edge_rep")
                 for net in processor_nets])
 
     def hi_processor_step(self, mesh_rep_levels, mesh_same_rep, mesh_up_rep,
