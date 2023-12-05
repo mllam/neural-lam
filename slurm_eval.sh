@@ -5,8 +5,8 @@
 #SBATCH --ntasks-per-node=1
 #SBATCH --partition=a100-80gb
 #SBATCH --account=s83
-#SBATCH --output=lightning_logs/neurwp_eval.out
-#SBATCH --error=lightning_logs/neurwp_eval.err
+#SBATCH --output=lightning_logs/neurwp_eval_out.log
+#SBATCH --error=lightning_logs/neurwp_eval_err.log
 
 conda activate neural-ddp
 

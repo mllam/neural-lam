@@ -5,8 +5,8 @@
 #SBATCH --ntasks-per-node=4
 #SBATCH --partition=a100-80gb
 #SBATCH --account=s83
-#SBATCH --output=lightning_logs/neurwp_hilam.out
-#SBATCH --error=lightning_logs/neurwp_hilam.err
+#SBATCH --output=lightning_logs/neurwp_hilam_out.log
+#SBATCH --error=lightning_logs/neurwp_hilam_err.log
 #SBATCH --exclusive
 #SBATCH --mem=490G
 
