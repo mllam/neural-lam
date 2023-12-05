@@ -12,10 +12,10 @@
 # Load necessary modules
 conda activate neural-ddp
 
-export OMP_NUM_THREADS=128
+export OMP_NUM_THREADS=32
 
 # Run the script with torchrun
 srun -ul --gpus-per-task=1 python train_model.py \
-    --dataset "cosmo" --val_interval 20 --epochs 100 --n_workers 128 \
-    --batch_size 4 --model "graph_lam"
+    --dataset "cosmo" --val_interval 20 --epochs 100 --n_workers 16 \
+    --batch_size 1 --model "graph_lam"
     # --load saved_models/graph_lam-4x64-11_15_22_38_47/last.ckpt --resume_run '3gio4mcv'
