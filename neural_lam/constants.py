@@ -82,4 +82,4 @@ store_example_data = False
 # Some constants useful for sub-classes
 batch_static_feature_dim = 0
 grid_forcing_dim = 0
-grid_state_dim = 1
+grid_state_dim = len(vertical_levels) * len(param_names)

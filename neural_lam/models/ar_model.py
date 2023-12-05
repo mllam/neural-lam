@@ -38,6 +38,7 @@ class ARModel(pl.LightningModule):
             self.register_buffer(static_data_name, static_data_tensor, persistent=False)
 
         # MSE loss, need to do reduction ourselves to get proper weighting
+        self.loss_name = args.loss
         if args.loss == "mse":
             self.loss = nn.MSELoss(reduction="none")
 
@@ -58,7 +59,7 @@ class ARModel(pl.LightningModule):
         self.N_interior = torch.sum(self.interior_mask)
 
         self.step_length = args.step_length  # Number of hours per pred. step
-        self.val_maes = []
+        self.val_errs = []
         self.test_maes = []
         self.test_mses = []
 
