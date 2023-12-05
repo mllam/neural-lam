@@ -5,16 +5,18 @@ channels:
   - pyg
 dependencies:
   - Cartopy
+  - dask
   - ipython
   - matplotlib
   - networkx
   - numpy
   - pip
   - plotly
+  - pyg
   - pyproj
+  - pyprojroot
   - pytorch
   - pytorch-cuda=11.8
-  - pyg
   - pytorch-lightning
   - scikit-learn
   - scipy
@@ -23,5 +25,6 @@ dependencies:
   - torchvision
   - wandb
   - xarray
+  - zarr
   - pip:
     - tueplots

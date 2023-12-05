@@ -1,14 +1,13 @@
 #!/bin/bash -l
 #SBATCH --job-name=NeurWPe
 #SBATCH --nodes=1
-#SBATCH --gpus-per-node=4
-#SBATCH --ntasks-per-node=4
+#SBATCH --gpus-per-node=1
+#SBATCH --ntasks-per-node=1
 #SBATCH --partition=a100-80gb
 #SBATCH --account=s83
 #SBATCH --output=lightning_logs/neurwp_eval.out
 #SBATCH --error=lightning_logs/neurwp_eval.err
 
-# Load necessary modules
 conda activate neural-ddp
 
 # Set OMP_NUM_THREADS to a value greater than 1

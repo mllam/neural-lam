@@ -35,19 +35,31 @@ def print_eval(args_eval):
 
 @rank_zero_only
 def init_wandb(args):
-    prefix = "subset-" if args.subset_ds else ""
-    if args.eval:
-        prefix = prefix + f"eval-{args.eval}-"
-    run_name = f"{prefix}{args.model}-{args.processor_layers}x{args.hidden_dim}-"\
-        f"{time.strftime('%m_%d_%H_%M_%S')}"
-    wandb.init(
-        project=constants.wandb_project,
-        name=run_name,
-        config=args,
-        # mode="dryrun"
-    )
-    logger = pl.loggers.WandbLogger(project=constants.wandb_project, name=run_name,
-                                    config=args)
+    if args.resume_run is None:
+        prefix = "subset-" if args.subset_ds else ""
+        if args.eval:
+            prefix = prefix + f"eval-{args.eval}-"
+        run_name = f"{prefix}{args.model}-{args.processor_layers}x{args.hidden_dim}-"\
+            f"{time.strftime('%m_%d_%H_%M_%S')}"
+        wandb.init(
+            name=run_name,
+            project=constants.wandb_project,
+            config=args,
+        )
+        logger = pl.loggers.WandbLogger(project=constants.wandb_project, name=run_name,
+                                        config=args)
+    else:
+        wandb.init(
+            project=constants.wandb_project,
+            config=args,
+            id=args.resume_run,
+            resume='must'
+        )
+        logger = pl.loggers.WandbLogger(
+            project=constants.wandb_project,
+            id=args.resume_run,
+            config=args)
+        run_name = wandb.run.name
     return logger, run_name
 
 
@@ -83,6 +95,8 @@ def main():
                         help='batch size (default: 4)')
     parser.add_argument('--load', type=str,
                         help='Path to load model parameters from (default: None)')
+    parser.add_argument('--resume_run', type=str,
+                        help='Run ID to resume (default: None)')
     parser.add_argument(
         '--precision', type=str, default=32,
         help='Numerical precision to use for model (32/16/bf16) (default: 32)')
@@ -129,6 +143,7 @@ def main():
     assert args.model in MODELS, f"Unknown model: {args.model}"
     assert args.step_length <= 3, "Too high step length"
     assert args.eval in (None, "val", "test"), f"Unknown eval setting: {args.eval}"
+    assert args.loss in ("mse", "mae", "huber"), f"Unknown loss function: {args.loss}"
 
     # Set seed
     seed.seed_everything(args.seed)

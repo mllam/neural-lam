@@ -1,4 +1,3 @@
-import cartopy.crs as ccrs
 import numpy as np
 
 wandb_project = "neural-lam"
@@ -76,7 +75,8 @@ metrics_initialized = False
 
 # Plotting
 fig_size = (15, 10)
-example_file = "data/straka/samples/test/data_test.zarr"
+example_file = "data/cosmo/samples/train/laf2015112800_extr.nc"
+eval_sample = 340  # First sample to use for evaluation
 store_example_data = False
 
 # Some constants useful for sub-classes
