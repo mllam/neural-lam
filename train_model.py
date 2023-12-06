@@ -66,7 +66,7 @@ def init_wandb(args):
 def init_checkpoint_callback(run_name):
     checkpoint_callback = pl.callbacks.ModelCheckpoint(
         dirpath=f"saved_models/{run_name}", filename="min_val_loss",
-        monitor="val_mean_loss", mode="min", save_last=True)
+        monitor="val_mean_loss", mode="min", save_last=False)
     return checkpoint_callback
 
 

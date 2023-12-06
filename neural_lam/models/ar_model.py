@@ -209,6 +209,11 @@ class ARModel(pl.LightningModule):
             on_epoch=True,
             sync_dist=True)
         return batch_loss
+    
+    def training_epoch_end(self, outputs):
+        # save model checkpoint
+        if self.current_epoch % 1 == 0:  # adjust this if you want to save less frequently
+            torch.save(self.state_dict(), "saved_models/last.ckpt")
 
     def per_var_error(self, prediction, target, error="mae"):
         """
@@ -277,7 +282,10 @@ class ARModel(pl.LightningModule):
             if not self.trainer.sanity_checking:
                 # Don't log this during sanity checking
                 val_err_fig = vis.plot_error_map(
-                    val_err_rescaled, title="Validation MAE",
+                    val_err_rescaled,
+                    title="Validation " +
+                    self.loss_name.upper() +
+                    " error",
                     step_length=self.step_length)
                 wandb.log({"val_err": wandb.Image(val_err_fig)})
                 plt.close("all")
