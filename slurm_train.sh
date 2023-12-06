@@ -12,7 +12,7 @@
 # Load necessary modules
 conda activate neural-ddp
 
-export OMP_NUM_THREADS=32
+export OMP_NUM_THREADS=40
 
 # Run the script with torchrun
 srun -ul --gpus-per-task=1 python train_model.py \
