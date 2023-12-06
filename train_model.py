@@ -67,7 +67,7 @@ def init_checkpoint_callback(run_name):
     checkpoint_callback = pl.callbacks.ModelCheckpoint(
         dirpath=f"saved_models/{run_name}",
         filename="latest",
-        save_top_k=None,
+        save_last=True,
         every_n_epochs=1,
     )
     return checkpoint_callback
