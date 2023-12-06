@@ -209,8 +209,8 @@ class ARModel(pl.LightningModule):
             on_epoch=True,
             sync_dist=True)
         return batch_loss
-    
-    def training_epoch_end(self, outputs):
+
+    def on_training_epoch_end(self, outputs):
         # save model checkpoint
         if self.current_epoch % 1 == 0:  # adjust this if you want to save less frequently
             torch.save(self.state_dict(), "saved_models/last.ckpt")
