@@ -66,11 +66,9 @@ def init_wandb(args):
 def init_checkpoint_callback(run_name):
     checkpoint_callback = pl.callbacks.ModelCheckpoint(
         dirpath=f"saved_models/{run_name}",
-        filename="train_loss_epoch",
-        monitor="train_loss_epoch",
-        mode="min",
-        save_last=True,
-        save_top_k=1,
+        filename="latest",
+        save_top_k=None,
+        every_n_epochs=1,
     )
     return checkpoint_callback
 
