@@ -8,6 +8,7 @@ dependencies:
   - dask
   - ipython
   - matplotlib
+  - netcdf4
   - networkx
   - numpy
   - pip
