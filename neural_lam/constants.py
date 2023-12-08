@@ -1,4 +1,5 @@
 import numpy as np
+from cartopy import crs as ccrs
 
 wandb_project = "neural-lam"
 
@@ -60,7 +61,7 @@ level_weights = {
 }
 
 # Projection and grid
-grid_shape = (582, 390)  # (x, y)
+grid_shape = (390, 582)  # (y, x)
 
 # Zoom for graph plotting
 zoom_limit = 1e10
@@ -78,6 +79,10 @@ fig_size = (15, 10)
 example_file = "data/cosmo/samples/train/laf2015112800_extr.nc"
 eval_sample = 340  # First sample to use for evaluation
 store_example_data = False
+cosmo_proj = ccrs.PlateCarree()
+selected_proj = cosmo_proj
+pollon = -170.0
+pollat = 43.0
 
 # Some constants useful for sub-classes
 batch_static_feature_dim = 0
