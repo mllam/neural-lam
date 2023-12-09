@@ -433,6 +433,7 @@ class ARModel(pl.LightningModule):
                        test_rmse_rescaled.cpu().numpy(), delimiter=",")
 
         self.test_maes.clear()  # Free memory
+        self.test_mses.clear()
 
         # Plot spatial loss maps
         spatial_loss_tensor = self.all_gather_cat(
@@ -446,7 +447,7 @@ class ARModel(pl.LightningModule):
 
             # Create plots and PDFs only for these instances
             loss_map_figs = [vis.plot_spatial_error(
-                mean_spatial_loss[i],
+                mean_spatial_loss[i], self.interior_mask[:, 0],
                 title=f"Test loss, t={val_step}, ({self.step_length*val_step} h)")
                 for i, val_step in enumerate(self.val_step_log_errors)]
 
@@ -456,8 +457,8 @@ class ARModel(pl.LightningModule):
 
             # Also make without title and save as PDF
             pdf_loss_map_figs = [
-                vis.plot_spatial_error(
-                    mean_spatial_loss[i]) for i in range(len(self.val_step_log_errors))]
+                vis.plot_spatial_error(loss_map, self.interior_mask[:, 0])
+                for loss_map in mean_spatial_loss]
             pdf_loss_maps_dir = os.path.join(wandb.run.dir, "spatial_loss_maps")
             os.makedirs(pdf_loss_maps_dir, exist_ok=True)
             for t_i, fig in zip(constants.val_step_log_errors, pdf_loss_map_figs):
