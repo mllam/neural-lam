@@ -63,9 +63,9 @@ def init_wandb(args):
     return logger, run_name
 
 
-def init_checkpoint_callback(run_name):
+def init_checkpoint_callback(logger):
     checkpoint_callback = pl.callbacks.ModelCheckpoint(
-        dirpath=f"saved_models/{run_name}",
+        dirpath=logger.experiment.dir,
         filename="latest",
         every_n_epochs=1,
         save_on_train_epoch_end=True,
