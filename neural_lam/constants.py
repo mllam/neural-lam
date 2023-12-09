@@ -61,7 +61,7 @@ level_weights = {
 }
 
 # Projection and grid
-grid_shape = (582, 390)  # (x, y)
+grid_shape = (390, 582)  # (y, x)
 
 # Zoom for graph plotting
 zoom_limit = 1e10

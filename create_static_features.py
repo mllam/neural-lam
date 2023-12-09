@@ -42,12 +42,8 @@ def main():
     # Create a 2D meshgrid for x and y indices
     x_grid, y_grid = np.indices((x_dim, y_dim))
 
-    # Invert the order of x_grid
-    x_grid = np.transpose(x_grid)
-    y_grid = np.transpose(y_grid)
-
     # Stack the 2D arrays into a 3D array with x and y as the first dimension
-    grid_xy = np.stack((x_grid, y_grid))
+    grid_xy = np.stack((y_grid, x_grid))
 
     np.save(args.outdir + 'nwp_xy.npy', grid_xy)
 
