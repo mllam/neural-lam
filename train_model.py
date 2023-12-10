@@ -60,9 +60,11 @@ def init_wandb(args):
             id=args.resume_run,
             config=args)
         run_name = wandb.run.name
+
     return logger, run_name
 
 
+@rank_zero_only
 def init_checkpoint_callback(logger):
     checkpoint_callback = pl.callbacks.ModelCheckpoint(
         dirpath=logger.experiment.dir,
@@ -170,11 +172,10 @@ def main():
     result = init_wandb(args)
     if result is not None:
         logger, run_name = result
+        checkpoint_callback = init_checkpoint_callback(logger)
     else:
         logger = None
-        run_name = None
-
-    checkpoint_callback = init_checkpoint_callback(run_name)
+        checkpoint_callback = None
 
     if args.eval:
         use_distributed_sampler = False

@@ -373,9 +373,8 @@ class ARModel(pl.LightningModule):
                                 )
                                 wandb.log(
                                     {f"{var_name}_lvl_{var_level}_t_{t_i_str}": wandb.Image(var_fig)})
-
-                            # Close all figs for this time step, saves memory
-                            plt.close("all")
+                                # Close all figs for this time step, saves memory
+                                plt.close("all")
 
                 if constants.store_example_data:
                     # Save pred and target as .pt files
