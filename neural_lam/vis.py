@@ -77,7 +77,7 @@ def plot_prediction(pred, target, obs_mask, title=None, vrange=None):
 
     # Plot pred and target
     for ax, data in zip(axes, (target, pred)):
-        data_grid = data.reshape(*constants.grid_shape).cpu().numpy()
+        data_grid = data.reshape(*constants.grid_shape[::-1]).cpu().numpy()
         contour_set = ax.contourf(
             lon,
             lat,
@@ -130,7 +130,7 @@ def plot_spatial_error(error, obs_mask, title=None, vrange=None):
     fig, ax = plt.subplots(figsize=constants.fig_size,
                            subplot_kw={"projection": constants.selected_proj})
 
-    error_grid = error.reshape(*constants.grid_shape).cpu().numpy()
+    error_grid = error.reshape(*constants.grid_shape[::-1]).cpu().numpy()
 
     contour_set = ax.contourf(
         lon,
