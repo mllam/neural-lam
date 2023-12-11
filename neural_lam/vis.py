@@ -69,8 +69,6 @@ def plot_prediction(pred, target, obs_mask, title=None, vrange=None):
     # get test data
     data_latlon = xr.open_dataset(constants.example_file)
     lon, lat = unrotate_latlon(data_latlon)
-    lon = lon.T
-    lat = lat.T
 
     fig, axes = plt.subplots(2, 1, figsize=constants.fig_size,
                              subplot_kw={"projection": constants.selected_proj})
@@ -124,8 +122,6 @@ def plot_spatial_error(error, obs_mask, title=None, vrange=None):
     # get test data
     data_latlon = xr.open_dataset(constants.example_file)
     lon, lat = unrotate_latlon(data_latlon)
-    lon = lon.T
-    lat = lat.T
 
     fig, ax = plt.subplots(figsize=constants.fig_size,
                            subplot_kw={"projection": constants.selected_proj})

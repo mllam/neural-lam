@@ -86,4 +86,4 @@ def unrotate_latlon(data):
     lon = unrot_lon(xx, yy, constants.pollon, constants.pollat)
     lat = unrot_lat(yy, xx, constants.pollon, constants.pollat)
 
-    return lon, lat
+    return lon.T, lat.T
