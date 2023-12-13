@@ -16,6 +16,5 @@ export OMP_NUM_THREADS=20
 
 # Run the script with torchrun
 srun -ul --gpus-per-task=1 python train_model.py \
-    --dataset "cosmo" --val_interval 20 --epochs 40 --n_workers 12 \
-    --batch_size 1
+    --dataset "cosmo" --val_interval 20 --epochs 40 --n_workers 12 --batch_size 1
     # --load saved_models/graph_lam-4x64-11_15_22_38_47/last.ckpt --resume_run '3gio4mcv'
