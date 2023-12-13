@@ -1,4 +1,3 @@
-import glob
 import os
 
 import pytorch_lightning as pl
@@ -26,10 +25,10 @@ class WeatherDataset(torch.utils.data.Dataset):
         assert split in ("train", "val", "test"), "Unknown dataset split"
         self.sample_dir_path = os.path.join("data", dataset_name, "samples", split)
 
-        zarr_files = glob.glob(os.path.join(self.sample_dir_path, "*.zarr"))
+        zarr_files = os.path.join(self.sample_dir_path, "data_" + split + ".zarr")
         if not zarr_files:
             raise ValueError("No .zarr files found in directory")
-        self.sample_archive = xr.open_zarr(zarr_files[0], consolidated=True)
+        self.sample_archive = xr.open_zarr(zarr_files, consolidated=True)
 
         if subset:
             # Limit to 200 samples
@@ -56,6 +55,7 @@ class WeatherDataset(torch.utils.data.Dataset):
         total_time = self.sample_archive.time.size - num_steps + 1
         time_idx = idx % total_time
         sample = self.sample_archive.isel(time=slice(time_idx, time_idx + num_steps))
+        sample = sample[constants.param_names_short]
         for var in sample.data_vars:
             for level in constants.vertical_levels:
                 new_var_name = f"{var}_z{level}"
@@ -64,7 +64,7 @@ class WeatherDataset(torch.utils.data.Dataset):
         da = sample.drop_dims("z_1").to_array().transpose(
             "time", "x_1", "y_1", "variable").values
 
-        sample = torch.cat((torch.tensor(da, dtype=torch.float32), sample))
+        sample = torch.tensor(da, dtype=torch.float32)
         # (N_t', N_x, N_y, d_features')
 
         # Flatten spatial dim
