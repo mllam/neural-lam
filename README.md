@@ -12,14 +12,14 @@ The repository contains LAM versions of:
 * GraphCast, by [Lam et al. (2023)](https://arxiv.org/abs/2212.12794).
 * The hierarchical model from [Oskarsson et al. (2023)](https://arxiv.org/abs/2309.17370).
 
-For more information see our preprint: [*Graph-based Neural Weather Prediction for Limited Area Modeling*](https://arxiv.org/abs/2309.17370).
+For more information see our paper: [*Graph-based Neural Weather Prediction for Limited Area Modeling*](https://arxiv.org/abs/2309.17370).
 If you use Neural-LAM in your work, please cite:
 ```
-@article{oskarsson2023graphbased,
-      title={Graph-based Neural Weather Prediction for Limited Area Modeling},
-      author={Joel Oskarsson and Tomas Landelius and Fredrik Lindsten},
-      year={2023},
-      journal={arXiv preprint arXiv:2309.17370}
+@inproceedings{oskarsson2023graphbased,
+    title={Graph-based Neural Weather Prediction for Limited Area Modeling},
+    author={Oskarsson, Joel and Landelius, Tomas and Lindsten, Fredrik},
+    booktitle={NeurIPS 2023 Workshop on Tackling Climate Change with Machine Learning},
+    year={2023}
 }
 ```
 
