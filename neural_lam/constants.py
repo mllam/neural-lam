@@ -1,7 +1,19 @@
+import numcodecs
 import numpy as np
 from cartopy import crs as ccrs
 
 wandb_project = "neural-lam"
+
+data_config = {
+    "data_path": "/scratch/mch/sadamov/ml_v1/",
+    "filename_regex": "(.*)_extr.nc",
+    "zarr_path": "/users/sadamov/pyprojects/neural-cosmo/data/cosmo/samples",
+    "compressor": numcodecs.Blosc(
+        cname='lz4',
+        clevel=5,
+        shuffle=numcodecs.Blosc.SHUFFLE),
+    "test_year": 2020,
+}
 
 # TODO: fix for leap years
 # Assuming no leap years in dataset (2024 is next)
