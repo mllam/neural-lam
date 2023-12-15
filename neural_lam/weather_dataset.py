@@ -52,9 +52,7 @@ class WeatherDataset(torch.utils.data.Dataset):
 
     def __getitem__(self, idx):
         num_steps = constants.train_horizon if self.split == "train" else constants.eval_horizon
-        total_time = self.sample_archive.time.size - num_steps + 1
-        time_idx = idx % total_time
-        sample = self.sample_archive.isel(time=slice(time_idx, time_idx + num_steps))
+        sample = self.sample_archive.isel(time=slice(idx, idx + num_steps))
         sample = sample[constants.param_names_short]
         for var in sample.data_vars:
             for level in constants.vertical_levels:
