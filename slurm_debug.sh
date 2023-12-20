@@ -17,5 +17,5 @@ export OMP_NUM_THREADS=128
 
 # Run the script with torchrun
 srun -ul --gpus-per-task=1 python train_model.py \
-    --dataset "cosmo" --subset_ds 1 --n_workers 128 --batch_size 4 --model "graph_lam" \
+    --dataset "cosmo" --subset_ds 1 --n_workers 64 --batch_size 4 --model "graph_lam" \
     --epochs 1 --val_interval 1
