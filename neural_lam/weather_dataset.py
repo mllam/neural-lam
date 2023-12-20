@@ -1,5 +1,6 @@
 import os
 
+import numpy as np
 import pytorch_lightning as pl
 import torch
 import xarray as xr
@@ -29,6 +30,16 @@ class WeatherDataset(torch.utils.data.Dataset):
         if not zarr_files:
             raise ValueError("No .zarr files found in directory")
         self.sample_archive = xr.open_zarr(zarr_files, consolidated=True)
+        self.sample_archive = self.sample_archive.sortby("time")
+        # These datapoints got corrupted during the creation of the dataset
+        self.sample_archive = self.sample_archive.sel(
+            time=~self.sample_archive.time.isin(np.array(
+                [
+                    #  '2019-09-07T22:00:00.000000000',
+                    #  '2019-09-07T23:00:00.000000000',
+                    #  '2019-09-08T00:00:00.000000000',
+                    '2019-09-09T22:00:00.000000000'],
+                dtype='datetime64[ns]')))
 
         if subset:
             # Limit to 200 samples
@@ -45,6 +56,14 @@ class WeatherDataset(torch.utils.data.Dataset):
         self.random_subsample = split == "train"
         self.split = split
 
+        self.sample_archive = self.sample_archive[constants.param_names_short]
+        for var in self.sample_archive.data_vars:
+            for level in constants.vertical_levels:
+                new_var_name = f"{var}_z{level}"
+                self.sample_archive[new_var_name] = self.sample_archive[var].sel(
+                    z_1=level)
+        self.sample_archive = self.sample_archive.drop_dims("z_1")
+
     def __len__(self):
         num_steps = constants.train_horizon if self.split == "train" else constants.eval_horizon
         total_time = self.sample_archive.time.size - num_steps + 1
@@ -53,14 +72,8 @@ class WeatherDataset(torch.utils.data.Dataset):
     def __getitem__(self, idx):
         num_steps = constants.train_horizon if self.split == "train" else constants.eval_horizon
         sample = self.sample_archive.isel(time=slice(idx, idx + num_steps))
-        sample = sample[constants.param_names_short]
-        for var in sample.data_vars:
-            for level in constants.vertical_levels:
-                new_var_name = f"{var}_z{level}"
-                sample[new_var_name] = sample[var].sel(z_1=level)
 
-        da = sample.drop_dims("z_1").to_array().transpose(
-            "time", "x_1", "y_1", "variable").values
+        da = sample.to_array().transpose("time", "x_1", "y_1", "variable").values
 
         sample = torch.tensor(da, dtype=torch.float32)
         # (N_t', N_x, N_y, d_features')
