@@ -1,6 +1,6 @@
+import glob
 import os
 
-import numpy as np
 import pytorch_lightning as pl
 import torch
 import xarray as xr
@@ -16,7 +16,7 @@ class WeatherDataset(torch.utils.data.Dataset):
     N_x = 582
     N_y = 390
     N_grid = 582*390 = 226980
-    d_features = 8(features) * 7(vertical model levels) = 56
+    d_features = 4(features) * 7(vertical model levels) = 28
     d_forcing = 0 #TODO: extract incoming radiation from KENDA
     """
 
@@ -24,65 +24,56 @@ class WeatherDataset(torch.utils.data.Dataset):
         super().__init__()
 
         assert split in ("train", "val", "test"), "Unknown dataset split"
-        self.sample_dir_path = os.path.join("data", dataset_name, "samples", split)
+        sample_dir_path = os.path.join("data", dataset_name, "samples", split)
 
-        zarr_files = os.path.join(self.sample_dir_path, "data_" + split + ".zarr")
-        if not zarr_files:
+        self.zarr_files = sorted(glob.glob(
+            os.path.join(sample_dir_path, "data*.zarr")))
+        if len(self.zarr_files) == 0:
             raise ValueError("No .zarr files found in directory")
-        self.sample_archive = xr.open_zarr(zarr_files, consolidated=True)
-        self.sample_archive = self.sample_archive.sortby("time")
-        # These datapoints got corrupted during the creation of the dataset
-        self.sample_archive = self.sample_archive.sel(
-            time=~self.sample_archive.time.isin(np.array(
-                [
-                    #  '2019-09-07T22:00:00.000000000',
-                    #  '2019-09-07T23:00:00.000000000',
-                    #  '2019-09-08T00:00:00.000000000',
-                    '2019-09-09T22:00:00.000000000'],
-                dtype='datetime64[ns]')))
 
         if subset:
             # Limit to 200 samples
-            self.sample_archive = self.sample_archive.isel(
-                time=slice(constants.eval_sample, constants.eval_sample + 200))
+            self.zarr_files = self.zarr_files[:2]
 
-        # Set up for standardization
         self.standardize = standardize
         if standardize:
             ds_stats = utils.load_dataset_stats(dataset_name, "cpu")
             self.data_mean, self.data_std = ds_stats["data_mean"], ds_stats["data_std"]
 
-        # If subsample index should be sampled (only duing training)
         self.random_subsample = split == "train"
         self.split = split
 
-        self.sample_archive = self.sample_archive[constants.param_names_short]
-        for var in self.sample_archive.data_vars:
-            for level in constants.vertical_levels:
-                new_var_name = f"{var}_z{level}"
-                self.sample_archive[new_var_name] = self.sample_archive[var].sel(
-                    z_1=level)
-        self.sample_archive = self.sample_archive.drop_dims("z_1")
-
     def __len__(self):
         num_steps = constants.train_horizon if self.split == "train" else constants.eval_horizon
-        total_time = self.sample_archive.time.size - num_steps + 1
+        total_time = len(
+            self.zarr_files) * constants.data_config["chunk_size"] - num_steps
         return total_time
 
     def __getitem__(self, idx):
         num_steps = constants.train_horizon if self.split == "train" else constants.eval_horizon
-        sample = self.sample_archive.isel(time=slice(idx, idx + num_steps))
 
-        da = sample.to_array().transpose("time", "x_1", "y_1", "variable").values
+        # Calculate which zarr files need to be loaded
+        start_file_idx = idx // constants.data_config["chunk_size"]
+        end_file_idx = (idx + num_steps) // constants.data_config["chunk_size"]
+        # Index of current slice
+        idx_sample = idx % constants.data_config["chunk_size"]
 
-        sample = torch.tensor(da, dtype=torch.float32)
-        # (N_t', N_x, N_y, d_features')
+        zarr_datasets = [xr.open_zarr(self.zarr_files[file_idx], consolidated=True)
+                         for file_idx in range(start_file_idx, end_file_idx + 1)]
+        sample_archive = xr.concat(zarr_datasets, dim='time')
 
-        # Flatten spatial dim
+        sample_xr = sample_archive.isel(time=slice(idx_sample, idx_sample + num_steps))
+
+        sample_values = [torch.tensor(
+            sample_xr[var].sel(z_1=level).values,
+            dtype=torch.float32)
+            for var in constants.param_names_short
+            for level in constants.vertical_levels]
+        sample = torch.stack(sample_values, dim=-1)  # (N_t', N_x, N_y, d_features')
+
         sample = sample.flatten(1, 2)  # (N_t, N_grid, d_features)
 
         if self.standardize:
-            # Standardize sample
             sample = (sample - self.data_mean) / self.data_std
 
         # Split up sample in init. states and target states
@@ -138,8 +129,6 @@ class WeatherDataModule(pl.LightningDataModule):
         return torch.utils.data.DataLoader(
             self.val_dataset, batch_size=self.batch_size, num_workers=self.num_workers,
             shuffle=False, pin_memory=False,
-            # persistent_workers=True,
-            # drop_last=True
         )
 
     def test_dataloader(self):

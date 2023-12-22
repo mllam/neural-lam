@@ -10,8 +10,9 @@ data_config = {
     "zarr_path": "/users/sadamov/pyprojects/neural-cosmo/data/cosmo/samples",
     "compressor": numcodecs.Blosc(
         cname='lz4',
-        clevel=5,
+        clevel=7,
         shuffle=numcodecs.Blosc.SHUFFLE),
+    "chunk_size": 100,
     "test_year": 2020,
 }
 
@@ -89,7 +90,7 @@ metrics_initialized = False
 # Plotting
 fig_size = (15, 10)
 example_file = "data/cosmo/samples/train/laf2015112800_extr.nc"
-eval_sample = 340  # First sample to use for evaluation
+eval_sample = 0  # First sample to use for evaluation #BUG: Implement this again
 store_example_data = False
 cosmo_proj = ccrs.PlateCarree()
 selected_proj = cosmo_proj
