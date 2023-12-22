@@ -59,20 +59,8 @@ def init_wandb(args):
             project=constants.wandb_project,
             id=args.resume_run,
             config=args)
-        run_name = wandb.run.name
 
-    return logger, run_name
-
-
-@rank_zero_only
-def init_checkpoint_callback(logger):
-    checkpoint_callback = pl.callbacks.ModelCheckpoint(
-        dirpath=logger.experiment.dir,
-        filename="latest",
-        every_n_epochs=1,
-        save_on_train_epoch_end=True,
-    )
-    return checkpoint_callback
+    return logger
 
 
 def main():
@@ -171,11 +159,21 @@ def main():
 
     result = init_wandb(args)
     if result is not None:
-        logger, run_name = result
-        checkpoint_callback = init_checkpoint_callback(logger)
+        logger = result
+        checkpoint_callback = pl.callbacks.ModelCheckpoint(
+            dirpath=logger.experiment.dir,
+            filename="latest",
+            every_n_epochs=1,
+            save_on_train_epoch_end=True,
+        )
     else:
         logger = None
-        checkpoint_callback = None
+        checkpoint_callback = pl.callbacks.ModelCheckpoint(
+            dirpath="saved_models",
+            filename="latest",
+            every_n_epochs=1,
+            save_on_train_epoch_end=True,
+        )
 
     if args.eval:
         use_distributed_sampler = False
