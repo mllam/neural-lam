@@ -8,7 +8,6 @@
 #SBATCH --output=lightning_logs/neurwp_out.log
 #SBATCH --error=lightning_logs/neurwp_err.log
 #SBATCH --mem=490G
-#SBATCH --exclusive
 
 # Load necessary modules
 conda activate neural-ddp
