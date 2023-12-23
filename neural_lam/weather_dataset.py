@@ -35,6 +35,20 @@ class WeatherDataset(torch.utils.data.Dataset):
             # Limit to 200 samples
             self.zarr_files = self.zarr_files[:2]
 
+        self.zarr_datasets = [
+            xr.open_zarr(
+                file,
+                consolidated=True)[
+                constants.param_names_short].sel(
+                z_1=constants.vertical_levels).to_array().stack(
+                    var=(
+                        'variable',
+                        'z_1')).transpose(
+                            "time",
+                            "x_1",
+                            "y_1",
+                "var") for file in self.zarr_files]
+
         self.standardize = standardize
         if standardize:
             ds_stats = utils.load_dataset_stats(dataset_name, "cpu")
@@ -58,18 +72,14 @@ class WeatherDataset(torch.utils.data.Dataset):
         # Index of current slice
         idx_sample = idx % constants.data_config["chunk_size"]
 
-        zarr_datasets = [xr.open_zarr(self.zarr_files[file_idx], consolidated=True)
-                         for file_idx in range(start_file_idx, end_file_idx + 1)]
-        sample_archive = xr.concat(zarr_datasets, dim='time')
+        sample_archive = xr.concat(
+            self.zarr_datasets[start_file_idx: end_file_idx + 1],
+            dim='time')
 
         sample_xr = sample_archive.isel(time=slice(idx_sample, idx_sample + num_steps))
 
-        sample_values = [torch.tensor(
-            sample_xr[var].sel(z_1=level).values,
-            dtype=torch.float32)
-            for var in constants.param_names_short
-            for level in constants.vertical_levels]
-        sample = torch.stack(sample_values, dim=-1)  # (N_t', N_x, N_y, d_features')
+        # (N_t', N_x, N_y, d_features')
+        sample = torch.tensor(sample_xr.values, dtype=torch.float32)
 
         sample = sample.flatten(1, 2)  # (N_t, N_grid, d_features)
 
@@ -127,11 +137,10 @@ class WeatherDataModule(pl.LightningDataModule):
 
     def val_dataloader(self):
         return torch.utils.data.DataLoader(
-            self.val_dataset, batch_size=self.batch_size, num_workers=self.num_workers,
-            shuffle=False, pin_memory=False,
-        )
+            self.val_dataset, batch_size=self.batch_size // self.batch_size,
+            num_workers=self.num_workers, shuffle=False, pin_memory=False,)
 
     def test_dataloader(self):
         return torch.utils.data.DataLoader(
-            self.test_dataset, batch_size=self.batch_size, num_workers=self.num_workers,
-            shuffle=False, pin_memory=False)
+            self.test_dataset, batch_size=self.batch_size // self.batch_size,
+            num_workers=self.num_workers, shuffle=False, pin_memory=False)
