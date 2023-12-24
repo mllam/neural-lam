@@ -65,7 +65,7 @@ def plot_prediction(pred, target, obs_mask, title=None, vrange=None):
         vmin, vmax = vrange[0].cpu().item(), vrange[1].cpu().item()
 
     # get test data
-    data_latlon = xr.open_dataset(constants.example_file)
+    data_latlon = xr.open_zarr(constants.example_file).isel(time=0)
     lon, lat = unrotate_latlon(data_latlon)
 
     fig, axes = plt.subplots(2, 1, figsize=constants.fig_size,
@@ -118,7 +118,7 @@ def plot_spatial_error(error, obs_mask, title=None, vrange=None):
         vmin, vmax = vrange[0].cpu().item(), vrange[1].cpu().item()
 
     # get test data
-    data_latlon = xr.open_dataset(constants.example_file)
+    data_latlon = xr.open_zarr(constants.example_file).isel(time=0)
     lon, lat = unrotate_latlon(data_latlon)
 
     fig, ax = plt.subplots(figsize=constants.fig_size,

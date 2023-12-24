@@ -24,7 +24,7 @@ def main():
     args = parser.parse_args()
 
     # Open the .nc file
-    ds = xr.open_dataset(constants.example_file)
+    ds = xr.open_zarr(constants.example_file).isel(time=0)
 
     # Extract the 'HSURF' data variable
     field = ds[args.field_name]
