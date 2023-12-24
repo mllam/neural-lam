@@ -90,7 +90,7 @@ metrics_initialized = False
 # Plotting
 fig_size = (15, 10)
 example_file = "data/cosmo/samples/train/laf2015112800_extr.nc"
-eval_sample = 0  # First sample to use for evaluation #BUG: Implement this again
+eval_sample = 20
 store_example_data = False
 cosmo_proj = ccrs.PlateCarree()
 selected_proj = cosmo_proj

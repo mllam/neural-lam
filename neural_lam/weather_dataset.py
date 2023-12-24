@@ -33,7 +33,13 @@ class WeatherDataset(torch.utils.data.Dataset):
 
         if subset:
             # Limit to 200 samples
-            self.zarr_files = self.zarr_files[:2]
+            self.zarr_files = self.zarr_files[constants.
+                                              eval_sample: constants.eval_sample + 2]
+            start_date = self.zarr_files[0].split(
+                "/")[-1].split("_")[1].replace('.zarr', '')
+
+            print("Evaluation on subset of 200 samples")
+            print("Evaluation starts on the", start_date)
 
         self.zarr_datasets = [
             xr.open_zarr(

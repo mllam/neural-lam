@@ -11,9 +11,9 @@
 conda activate neural-ddp
 
 # Set OMP_NUM_THREADS to a value greater than 1
-export OMP_NUM_THREADS=24
+export OMP_NUM_THREADS=16
 
 # Run the script with torchrun
 srun -ul --gpus-per-task=1 python train_model.py \
-    --load "saved_models/graph_lam-4x64-12_08_18_59_10/latest-v1.ckpt" \
-    --dataset "cosmo" --eval="test" --subset_ds 1 --n_workers 12 --batch_size 1
+    --load "wandb/run-20231223_204645-34sp11x5/files/latest-v1.ckpt" \
+    --dataset "cosmo" --eval="test" --subset_ds 1 --n_workers 8 --batch_size 12

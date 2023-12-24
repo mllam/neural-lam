@@ -1,6 +1,8 @@
+import glob
 import itertools
 import os
 
+import imageio
 import matplotlib.pyplot as plt
 import numpy as np
 import pytorch_lightning as pl
@@ -465,6 +467,18 @@ class ARModel(pl.LightningModule):
             # save mean spatial loss as .pt file also
             torch.save(mean_spatial_loss.cpu(), os.path.join(
                 wandb.run.dir, 'mean_spatial_loss.pt'))
+
+            dir_path = f"{wandb.run.dir}/media/images"
+            for param in constants.param_names_short + ["test_loss"]:
+                for level in constants.vertical_levels:
+                    # Get all the images for the current parameter
+                    images = sorted(
+                        glob.glob(f'{dir_path}/{param}_lvl_{level}_t_*.png'))
+                    # Generate the GIF
+                    with imageio.get_writer(f'{dir_path}/{param}_lvl_{level}.gif', mode='I', fps=1) as writer:
+                        for filename in images:
+                            image = imageio.imread(filename)
+                            writer.append_data(image)
 
         self.spatial_loss_maps.clear()
 
