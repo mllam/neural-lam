@@ -16,7 +16,7 @@ class WeatherDataset(torch.utils.data.Dataset):
     N_x = 582
     N_y = 390
     N_grid = 582*390 = 226980
-    d_features = 4(features) * 7(vertical model levels) = 28
+    d_features = 4(features) * 21(vertical model levels) = 84
     d_forcing = 0 #TODO: extract incoming radiation from KENDA
     """
 

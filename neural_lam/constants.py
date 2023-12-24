@@ -53,25 +53,11 @@ param_weights = {
 
 # Vertical levels
 vertical_levels = [
-    1,
-    5,
-    13,
-    22,
-    38,
-    41,
-    60
+    6, 9, 12, 14, 16, 18, 20, 22, 23, 25, 27, 29, 31, 33, 36, 39, 42, 45, 48, 52, 60
 ]
 
 # Vertical level weights
-level_weights = {
-    1: 1,
-    5: 1,
-    13: 1,
-    22: 1,
-    38: 1,
-    41: 1,
-    60: 1
-}
+level_weights = {level: 1 for level in vertical_levels}
 
 # Projection and grid
 grid_shape = (390, 582)  # (y, x)

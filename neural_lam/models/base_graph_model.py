@@ -33,7 +33,7 @@ class BaseGraphModel(ARModel):
 
         # grid_dim from data + static + batch_static
         grid_dim = 2 * self.grid_state_dim + grid_static_dim + self.grid_forcing_dim +\
-            self.batch_static_feature_dim  # 2*28 + 4 + 0 + 0 = 60
+            self.batch_static_feature_dim  # 2*81 + 4 + 0 + 0 = 166
         self.g2m_edges, g2m_dim = self.g2m_features.shape
         self.m2g_edges, m2g_dim = self.m2g_features.shape
 

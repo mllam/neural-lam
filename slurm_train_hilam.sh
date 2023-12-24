@@ -9,8 +9,18 @@
 #SBATCH --error=lightning_logs/neurwp_errh.log
 #SBATCH --mem=490G
 
+PREPROCESS=false
+
 # Load necessary modules
 conda activate neural-ddp
+
+if $PREPROCESS; then
+    srun -ul python tools/create_static_features.py --boundaries 60
+    srun -ul python tools/create_mesh.py --dataset "cosmo"
+    srun -ul python tools/create_grid_features.py --dataset "cosmo"
+    # This takes multiple hours!
+    srun -ul python tools/create_parameter_weights.py --dataset "cosmo" --batch_size 12 --n_workers 8 --step_length 1
+fi
 
 export OMP_NUM_THREADS=16
 
