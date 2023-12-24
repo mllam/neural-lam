@@ -9,7 +9,7 @@ from neural_lam.rotate_grid import unrotate_latlon
 
 
 @matplotlib.rc_context(utils.fractional_plot_bundle(1))
-def plot_error_map(errors, title=None, step_length=1):
+def plot_error_map(errors, global_mean, title=None, step_length=1):
     """
     Plot a heatmap of errors of different variables at different predictions horizons
     errors: (pred_steps, d_f)
@@ -17,13 +17,11 @@ def plot_error_map(errors, title=None, step_length=1):
     errors_np = errors.T.cpu().numpy()  # (d_f, pred_steps)
     d_f, pred_steps = errors_np.shape
 
-    # Normalize all errors to [0,1] for color map
-    max_errors = errors_np.max(axis=1)  # d_f
-    errors_norm = errors_np / np.expand_dims(max_errors, axis=1)
+    rel_errors = errors_np / np.expand_dims(global_mean, axis=1)
 
     fig, ax = plt.subplots(figsize=(15, 10))
 
-    ax.imshow(errors_norm, cmap="OrRd", vmin=0, vmax=1., interpolation="none",
+    ax.imshow(rel_errors, cmap="OrRd", vmin=0, vmax=1., interpolation="none",
               aspect="auto", alpha=0.8)
 
     # ax and labels

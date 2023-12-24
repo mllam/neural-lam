@@ -280,6 +280,7 @@ class ARModel(pl.LightningModule):
                 # Don't log this during sanity checking
                 val_err_fig = vis.plot_error_map(
                     val_err_rescaled,
+                    self.data_mean,
                     title="Validation " +
                     self.loss_name.upper() +
                     " error",
@@ -413,9 +414,11 @@ class ARModel(pl.LightningModule):
             # Create plots only for these instances
             mae_fig = vis.plot_error_map(
                 test_mae_rescaled[self.val_step_log_errors - 1],
+                self.data_mean,
                 step_length=self.step_length)
             rmse_fig = vis.plot_error_map(
                 test_rmse_rescaled[self.val_step_log_errors - 1],
+                self.data_mean,
                 step_length=self.step_length)
 
             wandb.log({  # Log png:s
