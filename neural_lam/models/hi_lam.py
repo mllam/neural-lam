@@ -1,4 +1,3 @@
-import torch
 from torch import nn
 
 from neural_lam.interaction_net import InteractionNet
