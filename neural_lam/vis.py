@@ -17,7 +17,7 @@ def plot_error_map(errors, global_mean, title=None, step_length=1):
     errors_np = errors.T.cpu().numpy()  # (d_f, pred_steps)
     d_f, pred_steps = errors_np.shape
 
-    rel_errors = errors_np / np.expand_dims(global_mean, axis=1)
+    rel_errors = errors_np / np.expand_dims(global_mean.cpu(), axis=1)
 
     fig, ax = plt.subplots(figsize=(15, 10))
 
