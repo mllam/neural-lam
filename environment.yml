@@ -6,6 +6,7 @@ channels:
 dependencies:
   - Cartopy
   - dask
+  - imageio
   - ipython
   - matplotlib
   - netcdf4
