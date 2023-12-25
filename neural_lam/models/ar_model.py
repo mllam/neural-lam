@@ -65,8 +65,8 @@ class ARModel(pl.LightningModule):
         self.test_maes = []
         self.test_mses = []
 
-        # For making restoring of optimizer state optional (slight hack)
-        self.opt_state = None
+        # For making restoring of optimizer state optional
+        self.resume_opt_sched = args.resume_opt_sched
 
         # For example plotting
         self.n_example_pred = args.n_example_pred
@@ -95,10 +95,15 @@ class ARModel(pl.LightningModule):
 
     def configure_optimizers(self):
         opt = torch.optim.AdamW(self.parameters(), lr=self.lr, betas=(0.9, 0.95))
-        if self.opt_state:
-            opt.load_state_dict(self.opt_state)
+        scheduler = torch.optim.lr_scheduler.StepLR(opt, step_size=20, gamma=0.1)
 
-        return opt
+        return [opt], [scheduler]
+
+    def on_load_checkpoint(self, checkpoint):
+        if not self.resume_opt_sched:
+            checkpoint['optimizer_states'] = [None
+                                              for _ in checkpoint['optimizer_states']]
+            checkpoint['lr_schedulers'] = [None for _ in checkpoint['lr_schedulers']]
 
     @staticmethod
     def expand_to_batch(x, batch_size):

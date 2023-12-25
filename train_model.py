@@ -90,6 +90,8 @@ def main():
                         help='Path to load model parameters from (default: None)')
     parser.add_argument('--resume_run', type=str,
                         help='Run ID to resume (default: None)')
+    parser.add_argument('--resume_opt_sched', type=int, default=0,
+                        help='Resume optimizer and scheduler state (default: 0=false)')
     parser.add_argument(
         '--precision', type=str, default=32,
         help='Numerical precision to use for model (32/16/bf16) (default: 32)')
