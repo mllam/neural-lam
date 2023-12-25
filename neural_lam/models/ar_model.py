@@ -169,7 +169,7 @@ class ARModel(pl.LightningModule):
         entry_loss = self.loss(prediction, target)  # (B, pred_steps, N_grid, d_f)
 
         # (B, pred_steps, N_grid), weighted sum over features
-        grid_node_loss = torch.sum(entry_loss * self.state_weight, dim=-1)
+        grid_node_loss = torch.mean(entry_loss * self.state_weight, dim=-1)
 
         if not reduce_spatial_dim:
             return grid_node_loss  # (B, pred_steps, N_grid)
