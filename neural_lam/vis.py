@@ -17,9 +17,8 @@ def plot_error_map(errors, global_mean, title=None, step_length=1):
     errors_np = errors.T.cpu().numpy()  # (d_f, pred_steps)
     d_f, pred_steps = errors_np.shape
 
-    rel_errors = errors_np / np.expand_dims(global_mean.cpu(), axis=1)
-
-    fig, ax = plt.subplots(figsize=(15, 10))
+    rel_errors = errors_np / np.abs(np.expand_dims(global_mean.cpu(), axis=1))
+    fig, ax = plt.subplots(figsize=(15, 20))
 
     ax.imshow(rel_errors, cmap="OrRd", vmin=0, vmax=1., interpolation="none",
               aspect="auto", alpha=0.8)
@@ -31,7 +30,7 @@ def plot_error_map(errors, global_mean, title=None, step_length=1):
         ax.text(i, j, formatted_error, ha='center', va='center', usetex=False)
 
     # Ticks and labels
-    label_size = 15
+    label_size = 12
     ax.set_xticks(np.arange(pred_steps))
     pred_hor_i = np.arange(pred_steps) + 1  # Prediction horiz. in index
     pred_hor_h = step_length * pred_hor_i  # Prediction horiz. in hours
