@@ -6,7 +6,7 @@
 #SBATCH --gpus-per-node=2
 #SBATCH --ntasks-per-node=2
 #SBATCH --time=01:00:00
-#SBATCH --partition=a100-80gb
+#SBATCH --partition=normal
 #SBATCH --account=s83
 #SBATCH --mem=490G
 

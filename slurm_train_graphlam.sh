@@ -9,21 +9,22 @@
 #SBATCH --error=lightning_logs/neurwp_err.log
 #SBATCH --mem=490G
 
-PREPROCESS=false
+export PREPROCESS=false
 
 # Load necessary modules
 conda activate neural-ddp
 
-if $PREPROCESS; then
-    srun -ul python tools/create_static_features.py --boundaries 60
-    srun -ul python tools/create_mesh.py --dataset "cosmo"
-    srun -ul python tools/create_grid_features.py --dataset "cosmo"
+export OMP_NUM_THREADS=8
+
+if [ "$PREPROCESS" = true ]; then
+    srun -ul -N1 -n1 python create_static_features.py --boundaries 60
+    srun -ul -N1 -n1 python create_mesh.py --dataset "cosmo"
+    srun -ul -N1 -n1 python create_grid_features.py --dataset "cosmo"
     # This takes multiple hours!
-    srun -ul python tools/create_parameter_weights.py --dataset "cosmo" --batch_size 12 --n_workers 8 --step_length 1
+    srun -ul -N1 -n1 python create_parameter_weights.py --dataset "cosmo" --batch_size 12 --n_workers 8 --step_length 1
 fi
-export OMP_NUM_THREADS=16
 
 # Run the script with torchrun
 srun -ul --gpus-per-task=1 python train_model.py \
-    --dataset "cosmo" --val_interval 20 --epochs 40 --n_workers 8 --batch_size 12
+    --dataset "cosmo" --val_interval 20 --epochs 40 --n_workers 4 --batch_size 12
     # --load saved_models/graph_lam-4x64-11_15_22_38_47/last.ckpt --resume_run '3gio4mcv'
