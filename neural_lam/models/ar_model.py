@@ -95,7 +95,7 @@ class ARModel(pl.LightningModule):
 
     def configure_optimizers(self):
         opt = torch.optim.AdamW(self.parameters(), lr=self.lr, betas=(0.9, 0.95))
-        scheduler = torch.optim.lr_scheduler.StepLR(opt, step_size=20, gamma=0.1)
+        scheduler = torch.optim.lr_scheduler.StepLR(opt, step_size=30, gamma=0.1)
 
         return [opt], [scheduler]
 
