@@ -128,12 +128,16 @@ def combine_zarr_archives(config) -> None:
 if __name__ == "__main__":
 
     parser = argparse.ArgumentParser(description='Create a zarr archive.')
-    parser.add_argument('--data_path', type=str, required=True,
-                        help='Path to the raw data')
+    parser.add_argument(
+        '--data_path',
+        type=str,
+        required=True,
+        help='Path to the raw data',
+        default="/scratch/mch/sadamov/ml_v1/")
     parser.add_argument('--test_year', type=int, required=True,
-                        help='Test year')
+                        help='Test year', default=2020)
     parser.add_argument('--filename_regex', type=str, required=True,
-                        help='Filename regex')
+                        help='Filename regex', default="(.*)_extr.nc")
 
     args = parser.parse_args()
 
