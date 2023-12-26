@@ -47,7 +47,7 @@ level_weights = {level: 1 for level in vertical_levels}
 grid_shape = (390, 582)  # (y, x)
 
 # Time step prediction during training / prediction (eval)
-train_horizon = 3  # hours (t-1 + t -> t+1)
+train_horizon = 6  # hours (t-1 + t -> t+1)
 eval_horizon = 25  # hours (autoregressive)
 
 # Log prediction error for these time steps forward
