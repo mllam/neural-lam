@@ -66,17 +66,17 @@ class WeatherDataset(torch.utils.data.Dataset):
     def __len__(self):
         num_steps = constants.train_horizon if self.split == "train" else constants.eval_horizon
         total_time = len(
-            self.zarr_files) * constants.data_config["chunk_size"] - num_steps
+            self.zarr_files) * constants.chunk_size - num_steps
         return total_time
 
     def __getitem__(self, idx):
         num_steps = constants.train_horizon if self.split == "train" else constants.eval_horizon
 
         # Calculate which zarr files need to be loaded
-        start_file_idx = idx // constants.data_config["chunk_size"]
-        end_file_idx = (idx + num_steps) // constants.data_config["chunk_size"]
+        start_file_idx = idx // constants.chunk_size
+        end_file_idx = (idx + num_steps) // constants.chunk_size
         # Index of current slice
-        idx_sample = idx % constants.data_config["chunk_size"]
+        idx_sample = idx % constants.chunk_size
 
         sample_archive = xr.concat(
             self.zarr_datasets[start_file_idx: end_file_idx + 1],
