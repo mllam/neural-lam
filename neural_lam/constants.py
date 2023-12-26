@@ -57,6 +57,7 @@ metrics_initialized = False
 # Plotting
 fig_size = (15, 10)
 example_file = "data/cosmo/samples/train/data_2015112800.zarr"
+chunk_size = 100
 eval_sample = 0
 store_example_data = False
 cosmo_proj = ccrs.PlateCarree()

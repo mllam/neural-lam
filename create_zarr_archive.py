@@ -11,6 +11,8 @@ import numcodecs
 import xarray as xr
 from tqdm import tqdm
 
+from neural_lam import constants
+
 
 def append_or_create_zarr(data_out: xr.Dataset, config: dict, zarr_name: str) -> None:
     """Append data to an existing Zarr archive or create a new one."""
@@ -149,7 +151,7 @@ if __name__ == "__main__":
             cname='lz4',
             clevel=7,
             shuffle=numcodecs.Blosc.SHUFFLE),
-        "chunk_size": 100,
+        "chunk_size": constants.chunk_size,
         "test_year": args.test_year,
     }
     data_config.update(
