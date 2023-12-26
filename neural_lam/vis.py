@@ -18,7 +18,9 @@ def plot_error_map(errors, global_mean, title=None, step_length=1):
     d_f, pred_steps = errors_np.shape
 
     rel_errors = errors_np / np.abs(np.expand_dims(global_mean.cpu(), axis=1))
-    fig, ax = plt.subplots(figsize=(15, 20))
+    height = int(np.sqrt(len(constants.vertical_levels)
+                         * len(constants.param_names_short)) * 2)
+    fig, ax = plt.subplots(figsize=(15, height))
 
     ax.imshow(rel_errors, cmap="OrRd", vmin=0, vmax=1., interpolation="none",
               aspect="auto", alpha=0.8)
