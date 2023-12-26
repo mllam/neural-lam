@@ -1,14 +1,15 @@
 # Standard library
+import argparse
 import glob
 import os
 import re
 import shutil
 
+import numcodecs
+
 # Third-party
 import xarray as xr
 from tqdm import tqdm
-
-from neural_lam.constants import data_config
 
 
 def append_or_create_zarr(data_out: xr.Dataset, config: dict, zarr_name: str) -> None:
@@ -125,6 +126,28 @@ def combine_zarr_archives(config) -> None:
 
 
 if __name__ == "__main__":
+
+    parser = argparse.ArgumentParser(description='Create a zarr archive.')
+    parser.add_argument('--data_path', type=str, required=True,
+                        help='Path to the raw data')
+    parser.add_argument('--test_year', type=int, required=True,
+                        help='Test year')
+    parser.add_argument('--filename_regex', type=str, required=True,
+                        help='Filename regex')
+
+    args = parser.parse_args()
+
+    data_config = {
+        "data_path": args.data_path,
+        "filename_regex": args.filename_regex,
+        "zarr_path": "/users/sadamov/pyprojects/neural-cosmo/data/cosmo/samples",
+        "compressor": numcodecs.Blosc(
+            cname='lz4',
+            clevel=7,
+            shuffle=numcodecs.Blosc.SHUFFLE),
+        "chunk_size": 100,
+        "test_year": args.test_year,
+    }
     data_config.update(
         {"folders": os.listdir(data_config["data_path"]),
          "filename_pattern": re.compile(data_config["filename_regex"])})
