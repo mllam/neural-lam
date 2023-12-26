@@ -14,7 +14,7 @@ export PREPROCESS=true
 # Load necessary modules
 conda activate neural-ddp
 
-export OMP_NUM_THREADS=12
+export OMP_NUM_THREADS=16
 
 if [ "$PREPROCESS" = true ]; then
     srun -ul -N1 -n1 python create_static_features.py --boundaries 60
