@@ -1,24 +1,7 @@
-import numcodecs
 import numpy as np
 from cartopy import crs as ccrs
 
 wandb_project = "neural-lam"
-
-data_config = {
-    "data_path": "/scratch/mch/sadamov/ml_v1/",
-    "filename_regex": "(.*)_extr.nc",
-    "zarr_path": "/users/sadamov/pyprojects/neural-cosmo/data/cosmo/samples",
-    "compressor": numcodecs.Blosc(
-        cname='lz4',
-        clevel=7,
-        shuffle=numcodecs.Blosc.SHUFFLE),
-    "chunk_size": 100,
-    "test_year": 2020,
-}
-
-# TODO: fix for leap years
-# Assuming no leap years in dataset (2024 is next)
-seconds_in_year = 365 * 24 * 60 * 60
 
 # Full names
 param_names = [
@@ -53,17 +36,15 @@ param_weights = {
 
 # Vertical levels
 vertical_levels = [
-    6, 9, 12, 14, 16, 18, 20, 22, 23, 25, 27, 29, 31, 33, 36, 39, 42, 45, 48, 52, 60
+    1, 5, 13, 22, 38, 41, 60
 ]
+
 
 # Vertical level weights
 level_weights = {level: 1 for level in vertical_levels}
 
 # Projection and grid
 grid_shape = (390, 582)  # (y, x)
-
-# Zoom for graph plotting
-zoom_limit = 1e10
 
 # Time step prediction during training / prediction (eval)
 train_horizon = 3  # hours (t-1 + t -> t+1)
