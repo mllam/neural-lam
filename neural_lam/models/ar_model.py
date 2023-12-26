@@ -99,12 +99,6 @@ class ARModel(pl.LightningModule):
 
         return [opt], [scheduler]
 
-    def on_load_checkpoint(self, checkpoint):
-        if not self.resume_opt_sched:
-            checkpoint['optimizer_states'] = [None
-                                              for _ in checkpoint['optimizer_states']]
-            checkpoint['lr_schedulers'] = [None for _ in checkpoint['lr_schedulers']]
-
     @staticmethod
     def expand_to_batch(x, batch_size):
         """
@@ -505,3 +499,6 @@ class ARModel(pl.LightningModule):
                 new_key = old_key.replace("g2m_gnn.grid_mlp", "encoding_grid_mlp")
                 loaded_state_dict[new_key] = loaded_state_dict[old_key]
                 del loaded_state_dict[old_key]
+        if not self.resume_opt_sched:
+            ckpt['optimizer_states'] = [None for _ in ckpt['optimizer_states']]
+            ckpt['lr_schedulers'] = [None for _ in ckpt['lr_schedulers']]
