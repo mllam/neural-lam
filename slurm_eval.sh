@@ -7,6 +7,7 @@
 #SBATCH --account=s83
 #SBATCH --output=lightning_logs/neurwp_eval_out.log
 #SBATCH --error=lightning_logs/neurwp_eval_err.log
+#SBATCH --time=03:00:00
 
 conda activate neural-ddp
 
@@ -15,6 +16,5 @@ export OMP_NUM_THREADS=16
 
 # Run the script with torchrun
 srun -ul --gpus-per-task=1 python train_model.py \
-    --load "wandb/run-20231224_035623-1z1j8v6v/files/latest-v1.ckpt" \
-    --dataset "cosmo" --eval="test" --subset_ds 1 --n_workers 8 --batch_size 12 \
-    --graph "hierarchical" --model "hi_lam"
+    --load "wandb/run-20231225_205644-qf82s2yb/files/latest-v1.ckpt" \
+    --dataset "cosmo" --eval="test" --subset_ds 1 --n_workers 8 --batch_size 12
