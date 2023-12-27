@@ -1,5 +1,4 @@
 import glob
-import itertools
 import os
 
 import imageio
@@ -32,7 +31,10 @@ class ARModel(pl.LightningModule):
         # Some constants useful for sub-classes
         self.batch_static_feature_dim = constants.batch_static_feature_dim
         self.grid_forcing_dim = constants.grid_forcing_dim
-        self.grid_state_dim = constants.grid_state_dim
+        count_3d_fields = sum(value == 1 for value in constants.is_3d.values())
+        count_2d_fields = sum(value != 1 for value in constants.is_3d.values())
+        self.grid_state_dim = len(
+            constants.vertical_levels) * count_3d_fields + count_2d_fields
 
         # Load static features for grid/data
         static_data_dict = utils.load_static_data(args.dataset)
@@ -321,11 +323,6 @@ class ARModel(pl.LightningModule):
         log_spatial_losses = spatial_loss[:, self.val_step_log_errors - 1]
         self.spatial_loss_maps.append(log_spatial_losses)  # (B, N_log, N_grid)
 
-        list(
-            itertools.product(
-                constants.param_names_short,
-                constants.vertical_levels))
-
         if self.global_rank == 0 and not self.plot_created:
             self.plot_created = True
             # Plot example predictions
@@ -343,13 +340,12 @@ class ARModel(pl.LightningModule):
                     self.plotted_examples += 1  # Increment already here
                     # Each slice is (pred_steps, N_grid, d_f)
                     # Iterate over variables
-                    for var_name, var_unit in zip(
-                            constants.param_names_short, constants.param_units):
+                    var_i = 0
+                    for var_name, var_unit in sorted(zip(
+                            constants.param_names_short, constants.param_units)):
                         # Iterate over vertical levels
-                        for var_level in constants.vertical_levels:
-                            var_i = constants.param_names_short.index(
-                                var_name) * len(constants.vertical_levels) + constants.vertical_levels.index(var_level)
-
+                        for var_level in constants.vertical_levels if constants.is_3d[var_name] else [
+                                0]:
                             # Calculate var_vrange for each level
                             var_vmin = min(
                                 pred_slice[:, :, var_i].min(),
@@ -377,6 +373,7 @@ class ARModel(pl.LightningModule):
                                     {f"{var_name}_lvl_{var_level}_t_{t_i_str}": wandb.Image(var_fig)})
                                 # Close all figs for this time step, saves memory
                                 plt.close("all")
+                                var_i += 1
 
                 if constants.store_example_data:
                     # Save pred and target as .pt files
@@ -472,7 +469,8 @@ class ARModel(pl.LightningModule):
 
             dir_path = f"{wandb.run.dir}/media/images"
             for param in constants.param_names_short + ["test_loss"]:
-                for level in constants.vertical_levels:
+                for level in constants.vertical_levels if constants.is_3d[param] else [
+                        0]:
                     # Get all the images for the current parameter
                     images = sorted(
                         glob.glob(f'{dir_path}/{param}_lvl_{level}_t_*.png'))

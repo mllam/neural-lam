@@ -27,8 +27,13 @@ def main():
     # Define weights for each vertical level and parameter
     # Create parameter weights based on height
     w_list = []
-    for pw in constants.param_weights.values():
-        for lw in constants.level_weights.values():
+    for var_name, pw in zip(constants.param_names_short,
+                            constants.param_weights.values()):
+        # Determine the levels to iterate over
+        levels = constants.level_weights.values() if constants.is_3d[var_name] else [1]
+
+        # Iterate over the levels
+        for lw in levels:
             w_list.append(pw * lw)
 
     w_list = np.array(w_list)

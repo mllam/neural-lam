@@ -41,19 +41,43 @@ class WeatherDataset(torch.utils.data.Dataset):
             print("Evaluation on subset of 200 samples")
             print("Evaluation starts on the", start_date)
 
-        self.zarr_datasets = [
+        # Separate 3D and 2D variables
+        variables_3d = [var for var in constants.param_names_short
+                        if constants.is_3d[var]]
+        variables_2d = [var for var in constants.param_names_short
+                        if not constants.is_3d[var]]
+
+        # Stack 3D variables
+        datasets_3d = [
             xr.open_zarr(
                 file,
-                consolidated=True)[
-                constants.param_names_short].sel(
+                consolidated=True)[variables_3d].sel(
                 z_1=constants.vertical_levels).to_array().stack(
-                    var=(
-                        'variable',
-                        'z_1')).transpose(
-                            "time",
-                            "x_1",
-                            "y_1",
+                var=(
+                    'variable',
+                    'z_1')).transpose(
+                        "time",
+                        "x_1",
+                        "y_1",
                 "var") for file in self.zarr_files]
+
+        # Stack 2D variables without selecting along z_1
+        datasets_2d = [
+            xr.open_zarr(
+                file,
+                consolidated=True)[variables_2d].to_array().expand_dims(
+                z_1=[0]).stack(
+                var=(
+                    'variable',
+                    'z_1')).transpose(
+                        "time",
+                        "x_1",
+                        "y_1",
+                "var") for file in self.zarr_files]
+
+        # Combine 3D and 2D datasets
+        self.zarr_datasets = [xr.concat([ds_3d, ds_2d], dim='var').sortby("var")
+                              for ds_3d, ds_2d in zip(datasets_3d, datasets_2d)]
 
         self.standardize = standardize
         if standardize:

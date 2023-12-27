@@ -3,13 +3,13 @@
 #SBATCH --nodes=4
 #SBATCH --gpus-per-node=4
 #SBATCH --ntasks-per-node=4
-#SBATCH --partition=a100-80gb
+#SBATCH --partition=normal
 #SBATCH --account=s83
 #SBATCH --output=lightning_logs/neurwp_out.log
 #SBATCH --error=lightning_logs/neurwp_err.log
 #SBATCH --mem=490G
 
-export PREPROCESS=true
+export PREPROCESS=false
 
 # Load necessary modules
 conda activate neural-ddp

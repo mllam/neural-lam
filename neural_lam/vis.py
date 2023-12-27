@@ -41,9 +41,11 @@ def plot_error_map(errors, global_mean, title=None, step_length=1):
 
     ax.set_yticks(np.arange(d_f))
     y_ticklabels = [
-        f"{name if name != 'RELHUM' else 'RH'} ({unit}) {level}" for name,
-        unit in zip(constants.param_names_short, constants.param_units)
-        for level in constants.vertical_levels]
+        f"{name if name != 'RELHUM' else 'RH'} ({unit}) {level if constants.is_3d else ''}" 
+        for name, unit in zip(constants.param_names_short, constants.param_units)
+        for level in (constants.vertical_levels if constants.is_3d[name] else [0])
+    ]
+    y_ticklabels = sorted(y_ticklabels)
     ax.set_yticklabels(y_ticklabels, rotation=30, size=label_size)
 
     if title:
