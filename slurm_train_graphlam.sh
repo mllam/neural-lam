@@ -9,7 +9,7 @@
 #SBATCH --error=lightning_logs/neurwp_err.log
 #SBATCH --mem=490G
 
-export PREPROCESS=true
+export PREPROCESS=false
 
 # Load necessary modules
 conda activate neural-ddp
@@ -26,7 +26,7 @@ fi
 
 # Run the script with torchrun
 srun -ul --gpus-per-task=1 python train_model.py \
-    --dataset "cosmo" --val_interval 20 --epochs 100 --n_workers 8 --batch_size 12 \
+    --dataset "cosmo" --val_interval 20 --epochs 100 --n_workers 8 --batch_size 3 \
     --load wandb/run-20231226_083638-4f5sanqa/files/latest-v1.ckpt \
     --resume_opt_sched 1
     # --resume_run '3gio4mcv'
