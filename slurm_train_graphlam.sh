@@ -3,7 +3,7 @@
 #SBATCH --nodes=4
 #SBATCH --gpus-per-node=4
 #SBATCH --ntasks-per-node=4
-#SBATCH --partition=a100-80gb
+#SBATCH --partition=normal
 #SBATCH --account=s83
 #SBATCH --output=lightning_logs/neurwp_out.log
 #SBATCH --error=lightning_logs/neurwp_err.log
@@ -26,7 +26,7 @@ fi
 
 # Run the script with torchrun
 srun -ul --gpus-per-task=1 python train_model.py \
-    --dataset "cosmo" --val_interval 20 --epochs 100 --n_workers 8 --batch_size 3 \
-    --load wandb/run-20231226_083638-4f5sanqa/files/latest-v1.ckpt \
-    --resume_opt_sched 1
+    --dataset "cosmo" --val_interval 20 --epochs 40 --n_workers 8 --batch_size 8 
+    # --load wandb/run-20231226_083638-4f5sanqa/files/latest-v1.ckpt \
+    # --resume_opt_sched 1
     # --resume_run '3gio4mcv'
