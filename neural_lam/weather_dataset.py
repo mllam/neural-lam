@@ -34,7 +34,7 @@ class WeatherDataset(torch.utils.data.Dataset):
         if subset:
             # Limit to 200 samples
             self.zarr_files = self.zarr_files[constants.
-                                              eval_sample: constants.eval_sample + 2]
+                                              eval_sample: constants.eval_sample + 1]
             start_date = self.zarr_files[0].split(
                 "/")[-1].split("_")[1].replace('.zarr', '')
 
