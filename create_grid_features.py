@@ -24,12 +24,8 @@ def main():
         np.load(
             os.path.join(
                 static_dir_path,
-                "surface_geopotential.npy")))  # (N_x, N_y)
-    geopotential = geopotential.flatten(0, 1).unsqueeze(1)  # (N_grid,1)
-    gp_min = torch.min(geopotential)
-    gp_max = torch.max(geopotential)
-    # Rescale geopotential to [0,1]
-    geopotential = (geopotential - gp_min) / (gp_max - gp_min)  # (N_grid, 1)
+                "reference_geopotential_pressure.npy")))  # (N_x, N_y)
+    geopotential = geopotential.flatten(0, 1)  # (N_grid, N_static)
 
     grid_border_mask = torch.tensor(
         np.load(
@@ -42,7 +38,7 @@ def main():
 
     # Concatenate grid features
     grid_features = torch.cat((grid_xy, geopotential, grid_border_mask),
-                              dim=1)  # (N_grid, 4)
+                              dim=1)  # (N_grid, 3 + N_static)
 
     torch.save(grid_features, os.path.join(
         static_dir_path, "grid_features.pt"))
