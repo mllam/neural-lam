@@ -92,7 +92,7 @@ class ARModel(pl.LightningModule):
 
         wandb.define_metric("val_mean_loss", summary="min")
         for step in self.val_step_log_errors:
-            wandb.define_metric(f"val_loss_unroll{step}", summary="min")
+            wandb.define_metric(f"val_loss_unroll{step:02}", summary="min")
         self.metrics_initialized = True  # Make sure this is done only once
 
     def configure_optimizers(self):
@@ -256,7 +256,7 @@ class ARModel(pl.LightningModule):
         mean_loss = torch.mean(time_step_loss)
 
         # Log loss per time step forward and mean
-        val_log_dict = {f"val_loss_unroll{step}": time_step_loss[step - 1]
+        val_log_dict = {f"val_loss_unroll{step:02}": time_step_loss[step - 1]
                         for step in self.val_step_log_errors}
         val_log_dict["val_mean_loss"] = mean_loss
 
@@ -303,7 +303,7 @@ class ARModel(pl.LightningModule):
         mean_loss = torch.mean(time_step_loss)
 
         # Log loss per time step forward and mean
-        test_log_dict = {f"test_loss_unroll{step}": time_step_loss[step - 1]
+        test_log_dict = {f"test_loss_unroll{step:02}": time_step_loss[step - 1]
                          for step in self.val_step_log_errors}
         test_log_dict["test_mean_loss"] = mean_loss
 
@@ -361,7 +361,7 @@ class ARModel(pl.LightningModule):
                                 # This will add leading zeros to make t_i at least 2
                                 # digits long
                                 t_i_str = str(t_i).zfill(2)
-                                title = f"{var_name} ({var_unit}), level={var_level}, t={t_i_str} h"
+                                title = f"{var_name} ({var_unit}), level={var_level:02}, t={t_i_str} h"
 
                                 var_fig = vis.plot_prediction(
                                     pred_t[:, var_i], target_t[:, var_i],
@@ -370,7 +370,7 @@ class ARModel(pl.LightningModule):
                                     vrange=var_vrange
                                 )
                                 wandb.log(
-                                    {f"{var_name}_lvl_{var_level}_t_{t_i_str}": wandb.Image(var_fig)})
+                                    {f"{var_name}_lvl_{var_level:02}_t_{t_i_str}": wandb.Image(var_fig)})
                                 # Close all figs for this time step, saves memory
                                 plt.close("all")
                                 var_i += 1
@@ -473,9 +473,9 @@ class ARModel(pl.LightningModule):
                         0]:
                     # Get all the images for the current parameter
                     images = sorted(
-                        glob.glob(f'{dir_path}/{param}_lvl_{level}_t_*.png'))
+                        glob.glob(f'{dir_path}/{param}_lvl_{level:02}_t_*.png'))
                     # Generate the GIF
-                    with imageio.get_writer(f'{dir_path}/{param}_lvl_{level}.gif', mode='I', fps=1) as writer:
+                    with imageio.get_writer(f'{dir_path}/{param}_lvl_{level:02}.gif', mode='I', fps=1) as writer:
                         for filename in images:
                             image = imageio.imread(filename)
                             writer.append_data(image)
