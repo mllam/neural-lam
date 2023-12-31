@@ -164,7 +164,7 @@ def main():
     #
 
     # graph geometry
-    nx = 3  # number of children = nx**2
+    nx = constants.graph_num_children  # number of children = nx**2
     nlev = int(np.log(max(xy.shape)) / np.log(nx))
     nleaf = nx**nlev  # leaves at the bottom = nleaf**2
 

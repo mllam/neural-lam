@@ -105,6 +105,9 @@ grid_shape = (390, 582)  # (y, x)
 train_horizon = 3  # hours (t-1 + t -> t+1)
 eval_horizon = 25  # hours (autoregressive)
 
+# Properties of the Graph / Mesh
+graph_num_children = 2
+
 # Log prediction error for these time steps forward
 val_step_log_errors = np.arange(1, eval_horizon - 1)
 metrics_initialized = False
