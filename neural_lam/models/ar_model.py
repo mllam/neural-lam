@@ -357,11 +357,7 @@ class ARModel(pl.LightningModule):
                             # Iterate over time steps
                             for t_i, (pred_t, target_t) in enumerate(
                                     zip(pred_slice, target_slice), start=1):
-                                # Add vertical level to the plot title
-                                # This will add leading zeros to make t_i at least 2
-                                # digits long
-                                t_i_str = str(t_i).zfill(2)
-                                title = f"{var_name} ({var_unit}), level={var_level:02}, t={t_i_str} h"
+                                title = f"{var_name} ({var_unit}), level={var_level:02}, t={t_i:02} h"
 
                                 var_fig = vis.plot_prediction(
                                     pred_t[:, var_i], target_t[:, var_i],
@@ -370,10 +366,10 @@ class ARModel(pl.LightningModule):
                                     vrange=var_vrange
                                 )
                                 wandb.log(
-                                    {f"{var_name}_lvl_{var_level:02}_t_{t_i_str}": wandb.Image(var_fig)})
+                                    {f"{var_name}_lvl_{var_level:02}_t_{t_i:02}": wandb.Image(var_fig)})
                                 # Close all figs for this time step, saves memory
                                 plt.close("all")
-                                var_i += 1
+                            var_i += 1
 
                 if constants.store_example_data:
                     # Save pred and target as .pt files
@@ -469,8 +465,8 @@ class ARModel(pl.LightningModule):
 
             dir_path = f"{wandb.run.dir}/media/images"
             for param in constants.param_names_short + ["test_loss"]:
-                for level in constants.vertical_levels if constants.is_3d[param] else [
-                        0]:
+                levels = constants.vertical_levels if param in constants.is_3d and constants.is_3d[param] else [0]
+                for level in levels:
                     # Get all the images for the current parameter
                     images = sorted(
                         glob.glob(f'{dir_path}/{param}_lvl_{level:02}_t_*.png'))
