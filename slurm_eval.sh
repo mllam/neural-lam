@@ -14,8 +14,6 @@ export PREPROCESS=false
 # Load necessary modules
 conda activate neural-ddp
 
-export OMP_NUM_THREADS=16
-
 if [ "$PREPROCESS" = true ]; then
     srun -ul -N1 -n1 python create_static_features.py --boundaries 60
     srun -ul -N1 -n1 python create_mesh.py --dataset "cosmo"
@@ -26,5 +24,5 @@ fi
 
 # Run the script with torchrun
 srun -ul --gpus-per-task=1 python train_model.py \
-    --load "wandb/run-20231225_205644-qf82s2yb/files/latest-v1.ckpt" \
-    --dataset "cosmo" --eval="test" --subset_ds 1 --n_workers 8 --batch_size 12
+    --load "wandb/run-20231230_074608-ax4mb1mq/files/latest.ckpt" \
+    --dataset "cosmo" --eval="test" --subset_ds 1 --n_workers 4 --batch_size 12

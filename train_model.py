@@ -1,4 +1,5 @@
 import os
+import resource
 import time
 from argparse import ArgumentParser
 
@@ -141,6 +142,8 @@ def main():
     assert args.step_length <= 3, "Too high step length"
     assert args.eval in (None, "val", "test"), f"Unknown eval setting: {args.eval}"
     assert args.loss in ("mse", "mae", "huber"), f"Unknown loss function: {args.loss}"
+
+    resource.setrlimit(resource.RLIMIT_CORE, (0, resource.RLIM_INFINITY))
 
     # Set seed
     seed.seed_everything(args.seed)

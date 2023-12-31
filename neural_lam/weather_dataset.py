@@ -168,9 +168,9 @@ class WeatherDataModule(pl.LightningDataModule):
     def val_dataloader(self):
         return torch.utils.data.DataLoader(
             self.val_dataset, batch_size=self.batch_size // self.batch_size,
-            num_workers=self.num_workers // 2, shuffle=False, pin_memory=False,)
+            num_workers=self.num_workers, shuffle=False, pin_memory=False,)
 
     def test_dataloader(self):
         return torch.utils.data.DataLoader(
             self.test_dataset, batch_size=self.batch_size // self.batch_size,
-            num_workers=self.num_workers // 2, shuffle=False, pin_memory=False)
+            num_workers=self.num_workers, shuffle=False, pin_memory=False)

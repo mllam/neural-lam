@@ -8,7 +8,6 @@
 #SBATCH --output=lightning_logs/neurwp_out.log
 #SBATCH --error=lightning_logs/neurwp_err.log
 #SBATCH --mem=490G
-#SBATCH --core-spec=0
 #SBATCH --exclusive
 
 export PREPROCESS=false
@@ -24,8 +23,12 @@ if [ "$PREPROCESS" = true ]; then
     srun -ul -N1 -n1 python create_parameter_weights.py --dataset "cosmo" --batch_size 32 --n_workers 8 --step_length 1
 fi
 
+ulimit -c 0
+export OMP_NUM_THREADS=4
+
 # Run the script with torchrun
 srun -ul --gpus-per-task=1 python train_model.py \
-    --dataset "cosmo" --val_interval 20 --epochs 40 --n_workers 5 --batch_size 12 \
-    --load wandb/run-20231229_220825-ax4mb1mq/files/latest.ckpt --resume_opt_sched 1 \
-    --resume_run 'ax4mb1mq'
+    --dataset "cosmo" --val_interval 20 --epochs 40 --n_workers 4 --batch_size 12 \
+    --loss "mae" \
+    --load wandb/run-20231230_174947-p84pnyig/files/latest.ckpt --resume_opt_sched 1 \
+    --resume_run 'p84pnyig'
