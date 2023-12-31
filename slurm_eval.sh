@@ -22,7 +22,10 @@ if [ "$PREPROCESS" = true ]; then
     srun -ul -N1 -n1 python create_parameter_weights.py --dataset "cosmo" --batch_size 12 --n_workers 8 --step_length 1
 fi
 
+ulimit -c 0
+export OMP_NUM_THREADS=16
+
 # Run the script with torchrun
 srun -ul --gpus-per-task=1 python train_model.py \
-    --load "wandb/run-20231230_074608-ax4mb1mq/files/latest.ckpt" \
+    --load "wandb/run-20231231_132555-p84pnyig/files/latest.ckpt" \
     --dataset "cosmo" --eval="test" --subset_ds 1 --n_workers 4 --batch_size 12
