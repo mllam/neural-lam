@@ -57,14 +57,14 @@ param_weights = {
     'U': 1,
     'V': 1,
     'RELHUM': 1,
-    'PMSL': 0.1,
+    'PMSL': 1,
     'PP': 1,
-    'PS': 0.1,
-    'TOT_PREC': 0.1,
-    'TQV': 0.1,
+    'PS': 1,
+    'TOT_PREC': 1,
+    'TQV': 1,
     'T_2M': 1,
-    'U_10M': 0.1,
-    'V_10M': 0.1,
+    'U_10M': 1,
+    'V_10M': 1,
 }
 
 # Vertical levels
@@ -89,13 +89,13 @@ is_3d = {
 
 # Vertical level weights
 level_weights = {
-    1: 0.0,
-    5: 0.004,
-    13: 0.013,
-    22: 0.023,
-    38: 0.041,
-    41: 0.044,
-    60: 0.065,
+    1: 1,
+    5: 1,
+    13: 1,
+    22: 1,
+    38: 1,
+    41: 1,
+    60: 1,
 }
 
 # Projection and grid
