@@ -57,14 +57,14 @@ param_weights = {
     'U': 1,
     'V': 1,
     'RELHUM': 1,
-    'PMSL': 1,
+    'PMSL': 0.1,
     'PP': 1,
-    'PS': 1,
-    'TOT_PREC': 1,
-    'TQV': 1,
+    'PS': 0.1,
+    'TOT_PREC': 0.1,
+    'TQV': 0.1,
     'T_2M': 1,
-    'U_10M': 1,
-    'V_10M': 1,
+    'U_10M': 0.1,
+    'V_10M': 0.1,
 }
 
 # Vertical levels
@@ -106,7 +106,7 @@ train_horizon = 3  # hours (t-1 + t -> t+1)
 eval_horizon = 25  # hours (autoregressive)
 
 # Properties of the Graph / Mesh
-graph_num_children = 2
+graph_num_children = 3
 
 # Log prediction error for these time steps forward
 val_step_log_errors = np.arange(1, eval_horizon - 1)
