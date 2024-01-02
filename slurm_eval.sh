@@ -27,5 +27,5 @@ export OMP_NUM_THREADS=16
 
 # Run the script with torchrun
 srun -ul --gpus-per-task=1 python train_model.py \
-    --load "wandb/run-20231231_132555-p84pnyig/files/latest.ckpt" \
-    --dataset "cosmo" --eval="test" --subset_ds 1 --n_workers 4 --batch_size 12
+    --load "wandb/run-20231231_164801-xkwwdmb0/files/latest-v1.ckpt" \
+    --dataset "cosmo" --eval="test" --subset_ds 1 --n_workers 4 --batch_size 6

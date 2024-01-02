@@ -28,6 +28,6 @@ export OMP_NUM_THREADS=16
 
 # Run the script with torchrun
 srun -ul --gpus-per-task=1 python train_model.py \
-    --dataset "cosmo" --val_interval 20 --epochs 40 --n_workers 4 --batch_size 12
-    # --load wandb/run-20231231_112343-p84pnyig/files/latest-v1.ckpt --resume_opt_sched 1 \
-    # --resume_run 'p84pnyig'
+    --dataset "cosmo" --val_interval 20 --epochs 40 --n_workers 4 --batch_size 6
+    # --load wandb/run-20240101_120843-h7l33wow/files/latest.ckpt --resume_opt_sched 1 \
+    # --resume_run 'h7l33wow'
