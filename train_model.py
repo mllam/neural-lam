@@ -208,9 +208,9 @@ def main():
         devices=devices,
         num_nodes=num_nodes,
         profiler="simple",
+        deterministic=True,
         # num_sanity_val_steps=0
         # strategy="ddp",
-        # deterministic=True,
         # limit_val_batches=0
         # fast_dev_run=True
     )
