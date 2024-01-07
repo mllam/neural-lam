@@ -72,6 +72,12 @@ vertical_levels = [
     1, 5, 13, 22, 38, 41, 60
 ]
 
+param_constraints = {
+    'RELHUM': ('sigmoid', 0, 100),
+    'TQV': ('relu', 0, None),
+    'TOT_PREC': ('relu', 0, None),
+}
+
 is_3d = {
     'T': 1,
     'U': 1,

@@ -79,6 +79,8 @@ class ARModel(pl.LightningModule):
 
         self.plot_created = False
 
+        self.variable_indices = self.precompute_variable_indices()
+
     @pl.utilities.rank_zero_only
     def log_image(self, name, img):
 
@@ -111,6 +113,32 @@ class ARModel(pl.LightningModule):
     def setup(self, stage=None):
         self.loss = self.loss.to(self.device)
         self.interior_mask = self.interior_mask.to(self.device)
+
+    def precompute_variable_indices(self):
+        variable_indices = {}
+        sorted_vars = sorted(constants.param_names_short)
+        index = 0
+        for var_name in sorted_vars:
+            if constants.is_3d[var_name]:
+                indices = list(range(index, index + len(constants.vertical_levels)))
+                index += len(constants.vertical_levels)
+            else:
+                indices = [index]
+                index += 1
+            variable_indices[var_name] = indices
+        return variable_indices
+
+    def apply_constraints(self, prediction):
+        for param, (constraint, min_val,
+                    max_val) in constants.param_constraints.items():
+            indices = self.variable_indices[param]
+            for index in indices:
+                if constraint == 'sigmoid':
+                    prediction[:, :, index] = torch.sigmoid(
+                        prediction[:, :, index]) * max_val
+                elif constraint == 'relu':
+                    prediction[:, :, index] = torch.relu(prediction[:, :, index])
+        return prediction
 
     def predict_step(self, prev_state, prev_prev_state):
         """
@@ -161,6 +189,8 @@ class ARModel(pl.LightningModule):
         returns (B, pred_steps)
         """
         torch.autograd.set_detect_anomaly(True)
+
+        prediction = self.apply_constraints(prediction)
 
         entry_loss = self.loss(prediction, target)  # (B, pred_steps, N_grid, d_f)
 
@@ -465,7 +495,8 @@ class ARModel(pl.LightningModule):
 
             dir_path = f"{wandb.run.dir}/media/images"
             for param in constants.param_names_short + ["test_loss"]:
-                levels = constants.vertical_levels if param in constants.is_3d and constants.is_3d[param] else [0]
+                levels = constants.vertical_levels if param in constants.is_3d and constants.is_3d[param] else [
+                    0]
                 for level in levels:
                     # Get all the images for the current parameter
                     images = sorted(
