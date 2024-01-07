@@ -363,6 +363,25 @@ class ARModel(pl.LightningModule):
                 # Rescale to original data scale
                 prediction_rescaled = prediction * self.data_std + self.data_mean
                 target_rescaled = target * self.data_std + self.data_mean
+
+                # Define the smoothing kernel
+                kernel = torch.ones((3, 3)) / 9
+                kernel = kernel[None, None, :, :]
+
+                # (batch_size, channels, pred_steps, N_grid)
+                prediction_permuted = prediction_rescaled.permute(0, 3, 1, 2)
+
+                smoothed_prediction_permuted = nn.conv2d(
+                    prediction_permuted, kernel, padding=1,
+                    groups=prediction_permuted.shape[1])
+
+                # (batch_size, pred_steps, N_grid, channels)
+                smoothed_prediction = smoothed_prediction_permuted.permute(0, 2, 3, 1)
+
+                # Apply the mask to the smoothed prediction
+                prediction_rescaled = (
+                    1 - self.interior_mask) * smoothed_prediction + self.interior_mask * prediction_rescaled
+
                 # Iterate over the examples
                 for pred_slice, target_slice in zip(
                         prediction_rescaled[:n_additional_examples],
