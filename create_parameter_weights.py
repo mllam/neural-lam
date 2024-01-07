@@ -15,9 +15,6 @@ def main():
                         help='Dataset to compute weights for (default: meps_example)')
     parser.add_argument('--batch_size', type=int, default=32,
                         help='Batch size when iterating over the dataset')
-    parser.add_argument(
-        '--step_length', type=int, default=3,
-        help='Step length in hours to consider single time step (default: 3)')
     parser.add_argument('--n_workers', type=int, default=4,
                         help='Number of workers in data loader (default: 4)')
     args = parser.parse_args()
