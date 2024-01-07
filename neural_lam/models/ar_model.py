@@ -478,21 +478,20 @@ class ARModel(pl.LightningModule):
 
         self.spatial_loss_maps.clear()
 
-    def on_load_checkpoint(self, ckpt):
-        """
-        Perform any changes to state dict before loading checkpoint
-        """
-        loaded_state_dict = ckpt["state_dict"]
 
-        # Fix for loading older models after IneractionNet refactoring, where the
-        # grid MLP was moved outside the encoder InteractionNet class
-        if "g2m_gnn.grid_mlp.0.weight" in loaded_state_dict:
-            replace_keys = list(filter(lambda key: key.startswith("g2m_gnn.grid_mlp"),
-                                       loaded_state_dict.keys()))
-            for old_key in replace_keys:
-                new_key = old_key.replace("g2m_gnn.grid_mlp", "encoding_grid_mlp")
-                loaded_state_dict[new_key] = loaded_state_dict[old_key]
-                del loaded_state_dict[old_key]
-        if not self.resume_opt_sched:
-            ckpt['optimizer_states'] = [None for _ in ckpt['optimizer_states']]
-            ckpt['lr_schedulers'] = [None for _ in ckpt['lr_schedulers']]
+def on_load_checkpoint(self, ckpt):
+    loaded_state_dict = ckpt["state_dict"]
+
+    if "g2m_gnn.grid_mlp.0.weight" in loaded_state_dict:
+        replace_keys = list(filter(lambda key: key.startswith("g2m_gnn.grid_mlp"),
+                                   loaded_state_dict.keys()))
+        for old_key in replace_keys:
+            new_key = old_key.replace("g2m_gnn.grid_mlp", "encoding_grid_mlp")
+            loaded_state_dict[new_key] = loaded_state_dict[old_key]
+            del loaded_state_dict[old_key]
+
+    if not self.resume_opt_sched:
+        # Create new optimizer and scheduler instances instead of setting them to None
+        optimizers, lr_schedulers = self.configure_optimizers()
+        ckpt['optimizer_states'] = [opt.state_dict() for opt in optimizers]
+        ckpt['lr_schedulers'] = [sched.state_dict() for sched in lr_schedulers]
