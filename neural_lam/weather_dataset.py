@@ -1,5 +1,6 @@
 import glob
 import os
+from datetime import datetime, timedelta
 
 import pytorch_lightning as pl
 import torch
@@ -32,9 +33,17 @@ class WeatherDataset(torch.utils.data.Dataset):
             raise ValueError("No .zarr files found in directory")
 
         if subset:
-            # Limit to 200 samples
-            self.zarr_files = self.zarr_files[constants.
-                                              eval_sample: constants.eval_sample + 1]
+            if self.eval_datetime is not None:
+                eval_datetime_obj = datetime.strptime(self.eval_datetime, "%Y%m%d%H")
+                for file in self.zarr_files:
+                    file_datetime_str = file.split("/")[-1].split("_")[1]
+                    file_datetime_obj = datetime.strptime(file_datetime_str, "%Y%m%d%H")
+                    if file_datetime_obj <= eval_datetime_obj < file_datetime_obj + \
+                            timedelta(hours=constants.chunk_size):
+                        self.zarr_files = [file]
+                        break
+            else:
+                self.zarr_files = self.zarr_files[0:1]
             start_date = self.zarr_files[0].split(
                 "/")[-1].split("_")[1].replace('.zarr', '')
 
