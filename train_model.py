@@ -167,20 +167,21 @@ def main():
     result = init_wandb(args)
     if result is not None:
         logger = result
-        checkpoint_callback = pl.callbacks.ModelCheckpoint(
-            dirpath=logger.experiment.dir,
-            filename="latest",
-            every_n_epochs=1,
-            save_on_train_epoch_end=True,
-        )
+        checkpoint_dir = logger.experiment.dir
     else:
         logger = None
-        checkpoint_callback = pl.callbacks.ModelCheckpoint(
-            dirpath="saved_models",
-            filename="latest",
-            every_n_epochs=1,
-            save_on_train_epoch_end=True,
-        )
+        checkpoint_dir = "saved_models"
+
+    # Ensure the checkpoint directory exists
+    os.makedirs(checkpoint_dir, exist_ok=True)
+
+    checkpoint_callback = pl.callbacks.ModelCheckpoint(
+        dirpath=checkpoint_dir,
+        filename="{epoch}",
+        every_n_epochs=1,
+        save_on_train_epoch_end=True,
+        verbose=True,
+    )
 
     if args.eval:
         use_distributed_sampler = False
