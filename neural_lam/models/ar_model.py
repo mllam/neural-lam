@@ -72,12 +72,9 @@ class ARModel(pl.LightningModule):
 
         # For example plotting
         self.n_example_pred = args.n_example_pred
-        self.plotted_examples = 0
 
         # For storing spatial loss maps during evaluation
         self.spatial_loss_maps = []
-
-        self.plot_created = False
 
         self.variable_indices = self.precompute_variable_indices()
 
@@ -116,28 +113,35 @@ class ARModel(pl.LightningModule):
 
     def precompute_variable_indices(self):
         variable_indices = {}
-        sorted_vars = sorted(constants.param_names_short)
+        all_vars = []
         index = 0
-        for var_name in sorted_vars:
+        # Create a list of tuples for all variables, using level 0 for 2D variables
+        for var_name in constants.param_names_short:
             if constants.is_3d[var_name]:
-                indices = list(range(index, index + len(constants.vertical_levels)))
-                index += len(constants.vertical_levels)
+                for level in constants.vertical_levels:
+                    all_vars.append((var_name, level))
             else:
-                indices = [index]
-                index += 1
-            variable_indices[var_name] = indices
+                all_vars.append((var_name, 0))  # Use level 0 for 2D variables
+
+        # Sort the variables based on the tuples
+        sorted_vars = sorted(all_vars)
+
+        for var in sorted_vars:
+            var_name, level = var
+            if var_name not in variable_indices:
+                variable_indices[var_name] = []
+            variable_indices[var_name].append(index)
+            index += 1
+
         return variable_indices
 
     def apply_constraints(self, prediction):
-        for param, (constraint, min_val,
-                    max_val) in constants.param_constraints.items():
+        for param, (min_val, max_val) in constants.param_constraints.items():
             indices = self.variable_indices[param]
             for index in indices:
-                if constraint == 'sigmoid':
-                    prediction[:, :, index] = torch.sigmoid(
-                        prediction[:, :, index]) * max_val
-                elif constraint == 'relu':
-                    prediction[:, :, index] = torch.relu(prediction[:, :, index])
+                # Apply clamping to ensure values are within the specified bounds
+                prediction[:, :, index] = torch.clamp(
+                    prediction[:, :, index], min=min_val, max=max_val if max_val is not None else float('inf'))
         return prediction
 
     def predict_step(self, prev_state, prev_prev_state):
@@ -189,8 +193,6 @@ class ARModel(pl.LightningModule):
         returns (B, pred_steps)
         """
         torch.autograd.set_detect_anomaly(True)
-
-        prediction = self.apply_constraints(prediction)
 
         entry_loss = self.loss(prediction, target)  # (B, pred_steps, N_grid, d_f)
 
@@ -353,82 +355,100 @@ class ARModel(pl.LightningModule):
         log_spatial_losses = spatial_loss[:, self.val_step_log_errors - 1]
         self.spatial_loss_maps.append(log_spatial_losses)  # (B, N_log, N_grid)
 
-        if self.global_rank == 0 and not self.plot_created:
-            self.plot_created = True
-            # Plot example predictions
-            if self.plotted_examples < self.n_example_pred:
-                n_additional_examples = min(prediction.shape[0], self.n_example_pred
-                                            - self.plotted_examples)
+        if self.global_rank == 0 and self.trainer.datamodule.test_dataset.batch_index == batch_idx:
+            index_within_batch = self.trainer.datamodule.test_dataset.index_within_batch
+            if not torch.is_tensor(index_within_batch):
+                index_within_batch = torch.tensor(
+                    index_within_batch, dtype=torch.int64, device=prediction.device)
 
-                # Rescale to original data scale
-                prediction_rescaled = prediction * self.data_std + self.data_mean
-                target_rescaled = target * self.data_std + self.data_mean
+            prediction = prediction[index_within_batch]
+            target = target[index_within_batch]
 
-                # Define the smoothing kernel
-                kernel = torch.ones((3, 3)) / 9
-                kernel = kernel[None, None, :, :]
+            # Rescale to original data scale
+            prediction_rescaled = prediction * self.data_std + self.data_mean
+            prediction_rescaled = self.apply_constraints(prediction_rescaled)
+            target_rescaled = target * self.data_std + self.data_mean
 
-                # (batch_size, channels, pred_steps, N_grid)
-                prediction_permuted = prediction_rescaled.permute(0, 3, 1, 2)
+            # BUG: this creates artifacts at border cells, improve logic!
+            if constants.smooth_boundaries:
+                # (pred_steps, N_grid, d_f)
 
-                smoothed_prediction_permuted = nn.conv2d(
-                    prediction_permuted, kernel, padding=1,
-                    groups=prediction_permuted.shape[1])
+                height, width = constants.grid_shape
+                prediction_permuted = prediction_rescaled.permute(
+                    0, 2, 1).reshape(
+                    prediction_rescaled.size(0),
+                    prediction_rescaled.size(2),
+                    height, width)
 
-                # (batch_size, pred_steps, N_grid, channels)
-                smoothed_prediction = smoothed_prediction_permuted.permute(0, 2, 3, 1)
+                # Define the smoothing kernel for grouped convolution
+                num_groups = prediction_permuted.shape[1]
+                kernel_size = 3
+                kernel = torch.ones((num_groups, 1, kernel_size,
+                                    kernel_size)) / (kernel_size ** 2)
+                kernel = kernel.to(self.device)
+
+                # Use the updated kernel in the conv2d operation
+                prediction_smoothed = nn.functional.conv2d(
+                    prediction_permuted, kernel, padding=1, groups=num_groups)
+
+                # (pred_steps, N_grid, channels)
+                # Combine the height and width dimensions back into a single N_grid
+                # dimension
+                prediction_smoothed = prediction_smoothed.reshape(
+                    prediction_smoothed.size(0), prediction_smoothed.size(1), -1)
+
+                # Permute the dimensions to get back to the original order (pred_steps,
+                # N_grid, d_f)
+                prediction_smoothed = prediction_smoothed.permute(0, 2, 1)
 
                 # Apply the mask to the smoothed prediction
-                prediction_rescaled = (
-                    1 - self.interior_mask) * smoothed_prediction + self.interior_mask * prediction_rescaled
+                prediction_rescaled = self.border_mask * prediction_smoothed + self.interior_mask * prediction_rescaled
 
-                # Iterate over the examples
-                for pred_slice, target_slice in zip(
-                        prediction_rescaled[:n_additional_examples],
-                        target_rescaled[:n_additional_examples]):
-                    self.plotted_examples += 1  # Increment already here
-                    # Each slice is (pred_steps, N_grid, d_f)
-                    # Iterate over variables
-                    var_i = 0
-                    for var_name, var_unit in sorted(zip(
-                            constants.param_names_short, constants.param_units)):
-                        # Iterate over vertical levels
-                        for var_level in constants.vertical_levels if constants.is_3d[var_name] else [
-                                0]:
-                            # Calculate var_vrange for each level
-                            var_vmin = min(
-                                pred_slice[:, :, var_i].min(),
-                                target_slice[:, :, var_i].min())
-                            var_vmax = max(
-                                pred_slice[:, :, var_i].max(),
-                                target_slice[:, :, var_i].max())
-                            var_vrange = (var_vmin, var_vmax)
-                            # Iterate over time steps
-                            for t_i, (pred_t, target_t) in enumerate(
-                                    zip(pred_slice, target_slice), start=1):
-                                title = f"{var_name} ({var_unit}), level={var_level:02}, t={t_i:02} h"
+            # Each slice is (pred_steps, N_grid, d_f)
+            # Iterate over variables
+            var_i = 0
+            for var_name, var_unit in sorted(zip(
+                    constants.param_names_short, constants.param_units)):
+                # Iterate over vertical levels
+                for var_level in constants.vertical_levels if constants.is_3d[var_name] else [
+                        0]:
+                    # Calculate var_vrange for each level
+                    var_vmin = min(
+                        prediction_rescaled[:, :, var_i].min(),
+                        target_rescaled[:, :, var_i].min())
+                    var_vmax = max(
+                        prediction_rescaled[:, :, var_i].max(),
+                        target_rescaled[:, :, var_i].max())
+                    var_vrange = (var_vmin, var_vmax)
+                    # Iterate over time steps
+                    for t_i, (pred_t, target_t) in enumerate(
+                            zip(prediction_rescaled, target_rescaled), start=1):
+                        title = f"{var_name} ({var_unit}), level={var_level:02}, t={t_i:02} h"
 
-                                var_fig = vis.plot_prediction(
-                                    pred_t[:, var_i], target_t[:, var_i],
-                                    self.interior_mask[:, 0],
-                                    title=title,
-                                    vrange=var_vrange
-                                )
-                                wandb.log(
-                                    {f"{var_name}_lvl_{var_level:02}_t_{t_i:02}": wandb.Image(var_fig)})
-                                # Close all figs for this time step, saves memory
-                                plt.close("all")
-                            var_i += 1
+                        var_fig = vis.plot_prediction(
+                            pred_t[:, var_i], target_t[:, var_i],
+                            self.interior_mask[:, 0],
+                            title=title,
+                            vrange=var_vrange
+                        )
+                        wandb.log(
+                            {f"{var_name}_lvl_{var_level:02}_t_{t_i:02}": wandb.Image(var_fig)})
+                        # Close all figs for this time step, saves memory
+                        plt.close("all")
+                    var_i += 1
 
-                if constants.store_example_data:
-                    # Save pred and target as .pt files
-                    torch.save(pred_slice.cpu(), os.path.join(
-                        wandb.run.dir, f'example_pred_{self.plotted_examples}.pt'))
-                    torch.save(
-                        target_slice.cpu(),
-                        os.path.join(
-                            wandb.run.dir,
-                            f'example_target_{self.plotted_examples}.pt'))
+            if constants.store_example_data:
+                # Save pred and target as .pt files
+                torch.save(
+                    prediction_rescaled.cpu(),
+                    os.path.join(
+                        wandb.run.dir,
+                        'example_pred.pt'))
+                torch.save(
+                    target_rescaled.cpu(),
+                    os.path.join(
+                        wandb.run.dir,
+                        'example_target.pt'))
 
     def on_test_epoch_end(self):
         """

@@ -73,9 +73,9 @@ vertical_levels = [
 ]
 
 param_constraints = {
-    'RELHUM': ('sigmoid', 0, 100),
-    'TQV': ('relu', 0, None),
-    'TOT_PREC': ('relu', 0, None),
+    'RELHUM': (0, 100),
+    'TQV': (0, None),
+    'TOT_PREC': (0, None),
 }
 
 is_3d = {
@@ -128,6 +128,7 @@ cosmo_proj = ccrs.PlateCarree()
 selected_proj = cosmo_proj
 pollon = -170.0
 pollat = 43.0
+smooth_boundaries = False
 
 # Some constants useful for sub-classes
 batch_static_feature_dim = 0

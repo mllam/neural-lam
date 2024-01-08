@@ -21,11 +21,16 @@ class WeatherDataset(torch.utils.data.Dataset):
     d_forcing = 0 #TODO: extract incoming radiation from KENDA
     """
 
-    def __init__(self, dataset_name, split="train", standardize=True, subset=False):
+    def __init__(self, dataset_name, split="train",
+                 standardize=True, subset=False, batch_size=4):
         super().__init__()
 
         assert split in ("train", "val", "test"), "Unknown dataset split"
         sample_dir_path = os.path.join("data", dataset_name, "samples", split)
+
+        self.batch_size = batch_size
+        self.batch_index = 0
+        self.index_within_batch = 0
 
         self.zarr_files = sorted(glob.glob(
             os.path.join(sample_dir_path, "data*.zarr")))
@@ -33,17 +38,28 @@ class WeatherDataset(torch.utils.data.Dataset):
             raise ValueError("No .zarr files found in directory")
 
         if subset:
-            if self.eval_datetime is not None:
-                eval_datetime_obj = datetime.strptime(self.eval_datetime, "%Y%m%d%H")
-                for file in self.zarr_files:
-                    file_datetime_str = file.split("/")[-1].split("_")[1]
+            if constants.eval_datetime is not None:
+                eval_datetime_obj = datetime.strptime(
+                    constants.eval_datetime, "%Y%m%d%H")
+                for i, file in enumerate(self.zarr_files):
+                    file_datetime_str = file.split("/")[-1].split("_")[1][:-5]
                     file_datetime_obj = datetime.strptime(file_datetime_str, "%Y%m%d%H")
                     if file_datetime_obj <= eval_datetime_obj < file_datetime_obj + \
                             timedelta(hours=constants.chunk_size):
-                        self.zarr_files = [file]
+                        # Retrieve the current file and the next file if it exists
+                        next_file_index = i + 1
+                        if next_file_index < len(self.zarr_files):
+                            self.zarr_files = [file, self.zarr_files[next_file_index]]
+                        else:
+                            self.zarr_files = [file]
+                        position_within_file = int(
+                            (eval_datetime_obj - file_datetime_obj).total_seconds() // 3600)
+                        self.batch_index = position_within_file // self.batch_size
+                        self.index_within_batch = position_within_file % self.batch_size
                         break
             else:
-                self.zarr_files = self.zarr_files[0:1]
+                self.zarr_files = self.zarr_files[0:2]
+
             start_date = self.zarr_files[0].split(
                 "/")[-1].split("_")[1].replace('.zarr', '')
 
@@ -155,19 +171,22 @@ class WeatherDataModule(pl.LightningDataModule):
                 self.dataset_name,
                 split="train",
                 standardize=self.standardize,
-                subset=self.subset)
+                subset=self.subset,
+                batch_size=self.batch_size)
             self.val_dataset = WeatherDataset(
                 self.dataset_name,
                 split="val",
                 standardize=self.standardize,
-                subset=self.subset)
+                subset=self.subset,
+                batch_size=self.batch_size)
 
         if stage == 'test' or stage is None:
             self.test_dataset = WeatherDataset(
                 self.dataset_name,
                 split="test",
                 standardize=self.standardize,
-                subset=self.subset)
+                subset=self.subset,
+                batch_size=self.batch_size)
 
     def train_dataloader(self):
         return torch.utils.data.DataLoader(
@@ -181,5 +200,5 @@ class WeatherDataModule(pl.LightningDataModule):
 
     def test_dataloader(self):
         return torch.utils.data.DataLoader(
-            self.test_dataset, batch_size=self.batch_size // self.batch_size,
+            self.test_dataset, batch_size=self.batch_size,
             num_workers=self.num_workers, shuffle=False, pin_memory=False)
