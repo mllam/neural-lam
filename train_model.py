@@ -48,8 +48,11 @@ def init_wandb(args):
             config=args,
             mode=args.wandb_mode
         )
-        logger = pl.loggers.WandbLogger(project=constants.wandb_project, name=run_name,
-                                        config=args)
+        logger = pl.loggers.WandbLogger(
+            project=constants.wandb_project,
+            name=run_name,
+            config=args,
+            log_model=True)
         wandb.save("slurm_train.sh")
         wandb.save("neural_lam/constants.py")
     else:
@@ -63,7 +66,8 @@ def init_wandb(args):
         logger = pl.loggers.WandbLogger(
             project=constants.wandb_project,
             id=args.resume_run,
-            config=args)
+            config=args,
+            log_model=True)
 
     return logger
 
@@ -171,20 +175,21 @@ def main():
     result = init_wandb(args)
     if result is not None:
         logger = result
-        checkpoint_callback = pl.callbacks.ModelCheckpoint(
-            dirpath=logger.experiment.dir,
-            filename="latest",
-            every_n_epochs=1,
-            save_on_train_epoch_end=True,
-        )
+        checkpoint_dir = logger.experiment.dir
     else:
         logger = None
-        checkpoint_callback = pl.callbacks.ModelCheckpoint(
-            dirpath="saved_models",
-            filename="latest",
-            every_n_epochs=1,
-            save_on_train_epoch_end=True,
-        )
+        checkpoint_dir = "saved_models"
+
+    # Ensure the checkpoint directory exists
+    os.makedirs(checkpoint_dir, exist_ok=True)
+
+    checkpoint_callback = pl.callbacks.ModelCheckpoint(
+        dirpath=checkpoint_dir,
+        filename="{epoch}",
+        every_n_epochs=1,
+        save_on_train_epoch_end=True,
+        verbose=True,
+    )
 
     if args.eval:
         use_distributed_sampler = False
