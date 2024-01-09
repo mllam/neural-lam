@@ -8,6 +8,18 @@ seconds_in_year = 365*24*60*60 # Assuming no leap years in dataset (2024 is next
 # Log prediction error for these lead times
 val_step_log_errors = np.array([1, 2, 3, 5, 10, 15, 19])
 
+# Log these metrics to wandb as scalar values for specific variables and lead times
+# List of metrics to watch, including any prefix (e.g. val_rmse)
+metrics_watch = [
+]
+# Dict with variables and lead times to log watched metrics for
+# Format is a dictionary that maps from a variable index to a list of lead time steps
+var_leads_metrics_watch = {
+    6: [2, 19], # t_2
+    14: [2, 19], # wvint_0
+    15: [2, 19], # z_1000
+}
+
 # Variable names
 param_names = [
     'pres_heightAboveGround_0_instant',
@@ -95,3 +107,8 @@ lambert_proj = cartopy.crs.LambertConformal(
         central_latitude=lambert_proj_params['lat_0'],
         standard_parallels=(lambert_proj_params['lat_1'],
         lambert_proj_params['lat_2']))
+
+# Data dimensions
+batch_static_feature_dim = 1 # Only open water
+grid_forcing_dim = 5*3 # 5 features for 3 time-step window
+grid_state_dim = 17

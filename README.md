@@ -22,6 +22,8 @@ If you use Neural-LAM in your work, please cite:
     year={2023}
 }
 ```
+As the code in the repository is continuously evolving, the latest version might feature some small differences to what was used in the paper.
+See the branch [`ccai_paper_2023`](https://github.com/joeloskarsson/neural-lam/tree/ccai_paper_2023) for a revision of the code that reproduces the workshop paper.
 
 We plan to continue updating this repository as we improve existing models and develop new ones.
 Collaborations around this implementation are very welcome.

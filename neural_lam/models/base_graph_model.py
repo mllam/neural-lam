@@ -1,7 +1,7 @@
 import torch
 import torch_geometric as pyg
 
-from neural_lam import utils
+from neural_lam import utils, constants
 from neural_lam.models.ar_model import ARModel
 from neural_lam.interaction_net import InteractionNet
 
@@ -24,21 +24,18 @@ class BaseGraphModel(ARModel):
                 setattr(self, name, attr_value)
 
         # Specify dimensions of data
-        self.N_grid, grid_static_dim = self.grid_static_features.shape # 63784 = 268x238
         self.N_mesh, N_mesh_ignore = self.get_num_mesh()
         print(f"Loaded graph with {self.N_grid + self.N_mesh} nodes "+
                 f"({self.N_grid} grid, {self.N_mesh} mesh)")
 
         # grid_dim from data + static + batch_static
-        grid_dim = 2*self.grid_state_dim + grid_static_dim + self.grid_forcing_dim +\
-            self.batch_static_feature_dim
         self.g2m_edges, g2m_dim = self.g2m_features.shape
         self.m2g_edges, m2g_dim = self.m2g_features.shape
 
         # Define sub-models
         # Feature embedders for grid
         self.mlp_blueprint_end = [args.hidden_dim]*(args.hidden_layers + 1)
-        self.grid_embedder = utils.make_mlp([grid_dim] +
+        self.grid_embedder = utils.make_mlp([self.grid_dim] +
                 self.mlp_blueprint_end)
         self.g2m_embedder = utils.make_mlp([g2m_dim] +
                 self.mlp_blueprint_end)
@@ -58,7 +55,7 @@ class BaseGraphModel(ARModel):
 
         # Output mapping (hidden_dim -> output_dim)
         self.output_map = utils.make_mlp([args.hidden_dim]*(args.hidden_layers + 1) +\
-                [self.grid_state_dim], layer_norm=False) # No layer norm on this one
+                [self.grid_output_dim], layer_norm=False) # No layer norm on this one
 
     def get_num_mesh(self):
         """
@@ -123,10 +120,19 @@ class BaseGraphModel(ARModel):
         grid_rep = self.m2g_gnn(mesh_rep, grid_rep, m2g_emb_expanded) # (B, N_grid, d_h)
 
         # Map to output dimension, only for grid
-        net_output = self.output_map(grid_rep) # (B, N_grid, d_f)
+        net_output = self.output_map(grid_rep) # (B, N_grid, d_grid_out)
+
+        if self.output_std:
+            pred_delta_mean, pred_std_raw = net_output.chunk(2,
+                    dim=-1) # both (B, N_grid, d_f)
+            # Note: The predicted std. is not scaled in any way here
+            pred_std = torch.nn.functional.softplus(pred_std_raw)
+        else:
+            pred_delta_mean = net_output
+            pred_std = None
 
         # Rescale with one-step difference statistics
-        rescaled_net_output = net_output*self.step_diff_std + self.step_diff_mean
+        rescaled_delta_mean = pred_delta_mean*self.step_diff_std + self.step_diff_mean
 
         # Residual connection for full state
-        return prev_state + rescaled_net_output
+        return prev_state + rescaled_delta_mean, pred_std

@@ -56,14 +56,17 @@ def main():
         help='Number of GNN layers in processor GNN (default: 4)')
     parser.add_argument('--mesh_aggr', type=str, default="sum",
         help='Aggregation to use for m2m processor GNN layers (sum/mean) (default: sum)')
+    parser.add_argument('--output_std', type=int, default=0,
+        help='If models should additionally output std.-dev. per output dimensions '
+        '(default: 0 (no))')
 
     # Training options
     parser.add_argument('--ar_steps', type=int, default=1,
         help='Number of steps to unroll prediction for in loss (1-19) (default: 1)')
     parser.add_argument('--control_only', type=int, default=0,
         help='Train only on control member of ensemble data (default: 0 (False))')
-    parser.add_argument('--loss', type=str, default="mse",
-        help='Loss function to use (default: mse)')
+    parser.add_argument('--loss', type=str, default="wmse",
+        help='Loss function to use, see metric.py (default: wmse)')
     parser.add_argument('--step_length', type=int, default=3,
         help='Step length in hours to consider single time step 1-3 (default: 3)')
     parser.add_argument('--lr', type=float, default=1e-3,
