@@ -47,8 +47,11 @@ def init_wandb(args):
             project=constants.wandb_project,
             config=args,
         )
-        logger = pl.loggers.WandbLogger(project=constants.wandb_project, name=run_name,
-                                        config=args)
+        logger = pl.loggers.WandbLogger(
+            project=constants.wandb_project,
+            name=run_name,
+            config=args,
+            log_model=True)
         wandb.save("slurm_train.sh")
         wandb.save("neural_lam/constants.py")
     else:
@@ -61,7 +64,8 @@ def init_wandb(args):
         logger = pl.loggers.WandbLogger(
             project=constants.wandb_project,
             id=args.resume_run,
-            config=args)
+            config=args,
+            log_model=True)
 
     return logger
 
