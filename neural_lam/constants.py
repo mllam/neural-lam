@@ -88,12 +88,13 @@ is_3d = {
     'PS': 0,
     'TOT_PREC': 0,
     'TQV': 0,
-    'T_2M': 0,
+    'T_2M': 0,  # TODO: these 2d field diagnostic variables could be removed from input channels, and derived during inference
     'U_10M': 0,
     'V_10M': 0,
 }
 
 # Vertical level weights
+# TODO: exponential function of height
 level_weights = {
     1: 1,
     5: 1,
@@ -108,7 +109,7 @@ level_weights = {
 grid_shape = (390, 582)  # (y, x)
 
 # Time step prediction during training / prediction (eval)
-train_horizon = 6  # hours (t-1 + t -> t+1)
+train_horizon = 3  # hours (t-1 + t -> t+1)
 eval_horizon = 25  # hours (autoregressive)
 
 # Properties of the Graph / Mesh
