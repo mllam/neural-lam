@@ -8,6 +8,7 @@
 #SBATCH --output=lightning_logs/neurwp_out.log
 #SBATCH --error=lightning_logs/neurwp_err.log
 #SBATCH --mem=490G
+#SBATCH --no-requeue
 
 export PREPROCESS=false
 
@@ -27,6 +28,5 @@ export OMP_NUM_THREADS=16
 
 # Run the script with torchrun
 srun -ul --gpus-per-task=1 python train_model.py \
-    --dataset "cosmo" --val_interval 20 --epochs 140 --n_workers 6 --batch_size 3 \
-    --load wandb/run-20240108_170210-4wgc6d3i/files/epoch=104.ckpt --resume_opt_sched 1 \
-    --resume_run 4wgc6d3i
+    --dataset "cosmo" --val_interval 20 --epochs 140 --n_workers 4 --batch_size 3 \
+    --load wandb/run-20240105_085036-ie0v7gzf/files/latest-v1.ckpt --resume_opt_sched 0
