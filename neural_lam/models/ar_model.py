@@ -1,5 +1,6 @@
 import glob
 import os
+from datetime import datetime, timedelta
 
 import imageio
 import matplotlib.pyplot as plt
@@ -77,6 +78,13 @@ class ARModel(pl.LightningModule):
         self.spatial_loss_maps = []
 
         self.variable_indices = self.precompute_variable_indices()
+        self.selected_vars_units = [
+            (var_name, var_unit) for var_name, var_unit in zip(
+                constants.param_names_short, constants.param_units
+            ) if var_name in constants.eval_plot_vars
+        ]
+        print("variable_indices", self.variable_indices)
+        print("selected_vars_units", self.selected_vars_units)
 
     @pl.utilities.rank_zero_only
     def log_image(self, name, img):
@@ -406,13 +414,13 @@ class ARModel(pl.LightningModule):
 
             # Each slice is (pred_steps, N_grid, d_f)
             # Iterate over variables
-            var_i = 0
-            for var_name, var_unit in sorted(zip(
-                    constants.param_names_short, constants.param_units)):
-                # Iterate over vertical levels
-                for var_level in constants.vertical_levels if constants.is_3d[var_name] else [
-                        0]:
-                    # Calculate var_vrange for each level
+
+            for var_name, var_unit in self.selected_vars_units:
+                # Retrieve the indices for the current variable
+                var_indices = self.variable_indices[var_name]
+                for lvl_i, var_i in enumerate(var_indices):
+                    # Calculate var_vrange for each index
+                    lvl = constants.vertical_levels[lvl_i]
                     var_vmin = min(
                         prediction_rescaled[:, :, var_i].min(),
                         target_rescaled[:, :, var_i].min())
@@ -423,8 +431,11 @@ class ARModel(pl.LightningModule):
                     # Iterate over time steps
                     for t_i, (pred_t, target_t) in enumerate(
                             zip(prediction_rescaled, target_rescaled), start=1):
-                        title = f"{var_name} ({var_unit}), level={var_level:02}, t={t_i:02} h"
-
+                        eval_datetime_obj = datetime.strptime(
+                            constants.eval_datetime, '%Y%m%d%H')
+                        current_datetime_obj = eval_datetime_obj + timedelta(hours=t_i)
+                        current_datetime_str = current_datetime_obj.strftime('%Y%m%d%H')
+                        title = f"{var_name} ({var_unit}), t={current_datetime_str}"
                         var_fig = vis.plot_prediction(
                             pred_t[:, var_i], target_t[:, var_i],
                             self.interior_mask[:, 0],
@@ -432,10 +443,9 @@ class ARModel(pl.LightningModule):
                             vrange=var_vrange
                         )
                         wandb.log(
-                            {f"{var_name}_lvl_{var_level:02}_t_{t_i:02}": wandb.Image(var_fig)})
-                        # Close all figs for this time step, saves memory
+                            {f"{var_name}_lvl_{lvl:02}_t_{current_datetime_str}": wandb.Image(var_fig)}
+                        )
                         plt.close("all")
-                    var_i += 1
 
             if constants.store_example_data:
                 # Save pred and target as .pt files
@@ -533,19 +543,18 @@ class ARModel(pl.LightningModule):
                 wandb.run.dir, 'mean_spatial_loss.pt'))
 
             dir_path = f"{wandb.run.dir}/media/images"
-            for param in constants.param_names_short + ["test_loss"]:
-                levels = constants.vertical_levels if param in constants.is_3d and constants.is_3d[param] else [
-                    0]
-                for level in levels:
-                    # Get all the images for the current parameter
+
+            for var_name, _ in self.selected_vars_units:
+                var_indices = self.variable_indices[var_name]
+                for var_i in var_indices:
+                    # Get all the images for the current variable and index
                     images = sorted(
-                        glob.glob(f'{dir_path}/{param}_lvl_{level:02}_t_*.png'))
+                        glob.glob(f'{dir_path}/{var_name}_t_*_{var_i:02}.png'))
                     # Generate the GIF
-                    with imageio.get_writer(f'{dir_path}/{param}_lvl_{level:02}.gif', mode='I', fps=1) as writer:
+                    with imageio.get_writer(f'{dir_path}/{var_name}_{var_i:02}.gif', mode='I', fps=1) as writer:
                         for filename in images:
                             image = imageio.imread(filename)
                             writer.append_data(image)
-
         self.spatial_loss_maps.clear()
 
 

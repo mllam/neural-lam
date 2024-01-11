@@ -42,9 +42,9 @@ param_units = [
     'm/s',
     'Perc.',
     'Pa',
+    'hPa',
     'Pa',
-    'Pa',
-    'mm',
+    '$kg/m^2$',
     '$kg/m^2$',
     'K',
     'm/s',
@@ -124,6 +124,7 @@ fig_size = (15, 10)
 example_file = "data/cosmo/samples/train/data_2015112800.zarr"
 chunk_size = 100
 eval_datetime = "2020080312"
+eval_plot_vars = ["TOT_PREC", "RELHUM", "TQV"]
 store_example_data = False
 cosmo_proj = ccrs.PlateCarree()
 selected_proj = cosmo_proj
