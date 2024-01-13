@@ -546,12 +546,15 @@ class ARModel(pl.LightningModule):
 
             for var_name, _ in self.selected_vars_units:
                 var_indices = self.variable_indices[var_name]
-                for var_i in var_indices:
+                for lvl_i, var_i in enumerate(var_indices):
+                    # Calculate var_vrange for each index
+                    lvl = constants.vertical_levels[lvl_i]
+
                     # Get all the images for the current variable and index
                     images = sorted(
-                        glob.glob(f'{dir_path}/{var_name}_t_*_{var_i:02}.png'))
+                        glob.glob(f"{dir_path}/{var_name}_lvl_{lvl:02}_t_*.png"))
                     # Generate the GIF
-                    with imageio.get_writer(f'{dir_path}/{var_name}_{var_i:02}.gif', mode='I', fps=1) as writer:
+                    with imageio.get_writer(f'{dir_path}/{var_name}_lvl_{lvl:02}.gif', mode='I', fps=1) as writer:
                         for filename in images:
                             image = imageio.imread(filename)
                             writer.append_data(image)
