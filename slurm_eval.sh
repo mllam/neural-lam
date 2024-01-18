@@ -30,4 +30,4 @@ export OMP_NUM_THREADS=16
 
 # Run the script with torchrun
 srun -ul python train_model.py --load "wandb/example.ckpt" --dataset "cosmo" \
-    --eval="test" --subset_ds 1 --n_workers 2 --batch_size 6 --wandb_mode "disabled"
+    --eval="test" --subset_ds 1 --n_workers 2 --batch_size 6 --wandb_mode "offline"
