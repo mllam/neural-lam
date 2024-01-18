@@ -17,11 +17,15 @@ export NORMALIZE=false
 conda activate neural-ddp
 
 if [ "$PREPROCESS" = true ]; then
+    echo "Create static features"
     srun -ul -N1 -n1 python create_static_features.py --boundaries 60
+    echo "Creating mesh"
     srun -ul -N1 -n1 python create_mesh.py --dataset "cosmo" --plot 1
+    echo "Creating grid features"
     srun -ul -N1 -n1 python create_grid_features.py --dataset "cosmo"
     if [ "$NORMALIZE" = true ]; then
         # This takes multiple hours!
+        echo "Creating normalization weights"
         srun -ul -N1 -n1 python create_parameter_weights.py --dataset "cosmo" --batch_size 32 --n_workers 8 --step_length 1
     fi
 fi
@@ -30,6 +34,5 @@ ulimit -c 0
 export OMP_NUM_THREADS=16
 
 # Run the script with torchrun
-srun -ul --gpus-per-task=1 python train_model.py --dataset "cosmo" --val_interval 2 \
-    --epochs 2 --n_workers 6 --batch_size 8 --subset_ds 1
-
+srun -ul --gpus-per-task=1 python train_model.py --dataset "cosmo" --val_interval 5 \
+    --epochs 10 --n_workers 6 --batch_size 8 --subset_ds 1 --wandb_mode "disabled"

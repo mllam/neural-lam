@@ -40,6 +40,7 @@ cd neural-lam
 ln -s /scratch/mch/sadamov/pyprojects_data/neural_lam/data
 mkdir lightning_logs
 
+# Create the conda environment (~10min)
 mamba env create -f environment.yml
 mamba activate neural-lam
 

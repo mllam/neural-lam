@@ -1,4 +1,4 @@
-name: neural-ddp
+name: neural-lam
 channels:
   - pytorch
   - nvidia
