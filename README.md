@@ -27,6 +27,27 @@ Collaborations around this implementation are very welcome.
 If you are working with Neural-LAM feel free to get in touch and/or submit pull requests to the repository.
 
 <span style="color:#98FF98;">Additions relevant to the COSMO Neural-LAM implementation are highlighted in __green__.</span>
+# Quick Start
+<span style="color:#98FF98;">
+Follow the steps below to get started with Neural-LAM on Balfrin.cscs.ch.</span>
+
+```{bash}
+# Clone the repository
+git clone https://github.com/MeteoSwiss/neural-lam/
+cd neural-lam
+
+# Link the data folder containing the COSMO zarr archives
+ln -s /scratch/mch/sadamov/pyprojects_data/neural_lam/data
+mkdir lightning_logs
+
+mamba env create -f environment.yml
+mamba activate neural-lam
+
+# Run the preprocessing/training scripts
+sbatch slurm_train.sh
+
+```
+
 
 # Modularity
 The Neural-LAM code is designed to modularize the different components involved in training and evaluating neural weather prediction models.

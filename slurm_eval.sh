@@ -9,23 +9,25 @@
 #SBATCH --error=lightning_logs/neurwp_eval_err.log
 #SBATCH --time=03:00:00
 
-export PREPROCESS=false
+export PREPROCESS=true
+export NORMALIZE=false
 
 # Load necessary modules
 conda activate neural-ddp
 
 if [ "$PREPROCESS" = true ]; then
     srun -ul -N1 -n1 python create_static_features.py --boundaries 60
-    srun -ul -N1 -n1 python create_mesh.py --dataset "cosmo"
+    srun -ul -N1 -n1 python create_mesh.py --dataset "cosmo" --plot 1
     srun -ul -N1 -n1 python create_grid_features.py --dataset "cosmo"
-    # This takes multiple hours!
-    srun -ul -N1 -n1 python create_parameter_weights.py --dataset "cosmo" --batch_size 12 --n_workers 8 --step_length 1
+    if [ "$NORMALIZE" = true ]; then
+        # This takes multiple hours!
+        srun -ul -N1 -n1 python create_parameter_weights.py --dataset "cosmo" --batch_size 32 --n_workers 8 --step_length 1
+    fi
 fi
 
 ulimit -c 0
 export OMP_NUM_THREADS=16
 
 # Run the script with torchrun
-srun -ul python train_model.py --wandb_mode "offline" \
-    --load "wandb/run-20240105_085036-ie0v7gzf/files/latest-v1.ckpt" \
+srun -ul python train_model.py --load "wandb/epoch=139.ckpt" \
     --dataset "cosmo" --eval="test" --subset_ds 1 --n_workers 2 --batch_size 6
