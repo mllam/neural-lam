@@ -42,9 +42,9 @@ param_units = [
     'm/s',
     'Perc.',
     'Pa',
+    'hPa',
     'Pa',
-    'Pa',
-    'mm',
+    '$kg/m^2$',
     '$kg/m^2$',
     'K',
     'm/s',
@@ -72,6 +72,12 @@ vertical_levels = [
     1, 5, 13, 22, 38, 41, 60
 ]
 
+param_constraints = {
+    'RELHUM': (0, 100),
+    'TQV': (0, None),
+    'TOT_PREC': (0, None),
+}
+
 is_3d = {
     'T': 1,
     'U': 1,
@@ -82,12 +88,13 @@ is_3d = {
     'PS': 0,
     'TOT_PREC': 0,
     'TQV': 0,
-    'T_2M': 0,
+    'T_2M': 0,  # TODO: these 2d field diagnostic variables could be removed from input channels, and derived during inference
     'U_10M': 0,
     'V_10M': 0,
 }
 
 # Vertical level weights
+# TODO: exponential function of height
 level_weights = {
     1: 1,
     5: 1,
@@ -102,7 +109,7 @@ level_weights = {
 grid_shape = (390, 582)  # (y, x)
 
 # Time step prediction during training / prediction (eval)
-train_horizon = 6  # hours (t-1 + t -> t+1)
+train_horizon = 3  # hours (t-1 + t -> t+1)
 eval_horizon = 25  # hours (autoregressive)
 
 # Properties of the Graph / Mesh
@@ -116,12 +123,14 @@ metrics_initialized = False
 fig_size = (15, 10)
 example_file = "data/cosmo/samples/train/data_2015112800.zarr"
 chunk_size = 100
-eval_sample = 0
+eval_datetime = "2020100215"
+eval_plot_vars = param_names_short
 store_example_data = False
 cosmo_proj = ccrs.PlateCarree()
 selected_proj = cosmo_proj
 pollon = -170.0
 pollat = 43.0
+smooth_boundaries = False
 
 # Some constants useful for sub-classes
 batch_static_feature_dim = 0

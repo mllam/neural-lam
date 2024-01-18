@@ -1,7 +1,7 @@
 ### Project Specific ###
-wandb
+wandb/*
+!wandb/example.ckpt
 slurm_log*
-saved_models
 data
 graphs
 *.sif

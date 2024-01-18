@@ -46,6 +46,7 @@ def init_wandb(args):
             name=run_name,
             project=constants.wandb_project,
             config=args,
+            mode=args.wandb_mode
         )
         logger = pl.loggers.WandbLogger(
             project=constants.wandb_project,
@@ -59,7 +60,8 @@ def init_wandb(args):
             project=constants.wandb_project,
             config=args,
             id=args.resume_run,
-            resume='must'
+            resume='must',
+            mode=args.wandb_mode
         )
         logger = pl.loggers.WandbLogger(
             project=constants.wandb_project,
@@ -102,6 +104,8 @@ def main():
     parser.add_argument(
         '--precision', type=str, default=32,
         help='Numerical precision to use for model (32/16/bf16) (default: 32)')
+    parser.add_argument('--wandb_mode', type=str, default="online",
+                        help='Wandb mode (online/offline/dryrun) (default: online)')
 
     # Model architecture
     parser.add_argument(
