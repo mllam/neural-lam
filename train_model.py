@@ -178,7 +178,7 @@ def main():
         checkpoint_dir = logger.experiment.dir
     else:
         logger = None
-        checkpoint_dir = "saved_models"
+        checkpoint_dir = "lightning_logs"
 
     # Ensure the checkpoint directory exists
     os.makedirs(checkpoint_dir, exist_ok=True)
