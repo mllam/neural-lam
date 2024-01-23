@@ -38,7 +38,7 @@ class WeatherDataset(torch.utils.data.Dataset):
             raise ValueError("No .zarr files found in directory")
 
         if subset:
-            if constants.eval_datetime is not None:
+            if constants.eval_datetime is not None and split == "test":
                 eval_datetime_obj = datetime.strptime(
                     constants.eval_datetime, "%Y%m%d%H")
                 for i, file in enumerate(self.zarr_files):
@@ -63,8 +63,7 @@ class WeatherDataset(torch.utils.data.Dataset):
             start_datetime = self.zarr_files[0].split(
                 "/")[-1].split("_")[1].replace('.zarr', '')
 
-            print("Evaluation on subset of 200 samples")
-            print("Evaluation starts on the", start_datetime)
+            print("Data subset of 200 samples starts on the", start_datetime)
 
         # Separate 3D and 2D variables
         variables_3d = [var for var in constants.param_names_short

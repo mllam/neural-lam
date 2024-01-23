@@ -13,7 +13,7 @@ export PREPROCESS=true
 export NORMALIZE=false
 
 # Load necessary modules
-conda activate neural-ddp
+conda activate neural-lam
 
 if [ "$PREPROCESS" = true ]; then
     srun -ul -N1 -n1 python create_static_features.py --boundaries 60
@@ -29,5 +29,5 @@ ulimit -c 0
 export OMP_NUM_THREADS=16
 
 # Run the script with torchrun
-srun -ul python train_model.py --load "wandb/example.ckpt" \
-    --dataset "cosmo" --eval="test" --subset_ds 1 --n_workers 2 --batch_size 6
+srun -ul python train_model.py --load "wandb/example.ckpt" --dataset "cosmo" \
+    --eval="test" --subset_ds 1 --n_workers 2 --batch_size 6 --wandb_mode "offline"
