@@ -29,7 +29,9 @@ If you are working with Neural-LAM feel free to get in touch and/or submit pull 
 <span style="color:blue;">Additions relevant to the COSMO Neural-LAM implementation are highlighted in __blue__.</span>
 # Quick Start
 <span style="color:blue;">
-Follow the steps below to get started with Neural-LAM on Balfrin.cscs.ch.</span>
+Follow the steps below to get started with Neural-LAM on Balfrin.cscs.ch.
+Don't worry everything is carried out on a small subset of data for a limited number of epochs.
+</span>
 
 ```{bash}
 # Clone the repository
@@ -46,6 +48,10 @@ mamba activate neural-lam
 
 # Run the preprocessing/training scripts
 sbatch slurm_train.sh
+
+# Run the evaluation script and generate plots and gif for TQV
+# (don't execute preprocessing scripts at the same time as training)
+sbatch slurm_eval.sh
 
 ```
 
