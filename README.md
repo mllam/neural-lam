@@ -26,9 +26,9 @@ We plan to continue updating this repository as we improve existing models and d
 Collaborations around this implementation are very welcome.
 If you are working with Neural-LAM feel free to get in touch and/or submit pull requests to the repository.
 
-<span style="color:#98FF98;">Additions relevant to the COSMO Neural-LAM implementation are highlighted in __green__.</span>
+<span style="color:blue;">Additions relevant to the COSMO Neural-LAM implementation are highlighted in __blue__.</span>
 # Quick Start
-<span style="color:#98FF98;">
+<span style="color:blue;">
 Follow the steps below to get started with Neural-LAM on Balfrin.cscs.ch.</span>
 
 ```{bash}
@@ -71,7 +71,7 @@ If there is interest to use Neural-LAM for other areas it is not a substantial u
 We would be happy to support such enhancements.
 See the issues https://github.com/joeloskarsson/neural-lam/issues/2, https://github.com/joeloskarsson/neural-lam/issues/3 and https://github.com/joeloskarsson/neural-lam/issues/4 for some initial ideas on how this could be done.
 
-<span style="color:#98FF98;">
+<span style="color:blue;">
 
 For the COSMO implementation some additional settings can be defined in `neural_lam/constants`. Most of the code should take user input either from `neural_lam/constants` or directly from command-line argument parsing. Would certainly be worth the effort to make the code fully area-agnostic.
 
@@ -82,7 +82,7 @@ Below follows instructions on how to use Neural-LAM to train and evaluate models
 
 ## Installation
 
-<span style="color:#98FF98;">
+<span style="color:blue;">
 
 For COSMO we use conda to avoid the Cartopy installation issues and because conda environments usually work well on the vCluster called Balfrin.cscs.ch.
 
@@ -122,7 +122,7 @@ All graphs used in the paper are also available for download at the same link (b
 Note that this is far too little data to train any useful models, but all scripts can be ran with it.
 It should thus be useful to make sure that your python environment is set up correctly and that all the code can be ran without any issues.
 
-<span style="color:#98FF98;">
+<span style="color:blue;">
 
 For COSMO the data is stored in the `data` folder with the same structure, but called `cosmo`. The data will be open-source someday but for now we cannot share the data outside of our vCluster. A tiny example dataset could probably be made available.
 
@@ -139,7 +139,7 @@ In order to start training models at least three pre-processing scripts have to 
 * `create_grid_features.py`
 * `create_parameter_weights.py`
 
-<span style="color:#98FF98;">
+<span style="color:blue;">
 
 For COSMO also run `create_static_features.py` to create the static features for the graph nodes.
 
@@ -186,7 +186,7 @@ A few of the key ones are outlined below:
 * `--processor_layers`: Number of GNN layers to use in the processing part of the model
 * `--ar_steps`: Number of time steps to unroll for when making predictions and computing the loss
 
-<span style="color:#98FF98;">
+<span style="color:blue;">
 
 For COSMO three simple slurm sbatch scripts are available for training/evaluating/debugging the model. You can launch either of these jobs respectively with:
 
