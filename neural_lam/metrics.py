@@ -1,4 +1,6 @@
+# Third-party
 import torch
+
 
 def get_metric(metric_name):
     """
@@ -12,6 +14,7 @@ def get_metric(metric_name):
     metric_name_lower = metric_name.lower()
     assert metric_name_lower in DEFINED_METRICS, f"Unknown metric: {metric_name}"
     return DEFINED_METRICS[metric_name_lower]
+
 
 def mask_and_reduce_metric(metric_entry_vals, mask, average_grid, sum_vars):
     """
@@ -29,15 +32,16 @@ def mask_and_reduce_metric(metric_entry_vals, mask, average_grid, sum_vars):
     """
     # Only keep grid nodes in mask
     if mask is not None:
-        metric_entry_vals = metric_entry_vals[...,mask,:] # (..., N', d_state)
+        metric_entry_vals = metric_entry_vals[..., mask, :]  # (..., N', d_state)
 
     # Optionally reduce last two dimensions
-    if average_grid: # Reduce grid first
-        metric_entry_vals = torch.mean(metric_entry_vals, dim=-2) # (..., d_state)
-    if sum_vars: # Reduce vars second
-        metric_entry_vals = torch.sum(metric_entry_vals, dim=-1) # (..., N) or (...,)
+    if average_grid:  # Reduce grid first
+        metric_entry_vals = torch.mean(metric_entry_vals, dim=-2)  # (..., d_state)
+    if sum_vars:  # Reduce vars second
+        metric_entry_vals = torch.sum(metric_entry_vals, dim=-1)  # (..., N) or (...,)
 
     return metric_entry_vals
+
 
 def wmse(pred, target, pred_std, mask=None, average_grid=True, sum_vars=True):
     """
@@ -55,12 +59,15 @@ def wmse(pred, target, pred_std, mask=None, average_grid=True, sum_vars=True):
     metric_val: One of (...,), (..., d_state), (..., N), (..., N, d_state), depending
     on reduction arguments.
     """
-    entry_mse = torch.nn.functional.mse_loss(pred, target,
-            reduction='none') # (..., N, d_state)
-    entry_mse_weighted = entry_mse / (pred_std**2) # (..., N, d_state)
+    entry_mse = torch.nn.functional.mse_loss(
+        pred, target, reduction="none"
+    )  # (..., N, d_state)
+    entry_mse_weighted = entry_mse / (pred_std**2)  # (..., N, d_state)
 
-    return mask_and_reduce_metric(entry_mse_weighted, mask=mask,
-            average_grid=average_grid, sum_vars=sum_vars)
+    return mask_and_reduce_metric(
+        entry_mse_weighted, mask=mask, average_grid=average_grid, sum_vars=sum_vars
+    )
+
 
 def mse(pred, target, pred_std, mask=None, average_grid=True, sum_vars=True):
     """
@@ -80,6 +87,7 @@ def mse(pred, target, pred_std, mask=None, average_grid=True, sum_vars=True):
     """
     # Replace pred_std with constant ones
     return wmse(pred, target, torch.ones_like(pred_std), mask, average_grid, sum_vars)
+
 
 def rmse(pred, target, pred_std, mask=None, average_grid=True, sum_vars=True):
     """
@@ -102,15 +110,17 @@ def rmse(pred, target, pred_std, mask=None, average_grid=True, sum_vars=True):
     assert average_grid, "Can not compute RMSE without averaging grid"
 
     # Spatially averaged mse, masking is also performed here
-    averaged_mse = mse(pred, target, pred_std, mask, average_grid=True,
-            sum_vars=False) # (..., d_state)
-    entry_rmse = torch.sqrt(averaged_mse) # (..., d_state)
+    averaged_mse = mse(
+        pred, target, pred_std, mask, average_grid=True, sum_vars=False
+    )  # (..., d_state)
+    entry_rmse = torch.sqrt(averaged_mse)  # (..., d_state)
 
     # Optionally sum over variables here manually
     if sum_vars:
-        return torch.sum(entry_rmse, dim=-1) # (...,)
+        return torch.sum(entry_rmse, dim=-1)  # (...,)
 
-    return entry_rmse # (..., d_state)
+    return entry_rmse  # (..., d_state)
+
 
 def wmae(pred, target, pred_std, mask=None, average_grid=True, sum_vars=True):
     """
@@ -128,12 +138,15 @@ def wmae(pred, target, pred_std, mask=None, average_grid=True, sum_vars=True):
     metric_val: One of (...,), (..., d_state), (..., N), (..., N, d_state), depending
     on reduction arguments.
     """
-    entry_mae = torch.nn.functional.l1_loss(pred, target,
-            reduction='none') # (..., N, d_state)
-    entry_mae_weighted = entry_mae / pred_std # (..., N, d_state)
+    entry_mae = torch.nn.functional.l1_loss(
+        pred, target, reduction="none"
+    )  # (..., N, d_state)
+    entry_mae_weighted = entry_mae / pred_std  # (..., N, d_state)
 
-    return mask_and_reduce_metric(entry_mae_weighted, mask=mask,
-            average_grid=average_grid, sum_vars=sum_vars)
+    return mask_and_reduce_metric(
+        entry_mae_weighted, mask=mask, average_grid=average_grid, sum_vars=sum_vars
+    )
+
 
 def mae(pred, target, pred_std, mask=None, average_grid=True, sum_vars=True):
     """
@@ -154,6 +167,7 @@ def mae(pred, target, pred_std, mask=None, average_grid=True, sum_vars=True):
     # Replace pred_std with constant ones
     return wmae(pred, target, torch.ones_like(pred_std), mask, average_grid, sum_vars)
 
+
 def nll(pred, target, pred_std, mask=None, average_grid=True, sum_vars=True):
     """
     Negative Log Likelihood loss, for isotropic Gaussian likelihood
@@ -171,11 +185,13 @@ def nll(pred, target, pred_std, mask=None, average_grid=True, sum_vars=True):
     on reduction arguments.
     """
     # Broadcast pred_std if shaped (d_state,), done internally in Normal class
-    dist = torch.distributions.Normal(pred, pred_std) # (..., N, d_state)
-    entry_nll = -dist.log_prob(target) # (..., N, d_state)
+    dist = torch.distributions.Normal(pred, pred_std)  # (..., N, d_state)
+    entry_nll = -dist.log_prob(target)  # (..., N, d_state)
 
-    return mask_and_reduce_metric(entry_nll, mask=mask, average_grid=average_grid,
-            sum_vars=sum_vars)
+    return mask_and_reduce_metric(
+        entry_nll, mask=mask, average_grid=average_grid, sum_vars=sum_vars
+    )
+
 
 def crps_gauss(pred, target, pred_std, mask=None, average_grid=True, sum_vars=True):
     """
@@ -194,18 +210,21 @@ def crps_gauss(pred, target, pred_std, mask=None, average_grid=True, sum_vars=Tr
     metric_val: One of (...,), (..., d_state), (..., N), (..., N, d_state), depending
     on reduction arguments.
     """
-    std_normal = torch.distributions.Normal(torch.zeros((), device=pred.device),
-            torch.ones((), device=pred.device))
-    target_standard = (target - pred)/pred_std # (..., N, d_state)
+    std_normal = torch.distributions.Normal(
+        torch.zeros((), device=pred.device), torch.ones((), device=pred.device)
+    )
+    target_standard = (target - pred) / pred_std  # (..., N, d_state)
 
-    entry_crps = -pred_std*(
-            torch.pi**(-0.5)
-            -2*torch.exp(std_normal.log_prob(target_standard))
-            -target_standard*(2*std_normal.cdf(target_standard) - 1)
-            ) # (..., N, d_state)
+    entry_crps = -pred_std * (
+        torch.pi ** (-0.5)
+        - 2 * torch.exp(std_normal.log_prob(target_standard))
+        - target_standard * (2 * std_normal.cdf(target_standard) - 1)
+    )  # (..., N, d_state)
 
-    return mask_and_reduce_metric(entry_crps, mask=mask, average_grid=average_grid,
-            sum_vars=sum_vars)
+    return mask_and_reduce_metric(
+        entry_crps, mask=mask, average_grid=average_grid, sum_vars=sum_vars
+    )
+
 
 DEFINED_METRICS = {
     "mse": mse,
