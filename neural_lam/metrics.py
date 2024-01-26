@@ -59,9 +59,7 @@ def wmse(pred, target, pred_std, mask=None, average_grid=True, sum_vars=True):
     metric_val: One of (...,), (..., d_state), (..., N), (..., N, d_state), depending
     on reduction arguments.
     """
-    entry_mse = torch.nn.functional.mse_loss(
-        pred, target, reduction="none"
-    )  # (..., N, d_state)
+    entry_mse = torch.nn.functional.mse_loss(pred, target, reduction="none")  # (..., N, d_state)
     entry_mse_weighted = entry_mse / (pred_std**2)  # (..., N, d_state)
 
     return mask_and_reduce_metric(
@@ -138,9 +136,7 @@ def wmae(pred, target, pred_std, mask=None, average_grid=True, sum_vars=True):
     metric_val: One of (...,), (..., d_state), (..., N), (..., N, d_state), depending
     on reduction arguments.
     """
-    entry_mae = torch.nn.functional.l1_loss(
-        pred, target, reduction="none"
-    )  # (..., N, d_state)
+    entry_mae = torch.nn.functional.l1_loss(pred, target, reduction="none")  # (..., N, d_state)
     entry_mae_weighted = entry_mae / pred_std  # (..., N, d_state)
 
     return mask_and_reduce_metric(

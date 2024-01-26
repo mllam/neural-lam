@@ -47,9 +47,7 @@ def main():
     w_dict = {"2": 1.0, "0": 0.1, "65": 0.065, "1000": 0.1, "850": 0.05, "500": 0.03}
     w_list = np.array([w_dict[par.split("_")[-2]] for par in constants.param_names])
     print("Saving parameter weights...")
-    np.save(
-        os.path.join(static_dir_path, "parameter_weights.npy"), w_list.astype("float32")
-    )
+    np.save(os.path.join(static_dir_path, "parameter_weights.npy"), w_list.astype("float32"))
 
     # Load dataset without any subsampling
     ds = WeatherDataset(
@@ -65,9 +63,7 @@ def main():
     flux_means = []
     flux_squares = []
     for init_batch, target_batch, _, forcing_batch in tqdm(loader):
-        batch = torch.cat(
-            (init_batch, target_batch), dim=1
-        )  # (N_batch, N_t, N_grid, d_features)
+        batch = torch.cat((init_batch, target_batch), dim=1)  # (N_batch, N_t, N_grid, d_features)
         means.append(torch.mean(batch, dim=(1, 2)))  # (N_batch, d_features,)
         squares.append(torch.mean(batch**2, dim=(1, 2)))  # (N_batch, d_features,)
 
@@ -102,9 +98,7 @@ def main():
     diff_means = []
     diff_squares = []
     for init_batch, target_batch, _, _ in tqdm(loader_standard):
-        batch = torch.cat(
-            (init_batch, target_batch), dim=1
-        )  # (N_batch, N_t', N_grid, d_features)
+        batch = torch.cat((init_batch, target_batch), dim=1)  # (N_batch, N_t', N_grid, d_features)
         # Note: batch contains only 1h-steps
         stepped_batch = torch.cat(
             [
@@ -118,12 +112,8 @@ def main():
         batch_diffs = stepped_batch[:, 1:] - stepped_batch[:, :-1]
         # (N_batch', N_t-1, N_grid, d_features)
 
-        diff_means.append(
-            torch.mean(batch_diffs, dim=(1, 2))
-        )  # (N_batch', d_features,)
-        diff_squares.append(
-            torch.mean(batch_diffs**2, dim=(1, 2))
-        )  # (N_batch', d_features,)
+        diff_means.append(torch.mean(batch_diffs, dim=(1, 2)))  # (N_batch', d_features,)
+        diff_squares.append(torch.mean(batch_diffs**2, dim=(1, 2)))  # (N_batch', d_features,)
 
     diff_mean = torch.mean(torch.cat(diff_means, dim=0), dim=0)  # (d_features)
     diff_second_moment = torch.mean(torch.cat(diff_squares, dim=0), dim=0)

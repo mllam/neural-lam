@@ -48,8 +48,7 @@ def plot_error_map(errors, title=None, step_length=3):
 
     ax.set_yticks(np.arange(d_f))
     y_ticklabels = [
-        f"{name} ({unit})"
-        for name, unit in zip(constants.param_names_short, constants.param_units)
+        f"{name} ({unit})" for name, unit in zip(constants.param_names_short, constants.param_units)
     ]
     ax.set_yticklabels(y_ticklabels, rotation=30, size=label_size)
 
@@ -123,9 +122,7 @@ def plot_spatial_error(error, obs_mask, title=None, vrange=None):
     mask_reshaped = obs_mask.reshape(*constants.grid_shape)
     pixel_alpha = mask_reshaped.clamp(0.7, 1).cpu().numpy()  # Faded border region
 
-    fig, ax = plt.subplots(
-        figsize=(5, 4.8), subplot_kw={"projection": constants.lambert_proj}
-    )
+    fig, ax = plt.subplots(figsize=(5, 4.8), subplot_kw={"projection": constants.lambert_proj})
 
     ax.coastlines()  # Add coastline outlines
     error_grid = error.reshape(*constants.grid_shape).cpu().numpy()

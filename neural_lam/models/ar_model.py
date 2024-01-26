@@ -31,9 +31,7 @@ class ARModel(pl.LightningModule):
         # Double grid output dim. to also output std.-dev.
         self.output_std = bool(args.output_std)
         if self.output_std:
-            self.grid_output_dim = (
-                2 * constants.grid_state_dim
-            )  # Pred. dim. in grid cell
+            self.grid_output_dim = 2 * constants.grid_state_dim  # Pred. dim. in grid cell
         else:
             self.grid_output_dim = constants.grid_state_dim  # Pred. dim. in grid cell
 
@@ -117,9 +115,7 @@ class ARModel(pl.LightningModule):
         """
         raise NotImplementedError("No prediction step implemented")
 
-    def unroll_prediction(
-        self, init_states, batch_static_features, forcing_features, true_states
-    ):
+    def unroll_prediction(self, init_states, batch_static_features, forcing_features, true_states):
         """
         Roll out prediction taking multiple autoregressive steps with model
         init_states: (B, 2, N_grid, d_f)
@@ -144,9 +140,7 @@ class ARModel(pl.LightningModule):
             # pred_std: (B, N_grid, d_f) or None
 
             # Overwrite border with true state
-            new_state = (
-                self.border_mask * border_state + self.interior_mask * pred_state
-            )
+            new_state = self.border_mask * border_state + self.interior_mask * pred_state
 
             prediction_list.append(new_state)
             if self.output_std:
@@ -197,9 +191,7 @@ class ARModel(pl.LightningModule):
         )  # mean over unrolled times and batch
 
         log_dict = {"train_loss": batch_loss}
-        self.log_dict(
-            log_dict, prog_bar=True, on_step=True, on_epoch=True, sync_dist=True
-        )
+        self.log_dict(log_dict, prog_bar=True, on_step=True, on_epoch=True, sync_dist=True)
         return batch_loss
 
     def all_gather_cat(self, tensor_to_gather):
@@ -351,17 +343,14 @@ class ARModel(pl.LightningModule):
             var_vranges = list(zip(var_vmin, var_vmax))
 
             # Iterate over prediction horizon time steps
-            for t_i, (pred_t, target_t) in enumerate(
-                zip(pred_slice, target_slice), start=1
-            ):
+            for t_i, (pred_t, target_t) in enumerate(zip(pred_slice, target_slice), start=1):
                 # Create one figure per variable at this time step
                 var_figs = [
                     vis.plot_prediction(
                         pred_t[:, var_i],
                         target_t[:, var_i],
                         self.interior_mask[:, 0],
-                        title=f"{var_name} ({var_unit}), "
-                        f"t={t_i} ({self.step_length*t_i} h)",
+                        title=f"{var_name} ({var_unit}), " f"t={t_i} ({self.step_length*t_i} h)",
                         vrange=var_vrange,
                     )
                     for var_i, (var_name, var_unit, var_vrange) in enumerate(
@@ -388,9 +377,7 @@ class ARModel(pl.LightningModule):
             )
             torch.save(
                 target_slice.cpu(),
-                os.path.join(
-                    wandb.run.dir, f"example_target_{self.plotted_examples}.pt"
-                ),
+                os.path.join(wandb.run.dir, f"example_target_{self.plotted_examples}.pt"),
             )
 
     def create_metric_log_dict(self, metric_tensor, prefix, metric_name):
@@ -452,9 +439,7 @@ class ARModel(pl.LightningModule):
                 # Note: we here assume rescaling for all metrics is linear
                 metric_rescaled = torch.mean(metric_tensor, dim=0) * self.data_std
                 # (pred_steps, d_f)
-                log_dict.update(
-                    self.create_metric_log_dict(metric_rescaled, prefix, metric_name)
-                )
+                log_dict.update(self.create_metric_log_dict(metric_rescaled, prefix, metric_name))
 
         if self.trainer.is_global_zero and not self.trainer.sanity_checking:
             wandb.log(log_dict)  # Log all
@@ -473,9 +458,7 @@ class ARModel(pl.LightningModule):
             torch.cat(self.spatial_loss_maps, dim=0)
         )  # (N_test, N_log, N_grid)
         if self.trainer.is_global_zero:
-            mean_spatial_loss = torch.mean(
-                spatial_loss_tensor, dim=0
-            )  # (N_log, N_grid)
+            mean_spatial_loss = torch.mean(spatial_loss_tensor, dim=0)  # (N_log, N_grid)
 
             loss_map_figs = [
                 vis.plot_spatial_error(
@@ -483,9 +466,7 @@ class ARModel(pl.LightningModule):
                     self.interior_mask[:, 0],
                     title=f"Test loss, t={t_i} ({self.step_length*t_i} h)",
                 )
-                for t_i, loss_map in zip(
-                    constants.val_step_log_errors, mean_spatial_loss
-                )
+                for t_i, loss_map in zip(constants.val_step_log_errors, mean_spatial_loss)
             ]
 
             # log all to same wandb key, sequentially

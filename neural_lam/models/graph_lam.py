@@ -23,8 +23,7 @@ class GraphLAM(BaseGraphModel):
         mesh_dim = self.mesh_static_features.shape[1]
         m2m_edges, m2m_dim = self.m2m_features.shape
         print(
-            f"Edges in subgraphs: m2m={m2m_edges}, g2m={self.g2m_edges}, "
-            f"m2g={self.m2g_edges}"
+            f"Edges in subgraphs: m2m={m2m_edges}, g2m={self.g2m_edges}, " f"m2g={self.m2g_edges}"
         )
 
         # Define sub-models
@@ -45,10 +44,7 @@ class GraphLAM(BaseGraphModel):
         ]
         self.processor = pyg.nn.Sequential(
             "mesh_rep, edge_rep",
-            [
-                (net, "mesh_rep, mesh_rep, edge_rep -> mesh_rep, edge_rep")
-                for net in processor_nets
-            ],
+            [(net, "mesh_rep, mesh_rep, edge_rep -> mesh_rep, edge_rep") for net in processor_nets],
         )
 
     def get_num_mesh(self):

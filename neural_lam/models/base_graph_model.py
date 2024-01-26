@@ -52,9 +52,7 @@ class BaseGraphModel(ARModel):
             hidden_layers=args.hidden_layers,
             update_edges=False,
         )
-        self.encoding_grid_mlp = utils.make_mlp(
-            [args.hidden_dim] + self.mlp_blueprint_end
-        )
+        self.encoding_grid_mlp = utils.make_mlp([args.hidden_dim] + self.mlp_blueprint_end)
 
         # decoder
         self.m2g_gnn = InteractionNet(
@@ -123,15 +121,11 @@ class BaseGraphModel(ARModel):
         mesh_emb = self.embedd_mesh_nodes()
 
         # Map from grid to mesh
-        mesh_emb_expanded = self.expand_to_batch(
-            mesh_emb, batch_size
-        )  # (B, N_mesh, d_h)
+        mesh_emb_expanded = self.expand_to_batch(mesh_emb, batch_size)  # (B, N_mesh, d_h)
         g2m_emb_expanded = self.expand_to_batch(g2m_emb, batch_size)
 
         # This also splits representation into grid and mesh
-        mesh_rep = self.g2m_gnn(
-            grid_emb, mesh_emb_expanded, g2m_emb_expanded
-        )  # (B, N_mesh, d_h)
+        mesh_rep = self.g2m_gnn(grid_emb, mesh_emb_expanded, g2m_emb_expanded)  # (B, N_mesh, d_h)
         # Also MLP with residual for grid representation
         grid_rep = grid_emb + self.encoding_grid_mlp(grid_emb)  # (B, N_grid, d_h)
 
@@ -140,17 +134,13 @@ class BaseGraphModel(ARModel):
 
         # Map back from mesh to grid
         m2g_emb_expanded = self.expand_to_batch(m2g_emb, batch_size)
-        grid_rep = self.m2g_gnn(
-            mesh_rep, grid_rep, m2g_emb_expanded
-        )  # (B, N_grid, d_h)
+        grid_rep = self.m2g_gnn(mesh_rep, grid_rep, m2g_emb_expanded)  # (B, N_grid, d_h)
 
         # Map to output dimension, only for grid
         net_output = self.output_map(grid_rep)  # (B, N_grid, d_grid_out)
 
         if self.output_std:
-            pred_delta_mean, pred_std_raw = net_output.chunk(
-                2, dim=-1
-            )  # both (B, N_grid, d_f)
+            pred_delta_mean, pred_std_raw = net_output.chunk(2, dim=-1)  # both (B, N_grid, d_f)
             # Note: The predicted std. is not scaled in any way here
             pred_std = torch.nn.functional.softplus(pred_std_raw)
         else:

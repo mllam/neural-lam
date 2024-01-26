@@ -49,9 +49,7 @@ class HiLAMParallel(BaseHiGraphModel):
                 ],
             )
 
-    def hi_processor_step(
-        self, mesh_rep_levels, mesh_same_rep, mesh_up_rep, mesh_down_rep
-    ):
+    def hi_processor_step(self, mesh_rep_levels, mesh_same_rep, mesh_up_rep, mesh_down_rep):
         """
         Internal processor step of hierarchical graph models.
         Between mesh init and read out.
@@ -77,14 +75,10 @@ class HiLAMParallel(BaseHiGraphModel):
 
         # Split up again for read-out step
         mesh_rep_levels = list(torch.split(mesh_rep, self.N_mesh_levels, dim=1))
-        mesh_edge_rep_sections = torch.split(
-            mesh_edge_rep, self.edge_split_sections, dim=1
-        )
+        mesh_edge_rep_sections = torch.split(mesh_edge_rep, self.edge_split_sections, dim=1)
 
         mesh_same_rep = mesh_edge_rep_sections[: self.N_levels]
-        mesh_up_rep = mesh_edge_rep_sections[
-            self.N_levels : self.N_levels + (self.N_levels - 1)
-        ]
+        mesh_up_rep = mesh_edge_rep_sections[self.N_levels : self.N_levels + (self.N_levels - 1)]
         mesh_down_rep = mesh_edge_rep_sections[
             self.N_levels + (self.N_levels - 1) :
         ]  # Last are down edges

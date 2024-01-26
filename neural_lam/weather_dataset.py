@@ -88,9 +88,7 @@ class WeatherDataset(torch.utils.data.Dataset):
         else:
             subsample_index = 0
         subsample_end_index = self.original_sample_length * self.subsample_step
-        sample = full_sample[
-            subsample_index : subsample_end_index : self.subsample_step
-        ]
+        sample = full_sample[subsample_index : subsample_end_index : self.subsample_step]
         # (N_t, N_x, N_y, d_features')
 
         # Remove feature 15, "z_height_above_ground"
@@ -105,9 +103,7 @@ class WeatherDataset(torch.utils.data.Dataset):
             rad_features[: (subsample_index + 1)], dim=0, keepdim=True
         )  # (1, N_x, N_y, 2)
         # Accumulate for rest of subsampled sequence
-        in_subsample_len = (
-            subsample_end_index - self.subsample_step + subsample_index + 1
-        )
+        in_subsample_len = subsample_end_index - self.subsample_step + subsample_index + 1
         rad_features_in_subsample = rad_features[
             (subsample_index + 1) : in_subsample_len
         ]  # (N_t*, N_x, N_y, 2), N_t* = (N_t-1)*ss_step
@@ -118,9 +114,7 @@ class WeatherDataset(torch.utils.data.Dataset):
             ),
             dim=1,
         )  # (N_t-1, N_x, N_y, 2)
-        accum_rad = torch.cat(
-            (init_accum_rad, rest_accum_rad), dim=0
-        )  # (N_t, N_x, N_y, 2)
+        accum_rad = torch.cat((init_accum_rad, rest_accum_rad), dim=0)  # (N_t, N_x, N_y, 2)
         # Replace in sample
         sample[:, :, :, 2:4] = accum_rad
 
@@ -128,9 +122,7 @@ class WeatherDataset(torch.utils.data.Dataset):
         sample = sample.flatten(1, 2)  # (N_t, N_grid, d_features)
 
         # Uniformly sample time id to start sample from
-        init_id = torch.randint(
-            0, 1 + self.original_sample_length - self.sample_length, ()
-        )
+        init_id = torch.randint(0, 1 + self.original_sample_length - self.sample_length, ())
         sample = sample[init_id : (init_id + self.sample_length)]
         # (sample_length, N_grid, d_features)
 
@@ -146,9 +138,7 @@ class WeatherDataset(torch.utils.data.Dataset):
         # Load water coverage
         sample_datetime = sample_name[:10]
         water_path = os.path.join(self.sample_dir_path, f"wtr_{sample_datetime}.npy")
-        static_features = torch.tensor(
-            np.load(water_path), dtype=torch.float32
-        ).unsqueeze(
+        static_features = torch.tensor(np.load(water_path), dtype=torch.float32).unsqueeze(
             -1
         )  # (N_x, N_y, 1)
         # Flatten
@@ -174,27 +164,21 @@ class WeatherDataset(torch.utils.data.Dataset):
 
         # Time of day and year
         dt_obj = dt.datetime.strptime(sample_datetime, "%Y%m%d%H")
-        dt_obj = dt_obj + dt.timedelta(
-            hours=2 + subsample_index
-        )  # Offset for first index
+        dt_obj = dt_obj + dt.timedelta(hours=2 + subsample_index)  # Offset for first index
         # Extract for initial step
         init_hour_in_day = dt_obj.hour
         start_of_year = dt.datetime(dt_obj.year, 1, 1)
         init_seconds_into_year = (dt_obj - start_of_year).total_seconds()
 
         # Add increments for all steps
-        hour_inc = (
-            torch.arange(self.sample_length) * self.subsample_step
-        )  # (sample_len,)
+        hour_inc = torch.arange(self.sample_length) * self.subsample_step  # (sample_len,)
         hour_of_day = init_hour_in_day + hour_inc  # (sample_len,), Can be > 24 but ok
         second_into_year = init_seconds_into_year + hour_inc * 3600  # (sample_len,)
         # can roll over to next year, ok because periodicity
 
         # Encode as sin/cos
         hour_angle = (hour_of_day / 12) * torch.pi  # (sample_len,)
-        year_angle = (
-            (second_into_year / constants.seconds_in_year) * 2 * torch.pi
-        )  # (sample_len,)
+        year_angle = (second_into_year / constants.seconds_in_year) * 2 * torch.pi  # (sample_len,)
         datetime_forcing = torch.stack(
             (
                 torch.sin(hour_angle),

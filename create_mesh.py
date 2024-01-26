@@ -37,9 +37,7 @@ def plot_graph(graph, title=None):
     to_pos = pos[edge_index[1]]  # (M/2, 2)
     edge_lines = np.stack((from_pos, to_pos), axis=1)
     axis.add_collection(
-        matplotlib.collections.LineCollection(
-            edge_lines, lw=0.4, colors="black", zorder=1
-        )
+        matplotlib.collections.LineCollection(edge_lines, lw=0.4, colors="black", zorder=1)
     )
 
     # Plot nodes
@@ -253,13 +251,9 @@ def main():
 
                 # add edge from mesh to grid
                 G_down.add_edge(u, v)
-                d = np.sqrt(
-                    np.sum((G_down.nodes[u]["pos"] - G_down.nodes[v]["pos"]) ** 2)
-                )
+                d = np.sqrt(np.sum((G_down.nodes[u]["pos"] - G_down.nodes[v]["pos"]) ** 2))
                 G_down.edges[u, v]["len"] = d
-                G_down.edges[u, v]["vdiff"] = (
-                    G_down.nodes[u]["pos"] - G_down.nodes[v]["pos"]
-                )
+                G_down.edges[u, v]["vdiff"] = G_down.nodes[u]["pos"] - G_down.nodes[v]["pos"]
 
             # relabel nodes to integers (sorted)
             G_down_int = networkx.convert_node_labels_to_integers(
@@ -269,9 +263,7 @@ def main():
             pyg_down = from_networkx_with_start_index(G_down_int, start_index)
 
             # Create up graph, invert downwards edges
-            up_edges = torch.stack(
-                (pyg_down.edge_index[1], pyg_down.edge_index[0]), dim=0
-            )
+            up_edges = torch.stack((pyg_down.edge_index[1], pyg_down.edge_index[0]), dim=0)
             pyg_up = pyg_down.clone()
             pyg_up.edge_index = up_edges
 
@@ -314,11 +306,7 @@ def main():
         for lev in range(1, len(G)):
             nodes = list(G[lev - 1].nodes)
             n = int(np.sqrt(len(nodes)))
-            ij = (
-                np.array(nodes)
-                .reshape((n, n, 2))[1::nx, 1::nx, :]
-                .reshape(int(n / nx) ** 2, 2)
-            )
+            ij = np.array(nodes).reshape((n, n, 2))[1::nx, 1::nx, :].reshape(int(n / nx) ** 2, 2)
             ij = [tuple(x) for x in ij]
             G[lev] = networkx.relabel_nodes(G[lev], dict(zip(G[lev].nodes, ij)))
             G_tot = networkx.compose(G_tot, G[lev])
@@ -327,9 +315,7 @@ def main():
         G_tot = prepend_node_index(G_tot, 0)
 
         # relabel nodes to integers (sorted)
-        G_int = networkx.convert_node_labels_to_integers(
-            G_tot, first_label=0, ordering="sorted"
-        )
+        G_int = networkx.convert_node_labels_to_integers(G_tot, first_label=0, ordering="sorted")
 
         # Graph to use in g2m and m2g
         G_bottom_mesh = G_tot
@@ -351,9 +337,7 @@ def main():
     mesh_pos = [pos / pos_max for pos in mesh_pos]
 
     # Save mesh positions
-    torch.save(
-        mesh_pos, os.path.join(graph_dir_path, "mesh_features.pt")
-    )  # mesh pos, in float32
+    torch.save(mesh_pos, os.path.join(graph_dir_path, "mesh_features.pt"))  # mesh pos, in float32
 
     #
     # Grid2Mesh
@@ -445,9 +429,7 @@ def main():
             G_m2g.edges[u, v]["vdiff"] = G_m2g.nodes[u]["pos"] - G_m2g.nodes[v]["pos"]
 
     # relabel nodes to integers (sorted)
-    G_m2g_int = networkx.convert_node_labels_to_integers(
-        G_m2g, first_label=0, ordering="sorted"
-    )
+    G_m2g_int = networkx.convert_node_labels_to_integers(G_m2g, first_label=0, ordering="sorted")
     pyg_m2g = from_networkx(G_m2g_int)
 
     if args.plot:

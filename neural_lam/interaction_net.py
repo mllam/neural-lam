@@ -89,9 +89,7 @@ class InteractionNet(pyg.nn.MessagePassing):
         # Always concatenate to [rec_nodes, send_nodes] for propagation, but only
         # aggregate to rec_nodes
         node_reps = torch.cat((rec_rep, send_rep), dim=-2)
-        edge_rep_aggr, edge_diff = self.propagate(
-            self.edge_index, x=node_reps, edge_attr=edge_rep
-        )
+        edge_rep_aggr, edge_diff = self.propagate(self.edge_index, x=node_reps, edge_attr=edge_rep)
         rec_diff = self.aggr_mlp(torch.cat((rec_rep, edge_rep_aggr), dim=-1))
 
         # Residual connections
@@ -128,9 +126,7 @@ class SplitMLPs(nn.Module):
 
     def __init__(self, mlps, chunk_sizes):
         super().__init__()
-        assert len(mlps) == len(
-            chunk_sizes
-        ), "Number of MLPs must match the number of chunks"
+        assert len(mlps) == len(chunk_sizes), "Number of MLPs must match the number of chunks"
 
         self.mlps = nn.ModuleList(mlps)
         self.chunk_sizes = chunk_sizes
@@ -145,7 +141,5 @@ class SplitMLPs(nn.Module):
         joined_output: (..., N, d), concatenated results from the different MLPs
         """
         chunks = torch.split(x, self.chunk_sizes, dim=-2)
-        chunk_outputs = [
-            mlp(chunk_input) for mlp, chunk_input in zip(self.mlps, chunks)
-        ]
+        chunk_outputs = [mlp(chunk_input) for mlp, chunk_input in zip(self.mlps, chunks)]
         return torch.cat(chunk_outputs, dim=-2)

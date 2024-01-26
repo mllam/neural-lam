@@ -28,6 +28,7 @@ source = "https://github.com/joeloskarsson/neural-lam"
 documentation = "https://github.io/MeteoSwiss-APN/neural-lam"
 
 [tool.black]
+line-length = 100
 
 [tool.isort]
 default_section = "THIRDPARTY"

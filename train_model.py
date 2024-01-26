@@ -44,21 +44,15 @@ def main():
         default=0,
         help="Use only a small subset of the dataset, for debugging (default: 0=false)",
     )
-    parser.add_argument(
-        "--seed", type=int, default=42, help="random seed (default: 42)"
-    )
+    parser.add_argument("--seed", type=int, default=42, help="random seed (default: 42)")
     parser.add_argument(
         "--n_workers",
         type=int,
         default=4,
         help="Number of workers in data loader (default: 4)",
     )
-    parser.add_argument(
-        "--epochs", type=int, default=200, help="upper epoch limit (default: 200)"
-    )
-    parser.add_argument(
-        "--batch_size", type=int, default=4, help="batch size (default: 4)"
-    )
+    parser.add_argument("--epochs", type=int, default=200, help="upper epoch limit (default: 200)")
+    parser.add_argument("--batch_size", type=int, default=4, help="batch size (default: 4)")
     parser.add_argument(
         "--load", type=str, help="Path to load model parameters from (default: None)"
     )
@@ -139,9 +133,7 @@ def main():
         default=3,
         help="Step length in hours to consider single time step 1-3 (default: 3)",
     )
-    parser.add_argument(
-        "--lr", type=float, default=1e-3, help="learning rate (default: 0.001)"
-    )
+    parser.add_argument("--lr", type=float, default=1e-3, help="learning rate (default: 0.001)")
     parser.add_argument(
         "--val_interval",
         type=int,
@@ -235,9 +227,7 @@ def main():
         mode="min",
         save_last=True,
     )
-    logger = pl.loggers.WandbLogger(
-        project=constants.wandb_project, name=run_name, config=args
-    )
+    logger = pl.loggers.WandbLogger(project=constants.wandb_project, name=run_name, config=args)
     trainer = pl.Trainer(
         max_epochs=args.epochs,
         deterministic=True,
@@ -275,9 +265,7 @@ def main():
         trainer.test(model=model, dataloaders=eval_loader)
     else:
         # Train model
-        trainer.fit(
-            model=model, train_dataloaders=train_loader, val_dataloaders=val_loader
-        )
+        trainer.fit(model=model, train_dataloaders=train_loader, val_dataloaders=val_loader)
 
 
 if __name__ == "__main__":

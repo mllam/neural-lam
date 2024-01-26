@@ -80,15 +80,11 @@ def main():
                 (
                     level_static_features.numpy(),
                     MESH_HEIGHT
-                    + MESH_LEVEL_DIST
-                    * height_level
-                    * np.ones((level_static_features.shape[0], 1)),
+                    + MESH_LEVEL_DIST * height_level * np.ones((level_static_features.shape[0], 1)),
                 ),
                 axis=1,
             )
-            for height_level, level_static_features in enumerate(
-                mesh_static_features, start=1
-            )
+            for height_level, level_static_features in enumerate(mesh_static_features, start=1)
         ]
         mesh_pos = np.concatenate(mesh_level_pos, axis=0)
 
