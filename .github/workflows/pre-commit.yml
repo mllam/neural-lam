@@ -19,7 +19,7 @@ jobs:
     - name: Set up Python
       uses: actions/setup-python@v2
       with:
-        python-version: 3.11.0
+        python-version: 3.11.7
     - name: Install pre-commit hooks
       run: |
         pip install -r requirements.txt

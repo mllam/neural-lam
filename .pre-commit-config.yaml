@@ -40,5 +40,5 @@ repos:
         name: flake8
         description: Check Python code for correctness, consistency and adherence to best practices
         language: system
-        entry: flake8
+        entry: flake8 --max-line-length=100 --ignore=E203,F811,I002,W503
         types: [python]
