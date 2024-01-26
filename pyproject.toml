@@ -1,0 +1,116 @@
+[build-system]
+requires = ["setuptools>=65", "wheel>=0.38"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "neural-lam"
+version = "0.1.0"
+description = "Neural Weather Prediction for Limited Area Modeling"
+readme = "README.md"
+keywords = [
+    "numericalweatherpredictions",
+    "machinelearning",
+    "deeplearning",
+    "weather",
+]
+classifiers = [
+    "Development Status :: Alpha",
+    "Intended Audience :: Developers",
+    "Natural Language :: English",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+]
+requires-python = ">=3.10"
+authors = [{ name = "Joel Oskarsson", email = "joel.oskarsson@liu.se" }]
+
+[project.urls]
+source = "https://github.com/joeloskarsson/neural-lam"
+documentation = "https://github.io/MeteoSwiss-APN/neural-lam"
+
+[tool.black]
+
+[tool.isort]
+default_section = "THIRDPARTY"
+profile = "black"
+# Headings
+import_heading_stdlib = "Standard library"
+import_heading_thirdparty = "Third-party"
+import_heading_firstparty = "First-party"
+import_heading_localfolder = "Local"
+# Known modules to avoid misclassification
+known_standard_library = [
+    # Add standard library modules that may be misclassified by isort
+]
+known_third_party = [
+    # Add third-party modules that may be misclassified by isort
+]
+known_first_party = [
+    # Add first-party modules that may be misclassified by isort
+    "neural_lam",
+]
+
+[tool.mypy]
+
+[[tool.mypy.overrides]]
+# Note: Only globally ignore missing imports as a matter of last resort!
+# See https://blog.wolt.com/engineering/2021/09/30/professional-grade-mypy-configuration/
+module = [
+    # Add external modules w/o type hints here
+]
+ignore_missing_imports = true
+
+[tool.flake8]
+max-line-length = 88
+# max-complexity = 10
+ignore = [
+    "E203", # Allow whitespace before ':' (https://github.com/PyCQA/pycodestyle/issues/373)
+    "F811", # Allow redefinition of unused name (necessary for typing.overload)
+    "I002", # Don't check for isort configuration
+    "W503", # Allow line break before binary operator (PEP 8-compatible)
+]
+per-file-ignores = [
+    "__init__.py: F401", # Allow unused imports
+]
+
+[tool.pylint]
+recursive = true
+ignore-imports = true
+max-line-length = 88
+# Tweak valid name formats
+# Defaults (http://pylint-messages.wikidot.com/messages:c0103):
+#  argument-rgx  = "^[a-z_][a-z0-9_]{2,30}$"
+#  attr-rgx      = "^[a-z_][a-z0-9_]{2,30}$"
+#  function-rgx  = "^[a-z_][a-z0-9_]{2,30}$"
+#  method-rgx    = "^[a-z_][a-z0-9_]{2,30}$"
+#  variable-rgx  = "^[a-z_][a-z0-9_]{2,30}$"
+#  class-rgx     = "^[A-Z_][a-zA-Z0-9]+$"
+#  const-rgx     = "^(([A-Z_][A-Z0-9_]*)|(__.*__))$"
+#  module-rgx    = "^(([a-z_][a-z0-9_]*)|([A-Z][a-zA-Z0-9]+))$"
+argument-rgx = "^[a-z_][a-z0-9_]{,40}$"
+attr-rgx = "^[a-z_][a-z0-9_]{,40}$"
+function-rgx = "^[a-z_][a-z0-9_]{,40}$"
+method-rgx = "^[a-z_][a-z0-9_]{,40}$"
+variable-rgx = "^[a-z_][a-z0-9_]{,40}$"
+class-rgx = "^[A-Z_][a-zA-Z0-9]+$"
+const-rgx = "^(([a-z_][a-z0-9_]*)|([A-Z_][A-Z0-9_]*)|(__[a-zA-Z0-9]+__))$"
+module-rgx = "^(([a-z_][a-z0-9_]*)|([A-Z][a-zA-Z0-9]+))$"
+inlinevar-rgx = "^[A-Za-z_][A-Za-z0-9_]*$"
+# Disable selected warnings, errors etc. that conflict with style guide etc.
+# Note: To locally ignore certain errors, use "pylint: disable=XXXX" comments instead!
+disable = [
+    "C0115", # Missing class docstring
+    "C0116", # Missing function or method docstring
+    "R0903", # Too few public methods (*/2) (too-few-public-methods)
+    # "R0801", # Similar lines in 2 files (duplicate-code)
+    # -> see https://github.com/PyCQA/pylint/issues/214
+    "R1705", # Unnecessary "elif" after "return" (no-else-return)
+    "R1720", # Unnecessary "elif" after "raise" (no-else-raise)
+    "R1724", # Unnecessary "elif" after "continue" (no-else-continue)
+    "W1116", # Second argument of isinstance is not a type (isinstance-second-argument-not-valid-type)
+]
+# Ignore (sub-)modules that trigger errors like E1101 (no-member) or E0611 (no-name-in-module)
+ignored-modules = []
+
+[tool.codespell]
+ignore-words-list = "inout"
+skip = "requirements/*"

@@ -1,0 +1,28 @@
+name: Run pre-commit in blueprint
+
+on:
+ push:
+    branches:
+    - feature_lint_format_pre-commit
+ pull_request:
+    branches:
+    - main
+
+jobs:
+ blueprint-pre-commit:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: bash -l {0}
+    steps:
+    - uses: actions/checkout@v2
+    - name: Set up Python
+      uses: actions/setup-python@v2
+      with:
+        python-version: 3.11.0
+    - name: Install pre-commit hooks
+      run: |
+        pip install -r requirements.txt
+    - name: Run pre-commit hooks
+      run: |
+        pre-commit run --all-files
