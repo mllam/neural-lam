@@ -3,7 +3,7 @@ name: Run pre-commit in blueprint
 on:
  push:
     branches:
-    - feature_lint_format_pre-commit
+    - main
  pull_request:
     branches:
     - main
