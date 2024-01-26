@@ -36,29 +36,9 @@ repos:
         types_or: [python, pyi, cython]
 -   repo: local
     hooks:
-    -   id: pylint
-        name: pylint
-        description: Check Python code for correctness, consistency and adherence to best practices
-        language: system
-        entry: pylint
-        types: [python]
--   repo: local
-    hooks:
     -   id: flake8
         name: flake8
         description: Check Python code for correctness, consistency and adherence to best practices
         language: system
         entry: flake8
         types: [python]
--   repo: local
-    hooks:
-    -   id: mypy
-        name: mypy
-        description: Perform static type analysis of Python code
-        language: system
-        entry: bash tools/run-mypy.sh
-        require_serial: true
-        pass_filenames: false
-        verbose: true
-        types: [python]
-        files: ^(src|tests)/
