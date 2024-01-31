@@ -23,14 +23,17 @@ MODELS = {
 
 
 def main():
-    parser = ArgumentParser(description="Train or evaluate NeurWP models for LAM")
+    parser = ArgumentParser(
+        description="Train or evaluate NeurWP models for LAM"
+    )
 
     # General options
     parser.add_argument(
         "--dataset",
         type=str,
         default="meps_example",
-        help="Dataset, corresponding to name in data directory (default: meps_example)",
+        help="Dataset, corresponding to name in data directory "
+        "(default: meps_example)",
     )
     parser.add_argument(
         "--model",
@@ -42,25 +45,38 @@ def main():
         "--subset_ds",
         type=int,
         default=0,
-        help="Use only a small subset of the dataset, for debugging (default: 0=false)",
+        help="Use only a small subset of the dataset, for debugging"
+        "(default: 0=false)",
     )
-    parser.add_argument("--seed", type=int, default=42, help="random seed (default: 42)")
+    parser.add_argument(
+        "--seed", type=int, default=42, help="random seed (default: 42)"
+    )
     parser.add_argument(
         "--n_workers",
         type=int,
         default=4,
         help="Number of workers in data loader (default: 4)",
     )
-    parser.add_argument("--epochs", type=int, default=200, help="upper epoch limit (default: 200)")
-    parser.add_argument("--batch_size", type=int, default=4, help="batch size (default: 4)")
     parser.add_argument(
-        "--load", type=str, help="Path to load model parameters from (default: None)"
+        "--epochs",
+        type=int,
+        default=200,
+        help="upper epoch limit (default: 200)",
+    )
+    parser.add_argument(
+        "--batch_size", type=int, default=4, help="batch size (default: 4)"
+    )
+    parser.add_argument(
+        "--load",
+        type=str,
+        help="Path to load model parameters from (default: None)",
     )
     parser.add_argument(
         "--restore_opt",
         type=int,
         default=0,
-        help="If optimizer state should be restored with model (default: 0 (false))",
+        help="If optimizer state should be restored with model "
+        "(default: 0 (false))",
     )
     parser.add_argument(
         "--precision",
@@ -74,7 +90,8 @@ def main():
         "--graph",
         type=str,
         default="multiscale",
-        help="Graph to load and use in graph-based model (default: multiscale)",
+        help="Graph to load and use in graph-based model "
+        "(default: multiscale)",
     )
     parser.add_argument(
         "--hidden_dim",
@@ -98,13 +115,15 @@ def main():
         "--mesh_aggr",
         type=str,
         default="sum",
-        help="Aggregation to use for m2m processor GNN layers (sum/mean) (default: sum)",
+        help="Aggregation to use for m2m processor GNN layers (sum/mean) "
+        "(default: sum)",
     )
     parser.add_argument(
         "--output_std",
         type=int,
         default=0,
-        help="If models should additionally output std.-dev. per output dimensions "
+        help="If models should additionally output std.-dev. per "
+        "output dimensions "
         "(default: 0 (no))",
     )
 
@@ -113,13 +132,15 @@ def main():
         "--ar_steps",
         type=int,
         default=1,
-        help="Number of steps to unroll prediction for in loss (1-19) (default: 1)",
+        help="Number of steps to unroll prediction for in loss (1-19) "
+        "(default: 1)",
     )
     parser.add_argument(
         "--control_only",
         type=int,
         default=0,
-        help="Train only on control member of ensemble data (default: 0 (False))",
+        help="Train only on control member of ensemble data "
+        "(default: 0 (False))",
     )
     parser.add_argument(
         "--loss",
@@ -131,34 +152,44 @@ def main():
         "--step_length",
         type=int,
         default=3,
-        help="Step length in hours to consider single time step 1-3 (default: 3)",
+        help="Step length in hours to consider single time step 1-3 "
+        "(default: 3)",
     )
-    parser.add_argument("--lr", type=float, default=1e-3, help="learning rate (default: 0.001)")
+    parser.add_argument(
+        "--lr", type=float, default=1e-3, help="learning rate (default: 0.001)"
+    )
     parser.add_argument(
         "--val_interval",
         type=int,
         default=1,
-        help="Number of epochs training between each validation run (default: 1)",
+        help="Number of epochs training between each validation run "
+        "(default: 1)",
     )
 
     # Evaluation options
     parser.add_argument(
         "--eval",
         type=str,
-        help="Eval model on given data split (val/test) (default: None (train model))",
+        help="Eval model on given data split (val/test) "
+        "(default: None (train model))",
     )
     parser.add_argument(
         "--n_example_pred",
         type=int,
         default=1,
-        help="Number of example predictions to plot during evaluation (default: 1)",
+        help="Number of example predictions to plot during evaluation "
+        "(default: 1)",
     )
     args = parser.parse_args()
 
     # Asserts for arguments
     assert args.model in MODELS, f"Unknown model: {args.model}"
     assert args.step_length <= 3, "Too high step length"
-    assert args.eval in (None, "val", "test"), f"Unknown eval setting: {args.eval}"
+    assert args.eval in (
+        None,
+        "val",
+        "test",
+    ), f"Unknown eval setting: {args.eval}"
 
     # Get an (actual) random run id as a unique identifier
     random_run_id = random.randint(0, 9999)
@@ -198,7 +229,9 @@ def main():
     # Instantiate model + trainer
     if torch.cuda.is_available():
         device_name = "cuda"
-        torch.set_float32_matmul_precision("high")  # Allows using Tensor Cores on A100s
+        torch.set_float32_matmul_precision(
+            "high"
+        )  # Allows using Tensor Cores on A100s
     else:
         device_name = "cpu"
 
@@ -227,7 +260,9 @@ def main():
         mode="min",
         save_last=True,
     )
-    logger = pl.loggers.WandbLogger(project=constants.wandb_project, name=run_name, config=args)
+    logger = pl.loggers.WandbLogger(
+        project=constants.wandb_project, name=run_name, config=args
+    )
     trainer = pl.Trainer(
         max_epochs=args.epochs,
         deterministic=True,
@@ -265,7 +300,11 @@ def main():
         trainer.test(model=model, dataloaders=eval_loader)
     else:
         # Train model
-        trainer.fit(model=model, train_dataloaders=train_loader, val_dataloaders=val_loader)
+        trainer.fit(
+            model=model,
+            train_dataloaders=train_loader,
+            val_dataloaders=val_loader,
+        )
 
 
 if __name__ == "__main__":

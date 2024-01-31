@@ -9,7 +9,8 @@ from neural_lam import utils
 
 class InteractionNet(pyg.nn.MessagePassing):
     """
-    Implementation of a generic Interaction Network, from Battaglia et al. (2016)
+    Implementation of a generic Interaction Network,
+    from Battaglia et al. (2016)
     """
 
     def __init__(
@@ -27,14 +28,18 @@ class InteractionNet(pyg.nn.MessagePassing):
         Create a new InteractionNet
 
         edge_index: (2,M), Edges in pyg format
-        input_dim: Dimensionality of input representations, for both nodes and edges
-        update_edges: If new edge representations should be computed and returned
+        input_dim: Dimensionality of input representations,
+            for both nodes and edges
+        update_edges: If new edge representations should be computed
+            and returned
         hidden_layers: Number of hidden layers in MLPs
-        hidden_dim: Dimensionality of hidden layers, if None then same as input_dim
-        edge_chunk_sizes: List of chunks sizes to split edge representation into and
-            use separate MLPs for (None = no chunking, same MLP)
-        aggr_chunk_sizes: List of chunks sizes to split aggregated node representation
+        hidden_dim: Dimensionality of hidden layers, if None then same
+            as input_dim
+        edge_chunk_sizes: List of chunks sizes to split edge representation
             into and use separate MLPs for (None = no chunking, same MLP)
+        aggr_chunk_sizes: List of chunks sizes to split aggregated node
+            representation into and use separate MLPs for
+            (None = no chunking, same MLP)
         aggr: Message aggregation method (sum/mean)
         """
         assert aggr in ("sum", "mean"), f"Unknown aggregation method: {aggr}"
@@ -48,7 +53,9 @@ class InteractionNet(pyg.nn.MessagePassing):
         edge_index = edge_index - edge_index.min(dim=1, keepdim=True)[0]
         # Store number of receiver nodes according to edge_index
         self.num_rec = edge_index[1].max() + 1
-        edge_index[0] = edge_index[0] + self.num_rec  # Make sender indices after rec
+        edge_index[0] = (
+            edge_index[0] + self.num_rec
+        )  # Make sender indices after rec
         self.register_buffer("edge_index", edge_index, persistent=False)
 
         # Create MLPs
@@ -75,8 +82,8 @@ class InteractionNet(pyg.nn.MessagePassing):
 
     def forward(self, send_rep, rec_rep, edge_rep):
         """
-        Apply interaction network to update the representations of receiver nodes,
-        and optionally the edge representations.
+        Apply interaction network to update the representations of receiver
+        nodes, and optionally the edge representations.
 
         send_rep: (N_send, d_h), vector representations of sender nodes
         rec_rep: (N_rec, d_h), vector representations of receiver nodes
@@ -84,12 +91,15 @@ class InteractionNet(pyg.nn.MessagePassing):
 
         Returns:
         rec_rep: (N_rec, d_h), updated vector representations of receiver nodes
-        (optionally) edge_rep: (M, d_h), updated vector representations of edges
+        (optionally) edge_rep: (M, d_h), updated vector representations
+            of edges
         """
-        # Always concatenate to [rec_nodes, send_nodes] for propagation, but only
-        # aggregate to rec_nodes
+        # Always concatenate to [rec_nodes, send_nodes] for propagation,
+        # but only aggregate to rec_nodes
         node_reps = torch.cat((rec_rep, send_rep), dim=-2)
-        edge_rep_aggr, edge_diff = self.propagate(self.edge_index, x=node_reps, edge_attr=edge_rep)
+        edge_rep_aggr, edge_diff = self.propagate(
+            self.edge_index, x=node_reps, edge_attr=edge_rep
+        )
         rec_diff = self.aggr_mlp(torch.cat((rec_rep, edge_rep_aggr), dim=-1))
 
         # Residual connections
@@ -126,7 +136,9 @@ class SplitMLPs(nn.Module):
 
     def __init__(self, mlps, chunk_sizes):
         super().__init__()
-        assert len(mlps) == len(chunk_sizes), "Number of MLPs must match the number of chunks"
+        assert len(mlps) == len(
+            chunk_sizes
+        ), "Number of MLPs must match the number of chunks"
 
         self.mlps = nn.ModuleList(mlps)
         self.chunk_sizes = chunk_sizes
@@ -138,8 +150,10 @@ class SplitMLPs(nn.Module):
         x: (..., N, d), where N = sum(chunk_sizes)
 
         Returns:
-        joined_output: (..., N, d), concatenated results from the different MLPs
+        joined_output: (..., N, d), concatenated results from the MLPs
         """
         chunks = torch.split(x, self.chunk_sizes, dim=-2)
-        chunk_outputs = [mlp(chunk_input) for mlp, chunk_input in zip(self.mlps, chunks)]
+        chunk_outputs = [
+            mlp(chunk_input) for mlp, chunk_input in zip(self.mlps, chunks)
+        ]
         return torch.cat(chunk_outputs, dim=-2)

@@ -15,7 +15,9 @@ def load_dataset_stats(dataset_name, device="cpu"):
     static_dir_path = os.path.join("data", dataset_name, "static")
 
     def loads_file(fn):
-        return torch.load(os.path.join(static_dir_path, fn), map_location=device)
+        return torch.load(
+            os.path.join(static_dir_path, fn), map_location=device
+        )
 
     data_mean = loads_file("parameter_mean.pt")  # (d_features,)
     data_std = loads_file("parameter_std.pt")  # (d_features,)
@@ -35,15 +37,21 @@ def load_static_data(dataset_name, device="cpu"):
     static_dir_path = os.path.join("data", dataset_name, "static")
 
     def loads_file(fn):
-        return torch.load(os.path.join(static_dir_path, fn), map_location=device)
+        return torch.load(
+            os.path.join(static_dir_path, fn), map_location=device
+        )
 
     # Load border mask, 1. if node is part of border, else 0.
     border_mask_np = np.load(os.path.join(static_dir_path, "border_mask.npy"))
     border_mask = (
-        torch.tensor(border_mask_np, dtype=torch.float32, device=device).flatten(0, 1).unsqueeze(1)
+        torch.tensor(border_mask_np, dtype=torch.float32, device=device)
+        .flatten(0, 1)
+        .unsqueeze(1)
     )  # (N_grid, 1)
 
-    grid_static_features = loads_file("grid_features.pt")  # (N_grid, d_grid_static)
+    grid_static_features = loads_file(
+        "grid_features.pt"
+    )  # (N_grid, d_grid_static)
 
     # Load step diff stats
     step_diff_mean = loads_file("diff_mean.pt")  # (d_f,)
@@ -73,8 +81,8 @@ def load_static_data(dataset_name, device="cpu"):
 
 class BufferList(nn.Module):
     """
-    A list of torch buffer tensors that sit together as a Module with no parameters and only
-    buffers.
+    A list of torch buffer tensors that sit together as a Module with no
+    parameters and only buffers.
 
     This should be replaced by a native torch BufferList once implemented.
     See: https://github.com/pytorch/pytorch/issues/37386
@@ -130,11 +138,17 @@ def load_graph(graph_name, device="cpu"):
     m2g_features = m2g_features / longest_edge
 
     # Load static node features
-    mesh_static_features = loads_file("mesh_features.pt")  # List of (N_mesh[l], d_mesh_static)
+    mesh_static_features = loads_file(
+        "mesh_features.pt"
+    )  # List of (N_mesh[l], d_mesh_static)
 
     # Some checks for consistency
-    assert len(m2m_features) == n_levels, "Inconsistent number of levels in mesh"
-    assert len(mesh_static_features) == n_levels, "Inconsistent number of levels in mesh"
+    assert (
+        len(m2m_features) == n_levels
+    ), "Inconsistent number of levels in mesh"
+    assert (
+        len(mesh_static_features) == n_levels
+    ), "Inconsistent number of levels in mesh"
 
     if hierarchical:
         # Load up and down edges and features
@@ -145,20 +159,32 @@ def load_graph(graph_name, device="cpu"):
             loads_file("mesh_down_edge_index.pt"), persistent=False
         )  # List of (2, M_down[l])
 
-        mesh_up_features = loads_file("mesh_up_features.pt")  # List of (M_up[l], d_edge_f)
-        mesh_down_features = loads_file("mesh_down_features.pt")  # List of (M_down[l], d_edge_f)
+        mesh_up_features = loads_file(
+            "mesh_up_features.pt"
+        )  # List of (M_up[l], d_edge_f)
+        mesh_down_features = loads_file(
+            "mesh_down_features.pt"
+        )  # List of (M_down[l], d_edge_f)
 
         # Rescale
         mesh_up_features = BufferList(
-            [edge_features / longest_edge for edge_features in mesh_up_features],
+            [
+                edge_features / longest_edge
+                for edge_features in mesh_up_features
+            ],
             persistent=False,
         )
         mesh_down_features = BufferList(
-            [edge_features / longest_edge for edge_features in mesh_down_features],
+            [
+                edge_features / longest_edge
+                for edge_features in mesh_down_features
+            ],
             persistent=False,
         )
 
-        mesh_static_features = BufferList(mesh_static_features, persistent=False)
+        mesh_static_features = BufferList(
+            mesh_static_features, persistent=False
+        )
     else:
         # Extract single mesh level
         m2m_edge_index = m2m_edge_index[0]
@@ -215,12 +241,16 @@ def make_mlp(blueprint, layer_norm=True):
 
 def fractional_plot_bundle(fraction):
     """
-    Get the tueplots bundle, but with figure width as a fraction of the page width.
+    Get the tueplots bundle, but with figure width as a fraction of
+    the page width.
     """
     bundle = bundles.neurips2023(usetex=True, family="serif")
     bundle.update(figsizes.neurips2023())
     original_figsize = bundle["figure.figsize"]
-    bundle["figure.figsize"] = (original_figsize[0] / fraction, original_figsize[1])
+    bundle["figure.figsize"] = (
+        original_figsize[0] / fraction,
+        original_figsize[1],
+    )
     return bundle
 
 

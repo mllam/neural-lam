@@ -28,7 +28,7 @@ source = "https://github.com/joeloskarsson/neural-lam"
 documentation = "https://github.io/MeteoSwiss-APN/neural-lam"
 
 [tool.black]
-line-length = 100
+line-length = 80
 
 [tool.isort]
 default_section = "THIRDPARTY"
@@ -52,7 +52,7 @@ known_first_party = [
 ]
 
 [tool.flake8]
-max-line-length = 100
+max-line-length = 80
 ignore = [
     "E203", # Allow whitespace before ':' (https://github.com/PyCQA/pycodestyle/issues/373)
     "I002", # Don't check for isort configuration

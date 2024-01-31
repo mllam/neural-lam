@@ -59,13 +59,17 @@ def main():
     )
     mesh_static_features = graph_ldict["mesh_static_features"]
 
-    grid_static_features = utils.load_static_data(args.dataset)["grid_static_features"]
+    grid_static_features = utils.load_static_data(args.dataset)[
+        "grid_static_features"
+    ]
 
     # Extract values needed, turn to numpy
     grid_pos = grid_static_features[:, :2].numpy()
     # Add in z-dimension
     z_grid = GRID_HEIGHT * np.ones((grid_pos.shape[0],))
-    grid_pos = np.concatenate((grid_pos, np.expand_dims(z_grid, axis=1)), axis=1)
+    grid_pos = np.concatenate(
+        (grid_pos, np.expand_dims(z_grid, axis=1)), axis=1
+    )
 
     # List of edges to plot, (edge_index, color, line_width, label)
     edge_plot_list = [
@@ -80,11 +84,15 @@ def main():
                 (
                     level_static_features.numpy(),
                     MESH_HEIGHT
-                    + MESH_LEVEL_DIST * height_level * np.ones((level_static_features.shape[0], 1)),
+                    + MESH_LEVEL_DIST
+                    * height_level
+                    * np.ones((level_static_features.shape[0], 1)),
                 ),
                 axis=1,
             )
-            for height_level, level_static_features in enumerate(mesh_static_features, start=1)
+            for height_level, level_static_features in enumerate(
+                mesh_static_features, start=1
+            )
         ]
         mesh_pos = np.concatenate(mesh_level_pos, axis=0)
 
@@ -99,7 +107,8 @@ def main():
             [level_up_ei.numpy() for level_up_ei in mesh_up_edge_index], axis=1
         )
         down_edges_ei = np.concatenate(
-            [level_down_ei.numpy() for level_down_ei in mesh_down_edge_index], axis=1
+            [level_down_ei.numpy() for level_down_ei in mesh_down_edge_index],
+            axis=1,
         )
         edge_plot_list.append((up_edges_ei, "green", 1, "Mesh up"))
         edge_plot_list.append((down_edges_ei, "green", 1, "Mesh down"))
@@ -112,7 +121,9 @@ def main():
         z_mesh = MESH_HEIGHT + 0.01 * mesh_degrees
         mesh_node_size = mesh_degrees / 2
 
-        mesh_pos = np.concatenate((mesh_pos, np.expand_dims(z_mesh, axis=1)), axis=1)
+        mesh_pos = np.concatenate(
+            (mesh_pos, np.expand_dims(z_mesh, axis=1)), axis=1
+        )
 
         edge_plot_list.append((m2m_edge_index.numpy(), "blue", 1, "M2M"))
 

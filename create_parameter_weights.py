@@ -44,28 +44,49 @@ def main():
 
     # Create parameter weights based on height
     # based on fig A.1 in graph cast paper
-    w_dict = {"2": 1.0, "0": 0.1, "65": 0.065, "1000": 0.1, "850": 0.05, "500": 0.03}
-    w_list = np.array([w_dict[par.split("_")[-2]] for par in constants.param_names])
+    w_dict = {
+        "2": 1.0,
+        "0": 0.1,
+        "65": 0.065,
+        "1000": 0.1,
+        "850": 0.05,
+        "500": 0.03,
+    }
+    w_list = np.array(
+        [w_dict[par.split("_")[-2]] for par in constants.param_names]
+    )
     print("Saving parameter weights...")
-    np.save(os.path.join(static_dir_path, "parameter_weights.npy"), w_list.astype("float32"))
+    np.save(
+        os.path.join(static_dir_path, "parameter_weights.npy"),
+        w_list.astype("float32"),
+    )
 
     # Load dataset without any subsampling
     ds = WeatherDataset(
-        args.dataset, split="train", subsample_step=1, pred_length=63, standardize=False
+        args.dataset,
+        split="train",
+        subsample_step=1,
+        pred_length=63,
+        standardize=False,
     )  # Without standardization
     loader = torch.utils.data.DataLoader(
         ds, args.batch_size, shuffle=False, num_workers=args.n_workers
     )
-    # Compute mean and std.-dev. of each parameter (+ flux forcing) across full dataset
+    # Compute mean and std.-dev. of each parameter (+ flux forcing)
+    # across full dataset
     print("Computing mean and std.-dev. for parameters...")
     means = []
     squares = []
     flux_means = []
     flux_squares = []
     for init_batch, target_batch, _, forcing_batch in tqdm(loader):
-        batch = torch.cat((init_batch, target_batch), dim=1)  # (N_batch, N_t, N_grid, d_features)
+        batch = torch.cat(
+            (init_batch, target_batch), dim=1
+        )  # (N_batch, N_t, N_grid, d_features)
         means.append(torch.mean(batch, dim=(1, 2)))  # (N_batch, d_features,)
-        squares.append(torch.mean(batch**2, dim=(1, 2)))  # (N_batch, d_features,)
+        squares.append(
+            torch.mean(batch**2, dim=(1, 2))
+        )  # (N_batch, d_features,)
 
         flux_batch = forcing_batch[:, :, :, 0]  # Flux is first index
         flux_means.append(torch.mean(flux_batch))  # (,)
@@ -88,7 +109,11 @@ def main():
     # Compute mean and std.-dev. of one-step differences across the dataset
     print("Computing mean and std.-dev. for one-step differences...")
     ds_standard = WeatherDataset(
-        args.dataset, split="train", subsample_step=1, pred_length=63, standardize=True
+        args.dataset,
+        split="train",
+        subsample_step=1,
+        pred_length=63,
+        standardize=True,
     )  # Re-load with standardization
     loader_standard = torch.utils.data.DataLoader(
         ds_standard, args.batch_size, shuffle=False, num_workers=args.n_workers
@@ -98,7 +123,9 @@ def main():
     diff_means = []
     diff_squares = []
     for init_batch, target_batch, _, _ in tqdm(loader_standard):
-        batch = torch.cat((init_batch, target_batch), dim=1)  # (N_batch, N_t', N_grid, d_features)
+        batch = torch.cat(
+            (init_batch, target_batch), dim=1
+        )  # (N_batch, N_t', N_grid, d_features)
         # Note: batch contains only 1h-steps
         stepped_batch = torch.cat(
             [
@@ -107,13 +134,18 @@ def main():
             ],
             dim=0,
         )
-        # (N_batch', N_t, N_grid, d_features), N_batch' = args.step_length*N_batch
+        # (N_batch', N_t, N_grid, d_features),
+        # N_batch' = args.step_length*N_batch
 
         batch_diffs = stepped_batch[:, 1:] - stepped_batch[:, :-1]
         # (N_batch', N_t-1, N_grid, d_features)
 
-        diff_means.append(torch.mean(batch_diffs, dim=(1, 2)))  # (N_batch', d_features,)
-        diff_squares.append(torch.mean(batch_diffs**2, dim=(1, 2)))  # (N_batch', d_features,)
+        diff_means.append(
+            torch.mean(batch_diffs, dim=(1, 2))
+        )  # (N_batch', d_features,)
+        diff_squares.append(
+            torch.mean(batch_diffs**2, dim=(1, 2))
+        )  # (N_batch', d_features,)
 
     diff_mean = torch.mean(torch.cat(diff_means, dim=0), dim=0)  # (d_features)
     diff_second_moment = torch.mean(torch.cat(diff_squares, dim=0), dim=0)

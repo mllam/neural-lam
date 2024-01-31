@@ -10,7 +10,8 @@ from neural_lam import constants, utils
 @matplotlib.rc_context(utils.fractional_plot_bundle(1))
 def plot_error_map(errors, title=None, step_length=3):
     """
-    Plot a heatmap of errors of different variables at different predictions horizons
+    Plot a heatmap of errors of different variables at different
+    predictions horizons
     errors: (pred_steps, d_f)
     """
     errors_np = errors.T.cpu().numpy()  # (d_f, pred_steps)
@@ -48,7 +49,10 @@ def plot_error_map(errors, title=None, step_length=3):
 
     ax.set_yticks(np.arange(d_f))
     y_ticklabels = [
-        f"{name} ({unit})" for name, unit in zip(constants.param_names_short, constants.param_units)
+        f"{name} ({unit})"
+        for name, unit in zip(
+            constants.param_names_short, constants.param_units
+        )
     ]
     ax.set_yticklabels(y_ticklabels, rotation=30, size=label_size)
 
@@ -73,7 +77,9 @@ def plot_prediction(pred, target, obs_mask, title=None, vrange=None):
 
     # Set up masking of border region
     mask_reshaped = obs_mask.reshape(*constants.grid_shape)
-    pixel_alpha = mask_reshaped.clamp(0.7, 1).cpu().numpy()  # Faded border region
+    pixel_alpha = (
+        mask_reshaped.clamp(0.7, 1).cpu().numpy()
+    )  # Faded border region
 
     fig, axes = plt.subplots(
         1, 2, figsize=(13, 7), subplot_kw={"projection": constants.lambert_proj}
@@ -120,9 +126,13 @@ def plot_spatial_error(error, obs_mask, title=None, vrange=None):
 
     # Set up masking of border region
     mask_reshaped = obs_mask.reshape(*constants.grid_shape)
-    pixel_alpha = mask_reshaped.clamp(0.7, 1).cpu().numpy()  # Faded border region
+    pixel_alpha = (
+        mask_reshaped.clamp(0.7, 1).cpu().numpy()
+    )  # Faded border region
 
-    fig, ax = plt.subplots(figsize=(5, 4.8), subplot_kw={"projection": constants.lambert_proj})
+    fig, ax = plt.subplots(
+        figsize=(5, 4.8), subplot_kw={"projection": constants.lambert_proj}
+    )
 
     ax.coastlines()  # Add coastline outlines
     error_grid = error.reshape(*constants.grid_shape).cpu().numpy()

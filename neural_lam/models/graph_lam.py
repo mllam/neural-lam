@@ -9,21 +9,25 @@ from neural_lam.models.base_graph_model import BaseGraphModel
 
 class GraphLAM(BaseGraphModel):
     """
-    Full graph-based LAM model that can be used with different (non-hierarchical )graphs.
-    Mainly based on GraphCast, but the model from Keisler (2022) almost identical.
-    Used for GC-LAM and L1-LAM in Oskarsson et al. (2023).
+    Full graph-based LAM model that can be used with different
+    (non-hierarchical )graphs. Mainly based on GraphCast, but the model from
+    Keisler (2022) is almost identical. Used for GC-LAM and L1-LAM in
+    Oskarsson et al. (2023).
     """
 
     def __init__(self, args):
         super().__init__(args)
 
-        assert not self.hierarchical, "GraphLAM does not use a hierarchical mesh graph"
+        assert (
+            not self.hierarchical
+        ), "GraphLAM does not use a hierarchical mesh graph"
 
         # grid_dim from data + static + batch_static
         mesh_dim = self.mesh_static_features.shape[1]
         m2m_edges, m2m_dim = self.m2m_features.shape
         print(
-            f"Edges in subgraphs: m2m={m2m_edges}, g2m={self.g2m_edges}, " f"m2g={self.m2g_edges}"
+            f"Edges in subgraphs: m2m={m2m_edges}, g2m={self.g2m_edges}, "
+            f"m2g={self.m2g_edges}"
         )
 
         # Define sub-models
@@ -44,7 +48,10 @@ class GraphLAM(BaseGraphModel):
         ]
         self.processor = pyg.nn.Sequential(
             "mesh_rep, edge_rep",
-            [(net, "mesh_rep, mesh_rep, edge_rep -> mesh_rep, edge_rep") for net in processor_nets],
+            [
+                (net, "mesh_rep, mesh_rep, edge_rep -> mesh_rep, edge_rep")
+                for net in processor_nets
+            ],
         )
 
     def get_num_mesh(self):
@@ -72,7 +79,11 @@ class GraphLAM(BaseGraphModel):
         # Embed m2m here first
         batch_size = mesh_rep.shape[0]
         m2m_emb = self.m2m_embedder(self.m2m_features)  # (M_mesh, d_h)
-        m2m_emb_expanded = self.expand_to_batch(m2m_emb, batch_size)  # (B, M_mesh, d_h)
+        m2m_emb_expanded = self.expand_to_batch(
+            m2m_emb, batch_size
+        )  # (B, M_mesh, d_h)
 
-        mesh_rep, _ = self.processor(mesh_rep, m2m_emb_expanded)  # (B, N_mesh, d_h)
+        mesh_rep, _ = self.processor(
+            mesh_rep, m2m_emb_expanded
+        )  # (B, N_mesh, d_h)
         return mesh_rep

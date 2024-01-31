@@ -40,7 +40,9 @@ class BaseGraphModel(ARModel):
         # Define sub-models
         # Feature embedders for grid
         self.mlp_blueprint_end = [args.hidden_dim] * (args.hidden_layers + 1)
-        self.grid_embedder = utils.make_mlp([self.grid_dim] + self.mlp_blueprint_end)
+        self.grid_embedder = utils.make_mlp(
+            [self.grid_dim] + self.mlp_blueprint_end
+        )
         self.g2m_embedder = utils.make_mlp([g2m_dim] + self.mlp_blueprint_end)
         self.m2g_embedder = utils.make_mlp([m2g_dim] + self.mlp_blueprint_end)
 
@@ -52,7 +54,9 @@ class BaseGraphModel(ARModel):
             hidden_layers=args.hidden_layers,
             update_edges=False,
         )
-        self.encoding_grid_mlp = utils.make_mlp([args.hidden_dim] + self.mlp_blueprint_end)
+        self.encoding_grid_mlp = utils.make_mlp(
+            [args.hidden_dim] + self.mlp_blueprint_end
+        )
 
         # decoder
         self.m2g_gnn = InteractionNet(
@@ -64,7 +68,8 @@ class BaseGraphModel(ARModel):
 
         # Output mapping (hidden_dim -> output_dim)
         self.output_map = utils.make_mlp(
-            [args.hidden_dim] * (args.hidden_layers + 1) + [self.grid_output_dim],
+            [args.hidden_dim] * (args.hidden_layers + 1)
+            + [self.grid_output_dim],
             layer_norm=False,
         )  # No layer norm on this one
 
@@ -92,7 +97,9 @@ class BaseGraphModel(ARModel):
         """
         raise NotImplementedError("process_step not implemented")
 
-    def predict_step(self, prev_state, prev_prev_state, batch_static_features, forcing):
+    def predict_step(
+        self, prev_state, prev_prev_state, batch_static_features, forcing
+    ):
         """
         Step state one step ahead using prediction model, X_{t-1}, X_t -> X_t+1
         prev_state: (B, N_grid, feature_dim), X_t
@@ -121,26 +128,36 @@ class BaseGraphModel(ARModel):
         mesh_emb = self.embedd_mesh_nodes()
 
         # Map from grid to mesh
-        mesh_emb_expanded = self.expand_to_batch(mesh_emb, batch_size)  # (B, N_mesh, d_h)
+        mesh_emb_expanded = self.expand_to_batch(
+            mesh_emb, batch_size
+        )  # (B, N_mesh, d_h)
         g2m_emb_expanded = self.expand_to_batch(g2m_emb, batch_size)
 
         # This also splits representation into grid and mesh
-        mesh_rep = self.g2m_gnn(grid_emb, mesh_emb_expanded, g2m_emb_expanded)  # (B, N_mesh, d_h)
+        mesh_rep = self.g2m_gnn(
+            grid_emb, mesh_emb_expanded, g2m_emb_expanded
+        )  # (B, N_mesh, d_h)
         # Also MLP with residual for grid representation
-        grid_rep = grid_emb + self.encoding_grid_mlp(grid_emb)  # (B, N_grid, d_h)
+        grid_rep = grid_emb + self.encoding_grid_mlp(
+            grid_emb
+        )  # (B, N_grid, d_h)
 
         # Run processor step
         mesh_rep = self.process_step(mesh_rep)
 
         # Map back from mesh to grid
         m2g_emb_expanded = self.expand_to_batch(m2g_emb, batch_size)
-        grid_rep = self.m2g_gnn(mesh_rep, grid_rep, m2g_emb_expanded)  # (B, N_grid, d_h)
+        grid_rep = self.m2g_gnn(
+            mesh_rep, grid_rep, m2g_emb_expanded
+        )  # (B, N_grid, d_h)
 
         # Map to output dimension, only for grid
         net_output = self.output_map(grid_rep)  # (B, N_grid, d_grid_out)
 
         if self.output_std:
-            pred_delta_mean, pred_std_raw = net_output.chunk(2, dim=-1)  # both (B, N_grid, d_f)
+            pred_delta_mean, pred_std_raw = net_output.chunk(
+                2, dim=-1
+            )  # both (B, N_grid, d_f)
             # Note: The predicted std. is not scaled in any way here
             pred_std = torch.nn.functional.softplus(pred_std_raw)
         else:
@@ -148,7 +165,9 @@ class BaseGraphModel(ARModel):
             pred_std = None
 
         # Rescale with one-step difference statistics
-        rescaled_delta_mean = pred_delta_mean * self.step_diff_std + self.step_diff_mean
+        rescaled_delta_mean = (
+            pred_delta_mean * self.step_diff_std + self.step_diff_mean
+        )
 
         # Residual connection for full state
         return prev_state + rescaled_delta_mean, pred_std
