@@ -85,7 +85,7 @@ param_units = [
 ]
 
 # Projection and grid
-# TODO Do not hard code this, make part of static dataset files
+# Hard coded for now, but should eventually be part of dataset desc. files
 grid_shape = (268, 238)  # (y, x)
 
 lambert_proj_params = {

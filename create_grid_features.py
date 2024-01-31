@@ -8,6 +8,9 @@ import torch
 
 
 def main():
+    """
+    Pre-compute all static features related to the grid nodes
+    """
     parser = ArgumentParser(description="Training arguments")
     parser.add_argument(
         "--dataset",

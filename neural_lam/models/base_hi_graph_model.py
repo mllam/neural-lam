@@ -17,23 +17,23 @@ class BaseHiGraphModel(BaseGraphModel):
 
         # Track number of nodes, edges on each level
         # Flatten lists for efficient embedding
-        self.N_levels = len(self.mesh_static_features)
+        self.num_levels = len(self.mesh_static_features)
 
         # Number of mesh nodes at each level
-        self.N_mesh_levels = [
+        self.level_mesh_sizes = [
             mesh_feat.shape[0] for mesh_feat in self.mesh_static_features
         ]  # Needs as python list for later
 
         # Print some useful info
         print("Loaded hierarchical graph with structure:")
-        for level_index, N_level in enumerate(self.N_mesh_levels):
+        for level_index, level_mesh_size in enumerate(self.level_mesh_sizes):
             same_level_edges = self.m2m_features[level_index].shape[0]
             print(
-                f"level {level_index} - {N_level} nodes, "
+                f"level {level_index} - {level_mesh_size} nodes, "
                 f"{same_level_edges} same-level edges"
             )
 
-            if level_index < (self.N_levels - 1):
+            if level_index < (self.num_levels - 1):
                 up_edges = self.mesh_up_features[level_index].shape[0]
                 down_edges = self.mesh_down_features[level_index].shape[0]
                 print(f"  {level_index}<->{level_index+1}")
@@ -49,25 +49,25 @@ class BaseHiGraphModel(BaseGraphModel):
         self.mesh_embedders = nn.ModuleList(
             [
                 utils.make_mlp([mesh_dim] + self.mlp_blueprint_end)
-                for _ in range(self.N_levels)
+                for _ in range(self.num_levels)
             ]
         )
         self.mesh_same_embedders = nn.ModuleList(
             [
                 utils.make_mlp([mesh_same_dim] + self.mlp_blueprint_end)
-                for _ in range(self.N_levels)
+                for _ in range(self.num_levels)
             ]
         )
         self.mesh_up_embedders = nn.ModuleList(
             [
                 utils.make_mlp([mesh_up_dim] + self.mlp_blueprint_end)
-                for _ in range(self.N_levels - 1)
+                for _ in range(self.num_levels - 1)
             ]
         )
         self.mesh_down_embedders = nn.ModuleList(
             [
                 utils.make_mlp([mesh_down_dim] + self.mlp_blueprint_end)
-                for _ in range(self.N_levels - 1)
+                for _ in range(self.num_levels - 1)
             ]
         )
 
@@ -102,18 +102,20 @@ class BaseHiGraphModel(BaseGraphModel):
         Compute number of mesh nodes from loaded features,
         and number of mesh nodes that should be ignored in encoding/decoding
         """
-        N_mesh = sum(
+        num_mesh_nodes = sum(
             node_feat.shape[0] for node_feat in self.mesh_static_features
         )
-        N_mesh_ignore = N_mesh - self.mesh_static_features[0].shape[0]
-        return N_mesh, N_mesh_ignore
+        num_mesh_nodes_ignore = (
+            num_mesh_nodes - self.mesh_static_features[0].shape[0]
+        )
+        return num_mesh_nodes, num_mesh_nodes_ignore
 
     def embedd_mesh_nodes(self):
         """
         Embed static mesh features
         This embeds only bottom level, rest is done at beginning of
         processing step
-        Returns tensor of shape (N_mesh[0], d_h)
+        Returns tensor of shape (num_mesh_nodes[0], d_h)
         """
         return self.mesh_embedders[0](self.mesh_static_features[0])
 
@@ -122,14 +124,14 @@ class BaseHiGraphModel(BaseGraphModel):
         Process step of embedd-process-decode framework
         Processes the representation on the mesh, possible in multiple steps
 
-        mesh_rep: has shape (B, N_mesh, d_h)
-        Returns mesh_rep: (B, N_mesh, d_h)
+        mesh_rep: has shape (B, num_mesh_nodes, d_h)
+        Returns mesh_rep: (B, num_mesh_nodes, d_h)
         """
         batch_size = mesh_rep.shape[0]
 
         # EMBED REMAINING MESH NODES (levels >= 1) -
         # Create list of mesh node representations for each level,
-        # each of size (B, N_mesh[l], d_h)
+        # each of size (B, num_mesh_nodes[l], d_h)
         mesh_rep_levels = [mesh_rep] + [
             self.expand_to_batch(emb(node_static_features), batch_size)
             for emb, node_static_features in zip(
@@ -165,8 +167,10 @@ class BaseHiGraphModel(BaseGraphModel):
             # Extract representations
             send_node_rep = mesh_rep_levels[
                 level_l - 1
-            ]  # (B, N_mesh[l-1], d_h)
-            rec_node_rep = mesh_rep_levels[level_l]  # (B, N_mesh[l], d_h)
+            ]  # (B, num_mesh_nodes[l-1], d_h)
+            rec_node_rep = mesh_rep_levels[
+                level_l
+            ]  # (B, num_mesh_nodes[l], d_h)
             edge_rep = mesh_up_rep[level_l - 1]
 
             # Apply GNN
@@ -175,7 +179,9 @@ class BaseHiGraphModel(BaseGraphModel):
             )
 
             # Update node and edge vectors in lists
-            mesh_rep_levels[level_l] = new_node_rep  # (B, N_mesh[l], d_h)
+            mesh_rep_levels[level_l] = (
+                new_node_rep  # (B, num_mesh_nodes[l], d_h)
+            )
             mesh_up_rep[level_l - 1] = new_edge_rep  # (B, M_up[l-1], d_h)
 
         # - PROCESSOR -
@@ -186,23 +192,27 @@ class BaseHiGraphModel(BaseGraphModel):
         # - MESH READ OUT. -
         # Let level_l go from L-1 to 0
         for level_l, gnn in zip(
-            range(self.N_levels - 2, -1, -1), reversed(self.mesh_read_gnns)
+            range(self.num_levels - 2, -1, -1), reversed(self.mesh_read_gnns)
         ):
             # Extract representations
             send_node_rep = mesh_rep_levels[
                 level_l + 1
-            ]  # (B, N_mesh[l+1], d_h)
-            rec_node_rep = mesh_rep_levels[level_l]  # (B, N_mesh[l], d_h)
+            ]  # (B, num_mesh_nodes[l+1], d_h)
+            rec_node_rep = mesh_rep_levels[
+                level_l
+            ]  # (B, num_mesh_nodes[l], d_h)
             edge_rep = mesh_down_rep[level_l]
 
             # Apply GNN
             new_node_rep = gnn(send_node_rep, rec_node_rep, edge_rep)
 
             # Update node and edge vectors in lists
-            mesh_rep_levels[level_l] = new_node_rep  # (B, N_mesh[l], d_h)
+            mesh_rep_levels[level_l] = (
+                new_node_rep  # (B, num_mesh_nodes[l], d_h)
+            )
 
         # Return only bottom level representation
-        return mesh_rep_levels[0]  # (B, N_mesh[0], d_h)
+        return mesh_rep_levels[0]  # (B, num_mesh_nodes[0], d_h)
 
     def hi_processor_step(
         self, mesh_rep_levels, mesh_same_rep, mesh_up_rep, mesh_down_rep
@@ -213,7 +223,7 @@ class BaseHiGraphModel(BaseGraphModel):
 
         Each input is list with representations, each with shape
 
-        mesh_rep_levels: (B, N_mesh[l], d_h)
+        mesh_rep_levels: (B, num_mesh_nodes[l], d_h)
         mesh_same_rep: (B, M_same[l], d_h)
         mesh_up_rep: (B, M_up[l -> l+1], d_h)
         mesh_down_rep: (B, M_down[l <- l+1], d_h)

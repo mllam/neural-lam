@@ -13,6 +13,9 @@ from neural_lam.weather_dataset import WeatherDataset
 
 
 def main():
+    """
+    Pre-compute parameter weights to be used in loss function
+    """
     parser = ArgumentParser(description="Training arguments")
     parser.add_argument(
         "--dataset",

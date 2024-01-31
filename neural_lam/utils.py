@@ -4,7 +4,7 @@ import os
 # Third-party
 import numpy as np
 import torch
-import torch.nn as nn
+from torch import nn
 from tueplots import bundles, figsizes
 
 # First-party
@@ -12,6 +12,9 @@ from neural_lam import constants
 
 
 def load_dataset_stats(dataset_name, device="cpu"):
+    """
+    Load arrays with stored dataset statistics from pre-processing
+    """
     static_dir_path = os.path.join("data", dataset_name, "static")
 
     def loads_file(fn):
@@ -34,6 +37,9 @@ def load_dataset_stats(dataset_name, device="cpu"):
 
 
 def load_static_data(dataset_name, device="cpu"):
+    """
+    Load static files related to dataset
+    """
     static_dir_path = os.path.join("data", dataset_name, "static")
 
     def loads_file(fn):
@@ -105,6 +111,9 @@ class BufferList(nn.Module):
 
 
 def load_graph(graph_name, device="cpu"):
+    """
+    Load all tensors representing the graph
+    """
     # Define helper lambda function
     graph_dir_path = os.path.join("graphs", graph_name)
 
@@ -128,7 +137,7 @@ def load_graph(graph_name, device="cpu"):
 
     # Normalize by dividing with longest edge (found in m2m)
     longest_edge = max(
-        [torch.max(level_features[:, 0]) for level_features in m2m_features]
+        torch.max(level_features[:, 0]) for level_features in m2m_features
     )  # Col. 0 is length
     m2m_features = BufferList(
         [level_features / longest_edge for level_features in m2m_features],

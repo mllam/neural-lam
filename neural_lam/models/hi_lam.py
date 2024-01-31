@@ -19,18 +19,18 @@ class HiLAM(BaseHiGraphModel):
         # Make down GNNs, both for down edges and same level
         self.mesh_down_gnns = nn.ModuleList(
             [self.make_down_gnns(args) for _ in range(args.processor_layers)]
-        )  # Nested lists (proc_steps, N_levels-1)
+        )  # Nested lists (proc_steps, num_levels-1)
         self.mesh_down_same_gnns = nn.ModuleList(
             [self.make_same_gnns(args) for _ in range(args.processor_layers)]
-        )  # Nested lists (proc_steps, N_levels)
+        )  # Nested lists (proc_steps, num_levels)
 
         # Make up GNNs, both for up edges and same level
         self.mesh_up_gnns = nn.ModuleList(
             [self.make_up_gnns(args) for _ in range(args.processor_layers)]
-        )  # Nested lists (proc_steps, N_levels-1)
+        )  # Nested lists (proc_steps, num_levels-1)
         self.mesh_up_same_gnns = nn.ModuleList(
             [self.make_same_gnns(args) for _ in range(args.processor_layers)]
-        )  # Nested lists (proc_steps, N_levels)
+        )  # Nested lists (proc_steps, num_levels)
 
     def make_same_gnns(self, args):
         """
@@ -96,7 +96,7 @@ class HiLAM(BaseHiGraphModel):
 
         # Let level_l go from L-1 to 0
         for level_l, down_gnn, same_gnn in zip(
-            range(self.N_levels - 2, -1, -1),
+            range(self.num_levels - 2, -1, -1),
             reversed(down_gnns),
             reversed(same_gnns[:-1]),
         ):

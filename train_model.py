@@ -23,6 +23,9 @@ MODELS = {
 
 
 def main():
+    """
+    Main function for training and evaluating models
+    """
     parser = ArgumentParser(
         description="Train or evaluate NeurWP models for LAM"
     )

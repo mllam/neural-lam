@@ -38,7 +38,7 @@ class HiLAMParallel(BaseHiGraphModel):
                     args.hidden_dim,
                     hidden_layers=args.hidden_layers,
                     edge_chunk_sizes=self.edge_split_sections,
-                    aggr_chunk_sizes=self.N_mesh_levels,
+                    aggr_chunk_sizes=self.level_mesh_sizes,
                 )
                 for _ in range(args.processor_layers)
             ]
@@ -77,17 +77,19 @@ class HiLAMParallel(BaseHiGraphModel):
         mesh_rep, mesh_edge_rep = self.processor(mesh_rep, mesh_edge_rep)
 
         # Split up again for read-out step
-        mesh_rep_levels = list(torch.split(mesh_rep, self.N_mesh_levels, dim=1))
+        mesh_rep_levels = list(
+            torch.split(mesh_rep, self.level_mesh_sizes, dim=1)
+        )
         mesh_edge_rep_sections = torch.split(
             mesh_edge_rep, self.edge_split_sections, dim=1
         )
 
-        mesh_same_rep = mesh_edge_rep_sections[: self.N_levels]
+        mesh_same_rep = mesh_edge_rep_sections[: self.num_levels]
         mesh_up_rep = mesh_edge_rep_sections[
-            self.N_levels : self.N_levels + (self.N_levels - 1)
+            self.num_levels : self.num_levels + (self.num_levels - 1)
         ]
         mesh_down_rep = mesh_edge_rep_sections[
-            self.N_levels + (self.N_levels - 1) :
+            self.num_levels + (self.num_levels - 1) :
         ]  # Last are down edges
 
         # Note: We return all, even though only down edges really are used later

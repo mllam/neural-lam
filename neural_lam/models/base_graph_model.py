@@ -17,7 +17,8 @@ class BaseGraphModel(ARModel):
         super().__init__(args)
 
         # Load graph with static features
-        # NOTE: (IMPORTANT!) mesh nodes MUST have the first N_mesh indices,
+        # NOTE: (IMPORTANT!) mesh nodes MUST have the first
+        # num_mesh_nodes indices,
         self.hierarchical, graph_ldict = utils.load_graph(args.graph)
         for name, attr_value in graph_ldict.items():
             # Make BufferLists module members and register tensors as buffers
@@ -27,10 +28,10 @@ class BaseGraphModel(ARModel):
                 setattr(self, name, attr_value)
 
         # Specify dimensions of data
-        self.N_mesh, N_mesh_ignore = self.get_num_mesh()
+        self.num_mesh_nodes, num_mesh_nodes_ignore = self.get_num_mesh()
         print(
-            f"Loaded graph with {self.N_grid + self.N_mesh} nodes "
-            + f"({self.N_grid} grid, {self.N_mesh} mesh)"
+            f"Loaded graph with {self.N_grid + self.num_mesh_nodes} nodes "
+            + f"({self.N_grid} grid, {self.num_mesh_nodes} mesh)"
         )
 
         # grid_dim from data + static + batch_static
@@ -83,7 +84,7 @@ class BaseGraphModel(ARModel):
     def embedd_mesh_nodes(self):
         """
         Embed static mesh features
-        Returns tensor of shape (N_mesh, d_h)
+        Returns tensor of shape (num_mesh_nodes, d_h)
         """
         raise NotImplementedError("embedd_mesh_nodes not implemented")
 
@@ -92,8 +93,8 @@ class BaseGraphModel(ARModel):
         Process step of embedd-process-decode framework
         Processes the representation on the mesh, possible in multiple steps
 
-        mesh_rep: has shape (B, N_mesh, d_h)
-        Returns mesh_rep: (B, N_mesh, d_h)
+        mesh_rep: has shape (B, num_mesh_nodes, d_h)
+        Returns mesh_rep: (B, num_mesh_nodes, d_h)
         """
         raise NotImplementedError("process_step not implemented")
 
@@ -130,13 +131,13 @@ class BaseGraphModel(ARModel):
         # Map from grid to mesh
         mesh_emb_expanded = self.expand_to_batch(
             mesh_emb, batch_size
-        )  # (B, N_mesh, d_h)
+        )  # (B, num_mesh_nodes, d_h)
         g2m_emb_expanded = self.expand_to_batch(g2m_emb, batch_size)
 
         # This also splits representation into grid and mesh
         mesh_rep = self.g2m_gnn(
             grid_emb, mesh_emb_expanded, g2m_emb_expanded
-        )  # (B, N_mesh, d_h)
+        )  # (B, num_mesh_nodes, d_h)
         # Also MLP with residual for grid representation
         grid_rep = grid_emb + self.encoding_grid_mlp(
             grid_emb

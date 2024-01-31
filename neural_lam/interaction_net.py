@@ -13,6 +13,9 @@ class InteractionNet(pyg.nn.MessagePassing):
     from Battaglia et al. (2016)
     """
 
+    # pylint: disable=arguments-differ
+    # Disable to override args/kwargs from superclass
+
     def __init__(
         self,
         edge_index,
@@ -117,14 +120,15 @@ class InteractionNet(pyg.nn.MessagePassing):
         """
         return self.edge_mlp(torch.cat((edge_attr, x_j, x_i), dim=-1))
 
-    def aggregate(self, messages, index, ptr, dim_size):
+    # pylint: disable-next=signature-differs
+    def aggregate(self, inputs, index, ptr, dim_size):
         """
         Overridden aggregation function to:
         * return both aggregated and original messages,
         * only aggregate to number of receiver nodes.
         """
-        aggr = super().aggregate(messages, index, ptr, self.num_rec)
-        return aggr, messages
+        aggr = super().aggregate(inputs, index, ptr, self.num_rec)
+        return aggr, inputs
 
 
 class SplitMLPs(nn.Module):
