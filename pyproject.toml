@@ -44,6 +44,7 @@ known_standard_library = [
 ]
 known_third_party = [
     # Add third-party modules that may be misclassified by isort
+    "wandb",
 ]
 known_first_party = [
     # Add first-party modules that may be misclassified by isort
@@ -65,5 +66,4 @@ per-file-ignores = [
 ]
 
 [tool.codespell]
-ignore-words-list = "inout"
 skip = "requirements/*"
