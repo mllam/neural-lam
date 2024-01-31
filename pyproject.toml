@@ -1,32 +1,3 @@
-[build-system]
-requires = ["setuptools>=65", "wheel>=0.38"]
-build-backend = "setuptools.build_meta"
-
-[project]
-name = "neural-lam"
-version = "0.1.0"
-description = "Neural Weather Prediction for Limited Area Modeling"
-readme = "README.md"
-keywords = [
-    "numericalweatherpredictions",
-    "machinelearning",
-    "deeplearning",
-    "weather",
-]
-classifiers = [
-    "Development Status :: Alpha",
-    "Intended Audience :: Developers",
-    "Natural Language :: English",
-    "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.9",
-]
-requires-python = ">=3.10"
-authors = [{ name = "Joel Oskarsson", email = "joel.oskarsson@liu.se" }]
-
-[project.urls]
-source = "https://github.com/joeloskarsson/neural-lam"
-documentation = "https://github.io/MeteoSwiss-APN/neural-lam"
-
 [tool.black]
 line-length = 80
 
