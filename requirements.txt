@@ -15,4 +15,5 @@ codespell>=2.0.0
 black>=21.9b0
 isort>=5.9.3
 flake8>=4.0.1
+pylint>=3.0.3
 pre-commit>=2.15.0
