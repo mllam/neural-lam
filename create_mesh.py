@@ -12,9 +12,8 @@ from torch_geometric.utils.convert import from_networkx
 
 from neural_lam import constants
 
-
 def plot_graph(graph, title=None):
-    fig, axis = plt.subplots(figsize=constants.fig_size, dpi=200)  # W,H
+    fig, axis = plt.subplots(dpi=200) # W,H
     edge_index = graph.edge_index
     pos = graph.pos
 
@@ -24,20 +23,23 @@ def plot_graph(graph, title=None):
 
     if pyg.utils.is_undirected(edge_index):
         # Keep only 1 direction of edge_index
-        edge_index = edge_index[:, edge_index[0] < edge_index[1]]  # (2, M/2)
+        edge_index = edge_index[:, edge_index[0] < edge_index[1]] # (2, M/2)
     # TODO: indicate direction of directed edges
 
     # Move all to cpu and numpy, compute (in)-degrees
-    degrees = pyg.utils.degree(edge_index[1], num_nodes=pos.shape[0]).cpu().numpy()
+    # Flatten the edge_index to consider both source and target nodes
+    flattened_edge_index = edge_index.flatten()
+    # Calculate degrees by counting occurrences of each node index
+    degrees = np.bincount(flattened_edge_index, minlength=pos.shape[0])
     edge_index = edge_index.cpu().numpy()
     pos = pos.cpu().numpy()
 
     # Plot edges
-    from_pos = pos[edge_index[0]]  # (M/2, 2)
-    to_pos = pos[edge_index[1]]  # (M/2, 2)
+    from_pos = pos[edge_index[0]] # (M/2, 2)
+    to_pos = pos[edge_index[1]] # (M/2, 2)
     edge_lines = np.stack((from_pos, to_pos), axis=1)
     axis.add_collection(matplotlib.collections.LineCollection(edge_lines, lw=0.4,
-                                                              colors="black", zorder=1))
+                                                            colors="black", zorder=1))
 
     # Plot nodes
     node_scatter = axis.scatter(
@@ -46,6 +48,10 @@ def plot_graph(graph, title=None):
         c=degrees, s=3, marker="o", zorder=2, cmap="viridis", clim=None)
 
     plt.colorbar(node_scatter, aspect=50)
+
+    margin = 0.5
+    axis.set_xlim(left=0-margin, right=constants.grid_shape[0] + margin)
+    axis.set_ylim(bottom=0-margin, top=constants.grid_shape[1] + margin)
 
     if title is not None:
         axis.set_title(title)
