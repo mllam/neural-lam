@@ -270,6 +270,16 @@ In addition, hierarchical mesh graphs (`L > 1`) feature a few additional files w
 These files have the same list format as the ones above, but each list has length `L-1` (as these edges describe connections between levels).
 Entries 0 in these lists describe edges between the lowest levels 1 and 2.
 
+# Development and Contributing
+Any push or Pull-Request to the main branch will trigger a selection of pre-commit hooks.
+These hooks will run a series of checks on the code, like formatting and linting.
+If any of these checks fail the push or PR will be rejected.
+To test whether your code passes these checks before pushing, run
+``` bash    
+pre-commit run --all-files
+```
+from the root directory of the repository.
+
 # Contact
 If you are interested in machine learning models for LAM, have questions about our implementation or ideas for extending it, feel free to get in touch.
 You can open a github issue on this page, or (if more suitable) send an email to [joel.oskarsson@liu.se](mailto:joel.oskarsson@liu.se).
