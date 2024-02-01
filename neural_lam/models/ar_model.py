@@ -18,6 +18,9 @@ class ARModel(pl.LightningModule):
     Abstract class that can be extended.
     """
 
+    # pylint: disable=arguments-differ
+    # Disable to override args/kwargs from superclass
+
     def __init__(self, args):
         super().__init__()
         self.save_hyperparameters()
@@ -52,7 +55,7 @@ class ARModel(pl.LightningModule):
 
         # grid_dim from data + static + batch_static
         (
-            self.N_grid,
+            self.num_grid_nodes,
             grid_static_dim,
         ) = self.grid_static_features.shape  # 63784 = 268x238
         self.grid_dim = (
@@ -68,7 +71,7 @@ class ARModel(pl.LightningModule):
         # Pre-compute interior mask for use in loss function
         self.register_buffer(
             "interior_mask", 1.0 - self.border_mask, persistent=False
-        )  # (N_grid, 1), 1 for non-border
+        )  # (num_grid_nodes, 1), 1 for non-border
 
         self.step_length = args.step_length  # Number of hours per pred. step
         self.val_metrics = {
@@ -119,10 +122,10 @@ class ARModel(pl.LightningModule):
     ):
         """
         Step state one step ahead using prediction model, X_{t-1}, X_t -> X_t+1
-        prev_state: (B, N_grid, feature_dim), X_t
-        prev_prev_state: (B, N_grid, feature_dim), X_{t-1}
-        batch_static_features: (B, N_grid, batch_static_feature_dim)
-        forcing: (B, N_grid, forcing_dim)
+        prev_state: (B, num_grid_nodes, feature_dim), X_t
+        prev_prev_state: (B, num_grid_nodes, feature_dim), X_{t-1}
+        batch_static_features: (B, num_grid_nodes, batch_static_feature_dim)
+        forcing: (B, num_grid_nodes, forcing_dim)
         """
         raise NotImplementedError("No prediction step implemented")
 
@@ -131,10 +134,10 @@ class ARModel(pl.LightningModule):
     ):
         """
         Roll out prediction taking multiple autoregressive steps with model
-        init_states: (B, 2, N_grid, d_f)
-        batch_static_features: (B, N_grid, d_static_f)
-        forcing_features: (B, pred_steps, N_grid, d_static_f)
-        true_states: (B, pred_steps, N_grid, d_f)
+        init_states: (B, 2, num_grid_nodes, d_f)
+        batch_static_features: (B, num_grid_nodes, d_static_f)
+        forcing_features: (B, pred_steps, num_grid_nodes, d_static_f)
+        true_states: (B, pred_steps, num_grid_nodes, d_f)
         """
         prev_prev_state = init_states[:, 0]
         prev_state = init_states[:, 1]
@@ -149,8 +152,8 @@ class ARModel(pl.LightningModule):
             pred_state, pred_std = self.predict_step(
                 prev_state, prev_prev_state, batch_static_features, forcing
             )
-            # state: (B, N_grid, d_f)
-            # pred_std: (B, N_grid, d_f) or None
+            # state: (B, num_grid_nodes, d_f)
+            # pred_std: (B, num_grid_nodes, d_f) or None
 
             # Overwrite border with true state
             new_state = (
@@ -168,11 +171,11 @@ class ARModel(pl.LightningModule):
 
         prediction = torch.stack(
             prediction_list, dim=1
-        )  # (B, pred_steps, N_grid, d_f)
+        )  # (B, pred_steps, num_grid_nodes, d_f)
         if self.output_std:
             pred_std = torch.stack(
                 pred_std_list, dim=1
-            )  # (B, pred_steps, N_grid, d_f)
+            )  # (B, pred_steps, num_grid_nodes, d_f)
         else:
             pred_std = self.per_var_std  # (d_f,)
 
@@ -183,11 +186,12 @@ class ARModel(pl.LightningModule):
         Predict on single batch
         batch = time_series, batch_static_features, forcing_features
 
-        init_states: (B, 2, N_grid, d_features)
-        target_states: (B, pred_steps, N_grid, d_features)
-        batch_static_features: (B, N_grid, d_static_f), for example open water
-        forcing_features: (B, pred_steps, N_grid, d_forcing), where index 0
-            corresponds to index 1 of init_states
+        init_states: (B, 2, num_grid_nodes, d_features)
+        target_states: (B, pred_steps, num_grid_nodes, d_features)
+        batch_static_features: (B, num_grid_nodes, d_static_f),
+            for example open water
+        forcing_features: (B, pred_steps, num_grid_nodes, d_forcing),
+            where index 0 corresponds to index 1 of init_states
         """
         init_states, target_states, batch_static_features, forcing_features = (
             batch
@@ -195,9 +199,9 @@ class ARModel(pl.LightningModule):
 
         prediction, pred_std = self.unroll_prediction(
             init_states, batch_static_features, forcing_features, target_states
-        )  # (B, pred_steps, N_grid, d_f)
-        # prediction: (B, pred_steps, N_grid, d_f)
-        # pred_std: (B, pred_steps, N_grid, d_f) or (d_f,)
+        )  # (B, pred_steps, num_grid_nodes, d_f)
+        # prediction: (B, pred_steps, num_grid_nodes, d_f)
+        # pred_std: (B, pred_steps, num_grid_nodes, d_f) or (d_f,)
 
         return prediction, target_states, pred_std
 
@@ -231,7 +235,7 @@ class ARModel(pl.LightningModule):
         """
         return self.all_gather(tensor_to_gather).flatten(0, 1)
 
-    def validation_step(self, batch, batch_idx):
+    def validation_step(self, batch):
         """
         Run validation on single batch
         """
@@ -276,13 +280,13 @@ class ARModel(pl.LightningModule):
         for metric_list in self.val_metrics.values():
             metric_list.clear()
 
-    def test_step(self, batch, batch_idx):
+    def test_step(self, batch):
         """
         Run test on single batch
         """
         prediction, target, pred_std = self.common_step(batch)
-        # prediction: (B, pred_steps, N_grid, d_f)
-        # pred_std: (B, pred_steps, N_grid, d_f) or (d_f,)
+        # prediction: (B, pred_steps, num_grid_nodes, d_f)
+        # pred_std: (B, pred_steps, num_grid_nodes, d_f) or (d_f,)
 
         time_step_loss = torch.mean(
             self.loss(
@@ -328,9 +332,10 @@ class ARModel(pl.LightningModule):
         # Save per-sample spatial loss for specific times
         spatial_loss = self.loss(
             prediction, target, pred_std, average_grid=False
-        )  # (B, pred_steps, N_grid)
+        )  # (B, pred_steps, num_grid_nodes)
         log_spatial_losses = spatial_loss[:, constants.VAL_STEP_LOG_ERRORS - 1]
-        self.spatial_loss_maps.append(log_spatial_losses)  # (B, N_log, N_grid)
+        self.spatial_loss_maps.append(log_spatial_losses)
+        # (B, N_log, num_grid_nodes)
 
         # Plot example predictions (on rank 0 only)
         if (
@@ -352,7 +357,7 @@ class ARModel(pl.LightningModule):
 
         batch: batch with data to plot corresponding forecasts for
         n_examples: number of forecasts to plot
-        prediction: (B, pred_steps, N_grid, d_f), existing prediction.
+        prediction: (B, pred_steps, num_grid_nodes, d_f), existing prediction.
             Generate if None.
         """
         if prediction is None:
@@ -368,7 +373,7 @@ class ARModel(pl.LightningModule):
         for pred_slice, target_slice in zip(
             prediction_rescaled[:n_examples], target_rescaled[:n_examples]
         ):
-            # Each slice is (pred_steps, N_grid, d_f)
+            # Each slice is (pred_steps, num_grid_nodes, d_f)
             self.plotted_examples += 1  # Increment already here
 
             var_vmin = (
@@ -526,11 +531,11 @@ class ARModel(pl.LightningModule):
         # Plot spatial loss maps
         spatial_loss_tensor = self.all_gather_cat(
             torch.cat(self.spatial_loss_maps, dim=0)
-        )  # (N_test, N_log, N_grid)
+        )  # (N_test, N_log, num_grid_nodes)
         if self.trainer.is_global_zero:
             mean_spatial_loss = torch.mean(
                 spatial_loss_tensor, dim=0
-            )  # (N_log, N_grid)
+            )  # (N_log, num_grid_nodes)
 
             loss_map_figs = [
                 vis.plot_spatial_error(
@@ -566,11 +571,11 @@ class ARModel(pl.LightningModule):
 
         self.spatial_loss_maps.clear()
 
-    def on_load_checkpoint(self, ckpt):
+    def on_load_checkpoint(self, checkpoint):
         """
         Perform any changes to state dict before loading checkpoint
         """
-        loaded_state_dict = ckpt["state_dict"]
+        loaded_state_dict = checkpoint["state_dict"]
 
         # Fix for loading older models after IneractionNet refactoring, where
         # the grid MLP was moved outside the encoder InteractionNet class

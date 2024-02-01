@@ -28,10 +28,10 @@ class BaseGraphModel(ARModel):
                 setattr(self, name, attr_value)
 
         # Specify dimensions of data
-        self.num_mesh_nodes, num_mesh_nodes_ignore = self.get_num_mesh()
+        self.num_mesh_nodes, _ = self.get_num_mesh()
         print(
-            f"Loaded graph with {self.N_grid + self.num_mesh_nodes} nodes "
-            + f"({self.N_grid} grid, {self.num_mesh_nodes} mesh)"
+            f"Loaded graph with {self.num_grid_nodes + self.num_mesh_nodes} "
+            f"nodes ({self.num_grid_nodes} grid, {self.num_mesh_nodes} mesh)"
         )
 
         # grid_dim from data + static + batch_static
@@ -103,14 +103,14 @@ class BaseGraphModel(ARModel):
     ):
         """
         Step state one step ahead using prediction model, X_{t-1}, X_t -> X_t+1
-        prev_state: (B, N_grid, feature_dim), X_t
-        prev_prev_state: (B, N_grid, feature_dim), X_{t-1}
-        batch_static_features: (B, N_grid, batch_static_feature_dim)
-        forcing: (B, N_grid, forcing_dim)
+        prev_state: (B, num_grid_nodes, feature_dim), X_t
+        prev_prev_state: (B, num_grid_nodes, feature_dim), X_{t-1}
+        batch_static_features: (B, num_grid_nodes, batch_static_feature_dim)
+        forcing: (B, num_grid_nodes, forcing_dim)
         """
         batch_size = prev_state.shape[0]
 
-        # Create full grid node features of shape (B, N_grid, grid_dim)
+        # Create full grid node features of shape (B, num_grid_nodes, grid_dim)
         grid_features = torch.cat(
             (
                 prev_state,
@@ -123,7 +123,7 @@ class BaseGraphModel(ARModel):
         )
 
         # Embed all features
-        grid_emb = self.grid_embedder(grid_features)  # (B, N_grid, d_h)
+        grid_emb = self.grid_embedder(grid_features)  # (B, num_grid_nodes, d_h)
         g2m_emb = self.g2m_embedder(self.g2m_features)  # (M_g2m, d_h)
         m2g_emb = self.m2g_embedder(self.m2g_features)  # (M_m2g, d_h)
         mesh_emb = self.embedd_mesh_nodes()
@@ -141,7 +141,7 @@ class BaseGraphModel(ARModel):
         # Also MLP with residual for grid representation
         grid_rep = grid_emb + self.encoding_grid_mlp(
             grid_emb
-        )  # (B, N_grid, d_h)
+        )  # (B, num_grid_nodes, d_h)
 
         # Run processor step
         mesh_rep = self.process_step(mesh_rep)
@@ -150,16 +150,20 @@ class BaseGraphModel(ARModel):
         m2g_emb_expanded = self.expand_to_batch(m2g_emb, batch_size)
         grid_rep = self.m2g_gnn(
             mesh_rep, grid_rep, m2g_emb_expanded
-        )  # (B, N_grid, d_h)
+        )  # (B, num_grid_nodes, d_h)
 
         # Map to output dimension, only for grid
-        net_output = self.output_map(grid_rep)  # (B, N_grid, d_grid_out)
+        net_output = self.output_map(
+            grid_rep
+        )  # (B, num_grid_nodes, d_grid_out)
 
         if self.output_std:
             pred_delta_mean, pred_std_raw = net_output.chunk(
                 2, dim=-1
-            )  # both (B, N_grid, d_f)
+            )  # both (B, num_grid_nodes, d_f)
             # Note: The predicted std. is not scaled in any way here
+            # linter for some reason does not think softplus is callable
+            # pylint: disable-next=not-callable
             pred_std = torch.nn.functional.softplus(pred_std_raw)
         else:
             pred_delta_mean = net_output

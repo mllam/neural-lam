@@ -15,6 +15,9 @@ GRID_HEIGHT = 0
 
 
 def main():
+    """
+    Plot graph structure in 3D using plotly
+    """
     parser = ArgumentParser(description="Plot graph")
     parser.add_argument(
         "--dataset",
@@ -193,11 +196,11 @@ def main():
     if not args.show_axis:
         # Hide axis
         fig.update_layout(
-            scene=dict(
-                xaxis=dict(visible=False),
-                yaxis=dict(visible=False),
-                zaxis=dict(visible=False),
-            )
+            scene={
+                "xaxis": {"visible": False},
+                "yaxis": {"visible": False},
+                "zaxis": {"visible": False},
+            }
         )
 
     if args.save:
