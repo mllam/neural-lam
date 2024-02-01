@@ -1,0 +1,51 @@
+repos:
+-   repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.5.0
+    hooks:
+    -   id: check-ast
+    -   id: check-case-conflict
+    -   id: check-docstring-first
+    -   id: check-symlinks
+    -   id: check-toml
+    -   id: check-yaml
+    -   id: debug-statements
+    -   id: end-of-file-fixer
+    -   id: trailing-whitespace
+-   repo: local
+    hooks:
+    -   id: codespell
+        name: codespell
+        description: Check for spelling errors
+        language: system
+        entry: codespell
+-   repo: local
+    hooks:
+    -   id: black
+        name: black
+        description: Format Python code
+        language: system
+        entry: black
+        types_or: [python, pyi]
+-   repo: local
+    hooks:
+    -   id: isort
+        name: isort
+        description: Group and sort Python imports
+        language: system
+        entry: isort
+        types_or: [python, pyi, cython]
+-   repo: local
+    hooks:
+    -   id: flake8
+        name: flake8
+        description: Check Python code for correctness, consistency and adherence to best practices
+        language: system
+        entry: flake8 --max-line-length=80 --ignore=E203,F811,I002,W503
+        types: [python]
+-   repo: local
+    hooks:
+    -   id: pylint
+        name: pylint
+        entry: pylint -rn -sn
+        language: system
+        types: [python]

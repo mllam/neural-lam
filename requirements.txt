@@ -1,3 +1,4 @@
+# for all
 numpy>=1.24.2
 wandb>=0.13.10
 matplotlib>=3.7.0
@@ -9,3 +10,10 @@ Cartopy>=0.22.0
 pyproj>=3.4.1
 tueplots>=0.0.8
 plotly>=5.15.0
+# for dev
+codespell>=2.0.0
+black>=21.9b0
+isort>=5.9.3
+flake8>=4.0.1
+pylint>=3.0.3
+pre-commit>=2.15.0

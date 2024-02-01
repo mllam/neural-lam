@@ -1,20 +1,24 @@
+# Third-party
 import torch
-import torch_geometric as pyg
 
-from neural_lam import utils, constants
-from neural_lam.models.ar_model import ARModel
+# First-party
+from neural_lam import utils
 from neural_lam.interaction_net import InteractionNet
+from neural_lam.models.ar_model import ARModel
+
 
 class BaseGraphModel(ARModel):
     """
     Base (abstract) class for graph-based models building on
     the encode-process-decode idea.
     """
+
     def __init__(self, args):
         super().__init__(args)
 
         # Load graph with static features
-        # NOTE: (IMPORTANT!) mesh nodes MUST have the first N_mesh indices,
+        # NOTE: (IMPORTANT!) mesh nodes MUST have the first
+        # num_mesh_nodes indices,
         self.hierarchical, graph_ldict = utils.load_graph(args.graph)
         for name, attr_value in graph_ldict.items():
             # Make BufferLists module members and register tensors as buffers
@@ -24,9 +28,11 @@ class BaseGraphModel(ARModel):
                 setattr(self, name, attr_value)
 
         # Specify dimensions of data
-        self.N_mesh, N_mesh_ignore = self.get_num_mesh()
-        print(f"Loaded graph with {self.N_grid + self.N_mesh} nodes "+
-                f"({self.N_grid} grid, {self.N_mesh} mesh)")
+        self.num_mesh_nodes, _ = self.get_num_mesh()
+        print(
+            f"Loaded graph with {self.num_grid_nodes + self.num_mesh_nodes} "
+            f"nodes ({self.num_grid_nodes} grid, {self.num_mesh_nodes} mesh)"
+        )
 
         # grid_dim from data + static + batch_static
         self.g2m_edges, g2m_dim = self.g2m_features.shape
@@ -34,28 +40,39 @@ class BaseGraphModel(ARModel):
 
         # Define sub-models
         # Feature embedders for grid
-        self.mlp_blueprint_end = [args.hidden_dim]*(args.hidden_layers + 1)
-        self.grid_embedder = utils.make_mlp([self.grid_dim] +
-                self.mlp_blueprint_end)
-        self.g2m_embedder = utils.make_mlp([g2m_dim] +
-                self.mlp_blueprint_end)
-        self.m2g_embedder = utils.make_mlp([m2g_dim] +
-                self.mlp_blueprint_end)
+        self.mlp_blueprint_end = [args.hidden_dim] * (args.hidden_layers + 1)
+        self.grid_embedder = utils.make_mlp(
+            [self.grid_dim] + self.mlp_blueprint_end
+        )
+        self.g2m_embedder = utils.make_mlp([g2m_dim] + self.mlp_blueprint_end)
+        self.m2g_embedder = utils.make_mlp([m2g_dim] + self.mlp_blueprint_end)
 
         # GNNs
         # encoder
-        self.g2m_gnn = InteractionNet(self.g2m_edge_index,
-                args.hidden_dim, hidden_layers=args.hidden_layers, update_edges=False)
-        self.encoding_grid_mlp = utils.make_mlp([args.hidden_dim]
-                + self.mlp_blueprint_end)
+        self.g2m_gnn = InteractionNet(
+            self.g2m_edge_index,
+            args.hidden_dim,
+            hidden_layers=args.hidden_layers,
+            update_edges=False,
+        )
+        self.encoding_grid_mlp = utils.make_mlp(
+            [args.hidden_dim] + self.mlp_blueprint_end
+        )
 
         # decoder
-        self.m2g_gnn = InteractionNet(self.m2g_edge_index,
-                args.hidden_dim, hidden_layers=args.hidden_layers, update_edges=False)
+        self.m2g_gnn = InteractionNet(
+            self.m2g_edge_index,
+            args.hidden_dim,
+            hidden_layers=args.hidden_layers,
+            update_edges=False,
+        )
 
         # Output mapping (hidden_dim -> output_dim)
-        self.output_map = utils.make_mlp([args.hidden_dim]*(args.hidden_layers + 1) +\
-                [self.grid_output_dim], layer_norm=False) # No layer norm on this one
+        self.output_map = utils.make_mlp(
+            [args.hidden_dim] * (args.hidden_layers + 1)
+            + [self.grid_output_dim],
+            layer_norm=False,
+        )  # No layer norm on this one
 
     def get_num_mesh(self):
         """
@@ -66,8 +83,8 @@ class BaseGraphModel(ARModel):
 
     def embedd_mesh_nodes(self):
         """
-        Embedd static mesh features
-        Returns tensor of shape (N_mesh, d_h)
+        Embed static mesh features
+        Returns tensor of shape (num_mesh_nodes, d_h)
         """
         raise NotImplementedError("embedd_mesh_nodes not implemented")
 
@@ -76,63 +93,86 @@ class BaseGraphModel(ARModel):
         Process step of embedd-process-decode framework
         Processes the representation on the mesh, possible in multiple steps
 
-        mesh_rep: has shape (B, N_mesh, d_h)
-        Returns mesh_rep: (B, N_mesh, d_h)
+        mesh_rep: has shape (B, num_mesh_nodes, d_h)
+        Returns mesh_rep: (B, num_mesh_nodes, d_h)
         """
         raise NotImplementedError("process_step not implemented")
 
-    def predict_step(self, prev_state, prev_prev_state, batch_static_features, forcing):
+    def predict_step(
+        self, prev_state, prev_prev_state, batch_static_features, forcing
+    ):
         """
         Step state one step ahead using prediction model, X_{t-1}, X_t -> X_t+1
-        prev_state: (B, N_grid, feature_dim), X_t
-        prev_prev_state: (B, N_grid, feature_dim), X_{t-1}
-        batch_static_features: (B, N_grid, batch_static_feature_dim)
-        forcing: (B, N_grid, forcing_dim)
+        prev_state: (B, num_grid_nodes, feature_dim), X_t
+        prev_prev_state: (B, num_grid_nodes, feature_dim), X_{t-1}
+        batch_static_features: (B, num_grid_nodes, batch_static_feature_dim)
+        forcing: (B, num_grid_nodes, forcing_dim)
         """
         batch_size = prev_state.shape[0]
 
-        # Create full grid node features of shape (B, N_grid, grid_dim)
-        grid_features = torch.cat((prev_state, prev_prev_state, batch_static_features,
-            forcing, self.expand_to_batch(self.grid_static_features, batch_size)),
-            dim=-1)
+        # Create full grid node features of shape (B, num_grid_nodes, grid_dim)
+        grid_features = torch.cat(
+            (
+                prev_state,
+                prev_prev_state,
+                batch_static_features,
+                forcing,
+                self.expand_to_batch(self.grid_static_features, batch_size),
+            ),
+            dim=-1,
+        )
 
-        # Embedd all features
-        grid_emb = self.grid_embedder(grid_features) # (B, N_grid, d_h)
-        g2m_emb = self.g2m_embedder(self.g2m_features) # (M_g2m, d_h)
-        m2g_emb = self.m2g_embedder(self.m2g_features) # (M_m2g, d_h)
+        # Embed all features
+        grid_emb = self.grid_embedder(grid_features)  # (B, num_grid_nodes, d_h)
+        g2m_emb = self.g2m_embedder(self.g2m_features)  # (M_g2m, d_h)
+        m2g_emb = self.m2g_embedder(self.m2g_features)  # (M_m2g, d_h)
         mesh_emb = self.embedd_mesh_nodes()
 
         # Map from grid to mesh
-        mesh_emb_expanded = self.expand_to_batch(mesh_emb, batch_size) # (B, N_mesh, d_h)
+        mesh_emb_expanded = self.expand_to_batch(
+            mesh_emb, batch_size
+        )  # (B, num_mesh_nodes, d_h)
         g2m_emb_expanded = self.expand_to_batch(g2m_emb, batch_size)
 
         # This also splits representation into grid and mesh
-        mesh_rep = self.g2m_gnn(grid_emb, mesh_emb_expanded,
-                g2m_emb_expanded) # (B, N_mesh, d_h)
+        mesh_rep = self.g2m_gnn(
+            grid_emb, mesh_emb_expanded, g2m_emb_expanded
+        )  # (B, num_mesh_nodes, d_h)
         # Also MLP with residual for grid representation
-        grid_rep = grid_emb + self.encoding_grid_mlp(grid_emb) # (B, N_grid, d_h)
+        grid_rep = grid_emb + self.encoding_grid_mlp(
+            grid_emb
+        )  # (B, num_grid_nodes, d_h)
 
         # Run processor step
         mesh_rep = self.process_step(mesh_rep)
 
         # Map back from mesh to grid
         m2g_emb_expanded = self.expand_to_batch(m2g_emb, batch_size)
-        grid_rep = self.m2g_gnn(mesh_rep, grid_rep, m2g_emb_expanded) # (B, N_grid, d_h)
+        grid_rep = self.m2g_gnn(
+            mesh_rep, grid_rep, m2g_emb_expanded
+        )  # (B, num_grid_nodes, d_h)
 
         # Map to output dimension, only for grid
-        net_output = self.output_map(grid_rep) # (B, N_grid, d_grid_out)
+        net_output = self.output_map(
+            grid_rep
+        )  # (B, num_grid_nodes, d_grid_out)
 
         if self.output_std:
-            pred_delta_mean, pred_std_raw = net_output.chunk(2,
-                    dim=-1) # both (B, N_grid, d_f)
+            pred_delta_mean, pred_std_raw = net_output.chunk(
+                2, dim=-1
+            )  # both (B, num_grid_nodes, d_f)
             # Note: The predicted std. is not scaled in any way here
+            # linter for some reason does not think softplus is callable
+            # pylint: disable-next=not-callable
             pred_std = torch.nn.functional.softplus(pred_std_raw)
         else:
             pred_delta_mean = net_output
             pred_std = None
 
         # Rescale with one-step difference statistics
-        rescaled_delta_mean = pred_delta_mean*self.step_diff_std + self.step_diff_mean
+        rescaled_delta_mean = (
+            pred_delta_mean * self.step_diff_std + self.step_diff_mean
+        )
 
         # Residual connection for full state
         return prev_state + rescaled_delta_mean, pred_std

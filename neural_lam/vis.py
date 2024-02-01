@@ -1,52 +1,66 @@
-import torch
-import numpy as np
+# Third-party
 import matplotlib
 import matplotlib.pyplot as plt
-from tueplots import axes, bundles
+import numpy as np
 
-from neural_lam import utils, constants
+# First-party
+from neural_lam import constants, utils
+
 
 @matplotlib.rc_context(utils.fractional_plot_bundle(1))
 def plot_error_map(errors, title=None, step_length=3):
     """
-    Plot a heatmap of errors of different variables at different predictions horizons
+    Plot a heatmap of errors of different variables at different
+    predictions horizons
     errors: (pred_steps, d_f)
     """
-    errors_np = errors.T.cpu().numpy() # (d_f, pred_steps)
+    errors_np = errors.T.cpu().numpy()  # (d_f, pred_steps)
     d_f, pred_steps = errors_np.shape
 
     # Normalize all errors to [0,1] for color map
-    max_errors = errors_np.max(axis=1) # d_f
+    max_errors = errors_np.max(axis=1)  # d_f
     errors_norm = errors_np / np.expand_dims(max_errors, axis=1)
 
-    fig, ax = plt.subplots(figsize=(15,10))
+    fig, ax = plt.subplots(figsize=(15, 10))
 
-    ax.imshow(errors_norm, cmap="OrRd", vmin=0, vmax=1., interpolation="none",
-            aspect="auto", alpha=0.8)
+    ax.imshow(
+        errors_norm,
+        cmap="OrRd",
+        vmin=0,
+        vmax=1.0,
+        interpolation="none",
+        aspect="auto",
+        alpha=0.8,
+    )
 
     # ax and labels
-    for (j,i),error in np.ndenumerate(errors_np):
+    for (j, i), error in np.ndenumerate(errors_np):
         # Numbers > 9999 will be too large to fit
         formatted_error = f"{error:.3f}" if error < 9999 else f"{error:.2E}"
-        ax.text(i,j, formatted_error,ha='center',va='center', usetex=False)
+        ax.text(i, j, formatted_error, ha="center", va="center", usetex=False)
 
     # Ticks and labels
-    label_size=15
+    label_size = 15
     ax.set_xticks(np.arange(pred_steps))
-    pred_hor_i = np.arange(pred_steps)+1 # Prediction horiz. in index
-    pred_hor_h = step_length*pred_hor_i # Prediction horiz. in hours
+    pred_hor_i = np.arange(pred_steps) + 1  # Prediction horiz. in index
+    pred_hor_h = step_length * pred_hor_i  # Prediction horiz. in hours
     ax.set_xticklabels(pred_hor_h, size=label_size)
     ax.set_xlabel("Lead time (h)", size=label_size)
 
     ax.set_yticks(np.arange(d_f))
-    y_ticklabels = [f"{name} ({unit})" for name, unit in
-            zip(constants.param_names_short, constants.param_units)]
-    ax.set_yticklabels(y_ticklabels , rotation=30, size=label_size)
+    y_ticklabels = [
+        f"{name} ({unit})"
+        for name, unit in zip(
+            constants.PARAM_NAMES_SHORT, constants.PARAM_UNITS
+        )
+    ]
+    ax.set_yticklabels(y_ticklabels, rotation=30, size=label_size)
 
     if title:
         ax.set_title(title, size=15)
 
     return fig
+
 
 @matplotlib.rc_context(utils.fractional_plot_bundle(1))
 def plot_prediction(pred, target, obs_mask, title=None, vrange=None):
@@ -62,18 +76,28 @@ def plot_prediction(pred, target, obs_mask, title=None, vrange=None):
         vmin, vmax = vrange
 
     # Set up masking of border region
-    mask_reshaped = obs_mask.reshape(*constants.grid_shape)
-    pixel_alpha = mask_reshaped.clamp(0.7, 1).cpu().numpy() # Faded border region
+    mask_reshaped = obs_mask.reshape(*constants.GRID_SHAPE)
+    pixel_alpha = (
+        mask_reshaped.clamp(0.7, 1).cpu().numpy()
+    )  # Faded border region
 
-    fig, axes = plt.subplots(1, 2, figsize=(13,7),
-            subplot_kw={"projection": constants.lambert_proj})
+    fig, axes = plt.subplots(
+        1, 2, figsize=(13, 7), subplot_kw={"projection": constants.LAMBERT_PROJ}
+    )
 
     # Plot pred and target
     for ax, data in zip(axes, (target, pred)):
-        ax.coastlines() # Add coastline outlines
-        data_grid = data.reshape(*constants.grid_shape).cpu().numpy()
-        im = ax.imshow(data_grid, origin="lower", extent=constants.grid_limits,
-                alpha=pixel_alpha, vmin=vmin, vmax=vmax, cmap="plasma")
+        ax.coastlines()  # Add coastline outlines
+        data_grid = data.reshape(*constants.GRID_SHAPE).cpu().numpy()
+        im = ax.imshow(
+            data_grid,
+            origin="lower",
+            extent=constants.GRID_LIMITS,
+            alpha=pixel_alpha,
+            vmin=vmin,
+            vmax=vmax,
+            cmap="plasma",
+        )
 
     # Ticks and labels
     axes[0].set_title("Ground Truth", size=15)
@@ -85,6 +109,7 @@ def plot_prediction(pred, target, obs_mask, title=None, vrange=None):
         fig.suptitle(title, size=20)
 
     return fig
+
 
 @matplotlib.rc_context(utils.fractional_plot_bundle(1))
 def plot_spatial_error(error, obs_mask, title=None, vrange=None):
@@ -100,17 +125,27 @@ def plot_spatial_error(error, obs_mask, title=None, vrange=None):
         vmin, vmax = vrange
 
     # Set up masking of border region
-    mask_reshaped = obs_mask.reshape(*constants.grid_shape)
-    pixel_alpha = mask_reshaped.clamp(0.7, 1).cpu().numpy() # Faded border region
+    mask_reshaped = obs_mask.reshape(*constants.GRID_SHAPE)
+    pixel_alpha = (
+        mask_reshaped.clamp(0.7, 1).cpu().numpy()
+    )  # Faded border region
 
-    fig, ax = plt.subplots(figsize=(5,4.8),
-            subplot_kw={"projection": constants.lambert_proj})
+    fig, ax = plt.subplots(
+        figsize=(5, 4.8), subplot_kw={"projection": constants.LAMBERT_PROJ}
+    )
 
-    ax.coastlines() # Add coastline outlines
-    error_grid = error.reshape(*constants.grid_shape).cpu().numpy()
+    ax.coastlines()  # Add coastline outlines
+    error_grid = error.reshape(*constants.GRID_SHAPE).cpu().numpy()
 
-    im = ax.imshow(error_grid, origin="lower", extent=constants.grid_limits,
-                alpha=pixel_alpha, vmin=vmin, vmax=vmax, cmap="OrRd")
+    im = ax.imshow(
+        error_grid,
+        origin="lower",
+        extent=constants.GRID_LIMITS,
+        alpha=pixel_alpha,
+        vmin=vmin,
+        vmax=vmax,
+        cmap="OrRd",
+    )
 
     # Ticks and labels
     cbar = fig.colorbar(im, aspect=30)
