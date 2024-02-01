@@ -61,3 +61,5 @@ disable = [
 max-statements=100 # Allow for some more involved functions
 [tool.pylint.IMPORTS]
 allow-any-import-level="neural_lam"
+[tool.pylint.SIMILARITIES]
+min-similarity-lines=10
