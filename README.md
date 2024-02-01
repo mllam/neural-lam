@@ -275,7 +275,7 @@ Any push or Pull-Request to the main branch will trigger a selection of pre-comm
 These hooks will run a series of checks on the code, like formatting and linting.
 If any of these checks fail the push or PR will be rejected.
 To test whether your code passes these checks before pushing, run
-``` bash    
+``` bash
 pre-commit run --all-files
 ```
 from the root directory of the repository.

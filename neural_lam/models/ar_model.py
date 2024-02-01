@@ -193,9 +193,12 @@ class ARModel(pl.LightningModule):
         forcing_features: (B, pred_steps, num_grid_nodes, d_forcing),
             where index 0 corresponds to index 1 of init_states
         """
-        init_states, target_states, batch_static_features, forcing_features = (
-            batch
-        )
+        (
+            init_states,
+            target_states,
+            batch_static_features,
+            forcing_features,
+        ) = batch
 
         prediction, pred_std = self.unroll_prediction(
             init_states, batch_static_features, forcing_features, target_states
