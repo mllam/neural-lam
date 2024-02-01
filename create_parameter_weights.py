@@ -56,7 +56,7 @@ def main():
         "500": 0.03,
     }
     w_list = np.array(
-        [w_dict[par.split("_")[-2]] for par in constants.param_names]
+        [w_dict[par.split("_")[-2]] for par in constants.PARAM_NAMES]
     )
     print("Saving parameter weights...")
     np.save(

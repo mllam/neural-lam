@@ -2,30 +2,30 @@
 import cartopy
 import numpy as np
 
-wandb_project = "neural-lam"
+WANDB_PROJECT = "neural-lam"
 
-seconds_in_year = (
+SECONDS_IN_YEAR = (
     365 * 24 * 60 * 60
 )  # Assuming no leap years in dataset (2024 is next)
 
 # Log prediction error for these lead times
-val_step_log_errors = np.array([1, 2, 3, 5, 10, 15, 19])
+VAL_STEP_LOG_ERRORS = np.array([1, 2, 3, 5, 10, 15, 19])
 
 # Log these metrics to wandb as scalar values for
 # specific variables and lead times
 # List of metrics to watch, including any prefix (e.g. val_rmse)
-metrics_watch = []
+METRICS_WATCH = []
 # Dict with variables and lead times to log watched metrics for
 # Format is a dictionary that maps from a variable index to
 # a list of lead time steps
-var_leads_metrics_watch = {
+VAR_LEADS_METRICS_WATCH = {
     6: [2, 19],  # t_2
     14: [2, 19],  # wvint_0
     15: [2, 19],  # z_1000
 }
 
 # Variable names
-param_names = [
+PARAM_NAMES = [
     "pres_heightAboveGround_0_instant",
     "pres_heightAboveSea_0_instant",
     "nlwrs_heightAboveGround_0_accum",
@@ -45,7 +45,7 @@ param_names = [
     "z_isobaricInhPa_500_instant",
 ]
 
-param_names_short = [
+PARAM_NAMES_SHORT = [
     "pres_0g",
     "pres_0s",
     "nlwrs_0",
@@ -64,7 +64,7 @@ param_names_short = [
     "z_1000",
     "z_500",
 ]
-param_units = [
+PARAM_UNITS = [
     "Pa",
     "Pa",
     "W/m\\textsuperscript{2}",
@@ -86,9 +86,9 @@ param_units = [
 
 # Projection and grid
 # Hard coded for now, but should eventually be part of dataset desc. files
-grid_shape = (268, 238)  # (y, x)
+GRID_SHAPE = (268, 238)  # (y, x)
 
-lambert_proj_params = {
+LAMBERT_PROJ_PARAMS = {
     "a": 6367470,
     "b": 6367470,
     "lat_0": 63.3,
@@ -98,7 +98,7 @@ lambert_proj_params = {
     "proj": "lcc",
 }
 
-grid_limits = [  # In projection
+GRID_LIMITS = [  # In projection
     -1059506.5523409774,  # min x
     1310493.4476590226,  # max x
     -1331732.4471934352,  # min y
@@ -106,16 +106,16 @@ grid_limits = [  # In projection
 ]
 
 # Create projection
-lambert_proj = cartopy.crs.LambertConformal(
-    central_longitude=lambert_proj_params["lon_0"],
-    central_latitude=lambert_proj_params["lat_0"],
+LAMBERT_PROJ = cartopy.crs.LambertConformal(
+    central_longitude=LAMBERT_PROJ_PARAMS["lon_0"],
+    central_latitude=LAMBERT_PROJ_PARAMS["lat_0"],
     standard_parallels=(
-        lambert_proj_params["lat_1"],
-        lambert_proj_params["lat_2"],
+        LAMBERT_PROJ_PARAMS["lat_1"],
+        LAMBERT_PROJ_PARAMS["lat_2"],
     ),
 )
 
 # Data dimensions
-batch_static_feature_dim = 1  # Only open water
-grid_forcing_dim = 5 * 3  # 5 features for 3 time-step window
-grid_state_dim = 17
+BATCH_STATIC_FEATURE_DIM = 1  # Only open water
+GRID_FORCING_DIM = 5 * 3  # 5 features for 3 time-step window
+GRID_STATE_DIM = 17

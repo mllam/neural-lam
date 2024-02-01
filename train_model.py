@@ -264,7 +264,7 @@ def main():
         save_last=True,
     )
     logger = pl.loggers.WandbLogger(
-        project=constants.wandb_project, name=run_name, config=args
+        project=constants.WANDB_PROJECT, name=run_name, config=args
     )
     trainer = pl.Trainer(
         max_epochs=args.epochs,

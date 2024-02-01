@@ -215,7 +215,7 @@ class WeatherDataset(torch.utils.data.Dataset):
         # Encode as sin/cos
         hour_angle = (hour_of_day / 12) * torch.pi  # (sample_len,)
         year_angle = (
-            (second_into_year / constants.seconds_in_year) * 2 * torch.pi
+            (second_into_year / constants.SECONDS_IN_YEAR) * 2 * torch.pi
         )  # (sample_len,)
         datetime_forcing = torch.stack(
             (
