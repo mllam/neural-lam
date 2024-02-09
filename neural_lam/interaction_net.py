@@ -38,11 +38,14 @@ class InteractionNet(pyg.nn.MessagePassing):
         hidden_layers: Number of hidden layers in MLPs
         hidden_dim: Dimensionality of hidden layers, if None then same
             as input_dim
+            
+        bet20: these are only used with hierarchical models
         edge_chunk_sizes: List of chunks sizes to split edge representation
             into and use separate MLPs for (None = no chunking, same MLP)
         aggr_chunk_sizes: List of chunks sizes to split aggregated node
             representation into and use separate MLPs for
             (None = no chunking, same MLP)
+            
         aggr: Message aggregation method (sum/mean)
         """
         assert aggr in ("sum", "mean"), f"Unknown aggregation method: {aggr}"
@@ -101,7 +104,9 @@ class InteractionNet(pyg.nn.MessagePassing):
         # but only aggregate to rec_nodes
         node_reps = torch.cat((rec_rep, send_rep), dim=-2)
         edge_rep_aggr, edge_diff = self.propagate(
-            self.edge_index, x=node_reps, edge_attr=edge_rep
+            self.edge_index, 
+            x=node_reps, 
+            edge_attr=edge_rep
         )
         rec_diff = self.aggr_mlp(torch.cat((rec_rep, edge_rep_aggr), dim=-1))
 

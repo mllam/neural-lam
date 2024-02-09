@@ -12,6 +12,7 @@ import torch
 import torch_geometric as pyg
 from torch_geometric.utils.convert import from_networkx
 
+from graphcast_mesh import create_graphcast_mesh
 
 def plot_graph(graph, title=None):
     fig, axis = plt.subplots(figsize=(8, 8), dpi=200)  # W,H
@@ -149,8 +150,7 @@ def prepend_node_index(graph, new_index):
     to_mapping = dict(zip(graph.nodes, ijk))
     return networkx.relabel_nodes(graph, to_mapping, copy=True)
 
-
-def main():
+def get_args():
     parser = ArgumentParser(description="Graph generation arguments")
     parser.add_argument(
         "--dataset",
@@ -185,13 +185,27 @@ def main():
         help="Generate hierarchical mesh graph (default: 0, no)",
     )
     args = parser.parse_args()
+    return args
+
+def main():
+    args = get_args()
 
     # Load grid positions
     static_dir_path = os.path.join("data", args.dataset, "static")
     graph_dir_path = os.path.join("graphs", args.graph)
     os.makedirs(graph_dir_path, exist_ok=True)
-
-    xy = np.load(os.path.join(static_dir_path, "nwp_xy.npy"))
+    
+    # ERA5 dataset has different graph generation
+    if args.dataset == "era5_global":
+        print("Creating graph from ERA5 dataset")
+        create_graphcast_mesh(args)
+        return
+    elif args.dataset == "era5_uk_reduced":
+        print("Creating graph from ERA5 UK reduced dataset")
+        create_graphcast_mesh(args)
+        return
+    
+    xy = np.load(os.path.join(static_dir_path, "nwp_xy.npy")) # (2, N_x, N_y)
 
     grid_xy = torch.tensor(xy)
     pos_max = torch.max(torch.abs(grid_xy))

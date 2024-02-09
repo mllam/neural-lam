@@ -13,9 +13,7 @@ from neural_lam import constants, utils
 from neural_lam.models.graph_lam import GraphLAM
 from neural_lam.models.hi_lam import HiLAM
 from neural_lam.models.hi_lam_parallel import HiLAMParallel
-from neural_lam.models.gcn_model import GCNModel
 from neural_lam.weather_dataset import WeatherDataset
-from neural_lam.era5_dataset import ERA5UKDataset
 
 import os
 # Required for running jobs on GPU node
@@ -25,7 +23,6 @@ MODELS = {
     "graph_lam": GraphLAM,
     "hi_lam": HiLAM,
     "hi_lam_parallel": HiLAMParallel,
-    "gcn": GCNModel,
 }
 
 def get_args():
@@ -209,161 +206,128 @@ def main():
     seed.seed_everything(args.seed)
     
     # Datasets
-    if args.dataset == "era5_uk_reduced":
-        train_set = ERA5UKDataset(
-            args.dataset,
-            pred_length=args.ar_steps,
-            split="train",
-            subsample_step=args.step_length,
-            subset=bool(args.subset_ds),
-            control_only=args.control_only,
-        )
-        val_set = ERA5UKDataset(
-            args.dataset,
-            pred_length=args.ar_steps,
-            split="val",
-            subsample_step=args.step_length,
-            subset=bool(args.subset_ds),
-            control_only=args.control_only,
-        )
-        data_constants = {
-            "BATCH_STATIC_FEATURE_DIM": 0,
-            "GRID_FORCING_DIM": 0, # 
-            "GRID_STATE_DIM": 42, # 6 variables * 7 levels; number of atmospheric variables per grid node
-        }
-        args.constants = data_constants
-    else:
-        train_set = WeatherDataset(
-            args.dataset,
-            pred_length=args.ar_steps,
-            split="train",
-            subsample_step=args.step_length,
-            subset=bool(args.subset_ds),
-            control_only=args.control_only,
-        )
-        max_pred_length = (65 // args.step_length) - 2  # 19
-        val_set = WeatherDataset(
-            args.dataset,
-            pred_length=max_pred_length,
-            split="val",
-            subsample_step=args.step_length,
-            subset=bool(args.subset_ds),
-            control_only=args.control_only,
-        )
-        data_constants = {
-            "BATCH_STATIC_FEATURE_DIM": 1,
-            "GRID_FORCING_DIM": 5 * 3,
-            "GRID_STATE_DIM": 17,
-        }
-        args.constants = data_constants
+    
+
     # Load data
     train_loader = torch.utils.data.DataLoader(
-        train_set,
+        WeatherDataset(
+            args.dataset,
+            pred_length=args.ar_steps,
+            split="train",
+            subsample_step=args.step_length,
+            subset=bool(args.subset_ds),
+            control_only=args.control_only,
+        ),
         args.batch_size,
         shuffle=True,
         num_workers=args.n_workers,
     )
-    val_loader = torch.utils.data.DataLoader(
-        val_set,
-        args.batch_size,
-        shuffle=False,
-        num_workers=args.n_workers,
-    )
-
-    # Instantiate model + trainer
-    if torch.cuda.is_available():
-        device_name = "cuda"
-        torch.set_float32_matmul_precision(
-            "high"
-        )  # Allows using Tensor Cores on A100s
-        print("===== CUDA ENABLED =====")
-        print("Using deterministic algorithms:", torch.are_deterministic_algorithms_enabled())
-    else:
-        device_name = "cpu"
-
-    # Load model parameters Use new args for model
-    model_class = MODELS[args.model]
-    if args.load:
-        model = model_class.load_from_checkpoint(args.load, args=args)
-        if args.restore_opt:
-            # Save for later
-            # Unclear if this works for multi-GPU
-            model.opt_state = torch.load(args.load)["optimizer_states"][0]
-    else:
-        model = model_class(args)
-
-    # Make run name
-    prefix = "subset-" if args.subset_ds else ""
-    if args.eval:
-        prefix = prefix + f"eval-{args.eval}-"
-    # Get an (actual) random run id as a unique identifier
-    random_run_id = random.randint(0, 9999)
-    run_name = (
-        f"{prefix}{args.model}-{args.processor_layers}x{args.hidden_dim}-"
-        f"{time.strftime('%m_%d_%H')}-{random_run_id:04d}"
-    )
     
-    # bet20:
-    # callback is a set of functions applied at given points during training
-    # checkpoint_callback saves model checkpoints at regular intervals during training
-    checkpoint_callback = pl.callbacks.ModelCheckpoint(
-        dirpath=f"saved_models/{run_name}",
-        filename="min_val_loss",
-        monitor="val_mean_loss",
-        mode="min",
-        save_last=True,
-    )
-    logger = pl.loggers.WandbLogger(
-        project=constants.WANDB_PROJECT,
-        name=run_name,
-        config=args,
-        offline=True,
-    )
-    trainer = pl.Trainer(
-        max_epochs=args.epochs,
-        deterministic=True,
-        strategy="ddp",
-        accelerator=device_name,
-        logger=logger,
-        log_every_n_steps=1,
-        callbacks=[checkpoint_callback],
-        check_val_every_n_epoch=args.val_interval,
-        precision=args.precision,
-        overfit_batches=1,
-    )
+    # max_pred_length = (65 // args.step_length) - 2  # 19
+    # val_loader = torch.utils.data.DataLoader(
+    #     WeatherDataset(
+    #         args.dataset,
+    #         pred_length=max_pred_length,
+    #         split="val",
+    #         subsample_step=args.step_length,
+    #         subset=bool(args.subset_ds),
+    #         control_only=args.control_only,
+    #     ),
+    #     args.batch_size,
+    #     shuffle=False,
+    #     num_workers=args.n_workers,
+    # )
 
-    # Only init once, on rank 0 only
-    if trainer.global_rank == 0:
-        utils.init_wandb_metrics(logger)  # Do after wandb.init
+    # # Instantiate model + trainer
+    # if torch.cuda.is_available():
+    #     device_name = "cuda"
+    #     torch.set_float32_matmul_precision(
+    #         "high"
+    #     )  # Allows using Tensor Cores on A100s
+    #     print("===== CUDA ENABLED =====")
+    #     print("Using deterministic algorithms:", torch.are_deterministic_algorithms_enabled())
+    # else:
+    #     device_name = "cpu"
 
-    if args.eval:
-        if args.eval == "val":
-            eval_loader = val_loader
-        else:  # Test
-            eval_loader = torch.utils.data.DataLoader(
-                WeatherDataset(
-                    args.dataset,
-                    pred_length=max_pred_length,
-                    split="test",
-                    subsample_step=args.step_length,
-                    subset=bool(args.subset_ds),
-                ),
-                args.batch_size,
-                shuffle=False,
-                num_workers=args.n_workers,
-            )
+    # # Load model parameters Use new args for model
+    # model_class = MODELS[args.model]
+    # if args.load:
+    #     model = model_class.load_from_checkpoint(args.load, args=args)
+    #     if args.restore_opt:
+    #         # Save for later
+    #         # Unclear if this works for multi-GPU
+    #         model.opt_state = torch.load(args.load)["optimizer_states"][0]
+    # else:
+    #     model = model_class(args)
 
-        print(f"Running evaluation on {args.eval}")
-        trainer.test(model=model, dataloaders=eval_loader)
-    else:
-        # Train model
-        trainer.fit(
-            model=model,
-            train_dataloaders=train_loader,
-            val_dataloaders=val_loader,
-        )
+    # # Make run name
+    # prefix = "subset-" if args.subset_ds else ""
+    # if args.eval:
+    #     prefix = prefix + f"eval-{args.eval}-"
+    # # Get an (actual) random run id as a unique identifier
+    # random_run_id = random.randint(0, 9999)
+    # run_name = (
+    #     f"{prefix}{args.model}-{args.processor_layers}x{args.hidden_dim}-"
+    #     f"{time.strftime('%m_%d_%H')}-{random_run_id:04d}"
+    # )
+    
+    # # bet20:
+    # # callback is a set of functions applied at given points during training
+    # # checkpoint_callback saves model checkpoints at regular intervals during training
+    # checkpoint_callback = pl.callbacks.ModelCheckpoint(
+    #     dirpath=f"saved_models/{run_name}",
+    #     filename="min_val_loss",
+    #     monitor="val_mean_loss",
+    #     mode="min",
+    #     save_last=True,
+    # )
+    # logger = pl.loggers.WandbLogger(
+    #     project=constants.WANDB_PROJECT, name=run_name, config=args
+    # )
+    # trainer = pl.Trainer(
+    #     max_epochs=args.epochs,
+    #     deterministic=True,
+    #     strategy="ddp",
+    #     accelerator=device_name,
+    #     logger=logger,
+    #     log_every_n_steps=1,
+    #     callbacks=[checkpoint_callback],
+    #     check_val_every_n_epoch=args.val_interval,
+    #     precision=args.precision,
+    #     overfit_batches=1,
+    # )
+
+    # # Only init once, on rank 0 only
+    # if trainer.global_rank == 0:
+    #     utils.init_wandb_metrics(logger)  # Do after wandb.init
+
+    # if args.eval:
+    #     if args.eval == "val":
+    #         eval_loader = val_loader
+    #     else:  # Test
+    #         eval_loader = torch.utils.data.DataLoader(
+    #             WeatherDataset(
+    #                 args.dataset,
+    #                 pred_length=max_pred_length,
+    #                 split="test",
+    #                 subsample_step=args.step_length,
+    #                 subset=bool(args.subset_ds),
+    #             ),
+    #             args.batch_size,
+    #             shuffle=False,
+    #             num_workers=args.n_workers,
+    #         )
+
+    #     print(f"Running evaluation on {args.eval}")
+    #     trainer.test(model=model, dataloaders=eval_loader)
+    # else:
+    #     # Train model
+    #     trainer.fit(
+    #         model=model,
+    #         train_dataloaders=train_loader,
+    #         val_dataloaders=val_loader,
+    #     )
 
 
 if __name__ == "__main__":
-    
     main()

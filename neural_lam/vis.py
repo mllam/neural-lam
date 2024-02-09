@@ -65,7 +65,7 @@ def plot_error_map(errors, title=None, step_length=3):
 @matplotlib.rc_context(utils.fractional_plot_bundle(1))
 def plot_prediction(pred, target, obs_mask, title=None, vrange=None):
     """
-    Plot example prediction and grond truth.
+    Plot example prediction and ground truth.
     Each has shape (N_grid,)
     """
     # Get common scale for values

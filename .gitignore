@@ -72,3 +72,12 @@ tags
 
 # Coc configuration directory
 .vim
+
+### HPC ###
+slurm-*.out
+
+### VSCode ###
+.vscode
+
+### Scratch ###
+dataset_scratch

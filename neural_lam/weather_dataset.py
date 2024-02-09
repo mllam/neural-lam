@@ -14,13 +14,13 @@ from neural_lam import constants, utils
 class WeatherDataset(torch.utils.data.Dataset):
     """
     For our dataset:
-    N_t' = 65
-    N_t = 65//subsample_step (= 21 for 3h steps)
-    dim_x = 268
-    dim_y = 238
-    N_grid = 268x238 = 63784
-    d_features = 17 (d_features' = 18)
-    d_forcing = 5
+    N_t' = 65 (total number of time steps in forecast)
+    N_t = 65//subsample_step (= 21 for 3h steps) (number of time steps in sample)
+    dim_x = 268 (width)
+    dim_y = 238 (height)
+    N_grid = 268x238 = 63784 (total number of grid nodes)
+    d_features = 17 (d_features' = 18) (number of atmospheric features)
+    d_forcing = 5 (number of forcing features)
     """
 
     def __init__(
@@ -33,6 +33,12 @@ class WeatherDataset(torch.utils.data.Dataset):
         subset=False,
         control_only=False,
     ):
+        """
+        bet20:
+        
+        pred_length: Number of time steps to predict. default: 19 (for 3h timesteps = 57h forecast leadtime)
+        split: Which split of the dataset to use. default: "train"
+        """
         super().__init__()
 
         assert split in ("train", "val", "test"), "Unknown dataset split"
@@ -48,7 +54,10 @@ class WeatherDataset(torch.utils.data.Dataset):
         )
         self.sample_names = [path.split("/")[-1][4:-4] for path in sample_paths]
         # Now on form "yyymmddhh_mbrXXX"
-
+        # bet20:
+        # mbrXXX denotes which member of the ensemble forecast (5 total)
+        # i.e. from "nwp_2020010100_mbr000.npy" to "2020010100_mbr000"
+        
         if subset:
             self.sample_names = self.sample_names[:50]  # Limit to 50 samples
 
@@ -102,12 +111,15 @@ class WeatherDataset(torch.utils.data.Dataset):
             subsample_index : subsample_end_index : self.subsample_step
         ]
         # (N_t, dim_x, dim_y, d_features')
+        # bet20: only return 1 out of 3 subsampled forecasts per get_item
 
+        # === Preprocessing ===
         # Remove feature 15, "z_height_above_ground"
         sample = torch.cat(
             (sample[:, :, :, :15], sample[:, :, :, 16:]), dim=3
-        )  # (N_t, dim_x, dim_y, d_features)
+        ) # (N_t, dim_x, dim_y, d_features)
 
+        # === Preprocessing ===
         # Accumulate solar radiation instead of just subsampling
         rad_features = full_sample[:, :, :, 2:4]  # (N_t', dim_x, dim_y, 2)
         # Accumulate for first time step
@@ -132,6 +144,8 @@ class WeatherDataset(torch.utils.data.Dataset):
             ),
             dim=1,
         )  # (N_t-1, dim_x, dim_y, 2)
+        
+        # make accum_rad
         accum_rad = torch.cat(
             (init_accum_rad, rest_accum_rad), dim=0
         )  # (N_t, dim_x, dim_y, 2)
@@ -139,9 +153,9 @@ class WeatherDataset(torch.utils.data.Dataset):
         sample[:, :, :, 2:4] = accum_rad
 
         # Flatten spatial dim
-        sample = sample.flatten(1, 2)  # (N_t, N_grid, d_features)
+        sample = sample.flatten(1, 2) # (N_t, N_grid, d_features) <- flatten (N_t, dim_x, dim_y, d_features)
 
-        # Uniformly sample time id to start sample from
+        # Uniformly sample time id to start sample from (only train on one )
         init_id = torch.randint(
             0, 1 + self.original_sample_length - self.sample_length, ()
         )

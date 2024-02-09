@@ -11,6 +11,31 @@ from tqdm import tqdm
 from neural_lam import constants
 from neural_lam.weather_dataset import WeatherDataset
 
+def create_era5_parameter_weights(args, static_dir_path):
+    mean = torch.tensor([0.])
+    std = torch.tensor([1.])
+    flux_mean = torch.tensor([0.])  # (,)
+    flux_std = torch.tensor([1.])  # (,)
+    flux_stats = torch.stack((flux_mean, flux_std))
+    
+    print("Saving mean, std.-dev, flux_stats...")
+    torch.save(mean, os.path.join(static_dir_path, "parameter_mean.pt"))
+    torch.save(std, os.path.join(static_dir_path, "parameter_std.pt"))
+    torch.save(flux_stats, os.path.join(static_dir_path, "flux_stats.pt"))
+    
+    diff_mean = torch.tensor([0.])
+    diff_std = torch.tensor([1.])
+    print("Saving one-step difference mean and std.-dev...")
+    torch.save(diff_mean, os.path.join(static_dir_path, "diff_mean.pt"))
+    torch.save(diff_std, os.path.join(static_dir_path, "diff_std.pt"))
+    
+    parameter_weights = np.array([1.0])
+    print("Saving parameter weights...")
+    np.save(
+        os.path.join(static_dir_path, "parameter_weights.npy"),
+        parameter_weights.astype("float32"),
+    )
+    
 
 def main():
     """
@@ -44,6 +69,10 @@ def main():
     args = parser.parse_args()
 
     static_dir_path = os.path.join("data", args.dataset, "static")
+    
+    if "era5" in args.dataset:
+        create_era5_parameter_weights(args, static_dir_path)
+        return
 
     # Create parameter weights based on height
     # based on fig A.1 in graph cast paper

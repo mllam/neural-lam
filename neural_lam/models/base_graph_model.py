@@ -19,6 +19,10 @@ class BaseGraphModel(ARModel):
         # Load graph with static features
         # NOTE: (IMPORTANT!) mesh nodes MUST have the first
         # num_mesh_nodes indices,
+        
+        # bet20: 
+        # this creates self.grid_static_features, self.grid_forcing_dim, self.grid_state_dim ... etc.
+        # full list of created properties found in utils.load_graph()
         self.hierarchical, graph_ldict = utils.load_graph(args.graph)
         for name, attr_value in graph_ldict.items():
             # Make BufferLists module members and register tensors as buffers

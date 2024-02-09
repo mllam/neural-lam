@@ -25,7 +25,8 @@ class ARModel(pl.LightningModule):
         super().__init__()
         self.save_hyperparameters()
         self.lr = args.lr
-
+        self.args = args
+        
         # Load static features for grid/data
         static_data_dict = utils.load_static_data(args.dataset)
         for static_data_name, static_data_tensor in static_data_dict.items():
@@ -37,11 +38,11 @@ class ARModel(pl.LightningModule):
         self.output_std = bool(args.output_std)
         if self.output_std:
             self.grid_output_dim = (
-                2 * constants.GRID_STATE_DIM
+                2 * args.constants["GRID_STATE_DIM"]
             )  # Pred. dim. in grid cell
         else:
             self.grid_output_dim = (
-                constants.GRID_STATE_DIM
+                args.constants["GRID_STATE_DIM"]
             )  # Pred. dim. in grid cell
 
             # Store constant per-variable std.-dev. weighting
@@ -59,10 +60,10 @@ class ARModel(pl.LightningModule):
             grid_static_dim,
         ) = self.grid_static_features.shape  # 63784 = 268x238
         self.grid_dim = (
-            2 * constants.GRID_STATE_DIM
+            2 * args.constants["GRID_STATE_DIM"]
             + grid_static_dim
-            + constants.GRID_FORCING_DIM
-            + constants.BATCH_STATIC_FEATURE_DIM
+            + args.constants["GRID_FORCING_DIM"]
+            + args.constants["BATCH_STATIC_FEATURE_DIM"]
         )
 
         # Instantiate loss function
@@ -95,6 +96,10 @@ class ARModel(pl.LightningModule):
         self.spatial_loss_maps = []
 
     def configure_optimizers(self):
+        """
+        bet20:
+        Returns a new AdamW optimiser, optionally loads it from state_dict (if restarting training from ckpt?)
+        """
         opt = torch.optim.AdamW(
             self.parameters(), lr=self.lr, betas=(0.9, 0.95)
         )
@@ -143,7 +148,7 @@ class ARModel(pl.LightningModule):
         prev_state = init_states[:, 1]
         prediction_list = []
         pred_std_list = []
-        pred_steps = forcing_features.shape[1]
+        pred_steps = true_states.shape[1]
 
         for i in range(pred_steps):
             forcing = forcing_features[:, i]
@@ -186,8 +191,10 @@ class ARModel(pl.LightningModule):
         Predict on single batch
         batch = time_series, batch_static_features, forcing_features
 
-        init_states: (B, 2, num_grid_nodes, d_features)
-        target_states: (B, pred_steps, num_grid_nodes, d_features)
+        time_series (is a tuple of):
+            init_states: (B, 2, N_grid, d_features)
+            target_states: (B, pred_steps, N_grid, d_features)
+
         batch_static_features: (B, num_grid_nodes, d_static_f),
             for example open water
         forcing_features: (B, pred_steps, num_grid_nodes, d_forcing),
@@ -256,6 +263,7 @@ class ARModel(pl.LightningModule):
         val_log_dict = {
             f"val_loss_unroll{step}": time_step_loss[step - 1]
             for step in constants.VAL_STEP_LOG_ERRORS
+            if step < time_step_loss.shape[0]
         }
         val_log_dict["val_mean_loss"] = mean_loss
         self.log_dict(
@@ -460,11 +468,11 @@ class ARModel(pl.LightningModule):
         log_dict: dict with everything to log for given metric
         """
         log_dict = {}
-        metric_fig = vis.plot_error_map(
-            metric_tensor, step_length=self.step_length
-        )
+        # metric_fig = vis.plot_error_map(
+        #     metric_tensor, step_length=self.step_length
+        # )
         full_log_name = f"{prefix}_{metric_name}"
-        log_dict[full_log_name] = wandb.Image(metric_fig)
+        # log_dict[full_log_name] = wandb.Image(metric_fig)
 
         if prefix == "test":
             # Save pdf
