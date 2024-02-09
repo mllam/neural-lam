@@ -2,7 +2,7 @@
 import cartopy
 import numpy as np
 
-WANDB_PROJECT = "neural-lam"
+WANDB_PROJECT = "neural-lam-bet20"
 
 SECONDS_IN_YEAR = (
     365 * 24 * 60 * 60
@@ -106,16 +106,23 @@ GRID_LIMITS = [  # In projection
 ]
 
 # Create projection
-LAMBERT_PROJ = cartopy.crs.LambertConformal(
-    central_longitude=LAMBERT_PROJ_PARAMS["lon_0"],
-    central_latitude=LAMBERT_PROJ_PARAMS["lat_0"],
-    standard_parallels=(
-        LAMBERT_PROJ_PARAMS["lat_1"],
-        LAMBERT_PROJ_PARAMS["lat_2"],
-    ),
-)
+# LAMBERT_PROJ = cartopy.crs.LambertConformal(
+#     central_longitude=LAMBERT_PROJ_PARAMS["lon_0"],
+#     central_latitude=LAMBERT_PROJ_PARAMS["lat_0"],
+#     standard_parallels=(
+#         LAMBERT_PROJ_PARAMS["lat_1"],
+#         LAMBERT_PROJ_PARAMS["lat_2"],
+#     ),
+# )
+
+# TODO: remove this when cartopy is available
+LAMBERT_PROJ = None
 
 # Data dimensions
-BATCH_STATIC_FEATURE_DIM = 1  # Only open water
-GRID_FORCING_DIM = 5 * 3  # 5 features for 3 time-step window
-GRID_STATE_DIM = 17
+# BATCH_STATIC_FEATURE_DIM = 1  # Only open water
+# GRID_FORCING_DIM = 5 * 3  # 5 features for 3 time-step window
+# GRID_STATE_DIM = 17
+
+BATCH_STATIC_FEATURE_DIM = 0  # Only open water
+GRID_FORCING_DIM = 0  # 5 features for 3 time-step window
+GRID_STATE_DIM = 0

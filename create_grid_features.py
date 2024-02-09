@@ -6,6 +6,25 @@ from argparse import ArgumentParser
 import numpy as np
 import torch
 
+def create_era5_grid_features(args, static_dir_path):
+    """
+    Create static features for the grid nodes
+    """
+    # -- Static grid node features --
+    grid_xy = torch.tensor(
+        np.load(os.path.join(static_dir_path, "nwp_xy.npy"))
+    )  # (2, N_x, N_y)
+    grid_xy = grid_xy.flatten(1, 2).T  # (N_grid, 2)
+    pos_max = torch.max(torch.abs(grid_xy))
+    grid_xy = grid_xy / pos_max  # Divide by maximum coordinate
+    
+    # Concatenate grid features
+    grid_features = torch.cat(
+        (grid_xy), dim=1
+    )  # (N_grid, 2)
+    
+    grid_features = torch.tensor([], dtype=torch.float)
+    torch.save(grid_features, os.path.join(static_dir_path, "grid_features.pt"))
 
 def main():
     """
@@ -21,6 +40,9 @@ def main():
     args = parser.parse_args()
 
     static_dir_path = os.path.join("data", args.dataset, "static")
+    
+    if "era5" in args.dataset:
+        create_era5_grid_features(args, static_dir_path)
 
     # -- Static grid node features --
     grid_xy = torch.tensor(
