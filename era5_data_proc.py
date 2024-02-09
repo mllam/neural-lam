@@ -69,8 +69,9 @@ def create_era5_grid_features(args):
 
 def create_xy(subset=None):
     """
-    Creates the nwp_xy.npy file for the era5 dataset
-    Also creates border mask
+    Creates for ERA5 dataset
+        - nwp_xy.npy
+        - border_mask.npy
     """
     nc_files = glob.glob(f'{constants.DATASET_PATH}/global/*.nc')
     proccessed_dataset_path = "data/era5_uk_reduced/static"

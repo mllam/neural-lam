@@ -13,6 +13,7 @@ from neural_lam import constants, utils
 from neural_lam.models.graph_lam import GraphLAM
 from neural_lam.models.hi_lam import HiLAM
 from neural_lam.models.hi_lam_parallel import HiLAMParallel
+from neural_lam.models.gcn_model import GCNModel
 from neural_lam.weather_dataset import WeatherDataset
 from neural_lam.era5_dataset import ERA5UKDataset
 
@@ -24,6 +25,7 @@ MODELS = {
     "graph_lam": GraphLAM,
     "hi_lam": HiLAM,
     "hi_lam_parallel": HiLAMParallel,
+    "gcn": GCNModel,
 }
 
 def get_args():
@@ -216,6 +218,20 @@ def main():
             subset=bool(args.subset_ds),
             control_only=args.control_only,
         )
+        val_set = ERA5UKDataset(
+            args.dataset,
+            pred_length=args.ar_steps,
+            split="val",
+            subsample_step=args.step_length,
+            subset=bool(args.subset_ds),
+            control_only=args.control_only,
+        )
+        data_constants = {
+            "BATCH_STATIC_FEATURE_DIM": 0,
+            "GRID_FORCING_DIM": 0, # 
+            "GRID_STATE_DIM": 42, # 6 variables * 7 levels; number of atmospheric variables per grid node
+        }
+        args.constants = data_constants
     else:
         train_set = WeatherDataset(
             args.dataset,
@@ -225,7 +241,21 @@ def main():
             subset=bool(args.subset_ds),
             control_only=args.control_only,
         )
-        
+        max_pred_length = (65 // args.step_length) - 2  # 19
+        val_set = WeatherDataset(
+            args.dataset,
+            pred_length=max_pred_length,
+            split="val",
+            subsample_step=args.step_length,
+            subset=bool(args.subset_ds),
+            control_only=args.control_only,
+        )
+        data_constants = {
+            "BATCH_STATIC_FEATURE_DIM": 1,
+            "GRID_FORCING_DIM": 5 * 3,
+            "GRID_STATE_DIM": 17,
+        }
+        args.constants = data_constants
     # Load data
     train_loader = torch.utils.data.DataLoader(
         train_set,
@@ -233,16 +263,8 @@ def main():
         shuffle=True,
         num_workers=args.n_workers,
     )
-    max_pred_length = (65 // args.step_length) - 2  # 19
     val_loader = torch.utils.data.DataLoader(
-        WeatherDataset(
-            args.dataset,
-            pred_length=max_pred_length,
-            split="val",
-            subsample_step=args.step_length,
-            subset=bool(args.subset_ds),
-            control_only=args.control_only,
-        ),
+        val_set,
         args.batch_size,
         shuffle=False,
         num_workers=args.n_workers,
@@ -292,7 +314,10 @@ def main():
         save_last=True,
     )
     logger = pl.loggers.WandbLogger(
-        project=constants.WANDB_PROJECT, name=run_name, config=args
+        project=constants.WANDB_PROJECT,
+        name=run_name,
+        config=args,
+        offline=True,
     )
     trainer = pl.Trainer(
         max_epochs=args.epochs,
@@ -340,4 +365,5 @@ def main():
 
 
 if __name__ == "__main__":
+    
     main()

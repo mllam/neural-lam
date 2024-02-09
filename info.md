@@ -26,7 +26,7 @@ data
 │   └── static                              - Directory with graph information and static features
 │       ├── nwp_xy.npy                      - Coordinates of grid nodes (part of dataset)                                   x
 │       ├── surface_geopotential.npy        - Geopotential at surface of grid nodes (part of dataset)                       x TODO: temporarily omitting this from grid_features
-│       ├── border_mask.npy                 - Mask with True for grid nodes that are part of border (part of dataset)       x
+│       ├── border_mask.npy                 - Mask with True for grid nodes that are part of border (part of dataset)       x TODO: temp. omitting
 │       ├── grid_features.pt                - Static features of grid nodes (create_grid_features.py)                       x TODO: add other features in
 │       ├── parameter_mean.pt               - Means of state parameters (create_parameter_weights.py)                       x TODO: setting as 0 for now
 │       ├── parameter_std.pt                - Std.-dev. of state parameters (create_parameter_weights.py)                   x TODO: setting as 1 for now

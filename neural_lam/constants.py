@@ -119,10 +119,10 @@ GRID_LIMITS = [  # In projection
 LAMBERT_PROJ = None
 
 # Data dimensions
-# BATCH_STATIC_FEATURE_DIM = 1  # Only open water
-# GRID_FORCING_DIM = 5 * 3  # 5 features for 3 time-step window
-# GRID_STATE_DIM = 17
+BATCH_STATIC_FEATURE_DIM = 1  # Only open water
+GRID_FORCING_DIM = 5 * 3  # 5 features for 3 time-step window
+GRID_STATE_DIM = 17
 
-BATCH_STATIC_FEATURE_DIM = 0  # Only open water
-GRID_FORCING_DIM = 0  # 5 features for 3 time-step window
-GRID_STATE_DIM = 0
+# BATCH_STATIC_FEATURE_DIM = 0  # Only open water
+# GRID_FORCING_DIM = 0  # 5 features for 3 time-step window
+# GRID_STATE_DIM = 0

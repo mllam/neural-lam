@@ -38,11 +38,11 @@ class ARModel(pl.LightningModule):
         self.output_std = bool(args.output_std)
         if self.output_std:
             self.grid_output_dim = (
-                2 * constants.GRID_STATE_DIM
+                2 * args.constants["GRID_STATE_DIM"]
             )  # Pred. dim. in grid cell
         else:
             self.grid_output_dim = (
-                constants.GRID_STATE_DIM
+                args.constants["GRID_STATE_DIM"]
             )  # Pred. dim. in grid cell
 
             # Store constant per-variable std.-dev. weighting
@@ -60,10 +60,10 @@ class ARModel(pl.LightningModule):
             grid_static_dim,
         ) = self.grid_static_features.shape  # 63784 = 268x238
         self.grid_dim = (
-            2 * constants.GRID_STATE_DIM
+            2 * args.constants["GRID_STATE_DIM"]
             + grid_static_dim
-            + constants.GRID_FORCING_DIM
-            + constants.BATCH_STATIC_FEATURE_DIM
+            + args.constants["GRID_FORCING_DIM"]
+            + args.constants["BATCH_STATIC_FEATURE_DIM"]
         )
 
         # Instantiate loss function
@@ -148,7 +148,7 @@ class ARModel(pl.LightningModule):
         prev_state = init_states[:, 1]
         prediction_list = []
         pred_std_list = []
-        pred_steps = forcing_features.shape[1]
+        pred_steps = true_states.shape[1]
 
         for i in range(pred_steps):
             forcing = forcing_features[:, i]
@@ -263,6 +263,7 @@ class ARModel(pl.LightningModule):
         val_log_dict = {
             f"val_loss_unroll{step}": time_step_loss[step - 1]
             for step in constants.VAL_STEP_LOG_ERRORS
+            if step < time_step_loss.shape[0]
         }
         val_log_dict["val_mean_loss"] = mean_loss
         self.log_dict(
@@ -467,11 +468,11 @@ class ARModel(pl.LightningModule):
         log_dict: dict with everything to log for given metric
         """
         log_dict = {}
-        metric_fig = vis.plot_error_map(
-            metric_tensor, step_length=self.step_length
-        )
+        # metric_fig = vis.plot_error_map(
+        #     metric_tensor, step_length=self.step_length
+        # )
         full_log_name = f"{prefix}_{metric_name}"
-        log_dict[full_log_name] = wandb.Image(metric_fig)
+        # log_dict[full_log_name] = wandb.Image(metric_fig)
 
         if prefix == "test":
             # Save pdf

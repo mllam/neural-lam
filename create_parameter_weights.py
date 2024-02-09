@@ -29,6 +29,13 @@ def create_era5_parameter_weights(args, static_dir_path):
     torch.save(diff_mean, os.path.join(static_dir_path, "diff_mean.pt"))
     torch.save(diff_std, os.path.join(static_dir_path, "diff_std.pt"))
     
+    parameter_weights = np.array([1.0])
+    print("Saving parameter weights...")
+    np.save(
+        os.path.join(static_dir_path, "parameter_weights.npy"),
+        parameter_weights.astype("float32"),
+    )
+    
 
 def main():
     """
@@ -62,6 +69,10 @@ def main():
     args = parser.parse_args()
 
     static_dir_path = os.path.join("data", args.dataset, "static")
+    
+    if "era5" in args.dataset:
+        create_era5_parameter_weights(args, static_dir_path)
+        return
 
     # Create parameter weights based on height
     # based on fig A.1 in graph cast paper
