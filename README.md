@@ -104,9 +104,9 @@ source_xy_coordinates["nwp_xy.npy"]:::npy_file
 surface_geopotential["surface_geopotential.npy"]:::npy_file
 grid_features["grid_features.pt"]:::pt_file
 border_mask["border_mask.npy"]:::npy_file
-nwp_mbr_files["nwp_*_mbr*.npy"]:::npy_file
-wtr_files["wtr_*.npy"]:::npy_file
-nwp_toa_files["nwp_toa*.npy"]:::npy_file
+nwp_mbr_files["nwp_*_mbr*.npy: [Nt,Ny,Nx,Nv]"]:::npy_file
+wtr_files["wtr_*.npy: [Ny,Nx]"]:::npy_file
+nwp_toa_files["nwp_toa*.npy: [Nt,Ny,Nx]"]:::npy_file
 
 border_mask -- read by --> training_step
 grid_features -- read by --> training_step
@@ -122,7 +122,7 @@ subgraph Dataset
     note("stored in `data/{dataset_name}/static/")
   end
   
-  subgraph dynamic_variables["dynamic variables [Nx, Ny, Nt]"]
+  subgraph dynamic_variables["dynamic variables"]
     direction LR
     nwp_mbr_files
     wtr_files
