@@ -83,9 +83,86 @@ It should thus be useful to make sure that your python environment is set up cor
 
 ## Pre-processing
 An overview of how the different scripts and files depend on each other is given in this figure:
-<p align="middle">
-  <img src="figures/component_dependencies.png"/>
-</p>
+
+```mermaid
+graph LR
+
+%% styling
+classDef proc_step stroke:#ffa49b
+classDef npy_file stroke:#8cdecf
+classDef pt_file stroke:#8fd7f1
+
+%% processing steps
+create_grid_features_step["create_grid_features.py"]:::proc_step
+create_mesh_step["create_mesh.py"]:::proc_step
+create_parameter_weights_step["create_parameter_weights.py"]:::proc_step
+
+%% data-collections
+
+%% files
+source_xy_coordinates["nwp_xy.npy"]:::npy_file
+surface_geopotential["surface_geopotential.npy"]:::npy_file
+grid_features["grid_features.pt"]:::pt_file
+border_mask["border_mask.npy"]:::npy_file
+nwp_mbr_files["nwp_*_mbr*.npy"]:::npy_file
+wtr_files["wtr_*.npy"]:::npy_file
+nwp_toa_files["nwp_toa*.npy"]:::npy_file
+
+border_mask -- read by --> training_step
+grid_features -- read by --> training_step
+parameter_weights -- read by --> training_step
+mesh_information -- read by --> training_step
+dynamic_variables -- read by --> training_step
+
+subgraph Dataset
+  subgraph static_variables["static variables [Nx,Ny]"]
+    source_xy_coordinates
+    surface_geopotential
+    border_mask
+    note("stored in `data/{dataset_name}/static/")
+  end
+  
+  subgraph dynamic_variables["dynamic variables [Nx, Ny, Nt]"]
+    direction LR
+    nwp_mbr_files
+    wtr_files
+    nwp_toa_files
+    note-dyn("stored in `data/{dataset_name}/\nsamples/[train|val|test]/`")
+  end
+  
+  dynamic_variables -- read by --> create_parameter_weights_step
+  create_parameter_weights_step -- writes --> parameter_weights
+  
+  surface_geopotential -- read by --> create_grid_features_step
+  source_xy_coordinates -- read by --> create_grid_features_step
+  border_mask -- read by --> create_grid_features_step
+  create_grid_features_step -- writes --> grid_features
+  
+  subgraph parameter_weights
+    direction LR
+    parameter_mean.pt\nparameter_std.pt\ndiff_mean.pt\ndiff_std.pt\nflux_stats.pt:::pt_file
+    note-params("stored in `data/{dataset_name}/static/`")
+  end
+end
+
+subgraph Graph
+  source_xy_coordinates -- read by --> create_mesh_step
+  create_mesh_step -- writes --> mesh_information
+  
+  subgraph mesh_information["Mesh information"]
+    direction LR
+    subgraph mesh_common["Mesh (common)"]
+        mesh_features.pt\nm2m_edge_index.pt\ng2m_edge_index.pt\nm2g_edge_index.pt\nm2m_features.pt\ng2m_features.pt\nm2g_features.pt:::pt_file
+    end
+      subgraph mesh_hierarchical["Mesh (hierarchical)"]
+        mesh_down_edge_index.pt\nmesh_up_edge_index.pt\nmesh_down_features.pt\nmesh_up_features.pt:::pt_file
+      end
+    note-mesh("stored in `graph/{mesh_type}/`")
+  end
+
+end
+
+```
 In order to start training models at least three pre-processing scripts have to be ran:
 
 * `create_mesh.py`
