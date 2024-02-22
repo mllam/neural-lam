@@ -75,10 +75,10 @@ class ARModel(pl.LightningModule):
 
         self.step_length = args.step_length  # Number of hours per pred. step
         self.val_metrics = {
-            "rmse": [],
+            "mse": [],
         }
         self.test_metrics = {
-            "rmse": [],
+            "mse": [],
             "mae": [],
         }
         if self.output_std:
@@ -238,7 +238,9 @@ class ARModel(pl.LightningModule):
         """
         return self.all_gather(tensor_to_gather).flatten(0, 1)
 
-    def validation_step(self, batch):
+    # newer lightning versions requires batch_idx argument, even if unused
+    # pylint: disable-next=unused-argument
+    def validation_step(self, batch, batch_idx):
         """
         Run validation on single batch
         """
@@ -262,15 +264,15 @@ class ARModel(pl.LightningModule):
             val_log_dict, on_step=False, on_epoch=True, sync_dist=True
         )
 
-        # Store RMSEs
-        entry_rmses = metrics.rmse(
+        # Store MSEs
+        entry_mses = metrics.mse(
             prediction,
             target,
             pred_std,
             mask=self.interior_mask_bool,
             sum_vars=False,
         )  # (B, pred_steps, d_f)
-        self.val_metrics["rmse"].append(entry_rmses)
+        self.val_metrics["mse"].append(entry_mses)
 
     def on_validation_epoch_end(self):
         """
@@ -283,7 +285,8 @@ class ARModel(pl.LightningModule):
         for metric_list in self.val_metrics.values():
             metric_list.clear()
 
-    def test_step(self, batch):
+    # pylint: disable-next=unused-argument
+    def test_step(self, batch, batch_idx):
         """
         Run test on single batch
         """
@@ -314,7 +317,7 @@ class ARModel(pl.LightningModule):
         # Note: explicitly list metrics here, as test_metrics can contain
         # additional ones, computed differently, but that should be aggregated
         # on_test_epoch_end
-        for metric_name in ("rmse", "mae"):
+        for metric_name in ("mse", "mae"):
             metric_func = metrics.get_metric(metric_name)
             batch_metric_vals = metric_func(
                 prediction,
@@ -508,10 +511,16 @@ class ARModel(pl.LightningModule):
             )  # (N_eval, pred_steps, d_f)
 
             if self.trainer.is_global_zero:
+                metric_tensor_averaged = torch.mean(metric_tensor, dim=0)
+                # (pred_steps, d_f)
+
+                # Take square root after all averaging to change MSE to RMSE
+                if "mse" in metric_name:
+                    metric_tensor_averaged = torch.sqrt(metric_tensor_averaged)
+                    metric_name = metric_name.replace("mse", "rmse")
+
                 # Note: we here assume rescaling for all metrics is linear
-                metric_rescaled = (
-                    torch.mean(metric_tensor, dim=0) * self.data_std
-                )
+                metric_rescaled = metric_tensor_averaged * self.data_std
                 # (pred_steps, d_f)
                 log_dict.update(
                     self.create_metric_log_dict(
