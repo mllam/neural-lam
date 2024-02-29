@@ -108,42 +108,6 @@ def mse(pred, target, pred_std, mask=None, average_grid=True, sum_vars=True):
     )
 
 
-def rmse(pred, target, pred_std, mask=None, average_grid=True, sum_vars=True):
-    """
-    Root Mean Squared Error
-    Note: here take sqrt only after spatial averaging, averaging the RMSE
-    of forecasts.
-    This is consistent with Weatherbench and others.
-    Because of this, averaging over grid must be set to true.
-
-    (...,) is any number of batch dimensions, potentially different
-        but broadcastable
-    pred: (..., N, d_state), prediction
-    target: (..., N, d_state), target
-    pred_std: (..., N, d_state) or (d_state,), predicted std.-dev.
-    mask: (N,), boolean mask describing which grid nodes to use in metric
-    average_grid: boolean, if grid dimension -2 should be reduced (mean over N)
-    sum_vars: boolean, if variable dimension -1 should be reduced (sum
-        over d_state)
-
-    Returns:
-    metric_val: One of (...,), (..., d_state), depending on reduction arguments
-    """
-    assert average_grid, "Can not compute RMSE without averaging grid"
-
-    # Spatially averaged mse, masking is also performed here
-    averaged_mse = mse(
-        pred, target, pred_std, mask, average_grid=True, sum_vars=False
-    )  # (..., d_state)
-    entry_rmse = torch.sqrt(averaged_mse)  # (..., d_state)
-
-    # Optionally sum over variables here manually
-    if sum_vars:
-        return torch.sum(entry_rmse, dim=-1)  # (...,)
-
-    return entry_rmse  # (..., d_state)
-
-
 def wmae(pred, target, pred_std, mask=None, average_grid=True, sum_vars=True):
     """
     Weighted Mean Absolute Error
@@ -266,7 +230,6 @@ def crps_gauss(
 DEFINED_METRICS = {
     "mse": mse,
     "mae": mae,
-    "rmse": rmse,
     "wmse": wmse,
     "wmae": wmae,
     "nll": nll,
