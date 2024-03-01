@@ -11,28 +11,36 @@ from neural_lam.rotate_grid import unrotate_latlon
 @matplotlib.rc_context(utils.fractional_plot_bundle(1))
 def plot_error_map(errors, global_mean, title=None, step_length=1):
     """
-    Plot a heatmap of errors of different variables at different predictions horizons
+    Plot a heatmap of errors of different variables at different
+    predictions horizons
     errors: (pred_steps, d_f)
     """
     errors_np = errors.T.cpu().numpy()  # (d_f, pred_steps)
     d_f, pred_steps = errors_np.shape
 
-    rel_errors = errors_np / np.abs(np.expand_dims(global_mean.cpu(), axis=1))
+    errors_norm = errors_np / np.abs(np.expand_dims(global_mean.cpu(), axis=1))
     height = int(np.sqrt(len(constants.vertical_levels)
                          * len(constants.param_names_short)) * 2)
     fig, ax = plt.subplots(figsize=(15, height))
 
-    ax.imshow(rel_errors, cmap="OrRd", vmin=0, vmax=1., interpolation="none",
-              aspect="auto", alpha=0.8)
+    ax.imshow(
+        errors_norm,
+        cmap="OrRd",
+        vmin=0,
+        vmax=1.0,
+        interpolation="none",
+        aspect="auto",
+        alpha=0.8,
+    )
 
     # ax and labels
     for (j, i), error in np.ndenumerate(errors_np):
         # Numbers > 9999 will be too large to fit
         formatted_error = f"{error:.3f}" if error < 9999 else f"{error:.2E}"
-        ax.text(i, j, formatted_error, ha='center', va='center', usetex=False)
+        ax.text(i, j, formatted_error, ha="center", va="center", usetex=False)
 
     # Ticks and labels
-    label_size = 12
+    label_size = 15
     ax.set_xticks(np.arange(pred_steps))
     pred_hor_i = np.arange(pred_steps) + 1  # Prediction horiz. in index
     pred_hor_h = step_length * pred_hor_i  # Prediction horiz. in hours
@@ -41,9 +49,16 @@ def plot_error_map(errors, global_mean, title=None, step_length=1):
 
     ax.set_yticks(np.arange(d_f))
     y_ticklabels = [
-        f"{name if name != 'RELHUM' else 'RH'} ({unit}) {f'{level:02}' if constants.is_3d[name] else ''}"
-        for name, unit in zip(constants.param_names_short, constants.param_units)
-        for level in (constants.vertical_levels if constants.is_3d[name] else [0])]
+        f"{name} ({unit})"
+        for name, unit in zip(
+            constants.PARAM_NAMES_SHORT, constants.PARAM_UNITS
+        )
+    ]
+    ax.set_yticklabels(y_ticklabels, rotation=30, size=label_size)
+    y_ticklabels = [
+        f"{name if name != 'RELHUM' else 'RH'} ({unit}) {f'{level:02}' if constants.IS_3D[name] else ''}"
+        for name, unit in zip(constants.PARAM_NAMES_SHORT, constants.PARAM_UNITS)
+        for level in (constants.VERTICAL_LEVELS if constants.IS_3D[name] else [0])]
     y_ticklabels = sorted(y_ticklabels)
     ax.set_yticklabels(y_ticklabels, rotation=30, size=label_size)
 
@@ -67,11 +82,11 @@ def plot_prediction(pred, target, obs_mask, title=None, vrange=None):
         vmin, vmax = vrange[0].cpu().item(), vrange[1].cpu().item()
 
     # get test data
-    data_latlon = xr.open_zarr(constants.example_file).isel(time=0)
+    data_latlon = xr.open_zarr(constants.EXAMPLE_FILE).isel(time=0)
     lon, lat = unrotate_latlon(data_latlon)
 
-    fig, axes = plt.subplots(2, 1, figsize=constants.fig_size,
-                             subplot_kw={"projection": constants.selected_proj})
+    fig, axes = plt.subplots(2, 1, figsize=constants.FIG_SIZE,
+                             subplot_kw={"projection": constants.SELECTED_PROJ})
 
     # Plot pred and target
     for ax, data in zip(axes, (target, pred)):
@@ -80,7 +95,7 @@ def plot_prediction(pred, target, obs_mask, title=None, vrange=None):
             lon,
             lat,
             data_grid,
-            transform=constants.selected_proj,
+            transform=constants.SELECTED_PROJ,
             cmap="plasma",
             levels=np.linspace(
                 vmin,
@@ -120,11 +135,11 @@ def plot_spatial_error(error, obs_mask, title=None, vrange=None):
         vmin, vmax = vrange[0].cpu().item(), vrange[1].cpu().item()
 
     # get test data
-    data_latlon = xr.open_zarr(constants.example_file).isel(time=0)
+    data_latlon = xr.open_zarr(constants.EXAMPLE_FILE).isel(time=0)
     lon, lat = unrotate_latlon(data_latlon)
 
-    fig, ax = plt.subplots(figsize=constants.fig_size,
-                           subplot_kw={"projection": constants.selected_proj})
+    fig, ax = plt.subplots(figsize=constants.FIG_SIZE,
+                           subplot_kw={"projection": constants.SELECTED_PROJ})
 
     error_grid = error.reshape(*constants.grid_shape[::-1]).cpu().numpy()
 
@@ -132,7 +147,7 @@ def plot_spatial_error(error, obs_mask, title=None, vrange=None):
         lon,
         lat,
         error_grid,
-        transform=constants.selected_proj,
+        transform=constants.SELECTED_PROJ,
         cmap="OrRd",
         levels=np.linspace(
             vmin,

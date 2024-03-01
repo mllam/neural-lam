@@ -21,12 +21,22 @@ class WeatherDataset(torch.utils.data.Dataset):
     d_forcing = 0 #TODO: extract incoming radiation from KENDA
     """
 
-    def __init__(self, dataset_name, split="train",
-                 standardize=True, subset=False, batch_size=4):
+    def __init__(
+        self,
+        dataset_name,
+        pred_length=19,
+        split="train",
+        subsample_step=3,
+        standardize=True,
+        subset=False,
+        control_only=False,
+    ):
         super().__init__()
 
         assert split in ("train", "val", "test"), "Unknown dataset split"
-        sample_dir_path = os.path.join("data", dataset_name, "samples", split)
+        self.sample_dir_path = os.path.join(
+            "data", dataset_name, "samples", split
+        )
 
         self.batch_size = batch_size
         self.batch_index = 0
@@ -106,7 +116,12 @@ class WeatherDataset(torch.utils.data.Dataset):
         self.standardize = standardize
         if standardize:
             ds_stats = utils.load_dataset_stats(dataset_name, "cpu")
-            self.data_mean, self.data_std = ds_stats["data_mean"], ds_stats["data_std"]
+            self.data_mean, self.data_std, self.flux_mean, self.flux_std = (
+                ds_stats["data_mean"],
+                ds_stats["data_std"],
+                ds_stats["flux_mean"],
+                ds_stats["flux_std"],
+            )
 
         self.random_subsample = split == "train"
         self.split = split
@@ -138,6 +153,7 @@ class WeatherDataset(torch.utils.data.Dataset):
         sample = sample.flatten(1, 2)  # (N_t, N_grid, d_features)
 
         if self.standardize:
+            # Standardize sample
             sample = (sample - self.data_mean) / self.data_std
 
         # Split up sample in init. states and target states

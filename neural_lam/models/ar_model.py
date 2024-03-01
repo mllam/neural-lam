@@ -10,7 +10,9 @@ import torch
 from torch import nn
 
 import wandb
-from neural_lam import constants, utils, vis
+
+# First-party
+from neural_lam import constants, metrics, utils, vis
 
 
 class ARModel(pl.LightningModule):
@@ -18,6 +20,9 @@ class ARModel(pl.LightningModule):
     Generic auto-regressive weather model.
     Abstract class that can be extended.
     """
+
+    # pylint: disable=arguments-differ
+    # Disable to override args/kwargs from superclass
 
     def __init__(self, args):
         super().__init__()
@@ -59,14 +64,20 @@ class ARModel(pl.LightningModule):
         self.register_buffer("state_weight", state_weight, persistent=False)
 
         # Pre-compute interior mask for use in loss function
-        self.interior_mask = 1. - self.border_mask  # (N_grid, 1), 1 for non-border
-        # Number of grid nodes to predict
-        self.N_interior = torch.sum(self.interior_mask)
+        self.register_buffer(
+            "interior_mask", 1.0 - self.border_mask, persistent=False
+        )  # (num_grid_nodes, 1), 1 for non-border
 
         self.step_length = args.step_length  # Number of hours per pred. step
-        self.val_errs = []
-        self.test_maes = []
-        self.test_mses = []
+        self.val_metrics = {
+            "rmse": [],
+        }
+        self.test_metrics = {
+            "rmse": [],
+            "mae": [],
+        }
+        if self.output_std:
+            self.test_metrics["output_std"] = []  # Treat as metric
 
         # For making restoring of optimizer state optional
         self.resume_opt_sched = args.resume_opt_sched
@@ -103,10 +114,29 @@ class ARModel(pl.LightningModule):
         self.metrics_initialized = True  # Make sure this is done only once
 
     def configure_optimizers(self):
+        opt = torch.optim.AdamW(
+            self.parameters(), lr=self.lr, betas=(0.9, 0.95)
+        )
+        if self.opt_state:
+            opt.load_state_dict(self.opt_state)
         opt = torch.optim.AdamW(self.parameters(), lr=self.lr, betas=(0.9, 0.95))
         scheduler = torch.optim.lr_scheduler.StepLR(opt, step_size=30, gamma=0.1)
 
         return [opt], [scheduler]
+
+    @property
+    def interior_mask_bool(self):
+        """
+        Get the interior mask as a boolean (N,) mask.
+        """
+        return self.interior_mask[:, 0].to(torch.bool)
+
+    @property
+    def interior_mask_bool(self):
+        """
+        Get the interior mask as a boolean (N,) mask.
+        """
+        return self.interior_mask[:, 0].to(torch.bool)
 
     @staticmethod
     def expand_to_batch(x, batch_size):
@@ -115,9 +145,6 @@ class ARModel(pl.LightningModule):
         """
         return x.unsqueeze(0).expand(batch_size, -1, -1)
 
-    def setup(self, stage=None):
-        self.loss = self.loss.to(self.device)
-        self.interior_mask = self.interior_mask.to(self.device)
 
     def precompute_variable_indices(self):
         variable_indices = {}
@@ -155,222 +182,251 @@ class ARModel(pl.LightningModule):
     def predict_step(self, prev_state, prev_prev_state):
         """
         Step state one step ahead using prediction model, X_{t-1}, X_t -> X_t+1
-        prev_state: (B, N_grid, feature_dim), X_t
-        prev_prev_state: (B, N_grid, feature_dim), X_{t-1}
-        batch_static_features: (B, N_grid, batch_static_feature_dim)
-        forcing: (B, N_grid, forcing_dim)
+        prev_state: (B, num_grid_nodes, feature_dim), X_t
+        prev_prev_state: (B, num_grid_nodes, feature_dim), X_{t-1}
+        batch_static_features: (B, num_grid_nodes, batch_static_feature_dim)
+        forcing: (B, num_grid_nodes, forcing_dim)
         """
 
         raise NotImplementedError("No prediction step implemented")
 
-    def unroll_prediction(self, init_states, true_states):
+    def unroll_prediction(
+        self, init_states, batch_static_features, forcing_features, true_states
+    ):
         """
         Roll out prediction taking multiple autoregressive steps with model
-        init_states: (B, 2, N_grid, d_f)
-        batch_static_features: (B, N_grid, d_static_f)
-        forcing_features: (B, pred_steps, N_grid, d_static_f)
-        true_states: (B, pred_steps, N_grid, d_f)
+        init_states: (B, 2, num_grid_nodes, d_f)
+        batch_static_features: (B, num_grid_nodes, d_static_f)
+        forcing_features: (B, pred_steps, num_grid_nodes, d_static_f)
+        true_states: (B, pred_steps, num_grid_nodes, d_f)
         """
-
         prev_prev_state = init_states[:, 0]
         prev_state = init_states[:, 1]
         prediction_list = []
-        pred_steps = true_states.shape[1]
+        pred_std_list = []
+        pred_steps = forcing_features.shape[1]
 
         for i in range(pred_steps):
             border_state = true_states[:, i]
-            predicted_state = self.predict_step(
-                prev_state,
-                prev_prev_state)  # (B, N_grid, d_f)
+
+            pred_state, pred_std = self.predict_step(
+                prev_state, prev_prev_state, batch_static_features, forcing
+            )
+            # state: (B, num_grid_nodes, d_f)
+            # pred_std: (B, num_grid_nodes, d_f) or None
 
             # Overwrite border with true state
-            new_state = self.border_mask * border_state +\
-                self.interior_mask * predicted_state
-            prediction_list.append(new_state)
+            new_state = (
+                self.border_mask * border_state
+                + self.interior_mask * pred_state
+            )
 
-            # Upate conditioning states
+            prediction_list.append(new_state)
+            if self.output_std:
+                pred_std_list.append(pred_std)
+
+            # Update conditioning states
             prev_prev_state = prev_state
             prev_state = new_state
 
-        return torch.stack(prediction_list, dim=1)  # (B, pred_steps, N_grid, d_f)
+        prediction = torch.stack(
+            prediction_list, dim=1
+        )  # (B, pred_steps, num_grid_nodes, d_f)
+        if self.output_std:
+            pred_std = torch.stack(
+                pred_std_list, dim=1
+            )  # (B, pred_steps, num_grid_nodes, d_f)
+        else:
+            pred_std = self.per_var_std  # (d_f,)
 
-    def weighted_loss(self, prediction, target, reduce_spatial_dim=True):
-        """
-        Computed weighted loss function.
-        prediction/target: (B, pred_steps, N_grid, d_f)
-        returns (B, pred_steps)
-        """
-        torch.autograd.set_detect_anomaly(True)
-
-        entry_loss = self.loss(prediction, target)  # (B, pred_steps, N_grid, d_f)
-
-        # (B, pred_steps, N_grid), weighted sum over features
-        grid_node_loss = torch.mean(entry_loss * self.state_weight, dim=-1)
-
-        if not reduce_spatial_dim:
-            return grid_node_loss  # (B, pred_steps, N_grid)
-
-        # Take (unweighted) mean over only non-border (interior) grid nodes
-        time_step_loss = torch.sum(grid_node_loss * self.interior_mask[:, 0],
-                                   dim=-1) / self.N_interior  # (B, pred_steps)
-
-        return time_step_loss  # (B, pred_steps)
+        return prediction, pred_std
 
     def common_step(self, batch):
         """
         Predict on single batch
         batch = time_series, batch_static_features, forcing_features
 
-        init_states: (B, 2, N_grid, d_features)
-        target_states: (B, pred_steps, N_grid, d_features)
-        batch_static_features: (B, N_grid, d_static_f), for example open water
-        forcing_features: (B, pred_steps, N_grid, d_forcing), where index 0
-            corresponds to index 1 of init_states
+        init_states: (B, 2, num_grid_nodes, d_features)
+        target_states: (B, pred_steps, num_grid_nodes, d_features)
+        batch_static_features: (B, num_grid_nodes, d_static_f),
+            for example open water
+        forcing_features: (B, pred_steps, num_grid_nodes, d_forcing),
+            where index 0 corresponds to index 1 of init_states
         """
+        (
+            init_states,
+            target_states,
+            batch_static_features,
+            forcing_features,
+        ) = batch
 
-        init_states, target_states, = batch
+        prediction, pred_std = self.unroll_prediction(
+            init_states, batch_static_features, forcing_features, target_states
+        )  # (B, pred_steps, num_grid_nodes, d_f)
+        # prediction: (B, pred_steps, num_grid_nodes, d_f)
+        # pred_std: (B, pred_steps, num_grid_nodes, d_f) or (d_f,)
 
-        prediction = self.unroll_prediction(
-            init_states, target_states)  # (B, pred_steps, N_grid, d_f)
-
-        return prediction, target_states
+        return prediction, target_states, pred_std
 
     def training_step(self, batch):
         """
         Train on single batch
         """
+        prediction, target, pred_std = self.common_step(batch)
 
-        prediction, target = self.common_step(batch)
         # Compute loss
-        batch_loss = torch.mean(self.weighted_loss(
-            prediction, target))  # mean over unrolled times and batch
+        batch_loss = torch.mean(
+            self.loss(
+                prediction, target, pred_std, mask=self.interior_mask_bool
+            )
+        )  # mean over unrolled times and batch
+
         log_dict = {"train_loss": batch_loss}
         self.log_dict(
-            log_dict,
-            prog_bar=True,
-            on_step=True,
-            on_epoch=True,
-            sync_dist=True)
+            log_dict, prog_bar=True, on_step=True, on_epoch=True, sync_dist=True
+        )
         return batch_loss
-
-    def per_var_error(self, prediction, target, error="mae"):
-        """
-        Computed MAE/MSE per variable and time step
-        prediction/target: (B, pred_steps, N_grid, d_f)
-        returns (B, pred_steps)
-        """
-
-        if error == "mse":
-            loss_func = torch.nn.functional.mse_loss
-        else:
-            loss_func = torch.nn.functional.l1_loss
-        entry_loss = loss_func(prediction, target,
-                               reduction="none")  # (B, pred_steps, N_grid, d_f)
-
-        mean_error = torch.sum(entry_loss * self.interior_mask,
-                               dim=2) / self.N_interior  # (B, pred_steps, d_f)
-        return mean_error
 
     def all_gather_cat(self, tensor_to_gather):
         """
-        Gather tensors across all ranks, and concatenate across dim. 0 (instead of
-        stacking in new dim. 0)
+        Gather tensors across all ranks, and concatenate across dim. 0
+        (instead of stacking in new dim. 0)
 
         tensor_to_gather: (d1, d2, ...), distributed over K ranks
 
         returns: (K*d1, d2, ...)
         """
-        if torch.distributed.is_available() and torch.distributed.is_initialized():
-            if torch.distributed.get_world_size() > 1:
-                tensor_to_gather = self.all_gather(tensor_to_gather).flatten(0, 1)
-        return tensor_to_gather
+        return self.all_gather(tensor_to_gather).flatten(0, 1)
 
-    def validation_step(self, batch, batch_idx):
+    def validation_step(self, batch):
         """
         Run validation on single batch
         """
-        prediction, target = self.common_step(batch)
+        prediction, target, pred_std = self.common_step(batch)
 
-        time_step_loss = torch.mean(self.weighted_loss(prediction,
-                                                       target), dim=0)  # (time_steps-1)
+        time_step_loss = torch.mean(
+            self.loss(
+                prediction, target, pred_std, mask=self.interior_mask_bool
+            ),
+            dim=0,
+        )  # (time_steps-1)
         mean_loss = torch.mean(time_step_loss)
 
         # Log loss per time step forward and mean
-        val_log_dict = {f"val_loss_unroll{step:02}": time_step_loss[step - 1]
-                        for step in self.val_step_log_errors}
+        val_log_dict = {
+            f"val_loss_unroll{step}": time_step_loss[step - 1]
+            for step in constants.VAL_STEP_LOG_ERRORS
+        }
         val_log_dict["val_mean_loss"] = mean_loss
+        self.log_dict(
+            val_log_dict, on_step=False, on_epoch=True, sync_dist=True
+        )
 
-        errs = self.per_var_error(
-            prediction, target, error=self.loss_name)  # (B, pred_steps, d_f)
-        self.val_errs.append(errs)
-
-        self.log_dict(val_log_dict, on_step=False, on_epoch=True, sync_dist=True)
+        # Store RMSEs
+        entry_rmses = metrics.rmse(
+            prediction,
+            target,
+            pred_std,
+            mask=self.interior_mask_bool,
+            sum_vars=False,
+        )  # (B, pred_steps, d_f)
+        self.val_metrics["rmse"].append(entry_rmses)
 
     def on_validation_epoch_end(self):
         """
         Compute val metrics at the end of val epoch
         """
-        val_err_tensor = self.all_gather_cat(torch.cat(
-            self.val_errs, dim=0))  # (N_val, pred_steps, d_f)
+        # Create error maps for all test metrics
+        self.aggregate_and_plot_metrics(self.val_metrics, prefix="val")
 
-        if self.trainer.is_global_zero:
-            val_err_total = torch.mean(val_err_tensor, dim=0)  # (pred_steps, d_f)
-            val_err_rescaled = val_err_total * self.data_std  # (pred_steps, d_f)
+        # Clear lists with validation metrics values
+        for metric_list in self.val_metrics.values():
+            metric_list.clear()
 
-            if not self.trainer.sanity_checking:
-                # Don't log this during sanity checking
-                val_err_fig = vis.plot_error_map(
-                    val_err_rescaled,
-                    self.data_mean,
-                    title="Validation " +
-                    self.loss_name.upper() +
-                    " error",
-                    step_length=self.step_length)
-                wandb.log({"val_err": wandb.Image(val_err_fig)})
-                plt.close("all")
-
-        self.val_errs.clear()  # Free memory
-
-    def test_step(self, batch, batch_idx):
+    def test_step(self, batch):
         """
         Run test on single batch
         """
+        prediction, target, pred_std = self.common_step(batch)
+        # prediction: (B, pred_steps, num_grid_nodes, d_f)
+        # pred_std: (B, pred_steps, num_grid_nodes, d_f) or (d_f,)
 
-        prediction, target = self.common_step(batch)
-
-        time_step_loss = torch.mean(self.weighted_loss(prediction,
-                                                       target), dim=0)  # (time_steps-1)
+        time_step_loss = torch.mean(
+            self.loss(
+                prediction, target, pred_std, mask=self.interior_mask_bool
+            ),
+            dim=0,
+        )  # (time_steps-1,)
         mean_loss = torch.mean(time_step_loss)
 
         # Log loss per time step forward and mean
-        test_log_dict = {f"test_loss_unroll{step:02}": time_step_loss[step - 1]
-                         for step in self.val_step_log_errors}
+        test_log_dict = {
+            f"test_loss_unroll{step}": time_step_loss[step - 1]
+            for step in constants.VAL_STEP_LOG_ERRORS
+        }
         test_log_dict["test_mean_loss"] = mean_loss
 
-        self.log_dict(test_log_dict, on_step=False, on_epoch=True, sync_dist=True)
+        self.log_dict(
+            test_log_dict, on_step=False, on_epoch=True, sync_dist=True
+        )
 
-        # For error maps
-        maes = self.per_var_error(
-            prediction, target, error="mae")  # (B, pred_steps, d_f)
-        self.test_maes.append(maes)
-        mses = self.per_var_error(
-            prediction, target, error="mse")  # (B, pred_steps, d_f)
-        self.test_mses.append(mses)
+        # Compute all evaluation metrics for error maps
+        # Note: explicitly list metrics here, as test_metrics can contain
+        # additional ones, computed differently, but that should be aggregated
+        # on_test_epoch_end
+        for metric_name in ("rmse", "mae"):
+            metric_func = metrics.get_metric(metric_name)
+            batch_metric_vals = metric_func(
+                prediction,
+                target,
+                pred_std,
+                mask=self.interior_mask_bool,
+                sum_vars=False,
+            )  # (B, pred_steps, d_f)
+            self.test_metrics[metric_name].append(batch_metric_vals)
+
+        if self.output_std:
+            # Store output std. per variable, spatially averaged
+            mean_pred_std = torch.mean(
+                pred_std[..., self.interior_mask_bool, :], dim=-2
+            )  # (B, pred_steps, d_f)
+            self.test_metrics["output_std"].append(mean_pred_std)
 
         # Save per-sample spatial loss for specific times
-        spatial_loss = self.weighted_loss(
-            prediction, target, reduce_spatial_dim=False)  # (B, pred_steps, N_grid)
-        log_spatial_losses = spatial_loss[:, self.val_step_log_errors - 1]
-        self.spatial_loss_maps.append(log_spatial_losses)  # (B, N_log, N_grid)
+        spatial_loss = self.loss(
+            prediction, target, pred_std, average_grid=False
+        )  # (B, pred_steps, num_grid_nodes)
+        log_spatial_losses = spatial_loss[:, constants.VAL_STEP_LOG_ERRORS - 1]
+        self.spatial_loss_maps.append(log_spatial_losses)
+        # (B, N_log, num_grid_nodes)
 
-        if self.global_rank == 0 and self.trainer.datamodule.test_dataset.batch_index == batch_idx:
-            index_within_batch = self.trainer.datamodule.test_dataset.index_within_batch
-            if not torch.is_tensor(index_within_batch):
-                index_within_batch = torch.tensor(
-                    index_within_batch, dtype=torch.int64, device=prediction.device)
+        # Plot example predictions (on rank 0 only)
+        if (
+            self.trainer.is_global_zero
+            and self.plotted_examples < self.n_example_pred
+        ):
+            # Need to plot more example predictions
+            n_additional_examples = min(
+                prediction.shape[0], self.n_example_pred - self.plotted_examples
+            )
 
-            prediction = prediction[index_within_batch]
-            target = target[index_within_batch]
+            self.plot_examples(
+                batch, n_additional_examples, prediction=prediction
+            )
+
+    def plot_examples(self, batch, n_examples, prediction=None):
+        """
+        Plot the first n_examples forecasts from batch
+
+        batch: batch with data to plot corresponding forecasts for
+        n_examples: number of forecasts to plot
+        prediction: (B, pred_steps, num_grid_nodes, d_f), existing prediction.
+            Generate if None.
+        """
+        if prediction is None:
+            prediction, target = self.common_step(batch)
+
+        target = batch[1]
 
             # Rescale to original data scale
             prediction_rescaled = prediction * self.data_std + self.data_mean
@@ -460,87 +516,131 @@ class ARModel(pl.LightningModule):
                         wandb.run.dir,
                         'example_target.pt'))
 
+
+    def create_metric_log_dict(self, metric_tensor, prefix, metric_name):
+        """
+        Put together a dict with everything to log for one metric.
+        Also saves plots as pdf and csv if using test prefix.
+
+        metric_tensor: (pred_steps, d_f), metric values per time and variable
+        prefix: string, prefix to use for logging
+        metric_name: string, name of the metric
+
+        Return:
+        log_dict: dict with everything to log for given metric
+        """
+        log_dict = {}
+        metric_fig = vis.plot_error_map(
+            metric_tensor, step_length=self.step_length
+        )
+        full_log_name = f"{prefix}_{metric_name}"
+        log_dict[full_log_name] = wandb.Image(metric_fig)
+
+        if prefix == "test":
+            # Save pdf
+            metric_fig.savefig(
+                os.path.join(wandb.run.dir, f"{full_log_name}.pdf")
+            )
+            # Save errors also as csv
+            np.savetxt(
+                os.path.join(wandb.run.dir, f"{full_log_name}.csv"),
+                metric_tensor.cpu().numpy(),
+                delimiter=",",
+            )
+
+        # Check if metrics are watched, log exact values for specific vars
+        if full_log_name in constants.METRICS_WATCH:
+            for var_i, timesteps in constants.VAR_LEADS_METRICS_WATCH.items():
+                var = constants.PARAM_NAMES_SHORT[var_i]
+                log_dict.update(
+                    {
+                        f"{full_log_name}_{var}_step_{step}": metric_tensor[
+                            step - 1, var_i
+                        ]  # 1-indexed in constants
+                        for step in timesteps
+                    }
+                )
+
+        return log_dict
+
+    def aggregate_and_plot_metrics(self, metrics_dict, prefix):
+        """
+        Aggregate and create error map plots for all metrics in metrics_dict
+
+        metrics_dict: dictionary with metric_names and list of tensors
+            with step-evals.
+        prefix: string, prefix to use for logging
+        """
+        log_dict = {}
+        for metric_name, metric_val_list in metrics_dict.items():
+            metric_tensor = self.all_gather_cat(
+                torch.cat(metric_val_list, dim=0)
+            )  # (N_eval, pred_steps, d_f)
+
+            if self.trainer.is_global_zero:
+                # Note: we here assume rescaling for all metrics is linear
+                metric_rescaled = (
+                    torch.mean(metric_tensor, dim=0) * self.data_std
+                )
+                # (pred_steps, d_f)
+                log_dict.update(
+                    self.create_metric_log_dict(
+                        metric_rescaled, prefix, metric_name
+                    )
+                )
+
+        if self.trainer.is_global_zero and not self.trainer.sanity_checking:
+            wandb.log(log_dict)  # Log all
+            plt.close("all")  # Close all figs
+
     def on_test_epoch_end(self):
         """
         Compute test metrics and make plots at the end of test epoch.
         Will gather stored tensors and perform plotting and logging on rank 0.
         """
-
-        # Create error maps for RMSE and MAE
-
-        test_mae_tensor = self.all_gather_cat(
-            torch.cat(self.test_maes, dim=0))  # (N_test, pred_steps, d_f)
-        test_mse_tensor = self.all_gather_cat(
-            torch.cat(self.test_mses, dim=0))  # (N_test, pred_steps, d_f)
-
-        if self.trainer.is_global_zero:
-            test_mae_rescaled = torch.mean(test_mae_tensor,
-                                           dim=0) * self.data_std  # (pred_steps, d_f)
-
-            test_rmse_rescaled = torch.sqrt(
-                torch.mean(
-                    test_mse_tensor,
-                    dim=0)) * self.data_std  # (pred_steps, d_f)
-
-            # Create plots only for these instances
-            mae_fig = vis.plot_error_map(
-                test_mae_rescaled[self.val_step_log_errors - 1],
-                self.data_mean,
-                step_length=self.step_length)
-            rmse_fig = vis.plot_error_map(
-                test_rmse_rescaled[self.val_step_log_errors - 1],
-                self.data_mean,
-                step_length=self.step_length)
-
-            wandb.log({  # Log png:s
-                "test_mae": wandb.Image(mae_fig),
-                "test_rmse": wandb.Image(rmse_fig),
-            })
-
-            # Save pdf:s
-            mae_fig.savefig(os.path.join(wandb.run.dir, "test_mae.pdf"))
-            rmse_fig.savefig(os.path.join(wandb.run.dir, "test_rmse.pdf"))
-            # Save errors also as csv:s
-
-            np.savetxt(os.path.join(wandb.run.dir, "test_mae.csv"),
-                       test_mae_rescaled.cpu().numpy(), delimiter=",")
-            np.savetxt(os.path.join(wandb.run.dir, "test_rmse.csv"),
-                       test_rmse_rescaled.cpu().numpy(), delimiter=",")
-
-        self.test_maes.clear()  # Free memory
-        self.test_mses.clear()
+        # Create error maps for all test metrics
+        self.aggregate_and_plot_metrics(self.test_metrics, prefix="test")
 
         # Plot spatial loss maps
         spatial_loss_tensor = self.all_gather_cat(
-            torch.cat(
-                self.spatial_loss_maps,
-                dim=0))  # (N_test, N_log, N_grid)
-
+            torch.cat(self.spatial_loss_maps, dim=0)
+        )  # (N_test, N_log, num_grid_nodes)
         if self.trainer.is_global_zero:
             mean_spatial_loss = torch.mean(
-                spatial_loss_tensor, dim=0)  # (N_log, N_grid)
+                spatial_loss_tensor, dim=0
+            )  # (N_log, num_grid_nodes)
 
-            # Create plots and PDFs only for these instances
-            loss_map_figs = [vis.plot_spatial_error(
-                mean_spatial_loss[i], self.interior_mask[:, 0],
-                title=f"Test loss, t={val_step}, ({self.step_length*val_step} h)")
-                for i, val_step in enumerate(self.val_step_log_errors)]
+            loss_map_figs = [
+                vis.plot_spatial_error(
+                    loss_map,
+                    self.interior_mask[:, 0],
+                    title=f"Test loss, t={t_i} ({self.step_length*t_i} h)",
+                )
+                for t_i, loss_map in zip(
+                    constants.VAL_STEP_LOG_ERRORS, mean_spatial_loss
+                )
+            ]
 
-            # Log all to same wandb key, sequentially
+            # log all to same wandb key, sequentially
             for fig in loss_map_figs:
                 wandb.log({"test_loss": wandb.Image(fig)})
 
-            # Also make without title and save as PDF
+            # also make without title and save as pdf
             pdf_loss_map_figs = [
                 vis.plot_spatial_error(loss_map, self.interior_mask[:, 0])
-                for loss_map in mean_spatial_loss]
+                for loss_map in mean_spatial_loss
+            ]
             pdf_loss_maps_dir = os.path.join(wandb.run.dir, "spatial_loss_maps")
             os.makedirs(pdf_loss_maps_dir, exist_ok=True)
-            for t_i, fig in zip(constants.val_step_log_errors, pdf_loss_map_figs):
+            for t_i, fig in zip(
+                constants.VAL_STEP_LOG_ERRORS, pdf_loss_map_figs
+            ):
                 fig.savefig(os.path.join(pdf_loss_maps_dir, f"loss_t{t_i}.pdf"))
             # save mean spatial loss as .pt file also
-            torch.save(mean_spatial_loss.cpu(), os.path.join(
-                wandb.run.dir, 'mean_spatial_loss.pt'))
+            torch.save(
+                mean_spatial_loss.cpu(),
+                os.path.join(wandb.run.dir, "mean_spatial_loss.pt"),
+            )
 
             dir_path = f"{wandb.run.dir}/media/images"
 
@@ -560,20 +660,24 @@ class ARModel(pl.LightningModule):
                             writer.append_data(image)
         self.spatial_loss_maps.clear()
 
+    def on_load_checkpoint(self, checkpoint):
+        """
+        Perform any changes to state dict before loading checkpoint
+        """
+        loaded_state_dict = checkpoint["state_dict"]
 
-def on_load_checkpoint(self, ckpt):
-    loaded_state_dict = ckpt["state_dict"]
-
-    if "g2m_gnn.grid_mlp.0.weight" in loaded_state_dict:
-        replace_keys = list(filter(lambda key: key.startswith("g2m_gnn.grid_mlp"),
-                                   loaded_state_dict.keys()))
-        for old_key in replace_keys:
-            new_key = old_key.replace("g2m_gnn.grid_mlp", "encoding_grid_mlp")
-            loaded_state_dict[new_key] = loaded_state_dict[old_key]
-            del loaded_state_dict[old_key]
-
-    if not self.resume_opt_sched:
-        # Create new optimizer and scheduler instances instead of setting them to None
-        optimizers, lr_schedulers = self.configure_optimizers()
-        ckpt['optimizer_states'] = [opt.state_dict() for opt in optimizers]
-        ckpt['lr_schedulers'] = [sched.state_dict() for sched in lr_schedulers]
+        # Fix for loading older models after IneractionNet refactoring, where
+        # the grid MLP was moved outside the encoder InteractionNet class
+        if "g2m_gnn.grid_mlp.0.weight" in loaded_state_dict:
+            replace_keys = list(
+                filter(
+                    lambda key: key.startswith("g2m_gnn.grid_mlp"),
+                    loaded_state_dict.keys(),
+                )
+            )
+            for old_key in replace_keys:
+                new_key = old_key.replace(
+                    "g2m_gnn.grid_mlp", "encoding_grid_mlp"
+                )
+                loaded_state_dict[new_key] = loaded_state_dict[old_key]
+                del loaded_state_dict[old_key]

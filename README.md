@@ -11,16 +11,18 @@ The repository contains LAM versions of:
 * GraphCast, by [Lam et al. (2023)](https://arxiv.org/abs/2212.12794).
 * The hierarchical model from [Oskarsson et al. (2023)](https://arxiv.org/abs/2309.17370).
 
-For more information see our preprint: [*Graph-based Neural Weather Prediction for Limited Area Modeling*](https://arxiv.org/abs/2309.17370).
+For more information see our paper: [*Graph-based Neural Weather Prediction for Limited Area Modeling*](https://arxiv.org/abs/2309.17370).
 If you use Neural-LAM in your work, please cite:
 ```
-@article{oskarsson2023graphbased,
-      title={Graph-based Neural Weather Prediction for Limited Area Modeling},
-      author={Joel Oskarsson and Tomas Landelius and Fredrik Lindsten},
-      year={2023},
-      journal={arXiv preprint arXiv:2309.17370}
+@inproceedings{oskarsson2023graphbased,
+    title={Graph-based Neural Weather Prediction for Limited Area Modeling},
+    author={Oskarsson, Joel and Landelius, Tomas and Lindsten, Fredrik},
+    booktitle={NeurIPS 2023 Workshop on Tackling Climate Change with Machine Learning},
+    year={2023}
 }
 ```
+As the code in the repository is continuously evolving, the latest version might feature some small differences to what was used in the paper.
+See the branch [`ccai_paper_2023`](https://github.com/joeloskarsson/neural-lam/tree/ccai_paper_2023) for a revision of the code that reproduces the workshop paper.
 
 We plan to continue updating this repository as we improve existing models and develop new ones.
 Collaborations around this implementation are very welcome.
@@ -103,7 +105,7 @@ Note that only the cuda version is pinned to 11.8, otherwise all the latest libr
 \
 Follow the steps below to create the neccesary python environment.
 
-1. Install GEOS for your system. For example with `sudo apt-get install libgeos-dev`. This is neccesary for the Cartopy requirement.
+1. Install GEOS for your system. For example with `sudo apt-get install libgeos-dev`. This is necessary for the Cartopy requirement.
 2. Use python 3.9.
 3. Install version 2.0.1 of PyTorch. Follow instructions on the [PyTorch webpage](https://pytorch.org/get-started/previous-versions/) for how to set this up with GPU support on your system.
 4. Install required packages specified in `requirements.txt`.
@@ -233,7 +235,7 @@ python train_model.py --model hi_lam --graph hierarchical ...
 ```
 
 ### Hi-LAM-Parallel
-A version of Hi-LAM where all message passing in the hierarchical mesh (up, down, inter-level) is ran in paralell.
+A version of Hi-LAM where all message passing in the hierarchical mesh (up, down, inter-level) is ran in parallel.
 Not included in the paper as initial experiments showed worse results than Hi-LAM, but could be interesting to try in more settings.
 
 To train Hi-LAM-Parallel use
@@ -342,6 +344,16 @@ In addition, hierarchical mesh graphs (`L > 1`) feature a few additional files w
 ```
 These files have the same list format as the ones above, but each list has length `L-1` (as these edges describe connections between levels).
 Entries 0 in these lists describe edges between the lowest levels 1 and 2.
+
+# Development and Contributing
+Any push or Pull-Request to the main branch will trigger a selection of pre-commit hooks.
+These hooks will run a series of checks on the code, like formatting and linting.
+If any of these checks fail the push or PR will be rejected.
+To test whether your code passes these checks before pushing, run
+``` bash
+pre-commit run --all-files
+```
+from the root directory of the repository.
 
 # Contact
 If you are interested in machine learning models for LAM, have questions about our implementation or ideas for extending it, feel free to get in touch.

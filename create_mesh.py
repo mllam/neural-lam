@@ -1,6 +1,8 @@
+# Standard library
 import os
 from argparse import ArgumentParser
 
+# Third-party
 import matplotlib
 import matplotlib.pyplot as plt
 import networkx
@@ -13,7 +15,7 @@ from torch_geometric.utils.convert import from_networkx
 from neural_lam import constants
 
 def plot_graph(graph, title=None):
-    fig, axis = plt.subplots(dpi=200) # W,H
+    fig, axis = plt.subplots(figsize=(8, 8), dpi=200)  # W,H
     edge_index = graph.edge_index
     pos = graph.pos
 
@@ -23,29 +25,37 @@ def plot_graph(graph, title=None):
 
     if pyg.utils.is_undirected(edge_index):
         # Keep only 1 direction of edge_index
-        edge_index = edge_index[:, edge_index[0] < edge_index[1]] # (2, M/2)
+        edge_index = edge_index[:, edge_index[0] < edge_index[1]]  # (2, M/2)
     # TODO: indicate direction of directed edges
 
     # Move all to cpu and numpy, compute (in)-degrees
-    # Flatten the edge_index to consider both source and target nodes
-    flattened_edge_index = edge_index.flatten()
-    # Calculate degrees by counting occurrences of each node index
-    degrees = np.bincount(flattened_edge_index, minlength=pos.shape[0])
+    degrees = (
+        pyg.utils.degree(edge_index[1], num_nodes=pos.shape[0]).cpu().numpy()
+    )
     edge_index = edge_index.cpu().numpy()
     pos = pos.cpu().numpy()
 
     # Plot edges
-    from_pos = pos[edge_index[0]] # (M/2, 2)
-    to_pos = pos[edge_index[1]] # (M/2, 2)
+    from_pos = pos[edge_index[0]]  # (M/2, 2)
+    to_pos = pos[edge_index[1]]  # (M/2, 2)
     edge_lines = np.stack((from_pos, to_pos), axis=1)
-    axis.add_collection(matplotlib.collections.LineCollection(edge_lines, lw=0.4,
-                                                            colors="black", zorder=1))
+    axis.add_collection(
+        matplotlib.collections.LineCollection(
+            edge_lines, lw=0.4, colors="black", zorder=1
+        )
+    )
 
     # Plot nodes
     node_scatter = axis.scatter(
         pos[:, 0],
         pos[:, 1],
-        c=degrees, s=3, marker="o", zorder=2, cmap="viridis", clim=None)
+        c=degrees,
+        s=3,
+        marker="o",
+        zorder=2,
+        cmap="viridis",
+        clim=None,
+    )
 
     plt.colorbar(node_scatter, aspect=50)
 
@@ -61,7 +71,8 @@ def plot_graph(graph, title=None):
 
 def sort_nodes_internally(nx_graph):
     # For some reason the networkx .nodes() return list can not be sorted,
-    # but this is the ordering used by pyg when converting. This function fixes this
+    # but this is the ordering used by pyg when converting.
+    # This function fixes this.
     H = networkx.DiGraph()
     H.add_nodes_from(sorted(nx_graph.nodes(data=True)))
     H.add_edges_from(nx_graph.edges(data=True))
@@ -69,19 +80,26 @@ def sort_nodes_internally(nx_graph):
 
 
 def save_edges(graph, name, base_path):
-    torch.save(graph.edge_index, os.path.join(base_path, f"{name}_edge_index.pt"))
-    edge_features = torch.cat((graph.len.unsqueeze(1), graph.vdiff),
-                              dim=1).to(torch.float32)  # Save as float32
+    torch.save(
+        graph.edge_index, os.path.join(base_path, f"{name}_edge_index.pt")
+    )
+    edge_features = torch.cat((graph.len.unsqueeze(1), graph.vdiff), dim=1).to(
+        torch.float32
+    )  # Save as float32
     torch.save(edge_features, os.path.join(base_path, f"{name}_features.pt"))
 
 
 def save_edges_list(graphs, name, base_path):
-    torch.save([graph.edge_index for graph in graphs],
-               os.path.join(base_path, f"{name}_edge_index.pt"))
+    torch.save(
+        [graph.edge_index for graph in graphs],
+        os.path.join(base_path, f"{name}_edge_index.pt"),
+    )
     edge_features = [
-        torch.cat(
-            (graph.len.unsqueeze(1), graph.vdiff), dim=1).to(
-            torch.float32) for graph in graphs]  # Save as float32
+        torch.cat((graph.len.unsqueeze(1), graph.vdiff), dim=1).to(
+            torch.float32
+        )
+        for graph in graphs
+    ]  # Save as float32
     torch.save(edge_features, os.path.join(base_path, f"{name}_features.pt"))
 
 
@@ -105,28 +123,27 @@ def mk_2d_graph(xy, nx, ny):
     g = networkx.grid_2d_graph(len(ly), len(lx))
 
     for node in g.nodes:
-        g.nodes[node]['pos'] = np.array([mg[0][node], mg[1][node]])
+        g.nodes[node]["pos"] = np.array([mg[0][node], mg[1][node]])
 
     # add diagonal edges
-    g.add_edges_from([
-        ((x, y), (x + 1, y + 1))
-        for x in range(nx - 1)
-        for y in range(ny - 1)
-    ] + [
-        ((x + 1, y), (x, y + 1))
-        for x in range(nx - 1)
-        for y in range(ny - 1)
-    ])
+    g.add_edges_from(
+        [((x, y), (x + 1, y + 1)) for x in range(nx - 1) for y in range(ny - 1)]
+        + [
+            ((x + 1, y), (x, y + 1))
+            for x in range(nx - 1)
+            for y in range(ny - 1)
+        ]
+    )
 
     # turn into directed graph
     dg = networkx.DiGraph(g)
-    for (u, v) in g.edges():
-        d = np.sqrt(np.sum((g.nodes[u]['pos'] - g.nodes[v]['pos'])**2))
-        dg.edges[u, v]['len'] = d
-        dg.edges[u, v]['vdiff'] = g.nodes[u]['pos'] - g.nodes[v]['pos']
+    for u, v in g.edges():
+        d = np.sqrt(np.sum((g.nodes[u]["pos"] - g.nodes[v]["pos"]) ** 2))
+        dg.edges[u, v]["len"] = d
+        dg.edges[u, v]["vdiff"] = g.nodes[u]["pos"] - g.nodes[v]["pos"]
         dg.add_edge(v, u)
-        dg.edges[v, u]['len'] = d
-        dg.edges[v, u]['vdiff'] = g.nodes[v]['pos'] - g.nodes[u]['pos']
+        dg.edges[v, u]["len"] = d
+        dg.edges[v, u]["vdiff"] = g.nodes[v]["pos"] - g.nodes[u]["pos"]
 
     return dg
 
@@ -139,20 +156,39 @@ def prepend_node_index(graph, new_index):
 
 
 def main():
-    parser = ArgumentParser(description='Graph genreation arguments')
+    parser = ArgumentParser(description="Graph generation arguments")
     parser.add_argument(
-        '--dataset', type=str, default="meps_example",
-        help='Dataset to load grid point coordinates from (default: meps_example)')
-    parser.add_argument('--graph', type=str, default="multiscale",
-                        help='Name to save graph as (default: multiscale)')
+        "--dataset",
+        type=str,
+        default="meps_example",
+        help="Dataset to load grid point coordinates from "
+        "(default: meps_example)",
+    )
     parser.add_argument(
-        '--plot', type=int, default=0,
-        help='If graphs should be plotted during generation (default: 0 (false))')
-    parser.add_argument('--levels', type=int,
-                        help='Limit multi-scale mesh to given number of levels, '
-                        'from bottom up (default: None (no limit))')
-    parser.add_argument('--hierarchical', type=int, default=0,
-                        help='Generate hierarchical mesh graph (default: 0, no)')
+        "--graph",
+        type=str,
+        default="multiscale",
+        help="Name to save graph as (default: multiscale)",
+    )
+    parser.add_argument(
+        "--plot",
+        type=int,
+        default=0,
+        help="If graphs should be plotted during generation "
+        "(default: 0 (false))",
+    )
+    parser.add_argument(
+        "--levels",
+        type=int,
+        help="Limit multi-scale mesh to given number of levels, "
+        "from bottom up (default: None (no limit))",
+    )
+    parser.add_argument(
+        "--hierarchical",
+        type=int,
+        default=0,
+        help="Generate hierarchical mesh graph (default: 0, no)",
+    )
     args = parser.parse_args()
 
     # Load grid positions
@@ -175,6 +211,7 @@ def main():
     nleaf = nx**nlev  # leaves at the bottom = nleaf**2
 
     mesh_levels = nlev - 1
+    mesh_levels = nlev - 1
     if args.levels:
         # Limit the levels in mesh graph
         mesh_levels = min(mesh_levels, args.levels)
@@ -183,6 +220,8 @@ def main():
 
     # multi resolution tree levels
     G = []
+    for lev in range(1, mesh_levels + 1):
+        n = int(nleaf / (nx**lev))
     for lev in range(1, mesh_levels + 1):
         n = int(nleaf / (nx**lev))
         g = mk_2d_graph(xy, n, n)
@@ -195,24 +234,27 @@ def main():
 
     if args.hierarchical:
         # Relabel nodes of each level with level index first
-        G = [prepend_node_index(graph, level_i) for level_i, graph in enumerate(G)]
+        G = [
+            prepend_node_index(graph, level_i)
+            for level_i, graph in enumerate(G)
+        ]
 
         num_nodes_level = np.array([len(g_level.nodes) for g_level in G])
-        # First node index in each level in the hierarcical graph
-        first_index_level = np.concatenate((
-            np.zeros(1, dtype=int),
-            np.cumsum(num_nodes_level[:-1])))
+        # First node index in each level in the hierarchical graph
+        first_index_level = np.concatenate(
+            (np.zeros(1, dtype=int), np.cumsum(num_nodes_level[:-1]))
+        )
 
         # Create inter-level mesh edges
         up_graphs = []
         down_graphs = []
         for from_level, to_level, G_from, G_to, start_index in zip(
-                range(1, mesh_levels),
-                range(0, mesh_levels - 1),
-                G[1:],
-                G[:-1],
-                first_index_level[:mesh_levels - 1]):
-
+            range(1, mesh_levels),
+            range(0, mesh_levels - 1),
+            G[1:],
+            G[:-1],
+            first_index_level[: mesh_levels - 1],
+        ):
             # start out from graph at from level
             G_down = G_from.copy()
             G_down.clear_edges()
@@ -225,34 +267,38 @@ def main():
             # order in vm should be same as in vm_xy
             v_to_list = list(G_to.nodes)
             v_from_list = list(G_from.nodes)
-            v_from_xy = np.array([xy for _, xy in G_from.nodes.data('pos')])
+            v_from_xy = np.array([xy for _, xy in G_from.nodes.data("pos")])
             kdt_m = scipy.spatial.KDTree(v_from_xy)
 
             # add edges from mesh to grid
             for v in v_to_list:
                 # find 1(?) nearest neighbours (index to vm_xy)
-                neigh_idx = kdt_m.query(G_down.nodes[v]['pos'], 1)[1]
+                neigh_idx = kdt_m.query(G_down.nodes[v]["pos"], 1)[1]
                 u = v_from_list[neigh_idx]
 
                 # add edge from mesh to grid
                 G_down.add_edge(u, v)
                 d = np.sqrt(
                     np.sum(
-                        (G_down.nodes[u]['pos'] -
-                         G_down.nodes[v]['pos'])**2))
-                G_down.edges[u, v]['len'] = d
-                G_down.edges[u,
-                             v]['vdiff'] = G_down.nodes[u]['pos'] - G_down.nodes[v]['pos']
+                        (G_down.nodes[u]["pos"] - G_down.nodes[v]["pos"]) ** 2
+                    )
+                )
+                G_down.edges[u, v]["len"] = d
+                G_down.edges[u, v]["vdiff"] = (
+                    G_down.nodes[u]["pos"] - G_down.nodes[v]["pos"]
+                )
 
             # relabel nodes to integers (sorted)
             G_down_int = networkx.convert_node_labels_to_integers(
-                G_down, first_label=start_index, ordering='sorted')  # Issue with sorting here
+                G_down, first_label=start_index, ordering="sorted"
+            )  # Issue with sorting here
             G_down_int = sort_nodes_internally(G_down_int)
             pyg_down = from_networkx_with_start_index(G_down_int, start_index)
 
             # Create up graph, invert downwards edges
-            up_edges = torch.stack((pyg_down.edge_index[1], pyg_down.edge_index[0]),
-                                   dim=0)
+            up_edges = torch.stack(
+                (pyg_down.edge_index[1], pyg_down.edge_index[0]), dim=0
+            )
             pyg_up = pyg_down.clone()
             pyg_up.edge_index = up_edges
 
@@ -260,17 +306,15 @@ def main():
             down_graphs.append(pyg_down)
 
             if args.plot:
-                plot_graph(pyg_down, title=f"Down graph, {from_level} -> {to_level}")
-                plt.savefig(
-                    os.path.join(
-                        graph_dir_path,
-                        f"mesh_down_graph_{from_level}.png"))
+                plot_graph(
+                    pyg_down, title=f"Down graph, {from_level} -> {to_level}"
+                )
+                plt.show()
 
-                plot_graph(pyg_down, title=f"Up graph, {to_level} -> {from_level}")
-                plt.savefig(
-                    os.path.join(
-                        graph_dir_path,
-                        f"mesh_up_graph_{to_level}.png"))
+                plot_graph(
+                    pyg_down, title=f"Up graph, {to_level} -> {from_level}"
+                )
+                plt.show()
 
         # Save up and down edges
         save_edges_list(up_graphs, "mesh_up", graph_dir_path)
@@ -280,9 +324,12 @@ def main():
         m2m_graphs = [
             from_networkx_with_start_index(
                 networkx.convert_node_labels_to_integers(
-                    level_graph, first_label=start_index, ordering='sorted'),
-                start_index) for level_graph, start_index in zip(
-                G, first_index_level)]
+                    level_graph, first_label=start_index, ordering="sorted"
+                ),
+                start_index,
+            )
+            for level_graph, start_index in zip(G, first_index_level)
+        ]
 
         mesh_pos = [graph.pos.to(torch.float32) for graph in m2m_graphs]
 
@@ -298,10 +345,11 @@ def main():
         for lev in range(1, len(G)):
             nodes = list(G[lev - 1].nodes)
             n = int(np.sqrt(len(nodes)))
-            ij = np.array(nodes).reshape(
-                (n, n, 2))[
-                1:: nx, 1:: nx, :].reshape(
-                int(n / nx) ** 2, 2)
+            ij = (
+                np.array(nodes)
+                .reshape((n, n, 2))[1::nx, 1::nx, :]
+                .reshape(int(n / nx) ** 2, 2)
+            )
             ij = [tuple(x) for x in ij]
             G[lev] = networkx.relabel_nodes(G[lev], dict(zip(G[lev].nodes, ij)))
             G_tot = networkx.compose(G_tot, G[lev])
@@ -310,8 +358,9 @@ def main():
         G_tot = prepend_node_index(G_tot, 0)
 
         # relabel nodes to integers (sorted)
-        G_int = networkx.convert_node_labels_to_integers(G_tot, first_label=0,
-                                                         ordering='sorted')
+        G_int = networkx.convert_node_labels_to_integers(
+            G_tot, first_label=0, ordering="sorted"
+        )
 
         # Graph to use in g2m and m2g
         G_bottom_mesh = G_tot
@@ -333,8 +382,9 @@ def main():
     mesh_pos = [pos / pos_max for pos in mesh_pos]
 
     # Save mesh positions
-    torch.save(mesh_pos, os.path.join(graph_dir_path,
-                                      "mesh_features.pt"))  # mesh pos, in float32
+    torch.save(
+        mesh_pos, os.path.join(graph_dir_path, "mesh_features.pt")
+    )  # mesh pos, in float32
 
     #
     # Grid2Mesh
@@ -346,9 +396,11 @@ def main():
 
     # mesh nodes on lowest level
     vm = G_bottom_mesh.nodes
-    vm_xy = np.array([xy for _, xy in vm.data('pos')])
+    vm_xy = np.array([xy for _, xy in vm.data("pos")])
     # distance between mesh nodes
-    dm = np.sqrt(np.sum((vm.data('pos')[(0, 1, 0)] - vm.data('pos')[(0, 0, 0)])**2))
+    dm = np.sqrt(
+        np.sum((vm.data("pos")[(0, 1, 0)] - vm.data("pos")[(0, 0, 0)]) ** 2)
+    )
 
     # grid nodes
     Ny, Nx = xy.shape[1:]
@@ -359,10 +411,10 @@ def main():
     # vg features (only pos introduced here)
     for node in G_grid.nodes:
         # pos is in feature but here explicit for convenience
-        G_grid.nodes[node]['pos'] = np.array([xy[0][node], xy[1][node]])
+        G_grid.nodes[node]["pos"] = np.array([xy[0][node], xy[1][node]])
 
-    # add 1000 to node key to separate grid nodes (1000,i,j) from mesh nodes (i,j)
-    # and impose sorting order such that vm are the first nodes
+    # add 1000 to node key to separate grid nodes (1000,i,j) from mesh nodes
+    # (i,j) and impose sorting order such that vm are the first nodes
     G_grid = prepend_node_index(G_grid, 1000)
 
     # build kd tree for grid point pos
@@ -385,14 +437,18 @@ def main():
     # add edges
     for v in vm:
         # find neighbours (index to vg_xy)
-        neigh_idxs = kdt_g.query_ball_point(vm[v]['pos'], dm * DM_SCALE)
+        neigh_idxs = kdt_g.query_ball_point(vm[v]["pos"], dm * DM_SCALE)
         for i in neigh_idxs:
             u = vg_list[i]
             # add edge from grid to mesh
             G_g2m.add_edge(u, v)
-            d = np.sqrt(np.sum((G_g2m.nodes[u]['pos'] - G_g2m.nodes[v]['pos'])**2))
-            G_g2m.edges[u, v]['len'] = d
-            G_g2m.edges[u, v]['vdiff'] = G_g2m.nodes[u]['pos'] - G_g2m.nodes[v]['pos']
+            d = np.sqrt(
+                np.sum((G_g2m.nodes[u]["pos"] - G_g2m.nodes[v]["pos"]) ** 2)
+            )
+            G_g2m.edges[u, v]["len"] = d
+            G_g2m.edges[u, v]["vdiff"] = (
+                G_g2m.nodes[u]["pos"] - G_g2m.nodes[v]["pos"]
+            )
 
     pyg_g2m = from_networkx(G_g2m)
 
@@ -416,18 +472,23 @@ def main():
     # add edges from mesh to grid
     for v in vg_list:
         # find 4 nearest neighbours (index to vm_xy)
-        neigh_idxs = kdt_m.query(G_m2g.nodes[v]['pos'], 4)[1]
+        neigh_idxs = kdt_m.query(G_m2g.nodes[v]["pos"], 4)[1]
         for i in neigh_idxs:
             u = vm_list[i]
             # add edge from mesh to grid
             G_m2g.add_edge(u, v)
-            d = np.sqrt(np.sum((G_m2g.nodes[u]['pos'] - G_m2g.nodes[v]['pos'])**2))
-            G_m2g.edges[u, v]['len'] = d
-            G_m2g.edges[u, v]['vdiff'] = G_m2g.nodes[u]['pos'] - G_m2g.nodes[v]['pos']
+            d = np.sqrt(
+                np.sum((G_m2g.nodes[u]["pos"] - G_m2g.nodes[v]["pos"]) ** 2)
+            )
+            G_m2g.edges[u, v]["len"] = d
+            G_m2g.edges[u, v]["vdiff"] = (
+                G_m2g.nodes[u]["pos"] - G_m2g.nodes[v]["pos"]
+            )
 
     # relabel nodes to integers (sorted)
-    G_m2g_int = networkx.convert_node_labels_to_integers(G_m2g, first_label=0,
-                                                         ordering='sorted')
+    G_m2g_int = networkx.convert_node_labels_to_integers(
+        G_m2g, first_label=0, ordering="sorted"
+    )
     pyg_m2g = from_networkx(G_m2g_int)
 
     if args.plot:

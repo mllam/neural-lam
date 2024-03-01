@@ -1,0 +1,65 @@
+[tool.black]
+line-length = 80
+
+[tool.isort]
+default_section = "THIRDPARTY"
+profile = "black"
+# Headings
+import_heading_stdlib = "Standard library"
+import_heading_thirdparty = "Third-party"
+import_heading_firstparty = "First-party"
+import_heading_localfolder = "Local"
+# Known modules to avoid misclassification
+known_standard_library = [
+    # Add standard library modules that may be misclassified by isort
+]
+known_third_party = [
+    # Add third-party modules that may be misclassified by isort
+    "wandb",
+]
+known_first_party = [
+    # Add first-party modules that may be misclassified by isort
+    "neural_lam",
+]
+
+[tool.flake8]
+max-line-length = 80
+ignore = [
+    "E203", # Allow whitespace before ':' (https://github.com/PyCQA/pycodestyle/issues/373)
+    "I002", # Don't check for isort configuration
+    "W503", # Allow line break before binary operator (PEP 8-compatible)
+]
+per-file-ignores = [
+    "__init__.py: F401", # Allow unused imports
+]
+
+[tool.codespell]
+skip = "requirements/*"
+
+# Pylint config
+[tool.pylint]
+ignore = [
+    "create_mesh.py", # Disable linting for now, as major rework is planned/expected
+]
+# Temporary fix for import neural_lam statements until set up as proper package
+init-hook='import sys; sys.path.append(".")'
+[tool.pylint.TYPECHECK]
+generated-members = [
+    "numpy.*",
+    "torch.*",
+]
+[tool.pylint.'MESSAGES CONTROL']
+disable = [
+    "C0114", # 'missing-module-docstring', Do not require module docstrings
+    "R0901", # 'too-many-ancestors', Allow many layers of sub-classing
+    "R0902", # 'too-many-instance-attribtes', Allow many attributes
+    "R0913", # 'too-many-arguments', Allow many function arguments
+    "R0914", # 'too-many-locals', Allow many local variables
+    "W0223", # 'abstract-method', Subclasses do not have to override all abstract methods
+]
+[tool.pylint.DESIGN]
+max-statements=100 # Allow for some more involved functions
+[tool.pylint.IMPORTS]
+allow-any-import-level="neural_lam"
+[tool.pylint.SIMILARITIES]
+min-similarity-lines=10
