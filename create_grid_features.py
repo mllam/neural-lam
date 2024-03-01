@@ -55,6 +55,5 @@ def main():
     torch.save(grid_features, os.path.join(static_dir_path, "grid_features.pt"))
 
 
-
 if __name__ == "__main__":
     main()

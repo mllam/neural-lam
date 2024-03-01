@@ -1,15 +1,16 @@
+# Standard library
 import glob
 import os
 from datetime import datetime, timedelta
 
+# Third-party
 import imageio
 import matplotlib.pyplot as plt
 import numpy as np
 import pytorch_lightning as pl
 import torch
-from torch import nn
-
 import wandb
+from torch import nn
 
 # First-party
 from neural_lam import constants, metrics, utils, vis
@@ -17,12 +18,11 @@ from neural_lam import constants, metrics, utils, vis
 
 class ARModel(pl.LightningModule):
     """
-    Generic auto-regressive weather model.
-    Abstract class that can be extended.
+    Generic auto-regressive weather model. Abstract class that can be extended.
     """
 
-    # pylint: disable=arguments-differ
-    # Disable to override args/kwargs from superclass
+    # pylint: disable=arguments-differ Disable to override args/kwargs from
+    # superclass
 
     def __init__(self, args):
         super().__init__()
@@ -39,20 +39,23 @@ class ARModel(pl.LightningModule):
         self.grid_forcing_dim = constants.grid_forcing_dim
         count_3d_fields = sum(value == 1 for value in constants.is_3d.values())
         count_2d_fields = sum(value != 1 for value in constants.is_3d.values())
-        self.grid_state_dim = len(
-            constants.vertical_levels) * count_3d_fields + count_2d_fields
+        self.grid_state_dim = (
+            len(constants.vertical_levels) * count_3d_fields + count_2d_fields
+        )
 
         # Load static features for grid/data
         static_data_dict = utils.load_static_data(args.dataset)
         for static_data_name, static_data_tensor in static_data_dict.items():
-            self.register_buffer(static_data_name, static_data_tensor, persistent=False)
+            self.register_buffer(
+                static_data_name, static_data_tensor, persistent=False
+            )
 
         # MSE loss, need to do reduction ourselves to get proper weighting
         self.loss_name = args.loss
         if args.loss == "mse":
             self.loss = nn.MSELoss(reduction="none")
 
-            inv_var = self.step_diff_std**-2.
+            inv_var = self.step_diff_std**-2.0
             state_weight = self.param_weights * inv_var  # (d_f,)
         elif args.loss == "mae":
             self.loss = nn.L1Loss(reduction="none")
@@ -90,16 +93,17 @@ class ARModel(pl.LightningModule):
 
         self.variable_indices = self.precompute_variable_indices()
         self.selected_vars_units = [
-            (var_name, var_unit) for var_name, var_unit in zip(
+            (var_name, var_unit)
+            for var_name, var_unit in zip(
                 constants.param_names_short, constants.param_units
-            ) if var_name in constants.eval_plot_vars
+            )
+            if var_name in constants.eval_plot_vars
         ]
         print("variable_indices", self.variable_indices)
         print("selected_vars_units", self.selected_vars_units)
 
     @pl.utilities.rank_zero_only
     def log_image(self, name, img):
-
         wandb.log({name: wandb.Image(img)})
 
     @pl.utilities.rank_zero_only
@@ -119,8 +123,12 @@ class ARModel(pl.LightningModule):
         )
         if self.opt_state:
             opt.load_state_dict(self.opt_state)
-        opt = torch.optim.AdamW(self.parameters(), lr=self.lr, betas=(0.9, 0.95))
-        scheduler = torch.optim.lr_scheduler.StepLR(opt, step_size=30, gamma=0.1)
+        opt = torch.optim.AdamW(
+            self.parameters(), lr=self.lr, betas=(0.9, 0.95)
+        )
+        scheduler = torch.optim.lr_scheduler.StepLR(
+            opt, step_size=30, gamma=0.1
+        )
 
         return [opt], [scheduler]
 
@@ -145,12 +153,12 @@ class ARModel(pl.LightningModule):
         """
         return x.unsqueeze(0).expand(batch_size, -1, -1)
 
-
     def precompute_variable_indices(self):
         variable_indices = {}
         all_vars = []
         index = 0
-        # Create a list of tuples for all variables, using level 0 for 2D variables
+        # Create a list of tuples for all variables, using level 0 for 2D
+        # variables
         for var_name in constants.param_names_short:
             if constants.is_3d[var_name]:
                 for level in constants.vertical_levels:
@@ -174,18 +182,22 @@ class ARModel(pl.LightningModule):
         for param, (min_val, max_val) in constants.param_constraints.items():
             indices = self.variable_indices[param]
             for index in indices:
-                # Apply clamping to ensure values are within the specified bounds
+                # Apply clamping to ensure values are within the specified
+                # bounds
                 prediction[:, :, index] = torch.clamp(
-                    prediction[:, :, index], min=min_val, max=max_val if max_val is not None else float('inf'))
+                    prediction[:, :, index],
+                    min=min_val,
+                    max=max_val if max_val is not None else float("inf"),
+                )
         return prediction
 
     def predict_step(self, prev_state, prev_prev_state):
         """
         Step state one step ahead using prediction model, X_{t-1}, X_t -> X_t+1
-        prev_state: (B, num_grid_nodes, feature_dim), X_t
-        prev_prev_state: (B, num_grid_nodes, feature_dim), X_{t-1}
-        batch_static_features: (B, num_grid_nodes, batch_static_feature_dim)
-        forcing: (B, num_grid_nodes, forcing_dim)
+        prev_state: (B, num_grid_nodes, feature_dim), X_t prev_prev_state: (B,
+        num_grid_nodes, feature_dim), X_{t-1} batch_static_features: (B,
+        num_grid_nodes, batch_static_feature_dim) forcing: (B, num_grid_nodes,
+        forcing_dim)
         """
 
         raise NotImplementedError("No prediction step implemented")
@@ -207,13 +219,14 @@ class ARModel(pl.LightningModule):
         pred_steps = forcing_features.shape[1]
 
         for i in range(pred_steps):
+            forcing = forcing_features[:, i]
             border_state = true_states[:, i]
 
             pred_state, pred_std = self.predict_step(
                 prev_state, prev_prev_state, batch_static_features, forcing
             )
-            # state: (B, num_grid_nodes, d_f)
-            # pred_std: (B, num_grid_nodes, d_f) or None
+            # state: (B, num_grid_nodes, d_f) pred_std: (B, num_grid_nodes, d_f)
+            # or None
 
             # Overwrite border with true state
             new_state = (
@@ -243,12 +256,12 @@ class ARModel(pl.LightningModule):
 
     def common_step(self, batch):
         """
-        Predict on single batch
-        batch = time_series, batch_static_features, forcing_features
+        Predict on single batch batch = time_series, batch_static_features,
+        forcing_features
 
-        init_states: (B, 2, num_grid_nodes, d_features)
-        target_states: (B, pred_steps, num_grid_nodes, d_features)
-        batch_static_features: (B, num_grid_nodes, d_static_f),
+        init_states: (B, 2, num_grid_nodes, d_features) target_states: (B,
+        pred_steps, num_grid_nodes, d_features) batch_static_features: (B,
+        num_grid_nodes, d_static_f),
             for example open water
         forcing_features: (B, pred_steps, num_grid_nodes, d_forcing),
             where index 0 corresponds to index 1 of init_states
@@ -263,8 +276,8 @@ class ARModel(pl.LightningModule):
         prediction, pred_std = self.unroll_prediction(
             init_states, batch_static_features, forcing_features, target_states
         )  # (B, pred_steps, num_grid_nodes, d_f)
-        # prediction: (B, pred_steps, num_grid_nodes, d_f)
-        # pred_std: (B, pred_steps, num_grid_nodes, d_f) or (d_f,)
+        # prediction: (B, pred_steps, num_grid_nodes, d_f) pred_std: (B,
+        # pred_steps, num_grid_nodes, d_f) or (d_f,)
 
         return prediction, target_states, pred_std
 
@@ -289,8 +302,8 @@ class ARModel(pl.LightningModule):
 
     def all_gather_cat(self, tensor_to_gather):
         """
-        Gather tensors across all ranks, and concatenate across dim. 0
-        (instead of stacking in new dim. 0)
+        Gather tensors across all ranks, and concatenate across dim. 0 (instead
+        of stacking in new dim. 0)
 
         tensor_to_gather: (d1, d2, ...), distributed over K ranks
 
@@ -348,8 +361,8 @@ class ARModel(pl.LightningModule):
         Run test on single batch
         """
         prediction, target, pred_std = self.common_step(batch)
-        # prediction: (B, pred_steps, num_grid_nodes, d_f)
-        # pred_std: (B, pred_steps, num_grid_nodes, d_f) or (d_f,)
+        # prediction: (B, pred_steps, num_grid_nodes, d_f) pred_std: (B,
+        # pred_steps, num_grid_nodes, d_f) or (d_f,)
 
         time_step_loss = torch.mean(
             self.loss(
@@ -370,10 +383,9 @@ class ARModel(pl.LightningModule):
             test_log_dict, on_step=False, on_epoch=True, sync_dist=True
         )
 
-        # Compute all evaluation metrics for error maps
-        # Note: explicitly list metrics here, as test_metrics can contain
-        # additional ones, computed differently, but that should be aggregated
-        # on_test_epoch_end
+        # Compute all evaluation metrics for error maps Note: explicitly list
+        # metrics here, as test_metrics can contain additional ones, computed
+        # differently, but that should be aggregated on_test_epoch_end
         for metric_name in ("rmse", "mae"):
             metric_func = metrics.get_metric(metric_name)
             batch_metric_vals = metric_func(
@@ -418,9 +430,9 @@ class ARModel(pl.LightningModule):
         """
         Plot the first n_examples forecasts from batch
 
-        batch: batch with data to plot corresponding forecasts for
-        n_examples: number of forecasts to plot
-        prediction: (B, pred_steps, num_grid_nodes, d_f), existing prediction.
+        batch: batch with data to plot corresponding forecasts for n_examples:
+        number of forecasts to plot prediction: (B, pred_steps, num_grid_nodes,
+        d_f), existing prediction.
             Generate if None.
         """
         if prediction is None:
@@ -428,106 +440,121 @@ class ARModel(pl.LightningModule):
 
         target = batch[1]
 
-            # Rescale to original data scale
-            prediction_rescaled = prediction * self.data_std + self.data_mean
-            prediction_rescaled = self.apply_constraints(prediction_rescaled)
-            target_rescaled = target * self.data_std + self.data_mean
+        # Rescale to original data scale
+        prediction_rescaled = prediction * self.data_std + self.data_mean
+        prediction_rescaled = self.apply_constraints(prediction_rescaled)
+        target_rescaled = target * self.data_std + self.data_mean
 
-            # BUG: this creates artifacts at border cells, improve logic!
-            if constants.smooth_boundaries:
-                # (pred_steps, N_grid, d_f)
+        # BUG: this creates artifacts at border cells, improve logic!
+        if constants.smooth_boundaries:
+            # (pred_steps, N_grid, d_f)
 
-                height, width = constants.grid_shape
-                prediction_permuted = prediction_rescaled.permute(
-                    0, 2, 1).reshape(
-                    prediction_rescaled.size(0),
-                    prediction_rescaled.size(2),
-                    height, width)
+            height, width = constants.grid_shape
+            prediction_permuted = prediction_rescaled.permute(0, 2, 1).reshape(
+                prediction_rescaled.size(0),
+                prediction_rescaled.size(2),
+                height,
+                width,
+            )
 
-                # Define the smoothing kernel for grouped convolution
-                num_groups = prediction_permuted.shape[1]
-                kernel_size = 3
-                kernel = torch.ones((num_groups, 1, kernel_size,
-                                    kernel_size)) / (kernel_size ** 2)
-                kernel = kernel.to(self.device)
+            # Define the smoothing kernel for grouped convolution
+            num_groups = prediction_permuted.shape[1]
+            kernel_size = 3
+            kernel = torch.ones((num_groups, 1, kernel_size, kernel_size)) / (
+                kernel_size**2
+            )
+            kernel = kernel.to(self.device)
 
-                # Use the updated kernel in the conv2d operation
-                prediction_smoothed = nn.functional.conv2d(
-                    prediction_permuted, kernel, padding=1, groups=num_groups)
+            # Use the updated kernel in the conv2d operation
+            prediction_smoothed = nn.functional.conv2d(
+                prediction_permuted, kernel, padding=1, groups=num_groups
+            )
 
-                # (pred_steps, N_grid, channels)
-                # Combine the height and width dimensions back into a single N_grid
-                # dimension
-                prediction_smoothed = prediction_smoothed.reshape(
-                    prediction_smoothed.size(0), prediction_smoothed.size(1), -1)
+            # (pred_steps, N_grid, channels) Combine the height and width
+            # dimensions back into a single N_grid dimension
+            prediction_smoothed = prediction_smoothed.reshape(
+                prediction_smoothed.size(0), prediction_smoothed.size(1), -1
+            )
 
-                # Permute the dimensions to get back to the original order (pred_steps,
-                # N_grid, d_f)
-                prediction_smoothed = prediction_smoothed.permute(0, 2, 1)
+            # Permute the dimensions to get back to the original order
+            # (pred_steps, N_grid, d_f)
+            prediction_smoothed = prediction_smoothed.permute(0, 2, 1)
 
-                # Apply the mask to the smoothed prediction
-                prediction_rescaled = self.border_mask * prediction_smoothed + self.interior_mask * prediction_rescaled
+            # Apply the mask to the smoothed prediction
+            prediction_rescaled = (
+                self.border_mask * prediction_smoothed
+                + self.interior_mask * prediction_rescaled
+            )
 
-            # Each slice is (pred_steps, N_grid, d_f)
-            # Iterate over variables
+        # Each slice is (pred_steps, N_grid, d_f) Iterate over variables
 
-            for var_name, var_unit in self.selected_vars_units:
-                # Retrieve the indices for the current variable
-                var_indices = self.variable_indices[var_name]
-                for lvl_i, var_i in enumerate(var_indices):
-                    # Calculate var_vrange for each index
-                    lvl = constants.vertical_levels[lvl_i]
-                    var_vmin = min(
-                        prediction_rescaled[:, :, var_i].min(),
-                        target_rescaled[:, :, var_i].min())
-                    var_vmax = max(
-                        prediction_rescaled[:, :, var_i].max(),
-                        target_rescaled[:, :, var_i].max())
-                    var_vrange = (var_vmin, var_vmax)
-                    # Iterate over time steps
-                    for t_i, (pred_t, target_t) in enumerate(
-                            zip(prediction_rescaled, target_rescaled), start=1):
-                        eval_datetime_obj = datetime.strptime(
-                            constants.eval_datetime, '%Y%m%d%H')
-                        current_datetime_obj = eval_datetime_obj + timedelta(hours=t_i)
-                        current_datetime_str = current_datetime_obj.strftime('%Y%m%d%H')
-                        title = f"{var_name} ({var_unit}), t={current_datetime_str}"
-                        var_fig = vis.plot_prediction(
-                            pred_t[:, var_i], target_t[:, var_i],
-                            self.interior_mask[:, 0],
-                            title=title,
-                            vrange=var_vrange
-                        )
-                        wandb.log(
-                            {f"{var_name}_lvl_{lvl:02}_t_{current_datetime_str}": wandb.Image(var_fig)}
-                        )
-                        plt.close("all")
+        for var_name, var_unit in self.selected_vars_units:
+            # Retrieve the indices for the current variable
+            var_indices = self.variable_indices[var_name]
+            for lvl_i, var_i in enumerate(var_indices):
+                # Calculate var_vrange for each index
+                lvl = constants.vertical_levels[lvl_i]
+                var_vmin = min(
+                    prediction_rescaled[:, :, var_i].min(),
+                    target_rescaled[:, :, var_i].min(),
+                )
+                var_vmax = max(
+                    prediction_rescaled[:, :, var_i].max(),
+                    target_rescaled[:, :, var_i].max(),
+                )
+                var_vrange = (var_vmin, var_vmax)
+                # Iterate over time steps
+                for t_i, (pred_t, target_t) in enumerate(
+                    zip(prediction_rescaled, target_rescaled), start=1
+                ):
+                    eval_datetime_obj = datetime.strptime(
+                        constants.eval_datetime, "%Y%m%d%H"
+                    )
+                    current_datetime_obj = eval_datetime_obj + timedelta(
+                        hours=t_i
+                    )
+                    current_datetime_str = current_datetime_obj.strftime(
+                        "%Y%m%d%H"
+                    )
+                    title = f"{var_name} ({var_unit}), t={current_datetime_str}"
+                    var_fig = vis.plot_prediction(
+                        pred_t[:, var_i],
+                        target_t[:, var_i],
+                        self.interior_mask[:, 0],
+                        title=title,
+                        vrange=var_vrange,
+                    )
+                    wandb.log(
+                        {
+                            (
+                                f"{var_name}_lvl_{lvl:02}_t_"
+                                f"{current_datetime_str}"
+                            ): wandb.Image(var_fig)
+                        }
+                    )
+                    plt.close("all")
 
-            if constants.store_example_data:
-                # Save pred and target as .pt files
-                torch.save(
-                    prediction_rescaled.cpu(),
-                    os.path.join(
-                        wandb.run.dir,
-                        'example_pred.pt'))
-                torch.save(
-                    target_rescaled.cpu(),
-                    os.path.join(
-                        wandb.run.dir,
-                        'example_target.pt'))
-
+        if constants.store_example_data:
+            # Save pred and target as .pt files
+            torch.save(
+                prediction_rescaled.cpu(),
+                os.path.join(wandb.run.dir, "example_pred.pt"),
+            )
+            torch.save(
+                target_rescaled.cpu(),
+                os.path.join(wandb.run.dir, "example_target.pt"),
+            )
 
     def create_metric_log_dict(self, metric_tensor, prefix, metric_name):
         """
-        Put together a dict with everything to log for one metric.
-        Also saves plots as pdf and csv if using test prefix.
+        Put together a dict with everything to log for one metric. Also saves
+        plots as pdf and csv if using test prefix.
 
         metric_tensor: (pred_steps, d_f), metric values per time and variable
-        prefix: string, prefix to use for logging
-        metric_name: string, name of the metric
+        prefix: string, prefix to use for logging metric_name: string, name of
+        the metric
 
-        Return:
-        log_dict: dict with everything to log for given metric
+        Return: log_dict: dict with everything to log for given metric
         """
         log_dict = {}
         metric_fig = vis.plot_error_map(
@@ -595,8 +622,8 @@ class ARModel(pl.LightningModule):
 
     def on_test_epoch_end(self):
         """
-        Compute test metrics and make plots at the end of test epoch.
-        Will gather stored tensors and perform plotting and logging on rank 0.
+        Compute test metrics and make plots at the end of test epoch. Will
+        gather stored tensors and perform plotting and logging on rank 0.
         """
         # Create error maps for all test metrics
         self.aggregate_and_plot_metrics(self.test_metrics, prefix="test")
@@ -652,9 +679,14 @@ class ARModel(pl.LightningModule):
 
                     # Get all the images for the current variable and index
                     images = sorted(
-                        glob.glob(f"{dir_path}/{var_name}_lvl_{lvl:02}_t_*.png"))
+                        glob.glob(f"{dir_path}/{var_name}_lvl_{lvl:02}_t_*.png")
+                    )
                     # Generate the GIF
-                    with imageio.get_writer(f'{dir_path}/{var_name}_lvl_{lvl:02}.gif', mode='I', fps=1) as writer:
+                    with imageio.get_writer(
+                        f"{dir_path}/{var_name}_lvl_{lvl:02}.gif",
+                        mode="I",
+                        fps=1,
+                    ) as writer:
                         for filename in images:
                             image = imageio.imread(filename)
                             writer.append_data(image)

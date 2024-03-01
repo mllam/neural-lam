@@ -1,4 +1,5 @@
 # Standard library
+import os
 import random
 import time
 from argparse import ArgumentParser
@@ -6,16 +7,16 @@ from argparse import ArgumentParser
 # Third-party
 import pytorch_lightning as pl
 import torch
+import wandb
 from lightning_fabric.utilities import seed
 from pytorch_lightning.utilities import rank_zero_only
 
-import wandb
+# First-party
 from neural_lam import constants, utils
 from neural_lam.models.graph_lam import GraphLAM
 from neural_lam.models.hi_lam import HiLAM
 from neural_lam.models.hi_lam_parallel import HiLAMParallel
 from neural_lam.weather_dataset import WeatherDataset
-from neural_lam.weather_dataset import WeatherDataModule
 
 MODELS = {
     "graph_lam": GraphLAM,
@@ -42,19 +43,22 @@ def init_wandb(args):
         prefix = "subset-" if args.subset_ds else ""
         if args.eval:
             prefix = prefix + f"eval-{args.eval}-"
-        run_name = f"{prefix}{args.model}-{args.processor_layers}x{args.hidden_dim}-"\
+        run_name = (
+            f"{prefix}{args.model}-{args.processor_layers}x{args.hidden_dim}-"
             f"{time.strftime('%m_%d_%H_%M_%S')}"
+        )
         wandb.init(
             name=run_name,
             project=constants.wandb_project,
             config=args,
-            mode=args.wandb_mode
+            mode=args.wandb_mode,
         )
         logger = pl.loggers.WandbLogger(
             project=constants.wandb_project,
             name=run_name,
             config=args,
-            log_model=True)
+            log_model=True,
+        )
         wandb.save("slurm_train.sh")
         wandb.save("neural_lam/constants.py")
     else:
@@ -62,14 +66,15 @@ def init_wandb(args):
             project=constants.wandb_project,
             config=args,
             id=args.resume_run,
-            resume='must',
-            mode=args.wandb_mode
+            resume="must",
+            mode=args.wandb_mode,
         )
         logger = pl.loggers.WandbLogger(
             project=constants.wandb_project,
             id=args.resume_run,
             config=args,
-            log_model=True)
+            log_model=True,
+        )
 
     return logger
 
@@ -341,7 +346,7 @@ def main():
     if torch.cuda.is_available():
         accelerator = "cuda"
         devices = torch.cuda.device_count()
-        num_nodes = int(os.environ.get('SLURM_JOB_NUM_NODES', 1))
+        num_nodes = int(os.environ.get("SLURM_JOB_NUM_NODES", 1))
     else:
         accelerator = "cpu"
         devices = 1
@@ -351,7 +356,9 @@ def main():
         max_epochs=args.epochs,
         logger=logger,
         log_every_n_steps=1,
-        callbacks=[checkpoint_callback] if checkpoint_callback is not None else [],
+        callbacks=[checkpoint_callback]
+        if checkpoint_callback is not None
+        else [],
         check_val_every_n_epoch=args.val_interval,
         precision=args.precision,
         use_distributed_sampler=use_distributed_sampler,

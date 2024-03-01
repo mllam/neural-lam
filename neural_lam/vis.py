@@ -1,9 +1,11 @@
+# Third-party
 import cartopy.feature as cf
 import matplotlib
 import matplotlib.pyplot as plt
 import numpy as np
 import xarray as xr
 
+# First-party
 from neural_lam import constants, utils
 from neural_lam.rotate_grid import unrotate_latlon
 
@@ -19,8 +21,12 @@ def plot_error_map(errors, global_mean, title=None, step_length=1):
     d_f, pred_steps = errors_np.shape
 
     errors_norm = errors_np / np.abs(np.expand_dims(global_mean.cpu(), axis=1))
-    height = int(np.sqrt(len(constants.vertical_levels)
-                         * len(constants.param_names_short)) * 2)
+    height = int(
+        np.sqrt(
+            len(constants.vertical_levels) * len(constants.param_names_short)
+        )
+        * 2
+    )
     fig, ax = plt.subplots(figsize=(15, height))
 
     ax.imshow(
@@ -56,9 +62,17 @@ def plot_error_map(errors, global_mean, title=None, step_length=1):
     ]
     ax.set_yticklabels(y_ticklabels, rotation=30, size=label_size)
     y_ticklabels = [
-        f"{name if name != 'RELHUM' else 'RH'} ({unit}) {f'{level:02}' if constants.IS_3D[name] else ''}"
-        for name, unit in zip(constants.PARAM_NAMES_SHORT, constants.PARAM_UNITS)
-        for level in (constants.VERTICAL_LEVELS if constants.IS_3D[name] else [0])]
+        (
+            f"{name if name != 'RELHUM' else 'RH'} ({unit}) "
+            f"{f'{level:02}' if constants.IS_3D[name] else ''}"
+        )
+        for name, unit in zip(
+            constants.PARAM_NAMES_SHORT, constants.PARAM_UNITS
+        )
+        for level in (
+            constants.VERTICAL_LEVELS if constants.IS_3D[name] else [0]
+        )
+    ]
     y_ticklabels = sorted(y_ticklabels)
     ax.set_yticklabels(y_ticklabels, rotation=30, size=label_size)
 
@@ -85,8 +99,12 @@ def plot_prediction(pred, target, obs_mask, title=None, vrange=None):
     data_latlon = xr.open_zarr(constants.EXAMPLE_FILE).isel(time=0)
     lon, lat = unrotate_latlon(data_latlon)
 
-    fig, axes = plt.subplots(2, 1, figsize=constants.FIG_SIZE,
-                             subplot_kw={"projection": constants.SELECTED_PROJ})
+    fig, axes = plt.subplots(
+        2,
+        1,
+        figsize=constants.FIG_SIZE,
+        subplot_kw={"projection": constants.SELECTED_PROJ},
+    )
 
     # Plot pred and target
     for ax, data in zip(axes, (target, pred)):
@@ -97,17 +115,16 @@ def plot_prediction(pred, target, obs_mask, title=None, vrange=None):
             data_grid,
             transform=constants.SELECTED_PROJ,
             cmap="plasma",
-            levels=np.linspace(
-                vmin,
-                vmax,
-                num=100))
-        ax.add_feature(cf.BORDERS, linestyle='-', edgecolor='black')
-        ax.add_feature(cf.COASTLINE, linestyle='-', edgecolor='black')
+            levels=np.linspace(vmin, vmax, num=100),
+        )
+        ax.add_feature(cf.BORDERS, linestyle="-", edgecolor="black")
+        ax.add_feature(cf.COASTLINE, linestyle="-", edgecolor="black")
         ax.gridlines(
             crs=constants.selected_proj,
             draw_labels=False,
             linewidth=0.5,
-            alpha=0.5)
+            alpha=0.5,
+        )
 
     # Ticks and labels
     axes[0].set_title("Ground Truth", size=15)
@@ -138,8 +155,10 @@ def plot_spatial_error(error, obs_mask, title=None, vrange=None):
     data_latlon = xr.open_zarr(constants.EXAMPLE_FILE).isel(time=0)
     lon, lat = unrotate_latlon(data_latlon)
 
-    fig, ax = plt.subplots(figsize=constants.FIG_SIZE,
-                           subplot_kw={"projection": constants.SELECTED_PROJ})
+    fig, ax = plt.subplots(
+        figsize=constants.FIG_SIZE,
+        subplot_kw={"projection": constants.SELECTED_PROJ},
+    )
 
     error_grid = error.reshape(*constants.grid_shape[::-1]).cpu().numpy()
 
@@ -149,17 +168,13 @@ def plot_spatial_error(error, obs_mask, title=None, vrange=None):
         error_grid,
         transform=constants.SELECTED_PROJ,
         cmap="OrRd",
-        levels=np.linspace(
-            vmin,
-            vmax,
-            num=100))
-    ax.add_feature(cf.BORDERS, linestyle='-', edgecolor='black')
-    ax.add_feature(cf.COASTLINE, linestyle='-', edgecolor='black')
+        levels=np.linspace(vmin, vmax, num=100),
+    )
+    ax.add_feature(cf.BORDERS, linestyle="-", edgecolor="black")
+    ax.add_feature(cf.COASTLINE, linestyle="-", edgecolor="black")
     ax.gridlines(
-        crs=constants.selected_proj,
-        draw_labels=False,
-        linewidth=0.5,
-        alpha=0.5)
+        crs=constants.selected_proj, draw_labels=False, linewidth=0.5, alpha=0.5
+    )
 
     # Ticks and labels
     cbar = fig.colorbar(contour_set, orientation="horizontal", aspect=20)

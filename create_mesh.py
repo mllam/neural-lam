@@ -12,7 +12,9 @@ import torch
 import torch_geometric as pyg
 from torch_geometric.utils.convert import from_networkx
 
+# First-party
 from neural_lam import constants
+
 
 def plot_graph(graph, title=None):
     fig, axis = plt.subplots(figsize=(8, 8), dpi=200)  # W,H
@@ -60,8 +62,8 @@ def plot_graph(graph, title=None):
     plt.colorbar(node_scatter, aspect=50)
 
     margin = 0.5
-    axis.set_xlim(left=0-margin, right=constants.grid_shape[0] + margin)
-    axis.set_ylim(bottom=0-margin, top=constants.grid_shape[1] + margin)
+    axis.set_xlim(left=0 - margin, right=constants.grid_shape[0] + margin)
+    axis.set_ylim(bottom=0 - margin, top=constants.grid_shape[1] + margin)
 
     if title is not None:
         axis.set_title(title)

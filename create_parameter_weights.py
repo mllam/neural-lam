@@ -48,10 +48,15 @@ def main():
     # Define weights for each vertical level and parameter
     # Create parameter weights based on height
     w_list = []
-    for var_name, pw in zip(constants.PARAM_NAMES,
-                            constants.PARAM_WEIGHTS.values()):
+    for var_name, pw in zip(
+        constants.PARAM_NAMES, constants.PARAM_WEIGHTS.values()
+    ):
         # Determine the levels to iterate over
-        levels = constants.level_weights.values() if constants.is_3d[var_name] else [1]
+        levels = (
+            constants.level_weights.values()
+            if constants.is_3d[var_name]
+            else [1]
+        )
 
         # Iterate over the levels
         for lw in levels:
@@ -108,6 +113,7 @@ def main():
     print("Saving mean, std.-dev, flux_stats...")
     torch.save(mean, os.path.join(static_dir_path, "parameter_mean.pt"))
     torch.save(std, os.path.join(static_dir_path, "parameter_std.pt"))
+    torch.save(flux_stats, os.path.join(static_dir_path, "flux_stats.pt"))
 
     # Compute mean and std.-dev. of one-step differences across the dataset
     print("Computing mean and std.-dev. for one-step differences...")

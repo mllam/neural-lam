@@ -103,7 +103,7 @@ Note that only the cuda version is pinned to 11.8, otherwise all the latest libr
 </span>
 
 \
-Follow the steps below to create the neccesary python environment.
+Follow the steps below to create the necessary python environment.
 
 1. Install GEOS for your system. For example with `sudo apt-get install libgeos-dev`. This is necessary for the Cartopy requirement.
 2. Use python 3.9.

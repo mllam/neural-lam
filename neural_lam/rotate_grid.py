@@ -1,7 +1,9 @@
 """unrotate rotated pole coordinates to geographical lat/lon"""
 
+# Third-party
 import numpy as np
 
+# First-party
 from neural_lam import constants
 
 
@@ -37,10 +39,12 @@ def unrot_lon(rotlon, rotlat, pollon, pollat):
     c2 = np.cos(np.radians(pollon))
 
     # subresults
-    tmp1 = s2 * (-s1 * np.cos(rlo) * np.cos(rla) + c1 *
-                 np.sin(rla)) - c2 * np.sin(rlo) * np.cos(rla)
-    tmp2 = c2 * (-s1 * np.cos(rlo) * np.cos(rla) + c1 *
-                 np.sin(rla)) + s2 * np.sin(rlo) * np.cos(rla)
+    tmp1 = s2 * (
+        -s1 * np.cos(rlo) * np.cos(rla) + c1 * np.sin(rla)
+    ) - c2 * np.sin(rlo) * np.cos(rla)
+    tmp2 = c2 * (
+        -s1 * np.cos(rlo) * np.cos(rla) + c1 * np.sin(rla)
+    ) + s2 * np.sin(rlo) * np.cos(rla)
 
     return np.degrees(np.arctan(tmp1 / tmp2))
 

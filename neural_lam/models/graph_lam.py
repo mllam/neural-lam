@@ -35,10 +35,6 @@ class GraphLAM(BaseGraphModel):
         self.mesh_embedder = utils.make_mlp([mesh_dim] + self.mlp_blueprint_end)
         self.m2m_embedder = utils.make_mlp([m2m_dim] + self.mlp_blueprint_end)
 
-    def setup(self, stage=None):
-        super().setup(stage)
-        # TODO: m2m, to device?
-        # GNNs
         # processor
         processor_nets = [
             InteractionNet(

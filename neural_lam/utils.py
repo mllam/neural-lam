@@ -1,6 +1,7 @@
 # Standard library
 import os
 
+# Third-party
 import numpy as np
 import torch
 import torch.nn as nn
@@ -263,6 +264,7 @@ def fractional_plot_bundle(fraction):
     return bundle
 
 
+@rank_zero_only
 def init_wandb_metrics(wandb_logger):
     """
     Set up wandb metrics to track

@@ -1,3 +1,6 @@
 {
-    "diffEditor.ignoreTrimWhitespace": true
+    "diffEditor.ignoreTrimWhitespace": true,
+    "editor.rulers": [
+        80
+    ]
 }
