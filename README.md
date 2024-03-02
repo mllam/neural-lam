@@ -1,6 +1,7 @@
 <p align="middle">
     <img src="figures/neural_lam_header.png" width="700">
 </p>
+
 Neural-LAM is a repository of graph-based neural weather prediction models for Limited Area Modeling (LAM).
 The code uses [PyTorch](https://pytorch.org/) and [PyTorch Lightning](https://lightning.ai/pytorch-lightning).
 Graph Neural Networks are implemented using [PyG](https://pyg.org/) and logging is set up through [Weights & Biases](https://wandb.ai/).

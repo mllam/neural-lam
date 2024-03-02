@@ -62,8 +62,8 @@ def plot_graph(graph, title=None):
     plt.colorbar(node_scatter, aspect=50)
 
     margin = 0.5
-    axis.set_xlim(left=0 - margin, right=constants.grid_shape[0] + margin)
-    axis.set_ylim(bottom=0 - margin, top=constants.grid_shape[1] + margin)
+    axis.set_xlim(left=0 - margin, right=constants.GRID_SHAPE[0] + margin)
+    axis.set_ylim(bottom=0 - margin, top=constants.GRID_SHAPE[1] + margin)
 
     if title is not None:
         axis.set_title(title)
@@ -208,11 +208,10 @@ def main():
     #
 
     # graph geometry
-    nx = constants.graph_num_children  # number of children = nx**2
+    nx = constants.GRAPH_NUM_CHILDREN  # number of children = nx**2
     nlev = int(np.log(max(xy.shape)) / np.log(nx))
     nleaf = nx**nlev  # leaves at the bottom = nleaf**2
 
-    mesh_levels = nlev - 1
     mesh_levels = nlev - 1
     if args.levels:
         # Limit the levels in mesh graph
@@ -222,8 +221,6 @@ def main():
 
     # multi resolution tree levels
     G = []
-    for lev in range(1, mesh_levels + 1):
-        n = int(nleaf / (nx**lev))
     for lev in range(1, mesh_levels + 1):
         n = int(nleaf / (nx**lev))
         g = mk_2d_graph(xy, n, n)

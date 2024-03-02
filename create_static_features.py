@@ -10,6 +10,7 @@ from neural_lam import constants
 
 
 def main():
+    """Create the static features for the neural network."""
     parser = ArgumentParser(description="Static features arguments")
     parser.add_argument(
         "--xdim",
@@ -37,7 +38,7 @@ def main():
             "Names of the fields to extract from the .nc file "
             '(default: ["hsurf", "FI", "P0FL"])'
         ),
-    ),
+    )
     parser.add_argument(
         "--boundaries",
         type=int,
@@ -59,7 +60,7 @@ def main():
     args = parser.parse_args()
 
     # Open the .nc file
-    ds = xr.open_zarr(constants.example_file).isel(time=0)
+    ds = xr.open_zarr(constants.EXAMPLE_FILE).isel(time=0)
 
     np_fields = []
 
@@ -76,7 +77,7 @@ def main():
         else:
             np_fields.append(
                 ds[var_name]
-                .sel({args.zdim: constants.vertical_levels})
+                .sel({args.zdim: constants.VERTICAL_LEVELS})
                 .transpose(args.xdim, args.ydim, args.zdim)
                 .values
             )

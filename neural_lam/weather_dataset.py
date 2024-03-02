@@ -9,9 +9,11 @@ import torch
 import xarray as xr
 
 # First-party
-# First-party BUG: Import should work in interactive mode as well -> create pypi
-# package
+# BUG: Import should work in interactive mode as well -> create pypi package
 from neural_lam import constants, utils
+
+# pylint: disable=W0613:unused-argument
+# pylint: disable=W0201:attribute-defined-outside-init
 
 
 class WeatherDataset(torch.utils.data.Dataset):
@@ -50,9 +52,9 @@ class WeatherDataset(torch.utils.data.Dataset):
             raise ValueError("No .zarr files found in directory")
 
         if subset:
-            if constants.eval_datetime is not None and split == "test":
+            if constants.EVAL_DATETIME is not None and split == "test":
                 eval_datetime_obj = datetime.strptime(
-                    constants.eval_datetime, "%Y%m%d%H"
+                    constants.EVAL_DATETIME, "%Y%m%d%H"
                 )
                 for i, file in enumerate(self.zarr_files):
                     file_datetime_str = file.split("/")[-1].split("_")[1][:-5]
@@ -63,7 +65,7 @@ class WeatherDataset(torch.utils.data.Dataset):
                         file_datetime_obj
                         <= eval_datetime_obj
                         < file_datetime_obj
-                        + timedelta(hours=constants.chunk_size)
+                        + timedelta(hours=constants.CHUNK_SIZE)
                     ):
                         # Retrieve the current file and the next file if it
                         # exists
@@ -102,18 +104,18 @@ class WeatherDataset(torch.utils.data.Dataset):
 
         # Separate 3D and 2D variables
         variables_3d = [
-            var for var in constants.param_names_short if constants.is_3d[var]
+            var for var in constants.PARAM_NAMES_SHORT if constants.IS_3D[var]
         ]
         variables_2d = [
             var
-            for var in constants.param_names_short
-            if not constants.is_3d[var]
+            for var in constants.PARAM_NAMES_SHORT
+            if not constants.IS_3D[var]
         ]
 
         # Stack 3D variables
         datasets_3d = [
             xr.open_zarr(file, consolidated=True)[variables_3d]
-            .sel(z_1=constants.vertical_levels)
+            .sel(z_1=constants.VERTICAL_LEVELS)
             .to_array()
             .stack(var=("variable", "z_1"))
             .transpose("time", "x_1", "y_1", "var")
@@ -151,25 +153,25 @@ class WeatherDataset(torch.utils.data.Dataset):
 
     def __len__(self):
         num_steps = (
-            constants.train_horizon
+            constants.TRAIN_HORIZON
             if self.split == "train"
-            else constants.eval_horizon
+            else constants.EVAL_HORIZON
         )
-        total_time = len(self.zarr_files) * constants.chunk_size - num_steps
+        total_time = len(self.zarr_files) * constants.CHUNK_SIZE - num_steps
         return total_time
 
     def __getitem__(self, idx):
         num_steps = (
-            constants.train_horizon
+            constants.TRAIN_HORIZON
             if self.split == "train"
-            else constants.eval_horizon
+            else constants.EVAL_HORIZON
         )
 
         # Calculate which zarr files need to be loaded
-        start_file_idx = idx // constants.chunk_size
-        end_file_idx = (idx + num_steps) // constants.chunk_size
+        start_file_idx = idx // constants.CHUNK_SIZE
+        end_file_idx = (idx + num_steps) // constants.CHUNK_SIZE
         # Index of current slice
-        idx_sample = idx % constants.chunk_size
+        idx_sample = idx % constants.CHUNK_SIZE
 
         sample_archive = xr.concat(
             self.zarr_datasets[start_file_idx : end_file_idx + 1], dim="time"
@@ -196,6 +198,8 @@ class WeatherDataset(torch.utils.data.Dataset):
 
 
 class WeatherDataModule(pl.LightningDataModule):
+    """DataModule for weather data."""
+
     def __init__(
         self,
         dataset_name,

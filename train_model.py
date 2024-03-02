@@ -1,3 +1,4 @@
+# pylint: disable=wrong-import-order
 # Standard library
 import os
 import random
@@ -27,6 +28,7 @@ MODELS = {
 
 @rank_zero_only
 def print_args(args):
+    """Print arguments"""
     print("Arguments:")
     for arg in vars(args):
         print(f"{arg}: {getattr(args, arg)}")
@@ -34,11 +36,13 @@ def print_args(args):
 
 @rank_zero_only
 def print_eval(args_eval):
+    """Print evaluation"""
     print(f"Running evaluation on {args_eval}")
 
 
 @rank_zero_only
 def init_wandb(args):
+    """Initialize wandb"""
     if args.resume_run is None:
         prefix = "subset-" if args.subset_ds else ""
         if args.eval:
@@ -49,28 +53,28 @@ def init_wandb(args):
         )
         wandb.init(
             name=run_name,
-            project=constants.wandb_project,
+            project=constants.WANDB_PROJECT,
             config=args,
             mode=args.wandb_mode,
         )
         logger = pl.loggers.WandbLogger(
-            project=constants.wandb_project,
+            project=constants.WANDB_PROJECT,
             name=run_name,
             config=args,
             log_model=True,
         )
         wandb.save("slurm_train.sh")
-        wandb.save("neural_lam/constants.py")
+        wandb.save("neural_lam/constants.PY")
     else:
         wandb.init(
-            project=constants.wandb_project,
+            project=constants.WANDB_PROJECT,
             config=args,
             id=args.resume_run,
             resume="must",
             mode=args.wandb_mode,
         )
         logger = pl.loggers.WandbLogger(
-            project=constants.wandb_project,
+            project=constants.WANDB_PROJECT,
             id=args.resume_run,
             config=args,
             log_model=True,
@@ -80,6 +84,7 @@ def init_wandb(args):
 
 
 def main():
+    # pylint: disable=too-many-branches
     """
     Main function for training and evaluating models
     """
@@ -241,6 +246,7 @@ def main():
         "(default: 1)",
     )
     args = parser.parse_args()
+
     # Asserts for arguments
     assert args.model in MODELS, f"Unknown model: {args.model}"
     assert args.step_length <= 3, "Too high step length"
@@ -356,9 +362,9 @@ def main():
         max_epochs=args.epochs,
         logger=logger,
         log_every_n_steps=1,
-        callbacks=[checkpoint_callback]
-        if checkpoint_callback is not None
-        else [],
+        callbacks=(
+            [checkpoint_callback] if checkpoint_callback is not None else []
+        ),
         check_val_every_n_epoch=args.val_interval,
         precision=args.precision,
         use_distributed_sampler=use_distributed_sampler,

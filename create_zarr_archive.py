@@ -43,7 +43,7 @@ def load_data(config: dict) -> None:
     """Load weather data from NetCDF files and store it in a Zarr archive."""
 
     file_paths = []
-    for root, dirs, files in os.walk(data_config["data_path"]):
+    for root, _, files in os.walk(config["data_path"]):
         for file in files:
             full_path = os.path.join(root, file)
             file_paths.append(full_path)
@@ -70,6 +70,7 @@ def load_data(config: dict) -> None:
 
 
 def process_file(full_path, config, zarr_name):
+    """Process a single NetCDF file and store it in a Zarr archive."""
     try:
         # if zarr_name directory exists, skip
         match = config["filename_pattern"].match(full_path)
@@ -95,6 +96,7 @@ def process_file(full_path, config, zarr_name):
         print(f"Processed: {full_path}")
     except (FileNotFoundError, OSError) as e:
         print(f"Error: {e}")
+    return None
 
 
 def combine_zarr_archives(config) -> None:
@@ -103,16 +105,16 @@ def combine_zarr_archives(config) -> None:
 
     # Get the last Zarr archive from the train folder
     train_archives = sorted(
-        glob.glob(os.path.join(data_config["zarr_path"], "train", "*.zarr"))
+        glob.glob(os.path.join(config["zarr_path"], "train", "*.zarr"))
     )
 
     # Get the first Zarr archive from the test folder
     test_archives = sorted(
-        glob.glob(os.path.join(data_config["zarr_path"], "test", "*.zarr"))
+        glob.glob(os.path.join(config["zarr_path"], "test", "*.zarr"))
     )
     first_test_archive = xr.open_zarr(test_archives[0], consolidated=True)
 
-    val_archives_path = os.path.join(data_config["zarr_path"], "val")
+    val_archives_path = os.path.join(config["zarr_path"], "val")
 
     for t in range(first_test_archive.time.size):
         first_test_archive.isel(time=slice(t, t + 1)).to_zarr(
@@ -158,7 +160,7 @@ if __name__ == "__main__":
         "compressor": numcodecs.Blosc(
             cname="lz4", clevel=7, shuffle=numcodecs.Blosc.SHUFFLE
         ),
-        "chunk_size": constants.chunk_size,
+        "chunk_size": constants.CHUNK_SIZE,
         "test_year": args.test_year,
     }
     data_config.update(

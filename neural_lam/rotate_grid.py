@@ -49,7 +49,7 @@ def unrot_lon(rotlon, rotlat, pollon, pollat):
     return np.degrees(np.arctan(tmp1 / tmp2))
 
 
-def unrot_lat(rotlat, rotlon, pollon, pollat):
+def unrot_lat(rotlat, rotlon, pollat):
     """Transform rotated latitude to latitude.
 
     Parameters
@@ -85,9 +85,10 @@ def unrot_lat(rotlat, rotlon, pollon, pollat):
 
 
 def unrotate_latlon(data):
+    """Unrotate lat/lon coordinates from rotated pole grid."""
     xx, yy = np.meshgrid(data.x_1.values, data.y_1.values)
     # unrotate lon/lat
-    lon = unrot_lon(xx, yy, constants.pollon, constants.pollat)
-    lat = unrot_lat(yy, xx, constants.pollon, constants.pollat)
+    lon = unrot_lon(xx, yy, constants.POLLON, constants.POLLAT)
+    lat = unrot_lat(yy, xx, constants.POLLAT)
 
     return lon.T, lat.T

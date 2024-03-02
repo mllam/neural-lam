@@ -45,7 +45,6 @@ def main():
 
     static_dir_path = os.path.join("data", args.dataset, "static")
 
-    # Define weights for each vertical level and parameter
     # Create parameter weights based on height
     w_list = []
     for var_name, pw in zip(
@@ -53,8 +52,8 @@ def main():
     ):
         # Determine the levels to iterate over
         levels = (
-            constants.level_weights.values()
-            if constants.is_3d[var_name]
+            constants.LEVEL_WEIGHTS.values()
+            if constants.IS_3D[var_name]
             else [1]
         )
 

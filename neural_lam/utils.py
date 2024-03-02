@@ -4,8 +4,8 @@ import os
 # Third-party
 import numpy as np
 import torch
-import torch.nn as nn
 from pytorch_lightning.utilities import rank_zero_only
+from torch import nn
 from tueplots import bundles, figsizes
 
 # First-party
@@ -231,7 +231,7 @@ def make_mlp(blueprint, layer_norm=True):
     hidden layers of dimensions: blueprint[1], ..., blueprint[-2]
 
     if layer_norm is True, includes a LayerNorm layer at
-    the output (as used iwn GraphCast)
+    the output (as used in GraphCast)
     """
     hidden_layers = len(blueprint) - 2
     assert hidden_layers >= 0, "Invalid MLP blueprint"

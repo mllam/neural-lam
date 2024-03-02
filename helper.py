@@ -4,14 +4,14 @@ import os
 # Third-party
 import xarray as xr
 
-path = "data/cosmo/samples/test/"
+PATH = "data/cosmo/samples/test/"
 
 # Initialize a dictionary to store the top-1 precipitation event for each file
 precip_events = {}
 
-for file in os.listdir(path):
+for file in os.listdir(PATH):
     print(file)
-    ds = xr.open_zarr(os.path.join(path, file))
+    ds = xr.open_zarr(os.path.join(PATH, file))
 
     ds_rechunked = ds.chunk({"time": -1})
     mean_tot_prec = ds_rechunked["TOT_PREC"].mean(dim=["y_1", "x_1"]).compute()
@@ -21,13 +21,13 @@ for file in os.listdir(path):
     max_precip_time = mean_tot_prec.where(
         mean_tot_prec == max_precip_value, drop=True
     ).time.values[0]
-    max_precip_time_str = str(
+    MAX_PRECIP_TIME_STR = str(
         max_precip_time
     )  # Convert to string for dictionary key
 
     # Store the top-1 precipitation event in the dictionary
     precip_events[file] = {
-        "max_time": max_precip_time_str,
+        "max_time": MAX_PRECIP_TIME_STR,
         "max_value": max_precip_value,
     }
 

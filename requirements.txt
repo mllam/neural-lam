@@ -6,8 +6,11 @@ scipy>=1.10.0
 pytorch-lightning>=2.0.3
 shapely>=2.0.1
 networkx>=3.0
+imageio>=2.34.0
+numcodecs>=0.12.1
 Cartopy>=0.22.0
 pyproj>=3.4.1
+xarray>=2024.1.1
 tueplots>=0.0.8
 plotly>=5.15.0
 # for dev

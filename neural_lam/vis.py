@@ -23,7 +23,7 @@ def plot_error_map(errors, global_mean, title=None, step_length=1):
     errors_norm = errors_np / np.abs(np.expand_dims(global_mean.cpu(), axis=1))
     height = int(
         np.sqrt(
-            len(constants.vertical_levels) * len(constants.param_names_short)
+            len(constants.VERTICAL_LEVELS) * len(constants.PARAM_NAMES_SHORT)
         )
         * 2
     )
@@ -83,7 +83,7 @@ def plot_error_map(errors, global_mean, title=None, step_length=1):
 
 
 @matplotlib.rc_context(utils.fractional_plot_bundle(1))
-def plot_prediction(pred, target, obs_mask, title=None, vrange=None):
+def plot_prediction(pred, target, title=None, vrange=None):
     """
     Plot example prediction and grond truth.
     Each has shape (N_grid,)
@@ -108,7 +108,7 @@ def plot_prediction(pred, target, obs_mask, title=None, vrange=None):
 
     # Plot pred and target
     for ax, data in zip(axes, (target, pred)):
-        data_grid = data.reshape(*constants.grid_shape[::-1]).cpu().numpy()
+        data_grid = data.reshape(*constants.GRID_SHAPE[::-1]).cpu().numpy()
         contour_set = ax.contourf(
             lon,
             lat,
@@ -120,7 +120,7 @@ def plot_prediction(pred, target, obs_mask, title=None, vrange=None):
         ax.add_feature(cf.BORDERS, linestyle="-", edgecolor="black")
         ax.add_feature(cf.COASTLINE, linestyle="-", edgecolor="black")
         ax.gridlines(
-            crs=constants.selected_proj,
+            crs=constants.SELECTED_PROJ,
             draw_labels=False,
             linewidth=0.5,
             alpha=0.5,
@@ -139,7 +139,7 @@ def plot_prediction(pred, target, obs_mask, title=None, vrange=None):
 
 
 @matplotlib.rc_context(utils.fractional_plot_bundle(1))
-def plot_spatial_error(error, obs_mask, title=None, vrange=None):
+def plot_spatial_error(error, title=None, vrange=None):
     """
     Plot errors over spatial map
     Error and obs_mask has shape (N_grid,)
@@ -160,7 +160,7 @@ def plot_spatial_error(error, obs_mask, title=None, vrange=None):
         subplot_kw={"projection": constants.SELECTED_PROJ},
     )
 
-    error_grid = error.reshape(*constants.grid_shape[::-1]).cpu().numpy()
+    error_grid = error.reshape(*constants.GRID_SHAPE[::-1]).cpu().numpy()
 
     contour_set = ax.contourf(
         lon,
@@ -173,7 +173,7 @@ def plot_spatial_error(error, obs_mask, title=None, vrange=None):
     ax.add_feature(cf.BORDERS, linestyle="-", edgecolor="black")
     ax.add_feature(cf.COASTLINE, linestyle="-", edgecolor="black")
     ax.gridlines(
-        crs=constants.selected_proj, draw_labels=False, linewidth=0.5, alpha=0.5
+        crs=constants.SELECTED_PROJ, draw_labels=False, linewidth=0.5, alpha=0.5
     )
 
     # Ticks and labels
