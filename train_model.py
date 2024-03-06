@@ -1,7 +1,6 @@
 # pylint: disable=wrong-import-order
 # Standard library
 import os
-import random
 import time
 from argparse import ArgumentParser
 
@@ -17,7 +16,7 @@ from neural_lam import constants, utils
 from neural_lam.models.graph_lam import GraphLAM
 from neural_lam.models.hi_lam import HiLAM
 from neural_lam.models.hi_lam_parallel import HiLAMParallel
-from neural_lam.weather_dataset import WeatherDataset
+from neural_lam.weather_dataset import WeatherDataModule
 
 MODELS = {
     "graph_lam": GraphLAM,
@@ -55,7 +54,6 @@ def init_wandb(args):
             name=run_name,
             project=constants.WANDB_PROJECT,
             config=args,
-            mode=args.wandb_mode,
         )
         logger = pl.loggers.WandbLogger(
             project=constants.WANDB_PROJECT,
@@ -71,7 +69,6 @@ def init_wandb(args):
             config=args,
             id=args.resume_run,
             resume="must",
-            mode=args.wandb_mode,
         )
         logger = pl.loggers.WandbLogger(
             project=constants.WANDB_PROJECT,
@@ -135,6 +132,9 @@ def main():
         "--load",
         type=str,
         help="Path to load model parameters from (default: None)",
+    )
+    parser.add_argument(
+        "--resume_run", type=str, help="Run ID to resume (default: None)"
     )
     parser.add_argument(
         "--restore_opt",
@@ -256,94 +256,45 @@ def main():
         "test",
     ), f"Unknown eval setting: {args.eval}"
 
-    # Get an (actual) random run id as a unique identifier
-    random_run_id = random.randint(0, 9999)
-
     # Set seed
     seed.seed_everything(args.seed)
 
-    # Load data
-    train_loader = torch.utils.data.DataLoader(
-        WeatherDataset(
-            args.dataset,
-            pred_length=args.ar_steps,
-            split="train",
-            subsample_step=args.step_length,
-            subset=bool(args.subset_ds),
-            control_only=args.control_only,
-        ),
-        args.batch_size,
-        shuffle=True,
-        num_workers=args.n_workers,
-    )
-    max_pred_length = (65 // args.step_length) - 2  # 19
-    val_loader = torch.utils.data.DataLoader(
-        WeatherDataset(
-            args.dataset,
-            pred_length=max_pred_length,
-            split="val",
-            subsample_step=args.step_length,
-            subset=bool(args.subset_ds),
-            control_only=args.control_only,
-        ),
-        args.batch_size,
-        shuffle=False,
+    # Create datamodule
+    data_module = WeatherDataModule(
+        args.dataset,
+        subset=bool(args.subset_ds),
+        batch_size=args.batch_size,
         num_workers=args.n_workers,
     )
 
     # Instantiate model + trainer
     if torch.cuda.is_available():
-        device_name = "cuda"
         torch.set_float32_matmul_precision(
             "high"
         )  # Allows using Tensor Cores on A100s
-    else:
-        device_name = "cpu"
 
     # Load model parameters Use new args for model
     model_class = MODELS[args.model]
-    if args.load:
-        model = model_class.load_from_checkpoint(args.load, args=args)
-        if args.restore_opt:
-            # Save for later
-            # Unclear if this works for multi-GPU
-            model.opt_state = torch.load(args.load)["optimizer_states"][0]
+    model = model_class(args)
+
+    result = init_wandb(args)
+    if result is not None:
+        logger = result
+        checkpoint_dir = logger.experiment.dir
     else:
-        model = model_class(args)
+        logger = None
+        checkpoint_dir = "lightning_logs"
 
-    prefix = "subset-" if args.subset_ds else ""
-    if args.eval:
-        prefix = prefix + f"eval-{args.eval}-"
-    run_name = (
-        f"{prefix}{args.model}-{args.processor_layers}x{args.hidden_dim}-"
-        f"{time.strftime('%m_%d_%H')}-{random_run_id:04d}"
-    )
+    # Ensure the checkpoint directory exists
+    os.makedirs(checkpoint_dir, exist_ok=True)
+
     checkpoint_callback = pl.callbacks.ModelCheckpoint(
-        dirpath=f"saved_models/{run_name}",
-        filename="min_val_loss",
-        monitor="val_mean_loss",
-        mode="min",
-        save_last=True,
+        dirpath=checkpoint_dir,
+        filename="{epoch}",
+        every_n_epochs=1,
+        save_on_train_epoch_end=True,
+        verbose=True,
     )
-    logger = pl.loggers.WandbLogger(
-        project=constants.WANDB_PROJECT, name=run_name, config=args
-    )
-    trainer = pl.Trainer(
-        max_epochs=args.epochs,
-        deterministic=True,
-        strategy="ddp",
-        accelerator=device_name,
-        logger=logger,
-        log_every_n_steps=1,
-        callbacks=[checkpoint_callback],
-        check_val_every_n_epoch=args.val_interval,
-        precision=args.precision,
-    )
-
-    # Only init once, on rank 0 only
-    if trainer.global_rank == 0:
-        utils.init_wandb_metrics(logger)  # Do after wandb.init
-
     if args.eval:
         use_distributed_sampler = False
     else:
@@ -384,30 +335,22 @@ def main():
     if args.eval:
         print_eval(args.eval)
         if args.eval == "val":
-            eval_loader = val_loader
+            data_module.split = "val"
         else:  # Test
-            eval_loader = torch.utils.data.DataLoader(
-                WeatherDataset(
-                    args.dataset,
-                    pred_length=max_pred_length,
-                    split="test",
-                    subsample_step=args.step_length,
-                    subset=bool(args.subset_ds),
-                ),
-                args.batch_size,
-                shuffle=False,
-                num_workers=args.n_workers,
-            )
-
-        print(f"Running evaluation on {args.eval}")
-        trainer.test(model=model, dataloaders=eval_loader)
+            data_module.split = "test"
+        trainer.test(model=model, datamodule=data_module, ckpt_path=args.load)
     else:
         # Train model
-        trainer.fit(
-            model=model,
-            train_dataloaders=train_loader,
-            val_dataloaders=val_loader,
-        )
+        data_module.split = "train"
+        if args.load:
+            trainer.fit(
+                model=model, datamodule=data_module, ckpt_path=args.load
+            )
+        else:
+            trainer.fit(model=model, datamodule=data_module)
+
+    # Print profiler
+    print(trainer.profiler)  # pylint: disable=no-member
 
 
 if __name__ == "__main__":

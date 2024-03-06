@@ -59,7 +59,6 @@ def main():
     )
     args = parser.parse_args()
 
-    # Open the .nc file
     ds = xr.open_zarr(constants.EXAMPLE_FILE).isel(time=0)
 
     np_fields = []
@@ -81,15 +80,14 @@ def main():
                 .transpose(args.xdim, args.ydim, args.zdim)
                 .values
             )
-
-    np_fields = np.concatenate(np_fields, axis=-1)
+    np_fields = np.concatenate(np_fields, axis=-1)  # (N_x, N_y, N_fields)
 
     # Save the numpy array to a .npy file
     np.save(args.outdir + "reference_geopotential_pressure.npy", np_fields)
 
     # Get the dimensions of the dataset
-    dims = ds.dims
-    x_dim, y_dim = ds.dims[args.xdim], ds.dims[args.ydim]
+    dims = ds.sizes
+    x_dim, y_dim = ds.sizes[args.xdim], ds.sizes[args.ydim]
 
     # Create a 2D meshgrid for x and y indices
     x_grid, y_grid = np.indices((x_dim, y_dim))
@@ -97,7 +95,7 @@ def main():
     # Stack the 2D arrays into a 3D array with x and y as the first dimension
     grid_xy = np.stack((y_grid, x_grid))
 
-    np.save(args.outdir + "nwp_xy.npy", grid_xy)
+    np.save(args.outdir + "nwp_xy.npy", grid_xy)  # (2, N_x, N_y)
 
     # Create a mask with the same dimensions, initially set to False
     mask = np.full((dims[args.xdim], dims[args.ydim]), False)
@@ -109,7 +107,7 @@ def main():
     mask[:, -args.boundaries :] = True  # right boundary
 
     # Save the numpy array to a .npy file
-    np.save(args.outdir + "border_mask", mask)
+    np.save(args.outdir + "border_mask", mask)  # (N_x, N_y)
 
 
 if __name__ == "__main__":

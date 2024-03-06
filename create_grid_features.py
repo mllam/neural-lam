@@ -31,13 +31,17 @@ def main():
     grid_xy = grid_xy / pos_max  # Divide by maximum coordinate
 
     geopotential = torch.tensor(
-        np.load(os.path.join(static_dir_path, "surface_geopotential.npy"))
-    )  # (N_x, N_y)
-    geopotential = geopotential.flatten(0, 1).unsqueeze(1)  # (N_grid,1)
+        np.load(
+            os.path.join(static_dir_path, "reference_geopotential_pressure.npy")
+        )
+    )  # (N_x, N_y, N_fields)
+    geopotential = geopotential.flatten(0, 1)  # (N_grid, N_fields)
     gp_min = torch.min(geopotential)
     gp_max = torch.max(geopotential)
     # Rescale geopotential to [0,1]
-    geopotential = (geopotential - gp_min) / (gp_max - gp_min)  # (N_grid, 1)
+    geopotential = (geopotential - gp_min) / (
+        gp_max - gp_min
+    )  # (N_grid, N_fields)
 
     grid_border_mask = torch.tensor(
         np.load(os.path.join(static_dir_path, "border_mask.npy")),

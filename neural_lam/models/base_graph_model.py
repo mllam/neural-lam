@@ -2,7 +2,7 @@
 import torch
 
 # First-party
-from neural_lam import utils
+from neural_lam import constants, utils
 from neural_lam.interaction_net import InteractionNet
 from neural_lam.models.ar_model import ARModel
 
@@ -99,28 +99,37 @@ class BaseGraphModel(ARModel):
         raise NotImplementedError("process_step not implemented")
 
     def predict_step(
-        self, prev_state, prev_prev_state, batch_static_features, forcing
+        self,
+        prev_state,
+        prev_prev_state,
+        batch_static_features=None,
+        forcing=None,
     ):
         """
         Step state one step ahead using prediction model, X_{t-1}, X_t -> X_t+1
         prev_state: (B, num_grid_nodes, feature_dim), X_t
         prev_prev_state: (B, num_grid_nodes, feature_dim), X_{t-1}
         batch_static_features: (B, num_grid_nodes, batch_static_feature_dim)
-        forcing: (B, num_grid_nodes, forcing_dim)
+        forcing: (B, num_grid_nodes, forcing_dim), optional
         """
         batch_size = prev_state.shape[0]
 
-        # Create full grid node features of shape (B, num_grid_nodes, grid_dim)
-        grid_features = torch.cat(
-            (
-                prev_state,
-                prev_prev_state,
-                batch_static_features,
-                forcing,
-                self.expand_to_batch(self.grid_static_features, batch_size),
-            ),
-            dim=-1,
+        features_list = [
+            prev_state,
+            prev_prev_state,
+        ]
+
+        if (
+            constants.BATCH_STATIC_FEATURE_DIM > 0
+            and batch_static_features is not None
+        ):
+            features_list.append(batch_static_features)
+        if constants.GRID_FORCING_DIM > 0 and forcing is not None:
+            features_list.append(forcing)
+        features_list.append(
+            self.expand_to_batch(self.grid_static_features, batch_size)
         )
+        grid_features = torch.cat(features_list, dim=-1)
 
         # Embed all features
         grid_emb = self.grid_embedder(grid_features)  # (B, num_grid_nodes, d_h)

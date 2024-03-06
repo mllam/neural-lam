@@ -50,10 +50,11 @@ mamba env create -f environment.yml
 mamba activate neural-lam
 
 # Run the preprocessing/training scripts
+# (don't execute preprocessing scripts at the same time as training)
 sbatch slurm_train.sh
 
 # Run the evaluation script and generate plots and gif for TQV
-# (don't execute preprocessing scripts at the same time as training)
+# (by default this will use the pre-trained model from `wandb/example.ckpt`)
 sbatch slurm_eval.sh
 
 ```

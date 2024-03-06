@@ -18,17 +18,19 @@ from neural_lam import constants, utils
 
 class WeatherDataset(torch.utils.data.Dataset):
     """
-    For our dataset: N_t = 1h N_x = 582 N_y = 390 N_grid = 582*390 = 226980
-    d_features = 4(features) * 21(vertical model levels) = 84 d_forcing = 0
+    N_t = 1h
+    N_x = 582
+    N_y = 390
+    N_grid = 582*390 = 226980
+    d_features = 4(features) * 21(vertical model levels) = 84
+    d_forcing = 0
     #TODO: extract incoming radiation from KENDA
     """
 
     def __init__(
         self,
         dataset_name,
-        pred_length=19,
         split="train",
-        subsample_step=3,
         standardize=True,
         subset=False,
         batch_size=4,
@@ -141,12 +143,18 @@ class WeatherDataset(torch.utils.data.Dataset):
         self.standardize = standardize
         if standardize:
             ds_stats = utils.load_dataset_stats(dataset_name, "cpu")
-            self.data_mean, self.data_std, self.flux_mean, self.flux_std = (
-                ds_stats["data_mean"],
-                ds_stats["data_std"],
-                ds_stats["flux_mean"],
-                ds_stats["flux_std"],
-            )
+            if constants.GRID_FORCING_DIM > 0:
+                self.data_mean, self.data_std, self.flux_mean, self.flux_std = (
+                    ds_stats["data_mean"],
+                    ds_stats["data_std"],
+                    ds_stats["flux_mean"],
+                    ds_stats["flux_std"],
+                )
+            else:
+                self.data_mean, self.data_std = (
+                    ds_stats["data_mean"],
+                    ds_stats["data_std"],
+                )
 
         self.random_subsample = split == "train"
         self.split = split

@@ -17,6 +17,7 @@ from torch import nn
 from neural_lam import constants, metrics, utils, vis
 
 
+# pylint: disable=too-many-public-methods
 class ARModel(pl.LightningModule):
     """
     Generic auto-regressive weather model.
@@ -104,7 +105,7 @@ class ARModel(pl.LightningModule):
             self.test_metrics["output_std"] = []  # Treat as metric
 
         # For making restoring of optimizer state optional
-        self.resume_opt_sched = args.resume_opt_sched
+        self.restore_opt = args.restore_opt
 
         # For example plotting
         self.n_example_pred = args.n_example_pred
@@ -140,11 +141,6 @@ class ARModel(pl.LightningModule):
         self.metrics_initialized = True  # Make sure this is done only once
 
     def configure_optimizers(self):
-        opt = torch.optim.AdamW(
-            self.parameters(), lr=self.lr, betas=(0.9, 0.95)
-        )
-        if self.opt_state:
-            opt.load_state_dict(self.opt_state)
         opt = torch.optim.AdamW(
             self.parameters(), lr=self.lr, betas=(0.9, 0.95)
         )
@@ -214,35 +210,49 @@ class ARModel(pl.LightningModule):
         return prediction
 
     def predict_step(
-        self, prev_state, prev_prev_state, batch_static_features, forcing
+        self,
+        prev_state,
+        prev_prev_state,
+        batch_static_features=None,
+        forcing=None,
     ):
         """
         Step state one step ahead using prediction model, X_{t-1}, X_t -> X_t+1
         prev_state: (B, num_grid_nodes, feature_dim), X_t
         prev_prev_state: (B, num_grid_nodes, feature_dim), X_{t-1}
         batch_static_features: (B, num_grid_nodes, batch_static_feature_dim)
-        forcing: (B, num_grid_nodes, forcing_dim)
+        forcing: (B, num_grid_nodes, forcing_dim), optional
         """
         raise NotImplementedError("No prediction step implemented")
 
     def unroll_prediction(
-        self, init_states, batch_static_features, forcing_features, true_states
+        self,
+        init_states,
+        true_states,
+        batch_static_features=None,
+        forcing_features=None,
     ):
         """
         Roll out prediction taking multiple autoregressive steps with model
         init_states: (B, 2, num_grid_nodes, d_f)
-        batch_static_features: (B, num_grid_nodes, d_static_f)
-        forcing_features: (B, pred_steps, num_grid_nodes, d_static_f)
+        batch_static_features: (B, num_grid_nodes, d_static_f), optional
+        forcing_features: (B, pred_steps, num_grid_nodes, d_static_f), optional
         true_states: (B, pred_steps, num_grid_nodes, d_f)
         """
         prev_prev_state = init_states[:, 0]
         prev_state = init_states[:, 1]
         prediction_list = []
         pred_std_list = []
-        pred_steps = forcing_features.shape[1]
+        pred_steps = (
+            forcing_features.shape[1]
+            if forcing_features is not None
+            else true_states.shape[1]
+        )
 
         for i in range(pred_steps):
-            forcing = forcing_features[:, i]
+            forcing = (
+                forcing_features[:, i] if forcing_features is not None else None
+            )
             border_state = true_states[:, i]
 
             pred_state, pred_std = self.predict_step(
@@ -284,20 +294,18 @@ class ARModel(pl.LightningModule):
 
         init_states: (B, 2, num_grid_nodes, d_features)
         target_states: (B, pred_steps, num_grid_nodes, d_features)
-        batch_static_features: (B, num_grid_nodes, d_static_f),
-            for example open water
-        forcing_features: (B, pred_steps, num_grid_nodes, d_forcing),
-            where index 0 corresponds to index 1 of init_states
+        batch_static_features: (B, num_grid_nodes, d_static_f), optional
+        forcing_features: (B, pred_steps, num_grid_nodes, d_forcing), optional
         """
-        (
+        init_states, target_states = batch[:2]
+        batch_static_features = batch[2] if len(batch) > 2 else None
+        forcing_features = batch[3] if len(batch) > 3 else None
+
+        prediction, pred_std = self.unroll_prediction(
             init_states,
             target_states,
             batch_static_features,
             forcing_features,
-        ) = batch
-
-        prediction, pred_std = self.unroll_prediction(
-            init_states, batch_static_features, forcing_features, target_states
         )  # (B, pred_steps, num_grid_nodes, d_f)
         # prediction: (B, pred_steps, num_grid_nodes, d_f)
         # pred_std: (B, pred_steps, num_grid_nodes, d_f) or (d_f,)
@@ -379,7 +387,7 @@ class ARModel(pl.LightningModule):
         for metric_list in self.val_metrics.values():
             metric_list.clear()
 
-    def test_step(self, batch):
+    def test_step(self, batch, batch_idx):
         """
         Run test on single batch
         """
@@ -437,20 +445,16 @@ class ARModel(pl.LightningModule):
         # (B, N_log, num_grid_nodes)
 
         # Plot example predictions (on rank 0 only)
-        if (
-            self.trainer.is_global_zero
-            and self.plotted_examples < self.n_example_pred
-        ):
+        if self.trainer.is_global_zero:
+            self.plot_examples(batch, batch_idx, prediction=prediction)
 
-            self.plot_examples(batch, prediction=prediction)
-
-    def plot_examples(self, batch, prediction=None):
+    def plot_examples(self, batch, batch_idx, prediction=None):
         """
         Plot the first n_examples forecasts from batch
 
-        batch: batch with data to plot corresponding forecasts for n_examples:
-        number of forecasts to plot prediction: (B, pred_steps, num_grid_nodes,
-        d_f), existing prediction.
+        batch: batch with data to plot corresponding forecasts for
+        n_examples: number of forecasts to plot
+        prediction: (B, pred_steps, num_grid_nodes, d_f), existing prediction.
             Generate if None.
         """
         if prediction is None:
@@ -458,110 +462,142 @@ class ARModel(pl.LightningModule):
 
         target = batch[1]
 
-        # Rescale to original data scale
-        prediction_rescaled = prediction * self.data_std + self.data_mean
-        prediction_rescaled = self.apply_constraints(prediction_rescaled)
-        target_rescaled = target * self.data_std + self.data_mean
-
-        # BUG: this creates artifacts at border cells, improve logic!
-        if constants.SMOOTH_BOUNDARIES:
-            # (pred_steps, N_grid, d_f)
-
-            height, width = constants.GRID_SHAPE
-            prediction_permuted = prediction_rescaled.permute(0, 2, 1).reshape(
-                prediction_rescaled.size(0),
-                prediction_rescaled.size(2),
-                height,
-                width,
+        if (
+            self.global_rank == 0
+            and self.trainer.datamodule.test_dataset.batch_index == batch_idx
+        ):
+            index_within_batch = (
+                self.trainer.datamodule.test_dataset.index_within_batch
             )
-
-            # Define the smoothing kernel for grouped convolution
-            num_groups = prediction_permuted.shape[1]
-            kernel_size = 3
-            kernel = torch.ones((num_groups, 1, kernel_size, kernel_size)) / (
-                kernel_size**2
-            )
-            kernel = kernel.to(self.device)
-
-            # Use the updated kernel in the conv2d operation
-            # pylint: disable=not-callable
-            prediction_smoothed = nn.functional.conv2d(
-                prediction_permuted, kernel, padding=1, groups=num_groups
-            )
-
-            # (pred_steps, N_grid, channels) Combine the height and width
-            # dimensions back into a single N_grid dimension
-            prediction_smoothed = prediction_smoothed.reshape(
-                prediction_smoothed.size(0), prediction_smoothed.size(1), -1
-            )
-
-            # Permute the dimensions to get back to the original order
-            # (pred_steps, N_grid, d_f)
-            prediction_smoothed = prediction_smoothed.permute(0, 2, 1)
-
-            # Apply the mask to the smoothed prediction
-            prediction_rescaled = (
-                self.border_mask * prediction_smoothed
-                + self.interior_mask * prediction_rescaled
-            )
-
-        # Each slice is (pred_steps, N_grid, d_f) Iterate over variables
-
-        for var_name, var_unit in self.selected_vars_units:
-            # Retrieve the indices for the current variable
-            var_indices = self.variable_indices[var_name]
-            for lvl_i, var_i in enumerate(var_indices):
-                # Calculate var_vrange for each index
-                lvl = constants.VERTICAL_LEVELS[lvl_i]
-                var_vmin = min(
-                    prediction_rescaled[:, :, var_i].min(),
-                    target_rescaled[:, :, var_i].min(),
+            if not torch.is_tensor(index_within_batch):
+                index_within_batch = torch.tensor(
+                    index_within_batch,
+                    dtype=torch.int64,
+                    device=prediction.device,
                 )
-                var_vmax = max(
-                    prediction_rescaled[:, :, var_i].max(),
-                    target_rescaled[:, :, var_i].max(),
-                )
-                var_vrange = (var_vmin, var_vmax)
-                # Iterate over time steps
-                for t_i, (pred_t, target_t) in enumerate(
-                    zip(prediction_rescaled, target_rescaled), start=1
-                ):
-                    eval_datetime_obj = datetime.strptime(
-                        constants.EVAL_DATETIME, "%Y%m%d%H"
-                    )
-                    current_datetime_obj = eval_datetime_obj + timedelta(
-                        hours=t_i
-                    )
-                    current_datetime_str = current_datetime_obj.strftime(
-                        "%Y%m%d%H"
-                    )
-                    title = f"{var_name} ({var_unit}), t={current_datetime_str}"
-                    var_fig = vis.plot_prediction(
-                        pred_t[:, var_i],
-                        target_t[:, var_i],
-                        title=title,
-                        vrange=var_vrange,
-                    )
-                    wandb.log(
-                        {
-                            (
-                                f"{var_name}_lvl_{lvl:02}_t_"
-                                f"{current_datetime_str}"
-                            ): wandb.Image(var_fig)
-                        }
-                    )
-                    plt.close("all")
 
-        if constants.STORE_EXAMPLE_DATA:
-            # Save pred and target as .pt files
-            torch.save(
-                prediction_rescaled.cpu(),
-                os.path.join(wandb.run.dir, "example_pred.pt"),
-            )
-            torch.save(
-                target_rescaled.cpu(),
-                os.path.join(wandb.run.dir, "example_target.pt"),
-            )
+            prediction = prediction[index_within_batch]
+            target = target[index_within_batch]
+
+            # Rescale to original data scale
+            prediction_rescaled = prediction * self.data_std + self.data_mean
+            prediction_rescaled = self.apply_constraints(prediction_rescaled)
+            target_rescaled = target * self.data_std + self.data_mean
+
+            if constants.SMOOTH_BOUNDARIES:
+                # BUG: this creates artifacts at border cells, improve logic!
+                prediction_rescaled = self.smooth_prediction_borders(
+                    prediction_rescaled
+                )
+
+            # Each slice is (pred_steps, N_grid, d_f) Iterate over variables
+
+            for var_name, var_unit in self.selected_vars_units:
+                # Retrieve the indices for the current variable
+                var_indices = self.variable_indices[var_name]
+                for lvl_i, var_i in enumerate(var_indices):
+                    # Calculate var_vrange for each index
+                    lvl = constants.VERTICAL_LEVELS[lvl_i]
+                    var_vmin = min(
+                        prediction_rescaled[:, :, var_i].min(),
+                        target_rescaled[:, :, var_i].min(),
+                    )
+                    var_vmax = max(
+                        prediction_rescaled[:, :, var_i].max(),
+                        target_rescaled[:, :, var_i].max(),
+                    )
+                    var_vrange = (var_vmin, var_vmax)
+                    # Iterate over time steps
+                    for t_i, (pred_t, target_t) in enumerate(
+                        zip(prediction_rescaled, target_rescaled), start=1
+                    ):
+                        eval_datetime_obj = datetime.strptime(
+                            constants.EVAL_DATETIME, "%Y%m%d%H"
+                        )
+                        current_datetime_obj = eval_datetime_obj + timedelta(
+                            hours=t_i
+                        )
+                        current_datetime_str = current_datetime_obj.strftime(
+                            "%Y%m%d%H"
+                        )
+                        title = (
+                            f"{var_name} ({var_unit}), t={current_datetime_str}"
+                        )
+                        var_fig = vis.plot_prediction(
+                            pred_t[:, var_i],
+                            target_t[:, var_i],
+                            title=title,
+                            vrange=var_vrange,
+                        )
+                        wandb.log(
+                            {
+                                (
+                                    f"{var_name}_lvl_{lvl:02}_t_"
+                                    f"{current_datetime_str}"
+                                ): wandb.Image(var_fig)
+                            }
+                        )
+                        plt.close("all")
+
+            if constants.STORE_EXAMPLE_DATA:
+                # Save pred and target as .pt files
+                torch.save(
+                    prediction_rescaled.cpu(),
+                    os.path.join(wandb.run.dir, "example_pred.pt"),
+                )
+                torch.save(
+                    target_rescaled.cpu(),
+                    os.path.join(wandb.run.dir, "example_target.pt"),
+                )
+
+    def smooth_prediction_borders(self, prediction_rescaled):
+        """
+        Smooths the prediction at the borders to avoid artifacts.
+
+        Args:
+            prediction_rescaled (torch.Tensor): The rescaled prediction tensor.
+
+        Returns:
+            torch.Tensor: The prediction tensor after smoothing the borders.
+        """
+        height, width = constants.GRID_SHAPE
+        prediction_permuted = prediction_rescaled.permute(0, 2, 1).reshape(
+            prediction_rescaled.size(0),
+            prediction_rescaled.size(2),
+            height,
+            width,
+        )
+
+        # Define the smoothing kernel for grouped convolution
+        num_groups = prediction_permuted.shape[1]
+        kernel_size = 3
+        kernel = torch.ones((num_groups, 1, kernel_size, kernel_size)) / (
+            kernel_size**2
+        )
+        kernel = kernel.to(self.device)
+
+        # Use the updated kernel in the conv2d operation
+        # pylint: disable-next=not-callable
+        prediction_smoothed = nn.functional.conv2d(
+            prediction_permuted, kernel, padding=1, groups=num_groups
+        )
+
+        # Combine the height and width dimensions back into a single N_grid
+        # dimension
+        prediction_smoothed = prediction_smoothed.reshape(
+            prediction_smoothed.size(0), prediction_smoothed.size(1), -1
+        )
+
+        # Permute the dimensions to get back to the original order
+        prediction_smoothed = prediction_smoothed.permute(0, 2, 1)
+
+        # Apply the mask to the smoothed prediction
+        prediction_rescaled = (
+            self.border_mask * prediction_smoothed
+            + self.interior_mask * prediction_rescaled
+        )
+
+        return prediction_rescaled
 
     def create_metric_log_dict(self, metric_tensor, prefix, metric_name):
         """
@@ -619,9 +655,7 @@ class ARModel(pl.LightningModule):
         """
         log_dict = {}
         for metric_name, metric_val_list in metrics_dict.items():
-            metric_tensor = self.all_gather_cat(
-                torch.cat(metric_val_list, dim=0)
-            )  # (N_eval, pred_steps, d_f)
+            metric_tensor = torch.cat(metric_val_list, dim=0)
 
             if self.trainer.is_global_zero:
                 # Note: we here assume rescaling for all metrics is linear
@@ -731,3 +765,13 @@ class ARModel(pl.LightningModule):
                 )
                 loaded_state_dict[new_key] = loaded_state_dict[old_key]
                 del loaded_state_dict[old_key]
+        if not self.restore_opt:
+            # Create new optimizer and scheduler instances instead of setting
+            # them to None
+            optimizers, lr_schedulers = self.configure_optimizers()
+            checkpoint["optimizer_states"] = [
+                opt.state_dict() for opt in optimizers
+            ]
+            checkpoint["lr_schedulers"] = [
+                sched.state_dict() for sched in lr_schedulers
+            ]

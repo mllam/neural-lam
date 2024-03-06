@@ -11,7 +11,7 @@ from neural_lam.rotate_grid import unrotate_latlon
 
 
 @matplotlib.rc_context(utils.fractional_plot_bundle(1))
-def plot_error_map(errors, global_mean, title=None, step_length=1):
+def plot_error_map(errors, global_mean, step_length=1, title=None):
     """
     Plot a heatmap of errors of different variables at different
     predictions horizons
@@ -54,13 +54,6 @@ def plot_error_map(errors, global_mean, title=None, step_length=1):
     ax.set_xlabel("Lead time (h)", size=label_size)
 
     ax.set_yticks(np.arange(d_f))
-    y_ticklabels = [
-        f"{name} ({unit})"
-        for name, unit in zip(
-            constants.PARAM_NAMES_SHORT, constants.PARAM_UNITS
-        )
-    ]
-    ax.set_yticklabels(y_ticklabels, rotation=30, size=label_size)
     y_ticklabels = [
         (
             f"{name if name != 'RELHUM' else 'RH'} ({unit}) "
