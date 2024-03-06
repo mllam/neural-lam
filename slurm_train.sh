@@ -9,7 +9,7 @@
 #SBATCH --mem=490G
 #SBATCH --no-requeue
 
-export PREPROCESS=false
+export PREPROCESS=true
 export NORMALIZE=false
 
 # Load necessary modules

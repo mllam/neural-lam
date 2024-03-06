@@ -1,6 +1,6 @@
 #!/bin/bash -l
 #SBATCH --job-name=NeurWPe
-#SBATCH --nodes=2
+#SBATCH --nodes=1
 #SBATCH --ntasks-per-node=4
 #SBATCH --partition=a100-80gb
 #SBATCH --account=s83
@@ -9,7 +9,7 @@
 #SBATCH --time=03:00:00
 #SBATCH --no-requeue
 
-export PREPROCESS=false
+export PREPROCESS=true
 export NORMALIZE=false
 
 # Load necessary modules
