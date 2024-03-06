@@ -7,9 +7,10 @@ from argparse import ArgumentParser
 # Third-party
 import pytorch_lightning as pl
 import torch
-import wandb
 from lightning_fabric.utilities import seed
 from pytorch_lightning.utilities import rank_zero_only
+
+import wandb
 
 # First-party
 from neural_lam import constants, utils
@@ -216,9 +217,9 @@ def main():
     parser.add_argument(
         "--step_length",
         type=int,
-        default=3,
+        default=1,
         help="Step length in hours to consider single time step 1-3 "
-        "(default: 3)",
+        "(default: 1)",
     )
     parser.add_argument(
         "--lr", type=float, default=1e-3, help="learning rate (default: 0.001)"
