@@ -7,10 +7,9 @@ from argparse import ArgumentParser
 # Third-party
 import pytorch_lightning as pl
 import torch
+import wandb
 from lightning_fabric.utilities import seed
 from pytorch_lightning.utilities import rank_zero_only
-
-import wandb
 
 # First-party
 from neural_lam import constants, utils
