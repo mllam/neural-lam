@@ -1,17 +1,22 @@
+# pylint: disable=wrong-import-order
 # Standard library
+import glob
 import os
 
 # Third-party
+import imageio
 import matplotlib.pyplot as plt
 import numpy as np
 import pytorch_lightning as pl
 import torch
 import wandb
+from torch import nn
 
 # First-party
-from neural_lam import config, metrics, utils, vis
+from neural_lam import constants, metrics, utils, vis
 
 
+# pylint: disable=too-many-public-methods
 class ARModel(pl.LightningModule):
     """
     Generic auto-regressive weather model.
@@ -106,6 +111,13 @@ class ARModel(pl.LightningModule):
         """
         return self.interior_mask[:, 0].to(torch.bool)
 
+    @property
+    def interior_mask_bool(self):
+        """
+        Get the interior mask as a boolean (N,) mask.
+        """
+        return self.interior_mask[:, 0].to(torch.bool)
+
     @staticmethod
     def expand_to_batch(x, batch_size):
         """
@@ -113,34 +125,99 @@ class ARModel(pl.LightningModule):
         """
         return x.unsqueeze(0).expand(batch_size, -1, -1)
 
-    def predict_step(self, prev_state, prev_prev_state, forcing):
+    def precompute_variable_indices(self):
+        """
+        Precompute indices for each variable in the input tensor
+        """
+        variable_indices = {}
+        all_vars = []
+        index = 0
+        # Create a list of tuples for all variables, using level 0 for 2D
+        # variables
+        for var_name in constants.PARAM_NAMES_SHORT:
+            if constants.IS_3D[var_name]:
+                for level in constants.VERTICAL_LEVELS:
+                    all_vars.append((var_name, level))
+            else:
+                all_vars.append((var_name, 0))  # Use level 0 for 2D variables
+
+        # Sort the variables based on the tuples
+        sorted_vars = sorted(all_vars)
+
+        for var in sorted_vars:
+            var_name, level = var
+            if var_name not in variable_indices:
+                variable_indices[var_name] = []
+            variable_indices[var_name].append(index)
+            index += 1
+
+        return variable_indices
+
+    def apply_constraints(self, prediction):
+        """
+        Apply constraints to prediction to ensure values are within the
+        specified bounds
+        """
+        for param, (min_val, max_val) in constants.PARAM_CONSTRAINTS.items():
+            indices = self.variable_indices[param]
+            for index in indices:
+                # Apply clamping to ensure values are within the specified
+                # bounds
+                prediction[:, :, index] = torch.clamp(
+                    prediction[:, :, index],
+                    min=min_val,
+                    max=max_val if max_val is not None else float("inf"),
+                )
+        return prediction
+
+    def predict_step(
+        self,
+        prev_state,
+        prev_prev_state,
+        batch_static_features=None,
+        forcing=None,
+    ):
         """
         Step state one step ahead using prediction model, X_{t-1}, X_t -> X_t+1
         prev_state: (B, num_grid_nodes, feature_dim), X_t
         prev_prev_state: (B, num_grid_nodes, feature_dim), X_{t-1}
-        forcing: (B, num_grid_nodes, forcing_dim)
+        batch_static_features: (B, num_grid_nodes, batch_static_feature_dim)
+        forcing: (B, num_grid_nodes, forcing_dim), optional
         """
         raise NotImplementedError("No prediction step implemented")
 
-    def unroll_prediction(self, init_states, forcing_features, true_states):
+    def unroll_prediction(
+        self,
+        init_states,
+        true_states,
+        batch_static_features=None,
+        forcing_features=None,
+    ):
         """
         Roll out prediction taking multiple autoregressive steps with model
         init_states: (B, 2, num_grid_nodes, d_f)
-        forcing_features: (B, pred_steps, num_grid_nodes, d_static_f)
+        batch_static_features: (B, num_grid_nodes, d_static_f), optional
+        forcing_features: (B, pred_steps, num_grid_nodes, d_static_f), optional
         true_states: (B, pred_steps, num_grid_nodes, d_f)
         """
         prev_prev_state = init_states[:, 0]
         prev_state = init_states[:, 1]
         prediction_list = []
         pred_std_list = []
-        pred_steps = forcing_features.shape[1]
+        pred_steps = (
+            forcing_features.shape[1]
+            if forcing_features is not None
+            else true_states.shape[1]
+        )
 
         for i in range(pred_steps):
-            forcing = forcing_features[:, i]
+            forcing = (
+                forcing_features[:, i] if forcing_features is not None else None
+            )
             border_state = true_states[:, i]
 
             pred_state, pred_std = self.predict_step(
-                prev_state, prev_prev_state, forcing
+                prev_state, prev_prev_state, batch_static_features, forcing
             )
             # state: (B, num_grid_nodes, d_f)
             # pred_std: (B, num_grid_nodes, d_f) or None
@@ -521,10 +598,15 @@ class ARModel(pl.LightningModule):
             wandb.log(log_dict)  # Log all
             plt.close("all")  # Close all figs
 
-    def on_test_epoch_end(self):
+    def smooth_prediction_borders(self, prediction_rescaled):
         """
-        Compute test metrics and make plots at the end of test epoch.
-        Will gather stored tensors and perform plotting and logging on rank 0.
+        Smooths the prediction at the borders to avoid artifacts.
+
+        Args:
+            prediction_rescaled (torch.Tensor): The rescaled prediction tensor.
+
+        Returns:
+            torch.Tensor: The prediction tensor after smoothing the borders.
         """
         # Create error maps for all test metrics
         self.aggregate_and_plot_metrics(self.test_metrics, prefix="test")

@@ -1,11 +1,13 @@
 # Standard library
 import random
+import os
 import time
 from argparse import ArgumentParser
 
 # Third-party
 import pytorch_lightning as pl
 import torch
+import wandb
 from lightning_fabric.utilities import seed
 
 # First-party
@@ -225,32 +227,11 @@ def main():
     # Set seed
     seed.seed_everything(args.seed)
 
-    # Load data
-    train_loader = torch.utils.data.DataLoader(
-        WeatherDataset(
-            config_loader.dataset.name,
-            pred_length=args.ar_steps,
-            split="train",
-            subsample_step=args.step_length,
-            subset=bool(args.subset_ds),
-            control_only=args.control_only,
-        ),
-        args.batch_size,
-        shuffle=True,
-        num_workers=args.n_workers,
-    )
-    max_pred_length = (65 // args.step_length) - 2  # 19
-    val_loader = torch.utils.data.DataLoader(
-        WeatherDataset(
-            config_loader.dataset.name,
-            pred_length=max_pred_length,
-            split="val",
-            subsample_step=args.step_length,
-            subset=bool(args.subset_ds),
-            control_only=args.control_only,
-        ),
-        args.batch_size,
-        shuffle=False,
+    # Create datamodule
+    data_module = WeatherDataModule(
+        args.dataset,
+        subset=bool(args.subset_ds),
+        batch_size=args.batch_size,
         num_workers=args.n_workers,
     )
 
@@ -323,12 +304,16 @@ def main():
         trainer.test(model=model, dataloaders=eval_loader, ckpt_path=args.load)
     else:
         # Train model
-        trainer.fit(
-            model=model,
-            train_dataloaders=train_loader,
-            val_dataloaders=val_loader,
-            ckpt_path=args.load,
-        )
+        data_module.split = "train"
+        if args.load:
+            trainer.fit(
+                model=model, datamodule=data_module, ckpt_path=args.load
+            )
+        else:
+            trainer.fit(model=model, datamodule=data_module)
+
+    # Print profiler
+    print(trainer.profiler)  # pylint: disable=no-member
 
 
 if __name__ == "__main__":

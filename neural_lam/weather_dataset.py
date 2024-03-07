@@ -10,6 +10,9 @@ import torch
 # First-party
 from neural_lam import utils
 
+# pylint: disable=W0613:unused-argument
+# pylint: disable=W0201:attribute-defined-outside-init
+
 
 class WeatherDataset(torch.utils.data.Dataset):
     """

@@ -16,6 +16,7 @@ from torch_geometric.utils.convert import from_networkx
 from neural_lam import config
 
 
+
 def plot_graph(graph, title=None):
     fig, axis = plt.subplots(figsize=(8, 8), dpi=200)  # W,H
     edge_index = graph.edge_index

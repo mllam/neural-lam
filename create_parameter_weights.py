@@ -82,6 +82,7 @@ def main():
     # Compute mean and std.-dev. of each parameter (+ flux forcing)
     # across full dataset
     print("Computing mean and std.-dev. for parameters...")
+
     means = []
     squares = []
     flux_means = []
