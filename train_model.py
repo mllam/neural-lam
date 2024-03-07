@@ -1,4 +1,3 @@
-# pylint: disable=wrong-import-order
 # Standard library
 import os
 import time

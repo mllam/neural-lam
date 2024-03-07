@@ -46,6 +46,6 @@ sorted_precip_events = sorted(
 print("Top ten maximum precipitation events:")
 for i, (file, event) in enumerate(sorted_precip_events[:10]):
     print(
-        f"{i+1}: {event['max_time']} with a value of "
+        f"{i + 1}: {event['max_time']} with a value of "
         f"{event['max_value']} in file {file}"
     )
