@@ -702,7 +702,7 @@ class ARModel(pl.LightningModule):
             loss_map_figs = [
                 vis.plot_spatial_error(
                     loss_map,
-                    title=f"Test loss, t={t_i} ({self.step_length*t_i} h)",
+                    title=f"Test loss, t={t_i} ({self.step_length * t_i} h)",
                 )
                 for t_i, loss_map in zip(
                     constants.VAL_STEP_LOG_ERRORS, mean_spatial_loss
