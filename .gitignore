@@ -8,6 +8,7 @@ graphs
 sweeps
 test_*.sh
 lightning_logs
+.vscode
 
 ### Python ###
 # Byte-compiled / optimized / DLL files

@@ -1,7 +1,6 @@
 #!/bin/bash -l
 #SBATCH --job-name=NeurWP
 #SBATCH --nodes=1
-#SBATCH --gpus-per-node=4
 #SBATCH --ntasks-per-node=4
 #SBATCH --partition=a100-80gb
 #SBATCH --account=s83
@@ -34,5 +33,5 @@ ulimit -c 0
 export OMP_NUM_THREADS=16
 
 # Run the script with torchrun
-srun -ul --gpus-per-task=1 python train_model.py --dataset "cosmo" --val_interval 5 \
-    --epochs 10 --n_workers 6 --batch_size 8 --subset_ds 1 --wandb_mode "offline"
+srun -ul python train_model.py --dataset "cosmo" --val_interval 5 \
+    --epochs 10 --n_workers 6 --batch_size 8 --subset_ds 1
