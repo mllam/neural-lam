@@ -2,11 +2,11 @@
 #SBATCH --job-name=NeurWPe
 #SBATCH --nodes=1
 #SBATCH --ntasks-per-node=4
-#SBATCH --partition=a100-80gb
+#SBATCH --partition=pp-short
 #SBATCH --account=s83
 #SBATCH --output=lightning_logs/neurwp_eval_out.log
 #SBATCH --error=lightning_logs/neurwp_eval_err.log
-#SBATCH --time=03:00:00
+#SBATCH --time=00:30:00
 #SBATCH --no-requeue
 
 export PREPROCESS=true
