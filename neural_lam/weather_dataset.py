@@ -171,11 +171,9 @@ class WeatherDataset(torch.utils.data.Dataset):
         )  # (dim_x, dim_y, 1)
         # Flatten
         water_cover_features = water_cover_features.flatten(0, 1)  # (N_grid, 1)
-        # Exand over temporal dimension
+        # Expand over temporal dimension
         water_cover_expanded = water_cover_features.unsqueeze(0).expand(
-            self.sample_length - 2,  # -2 as added on after windowing
-            -1,
-            -1
+            self.sample_length - 2, -1, -1  # -2 as added on after windowing
         )  # (sample_len, N_grid, 1)
 
         # TOA flux

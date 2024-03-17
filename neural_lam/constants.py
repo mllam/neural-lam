@@ -116,5 +116,5 @@ LAMBERT_PROJ = cartopy.crs.LambertConformal(
 )
 
 # Data dimensions
-GRID_FORCING_DIM = 5 * 3 + 1 # 5 feat. for 3 time-step window + 1 batch-static
+GRID_FORCING_DIM = 5 * 3 + 1  # 5 feat. for 3 time-step window + 1 batch-static
 GRID_STATE_DIM = 17

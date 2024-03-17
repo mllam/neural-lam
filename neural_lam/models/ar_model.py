@@ -116,9 +116,7 @@ class ARModel(pl.LightningModule):
         """
         return x.unsqueeze(0).expand(batch_size, -1, -1)
 
-    def predict_step(
-        self, prev_state, prev_prev_state, forcing
-    ):
+    def predict_step(self, prev_state, prev_prev_state, forcing):
         """
         Step state one step ahead using prediction model, X_{t-1}, X_t -> X_t+1
         prev_state: (B, num_grid_nodes, feature_dim), X_t
@@ -127,9 +125,7 @@ class ARModel(pl.LightningModule):
         """
         raise NotImplementedError("No prediction step implemented")
 
-    def unroll_prediction(
-        self, init_states, forcing_features, true_states
-    ):
+    def unroll_prediction(self, init_states, forcing_features, true_states):
         """
         Roll out prediction taking multiple autoregressive steps with model
         init_states: (B, 2, num_grid_nodes, d_f)
