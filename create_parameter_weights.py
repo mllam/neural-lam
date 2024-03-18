@@ -82,7 +82,7 @@ def main():
     squares = []
     flux_means = []
     flux_squares = []
-    for init_batch, target_batch, _, forcing_batch in tqdm(loader):
+    for init_batch, target_batch, forcing_batch in tqdm(loader):
         batch = torch.cat(
             (init_batch, target_batch), dim=1
         )  # (N_batch, N_t, N_grid, d_features)
@@ -91,7 +91,8 @@ def main():
             torch.mean(batch**2, dim=(1, 2))
         )  # (N_batch, d_features,)
 
-        flux_batch = forcing_batch[:, :, :, 0]  # Flux is first index
+        # Flux at 1st windowed position is index 1 in forcing
+        flux_batch = forcing_batch[:, :, :, 1]
         flux_means.append(torch.mean(flux_batch))  # (,)
         flux_squares.append(torch.mean(flux_batch**2))  # (,)
 
@@ -125,7 +126,7 @@ def main():
 
     diff_means = []
     diff_squares = []
-    for init_batch, target_batch, _, _ in tqdm(loader_standard):
+    for init_batch, target_batch, _ in tqdm(loader_standard):
         batch = torch.cat(
             (init_batch, target_batch), dim=1
         )  # (N_batch, N_t', N_grid, d_features)
