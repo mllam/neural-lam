@@ -156,22 +156,27 @@ class WeatherDataset(torch.utils.data.Dataset):
         init_states = sample[:2]  # (2, N_grid, d_features)
         target_states = sample[2:]  # (sample_length-2, N_grid, d_features)
 
-        # === Static batch features ===
+        # === Forcing features ===
+        # Now batch-static features are just part of forcing,
+        # repeated over temporal dimension
         # Load water coverage
         sample_datetime = sample_name[:10]
         water_path = os.path.join(
             self.sample_dir_path, f"wtr_{sample_datetime}.npy"
         )
-        static_features = torch.tensor(
+        water_cover_features = torch.tensor(
             np.load(water_path), dtype=torch.float32
         ).unsqueeze(
             -1
         )  # (dim_x, dim_y, 1)
         # Flatten
-        static_features = static_features.flatten(0, 1)  # (N_grid, 1)
+        water_cover_features = water_cover_features.flatten(0, 1)  # (N_grid, 1)
+        # Expand over temporal dimension
+        water_cover_expanded = water_cover_features.unsqueeze(0).expand(
+            self.sample_length - 2, -1, -1  # -2 as added on after windowing
+        )  # (sample_len, N_grid, 1)
 
-        # === Forcing features ===
-        # Forcing features
+        # TOA flux
         flux_path = os.path.join(
             self.sample_dir_path,
             f"nwp_toa_downwelling_shortwave_flux_{sample_datetime}.npy",
@@ -247,4 +252,9 @@ class WeatherDataset(torch.utils.data.Dataset):
         )  # (sample_len-2, N_grid, 3*d_forcing)
         # Now index 0 of ^ corresponds to forcing at index 0-2 of sample
 
-        return init_states, target_states, static_features, forcing_windowed
+        # batch-static water cover is added after windowing,
+        # as it is static over time
+        forcing = torch.cat((water_cover_expanded, forcing_windowed), dim=2)
+        # (sample_len-2, N_grid, forcing_dim)
+
+        return init_states, target_states, forcing
