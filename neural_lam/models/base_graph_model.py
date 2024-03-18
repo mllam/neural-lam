@@ -34,7 +34,7 @@ class BaseGraphModel(ARModel):
             f"nodes ({self.num_grid_nodes} grid, {self.num_mesh_nodes} mesh)"
         )
 
-        # grid_dim from data + static + batch_static
+        # grid_dim from data + static
         self.g2m_edges, g2m_dim = self.g2m_features.shape
         self.m2g_edges, m2g_dim = self.m2g_features.shape
 
@@ -98,19 +98,12 @@ class BaseGraphModel(ARModel):
         """
         raise NotImplementedError("process_step not implemented")
 
-    def predict_step(
-        self,
-        prev_state,
-        prev_prev_state,
-        batch_static_features=None,
-        forcing=None,
-    ):
+    def predict_step(self, prev_state, prev_prev_state, forcing):
         """
         Step state one step ahead using prediction model, X_{t-1}, X_t -> X_t+1
         prev_state: (B, num_grid_nodes, feature_dim), X_t
         prev_prev_state: (B, num_grid_nodes, feature_dim), X_{t-1}
-        batch_static_features: (B, num_grid_nodes, batch_static_feature_dim)
-        forcing: (B, num_grid_nodes, forcing_dim), optional
+        forcing: (B, num_grid_nodes, forcing_dim)
         """
         batch_size = prev_state.shape[0]
 
@@ -119,11 +112,6 @@ class BaseGraphModel(ARModel):
             prev_prev_state,
         ]
 
-        if (
-            constants.BATCH_STATIC_FEATURE_DIM > 0
-            and batch_static_features is not None
-        ):
-            features_list.append(batch_static_features)
         if constants.GRID_FORCING_DIM > 0 and forcing is not None:
             features_list.append(forcing)
         features_list.append(

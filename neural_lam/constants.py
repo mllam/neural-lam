@@ -151,7 +151,6 @@ POLLAT = 43.0
 SMOOTH_BOUNDARIES = False
 
 # Some constants useful for sub-classes
-BATCH_STATIC_FEATURE_DIM = 0
 GRID_FORCING_DIM = 0
 GRID_STATE_DIM = sum(
     len(VERTICAL_LEVELS) if IS_3D[param] else 1 for param in PARAM_NAMES_SHORT

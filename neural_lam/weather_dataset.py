@@ -182,7 +182,7 @@ class WeatherDataset(torch.utils.data.Dataset):
         idx_sample = idx % constants.CHUNK_SIZE
 
         sample_archive = xr.concat(
-            self.zarr_datasets[start_file_idx : end_file_idx + 1], dim="time"
+            self.zarr_datasets[start_file_idx: end_file_idx + 1], dim="time"
         )
 
         sample_xr = sample_archive.isel(

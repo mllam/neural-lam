@@ -2,14 +2,14 @@
 #SBATCH --job-name=NeurWPe
 #SBATCH --nodes=1
 #SBATCH --ntasks-per-node=4
-#SBATCH --partition=a100-80gb
+#SBATCH --partition=normal
 #SBATCH --account=s83
 #SBATCH --output=lightning_logs/neurwp_eval_out.log
 #SBATCH --error=lightning_logs/neurwp_eval_err.log
 #SBATCH --time=03:00:00
 #SBATCH --no-requeue
 
-export PREPROCESS=true
+export PREPROCESS=false
 export NORMALIZE=false
 
 # Load necessary modules
