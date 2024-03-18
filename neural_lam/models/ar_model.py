@@ -10,9 +10,8 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pytorch_lightning as pl
 import torch
-from torch import nn
-
 import wandb
+from torch import nn
 
 # First-party
 from neural_lam import constants, metrics, utils, vis

@@ -27,7 +27,9 @@ class BaseHiGraphModel(BaseGraphModel):
         if self.trainer.is_global_zero:
             # Print some useful info
             print("Loaded hierarchical graph with structure:")
-            for level_index, level_mesh_size in enumerate(self.level_mesh_sizes):
+            for level_index, level_mesh_size in enumerate(
+                self.level_mesh_sizes
+            ):
                 same_level_edges = self.m2m_features[level_index].shape[0]
                 print(
                     f"level {level_index} - {level_mesh_size} nodes, "

@@ -8,15 +8,15 @@ import numcodecs
 import xarray as xr
 from tqdm import tqdm
 
-# First-party
-
 
 def create_single_zarr_archive(config: dict, is_test: bool) -> None:
     """
     Create a single large Zarr archive for either test or train data.
     """
     # Determine the path based on whether it's test or train data
-    zarr_path = os.path.join(config["zarr_path"], "test" if is_test else "train")
+    zarr_path = os.path.join(
+        config["zarr_path"], "test" if is_test else "train"
+    )
     zarr_name = "test_data.zarr" if is_test else "train_data.zarr"
     full_zarr_path = os.path.join(zarr_path, zarr_name)
 
@@ -45,7 +45,7 @@ def create_single_zarr_archive(config: dict, is_test: bool) -> None:
             # Check if the data belongs to the test year
             data_is_test = config["test_year"] in data.time.dt.year.values
 
-            # If the current data matches the desired type (test/train), process it
+            # If the current data matches the desired type (test/train)
             if data_is_test == is_test:
                 datasets.append(data)
 
@@ -67,17 +67,20 @@ def create_single_zarr_archive(config: dict, is_test: bool) -> None:
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
-        description="Create Zarr archives for weather data.")
+        description="Create Zarr archives for weather data."
+    )
     parser.add_argument(
         "--data_path",
         type=str,
         default="/scratch/mch/sadamov/ml_v1/",
-        help="Path to the raw data")
+        help="Path to the raw data",
+    )
     parser.add_argument(
         "--zarr_path",
         type=str,
         default="data/cosmo/samples/",
-        help="Path to the zarr output")
+        help="Path to the zarr output",
+    )
     parser.add_argument("--test_year", type=int, default=2020)
     parser.add_argument(
         "--filename_regex",
@@ -93,12 +96,10 @@ if __name__ == "__main__":
         "filename_regex": args.filename_regex,
         "zarr_path": args.zarr_path,
         "compressor": numcodecs.Blosc(
-            cname="lz4",
-            clevel=7,
-            shuffle=numcodecs.Blosc.SHUFFLE),
+            cname="lz4", clevel=7, shuffle=numcodecs.Blosc.SHUFFLE
+        ),
         "test_year": args.test_year,
-        "filename_pattern": re.compile(
-            args.filename_regex),
+        "filename_pattern": re.compile(args.filename_regex),
     }
 
     # Create Zarr archive for test data
