@@ -38,7 +38,7 @@ class WeatherDataset(torch.utils.data.Dataset):
     ):
         super().__init__()
 
-        assert split in ("train", "val", "test"), "Unknown dataset split"
+        assert split in ("train", "val", "test","forecast", "pred"), "Unknown dataset split"
         self.sample_dir_path = os.path.join(
             "data", dataset_name, "samples", split
         )
@@ -128,7 +128,7 @@ class WeatherDataset(torch.utils.data.Dataset):
         datasets_2d = [
             xr.open_zarr(file, consolidated=True)[variables_2d]
             .to_array()
-            .expand_dims(z_1=[0])
+            .pipe(lambda ds: ds if 'z_1' in ds.dims else ds.expand_dims(z_1=[0]))
             .stack(var=("variable", "z_1"))
             .transpose("time", "x_1", "y_1", "var")
             for file in self.zarr_files
@@ -201,8 +201,11 @@ class WeatherDataset(torch.utils.data.Dataset):
         # Split up sample in init. states and target states
         init_states = sample[:2]  # (2, N_grid, d_features)
         target_states = sample[2:]  # (sample_length-2, N_grid, d_features)
-
-        return init_states, target_states
+    
+        if self.split in ["forecast", "pred"]: 
+            return sample # alternatively torch.vstack((init_statesm target_states))
+        else:
+            return init_states, target_states
 
 
 class WeatherDataModule(pl.LightningDataModule):
@@ -229,7 +232,7 @@ class WeatherDataModule(pl.LightningDataModule):
         pass
 
     def setup(self, stage=None):
-        # make assignments here (val/train/test split) called on every process
+        # make assignments here (val/train/test/predict split) called on every process
         # in DDP
         if stage == "fit" or stage is None:
             self.train_dataset = WeatherDataset(
@@ -255,6 +258,23 @@ class WeatherDataModule(pl.LightningDataModule):
                 subset=self.subset,
                 batch_size=self.batch_size,
             )
+            self.forecast_dataset = WeatherDataset(
+                self.dataset_name,
+                split="forecast",
+                standardize=self.standardize,
+                subset=False,
+                batch_size=self.batch_size,
+            )
+
+        if stage == "predict" or stage is None:
+            self.predict_dataset = WeatherDataset(
+                self.dataset_name,
+                split="pred", 
+                standardize=self.standardize,
+                subset=False,
+                batch_size=1
+            )
+
 
     def train_dataloader(self):
         return torch.utils.data.DataLoader(
@@ -277,6 +297,24 @@ class WeatherDataModule(pl.LightningDataModule):
     def test_dataloader(self):
         return torch.utils.data.DataLoader(
             self.test_dataset,
+            batch_size=self.batch_size,
+            num_workers=self.num_workers,
+            shuffle=False,
+            pin_memory=False,
+        )
+    
+    def forecast_dataloader(self): 
+        return torch.utils.data.DataLoader(
+            self.forecast_dataset,
+            batch_size=self.batch_size,
+            num_workers=self.num_workers,
+            shuffle=False,
+            pin_memory=False,
+        )
+    
+    def predict_dataloader(self):
+        return torch.utils.data.DataLoader(
+            self.predict_dataset,
             batch_size=self.batch_size,
             num_workers=self.num_workers,
             shuffle=False,

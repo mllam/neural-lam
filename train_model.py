@@ -12,6 +12,7 @@ from pytorch_lightning.utilities import rank_zero_only
 
 # First-party
 from neural_lam import constants, utils
+from neural_lam.models.base_graph_model import BaseGraphModel
 from neural_lam.models.graph_lam import GraphLAM
 from neural_lam.models.hi_lam import HiLAM
 from neural_lam.models.hi_lam_parallel import HiLAMParallel
@@ -20,6 +21,7 @@ from neural_lam.weather_dataset import WeatherDataModule
 MODELS = {
     "graph_lam": GraphLAM,
     "hi_lam": HiLAM,
+    "base_graph": BaseGraphModel,
     "hi_lam_parallel": HiLAMParallel,
 }
 
@@ -61,7 +63,7 @@ def init_wandb(args):
             log_model=True,
         )
         wandb.save("slurm_train.sh")
-        wandb.save("neural_lam/constants.PY")
+        wandb.save("neural_lam/constants.py")
     else:
         wandb.init(
             project=constants.WANDB_PROJECT,
@@ -100,7 +102,7 @@ def main():
         "--model",
         type=str,
         default="graph_lam",
-        help="Model architecture to train/evaluate (default: graph_lam)",
+        help="Model architecture to train/evaluate/predict (default: graph_lam)",
     )
     parser.add_argument(
         "--subset_ds",
@@ -234,7 +236,7 @@ def main():
     parser.add_argument(
         "--eval",
         type=str,
-        help="Eval model on given data split (val/test) "
+        help="Eval model on given data split (val/test/predict) "
         "(default: None (train model))",
     )
     parser.add_argument(
@@ -253,6 +255,7 @@ def main():
         None,
         "val",
         "test",
+        "predict"
     ), f"Unknown eval setting: {args.eval}"
 
     # Set seed
@@ -331,20 +334,25 @@ def main():
     # Only init once, on rank 0 only
     if trainer.global_rank == 0:
         utils.init_wandb_metrics(logger)  # Do after wandb.init
-    if args.eval:
+
+    # Check if the mode is evaluation (either 'val' or 'test')
+    if args.eval in ["val", "test"]:
+        # Print evaluation mode
         print_eval(args.eval)
-        if args.eval == "val":
-            data_module.split = "val"
-        else:  # Test
-            data_module.split = "test"
+        data_module.split = args.eval
         trainer.test(model=model, datamodule=data_module, ckpt_path=args.load)
+
+    # Check if the mode is prediction
+    elif args.eval == "predict":
+        data_module.split = "pred"
+        trainer.predict(model=model, datamodule=data_module, return_predictions=True, ckpt_path=args.load)
+
+    # Default mode is training
     else:
-        # Train model
         data_module.split = "train"
+        # Check if a checkpoint path is provided for training
         if args.load:
-            trainer.fit(
-                model=model, datamodule=data_module, ckpt_path=args.load
-            )
+            trainer.fit(model=model, datamodule=data_module, ckpt_path=args.load)
         else:
             trainer.fit(model=model, datamodule=data_module)
 
