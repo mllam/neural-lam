@@ -98,7 +98,7 @@ class BaseGraphModel(ARModel):
         """
         raise NotImplementedError("process_step not implemented")
 
-    def predict_step(
+    def single_prediction(
         self,
         prev_state,
         prev_prev_state,

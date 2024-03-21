@@ -345,7 +345,12 @@ def main():
     # Check if the mode is prediction
     elif args.eval == "predict":
         data_module.split = "pred"
-        trainer.predict(model=model, datamodule=data_module, return_predictions=True, ckpt_path=args.load)
+        # Since cuda available, device should be 1 and accelerator "gpu"
+        # Quick sanity check
+        assert devices == 1, "Device not set to 1, check cuda availability"
+        trainer.accelerator == "gpu"
+        predictions = trainer.predict(model=model, datamodule=data_module, return_predictions=True, ckpt_path=args.load)
+        # FIXME Should we specify where to save the predictions? - save raw data on_predict_epoch_end()
 
     # Default mode is training
     else:

@@ -76,7 +76,7 @@ def plot_error_map(errors, global_mean, step_length=1, title=None):
 
 
 @matplotlib.rc_context(utils.fractional_plot_bundle(1))
-def plot_prediction(pred, target, title=None, vrange=None):
+def plot_prediction(pred, target, title=None, second_title=None, vrange=None):
     """
     Plot example prediction and grond truth.
     Each has shape (N_grid,)
@@ -120,7 +120,7 @@ def plot_prediction(pred, target, title=None, vrange=None):
         )
 
     # Ticks and labels
-    axes[0].set_title("Ground Truth", size=15)
+    axes[0].set_title(second_title, size=15)
     axes[1].set_title("Prediction", size=15)
     cbar = fig.colorbar(contour_set, orientation="horizontal", aspect=20)
     cbar.ax.tick_params(labelsize=10)

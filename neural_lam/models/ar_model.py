@@ -15,6 +15,7 @@ from torch import nn
 
 # First-party
 from neural_lam import constants, metrics, utils, vis
+from neural_lam.weather_dataset import WeatherDataModule
 
 
 # pylint: disable=too-many-public-methods
@@ -209,7 +210,7 @@ class ARModel(pl.LightningModule):
                 )
         return prediction
 
-    def predict_step(
+    def single_prediction(
         self,
         prev_state,
         prev_prev_state,
@@ -224,6 +225,16 @@ class ARModel(pl.LightningModule):
         forcing: (B, num_grid_nodes, forcing_dim), optional
         """
         raise NotImplementedError("No prediction step implemented")
+
+    def predict_step(self, batch, batch_idx): 
+        """
+        Run the inference on batch.
+        """
+        prediction, target, pred_std = self.common_step(batch)
+        
+        self.plot_examples(batch, batch_idx, prediction=prediction)
+
+
 
     def unroll_prediction(
         self,
@@ -255,7 +266,7 @@ class ARModel(pl.LightningModule):
             )
             border_state = true_states[:, i]
 
-            pred_state, pred_std = self.predict_step(
+            pred_state, pred_std = self.single_prediction(
                 prev_state, prev_prev_state, batch_static_features, forcing
             )
             # state: (B, num_grid_nodes, d_f)
@@ -462,8 +473,25 @@ class ARModel(pl.LightningModule):
         """
         if prediction is None:
             prediction, target = self.common_step(batch)
+            plot_title = "Ground Truth"
+            target = batch[1]
 
-        target = batch[1]
+        else:
+            plot_title = "Forecast"
+            forecast_data_module = WeatherDataModule(
+                "cosmo",
+                split="forecast",
+                standardize=False,
+                subset=False,
+                batch_size=6,
+                num_workers=2
+            )
+            forecast_data_module.prepare_data()
+            forecast_data_module.setup(stage = "test")
+            forecast_loader = forecast_data_module.forecast_dataloader() 
+            for forecast_batch in forecast_loader:
+                target = forecast_batch[0]  # tensor 
+                break 
 
         if (
             self.global_rank == 0
@@ -530,6 +558,7 @@ class ARModel(pl.LightningModule):
                             pred_t[:, var_i],
                             target_t[:, var_i],
                             title=title,
+                            second_title=plot_title,
                             vrange=var_vrange,
                         )
                         wandb.log(
@@ -752,6 +781,41 @@ class ARModel(pl.LightningModule):
                             image = imageio.imread(filename)
                             writer.append_data(image)
         self.spatial_loss_maps.clear()
+
+    def on_predict_epoch_end(self):
+        """
+        Return inference plot at the end of predict epoch.
+        """
+
+        # We want to plot the maps like for test but with prediction --> do it within predict step
+        # Decide where the plot is getting shipped
+
+
+        # And then save in appropriate location in wandb 
+        dir_path = f"{wandb.run.dir}/media/predictions"
+
+        for var_name, _ in self.selected_vars_units:
+            var_indices = self.variable_indices[var_name] # chANGE THIS to select the plot? 
+            for lvl_i, _ in enumerate(var_indices):
+                # Calculate var_vrange for each index
+                lvl = constants.VERTICAL_LEVELS[lvl_i]
+
+                # Get all the images for the current variable and index
+                images = sorted(
+                    glob.glob(f"{dir_path}/{var_name}_prediction_lvl_{lvl:02}_t_*.png")
+                )
+                # Generate the GIF
+                with imageio.get_writer(
+                    f"{dir_path}/{var_name}_prediction_lvl_{lvl:02}.gif",
+                    mode="I",
+                    fps=1,
+                ) as writer:
+                    for filename in images:
+                        image = imageio.imread(filename)
+                        writer.append_data(image)
+
+
+
 
     def on_load_checkpoint(self, checkpoint):
         """
