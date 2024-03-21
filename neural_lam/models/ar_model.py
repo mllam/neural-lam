@@ -473,25 +473,7 @@ class ARModel(pl.LightningModule):
         """
         if prediction is None:
             prediction, target = self.common_step(batch)
-            plot_title = "Ground Truth"
-            target = batch[1]
-
-        else:
-            plot_title = "Forecast"
-            forecast_data_module = WeatherDataModule(
-                "cosmo",
-                split="forecast",
-                standardize=False,
-                subset=False,
-                batch_size=6,
-                num_workers=2
-            )
-            forecast_data_module.prepare_data()
-            forecast_data_module.setup(stage = "test")
-            forecast_loader = forecast_data_module.forecast_dataloader() 
-            for forecast_batch in forecast_loader:
-                target = forecast_batch[0]  # tensor 
-                break 
+        target = batch[1]
 
         if (
             self.global_rank == 0
@@ -558,7 +540,6 @@ class ARModel(pl.LightningModule):
                             pred_t[:, var_i],
                             target_t[:, var_i],
                             title=title,
-                            second_title=plot_title,
                             vrange=var_vrange,
                         )
                         wandb.log(

@@ -202,7 +202,7 @@ class WeatherDataset(torch.utils.data.Dataset):
         init_states = sample[:2]  # (2, N_grid, d_features)
         target_states = sample[2:]  # (sample_length-2, N_grid, d_features)
     
-        if self.split in ["forecast", "pred"]: 
+        if self.split == "forecast": 
             return sample # alternatively torch.vstack((init_statesm target_states))
         else:
             return init_states, target_states
