@@ -80,10 +80,6 @@ def init_wandb(args):
 
     return logger
 
-def ensure_wandb_initialized(args):
-    if wandb.run is None:
-        init_wandb(args)
-
 
 def main():
     # pylint: disable=too-many-branches
@@ -339,6 +335,7 @@ def main():
         num_nodes=num_nodes,
         profiler="simple",
         deterministic=True,
+        num_predict_batches=args.n_predictions,
         # num_sanity_val_steps=0
         # strategy="ddp",
         # limit_val_batches=0
@@ -358,7 +355,6 @@ def main():
     # Check if the mode is prediction
     elif args.eval == "predict":
         data_module.split = "pred"
-        ensure_wandb_initialized(args)
         # Since cuda available, device should be 1 and accelerator "gpu"
         # Quick sanity check
         assert devices == 1, "Device not set to 1, check cuda availability"

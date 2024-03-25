@@ -545,7 +545,7 @@ class ARModel(pl.LightningModule):
                         wandb.log(
                             {
                                 (
-                                    f"{var_name}_lvl_{lvl:02}_t_"
+                                    f"{var_name}_{current_dataset}_lvl_{lvl:02}_t_"
                                     f"{current_datetime_str}"
                                 ): wandb.Image(var_fig)
                             }
