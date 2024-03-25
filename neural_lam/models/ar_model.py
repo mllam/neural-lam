@@ -113,6 +113,8 @@ class ARModel(pl.LightningModule):
 
         # For storing spatial loss maps during evaluation
         self.spatial_loss_maps = []
+        # For storing prediction output
+        self.inference_output = []
 
         self.variable_indices = self.precompute_variable_indices()
         self.selected_vars_units = [
@@ -226,15 +228,13 @@ class ARModel(pl.LightningModule):
         """
         raise NotImplementedError("No prediction step implemented")
 
-    def predict_step(self, batch, batch_idx): 
+    def predict_step(self, batch, batch_idx, prediction_steps): 
         """
         Run the inference on batch.
         """
-        prediction, target, pred_std = self.common_step(batch)
-        
+        prediction, target, pred_std = self.common_step(batch, prediction_steps)        
         self.plot_examples(batch, batch_idx, prediction=prediction)
-
-
+        self.inference_output.append(prediction)
 
     def unroll_prediction(
         self,
@@ -242,6 +242,7 @@ class ARModel(pl.LightningModule):
         true_states,
         batch_static_features=None,
         forcing_features=None,
+        predictions_steps=None
     ):
         """
         Roll out prediction taking multiple autoregressive steps with model
@@ -254,11 +255,14 @@ class ARModel(pl.LightningModule):
         prev_state = init_states[:, 1]
         prediction_list = []
         pred_std_list = []
-        pred_steps = (
-            forcing_features.shape[1]
-            if forcing_features is not None
-            else true_states.shape[1]
-        )
+        if predictions_steps is None:
+            pred_steps = (
+                forcing_features.shape[1]
+                if forcing_features is not None
+                else true_states.shape[1]
+            )
+        else:
+            pred_steps = predictions_steps
 
         for i in range(pred_steps):
             forcing = (
@@ -298,7 +302,7 @@ class ARModel(pl.LightningModule):
 
         return prediction, pred_std
 
-    def common_step(self, batch):
+    def common_step(self, batch, prediction_steps=None):
         """
         Predict on single batch
         batch = time_series, batch_static_features, forcing_features
@@ -307,6 +311,7 @@ class ARModel(pl.LightningModule):
         target_states: (B, pred_steps, num_grid_nodes, d_features)
         batch_static_features: (B, num_grid_nodes, d_static_f), optional
         forcing_features: (B, pred_steps, num_grid_nodes, d_forcing), optional
+        predictions_steps: optional, the nb of steps to unroll on
         """
         init_states, target_states = batch[:2]
         batch_static_features = batch[2] if len(batch) > 2 else None
@@ -317,6 +322,7 @@ class ARModel(pl.LightningModule):
             target_states,
             batch_static_features,
             forcing_features,
+            prediction_steps
         )  # (B, pred_steps, num_grid_nodes, d_f)
         # prediction: (B, pred_steps, num_grid_nodes, d_f)
         # pred_std: (B, pred_steps, num_grid_nodes, d_f) or (d_f,)
@@ -475,13 +481,13 @@ class ARModel(pl.LightningModule):
             prediction, target = self.common_step(batch)
         target = batch[1]
 
-        if (
-            self.global_rank == 0
-            and self.trainer.datamodule.test_dataset.batch_index == batch_idx
-        ):
-            index_within_batch = (
-                self.trainer.datamodule.test_dataset.index_within_batch
-            )
+        # Determine the current dataset mode (predict or test) and access the appropriate dataset
+        current_mode = self.trainer.state.fn.lower()  # 'train', 'test', 'validate', or 'predict'
+        current_dataset = getattr(self.trainer.datamodule, f"{current_mode}_dataset", None)
+        
+        # Check if the current dataset and batch index match
+        if self.global_rank == 0 and current_dataset is not None and current_dataset.batch_index == batch_idx:
+            index_within_batch = current_dataset.index_within_batch
             if not torch.is_tensor(index_within_batch):
                 index_within_batch = torch.tensor(
                     index_within_batch,
@@ -763,6 +769,7 @@ class ARModel(pl.LightningModule):
                             writer.append_data(image)
         self.spatial_loss_maps.clear()
 
+
     def on_predict_epoch_end(self):
         """
         Return inference plot at the end of predict epoch.
@@ -773,29 +780,36 @@ class ARModel(pl.LightningModule):
 
 
         # And then save in appropriate location in wandb 
-        dir_path = f"{wandb.run.dir}/media/predictions"
+        plot_dir_path = f"{wandb.run.dir}/media/predictions"
+        value_dir_path = f"{wandb.run.dir}/results/inference"
 
+        # For values 
+        for i, prediction in enumerate(self.inference_output):
+            # Process and save the prediction
+            prediction_array = prediction.cpu().numpy()  # Adjust as necessary
+            file_path = os.path.join(value_dir_path, f"prediction_{i}.npy")
+            np.save(file_path, prediction_array)
+
+        # For plots
         for var_name, _ in self.selected_vars_units:
-            var_indices = self.variable_indices[var_name] # chANGE THIS to select the plot? 
+            var_indices = self.variable_indices[var_name]
             for lvl_i, _ in enumerate(var_indices):
                 # Calculate var_vrange for each index
                 lvl = constants.VERTICAL_LEVELS[lvl_i]
 
                 # Get all the images for the current variable and index
                 images = sorted(
-                    glob.glob(f"{dir_path}/{var_name}_prediction_lvl_{lvl:02}_t_*.png")
+                    glob.glob(f"{plot_dir_path}/{var_name}_prediction_lvl_{lvl:02}_t_*.png")
                 )
                 # Generate the GIF
                 with imageio.get_writer(
-                    f"{dir_path}/{var_name}_prediction_lvl_{lvl:02}.gif",
+                    f"{plot_dir_path}/{var_name}_prediction_lvl_{lvl:02}.gif",
                     mode="I",
                     fps=1,
                 ) as writer:
                     for filename in images:
                         image = imageio.imread(filename)
                         writer.append_data(image)
-
-
 
 
     def on_load_checkpoint(self, checkpoint):

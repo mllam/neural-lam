@@ -80,6 +80,10 @@ def init_wandb(args):
 
     return logger
 
+def ensure_wandb_initialized(args):
+    if wandb.run is None:
+        init_wandb(args)
+
 
 def main():
     # pylint: disable=too-many-branches
@@ -232,6 +236,15 @@ def main():
         "(default: 1)",
     )
 
+    # Prediction options
+    parser.add_argument(
+        "--n_predictions",
+        type=int,
+        default=10,
+        help="Number of inference steps to generate"
+        "(default: 10)",
+    )
+
     # Evaluation options
     parser.add_argument(
         "--eval",
@@ -345,12 +358,12 @@ def main():
     # Check if the mode is prediction
     elif args.eval == "predict":
         data_module.split = "pred"
+        ensure_wandb_initialized(args)
         # Since cuda available, device should be 1 and accelerator "gpu"
         # Quick sanity check
         assert devices == 1, "Device not set to 1, check cuda availability"
         trainer.accelerator == "gpu"
-        predictions = trainer.predict(model=model, datamodule=data_module, return_predictions=True, ckpt_path=args.load)
-        # FIXME Should we specify where to save the predictions? - save raw data on_predict_epoch_end()
+        trainer.predict(model=model, datamodule=data_module, return_predictions=True, ckpt_path=args.load, prediction_steps=args.n_predictions)
 
     # Default mode is training
     else:
@@ -366,4 +379,5 @@ def main():
 
 
 if __name__ == "__main__":
+    wandb.init(project="neural-lam")
     main()
