@@ -228,11 +228,11 @@ class ARModel(pl.LightningModule):
         """
         raise NotImplementedError("No prediction step implemented")
 
-    def predict_step(self, batch, batch_idx, prediction_steps): 
+    def predict_step(self, batch, batch_idx): 
         """
         Run the inference on batch.
         """
-        prediction, target, pred_std = self.common_step(batch, prediction_steps)        
+        prediction, target, pred_std = self.common_step(batch)        
         self.plot_examples(batch, batch_idx, prediction=prediction)
         self.inference_output.append(prediction)
 
@@ -242,7 +242,6 @@ class ARModel(pl.LightningModule):
         true_states,
         batch_static_features=None,
         forcing_features=None,
-        predictions_steps=None
     ):
         """
         Roll out prediction taking multiple autoregressive steps with model
@@ -255,15 +254,12 @@ class ARModel(pl.LightningModule):
         prev_state = init_states[:, 1]
         prediction_list = []
         pred_std_list = []
-        if predictions_steps is None:
-            pred_steps = (
-                forcing_features.shape[1]
-                if forcing_features is not None
-                else true_states.shape[1]
-            )
-        else:
-            pred_steps = predictions_steps
-
+        pred_steps = (
+            forcing_features.shape[1]
+            if forcing_features is not None
+            else true_states.shape[1]
+        )
+        
         for i in range(pred_steps):
             forcing = (
                 forcing_features[:, i] if forcing_features is not None else None
@@ -302,7 +298,7 @@ class ARModel(pl.LightningModule):
 
         return prediction, pred_std
 
-    def common_step(self, batch, prediction_steps=None):
+    def common_step(self, batch):
         """
         Predict on single batch
         batch = time_series, batch_static_features, forcing_features
@@ -311,7 +307,6 @@ class ARModel(pl.LightningModule):
         target_states: (B, pred_steps, num_grid_nodes, d_features)
         batch_static_features: (B, num_grid_nodes, d_static_f), optional
         forcing_features: (B, pred_steps, num_grid_nodes, d_forcing), optional
-        predictions_steps: optional, the nb of steps to unroll on
         """
         init_states, target_states = batch[:2]
         batch_static_features = batch[2] if len(batch) > 2 else None
@@ -321,8 +316,7 @@ class ARModel(pl.LightningModule):
             init_states,
             target_states,
             batch_static_features,
-            forcing_features,
-            prediction_steps
+            forcing_features
         )  # (B, pred_steps, num_grid_nodes, d_f)
         # prediction: (B, pred_steps, num_grid_nodes, d_f)
         # pred_std: (B, pred_steps, num_grid_nodes, d_f) or (d_f,)
@@ -782,6 +776,9 @@ class ARModel(pl.LightningModule):
         # And then save in appropriate location in wandb 
         plot_dir_path = f"{wandb.run.dir}/media/predictions"
         value_dir_path = f"{wandb.run.dir}/results/inference"
+        # Ensure the directory for saving numpy arrays exists
+        os.makedirs(plot_dir_path, exist_ok=True)
+        os.makedirs(value_dir_path, exist_ok=True) 
 
         # For values 
         for i, prediction in enumerate(self.inference_output):

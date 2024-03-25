@@ -363,7 +363,7 @@ def main():
         # Quick sanity check
         assert devices == 1, "Device not set to 1, check cuda availability"
         trainer.accelerator == "gpu"
-        trainer.predict(model=model, datamodule=data_module, return_predictions=True, ckpt_path=args.load, prediction_steps=args.n_predictions)
+        trainer.predict(model=model, datamodule=data_module, return_predictions=True, ckpt_path=args.load)
 
     # Default mode is training
     else:
