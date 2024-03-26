@@ -33,7 +33,7 @@ PARAM_NAMES = [
     "Pressure at Mean Sea Level",
     "Pressure Perturbation",
     "Surface Pressure",
-    "Total Precipitation",
+    # "Total Precipitation",
     "Total Water Vapor content",
     "2-meter Temperature",
     "10-meter Zonal wind speed",
@@ -49,7 +49,7 @@ PARAM_NAMES_SHORT = [
     "PMSL",
     "PP",
     "PS",
-    "TOT_PREC",
+    # "TOT_PREC",
     "TQV",
     "T_2M",
     "U_10M",
@@ -65,7 +65,7 @@ PARAM_UNITS = [
     "Pa",
     "hPa",
     "Pa",
-    "$kg/m^2$",
+    # "$kg/m^2$",
     "$kg/m^2$",
     "K",
     "m/s",
@@ -81,7 +81,7 @@ PARAM_WEIGHTS = {
     "PMSL": 1,
     "PP": 1,
     "PS": 1,
-    "TOT_PREC": 1,
+    # "TOT_PREC": 1,
     "TQV": 1,
     "T_2M": 1,
     "U_10M": 1,
@@ -94,7 +94,7 @@ VERTICAL_LEVELS = [1, 5, 13, 22, 38, 41, 60]
 PARAM_CONSTRAINTS = {
     "RELHUM": (0, 100),
     "TQV": (0, None),
-    "TOT_PREC": (0, None),
+    # "TOT_PREC": (0, None),
 }
 
 IS_3D = {
@@ -139,9 +139,9 @@ METRICS_INITIALIZED = False
 
 # Plotting
 FIG_SIZE = (15, 10)
-EXAMPLE_FILE = "data/cosmo/samples/train/data_2015112800.zarr"
+EXAMPLE_FILE = "data/cosmo_single/samples/train/data.zarr"
 CHUNK_SIZE = 100
-EVAL_DATETIME = "2020100215"
+EVAL_DATETIMES = ["2015112800"]
 EVAL_PLOT_VARS = ["TQV"]
 STORE_EXAMPLE_DATA = False
 COSMO_PROJ = ccrs.PlateCarree()

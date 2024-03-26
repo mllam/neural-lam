@@ -285,8 +285,8 @@ class ARModel(pl.LightningModule):
         forcing_features: (B, pred_steps, num_grid_nodes, d_forcing),
             where index 0 corresponds to index 1 of init_states
         """
-        init_states, target_states = batch[:2]
-        forcing_features = batch[3] if len(batch) > 3 else None
+        init_states, target_states, batch_time = batch[:3]
+        forcing_features = batch[4] if len(batch) > 3 else None
 
         prediction, pred_std = self.unroll_prediction(
             init_states, forcing_features, target_states
@@ -294,13 +294,13 @@ class ARModel(pl.LightningModule):
         # prediction: (B, pred_steps, num_grid_nodes, d_f)
         # pred_std: (B, pred_steps, num_grid_nodes, d_f) or (d_f,)
 
-        return prediction, target_states, pred_std
+        return prediction, target_states, pred_std, batch_time
 
     def training_step(self, batch):
         """
         Train on single batch
         """
-        prediction, target, pred_std = self.common_step(batch)
+        prediction, target, pred_std, _ = self.common_step(batch)
 
         # Compute loss
         batch_loss = torch.mean(
@@ -311,7 +311,12 @@ class ARModel(pl.LightningModule):
 
         log_dict = {"train_loss": batch_loss}
         self.log_dict(
-            log_dict, prog_bar=True, on_step=True, on_epoch=True, sync_dist=True
+            log_dict,
+            prog_bar=True,
+            on_step=True,
+            on_epoch=True,
+            sync_dist=True,
+            batch_size=batch[0].shape[0],
         )
         return batch_loss
 
@@ -332,7 +337,7 @@ class ARModel(pl.LightningModule):
         """
         Run validation on single batch
         """
-        prediction, target, pred_std = self.common_step(batch)
+        prediction, target, pred_std, _ = self.common_step(batch)
 
         time_step_loss = torch.mean(
             self.loss(
@@ -349,7 +354,11 @@ class ARModel(pl.LightningModule):
         }
         val_log_dict["val_mean_loss"] = mean_loss
         self.log_dict(
-            val_log_dict, on_step=False, on_epoch=True, sync_dist=True
+            val_log_dict,
+            on_step=False,
+            on_epoch=True,
+            sync_dist=True,
+            batch_size=batch[0].shape[0],
         )
 
         # Store MSEs
@@ -378,7 +387,7 @@ class ARModel(pl.LightningModule):
         """
         Run test on single batch
         """
-        prediction, target, pred_std = self.common_step(batch)
+        prediction, target, pred_std, batch_time = self.common_step(batch)
         # prediction: (B, pred_steps, num_grid_nodes, d_f)
         # pred_std: (B, pred_steps, num_grid_nodes, d_f) or (d_f,)
 
@@ -398,7 +407,11 @@ class ARModel(pl.LightningModule):
         test_log_dict["test_mean_loss"] = mean_loss
 
         self.log_dict(
-            test_log_dict, on_step=False, on_epoch=True, sync_dist=True
+            test_log_dict,
+            on_step=False,
+            on_epoch=True,
+            sync_dist=True,
+            batch_size=batch[0].shape[0],
         )
 
         # Compute all evaluation metrics for error maps
@@ -431,11 +444,17 @@ class ARModel(pl.LightningModule):
         self.spatial_loss_maps.append(log_spatial_losses)
         # (B, N_log, num_grid_nodes)
 
-        # Plot example predictions (on rank 0 only)
         if self.trainer.is_global_zero:
-            self.plot_examples(batch, batch_idx, prediction=prediction)
+            self.plot_examples(
+                batch,
+                prediction=prediction,
+                target=target,
+                batch_time=batch_time,
+            )
 
-    def plot_examples(self, batch, batch_idx, prediction=None):
+    def plot_examples(
+        self, batch, prediction=None, target=None, batch_time=None
+    ):
         """
         Plot the first n_examples forecasts from batch
 
@@ -444,98 +463,83 @@ class ARModel(pl.LightningModule):
         prediction: (B, pred_steps, num_grid_nodes, d_f), existing prediction.
             Generate if None.
         """
-        if prediction is None:
-            prediction, target = self.common_step(batch)
+        if prediction is None or target is None or batch_time is None:
+            prediction, target, _, batch_time = self.common_step(batch)
 
-        target = batch[1]
-
-        if (
-            self.global_rank == 0
-            and self.trainer.datamodule.test_dataset.batch_index == batch_idx
+        if self.global_rank == 0 and any(
+            eval_datetime in batch_time
+            for eval_datetime in constants.EVAL_DATETIMES
         ):
-            index_within_batch = (
-                self.trainer.datamodule.test_dataset.index_within_batch
-            )
-            if not torch.is_tensor(index_within_batch):
-                index_within_batch = torch.tensor(
-                    index_within_batch,
-                    dtype=torch.int64,
-                    device=prediction.device,
-                )
-
-            prediction = prediction[index_within_batch]
-            target = target[index_within_batch]
-
             # Rescale to original data scale
             prediction_rescaled = prediction * self.data_std + self.data_mean
             prediction_rescaled = self.apply_constraints(prediction_rescaled)
             target_rescaled = target * self.data_std + self.data_mean
 
             if constants.SMOOTH_BOUNDARIES:
-                # BUG: this creates artifacts at border cells, improve logic!
                 prediction_rescaled = self.smooth_prediction_borders(
                     prediction_rescaled
                 )
 
-            # Each slice is (pred_steps, N_grid, d_f) Iterate over variables
+            for i, eval_datetime in enumerate(batch_time):
+                if eval_datetime not in constants.EVAL_DATETIMES:
+                    continue
+                pred_rescaled = prediction_rescaled[i]
+                targ_rescaled = target_rescaled[i]
 
-            for var_name, var_unit in self.selected_vars_units:
-                # Retrieve the indices for the current variable
-                var_indices = self.variable_indices[var_name]
-                for lvl_i, var_i in enumerate(var_indices):
-                    # Calculate var_vrange for each index
-                    lvl = constants.VERTICAL_LEVELS[lvl_i]
-                    var_vmin = min(
-                        prediction_rescaled[:, :, var_i].min(),
-                        target_rescaled[:, :, var_i].min(),
-                    )
-                    var_vmax = max(
-                        prediction_rescaled[:, :, var_i].max(),
-                        target_rescaled[:, :, var_i].max(),
-                    )
-                    var_vrange = (var_vmin, var_vmax)
-                    # Iterate over time steps
-                    for t_i, (pred_t, target_t) in enumerate(
-                        zip(prediction_rescaled, target_rescaled), start=1
-                    ):
-                        eval_datetime_obj = datetime.strptime(
-                            constants.EVAL_DATETIME, "%Y%m%d%H"
+                for var_name, var_unit in self.selected_vars_units:
+                    var_indices = self.variable_indices[var_name]
+                    for lvl_i, var_i in enumerate(var_indices):
+                        lvl = constants.VERTICAL_LEVELS[lvl_i]
+                        var_vmin = min(
+                            pred_rescaled[:, var_i].min(),
+                            targ_rescaled[:, var_i].min(),
                         )
-                        current_datetime_obj = eval_datetime_obj + timedelta(
-                            hours=t_i
+                        var_vmax = max(
+                            pred_rescaled[:, var_i].max(),
+                            targ_rescaled[:, var_i].max(),
                         )
-                        current_datetime_str = current_datetime_obj.strftime(
-                            "%Y%m%d%H"
-                        )
-                        title = (
-                            f"{var_name} ({var_unit}), t={current_datetime_str}"
-                        )
-                        var_fig = vis.plot_prediction(
-                            pred_t[:, var_i],
-                            target_t[:, var_i],
-                            title=title,
-                            vrange=var_vrange,
-                        )
-                        wandb.log(
-                            {
-                                (
+                        var_vrange = (var_vmin, var_vmax)
+
+                        for t_i, (pred_t, target_t) in enumerate(
+                            zip(pred_rescaled, targ_rescaled), start=1
+                        ):
+                            current_datetime_str = (
+                                datetime.strptime(eval_datetime, "%Y%m%d%H")
+                                + timedelta(hours=t_i)
+                            ).strftime("%Y%m%d%H")
+                            title = (
+                                f"{var_name} ({var_unit}), "
+                                f"t={current_datetime_str}"
+                            )
+                            var_fig = vis.plot_prediction(
+                                pred_t[:, var_i],
+                                target_t[:, var_i],
+                                title=title,
+                                vrange=var_vrange,
+                            )
+                            wandb.log(
+                                {
                                     f"{var_name}_lvl_{lvl:02}_t_"
-                                    f"{current_datetime_str}"
-                                ): wandb.Image(var_fig)
-                            }
-                        )
-                        plt.close("all")
+                                    f"{current_datetime_str}": wandb.Image(
+                                        var_fig
+                                    )
+                                }
+                            )
+                            plt.close("all")
 
-            if constants.STORE_EXAMPLE_DATA:
-                # Save pred and target as .pt files
-                torch.save(
-                    prediction_rescaled.cpu(),
-                    os.path.join(wandb.run.dir, "example_pred.pt"),
-                )
-                torch.save(
-                    target_rescaled.cpu(),
-                    os.path.join(wandb.run.dir, "example_target.pt"),
-                )
+                if constants.STORE_EXAMPLE_DATA:
+                    torch.save(
+                        pred_rescaled.cpu(),
+                        os.path.join(
+                            wandb.run.dir, f"example_pred_{eval_datetime}.pt"
+                        ),
+                    )
+                    torch.save(
+                        targ_rescaled.cpu(),
+                        os.path.join(
+                            wandb.run.dir, f"example_target_{eval_datetime}.pt"
+                        ),
+                    )
 
     def smooth_prediction_borders(self, prediction_rescaled):
         """

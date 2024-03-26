@@ -86,7 +86,7 @@ def unrot_lat(rotlat, rotlon, pollat):
 
 def unrotate_latlon(data):
     """Unrotate lat/lon coordinates from rotated pole grid."""
-    xx, yy = np.meshgrid(data.x_1.values, data.y_1.values)
+    xx, yy = np.meshgrid(data.x.values, data.y.values)
     # unrotate lon/lat
     lon = unrot_lon(xx, yy, constants.POLLON, constants.POLLAT)
     lat = unrot_lat(yy, xx, constants.POLLAT)

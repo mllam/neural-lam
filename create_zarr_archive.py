@@ -1,174 +1,165 @@
 # Standard library
 import argparse
-import glob
 import os
-import re
-import shutil
 
 # Third-party
-import numcodecs
 import xarray as xr
-from tqdm import tqdm
-
-# First-party
-from neural_lam import constants
+from dask.diagnostics import ProgressBar
+from numcodecs import Blosc
 
 
-def append_or_create_zarr(
-    data_out: xr.Dataset, config: dict, zarr_name: str
-) -> None:
-    """Append data to an existing Zarr archive or create a new one."""
+def process_grib_files(paths, selected_vars, indexpath):
+    """Process grib2 files and return a dataset."""
+    datasets = []
+    for filters, variables in selected_vars.items():
+        backend_kwargs = {
+            "errors": "ignore",
+            "encode_cf": ["time", "geography"],
+            "indexpath": indexpath + "{path}.{short_hash}.idx",
+            "filter_by_keys": {},
+        }
+        print(f"Processing {filters} with variables {variables}")
+        if filters == "shortName":
+            for var in variables:
+                backend_kwargs["filter_by_keys"] = {"shortName": var}
+                with ProgressBar():
+                    ds = xr.open_mfdataset(
+                        paths,
+                        engine="cfgrib",
+                        backend_kwargs=backend_kwargs,
+                        combine="nested",
+                        concat_dim="time",
+                        parallel=True,
+                        chunks={"time": 1},
+                        data_vars="minimal",
+                        coords="minimal",
+                        compat="override",
+                    )
+                datasets.append(ds)
+        else:
+            backend_kwargs["filter_by_keys"] = {"typeOfLevel": filter}
+            if filter == "surface":
+                backend_kwargs["filter_by_keys"]["stepType"] = "instant"
+            with ProgressBar():
+                ds = xr.open_mfdataset(
+                    paths,
+                    engine="cfgrib",
+                    backend_kwargs=backend_kwargs,
+                    combine="nested",
+                    concat_dim="time",
+                    parallel=True,
+                    chunks={"time": 1},
+                    data_vars="minimal",
+                    coords="minimal",
+                    compat="override",
+                )
+            datasets.append(ds[vars])
+    return xr.merge(datasets, compat="minimal")
 
-    if config["test_year"] in data_out.time.dt.year.values:
-        zarr_path = os.path.join(config["zarr_path"], "test", zarr_name)
-    else:
-        zarr_path = os.path.join(config["zarr_path"], "train", zarr_name)
 
-    if os.path.exists(zarr_path):
-        data_out.to_zarr(
-            store=zarr_path,
-            mode="a",
-            consolidated=True,
-            append_dim="time",
-        )
-    else:
-        data_out.to_zarr(
-            zarr_path,
-            mode="w",
-            consolidated=True,
-        )
-
-
-def load_data(config: dict) -> None:
-    """Load weather data from NetCDF files and store it in a Zarr archive."""
-
-    file_paths = []
-    for root, _, files in os.walk(config["data_path"]):
-        for file in files:
-            full_path = os.path.join(root, file)
-            file_paths.append(full_path)
-            file_paths.sort()
-
-    # Group file paths into chunks
-    file_groups = [
-        file_paths[i : i + config["chunk_size"]]
-        for i in range(0, len(file_paths), config["chunk_size"])
+def main(
+    data_in, data_train, data_test, indexpath, selected_vars, selected_vars_2
+):
+    """Process grib2 files and save them to zarr format."""
+    compressor = Blosc(cname="zstd", clevel=3, shuffle=Blosc.SHUFFLE)
+    all_files = [
+        os.path.join(root, f)
+        for root, dirs, files in os.walk(data_in)
+        for f in files
+        if root.endswith("det") and f.startswith("laf")
     ]
 
-    for group in tqdm(file_groups, desc="Processing file groups"):
-        # Create a new Zarr archive for each group Extract the date from the
-        # first file in the group
-        date = os.path.basename(group[0]).split("_")[0][3:]
-        zarr_name = f"data_{date}.zarr"
-        if not os.path.exists(
-            os.path.join(config["zarr_path"], "train", zarr_name)
-        ) and not os.path.exists(
-            os.path.join(config["zarr_path"], "test", zarr_name)
-        ):
-            for full_path in group:
-                process_file(full_path, config, zarr_name)
+    def years_filter(y):
+        return [f for f in all_files if y(int(f[-10:-6]))]
 
+    def process(y, variables):
+        return process_grib_files(years_filter(y), variables, indexpath)
 
-def process_file(full_path, config, zarr_name):
-    """Process a single NetCDF file and store it in a Zarr archive."""
-    try:
-        # if zarr_name directory exists, skip
-        match = config["filename_pattern"].match(full_path)
-        if not match:
-            return None
-        data: xr.Dataset = xr.open_dataset(
-            full_path,
-            engine="netcdf4",
-            chunks={
-                "time": 1,
-                "x_1": -1,
-                "y_1": -1,
-                "z_1": -1,
-                "zbound": -1,
-            },
-            autoclose=True,
-        ).drop_vars("grid_mapping_1")
-        for var in data.variables:
-            data[var].encoding = {"compressor": config["compressor"]}
-        data.time.encoding = {"dtype": "float64"}
-        append_or_create_zarr(data, config, zarr_name)
-        # Display the progress
-        print(f"Processed: {full_path}")
-    except (FileNotFoundError, OSError) as e:
-        print(f"Error: {e}")
-    return None
+    print("Processing training data")
+    ds_train = xr.merge(
+        [
+            process(lambda x: 2015 <= x <= 2019, selected_vars),
+            process(lambda x: 2015 <= x <= 2019, selected_vars_2),
+        ],
+        compat="override",
+    ).rename_vars({"pp": "PP"})
 
+    print("Processing testing data")
+    ds_test = xr.merge(
+        [
+            process(lambda x: x == 2020, selected_vars),
+            process(lambda x: x == 2020, selected_vars_2),
+        ],
+        compat="override",
+    ).rename_vars({"pp": "PP"})
 
-def combine_zarr_archives(config) -> None:
-    """Combine the last Zarr archive from the train folder with the first from
-    the test folder."""
-
-    # Get the last Zarr archive from the train folder
-    train_archives = sorted(
-        glob.glob(os.path.join(config["zarr_path"], "train", "*.zarr"))
-    )
-
-    # Get the first Zarr archive from the test folder
-    test_archives = sorted(
-        glob.glob(os.path.join(config["zarr_path"], "test", "*.zarr"))
-    )
-    first_test_archive = xr.open_zarr(test_archives[0], consolidated=True)
-
-    val_archives_path = os.path.join(config["zarr_path"], "val")
-
-    for t in range(first_test_archive.time.size):
-        first_test_archive.isel(time=slice(t, t + 1)).to_zarr(
-            train_archives[-1], mode="a", append_dim="time", consolidated=True
-        )
-
-    shutil.rmtree(test_archives[0])
-    shutil.rmtree(test_archives[-1])
-
-    for file in test_archives[1:]:
-        filename = os.path.basename(file)
-        os.symlink(file, os.path.join(val_archives_path, filename))
+    for ds, path in zip([ds_train, ds_test], [data_train, data_test]):
+        print(f"Saving Zarr to {path}")
+        with ProgressBar():
+            ds = (
+                ds.assign_coords(x=ds.x, y=ds.y)
+                .chunk({"level": 1})
+                .drop_vars(["valid_time", "step"])
+            )
+            ds.to_zarr(
+                path,
+                consolidated=True,
+                mode="w",
+                encoding={
+                    var: {"compressor": compressor} for var in ds.data_vars
+                },
+            )
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Create a zarr archive.")
+    parser = argparse.ArgumentParser(
+        description="Process grib2 files and save them to zarr format."
+    )
     parser.add_argument(
-        "--data_path",
+        "--data_in",
         type=str,
-        required=True,
-        help="Path to the raw data",
-        default="/scratch/mch/sadamov/ml_v1/",
+        default="/scratch/mch/dealmeih/kenda/",
+        help="Input data directory.",
     )
     parser.add_argument(
-        "--test_year", type=int, required=True, help="Test year", default=2020
-    )
-    parser.add_argument(
-        "--filename_regex",
+        "--data_train",
         type=str,
-        required=True,
-        help="Filename regex",
-        default="(.*)_extr.nc",
+        default="/scratch/mch/sadamov/train.zarr",
+        help="Output zarr file for training.",
     )
+    parser.add_argument(
+        "--data_test",
+        type=str,
+        default="/scratch/mch/sadamov/test.zarr",
+        help="Output zarr file for testing.",
+    )
+    parser.add_argument(
+        "--indexpath",
+        type=str,
+        default="/scratch/mch/sadamov/temp",
+        help="Path to the index file.",
+    )
+
+    SELECTED_VARS = {
+        "heightAboveGround": ["U_10M", "V_10M"],
+        "surface": ["PS", "HSURF", "TQV", "FIS", "CLCL"],
+        "hybridLayer": ["T", "pp", "QV"],
+        "hybrid": ["W"],
+        "meanSea": ["PMSL"],
+    }
+    SELECTED_VARS_2 = {
+        # U,V have different lat/lon. T_2M has different heightAboveGround
+        "shortName": ["T_2M", "U", "V"],
+        # TOT_PREC retrieval incorrect in analysis file
+    }
 
     args = parser.parse_args()
 
-    data_config = {
-        "data_path": args.data_path,
-        "filename_regex": args.filename_regex,
-        "zarr_path": (
-            "/users/sadamov/pyprojects/" "neural-cosmo/data/cosmo/samples"
-        ),
-        "compressor": numcodecs.Blosc(
-            cname="lz4", clevel=7, shuffle=numcodecs.Blosc.SHUFFLE
-        ),
-        "chunk_size": constants.CHUNK_SIZE,
-        "test_year": args.test_year,
-    }
-    data_config.update(
-        {
-            "folders": os.listdir(data_config["data_path"]),
-            "filename_pattern": re.compile(data_config["filename_regex"]),
-        }
+    main(
+        args.data_in,
+        args.data_train,
+        args.data_test,
+        args.indexpath,
+        SELECTED_VARS,
+        SELECTED_VARS_2,
     )
-
-    load_data(data_config)
-    combine_zarr_archives(data_config)

@@ -15,4 +15,4 @@ ulimit -c 0
 export OMP_NUM_THREADS=16
 
 # Run the script with torchrun
-srun -ul python create_zarr.py
+srun -ul python create_zarr_archive.py
