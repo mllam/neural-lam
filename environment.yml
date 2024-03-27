@@ -6,6 +6,7 @@ channels:
 dependencies:
   - Cartopy
   - dask
+  - dask-jobqueue
   - imageio
   - ipython
   - matplotlib

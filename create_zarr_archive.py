@@ -5,10 +5,12 @@ import os
 # Third-party
 import xarray as xr
 from dask.diagnostics import ProgressBar
+from dask.distributed import Client
+from dask_jobqueue import SLURMCluster
 from numcodecs import Blosc
 
 
-def process_grib_files(paths, selected_vars, indexpath):
+def process_grib_files(data_in, selected_vars, indexpath):
     """Process grib2 files and return a dataset."""
     datasets = []
     for filters, variables in selected_vars.items():
@@ -24,25 +26,25 @@ def process_grib_files(paths, selected_vars, indexpath):
                 backend_kwargs["filter_by_keys"] = {"shortName": var}
                 with ProgressBar():
                     ds = xr.open_mfdataset(
-                        paths,
+                        data_in,
                         engine="cfgrib",
                         backend_kwargs=backend_kwargs,
                         combine="nested",
                         concat_dim="time",
                         parallel=True,
-                        chunks={"time": 1},
+                        chunks={"time": 1, "level": 1},
                         data_vars="minimal",
                         coords="minimal",
                         compat="override",
                     )
                 datasets.append(ds)
         else:
-            backend_kwargs["filter_by_keys"] = {"typeOfLevel": filter}
-            if filter == "surface":
+            backend_kwargs["filter_by_keys"] = {"typeOfLevel": filters}
+            if filters == "surface":
                 backend_kwargs["filter_by_keys"]["stepType"] = "instant"
             with ProgressBar():
                 ds = xr.open_mfdataset(
-                    paths,
+                    data_in,
                     engine="cfgrib",
                     backend_kwargs=backend_kwargs,
                     combine="nested",
@@ -57,9 +59,7 @@ def process_grib_files(paths, selected_vars, indexpath):
     return xr.merge(datasets, compat="minimal")
 
 
-def main(
-    data_in, data_train, data_test, indexpath, selected_vars, selected_vars_2
-):
+def main(data_in, data_out, indexpath, selected_vars, selected_vars_2):
     """Process grib2 files and save them to zarr format."""
     compressor = Blosc(cname="zstd", clevel=3, shuffle=Blosc.SHUFFLE)
     all_files = [
@@ -69,46 +69,24 @@ def main(
         if root.endswith("det") and f.startswith("laf")
     ]
 
-    def years_filter(y):
-        return [f for f in all_files if y(int(f[-10:-6]))]
-
-    def process(y, variables):
-        return process_grib_files(years_filter(y), variables, indexpath)
-
-    print("Processing training data")
-    ds_train = xr.merge(
+    print("Processing training data_out")
+    ds = xr.merge(
         [
-            process(lambda x: 2015 <= x <= 2019, selected_vars),
-            process(lambda x: 2015 <= x <= 2019, selected_vars_2),
+            process_grib_files(all_files, selected_vars, indexpath),
+            process_grib_files(all_files, selected_vars_2, indexpath),
         ],
         compat="override",
     ).rename_vars({"pp": "PP"})
 
-    print("Processing testing data")
-    ds_test = xr.merge(
-        [
-            process(lambda x: x == 2020, selected_vars),
-            process(lambda x: x == 2020, selected_vars_2),
-        ],
-        compat="override",
-    ).rename_vars({"pp": "PP"})
-
-    for ds, path in zip([ds_train, ds_test], [data_train, data_test]):
-        print(f"Saving Zarr to {path}")
-        with ProgressBar():
-            ds = (
-                ds.assign_coords(x=ds.x, y=ds.y)
-                .chunk({"level": 1})
-                .drop_vars(["valid_time", "step"])
-            )
-            ds.to_zarr(
-                path,
-                consolidated=True,
-                mode="w",
-                encoding={
-                    var: {"compressor": compressor} for var in ds.data_vars
-                },
-            )
+    print(f"Saving Zarr to {data_out}")
+    with ProgressBar():
+        ds = ds.assign_coords(x=ds.x, y=ds.y).drop_vars(["valid_time", "step"])
+        ds.to_zarr(
+            data_out,
+            consolidated=True,
+            mode="w",
+            encoding={var: {"compressor": compressor} for var in ds.data_vars},
+        )
 
 
 if __name__ == "__main__":
@@ -119,19 +97,13 @@ if __name__ == "__main__":
         "--data_in",
         type=str,
         default="/scratch/mch/dealmeih/kenda/",
-        help="Input data directory.",
+        help="Input data_out directory.",
     )
     parser.add_argument(
-        "--data_train",
+        "--data_out",
         type=str,
-        default="/scratch/mch/sadamov/train.zarr",
+        default="/scratch/mch/sadamov/data.zarr",
         help="Output zarr file for training.",
-    )
-    parser.add_argument(
-        "--data_test",
-        type=str,
-        default="/scratch/mch/sadamov/test.zarr",
-        help="Output zarr file for testing.",
     )
     parser.add_argument(
         "--indexpath",
@@ -150,16 +122,33 @@ if __name__ == "__main__":
     SELECTED_VARS_2 = {
         # U,V have different lat/lon. T_2M has different heightAboveGround
         "shortName": ["T_2M", "U", "V"],
-        # TOT_PREC retrieval incorrect in analysis file
     }
 
     args = parser.parse_args()
 
+    cluster = SLURMCluster(
+        queue='postproc',
+        account='s83',
+        processes=1,
+        cores=256,
+        memory='446GB',
+        local_directory='/scratch/mch/sadamov/temp',
+        shared_temp_directory='/scratch/mch/sadamov/temp',
+        log_directory='lightning_logs',
+        shebang='#!/bin/bash',
+        interface='nmn0',
+        walltime='5-00:00:00',
+        job_extra_directives=['--exclusive'])
+    cluster.scale(jobs=2)
+    client = Client(cluster)
+    client.wait_for_workers(2)
+
     main(
         args.data_in,
-        args.data_train,
-        args.data_test,
+        args.data_out,
         args.indexpath,
         SELECTED_VARS,
         SELECTED_VARS_2,
     )
+
+    client.close()

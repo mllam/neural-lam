@@ -32,18 +32,25 @@ class WeatherDataset(torch.utils.data.Dataset):
             "data", dataset_name, "samples", split, "data.zarr"
         )
         self.ds = xr.open_zarr(self.zarr_path, consolidated=True)
+        if split == "train":
+            self.ds = self.ds.sel(time=slice("2015", "2019"))
+        else:
+            self.ds = self.ds.sel(time=slice("2020", "2020"))
 
-        new_vars = {}
-        for var_name, data_array in self.ds.data_vars.items():
-            if var_name in constants.PARAM_NAMES_SHORT:
-                if constants.IS_3D[var_name]:
-                    for level in constants.VERTICAL_LEVELS:
-                        new_var_name = f"{var_name}_{int(level)}"
-                        new_vars[new_var_name] = data_array.sel(
-                            level=level
-                        ).drop_vars("level")
-                else:
-                    new_vars[var_name] = data_array
+        new_vars = {
+            (
+                f"{var_name}_{int(level)}"
+                if constants.IS_3D[var_name]
+                else var_name
+            ): (
+                data_array.sel(level=level).drop_vars("level")
+                if constants.IS_3D[var_name]
+                else data_array
+            )
+            for var_name, data_array in self.ds.data_vars.items()
+            if var_name in constants.PARAM_NAMES_SHORT
+            for level in constants.VERTICAL_LEVELS
+        }
 
         self.ds = (
             xr.Dataset(new_vars)
