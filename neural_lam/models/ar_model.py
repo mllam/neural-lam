@@ -234,6 +234,10 @@ class ARModel(pl.LightningModule):
         """
         prediction, target, pred_std = self.common_step(batch)        
         self.plot_examples(batch, batch_idx, prediction=prediction)
+
+        # Save prediction as np array 
+        prediction_np = prediction.numpy()
+        self.log("prediction", prediction_np)
         self.inference_output.append(prediction)
 
     def unroll_prediction(
@@ -545,7 +549,7 @@ class ARModel(pl.LightningModule):
                         wandb.log(
                             {
                                 (
-                                    f"{var_name}_{current_dataset}_lvl_{lvl:02}_t_"
+                                    f"{var_name}_{current_mode}_lvl_{lvl:02}_t_"
                                     f"{current_datetime_str}"
                                 ): wandb.Image(var_fig)
                             }
@@ -768,12 +772,6 @@ class ARModel(pl.LightningModule):
         """
         Return inference plot at the end of predict epoch.
         """
-
-        # We want to plot the maps like for test but with prediction --> do it within predict step
-        # Decide where the plot is getting shipped
-
-
-        # And then save in appropriate location in wandb 
         plot_dir_path = f"{wandb.run.dir}/media/predictions"
         value_dir_path = f"{wandb.run.dir}/results/inference"
         # Ensure the directory for saving numpy arrays exists
@@ -783,10 +781,11 @@ class ARModel(pl.LightningModule):
         # For values 
         for i, prediction in enumerate(self.inference_output):
             # Process and save the prediction
-            prediction_array = prediction.cpu().numpy()  # Adjust as necessary
+            prediction_array = prediction.cpu().numpy()
             file_path = os.path.join(value_dir_path, f"prediction_{i}.npy")
             np.save(file_path, prediction_array)
 
+        # FIXME I think this is not getting generated 
         # For plots
         for var_name, _ in self.selected_vars_units:
             var_indices = self.variable_indices[var_name]

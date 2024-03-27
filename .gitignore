@@ -9,7 +9,7 @@ sweeps
 test_*.sh
 lightning_logs
 .vscode
-/users/clechart/clechart/neural-lam/data_copy
+/users/clechart/clechart/neural-lam/data_copy/
 
 ### Python ###
 # Byte-compiled / optimized / DLL files

@@ -40,7 +40,7 @@ def print_eval(args_eval):
     print(f"Running evaluation on {args_eval}")
 
 
-@rank_zero_only
+# @rank_zero_only
 def init_wandb(args):
     """Initialize wandb"""
     if args.resume_run is None:
@@ -63,6 +63,7 @@ def init_wandb(args):
             log_model=True,
         )
         wandb.save("slurm_train.sh")
+        wandb.save("slurm_predict.sh")
         wandb.save("neural_lam/constants.py")
     else:
         wandb.init(
@@ -79,6 +80,7 @@ def init_wandb(args):
         )
 
     return logger
+
 
 
 def main():
@@ -232,15 +234,6 @@ def main():
         "(default: 1)",
     )
 
-    # Prediction options
-    parser.add_argument(
-        "--n_predictions",
-        type=int,
-        default=10,
-        help="Number of inference steps to generate"
-        "(default: 10)",
-    )
-
     # Evaluation options
     parser.add_argument(
         "--eval",
@@ -255,6 +248,7 @@ def main():
         help="Number of example predictions to plot during evaluation "
         "(default: 1)",
     )
+    # Get args 
     args = parser.parse_args()
 
     # Asserts for arguments
@@ -289,6 +283,7 @@ def main():
     model = model_class(args)
 
     result = init_wandb(args)
+
     if result is not None:
         logger = result
         checkpoint_dir = logger.experiment.dir
@@ -335,7 +330,7 @@ def main():
         num_nodes=num_nodes,
         profiler="simple",
         deterministic=True,
-        num_predict_batches=args.n_predictions,
+        limit_predict_batches=10,
         # num_sanity_val_steps=0
         # strategy="ddp",
         # limit_val_batches=0
@@ -347,16 +342,12 @@ def main():
 
     # Check if the mode is evaluation (either 'val' or 'test')
     if args.eval in ["val", "test"]:
-        # Print evaluation mode
-        print_eval(args.eval)
         data_module.split = args.eval
         trainer.test(model=model, datamodule=data_module, ckpt_path=args.load)
 
     # Check if the mode is prediction
     elif args.eval == "predict":
         data_module.split = "pred"
-        # Since cuda available, device should be 1 and accelerator "gpu"
-        # Quick sanity check
         assert devices == 1, "Device not set to 1, check cuda availability"
         trainer.accelerator == "gpu"
         trainer.predict(model=model, datamodule=data_module, return_predictions=True, ckpt_path=args.load)
@@ -364,7 +355,6 @@ def main():
     # Default mode is training
     else:
         data_module.split = "train"
-        # Check if a checkpoint path is provided for training
         if args.load:
             trainer.fit(model=model, datamodule=data_module, ckpt_path=args.load)
         else:
@@ -375,5 +365,4 @@ def main():
 
 
 if __name__ == "__main__":
-    wandb.init(project="neural-lam")
     main()
