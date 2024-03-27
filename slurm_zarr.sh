@@ -15,42 +15,7 @@
 conda activate neural-lam
 
 # Set up environment variables
-export DASK_DISTRIBUTED__COMM__TIMEOUTS__CONNECT=600s
-export DASK_DISTRIBUTED__COMM__TIMEOUTS__TCP=600s
+export DASK_DISTRIBUTED__COMM__TIMEOUTS__CONNECT=100000s
+export DASK_DISTRIBUTED__COMM__TIMEOUTS__TCP=100000s
 
-# Launch the SLURMCluster
-srun python -c "
-from dask.distributed import Client
-from dask_jobqueue import SLURMCluster
-
-JOBS = 1
-CORES = 256
-PROCESSES = 8
-workers = JOBS * PROCESSES
-
-cluster = SLURMCluster(
-    queue='postproc',
-    account='s83',
-    processes=PROCESSES,
-    cores=CORES,
-    memory='444GB',
-    local_directory='/scratch/mch/sadamov/temp',
-    shared_temp_directory='/scratch/mch/sadamov/temp',
-    log_directory='lightning_logs',
-    shebang='#!/bin/bash',
-    interface='hsn0',
-    walltime='5-00:00:00',
-    job_extra_directives=['--exclusive'],
-)
-cluster.scale(jobs=JOBS)
-client = Client(cluster)
-client.wait_for_workers(workers)
-"
-
-# Run the main Python script
-srun python create_zarr_archive.py --data_in /scratch/mch/dealmeih/kenda/ \
-                                   --data_out /scratch/mch/sadamov/data.zarr \
-                                   --indexpath /scratch/mch/sadamov/temp
-
-# Close the client
-srun python -c "client.close()"
+srun -ul python create_zarr_archive.py

@@ -5,6 +5,8 @@ import os
 # Third-party
 import xarray as xr
 from dask.diagnostics import ProgressBar
+from dask.distributed import Client
+from dask_jobqueue import SLURMCluster
 from numcodecs import Blosc
 
 
@@ -30,7 +32,7 @@ def process_grib_files(data_in, selected_vars, indexpath):
                         combine="nested",
                         concat_dim="time",
                         parallel=True,
-                        chunks={"time": 1, "level": 1},
+                        chunks={"time": 128, "level": 1},
                         data_vars="minimal",
                         coords="minimal",
                         compat="override",
@@ -48,7 +50,7 @@ def process_grib_files(data_in, selected_vars, indexpath):
                     combine="nested",
                     concat_dim="time",
                     parallel=True,
-                    chunks={"time": 1},
+                    chunks={"time": 128},
                     data_vars="minimal",
                     coords="minimal",
                     compat="override",
@@ -57,38 +59,60 @@ def process_grib_files(data_in, selected_vars, indexpath):
     return xr.merge(datasets, compat="minimal")
 
 
-def main(data_in, data_out, indexpath, selected_vars, selected_vars_2):
-    """Process grib2 files and save them to zarr format."""
-    compressor = Blosc(cname="zstd", clevel=3, shuffle=Blosc.SHUFFLE)
-    all_files = [
-        os.path.join(root, f)
-        for root, dirs, files in os.walk(data_in)
-        for f in files
-        if root.endswith("det") and f.startswith("laf")
-    ]
-
-    print("Processing Data")
+def process_chunk(chunk, indexpath, selected_vars, selected_vars_2):
+    """Process a chunk of grib2 files and return a dataset."""
     ds = xr.merge(
         [
-            process_grib_files(all_files, selected_vars, indexpath),
-            process_grib_files(all_files, selected_vars_2, indexpath),
+            process_grib_files(chunk, selected_vars, indexpath),
+            process_grib_files(chunk, selected_vars_2, indexpath),
         ],
         compat="override",
     ).rename_vars({"pp": "PP"})
+    return ds
 
-    print(f"Saving Zarr to {data_out}")
-    with ProgressBar():
-        ds = (
-            ds.assign_coords(x=ds.x, y=ds.y)
-            .drop_vars(["valid_time", "step"])
-            .chunk({"time": 1, "level": 1})
-        )
-        ds.to_zarr(
-            data_out,
-            consolidated=True,
-            mode="w",
-            encoding={var: {"compressor": compressor} for var in ds.data_vars},
-        )
+
+def main(
+    data_in, data_out, indexpath, selected_vars, selected_vars_2, chunk_size
+):
+    """Main function to process grib2 files and save them to zarr format."""
+    compressor = Blosc(cname="zstd", clevel=3, shuffle=Blosc.SHUFFLE)
+    all_files = sorted(
+        [
+            os.path.join(root, f)
+            for root, dirs, files in os.walk(data_in)
+            for f in files
+            if root.endswith("det") and f.startswith("laf")
+        ]
+    )
+
+    print("Processing Data")
+    for i in range(0, len(all_files), chunk_size):
+        chunk = all_files[i : i + chunk_size]
+        ds = process_chunk(chunk, indexpath, selected_vars, selected_vars_2)
+
+        print(f"Saving Zarr chunk {i//chunk_size} to {data_out}")
+        with ProgressBar():
+            ds = (
+                ds.assign_coords(x=ds.x, y=ds.y)
+                .drop_vars(["valid_time", "step"])
+                .chunk({"time": 128, "level": 1})
+            )
+            if i == 0:
+                ds.to_zarr(
+                    data_out,
+                    consolidated=True,
+                    mode="w",
+                    encoding={
+                        var: {"compressor": compressor} for var in ds.data_vars
+                    },
+                )
+            else:
+                ds.to_zarr(
+                    data_out,
+                    consolidated=True,
+                    mode="a",
+                    append_dim="time",
+                )
 
 
 if __name__ == "__main__":
@@ -126,6 +150,30 @@ if __name__ == "__main__":
         # U,V have different lat/lon. T_2M has different heightAboveGround
         "shortName": ["T_2M", "U", "V"],
     }
+    CHUNK_SIZE = 10000
+    JOBS = 2
+    CORES = 256
+    PROCESSES = 4
+    WORKERS = JOBS * PROCESSES
+
+    cluster = SLURMCluster(
+        queue="postproc",
+        account="s83",
+        processes=PROCESSES,
+        cores=CORES,
+        memory="444GB",
+        local_directory="/scratch/mch/sadamov/temp",
+        shared_temp_directory="/scratch/mch/sadamov/temp",
+        log_directory="lightning_logs",
+        shebang="#!/bin/bash",
+        interface="hsn0",
+        walltime="5-00:00:00",
+        job_extra_directives=["--exclusive"],
+        death_timeout="100000",
+    )
+    cluster.scale(jobs=JOBS)
+    client = Client(cluster, timeout="100000")
+    client.wait_for_workers(WORKERS)
 
     main(
         args.data_in,
@@ -133,4 +181,7 @@ if __name__ == "__main__":
         args.indexpath,
         SELECTED_VARS,
         SELECTED_VARS_2,
+        CHUNK_SIZE,
     )
+
+client.close()
