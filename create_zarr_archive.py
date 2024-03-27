@@ -1,13 +1,10 @@
 # Standard library
 import argparse
 import os
-from math import sqrt
 
 # Third-party
 import xarray as xr
 from dask.diagnostics import ProgressBar
-from dask.distributed import Client
-from dask_jobqueue import SLURMCluster
 from numcodecs import Blosc
 
 
@@ -129,28 +126,6 @@ if __name__ == "__main__":
         # U,V have different lat/lon. T_2M has different heightAboveGround
         "shortName": ["T_2M", "U", "V"],
     }
-    JOBS = 4
-    CORES = 256
-    processes = int(sqrt(CORES))
-    workers = JOBS * processes
-
-    cluster = SLURMCluster(
-        queue="postproc",
-        account="s83",
-        processes=16,
-        cores=CORES,
-        memory="444GB",
-        local_directory="/scratch/mch/sadamov/temp",
-        shared_temp_directory="/scratch/mch/sadamov/temp",
-        log_directory="lightning_logs",
-        shebang="#!/bin/bash",
-        interface="hsn0",
-        walltime="5-00:00:00",
-        job_extra_directives=["--exclusive"],
-    )
-    cluster.scale(jobs=JOBS)
-    client = Client(cluster)
-    client.wait_for_workers(workers)
 
     main(
         args.data_in,
@@ -159,5 +134,3 @@ if __name__ == "__main__":
         SELECTED_VARS,
         SELECTED_VARS_2,
     )
-
-    client.close()
