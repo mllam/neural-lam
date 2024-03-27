@@ -127,18 +127,19 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     cluster = SLURMCluster(
-        queue='postproc',
-        account='s83',
+        queue="postproc",
+        account="s83",
         processes=1,
         cores=256,
-        memory='446GB',
-        local_directory='/scratch/mch/sadamov/temp',
-        shared_temp_directory='/scratch/mch/sadamov/temp',
-        log_directory='lightning_logs',
-        shebang='#!/bin/bash',
-        interface='nmn0',
-        walltime='5-00:00:00',
-        job_extra_directives=['--exclusive'])
+        memory="446GB",
+        local_directory="/scratch/mch/sadamov/temp",
+        shared_temp_directory="/scratch/mch/sadamov/temp",
+        log_directory="lightning_logs",
+        shebang="#!/bin/bash",
+        interface="nmn0",
+        walltime="5-00:00:00",
+        job_extra_directives=["--exclusive"],
+    )
     cluster.scale(jobs=2)
     client = Client(cluster)
     client.wait_for_workers(2)
