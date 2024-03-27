@@ -1,7 +1,7 @@
 #!/bin/bash -l
 #SBATCH --job-name=dask-job
-#SBATCH --output=%x_%j.out
-#SBATCH --error=%x_%j.err
+#SBATCH --output=lightning_logs/%x_%j.out
+#SBATCH --error=lightning_logs/%x_%j.err
 #SBATCH --partition=postproc
 #SBATCH --account=s83
 #SBATCH --nodes=1
@@ -23,9 +23,9 @@ srun python -c "
 from dask.distributed import Client
 from dask_jobqueue import SLURMCluster
 
-JOBS = 2
+JOBS = 1
 CORES = 256
-PROCESSES = 2
+PROCESSES = 8
 workers = JOBS * PROCESSES
 
 cluster = SLURMCluster(
