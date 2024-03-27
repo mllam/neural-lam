@@ -40,7 +40,7 @@ def print_eval(args_eval):
     print(f"Running evaluation on {args_eval}")
 
 
-# @rank_zero_only
+@rank_zero_only
 def init_wandb(args):
     """Initialize wandb"""
     if args.resume_run is None:

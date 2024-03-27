@@ -546,14 +546,15 @@ class ARModel(pl.LightningModule):
                             title=title,
                             vrange=var_vrange,
                         )
-                        wandb.log(
-                            {
-                                (
-                                    f"{var_name}_{current_mode}_lvl_{lvl:02}_t_"
-                                    f"{current_datetime_str}"
-                                ): wandb.Image(var_fig)
-                            }
-                        )
+                        if self.trainer.global_rank == 0:
+                            wandb.log(
+                                {
+                                    (
+                                        f"{var_name}_{current_mode}_lvl_{lvl:02}_t_"
+                                        f"{current_datetime_str}"
+                                    ): wandb.Image(var_fig)
+                                }
+                            )
                         plt.close("all")
 
             if constants.STORE_EXAMPLE_DATA:
@@ -725,7 +726,8 @@ class ARModel(pl.LightningModule):
 
             # log all to same wandb key, sequentially
             for fig in loss_map_figs:
-                wandb.log({"test_loss": wandb.Image(fig)})
+                if self.global_rank == 0:
+                    wandb.log({"test_loss": wandb.Image(fig)})
 
             # also make without title and save as pdf
             pdf_loss_map_figs = [
