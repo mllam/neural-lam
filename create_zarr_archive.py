@@ -129,9 +129,9 @@ if __name__ == "__main__":
     cluster = SLURMCluster(
         queue="postproc",
         account="s83",
-        processes=1,
-        cores=256,
-        memory="446GB",
+        processes=4,
+        cores=64,
+        memory="111GB",
         local_directory="/scratch/mch/sadamov/temp",
         shared_temp_directory="/scratch/mch/sadamov/temp",
         log_directory="lightning_logs",
