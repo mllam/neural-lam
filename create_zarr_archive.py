@@ -32,7 +32,7 @@ def process_grib_files(data_in, selected_vars, indexpath):
                         combine="nested",
                         concat_dim="time",
                         parallel=True,
-                        chunks={"time": 128, "level": 1},
+                        chunks={"time": 1, "level": 1},
                         data_vars="minimal",
                         coords="minimal",
                         compat="override",
@@ -50,7 +50,7 @@ def process_grib_files(data_in, selected_vars, indexpath):
                     combine="nested",
                     concat_dim="time",
                     parallel=True,
-                    chunks={"time": 128},
+                    chunks={"time": 1},
                     data_vars="minimal",
                     coords="minimal",
                     compat="override",
@@ -87,7 +87,7 @@ def main(
 
     print("Processing Data")
     for i in range(0, len(all_files), chunk_size):
-        chunk = all_files[i : i + chunk_size]
+        chunk = all_files[i: i + chunk_size]
         ds = process_chunk(chunk, indexpath, selected_vars, selected_vars_2)
 
         print(f"Saving Zarr chunk {i//chunk_size} to {data_out}")
@@ -95,7 +95,7 @@ def main(
             ds = (
                 ds.assign_coords(x=ds.x, y=ds.y)
                 .drop_vars(["valid_time", "step"])
-                .chunk({"time": 128, "level": 1})
+                .chunk({"time": 1, "level": 1})
             )
             if i == 0:
                 ds.to_zarr(
@@ -150,10 +150,10 @@ if __name__ == "__main__":
         # U,V have different lat/lon. T_2M has different heightAboveGround
         "shortName": ["T_2M", "U", "V"],
     }
-    CHUNK_SIZE = 10000
+    CHUNK_SIZE = 1000
     JOBS = 2
     CORES = 256
-    PROCESSES = 4
+    PROCESSES = 16
     WORKERS = JOBS * PROCESSES
 
     cluster = SLURMCluster(
