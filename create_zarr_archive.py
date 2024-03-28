@@ -87,7 +87,7 @@ def main(
 
     print("Processing Data")
     for i in range(0, len(all_files), chunk_size):
-        chunk = all_files[i: i + chunk_size]
+        chunk = all_files[i : i + chunk_size]
         ds = process_chunk(chunk, indexpath, selected_vars, selected_vars_2)
 
         print(f"Saving Zarr chunk {i//chunk_size} to {data_out}")
