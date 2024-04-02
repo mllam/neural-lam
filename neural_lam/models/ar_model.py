@@ -232,12 +232,12 @@ class ARModel(pl.LightningModule):
         """
         Run the inference on batch.
         """
-        prediction, target, pred_std = self.common_step(batch)        
-        self.plot_examples(batch, batch_idx, prediction=prediction)
-
-        # Save prediction as np array 
-        prediction_np = prediction.numpy()
-        self.log("prediction", prediction_np)
+        prediction, target, pred_std = self.common_step(batch)     
+        if self.trainer.is_global_zero:  
+            self.plot_examples(batch, batch_idx, prediction=prediction)
+            # Save prediction as np array 
+            prediction_np = prediction.numpy()
+            self.log("prediction", prediction_np)
         self.inference_output.append(prediction)
 
     def unroll_prediction(
@@ -546,7 +546,7 @@ class ARModel(pl.LightningModule):
                             title=title,
                             vrange=var_vrange,
                         )
-                        if self.trainer.global_rank == 0:
+                        if self.trainer.global_rank == 0  and not self.trainer.sanity_checking:
                             wandb.log(
                                 {
                                     (
