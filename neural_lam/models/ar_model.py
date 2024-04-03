@@ -488,8 +488,10 @@ class ARModel(pl.LightningModule):
         dataset = None
         if hasattr(self.trainer.datamodule, 'test_dataset') and self.trainer.datamodule.test_dataset:
             dataset = self.trainer.datamodule.test_dataset
+            plot_name = "test"
         elif hasattr(self.trainer.datamodule, 'predict_dataset') and self.trainer.datamodule.predict_dataset:
             dataset = self.trainer.datamodule.predict_dataset
+            plot_name = "prediction"
 
         if dataset and self.trainer.global_rank == 0 and dataset.batch_index == batch_idx:
             index_within_batch = dataset.index_within_batch
@@ -521,7 +523,7 @@ class ARModel(pl.LightningModule):
                         current_datetime_str = current_datetime_obj.strftime("%Y%m%d%H")
                         title = f"{var_name} ({var_unit}), t={current_datetime_str}"
                         var_fig = vis.plot_prediction(pred_t[:, var_i], target_t[:, var_i], title=title, vrange=var_vrange)
-                        wandb.log({f"{var_name}_lvl_{lvl:02}_t_{current_datetime_str}": wandb.Image(var_fig)})
+                        wandb.log({f"{var_name}_{plot_name}_lvl_{lvl:02}_t_{current_datetime_str}": wandb.Image(var_fig)})
                         plt.close("all")
 
             if constants.STORE_EXAMPLE_DATA:
@@ -708,7 +710,6 @@ class ARModel(pl.LightningModule):
             )
 
             dir_path = f"{wandb.run.dir}/media/images"
-            print(wandb.summary)
 
             for var_name, _ in self.selected_vars_units:
                 var_indices = self.variable_indices[var_name]
@@ -718,7 +719,7 @@ class ARModel(pl.LightningModule):
 
                     # Get all the images for the current variable and index
                     images = sorted(
-                        glob.glob(f"{dir_path}/{var_name}_lvl_{lvl:02}_t_*.png")
+                        glob.glob(f"{dir_path}/{var_name}_test_lvl_{lvl:02}_t_*.png")
                     )
                     # Generate the GIF
                     with imageio.get_writer(
@@ -736,7 +737,7 @@ class ARModel(pl.LightningModule):
         """
         Return inference plot at the end of predict epoch.
         """
-        plot_dir_path = f"{wandb.run.dir}/media/predictions"
+        plot_dir_path = f"{wandb.run.dir}/media/images"
         value_dir_path = f"{wandb.run.dir}/results/inference"
         # Ensure the directory for saving numpy arrays exists
         os.makedirs(plot_dir_path, exist_ok=True)
