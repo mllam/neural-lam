@@ -330,7 +330,7 @@ def main():
         num_nodes=num_nodes,
         profiler="simple",
         deterministic=True,
-        limit_predict_batches=10,
+        limit_predict_batches=4,
         # num_sanity_val_steps=0
         # strategy="ddp",
         # limit_val_batches=0

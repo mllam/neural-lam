@@ -20,4 +20,5 @@ ulimit -c 0
 export OMP_NUM_THREADS=16
 
 srun -ul python train_model.py --load "wandb/example.ckpt" --dataset "cosmo" \
-    --eval="predict" --subset_ds 1 --n_workers 2 --batch_size 6 --model "graph_lam" 
+    --eval="predict" --subset_ds 1 --n_workers 2 --batch_size 6 
+    # --model "graph_lam" 
