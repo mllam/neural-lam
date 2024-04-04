@@ -82,7 +82,6 @@ def init_wandb(args):
     return logger
 
 
-
 def main():
     # pylint: disable=too-many-branches
     """
@@ -104,7 +103,8 @@ def main():
         "--model",
         type=str,
         default="graph_lam",
-        help="Model architecture to train/evaluate/predict (default: graph_lam)",
+        help="Model architecture to train/evaluate/predict"
+        "(default: graph_lam)",
     )
     parser.add_argument(
         "--subset_ds",
@@ -248,7 +248,7 @@ def main():
         help="Number of example predictions to plot during evaluation "
         "(default: 1)",
     )
-    # Get args 
+    # Get args
     args = parser.parse_args()
 
     # Asserts for arguments
@@ -258,7 +258,7 @@ def main():
         None,
         "val",
         "test",
-        "predict"
+        "predict",
     ), f"Unknown eval setting: {args.eval}"
 
     # Set seed
@@ -349,14 +349,21 @@ def main():
     elif args.eval == "predict":
         data_module.split = "pred"
         assert devices == 1, "Device not set to 1, check cuda availability"
-        trainer.accelerator == "gpu"
-        trainer.predict(model=model, datamodule=data_module, return_predictions=True, ckpt_path=args.load)
+        assert trainer.accelerator == "gpu", "Accelerator should be GPU"
+        trainer.predict(
+            model=model,
+            datamodule=data_module,
+            return_predictions=True,
+            ckpt_path=args.load,
+        )
 
     # Default mode is training
     else:
         data_module.split = "train"
         if args.load:
-            trainer.fit(model=model, datamodule=data_module, ckpt_path=args.load)
+            trainer.fit(
+                model=model, datamodule=data_module, ckpt_path=args.load
+            )
         else:
             trainer.fit(model=model, datamodule=data_module)
 

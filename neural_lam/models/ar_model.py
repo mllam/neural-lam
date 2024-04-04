@@ -11,12 +11,11 @@ import numpy as np
 import pytorch_lightning as pl
 import torch
 import wandb
-from torch import nn
 from pytorch_lightning.utilities import rank_zero_only
+from torch import nn
 
 # First-party
 from neural_lam import constants, metrics, utils, vis
-from neural_lam.weather_dataset import WeatherDataModule
 
 
 # pylint: disable=too-many-public-methods
@@ -229,14 +228,14 @@ class ARModel(pl.LightningModule):
         """
         raise NotImplementedError("No prediction step implemented")
 
-    def predict_step(self, batch, batch_idx): 
+    def predict_step(self, batch, batch_idx):
         """
         Run the inference on batch.
         """
-        prediction, target, pred_std = self.common_step(batch)     
-        if self.trainer.global_rank == 0:  
+        prediction, _, _ = self.common_step(batch)
+        if self.trainer.global_rank == 0:
             self.plot_examples(batch, batch_idx, prediction=prediction)
-            # Save prediction as np array 
+            # Save prediction as np array
             # prediction_np = prediction.numpy()
             # self.log("prediction", prediction_np)
         self.inference_output.append(prediction)
@@ -264,7 +263,7 @@ class ARModel(pl.LightningModule):
             if forcing_features is not None
             else true_states.shape[1]
         )
-        
+
         for i in range(pred_steps):
             forcing = (
                 forcing_features[:, i] if forcing_features is not None else None
@@ -318,10 +317,7 @@ class ARModel(pl.LightningModule):
         forcing_features = batch[3] if len(batch) > 3 else None
 
         prediction, pred_std = self.unroll_prediction(
-            init_states,
-            target_states,
-            batch_static_features,
-            forcing_features
+            init_states, target_states, batch_static_features, forcing_features
         )  # (B, pred_steps, num_grid_nodes, d_f)
         # prediction: (B, pred_steps, num_grid_nodes, d_f)
         # pred_std: (B, pred_steps, num_grid_nodes, d_f) or (d_f,)
@@ -476,8 +472,10 @@ class ARModel(pl.LightningModule):
         - batch_idx: Index of the batch being processed
         - prediction: Tensor of existing predictions. Generate if None.
 
-        The function checks for the presence of test_dataset or predict_dataset within the trainer's data module,
-        handles indexing within the batch for targeted analysis, performs prediction rescaling, and plots results.
+        The function checks for the presence of test_dataset or
+        predict_dataset within the trainer's data module,
+        handles indexing within the batch for targeted analysis,
+        performs prediction rescaling, and plots results.
         """
         if prediction is None:
             prediction, target = self.common_step(batch)
@@ -486,17 +484,31 @@ class ARModel(pl.LightningModule):
 
         # Determine the dataset to work with (test_dataset or predict_dataset)
         dataset = None
-        if hasattr(self.trainer.datamodule, 'test_dataset') and self.trainer.datamodule.test_dataset:
+        if (
+            hasattr(self.trainer.datamodule, "test_dataset")
+            and self.trainer.datamodule.test_dataset
+        ):
             dataset = self.trainer.datamodule.test_dataset
             plot_name = "test"
-        elif hasattr(self.trainer.datamodule, 'predict_dataset') and self.trainer.datamodule.predict_dataset:
+        elif (
+            hasattr(self.trainer.datamodule, "predict_dataset")
+            and self.trainer.datamodule.predict_dataset
+        ):
             dataset = self.trainer.datamodule.predict_dataset
             plot_name = "prediction"
 
-        if dataset and self.trainer.global_rank == 0 and dataset.batch_index == batch_idx:
+        if (
+            dataset
+            and self.trainer.global_rank == 0
+            and dataset.batch_index == batch_idx
+        ):
             index_within_batch = dataset.index_within_batch
             if not torch.is_tensor(index_within_batch):
-                index_within_batch = torch.tensor(index_within_batch, dtype=torch.int64, device=prediction.device)
+                index_within_batch = torch.tensor(
+                    index_within_batch,
+                    dtype=torch.int64,
+                    device=prediction.device,
+                )
 
             prediction = prediction[index_within_batch]
             target = target[index_within_batch]
@@ -507,28 +519,65 @@ class ARModel(pl.LightningModule):
             target_rescaled = target * self.data_std + self.data_mean
 
             if constants.SMOOTH_BOUNDARIES:
-                prediction_rescaled = self.smooth_prediction_borders(prediction_rescaled)
+                prediction_rescaled = self.smooth_prediction_borders(
+                    prediction_rescaled
+                )
 
             # Plotting and logging
             for var_name, var_unit in self.selected_vars_units:
                 var_indices = self.variable_indices[var_name]
                 for lvl_i, var_i in enumerate(var_indices):
                     lvl = constants.VERTICAL_LEVELS[lvl_i]
-                    var_vmin = min(prediction_rescaled[:, :, var_i].min(), target_rescaled[:, :, var_i].min())
-                    var_vmax = max(prediction_rescaled[:, :, var_i].max(), target_rescaled[:, :, var_i].max())
+                    var_vmin = min(
+                        prediction_rescaled[:, :, var_i].min(),
+                        target_rescaled[:, :, var_i].min(),
+                    )
+                    var_vmax = max(
+                        prediction_rescaled[:, :, var_i].max(),
+                        target_rescaled[:, :, var_i].max(),
+                    )
                     var_vrange = (var_vmin, var_vmax)
-                    for t_i, (pred_t, target_t) in enumerate(zip(prediction_rescaled, target_rescaled), start=1):
-                        eval_datetime_obj = datetime.strptime(constants.EVAL_DATETIME, "%Y%m%d%H")
-                        current_datetime_obj = eval_datetime_obj + timedelta(hours=t_i)
-                        current_datetime_str = current_datetime_obj.strftime("%Y%m%d%H")
-                        title = f"{var_name} ({var_unit}), t={current_datetime_str}"
-                        var_fig = vis.plot_prediction(pred_t[:, var_i], target_t[:, var_i], title=title, vrange=var_vrange)
-                        wandb.log({f"{var_name}_{plot_name}_lvl_{lvl:02}_t_{current_datetime_str}": wandb.Image(var_fig)})
+                    for t_i, (pred_t, target_t) in enumerate(
+                        zip(prediction_rescaled, target_rescaled), start=1
+                    ):
+                        eval_datetime_obj = datetime.strptime(
+                            constants.EVAL_DATETIME, "%Y%m%d%H"
+                        )
+                        current_datetime_obj = eval_datetime_obj + timedelta(
+                            hours=t_i
+                        )
+                        current_datetime_str = current_datetime_obj.strftime(
+                            "%Y%m%d%H"
+                        )
+                        title = (
+                            f"{var_name} ({var_unit}), t={current_datetime_str}"
+                        )
+                        var_fig = vis.plot_prediction(
+                            pred_t[:, var_i],
+                            target_t[:, var_i],
+                            title=title,
+                            vrange=var_vrange,
+                        )
+                        wandb.log(
+                            {
+                                f"{var_name}_{plot_name}_lvl_"
+                                f"{lvl:02}_t_{current_datetime_str}":
+                                wandb.Image(
+                                    var_fig
+                                )
+                            }
+                        )
                         plt.close("all")
 
             if constants.STORE_EXAMPLE_DATA:
-                torch.save(prediction_rescaled.cpu(), os.path.join(wandb.run.dir, "example_pred.pt"))
-                torch.save(target_rescaled.cpu(), os.path.join(wandb.run.dir, "example_target.pt"))
+                torch.save(
+                    prediction_rescaled.cpu(),
+                    os.path.join(wandb.run.dir, "example_pred.pt"),
+                )
+                torch.save(
+                    target_rescaled.cpu(),
+                    os.path.join(wandb.run.dir, "example_target.pt"),
+                )
 
     @rank_zero_only
     def smooth_prediction_borders(self, prediction_rescaled):
@@ -719,7 +768,9 @@ class ARModel(pl.LightningModule):
 
                     # Get all the images for the current variable and index
                     images = sorted(
-                        glob.glob(f"{dir_path}/{var_name}_test_lvl_{lvl:02}_t_*.png")
+                        glob.glob(
+                            f"{dir_path}/{var_name}_test_lvl_{lvl:02}_t_*.png"
+                        )
                     )
                     # Generate the GIF
                     with imageio.get_writer(
@@ -741,16 +792,15 @@ class ARModel(pl.LightningModule):
         value_dir_path = f"{wandb.run.dir}/results/inference"
         # Ensure the directory for saving numpy arrays exists
         os.makedirs(plot_dir_path, exist_ok=True)
-        os.makedirs(value_dir_path, exist_ok=True) 
+        os.makedirs(value_dir_path, exist_ok=True)
 
-        # For values 
+        # For values
         for i, prediction in enumerate(self.inference_output):
             # Process and save the prediction
             prediction_array = prediction.cpu().numpy()
             file_path = os.path.join(value_dir_path, f"prediction_{i}.npy")
             np.save(file_path, prediction_array)
 
-        # FIXME I think this is not getting generated 
         # For plots
         for var_name, _ in self.selected_vars_units:
             var_indices = self.variable_indices[var_name]
@@ -760,7 +810,10 @@ class ARModel(pl.LightningModule):
 
                 # Get all the images for the current variable and index
                 images = sorted(
-                    glob.glob(f"{plot_dir_path}/{var_name}_prediction_lvl_{lvl:02}_t_*.png")
+                    glob.glob(
+                        f"{plot_dir_path}/"
+                        f"{var_name}_prediction_lvl_{lvl:02}_t_*.png"
+                    )
                 )
                 # Generate the GIF
                 with imageio.get_writer(
@@ -771,7 +824,6 @@ class ARModel(pl.LightningModule):
                     for filename in images:
                         image = imageio.imread(filename)
                         writer.append_data(image)
-
 
     def on_load_checkpoint(self, checkpoint):
         """
