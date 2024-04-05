@@ -330,7 +330,7 @@ def main():
         num_nodes=num_nodes,
         profiler="simple",
         deterministic=True,
-        limit_predict_batches=4,
+        limit_predict_batches= int(constants.EVAL_HORIZON / args.step_length),
         # num_sanity_val_steps=0
         # strategy="ddp",
         # limit_val_batches=0
@@ -349,14 +349,13 @@ def main():
     elif args.eval == "predict":
         data_module.split = "pred"
         assert devices == 1, "Device not set to 1, check cuda availability"
-        assert trainer.accelerator == "gpu", "Accelerator should be GPU"
+        # assert trainer.accelerator == "cuda", "Accelerator should be GPU"
         trainer.predict(
             model=model,
             datamodule=data_module,
             return_predictions=True,
             ckpt_path=args.load,
         )
-
     # Default mode is training
     else:
         data_module.split = "train"

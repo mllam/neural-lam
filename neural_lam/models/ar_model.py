@@ -522,11 +522,15 @@ class ARModel(pl.LightningModule):
                 prediction_rescaled = self.smooth_prediction_borders(
                     prediction_rescaled
                 )
+            
+            # Each slice is (pred_steps, N_grid, d_f) Iterate over variables
 
             # Plotting and logging
             for var_name, var_unit in self.selected_vars_units:
+                # Retrieve the indices for the current variable
                 var_indices = self.variable_indices[var_name]
                 for lvl_i, var_i in enumerate(var_indices):
+                    # Calculate var_vrange for each index
                     lvl = constants.VERTICAL_LEVELS[lvl_i]
                     var_vmin = min(
                         prediction_rescaled[:, :, var_i].min(),
@@ -537,6 +541,7 @@ class ARModel(pl.LightningModule):
                         target_rescaled[:, :, var_i].max(),
                     )
                     var_vrange = (var_vmin, var_vmax)
+                    # Iterate over time steps
                     for t_i, (pred_t, target_t) in enumerate(
                         zip(prediction_rescaled, target_rescaled), start=1
                     ):
@@ -570,6 +575,7 @@ class ARModel(pl.LightningModule):
                         plt.close("all")
 
             if constants.STORE_EXAMPLE_DATA:
+                # Save pred and target as .pt files
                 torch.save(
                     prediction_rescaled.cpu(),
                     os.path.join(wandb.run.dir, "example_pred.pt"),
@@ -793,13 +799,6 @@ class ARModel(pl.LightningModule):
         # Ensure the directory for saving numpy arrays exists
         os.makedirs(plot_dir_path, exist_ok=True)
         os.makedirs(value_dir_path, exist_ok=True)
-
-        # For values
-        for i, prediction in enumerate(self.inference_output):
-            # Process and save the prediction
-            prediction_array = prediction.cpu().numpy()
-            file_path = os.path.join(value_dir_path, f"prediction_{i}.npy")
-            np.save(file_path, prediction_array)
 
         # For plots
         for var_name, _ in self.selected_vars_units:
