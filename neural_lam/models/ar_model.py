@@ -235,9 +235,6 @@ class ARModel(pl.LightningModule):
         prediction, _, _ = self.common_step(batch)
         if self.trainer.global_rank == 0:
             self.plot_examples(batch, batch_idx, prediction=prediction)
-            # Save prediction as np array
-            # prediction_np = prediction.numpy()
-            # self.log("prediction", prediction_np)
         self.inference_output.append(prediction)
 
     def unroll_prediction(
@@ -521,11 +518,9 @@ class ARModel(pl.LightningModule):
             if constants.SMOOTH_BOUNDARIES:
                 prediction_rescaled = self.smooth_prediction_borders(
                     prediction_rescaled
-                )
-            
+                )        
             # Each slice is (pred_steps, N_grid, d_f) Iterate over variables
 
-            # Plotting and logging
             for var_name, var_unit in self.selected_vars_units:
                 # Retrieve the indices for the current variable
                 var_indices = self.variable_indices[var_name]
@@ -744,8 +739,7 @@ class ARModel(pl.LightningModule):
 
             # log all to same wandb key, sequentially
             for fig in loss_map_figs:
-                if self.global_rank == 0:
-                    wandb.log({"test_loss": wandb.Image(fig)})
+                wandb.log({"test_loss": wandb.Image(fig)})
 
             # also make without title and save as pdf
             pdf_loss_map_figs = [
