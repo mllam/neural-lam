@@ -800,19 +800,6 @@ class ARModel(pl.LightningModule):
         os.makedirs(plot_dir_path, exist_ok=True)
         os.makedirs(value_dir_path, exist_ok=True)
 
-        # For values
-        for i, prediction in enumerate(self.inference_output):
-            # Process and save the prediction
-            prediction_array = prediction.cpu().numpy()
-            old_prediction_array = np.load("/users/clechart/clechart/neural-lam/wandb/run-20240403_145858-x42zxtng/files/results/inference/prediction_0.npy")
-            # setting the absolute and relative tolerance 
-            rtol = 1e-06
-            atol = 1e-09
-            res = prediction_array.allclose(old_prediction_array, rtol, atol)
-            print("Are the two arrays are equal within the tolerance: \t", res) 
-            file_path = os.path.join(value_dir_path, f"prediction_{i}.npy")
-            np.save(file_path, prediction_array)
-
         # For plots
         for var_name, _ in self.selected_vars_units:
             var_indices = self.variable_indices[var_name]
