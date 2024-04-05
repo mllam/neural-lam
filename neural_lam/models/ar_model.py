@@ -518,7 +518,7 @@ class ARModel(pl.LightningModule):
             if constants.SMOOTH_BOUNDARIES:
                 prediction_rescaled = self.smooth_prediction_borders(
                     prediction_rescaled
-                )        
+                )
             # Each slice is (pred_steps, N_grid, d_f) Iterate over variables
 
             for var_name, var_unit in self.selected_vars_units:
@@ -561,8 +561,7 @@ class ARModel(pl.LightningModule):
                         wandb.log(
                             {
                                 f"{var_name}_{plot_name}_lvl_"
-                                f"{lvl:02}_t_{current_datetime_str}":
-                                wandb.Image(
+                                f"{lvl:02}_t_{current_datetime_str}": wandb.Image(
                                     var_fig
                                 )
                             }
