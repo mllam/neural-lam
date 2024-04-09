@@ -792,6 +792,13 @@ class ARModel(pl.LightningModule):
         # Ensure the directory for saving numpy arrays exists
         os.makedirs(plot_dir_path, exist_ok=True)
         os.makedirs(value_dir_path, exist_ok=True)
+        
+        # For values
+        for i, prediction in enumerate(self.inference_output):
+            # Process and save the prediction
+            prediction_array = prediction.cpu().numpy()
+            file_path = os.path.join(value_dir_path, f"prediction_{i}.npy")
+            np.save(file_path, prediction_array)
 
         # For plots
         for var_name, _ in self.selected_vars_units:
