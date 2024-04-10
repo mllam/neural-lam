@@ -232,7 +232,58 @@ class ARModel(pl.LightningModule):
         """
         Run the inference on batch.
         """
-        prediction, _, _ = self.common_step(batch)
+        prediction, target, pred_std = self.common_step(batch)
+
+        time_step_loss = torch.mean(
+            self.loss(
+                prediction, target, pred_std, mask=self.interior_mask_bool
+            ),
+            dim=0,
+        )  # (time_steps-1,)
+        mean_loss = torch.mean(time_step_loss)
+
+        # Log loss per time step forward and mean
+        test_log_dict = {
+            f"test_loss_unroll{step}": time_step_loss[step - 1]
+            for step in constants.VAL_STEP_LOG_ERRORS
+        }
+        test_log_dict["test_mean_loss"] = mean_loss
+
+        self.log_dict(
+            test_log_dict, on_step=False, on_epoch=True, sync_dist=True
+        )
+
+        # Compute all evaluation metrics for error maps
+        # Note: explicitly list metrics here, as test_metrics can contain
+        # additional ones, computed differently, but that should be aggregated
+        # on_test_epoch_end
+        for metric_name in ("mse", "mae"):
+            metric_func = metrics.get_metric(metric_name)
+            batch_metric_vals = metric_func(
+                prediction,
+                target,
+                pred_std,
+                mask=self.interior_mask_bool,
+                sum_vars=False,
+            )  # (B, pred_steps, d_f)
+            self.test_metrics[metric_name].append(batch_metric_vals)
+
+        if self.output_std:
+            # Store output std. per variable, spatially averaged
+            mean_pred_std = torch.mean(
+                pred_std[..., self.interior_mask_bool, :], dim=-2
+            )  # (B, pred_steps, d_f)
+            self.test_metrics["output_std"].append(mean_pred_std)
+
+        # Save per-sample spatial loss for specific times
+        spatial_loss = self.loss(
+            prediction, target, pred_std, average_grid=False
+        )  # (B, pred_steps, num_grid_nodes)
+        log_spatial_losses = spatial_loss[:, constants.VAL_STEP_LOG_ERRORS - 1]
+        self.spatial_loss_maps.append(log_spatial_losses)
+        # (B, N_log, num_grid_nodes)
+
+
         if self.trainer.global_rank == 0:
             self.plot_examples(batch, batch_idx, prediction=prediction)
         self.inference_output.append(prediction)
