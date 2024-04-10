@@ -242,16 +242,16 @@ class ARModel(pl.LightningModule):
         )  # (time_steps-1,)
         mean_loss = torch.mean(time_step_loss)
 
-        # Log loss per time step forward and mean
-        test_log_dict = {
-            f"test_loss_unroll{step}": time_step_loss[step - 1]
-            for step in constants.VAL_STEP_LOG_ERRORS
-        }
-        test_log_dict["test_mean_loss"] = mean_loss
+        # # Log loss per time step forward and mean
+        # test_log_dict = {
+        #     f"test_loss_unroll{step}": time_step_loss[step - 1]
+        #     for step in constants.VAL_STEP_LOG_ERRORS
+        # }
+        # test_log_dict["test_mean_loss"] = mean_loss
 
-        self.log_dict(
-            test_log_dict, on_step=False, on_epoch=True, sync_dist=True
-        )
+        # self.log_dict(
+        #     test_log_dict, on_step=False, on_epoch=True, sync_dist=True
+        # )
 
         # Compute all evaluation metrics for error maps
         # Note: explicitly list metrics here, as test_metrics can contain
