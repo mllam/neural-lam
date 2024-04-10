@@ -330,7 +330,7 @@ def main():
         num_nodes=num_nodes,
         profiler="simple",
         deterministic=True,
-        limit_predict_batches=int(constants.EVAL_HORIZON / args.step_length),
+        limit_predict_batches=1,
         # num_sanity_val_steps=0
         # strategy="ddp",
         # limit_val_batches=0
