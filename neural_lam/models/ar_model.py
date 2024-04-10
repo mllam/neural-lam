@@ -795,8 +795,18 @@ class ARModel(pl.LightningModule):
         
         # For values
         for i, prediction in enumerate(self.inference_output):
+
+            # Rescale to original data scale
+            prediction_rescaled = prediction * self.data_std + self.data_mean
+            prediction_rescaled = self.apply_constraints(prediction_rescaled)
+
+            if constants.SMOOTH_BOUNDARIES:
+                prediction_rescaled = self.smooth_prediction_borders(
+                    prediction_rescaled
+                )
+
             # Process and save the prediction
-            prediction_array = prediction.cpu().numpy()
+            prediction_array = prediction_rescaled.cpu().numpy()
             file_path = os.path.join(value_dir_path, f"prediction_{i}.npy")
             np.save(file_path, prediction_array)
 
