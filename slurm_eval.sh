@@ -9,7 +9,7 @@
 #SBATCH --time=03:00:00
 #SBATCH --no-requeue
 
-export PREPROCESS=true
+export PREPROCESS=false
 export NORMALIZE=false
 
 # Load necessary modules
