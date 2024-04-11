@@ -39,7 +39,6 @@ class ARModel(pl.LightningModule):
         self.metrics_initialized = constants.METRICS_INITIALIZED
 
         # Some constants useful for sub-classes
-        self.batch_static_feature_dim = constants.BATCH_STATIC_FEATURE_DIM
         self.grid_forcing_dim = constants.GRID_FORCING_DIM
         count_3d_fields = sum(value == 1 for value in constants.IS_3D.values())
         count_2d_fields = sum(value != 1 for value in constants.IS_3D.values())
@@ -74,7 +73,7 @@ class ARModel(pl.LightningModule):
                 persistent=False,
             )
 
-        # grid_dim from data + static + batch_static
+        # grid_dim from data + static
         (
             self.num_grid_nodes,
             grid_static_dim,
@@ -83,7 +82,6 @@ class ARModel(pl.LightningModule):
             2 * constants.GRID_STATE_DIM
             + grid_static_dim
             + constants.GRID_FORCING_DIM
-            + constants.BATCH_STATIC_FEATURE_DIM
         )
 
         # Instantiate loss function
@@ -216,15 +214,13 @@ class ARModel(pl.LightningModule):
         self,
         prev_state,
         prev_prev_state,
-        batch_static_features=None,
-        forcing=None,
+        forcing,
     ):
         """
         Step state one step ahead using prediction model, X_{t-1}, X_t -> X_t+1
         prev_state: (B, num_grid_nodes, feature_dim), X_t
         prev_prev_state: (B, num_grid_nodes, feature_dim), X_{t-1}
-        batch_static_features: (B, num_grid_nodes, batch_static_feature_dim)
-        forcing: (B, num_grid_nodes, forcing_dim), optional
+        forcing: (B, num_grid_nodes, forcing_dim)
         """
         raise NotImplementedError("No prediction step implemented")
 
@@ -234,29 +230,10 @@ class ARModel(pl.LightningModule):
         """
         prediction, target, pred_std = self.common_step(batch)
 
-        time_step_loss = torch.mean(
-            self.loss(
-                prediction, target, pred_std, mask=self.interior_mask_bool
-            ),
-            dim=0,
-        )  # (time_steps-1,)
-        mean_loss = torch.mean(time_step_loss)
-
-        # # Log loss per time step forward and mean
-        # test_log_dict = {
-        #     f"test_loss_unroll{step}": time_step_loss[step - 1]
-        #     for step in constants.VAL_STEP_LOG_ERRORS
-        # }
-        # test_log_dict["test_mean_loss"] = mean_loss
-
-        # self.log_dict(
-        #     test_log_dict, on_step=False, on_epoch=True, sync_dist=True
-        # )
-
         # Compute all evaluation metrics for error maps
         # Note: explicitly list metrics here, as test_metrics can contain
         # additional ones, computed differently, but that should be aggregated
-        # on_test_epoch_end
+        # on_predict_epoch_end
         for metric_name in ("mse", "mae"):
             metric_func = metrics.get_metric(metric_name)
             batch_metric_vals = metric_func(
@@ -283,23 +260,15 @@ class ARModel(pl.LightningModule):
         self.spatial_loss_maps.append(log_spatial_losses)
         # (B, N_log, num_grid_nodes)
 
-
         if self.trainer.global_rank == 0:
             self.plot_examples(batch, batch_idx, prediction=prediction)
         self.inference_output.append(prediction)
 
-    def unroll_prediction(
-        self,
-        init_states,
-        true_states,
-        batch_static_features=None,
-        forcing_features=None,
-    ):
+    def unroll_prediction(self, init_states, forcing_features, true_states):
         """
         Roll out prediction taking multiple autoregressive steps with model
         init_states: (B, 2, num_grid_nodes, d_f)
-        batch_static_features: (B, num_grid_nodes, d_static_f), optional
-        forcing_features: (B, pred_steps, num_grid_nodes, d_static_f), optional
+        forcing_features: (B, pred_steps, num_grid_nodes, d_static_f)
         true_states: (B, pred_steps, num_grid_nodes, d_f)
         """
         prev_prev_state = init_states[:, 0]
@@ -318,8 +287,8 @@ class ARModel(pl.LightningModule):
             )
             border_state = true_states[:, i]
 
-            pred_state, pred_std = self.single_prediction(
-                prev_state, prev_prev_state, batch_static_features, forcing
+            pred_state, pred_std = self.predict_step(
+                prev_state, prev_prev_state, forcing
             )
             # state: (B, num_grid_nodes, d_f)
             # pred_std: (B, num_grid_nodes, d_f) or None
@@ -353,22 +322,17 @@ class ARModel(pl.LightningModule):
     def common_step(self, batch):
         """
         Predict on single batch
-        batch = time_series, batch_static_features, forcing_features
-
+        batch consists of:
         init_states: (B, 2, num_grid_nodes, d_features)
         target_states: (B, pred_steps, num_grid_nodes, d_features)
-        batch_static_features: (B, num_grid_nodes, d_static_f), optional
-        forcing_features: (B, pred_steps, num_grid_nodes, d_forcing), optional
+        forcing_features: (B, pred_steps, num_grid_nodes, d_forcing),
+            where index 0 corresponds to index 1 of init_states
         """
         init_states, target_states = batch[:2]
-        batch_static_features = batch[2] if len(batch) > 2 else None
         forcing_features = batch[3] if len(batch) > 3 else None
 
         prediction, pred_std = self.unroll_prediction(
-            init_states, 
-            target_states,
-            batch_static_features,
-            forcing_features
+            init_states, forcing_features, target_states
         )  # (B, pred_steps, num_grid_nodes, d_f)
         # prediction: (B, pred_steps, num_grid_nodes, d_f)
         # pred_std: (B, pred_steps, num_grid_nodes, d_f) or (d_f,)
@@ -614,8 +578,8 @@ class ARModel(pl.LightningModule):
                         )
                         wandb.log(
                             {
-                                f"{var_name}_{plot_name}_lvl_"
-                                f"{lvl:02}_t_{current_datetime_str}": wandb.Image(
+                                f"{var_name}_{plot_name}_lvl_{lvl:02}"
+                                f"_t_{current_datetime_str}": wandb.Image(
                                     var_fig
                                 )
                             }
@@ -846,7 +810,7 @@ class ARModel(pl.LightningModule):
         # Ensure the directory for saving numpy arrays exists
         os.makedirs(plot_dir_path, exist_ok=True)
         os.makedirs(value_dir_path, exist_ok=True)
-        
+
         # For values
         for i, prediction in enumerate(self.inference_output):
 

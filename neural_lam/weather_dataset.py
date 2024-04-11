@@ -263,13 +263,6 @@ class WeatherDataModule(pl.LightningDataModule):
                 subset=self.subset,
                 batch_size=self.batch_size,
             )
-            self.forecast_dataset = WeatherDataset(
-                self.dataset_name,
-                split="forecast",
-                standardize=self.standardize,
-                subset=False,
-                batch_size=self.batch_size,
-            )
 
         if stage == "predict" or stage is None:
             self.predict_dataset = WeatherDataset(

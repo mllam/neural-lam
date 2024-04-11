@@ -24,20 +24,23 @@ class BaseHiGraphModel(BaseGraphModel):
             mesh_feat.shape[0] for mesh_feat in self.mesh_static_features
         ]  # Needs as python list for later
 
-        # Print some useful info
-        print("Loaded hierarchical graph with structure:")
-        for level_index, level_mesh_size in enumerate(self.level_mesh_sizes):
-            same_level_edges = self.m2m_features[level_index].shape[0]
-            print(
-                f"level {level_index} - {level_mesh_size} nodes, "
-                f"{same_level_edges} same-level edges"
-            )
+        if self.trainer.is_global_zero:
+            # Print some useful info
+            print("Loaded hierarchical graph with structure:")
+            for level_index, level_mesh_size in enumerate(
+                self.level_mesh_sizes
+            ):
+                same_level_edges = self.m2m_features[level_index].shape[0]
+                print(
+                    f"level {level_index} - {level_mesh_size} nodes, "
+                    f"{same_level_edges} same-level edges"
+                )
 
-            if level_index < (self.num_levels - 1):
-                up_edges = self.mesh_up_features[level_index].shape[0]
-                down_edges = self.mesh_down_features[level_index].shape[0]
-                print(f"  {level_index}<->{level_index + 1}")
-                print(f" - {up_edges} up edges, {down_edges} down edges")
+                if level_index < (self.num_levels - 1):
+                    up_edges = self.mesh_up_features[level_index].shape[0]
+                    down_edges = self.mesh_down_features[level_index].shape[0]
+                    print(f"  {level_index}<->{level_index + 1}")
+                    print(f" - {up_edges} up edges, {down_edges} down edges")
         # Embedders
         # Assume all levels have same static feature dimensionality
         mesh_dim = self.mesh_static_features[0].shape[1]

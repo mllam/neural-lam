@@ -348,8 +348,6 @@ def main():
     # Check if the mode is prediction
     elif args.eval == "predict":
         data_module.split = "pred"
-        assert devices == 1, "Device not set to 1, check cuda availability"
-        # assert trainer.accelerator == "cuda", "Accelerator should be GPU"
         trainer.predict(
             model=model,
             datamodule=data_module,
