@@ -256,7 +256,7 @@ def fractional_plot_bundle(fraction):
     Get the tueplots bundle, but with figure width as a fraction of
     the page width.
     """
-    bundle = bundles.neurips2023(usetex=True, family="serif")
+    bundle = bundles.neurips2023(usetex=False, family="serif")
     bundle.update(figsizes.neurips2023())
     original_figsize = bundle["figure.figsize"]
     bundle["figure.figsize"] = (
