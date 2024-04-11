@@ -287,7 +287,7 @@ class ARModel(pl.LightningModule):
             )
             border_state = true_states[:, i]
 
-            pred_state, pred_std = self.predict_step(
+            pred_state, pred_std = self.single_prediction(
                 prev_state, prev_prev_state, forcing
             )
             # state: (B, num_grid_nodes, d_f)
