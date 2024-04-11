@@ -365,7 +365,10 @@ class ARModel(pl.LightningModule):
         forcing_features = batch[3] if len(batch) > 3 else None
 
         prediction, pred_std = self.unroll_prediction(
-            init_states, target_states, batch_static_features, forcing_features
+            init_states, 
+            target_states,
+            batch_static_features,
+            forcing_features
         )  # (B, pred_steps, num_grid_nodes, d_f)
         # prediction: (B, pred_steps, num_grid_nodes, d_f)
         # pred_std: (B, pred_steps, num_grid_nodes, d_f) or (d_f,)
