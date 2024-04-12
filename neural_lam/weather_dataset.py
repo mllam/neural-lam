@@ -4,6 +4,7 @@ import os
 from datetime import datetime, timedelta
 
 # Third-party
+import numpy as np
 import pytorch_lightning as pl
 import torch
 import xarray as xr
@@ -30,6 +31,7 @@ class WeatherDataset(torch.utils.data.Dataset):
     def __init__(
         self,
         dataset_name,
+        path_verif_file=None,
         split="train",
         standardize=True,
         subset=False,
@@ -43,15 +45,21 @@ class WeatherDataset(torch.utils.data.Dataset):
             "val",
             "test",
             "pred",
+            "verif",
         ), "Unknown dataset split"
         self.sample_dir_path = os.path.join(
             "data", dataset_name, "samples", split
         )
-        print(self.sample_dir_path)
 
         self.batch_size = batch_size
         self.batch_index = 0
         self.index_within_batch = 0
+        self.sample_dir_path = path_verif_file
+
+        if split == "verif" and os.path.exists(self.sample_dir_path):
+            self.np_files = np.load(self.sample_dir_path)
+            self.split = split
+            return
 
         self.zarr_files = sorted(
             glob.glob(os.path.join(self.sample_dir_path, "data*.zarr"))
@@ -135,7 +143,7 @@ class WeatherDataset(torch.utils.data.Dataset):
             xr.open_zarr(file, consolidated=True)[variables_2d]
             .to_array()
             .pipe(
-                lambda ds: ds if "z_1" in ds.dims else ds.expand_dims(z_1=[0])
+                lambda ds: (ds if "z_1" in ds.dims else ds.expand_dims(z_1=[0]))
             )
             .stack(var=("variable", "z_1"))
             .transpose("time", "x_1", "y_1", "var")
@@ -152,7 +160,12 @@ class WeatherDataset(torch.utils.data.Dataset):
         if standardize:
             ds_stats = utils.load_dataset_stats(dataset_name, "cpu")
             if constants.GRID_FORCING_DIM > 0:
-                self.data_mean, self.data_std, self.flux_mean, self.flux_std = (
+                (
+                    self.data_mean,
+                    self.data_std,
+                    self.flux_mean,
+                    self.flux_std,
+                ) = (
                     ds_stats["data_mean"],
                     ds_stats["data_std"],
                     ds_stats["flux_mean"],
@@ -163,7 +176,6 @@ class WeatherDataset(torch.utils.data.Dataset):
                     ds_stats["data_mean"],
                     ds_stats["data_std"],
                 )
-
         self.random_subsample = split == "train"
         self.split = split
 
@@ -173,10 +185,15 @@ class WeatherDataset(torch.utils.data.Dataset):
             if self.split == "train"
             else constants.EVAL_HORIZON
         )
-        total_time = len(self.zarr_files) * constants.CHUNK_SIZE - num_steps
+        total_time = 1
+        if hasattr(self, "zarr_files"):
+            total_time = len(self.zarr_files) * constants.CHUNK_SIZE - num_steps
         return total_time
 
     def __getitem__(self, idx):
+        if self.split == "verif":
+            return self.np_files
+
         num_steps = (
             constants.TRAIN_HORIZON
             if self.split == "train"
@@ -190,7 +207,8 @@ class WeatherDataset(torch.utils.data.Dataset):
         idx_sample = idx % constants.CHUNK_SIZE
 
         sample_archive = xr.concat(
-            self.zarr_datasets[start_file_idx : end_file_idx + 1], dim="time"
+            self.zarr_datasets[start_file_idx : end_file_idx + 1],
+            dim="time",
         )
 
         sample_xr = sample_archive.isel(
@@ -220,6 +238,7 @@ class WeatherDataModule(pl.LightningDataModule):
         self,
         dataset_name,
         split="train",
+        path_verif_file=None,
         standardize=True,
         subset=False,
         batch_size=4,
@@ -227,6 +246,7 @@ class WeatherDataModule(pl.LightningDataModule):
     ):
         super().__init__()
         self.dataset_name = dataset_name
+        self.path_verif_file = path_verif_file
         self.batch_size = batch_size
         self.num_workers = num_workers
         self.standardize = standardize
@@ -237,7 +257,7 @@ class WeatherDataModule(pl.LightningDataModule):
         pass
 
     def setup(self, stage=None):
-        # make assignments here (val/train/test/predict split)
+        # make assignments here (val/train/test/pred split)
         # called on every process in DDP
         if stage == "fit" or stage is None:
             self.train_dataset = WeatherDataset(
@@ -264,8 +284,18 @@ class WeatherDataModule(pl.LightningDataModule):
                 batch_size=self.batch_size,
             )
 
-        if stage == "predict" or stage is None:
-            self.predict_dataset = WeatherDataset(
+        if stage == "verif":
+            self.verif_dataset = WeatherDataset(
+                self.dataset_name,
+                self.path_verif_file,
+                split="verif",
+                standardize=False,
+                subset=False,
+                batch_size=self.batch_size,
+            )
+
+        if stage == "pred" or stage is None:
+            self.pred_dataset = WeatherDataset(
                 self.dataset_name,
                 split="pred",
                 standardize=self.standardize,
@@ -274,6 +304,7 @@ class WeatherDataModule(pl.LightningDataModule):
             )
 
     def train_dataloader(self):
+        """Load train dataset."""
         return torch.utils.data.DataLoader(
             self.train_dataset,
             batch_size=self.batch_size,
@@ -283,6 +314,7 @@ class WeatherDataModule(pl.LightningDataModule):
         )
 
     def val_dataloader(self):
+        """Load validation dataset."""
         return torch.utils.data.DataLoader(
             self.val_dataset,
             batch_size=self.batch_size // self.batch_size,
@@ -292,6 +324,7 @@ class WeatherDataModule(pl.LightningDataModule):
         )
 
     def test_dataloader(self):
+        """Load test dataset."""
         return torch.utils.data.DataLoader(
             self.test_dataset,
             batch_size=self.batch_size,
@@ -300,11 +333,21 @@ class WeatherDataModule(pl.LightningDataModule):
             pin_memory=False,
         )
 
-    def predict_dataloader(self):
+    def pred_dataloader(self):
+        """Load prediction dataset."""
         return torch.utils.data.DataLoader(
-            self.predict_dataset,
+            self.pred_dataset,
             batch_size=self.batch_size,
             num_workers=self.num_workers,
+            shuffle=False,
+            pin_memory=False,
+        )
+
+    def verif_dataloader(self):
+        """Load inference output dataset."""
+        return torch.utils.data.DataLoader(
+            self.verif_dataset,
+            batch_size=1,
             shuffle=False,
             pin_memory=False,
         )
