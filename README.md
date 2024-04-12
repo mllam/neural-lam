@@ -258,6 +258,22 @@ Some options specifically important for evaluation are:
 
 **Note:** While it is technically possible to use multiple GPUs for running evaluation, this is strongly discouraged. If using multiple devices the `DistributedSampler` will replicate some samples to make sure all devices have the same batch size, meaning that evaluation metrics will be unreliable. This issue stems from PyTorch Lightning. See for example [this draft PR](https://github.com/Lightning-AI/torchmetrics/pull/1886) for more discussion and ongoing work to remedy this.
 
+## Plot Model output
+One can use the command-line tool `cli_plotting.py` to generate the plotting and verifying of inference results stored in `.npy` files.
+
+Arguments and options:
+
+  * `--file_path`: The path to the .npy file that contains the inferred values. This argument is required.
+  * `--save_path`: The path where the output files will be saved. This argument is required.
+  * `--feature_channel` (Optional): Specifies the feature channel to use during the verification. Default is 0.
+
+Example Usage to run the plotting on the 10th feature channel of a .npy file located at /data/results/inference_output.npy and save the output in /outputs::
+
+```
+python cli_plotting.py data/results/inference_output.npy outputs/ --feature_channel 10
+```
+
+
 # Repository Structure
 Except for training and pre-processing scripts all the source code can be found in the `neural_lam` directory.
 Model classes, including abstract base classes, are located in `neural_lam/models`.

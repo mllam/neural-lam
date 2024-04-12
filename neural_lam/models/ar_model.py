@@ -11,6 +11,7 @@ import numpy as np
 import pytorch_lightning as pl
 import torch
 import wandb
+from pytorch_lightning.utilities import rank_zero_only
 from torch import nn
 
 # First-party
@@ -110,6 +111,8 @@ class ARModel(pl.LightningModule):
 
         # For storing spatial loss maps during evaluation
         self.spatial_loss_maps = []
+        # For storing prediction output
+        self.inference_output = []
 
         self.variable_indices = self.precompute_variable_indices()
         self.selected_vars_units = [
@@ -207,7 +210,7 @@ class ARModel(pl.LightningModule):
                 )
         return prediction
 
-    def predict_step(
+    def single_prediction(
         self,
         prev_state,
         prev_prev_state,
@@ -220,6 +223,46 @@ class ARModel(pl.LightningModule):
         forcing: (B, num_grid_nodes, forcing_dim)
         """
         raise NotImplementedError("No prediction step implemented")
+
+    def predict_step(self, batch, batch_idx):
+        """
+        Run the inference on batch.
+        """
+        prediction, target, pred_std = self.common_step(batch)
+
+        # Compute all evaluation metrics for error maps
+        # Note: explicitly list metrics here, as test_metrics can contain
+        # additional ones, computed differently, but that should be aggregated
+        # on_predict_epoch_end
+        for metric_name in ("mse", "mae"):
+            metric_func = metrics.get_metric(metric_name)
+            batch_metric_vals = metric_func(
+                prediction,
+                target,
+                pred_std,
+                mask=self.interior_mask_bool,
+                sum_vars=False,
+            )  # (B, pred_steps, d_f)
+            self.test_metrics[metric_name].append(batch_metric_vals)
+
+        if self.output_std:
+            # Store output std. per variable, spatially averaged
+            mean_pred_std = torch.mean(
+                pred_std[..., self.interior_mask_bool, :], dim=-2
+            )  # (B, pred_steps, d_f)
+            self.test_metrics["output_std"].append(mean_pred_std)
+
+        # Save per-sample spatial loss for specific times
+        spatial_loss = self.loss(
+            prediction, target, pred_std, average_grid=False
+        )  # (B, pred_steps, num_grid_nodes)
+        log_spatial_losses = spatial_loss[:, constants.VAL_STEP_LOG_ERRORS - 1]
+        self.spatial_loss_maps.append(log_spatial_losses)
+        # (B, N_log, num_grid_nodes)
+
+        if self.trainer.global_rank == 0:
+            self.plot_examples(batch, batch_idx, prediction=prediction)
+        self.inference_output.append(prediction)
 
     def unroll_prediction(self, init_states, forcing_features, true_states):
         """
@@ -244,7 +287,7 @@ class ARModel(pl.LightningModule):
             )
             border_state = true_states[:, i]
 
-            pred_state, pred_std = self.predict_step(
+            pred_state, pred_std = self.single_prediction(
                 prev_state, prev_prev_state, forcing
             )
             # state: (B, num_grid_nodes, d_f)
@@ -458,18 +501,52 @@ class ARModel(pl.LightningModule):
         """
         Plot the first n_examples forecasts from batch
 
-        batch: batch with data to plot corresponding forecasts for
-        n_examples: number of forecasts to plot
-        prediction: (B, pred_steps, num_grid_nodes, d_f), existing prediction.
-            Generate if None.
+        Parameters:
+        - batch: Tuple containing data to plot corresponding forecasts for
+        - batch_idx: Index of the batch being processed
+        - prediction: Tensor of existing predictions. Generate if None.
+
+        The function checks for the presence of test_dataset or
+        predict_dataset within the trainer's data module,
+        handles indexing within the batch for targeted analysis,
+        performs prediction rescaling, and plots results.
         """
         if prediction is None or target is None or batch_time is None:
             prediction, target, _, batch_time = self.common_step(batch)
 
-        if self.global_rank == 0 and any(
-            eval_datetime in batch_time
-            for eval_datetime in constants.EVAL_DATETIMES
+        target = batch[1]
+
+        # Determine the dataset to work with (test_dataset or predict_dataset)
+        dataset = None
+        if (
+            hasattr(self.trainer.datamodule, "test_dataset")
+            and self.trainer.datamodule.test_dataset
         ):
+            dataset = self.trainer.datamodule.test_dataset
+            plot_name = "test"
+        elif (
+            hasattr(self.trainer.datamodule, "predict_dataset")
+            and self.trainer.datamodule.predict_dataset
+        ):
+            dataset = self.trainer.datamodule.predict_dataset
+            plot_name = "prediction"
+
+        if (
+            dataset
+            and self.trainer.global_rank == 0
+            and dataset.batch_index == batch_idx
+        ):
+            index_within_batch = dataset.index_within_batch
+            if not torch.is_tensor(index_within_batch):
+                index_within_batch = torch.tensor(
+                    index_within_batch,
+                    dtype=torch.int64,
+                    device=prediction.device,
+                )
+
+            prediction = prediction[index_within_batch]
+            target = target[index_within_batch]
+
             # Rescale to original data scale
             prediction_rescaled = prediction * self.data_std + self.data_mean
             prediction_rescaled = self.apply_constraints(prediction_rescaled)
@@ -541,6 +618,7 @@ class ARModel(pl.LightningModule):
                         ),
                     )
 
+    @rank_zero_only
     def smooth_prediction_borders(self, prediction_rescaled):
         """
         Smooths the prediction at the borders to avoid artifacts.
@@ -728,7 +806,9 @@ class ARModel(pl.LightningModule):
 
                     # Get all the images for the current variable and index
                     images = sorted(
-                        glob.glob(f"{dir_path}/{var_name}_lvl_{lvl:02}_t_*.png")
+                        glob.glob(
+                            f"{dir_path}/{var_name}_test_lvl_{lvl:02}_t_*.png"
+                        )
                     )
                     # Generate the GIF
                     with imageio.get_writer(
@@ -740,6 +820,58 @@ class ARModel(pl.LightningModule):
                             image = imageio.imread(filename)
                             writer.append_data(image)
         self.spatial_loss_maps.clear()
+
+    @rank_zero_only
+    def on_predict_epoch_end(self):
+        """
+        Return inference plot at the end of predict epoch.
+        """
+        plot_dir_path = f"{wandb.run.dir}/media/images"
+        value_dir_path = f"{wandb.run.dir}/results/inference"
+        # Ensure the directory for saving numpy arrays exists
+        os.makedirs(plot_dir_path, exist_ok=True)
+        os.makedirs(value_dir_path, exist_ok=True)
+
+        # For values
+        for i, prediction in enumerate(self.inference_output):
+
+            # Rescale to original data scale
+            prediction_rescaled = prediction * self.data_std + self.data_mean
+            prediction_rescaled = self.apply_constraints(prediction_rescaled)
+
+            if constants.SMOOTH_BOUNDARIES:
+                prediction_rescaled = self.smooth_prediction_borders(
+                    prediction_rescaled
+                )
+
+            # Process and save the prediction
+            prediction_array = prediction_rescaled.cpu().numpy()
+            file_path = os.path.join(value_dir_path, f"prediction_{i}.npy")
+            np.save(file_path, prediction_array)
+
+        # For plots
+        for var_name, _ in self.selected_vars_units:
+            var_indices = self.variable_indices[var_name]
+            for lvl_i, _ in enumerate(var_indices):
+                # Calculate var_vrange for each index
+                lvl = constants.VERTICAL_LEVELS[lvl_i]
+
+                # Get all the images for the current variable and index
+                images = sorted(
+                    glob.glob(
+                        f"{plot_dir_path}/"
+                        f"{var_name}_prediction_lvl_{lvl:02}_t_*.png"
+                    )
+                )
+                # Generate the GIF
+                with imageio.get_writer(
+                    f"{plot_dir_path}/{var_name}_prediction_lvl_{lvl:02}.gif",
+                    mode="I",
+                    fps=1,
+                ) as writer:
+                    for filename in images:
+                        image = imageio.imread(filename)
+                        writer.append_data(image)
 
     def on_load_checkpoint(self, checkpoint):
         """

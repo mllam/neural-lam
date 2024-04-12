@@ -1,13 +1,18 @@
+# Standard library
+import os
+
 # Third-party
 import cartopy.feature as cf
 import matplotlib
 import matplotlib.pyplot as plt
 import numpy as np
 import xarray as xr
+from tqdm import tqdm
 
 # First-party
 from neural_lam import constants, utils
 from neural_lam.rotate_grid import unrotate_latlon
+from neural_lam.weather_dataset import WeatherDataModule
 
 
 @matplotlib.rc_context(utils.fractional_plot_bundle(1))
@@ -179,3 +184,111 @@ def plot_spatial_error(error, title=None, vrange=None):
         fig.suptitle(title, size=10)
 
     return fig
+
+
+@matplotlib.rc_context(utils.fractional_plot_bundle(1))
+def verify_inference(
+    file_path: str, save_path: str, feature_channel: int, vrange=None
+):
+    """
+    Plot example prediction, forecast, and ground truth.
+    Each has shape (N_grid,)
+    """
+
+    # Load the inference dataset for plotting
+    predictions_data_module = WeatherDataModule(
+        "cosmo",
+        path_verif_file=file_path,
+        split="verif",
+        standardize=False,
+        subset=False,
+        batch_size=6,
+        num_workers=2,
+    )
+    predictions_data_module.setup(stage="verif")
+    predictions_loader = predictions_data_module.verif_dataloader()
+    for predictions_batch in predictions_loader:
+        predictions = predictions_batch[0]  # tensor
+        break
+
+    # Verify that feature channel is within bounds
+    if not 0 <= feature_channel < predictions.shape[-1]:
+        raise ValueError(
+            f"feature_channel must be between 0 and "
+            f"{predictions.shape[-1]-1}, inclusive."
+        )
+
+    # get test data
+    data_latlon = xr.open_zarr(constants.EXAMPLE_FILE).isel(time=0)
+    lon, lat = unrotate_latlon(data_latlon)
+
+    # Get common scale for values
+    total = predictions[0, :, :, feature_channel]
+    total_array = np.array(total)
+    if vrange is None:
+        vmin = total_array.min()
+        vmax = total_array.max()
+    else:
+        vmin, vmax = float(vrange[0].cpu().item()), float(
+            vrange[1].cpu().item()
+        )
+
+    # Plot
+    for i in tqdm(
+        range(constants.EVAL_HORIZON - 2), desc="Plotting predictions"
+    ):
+        feature_array = (
+            predictions[0, i, :, feature_channel]
+            .reshape(*constants.GRID_SHAPE[::-1])
+            .cpu()
+            .numpy()
+        )
+        data_array = np.array(feature_array)
+
+        fig, axes = plt.subplots(
+            1,
+            1,
+            figsize=constants.FIG_SIZE,
+            subplot_kw={"projection": constants.SELECTED_PROJ},
+        )
+
+        contour_set = axes.contourf(
+            lon,
+            lat,
+            data_array,
+            transform=constants.SELECTED_PROJ,
+            cmap="plasma",
+            levels=np.linspace(vmin, vmax, num=100),
+        )
+        axes.add_feature(cf.BORDERS, linestyle="-", edgecolor="black")
+        axes.add_feature(cf.COASTLINE, linestyle="-", edgecolor="black")
+        axes.gridlines(
+            crs=constants.SELECTED_PROJ,
+            draw_labels=False,
+            linewidth=0.5,
+            alpha=0.5,
+        )
+
+        # Ticks and labels
+        axes.set_title("Predictions from model inference", size=15)
+        axes.text(
+            0.5,
+            1.05,
+            f"Feature channel {feature_channel}, time step {i}",
+            ha="center",
+            va="bottom",
+            transform=axes.transAxes,
+            fontsize=12,
+        )
+        cbar = fig.colorbar(contour_set, orientation="horizontal", aspect=20)
+        cbar.ax.tick_params(labelsize=10)
+
+        # Save the plot!
+        directory = os.path.dirname(save_path)
+        if not os.path.exists(directory):
+            os.makedirs(directory)
+        plt.savefig(
+            f"{save_path}feature_channel_{feature_channel}_{i}.png",
+            bbox_inches="tight",
+        )
+        plt.close()
