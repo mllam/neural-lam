@@ -1,13 +1,13 @@
 #!/bin/bash -l
 #SBATCH --job-name=NeurWPe
+#SBATCH --account=s83
+#SBATCH --partition=normal
 #SBATCH --nodes=1
 #SBATCH --ntasks-per-node=4
-#SBATCH --partition=normal
-#SBATCH --account=s83
+#SBATCH --time=00:59:00
+#SBATCH --no-requeue
 #SBATCH --output=lightning_logs/neurwp_eval_out.log
 #SBATCH --error=lightning_logs/neurwp_eval_err.log
-#SBATCH --time=03:00:00
-#SBATCH --no-requeue
 
 export PREPROCESS=false
 export NORMALIZE=false

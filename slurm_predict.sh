@@ -1,15 +1,15 @@
 #!/bin/bash -l
-#SBATCH --job-name=NeurWPredict
+#SBATCH --job-name=NeurWPp
+#SBATCH --account=s83
+#SBATCH --partition=normal
 #SBATCH --nodes=1
 #SBATCH --ntasks-per-node=4
-#SBATCH --partition=normal
-#SBATCH --account=s83
+#SBATCH --time=00:59:00
+#SBATCH --no-requeue
 #SBATCH --output=lightning_logs/neurwp_pred_out.log
 #SBATCH --error=lightning_logs/neurwp_pred_err.log
-#SBATCH --time=03:00:00
-#SBATCH --no-requeue
 
-export PREPROCESS=true
+export PREPROCESS=false
 export NORMALIZE=false
 
 if [ "$PREPROCESS" = true ]; then
@@ -32,4 +32,4 @@ ulimit -c 0
 export OMP_NUM_THREADS=16
 
 srun -ul python train_model.py --load "wandb/example.ckpt" --dataset "cosmo" \
-    --eval="pred" --subset_ds 1 --n_workers 2 --batch_size 6 --model "graph_lam"
+    --eval="predict" --subset_ds 1 --n_workers 2 --batch_size 6 --model "graph_lam"
