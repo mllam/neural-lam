@@ -122,8 +122,9 @@ class ARModel(pl.LightningModule):
             )
             if var_name in constants.EVAL_PLOT_VARS
         ]
-        print("variable_indices", self.variable_indices)
-        print("selected_vars_units", self.selected_vars_units)
+
+        utils.rank_zero_print("variable_indices", self.variable_indices)
+        utils.rank_zero_print("selected_vars_units", self.selected_vars_units)
 
     @pl.utilities.rank_zero_only
     def log_image(self, name, img):
@@ -224,11 +225,12 @@ class ARModel(pl.LightningModule):
         """
         raise NotImplementedError("No prediction step implemented")
 
+    # pylint: disable-next=unused-argument
     def predict_step(self, batch, batch_idx):
         """
         Run the inference on batch.
         """
-        prediction, target, pred_std = self.common_step(batch)
+        prediction, target, pred_std, _ = self.common_step(batch)
 
         # Compute all evaluation metrics for error maps
         # Note: explicitly list metrics here, as test_metrics can contain
@@ -261,7 +263,7 @@ class ARModel(pl.LightningModule):
         # (B, N_log, num_grid_nodes)
 
         if self.trainer.global_rank == 0:
-            self.plot_examples(batch, batch_idx, prediction=prediction)
+            self.plot_examples(batch, prediction=prediction)
         self.inference_output.append(prediction)
 
     def unroll_prediction(self, init_states, forcing_features, true_states):
@@ -502,9 +504,10 @@ class ARModel(pl.LightningModule):
         Plot the first n_examples forecasts from batch
 
         Parameters:
-        - batch: Tuple containing data to plot corresponding forecasts for
-        - batch_idx: Index of the batch being processed
-        - prediction: Tensor of existing predictions. Generate if None.
+        - batch: batch with data to plot corresponding forecasts for
+        - n_examples: number of forecasts to plot
+        - prediction: (B, pred_steps, num_grid_nodes, d_f), existing prediction.
+            Generate if None.
 
         The function checks for the presence of test_dataset or
         predict_dataset within the trainer's data module,
@@ -514,39 +517,10 @@ class ARModel(pl.LightningModule):
         if prediction is None or target is None or batch_time is None:
             prediction, target, _, batch_time = self.common_step(batch)
 
-        target = batch[1]
-
-        # Determine the dataset to work with (test_dataset or predict_dataset)
-        dataset = None
-        if (
-            hasattr(self.trainer.datamodule, "test_dataset")
-            and self.trainer.datamodule.test_dataset
+        if self.global_rank == 0 and any(
+            eval_datetime in batch_time
+            for eval_datetime in constants.EVAL_DATETIMES
         ):
-            dataset = self.trainer.datamodule.test_dataset
-            plot_name = "test"
-        elif (
-            hasattr(self.trainer.datamodule, "predict_dataset")
-            and self.trainer.datamodule.predict_dataset
-        ):
-            dataset = self.trainer.datamodule.predict_dataset
-            plot_name = "prediction"
-
-        if (
-            dataset
-            and self.trainer.global_rank == 0
-            and dataset.batch_index == batch_idx
-        ):
-            index_within_batch = dataset.index_within_batch
-            if not torch.is_tensor(index_within_batch):
-                index_within_batch = torch.tensor(
-                    index_within_batch,
-                    dtype=torch.int64,
-                    device=prediction.device,
-                )
-
-            prediction = prediction[index_within_batch]
-            target = target[index_within_batch]
-
             # Rescale to original data scale
             prediction_rescaled = prediction * self.data_std + self.data_mean
             prediction_rescaled = self.apply_constraints(prediction_rescaled)
@@ -580,6 +554,7 @@ class ARModel(pl.LightningModule):
                         for t_i, (pred_t, target_t) in enumerate(
                             zip(pred_rescaled, targ_rescaled), start=1
                         ):
+                            print(f"Plotting {var_name} lvl {lvl_i} t {t_i}...")
                             current_datetime_str = (
                                 datetime.strptime(eval_datetime, "%Y%m%d%H")
                                 + timedelta(hours=t_i)
