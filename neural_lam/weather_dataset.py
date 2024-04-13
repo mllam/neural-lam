@@ -5,7 +5,6 @@ from random import randint
 
 # Third-party
 import numpy as np
-import numpy as np
 import pytorch_lightning as pl
 import torch
 import xarray as xr
@@ -17,6 +16,7 @@ from neural_lam import constants, utils
 class WeatherDataset(torch.utils.data.Dataset):
     """Weather dataset for PyTorch Lightning."""
 
+    # pylint: disable=too-many-branches
     def __init__(
         self,
         dataset_name,
@@ -29,36 +29,50 @@ class WeatherDataset(torch.utils.data.Dataset):
     ):
         super().__init__()
 
-        assert split in ("train", "val", "test"), "Unknown dataset split"
+        assert split in (
+            "train",
+            "val",
+            "test",
+            "predict",
+            "verif",
+        ), "Unknown dataset split"
+
+        if split == "verif":
+            self.np_files = np.load(path_verif_file)
+            self.split = split
+            return
+
         self.zarr_path = os.path.join(
             "data", dataset_name, "samples", split, "data.zarr"
         )
         self.ds = xr.open_zarr(self.zarr_path, consolidated=True)
         if split == "train":
             self.ds = self.ds.sel(time=slice("2015", "2019"))
-        elif split == "verif":
-            self.np_files = np.load(path_verif_file)
-            self.split = split
         else:
-            self.ds = self.ds.sel(time=slice("2020", "2020"))
+            # BUG: Clean this up after zarr archive is fixed
+            self.ds = self.ds.sel(time=slice("2015", "2020"))
 
-        new_vars = {
-            (
-                f"{var_name}_{int(level)}"
-                if constants.IS_3D[var_name]
-                else var_name
-            ): (
-                data_array.sel(level=level).drop_vars("level")
-                if constants.IS_3D[var_name]
-                else data_array
-            )
-            for var_name, data_array in self.ds.data_vars.items()
-            if var_name in constants.PARAM_NAMES_SHORT
-            for level in constants.VERTICAL_LEVELS
-        }
+        new_vars = {}
+        for var_name, data_array in self.ds.data_vars.items():
+            if var_name in constants.PARAM_NAMES_SHORT:
+                if constants.IS_3D[var_name]:
+                    for z in constants.VERTICAL_LEVELS:
+                        new_key = f"{var_name}_{int(z)}"
+                        new_vars[new_key] = data_array.sel(z=z).drop_vars("z")
+                # BUG: Clean this up after zarr archive is fixed
+                elif var_name == "T_2M":
+                    new_vars[var_name] = data_array.sel(z=2).drop_vars("z")
+                elif var_name in ["U_10M", "V_10M"]:
+                    new_vars[var_name] = data_array.sel(z=10).drop_vars("z")
+                elif var_name == "PMSL":
+                    new_vars[var_name] = data_array.sel(z=0).drop_vars("z")
+                else:
+                    new_vars[var_name] = data_array
 
         self.ds = (
             xr.Dataset(new_vars)
+            # BUG: This should not be necessary with clean data without nans
+            .drop_isel(time=848)
             .to_array()
             .transpose("time", "x", "y", "variable")
         )
@@ -109,30 +123,14 @@ class WeatherDataset(torch.utils.data.Dataset):
         self.control_only = control_only
 
     def __len__(self):
+        if self.split == "verif":
+            return len(self.np_files)
         return len(self.ds.time) - self.num_steps
 
     def __getitem__(self, idx):
         if self.split == "verif":
             return self.np_files
-        num_steps = (
-            constants.TRAIN_HORIZON
-            if self.split == "train"
-            else constants.EVAL_HORIZON
-        )
-
-        # Calculate which zarr files need to be loaded
-        start_file_idx = idx // constants.CHUNK_SIZE
-        end_file_idx = (idx + num_steps) // constants.CHUNK_SIZE
-        # Index of current slice
-        idx_sample = idx % constants.CHUNK_SIZE
-
-        sample_archive = xr.concat(
-            self.zarr_datasets[start_file_idx: end_file_idx + 1], dim="time"
-        )
-
-        sample_xr = sample_archive.isel(
-            time=slice(idx_sample, idx_sample + num_steps)
-        )
+        sample_xr = self.ds.isel(time=slice(idx, idx + self.num_steps))
 
         # (N_t', N_x, N_y, d_features')
         sample = torch.tensor(sample_xr.values, dtype=torch.float32)
@@ -156,7 +154,6 @@ class WeatherDataModule(pl.LightningDataModule):
     def __init__(
         self,
         dataset_name,
-        split="train",
         path_verif_file=None,
         standardize=True,
         subset=False,
@@ -173,6 +170,8 @@ class WeatherDataModule(pl.LightningDataModule):
         self.train_dataset = None
         self.val_dataset = None
         self.test_dataset = None
+        self.verif_dataset = None
+        self.predict_dataset = None
 
     def setup(self, stage=None):
         if stage == "fit" or stage is None:
@@ -210,10 +209,10 @@ class WeatherDataModule(pl.LightningDataModule):
                 batch_size=self.batch_size,
             )
 
-        if stage == "pred" or stage is None:
-            self.pred_dataset = WeatherDataset(
+        if stage == "predict" or stage is None:
+            self.predict_dataset = WeatherDataset(
                 self.dataset_name,
-                split="pred",
+                split="predict",
                 standardize=self.standardize,
                 subset=False,
                 batch_size=1,
@@ -249,10 +248,10 @@ class WeatherDataModule(pl.LightningDataModule):
             pin_memory=False,
         )
 
-    def pred_dataloader(self):
+    def predict_dataloader(self):
         """Load prediction dataset."""
         return torch.utils.data.DataLoader(
-            self.pred_dataset,
+            self.predict_dataset,
             batch_size=self.batch_size,
             num_workers=self.num_workers,
             shuffle=False,

@@ -31,9 +31,9 @@ PARAM_NAMES = [
     "Meridional wind component",
     "Relative humidity",
     "Pressure at Mean Sea Level",
-    "Pressure Perturbation",
+    "Pressure",
     "Surface Pressure",
-    # "Total Precipitation",
+    "Total Precipitation",
     "Total Water Vapor content",
     "2-meter Temperature",
     "10-meter Zonal wind speed",
@@ -47,9 +47,9 @@ PARAM_NAMES_SHORT = [
     "V",
     "RELHUM",
     "PMSL",
-    "PP",
+    "P",
     "PS",
-    # "TOT_PREC",
+    "TOT_PREC",
     "TQV",
     "T_2M",
     "U_10M",
@@ -63,9 +63,9 @@ PARAM_UNITS = [
     "m/s",
     "Perc.",
     "Pa",
-    "hPa",
     "Pa",
-    # "$kg/m^2$",
+    "Pa",
+    "$kg/m^2$",
     "$kg/m^2$",
     "K",
     "m/s",
@@ -79,9 +79,9 @@ PARAM_WEIGHTS = {
     "V": 1,
     "RELHUM": 1,
     "PMSL": 1,
-    "PP": 1,
+    "P": 1,
     "PS": 1,
-    # "TOT_PREC": 1,
+    "TOT_PREC": 1,
     "TQV": 1,
     "T_2M": 1,
     "U_10M": 1,
@@ -89,12 +89,13 @@ PARAM_WEIGHTS = {
 }
 
 # Vertical levels
+# BUG: This will change after sponges
 VERTICAL_LEVELS = [1, 5, 13, 22, 38, 41, 60]
 
 PARAM_CONSTRAINTS = {
     "RELHUM": (0, 100),
     "TQV": (0, None),
-    # "TOT_PREC": (0, None),
+    "TOT_PREC": (0, None),
 }
 
 IS_3D = {
@@ -103,7 +104,7 @@ IS_3D = {
     "V": 1,
     "RELHUM": 1,
     "PMSL": 0,
-    "PP": 1,
+    "P": 1,
     "PS": 0,
     "TOT_PREC": 0,
     "TQV": 0,
@@ -139,13 +140,11 @@ METRICS_INITIALIZED = False
 
 # Plotting
 FIG_SIZE = (15, 10)
-EXAMPLE_FILE = "data/cosmo_single/samples/train/data.zarr"
-CHUNK_SIZE = 100
+EXAMPLE_FILE = "data/cosmo/samples/train/data.zarr"
 EVAL_DATETIMES = ["2015112800"]
 EVAL_PLOT_VARS = ["TQV"]
 STORE_EXAMPLE_DATA = False
-COSMO_PROJ = ccrs.PlateCarree()
-SELECTED_PROJ = COSMO_PROJ
+SELECTED_PROJ = ccrs.PlateCarree()
 POLLON = -170.0
 POLLAT = 43.0
 SMOOTH_BOUNDARIES = False

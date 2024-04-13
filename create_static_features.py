@@ -28,16 +28,16 @@ def main():
     parser.add_argument(
         "--zdim",
         type=str,
-        default="level",
-        help="Name of the x-dimension in the dataset (default: level)",
+        default="z",
+        help="Name of the x-dimension in the dataset (default: z)",
     )
     parser.add_argument(
         "--field_names",
         nargs="+",
-        default=["hsurf", "FI", "P0FL"],
+        default=["HSURF", "FI", "HFL"],
         help=(
             "Names of the fields to extract from the .nc file "
-            '(default: ["hsurf", "FI", "P0FL"])'
+            '(default: ["HSURF", "FI", "HFL"])'
         ),
     )
     parser.add_argument(
@@ -81,7 +81,7 @@ def main():
             )
     np_fields = np.concatenate(np_fields, axis=-1)  # (N_x, N_y, N_fields)
 
-    outdir = os.path.join("data", args.dataset, "static")
+    outdir = os.path.join("data", args.dataset, "static/")
 
     # Save the numpy array to a .npy file
     np.save(outdir + "reference_geopotential_pressure.npy", np_fields)
