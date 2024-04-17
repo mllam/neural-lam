@@ -497,6 +497,7 @@ class ARModel(pl.LightningModule):
                 batch_time=batch_time,
             )
 
+    @rank_zero_only
     def plot_examples(
         self, batch, prediction=None, target=None, batch_time=None
     ):
