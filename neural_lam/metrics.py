@@ -46,7 +46,7 @@ def mask_and_reduce_metric(metric_entry_vals, mask, average_grid, sum_vars):
             metric_entry_vals, dim=-2
         )  # (..., d_state)
     if sum_vars:  # Reduce vars second
-        metric_entry_vals = torch.sum(
+        metric_entry_vals = torch.mean(
             metric_entry_vals, dim=-1
         )  # (..., N) or (...,)
 

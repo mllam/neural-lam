@@ -59,20 +59,11 @@ class WeatherDataset(torch.utils.data.Dataset):
                     for z in constants.VERTICAL_LEVELS:
                         new_key = f"{var_name}_{int(z)}"
                         new_vars[new_key] = data_array.sel(z=z).drop_vars("z")
-                # BUG: Clean this up after zarr archive is fixed
-                elif var_name == "T_2M":
-                    new_vars[var_name] = data_array.sel(z=2).drop_vars("z")
-                elif var_name in ["U_10M", "V_10M"]:
-                    new_vars[var_name] = data_array.sel(z=10).drop_vars("z")
-                elif var_name == "PMSL":
-                    new_vars[var_name] = data_array.sel(z=0).drop_vars("z")
                 else:
                     new_vars[var_name] = data_array
 
         self.ds = (
             xr.Dataset(new_vars)
-            # BUG: This should not be necessary with clean data without nans
-            .drop_isel(time=848)
             .to_array()
             .transpose("time", "x", "y", "variable")
         )

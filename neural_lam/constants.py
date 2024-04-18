@@ -47,7 +47,7 @@ PARAM_NAMES_SHORT = [
     "V",
     "RELHUM",
     "PMSL",
-    "P",
+    "PP",
     "PS",
     "TOT_PREC",
     "TQV",
@@ -79,7 +79,7 @@ PARAM_WEIGHTS = {
     "V": 1,
     "RELHUM": 1,
     "PMSL": 1,
-    "P": 1,
+    "PP": 1,
     "PS": 1,
     "TOT_PREC": 1,
     "TQV": 1,
@@ -89,7 +89,6 @@ PARAM_WEIGHTS = {
 }
 
 # Vertical levels
-# BUG: This will change after sponges
 VERTICAL_LEVELS = [1, 5, 13, 22, 38, 41, 60]
 
 PARAM_CONSTRAINTS = {
@@ -104,7 +103,7 @@ IS_3D = {
     "V": 1,
     "RELHUM": 1,
     "PMSL": 0,
-    "P": 1,
+    "PP": 1,
     "PS": 0,
     "TOT_PREC": 0,
     "TQV": 0,
