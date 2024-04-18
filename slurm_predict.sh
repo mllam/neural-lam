@@ -14,15 +14,15 @@ export NORMALIZE=false
 
 if [ "$PREPROCESS" = true ]; then
     echo "Create static features"
-    srun -ul -N1 -n1 python create_static_features.py --boundaries 60
+    python create_static_features.py --boundaries 60
     echo "Creating mesh"
-    srun -ul -N1 -n1 python create_mesh.py --dataset "cosmo" --plot 1
+    python create_mesh.py --dataset "cosmo" --plot 1
     echo "Creating grid features"
-    srun -ul -N1 -n1 python create_grid_features.py --dataset "cosmo"
+    python create_grid_features.py --dataset "cosmo"
     if [ "$NORMALIZE" = true ]; then
         # This takes multiple hours!
         echo "Creating normalization weights"
-        srun -ul -N1 -n1 python create_parameter_weights.py --dataset "cosmo" --batch_size 32 --n_workers 8 --step_length 1
+        python create_parameter_weights.py --dataset "cosmo" --batch_size 32 --n_workers 8 --step_length 1
     fi
 fi
 # Load necessary modules
