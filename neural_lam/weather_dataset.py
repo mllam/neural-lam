@@ -16,6 +16,7 @@ from neural_lam import constants, utils
 class WeatherDataset(torch.utils.data.Dataset):
     """Weather dataset for PyTorch Lightning."""
 
+    # pylint: disable=too-many-branches
     def __init__(
         self,
         dataset_name,
@@ -28,25 +29,7 @@ class WeatherDataset(torch.utils.data.Dataset):
     ):
         super().__init__()
 
-        self.dataset_name = dataset_name
-        self.path_verif_file = path_verif_file
-        self.split = split
-        self.standardize = standardize
-        self.subset = subset
-        self.batch_size = batch_size
-        self.control_only = control_only
-
-        self.ds = None
-        self.forcings = None
-        self.data_mean = None
-        self.data_std = None
-        self.flux_mean = None
-        self.flux_std = None
-        self.random_subsample = None
-        self.num_steps = None
-
-    def preprocess(self):
-        assert self.split in (
+        assert split in (
             "train",
             "val",
             "test",
@@ -54,14 +37,20 @@ class WeatherDataset(torch.utils.data.Dataset):
             "verif",
         ), "Unknown dataset split"
 
-        if self.split == "verif":
-            self.np_files = np.load(self.path_verif_file)
+        if split == "verif":
+            self.np_files = np.load(path_verif_file)
+            self.split = split
             return
 
         self.zarr_path = os.path.join(
-            "data", self.dataset_name, "samples", self.split, "data.zarr"
+            "data", dataset_name, "samples", split, "data.zarr"
         )
         self.ds = xr.open_zarr(self.zarr_path, consolidated=True)
+        # BUG put this back in
+        # if split == "train":
+        #     self.ds = self.ds.sel(time=slice("2015", "2019"))
+        # else:
+        #     self.ds = self.ds.sel(time="2020")
 
         new_vars = {}
         forcings = {}
@@ -87,59 +76,59 @@ class WeatherDataset(torch.utils.data.Dataset):
             .transpose("time", "x", "y", "variable")
         )
 
-        self._subset_data()
-        self._load_stats(self.dataset_name)
+        if subset:
+            if constants.EVAL_DATETIMES is not None and split == "test":
+                eval_datetime_obj = dt.datetime.strptime(
+                    constants.EVAL_DATETIMES[0], "%Y%m%d%H"
+                )
+                self.ds = self.ds.sel(
+                    time=slice(
+                        eval_datetime_obj,
+                        eval_datetime_obj + dt.timedelta(hours=50),
+                    )
+                )
+                self.forcings = self.forcings.sel(
+                    time=slice(
+                        eval_datetime_obj,
+                        eval_datetime_obj + dt.timedelta(hours=50),
+                    )
+                )
+            else:
+                start_idx = randint(0, self.ds.time.size - 50)
+                self.ds = self.ds.isel(time=slice(start_idx, start_idx + 50))
+                self.forcings = self.forcings.isel(
+                    time=slice(start_idx, start_idx + 50)
+                )
 
-        self.random_subsample = self.split == "train"
+        self.standardize = standardize
+        if standardize:
+            ds_stats = utils.load_dataset_stats(dataset_name, "cpu")
+            if constants.GRID_FORCING_DIM > 0:
+                (
+                    self.data_mean,
+                    self.data_std,
+                    self.flux_mean,
+                    self.flux_std,
+                ) = (
+                    ds_stats["data_mean"],
+                    ds_stats["data_std"],
+                    ds_stats["flux_mean"],
+                    ds_stats["flux_std"],
+                )
+            else:
+                self.data_mean, self.data_std = (
+                    ds_stats["data_mean"],
+                    ds_stats["data_std"],
+                )
+        self.random_subsample = split == "train"
+        self.split = split
         self.num_steps = (
             constants.TRAIN_HORIZON
             if self.split == "train"
             else constants.EVAL_HORIZON
         )
-
-    def _subset_data(self):
-        if constants.EVAL_DATETIMES is not None and self.split == "test":
-            eval_datetime_obj = dt.datetime.strptime(
-                constants.EVAL_DATETIMES[0], "%Y%m%d%H"
-            )
-            self.ds = self.ds.sel(
-                time=slice(
-                    eval_datetime_obj,
-                    eval_datetime_obj + dt.timedelta(hours=50),
-                )
-            )
-            self.forcings = self.forcings.sel(
-                time=slice(
-                    eval_datetime_obj,
-                    eval_datetime_obj + dt.timedelta(hours=50),
-                )
-            )
-        else:
-            start_idx = randint(0, self.ds.time.size - 50)
-            self.ds = self.ds.isel(time=slice(start_idx, start_idx + 50))
-            self.forcings = self.forcings.isel(
-                time=slice(start_idx, start_idx + 50)
-            )
-
-    def _load_stats(self, dataset_name):
-        ds_stats = utils.load_dataset_stats(dataset_name, "cpu")
-        if constants.GRID_FORCING_DIM > 0:
-            (
-                self.data_mean,
-                self.data_std,
-                self.flux_mean,
-                self.flux_std,
-            ) = (
-                ds_stats["data_mean"],
-                ds_stats["data_std"],
-                ds_stats["flux_mean"],
-                ds_stats["flux_std"],
-            )
-        else:
-            self.data_mean, self.data_std = (
-                ds_stats["data_mean"],
-                ds_stats["data_std"],
-            )
+        self.batch_size = batch_size
+        self.control_only = control_only
 
     def __len__(self):
         if self.split == "verif":
@@ -149,41 +138,39 @@ class WeatherDataset(torch.utils.data.Dataset):
     def __getitem__(self, idx):
         if self.split == "verif":
             return self.np_files
-
         sample_xr = self.ds.isel(time=slice(idx, idx + self.num_steps))
         forcings = self.forcings.isel(time=slice(idx, idx + 1))
 
+        # (N_t', N_x, N_y, d_features')
         sample = torch.tensor(sample_xr.values, dtype=torch.float32)
         forcings = torch.tensor(forcings.values, dtype=torch.float32)
-        sample = sample.flatten(1, 2)
-        forcings = forcings.flatten(1, 2)
-
-        init_states = sample[:2]
-        target_states = sample[2:]
-
-        batch_time = self.ds.isel(time=idx).time.values
-        batch_time = np.datetime_as_string(batch_time, unit="h")
-        batch_time = str(batch_time).replace("-", "").replace("T", "")
-
-        forcings = self._preprocess_forcings(forcings, batch_time)
+        sample = sample.flatten(1, 2)  # (N_t, N_grid, d_features)
+        forcings = forcings.flatten(1, 2)  # (N_t, N_grid, d_forcing)
 
         if self.standardize:
             sample = (sample - self.data_mean) / self.data_std
             forcings = (forcings - self.flux_mean) / self.flux_std
 
-        return init_states, target_states, batch_time, forcings
+        init_states = sample[:2]  # (2, N_grid, d_features)
+        target_states = sample[2:]  # (sample_length-2, N_grid, d_features)
 
-    def _preprocess_forcings(self, forcings, batch_time):
+        batch_time = self.ds.isel(time=idx).time.values
+        batch_time = np.datetime_as_string(batch_time, unit="h")
+        batch_time = str(batch_time).replace("-", "").replace("T", "")
+
+        # Time of day and year
         dt_obj = dt.datetime.strptime(batch_time, "%Y%m%d%H")
         hour_of_day = dt_obj.hour
         second_into_year = (
             dt_obj - dt.datetime(dt_obj.year, 1, 1)
         ).total_seconds()
 
-        hour_angle = torch.tensor((hour_of_day / 12) * torch.pi)
+        hour_angle = torch.tensor(
+            (hour_of_day / 12) * torch.pi
+        )  # (sample_len,)
         year_angle = torch.tensor(
             (second_into_year / constants.SECONDS_IN_YEAR) * 2 * torch.pi
-        )
+        )  # (sample_len,)
         datetime_forcing = torch.stack(
             (
                 torch.sin(hour_angle),
@@ -192,18 +179,21 @@ class WeatherDataset(torch.utils.data.Dataset):
                 torch.cos(year_angle),
             ),
             dim=0,
-        )
-        datetime_forcing = (datetime_forcing + 1) / 2
+        )  # (N_t, 4)
+        datetime_forcing = (datetime_forcing + 1) / 2  # Rescale to [0,1]
 
         datetime_forcing = (
             datetime_forcing.unsqueeze(0)
             .unsqueeze(0)
             .expand(-1, forcings.shape[1], -1)
-        )
+        )  # (N_t, N_grid, 4)
 
-        forcings = torch.cat((forcings, datetime_forcing), dim=-1)
+        # Put forcing features together
+        forcings = torch.cat(
+            (forcings, datetime_forcing), dim=-1
+        )  # (sample_len, N_grid, d_forcing)
 
-        return forcings
+        return init_states, target_states, batch_time, forcings
 
 
 class WeatherDataModule(pl.LightningDataModule):
