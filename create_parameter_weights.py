@@ -89,9 +89,9 @@ def main():
     for batch_data in tqdm(loader):
         if constants.GRID_FORCING_DIM > 0:
             init_batch, target_batch, _, forcing_batch = batch_data
-            flux_batch = forcing_batch[:, :, :, 0]  # Flux is first index
-            flux_means.append(torch.mean(flux_batch))  # (,)
-            flux_squares.append(torch.mean(flux_batch**2))  # (,)
+            flux_batch = forcing_batch[:, :, :, : constants.GRID_FORCING_DIM]
+            flux_means.append(torch.mean(flux_batch, dim=(1, 2, 3)))  # (,)
+            flux_squares.append(torch.mean(flux_batch**2, dim=(1, 2, 3)))  # (,)
         else:
             init_batch, target_batch, _ = batch_data
 
@@ -135,9 +135,9 @@ def main():
     for batch_data in tqdm(loader_standard):
         if constants.GRID_FORCING_DIM > 0:
             init_batch, target_batch, _, forcing_batch = batch_data
-            flux_batch = forcing_batch[:, :, :, 0]  # Flux is first index
-            flux_means.append(torch.mean(flux_batch))  # (,)
-            flux_squares.append(torch.mean(flux_batch**2))  # (,)
+            flux_batch = forcing_batch[:, :, :, constants.GRID_FORCING_DIM]
+            flux_means.append(torch.mean(flux_batch, dim=(1, 2, 3)))  # (,)
+            flux_squares.append(torch.mean(flux_batch**2, dim=(1, 2, 3)))  # (,)
         else:
             init_batch, target_batch, _ = batch_data
         batch_diffs = init_batch[:, 1:] - target_batch
