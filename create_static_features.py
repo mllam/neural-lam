@@ -103,9 +103,9 @@ def main():
 
     # Set the args.boundaries grid-cells closest to each boundary to True
     mask[: args.boundaries, :] = True  # top boundary
-    mask[-args.boundaries:, :] = True  # bottom boundary
+    mask[-args.boundaries :, :] = True  # bottom boundary
     mask[:, : args.boundaries] = True  # left boundary
-    mask[:, -args.boundaries:] = True  # right boundary
+    mask[:, -args.boundaries :] = True  # right boundary
 
     # Save the numpy array to a .npy file
     np.save(outdir + "border_mask", mask)  # (N_x, N_y)
