@@ -15,9 +15,14 @@ export PATH=/work/ec249/ec249/bet20/texlive//bin/x86_64-linux:$PATH
 export WANDB_API_KEY=a969b84c10ffe6ee78383e7dbf3454ee494726d5
 
 # Load the required modules 
-source /work/ec249/ec249/bet20/nlam/bin/activate
+source /work/ec249/ec249/bet20/myenv/bin/activate
 
 # srun python train_model.py
-srun python train_model.py --model graph_lam --dataset era5_uk_reduced --graph graphcast_uk
+# srun python train_model.py --model graph_lam --dataset era5_uk_reduced --graph graphcast_uk
+# srun python train_model.py --model graph_lam --dataset era5_uk_reduced --graph graphcast_uk --epochs 10
+wandb offline
+srun python train_model.py --graph multiscale --model graph_lam --epochs 5
 # srun python train_model.py --model gcn --dataset era5_uk_reduced --graph graphcast_uk
 # srun python era5_data_proc.py
+
+# ldd --version

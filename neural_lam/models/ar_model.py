@@ -189,11 +189,9 @@ class ARModel(pl.LightningModule):
     def common_step(self, batch):
         """
         Predict on single batch
-        batch = time_series, batch_static_features, forcing_features
 
-        time_series (is a tuple of):
-            init_states: (B, 2, N_grid, d_features)
-            target_states: (B, pred_steps, N_grid, d_features)
+        init_states: (B, 2, num_grid_nodes, d_features)
+        target_states: (B, pred_steps, num_grid_nodes, d_features)
 
         batch_static_features: (B, num_grid_nodes, d_static_f),
             for example open water

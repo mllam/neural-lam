@@ -20,6 +20,8 @@ from neural_lam.era5_dataset import ERA5UKDataset
 import os
 # Required for running jobs on GPU node
 os.environ["WANDB_CONFIG_DIR"] = "/work/ec249/ec249/bet20/.config/wandb"
+wandb_mode = os.environ.get('WANDB_MODE')
+print(f"WANDB_MODE: {wandb_mode}")
 
 MODELS = {
     "graph_lam": GraphLAM,
@@ -152,7 +154,7 @@ def get_args():
         "--loss",
         type=str,
         default="wmse",
-        help="Loss function to use, see metric.py (default: wmse)",
+        help="Loss function to use, see metrics.py (default: wmse)",
     )
     parser.add_argument(
         "--step_length",
@@ -291,7 +293,9 @@ def main():
             model.opt_state = torch.load(args.load)["optimizer_states"][0]
     else:
         model = model_class(args)
-
+        
+    print("===== Model initialized =====")
+    
     # Make run name
     prefix = "subset-" if args.subset_ds else ""
     if args.eval:
@@ -319,6 +323,7 @@ def main():
         config=args,
         offline=True,
     )
+    print("===== Logger initialized =====")
     trainer = pl.Trainer(
         max_epochs=args.epochs,
         deterministic=True,
@@ -329,13 +334,14 @@ def main():
         callbacks=[checkpoint_callback],
         check_val_every_n_epoch=args.val_interval,
         precision=args.precision,
-        overfit_batches=1,
+        # overfit_batches=1,
     )
 
     # Only init once, on rank 0 only
     if trainer.global_rank == 0:
         utils.init_wandb_metrics(logger)  # Do after wandb.init
 
+    print("===== Trainer initialized =====")
     if args.eval:
         if args.eval == "val":
             eval_loader = val_loader
