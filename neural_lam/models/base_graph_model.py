@@ -122,6 +122,7 @@ class BaseGraphModel(ARModel):
         features_list.append(
             self.expand_to_batch(self.grid_static_features, batch_size)
         )
+
         grid_features = torch.cat(features_list, dim=-1)
 
         # Embed all features

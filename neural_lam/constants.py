@@ -113,7 +113,6 @@ VERTICAL_LEVELS = [
     20,
     23,
     27,
-    29,
     31,
     39,
     45,
@@ -157,7 +156,6 @@ LEVEL_WEIGHTS = {
     20: 1,
     23: 1,
     27: 1,
-    29: 1,
     31: 1,
     39: 1,
     45: 1,
@@ -188,7 +186,7 @@ SELECTED_PROJ = ccrs.PlateCarree()
 SMOOTH_BOUNDARIES = False
 
 # Some constants useful for sub-classes
-GRID_FORCING_DIM = 3
+GRID_FORCING_DIM = 7  # 3 fluxes variables + 4 time-related features
 GRID_STATE_DIM = sum(
     len(VERTICAL_LEVELS) if IS_3D[param] else 1 for param in PARAM_NAMES_SHORT
 )

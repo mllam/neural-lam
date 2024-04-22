@@ -335,7 +335,7 @@ class ARModel(pl.LightningModule):
             where index 0 corresponds to index 1 of init_states
         """
         init_states, target_states, batch_time = batch[:3]
-        forcing_features = batch[4] if len(batch) > 3 else None
+        forcing_features = batch[3] if len(batch) > 3 else None
 
         prediction, pred_std = self.unroll_prediction(
             init_states, forcing_features, target_states

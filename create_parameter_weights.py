@@ -89,7 +89,9 @@ def main():
     for batch_data in tqdm(loader):
         if constants.GRID_FORCING_DIM > 0:
             init_batch, target_batch, _, forcing_batch = batch_data
-            flux_batch = forcing_batch[:, :, :, : constants.GRID_FORCING_DIM]
+            flux_batch = forcing_batch[
+                :, :, :, :3
+            ]  # fluxes are first 3 features
             flux_means.append(torch.mean(flux_batch, dim=(1, 2, 3)))  # (,)
             flux_squares.append(torch.mean(flux_batch**2, dim=(1, 2, 3)))  # (,)
         else:
@@ -108,8 +110,10 @@ def main():
     std = torch.sqrt(second_moment - mean**2)  # (d_features)
 
     if constants.GRID_FORCING_DIM > 0:
-        flux_mean = torch.mean(torch.stack(flux_means))  # (,)
-        flux_second_moment = torch.mean(torch.stack(flux_squares))  # (,)
+        flux_mean = torch.mean(torch.cat(flux_means, dim=0), dim=0)  # (,)
+        flux_second_moment = torch.mean(
+            torch.cat(flux_squares, dim=0), dim=0
+        )  # (,)
         flux_std = torch.sqrt(flux_second_moment - flux_mean**2)  # (,)
         flux_stats = torch.stack((flux_mean, flux_std))
 
@@ -135,7 +139,9 @@ def main():
     for batch_data in tqdm(loader_standard):
         if constants.GRID_FORCING_DIM > 0:
             init_batch, target_batch, _, forcing_batch = batch_data
-            flux_batch = forcing_batch[:, :, :, constants.GRID_FORCING_DIM]
+            flux_batch = forcing_batch[
+                :, :, :, :3
+            ]  # fluxes are first 3 features
             flux_means.append(torch.mean(flux_batch, dim=(1, 2, 3)))  # (,)
             flux_squares.append(torch.mean(flux_batch**2, dim=(1, 2, 3)))  # (,)
         else:
