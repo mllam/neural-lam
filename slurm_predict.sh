@@ -1,16 +1,15 @@
 #!/bin/bash -l
-#SBATCH --job-name=NeurWPredict
+#SBATCH --job-name=NeurWPp
+#SBATCH --account=s83
+#SBATCH --partition=normal
 #SBATCH --nodes=1
 #SBATCH --ntasks-per-node=4
-#SBATCH --partition=normal
-#SBATCH --account=s83
+#SBATCH --time=00:59:00
+#SBATCH --no-requeue
 #SBATCH --output=lightning_logs/neurwp_pred_out.log
 #SBATCH --error=lightning_logs/neurwp_pred_err.log
-#SBATCH --time=03:00:00
-#SBATCH --no-requeue
 
-
-export PREPROCESS=true
+export PREPROCESS=false
 export NORMALIZE=false
 
 if [ "$PREPROCESS" = true ]; then
@@ -28,7 +27,6 @@ if [ "$PREPROCESS" = true ]; then
 fi
 # Load necessary modules
 conda activate neural-lam
-
 
 ulimit -c 0
 export OMP_NUM_THREADS=16

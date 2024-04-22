@@ -1,9 +1,12 @@
 # Standard library
 import os
+import time
 
 # Third-party
 import numpy as np
+import pytorch_lightning as pl
 import torch
+import wandb
 from pytorch_lightning.utilities import rank_zero_only
 from torch import nn
 from tueplots import bundles, figsizes
@@ -275,3 +278,51 @@ def init_wandb_metrics(wandb_logger):
     experiment.define_metric("val_mean_loss", summary="min")
     for step in constants.VAL_STEP_LOG_ERRORS:
         experiment.define_metric(f"val_loss_unroll{step}", summary="min")
+
+
+@rank_zero_only
+def rank_zero_print(*args, **kwargs):
+    """Print only from rank 0 process"""
+    print(*args, **kwargs)
+
+
+@rank_zero_only
+def init_wandb(args):
+    """Initialize wandb"""
+    if args.resume_run is None:
+        prefix = "subset-" if args.subset_ds else ""
+        if args.eval:
+            prefix = prefix + f"eval-{args.eval}-"
+        run_name = (
+            f"{prefix}{args.model}-{args.processor_layers}x{args.hidden_dim}-"
+            f"{time.strftime('%m_%d_%H_%M_%S')}"
+        )
+        wandb.init(
+            name=run_name,
+            project=constants.WANDB_PROJECT,
+            config=args,
+        )
+        logger = pl.loggers.WandbLogger(
+            project=constants.WANDB_PROJECT,
+            name=run_name,
+            config=args,
+            log_model=True,
+        )
+        wandb.save("slurm_train.sh")
+        wandb.save("slurm_predict.sh")
+        wandb.save("neural_lam/constants.py")
+    else:
+        wandb.init(
+            project=constants.WANDB_PROJECT,
+            config=args,
+            id=args.resume_run,
+            resume="must",
+        )
+        logger = pl.loggers.WandbLogger(
+            project=constants.WANDB_PROJECT,
+            id=args.resume_run,
+            config=args,
+            log_model=True,
+        )
+
+    return logger

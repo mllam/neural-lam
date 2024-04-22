@@ -1,13 +1,13 @@
 #!/bin/bash -l
 #SBATCH --job-name=NeurWP
+#SBATCH --account=s83
+#SBATCH --partition=normal
 #SBATCH --nodes=1
 #SBATCH --ntasks-per-node=4
-#SBATCH --partition=normal
-#SBATCH --account=s83
-#SBATCH --output=lightning_logs/neurwp_out.log
-#SBATCH --error=lightning_logs/neurwp_err.log
 #SBATCH --mem=400G
 #SBATCH --no-requeue
+#SBATCH --output=lightning_logs/neurwp_out.log
+#SBATCH --error=lightning_logs/neurwp_err.log
 
 export PREPROCESS=false
 export NORMALIZE=false
@@ -17,7 +17,7 @@ conda activate neural-lam
 
 if [ "$PREPROCESS" = true ]; then
     echo "Create static features"
-    srun -ul -N1 -n1 python create_static_features.py --boundaries 60
+    srun -ul -N1 -n1 python create_static_features.py --boundaries 60 --dataset "cosmo"
     echo "Creating mesh"
     srun -ul -N1 -n1 python create_mesh.py --dataset "cosmo" --plot 1
     echo "Creating grid features"

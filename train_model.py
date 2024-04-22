@@ -1,17 +1,14 @@
 # Standard library
 import os
-import time
 from argparse import ArgumentParser
 
 # Third-party
 import pytorch_lightning as pl
 import torch
-import wandb
 from lightning_fabric.utilities import seed
-from pytorch_lightning.utilities import rank_zero_only
 
 # First-party
-from neural_lam import constants, utils
+from neural_lam import utils
 from neural_lam.models.base_graph_model import BaseGraphModel
 from neural_lam.models.graph_lam import GraphLAM
 from neural_lam.models.hi_lam import HiLAM
@@ -24,62 +21,6 @@ MODELS = {
     "base_graph": BaseGraphModel,
     "hi_lam_parallel": HiLAMParallel,
 }
-
-
-@rank_zero_only
-def print_args(args):
-    """Print arguments"""
-    print("Arguments:")
-    for arg in vars(args):
-        print(f"{arg}: {getattr(args, arg)}")
-
-
-@rank_zero_only
-def print_eval(args_eval):
-    """Print evaluation"""
-    print(f"Running evaluation on {args_eval}")
-
-
-@rank_zero_only
-def init_wandb(args):
-    """Initialize wandb"""
-    if args.resume_run is None:
-        prefix = "subset-" if args.subset_ds else ""
-        if args.eval:
-            prefix = prefix + f"eval-{args.eval}-"
-        run_name = (
-            f"{prefix}{args.model}-{args.processor_layers}x{args.hidden_dim}-"
-            f"{time.strftime('%m_%d_%H_%M_%S')}"
-        )
-        wandb.init(
-            name=run_name,
-            project=constants.WANDB_PROJECT,
-            config=args,
-        )
-        logger = pl.loggers.WandbLogger(
-            project=constants.WANDB_PROJECT,
-            name=run_name,
-            config=args,
-            log_model=True,
-        )
-        wandb.save("slurm_train.sh")
-        wandb.save("slurm_predict.sh")
-        wandb.save("neural_lam/constants.py")
-    else:
-        wandb.init(
-            project=constants.WANDB_PROJECT,
-            config=args,
-            id=args.resume_run,
-            resume="must",
-        )
-        logger = pl.loggers.WandbLogger(
-            project=constants.WANDB_PROJECT,
-            id=args.resume_run,
-            config=args,
-            log_model=True,
-        )
-
-    return logger
 
 
 def main():
@@ -263,7 +204,6 @@ def main():
 
     # Set seed
     seed.seed_everything(args.seed)
-
     # Create datamodule
     data_module = WeatherDataModule(
         args.dataset,
@@ -282,7 +222,7 @@ def main():
     model_class = MODELS[args.model]
     model = model_class(args)
 
-    result = init_wandb(args)
+    result = utils.init_wandb(args)
 
     if result is not None:
         logger = result
@@ -305,10 +245,15 @@ def main():
         use_distributed_sampler = False
     else:
         use_distributed_sampler = True
+    utils.rank_zero_print("Arguments:")
+    for arg in vars(args):
+        utils.rank_zero_print(f"{arg}: {getattr(args, arg)}")
 
     if torch.cuda.is_available():
         accelerator = "cuda"
-        devices = torch.cuda.device_count()
+        devices = int(
+            os.environ.get("SLURM_GPUS_PER_NODE", torch.cuda.device_count())
+        )
         num_nodes = int(os.environ.get("SLURM_JOB_NUM_NODES", 1))
     else:
         accelerator = "cpu"
@@ -347,7 +292,7 @@ def main():
 
     # Check if the mode is prediction
     elif args.eval == "predict":
-        data_module.split = "pred"
+        data_module.split = "predict"
         trainer.predict(
             model=model,
             datamodule=data_module,

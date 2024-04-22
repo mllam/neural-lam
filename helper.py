@@ -14,7 +14,7 @@ for file in os.listdir(PATH):
     ds = xr.open_zarr(os.path.join(PATH, file))
 
     ds_rechunked = ds.chunk({"time": -1})
-    mean_tot_prec = ds_rechunked["TOT_PREC"].mean(dim=["y_1", "x_1"]).compute()
+    mean_tot_prec = ds_rechunked["TOT_PREC"].mean(dim=["y", "x"]).compute()
 
     # Find the maximum precipitation value and its corresponding time
     max_precip_value = mean_tot_prec.max().item()
