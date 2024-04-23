@@ -37,6 +37,11 @@ class WeatherDataset(torch.utils.data.Dataset):
             "verif",
         ), "Unknown dataset split"
 
+        self.random_subsample = split == "train"
+        self.split = split
+        self.batch_size = batch_size
+        self.control_only = control_only
+
         if split == "verif":
             self.np_files = np.load(path_verif_file)
             self.split = split
@@ -49,7 +54,7 @@ class WeatherDataset(torch.utils.data.Dataset):
         if split == "train":
             self.ds = self.ds.sel(time=slice("2015", "2019"))
         else:
-            self.ds = self.ds.sel(time="2020")
+            self.ds = self.ds.sel(time=slice("2020"))
 
         new_vars = {}
         forcings = {}
@@ -75,28 +80,48 @@ class WeatherDataset(torch.utils.data.Dataset):
             .transpose("time", "x", "y", "variable")
         )
 
+        self.num_steps = (
+            constants.TRAIN_HORIZON
+            if self.split == "train"
+            else constants.EVAL_HORIZON
+        )
+
         if subset:
             if constants.EVAL_DATETIMES is not None and split == "test":
+                utils.rank_zero_print(
+                    f"Subsetting test dataset, using only first "
+                    f"{self.num_steps} hours after "
+                    f"{constants.EVAL_DATETIMES[0]}"
+                )
                 eval_datetime_obj = dt.datetime.strptime(
                     constants.EVAL_DATETIMES[0], "%Y%m%d%H"
                 )
+                init_datetime = np.datetime64(eval_datetime_obj, "ns")
+                end_datetime = np.datetime64(
+                    eval_datetime_obj + dt.timedelta(hours=self.num_steps), "ns"
+                )
+                assert (
+                    init_datetime in self.ds.time.values
+                ), f"Eval datetime {init_datetime} not in dataset. "
                 self.ds = self.ds.sel(
                     time=slice(
-                        eval_datetime_obj,
-                        eval_datetime_obj + dt.timedelta(hours=50),
+                        init_datetime,
+                        end_datetime,
                     )
                 )
                 self.forcings = self.forcings.sel(
                     time=slice(
-                        eval_datetime_obj,
-                        eval_datetime_obj + dt.timedelta(hours=50),
+                        init_datetime,
+                        end_datetime,
                     )
                 )
             else:
-                start_idx = randint(0, self.ds.time.size - 50)
-                self.ds = self.ds.isel(time=slice(start_idx, start_idx + 50))
+                start_idx = randint(0, self.ds.time.size - self.num_steps)
+                self.ds = self.ds.isel(
+                    time=slice(start_idx, start_idx + self.num_steps)
+                )
                 self.forcings = self.forcings.isel(
-                    time=slice(start_idx, start_idx + 50)
+                    time=slice(start_idx, start_idx + self.num_steps)
                 )
 
         self.standardize = standardize
@@ -119,15 +144,6 @@ class WeatherDataset(torch.utils.data.Dataset):
                     ds_stats["data_mean"],
                     ds_stats["data_std"],
                 )
-        self.random_subsample = split == "train"
-        self.split = split
-        self.num_steps = (
-            constants.TRAIN_HORIZON
-            if self.split == "train"
-            else constants.EVAL_HORIZON
-        )
-        self.batch_size = batch_size
-        self.control_only = control_only
 
     def __len__(self):
         if self.split == "verif":
@@ -138,7 +154,7 @@ class WeatherDataset(torch.utils.data.Dataset):
         if self.split == "verif":
             return self.np_files
         sample_xr = self.ds.isel(time=slice(idx, idx + self.num_steps))
-        forcings = self.forcings.isel(time=slice(idx, idx + 1))
+        forcings = self.forcings.isel(time=slice(idx, idx + self.num_steps))
 
         # (N_t', N_x, N_y, d_features')
         sample = torch.tensor(sample_xr.values, dtype=torch.float32)
@@ -153,46 +169,66 @@ class WeatherDataset(torch.utils.data.Dataset):
         init_states = sample[:2]  # (2, N_grid, d_features)
         target_states = sample[2:]  # (sample_length-2, N_grid, d_features)
 
-        batch_time = self.ds.isel(time=idx).time.values
-        batch_time = np.datetime_as_string(batch_time, unit="h")
-        batch_time = str(batch_time).replace("-", "").replace("T", "")
+        batch_times = self.ds.isel(
+            time=slice(idx, idx + self.num_steps)
+        ).time.values
+        batch_times = np.datetime_as_string(batch_times, unit="h")
+        batch_times = [
+            str(t).replace("-", "").replace("T", "") for t in batch_times
+        ]
 
         # Time of day and year
-        dt_obj = dt.datetime.strptime(batch_time, "%Y%m%d%H")
-        hour_of_day = dt_obj.hour
-        second_into_year = (
-            dt_obj - dt.datetime(dt_obj.year, 1, 1)
-        ).total_seconds()
+        dt_objs = [dt.datetime.strptime(t, "%Y%m%d%H") for t in batch_times]
+        hours_of_day = [dt_obj.hour for dt_obj in dt_objs]
+        seconds_into_year = [
+            (dt_obj - dt.datetime(dt_obj.year, 1, 1)).total_seconds()
+            for dt_obj in dt_objs
+        ]
 
-        hour_angle = torch.tensor(
-            (hour_of_day / 12) * torch.pi
+        hour_angles = torch.tensor(
+            [(hour_of_day / 12) * torch.pi for hour_of_day in hours_of_day]
         )  # (sample_len,)
-        year_angle = torch.tensor(
-            (second_into_year / constants.SECONDS_IN_YEAR) * 2 * torch.pi
+        year_angles = torch.tensor(
+            [
+                (second_into_year / constants.SECONDS_IN_YEAR) * 2 * torch.pi
+                for second_into_year in seconds_into_year
+            ]
         )  # (sample_len,)
         datetime_forcing = torch.stack(
             (
-                torch.sin(hour_angle),
-                torch.cos(hour_angle),
-                torch.sin(year_angle),
-                torch.cos(year_angle),
+                torch.sin(hour_angles),
+                torch.cos(hour_angles),
+                torch.sin(year_angles),
+                torch.cos(year_angles),
             ),
-            dim=0,
-        )  # (N_t, 4)
+            dim=1,
+        )  # (sample_len, 4)
         datetime_forcing = (datetime_forcing + 1) / 2  # Rescale to [0,1]
 
-        datetime_forcing = (
-            datetime_forcing.unsqueeze(0)
-            .unsqueeze(0)
-            .expand(-1, forcings.shape[1], -1)
-        )  # (N_t, N_grid, 4)
+        datetime_forcing = datetime_forcing.unsqueeze(1).expand(
+            -1, forcings.shape[1], -1
+        )  # (sample_len, N_grid, 4)
 
         # Put forcing features together
         forcings = torch.cat(
             (forcings, datetime_forcing), dim=-1
         )  # (sample_len, N_grid, d_forcing)
 
-        return init_states, target_states, batch_time, forcings
+        # Combine forcing over each window of 3 time steps (prev_prev, prev,
+        # current)
+        forcing = torch.cat(
+            (
+                forcings[:-2],
+                forcings[1:-1],
+                forcings[2:],
+            ),
+            dim=2,
+        )  # (sample_len-2, N_grid, 3*d_forcing)
+        # Now index 0 of ^ corresponds to forcing at index 0-2 of sample
+
+        # Start the plotting at the first time step
+        batch_time = batch_times[0]
+        return init_states, target_states, batch_time, forcing
 
 
 class WeatherDataModule(pl.LightningDataModule):

@@ -122,7 +122,7 @@ VERTICAL_LEVELS = [
 PARAM_CONSTRAINTS = {
     "RELHUM": (0, 100),
     "CLCT": (0, 100),
-    "TQV": (0, None),
+    # "TQV": (0, None),
     "TOT_PREC": (0, None),
 }
 
@@ -179,14 +179,15 @@ METRICS_INITIALIZED = False
 # Plotting
 FIG_SIZE = (15, 10)
 EXAMPLE_FILE = "data/cosmo/samples/train/data.zarr"
-EVAL_DATETIMES = ["2015112800"]
+EVAL_DATETIMES = ["2019010100"]  # prev_prev timestep (t-2)
 EVAL_PLOT_VARS = ["T_2M"]
-STORE_EXAMPLE_DATA = False
+STORE_EXAMPLE_DATA = True
 SELECTED_PROJ = ccrs.PlateCarree()
 SMOOTH_BOUNDARIES = False
 
-# Some constants useful for sub-classes
-GRID_FORCING_DIM = 7  # 3 fluxes variables + 4 time-related features
+# Some constants useful for sub-classes 3 fluxes variables + 4 time-related
+# features; in packages of three (prev, prev_prev, current)
+GRID_FORCING_DIM = (3 + 4) * 3
 GRID_STATE_DIM = sum(
     len(VERTICAL_LEVELS) if IS_3D[param] else 1 for param in PARAM_NAMES_SHORT
 )

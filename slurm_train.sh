@@ -2,7 +2,7 @@
 #SBATCH --job-name=NeurWP
 #SBATCH --account=s83
 #SBATCH --time=24:00:00
-#SBATCH --nodes=1
+#SBATCH --nodes=5
 #SBATCH --gres=gpu:8
 #SBATCH --ntasks-per-node=8
 #SBATCH --partition=normal
@@ -39,11 +39,9 @@ if [ "$PREPROCESS" = true ]; then
     fi
 fi
 
-ulimit -c 0
-
 echo "Training model"
 if [ "$MODEL" = "hi_lam" ]; then
-    srun -ul python train_model.py --dataset $DATASET --val_interval 2 --epochs 1 --n_workers 4 --batch_size 1 --subset_ds 0 --model hi_lam --graph hierarchical
+    srun -ul python train_model.py --dataset $DATASET --val_interval 20 --epochs 40 --n_workers 4 --batch_size 1 --subset_ds 0 --model hi_lam --graph hierarchical
 else
-    srun -ul python train_model.py --dataset $DATASET --val_interval 2 --epochs 1 --n_workers 4 --batch_size 1 --subset_ds 0
+    srun -ul python train_model.py --dataset $DATASET --val_interval 20 --epochs 40 --n_workers 4 --batch_size 1 --subset_ds 0
 fi
