@@ -128,7 +128,7 @@ def main():
     diff_means = []
     diff_squares = []
     for batch_data in tqdm(loader_standard):
-        init_batch, target_batch, _ , _= batch_data
+        init_batch, target_batch, _, _ = batch_data
         batch = torch.cat(init_batch, target_batch, dim=1)
         # (N_batch, N_t', N_grid, d_features)
         batch_diffs = batch[:, 1:] - batch[:, :-1]
