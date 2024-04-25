@@ -33,7 +33,7 @@ if [ "$PREPROCESS" = true ]; then
     if [ "$NORMALIZE" = true ]; then
         # This takes multiple hours!
         echo "Creating normalization weights"
-        python create_parameter_weights.py --dataset $DATASET --batch_size 32 --n_workers 8 --step_length 1
+        sbatch slurm_param.sh
     fi
 fi
 

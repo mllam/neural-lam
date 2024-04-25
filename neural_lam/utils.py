@@ -6,11 +6,10 @@ import time
 import numpy as np
 import pytorch_lightning as pl
 import torch
+import wandb
 from pytorch_lightning.utilities import rank_zero_only
 from torch import nn
 from tueplots import bundles, figsizes
-
-import wandb
 
 # First-party
 from neural_lam import constants
