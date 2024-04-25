@@ -290,7 +290,7 @@ def rank_zero_print(*args, **kwargs):
 def init_wandb(args):
     """Initialize wandb"""
     if args.resume_run is None:
-        prefix = "subset-" if args.subset_ds else ""
+        prefix = f"subset-{args.subset_ds}-" if args.subset_ds else ""
         if args.eval:
             prefix = prefix + f"eval-{args.eval}-"
         run_name = (

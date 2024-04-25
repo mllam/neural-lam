@@ -23,7 +23,7 @@ class WeatherDataset(torch.utils.data.Dataset):
         path_verif_file=None,
         split="train",
         standardize=True,
-        subset=False,
+        subset=0,
         batch_size=4,
         control_only=False,
     ):
@@ -37,10 +37,10 @@ class WeatherDataset(torch.utils.data.Dataset):
             "verif",
         ), "Unknown dataset split"
 
-        self.random_subsample = split == "train"
         self.split = split
         self.batch_size = batch_size
         self.control_only = control_only
+        self.subset = subset
 
         if split == "verif":
             self.np_files = np.load(path_verif_file)
@@ -86,7 +86,7 @@ class WeatherDataset(torch.utils.data.Dataset):
             else constants.EVAL_HORIZON
         )
 
-        if subset:
+        if subset > 0:
             if constants.EVAL_DATETIMES is not None and split == "test":
                 utils.rank_zero_print(
                     f"Subsetting test dataset, using only first "
@@ -116,12 +116,12 @@ class WeatherDataset(torch.utils.data.Dataset):
                     )
                 )
             else:
-                start_idx = randint(0, self.ds.time.size - self.num_steps)
+                start_idx = randint(0, self.ds.time.size - self.subset)
                 self.ds = self.ds.isel(
-                    time=slice(start_idx, start_idx + self.num_steps)
+                    time=slice(start_idx, start_idx + self.subset)
                 )
                 self.forcings = self.forcings.isel(
-                    time=slice(start_idx, start_idx + self.num_steps)
+                    time=slice(start_idx, start_idx + self.subset)
                 )
 
         self.standardize = standardize
@@ -239,7 +239,7 @@ class WeatherDataModule(pl.LightningDataModule):
         dataset_name,
         path_verif_file=None,
         standardize=True,
-        subset=False,
+        subset=0,
         batch_size=4,
         num_workers=16,
     ):
@@ -288,7 +288,7 @@ class WeatherDataModule(pl.LightningDataModule):
                 self.path_verif_file,
                 split="verif",
                 standardize=False,
-                subset=False,
+                subset=0,
                 batch_size=self.batch_size,
             )
 
@@ -297,7 +297,7 @@ class WeatherDataModule(pl.LightningDataModule):
                 self.dataset_name,
                 split="predict",
                 standardize=self.standardize,
-                subset=False,
+                subset=0,
                 batch_size=1,
             )
 

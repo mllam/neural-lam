@@ -199,7 +199,7 @@ def verify_inference(
         "cosmo",
         path_verif_file=file_path,
         standardize=False,
-        subset=False,
+        subset=0,
         batch_size=6,
         num_workers=2,
     )

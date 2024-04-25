@@ -9,7 +9,7 @@ from tqdm import tqdm
 
 # First-party
 from neural_lam import constants
-from neural_lam.weather_dataset import WeatherDataset
+from neural_lam.weather_dataset import WeatherDataModule
 
 
 def main():
@@ -70,14 +70,16 @@ def main():
     )
 
     # Load dataset without any subsampling
-    ds = WeatherDataset(
-        args.dataset,
-        split="train",
+    data_module = WeatherDataModule(
+        dataset_name=args.dataset,
         standardize=False,
-    )  # Without standardization
-    loader = torch.utils.data.DataLoader(
-        ds, args.batch_size, shuffle=False, num_workers=args.n_workers
+        subset=1000,
+        batch_size=args.batch_size,
+        num_workers=args.n_workers,
     )
+    data_module.setup(stage="fit")
+    loader = data_module.train_dataloader()
+
     # Compute mean and std.-dev. of each parameter (+ flux forcing)
     # across full dataset
     print("Computing mean and std.-dev. for parameters...")
@@ -116,14 +118,15 @@ def main():
 
     # Compute mean and std.-dev. of one-step differences across the dataset
     print("Computing mean and std.-dev. for one-step differences...")
-    ds_standard = WeatherDataset(
-        args.dataset,
-        split="train",
+    data_module = WeatherDataModule(
+        dataset_name=args.dataset,
         standardize=True,
-    )  # Re-load with standardization
-    loader_standard = torch.utils.data.DataLoader(
-        ds_standard, args.batch_size, shuffle=False, num_workers=args.n_workers
+        subset=0,
+        batch_size=args.batch_size,
+        num_workers=args.n_workers,
     )
+    data_module.setup(stage="fit")
+    loader_standard = data_module.train_dataloader()
 
     diff_means = []
     diff_squares = []

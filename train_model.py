@@ -207,7 +207,7 @@ def main():
     # Create datamodule
     data_module = WeatherDataModule(
         args.dataset,
-        subset=bool(args.subset_ds),
+        subset=args.subset_ds,
         batch_size=args.batch_size,
         num_workers=args.n_workers,
     )
