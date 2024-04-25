@@ -6,10 +6,11 @@ import time
 import numpy as np
 import pytorch_lightning as pl
 import torch
-import wandb
 from pytorch_lightning.utilities import rank_zero_only
 from torch import nn
 from tueplots import bundles, figsizes
+
+import wandb
 
 # First-party
 from neural_lam import constants
@@ -31,13 +32,12 @@ def load_dataset_stats(dataset_name, device="cpu"):
 
     if constants.GRID_FORCING_DIM > 0:
         flux_stats = loads_file("flux_stats.pt")  # (2,)
-        flux_mean, flux_std = flux_stats
 
         return {
             "data_mean": data_mean,
             "data_std": data_std,
-            "flux_mean": flux_mean,
-            "flux_std": flux_std,
+            "flux_mean": flux_stats["mean"],
+            "flux_std": flux_stats["std"],
         }
     return {"data_mean": data_mean, "data_std": data_std}
 
