@@ -35,26 +35,30 @@ def main():
 
     # Load the array to replace the values with 
     replacement_data = np.load("/users/clechart/clechart/neural-lam/wandb/run-20240417_104748-dxnil3vw/files/results/inference/prediction_0.npy")
-    cut_values = replacement_data[0,1,:, 26:33].transpose()
-    cut_values = np.flip(cut_values, axis=(0,1))
+    original_cut = replacement_data[0,1,:,26:33].reshape(582,390, 7)
+    cut_values = np.moveaxis(original_cut, [-3,-2,-1], [-1,-2,-3])
+    
+    # cut_values = np.flip(cut_values, axis=(0,1))
     # cut_values = cut_values.reshape(cut_values.shape[0], -1)
     # cut_values = cut_values.reshape(-1, cut_values.shape[0])
 
-    # Ensure the dimensions match
-    assert cut_values.shape == subset.values.shape, "The shapes of the arrays don't match."
+    # # Ensure the dimensions match
+    # assert cut_values.shape == subset.values.shape, "The shapes of the arrays don't match."
 
 
-    # Find indices where values are around -8
-    close_to_minus_eight_subset = np.where((subset.values > -8.5) & (subset.values < -8.0))
-    close_to_minus_eight_cut_values = np.where((cut_values > -8.5) & (cut_values < -8.0))
+    # # Find indices where values are around -8
+    # close_to_minus_eight_subset = np.where((subset.values > -8.5) & (subset.values < -8.0))
+    # close_to_minus_eight_cut_values = np.where((cut_values > -8.5) & (cut_values < -8.0))
 
-    print(f"Indices in subset.values close to -8: {close_to_minus_eight_subset}")
-    print(f"Indices in cut_values close to -8: {close_to_minus_eight_cut_values}")
+    # print(f"Indices in subset.values close to -8: {close_to_minus_eight_subset}")
+    # print(f"Indices in cut_values close to -8: {close_to_minus_eight_cut_values}")
 
     # Save the overwritten data 
     md = subset.metadata()
-    data_new = earthkit.data.FieldList.from_array(cut_values, md)
-    data_new.save("testinho")
+    # ni= md[0]["Ni"]
+    # nj = md[0]["Nj"]
+    data_new = earthkit.data.FieldList.from_array(cut_values, md) # .reshape(7, nj, ni)
+    data_new.save("testinhoModif")
 
 
 
@@ -66,7 +70,7 @@ def pygrib_plotting():
     original_data = grb.values
 
     # Load transformed GRIB with inference output
-    inference_grib = pygrib.open("testinho")
+    inference_grib = pygrib.open("testinhoModif")
     inf = inference_grib.select(shortName = "u", level = 1)[0]
     predicted_data = inf.values
 
