@@ -16,4 +16,4 @@ conda activate neural-lam
 ulimit -c 0
 export OMP_NUM_THREADS=16
 
-srun -ul python grib_modifyer.py
+srun -ul python grib_modifier.py
