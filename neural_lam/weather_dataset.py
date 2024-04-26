@@ -52,9 +52,9 @@ class WeatherDataset(torch.utils.data.Dataset):
         )
         self.ds = xr.open_zarr(self.zarr_path, consolidated=True)
         if split == "train":
-            self.ds = self.ds.sortby("time").sel(time=slice("2015", "2019"))
+            self.ds = self.ds.sel(time=slice("2015", "2019"))
         else:
-            self.ds = self.ds.sortby("time").sel(time=slice("2020"))
+            self.ds = self.ds.sel(time=slice("2020"))
 
         new_vars = {}
         forcings = {}
