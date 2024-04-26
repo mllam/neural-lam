@@ -63,6 +63,11 @@ def main(rank, world_size):  # pylint: disable=redefined-outer-name
     parser.add_argument("--n_workers", type=int, default=4)
     args = parser.parse_args()
 
+    if args.subset % (world_size * args.batch_size) != 0:
+        raise ValueError(
+            "Subset size must be divisible by (world_size * batch_size)"
+        )
+
     device = torch.device(
         f"cuda:{rank % torch.cuda.device_count()}"
         if torch.cuda.is_available()
@@ -121,10 +126,12 @@ def main(rank, world_size):  # pylint: disable=redefined-outer-name
             flux_means.append(torch.mean(flux_batch))
             flux_squares.append(torch.mean(flux_batch**2))
 
-    means_gathered = [torch.zeros_like(means[0]) for _ in range(world_size)]
-    squares_gathered = [torch.zeros_like(squares[0]) for _ in range(world_size)]
-    dist.all_gather(means_gathered, torch.cat(means, dim=0))
-    dist.all_gather(squares_gathered, torch.cat(squares, dim=0))
+    dist.barrier()
+
+    means_gathered = [None] * world_size
+    squares_gathered = [None] * world_size
+    dist.all_gather_object(means_gathered, torch.cat(means, dim=0))
+    dist.all_gather_object(squares_gathered, torch.cat(squares, dim=0))
 
     if rank == 0:
         means_all = torch.cat(means_gathered, dim=0)
@@ -146,6 +153,25 @@ def main(rank, world_size):  # pylint: disable=redefined-outer-name
                 os.path.join(static_dir_path, "flux_stats.pt"),
             )
 
+    data_module = WeatherDataModule(
+        dataset_name=args.dataset,
+        standardize=True,
+        subset=args.subset,
+        batch_size=args.batch_size,
+        num_workers=args.n_workers,
+    )
+    data_module.setup(stage="fit")
+
+    train_sampler = DistributedSampler(
+        data_module.train_dataset, num_replicas=world_size, rank=rank
+    )
+    train_loader = torch.utils.data.DataLoader(
+        data_module.train_dataset,
+        batch_size=args.batch_size,
+        sampler=train_sampler,
+        num_workers=args.n_workers,
+    )
+
     # Compute mean and std-dev of one-step differences
     diff_means = []
     diff_squares = []
@@ -155,14 +181,14 @@ def main(rank, world_size):  # pylint: disable=redefined-outer-name
         diff_means.append(torch.mean(diffs, dim=(1, 2)))
         diff_squares.append(torch.mean(diffs**2, dim=(1, 2)))
 
-    diff_means_gathered = [
-        torch.zeros_like(diff_means[0]) for _ in range(world_size)
-    ]
-    diff_squares_gathered = [
-        torch.zeros_like(diff_squares[0]) for _ in range(world_size)
-    ]
-    dist.all_gather(diff_means_gathered, torch.cat(diff_means, dim=0))
-    dist.all_gather(diff_squares_gathered, torch.cat(diff_squares, dim=0))
+    dist.barrier()
+
+    diff_means_gathered = [None] * world_size
+    diff_squares_gathered = [None] * world_size
+    dist.all_gather_object(diff_means_gathered, torch.cat(diff_means, dim=0))
+    dist.all_gather_object(
+        diff_squares_gathered, torch.cat(diff_squares, dim=0)
+    )
 
     if rank == 0:
         diff_means_all = torch.cat(diff_means_gathered, dim=0)

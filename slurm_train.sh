@@ -13,7 +13,7 @@
 #SBATCH --error=lightning_logs/neurwp_err.log
 
 export PREPROCESS=true
-export NORMALIZE=true
+export NORMALIZE=false
 export DATASET="cosmo"
 export MODEL="hi_lam"
 
