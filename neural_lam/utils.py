@@ -31,13 +31,12 @@ def load_dataset_stats(dataset_name, device="cpu"):
 
     if constants.GRID_FORCING_DIM > 0:
         flux_stats = loads_file("flux_stats.pt")  # (2,)
-        flux_mean, flux_std = flux_stats
 
         return {
             "data_mean": data_mean,
             "data_std": data_std,
-            "flux_mean": flux_mean,
-            "flux_std": flux_std,
+            "flux_mean": flux_stats["mean"],
+            "flux_std": flux_stats["std"],
         }
     return {"data_mean": data_mean, "data_std": data_std}
 
@@ -290,7 +289,7 @@ def rank_zero_print(*args, **kwargs):
 def init_wandb(args):
     """Initialize wandb"""
     if args.resume_run is None:
-        prefix = "subset-" if args.subset_ds else ""
+        prefix = f"subset-{args.subset_ds}-" if args.subset_ds else ""
         if args.eval:
             prefix = prefix + f"eval-{args.eval}-"
         run_name = (

@@ -199,7 +199,7 @@ def verify_inference(
         "cosmo",
         path_verif_file=file_path,
         standardize=False,
-        subset=False,
+        subset=0,
         batch_size=6,
         num_workers=2,
     )
@@ -213,7 +213,7 @@ def verify_inference(
     if not 0 <= feature_channel < predictions.shape[-1]:
         raise ValueError(
             f"feature_channel must be between 0 and "
-            f"{predictions.shape[-1]-1}, inclusive."
+            f"{predictions.shape[-1] - 1}, inclusive."
         )
 
     # get test data

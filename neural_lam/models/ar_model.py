@@ -40,11 +40,7 @@ class ARModel(pl.LightningModule):
 
         # Some constants useful for sub-classes
         self.grid_forcing_dim = constants.GRID_FORCING_DIM
-        count_3d_fields = sum(value == 1 for value in constants.IS_3D.values())
-        count_2d_fields = sum(value != 1 for value in constants.IS_3D.values())
-        self.grid_state_dim = (
-            len(constants.VERTICAL_LEVELS) * count_3d_fields + count_2d_fields
-        )
+        self.grid_state_dim = constants.GRID_STATE_DIM
 
         # Load static features for grid/data
         static_data_dict = utils.load_static_data(args.dataset)
@@ -143,8 +139,12 @@ class ARModel(pl.LightningModule):
         self.metrics_initialized = True  # Make sure this is done only once
 
     def configure_optimizers(self):
+        # loss is added over all input channels, need to divide by d_feature to
+        # obtain roughly the same learning rate as for a single feature
         opt = torch.optim.AdamW(
-            self.parameters(), lr=self.lr, betas=(0.9, 0.95)
+            self.parameters(),
+            lr=self.lr / constants.GRID_STATE_DIM,
+            betas=(0.9, 0.95),
         )
         scheduler = torch.optim.lr_scheduler.StepLR(
             opt, step_size=30, gamma=0.1
@@ -330,8 +330,8 @@ class ARModel(pl.LightningModule):
         forcing_features: (B, pred_steps, num_grid_nodes, d_forcing),
             where index 0 corresponds to index 1 of init_states
         """
-        init_states, target_states, batch_time = batch[:3]
-        forcing_features = batch[4] if len(batch) > 3 else None
+        init_states, target_states, batch_times = batch[:3]
+        forcing_features = batch[3] if len(batch) > 3 else None
 
         prediction, pred_std = self.unroll_prediction(
             init_states, forcing_features, target_states
@@ -339,7 +339,7 @@ class ARModel(pl.LightningModule):
         # prediction: (B, pred_steps, num_grid_nodes, d_f)
         # pred_std: (B, pred_steps, num_grid_nodes, d_f) or (d_f,)
 
-        return prediction, target_states, pred_std, batch_time
+        return prediction, target_states, pred_std, batch_times
 
     def training_step(self, batch):
         """
@@ -432,7 +432,7 @@ class ARModel(pl.LightningModule):
         """
         Run test on single batch
         """
-        prediction, target, pred_std, batch_time = self.common_step(batch)
+        prediction, target, pred_std, batch_times = self.common_step(batch)
         # prediction: (B, pred_steps, num_grid_nodes, d_f)
         # pred_std: (B, pred_steps, num_grid_nodes, d_f) or (d_f,)
 
@@ -494,12 +494,12 @@ class ARModel(pl.LightningModule):
                 batch,
                 prediction=prediction,
                 target=target,
-                batch_time=batch_time,
+                batch_times=batch_times,
             )
 
     @rank_zero_only
     def plot_examples(
-        self, batch, prediction=None, target=None, batch_time=None
+        self, batch, prediction=None, target=None, batch_times=None
     ):
         """
         Plot the first n_examples forecasts from batch
@@ -515,13 +515,15 @@ class ARModel(pl.LightningModule):
         handles indexing within the batch for targeted analysis,
         performs prediction rescaling, and plots results.
         """
-        if prediction is None or target is None or batch_time is None:
-            prediction, target, _, batch_time = self.common_step(batch)
+        if prediction is None or target is None or batch_times is None:
+            prediction, target, _, batch_times = self.common_step(batch)
 
         if self.global_rank == 0 and any(
-            eval_datetime in batch_time
+            eval_datetime in batch_times
             for eval_datetime in constants.EVAL_DATETIMES
         ):
+            print("Plotting examples...")
+            print("batch_times", batch_times)
             # Rescale to original data scale
             prediction_rescaled = prediction * self.data_std + self.data_mean
             prediction_rescaled = self.apply_constraints(prediction_rescaled)
@@ -532,7 +534,7 @@ class ARModel(pl.LightningModule):
                     prediction_rescaled
                 )
 
-            for i, eval_datetime in enumerate(batch_time):
+            for i, eval_datetime in enumerate(batch_times):
                 if eval_datetime not in constants.EVAL_DATETIMES:
                     continue
                 pred_rescaled = prediction_rescaled[i]
@@ -782,9 +784,7 @@ class ARModel(pl.LightningModule):
 
                     # Get all the images for the current variable and index
                     images = sorted(
-                        glob.glob(
-                            f"{dir_path}/{var_name}_test_lvl_{lvl:02}_t_*.png"
-                        )
+                        glob.glob(f"{dir_path}/{var_name}_lvl_{lvl:02}_t_*.png")
                     )
                     # Generate the GIF
                     with imageio.get_writer(

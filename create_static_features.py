@@ -34,10 +34,10 @@ def main():
     parser.add_argument(
         "--field_names",
         nargs="+",
-        default=["HSURF", "FI", "HFL"],
+        default=["HSURF", "FI"],
         help=(
             "Names of the fields to extract from the .nc file "
-            '(default: ["HSURF", "FI", "HFL"])'
+            '(default: ["HSURF", "FI"])'
         ),
     )
     parser.add_argument(

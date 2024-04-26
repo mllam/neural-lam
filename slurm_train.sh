@@ -1,37 +1,47 @@
 #!/bin/bash -l
 #SBATCH --job-name=NeurWP
 #SBATCH --account=s83
+#SBATCH --time=24:00:00
+#SBATCH --nodes=5
+#SBATCH --gres=gpu:8
+#SBATCH --ntasks-per-node=8
 #SBATCH --partition=normal
-#SBATCH --nodes=1
-#SBATCH --ntasks-per-node=4
-#SBATCH --mem=400G
+#SBATCH --mem=375G
 #SBATCH --no-requeue
+#SBATCH --exclusive
 #SBATCH --output=lightning_logs/neurwp_out.log
 #SBATCH --error=lightning_logs/neurwp_err.log
 
-export PREPROCESS=false
+export PREPROCESS=true
 export NORMALIZE=false
+export DATASET="cosmo"
+export MODEL="hi_lam"
 
 # Load necessary modules
 conda activate neural-lam
 
 if [ "$PREPROCESS" = true ]; then
     echo "Create static features"
-    srun -ul -N1 -n1 python create_static_features.py --boundaries 60 --dataset "cosmo"
-    echo "Creating mesh"
-    srun -ul -N1 -n1 python create_mesh.py --dataset "cosmo" --plot 1
+    python create_static_features.py --boundaries 60 --dataset $DATASET
+    if [ "$MODEL" = "hi_lam" ]; then
+        echo "Creating hierarchical mesh"
+        python create_mesh.py --dataset $DATASET --plot 1 --graph hierarchical --levels 4 --hierarchical 1
+    else
+        echo "Creating flat mesh"
+        python create_mesh.py --dataset $DATASET --plot 1
+    fi
     echo "Creating grid features"
-    srun -ul -N1 -n1 python create_grid_features.py --dataset "cosmo"
+    python create_grid_features.py --dataset $DATASET
     if [ "$NORMALIZE" = true ]; then
         # This takes multiple hours!
         echo "Creating normalization weights"
-        srun -ul -N1 -n1 python create_parameter_weights.py --dataset "cosmo" --batch_size 32 --n_workers 8 --step_length 1
+        sbatch slurm_param.sh
     fi
 fi
 
-ulimit -c 0
-export OMP_NUM_THREADS=16
-
-# Run the script with torchrun
-srun -ul python train_model.py --dataset "cosmo" --val_interval 5 \
-    --epochs 10 --n_workers 6 --batch_size 8 --subset_ds 1
+echo "Training model"
+if [ "$MODEL" = "hi_lam" ]; then
+    srun -ul python train_model.py --dataset $DATASET --val_interval 20 --epochs 40 --n_workers 4 --batch_size 1 --subset_ds 0 --model hi_lam --graph hierarchical
+else
+    srun -ul python train_model.py --dataset $DATASET --val_interval 20 --epochs 40 --n_workers 4 --batch_size 1 --subset_ds 0
+fi
