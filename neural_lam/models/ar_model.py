@@ -204,8 +204,8 @@ class ARModel(pl.LightningModule):
             for index in indices:
                 # Apply clamping to ensure values are within the specified
                 # bounds
-                prediction[:, :, index] = torch.clamp(
-                    prediction[:, :, index],
+                prediction[:, :, :, index] = torch.clamp(
+                    prediction[:, :, :, index],
                     min=min_val,
                     max=max_val if max_val is not None else float("inf"),
                 )
@@ -489,13 +489,12 @@ class ARModel(pl.LightningModule):
         self.spatial_loss_maps.append(log_spatial_losses)
         # (B, N_log, num_grid_nodes)
 
-        if self.trainer.is_global_zero:
-            self.plot_examples(
-                batch,
-                prediction=prediction,
-                target=target,
-                batch_times=batch_times,
-            )
+        self.plot_examples(
+            batch,
+            prediction=prediction,
+            target=target,
+            batch_times=batch_times,
+        )
 
     @rank_zero_only
     def plot_examples(
@@ -545,12 +544,12 @@ class ARModel(pl.LightningModule):
                     for lvl_i, var_i in enumerate(var_indices):
                         lvl = constants.VERTICAL_LEVELS[lvl_i]
                         var_vmin = min(
-                            pred_rescaled[:, var_i].min(),
-                            targ_rescaled[:, var_i].min(),
+                            pred_rescaled[:, :, var_i].min(),
+                            targ_rescaled[:, :, var_i].min(),
                         )
                         var_vmax = max(
-                            pred_rescaled[:, var_i].max(),
-                            targ_rescaled[:, var_i].max(),
+                            pred_rescaled[:, :, var_i].max(),
+                            targ_rescaled[:, :, var_i].max(),
                         )
                         var_vrange = (var_vmin, var_vmax)
 
@@ -754,8 +753,8 @@ class ARModel(pl.LightningModule):
             ]
 
             # log all to same wandb key, sequentially
-            for fig in loss_map_figs:
-                wandb.log({"test_loss": wandb.Image(fig)})
+            for t_i, fig in enumerate(loss_map_figs):
+                wandb.log({f"test_loss_t_{t_i}": wandb.Image(fig)})
 
             # also make without title and save as pdf
             pdf_loss_map_figs = [
