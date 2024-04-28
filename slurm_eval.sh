@@ -2,10 +2,9 @@
 #SBATCH --job-name=NeurWPe
 #SBATCH --account=s83
 #SBATCH --nodes=1
-#SBATCH --gres=gpu:8
-#SBATCH --ntasks-per-node=8
+#SBATCH --ntasks-per-node=4
 #SBATCH --partition=normal
-#SBATCH --mem=375G
+#SBATCH --mem=444G
 #SBATCH --no-requeue
 #SBATCH --output=lightning_logs/neurwp_eval_out.log
 #SBATCH --error=lightning_logs/neurwp_eval_err.log
@@ -39,7 +38,7 @@ fi
 
 echo "Evaluating model"
 if [ "$MODEL" = "hi_lam" ]; then
-    srun -ul python train_model.py --dataset $DATASET --val_interval 2 --epochs 1 --n_workers 4 --batch_size 1 --subset_ds 1 --model hi_lam --graph hierarchical --load wandb/example.ckpt --eval="test"
+    srun -ul python train_model.py --dataset $DATASET --val_interval 2 --epochs 1 --n_workers 8 --batch_size 12 --subset_ds 1 --model hi_lam --graph hierarchical --load "wandb/example.ckpt" --eval="test"
 else
-    srun -ul python train_model.py --dataset $DATASET --val_interval 2 --epochs 1 --n_workers 4 --batch_size 1 --subset_ds 1 --load "wandb/example.ckpt" --eval="test"
+    srun -ul python train_model.py --dataset $DATASET --val_interval 2 --epochs 1 --n_workers 8 --batch_size 12 --subset_ds 1 --load "wandb/example.ckpt" --eval="test"
 fi

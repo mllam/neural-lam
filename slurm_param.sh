@@ -4,7 +4,7 @@
 #SBATCH --time=24:00:00
 #SBATCH --nodes=2
 #SBATCH --partition=postproc
-#SBATCH --mem=375G
+#SBATCH --mem=444G
 #SBATCH --no-requeue
 #SBATCH --exclusive
 #SBATCH --output=lightning_logs/neurwp_param_out.log

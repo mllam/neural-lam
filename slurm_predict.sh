@@ -3,7 +3,8 @@
 #SBATCH --account=s83
 #SBATCH --partition=normal
 #SBATCH --nodes=1
-#SBATCH --ntasks-per-node=8
+#SBATCH --ntasks-per-node=4
+#SBATCH --mem=444G
 #SBATCH --time=00:59:00
 #SBATCH --no-requeue
 #SBATCH --output=lightning_logs/neurwp_pred_out.log
@@ -38,7 +39,7 @@ fi
 
 echo "Predicting with model"
 if [ "$MODEL" = "hi_lam" ]; then
-    srun -ul python train_model.py --dataset $DATASET --val_interval 2 --epochs 1 --n_workers 4 --batch_size 1 --subset_ds 1 --model hi_lam --graph hierarchical --load wandb/example.ckpt --eval="predict"
+    srun -ul python train_model.py --dataset $DATASET --val_interval 2 --epochs 1 --n_workers 12 --batch_size 1 --subset_ds 1 --model hi_lam --graph hierarchical --load wandb/example.ckpt --eval="predict"
 else
-    srun -ul python train_model.py --dataset $DATASET --val_interval 2 --epochs 1 --n_workers 4 --batch_size 1 --subset_ds 1 --load "wandb/example.ckpt" --eval="predict"
+    srun -ul python train_model.py --dataset $DATASET --val_interval 2 --epochs 1 --n_workers 12 --batch_size 1 --subset_ds 1 --load "wandb/example.ckpt" --eval="predict"
 fi
