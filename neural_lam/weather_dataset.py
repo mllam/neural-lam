@@ -54,7 +54,7 @@ class WeatherDataset(torch.utils.data.Dataset):
         if split == "train":
             self.ds = self.ds.sel(time=slice("2015", "2019"))
         else:
-            self.ds = self.ds.sel(time=slice("2020"))
+            self.ds = self.ds.sel(time=slice("2020-01-01", "2020-12-31"))
 
         new_vars = {}
         forcings = {}
