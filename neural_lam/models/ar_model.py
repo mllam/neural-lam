@@ -854,6 +854,10 @@ class ARModel(pl.LightningModule):
         """Generate a list with all time steps in inference."""
         # Parse the times
         base_time = constants.EVAL_DATETIMES[0]
+        if isinstance(base_time, str):
+            base_time = datetime.strptime(base_time, "%Y%m%d%H")
+        else:
+            base_time = base_time 
         time_steps = {}
         # Generate dates for each step
         for i in range(constants.EVAL_HORIZON - 2):
@@ -891,6 +895,18 @@ class ARModel(pl.LightningModule):
                     shortName=variable.lower(), level=constants.VERTICAL_LEVELS
                 )
                 md = subset.metadata()
+
+                # Cut the datestring into date and time and then override all 
+                # values in md 
+                date = date_str[:8]
+                time = date_str[8:]
+
+                # Assuming md is a list of metadata dictionaries
+                for metadata in md:
+                    metadata.override({
+                        "date": date,
+                        "time": time
+                    })
 
                 if len(md) > 0:
                     # Load the array to replace the values with
