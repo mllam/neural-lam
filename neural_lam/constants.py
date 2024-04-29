@@ -140,6 +140,10 @@ METRICS_INITIALIZED = False
 # Plotting
 FIG_SIZE = (15, 10)
 EXAMPLE_FILE = "data/cosmo/samples/train/data_2015112800.zarr"
+SAMPLE_GRIB = "/scratch/mch/sadamov/pyprojects_data/"\
+    "neural_lam/data/cosmo/templates/lfff02180000"
+SAMPLE_Z_GRIB = "/scratch/mch/sadamov/pyprojects_data/"\
+    "neural_lam/data/cosmo/templates/lfff02180000z"
 CHUNK_SIZE = 100
 EVAL_DATETIME = "2020100215"
 EVAL_PLOT_VARS = ["TQV"]
