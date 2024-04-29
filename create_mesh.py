@@ -308,12 +308,20 @@ def main():
                 plot_graph(
                     pyg_down, title=f"Down graph, {from_level} -> {to_level}"
                 )
-                plt.show()
+                plt.savefig(
+                    os.path.join(
+                        graph_dir_path, f"mesh_down_graph_{from_level}.png"
+                    )
+                )
 
                 plot_graph(
                     pyg_down, title=f"Up graph, {to_level} -> {from_level}"
                 )
-                plt.show()
+                plt.savefig(
+                    os.path.join(
+                        graph_dir_path, f"mesh_up_graph_{to_level}.png"
+                    )
+                )
 
         # Save up and down edges
         save_edges_list(up_graphs, "mesh_up", graph_dir_path)

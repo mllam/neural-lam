@@ -54,7 +54,7 @@ def main():
     # Concatenate grid features
     grid_features = torch.cat(
         (grid_xy, geopotential, grid_border_mask), dim=1
-    )  # (N_grid, 4)
+    )  # (N_grid, 2+N_fields+1)
 
     torch.save(grid_features, os.path.join(static_dir_path, "grid_features.pt"))
 

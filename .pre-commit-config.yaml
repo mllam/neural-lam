@@ -18,6 +18,7 @@ repos:
         description: Check for spelling errors
         language: system
         entry: codespell
+        args: ['--ignore-words-list=laf']
 -   repo: local
     hooks:
     -   id: black

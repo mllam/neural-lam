@@ -29,7 +29,7 @@ class BaseGraphModel(ARModel):
 
         # Specify dimensions of data
         self.num_mesh_nodes, _ = self.get_num_mesh()
-        print(
+        utils.rank_zero_print(
             f"Loaded graph with {self.num_grid_nodes + self.num_mesh_nodes} "
             f"nodes ({self.num_grid_nodes} grid, {self.num_mesh_nodes} mesh)"
         )
@@ -122,6 +122,7 @@ class BaseGraphModel(ARModel):
         features_list.append(
             self.expand_to_batch(self.grid_static_features, batch_size)
         )
+
         grid_features = torch.cat(features_list, dim=-1)
 
         # Embed all features

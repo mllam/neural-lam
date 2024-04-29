@@ -11,7 +11,6 @@ from tqdm import tqdm
 
 # First-party
 from neural_lam import constants, utils
-from neural_lam.rotate_grid import unrotate_latlon
 from neural_lam.weather_dataset import WeatherDataModule
 
 
@@ -62,14 +61,12 @@ def plot_error_map(errors, global_mean, step_length=1, title=None):
     y_ticklabels = [
         (
             f"{name if name != 'RELHUM' else 'RH'} ({unit}) "
-            f"{f'{level:02}' if constants.IS_3D[name] else ''}"
+            f"{f'{z:02}' if constants.IS_3D[name] else ''}"
         )
         for name, unit in zip(
             constants.PARAM_NAMES_SHORT, constants.PARAM_UNITS
         )
-        for level in (
-            constants.VERTICAL_LEVELS if constants.IS_3D[name] else [0]
-        )
+        for z in (constants.VERTICAL_LEVELS if constants.IS_3D[name] else [0])
     ]
     y_ticklabels = sorted(y_ticklabels)
     ax.set_yticklabels(y_ticklabels, rotation=30, size=label_size)
@@ -94,8 +91,10 @@ def plot_prediction(pred, target, title=None, vrange=None):
         vmin, vmax = vrange[0].cpu().item(), vrange[1].cpu().item()
 
     # get test data
-    data_latlon = xr.open_zarr(constants.EXAMPLE_FILE).isel(time=0)
-    lon, lat = unrotate_latlon(data_latlon)
+    data_latlon = xr.open_zarr(constants.EXAMPLE_FILE, consolidated=True).isel(
+        time=0
+    )
+    lon, lat = data_latlon.lon.values.T, data_latlon.lat.values.T
 
     fig, axes = plt.subplots(
         2,
@@ -151,7 +150,7 @@ def plot_spatial_error(error, title=None, vrange=None):
 
     # get test data
     data_latlon = xr.open_zarr(constants.EXAMPLE_FILE).isel(time=0)
-    lon, lat = unrotate_latlon(data_latlon)
+    lon, lat = data_latlon.lon.values.T, data_latlon.lat.values.T
 
     fig, ax = plt.subplots(
         figsize=constants.FIG_SIZE,
@@ -191,7 +190,7 @@ def verify_inference(
     file_path: str, save_path: str, feature_channel: int, vrange=None
 ):
     """
-    Plot example prediction, forecast, and ground truth.
+    Plot example prediction, verification, and ground truth.
     Each has shape (N_grid,)
     """
 
@@ -199,9 +198,8 @@ def verify_inference(
     predictions_data_module = WeatherDataModule(
         "cosmo",
         path_verif_file=file_path,
-        split="verif",
         standardize=False,
-        subset=False,
+        subset=0,
         batch_size=6,
         num_workers=2,
     )
@@ -215,12 +213,12 @@ def verify_inference(
     if not 0 <= feature_channel < predictions.shape[-1]:
         raise ValueError(
             f"feature_channel must be between 0 and "
-            f"{predictions.shape[-1]-1}, inclusive."
+            f"{predictions.shape[-1] - 1}, inclusive."
         )
 
     # get test data
     data_latlon = xr.open_zarr(constants.EXAMPLE_FILE).isel(time=0)
-    lon, lat = unrotate_latlon(data_latlon)
+    lon, lat = data_latlon.lon.values.T, data_latlon.lat.values.T
 
     # Get common scale for values
     total = predictions[0, :, :, feature_channel]

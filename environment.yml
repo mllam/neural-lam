@@ -6,6 +6,7 @@ channels:
 dependencies:
   - Cartopy
   - dask
+  - dask-jobqueue
   - imageio
   - ipython
   - matplotlib
@@ -17,8 +18,7 @@ dependencies:
   - pyg
   - pyproj
   - pyprojroot
-  - pytorch
-  - pytorch-cuda=11.8
+  - pytorch=2.2.2=py3.12_cuda11.8_cudnn8.7.0_0
   - pytorch-lightning
   - scikit-learn
   - scipy

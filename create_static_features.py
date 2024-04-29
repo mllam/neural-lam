@@ -1,4 +1,5 @@
 # Standard library
+import os
 from argparse import ArgumentParser
 
 # Third-party
@@ -15,28 +16,28 @@ def main():
     parser.add_argument(
         "--xdim",
         type=str,
-        default="x_1",
-        help="Name of the x-dimension in the dataset (default: x_1)",
+        default="x",
+        help="Name of the x-dimension in the dataset (default: x)",
     )
     parser.add_argument(
         "--ydim",
         type=str,
-        default="y_1",
-        help="Name of the x-dimension in the dataset (default: y_1)",
+        default="y",
+        help="Name of the x-dimension in the dataset (default: y)",
     )
     parser.add_argument(
         "--zdim",
         type=str,
-        default="z_1",
-        help="Name of the x-dimension in the dataset (default: z_1)",
+        default="z",
+        help="Name of the x-dimension in the dataset (default: z)",
     )
     parser.add_argument(
         "--field_names",
         nargs="+",
-        default=["hsurf", "FI", "P0FL"],
+        default=["HSURF", "FI"],
         help=(
             "Names of the fields to extract from the .nc file "
-            '(default: ["hsurf", "FI", "P0FL"])'
+            '(default: ["HSURF", "FI"])'
         ),
     )
     parser.add_argument(
@@ -49,14 +50,12 @@ def main():
         ),
     )
     parser.add_argument(
-        "--outdir",
+        "--dataset",
         type=str,
-        default="data/cosmo/static/",
-        help=(
-            "Output directory for the static features "
-            "(default: data/cosmo/static/)"
-        ),
+        default="cosmo",
+        help=("Name of the dataset (default: cosmo)"),
     )
+
     args = parser.parse_args()
 
     ds = xr.open_zarr(constants.EXAMPLE_FILE).isel(time=0)
@@ -82,8 +81,10 @@ def main():
             )
     np_fields = np.concatenate(np_fields, axis=-1)  # (N_x, N_y, N_fields)
 
+    outdir = os.path.join("data", args.dataset, "static/")
+
     # Save the numpy array to a .npy file
-    np.save(args.outdir + "reference_geopotential_pressure.npy", np_fields)
+    np.save(outdir + "reference_geopotential_pressure.npy", np_fields)
 
     # Get the dimensions of the dataset
     dims = ds.sizes
@@ -95,7 +96,7 @@ def main():
     # Stack the 2D arrays into a 3D array with x and y as the first dimension
     grid_xy = np.stack((y_grid, x_grid))
 
-    np.save(args.outdir + "nwp_xy.npy", grid_xy)  # (2, N_x, N_y)
+    np.save(outdir + "nwp_xy.npy", grid_xy)  # (2, N_x, N_y)
 
     # Create a mask with the same dimensions, initially set to False
     mask = np.full((dims[args.xdim], dims[args.ydim]), False)
@@ -107,7 +108,7 @@ def main():
     mask[:, -args.boundaries :] = True  # right boundary
 
     # Save the numpy array to a .npy file
-    np.save(args.outdir + "border_mask", mask)  # (N_x, N_y)
+    np.save(outdir + "border_mask", mask)  # (N_x, N_y)
 
 
 if __name__ == "__main__":
