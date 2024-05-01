@@ -30,7 +30,7 @@ dependencies:
   - xarray
   - zarr
   - pip:
-    - earthkit.data
+    - earthkit-data
     - tueplots
     - codespell>=2.0.0
     - black>=21.9b0
