@@ -400,7 +400,7 @@ class ARModel(pl.LightningModule):
                         target_t[:, var_i],
                         self.interior_mask[:, 0],
                         title=f"{var_name} ({var_unit}), "
-                        f"t={t_i} ({self.step_length*t_i} h)",
+                        f"t={t_i} ({self.step_length * t_i} h)",
                         vrange=var_vrange,
                     )
                     for var_i, (var_name, var_unit, var_vrange) in enumerate(
@@ -542,7 +542,7 @@ class ARModel(pl.LightningModule):
                 vis.plot_spatial_error(
                     loss_map,
                     self.interior_mask[:, 0],
-                    title=f"Test loss, t={t_i} ({self.step_length*t_i} h)",
+                    title=f"Test loss, t={t_i} ({self.step_length * t_i} h)",
                 )
                 for t_i, loss_map in zip(
                     constants.VAL_STEP_LOG_ERRORS, mean_spatial_loss
