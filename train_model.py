@@ -9,7 +9,7 @@ import torch
 from lightning_fabric.utilities import seed
 
 # First-party
-from neural_lam import constants, utils
+from neural_lam import utils
 from neural_lam.models.graph_lam import GraphLAM
 from neural_lam.models.hi_lam import HiLAM
 from neural_lam.models.hi_lam_parallel import HiLAMParallel
@@ -263,9 +263,9 @@ def main():
         mode="min",
         save_last=True,
     )
-    logger = pl.loggers.WandbLogger(
-        project=constants.WANDB_PROJECT, name=run_name, config=args
-    )
+
+    logger = utils.init_wandb(args)
+
     trainer = pl.Trainer(
         max_epochs=args.epochs,
         deterministic=True,
