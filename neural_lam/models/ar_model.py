@@ -83,8 +83,8 @@ class ARModel(pl.LightningModule):
         if self.output_std:
             self.test_metrics["output_std"] = []  # Treat as metric
 
-        # For making restoring of optimizer state optional (slight hack)
-        self.opt_state = None
+        # For making restoring of optimizer state optional
+        self.restore_opt = args.restore_opt
 
         # For example plotting
         self.n_example_pred = args.n_example_pred
@@ -593,3 +593,11 @@ class ARModel(pl.LightningModule):
                 )
                 loaded_state_dict[new_key] = loaded_state_dict[old_key]
                 del loaded_state_dict[old_key]
+        if not self.restore_opt:
+            optimizers, lr_schedulers = self.configure_optimizers()
+            checkpoint["optimizer_states"] = [
+                opt.state_dict() for opt in optimizers
+            ]
+            checkpoint["lr_schedulers"] = [
+                sched.state_dict() for sched in lr_schedulers
+            ]
