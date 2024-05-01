@@ -824,7 +824,7 @@ class ARModel(pl.LightningModule):
             prediction_array = prediction_rescaled.cpu().numpy()
             file_path = os.path.join(value_dir_path, f"prediction_{i}.npy")
             np.save(file_path, prediction_array)
-            self.save_pred_as_grib(prediction_rescaled, value_dir_path)
+            self.save_pred_as_grib(file_path, value_dir_path)
 
         # For plots
         for var_name, _ in self.selected_vars_units:
@@ -849,6 +849,7 @@ class ARModel(pl.LightningModule):
                     for filename in images:
                         image = imageio.imread(filename)
                         writer.append_data(image)
+        self.spatial_loss_maps.clear()
 
     def _generate_time_steps(self):
         """Generate a list with all time steps in inference."""
@@ -856,8 +857,6 @@ class ARModel(pl.LightningModule):
         base_time = constants.EVAL_DATETIMES[0]
         if isinstance(base_time, str):
             base_time = datetime.strptime(base_time, "%Y%m%d%H")
-        else:
-            base_time = base_time 
         time_steps = {}
         # Generate dates for each step
         for i in range(constants.EVAL_HORIZON - 2):
@@ -868,7 +867,7 @@ class ARModel(pl.LightningModule):
 
         return time_steps
 
-    def save_pred_as_grib(self, prediction, value_dir_path):
+    def save_pred_as_grib(self, file_path, value_dir_path):
         """Save the prediction values into GRIB format."""
         # Initialize the lists to loop over
         indices = self.precompute_variable_indices()
@@ -880,7 +879,7 @@ class ARModel(pl.LightningModule):
             for variable in constants.PARAM_NAMES_SHORT:
                 # here find the key of the cariable in constants.is_3D
                 #  and if == 7, assign a cut of 7 on the reshape. Else 1
-                shape_val = 7 if constants.IS_3D[variable] else 1
+                shape_val = 13 if constants.IS_3D[variable] else 1
                 # Find the value range to sample
                 value_range = indices[variable]
 
@@ -896,23 +895,21 @@ class ARModel(pl.LightningModule):
                 )
                 md = subset.metadata()
 
-                # Cut the datestring into date and time and then override all 
-                # values in md 
+                # Cut the datestring into date and time and then override all
+                # values in md
                 date = date_str[:8]
                 time = date_str[8:]
 
                 # Assuming md is a list of metadata dictionaries
                 for metadata in md:
-                    metadata.override({
-                        "date": date,
-                        "time": time
-                    })
+                    metadata.override({"date": date, "time": time})
 
                 if len(md) > 0:
                     # Load the array to replace the values with
                     # We need to still save it as a .npy
                     # object and pass it on as an argument to this function
-                    original_cut = prediction[
+                    replacement_data = np.load(file_path)
+                    original_cut = replacement_data[
                         0, time_idx, :, min(value_range) : max(value_range) + 1
                     ].reshape(582, 390, shape_val)
                     cut_values = np.moveaxis(

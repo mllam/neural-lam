@@ -38,7 +38,7 @@ fi
 
 echo "Predicting with model"
 if [ "$MODEL" = "hi_lam" ]; then
-    srun -ul python train_model.py --dataset $DATASET --epochs 1 --n_workers 12 --batch_size 1 --subset_ds 1 --model hi_lam --graph hierarchical --load wandb/example.ckpt --eval="predict"
+    srun -ul python train_model.py --dataset $DATASET --epochs 1 --n_workers 0 --batch_size 1 --subset_ds 1 --model hi_lam --graph hierarchical --load wandb/example.ckpt --eval="predict"
 else
-    srun -ul python train_model.py --dataset $DATASET --epochs 1 --n_workers 12 --batch_size 1 --subset_ds 1 --load "wandb/example.ckpt" --eval="predict"
+    srun -ul python train_model.py --dataset $DATASET --epochs 1 --n_workers 0 --batch_size 1 --subset_ds 1 --load "wandb/example.ckpt" --eval="predict"
 fi
