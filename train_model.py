@@ -75,6 +75,9 @@ def main():
         help="Path to load model parameters from (default: None)",
     )
     parser.add_argument(
+        "--resume_run", type=str, help="Run ID to resume (default: None)"
+    )
+    parser.add_argument(
         "--restore_opt",
         type=int,
         default=0,
