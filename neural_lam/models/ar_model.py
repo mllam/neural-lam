@@ -879,7 +879,12 @@ class ARModel(pl.LightningModule):
             for variable, grib_code in constants.GRIB_NAME.items():
                 # here find the key of the cariable in constants.is_3D
                 #  and if == 7, assign a cut of 7 on the reshape. Else 1
-                shape_val = 13 if constants.IS_3D[variable] else 1
+                if constants.IS_3D[variable]:
+                    shape_val = 13 
+                    vertical = constants.VERTICAL_LEVELS
+                else:
+                    shape_val = 1
+                    vertical = 1
                 # Find the value range to sample
                 value_range = indices[variable]
 
@@ -891,7 +896,7 @@ class ARModel(pl.LightningModule):
                 original_data = earthkit.data.from_source("file", sample_file)
 
                 subset = original_data.sel(
-                    shortName=grib_code, level=constants.VERTICAL_LEVELS
+                    shortName=grib_code, level=vertical
                 )
                 md = subset.metadata()
 
