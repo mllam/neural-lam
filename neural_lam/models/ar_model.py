@@ -876,7 +876,7 @@ class ARModel(pl.LightningModule):
         final_data = earthkit.data.FieldList()
         # Loop through all the time steps and all the variables
         for time_idx, date_str in time_steps.items():
-            for variable in constants.PARAM_NAMES_SHORT:
+            for variable, grib_code in constants.GRIB_NAME.items():
                 # here find the key of the cariable in constants.is_3D
                 #  and if == 7, assign a cut of 7 on the reshape. Else 1
                 shape_val = 13 if constants.IS_3D[variable] else 1
@@ -891,7 +891,7 @@ class ARModel(pl.LightningModule):
                 original_data = earthkit.data.from_source("file", sample_file)
 
                 subset = original_data.sel(
-                    shortName=variable.lower(), level=constants.VERTICAL_LEVELS
+                    shortName=grib_code, level=constants.VERTICAL_LEVELS
                 )
                 md = subset.metadata()
 
