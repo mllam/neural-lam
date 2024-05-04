@@ -240,7 +240,7 @@ def main():
     num_nodes = 1
     if torch.cuda.is_available():
         accelerator = "cuda"
-        if "SLURM_JOB_ID" in os.environ:
+        if "SLURM_JOB_ID" in os.environ and not args.eval:
             devices = int(
                 os.environ.get(
                     "SLURM_GPUS_PER_NODE",
