@@ -1,4 +1,3 @@
-# for all
 numpy>=1.24.2
 wandb>=0.13.10
 matplotlib>=3.7.0
@@ -6,10 +5,17 @@ scipy>=1.10.0
 pytorch-lightning>=2.0.3
 shapely>=2.0.1
 networkx>=3.0
-Cartopy>=0.22.0
+Cartopy>=0.20.0
 pyproj>=3.4.1
 tueplots>=0.0.8
 plotly>=5.15.0
+torch>=2.0.1
+--find-links https://data.pyg.org/whl/torch-${TORCH}.html
+torch-scatter>=2.1.0
+torch-sparse>=0.6.15
+torch-cluster>=1.6.0
+torch-spline-conv>=1.2.1
+torch-geometric>=2.3.0
 # for dev
 codespell>=2.0.0
 black>=21.9b0
