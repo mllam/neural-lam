@@ -880,7 +880,7 @@ class ARModel(pl.LightningModule):
                 # here find the key of the cariable in constants.is_3D
                 #  and if == 7, assign a cut of 7 on the reshape. Else 1
                 if constants.IS_3D[variable]:
-                    shape_val = 13 
+                    shape_val = 13
                     vertical = constants.VERTICAL_LEVELS
                 else:
                     shape_val = 1
@@ -895,9 +895,7 @@ class ARModel(pl.LightningModule):
                 # Load the sample grib file
                 original_data = earthkit.data.from_source("file", sample_file)
 
-                subset = original_data.sel(
-                    shortName=grib_code, level=vertical
-                )
+                subset = original_data.sel(shortName=grib_code, level=vertical)
                 md = subset.metadata()
 
                 # Cut the datestring into date and time and then override all

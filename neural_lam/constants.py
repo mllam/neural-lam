@@ -144,20 +144,20 @@ IS_3D = {
 }
 
 GRIB_NAME = {
-    "PP": 'pres',
-    "QV": 'q',
-    "RELHUM": 'r',
-    "T": 't',
-    "U": 'u',
-    "V": 'v',
-    "W": 'wz',
-    "CLCT": 'ccl',
-    "PMSL": 'prmsl',
-    "PS": 'sp',
-    "T_2M": '2t',
-    "TOT_PREC": 'tp',
-    "U_10M":'10u',
-    "V_10M": '10v'
+    "PP": "pres",
+    "QV": "q",
+    "RELHUM": "r",
+    "T": "t",
+    "U": "u",
+    "V": "v",
+    "W": "wz",
+    "CLCT": "ccl",
+    "PMSL": "prmsl",
+    "PS": "sp",
+    "T_2M": "2t",
+    "TOT_PREC": "tp",
+    "U_10M": "10u",
+    "V_10M": "10v",
 }
 
 
