@@ -1,260 +1,233 @@
 # Standard library
-import datetime as dt
-import glob
 import os
 
 # Third-party
-import numpy as np
+import pytorch_lightning as pl
 import torch
+import xarray as xr
+import yaml
 
-# First-party
-from neural_lam import constants, utils
+
+class ConfigLoader:
+    """
+    Class for loading configuration files.
+
+    This class loads a YAML configuration file and provides a way to access
+    its values as attributes.
+    """
+
+    def __init__(self, config_path, values=None):
+        self.config_path = config_path
+        if values is None:
+            self.values = self.load_config()
+        else:
+            self.values = values
+
+    def load_config(self):
+        with open(self.config_path, "r") as file:
+            return yaml.safe_load(file)
+
+    def __getattr__(self, name):
+        keys = name.split(".")
+        value = self.values
+        for key in keys:
+            if key in value:
+                value = value[key]
+            else:
+                None
+        if isinstance(value, dict):
+            return ConfigLoader(None, values=value)
+        return value
+
+    def __getitem__(self, key):
+        value = self.values[key]
+        if isinstance(value, dict):
+            return ConfigLoader(None, values=value)
+        return value
+
+    def __contains__(self, key):
+        return key in self.values
 
 
 class WeatherDataset(torch.utils.data.Dataset):
     """
-    For our dataset:
-    N_t' = 65
-    N_t = 65//subsample_step (= 21 for 3h steps)
-    dim_x = 268
-    dim_y = 238
-    N_grid = 268x238 = 63784
-    d_features = 17 (d_features' = 18)
-    d_forcing = 5
+    Dataset class for weather data.
+
+    This class loads and processes weather data from zarr files based on the
+    provided configuration. It supports splitting the data into train,
+    validation, and test sets.
     """
+
+    def process_dataset(self, dataset_name):
+        """
+        Process a single dataset specified by the dataset name.
+
+        Args:
+            dataset_name (str): Name of the dataset to process.
+
+        Returns:
+            xarray.Dataset: Processed dataset.
+        """
+
+        dataset_path = os.path.join(self.config_loader.zarrs[dataset_name].path)
+        dataset = xr.open_zarr(dataset_path, consolidated=True)
+
+        start, end = self.config_loader.splits[self.split].start, self.config_loader.splits[self.split].end
+        dataset = dataset.sel(time=slice(start, end))
+        dataset = dataset.rename_dims(
+            {v: k for k, v in self.config_loader.zarrs[dataset_name].dims.values.items()
+             if k not in dataset.dims})
+        if 'grid' not in dataset.dims:
+            dataset = dataset.stack(grid=('x', 'y'))
+
+        vars_surface = []
+        if self.config_loader[dataset_name].surface:
+            vars_surface = dataset[self.config_loader[dataset_name].surface]
+
+        vars_atmosphere = []
+        if self.config_loader[dataset_name].atmosphere:
+            vars_atmosphere = xr.merge(
+                [dataset[var].sel(level=level, drop=True).rename(f"{var}_{level}")
+                 for var in self.config_loader[dataset_name].atmosphere
+                 for level in self.config_loader[dataset_name].levels])
+
+        if vars_surface and vars_atmosphere:
+            dataset = xr.merge([vars_surface, vars_atmosphere])
+        elif vars_surface:
+            dataset = vars_surface
+        elif vars_atmosphere:
+            dataset = vars_atmosphere
+        else:
+            raise ValueError(f"No variables specified for dataset: {dataset_name}")
+
+        dataset = dataset.squeeze(drop=True).to_array()
+        if "time" in dataset.dims:
+            dataset = dataset.transpose("time", "grid", "variable")
+        else:
+            dataset = dataset.transpose("grid", "variable")
+        return dataset
 
     def __init__(
         self,
-        dataset_name,
-        pred_length=19,
         split="train",
-        subsample_step=3,
-        standardize=True,
-        subset=False,
+        batch_size=4,
+        ar_steps=3,
         control_only=False,
+        yaml_path="neural_lam/data_config.yaml",
     ):
         super().__init__()
 
-        assert split in ("train", "val", "test"), "Unknown dataset split"
-        self.sample_dir_path = os.path.join(
-            "data", dataset_name, "samples", split
-        )
+        assert split in (
+            "train",
+            "val",
+            "test",
+        ), "Unknown dataset split"
 
-        member_file_regexp = (
-            "nwp*mbr000.npy" if control_only else "nwp*mbr*.npy"
-        )
-        sample_paths = glob.glob(
-            os.path.join(self.sample_dir_path, member_file_regexp)
-        )
-        self.sample_names = [path.split("/")[-1][4:-4] for path in sample_paths]
-        # Now on form "yyymmddhh_mbrXXX"
+        self.split = split
+        self.batch_size = batch_size
+        self.ar_steps = ar_steps
+        self.control_only = control_only
+        self.config_loader = ConfigLoader(yaml_path)
 
-        if subset:
-            self.sample_names = self.sample_names[:50]  # Limit to 50 samples
+        self.state = self.process_dataset("state")
+        self.static = self.process_dataset("static")
+        self.forcings = self.process_dataset("forcing")
+        # self.boundary = self.process_dataset("boundary")
 
-        self.sample_length = pred_length + 2  # 2 init states
-        self.subsample_step = subsample_step
-        self.original_sample_length = (
-            65 // self.subsample_step
-        )  # 21 for 3h steps
-        assert (
-            self.sample_length <= self.original_sample_length
-        ), "Requesting too long time series samples"
-
-        # Set up for standardization
-        self.standardize = standardize
-        if standardize:
-            ds_stats = utils.load_dataset_stats(dataset_name, "cpu")
-            self.data_mean, self.data_std, self.flux_mean, self.flux_std = (
-                ds_stats["data_mean"],
-                ds_stats["data_std"],
-                ds_stats["flux_mean"],
-                ds_stats["flux_std"],
-            )
-
-        # If subsample index should be sampled (only duing training)
-        self.random_subsample = split == "train"
+        self.static = self.static.expand_dims({"time": self.state.time}, axis=0)
+        self.ds = xr.concat([self.state, self.static], dim="variable")
 
     def __len__(self):
-        return len(self.sample_names)
+        return len(self.ds.time) - self.ar_steps
 
     def __getitem__(self, idx):
-        # === Sample ===
-        sample_name = self.sample_names[idx]
-        sample_path = os.path.join(
-            self.sample_dir_path, f"nwp_{sample_name}.npy"
+        sample = self.ds.isel(time=slice(idx, idx + self.ar_steps))
+        forcings = self.forcings.isel(time=slice(idx, idx + self.ar_steps))
+        sample = torch.tensor(sample.values, dtype=torch.float32)
+        forcings = torch.tensor(forcings.values, dtype=torch.float32)
+
+        init_states = sample[:2]
+        target_states = sample[2:]
+
+        batch_times = self.ds.isel(
+            time=slice(
+                idx,
+                idx +
+                self.ar_steps)).time.values.astype(str).tolist()
+
+        # init_states: (2, N_grid, d_features)
+        # target_states: (ar_steps-2, N_grid, d_features)
+        # forcings: (ar_steps, N_grid, d_windowed_forcings)
+        # batch_times: (ar_steps,)
+        return init_states, target_states, forcings, batch_times
+
+
+class WeatherDataModule(pl.LightningDataModule):
+    """DataModule for weather data."""
+
+    def __init__(
+        self,
+        batch_size=4,
+        num_workers=16,
+    ):
+        super().__init__()
+        self.batch_size = batch_size
+        self.num_workers = num_workers
+        self.train_dataset = None
+        self.val_dataset = None
+        self.test_dataset = None
+
+    def setup(self, stage=None):
+        if stage == "fit" or stage is None:
+            self.train_dataset = WeatherDataset(
+                split="train",
+                batch_size=self.batch_size,
+            )
+            self.val_dataset = WeatherDataset(
+                split="val",
+                batch_size=self.batch_size,
+            )
+
+        if stage == "test" or stage is None:
+            self.test_dataset = WeatherDataset(
+                split="test",
+                batch_size=self.batch_size,
+            )
+
+    def train_dataloader(self):
+        """Load train dataset."""
+        return torch.utils.data.DataLoader(
+            self.train_dataset,
+            batch_size=self.batch_size,
+            num_workers=self.num_workers,
+            shuffle=False,
         )
-        try:
-            full_sample = torch.tensor(
-                np.load(sample_path), dtype=torch.float32
-            )  # (N_t', dim_x, dim_y, d_features')
-        except ValueError:
-            print(f"Failed to load {sample_path}")
 
-        # Only use every ss_step:th time step, sample which of ss_step
-        # possible such time series
-        if self.random_subsample:
-            subsample_index = torch.randint(0, self.subsample_step, ()).item()
-        else:
-            subsample_index = 0
-        subsample_end_index = self.original_sample_length * self.subsample_step
-        sample = full_sample[
-            subsample_index : subsample_end_index : self.subsample_step
-        ]
-        # (N_t, dim_x, dim_y, d_features')
-
-        # Remove feature 15, "z_height_above_ground"
-        sample = torch.cat(
-            (sample[:, :, :, :15], sample[:, :, :, 16:]), dim=3
-        )  # (N_t, dim_x, dim_y, d_features)
-
-        # Accumulate solar radiation instead of just subsampling
-        rad_features = full_sample[:, :, :, 2:4]  # (N_t', dim_x, dim_y, 2)
-        # Accumulate for first time step
-        init_accum_rad = torch.sum(
-            rad_features[: (subsample_index + 1)], dim=0, keepdim=True
-        )  # (1, dim_x, dim_y, 2)
-        # Accumulate for rest of subsampled sequence
-        in_subsample_len = (
-            subsample_end_index - self.subsample_step + subsample_index + 1
+    def val_dataloader(self):
+        """Load validation dataset."""
+        return torch.utils.data.DataLoader(
+            self.val_dataset,
+            batch_size=self.batch_size,
+            num_workers=self.num_workers,
+            shuffle=False,
         )
-        rad_features_in_subsample = rad_features[
-            (subsample_index + 1) : in_subsample_len
-        ]  # (N_t*, dim_x, dim_y, 2), N_t* = (N_t-1)*ss_step
-        _, dim_x, dim_y, _ = sample.shape
-        rest_accum_rad = torch.sum(
-            rad_features_in_subsample.view(
-                self.original_sample_length - 1,
-                self.subsample_step,
-                dim_x,
-                dim_y,
-                2,
-            ),
-            dim=1,
-        )  # (N_t-1, dim_x, dim_y, 2)
-        accum_rad = torch.cat(
-            (init_accum_rad, rest_accum_rad), dim=0
-        )  # (N_t, dim_x, dim_y, 2)
-        # Replace in sample
-        sample[:, :, :, 2:4] = accum_rad
 
-        # Flatten spatial dim
-        sample = sample.flatten(1, 2)  # (N_t, N_grid, d_features)
-
-        # Uniformly sample time id to start sample from
-        init_id = torch.randint(
-            0, 1 + self.original_sample_length - self.sample_length, ()
+    def test_dataloader(self):
+        """Load test dataset."""
+        return torch.utils.data.DataLoader(
+            self.test_dataset,
+            batch_size=self.batch_size,
+            num_workers=self.num_workers,
+            shuffle=False,
         )
-        sample = sample[init_id : (init_id + self.sample_length)]
-        # (sample_length, N_grid, d_features)
 
-        if self.standardize:
-            # Standardize sample
-            sample = (sample - self.data_mean) / self.data_std
 
-        # Split up sample in init. states and target states
-        init_states = sample[:2]  # (2, N_grid, d_features)
-        target_states = sample[2:]  # (sample_length-2, N_grid, d_features)
-
-        # === Forcing features ===
-        # Now batch-static features are just part of forcing,
-        # repeated over temporal dimension
-        # Load water coverage
-        sample_datetime = sample_name[:10]
-        water_path = os.path.join(
-            self.sample_dir_path, f"wtr_{sample_datetime}.npy"
-        )
-        water_cover_features = torch.tensor(
-            np.load(water_path), dtype=torch.float32
-        ).unsqueeze(
-            -1
-        )  # (dim_x, dim_y, 1)
-        # Flatten
-        water_cover_features = water_cover_features.flatten(0, 1)  # (N_grid, 1)
-        # Expand over temporal dimension
-        water_cover_expanded = water_cover_features.unsqueeze(0).expand(
-            self.sample_length - 2, -1, -1  # -2 as added on after windowing
-        )  # (sample_len, N_grid, 1)
-
-        # TOA flux
-        flux_path = os.path.join(
-            self.sample_dir_path,
-            f"nwp_toa_downwelling_shortwave_flux_{sample_datetime}.npy",
-        )
-        flux = torch.tensor(np.load(flux_path), dtype=torch.float32).unsqueeze(
-            -1
-        )  # (N_t', dim_x, dim_y, 1)
-
-        if self.standardize:
-            flux = (flux - self.flux_mean) / self.flux_std
-
-        # Flatten and subsample flux forcing
-        flux = flux.flatten(1, 2)  # (N_t, N_grid, 1)
-        flux = flux[subsample_index :: self.subsample_step]  # (N_t, N_grid, 1)
-        flux = flux[
-            init_id : (init_id + self.sample_length)
-        ]  # (sample_len, N_grid, 1)
-
-        # Time of day and year
-        dt_obj = dt.datetime.strptime(sample_datetime, "%Y%m%d%H")
-        dt_obj = dt_obj + dt.timedelta(
-            hours=2 + subsample_index
-        )  # Offset for first index
-        # Extract for initial step
-        init_hour_in_day = dt_obj.hour
-        start_of_year = dt.datetime(dt_obj.year, 1, 1)
-        init_seconds_into_year = (dt_obj - start_of_year).total_seconds()
-
-        # Add increments for all steps
-        hour_inc = (
-            torch.arange(self.sample_length) * self.subsample_step
-        )  # (sample_len,)
-        hour_of_day = (
-            init_hour_in_day + hour_inc
-        )  # (sample_len,), Can be > 24 but ok
-        second_into_year = (
-            init_seconds_into_year + hour_inc * 3600
-        )  # (sample_len,)
-        # can roll over to next year, ok because periodicity
-
-        # Encode as sin/cos
-        hour_angle = (hour_of_day / 12) * torch.pi  # (sample_len,)
-        year_angle = (
-            (second_into_year / constants.SECONDS_IN_YEAR) * 2 * torch.pi
-        )  # (sample_len,)
-        datetime_forcing = torch.stack(
-            (
-                torch.sin(hour_angle),
-                torch.cos(hour_angle),
-                torch.sin(year_angle),
-                torch.cos(year_angle),
-            ),
-            dim=1,
-        )  # (N_t, 4)
-        datetime_forcing = (datetime_forcing + 1) / 2  # Rescale to [0,1]
-        datetime_forcing = datetime_forcing.unsqueeze(1).expand(
-            -1, flux.shape[1], -1
-        )  # (sample_len, N_grid, 4)
-
-        # Put forcing features together
-        forcing_features = torch.cat(
-            (flux, datetime_forcing), dim=-1
-        )  # (sample_len, N_grid, d_forcing)
-
-        # Combine forcing over each window of 3 time steps
-        forcing_windowed = torch.cat(
-            (
-                forcing_features[:-2],
-                forcing_features[1:-1],
-                forcing_features[2:],
-            ),
-            dim=2,
-        )  # (sample_len-2, N_grid, 3*d_forcing)
-        # Now index 0 of ^ corresponds to forcing at index 0-2 of sample
-
-        # batch-static water cover is added after windowing,
-        # as it is static over time
-        forcing = torch.cat((water_cover_expanded, forcing_windowed), dim=2)
-        # (sample_len-2, N_grid, forcing_dim)
-
-        return init_states, target_states, forcing
+data_module = WeatherDataModule(batch_size=4, num_workers=0)
+data_module.setup()
+train_dataloader = data_module.train_dataloader()
+for batch in train_dataloader:
+    print(batch[0].shape)
+    print(batch[1].shape)
+    print(batch[2].shape)
+    print(batch[3])
+    break
