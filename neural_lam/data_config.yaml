@@ -1,0 +1,130 @@
+zarrs: # List of zarrs containing fields related to state
+  state:
+    path: /scratch/sadamov/template.zarr # Path to zarr
+    dims: # Name of dimensions in zarr, to be used for indexing
+      time: time
+      level: z
+      x: x # Either give "grid" (flattened) dimension or "x" and "y"
+      y: y
+  static:
+    path: /scratch/sadamov/template.zarr
+    dims:
+      level: z
+      x: x
+      y: y
+  forcing: 
+    path: /scratch/sadamov/template.zarr
+    dims:
+      time: time
+      level: z
+      x: x
+      y: y
+  boundary:
+    zarrs:
+    mask: boundary_mask # Name of variable containing boolean mask, true for grid nodes to be used in boundary.
+state: # Variables forecasted by the model
+  surface: # Single-field variables
+    - CLCT
+    - PMSL
+    - PS
+    - T_2M
+    - TOT_PREC
+    - U_10M
+    - V_10M
+  surface_units:
+    - "%"
+    - Pa
+    - Pa
+    - K
+    - kg/m^2
+    - m/s
+    - m/s
+  atmosphere: # Variables with vertical levels
+    - PP
+    - QV
+    - RELHUM
+    - T
+    - U
+    - V
+    - W
+  atmosphere_units:
+    - Pa
+    - kg/kg
+    - "%"
+    - K
+    - m/s
+    - m/s
+    - Pa/s
+  levels: # Levels to use for atmosphere variables 
+    - 0
+    - 5
+    - 8
+    - 11
+    - 13
+    - 15
+    - 19
+    - 22
+    - 26
+    - 30
+    - 38
+    - 44
+    - 59
+static: # Static inputs
+  surface:
+    - HSURF 
+  surface_units:
+    - m
+  atmosphere:
+    - FI
+  atmosphere_units:
+    - m^2/s^2
+  levels:
+    - 0
+    - 5
+    - 8
+    - 11
+    - 13
+    - 15
+    - 19
+    - 22
+    - 26
+    - 30
+    - 38
+    - 44
+    - 59
+forcing: # Forcing variables, dynamic inputs to the model
+  surface:
+    - ASOB_S
+  surface_units:
+    - W/m^2
+  atmosphere:
+  atmosphere_units:
+  levels:
+boundary: # Boundary conditions
+  surface:
+  surface_units:
+  atmosphere:
+  atmosphere_units:
+  levels:
+lat_lon_names: # Name of variables/coordinates in zarrs specifying latitude and longitude of grid cells
+  lat: lat
+  lon: lon
+grid_shape:
+  x: 582
+  y: 390
+splits:
+  train:
+    start: 2015-01-01T00
+    end: 2024-12-31T23
+  val:
+    start: 2015-01-01T00
+    end: 2024-12-31T23
+  test:
+    start: 2015-01-01T00
+    end: 2024-12-31T23
+projection: 
+  class: RotatedPole # Name of class in cartopy.crs
+  kwargs: # Parsed and used directly as kwargs to projection-class above
+    pole_longitude: 10.0
+    pole_latitude: -43.0
+normalization_zarr: data/meps_example/norm.zarr
