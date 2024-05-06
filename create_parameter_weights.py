@@ -82,7 +82,7 @@ def main(rank, world_size):  # pylint: disable=redefined-outer-name
         batch_size=args.batch_size,
         num_workers=args.n_workers,
     )
-    data_module.setup(stage="fit")
+    data_module.setup(stage="train")
 
     train_sampler = DistributedSampler(
         data_module.train_dataset, num_replicas=world_size, rank=rank

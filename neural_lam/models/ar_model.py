@@ -880,7 +880,7 @@ class ARModel(pl.LightningModule):
                 # here find the key of the cariable in constants.is_3D
                 #  and if == 7, assign a cut of 7 on the reshape. Else 1
                 if constants.IS_3D[variable]:
-                    shape_val = len(constants.VERTICAL_LEVELS) 
+                    shape_val = len(constants.VERTICAL_LEVELS)
                     vertical = constants.VERTICAL_LEVELS
                 else:
                     shape_val = 1
@@ -914,7 +914,11 @@ class ARModel(pl.LightningModule):
                     replacement_data = np.load(file_path)
                     original_cut = replacement_data[
                         0, time_idx, :, min(value_range) : max(value_range) + 1
-                    ].reshape(constants.GRID_SHAPE[1], constants.GRID_SHAPE[0], shape_val)
+                    ].reshape(
+                        constants.GRID_SHAPE[1],
+                        constants.GRID_SHAPE[0],
+                        shape_val,
+                    )
                     cut_values = np.moveaxis(
                         original_cut, [-3, -2, -1], [-1, -2, -3]
                     )

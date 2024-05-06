@@ -257,7 +257,7 @@ class WeatherDataModule(pl.LightningDataModule):
         self.predict_dataset = None
 
     def setup(self, stage=None):
-        if stage == "fit" or stage is None:
+        if stage == "train" or stage is None:
             self.train_dataset = WeatherDataset(
                 dataset_name=self.dataset_name,
                 split="train",
@@ -265,6 +265,7 @@ class WeatherDataModule(pl.LightningDataModule):
                 subset=self.subset,
                 batch_size=self.batch_size,
             )
+        elif stage == "val":
             self.val_dataset = WeatherDataset(
                 dataset_name=self.dataset_name,
                 split="val",

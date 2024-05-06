@@ -9,7 +9,7 @@
 #SBATCH --output=lightning_logs/neurwp_pred_out.log
 #SBATCH --error=lightning_logs/neurwp_pred_err.log
 
-export PREPROCESS=true
+export PREPROCESS=false
 export NORMALIZE=false
 export DATASET="cosmo"
 export MODEL="hi_lam"
@@ -38,7 +38,7 @@ fi
 
 echo "Predicting with model"
 if [ "$MODEL" = "hi_lam" ]; then
-    srun -ul python train_model.py --dataset $DATASET --epochs 1 --n_workers 0 --batch_size 1 --subset_ds 1 --model hi_lam --graph hierarchical --load wandb/example.ckpt --eval="predict"
+    srun -ul python train_model.py --dataset $DATASET --epochs 1 --n_workers 1 --batch_size 1 --subset_ds 1 --model hi_lam --graph hierarchical --load wandb/example.ckpt --eval="predict"
 else
-    srun -ul python train_model.py --dataset $DATASET --epochs 1 --n_workers 0 --batch_size 1 --subset_ds 1 --load "wandb/example.ckpt" --eval="predict"
+    srun -ul python train_model.py --dataset $DATASET --epochs 1 --n_workers 1 --batch_size 1 --subset_ds 1 --load "wandb/example.ckpt" --eval="predict"
 fi
