@@ -1,5 +1,6 @@
 # Standard library
 import os
+from functools import lru_cache
 
 # Third-party
 import pytorch_lightning as pl
@@ -27,6 +28,7 @@ class ConfigLoader:
         with open(self.config_path, "r") as file:
             return yaml.safe_load(file)
 
+    @lru_cache(maxsize=None)
     def __getattr__(self, name):
         keys = name.split(".")
         value = self.values
@@ -69,16 +71,26 @@ class WeatherDataset(torch.utils.data.Dataset):
             xarray.Dataset: Processed dataset.
         """
 
-        dataset_path = os.path.join(self.config_loader.zarrs[dataset_name].path)
+        dataset_path = self.config_loader.zarrs[dataset_name].path
+        if dataset_path is None or not os.path.exists(dataset_path):
+            print(f"Dataset '{dataset_name}' not found at path: {dataset_path}")
+            return None
         dataset = xr.open_zarr(dataset_path, consolidated=True)
 
-        start, end = self.config_loader.splits[self.split].start, self.config_loader.splits[self.split].end
+        start, end = (
+            self.config_loader.splits[self.split].start,
+            self.config_loader.splits[self.split].end,
+        )
         dataset = dataset.sel(time=slice(start, end))
         dataset = dataset.rename_dims(
-            {v: k for k, v in self.config_loader.zarrs[dataset_name].dims.values.items()
-             if k not in dataset.dims})
-        if 'grid' not in dataset.dims:
-            dataset = dataset.stack(grid=('x', 'y'))
+            {
+                v: k
+                for k, v in self.config_loader.zarrs[dataset_name].dims.values.items()
+                if k not in dataset.dims
+            }
+        )
+        if "grid" not in dataset.dims:
+            dataset = dataset.stack(grid=("x", "y"))
 
         vars_surface = []
         if self.config_loader[dataset_name].surface:
@@ -87,9 +99,12 @@ class WeatherDataset(torch.utils.data.Dataset):
         vars_atmosphere = []
         if self.config_loader[dataset_name].atmosphere:
             vars_atmosphere = xr.merge(
-                [dataset[var].sel(level=level, drop=True).rename(f"{var}_{level}")
-                 for var in self.config_loader[dataset_name].atmosphere
-                 for level in self.config_loader[dataset_name].levels])
+                [
+                    dataset[var].sel(level=level, drop=True).rename(f"{var}_{level}")
+                    for var in self.config_loader[dataset_name].atmosphere
+                    for level in self.config_loader[dataset_name].levels
+                ]
+            )
 
         if vars_surface and vars_atmosphere:
             dataset = xr.merge([vars_surface, vars_atmosphere])
@@ -98,7 +113,8 @@ class WeatherDataset(torch.utils.data.Dataset):
         elif vars_atmosphere:
             dataset = vars_atmosphere
         else:
-            raise ValueError(f"No variables specified for dataset: {dataset_name}")
+            print("No variables found in dataset {dataset_name}")
+            return None
 
         dataset = dataset.squeeze(drop=True).to_array()
         if "time" in dataset.dims:
@@ -130,36 +146,49 @@ class WeatherDataset(torch.utils.data.Dataset):
         self.config_loader = ConfigLoader(yaml_path)
 
         self.state = self.process_dataset("state")
+        assert self.state is not None, "State dataset not found"
         self.static = self.process_dataset("static")
         self.forcings = self.process_dataset("forcing")
-        # self.boundary = self.process_dataset("boundary")
+        self.boundary = self.process_dataset("boundary")
 
-        self.static = self.static.expand_dims({"time": self.state.time}, axis=0)
-        self.ds = xr.concat([self.state, self.static], dim="variable")
+        if self.static is not None:
+            self.static = self.static.expand_dims({"time": self.state.time}, axis=0)
+            self.state = xr.concat([self.state, self.static], dim="variable")
 
     def __len__(self):
-        return len(self.ds.time) - self.ar_steps
+        return len(self.state.time) - self.ar_steps
 
     def __getitem__(self, idx):
-        sample = self.ds.isel(time=slice(idx, idx + self.ar_steps))
-        forcings = self.forcings.isel(time=slice(idx, idx + self.ar_steps))
-        sample = torch.tensor(sample.values, dtype=torch.float32)
-        forcings = torch.tensor(forcings.values, dtype=torch.float32)
+        sample = torch.tensor(
+            self.state.isel(time=slice(idx, idx + self.ar_steps)).values,
+            dtype=torch.float32,
+        )
+
+        forcings = torch.tensor(
+            self.forcings.isel(time=slice(idx, idx + self.ar_steps)).values,
+            dtype=torch.float32,
+        ) if self.forcings is not None else torch.tensor([])
+
+        boundary = torch.tensor(
+            self.boundary.isel(time=slice(idx, idx + self.ar_steps)).values,
+            dtype=torch.float32,
+        ) if self.boundary is not None else torch.tensor([])
 
         init_states = sample[:2]
         target_states = sample[2:]
 
-        batch_times = self.ds.isel(
-            time=slice(
-                idx,
-                idx +
-                self.ar_steps)).time.values.astype(str).tolist()
+        batch_times = (
+            self.state.isel(time=slice(idx, idx + self.ar_steps))
+            .time.values.astype(str)
+            .tolist()
+        )
 
         # init_states: (2, N_grid, d_features)
         # target_states: (ar_steps-2, N_grid, d_features)
         # forcings: (ar_steps, N_grid, d_windowed_forcings)
+        # boundary: (ar_steps, N_grid, d_windowed_boundary)
         # batch_times: (ar_steps,)
-        return init_states, target_states, forcings, batch_times
+        return init_states, target_states, forcings, boundary, batch_times
 
 
 class WeatherDataModule(pl.LightningDataModule):
@@ -229,5 +258,6 @@ for batch in train_dataloader:
     print(batch[0].shape)
     print(batch[1].shape)
     print(batch[2].shape)
-    print(batch[3])
+    print(batch[3].shape)
+    print(batch[4])
     break

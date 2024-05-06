@@ -20,7 +20,7 @@ zarrs: # List of zarrs containing fields related to state
       x: x
       y: y
   boundary:
-    zarrs:
+    path:
     mask: boundary_mask # Name of variable containing boolean mask, true for grid nodes to be used in boundary.
 state: # Variables forecasted by the model
   surface: # Single-field variables
@@ -127,4 +127,4 @@ projection:
   kwargs: # Parsed and used directly as kwargs to projection-class above
     pole_longitude: 10.0
     pole_latitude: -43.0
-normalization_zarr: data/meps_example/norm.zarr
+normalization_zarr: /scratch/sadamov/norm.zarr
