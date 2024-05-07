@@ -872,10 +872,10 @@ class ARModel(pl.LightningModule):
         # Initialize the lists to loop over
         indices = self.precompute_variable_indices()
         time_steps = self._generate_time_steps()
-        # Initialize final data object
-        final_data = earthkit.data.FieldList()
         # Loop through all the time steps and all the variables
         for time_idx, date_str in time_steps.items():
+            # Initialize final data object
+            final_data = earthkit.data.FieldList()
             for variable, grib_code in constants.GRIB_NAME.items():
                 # here find the key of the cariable in constants.is_3D
                 #  and if == 7, assign a cut of 7 on the reshape. Else 1
@@ -890,6 +890,7 @@ class ARModel(pl.LightningModule):
 
                 sample_file = constants.SAMPLE_GRIB
                 if variable == "RELHUM":
+                    variable = "r"
                     sample_file = constants.SAMPLE_Z_GRIB
 
                 # Load the sample grib file
@@ -903,14 +904,12 @@ class ARModel(pl.LightningModule):
                 date = date_str[:8]
                 time = date_str[8:]
 
-                # Assuming md is a list of metadata dictionaries
-                for metadata in md:
-                    metadata.override({"date": date, "time": time})
-
+                for index, item in enumerate(md):
+                    md[index] = item.override({"date": date}).override(
+                        {"time": time}
+                    )
                 if len(md) > 0:
                     # Load the array to replace the values with
-                    # We need to still save it as a .npy
-                    # object and pass it on as an argument to this function
                     replacement_data = np.load(file_path)
                     original_cut = replacement_data[
                         0, time_idx, :, min(value_range) : max(value_range) + 1
@@ -927,7 +926,6 @@ class ARModel(pl.LightningModule):
                         cut_values, md
                     )
                     final_data += data_new
-
             # Create the modified GRIB file with the predicted data
             grib_path = os.path.join(
                 value_dir_path, f"prediction_{date_str}_grib"
