@@ -9,7 +9,7 @@ import torch
 from lightning_fabric.utilities import seed
 
 # First-party
-from neural_lam import constants, utils
+from neural_lam import utils
 from neural_lam.models.graph_lam import GraphLAM
 from neural_lam.models.hi_lam import HiLAM
 from neural_lam.models.hi_lam_parallel import HiLAMParallel
@@ -43,6 +43,12 @@ def main():
         type=str,
         default="graph_lam",
         help="Model architecture to train/evaluate (default: graph_lam)",
+    )
+    parser. add_argument(
+        "--data_config",
+        type=str,
+        default="neural_lam/data_config.yaml",
+        help="Path to data configuration file (default: neural_lam/data_config.yaml)",
     )
     parser.add_argument(
         "--subset_ds",
@@ -183,6 +189,30 @@ def main():
         help="Number of example predictions to plot during evaluation "
         "(default: 1)",
     )
+    parser.add_argument(
+        "--wandb_project",
+        type=str,
+        default="neural-lam",
+        help="Wandb project to log to (default: neural-lam)",
+    )
+    parser.add_argument(
+        "--val_steps_log",
+        type=list,
+        default=[1, 2, 3, 5, 10, 15, 19],
+        help="Steps to log validation loss for (default: [1, 2, 3, 5, 10, 15, 19])",
+    )
+    parser.add_argument(
+        "--metrics_watch",
+        type=list,
+        default=[],
+        help="List of metrics to watch, including any prefix (e.g. val_rmse)",
+    )
+    parser.add_argument(
+        "--var_leads_metrics_watch",
+        type=dict,
+        default={},
+        help="Dict with variables and lead times to log watched metrics for",
+    )
     args = parser.parse_args()
 
     # Asserts for arguments
@@ -264,7 +294,7 @@ def main():
         save_last=True,
     )
     logger = pl.loggers.WandbLogger(
-        project=constants.WANDB_PROJECT, name=run_name, config=args
+        project=args.wandb_project, name=run_name, config=args
     )
     trainer = pl.Trainer(
         max_epochs=args.epochs,
@@ -280,7 +310,8 @@ def main():
 
     # Only init once, on rank 0 only
     if trainer.global_rank == 0:
-        utils.init_wandb_metrics(logger)  # Do after wandb.init
+        utils.init_wandb_metrics(
+            logger, val_steps=args.val_steps_log)  # Do after wandb.init
 
     if args.eval:
         if args.eval == "val":

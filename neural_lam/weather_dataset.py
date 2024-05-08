@@ -7,6 +7,7 @@ import pytorch_lightning as pl
 import torch
 import xarray as xr
 import yaml
+import cartopy.crs as ccrs
 
 
 class ConfigLoader:
@@ -36,7 +37,7 @@ class ConfigLoader:
             if key in value:
                 value = value[key]
             else:
-                None
+                return None
         if isinstance(value, dict):
             return ConfigLoader(None, values=value)
         return value
@@ -50,6 +51,24 @@ class ConfigLoader:
     def __contains__(self, key):
         return key in self.values
 
+    def param_names(self):
+        return self.values['state']['surface'] + self.values['state']['atmosphere']
+
+    def param_units(self):
+        return self.values['state']['surface_units'] + self.values['state']['atmosphere_units']
+
+    def num_data_vars(self, key):
+        surface_vars = len(self.values[key]['surface'])
+        atmosphere_vars = len(self.values[key]['atmosphere'])
+        levels = len(self.values[key]['levels'])
+        return surface_vars + atmosphere_vars * levels
+    
+    def projection(self):
+        proj_config = self.values["projections"]["class"]
+        proj_class = getattr(ccrs, proj_config["proj_class"])
+        proj_params = proj_config["proj_params"]
+        return proj_class(**proj_params)
+
 
 class WeatherDataset(torch.utils.data.Dataset):
     """
@@ -61,15 +80,7 @@ class WeatherDataset(torch.utils.data.Dataset):
     """
 
     def process_dataset(self, dataset_name):
-        """
-        Process a single dataset specified by the dataset name.
-
-        Args:
-            dataset_name (str): Name of the dataset to process.
-
-        Returns:
-            xarray.Dataset: Processed dataset.
-        """
+        """Process a single dataset specified by the dataset name."""
 
         dataset_path = self.config_loader.zarrs[dataset_name].path
         if dataset_path is None or not os.path.exists(dataset_path):
@@ -129,7 +140,7 @@ class WeatherDataset(torch.utils.data.Dataset):
         batch_size=4,
         ar_steps=3,
         control_only=False,
-        yaml_path="neural_lam/data_config.yaml",
+        data_config="neural_lam/data_config.yaml",
     ):
         super().__init__()
 
@@ -143,7 +154,7 @@ class WeatherDataset(torch.utils.data.Dataset):
         self.batch_size = batch_size
         self.ar_steps = ar_steps
         self.control_only = control_only
-        self.config_loader = ConfigLoader(yaml_path)
+        self.config_loader = ConfigLoader(data_config)
 
         self.state = self.process_dataset("state")
         assert self.state is not None, "State dataset not found"

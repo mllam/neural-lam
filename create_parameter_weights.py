@@ -8,7 +8,6 @@ import torch
 from tqdm import tqdm
 
 # First-party
-from neural_lam import constants
 from neural_lam.weather_dataset import WeatherDataset
 
 
@@ -45,6 +44,7 @@ def main():
 
     static_dir_path = os.path.join("data", args.dataset, "static")
 
+    ds = WeatherDataset()
     # Create parameter weights based on height
     # based on fig A.1 in graph cast paper
     w_dict = {
@@ -56,7 +56,7 @@ def main():
         "500": 0.03,
     }
     w_list = np.array(
-        [w_dict[par.split("_")[-2]] for par in constants.PARAM_NAMES]
+        [w_dict[par.split("_")[-2]] for par in ds.config_loader.param_names()]
     )
     print("Saving parameter weights...")
     np.save(
@@ -65,13 +65,6 @@ def main():
     )
 
     # Load dataset without any subsampling
-    ds = WeatherDataset(
-        args.dataset,
-        split="train",
-        subsample_step=1,
-        pred_length=63,
-        standardize=False,
-    )  # Without standardization
     loader = torch.utils.data.DataLoader(
         ds, args.batch_size, shuffle=False, num_workers=args.n_workers
     )
@@ -133,7 +126,7 @@ def main():
         # Note: batch contains only 1h-steps
         stepped_batch = torch.cat(
             [
-                batch[:, ss_i : used_subsample_len : args.step_length]
+                batch[:, ss_i: used_subsample_len: args.step_length]
                 for ss_i in range(args.step_length)
             ],
             dim=0,
