@@ -8,7 +8,6 @@ from torch import nn
 from tueplots import bundles, figsizes
 
 
-
 def load_dataset_stats(dataset_name, device="cpu"):
     """
     Load arrays with stored dataset statistics from pre-processing

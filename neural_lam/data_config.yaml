@@ -12,7 +12,7 @@ zarrs: # List of zarrs containing fields related to state
       level: z
       x: x
       y: y
-  forcing: 
+  forcing:
     path: /scratch/sadamov/template.zarr
     dims:
       time: time
@@ -55,7 +55,7 @@ state: # Variables forecasted by the model
     - m/s
     - m/s
     - Pa/s
-  levels: # Levels to use for atmosphere variables 
+  levels: # Levels to use for atmosphere variables
     - 0
     - 5
     - 8
@@ -71,7 +71,7 @@ state: # Variables forecasted by the model
     - 59
 static: # Static inputs
   surface:
-    - HSURF 
+    - HSURF
   surface_units:
     - m
   atmosphere:
@@ -122,7 +122,7 @@ splits:
   test:
     start: 2015-01-01T00
     end: 2024-12-31T23
-projection: 
+projection:
   class: RotatedPole # Name of class in cartopy.crs
   kwargs: # Parsed and used directly as kwargs to projection-class above
     pole_longitude: 10.0

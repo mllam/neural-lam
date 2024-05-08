@@ -44,11 +44,11 @@ def main():
         default="graph_lam",
         help="Model architecture to train/evaluate (default: graph_lam)",
     )
-    parser. add_argument(
+    parser.add_argument(
         "--data_config",
         type=str,
         default="neural_lam/data_config.yaml",
-        help="Path to data configuration file (default: neural_lam/data_config.yaml)",
+        help="Path to data config file (default: neural_lam/data_config.yaml)",
     )
     parser.add_argument(
         "--subset_ds",
@@ -199,7 +199,7 @@ def main():
         "--val_steps_log",
         type=list,
         default=[1, 2, 3, 5, 10, 15, 19],
-        help="Steps to log validation loss for (default: [1, 2, 3, 5, 10, 15, 19])",
+        help="Steps to log val loss for (default: [1, 2, 3, 5, 10, 15, 19])",
     )
     parser.add_argument(
         "--metrics_watch",
@@ -232,28 +232,13 @@ def main():
 
     # Load data
     train_loader = torch.utils.data.DataLoader(
-        WeatherDataset(
-            args.dataset,
-            pred_length=args.ar_steps,
-            split="train",
-            subsample_step=args.step_length,
-            subset=bool(args.subset_ds),
-            control_only=args.control_only,
-        ),
+        WeatherDataset(control_only=args.control_only),
         args.batch_size,
         shuffle=True,
         num_workers=args.n_workers,
     )
-    max_pred_length = (65 // args.step_length) - 2  # 19
     val_loader = torch.utils.data.DataLoader(
-        WeatherDataset(
-            args.dataset,
-            pred_length=max_pred_length,
-            split="val",
-            subsample_step=args.step_length,
-            subset=bool(args.subset_ds),
-            control_only=args.control_only,
-        ),
+        WeatherDataset(control_only=args.control_only),
         args.batch_size,
         shuffle=False,
         num_workers=args.n_workers,
@@ -311,20 +296,15 @@ def main():
     # Only init once, on rank 0 only
     if trainer.global_rank == 0:
         utils.init_wandb_metrics(
-            logger, val_steps=args.val_steps_log)  # Do after wandb.init
+            logger, val_steps=args.val_steps_log
+        )  # Do after wandb.init
 
     if args.eval:
         if args.eval == "val":
             eval_loader = val_loader
         else:  # Test
             eval_loader = torch.utils.data.DataLoader(
-                WeatherDataset(
-                    args.dataset,
-                    pred_length=max_pred_length,
-                    split="test",
-                    subsample_step=args.step_length,
-                    subset=bool(args.subset_ds),
-                ),
+                WeatherDataset(),
                 args.batch_size,
                 shuffle=False,
                 num_workers=args.n_workers,

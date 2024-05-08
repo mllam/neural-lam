@@ -1,13 +1,12 @@
 # Standard library
 import os
-from functools import lru_cache
 
 # Third-party
+import cartopy.crs as ccrs
 import pytorch_lightning as pl
 import torch
 import xarray as xr
 import yaml
-import cartopy.crs as ccrs
 
 
 class ConfigLoader:
@@ -26,10 +25,10 @@ class ConfigLoader:
             self.values = values
 
     def load_config(self):
-        with open(self.config_path, "r") as file:
+        """Load configuration file."""
+        with open(self.config_path, encoding="utf-8", mode="r") as file:
             return yaml.safe_load(file)
 
-    @lru_cache(maxsize=None)
     def __getattr__(self, name):
         keys = name.split(".")
         value = self.values
@@ -52,18 +51,27 @@ class ConfigLoader:
         return key in self.values
 
     def param_names(self):
-        return self.values['state']['surface'] + self.values['state']['atmosphere']
+        """Return parameter names."""
+        return (
+            self.values["state"]["surface"] + self.values["state"]["atmosphere"]
+        )
 
     def param_units(self):
-        return self.values['state']['surface_units'] + self.values['state']['atmosphere_units']
+        """Return parameter units."""
+        return (
+            self.values["state"]["surface_units"]
+            + self.values["state"]["atmosphere_units"]
+        )
 
     def num_data_vars(self, key):
-        surface_vars = len(self.values[key]['surface'])
-        atmosphere_vars = len(self.values[key]['atmosphere'])
-        levels = len(self.values[key]['levels'])
+        """Return the number of data variables for a given key."""
+        surface_vars = len(self.values[key]["surface"])
+        atmosphere_vars = len(self.values[key]["atmosphere"])
+        levels = len(self.values[key]["levels"])
         return surface_vars + atmosphere_vars * levels
-    
+
     def projection(self):
+        """Return the projection."""
         proj_config = self.values["projections"]["class"]
         proj_class = getattr(ccrs, proj_config["proj_class"])
         proj_params = proj_config["proj_params"]
@@ -96,7 +104,9 @@ class WeatherDataset(torch.utils.data.Dataset):
         dataset = dataset.rename_dims(
             {
                 v: k
-                for k, v in self.config_loader.zarrs[dataset_name].dims.values.items()
+                for k, v in self.config_loader.zarrs[
+                    dataset_name
+                ].dims.values.items()
                 if k not in dataset.dims
             }
         )
@@ -111,7 +121,9 @@ class WeatherDataset(torch.utils.data.Dataset):
         if self.config_loader[dataset_name].atmosphere:
             vars_atmosphere = xr.merge(
                 [
-                    dataset[var].sel(level=level, drop=True).rename(f"{var}_{level}")
+                    dataset[var]
+                    .sel(level=level, drop=True)
+                    .rename(f"{var}_{level}")
                     for var in self.config_loader[dataset_name].atmosphere
                     for level in self.config_loader[dataset_name].levels
                 ]
@@ -163,7 +175,9 @@ class WeatherDataset(torch.utils.data.Dataset):
         self.boundary = self.process_dataset("boundary")
 
         if self.static is not None:
-            self.static = self.static.expand_dims({"time": self.state.time}, axis=0)
+            self.static = self.static.expand_dims(
+                {"time": self.state.time}, axis=0
+            )
             self.state = xr.concat([self.state, self.static], dim="variable")
 
     def __len__(self):
@@ -175,15 +189,23 @@ class WeatherDataset(torch.utils.data.Dataset):
             dtype=torch.float32,
         )
 
-        forcings = torch.tensor(
-            self.forcings.isel(time=slice(idx, idx + self.ar_steps)).values,
-            dtype=torch.float32,
-        ) if self.forcings is not None else torch.tensor([])
+        forcings = (
+            torch.tensor(
+                self.forcings.isel(time=slice(idx, idx + self.ar_steps)).values,
+                dtype=torch.float32,
+            )
+            if self.forcings is not None
+            else torch.tensor([])
+        )
 
-        boundary = torch.tensor(
-            self.boundary.isel(time=slice(idx, idx + self.ar_steps)).values,
-            dtype=torch.float32,
-        ) if self.boundary is not None else torch.tensor([])
+        boundary = (
+            torch.tensor(
+                self.boundary.isel(time=slice(idx, idx + self.ar_steps)).values,
+                dtype=torch.float32,
+            )
+            if self.boundary is not None
+            else torch.tensor([])
+        )
 
         init_states = sample[:2]
         target_states = sample[2:]

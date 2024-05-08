@@ -63,7 +63,9 @@ def plot_error_map(errors, data_config, title=None, step_length=3):
 
 
 @matplotlib.rc_context(utils.fractional_plot_bundle(1))
-def plot_prediction(pred, target, obs_mask, data_config, title=None, vrange=None):
+def plot_prediction(
+    pred, target, obs_mask, data_config, title=None, vrange=None
+):
     """
     Plot example prediction and grond truth.
     Each has shape (N_grid,)
@@ -82,7 +84,10 @@ def plot_prediction(pred, target, obs_mask, data_config, title=None, vrange=None
     )  # Faded border region
 
     fig, axes = plt.subplots(
-        1, 2, figsize=(13, 7), subplot_kw={"projection": data_config.projection()}
+        1,
+        2,
+        figsize=(13, 7),
+        subplot_kw={"projection": data_config.projection()},
     )
 
     # Plot pred and target

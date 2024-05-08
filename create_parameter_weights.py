@@ -105,13 +105,7 @@ def main():
 
     # Compute mean and std.-dev. of one-step differences across the dataset
     print("Computing mean and std.-dev. for one-step differences...")
-    ds_standard = WeatherDataset(
-        args.dataset,
-        split="train",
-        subsample_step=1,
-        pred_length=63,
-        standardize=True,
-    )  # Re-load with standardization
+    ds_standard = WeatherDataset()  # Re-load with standardization
     loader_standard = torch.utils.data.DataLoader(
         ds_standard, args.batch_size, shuffle=False, num_workers=args.n_workers
     )
@@ -126,7 +120,7 @@ def main():
         # Note: batch contains only 1h-steps
         stepped_batch = torch.cat(
             [
-                batch[:, ss_i: used_subsample_len: args.step_length]
+                batch[:, ss_i : used_subsample_len : args.step_length]
                 for ss_i in range(args.step_length)
             ],
             dim=0,

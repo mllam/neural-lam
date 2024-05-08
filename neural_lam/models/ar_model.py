@@ -6,7 +6,6 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pytorch_lightning as pl
 import torch
-
 import wandb
 
 # First-party
@@ -39,12 +38,12 @@ class ARModel(pl.LightningModule):
         # Double grid output dim. to also output std.-dev.
         self.output_std = bool(args.output_std)
         if self.output_std:
-            self.grid_output_dim = (
-                2 * self.config_loader.num_data_vars("state")
+            self.grid_output_dim = 2 * self.config_loader.num_data_vars(
+                "state"
             )  # Pred. dim. in grid cell
         else:
-            self.grid_output_dim = (
-                self.config_loader.num_data_vars("state")
+            self.grid_output_dim = self.config_loader.num_data_vars(
+                "state"
             )  # Pred. dim. in grid cell
 
             # Store constant per-variable std.-dev. weighting
@@ -559,15 +558,15 @@ class ARModel(pl.LightningModule):
                 wandb.log({"test_loss": wandb.Image(fig)})
 
             # also make without title and save as pdf
-            pdf_loss_map_figs = [vis.plot_spatial_error(
-                loss_map, self.interior_mask[:, 0],
-                self.config_loader)
-                for loss_map in mean_spatial_loss]
+            pdf_loss_map_figs = [
+                vis.plot_spatial_error(
+                    loss_map, self.interior_mask[:, 0], self.config_loader
+                )
+                for loss_map in mean_spatial_loss
+            ]
             pdf_loss_maps_dir = os.path.join(wandb.run.dir, "spatial_loss_maps")
             os.makedirs(pdf_loss_maps_dir, exist_ok=True)
-            for t_i, fig in zip(
-                self.args.val_steps_log, pdf_loss_map_figs
-            ):
+            for t_i, fig in zip(self.args.val_steps_log, pdf_loss_map_figs):
                 fig.savefig(os.path.join(pdf_loss_maps_dir, f"loss_t{t_i}.pdf"))
             # save mean spatial loss as .pt file also
             torch.save(
