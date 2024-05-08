@@ -13,7 +13,7 @@ from neural_lam import utils
 from neural_lam.models.graph_lam import GraphLAM
 from neural_lam.models.hi_lam import HiLAM
 from neural_lam.models.hi_lam_parallel import HiLAMParallel
-from neural_lam.weather_dataset import WeatherDataset
+from neural_lam.weather_dataset import WeatherDataModule
 
 MODELS = {
     "graph_lam": GraphLAM,
@@ -189,6 +189,8 @@ def main():
         help="Number of example predictions to plot during evaluation "
         "(default: 1)",
     )
+
+    # Logging Options
     parser.add_argument(
         "--wandb_project",
         type=str,
@@ -229,18 +231,9 @@ def main():
 
     # Set seed
     seed.seed_everything(args.seed)
-
-    # Load data
-    train_loader = torch.utils.data.DataLoader(
-        WeatherDataset(control_only=args.control_only),
-        args.batch_size,
-        shuffle=True,
-        num_workers=args.n_workers,
-    )
-    val_loader = torch.utils.data.DataLoader(
-        WeatherDataset(control_only=args.control_only),
-        args.batch_size,
-        shuffle=False,
+    # Create datamodule
+    data_module = WeatherDataModule(
+        batch_size=args.batch_size,
         num_workers=args.n_workers,
     )
 
@@ -300,25 +293,9 @@ def main():
         )  # Do after wandb.init
 
     if args.eval:
-        if args.eval == "val":
-            eval_loader = val_loader
-        else:  # Test
-            eval_loader = torch.utils.data.DataLoader(
-                WeatherDataset(),
-                args.batch_size,
-                shuffle=False,
-                num_workers=args.n_workers,
-            )
-
-        print(f"Running evaluation on {args.eval}")
-        trainer.test(model=model, dataloaders=eval_loader)
+        trainer.test(model=model, datamodule=data_module, ckpt_path=args.load)
     else:
-        # Train model
-        trainer.fit(
-            model=model,
-            train_dataloaders=train_loader,
-            val_dataloaders=val_loader,
-        )
+        trainer.fit(model=model, datamodule=data_module)
 
 
 if __name__ == "__main__":
