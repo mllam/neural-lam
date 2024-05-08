@@ -6,11 +6,11 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pytorch_lightning as pl
 import torch
+
 import wandb
 
 # First-party
 from neural_lam import metrics, utils, vis
-from neural_lam.weather_dataset import ConfigLoader
 
 
 class ARModel(pl.LightningModule):
@@ -26,14 +26,11 @@ class ARModel(pl.LightningModule):
         super().__init__()
         self.save_hyperparameters()
         self.lr = args.lr
-        self.config_loader = ConfigLoader(args.data_config)
+        self.config_loader = utils.ConfigLoader(args.data_config)
 
         # Load static features for grid/data
-        static_data_dict = utils.load_static_data(args.dataset)
-        for static_data_name, static_data_tensor in static_data_dict.items():
-            self.register_buffer(
-                static_data_name, static_data_tensor, persistent=False
-            )
+        static = self.config_loader.process_dataset("static")
+        self.register_buffer("grid_static_features", torch.tensor(static.values))
 
         # Double grid output dim. to also output std.-dev.
         self.output_std = bool(args.output_std)
@@ -59,7 +56,7 @@ class ARModel(pl.LightningModule):
         (
             self.num_grid_nodes,
             grid_static_dim,
-        ) = self.grid_static_features.shape  # 63784 = 268x238
+        ) = self.grid_static_features.shape
         self.grid_dim = (
             2 * self.config_loader.num_data_vars("state")
             + grid_static_dim

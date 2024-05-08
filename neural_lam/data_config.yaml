@@ -72,8 +72,12 @@ state: # Variables forecasted by the model
 static: # Static inputs
   surface:
     - HSURF
+    - lat
+    - lon
   surface_units:
     - m
+    - °N
+    - °E
   atmosphere:
     - FI
   atmosphere_units:
@@ -127,4 +131,17 @@ projection:
   kwargs: # Parsed and used directly as kwargs to projection-class above
     pole_longitude: 10.0
     pole_latitude: -43.0
-normalization_zarr: /scratch/sadamov/norm.zarr
+normalization:
+  zarr: /scratch/sadamov/norm.zarr
+  vars:
+    data_mean: data_mean
+    data_std: data_std
+    forcing_mean: forcing_mean
+    forcing_std: forcing_std
+    boundary_mean: boundary_mean
+    boundary_std: boundary_std
+    diff_mean: diff_mean
+    diff_std: diff_std
+    grid_static_features: grid_static_features
+    param_weights: param_weights
+
