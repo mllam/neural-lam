@@ -8,6 +8,8 @@ import pytorch_lightning as pl
 import torch
 from lightning_fabric.utilities import seed
 
+import wandb
+
 # First-party
 from neural_lam import utils
 from neural_lam.models.graph_lam import GraphLAM
@@ -291,7 +293,7 @@ def main():
         utils.init_wandb_metrics(
             logger, val_steps=args.val_steps_log
         )  # Do after wandb.init
-
+        wandb.save(args.data_config)
     if args.eval:
         trainer.test(model=model, datamodule=data_module, ckpt_path=args.load)
     else:
