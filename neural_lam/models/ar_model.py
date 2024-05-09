@@ -59,7 +59,7 @@ class ARModel(pl.LightningModule):
         # Instantiate loss function
         self.loss = metrics.get_metric(args.loss)
 
-        border_mask = torch.ones(self.num_grid_nodes, 1)
+        border_mask = torch.zeros(self.num_grid_nodes, 1)
         self.register_buffer("border_mask", border_mask, persistent=False)
         # Pre-compute interior mask for use in loss function
         self.register_buffer(
