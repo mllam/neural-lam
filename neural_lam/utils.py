@@ -242,16 +242,23 @@ class ConfigLoader:
 
     def param_names(self):
         """Return parameter names."""
-        return (
-            self.values["state"]["surface"] + self.values["state"]["atmosphere"]
-        )
+        surface_names = self.values["state"]["surface"]
+        atmosphere_names = [
+            f"{var}_{level}"
+            for var in self.values["state"]["atmosphere"]
+            for level in self.values["state"]["levels"]
+        ]
+        return surface_names + atmosphere_names
 
     def param_units(self):
         """Return parameter units."""
-        return (
-            self.values["state"]["surface_units"]
-            + self.values["state"]["atmosphere_units"]
-        )
+        surface_units = self.values["state"]["surface_units"]
+        atmosphere_units = [
+            unit
+            for unit in self.values["state"]["atmosphere_units"]
+            for _ in self.values["state"]["levels"]
+        ]
+        return surface_units + atmosphere_units
 
     def num_data_vars(self, key):
         """Return the number of data variables for a given key."""
