@@ -39,9 +39,7 @@ class WeatherDataset(torch.utils.data.Dataset):
 
         self.state = self.config_loader.process_dataset("state", self.split)
         assert self.state is not None, "State dataset not found"
-        self.forcings = self.config_loader.process_dataset(
-            "forcing", self.split
-        )
+        self.forcing = self.config_loader.process_dataset("forcing", self.split)
         self.boundary = self.config_loader.process_dataset(
             "boundary", self.split
         )
@@ -53,9 +51,9 @@ class WeatherDataset(torch.utils.data.Dataset):
             (self.boundary_window - 1), (self.forcing_window - 1)
         )
 
-        if self.forcings is not None:
-            self.forcings_windowed = (
-                self.forcings.sel(
+        if self.forcing is not None:
+            self.forcing_windowed = (
+                self.forcing.sel(
                     time=self.state.time,
                     method="nearest",
                 )
@@ -92,11 +90,11 @@ class WeatherDataset(torch.utils.data.Dataset):
             dtype=torch.float32,
         )
 
-        forcings = (
-            self.forcings_windowed.isel(time=slice(idx, idx + self.ar_steps))
+        forcing = (
+            self.forcing_windowed.isel(time=slice(idx, idx + self.ar_steps))
             .stack(variable_window=("variable", "window"))
             .values
-            if self.forcings is not None
+            if self.forcing is not None
             else torch.tensor([])
         )
 
@@ -119,10 +117,10 @@ class WeatherDataset(torch.utils.data.Dataset):
 
         # init_states: (2, N_grid, d_features)
         # target_states: (ar_steps-2, N_grid, d_features)
-        # forcings: (ar_steps, N_grid, d_windowed_forcings)
+        # forcing: (ar_steps, N_grid, d_windowed_forcing)
         # boundary: (ar_steps, N_grid, d_windowed_boundary)
         # batch_times: (ar_steps,)
-        return init_states, target_states, forcings, boundary, batch_times
+        return init_states, target_states, forcing, boundary, batch_times
 
 
 class WeatherDataModule(pl.LightningDataModule):
@@ -183,16 +181,3 @@ class WeatherDataModule(pl.LightningDataModule):
             num_workers=self.num_workers,
             shuffle=False,
         )
-
-
-data_module = WeatherDataModule(batch_size=4, num_workers=0)
-data_module.setup()
-train_dataloader = data_module.train_dataloader()
-for batch in train_dataloader:
-    print(batch[0].shape)
-    print(batch[1].shape)
-    print(batch[2].shape)
-    print(batch[3].shape)
-    print(batch[4])
-    print(batch[2][0, 0, 0, :])
-    break

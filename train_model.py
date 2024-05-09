@@ -62,7 +62,7 @@ def main():
         "--seed", type=int, default=42, help="random seed (default: 42)"
     )
     parser.add_argument(
-        "--n_workers",
+        "--num_workers",
         type=int,
         default=4,
         help="Number of workers in data loader (default: 4)",
@@ -235,7 +235,7 @@ def main():
     # Create datamodule
     data_module = WeatherDataModule(
         batch_size=args.batch_size,
-        num_workers=args.n_workers,
+        num_workers=args.num_workers,
     )
 
     # Instantiate model + trainer

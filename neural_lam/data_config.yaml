@@ -29,7 +29,7 @@ zarrs: # List of zarrs containing fields related to state
       lon: lon
       lat: lat
   boundary:
-    path: /scratch/sadamov/era5.zarr
+    path: /scratch/sadamov/era5_template.zarr
     dims:
       time: time
       level: level
@@ -197,5 +197,3 @@ normalization:
     boundary_std: boundary_std
     diff_mean: diff_mean
     diff_std: diff_std
-    grid_static_features: grid_static_features
-    param_weights: param_weights
