@@ -318,7 +318,7 @@ class ConfigLoader:
         elif vars_atmosphere:
             dataset = vars_atmosphere
         else:
-            print("No variables found in dataset {dataset_name}")
+            print(f"No variables found in dataset {dataset_name}")
             return None
 
         dataset = dataset.squeeze().stack(grid=("x", "y")).to_array()

@@ -56,17 +56,26 @@ class WeatherDataset(torch.utils.data.Dataset):
         if self.forcings is not None:
             self.forcings_windowed = (
                 self.forcings.sel(
-                    time=self.forcings.time.isin(self.state.time),
+                    time=self.state.time,
                     method="nearest",
+                )
+                .pad(
+                    time=(self.forcing_window // 2, self.forcing_window // 2),
+                    mode="edge",
                 )
                 .rolling(time=self.forcing_window, center=True)
                 .construct("window")
             )
+
         if self.boundary is not None:
             self.boundary_windowed = (
                 self.boundary.sel(
-                    time=self.forcings.time.isin(self.state.time),
+                    time=self.state.time,
                     method="nearest",
+                )
+                .pad(
+                    time=(self.boundary_window // 2, self.boundary_window // 2),
+                    mode="edge",
                 )
                 .rolling(time=self.boundary_window, center=True)
                 .construct("window")
@@ -77,7 +86,7 @@ class WeatherDataset(torch.utils.data.Dataset):
         return len(self.state.time) - self.ar_steps - self.idx_max
 
     def __getitem__(self, idx):
-        idx += self.idx_max / 2  # Skip first time step
+        idx += self.idx_max // 2  # Skip first time step
         sample = torch.tensor(
             self.state.isel(time=slice(idx, idx + self.ar_steps)).values,
             dtype=torch.float32,
