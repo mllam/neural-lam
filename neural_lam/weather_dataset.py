@@ -1,6 +1,8 @@
+# Third-party
 import pytorch_lightning as pl
 import torch
 
+# First-party
 from neural_lam import utils
 
 
@@ -35,34 +37,64 @@ class WeatherDataset(torch.utils.data.Dataset):
         self.control_only = control_only
         self.config_loader = utils.ConfigLoader(data_config)
 
-        self.state = self.config_loader("state", self.split)
+        self.state = self.config_loader.process_dataset("state", self.split)
         assert self.state is not None, "State dataset not found"
-        self.forcings = self.config_loader("forcing", self.split)
-        self.boundary = self.config_loader("boundary", self.split)
+        self.forcings = self.config_loader.process_dataset(
+            "forcing", self.split
+        )
+        self.boundary = self.config_loader.process_dataset(
+            "boundary", self.split
+        )
+
+        self.state_times = self.state.time.values
+        self.forcing_window = self.config_loader.forcing.window
+        self.boundary_window = self.config_loader.boundary.window
+        self.idx_max = max(
+            (self.boundary_window - 1), (self.forcing_window - 1)
+        )
+
+        if self.forcings is not None:
+            self.forcings_windowed = (
+                self.forcings.sel(
+                    time=self.forcings.time.isin(self.state.time),
+                    method="nearest",
+                )
+                .rolling(time=self.forcing_window, center=True)
+                .construct("window")
+            )
+        if self.boundary is not None:
+            self.boundary_windowed = (
+                self.boundary.sel(
+                    time=self.forcings.time.isin(self.state.time),
+                    method="nearest",
+                )
+                .rolling(time=self.boundary_window, center=True)
+                .construct("window")
+            )
 
     def __len__(self):
-        return len(self.state.time) - self.ar_steps
+        # Skip first and last time step
+        return len(self.state.time) - self.ar_steps - self.idx_max
 
     def __getitem__(self, idx):
+        idx += self.idx_max / 2  # Skip first time step
         sample = torch.tensor(
             self.state.isel(time=slice(idx, idx + self.ar_steps)).values,
             dtype=torch.float32,
         )
 
         forcings = (
-            torch.tensor(
-                self.forcings.isel(time=slice(idx, idx + self.ar_steps)).values,
-                dtype=torch.float32,
-            )
+            self.forcings_windowed.isel(time=slice(idx, idx + self.ar_steps))
+            .stack(variable_window=("variable", "window"))
+            .values
             if self.forcings is not None
             else torch.tensor([])
         )
 
         boundary = (
-            torch.tensor(
-                self.boundary.isel(time=slice(idx, idx + self.ar_steps)).values,
-                dtype=torch.float32,
-            )
+            self.boundary_windowed.isel(time=slice(idx, idx + self.ar_steps))
+            .stack(variable_window=("variable", "window"))
+            .values
             if self.boundary is not None
             else torch.tensor([])
         )
@@ -153,4 +185,5 @@ for batch in train_dataloader:
     print(batch[2].shape)
     print(batch[3].shape)
     print(batch[4])
+    print(batch[2][0, 0, 0, :])
     break

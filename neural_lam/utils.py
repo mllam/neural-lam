@@ -1,9 +1,8 @@
 # Standard library
 import os
 
-import cartopy.crs as ccrs
-
 # Third-party
+import cartopy.crs as ccrs
 import torch
 import xarray as xr
 import yaml
@@ -242,7 +241,9 @@ class ConfigLoader:
 
     def param_names(self):
         """Return parameter names."""
-        return self.values["state"]["surface"] + self.values["state"]["atmosphere"]
+        return (
+            self.values["state"]["surface"] + self.values["state"]["atmosphere"]
+        )
 
     def param_units(self):
         """Return parameter units."""
@@ -265,7 +266,7 @@ class ConfigLoader:
         proj_params = proj_config["proj_params"]
         return proj_class(**proj_params)
 
-    def open_zarr(self, dataset_name, split):
+    def open_zarr(self, dataset_name):
         """Open a dataset specified by the dataset name."""
         dataset_path = self.zarrs[dataset_name].path
         if dataset_path is None or not os.path.exists(dataset_path):
@@ -274,10 +275,12 @@ class ConfigLoader:
         dataset = xr.open_zarr(dataset_path, consolidated=True)
         return dataset
 
-    def process_dataset(self, dataset_name, split):
+    def process_dataset(self, dataset_name, split="train"):
         """Process a single dataset specified by the dataset name."""
 
-        dataset = self.open_zarr(dataset_name, split)
+        dataset = self.open_zarr(dataset_name)
+        if dataset is None:
+            return None
 
         start, end = (
             self.splits[split].start,
@@ -287,14 +290,10 @@ class ConfigLoader:
         dataset = dataset.rename_dims(
             {
                 v: k
-                for k, v in self.zarrs[
-                    dataset_name
-                ].dims.values.items()
+                for k, v in self.zarrs[dataset_name].dims.values.items()
                 if k not in dataset.dims
             }
         )
-        if "grid" not in dataset.dims:
-            dataset = dataset.stack(grid=("x", "y"))
 
         vars_surface = []
         if self[dataset_name].surface:
@@ -322,10 +321,10 @@ class ConfigLoader:
             print("No variables found in dataset {dataset_name}")
             return None
 
+        dataset = dataset.squeeze().stack(grid=("x", "y")).to_array()
+
         if "time" in dataset.dims:
-            dataset = dataset.squeeze(
-                drop=True).to_array().transpose(
-                "time", "grid", "variable")
+            dataset = dataset.transpose("time", "grid", "variable")
         else:
-            dataset = dataset.to_array().transpose("grid", "variable")
+            dataset = dataset.transpose("grid", "variable")
         return dataset

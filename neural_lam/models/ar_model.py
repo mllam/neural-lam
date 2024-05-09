@@ -6,7 +6,6 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pytorch_lightning as pl
 import torch
-
 import wandb
 
 # First-party
@@ -29,19 +28,19 @@ class ARModel(pl.LightningModule):
         self.config_loader = utils.ConfigLoader(args.data_config)
 
         # Load static features for grid/data
-        static = self.config_loader.process_dataset("static")
-        self.register_buffer("grid_static_features", torch.tensor(static.values))
+        static = self.config_loader.process_dataset("static", self.split)
+        self.register_buffer(
+            "grid_static_features", torch.tensor(static.values)
+        )
 
         # Double grid output dim. to also output std.-dev.
         self.output_std = bool(args.output_std)
         if self.output_std:
-            self.grid_output_dim = 2 * self.config_loader.num_data_vars(
-                "state"
-            )  # Pred. dim. in grid cell
+            # Pred. dim. in grid cell
+            self.grid_output_dim = 2 * self.config_loader.num_data_vars("state")
         else:
-            self.grid_output_dim = self.config_loader.num_data_vars(
-                "state"
-            )  # Pred. dim. in grid cell
+            # Pred. dim. in grid cell
+            self.grid_output_dim = self.config_loader.num_data_vars("state")
 
             # Store constant per-variable std.-dev. weighting
             # Note that this is the inverse of the multiplicative weighting

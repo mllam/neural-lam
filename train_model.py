@@ -6,9 +6,8 @@ from argparse import ArgumentParser
 # Third-party
 import pytorch_lightning as pl
 import torch
-from lightning_fabric.utilities import seed
-
 import wandb
+from lightning_fabric.utilities import seed
 
 # First-party
 from neural_lam import utils

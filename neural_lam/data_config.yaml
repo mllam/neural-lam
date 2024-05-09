@@ -102,14 +102,26 @@ forcing: # Forcing variables, dynamic inputs to the model
   surface_units:
     - W/m^2
   atmosphere:
+    - T
   atmosphere_units:
+    - K
   levels:
+    - 0
+    - 5
+    - 8
+    - 11
+    - 13
+    - 38
+    - 44
+    - 59
+  window: 3 # Number of time steps to use for forcing (odd)
 boundary: # Boundary conditions
   surface:
   surface_units:
   atmosphere:
   atmosphere_units:
   levels:
+  window: 3 # Number of time steps to use for boundary (odd)
 lat_lon_names: # Name of variables/coordinates in zarrs specifying latitude and longitude of grid cells
   lat: lat
   lon: lon
@@ -144,4 +156,3 @@ normalization:
     diff_std: diff_std
     grid_static_features: grid_static_features
     param_weights: param_weights
-
