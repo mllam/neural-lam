@@ -285,7 +285,7 @@ class ConfigLoader:
 
     def load_normalization_stats(self):
         """Load normalization statistics from Zarr archive."""
-        normalization_path = "normalization.zarr"
+        normalization_path = self.normalization.zarr
         if not os.path.exists(normalization_path):
             print(
                 f"Normalization statistics not found at "

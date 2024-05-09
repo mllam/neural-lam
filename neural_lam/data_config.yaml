@@ -187,7 +187,7 @@ projection:
     pole_longitude: 10.0
     pole_latitude: -43.0
 normalization:
-  zarr: /scratch/sadamov/norm.zarr
+  zarr: normalization.zarr
   vars:
     data_mean: data_mean
     data_std: data_std
