@@ -78,7 +78,7 @@ def plot_prediction(
         vmin, vmax = vrange
 
     # Set up masking of border region
-    mask_reshaped = obs_mask.reshape(*data_config.grid_shape)
+    mask_reshaped = obs_mask.reshape(*data_config.grid_shape_state)
     pixel_alpha = (
         mask_reshaped.clamp(0.7, 1).cpu().numpy()
     )  # Faded border region
@@ -93,7 +93,7 @@ def plot_prediction(
     # Plot pred and target
     for ax, data in zip(axes, (target, pred)):
         ax.coastlines()  # Add coastline outlines
-        data_grid = data.reshape(*data_config.grid_shape).cpu().numpy()
+        data_grid = data.reshape(*data_config.grid_shape_state).cpu().numpy()
         im = ax.imshow(
             data_grid,
             origin="lower",
@@ -129,7 +129,7 @@ def plot_spatial_error(error, obs_mask, data_config, title=None, vrange=None):
         vmin, vmax = vrange
 
     # Set up masking of border region
-    mask_reshaped = obs_mask.reshape(*data_config.grid_shape)
+    mask_reshaped = obs_mask.reshape(*data_config.grid_shape_state)
     pixel_alpha = (
         mask_reshaped.clamp(0.7, 1).cpu().numpy()
     )  # Faded border region
@@ -139,7 +139,7 @@ def plot_spatial_error(error, obs_mask, data_config, title=None, vrange=None):
     )
 
     ax.coastlines()  # Add coastline outlines
-    error_grid = error.reshape(*data_config.grid_shape).cpu().numpy()
+    error_grid = error.reshape(*data_config.grid_shape_state).cpu().numpy()
 
     im = ax.imshow(
         error_grid,

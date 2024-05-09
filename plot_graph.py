@@ -63,9 +63,11 @@ def main():
     mesh_static_features = graph_ldict["mesh_static_features"]
 
     config_loader = utils.ConfigLoader(args.data_config)
-    grid_static_features = config_loader.process_dataset("static")
-    # Extract values needed, turn to numpy
-    grid_pos = grid_static_features[:, :2].numpy()
+    xy = config_loader.get_nwp_xy()
+    grid_xy = xy.transpose(1, 2, 0).reshape(-1, 2)  # (N_grid, 2)
+    pos_max = np.max(np.abs(grid_xy))
+    grid_pos = grid_xy / pos_max  # Divide by maximum coordinate
+
     # Add in z-dimension
     z_grid = GRID_HEIGHT * np.ones((grid_pos.shape[0],))
     grid_pos = np.concatenate(
