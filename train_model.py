@@ -31,14 +31,6 @@ def main():
         description="Train or evaluate NeurWP models for LAM"
     )
 
-    # General options
-    parser.add_argument(
-        "--dataset",
-        type=str,
-        default="meps_example",
-        help="Dataset, corresponding to name in data directory "
-        "(default: meps_example)",
-    )
     parser.add_argument(
         "--model",
         type=str,
@@ -50,13 +42,6 @@ def main():
         type=str,
         default="neural_lam/data_config.yaml",
         help="Path to data config file (default: neural_lam/data_config.yaml)",
-    )
-    parser.add_argument(
-        "--subset_ds",
-        type=int,
-        default=0,
-        help="Use only a small subset of the dataset, for debugging"
-        "(default: 0=false)",
     )
     parser.add_argument(
         "--seed", type=int, default=42, help="random seed (default: 42)"
@@ -139,11 +124,11 @@ def main():
 
     # Training options
     parser.add_argument(
-        "--ar_steps",
+        "--ar_steps_train",
         type=int,
-        default=1,
-        help="Number of steps to unroll prediction for in loss (1-19) "
-        "(default: 1)",
+        default=3,
+        help="Number of steps to unroll prediction for in loss function "
+        "(default: 3)",
     )
     parser.add_argument(
         "--control_only",
@@ -161,9 +146,9 @@ def main():
     parser.add_argument(
         "--step_length",
         type=int,
-        default=3,
+        default=1,
         help="Step length in hours to consider single time step 1-3 "
-        "(default: 3)",
+        "(default: 1)",
     )
     parser.add_argument(
         "--lr", type=float, default=1e-3, help="learning rate (default: 0.001)"
@@ -182,6 +167,13 @@ def main():
         type=str,
         help="Eval model on given data split (val/test) "
         "(default: None (train model))",
+    )
+    parser.add_argument(
+        "--ar_steps_eval",
+        type=int,
+        default=25,
+        help="Number of steps to unroll prediction for in loss function "
+        "(default: 25)",
     )
     parser.add_argument(
         "--n_example_pred",
@@ -234,6 +226,8 @@ def main():
     seed.seed_everything(args.seed)
     # Create datamodule
     data_module = WeatherDataModule(
+        ar_steps_train=args.ar_steps_train,
+        ar_steps_eval=args.ar_steps_eval,
         batch_size=args.batch_size,
         num_workers=args.num_workers,
     )
@@ -258,9 +252,10 @@ def main():
     else:
         model = model_class(args)
 
-    prefix = "subset-" if args.subset_ds else ""
     if args.eval:
-        prefix = prefix + f"eval-{args.eval}-"
+        prefix = f"eval-{args.eval}-"
+    else:
+        prefix = "train-"
     run_name = (
         f"{prefix}{args.model}-{args.processor_layers}x{args.hidden_dim}-"
         f"{time.strftime('%m_%d_%H')}-{random_run_id:04d}"

@@ -18,8 +18,8 @@ class WeatherDataset(torch.utils.data.Dataset):
     def __init__(
         self,
         split="train",
-        batch_size=4,
         ar_steps=3,
+        batch_size=4,
         control_only=False,
         data_config="neural_lam/data_config.yaml",
     ):
@@ -47,9 +47,6 @@ class WeatherDataset(torch.utils.data.Dataset):
         self.state_times = self.state.time.values
         self.forcing_window = self.config_loader.forcing.window
         self.boundary_window = self.config_loader.boundary.window
-        self.idx_max = max(
-            (self.boundary_window - 1), (self.forcing_window - 1)
-        )
 
         if self.forcing is not None:
             self.forcing_windowed = (
@@ -81,17 +78,16 @@ class WeatherDataset(torch.utils.data.Dataset):
 
     def __len__(self):
         # Skip first and last time step
-        return len(self.state.time) - self.ar_steps - self.idx_max
+        return len(self.state.time) - self.ar_steps
 
     def __getitem__(self, idx):
-        idx += self.idx_max // 2  # Skip first time step
         sample = torch.tensor(
             self.state.isel(time=slice(idx, idx + self.ar_steps)).values,
             dtype=torch.float32,
         )
 
         forcing = (
-            self.forcing_windowed.isel(time=slice(idx, idx + self.ar_steps))
+            self.forcing_windowed.isel(time=slice(idx + 2, idx + self.ar_steps))
             .stack(variable_window=("variable", "window"))
             .values
             if self.forcing is not None
@@ -99,7 +95,9 @@ class WeatherDataset(torch.utils.data.Dataset):
         )
 
         boundary = (
-            self.boundary_windowed.isel(time=slice(idx, idx + self.ar_steps))
+            self.boundary_windowed.isel(
+                time=slice(idx + 2, idx + self.ar_steps)
+            )
             .stack(variable_window=("variable", "window"))
             .values
             if self.boundary is not None
@@ -110,16 +108,16 @@ class WeatherDataset(torch.utils.data.Dataset):
         target_states = sample[2:]
 
         batch_times = (
-            self.state.isel(time=slice(idx, idx + self.ar_steps))
+            self.state.isel(time=slice(idx + 2, idx + self.ar_steps))
             .time.values.astype(str)
             .tolist()
         )
 
         # init_states: (2, N_grid, d_features)
         # target_states: (ar_steps-2, N_grid, d_features)
-        # forcing: (ar_steps, N_grid, d_windowed_forcing)
-        # boundary: (ar_steps, N_grid, d_windowed_boundary)
-        # batch_times: (ar_steps,)
+        # forcing: (ar_steps-2, N_grid, d_windowed_forcing)
+        # boundary: (ar_steps-2, N_grid, d_windowed_boundary)
+        # batch_times: (ar_steps-2,)
         return init_states, target_states, forcing, boundary, batch_times
 
 
@@ -128,10 +126,14 @@ class WeatherDataModule(pl.LightningDataModule):
 
     def __init__(
         self,
+        ar_steps_train=3,
+        ar_steps_eval=25,
         batch_size=4,
         num_workers=16,
     ):
         super().__init__()
+        self.ar_steps_train = ar_steps_train
+        self.ar_steps_eval = ar_steps_eval
         self.batch_size = batch_size
         self.num_workers = num_workers
         self.train_dataset = None
@@ -142,16 +144,19 @@ class WeatherDataModule(pl.LightningDataModule):
         if stage == "fit" or stage is None:
             self.train_dataset = WeatherDataset(
                 split="train",
+                ar_steps=self.ar_steps_train,
                 batch_size=self.batch_size,
             )
             self.val_dataset = WeatherDataset(
                 split="val",
+                ar_steps=self.ar_steps_eval,
                 batch_size=self.batch_size,
             )
 
         if stage == "test" or stage is None:
             self.test_dataset = WeatherDataset(
                 split="test",
+                ar_steps=self.ar_steps_eval,
                 batch_size=self.batch_size,
             )
 
