@@ -276,6 +276,20 @@ class ConfigLoader:
         dataset = xr.open_zarr(dataset_path, consolidated=True)
         return dataset
 
+    def load_normalization_stats(self):
+        """Load normalization statistics from Zarr archive."""
+        normalization_path = "normalization.zarr"
+        if not os.path.exists(normalization_path):
+            print(
+                f"Normalization statistics not found at "
+                f"path: {normalization_path}"
+            )
+            return None
+        normalization_stats = xr.open_zarr(
+            normalization_path, consolidated=True
+        )
+        return normalization_stats
+
     def process_dataset(self, dataset_name, split="train", stack=True):
         """Process a single dataset specified by the dataset name."""
 
@@ -338,8 +352,8 @@ class ConfigLoader:
                 x=dataset[lon_name], y=dataset[lat_name]
             )
 
-            if stack:
-                dataset = self.stack_grid(dataset)
+        if stack:
+            dataset = self.stack_grid(dataset)
 
         return dataset
 

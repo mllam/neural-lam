@@ -91,6 +91,17 @@ class ARModel(pl.LightningModule):
         # For storing spatial loss maps during evaluation
         self.spatial_loss_maps = []
 
+        # Load normalization statistics
+        self.normalization_stats = self.config_loader.load_normalization_stats()
+        if self.normalization_stats is not None:
+            for (
+                var_name,
+                var_data,
+            ) in self.normalization_stats.data_vars.items():
+                self.register_buffer(
+                    f"data_{var_name}", torch.tensor(var_data.values)
+                )
+
     def configure_optimizers(self):
         opt = torch.optim.AdamW(
             self.parameters(), lr=self.lr, betas=(0.9, 0.95)
@@ -194,6 +205,28 @@ class ARModel(pl.LightningModule):
         # pred_std: (B, pred_steps, num_grid_nodes, d_f) or (d_f,)
 
         return prediction, target_states, pred_std
+
+    def on_after_batch_transfer(self, batch, dataloader_idx):
+        """Normalize Batch data after transferring to the device."""
+        if self.normalization_stats is not None:
+            init_states, target_states, forcing_features, boundary_features = (
+                batch
+            )
+            init_states = (init_states - self.data_mean) / self.data_std
+            target_states = (target_states - self.data_mean) / self.data_std
+            forcing_features = (
+                forcing_features - self.forcing_mean
+            ) / self.forcing_std
+            boundary_features = (
+                boundary_features - self.boundary_mean
+            ) / self.boundary_std
+            batch = (
+                init_states,
+                target_states,
+                forcing_features,
+                boundary_features,
+            )
+        return batch
 
     def training_step(self, batch):
         """
