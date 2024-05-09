@@ -6,12 +6,18 @@ zarrs: # List of zarrs containing fields related to state
       level: z
       x: x # Either give "grid" (flattened) dimension or "x" and "y"
       y: y
+    lat_lon_names:
+      lon: lon
+      lat: lat
   static:
     path: /scratch/sadamov/template.zarr
     dims:
       level: z
       x: x
       y: y
+    lat_lon_names:
+      lon: lon
+      lat: lat
   forcing:
     path: /scratch/sadamov/template.zarr
     dims:
@@ -19,6 +25,9 @@ zarrs: # List of zarrs containing fields related to state
       level: z
       x: x
       y: y
+    lat_lon_names:
+      lon: lon
+      lat: lat
   boundary:
     path: /scratch/sadamov/era5.zarr
     dims:
@@ -26,6 +35,9 @@ zarrs: # List of zarrs containing fields related to state
       level: level
       x: longitude
       y: latitude
+    lat_lon_names:
+      lon: longitude
+      lat: latitude
     mask: boundary_mask # Name of variable containing boolean mask, true for grid nodes to be used in boundary.
 state: # Variables forecasted by the model
   surface: # Single-field variables
@@ -77,16 +89,8 @@ state: # Variables forecasted by the model
 static: # Static inputs
   surface:
     - HSURF
-    - lat
-    - lon
-  surface_units:
-    - m
-    - °N
-    - °E
   atmosphere:
     - FI
-  atmosphere_units:
-    - m^2/s^2
   levels:
     - 0
     - 5
@@ -104,12 +108,8 @@ static: # Static inputs
 forcing: # Forcing variables, dynamic inputs to the model
   surface:
     - ASOB_S
-  surface_units:
-    - W/m^2
   atmosphere:
     - T
-  atmosphere_units:
-    - K
   levels:
     - 0
     - 5
@@ -143,23 +143,6 @@ boundary: # Boundary conditions
     # - total_precipitation_24hr
     # - total_precipitation_6hr
     # - geopotential_at_surface
-  surface_units:
-    - m/s
-    # - m/s
-    # - K
-    # - K
-    # - Pa
-    # - W/m^2
-    # - W/m^2
-    # - W/m^2
-    # - W/m^2
-    # - Pa
-    # - "%"
-    # - kg/m^2
-    # - kg/m^2
-    # - kg/m^2
-    # - kg/m^2
-    # - m^2/s^2
   atmosphere:
     - divergence
     # - geopotential
@@ -170,16 +153,6 @@ boundary: # Boundary conditions
     # - v_component_of_wind
     # - vertical_velocity
     # - vorticity
-  atmosphere_units:
-    - 1/s
-    # - m^2/s^2
-    # - "%"
-    # - kg/kg
-    # - K
-    # - m/s
-    # - m/s
-    # - m/s
-    # - 1/s
   levels:
     - 50
     - 100
@@ -195,10 +168,7 @@ boundary: # Boundary conditions
     - 925
     - 1000
   window: 3 # Number of time steps to use for boundary (odd)
-lat_lon_names: # Name of variables/coordinates in zarrs specifying latitude and longitude of grid cells
-  lat: lat
-  lon: lon
-grid_shape:
+grid_shape_state:
   x: 582
   y: 390
 splits:
