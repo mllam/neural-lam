@@ -1,6 +1,6 @@
 import neural_lam
-import neural_lam.create_mesh
 import neural_lam.create_grid_features
+import neural_lam.create_mesh
 import neural_lam.create_parameter_weights
 import neural_lam.train_model
 
