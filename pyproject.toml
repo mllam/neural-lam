@@ -31,25 +31,7 @@ license = {text = "MIT"}
 line-length = 80
 
 [tool.isort]
-default_section = "THIRDPARTY"
 profile = "black"
-# Headings
-import_heading_stdlib = "Standard library"
-import_heading_thirdparty = "Third-party"
-import_heading_firstparty = "First-party"
-import_heading_localfolder = "Local"
-# Known modules to avoid misclassification
-known_standard_library = [
-    # Add standard library modules that may be misclassified by isort
-]
-known_third_party = [
-    # Add third-party modules that may be misclassified by isort
-    "wandb",
-]
-known_first_party = [
-    # Add first-party modules that may be misclassified by isort
-    "neural_lam",
-]
 
 [tool.flake8]
 max-line-length = 80
