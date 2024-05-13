@@ -14,6 +14,7 @@ dependencies = [
     "tueplots>=0.0.8",
     "plotly>=5.15.0",
     "pre-commit>=2.15.0",
+    "torch-geometric>=2.5.3",
 ]
 requires-python = ">=3.10"
 name = "neural-lam"
