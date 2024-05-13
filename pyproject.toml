@@ -52,13 +52,13 @@ skip = "requirements/*"
 ignore = [
     "create_mesh.py", # Disable linting for now, as major rework is planned/expected
 ]
-# Temporary fix for import neural_lam statements until set up as proper package
-init-hook='import sys; sys.path.append(".")'
+
 [tool.pylint.TYPECHECK]
 generated-members = [
     "numpy.*",
     "torch.*",
 ]
+
 [tool.pylint.'MESSAGES CONTROL']
 disable = [
     "C0114", # 'missing-module-docstring', Do not require module docstrings
