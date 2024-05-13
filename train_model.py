@@ -23,7 +23,7 @@ MODELS = {
 }
 
 
-def main():
+def main():  # pylint: disable=too-many-branches
     """
     Main function for training and evaluating models
     """
@@ -242,9 +242,8 @@ def main():
         accelerator = "cuda"
         if "SLURM_JOB_ID" in os.environ and not args.eval:
             devices = int(
-                os.environ.get(
-                    "SLURM_GPUS_PER_NODE",
-                    torch.cuda.device_count()))
+                os.environ.get("SLURM_GPUS_PER_NODE", torch.cuda.device_count())
+            )
             num_nodes = int(os.environ.get("SLURM_JOB_NUM_NODES", 1))
             # Allows using Tensor Cores on A100s
             torch.set_float32_matmul_precision("high")
