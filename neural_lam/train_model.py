@@ -9,11 +9,11 @@ import torch
 from lightning_fabric.utilities import seed
 
 # First-party
-from neural_lam import constants, utils
-from neural_lam.models.graph_lam import GraphLAM
-from neural_lam.models.hi_lam import HiLAM
-from neural_lam.models.hi_lam_parallel import HiLAMParallel
-from neural_lam.weather_dataset import WeatherDataset
+from . import constants, utils
+from .models.graph_lam import GraphLAM
+from .models.hi_lam import HiLAM
+from .models.hi_lam_parallel import HiLAMParallel
+from .weather_dataset import WeatherDataset
 
 MODELS = {
     "graph_lam": GraphLAM,

@@ -8,7 +8,7 @@ from torch import nn
 from tueplots import bundles, figsizes
 
 # First-party
-from neural_lam import constants
+from . import constants
 
 
 def load_dataset_stats(dataset_name, device="cpu"):
