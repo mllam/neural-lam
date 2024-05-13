@@ -2,7 +2,7 @@
 # needs to first install pdm, then install torch cpu manually and then install the package
 # then run the tests
 
-name: tests
+name: tests (cpu)
 
 on: [push, pull_request]
 
@@ -17,6 +17,7 @@ jobs:
         uses: pdm-project/setup-pdm@v4
         with:
           python-version: "3.10"
+          cache: true
 
       - name: Install torch (CPU)
         run: |
