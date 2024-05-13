@@ -2,7 +2,7 @@
 import torch_geometric as pyg
 
 # First-party
-from . import utils
+from .. import utils
 from ..interaction_net import InteractionNet
 from .base_graph_model import BaseGraphModel
 
