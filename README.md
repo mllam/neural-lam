@@ -45,7 +45,7 @@ Still, some restrictions are inevitable:
 ## A note on the limited area setting
 Currently we are using these models on a limited area covering the Nordic region, the so called MEPS area (see [paper](https://arxiv.org/abs/2309.17370)).
 There are still some parts of the code that is quite specific for the MEPS area use case.
-This is in particular true for the mesh graph creation (`create_mesh.py`) and some of the constants used (`neural_lam/constants.py`).
+This is in particular true for the mesh graph creation (`neural_lam.create_mesh`) and some of the constants used (`neural_lam.constants`).
 If there is interest to use Neural-LAM for other areas it is not a substantial undertaking to refactor the code to be fully area-agnostic.
 We would be happy to support such enhancements.
 See the issues https://github.com/joeloskarsson/neural-lam/issues/2, https://github.com/joeloskarsson/neural-lam/issues/3 and https://github.com/joeloskarsson/neural-lam/issues/4 for some initial ideas on how this could be done.
@@ -77,7 +77,7 @@ See the [repository format section](#format-of-data-directory) for details on th
 The full MEPS dataset can be shared with other researchers on request, contact us for this.
 A tiny subset of the data (named `meps_example`) is available in `example_data.zip`, which can be downloaded from [here](https://liuonline-my.sharepoint.com/:f:/g/personal/joeos82_liu_se/EuiUuiGzFIFHruPWpfxfUmYBSjhqMUjNExlJi9W6ULMZ1w?e=97pnGX).
 Download the file and unzip in the neural-lam directory.
-All graphs used in the paper are also available for download at the same link (but can as easily be re-generated using `create_mesh.py`).
+All graphs used in the paper are also available for download at the same link (but can as easily be re-generated using `python -m neural_lam.create_mesh`).
 Note that this is far too little data to train any useful models, but all scripts can be ran with it.
 It should thus be useful to make sure that your python environment is set up correctly and that all the code can be ran without any issues.
 
@@ -86,31 +86,31 @@ An overview of how the different scripts and files depend on each other is given
 <p align="middle">
   <img src="figures/component_dependencies.png"/>
 </p>
-In order to start training models at least three pre-processing scripts have to be ran:
+In order to start training models at least three pre-processing scripts have to be run:
 
-* `create_mesh.py`
-* `create_grid_features.py`
-* `create_parameter_weights.py`
+* `python -m neural_lam.create_mesh`
+* `python -m neural_lam.create_grid_features`
+* `python -m neural_lam.create_parameter_weights`
 
 ### Create graph
-Run `create_mesh.py` with suitable options to generate the graph you want to use (see `python create_mesh.py --help` for a list of options).
+Run `python -m neural_lam.create_mesh` with suitable options to generate the graph you want to use (see `python neural_lam.create_mesh --help` for a list of options).
 The graphs used for the different models in the [paper](https://arxiv.org/abs/2309.17370) can be created as:
 
-* **GC-LAM**: `python create_mesh.py --graph multiscale`
-* **Hi-LAM**: `python create_mesh.py --graph hierarchical --hierarchical 1` (also works for Hi-LAM-Parallel)
-* **L1-LAM**: `python create_mesh.py --graph 1level --levels 1`
+* **GC-LAM**: `python -m neural_lam.create_mesh --graph multiscale`
+* **Hi-LAM**: `python -m neural_lam.create_mesh --graph hierarchical --hierarchical 1` (also works for Hi-LAM-Parallel)
+* **L1-LAM**: `python -m neural_lam.create_mesh --graph 1level --levels 1`
 
 The graph-related files are stored in a directory called `graphs`.
 
 ### Create remaining static features
-To create the remaining static files run the scripts `create_grid_features.py` and `create_parameter_weights.py`.
+To create the remaining static files run the scripts `python -m neural_lam.create_grid_features` and `python -m neural_lam.create_parameter_weights`.
 The main option to set for these is just which dataset to use.
 
 ## Weights & Biases Integration
 The project is fully integrated with [Weights & Biases](https://www.wandb.ai/) (W&B) for logging and visualization, but can just as easily be used without it.
 When W&B is used, training configuration, training/test statistics and plots are sent to the W&B servers and made available in an interactive web interface.
 If W&B is turned off, logging instead saves everything locally to a directory like `wandb/dryrun...`.
-The W&B project name is set to `neural-lam`, but this can be changed in `neural_lam/constants.py`.
+The W&B project name is set to `neural-lam`, but this can be changed in `neural_lam.constants`.
 See the [W&B documentation](https://docs.wandb.ai/) for details.
 
 If you would like to login and use W&B, run:
@@ -123,8 +123,8 @@ wandb off
 ```
 
 ## Train Models
-Models can be trained using `train_model.py`.
-Run `python train_model.py --help` for a full list of training options.
+Models can be trained using `python -m neural_lam.train_model`.
+Run `python neural_lam.train_model --help` for a full list of training options.
 A few of the key ones are outlined below:
 
 * `--dataset`: Which data to train on
@@ -143,12 +143,12 @@ This model class is used both for the L1-LAM and GC-LAM models from the [paper](
 
 To train 1L-LAM use
 ```
-python train_model.py --model graph_lam --graph 1level ...
+python -m neural_lam.train_model --model graph_lam --graph 1level ...
 ```
 
 To train GC-LAM use
 ```
-python train_model.py --model graph_lam --graph multiscale ...
+python -m neural_lam.train_model --model graph_lam --graph multiscale ...
 ```
 
 ### Hi-LAM
@@ -156,7 +156,7 @@ A version of Graph-LAM that uses a hierarchical mesh graph and performs sequenti
 
 To train Hi-LAM use
 ```
-python train_model.py --model hi_lam --graph hierarchical ...
+python -m neural_lam.train_model --model hi_lam --graph hierarchical ...
 ```
 
 ### Hi-LAM-Parallel
@@ -165,13 +165,13 @@ Not included in the paper as initial experiments showed worse results than Hi-LA
 
 To train Hi-LAM-Parallel use
 ```
-python train_model.py --model hi_lam_parallel --graph hierarchical ...
+python -m neural_lam.train_model --model hi_lam_parallel --graph hierarchical ...
 ```
 
 Checkpoint files for our models trained on the MEPS data are available upon request.
 
 ## Evaluate Models
-Evaluation is also done using `train_model.py`, but using the `--eval` option.
+Evaluation is also done using `python -m neural_lam.train_model`, but using the `--eval` option.
 Use `--eval val` to evaluate the model on the validation set and `--eval test` to evaluate on test data.
 Most of the training options are also relevant for evaluation (not `ar_steps`, evaluation always unrolls full forecasts).
 Some options specifically important for evaluation are:
