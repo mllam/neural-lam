@@ -1,51 +1,51 @@
 repos:
--   repo: https://github.com/pre-commit/pre-commit-hooks
+  - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v4.5.0
     hooks:
-    -   id: check-ast
-    -   id: check-case-conflict
-    -   id: check-docstring-first
-    -   id: check-symlinks
-    -   id: check-toml
-    -   id: check-yaml
-    -   id: debug-statements
-    -   id: end-of-file-fixer
-    -   id: trailing-whitespace
--   repo: local
+      - id: check-ast
+      - id: check-case-conflict
+      - id: check-docstring-first
+      - id: check-symlinks
+      - id: check-toml
+      - id: check-yaml
+      - id: debug-statements
+      - id: end-of-file-fixer
+      - id: trailing-whitespace
+
+  - repo: https://github.com/codespell-project/codespell
+    rev: 2.0.0
     hooks:
-    -   id: codespell
-        name: codespell
+      - id: codespell
         description: Check for spelling errors
         language: system
-        entry: codespell
--   repo: local
+
+  - repo: https://github.com/psf/black
+    rev: 22.3.0
     hooks:
-    -   id: black
-        name: black
+      - id: black
         description: Format Python code
         language: system
-        entry: black
         types_or: [python, pyi]
--   repo: local
+
+  - repo: https://github.com/PyCQA/isort
+    rev: 5.12.0
     hooks:
-    -   id: isort
-        name: isort
+      - id: isort
         description: Group and sort Python imports
         language: system
-        entry: isort
         types_or: [python, pyi, cython]
--   repo: local
+
+  - repo: https://github.com/PyCQA/flake8
+    rev: 6.1.0
     hooks:
-    -   id: flake8
-        name: flake8
+      - id: flake8
         description: Check Python code for correctness, consistency and adherence to best practices
         language: system
-        entry: flake8 --max-line-length=80 --ignore=E203,F811,I002,W503
         types: [python]
--   repo: local
+
+  - repo: https://github.com/pylint-dev/pylint
     hooks:
-    -   id: pylint
-        name: pylint
+      - id: pylint
         entry: pylint -rn -sn
         language: system
         types: [python]
