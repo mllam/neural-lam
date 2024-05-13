@@ -1,6 +1,6 @@
 # Changelog
 
-## [unrelease](https://github.com/joeloskarsson/neural-lam)
+## [unrelease](https://github.com/joeloskarsson/neural-lam/compare/v0.1.0...HEAD)
 
 ### Added
 
