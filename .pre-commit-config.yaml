@@ -44,6 +44,7 @@ repos:
         types: [python]
 
   - repo: https://github.com/pylint-dev/pylint
+    rev: 2.0.0
     hooks:
       - id: pylint
         entry: pylint -rn -sn
