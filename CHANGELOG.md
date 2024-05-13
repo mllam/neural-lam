@@ -38,7 +38,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Removed
 
-- WeatherDataset(torch.Dataset) no longer returns static component, static is
+- `WeatherDataset(torch.Dataset)` no longer returns "static" component of
+  training item (only `prev_state`, `target_state` and `forcing`), static is
   instead included in forcing
   [\#13](https://github.com/joeloskarsson/neural-lam/pull/13)
   @joeloskarsson
