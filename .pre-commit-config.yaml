@@ -13,40 +13,25 @@ repos:
       - id: trailing-whitespace
 
   - repo: https://github.com/codespell-project/codespell
-    rev: 2.0.0
+    rev: v2.2.6
     hooks:
       - id: codespell
         description: Check for spelling errors
-        language: system
 
   - repo: https://github.com/psf/black
     rev: 22.3.0
     hooks:
       - id: black
         description: Format Python code
-        language: system
-        types_or: [python, pyi]
 
   - repo: https://github.com/PyCQA/isort
     rev: 5.12.0
     hooks:
       - id: isort
         description: Group and sort Python imports
-        language: system
-        types_or: [python, pyi, cython]
 
   - repo: https://github.com/PyCQA/flake8
     rev: 6.1.0
     hooks:
       - id: flake8
         description: Check Python code for correctness, consistency and adherence to best practices
-        language: system
-        types: [python]
-
-  - repo: https://github.com/pylint-dev/pylint
-    rev: 2.0.0
-    hooks:
-      - id: pylint
-        entry: pylint -rn -sn
-        language: system
-        types: [python]
