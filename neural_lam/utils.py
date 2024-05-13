@@ -2,87 +2,13 @@
 import os
 
 # Third-party
+import cartopy.crs as ccrs
 import numpy as np
 import torch
+import xarray as xr
+import yaml
 from torch import nn
 from tueplots import bundles, figsizes
-
-# First-party
-from neural_lam import constants
-
-
-def load_dataset_stats(dataset_name, device="cpu"):
-    """
-    Load arrays with stored dataset statistics from pre-processing
-    """
-    static_dir_path = os.path.join("data", dataset_name, "static")
-
-    def loads_file(fn):
-        return torch.load(
-            os.path.join(static_dir_path, fn), map_location=device
-        )
-
-    data_mean = loads_file("parameter_mean.pt")  # (d_features,)
-    data_std = loads_file("parameter_std.pt")  # (d_features,)
-
-    flux_stats = loads_file("flux_stats.pt")  # (2,)
-    flux_mean, flux_std = flux_stats
-
-    return {
-        "data_mean": data_mean,
-        "data_std": data_std,
-        "flux_mean": flux_mean,
-        "flux_std": flux_std,
-    }
-
-
-def load_static_data(dataset_name, device="cpu"):
-    """
-    Load static files related to dataset
-    """
-    static_dir_path = os.path.join("data", dataset_name, "static")
-
-    def loads_file(fn):
-        return torch.load(
-            os.path.join(static_dir_path, fn), map_location=device
-        )
-
-    # Load border mask, 1. if node is part of border, else 0.
-    border_mask_np = np.load(os.path.join(static_dir_path, "border_mask.npy"))
-    border_mask = (
-        torch.tensor(border_mask_np, dtype=torch.float32, device=device)
-        .flatten(0, 1)
-        .unsqueeze(1)
-    )  # (N_grid, 1)
-
-    grid_static_features = loads_file(
-        "grid_features.pt"
-    )  # (N_grid, d_grid_static)
-
-    # Load step diff stats
-    step_diff_mean = loads_file("diff_mean.pt")  # (d_f,)
-    step_diff_std = loads_file("diff_std.pt")  # (d_f,)
-
-    # Load parameter std for computing validation errors in original data scale
-    data_mean = loads_file("parameter_mean.pt")  # (d_features,)
-    data_std = loads_file("parameter_std.pt")  # (d_features,)
-
-    # Load loss weighting vectors
-    param_weights = torch.tensor(
-        np.load(os.path.join(static_dir_path, "parameter_weights.npy")),
-        dtype=torch.float32,
-        device=device,
-    )  # (d_f,)
-
-    return {
-        "border_mask": border_mask,
-        "grid_static_features": grid_static_features,
-        "step_diff_mean": step_diff_mean,
-        "step_diff_std": step_diff_std,
-        "data_mean": data_mean,
-        "data_std": data_std,
-        "param_weights": param_weights,
-    }
 
 
 class BufferList(nn.Module):
@@ -263,11 +189,196 @@ def fractional_plot_bundle(fraction):
     return bundle
 
 
-def init_wandb_metrics(wandb_logger):
+def init_wandb_metrics(wandb_logger, val_steps):
     """
     Set up wandb metrics to track
     """
     experiment = wandb_logger.experiment
     experiment.define_metric("val_mean_loss", summary="min")
-    for step in constants.VAL_STEP_LOG_ERRORS:
+    for step in val_steps:
         experiment.define_metric(f"val_loss_unroll{step}", summary="min")
+
+
+class ConfigLoader:
+    """
+    Class for loading configuration files.
+
+    This class loads a YAML configuration file and provides a way to access
+    its values as attributes.
+    """
+
+    def __init__(self, config_path, values=None):
+        self.config_path = config_path
+        if values is None:
+            self.values = self.load_config()
+        else:
+            self.values = values
+
+    def load_config(self):
+        """Load configuration file."""
+        with open(self.config_path, encoding="utf-8", mode="r") as file:
+            return yaml.safe_load(file)
+
+    def __getattr__(self, name):
+        keys = name.split(".")
+        value = self.values
+        for key in keys:
+            if key in value:
+                value = value[key]
+            else:
+                return None
+        if isinstance(value, dict):
+            return ConfigLoader(None, values=value)
+        return value
+
+    def __getitem__(self, key):
+        value = self.values[key]
+        if isinstance(value, dict):
+            return ConfigLoader(None, values=value)
+        return value
+
+    def __contains__(self, key):
+        return key in self.values
+
+    def param_names(self):
+        """Return parameter names."""
+        surface_names = self.values["state"]["surface"]
+        atmosphere_names = [
+            f"{var}_{level}"
+            for var in self.values["state"]["atmosphere"]
+            for level in self.values["state"]["levels"]
+        ]
+        return surface_names + atmosphere_names
+
+    def param_units(self):
+        """Return parameter units."""
+        surface_units = self.values["state"]["surface_units"]
+        atmosphere_units = [
+            unit
+            for unit in self.values["state"]["atmosphere_units"]
+            for _ in self.values["state"]["levels"]
+        ]
+        return surface_units + atmosphere_units
+
+    def num_data_vars(self, key):
+        """Return the number of data variables for a given key."""
+        surface_vars = len(self.values[key]["surface"])
+        atmosphere_vars = len(self.values[key]["atmosphere"])
+        levels = len(self.values[key]["levels"])
+        return surface_vars + atmosphere_vars * levels
+
+    def projection(self):
+        """Return the projection."""
+        proj_config = self.values["projections"]["class"]
+        proj_class = getattr(ccrs, proj_config["proj_class"])
+        proj_params = proj_config["proj_params"]
+        return proj_class(**proj_params)
+
+    def open_zarr(self, dataset_name):
+        """Open a dataset specified by the dataset name."""
+        dataset_path = self.zarrs[dataset_name].path
+        if dataset_path is None or not os.path.exists(dataset_path):
+            print(f"Dataset '{dataset_name}' not found at path: {dataset_path}")
+            return None
+        dataset = xr.open_zarr(dataset_path, consolidated=True)
+        return dataset
+
+    def load_normalization_stats(self):
+        """Load normalization statistics from Zarr archive."""
+        normalization_path = self.normalization.zarr
+        if not os.path.exists(normalization_path):
+            print(
+                f"Normalization statistics not found at "
+                f"path: {normalization_path}"
+            )
+            return None
+        normalization_stats = xr.open_zarr(
+            normalization_path, consolidated=True
+        )
+        return normalization_stats
+
+    def process_dataset(self, dataset_name, split="train", stack=True):
+        """Process a single dataset specified by the dataset name."""
+
+        dataset = self.open_zarr(dataset_name)
+        if dataset is None:
+            return None
+
+        start, end = (
+            self.splits[split].start,
+            self.splits[split].end,
+        )
+        dataset = dataset.sel(time=slice(start, end))
+        dataset = dataset.rename_dims(
+            {
+                v: k
+                for k, v in self.zarrs[dataset_name].dims.values.items()
+                if k not in dataset.dims
+            }
+        )
+
+        vars_surface = []
+        if self[dataset_name].surface:
+            vars_surface = dataset[self[dataset_name].surface]
+
+        vars_atmosphere = []
+        if self[dataset_name].atmosphere:
+            vars_atmosphere = xr.merge(
+                [
+                    dataset[var]
+                    .sel(level=level, drop=True)
+                    .rename(f"{var}_{level}")
+                    for var in self[dataset_name].atmosphere
+                    for level in self[dataset_name].levels
+                ]
+            )
+
+        if vars_surface and vars_atmosphere:
+            dataset = xr.merge([vars_surface, vars_atmosphere])
+        elif vars_surface:
+            dataset = vars_surface
+        elif vars_atmosphere:
+            dataset = vars_atmosphere
+        else:
+            print(f"No variables found in dataset {dataset_name}")
+            return None
+
+        if not all(
+            lat_lon in self.zarrs[dataset_name].dims.values.values()
+            for lat_lon in self.zarrs[
+                dataset_name
+            ].lat_lon_names.values.values()
+        ):
+            lat_name = self.zarrs[dataset_name].lat_lon_names.lat
+            lon_name = self.zarrs[dataset_name].lat_lon_names.lon
+            if dataset[lat_name].ndim == 2:
+                dataset[lat_name] = dataset[lat_name].isel(x=0, drop=True)
+            if dataset[lon_name].ndim == 2:
+                dataset[lon_name] = dataset[lon_name].isel(y=0, drop=True)
+            dataset = dataset.assign_coords(
+                x=dataset[lon_name], y=dataset[lat_name]
+            )
+
+        if stack:
+            dataset = self.stack_grid(dataset)
+
+        return dataset
+
+    def stack_grid(self, dataset):
+        """Stack grid dimensions."""
+        dataset = dataset.squeeze().stack(grid=("x", "y")).to_array()
+
+        if "time" in dataset.dims:
+            dataset = dataset.transpose("time", "grid", "variable")
+        else:
+            dataset = dataset.transpose("grid", "variable")
+        return dataset
+
+    def get_nwp_xy(self):
+        """Get the x and y coordinates for the NWP grid."""
+        x = self.process_dataset("static", stack=False).x.values
+        y = self.process_dataset("static", stack=False).y.values
+        xx, yy = np.meshgrid(y, x)
+        xy = np.stack((xx, yy), axis=0)
+
+        return xy

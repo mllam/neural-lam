@@ -166,9 +166,7 @@ class BaseGraphModel(ARModel):
             pred_std = None
 
         # Rescale with one-step difference statistics
-        rescaled_delta_mean = (
-            pred_delta_mean * self.step_diff_std + self.step_diff_mean
-        )
+        rescaled_delta_mean = pred_delta_mean * self.diff_std + self.diff_mean
 
         # Residual connection for full state
         return prev_state + rescaled_delta_mean, pred_std

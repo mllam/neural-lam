@@ -20,12 +20,6 @@ def main():
     """
     parser = ArgumentParser(description="Plot graph")
     parser.add_argument(
-        "--dataset",
-        type=str,
-        default="meps_example",
-        help="Datast to load grid coordinates from (default: meps_example)",
-    )
-    parser.add_argument(
         "--graph",
         type=str,
         default="multiscale",
@@ -41,6 +35,12 @@ def main():
         type=int,
         default=0,
         help="If the axis should be displayed (default: 0 (No))",
+    )
+    parser.add_argument(
+        "--data_config",
+        type=str,
+        default="neural_lam/data_config.yaml",
+        help="Path to data config file (default: neural_lam/data_config.yaml)",
     )
 
     args = parser.parse_args()
@@ -62,12 +62,12 @@ def main():
     )
     mesh_static_features = graph_ldict["mesh_static_features"]
 
-    grid_static_features = utils.load_static_data(args.dataset)[
-        "grid_static_features"
-    ]
+    config_loader = utils.ConfigLoader(args.data_config)
+    xy = config_loader.get_nwp_xy()
+    grid_xy = xy.transpose(1, 2, 0).reshape(-1, 2)  # (N_grid, 2)
+    pos_max = np.max(np.abs(grid_xy))
+    grid_pos = grid_xy / pos_max  # Divide by maximum coordinate
 
-    # Extract values needed, turn to numpy
-    grid_pos = grid_static_features[:, :2].numpy()
     # Add in z-dimension
     z_grid = GRID_HEIGHT * np.ones((grid_pos.shape[0],))
     grid_pos = np.concatenate(
