@@ -382,3 +382,10 @@ class ConfigLoader:
         xy = np.stack((xx, yy), axis=0)
 
         return xy
+
+    def get_step_length(self):
+        """Get the temporal resolution for a given dataset."""
+        times = self.open_zarr("state").isel(time=slice(0, 2)).time.values
+        step_length = times[1] - times[0]
+        step_length_hours = step_length.astype("timedelta64[h]").astype(int)
+        return step_length_hours
