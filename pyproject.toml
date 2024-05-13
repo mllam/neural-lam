@@ -78,6 +78,11 @@ min-similarity-lines=10
 
 [tool.pdm]
 distribution = true
+
+[tool.pdm.dev-dependencies]
+dev = [
+    "pytest>=8.2.0",
+]
 [build-system]
 requires = ["pdm-backend"]
 build-backend = "pdm.backend"
