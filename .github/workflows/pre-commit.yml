@@ -1,15 +1,17 @@
 name: Run pre-commit job
 
 on:
- push:
+  # trigger on pushes to any branch, but not main
+  push:
+    branches-ignore:
+      - master
+  # and also on PRs to main
+  pull_request:
     branches:
-    - main
- pull_request:
-    branches:
-    - main
+      - main
 
 jobs:
- pre-commit-job:
+  pre-commit-job:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v2
