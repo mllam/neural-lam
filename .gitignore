@@ -7,6 +7,10 @@ graphs
 *.sif
 sweeps
 test_*.sh
+cosmo_hilam.html
+.gitignore
+.vscode
+normalization.zarr
 
 ### Python ###
 # Byte-compiled / optimized / DLL files
