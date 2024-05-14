@@ -7,8 +7,7 @@ graphs
 *.sif
 sweeps
 test_*.sh
-cosmo_hilam.html
-normalization.zarr
+.vscode
 
 ### Python ###
 # Byte-compiled / optimized / DLL files
@@ -74,4 +73,3 @@ tags
 
 # Coc configuration directory
 .vim
-.vscode

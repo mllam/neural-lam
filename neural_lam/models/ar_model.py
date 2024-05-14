@@ -28,21 +28,30 @@ class ARModel(pl.LightningModule):
         self.config_loader = utils.ConfigLoader(args.data_config)
 
         # Load static features for grid/data
-        static = self.config_loader.process_dataset("static")
-        self.register_buffer(
-            "grid_static_features",
-            torch.tensor(static.values),
-            persistent=False,
+        static_data_dict = utils.load_static_data(
+            self.config_loader.dataset.name
         )
+        for static_data_name, static_data_tensor in static_data_dict.items():
+            self.register_buffer(
+                static_data_name, static_data_tensor, persistent=False
+            )
 
         # Double grid output dim. to also output std.-dev.
         self.output_std = bool(args.output_std)
         if self.output_std:
             # Pred. dim. in grid cell
-            self.grid_output_dim = 2 * self.config_loader.num_data_vars("state")
+            self.grid_output_dim = 2 * self.config_loader.num_data_vars()
         else:
             # Pred. dim. in grid cell
-            self.grid_output_dim = self.config_loader.num_data_vars("state")
+            self.grid_output_dim = self.config_loader.num_data_vars()
+            # Store constant per-variable std.-dev. weighting
+            # Note that this is the inverse of the multiplicative weighting
+            # in wMSE/wMAE
+            self.register_buffer(
+                "per_var_std",
+                self.step_diff_std / torch.sqrt(self.param_weights),
+                persistent=False,
+            )
 
         # grid_dim from data + static
         (
@@ -50,17 +59,14 @@ class ARModel(pl.LightningModule):
             grid_static_dim,
         ) = self.grid_static_features.shape
         self.grid_dim = (
-            2 * self.config_loader.num_data_vars("state")
+            2 * self.config_loader.num_data_vars()
             + grid_static_dim
-            + self.config_loader.num_data_vars("forcing")
-            * self.config_loader.forcing.window
+            + self.config_loader.dataset.forcing_dim
         )
 
         # Instantiate loss function
         self.loss = metrics.get_metric(args.loss)
 
-        border_mask = torch.zeros(self.num_grid_nodes, 1)
-        self.register_buffer("border_mask", border_mask, persistent=False)
         # Pre-compute interior mask for use in loss function
         self.register_buffer(
             "interior_mask", 1.0 - self.border_mask, persistent=False
@@ -86,19 +92,6 @@ class ARModel(pl.LightningModule):
 
         # For storing spatial loss maps during evaluation
         self.spatial_loss_maps = []
-
-        # Load normalization statistics
-        self.normalization_stats = self.config_loader.load_normalization_stats()
-        if self.normalization_stats is not None:
-            for (
-                var_name,
-                var_data,
-            ) in self.normalization_stats.data_vars.items():
-                self.register_buffer(
-                    f"{var_name}",
-                    torch.tensor(var_data.values),
-                    persistent=False,
-                )
 
     def configure_optimizers(self):
         opt = torch.optim.AdamW(
@@ -177,7 +170,7 @@ class ARModel(pl.LightningModule):
                 pred_std_list, dim=1
             )  # (B, pred_steps, num_grid_nodes, d_f)
         else:
-            pred_std = self.diff_std  # (d_f,)
+            pred_std = self.per_var_std  # (d_f,)
 
         return prediction, pred_std
 
@@ -203,26 +196,6 @@ class ARModel(pl.LightningModule):
         # pred_std: (B, pred_steps, num_grid_nodes, d_f) or (d_f,)
 
         return prediction, target_states, pred_std
-
-    def on_after_batch_transfer(self, batch, dataloader_idx):
-        """Normalize Batch data after transferring to the device."""
-        if self.normalization_stats is not None:
-            init_states, target_states, forcing_features, _, _ = batch
-            init_states = (init_states - self.mean) / self.std
-            target_states = (target_states - self.mean) / self.std
-            forcing_features = (
-                forcing_features - self.forcing_mean
-            ) / self.forcing_std
-            # boundary_features = (
-            #     boundary_features - self.boundary_mean
-            # ) / self.boundary_std
-            batch = (
-                init_states,
-                target_states,
-                forcing_features,
-                # boundary_features,
-            )
-        return batch
 
     def training_step(self, batch):
         """
@@ -355,7 +328,9 @@ class ARModel(pl.LightningModule):
         spatial_loss = self.loss(
             prediction, target, pred_std, average_grid=False
         )  # (B, pred_steps, num_grid_nodes)
-        log_spatial_losses = spatial_loss[:, self.args.val_steps_log - 1]
+        log_spatial_losses = spatial_loss[
+            :, [step - 1 for step in self.args.val_steps_log]
+        ]
         self.spatial_loss_maps.append(log_spatial_losses)
         # (B, N_log, num_grid_nodes)
 
@@ -388,8 +363,8 @@ class ARModel(pl.LightningModule):
         target = batch[1]
 
         # Rescale to original data scale
-        prediction_rescaled = prediction * self.std + self.mean
-        target_rescaled = target * self.std + self.mean
+        prediction_rescaled = prediction * self.data_std + self.data_mean
+        target_rescaled = target * self.data_std + self.data_mean
 
         # Iterate over the examples
         for pred_slice, target_slice in zip(
@@ -433,8 +408,8 @@ class ARModel(pl.LightningModule):
                     )
                     for var_i, (var_name, var_unit, var_vrange) in enumerate(
                         zip(
-                            self.config_loader.param_names(),
-                            self.config_loader.param_units(),
+                            self.config_loader.dataset.vars,
+                            self.config_loader.dataset.units,
                             var_vranges,
                         )
                     )
@@ -445,7 +420,7 @@ class ARModel(pl.LightningModule):
                     {
                         f"{var_name}_example_{example_i}": wandb.Image(fig)
                         for var_name, fig in zip(
-                            self.config_loader.param_names(), var_figs
+                            self.config_loader.dataset.vars, var_figs
                         )
                     }
                 )
@@ -501,7 +476,7 @@ class ARModel(pl.LightningModule):
         # Check if metrics are watched, log exact values for specific vars
         if full_log_name in self.args.metrics_watch:
             for var_i, timesteps in self.args.var_leads_metrics_watch.items():
-                var = self.config_loader.param_names()[var_i]
+                var = self.config_loader.dataset.vars[var_i]
                 log_dict.update(
                     {
                         f"{full_log_name}_{var}_step_{step}": metric_tensor[
@@ -537,7 +512,7 @@ class ARModel(pl.LightningModule):
                     metric_name = metric_name.replace("mse", "rmse")
 
                 # Note: we here assume rescaling for all metrics is linear
-                metric_rescaled = metric_tensor_averaged * self.std
+                metric_rescaled = metric_tensor_averaged * self.data_std
                 # (pred_steps, d_f)
                 log_dict.update(
                     self.create_metric_log_dict(

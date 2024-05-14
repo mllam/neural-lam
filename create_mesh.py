@@ -15,8 +15,6 @@ from torch_geometric.utils.convert import from_networkx
 # First-party
 from neural_lam import utils
 
-# matplotlib.use('TkAgg')
-
 
 def plot_graph(graph, title=None):
     fig, axis = plt.subplots(figsize=(8, 8), dpi=200)  # W,H
@@ -158,6 +156,12 @@ def prepend_node_index(graph, new_index):
 def main():
     parser = ArgumentParser(description="Graph generation arguments")
     parser.add_argument(
+        "--data_config",
+        type=str,
+        default="neural_lam/data_config.yaml",
+        help="Path to data config file (default: neural_lam/data_config.yaml)",
+    )
+    parser.add_argument(
         "--graph",
         type=str,
         default="multiscale",
@@ -182,21 +186,16 @@ def main():
         default=0,
         help="Generate hierarchical mesh graph (default: 0, no)",
     )
-    parser.add_argument(
-        "--data_config",
-        type=str,
-        default="neural_lam/data_config.yaml",
-        help="Path to data config file (default: neural_lam/data_config.yaml)",
-    )
-
     args = parser.parse_args()
 
     # Load grid positions
+    config_loader = utils.ConfigLoader(args.data_config)
+    static_dir_path = os.path.join("data", config_loader.dataset.name, "static")
     graph_dir_path = os.path.join("graphs", args.graph)
     os.makedirs(graph_dir_path, exist_ok=True)
 
-    config_loader = utils.ConfigLoader(args.data_config)
-    xy = config_loader.get_nwp_xy()
+    xy = np.load(os.path.join(static_dir_path, "nwp_xy.npy"))
+
     grid_xy = torch.tensor(xy)
     pos_max = torch.max(torch.abs(grid_xy))
 

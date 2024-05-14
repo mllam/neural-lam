@@ -51,7 +51,7 @@ def plot_error_map(errors, data_config, title=None, step_length=3):
     y_ticklabels = [
         f"{name} ({unit})"
         for name, unit in zip(
-            data_config.param_names(), data_config.param_units()
+            data_config.dataset.vars, data_config.dataset.units
         )
     ]
     ax.set_yticklabels(y_ticklabels, rotation=30, size=label_size)

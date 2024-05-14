@@ -20,6 +20,12 @@ def main():
     """
     parser = ArgumentParser(description="Plot graph")
     parser.add_argument(
+        "--data_config",
+        type=str,
+        default="neural_lam/data_config.yaml",
+        help="Path to data config file (default: neural_lam/data_config.yaml)",
+    )
+    parser.add_argument(
         "--graph",
         type=str,
         default="multiscale",
@@ -36,14 +42,9 @@ def main():
         default=0,
         help="If the axis should be displayed (default: 0 (No))",
     )
-    parser.add_argument(
-        "--data_config",
-        type=str,
-        default="neural_lam/data_config.yaml",
-        help="Path to data config file (default: neural_lam/data_config.yaml)",
-    )
 
     args = parser.parse_args()
+    config_loader = utils.ConfigLoader(args.data_config)
 
     # Load graph data
     hierarchical, graph_ldict = utils.load_graph(args.graph)
@@ -62,12 +63,12 @@ def main():
     )
     mesh_static_features = graph_ldict["mesh_static_features"]
 
-    config_loader = utils.ConfigLoader(args.data_config)
-    xy = config_loader.get_nwp_xy()
-    grid_xy = xy.transpose(1, 2, 0).reshape(-1, 2)  # (N_grid, 2)
-    pos_max = np.max(np.abs(grid_xy))
-    grid_pos = grid_xy / pos_max  # Divide by maximum coordinate
+    grid_static_features = utils.load_static_data(config_loader.dataset.name)[
+        "grid_static_features"
+    ]
 
+    # Extract values needed, turn to numpy
+    grid_pos = grid_static_features[:, :2].numpy()
     # Add in z-dimension
     z_grid = GRID_HEIGHT * np.ones((grid_pos.shape[0],))
     grid_pos = np.concatenate(

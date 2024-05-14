@@ -1,199 +1,64 @@
-zarrs: # List of zarrs containing fields related to state
-  state:
-    path: /scratch/sadamov/template.zarr # Path to zarr
-    dims: # Name of dimensions in zarr, to be used for indexing
-      time: time
-      level: z
-      x: x # Either give "grid" (flattened) dimension or "x" and "y"
-      y: y
-    lat_lon_names:
-      lon: lon
-      lat: lat
-  static:
-    path: /scratch/sadamov/template.zarr
-    dims:
-      level: z
-      x: x
-      y: y
-    lat_lon_names:
-      lon: lon
-      lat: lat
-  forcing:
-    path: /scratch/sadamov/template.zarr
-    dims:
-      time: time
-      level: z
-      x: x
-      y: y
-    lat_lon_names:
-      lon: lon
-      lat: lat
-  boundary:
-    path: /scratch/sadamov/era5_template.zarr
-    dims:
-      time: time
-      level: level
-      x: longitude
-      y: latitude
-    lat_lon_names:
-      lon: longitude
-      lat: latitude
-    mask: boundary_mask # Name of variable containing boolean mask, true for grid nodes to be used in boundary.
-state: # Variables forecasted by the model
-  surface: # Single-field variables
-    - CLCT
-    - PMSL
-    - PS
-    - T_2M
-    - TOT_PREC
-    - U_10M
-    - V_10M
-  surface_units:
-    - "%"
-    - r"$\mathrm{Pa}$"
-    - r"$\mathrm{Pa}$"
-    - r"$\mathrm{K}$"
-    - r"$\mathrm{kg}/\mathrm{m}^2$"
-    - r"$\mathrm{m}/\mathrm{s}$"
-    - r"$\mathrm{m}/\mathrm{s}$"
-  atmosphere: # Variables with vertical levels
-    - PP
-    - QV
-    - RELHUM
-    - T
-    - U
-    - V
-    - W
-  atmosphere_units:
-    - r"$\mathrm{Pa}$"
-    - r"$\mathrm{kg}/\mathrm{kg}$"
-    - "%"
-    - r"$\mathrm{K}$"
-    - r"$\mathrm{m}/\mathrm{s}$"
-    - r"$\mathrm{m}/\mathrm{s}$"
-    - r"$\mathrm{Pa}/\mathrm{s}$"
-  levels: # Levels to use for atmosphere variables
-    - 0
-    - 5
-    - 8
-    - 11
-    - 13
-    - 15
-    - 19
-    - 22
-    - 26
-    - 30
-    - 38
-    - 44
-    - 59
-static: # Static inputs
-  surface:
-    - HSURF
-  atmosphere:
-    - FI
-  levels:
-    - 0
-    - 5
-    - 8
-    - 11
-    - 13
-    - 15
-    - 19
-    - 22
-    - 26
-    - 30
-    - 38
-    - 44
-    - 59
-forcing: # Forcing variables, dynamic inputs to the model
-  surface:
-    - ASOB_S
-  atmosphere:
-    - T
-  levels:
-    - 0
-    - 5
-    - 8
-    - 11
-    - 13
-    - 15
-    - 19
-    - 22
-    - 26
-    - 30
-    - 38
-    - 44
-    - 59
-  window: 3 # Number of time steps to use for forcing (odd)
-boundary: # Boundary conditions
-  surface:
-    - 10m_u_component_of_wind
-    # - 10m_v_component_of_wind
-    # - 2m_dewpoint_temperature
-    # - 2m_temperature
-    # - mean_sea_level_pressure
-    # - mean_surface_latent_heat_flux
-    # - mean_surface_net_long_wave_radiation_flux
-    # - mean_surface_net_short_wave_radiation_flux
-    # - mean_surface_sensible_heat_flux
-    # - surface_pressure
-    # - total_cloud_cover
-    # - total_column_water_vapour
-    # - total_precipitation_12hr
-    # - total_precipitation_24hr
-    # - total_precipitation_6hr
-    # - geopotential_at_surface
-  atmosphere:
-    - divergence
-    # - geopotential
-    # - relative_humidity
-    # - specific_humidity
-    # - temperature
-    # - u_component_of_wind
-    # - v_component_of_wind
-    # - vertical_velocity
-    # - vorticity
-  levels:
-    - 50
-    - 100
-    - 150
-    - 200
-    - 250
-    - 300
-    - 400
-    - 500
-    - 600
-    - 700
-    - 850
-    - 925
-    - 1000
-  window: 3 # Number of time steps to use for boundary (odd)
-grid_shape_state:
-  x: 582
-  y: 390
-splits:
-  train:
-    start: 2015-01-01T00
-    end: 2024-12-31T23
-  val:
-    start: 2015-01-01T00
-    end: 2024-12-31T23
-  test:
-    start: 2015-01-01T00
-    end: 2024-12-31T23
-projection:
-  class: RotatedPole # Name of class in cartopy.crs
-  kwargs: # Parsed and used directly as kwargs to projection-class above
-    pole_longitude: 10.0
-    pole_latitude: -43.0
-normalization:
-  zarr: normalization.zarr
+dataset:
+  name: meps_example
   vars:
-    data_mean: data_mean
-    data_std: data_std
-    forcing_mean: forcing_mean
-    forcing_std: forcing_std
-    boundary_mean: boundary_mean
-    boundary_std: boundary_std
-    diff_mean: diff_mean
-    diff_std: diff_std
+    - pres_0g
+    - pres_0s
+    - nlwrs_0
+    - nswrs_0
+    - r_2
+    - r_65
+    - t_2
+    - t_65
+    - t_500
+    - t_850
+    - u_65
+    - u_850
+    - v_65
+    - v_850
+    - wvint_0
+    - z_1000
+    - z_500
+  units:
+    - Pa
+    - Pa
+    - r"$\mathrm{W}/\mathrm{m}^2$"
+    - r"$\mathrm{W}/\mathrm{m}^2$"
+    - ""
+    - ""
+    - K
+    - K
+    - K
+    - K
+    - m/s
+    - m/s
+    - m/s
+    - m/s
+    - r"$\mathrm{kg}/\mathrm{m}^2$"
+    - r"$\mathrm{m}^2/\mathrm{s}^2$"
+    - r"$\mathrm{m}^2/\mathrm{s}^2$"
+  var_names:
+    - pres_heightAboveGround_0_instant
+    - pres_heightAboveSea_0_instant
+    - nlwrs_heightAboveGround_0_accum
+    - nswrs_heightAboveGround_0_accum
+    - r_heightAboveGround_2_instant
+    - r_hybrid_65_instant
+    - t_heightAboveGround_2_instant
+    - t_hybrid_65_instant
+    - t_isobaricInhPa_500_instant
+    - t_isobaricInhPa_850_instant
+    - u_hybrid_65_instant
+    - u_isobaricInhPa_850_instant
+    - v_hybrid_65_instant
+    - v_isobaricInhPa_850_instant
+    - wvint_entireAtmosphere_0_instant
+    - z_isobaricInhPa_1000_instant
+    - z_isobaricInhPa_500_instant
+  forcing_dim: 16
+grid_shape_state: [268, 238]
+projection:
+  class: LambertConformal
+  kwargs:
+    central_longitude: 15.0
+    central_latitude: 63.3
+    standard_parallels: [63.3, 63.3]
