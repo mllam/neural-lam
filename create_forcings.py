@@ -7,7 +7,6 @@ import zipfile
 
 import cartopy.crs as ccrs
 import cartopy.feature as cfeature
-import matplotlib.patches as mpatches
 import matplotlib.pyplot as plt
 
 # Third-party
@@ -81,41 +80,58 @@ def generate_land_sea_mask(xy, tempdir):
         [shape(s) for s in sf.shapes() if s.shapeType == shapefile.POLYGON]
     )
 
-    # Calcuye the proportion of each grid cell covered by land
+    # Assuming x and y are your original arrays
+    x_padded = np.pad(x, ((0, 1), (0, 1)), mode='edge')  # Pad with the edge values
+    y_padded = np.pad(y, ((0, 1), (0, 1)), mode='edge')
     mask = np.array(
         [
             [
-                Polygon(
-                    [
-                        (x[i, j], y[i, j]),
-                        (x[i, j + 1], y[i, j]),
-                        (x[i + 1, j + 1], y[i + 1, j]),
-                        (x[i + 1, j], y[i + 1, j]),
-                    ]
+                (
+                    Polygon(
+                        [
+                            (x_padded[i, j], y_padded[i, j]),
+                            (x_padded[i, j + 1], y_padded[i, j + 1]),
+                            (x_padded[i + 1, j + 1], y_padded[i + 1, j + 1]),
+                            (x_padded[i + 1, j], y_padded[i + 1, j]),
+                        ]
+                    )
+                    .intersection(land_geometries)
+                    .area
+                    / Polygon(
+                        [
+                            (x_padded[i, j], y_padded[i, j]),
+                            (x_padded[i, j + 1], y_padded[i, j + 1]),
+                            (x_padded[i + 1, j + 1], y_padded[i + 1, j + 1]),
+                            (x_padded[i + 1, j], y_padded[i + 1, j]),
+                        ]
+                    ).area
+                    if Polygon(
+                        [
+                            (x_padded[i, j], y_padded[i, j]),
+                            (x_padded[i, j + 1], y_padded[i, j + 1]),
+                            (x_padded[i + 1, j + 1], y_padded[i + 1, j + 1]),
+                            (x_padded[i + 1, j], y_padded[i + 1, j]),
+                        ]
+                    ).area != 0 else 0
                 )
-                .intersection(land_geometries)
-                .area
-                / Polygon(
-                    [
-                        (x[i, j], y[i, j]),
-                        (x[i, j + 1], y[i, j]),
-                        (x[i + 1, j + 1], y[i + 1, j]),
-                        (x[i + 1, j], y[i + 1, j]),
-                    ]
-                ).area
-                for j in range(x.shape[1] - 1)
+                for j in range(x_padded.shape[1] - 1)
             ]
-            for i in range(y.shape[0] - 1)
+            for i in range(x_padded.shape[0] - 1)
         ]
     )
-
     shutil.rmtree("./shps")
-    mask = xr.Dataset({"land_sea_mask": (("y", "x"), mask)})
 
-    return mask
+    mask_xr = xr.DataArray(
+        mask, dims=("x", "y"),
+        coords={
+            "x": x[:, 0],
+            "y": y[0, :]
+        })
+
+    return mask_xr
 
 
-def create_boundary_mask(xy_state, xy_boundary, boundary_thickness, overlap):
+def create_boundary_mask(xy_state, xy_boundary, boundary_thickness,):
     state_x, state_y = xy_state[0], xy_state[1]
     boundary_x, boundary_y = xy_boundary[0], xy_boundary[1]
 
@@ -160,11 +176,6 @@ def create_boundary_mask(xy_state, xy_boundary, boundary_thickness, overlap):
     dilated_mask = np.roll(dilated_mask, -shift_y, axis=0)
     dilated_mask = np.roll(dilated_mask, -shift_x, axis=1)
 
-    if overlap:
-        boundary_mask = dilated_mask
-    else:
-        boundary_mask = dilated_mask & ~interior_mask
-
     interior_mask = xr.DataArray(
         interior_mask.astype(int), dims=("x", "y"),
         coords={
@@ -173,7 +184,7 @@ def create_boundary_mask(xy_state, xy_boundary, boundary_thickness, overlap):
         }
     )
     boundary_mask = xr.DataArray(
-        boundary_mask.astype(int), dims=("x", "y"),
+        dilated_mask.astype(int), dims=("x", "y"),
         coords={
             "y": boundary_y[0, :],
             "x": boundary_x[:, 0]
@@ -191,8 +202,8 @@ def main():
     parser.add_argument("--zarr_path", type=str, default="forcings.zarr")
     parser.add_argument("--tempdir", type=str, default="./shps")
     parser.add_argument("--seconds_in_year", type=int, default=31536000)
-    parser.add_argument("--boundary_thickness", type=int, default=40)
-    parser.add_argument("--overlap", type=bool, default=True)
+    parser.add_argument("--boundary_thickness", type=int, default=15)
+    parser.add_argument("--overlap", type=bool, default=False)
     parser.add_argument("--plot", type=bool, default=True)
     args = parser.parse_args()
 
@@ -208,8 +219,28 @@ def main():
     land_sea_mask = generate_land_sea_mask(xy_state, args.tempdir)
     land_sea_mask.to_zarr(args.zarr_path, mode="a")
 
+    if args.plot:
+        # Normalize longitude values to be within [-180, 180]
+        if land_sea_mask['x'].max() > 180:
+            land_sea_mask['x'] = ((land_sea_mask['x'] + 180) % 360) - 180
+
+        fig, ax = plt.subplots(subplot_kw={'projection': ccrs.PlateCarree()})
+        land_sea_mask.sortby("x").transpose().plot(
+            x='x',
+            y='y',
+            ax=ax,
+            cmap='ocean_r',
+            alpha=0.6,
+            add_colorbar=False)
+
+        # Add country borders and coastlines
+        ax.add_feature(cfeature.BORDERS, linestyle='-', alpha=0.5)
+        ax.coastlines()
+
+        plt.savefig("land_sea_mask.png")
+
     interior_mask, boundary_mask = create_boundary_mask(
-        xy_state, xy_boundary, args.boundary_thickness, args.overlap
+        xy_state, xy_boundary, args.boundary_thickness
     )
     # mask.to_zarr(args.zarr_path, mode="a")
     print(f"Boundary mask saved to {args.zarr_path}")
@@ -217,40 +248,78 @@ def main():
     if args.plot:
         interior_mask = interior_mask.where(interior_mask == 1, drop=True)
         boundary_mask = boundary_mask.where(boundary_mask == 1, drop=True)
+        interior_mask_regrid = interior_mask.interp_like(boundary_mask)
+        interior_mask_regrid = interior_mask_regrid.fillna(0)
+        interior_mask_bool_inv = ~interior_mask_regrid.astype(bool)
+        boundary_mask_updated = boundary_mask.where(interior_mask_bool_inv, drop=True)
 
-        # Normalize longitude values to be within [-180, 180]
-        if boundary_mask['x'].max() > 180:
-            boundary_mask['x'] = ((boundary_mask['x'] + 180) % 360) - 180
-        if interior_mask['x'].max() > 180:
-            interior_mask['x'] = ((interior_mask['x'] + 180) % 360) - 180
+        # Example parameters for the rotated pole projection
+        pole_longitude = 10  # Pole longitude in degrees
+        pole_latitude = -45    # Pole latitude in degrees
 
-    # Assuming interior_mask is your xarray DataArray
-    fig, ax = plt.subplots(subplot_kw={'projection': ccrs.PlateCarree()})
+        # Create a RotatedPole CRS
+        rotated_pole_crs = ccrs.RotatedPole(
+            pole_longitude=pole_longitude,
+            pole_latitude=pole_latitude)
 
-    # Plot the boundary mask normally
-    boundary_mask.sortby("x").transpose().plot(
-        x='x',
-        y='y',
-        ax=ax,
-        cmap='Reds',
-        alpha=0.5,
-        add_colorbar=False)
+        # Expand x and y into grids that match the shape of your data arrays
+        xx_interior, yy_interior = np.meshgrid(
+            interior_mask.x.values, interior_mask.y.values)
+        xx_boundary, yy_boundary = np.meshgrid(
+            boundary_mask.x.values, boundary_mask.y.values)
 
-    # Create a patch for the hatched area
-    patch = mpatches.Rectangle(
-        (interior_mask.x.min(), interior_mask.y.min()),
-        width=interior_mask.x.max() - interior_mask.x.min(),
-        height=interior_mask.y.max() - interior_mask.y.min(),
-        edgecolor="blue", hatch='//', fill=False, linewidth=2,
-        transform=ccrs.PlateCarree()
-    )
-    ax.add_patch(patch)
+        xx_boundary = xx_boundary.T[boundary_mask_updated.values == 1]
+        yy_boundary = yy_boundary.T[boundary_mask_updated.values == 1]
 
-    # Add country borders and coastlines
-    ax.add_feature(cfeature.BORDERS, linestyle='-', alpha=0.5)
-    ax.coastlines()
+        # Flatten the grids to pair each x with its corresponding y
+        original_lons_interior = xx_interior.flatten()
+        original_lats_interior = yy_interior.flatten()
+        original_lons_boundary = xx_boundary.flatten()
+        original_lats_boundary = yy_boundary.flatten()
 
-    plt.savefig("boundary_mask.png")
+        # Transforming points to the rotated pole coordinate system
+        transformed_coords_interior = rotated_pole_crs.transform_points(
+            ccrs.PlateCarree(), original_lons_interior, original_lats_interior)
+        transformed_coords_boundary = rotated_pole_crs.transform_points(
+            ccrs.PlateCarree(), original_lons_boundary, original_lats_boundary)
+
+        # Extracting transformed coordinates
+        transformed_lons_interior = transformed_coords_interior[:, 0]
+        transformed_lats_interior = transformed_coords_interior[:, 1]
+        transformed_lons_boundary = transformed_coords_boundary[:, 0]
+        transformed_lats_boundary = transformed_coords_boundary[:, 1]
+
+        # Plotting
+        fig = plt.figure(figsize=(15, 10))
+        ax_rotated_pole = fig.add_subplot(111, projection=ccrs.RotatedPole(
+            pole_longitude=pole_longitude,
+            pole_latitude=pole_latitude))
+
+        # Scatter plot of transformed points for both masks
+        ax_rotated_pole.scatter(
+            transformed_lons_boundary,
+            transformed_lats_boundary,
+            color='red',
+            marker='o',
+            s=8,  # Increased size for better visibility
+            transform=rotated_pole_crs)
+        ax_rotated_pole.scatter(
+            transformed_lons_interior,
+            transformed_lats_interior,
+            color='blue',
+            marker='+',
+            s=6,  # Increased size for better visibility
+            transform=rotated_pole_crs)
+
+        # Invert y-axis if desired
+        ax_rotated_pole.add_feature(cfeature.BORDERS, linestyle='-', alpha=0.5)
+        ax_rotated_pole.invert_yaxis()
+
+        # Adding coastlines and gridlines
+        ax_rotated_pole.coastlines()
+        ax_rotated_pole.gridlines()
+
+        plt.savefig("boundary_mask_pointynut.png")
 
 
 if __name__ == "__main__":

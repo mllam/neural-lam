@@ -350,11 +350,13 @@ class ConfigLoader:
         if dataset[lon_name].ndim == 2:
             dataset[lon_name] = dataset[lon_name].isel(y=0, drop=True)
 
-        if 'x' in dataset.dims:
-            dataset = dataset.rename({'x': 'old_x'})
-        if 'y' in dataset.dims:
-            dataset = dataset.rename({'y': 'old_y'})
-        dataset = dataset.assign_coords(x=dataset[lon_name], y=dataset[lat_name])
+        if "x" in dataset.dims:
+            dataset = dataset.rename({"x": "old_x"})
+        if "y" in dataset.dims:
+            dataset = dataset.rename({"y": "old_y"})
+        dataset = dataset.assign_coords(
+            x=dataset[lon_name], y=dataset[lat_name]
+        )
         dataset["x"] = dataset[lon_name]
         dataset["y"] = dataset[lat_name]
 
