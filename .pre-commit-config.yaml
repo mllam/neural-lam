@@ -31,7 +31,7 @@ repos:
         description: Group and sort Python imports
 
   - repo: https://github.com/PyCQA/flake8
-    rev: 6.1.0
+    rev: 7.0.0
     hooks:
       - id: flake8
         description: Check Python code for correctness, consistency and adherence to best practices
