@@ -32,14 +32,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   [c14b6b4](https://github.com/joeloskarsson/neural-lam/commit/c14b6b4323e6b56f1f18632b6ca8b0d65c3ce36a)
   @joeloskarsson
 
-- compute `rmse` after spatial averaging
+- change RMSE definition to compute sqrt after all averaging
   [\#10](https://github.com/joeloskarsson/neural-lam/pull/10)
   @joeloskarsson
 
 ### Removed
 
-- `WeatherDataset(torch.Dataset)` no longer returns "static" component of
-  training item (only `prev_state`, `target_state` and `forcing`), static is
+- `WeatherDataset(torch.Dataset)` no longer returns "batch-static" component of
+  training item (only `prev_state`, `target_state` and `forcing`), the batch static features are
   instead included in forcing
   [\#13](https://github.com/joeloskarsson/neural-lam/pull/13)
   @joeloskarsson
@@ -47,5 +47,5 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [v0.1.0](https://github.com/joeloskarsson/neural-lam/releases/tag/v0.1.0)
 
-First tagged release of `neural-lam`, matching Oscarsson et al 2023 publication
+First tagged release of `neural-lam`, matching Oskarsson et al 2023 publication
 (https://arxiv.org/abs/2309.17370)
