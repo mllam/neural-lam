@@ -343,21 +343,20 @@ class ConfigLoader:
             print(f"No variables found in dataset {dataset_name}")
             return None
 
-        if not all(
-            lat_lon in self.zarrs[dataset_name].dims.values.values()
-            for lat_lon in self.zarrs[
-                dataset_name
-            ].lat_lon_names.values.values()
-        ):
-            lat_name = self.zarrs[dataset_name].lat_lon_names.lat
-            lon_name = self.zarrs[dataset_name].lat_lon_names.lon
-            if dataset[lat_name].ndim == 2:
-                dataset[lat_name] = dataset[lat_name].isel(x=0, drop=True)
-            if dataset[lon_name].ndim == 2:
-                dataset[lon_name] = dataset[lon_name].isel(y=0, drop=True)
-            dataset = dataset.assign_coords(
-                x=dataset[lon_name], y=dataset[lat_name]
-            )
+        lat_name = self.zarrs[dataset_name].lat_lon_names.lat
+        lon_name = self.zarrs[dataset_name].lat_lon_names.lon
+        if dataset[lat_name].ndim == 2:
+            dataset[lat_name] = dataset[lat_name].isel(x=0, drop=True)
+        if dataset[lon_name].ndim == 2:
+            dataset[lon_name] = dataset[lon_name].isel(y=0, drop=True)
+
+        if 'x' in dataset.dims:
+            dataset = dataset.rename({'x': 'old_x'})
+        if 'y' in dataset.dims:
+            dataset = dataset.rename({'y': 'old_y'})
+        dataset = dataset.assign_coords(x=dataset[lon_name], y=dataset[lat_name])
+        dataset["x"] = dataset[lon_name]
+        dataset["y"] = dataset[lat_name]
 
         if stack:
             dataset = self.stack_grid(dataset)
@@ -374,12 +373,12 @@ class ConfigLoader:
             dataset = dataset.transpose("grid", "variable")
         return dataset
 
-    def get_nwp_xy(self):
-        """Get the x and y coordinates for the NWP grid."""
-        x = self.process_dataset("static", stack=False).x.values
-        y = self.process_dataset("static", stack=False).y.values
-        xx, yy = np.meshgrid(y, x)
-        xy = np.stack((xx, yy), axis=0)
+    def get_nwp_xy(self, dataset_name):
+        """Get the longitude and latitude coordinates for the NWP grid."""
+        x = np.sort(self.process_dataset(dataset_name, stack=False).x.values)
+        y = np.sort(self.process_dataset(dataset_name, stack=False).y.values)
+        xx, yy = np.meshgrid(x, y)
+        xy = np.stack((xx.T, yy.T), axis=0)
 
         return xy
 
