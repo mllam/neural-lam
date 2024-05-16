@@ -72,3 +72,6 @@ tags
 
 # Coc configuration directory
 .vim
+
+# pdm
+.pdm-python

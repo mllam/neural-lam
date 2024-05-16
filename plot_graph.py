@@ -47,11 +47,7 @@ def main():
 
     # Load graph data
     hierarchical, graph_ldict = utils.load_graph(args.graph)
-    (
-        g2m_edge_index,
-        m2g_edge_index,
-        m2m_edge_index,
-    ) = (
+    (g2m_edge_index, m2g_edge_index, m2m_edge_index,) = (
         graph_ldict["g2m_edge_index"],
         graph_ldict["m2g_edge_index"],
         graph_ldict["m2m_edge_index"],

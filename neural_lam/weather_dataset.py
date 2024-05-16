@@ -8,7 +8,7 @@ import numpy as np
 import torch
 
 # First-party
-from neural_lam import constants, utils
+from . import constants, utils
 
 
 class WeatherDataset(torch.utils.data.Dataset):

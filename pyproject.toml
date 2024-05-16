@@ -1,26 +1,38 @@
+[project]
+# PEP 621 project metadata
+# See https://www.python.org/dev/peps/pep-0621/
+dependencies = [
+    "numpy>=1.24.2",
+    "wandb>=0.13.10",
+    "matplotlib>=3.7.0",
+    "scipy>=1.10.0",
+    "pytorch-lightning>=2.0.3",
+    "shapely>=2.0.1",
+    "networkx>=3.0",
+    "Cartopy>=0.22.0",
+    "pyproj>=3.4.1",
+    "tueplots>=0.0.8",
+    "plotly>=5.15.0",
+    "pre-commit>=2.15.0",
+    "torch-geometric>=2.5.3",
+]
+requires-python = ">=3.10"
+name = "neural-lam"
+version = "0.1.0"
+description = "Neural Weather Prediction for Limited Area Modeling"
+authors = [
+    {name = "Joel Oskarsson", email = "joel.oskarsson@liu.se"},
+    {name = "Simon Adamov", email = "simon.adamov@meteoswiss.ch"},
+    {name = "Leif Denby", email = "lcd@dmi.dk"},
+]
+readme = "README.md"
+license = {text = "MIT"}
+
 [tool.black]
 line-length = 80
 
 [tool.isort]
-default_section = "THIRDPARTY"
 profile = "black"
-# Headings
-import_heading_stdlib = "Standard library"
-import_heading_thirdparty = "Third-party"
-import_heading_firstparty = "First-party"
-import_heading_localfolder = "Local"
-# Known modules to avoid misclassification
-known_standard_library = [
-    # Add standard library modules that may be misclassified by isort
-]
-known_third_party = [
-    # Add third-party modules that may be misclassified by isort
-    "wandb",
-]
-known_first_party = [
-    # Add first-party modules that may be misclassified by isort
-    "neural_lam",
-]
 
 [tool.flake8]
 max-line-length = 80
@@ -41,13 +53,13 @@ skip = "requirements/*"
 ignore = [
     "create_mesh.py", # Disable linting for now, as major rework is planned/expected
 ]
-# Temporary fix for import neural_lam statements until set up as proper package
-init-hook='import sys; sys.path.append(".")'
+
 [tool.pylint.TYPECHECK]
 generated-members = [
     "numpy.*",
     "torch.*",
 ]
+
 [tool.pylint.'MESSAGES CONTROL']
 disable = [
     "C0114", # 'missing-module-docstring', Do not require module docstrings
@@ -63,3 +75,15 @@ max-statements=100 # Allow for some more involved functions
 allow-any-import-level="neural_lam"
 [tool.pylint.SIMILARITIES]
 min-similarity-lines=10
+
+
+[tool.pdm]
+distribution = true
+
+[tool.pdm.dev-dependencies]
+dev = [
+    "pytest>=8.2.0",
+]
+[build-system]
+requires = ["pdm-backend"]
+build-backend = "pdm.backend"

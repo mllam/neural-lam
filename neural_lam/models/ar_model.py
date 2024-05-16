@@ -9,7 +9,7 @@ import torch
 import wandb
 
 # First-party
-from neural_lam import constants, metrics, utils, vis
+from .. import constants, metrics, utils, vis
 
 
 class ARModel(pl.LightningModule):

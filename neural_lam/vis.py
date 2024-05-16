@@ -4,7 +4,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 # First-party
-from neural_lam import constants, utils
+from . import constants, utils
 
 
 @matplotlib.rc_context(utils.fractional_plot_bundle(1))

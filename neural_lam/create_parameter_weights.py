@@ -8,8 +8,8 @@ import torch
 from tqdm import tqdm
 
 # First-party
-from neural_lam import constants
-from neural_lam.weather_dataset import WeatherDataset
+from . import constants
+from .weather_dataset import WeatherDataset
 
 
 def main():
