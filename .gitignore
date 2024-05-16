@@ -10,8 +10,9 @@ test_*.sh
 cosmo_hilam.html
 .gitignore
 .vscode
-normalization.zarr
+*.zarr
 *.png
+shps
 
 ### Python ###
 # Byte-compiled / optimized / DLL files
