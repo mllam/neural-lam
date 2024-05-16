@@ -2,22 +2,23 @@
 import argparse
 import io
 import os
-import shutil
 import zipfile
 
-# Third-party
 import cartopy.crs as ccrs
 import cartopy.feature as cfeature
+import geopandas as gpd
+
+# Third-party
+import graphcast.solar_radiation as gc_sr
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import requests
-import shapefile
 import xarray as xr
 from anemoi.datasets.grids import cutout_mask
+from rasterio.features import rasterize
+from rasterio.transform import from_bounds
 from scipy.ndimage import binary_dilation, shift
-from shapely.geometry import Polygon, shape
-from shapely.ops import unary_union
 
 # First-party
 from neural_lam.utils import ConfigLoader
@@ -57,76 +58,46 @@ def calculate_datetime_forcing(ds, args):
     return datetime_forcing
 
 
-def download_natural_earth_data(url, tempdir):
-    """Download and extract Natural Earth data."""
-    response = requests.get(url, timeout=10)
-    with zipfile.ZipFile(io.BytesIO(response.content), "r") as zip_ref:
-        zip_ref.extractall(tempdir)
-        extracted_files = [f for f in zip_ref.namelist() if f.endswith(".shp")]
-        print(f"Extracted files: {extracted_files}")
-        return extracted_files
+def generate_land_sea_mask(xy, tempdir, high_res_factor=10):
+    def download_and_extract_shapefile(url, tempdir):
+        response = requests.get(url, timeout=10)
+        with zipfile.ZipFile(io.BytesIO(response.content), "r") as zip_ref:
+            zip_ref.extractall(tempdir)
+        return next((f for f in zip_ref.namelist() if f.endswith(".shp")), None)
 
-
-def generate_land_sea_mask(xy, tempdir):
-    """Generate a land-sea mask for the neural LAM model."""
-    x, y = xy[0], xy[1]
     url = "https://naturalearth.s3.amazonaws.com/110m_physical/ne_110m_land.zip"
-    extracted_files = download_natural_earth_data(url, tempdir)
-    shp_path = next((f for f in extracted_files if f.endswith(".shp")), None)
+    shp_path = download_and_extract_shapefile(url, tempdir)
 
-    sf = shapefile.Reader(os.path.join(tempdir, shp_path))
-    land_geometries = unary_union(
-        [shape(s) for s in sf.shapes() if s.shapeType == shapefile.POLYGON]
-    )
+    gdf = gpd.read_file(os.path.join(tempdir, shp_path))
+    land_geometry = gdf.unary_union
 
-    # Assuming x and y are your original arrays
-    x_padded = np.pad(
-        x, ((0, 1), (0, 1)), mode="edge"
-    )  # Pad with the edge values
-    y_padded = np.pad(y, ((0, 1), (0, 1)), mode="edge")
-    mask = np.array(
-        [
-            [
-                (
-                    Polygon(
-                        [
-                            (x_padded[i, j], y_padded[i, j]),
-                            (x_padded[i, j + 1], y_padded[i, j + 1]),
-                            (x_padded[i + 1, j + 1], y_padded[i + 1, j + 1]),
-                            (x_padded[i + 1, j], y_padded[i + 1, j]),
-                        ]
-                    )
-                    .intersection(land_geometries)
-                    .area
-                    / Polygon(
-                        [
-                            (x_padded[i, j], y_padded[i, j]),
-                            (x_padded[i, j + 1], y_padded[i, j + 1]),
-                            (x_padded[i + 1, j + 1], y_padded[i + 1, j + 1]),
-                            (x_padded[i + 1, j], y_padded[i + 1, j]),
-                        ]
-                    ).area
-                    if Polygon(
-                        [
-                            (x_padded[i, j], y_padded[i, j]),
-                            (x_padded[i, j + 1], y_padded[i, j + 1]),
-                            (x_padded[i + 1, j + 1], y_padded[i + 1, j + 1]),
-                            (x_padded[i + 1, j], y_padded[i + 1, j]),
-                        ]
-                    ).area
-                    != 0
-                    else 0
-                )
-                for j in range(x_padded.shape[1] - 1)
-            ]
-            for i in range(x_padded.shape[0] - 1)
-        ]
-    )
-    shutil.rmtree("./shps")
+    minx, miny = xy[0][:, 0].min(), xy[1][0, :].min()
+    maxx, maxy = xy[0][:, 0].max(), xy[1][0, :].max()
+
+    # Generate a high-resolution binary mask
+    high_res_out_shape = (
+        int(xy[1].shape[1] * high_res_factor),
+        int(xy[0].shape[0] * high_res_factor))
+    high_res_transform = from_bounds(
+        minx, maxy, maxx, miny, high_res_out_shape[1],
+        high_res_out_shape[0])
+
+    high_res_out_image = rasterize(
+        shapes=[land_geometry.__geo_interface__],
+        out_shape=high_res_out_shape,
+        transform=high_res_transform,
+        fill=0, dtype=np.uint8)
+
+    # Aggregate the high-resolution mask to the target grid resolution
+    aggregated_out_image = high_res_out_image.reshape(
+        (xy[1].shape[1],
+         high_res_factor, xy[0].shape[0],
+         high_res_factor)).mean(
+        axis=(1, 3))
 
     mask_xr = xr.DataArray(
-        mask, dims=("x", "y"), coords={"x": x[:, 0], "y": y[0, :]}
-    )
+        aggregated_out_image, dims=("y", "x"),
+        coords={"y": xy[1][0, :], "x": xy[0][:, 0]})
 
     return mask_xr
 
@@ -158,25 +129,19 @@ def create_boundary_mask(
     y_min, x_min = coords.min(axis=0)
     y_max, x_max = coords.max(axis=0)
 
-    # Calculate the center of the mask
     center_y, center_x = np.array(interior_mask.shape) // 2
-
-    # Calculate the shift needed to center the interior mask
     shift_y = center_y - (y_min + y_max) // 2
     shift_x = center_x - (x_min + x_max) // 2
-
-    # Shift the padded interior mask to the center
     centered_interior_mask = shift(
         interior_mask.astype(float), shift=(shift_y, shift_x), order=0
     ).astype(bool)
 
-    # Apply binary dilation
+    # Create the boundary mask with appropriate thickness
     structure = np.ones((3, 3), dtype=bool)
     dilated_mask = binary_dilation(
         centered_interior_mask, structure, boundary_thickness
     )
 
-    # Wrap around the dimensions
     dilated_mask = np.roll(dilated_mask, -shift_y, axis=0)
     dilated_mask = np.roll(dilated_mask, -shift_x, axis=1)
 
@@ -191,6 +156,34 @@ def create_boundary_mask(
         coords={"y": boundary_y[0, :], "x": boundary_x[:, 0]},
     )
     return interior_mask, boundary_mask
+
+
+def generate_toa_radiation_forcing(ds, xy):
+    """
+    Pre-compute all static features related to the grid nodes
+    """
+
+    x, y = xy[0][:, 0], xy[1][0, :]
+
+    # Time 0 here is 1959-01-01, 00:00
+    timestamps = ds.time.values.astype("datetime64[s]")
+
+    toa_array = gc_sr.get_toa_incident_solar_radiation(
+        timestamps,
+        y,
+        x,
+    )  # (num_time, num_lat, num_lon)
+    toa_min = toa_array.min()
+    toa_max = toa_array.max()
+    toa_array = (toa_array - toa_min) / (toa_max - toa_min)
+    toa_radiation = toa_array.transpose(0, 2, 1)
+
+    toa_radiation = xr.DataArray(
+        toa_radiation,
+        dims=("time", "x", "y"),
+        coords={"time": ds.time, "x": x, "y": y},
+    )
+    return toa_radiation
 
 
 def main():
@@ -209,40 +202,59 @@ def main():
 
     config_loader = ConfigLoader(args.data_config)
     ds_state = config_loader.open_zarr("state")
+    ds_boundary = config_loader.open_zarr("boundary")
     xy_state = config_loader.get_nwp_xy("state")
     xy_boundary = config_loader.get_nwp_xy("boundary")
 
+    # reduce the time dim for this example
+    ds_state = ds_state.isel(time=slice(0, 24))
+    ds_boundary = ds_boundary.isel(time=slice(0, 24))
+
     datetime_forcing = calculate_datetime_forcing(ds_state, args)
-    datetime_forcing.to_zarr(args.zarr_path, mode="a")
+    datetime_forcing.to_zarr(args.zarr_path, mode="w")
     print(f"Datetime forcing saved to {args.zarr_path}")
 
     land_sea_mask = generate_land_sea_mask(xy_state, args.tempdir)
-    land_sea_mask.to_zarr(args.zarr_path, mode="a")
+    land_sea_mask.to_zarr(args.zarr_path, mode="w")
     print(f"Land-sea mask saved to {args.zarr_path}")
 
+    interior_mask, boundary_mask = create_boundary_mask(
+        xy_state, xy_boundary, args.boundary_thickness
+    )
+    boundary_mask.to_zarr(f"boundary_{args.zarr_path}", mode="w")
+    print(f"Boundary mask saved to boundary_{args.zarr_path}")
+
+    toa_radiation_state = generate_toa_radiation_forcing(ds_state, xy_state)
+    toa_radiation_state.to_zarr(args.zarr_path, mode="w")
+    toa_radtiation_boundary = generate_toa_radiation_forcing(ds_boundary, xy_boundary)
+    toa_radtiation_boundary.to_zarr(f"boundary_{args.zarr_path}", mode="w")
+    print(f"TOA radiation saved to boundary_{args.zarr_path}")
+
     if args.plot:
+
+        fig, axs = plt.subplots(2, 2, figsize=(10, 8))
+
+        datetime_forcing.hour_sin.plot(ax=axs[0, 0])
+        datetime_forcing.hour_cos.plot(ax=axs[0, 1])
+        datetime_forcing.year_sin.plot(ax=axs[1, 0])
+        datetime_forcing.year_cos.plot(ax=axs[1, 1])
+
+        plt.tight_layout()
+        plt.savefig("datetime_forcing_state.png")
+
         # Normalize longitude values to be within [-180, 180]
         if land_sea_mask["x"].max() > 180:
             land_sea_mask["x"] = ((land_sea_mask["x"] + 180) % 360) - 180
 
         fig, ax = plt.subplots(subplot_kw={"projection": ccrs.PlateCarree()})
-        land_sea_mask.sortby("x").transpose().plot(
+        land_sea_mask.plot(
             x="x", y="y", ax=ax, cmap="ocean_r", alpha=0.6, add_colorbar=False
         )
-
-        # Add country borders and coastlines
         ax.add_feature(cfeature.BORDERS, linestyle="-", alpha=0.5)
         ax.coastlines()
 
         plt.savefig("land_sea_mask.png")
 
-    interior_mask, boundary_mask = create_boundary_mask(
-        xy_state, xy_boundary, args.boundary_thickness
-    )
-    # mask.to_zarr(args.zarr_path, mode="a")
-    print(f"Boundary mask saved to {args.zarr_path}")
-
-    if args.plot:
         interior_mask = interior_mask.where(interior_mask == 1, drop=True)
         boundary_mask = boundary_mask.where(boundary_mask == 1, drop=True)
         interior_mask_regrid = interior_mask.interp_like(boundary_mask)
@@ -261,7 +273,6 @@ def main():
             pole_longitude=pole_longitude, pole_latitude=pole_latitude
         )
 
-        # Expand x and y into grids that match the shape of your data arrays
         xx_interior, yy_interior = np.meshgrid(
             interior_mask.x.values, interior_mask.y.values
         )
@@ -272,7 +283,6 @@ def main():
         xx_boundary = xx_boundary.T[boundary_mask_updated.values == 1]
         yy_boundary = yy_boundary.T[boundary_mask_updated.values == 1]
 
-        # Flatten the grids to pair each x with its corresponding y
         original_lons_interior = xx_interior.flatten()
         original_lats_interior = yy_interior.flatten()
         original_lons_boundary = xx_boundary.flatten()
@@ -286,13 +296,11 @@ def main():
             ccrs.PlateCarree(), original_lons_boundary, original_lats_boundary
         )
 
-        # Extracting transformed coordinates
         transformed_lons_interior = transformed_coords_interior[:, 0]
         transformed_lats_interior = transformed_coords_interior[:, 1]
         transformed_lons_boundary = transformed_coords_boundary[:, 0]
         transformed_lats_boundary = transformed_coords_boundary[:, 1]
 
-        # Plotting
         fig = plt.figure(figsize=(15, 10))
         ax_rotated_pole = fig.add_subplot(
             111,
@@ -301,13 +309,12 @@ def main():
             ),
         )
 
-        # Scatter plot of transformed points for both masks
         ax_rotated_pole.scatter(
             transformed_lons_boundary,
             transformed_lats_boundary,
             color="red",
             marker="o",
-            s=8,  # Increased size for better visibility
+            s=8,
             transform=rotated_pole_crs,
         )
         ax_rotated_pole.scatter(
@@ -315,19 +322,25 @@ def main():
             transformed_lats_interior,
             color="blue",
             marker="+",
-            s=6,  # Increased size for better visibility
+            s=6,
             transform=rotated_pole_crs,
         )
-
-        # Invert y-axis if desired
-        ax_rotated_pole.add_feature(cfeature.BORDERS, linestyle="-", alpha=0.5)
         ax_rotated_pole.invert_yaxis()
 
-        # Adding coastlines and gridlines
+        ax_rotated_pole.add_feature(cfeature.BORDERS, linestyle="-", alpha=0.5)
         ax_rotated_pole.coastlines()
         ax_rotated_pole.gridlines()
 
-        plt.savefig("boundary_mask_pointynut.png")
+        plt.savefig("boundary_mask.png")
+
+        fig, ax = plt.subplots(figsize=(10, 6))
+        toa_radiation_state_mean = toa_radiation_state.mean(dim="x")
+        toa_radiation_state_mean.plot(x="y", y="time", ax=ax, cmap="viridis")
+        ax.set_xlabel("Latitude")
+        ax.set_ylabel("Time")
+        ax.set_title("Hovmöller Diagram - TOA Radiation (State)")
+        plt.tight_layout()
+        plt.savefig("toa_radiation_state_hovmoller.png")
 
 
 if __name__ == "__main__":
