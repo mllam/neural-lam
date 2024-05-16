@@ -63,7 +63,7 @@ def main():
     mesh_static_features = graph_ldict["mesh_static_features"]
 
     config_loader = utils.ConfigLoader(args.data_config)
-    xy = config_loader.get_nwp_xy()
+    xy = config_loader.get_nwp_xy("static")
     grid_xy = xy.transpose(1, 2, 0).reshape(-1, 2)  # (N_grid, 2)
     pos_max = np.max(np.abs(grid_xy))
     grid_pos = grid_xy / pos_max  # Divide by maximum coordinate

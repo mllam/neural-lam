@@ -11,6 +11,7 @@ cosmo_hilam.html
 .gitignore
 .vscode
 normalization.zarr
+*.png
 
 ### Python ###
 # Byte-compiled / optimized / DLL files
@@ -77,3 +78,4 @@ tags
 # Coc configuration directory
 .vim
 .vscode
+boundary_mask_donut.png
