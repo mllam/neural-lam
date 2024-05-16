@@ -4,11 +4,10 @@ import io
 import os
 import zipfile
 
+# Third-party
 import cartopy.crs as ccrs
 import cartopy.feature as cfeature
 import geopandas as gpd
-
-# Third-party
 import graphcast.solar_radiation as gc_sr
 import matplotlib.pyplot as plt
 import numpy as np
@@ -59,6 +58,8 @@ def calculate_datetime_forcing(ds, args):
 
 
 def generate_land_sea_mask(xy, tempdir, high_res_factor=10):
+    """Generate a land-sea mask for the neural LAM model."""
+
     def download_and_extract_shapefile(url, tempdir):
         response = requests.get(url, timeout=10)
         with zipfile.ZipFile(io.BytesIO(response.content), "r") as zip_ref:
@@ -77,27 +78,30 @@ def generate_land_sea_mask(xy, tempdir, high_res_factor=10):
     # Generate a high-resolution binary mask
     high_res_out_shape = (
         int(xy[1].shape[1] * high_res_factor),
-        int(xy[0].shape[0] * high_res_factor))
+        int(xy[0].shape[0] * high_res_factor),
+    )
     high_res_transform = from_bounds(
-        minx, maxy, maxx, miny, high_res_out_shape[1],
-        high_res_out_shape[0])
+        minx, maxy, maxx, miny, high_res_out_shape[1], high_res_out_shape[0]
+    )
 
     high_res_out_image = rasterize(
         shapes=[land_geometry.__geo_interface__],
         out_shape=high_res_out_shape,
         transform=high_res_transform,
-        fill=0, dtype=np.uint8)
+        fill=0,
+        dtype=np.uint8,
+    )
 
     # Aggregate the high-resolution mask to the target grid resolution
     aggregated_out_image = high_res_out_image.reshape(
-        (xy[1].shape[1],
-         high_res_factor, xy[0].shape[0],
-         high_res_factor)).mean(
-        axis=(1, 3))
+        (xy[1].shape[1], high_res_factor, xy[0].shape[0], high_res_factor)
+    ).mean(axis=(1, 3))
 
     mask_xr = xr.DataArray(
-        aggregated_out_image, dims=("y", "x"),
-        coords={"y": xy[1][0, :], "x": xy[0][:, 0]})
+        aggregated_out_image,
+        dims=("y", "x"),
+        coords={"y": xy[1][0, :], "x": xy[0][:, 0]},
+    )
 
     return mask_xr
 
@@ -226,7 +230,9 @@ def main():
 
     toa_radiation_state = generate_toa_radiation_forcing(ds_state, xy_state)
     toa_radiation_state.to_zarr(args.zarr_path, mode="w")
-    toa_radtiation_boundary = generate_toa_radiation_forcing(ds_boundary, xy_boundary)
+    toa_radtiation_boundary = generate_toa_radiation_forcing(
+        ds_boundary, xy_boundary
+    )
     toa_radtiation_boundary.to_zarr(f"boundary_{args.zarr_path}", mode="w")
     print(f"TOA radiation saved to boundary_{args.zarr_path}")
 
