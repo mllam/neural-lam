@@ -1,6 +1,8 @@
+# Standard library
 import functools
 from pathlib import Path
 
+# Third-party
 import cartopy.crs as ccrs
 import yaml
 
@@ -18,6 +20,7 @@ class Config:
 
     @classmethod
     def from_file(cls, filepath):
+        """Load a configuration file."""
         if filepath.endswith(".yaml"):
             with open(filepath, encoding="utf-8", mode="r") as file:
                 return cls(values=yaml.safe_load(file))
