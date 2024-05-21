@@ -7,7 +7,7 @@ import plotly.graph_objects as go
 import torch_geometric as pyg
 
 # First-party
-from neural_lam import utils
+from neural_lam import config, utils
 
 MESH_HEIGHT = 0.1
 MESH_LEVEL_DIST = 0.2
@@ -44,7 +44,7 @@ def main():
     )
 
     args = parser.parse_args()
-    config_loader = utils.ConfigLoader(args.data_config)
+    config_loader = config.Config.from_file(args.data_config)
 
     # Load graph data
     hierarchical, graph_ldict = utils.load_graph(args.graph)

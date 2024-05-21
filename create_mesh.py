@@ -13,7 +13,7 @@ import torch_geometric as pyg
 from torch_geometric.utils.convert import from_networkx
 
 # First-party
-from neural_lam import utils
+from neural_lam import config
 
 
 def plot_graph(graph, title=None):
@@ -189,7 +189,7 @@ def main():
     args = parser.parse_args()
 
     # Load grid positions
-    config_loader = utils.ConfigLoader(args.data_config)
+    config_loader = config.Config.from_file(args.data_config)
     static_dir_path = os.path.join("data", config_loader.dataset.name, "static")
     graph_dir_path = os.path.join("graphs", args.graph)
     os.makedirs(graph_dir_path, exist_ok=True)

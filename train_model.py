@@ -9,7 +9,7 @@ import torch
 from lightning_fabric.utilities import seed
 
 # First-party
-from neural_lam import utils
+from neural_lam import config, utils
 from neural_lam.models.graph_lam import GraphLAM
 from neural_lam.models.hi_lam import HiLAM
 from neural_lam.models.hi_lam_parallel import HiLAMParallel
@@ -189,7 +189,7 @@ def main():
         help="Wandb project name (default: neural_lam)",
     )
     parser.add_argument(
-        "--val_steps_log",
+        "--val_steps_to_log",
         type=list,
         default=[1, 2, 3, 5, 10, 15, 19],
         help="Steps to log val loss for (default: [1, 2, 3, 5, 10, 15, 19])",
@@ -208,7 +208,7 @@ def main():
     )
     args = parser.parse_args()
 
-    config_loader = utils.ConfigLoader(args.data_config)
+    config_loader = config.Config.from_file(args.data_config)
 
     # Asserts for arguments
     assert args.model in MODELS, f"Unknown model: {args.model}"
@@ -306,7 +306,7 @@ def main():
     # Only init once, on rank 0 only
     if trainer.global_rank == 0:
         utils.init_wandb_metrics(
-            logger, args.val_steps_log
+            logger, args.val_steps_to_log
         )  # Do after wandb.init
 
     if args.eval:

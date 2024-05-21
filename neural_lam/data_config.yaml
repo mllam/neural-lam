@@ -1,6 +1,6 @@
 dataset:
   name: meps_example
-  vars:
+  var_names:
     - pres_0g
     - pres_0s
     - nlwrs_0
@@ -18,7 +18,7 @@ dataset:
     - wvint_0
     - z_1000
     - z_500
-  units:
+  var_units:
     - Pa
     - Pa
     - r"$\mathrm{W}/\mathrm{m}^2$"
@@ -36,7 +36,7 @@ dataset:
     - r"$\mathrm{kg}/\mathrm{m}^2$"
     - r"$\mathrm{m}^2/\mathrm{s}^2$"
     - r"$\mathrm{m}^2/\mathrm{s}^2$"
-  var_names:
+  var_longnames:
     - pres_heightAboveGround_0_instant
     - pres_heightAboveSea_0_instant
     - nlwrs_heightAboveGround_0_accum
@@ -54,7 +54,7 @@ dataset:
     - wvint_entireAtmosphere_0_instant
     - z_isobaricInhPa_1000_instant
     - z_isobaricInhPa_500_instant
-  forcing_dim: 16
+  num_forcing_features: 16
 grid_shape_state: [268, 238]
 projection:
   class: LambertConformal

@@ -8,7 +8,7 @@ import torch
 from tqdm import tqdm
 
 # First-party
-from neural_lam import utils
+from neural_lam import config
 from neural_lam.weather_dataset import WeatherDataset
 
 
@@ -43,7 +43,7 @@ def main():
     )
     args = parser.parse_args()
 
-    config_loader = utils.ConfigLoader(args.data_config)
+    config_loader = config.Config.from_file(args.data_config)
     static_dir_path = os.path.join("data", config_loader.dataset.name, "static")
 
     # Create parameter weights based on height
@@ -57,7 +57,10 @@ def main():
         "500": 0.03,
     }
     w_list = np.array(
-        [w_dict[par.split("_")[-2]] for par in config_loader.dataset.var_names]
+        [
+            w_dict[par.split("_")[-2]]
+            for par in config_loader.dataset.var_longnames
+        ]
     )
     print("Saving parameter weights...")
     np.save(

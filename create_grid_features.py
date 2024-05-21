@@ -7,7 +7,7 @@ import numpy as np
 import torch
 
 # First-party
-from neural_lam import utils
+from neural_lam import config
 
 
 def main():
@@ -22,7 +22,7 @@ def main():
         help="Path to data config file (default: neural_lam/data_config.yaml)",
     )
     args = parser.parse_args()
-    config_loader = utils.ConfigLoader(args.data_config)
+    config_loader = config.Config.from_file(args.data_config)
 
     static_dir_path = os.path.join("data", config_loader.dataset.name, "static")
 

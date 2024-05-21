@@ -9,7 +9,7 @@ import torch
 import wandb
 
 # First-party
-from neural_lam import metrics, utils, vis
+from neural_lam import config, metrics, utils, vis
 
 
 class ARModel(pl.LightningModule):
@@ -25,7 +25,7 @@ class ARModel(pl.LightningModule):
         super().__init__()
         self.save_hyperparameters()
         self.args = args
-        self.config_loader = utils.ConfigLoader(args.data_config)
+        self.config_loader = config.Config.from_file(args.data_config)
 
         # Load static features for grid/data
         static_data_dict = utils.load_static_data(
@@ -61,7 +61,7 @@ class ARModel(pl.LightningModule):
         self.grid_dim = (
             2 * self.config_loader.num_data_vars()
             + grid_static_dim
-            + self.config_loader.dataset.forcing_dim
+            + self.config_loader.dataset.num_forcing_features
         )
 
         # Instantiate loss function
@@ -246,7 +246,7 @@ class ARModel(pl.LightningModule):
         # Log loss per time step forward and mean
         val_log_dict = {
             f"val_loss_unroll{step}": time_step_loss[step - 1]
-            for step in self.args.val_steps_log
+            for step in self.args.val_steps_to_log
         }
         val_log_dict["val_mean_loss"] = mean_loss
         self.log_dict(
@@ -294,7 +294,7 @@ class ARModel(pl.LightningModule):
         # Log loss per time step forward and mean
         test_log_dict = {
             f"test_loss_unroll{step}": time_step_loss[step - 1]
-            for step in self.args.val_steps_log
+            for step in self.args.val_steps_to_log
         }
         test_log_dict["test_mean_loss"] = mean_loss
 
@@ -329,7 +329,7 @@ class ARModel(pl.LightningModule):
             prediction, target, pred_std, average_grid=False
         )  # (B, pred_steps, num_grid_nodes)
         log_spatial_losses = spatial_loss[
-            :, [step - 1 for step in self.args.val_steps_log]
+            :, [step - 1 for step in self.args.val_steps_to_log]
         ]
         self.spatial_loss_maps.append(log_spatial_losses)
         # (B, N_log, num_grid_nodes)
@@ -408,8 +408,8 @@ class ARModel(pl.LightningModule):
                     )
                     for var_i, (var_name, var_unit, var_vrange) in enumerate(
                         zip(
-                            self.config_loader.dataset.vars,
-                            self.config_loader.dataset.units,
+                            self.config_loader.dataset.var_names,
+                            self.config_loader.dataset.var_units,
                             var_vranges,
                         )
                     )
@@ -420,7 +420,7 @@ class ARModel(pl.LightningModule):
                     {
                         f"{var_name}_example_{example_i}": wandb.Image(fig)
                         for var_name, fig in zip(
-                            self.config_loader.dataset.vars, var_figs
+                            self.config_loader.dataset.var_names, var_figs
                         )
                     }
                 )
@@ -476,7 +476,7 @@ class ARModel(pl.LightningModule):
         # Check if metrics are watched, log exact values for specific vars
         if full_log_name in self.args.metrics_watch:
             for var_i, timesteps in self.args.var_leads_metrics_watch.items():
-                var = self.config_loader.dataset.vars[var_i]
+                var = self.config_loader.dataset.var_nums[var_i]
                 log_dict.update(
                     {
                         f"{full_log_name}_{var}_step_{step}": metric_tensor[
@@ -549,7 +549,7 @@ class ARModel(pl.LightningModule):
                     title=f"Test loss, t={t_i} ({self.step_length * t_i} h)",
                 )
                 for t_i, loss_map in zip(
-                    self.args.val_steps_log, mean_spatial_loss
+                    self.args.val_steps_to_log, mean_spatial_loss
                 )
             ]
 
@@ -566,7 +566,7 @@ class ARModel(pl.LightningModule):
             ]
             pdf_loss_maps_dir = os.path.join(wandb.run.dir, "spatial_loss_maps")
             os.makedirs(pdf_loss_maps_dir, exist_ok=True)
-            for t_i, fig in zip(self.args.val_steps_log, pdf_loss_map_figs):
+            for t_i, fig in zip(self.args.val_steps_to_log, pdf_loss_map_figs):
                 fig.savefig(os.path.join(pdf_loss_maps_dir, f"loss_t{t_i}.pdf"))
             # save mean spatial loss as .pt file also
             torch.save(

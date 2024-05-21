@@ -2,10 +2,8 @@
 import os
 
 # Third-party
-import cartopy.crs as ccrs
 import numpy as np
 import torch
-import yaml
 from torch import nn
 from tueplots import bundles, figsizes
 
@@ -270,57 +268,3 @@ def init_wandb_metrics(wandb_logger, val_steps):
     experiment.define_metric("val_mean_loss", summary="min")
     for step in val_steps:
         experiment.define_metric(f"val_loss_unroll{step}", summary="min")
-
-
-class ConfigLoader:
-    """
-    Class for loading configuration files.
-
-    This class loads a YAML configuration file and provides a way to access
-    its values as attributes.
-    """
-
-    def __init__(self, config_path, values=None):
-        self.config_path = config_path
-        if values is None:
-            self.values = self.load_config()
-        else:
-            self.values = values
-
-    def load_config(self):
-        """Load configuration file."""
-        with open(self.config_path, encoding="utf-8", mode="r") as file:
-            return yaml.safe_load(file)
-
-    def __getattr__(self, name):
-        keys = name.split(".")
-        value = self.values
-        for key in keys:
-            if key in value:
-                value = value[key]
-            else:
-                return None
-        if isinstance(value, dict):
-            return ConfigLoader(None, values=value)
-        return value
-
-    def __getitem__(self, key):
-        value = self.values[key]
-        if isinstance(value, dict):
-            return ConfigLoader(None, values=value)
-        return value
-
-    def __contains__(self, key):
-        return key in self.values
-
-    def num_data_vars(self):
-        """Return the number of data variables for a given key."""
-        return len(self.dataset.vars)
-
-    def projection(self):
-        """Return the projection."""
-        proj_config = self.values["projection"]
-        proj_class_name = proj_config["class"]
-        proj_class = getattr(ccrs, proj_class_name)
-        proj_params = proj_config.get("kwargs", {})
-        return proj_class(**proj_params)

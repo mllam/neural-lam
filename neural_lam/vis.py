@@ -51,7 +51,7 @@ def plot_error_map(errors, data_config, title=None, step_length=3):
     y_ticklabels = [
         f"{name} ({unit})"
         for name, unit in zip(
-            data_config.dataset.vars, data_config.dataset.units
+            data_config.dataset.var_names, data_config.dataset.var_units
         )
     ]
     ax.set_yticklabels(y_ticklabels, rotation=30, size=label_size)
@@ -87,7 +87,7 @@ def plot_prediction(
         1,
         2,
         figsize=(13, 7),
-        subplot_kw={"projection": data_config.projection()},
+        subplot_kw={"projection": data_config.coords_projection()},
     )
 
     # Plot pred and target
@@ -135,7 +135,8 @@ def plot_spatial_error(error, obs_mask, data_config, title=None, vrange=None):
     )  # Faded border region
 
     fig, ax = plt.subplots(
-        figsize=(5, 4.8), subplot_kw={"projection": data_config.projection()}
+        figsize=(5, 4.8),
+        subplot_kw={"projection": data_config.coords_projection()},
     )
 
     ax.coastlines()  # Add coastline outlines
