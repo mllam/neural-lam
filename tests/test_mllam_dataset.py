@@ -13,7 +13,7 @@ import numpy as np
 import weather_model_graphs as wmg
 
 
-def load_reduced_meps_dataset():
+def test_load_reduced_meps_dataset():
     data_config_file = 'data/meps_example_reduced/data_config.yaml'
     dataset_name = 'meps_example_reduced'
 
