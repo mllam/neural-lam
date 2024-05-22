@@ -1,33 +1,25 @@
-name: Run pre-commit job
+name: lint
 
 on:
- push:
+  # trigger on pushes to any branch, but not main
+  push:
+    branches-ignore:
+      - main
+  # and also on PRs to main
+  pull_request:
     branches:
-    - main
- pull_request:
-    branches:
-    - main
+      - main
 
 jobs:
- pre-commit-job:
+  pre-commit-job:
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        shell: bash -l {0}
+    strategy:
+      matrix:
+        python-version: ["3.9", "3.10", "3.11", "3.12"]
     steps:
     - uses: actions/checkout@v2
     - name: Set up Python
       uses: actions/setup-python@v2
       with:
-        python-version: 3.9
-    - name: Install pre-commit hooks
-      run: |
-        pip install torch==2.0.1 torchvision==0.15.2 torchaudio==2.0.2 \
-          --index-url https://download.pytorch.org/whl/cpu
-        pip install -r requirements.txt
-        pip install pyg-lib==0.2.0 torch-scatter==2.1.1 torch-sparse==0.6.17 \
-          torch-cluster==1.6.1 torch-geometric==2.3.1 \
-          -f https://pytorch-geometric.com/whl/torch-2.0.1+cpu.html
-    - name: Run pre-commit hooks
-      run: |
-        pre-commit run --all-files
+        python-version: ${{ matrix.python-version }}
+    - uses: pre-commit/action@v2.0.3
