@@ -2,7 +2,7 @@
 # needs to first install pdm, then install torch cpu manually and then install the package
 # then run the tests
 
-name: tests (pdm install, cpu)
+name: test (pdm install, cpu)
 
 on: [push, pull_request]
 
