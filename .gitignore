@@ -73,3 +73,6 @@ tags
 
 # Coc configuration directory
 .vim
+
+# pdm (https://pdm-project.org/en/stable/)
+.pdm-python
