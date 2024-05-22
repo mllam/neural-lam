@@ -55,6 +55,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   [\#13](https://github.com/joeloskarsson/neural-lam/pull/13)
   @joeloskarsson
 
+### Maintenance
+
+- simplify pre-commit setup by 1) reducing linting to only cover static
+  analysis excluding imports from external dependencies (this will be handled
+  in build/test cicd action introduced later), 2) pinning versions of linting
+  tools in pre-commit config (and remove from `requirements.txt`) and 3) using
+  github action to run pre-commit.
+  [\#29](https://github.com/mllam/neural-lam/pull/29)
+  @leifdenby
+
+
 ## [v0.1.0](https://github.com/joeloskarsson/neural-lam/releases/tag/v0.1.0)
 
 First tagged release of `neural-lam`, matching Oskarsson et al 2023 publication
