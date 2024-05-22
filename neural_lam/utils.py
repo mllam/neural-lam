@@ -7,9 +7,6 @@ import torch
 from torch import nn
 from tueplots import bundles, figsizes
 
-# First-party
-from neural_lam import constants
-
 
 def load_dataset_stats(dataset_name, device="cpu"):
     """
@@ -263,11 +260,11 @@ def fractional_plot_bundle(fraction):
     return bundle
 
 
-def init_wandb_metrics(wandb_logger):
+def init_wandb_metrics(wandb_logger, val_steps):
     """
     Set up wandb metrics to track
     """
     experiment = wandb_logger.experiment
     experiment.define_metric("val_mean_loss", summary="min")
-    for step in constants.VAL_STEP_LOG_ERRORS:
+    for step in val_steps:
         experiment.define_metric(f"val_loss_unroll{step}", summary="min")
