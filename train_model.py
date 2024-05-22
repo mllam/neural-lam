@@ -22,7 +22,7 @@ MODELS = {
 }
 
 
-def main():
+def main(input_args=None):
     """
     Main function for training and evaluating models
     """
@@ -206,7 +206,7 @@ def main():
         default={},
         help="Dict with variables and lead times to log watched metrics for",
     )
-    args = parser.parse_args()
+    args = parser.parse_args(input_args)
 
     config_loader = config.Config.from_file(args.data_config)
 
