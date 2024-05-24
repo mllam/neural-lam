@@ -24,3 +24,4 @@ isort>=5.9.3
 flake8>=4.0.1
 pylint>=3.0.3
 pytest>=8.1.1
+pooch>=1.8.1
