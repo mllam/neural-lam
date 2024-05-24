@@ -1,6 +1,9 @@
 # Standard library
 import os
 
+# Third-party
+import pooch
+
 # First-party
 from create_mesh import main as create_mesh
 from neural_lam.config import Config
@@ -8,12 +11,26 @@ from neural_lam.utils import load_static_data
 from neural_lam.weather_dataset import WeatherDataset
 from train_model import main as train_model
 
-# from pathlib import Path
-# import numpy as np
-# import weather_model_graphs as wmg
-
-
 os.environ["WANDB_DISABLED"] = "true"
+
+
+def test_retrieve_data_ewc():
+    # Initializing variables for the client
+    S3_BUCKET_NAME = "mllam-testdata"
+    S3_ENDPOINT_URL = "https://object-store.os-api.cci1.ecmwf.int"
+    S3_FILE_PATH = "neural-lam/npy/meps_example_reduced.v0.1.0.zip"
+    S3_FULL_PATH = "/".join([S3_ENDPOINT_URL, S3_BUCKET_NAME, S3_FILE_PATH])
+    known_hash = (
+        "80903c4012018797eaa9f2818b6a205d1d2d3122297a15359f6343f54eddcb18"
+    )
+
+    pooch.retrieve(
+        url=S3_FULL_PATH,
+        known_hash=known_hash,
+        processor=pooch.Unzip(extract_dir=""),
+        path="data",
+        fname="meps_example_reduced.zip",
+    )
 
 
 def test_load_reduced_meps_dataset():
@@ -87,44 +104,6 @@ def test_load_reduced_meps_dataset():
     assert set(static_data.keys()) == required_props
 
 
-# def test_create_wmg_graph_reduced_meps_dataset():
-#     dataset_name = "meps_example_reduced"
-#     static_dir_path = Path("data", dataset_name, "static")
-#     graph_dir_path = Path("graphs", "hierarchial")
-
-#     # -- Static grid node features --
-#     xy_grid = np.load(static_dir_path / "nwp_xy.npy")
-
-#     # create the full graph
-#     graph = wmg.create.archetype.create_oscarsson_hierarchical_graph(
-#         xy_grid=xy_grid
-#     )
-
-#     # split the graph by component
-#     graph_components = wmg.split_graph_by_edge_attribute(
-#         graph=graph, attr="component"
-#     )
-
-#     m2m_graph = graph_components.pop("m2m")
-#     m2m_graph_components = wmg.split_graph_by_edge_attribute(
-#         graph=m2m_graph, attr="direction"
-#     )
-#     m2m_graph_components = {
-#         f"m2m_{name}": graph for name, graph in m2m_graph_components.items()
-#     }
-#     graph_components.update(m2m_graph_components)
-
-#     # save the graph components to disk in pytorch-geometric format
-#     for component_name, graph_component in graph_components.items():
-#         kwargs = {}
-#         wmg.save.to_pyg(
-#             graph=graph_component,
-#             name=component_name,
-#             output_directory=graph_dir_path,
-#             **kwargs,
-#         )
-
-
 def test_create_graph_reduced_meps_dataset():
     args = [
         "--graph=hierarchical",
@@ -150,6 +129,3 @@ def test_train_model_reduced_meps_dataset():
         "--n_example_pred=0",
     ]
     train_model(args)
-
-
-test_train_model_reduced_meps_dataset()
