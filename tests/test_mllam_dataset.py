@@ -21,7 +21,7 @@ def test_retrieve_data_ewc():
     S3_FILE_PATH = "neural-lam/npy/meps_example_reduced.v0.1.0.zip"
     S3_FULL_PATH = "/".join([S3_ENDPOINT_URL, S3_BUCKET_NAME, S3_FILE_PATH])
     known_hash = (
-        "80903c4012018797eaa9f2818b6a205d1d2d3122297a15359f6343f54eddcb18"
+        "7d80f0d8c3022aa8c0331f26a17566b44b4b33a5d9a60f6d2e60bf65ed857d86"
     )
 
     pooch.retrieve(
