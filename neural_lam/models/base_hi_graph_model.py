@@ -36,7 +36,7 @@ class BaseHiGraphModel(BaseGraphModel):
             if level_index < (self.num_levels - 1):
                 up_edges = self.mesh_up_features[level_index].shape[0]
                 down_edges = self.mesh_down_features[level_index].shape[0]
-                print(f"  {level_index}<->{level_index+1}")
+                print(f"  {level_index}<->{level_index + 1}")
                 print(f" - {up_edges} up edges, {down_edges} down edges")
         # Embedders
         # Assume all levels have same static feature dimensionality
@@ -179,9 +179,9 @@ class BaseHiGraphModel(BaseGraphModel):
             )
 
             # Update node and edge vectors in lists
-            mesh_rep_levels[level_l] = (
-                new_node_rep  # (B, num_mesh_nodes[l], d_h)
-            )
+            mesh_rep_levels[
+                level_l
+            ] = new_node_rep  # (B, num_mesh_nodes[l], d_h)
             mesh_up_rep[level_l - 1] = new_edge_rep  # (B, M_up[l-1], d_h)
 
         # - PROCESSOR -
@@ -207,9 +207,9 @@ class BaseHiGraphModel(BaseGraphModel):
             new_node_rep = gnn(send_node_rep, rec_node_rep, edge_rep)
 
             # Update node and edge vectors in lists
-            mesh_rep_levels[level_l] = (
-                new_node_rep  # (B, num_mesh_nodes[l], d_h)
-            )
+            mesh_rep_levels[
+                level_l
+            ] = new_node_rep  # (B, num_mesh_nodes[l], d_h)
 
         # Return only bottom level representation
         return mesh_rep_levels[0]  # (B, num_mesh_nodes[0], d_h)
