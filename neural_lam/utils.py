@@ -8,31 +8,6 @@ from torch import nn
 from tueplots import bundles, figsizes
 
 
-def load_dataset_stats(dataset_name, device="cpu"):
-    """
-    Load arrays with stored dataset statistics from pre-processing
-    """
-    static_dir_path = os.path.join("data", dataset_name, "static")
-
-    def loads_file(fn):
-        return torch.load(
-            os.path.join(static_dir_path, fn), map_location=device
-        )
-
-    data_mean = loads_file("parameter_mean.pt")  # (d_features,)
-    data_std = loads_file("parameter_std.pt")  # (d_features,)
-
-    flux_stats = loads_file("flux_stats.pt")  # (2,)
-    flux_mean, flux_std = flux_stats
-
-    return {
-        "data_mean": data_mean,
-        "data_std": data_std,
-        "flux_mean": flux_mean,
-        "flux_std": flux_std,
-    }
-
-
 def load_static_data(dataset_name, device="cpu"):
     """
     Load static files related to dataset
@@ -64,6 +39,9 @@ def load_static_data(dataset_name, device="cpu"):
     data_mean = loads_file("parameter_mean.pt")  # (d_features,)
     data_std = loads_file("parameter_std.pt")  # (d_features,)
 
+    flux_mean = loads_file("flux_mean.pt")  # (,)
+    flux_std = loads_file("flux_std.pt")  # (,)
+
     # Load loss weighting vectors
     param_weights = torch.tensor(
         np.load(os.path.join(static_dir_path, "parameter_weights.npy")),
@@ -78,6 +56,8 @@ def load_static_data(dataset_name, device="cpu"):
         "step_diff_std": step_diff_std,
         "data_mean": data_mean,
         "data_std": data_std,
+        "flux_mean": flux_mean,
+        "flux_std": flux_std,
         "param_weights": param_weights,
     }
 

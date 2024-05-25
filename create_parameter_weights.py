@@ -74,7 +74,6 @@ def main():
         split="train",
         subsample_step=1,
         pred_length=63,
-        standardize=False,
     )  # Without standardization
     loader = torch.utils.data.DataLoader(
         ds, args.batch_size, shuffle=False, num_workers=args.n_workers
@@ -107,30 +106,25 @@ def main():
     flux_mean = torch.mean(torch.stack(flux_means))  # (,)
     flux_second_moment = torch.mean(torch.stack(flux_squares))  # (,)
     flux_std = torch.sqrt(flux_second_moment - flux_mean**2)  # (,)
-    flux_stats = torch.stack((flux_mean, flux_std))
 
-    print("Saving mean, std.-dev, flux_stats...")
+    print("Saving mean, std.-dev, flux_mean, flux_std...")
     torch.save(mean, os.path.join(static_dir_path, "parameter_mean.pt"))
     torch.save(std, os.path.join(static_dir_path, "parameter_std.pt"))
-    torch.save(flux_stats, os.path.join(static_dir_path, "flux_stats.pt"))
+    torch.save(flux_mean, os.path.join(static_dir_path, "flux_mean.pt"))
+    torch.save(flux_std, os.path.join(static_dir_path, "flux_std.pt"))
 
     # Compute mean and std.-dev. of one-step differences across the dataset
     print("Computing mean and std.-dev. for one-step differences...")
-    ds_standard = WeatherDataset(
-        config_loader.dataset.name,
-        split="train",
-        subsample_step=1,
-        pred_length=63,
-        standardize=True,
-    )  # Re-load with standardization
-    loader_standard = torch.utils.data.DataLoader(
-        ds_standard, args.batch_size, shuffle=False, num_workers=args.n_workers
-    )
     used_subsample_len = (65 // args.step_length) * args.step_length
 
     diff_means = []
     diff_squares = []
-    for init_batch, target_batch, _ in tqdm(loader_standard):
+    for init_batch, target_batch, _ in tqdm(loader):
+        # normalize the batch
+        init_batch = (init_batch - mean) / std
+        target_batch = (target_batch - mean) / std
+
+        batch = torch.cat((init_batch, target_batch), dim=1)
         batch = torch.cat(
             (init_batch, target_batch), dim=1
         )  # (N_batch, N_t', N_grid, d_features)
