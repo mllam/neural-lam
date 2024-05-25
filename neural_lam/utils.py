@@ -1,15 +1,17 @@
 # Standard library
 import os
+import random
 import time
 
 # Third-party
 import numpy as np
 import pytorch_lightning as pl
 import torch
-import wandb  # pylint: disable=wrong-import-order
 from pytorch_lightning.utilities import rank_zero_only
 from torch import nn
 from tueplots import bundles, figsizes
+
+import wandb  # pylint: disable=wrong-import-order
 
 
 def load_dataset_stats(dataset_name, device="cpu"):
@@ -277,9 +279,10 @@ def init_wandb(args):
         prefix = f"subset-{args.subset_ds}-" if args.subset_ds else ""
         if args.eval:
             prefix = prefix + f"eval-{args.eval}-"
+        random_int = random.randint(0, 10000)
         run_name = (
             f"{prefix}{args.model}-{args.processor_layers}x{args.hidden_dim}-"
-            f"{time.strftime('%m_%d_%H_%M_%S')}"
+            f"{time.strftime('%m_%d_%H_%M_%S')}-{random_int}"
         )
         wandb.init(
             name=run_name,
