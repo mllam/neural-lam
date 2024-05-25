@@ -1,4 +1,5 @@
 # Standard library
+import json
 import random
 import time
 from argparse import ArgumentParser
@@ -202,11 +203,13 @@ def main():
     )
     parser.add_argument(
         "--var_leads_metrics_watch",
-        type=dict,
-        default={},
-        help="Dict with variables and lead times to log watched metrics for",
+        type=str,
+        default="{}",
+        help="JSON string with variables and lead times to log watched metrics"
+        # e.g. '{"var1": [1, 2], "var2": [3, 4]}'
     )
     args = parser.parse_args()
+    args.var_leads_metrics_watch = json.loads(args.var_leads_metrics_watch)
 
     config_loader = config.Config.from_file(args.data_config)
 
