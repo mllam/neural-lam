@@ -97,9 +97,6 @@ class ARModel(pl.LightningModule):
         opt = torch.optim.AdamW(
             self.parameters(), lr=self.args.lr, betas=(0.9, 0.95)
         )
-        if self.opt_state:
-            opt.load_state_dict(self.opt_state)
-
         return opt
 
     @property
@@ -598,10 +595,5 @@ class ARModel(pl.LightningModule):
                 loaded_state_dict[new_key] = loaded_state_dict[old_key]
                 del loaded_state_dict[old_key]
         if not self.restore_opt:
-            optimizers, lr_schedulers = self.configure_optimizers()
-            checkpoint["optimizer_states"] = [
-                opt.state_dict() for opt in optimizers
-            ]
-            checkpoint["lr_schedulers"] = [
-                sched.state_dict() for sched in lr_schedulers
-            ]
+            opt = self.configure_optimizers()
+            checkpoint["optimizer_states"] = [opt.state_dict()]
