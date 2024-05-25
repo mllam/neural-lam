@@ -7,11 +7,10 @@ import time
 import numpy as np
 import pytorch_lightning as pl
 import torch
+import wandb  # pylint: disable=wrong-import-order
 from pytorch_lightning.utilities import rank_zero_only
 from torch import nn
 from tueplots import bundles, figsizes
-
-import wandb  # pylint: disable=wrong-import-order
 
 
 def load_dataset_stats(dataset_name, device="cpu"):
