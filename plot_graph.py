@@ -7,7 +7,7 @@ import plotly.graph_objects as go
 import torch_geometric as pyg
 
 # First-party
-from neural_lam import utils
+from neural_lam import config, utils
 
 MESH_HEIGHT = 0.1
 MESH_LEVEL_DIST = 0.2
@@ -20,10 +20,10 @@ def main():
     """
     parser = ArgumentParser(description="Plot graph")
     parser.add_argument(
-        "--dataset",
+        "--data_config",
         type=str,
-        default="meps_example",
-        help="Datast to load grid coordinates from (default: meps_example)",
+        default="neural_lam/data_config.yaml",
+        help="Path to data config file (default: neural_lam/data_config.yaml)",
     )
     parser.add_argument(
         "--graph",
@@ -44,14 +44,11 @@ def main():
     )
 
     args = parser.parse_args()
+    config_loader = config.Config.from_file(args.data_config)
 
     # Load graph data
     hierarchical, graph_ldict = utils.load_graph(args.graph)
-    (
-        g2m_edge_index,
-        m2g_edge_index,
-        m2m_edge_index,
-    ) = (
+    (g2m_edge_index, m2g_edge_index, m2m_edge_index,) = (
         graph_ldict["g2m_edge_index"],
         graph_ldict["m2g_edge_index"],
         graph_ldict["m2m_edge_index"],
@@ -62,7 +59,7 @@ def main():
     )
     mesh_static_features = graph_ldict["mesh_static_features"]
 
-    grid_static_features = utils.load_static_data(args.dataset)[
+    grid_static_features = utils.load_static_data(config_loader.dataset.name)[
         "grid_static_features"
     ]
 
