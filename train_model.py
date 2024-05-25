@@ -9,7 +9,6 @@ import torch
 from lightning_fabric.utilities import seed
 
 # First-party
-from neural_lam import utils
 from neural_lam import config, utils
 from neural_lam.models.graph_lam import GraphLAM
 from neural_lam.models.hi_lam import HiLAM

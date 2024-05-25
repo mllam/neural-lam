@@ -264,13 +264,6 @@ def fractional_plot_bundle(fraction):
     return bundle
 
 
-def init_wandb_metrics(wandb_logger, val_steps):
-    """
-    Set up wandb metrics to track
-    """
-
-
-
 @rank_zero_only
 def rank_zero_print(*args, **kwargs):
     """Print only from rank 0 process"""
@@ -290,30 +283,30 @@ def init_wandb(args):
         )
         wandb.init(
             name=run_name,
-            project=constants.WANDB_PROJECT,
+            project=args.wandb_project,
             config=args,
         )
         logger = pl.loggers.WandbLogger(
-            project=constants.WANDB_PROJECT,
+            project=args.wandb_project,
             name=run_name,
             config=args,
         )
-        wandb.save("neural_lam/constants.py")
+        wandb.save("neural_lam/data_config.yaml")
     else:
         wandb.init(
-            project=constants.WANDB_PROJECT,
+            project=args.wandb_project,
             config=args,
             id=args.resume_run,
             resume="must",
         )
         logger = pl.loggers.WandbLogger(
-            project=constants.WANDB_PROJECT,
+            project=args.wandb_project,
             id=args.resume_run,
             config=args,
         )
     experiment = logger.experiment
     experiment.define_metric("val_mean_loss", summary="min")
-    for step in val_steps:
+    for step in args.val_steps_to_log:
         experiment.define_metric(f"val_loss_unroll{step}", summary="min")
 
     return logger
