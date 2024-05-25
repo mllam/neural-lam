@@ -271,10 +271,7 @@ def init_wandb_metrics(wandb_logger):
     """
     Set up wandb metrics to track
     """
-    experiment = wandb_logger.experiment
-    experiment.define_metric("val_mean_loss", summary="min")
-    for step in constants.VAL_STEP_LOG_ERRORS:
-        experiment.define_metric(f"val_loss_unroll{step}", summary="min")
+
 
 
 @rank_zero_only
@@ -303,7 +300,6 @@ def init_wandb(args):
             project=constants.WANDB_PROJECT,
             name=run_name,
             config=args,
-            log_model=True,
         )
         wandb.save("neural_lam/constants.py")
     else:
@@ -317,7 +313,10 @@ def init_wandb(args):
             project=constants.WANDB_PROJECT,
             id=args.resume_run,
             config=args,
-            log_model=True,
         )
+    experiment = logger.experiment
+    experiment.define_metric("val_mean_loss", summary="min")
+    for step in constants.VAL_STEP_LOG_ERRORS:
+        experiment.define_metric(f"val_loss_unroll{step}", summary="min")
 
     return logger

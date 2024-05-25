@@ -281,10 +281,6 @@ def main():
         precision=args.precision,
     )
 
-    # Only init once, on rank 0 only
-    if trainer.global_rank == 0:
-        utils.init_wandb_metrics(logger)  # Do after wandb.init
-
     if args.eval:
         if args.eval == "val":
             eval_loader = val_loader
