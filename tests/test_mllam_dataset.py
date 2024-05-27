@@ -3,6 +3,7 @@ import os
 
 # Third-party
 import pooch
+from matplotlib import rcParams
 
 # First-party
 from create_mesh import main as create_mesh
@@ -12,6 +13,7 @@ from neural_lam.weather_dataset import WeatherDataset
 from train_model import main as train_model
 
 os.environ["WANDB_DISABLED"] = "true"
+rcParams["text.usetex"] = False
 
 
 def test_retrieve_data_ewc():
