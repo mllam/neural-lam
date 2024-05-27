@@ -3,7 +3,6 @@ import os
 
 # Third-party
 import pooch
-from matplotlib import rcParams
 
 # First-party
 from create_mesh import main as create_mesh
@@ -13,7 +12,6 @@ from neural_lam.weather_dataset import WeatherDataset
 from train_model import main as train_model
 
 os.environ["WANDB_DISABLED"] = "true"
-rcParams["text.usetex"] = False
 
 
 def test_retrieve_data_ewc():
@@ -23,7 +21,7 @@ def test_retrieve_data_ewc():
     S3_FILE_PATH = "neural-lam/npy/meps_example_reduced.v0.1.0.zip"
     S3_FULL_PATH = "/".join([S3_ENDPOINT_URL, S3_BUCKET_NAME, S3_FILE_PATH])
     known_hash = (
-        "7d80f0d8c3022aa8c0331f26a17566b44b4b33a5d9a60f6d2e60bf65ed857d86"
+        "98c7a2f442922de40c6891fe3e5d190346889d6e0e97550170a82a7ce58a72b7"
     )
 
     pooch.retrieve(
