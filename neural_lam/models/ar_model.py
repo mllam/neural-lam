@@ -883,8 +883,16 @@ class ARModel(pl.LightningModule):
                     shape_val = len(constants.VERTICAL_LEVELS)
                     vertical = constants.VERTICAL_LEVELS
                 else:
-                    shape_val = 1
-                    vertical = 1
+                    # Special handling for T_2M and *_10M variables
+                    if variable == "T_2M":
+                        shape_val = 1
+                        vertical = 2
+                    elif variable.endswith("_10M"):
+                        shape_val = 1
+                        vertical = 10
+                    else:
+                        shape_val = 1
+                        vertical = 0
                 # Find the value range to sample
                 value_range = indices[variable]
 
