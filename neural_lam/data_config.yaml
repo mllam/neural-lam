@@ -50,12 +50,12 @@ state: # Variables forecasted by the model
     - V_10M
   surface_units:
     - "%"
-    - r"$\mathrm{Pa}$"
-    - r"$\mathrm{Pa}$"
-    - r"$\mathrm{K}$"
-    - r"$\mathrm{kg}/\mathrm{m}^2$"
-    - r"$\mathrm{m}/\mathrm{s}$"
-    - r"$\mathrm{m}/\mathrm{s}$"
+    - $\mathrm{Pa}$
+    - $\mathrm{Pa}$
+    - $\mathrm{K}$
+    - $\mathrm{kg}/\mathrm{m}^2$
+    - $\mathrm{m}/\mathrm{s}$
+    - $\mathrm{m}/\mathrm{s}$
   atmosphere: # Variables with vertical levels
     - PP
     - QV
@@ -65,13 +65,13 @@ state: # Variables forecasted by the model
     - V
     - W
   atmosphere_units:
-    - r"$\mathrm{Pa}$"
-    - r"$\mathrm{kg}/\mathrm{kg}$"
+    - $\mathrm{Pa}$
+    - $\mathrm{kg}/\mathrm{kg}$
     - "%"
-    - r"$\mathrm{K}$"
-    - r"$\mathrm{m}/\mathrm{s}$"
-    - r"$\mathrm{m}/\mathrm{s}$"
-    - r"$\mathrm{Pa}/\mathrm{s}$"
+    - $\mathrm{K}$
+    - $\mathrm{m}/\mathrm{s}$
+    - $\mathrm{m}/\mathrm{s}$
+    - $\mathrm{Pa}/\mathrm{s}$
   levels: # Levels to use for atmosphere variables
     - 0
     - 5
