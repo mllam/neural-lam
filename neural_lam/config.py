@@ -1,6 +1,7 @@
-
+# Standard library
 import os
 
+# Third-party
 import cartopy.crs as ccrs
 import numpy as np
 import xarray as xr
@@ -86,7 +87,10 @@ class Config:
         """Open a dataset specified by the dataset name."""
         dataset_path = self.zarrs[dataset_name].path
         if dataset_path is None or not os.path.exists(dataset_path):
-            print(f"Dataset '{dataset_name}' not found at path: {dataset_path}")
+            print(
+                f"Dataset '{dataset_name}' "
+                f"not found at path: {dataset_path}"
+            )
             return None
         dataset = xr.open_zarr(dataset_path, consolidated=True)
         return dataset

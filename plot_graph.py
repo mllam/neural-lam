@@ -10,7 +10,7 @@ from tqdm import tqdm
 from trimesh.primitives import Box
 
 # First-party
-from neural_lam import utils
+from neural_lam import config, utils
 
 MESH_HEIGHT = 0.1
 MESH_LEVEL_DIST = 0.05
