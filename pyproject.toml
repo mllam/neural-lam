@@ -2,7 +2,7 @@
 line-length = 80
 
 [tool.isort]
-default_section = "THIRD PARTY"
+default_section = "THIRDPARTY"
 profile = "black"
 # Headings
 import_heading_stdlib = "Standard library"
