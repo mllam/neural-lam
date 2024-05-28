@@ -11,22 +11,25 @@ from neural_lam.utils import load_static_data
 from neural_lam.weather_dataset import WeatherDataset
 from train_model import main as train_model
 
+# Disable weights and biases to avoid unnecessary logging
+# and to avoid having to deal with authentication
 os.environ["WANDB_DISABLED"] = "true"
+
+# Initializing variables for the s3 client
+S3_BUCKET_NAME = "mllam-testdata"
+S3_ENDPOINT_URL = "https://object-store.os-api.cci1.ecmwf.int"
+S3_FILE_PATH = "neural-lam/npy/meps_example_reduced.v0.1.0.zip"
+S3_FULL_PATH = "/".join([S3_ENDPOINT_URL, S3_BUCKET_NAME, S3_FILE_PATH])
+TEST_DATA_KNOWN_HASH = (
+    "98c7a2f442922de40c6891fe3e5d190346889d6e0e97550170a82a7ce58a72b7"
+)
 
 
 def test_retrieve_data_ewc():
-    # Initializing variables for the client
-    S3_BUCKET_NAME = "mllam-testdata"
-    S3_ENDPOINT_URL = "https://object-store.os-api.cci1.ecmwf.int"
-    S3_FILE_PATH = "neural-lam/npy/meps_example_reduced.v0.1.0.zip"
-    S3_FULL_PATH = "/".join([S3_ENDPOINT_URL, S3_BUCKET_NAME, S3_FILE_PATH])
-    known_hash = (
-        "98c7a2f442922de40c6891fe3e5d190346889d6e0e97550170a82a7ce58a72b7"
-    )
-
+    # Download and unzip test data into data/meps_example_reduced
     pooch.retrieve(
         url=S3_FULL_PATH,
-        known_hash=known_hash,
+        known_hash=TEST_DATA_KNOWN_HASH,
         processor=pooch.Unzip(extract_dir=""),
         path="data",
         fname="meps_example_reduced.zip",
@@ -34,6 +37,8 @@ def test_retrieve_data_ewc():
 
 
 def test_load_reduced_meps_dataset():
+    # The data_config.yaml file is downloaded and extracted in
+    # test_retrieve_data_ewc together with the dataset itself
     data_config_file = "data/meps_example_reduced/data_config.yaml"
     dataset_name = "meps_example_reduced"
 
