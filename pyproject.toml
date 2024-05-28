@@ -6,10 +6,10 @@ version = "0.1.0"
 packages = ["neural_lam"]
 
 [tool.black]
-line-length = 80
+line-length = 79
 
 [tool.isort]
-default_section = "THIRDPARTY"
+default_section = "THIRDPARTY" #codespell:ignore
 profile = "black"
 # Headings
 import_heading_stdlib = "Standard library"

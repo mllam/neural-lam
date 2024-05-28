@@ -40,7 +40,9 @@ def load_graph(graph_name, device="cpu"):
     graph_dir_path = os.path.join("graphs", graph_name)
 
     def loads_file(fn):
-        return torch.load(os.path.join(graph_dir_path, fn), map_location=device)
+        return torch.load(
+            os.path.join(graph_dir_path, fn), map_location=device
+        )
 
     # Load edges (edge_index)
     m2m_edge_index = BufferList(
@@ -53,7 +55,8 @@ def load_graph(graph_name, device="cpu"):
     hierarchical = n_levels > 1  # Nor just single level mesh graph
 
     # Load static edge features
-    m2m_features = loads_file("m2m_features.pt")  # List of (M_m2m[l], d_edge_f)
+    # List of (M_m2m[l], d_edge_f)
+    m2m_features = loads_file("m2m_features.pt")
     g2m_features = loads_file("g2m_features.pt")  # (M_g2m, d_edge_f)
     m2g_features = loads_file("m2g_features.pt")  # (M_m2g, d_edge_f)
 

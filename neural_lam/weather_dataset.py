@@ -39,7 +39,9 @@ class WeatherDataset(torch.utils.data.Dataset):
 
         self.state = self.config_loader.process_dataset("state", self.split)
         assert self.state is not None, "State dataset not found"
-        self.forcing = self.config_loader.process_dataset("forcing", self.split)
+        self.forcing = self.config_loader.process_dataset(
+            "forcing", self.split
+        )
         self.boundary = self.config_loader.process_dataset(
             "boundary", self.split
         )
@@ -69,7 +71,10 @@ class WeatherDataset(torch.utils.data.Dataset):
                     method="nearest",
                 )
                 .pad(
-                    time=(self.boundary_window // 2, self.boundary_window // 2),
+                    time=(
+                        self.boundary_window // 2,
+                        self.boundary_window // 2,
+                    ),
                     mode="edge",
                 )
                 .rolling(time=self.boundary_window, center=True)
@@ -87,7 +92,9 @@ class WeatherDataset(torch.utils.data.Dataset):
         )
 
         forcing = (
-            self.forcing_windowed.isel(time=slice(idx + 2, idx + self.ar_steps))
+            self.forcing_windowed.isel(
+                time=slice(idx + 2, idx + self.ar_steps)
+            )
             .stack(variable_window=("variable", "window"))
             .values
             if self.forcing is not None

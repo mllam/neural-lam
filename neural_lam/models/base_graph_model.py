@@ -118,8 +118,8 @@ class BaseGraphModel(ARModel):
             dim=-1,
         )
 
-        # Embed all features
-        grid_emb = self.grid_embedder(grid_features)  # (B, num_grid_nodes, d_h)
+        # Embed all features  # (B, num_grid_nodes, d_h)
+        grid_emb = self.grid_embedder(grid_features)
         g2m_emb = self.g2m_embedder(self.g2m_features)  # (M_g2m, d_h)
         m2g_emb = self.m2g_embedder(self.m2g_features)  # (M_m2g, d_h)
         mesh_emb = self.embedd_mesh_nodes()
@@ -149,9 +149,8 @@ class BaseGraphModel(ARModel):
         )  # (B, num_grid_nodes, d_h)
 
         # Map to output dimension, only for grid
-        net_output = self.output_map(
-            grid_rep
-        )  # (B, num_grid_nodes, d_grid_out)
+        # (B, num_grid_nodes, d_grid_out)
+        net_output = self.output_map(grid_rep)
 
         if self.output_std:
             pred_delta_mean, pred_std_raw = net_output.chunk(

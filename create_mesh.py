@@ -125,7 +125,11 @@ def mk_2d_graph(xy, nx, ny):
 
     # add diagonal edges
     g.add_edges_from(
-        [((x, y), (x + 1, y + 1)) for x in range(nx - 1) for y in range(ny - 1)]
+        [
+            ((x, y), (x + 1, y + 1))
+            for x in range(nx - 1)
+            for y in range(ny - 1)
+        ]
         + [
             ((x + 1, y), (x, y + 1))
             for x in range(nx - 1)
@@ -343,7 +347,9 @@ def main():
                 .reshape(int(n / nx) ** 2, 2)
             )
             ij = [tuple(x) for x in ij]
-            G[lev] = networkx.relabel_nodes(G[lev], dict(zip(G[lev].nodes, ij)))
+            G[lev] = networkx.relabel_nodes(
+                G[lev], dict(zip(G[lev].nodes, ij))
+            )
             G_tot = networkx.compose(G_tot, G[lev])
 
         # Relabel mesh nodes to start with 0
