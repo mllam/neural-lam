@@ -3,7 +3,7 @@ import pytorch_lightning as pl
 import torch
 
 # First-party
-from neural_lam import utils
+from neural_lam import config
 
 
 class WeatherDataset(torch.utils.data.Dataset):
@@ -35,7 +35,7 @@ class WeatherDataset(torch.utils.data.Dataset):
         self.batch_size = batch_size
         self.ar_steps = ar_steps
         self.control_only = control_only
-        self.config_loader = utils.ConfigLoader(data_config)
+        self.config_loader = config.Config(data_config)
 
         self.state = self.config_loader.process_dataset("state", self.split)
         assert self.state is not None, "State dataset not found"

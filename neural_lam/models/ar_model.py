@@ -6,10 +6,11 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pytorch_lightning as pl
 import torch
+
 import wandb
 
 # First-party
-from neural_lam import metrics, utils, vis
+from neural_lam import metrics, vis
 
 
 class ARModel(pl.LightningModule):
@@ -25,7 +26,7 @@ class ARModel(pl.LightningModule):
         super().__init__()
         self.save_hyperparameters()
         self.args = args
-        self.config_loader = utils.ConfigLoader(args.data_config)
+        self.config_loader = config.Config(args.data_config)
 
         # Load static features for grid/data
         static = self.config_loader.process_dataset("static")

@@ -76,8 +76,16 @@ def export_to_3d_model(node_pos, edge_plot_list, filename):
 
 
 def main():
-    """Plot the graph."""
+    """
+    Plot graph structure in 3D using plotly
+    """
     parser = ArgumentParser(description="Plot graph")
+    parser.add_argument(
+        "--data_config",
+        type=str,
+        default="neural_lam/data_config.yaml",
+        help="Path to data config file (default: neural_lam/data_config.yaml)",
+    )
     parser.add_argument(
         "--graph",
         type=str,
@@ -94,12 +102,6 @@ def main():
         type=int,
         default=0,
         help="If the axis should be displayed (default: 0 (No))",
-    )
-    parser.add_argument(
-        "--data_config",
-        type=str,
-        default="neural_lam/data_config.yaml",
-        help="Path to data config file (default: neural_lam/data_config.yaml)",
     )
     parser.add_argument(
         "--export",
@@ -121,7 +123,7 @@ def main():
     )
     mesh_static_features = graph_ldict["mesh_static_features"]
 
-    config_loader = utils.ConfigLoader(args.data_config)
+    config_loader = config.Config(args.data_config)
     xy = config_loader.get_nwp_xy()
     grid_xy = xy.transpose(1, 2, 0).reshape(-1, 2)
     pos_max = np.max(np.abs(grid_xy))
