@@ -27,6 +27,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Robust restoration of optimizer and scheduler using `ckpt_path`
+  [\#17](https://github.com/mllam/neural-lam/pull/17)
+  @sadamov
+
 - Updated scripts and modules to use `data_config.yaml` instead of `constants.py`
   [\#31](https://github.com/joeloskarsson/neural-lam/pull/31)
   @sadamov
