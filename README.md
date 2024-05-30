@@ -29,37 +29,6 @@ We plan to continue updating this repository as we improve existing models and d
 Collaborations around this implementation are very welcome.
 If you are working with Neural-LAM feel free to get in touch and/or submit pull requests to the repository.
 
-<span style="color:blue;">Additions relevant to the COSMO Neural-LAM implementation are highlighted in __blue__.</span>
-# Quick Start
-<span style="color:blue;">
-Follow the steps below to get started with Neural-LAM on Balfrin.cscs.ch.
-Don't worry everything is carried out on a small subset of data for a limited number of epochs.
-</span>
-
-```{bash}
-# Clone the repository
-git clone https://github.com/MeteoSwiss/neural-lam/
-cd neural-lam
-
-# Link the data folder containing the COSMO zarr archives
-ln -s /scratch/mch/sadamov/pyprojects_data/neural_lam/data
-mkdir lightning_logs
-
-# Create the conda environment (~10min)
-mamba env create -f environment.yml
-mamba activate neural-lam
-
-# Run the preprocessing/training scripts
-# (don't execute preprocessing scripts at the same time as training)
-sbatch slurm_train.sh
-
-# Run the evaluation script and generate plots and gif for TQV
-# (by default this will use the pre-trained model from `wandb/example.ckpt`)
-sbatch slurm_eval.sh
-
-```
-
-
 # Modularity
 The Neural-LAM code is designed to modularize the different components involved in training and evaluating neural weather prediction models.
 Models, graphs and data are stored separately and it should be possible to swap out individual components.
@@ -85,21 +54,6 @@ See the issues https://github.com/joeloskarsson/neural-lam/issues/2, https://git
 Below follows instructions on how to use Neural-LAM to train and evaluate models.
 
 ## Installation
-Follow the steps below to create the necessary python environment.
-
-<span style="color:blue;">
-
-For COSMO we use conda to avoid the Cartopy installation issues and because conda environments usually work well on the vCluster called Balfrin.cscs.ch.
-
-1. Simply run `conda env create -f environment.yml` to create the environment.
-2. Activate the environment with `conda activate neural-lam`.
-3. Happy Coding \o/
-
-Note that only the cuda version is pinned to 11.8, otherwise all the latest libraries are installed. This might break in the future and must be adjusted to the users conda version.
-
-</span>
-
-\
 Follow the steps below to create the necessary python environment.
 
 1. Install GEOS for your system. For example with `sudo apt-get install libgeos-dev`. This is necessary for the Cartopy requirement.
