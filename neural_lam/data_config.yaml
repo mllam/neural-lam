@@ -62,3 +62,37 @@ projection:
     central_longitude: 15.0
     central_latitude: 63.3
     standard_parallels: [63.3, 63.3]
+
+dataset2:
+  name: cosmo_example
+  var_names:
+    - "T"
+    - "U"
+    - "V"
+    - "RELHUM"
+    - "PMSL"
+    - "PP"
+  var_units:
+    - K
+    - m/s
+    - m/s
+    - Perc.
+    - Pa
+    - hPa
+  var_longnames:
+    - "Temperature"
+    - "Zonal wind component"
+    - "Meridional wind component"
+    - "Relative humidity"
+    - "Pressure at Mean Sea Level"
+    - "Pressure Perturbation"
+  var_is_3d:
+    - 1
+    - 1
+    - 1
+    - 1
+    - 0
+    - 1
+  vertical_levels: [1, 5, 13, 22, 38, 41, 60]
+  num_forcing_features: 16
+  eval_plot_vars: ["TQV"]
