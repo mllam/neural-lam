@@ -1,6 +1,4 @@
 # for all
-dask>=2022.3.0
-dask_jobqueue>=0.7.0
 numpy>=1.24.2
 wandb>=0.13.10
 matplotlib>=3.7.0
