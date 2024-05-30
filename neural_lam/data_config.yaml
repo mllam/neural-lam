@@ -1,0 +1,64 @@
+dataset:
+  name: meps_example
+  var_names:
+    - pres_0g
+    - pres_0s
+    - nlwrs_0
+    - nswrs_0
+    - r_2
+    - r_65
+    - t_2
+    - t_65
+    - t_500
+    - t_850
+    - u_65
+    - u_850
+    - v_65
+    - v_850
+    - wvint_0
+    - z_1000
+    - z_500
+  var_units:
+    - Pa
+    - Pa
+    - r"$\mathrm{W}/\mathrm{m}^2$"
+    - r"$\mathrm{W}/\mathrm{m}^2$"
+    - ""
+    - ""
+    - K
+    - K
+    - K
+    - K
+    - m/s
+    - m/s
+    - m/s
+    - m/s
+    - r"$\mathrm{kg}/\mathrm{m}^2$"
+    - r"$\mathrm{m}^2/\mathrm{s}^2$"
+    - r"$\mathrm{m}^2/\mathrm{s}^2$"
+  var_longnames:
+    - pres_heightAboveGround_0_instant
+    - pres_heightAboveSea_0_instant
+    - nlwrs_heightAboveGround_0_accum
+    - nswrs_heightAboveGround_0_accum
+    - r_heightAboveGround_2_instant
+    - r_hybrid_65_instant
+    - t_heightAboveGround_2_instant
+    - t_hybrid_65_instant
+    - t_isobaricInhPa_500_instant
+    - t_isobaricInhPa_850_instant
+    - u_hybrid_65_instant
+    - u_isobaricInhPa_850_instant
+    - v_hybrid_65_instant
+    - v_isobaricInhPa_850_instant
+    - wvint_entireAtmosphere_0_instant
+    - z_isobaricInhPa_1000_instant
+    - z_isobaricInhPa_500_instant
+  num_forcing_features: 16
+grid_shape_state: [268, 238]
+projection:
+  class: LambertConformal
+  kwargs:
+    central_longitude: 15.0
+    central_latitude: 63.3
+    standard_parallels: [63.3, 63.3]

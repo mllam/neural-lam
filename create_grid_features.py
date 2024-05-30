@@ -6,6 +6,9 @@ from argparse import ArgumentParser
 import numpy as np
 import torch
 
+# First-party
+from neural_lam import config
+
 
 def main():
     """
@@ -13,14 +16,15 @@ def main():
     """
     parser = ArgumentParser(description="Training arguments")
     parser.add_argument(
-        "--dataset",
+        "--data_config",
         type=str,
-        default="meps_example",
-        help="Dataset to compute weights for (default: meps_example)",
+        default="neural_lam/data_config.yaml",
+        help="Path to data config file (default: neural_lam/data_config.yaml)",
     )
     args = parser.parse_args()
+    config_loader = config.Config.from_file(args.data_config)
 
-    static_dir_path = os.path.join("data", args.dataset, "static")
+    static_dir_path = os.path.join("data", config_loader.dataset.name, "static")
 
     # -- Static grid node features --
     grid_xy = torch.tensor(
