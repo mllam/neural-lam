@@ -279,6 +279,8 @@ pre-commit run --all-files
 ```
 from the root directory of the repository.
 
+Furthermore, all tests in the ```tests``` directory will be run upon pushing changes by a github action. Failure in any of the tests will also reject the push/PR.
+
 # Contact
 If you are interested in machine learning models for LAM, have questions about our implementation or ideas for extending it, feel free to get in touch.
 You can open a github issue on this page, or (if more suitable) send an email to [joel.oskarsson@liu.se](mailto:joel.oskarsson@liu.se).

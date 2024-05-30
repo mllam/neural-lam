@@ -251,6 +251,9 @@ def fractional_plot_bundle(fraction):
     Get the tueplots bundle, but with figure width as a fraction of
     the page width.
     """
+    # If latex is not available, some visualizations might not render correctly,
+    # but will at least not raise an error.
+    # Alternatively, use unicode raised numbers.
     usetex = True if shutil.which("latex") else False
     bundle = bundles.neurips2023(usetex=usetex, family="serif")
     bundle.update(figsizes.neurips2023())

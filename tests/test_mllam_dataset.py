@@ -52,8 +52,10 @@ def test_load_reduced_meps_dataset():
     assert len(var_names) == len(var_longnames)
     assert len(var_names) == len(var_units)
 
-    # TODO: can these two variables be loaded from elsewhere?
+    # in future the number of grid static features
+    # will be provided by the Dataset class itself
     n_grid_static_features = 4
+    # Hardcoded in model
     n_input_steps = 2
 
     n_forcing_features = config.values["dataset"]["num_forcing_features"]
