@@ -197,7 +197,7 @@ def main():
     )
     parser.add_argument(
         "--metrics_watch",
-        type=list,
+        nargs="+",
         default=[],
         help="List of metrics to watch, including any prefix (e.g. val_rmse)",
     )
@@ -205,11 +205,13 @@ def main():
         "--var_leads_metrics_watch",
         type=str,
         default="{}",
-        help="JSON string with variables and lead times to log watched metrics"
-        # e.g. '{"var1": [1, 2], "var2": [3, 4]}'
+        help="""JSON string with variable-IDs and lead times to log watched
+             metrics (e.g. '{"1": [1, 2], "3": [3, 4]}')""",
     )
     args = parser.parse_args()
-    args.var_leads_metrics_watch = json.loads(args.var_leads_metrics_watch)
+    args.var_leads_metrics_watch = {
+        int(k): v for k, v in json.loads(args.var_leads_metrics_watch).items()
+    }
 
     config_loader = config.Config.from_file(args.data_config)
 

@@ -473,7 +473,7 @@ class ARModel(pl.LightningModule):
         # Check if metrics are watched, log exact values for specific vars
         if full_log_name in self.args.metrics_watch:
             for var_i, timesteps in self.args.var_leads_metrics_watch.items():
-                var = self.config_loader.dataset.var_nums[var_i]
+                var = self.config_loader.dataset.var_names[var_i]
                 log_dict.update(
                     {
                         f"{full_log_name}_{var}_step_{step}": metric_tensor[
