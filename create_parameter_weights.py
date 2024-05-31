@@ -16,21 +16,16 @@ from neural_lam.weather_dataset import WeatherDataset
 
 
 class PaddedWeatherDataset(torch.utils.data.Dataset):
-    def __init__(
-        self, base_dataset, world_size, batch_size, duplication_factor=1
-    ):
+    def __init__(self, base_dataset, world_size, batch_size):
         super().__init__()
         self.base_dataset = base_dataset
         self.world_size = world_size
         self.batch_size = batch_size
-        self.duplication_factor = duplication_factor
-        self.total_samples = len(base_dataset) * duplication_factor
+        self.total_samples = len(base_dataset)
         self.padded_samples = (
             (self.world_size * self.batch_size) - self.total_samples
         ) % self.world_size
-        self.original_indices = (
-            list(range(len(base_dataset))) * duplication_factor
-        )
+        self.original_indices = list(range(len(base_dataset)))
         self.padded_indices = list(
             range(self.total_samples, self.total_samples + self.padded_samples)
         )
@@ -47,6 +42,12 @@ class PaddedWeatherDataset(torch.utils.data.Dataset):
 
     def get_original_indices(self):
         return self.original_indices
+
+    def get_original_window_indices(self, step_length):
+        return [
+            i // step_length
+            for i in range(len(self.original_indices) * step_length)
+        ]
 
 
 def get_rank():
@@ -70,9 +71,9 @@ def setup(rank, world_size):  # pylint: disable=redefined-outer-name
         )
     else:
         print(
-            "\033[91mCareful, you are running this script with --parallelize "
+            "\033[91mCareful, you are running this script with --distributed "
             "without any scheduler. In most cases this will result in slower "
-            "execution and the --parallelize flag should be removed.\033[0m"
+            "execution and the --distributed flag should be removed.\033[0m"
         )
         master_node = "localhost"
     os.environ["MASTER_ADDR"] = master_node
@@ -82,19 +83,25 @@ def setup(rank, world_size):  # pylint: disable=redefined-outer-name
         rank=rank,
         world_size=world_size,
     )
-    print(
-        f"Initialized {dist.get_backend()} process group with world size {world_size}."
-    )
+    if rank == 0:
+        print(
+            f"Initialized {dist.get_backend()} "
+            f"process group with world size {world_size}."
+        )
 
 
 def save_stats(
     static_dir_path, means, squares, flux_means, flux_squares, filename_prefix
 ):
-    means = torch.stack(means) if len(means) > 1 else means[0]
-    squares = torch.stack(squares) if len(squares) > 1 else squares[0]
-    mean = torch.mean(means, dim=0)
-    second_moment = torch.mean(squares, dim=0)
-    std = torch.sqrt(second_moment - mean**2)
+    means = (
+        torch.stack(means) if len(means) > 1 else means[0]
+    )  # (N_batch, d_features,)
+    squares = (
+        torch.stack(squares) if len(squares) > 1 else squares[0]
+    )  # (N_batch, d_features,)
+    mean = torch.mean(means, dim=0)  # (d_features,)
+    second_moment = torch.mean(squares, dim=0)  # (d_features,)
+    std = torch.sqrt(second_moment - mean**2)  # (d_features,)
     torch.save(
         mean.cpu(), os.path.join(static_dir_path, f"{filename_prefix}_mean.pt")
     )
@@ -106,20 +113,23 @@ def save_stats(
         return
     flux_means = (
         torch.stack(flux_means) if len(flux_means) > 1 else flux_means[0]
-    )
+    )  # (N_batch,)
     flux_squares = (
         torch.stack(flux_squares) if len(flux_squares) > 1 else flux_squares[0]
-    )
-    flux_mean = torch.mean(flux_means)
-    flux_second_moment = torch.mean(flux_squares)
-    flux_std = torch.sqrt(flux_second_moment - flux_mean**2)
+    )  # (N_batch,)
+    flux_mean = torch.mean(flux_means)  # (,)
+    flux_second_moment = torch.mean(flux_squares)  # (,)
+    flux_std = torch.sqrt(flux_second_moment - flux_mean**2)  # (,)
     torch.save(
         torch.stack((flux_mean, flux_std)).cpu(),
-        os.path.join(static_dir_path, f"{filename_prefix}_flux_stats.pt"),
+        os.path.join(static_dir_path, "flux_stats.pt"),
     )
 
 
 def main():
+    """
+    Pre-compute parameter weights to be used in loss function
+    """
     parser = ArgumentParser(description="Training arguments")
     parser.add_argument(
         "--data_config",
@@ -146,15 +156,9 @@ def main():
         help="Number of workers in data loader (default: 4)",
     )
     parser.add_argument(
-        "--duplication_factor",
-        type=int,
-        default=10,
-        help="Factor to duplicate the dataset for benchmarking",
-    )
-    parser.add_argument(
-        "--parallelize",
+        "--distributed",
         action="store_true",
-        help="Run the script in parallel mode",
+        help="Run the script in distributed mode",
     )
     args = parser.parse_args()
 
@@ -162,7 +166,7 @@ def main():
     world_size = get_world_size()
     config_loader = config.Config.from_file(args.data_config)
 
-    if args.parallelize:
+    if args.distributed:
 
         setup(rank, world_size)
         device = torch.device(
@@ -174,6 +178,8 @@ def main():
         static_dir_path = os.path.join(
             "data", config_loader.dataset.name, "static"
         )
+        # Create parameter weights based on height
+        # based on fig A.1 in graph cast paper
         w_dict = {
             "2": 1.0,
             "0": 0.1,
@@ -194,6 +200,7 @@ def main():
             w_list.astype("float32"),
         )
 
+    # Load dataset without any subsampling
     ds = WeatherDataset(
         config_loader.dataset.name,
         split="train",
@@ -201,14 +208,15 @@ def main():
         pred_length=63,
         standardize=False,
     )
-    ds = PaddedWeatherDataset(
-        ds,
-        world_size,
-        args.batch_size,
-        duplication_factor=args.duplication_factor,
-    )
-    if args.parallelize:
-        sampler = DistributedSampler(ds, num_replicas=world_size, rank=rank)
+    if args.distributed:
+        ds = PaddedWeatherDataset(
+            ds,
+            world_size,
+            args.batch_size,
+        )
+        sampler = DistributedSampler(
+            ds, num_replicas=world_size, rank=rank, shuffle=False
+        )
     else:
         sampler = None
     loader = torch.utils.data.DataLoader(
@@ -224,32 +232,56 @@ def main():
     means, squares, flux_means, flux_squares = [], [], [], []
 
     for init_batch, target_batch, forcing_batch in tqdm(loader):
-        if args.parallelize:
+        if args.distributed:
             init_batch, target_batch, forcing_batch = (
                 init_batch.to(device),
                 target_batch.to(device),
                 forcing_batch.to(device),
             )
+        # (N_batch, N_t, N_grid, d_features)
         batch = torch.cat((init_batch, target_batch), dim=1)
-        means.append(torch.mean(batch, dim=(1, 2)).cpu())
-        squares.append(torch.mean(batch**2, dim=(1, 2)).cpu())
+        # Flux at 1st windowed position is index 1 in forcing
         flux_batch = forcing_batch[:, :, :, 1]
-        flux_means.append(torch.mean(flux_batch).cpu())
-        flux_squares.append(torch.mean(flux_batch**2).cpu())
+        # (N_batch, d_features,)
+        means.append(torch.mean(batch, dim=(1, 2)).cpu())
+        squares.append(
+            torch.mean(batch**2, dim=(1, 2)).cpu()
+        )  # (N_batch, d_features,)
+        flux_means.append(torch.mean(flux_batch).cpu())  # (,)
+        flux_squares.append(torch.mean(flux_batch**2).cpu())  # (,)
 
-    if args.parallelize:
+    if args.distributed and world_size > 1:
         means_gathered, squares_gathered = [None] * world_size, [
+            None
+        ] * world_size
+        flux_means_gathered, flux_squares_gathered = [None] * world_size, [
             None
         ] * world_size
         dist.all_gather_object(means_gathered, torch.cat(means, dim=0))
         dist.all_gather_object(squares_gathered, torch.cat(squares, dim=0))
+        dist.all_gather_object(flux_means_gathered, flux_means)
+        dist.all_gather_object(flux_squares_gathered, flux_squares)
+
         if rank == 0:
             means_gathered, squares_gathered = torch.cat(
                 means_gathered, dim=0
             ), torch.cat(squares_gathered, dim=0)
-            means, squares = [
-                means_gathered[i] for i in ds.get_original_indices()
-            ], [squares_gathered[i] for i in ds.get_original_indices()]
+            flux_means_gathered, flux_squares_gathered = torch.tensor(
+                flux_means_gathered
+            ), torch.tensor(flux_squares_gathered)
+
+            original_indices = ds.get_original_indices()
+            means, squares = [means_gathered[i] for i in original_indices], [
+                squares_gathered[i] for i in original_indices
+            ]
+            flux_means, flux_squares = [
+                flux_means_gathered[i] for i in original_indices
+            ], [flux_squares_gathered[i] for i in original_indices]
+    else:
+        means = [torch.cat(means, dim=0)]  # (N_batch, d_features,)
+        squares = [torch.cat(squares, dim=0)]  # (N_batch, d_features,)
+        flux_means = [torch.tensor(flux_means)]  # (N_batch,)
+        flux_squares = [torch.tensor(flux_squares)]  # (N_batch,)
 
     if rank == 0:
         save_stats(
@@ -261,7 +293,7 @@ def main():
             "parameter",
         )
 
-    if args.parallelize:
+    if args.distributed:
         dist.barrier()
 
     if rank == 0:
@@ -272,16 +304,15 @@ def main():
         subsample_step=1,
         pred_length=63,
         standardize=True,
-    )
-    ds_standard = PaddedWeatherDataset(
-        ds_standard,
-        world_size,
-        args.batch_size,
-        duplication_factor=args.duplication_factor,
-    )
-    if args.parallelize:
+    )  # Re-load with standardization
+    if args.distributed:
+        ds_standard = PaddedWeatherDataset(
+            ds_standard,
+            world_size,
+            args.batch_size,
+        )
         sampler_standard = DistributedSampler(
-            ds_standard, num_replicas=world_size, rank=rank
+            ds_standard, num_replicas=world_size, rank=rank, shuffle=False
         )
     else:
         sampler_standard = None
@@ -297,11 +328,13 @@ def main():
     diff_means, diff_squares = [], []
 
     for init_batch, target_batch, _ in tqdm(loader_standard, disable=rank != 0):
-        if args.parallelize:
+        if args.distributed:
             init_batch, target_batch = init_batch.to(device), target_batch.to(
                 device
             )
+        # (N_batch, N_t', N_grid, d_features)
         batch = torch.cat((init_batch, target_batch), dim=1)
+        # Note: batch contains only 1h-steps
         stepped_batch = torch.cat(
             [
                 batch[:, ss_i : used_subsample_len : args.step_length]
@@ -309,11 +342,16 @@ def main():
             ],
             dim=0,
         )
+        # (N_batch', N_t, N_grid, d_features),
+        # N_batch' = args.step_length*N_batch
         batch_diffs = stepped_batch[:, 1:] - stepped_batch[:, :-1]
+        # (N_batch', N_t-1, N_grid, d_features)
         diff_means.append(torch.mean(batch_diffs, dim=(1, 2)).cpu())
+        # (N_batch', d_features,)
         diff_squares.append(torch.mean(batch_diffs**2, dim=(1, 2)).cpu())
+        # (N_batch', d_features,)
 
-    if args.parallelize:
+    if args.distributed and world_size > 1:
         dist.barrier()
         diff_means_gathered, diff_squares_gathered = [None] * world_size, [
             None
@@ -324,22 +362,29 @@ def main():
         dist.all_gather_object(
             diff_squares_gathered, torch.cat(diff_squares, dim=0)
         )
+
         if rank == 0:
             diff_means_gathered, diff_squares_gathered = torch.cat(
                 diff_means_gathered, dim=0
-            ), torch.cat(diff_squares_gathered, dim=0)
+            ).view(-1, *diff_means[0].shape), torch.cat(
+                diff_squares_gathered, dim=0
+            ).view(
+                -1, *diff_squares[0].shape
+            )
+            original_indices = ds_standard.get_original_window_indices(
+                args.step_length
+            )
             diff_means, diff_squares = [
-                diff_means_gathered[i]
-                for i in ds_standard.get_original_indices()
-            ], [
-                diff_squares_gathered[i]
-                for i in ds_standard.get_original_indices()
-            ]
+                diff_means_gathered[i] for i in original_indices
+            ], [diff_squares_gathered[i] for i in original_indices]
+
+    diff_means = [torch.cat(diff_means, dim=0)]  # (N_batch', d_features,)
+    diff_squares = [torch.cat(diff_squares, dim=0)]  # (N_batch', d_features,)
 
     if rank == 0:
         save_stats(static_dir_path, diff_means, diff_squares, [], [], "diff")
 
-    if args.parallelize:
+    if args.distributed:
         dist.destroy_process_group()
 
 
