@@ -292,6 +292,7 @@ def main():
         accelerator=device_name,
         logger=logger,
         log_every_n_steps=1,
+        devices=4,
         callbacks=[checkpoint_callback],
         check_val_every_n_epoch=args.val_interval,
         precision=args.precision,
