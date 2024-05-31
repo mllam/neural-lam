@@ -1,4 +1,4 @@
-name: Run Unit Test via Pytest
+name: Unit Tests
 
 on:
   # trigger on pushes to any branch, but not main
