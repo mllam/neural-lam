@@ -161,6 +161,7 @@ def main():
     parser = ArgumentParser(description="Graph generation arguments")
     parser.add_argument(
         "--data_config",
+        "--data_config",
         type=str,
         default="neural_lam/data_config.yaml",
         help="Path to data config file (default: neural_lam/data_config.yaml)",
@@ -193,6 +194,7 @@ def main():
     args = parser.parse_args()
 
     # Load grid positions
+    config_loader = config.Config.from_file(args.data_config)
     graph_dir_path = os.path.join("graphs", args.graph)
     os.makedirs(graph_dir_path, exist_ok=True)
 

@@ -1,4 +1,5 @@
 # Standard library
+import json
 import random
 import time
 from argparse import ArgumentParser
@@ -30,7 +31,12 @@ def main():
     parser = ArgumentParser(
         description="Train or evaluate NeurWP models for LAM"
     )
-
+    parser.add_argument(
+        "--data_config",
+        type=str,
+        default="neural_lam/data_config.yaml",
+        help="Path to data config file (default: neural_lam/data_config.yaml)",
+    )
     parser.add_argument(
         "--model",
         type=str,
@@ -183,32 +189,36 @@ def main():
         "(default: 1)",
     )
 
-    # Logging Options
+    # Logger Settings
     parser.add_argument(
         "--wandb_project",
         type=str,
-        default="neural-lam",
-        help="Wandb project to log to (default: neural-lam)",
+        default="neural_lam",
+        help="Wandb project name (default: neural_lam)",
     )
     parser.add_argument(
-        "--val_steps_log",
+        "--val_steps_to_log",
         type=list,
         default=[1, 2, 3, 5, 10, 15, 19],
         help="Steps to log val loss for (default: [1, 2, 3, 5, 10, 15, 19])",
     )
     parser.add_argument(
         "--metrics_watch",
-        type=list,
+        nargs="+",
         default=[],
         help="List of metrics to watch, including any prefix (e.g. val_rmse)",
     )
     parser.add_argument(
         "--var_leads_metrics_watch",
-        type=dict,
-        default={},
-        help="Dict with variables and lead times to log watched metrics for",
+        type=str,
+        default="{}",
+        help="""JSON string with variable-IDs and lead times to log watched
+             metrics (e.g. '{"1": [1, 2], "3": [3, 4]}')""",
     )
     args = parser.parse_args()
+    args.var_leads_metrics_watch = {
+        int(k): v for k, v in json.loads(args.var_leads_metrics_watch).items()
+    }
 
     # Asserts for arguments
     assert args.model in MODELS, f"Unknown model: {args.model}"
@@ -243,14 +253,7 @@ def main():
 
     # Load model parameters Use new args for model
     model_class = MODELS[args.model]
-    if args.load:
-        model = model_class.load_from_checkpoint(args.load, args=args)
-        if args.restore_opt:
-            # Save for later
-            # Unclear if this works for multi-GPU
-            model.opt_state = torch.load(args.load)["optimizer_states"][0]
-    else:
-        model = model_class(args)
+    model = model_class(args)
 
     if args.eval:
         prefix = f"eval-{args.eval}-"

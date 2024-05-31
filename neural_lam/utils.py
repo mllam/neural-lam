@@ -2,9 +2,84 @@
 import os
 
 # Third-party
+import numpy as np
 import torch
 from torch import nn
 from tueplots import bundles, figsizes
+
+
+def load_dataset_stats(dataset_name, device="cpu"):
+    """
+    Load arrays with stored dataset statistics from pre-processing
+    """
+    static_dir_path = os.path.join("data", dataset_name, "static")
+
+    def loads_file(fn):
+        return torch.load(
+            os.path.join(static_dir_path, fn), map_location=device
+        )
+
+    data_mean = loads_file("parameter_mean.pt")  # (d_features,)
+    data_std = loads_file("parameter_std.pt")  # (d_features,)
+
+    flux_stats = loads_file("flux_stats.pt")  # (2,)
+    flux_mean, flux_std = flux_stats
+
+    return {
+        "data_mean": data_mean,
+        "data_std": data_std,
+        "flux_mean": flux_mean,
+        "flux_std": flux_std,
+    }
+
+
+def load_static_data(dataset_name, device="cpu"):
+    """
+    Load static files related to dataset
+    """
+    static_dir_path = os.path.join("data", dataset_name, "static")
+
+    def loads_file(fn):
+        return torch.load(
+            os.path.join(static_dir_path, fn), map_location=device
+        )
+
+    # Load border mask, 1. if node is part of border, else 0.
+    border_mask_np = np.load(os.path.join(static_dir_path, "border_mask.npy"))
+    border_mask = (
+        torch.tensor(border_mask_np, dtype=torch.float32, device=device)
+        .flatten(0, 1)
+        .unsqueeze(1)
+    )  # (N_grid, 1)
+
+    grid_static_features = loads_file(
+        "grid_features.pt"
+    )  # (N_grid, d_grid_static)
+
+    # Load step diff stats
+    step_diff_mean = loads_file("diff_mean.pt")  # (d_f,)
+    step_diff_std = loads_file("diff_std.pt")  # (d_f,)
+
+    # Load parameter std for computing validation errors in original data scale
+    data_mean = loads_file("parameter_mean.pt")  # (d_features,)
+    data_std = loads_file("parameter_std.pt")  # (d_features,)
+
+    # Load loss weighting vectors
+    param_weights = torch.tensor(
+        np.load(os.path.join(static_dir_path, "parameter_weights.npy")),
+        dtype=torch.float32,
+        device=device,
+    )  # (d_f,)
+
+    return {
+        "border_mask": border_mask,
+        "grid_static_features": grid_static_features,
+        "step_diff_mean": step_diff_mean,
+        "step_diff_std": step_diff_std,
+        "data_mean": data_mean,
+        "data_std": data_std,
+        "param_weights": param_weights,
+    }
 
 
 class BufferList(nn.Module):

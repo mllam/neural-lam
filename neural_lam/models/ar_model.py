@@ -24,7 +24,7 @@ class ARModel(pl.LightningModule):
         super().__init__()
         self.save_hyperparameters()
         self.args = args
-        self.config_loader = config.Config(args.data_config)
+        self.config_loader = config.Config.from_file(args.data_config)
 
         # Load static features for grid/data
         static = self.config_loader.process_dataset("static")
@@ -78,8 +78,8 @@ class ARModel(pl.LightningModule):
         if self.output_std:
             self.test_metrics["output_std"] = []  # Treat as metric
 
-        # For making restoring of optimizer state optional (slight hack)
-        self.opt_state = None
+        # For making restoring of optimizer state optional
+        self.restore_opt = args.restore_opt
 
         # For example plotting
         self.n_example_pred = args.n_example_pred
@@ -107,9 +107,6 @@ class ARModel(pl.LightningModule):
         opt = torch.optim.AdamW(
             self.parameters(), lr=self.args.lr, betas=(0.9, 0.95)
         )
-        if self.opt_state:
-            opt.load_state_dict(self.opt_state)
-
         return opt
 
     @property
@@ -278,7 +275,7 @@ class ARModel(pl.LightningModule):
         # Log loss per time step forward and mean
         val_log_dict = {
             f"val_loss_unroll{step}": time_step_loss[step - 1]
-            for step in self.args.val_steps_log
+            for step in self.args.val_steps_to_log
         }
         val_log_dict["val_mean_loss"] = mean_loss
         self.log_dict(
@@ -326,7 +323,7 @@ class ARModel(pl.LightningModule):
         # Log loss per time step forward and mean
         test_log_dict = {
             f"test_loss_unroll{step}": time_step_loss[step - 1]
-            for step in self.args.val_steps_log
+            for step in self.args.val_steps_to_log
         }
         test_log_dict["test_mean_loss"] = mean_loss
 
@@ -359,7 +356,9 @@ class ARModel(pl.LightningModule):
         spatial_loss = self.loss(
             prediction, target, pred_std, average_grid=False
         )  # (B, pred_steps, num_grid_nodes)
-        log_spatial_losses = spatial_loss[:, self.args.val_steps_log - 1]
+        log_spatial_losses = spatial_loss[
+            :, [step - 1 for step in self.args.val_steps_to_log]
+        ]
         self.spatial_loss_maps.append(log_spatial_losses)
         # (B, N_log, num_grid_nodes)
 
@@ -438,6 +437,8 @@ class ARModel(pl.LightningModule):
                     )
                     for var_i, (var_name, var_unit, var_vrange) in enumerate(
                         zip(
+                            self.config_loader.dataset.var_names,
+                            self.config_loader.dataset.var_units,
                             self.config_loader.param_names(),
                             self.config_loader.param_units(),
                             var_vranges,
@@ -578,7 +579,7 @@ class ARModel(pl.LightningModule):
                     title=f"Test loss, t={t_i} ({self.step_length * t_i} h)",
                 )
                 for t_i, loss_map in zip(
-                    self.args.val_steps_log, mean_spatial_loss
+                    self.args.val_steps_to_log, mean_spatial_loss
                 )
             ]
 
@@ -597,7 +598,7 @@ class ARModel(pl.LightningModule):
                 wandb.run.dir, "spatial_loss_maps"
             )
             os.makedirs(pdf_loss_maps_dir, exist_ok=True)
-            for t_i, fig in zip(self.args.val_steps_log, pdf_loss_map_figs):
+            for t_i, fig in zip(self.args.val_steps_to_log, pdf_loss_map_figs):
                 fig.savefig(
                     os.path.join(pdf_loss_maps_dir, f"loss_t{t_i}.pdf")
                 )
@@ -630,3 +631,6 @@ class ARModel(pl.LightningModule):
                 )
                 loaded_state_dict[new_key] = loaded_state_dict[old_key]
                 del loaded_state_dict[old_key]
+        if not self.restore_opt:
+            opt = self.configure_optimizers()
+            checkpoint["optimizer_states"] = [opt.state_dict()]

@@ -1,5 +1,7 @@
 # Standard library
+import functools
 import os
+from pathlib import Path
 
 # Third-party
 import cartopy.crs as ccrs
@@ -12,21 +14,21 @@ class Config:
     """
     Class for loading configuration files.
 
-    This class loads a YAML configuration file and provides a way to access
-    its values as attributes.
+    This class loads a configuration file and provides a way to access its
+    values as attributes.
     """
 
-    def __init__(self, config_path, values=None):
-        self.config_path = config_path
-        if values is None:
-            self.values = self.load_config()
-        else:
-            self.values = values
+    def __init__(self, values):
+        self.values = values
 
-    def load_config(self):
-        """Load configuration file."""
-        with open(self.config_path, encoding="utf-8", mode="r") as file:
-            return yaml.safe_load(file)
+    @classmethod
+    def from_file(cls, filepath):
+        """Load a configuration file."""
+        if filepath.endswith(".yaml"):
+            with open(filepath, encoding="utf-8", mode="r") as file:
+                return cls(values=yaml.safe_load(file))
+        else:
+            raise NotImplementedError(Path(filepath).suffix)
 
     def __getattr__(self, name):
         keys = name.split(".")
@@ -37,17 +39,26 @@ class Config:
             else:
                 return None
         if isinstance(value, dict):
-            return Config(None, values=value)
+            return Config(values=value)
         return value
 
     def __getitem__(self, key):
         value = self.values[key]
         if isinstance(value, dict):
-            return Config(None, values=value)
+            return Config(values=value)
         return value
 
     def __contains__(self, key):
         return key in self.values
+
+    @functools.cached_property
+    def coords_projection(self):
+        """Return the projection."""
+        proj_config = self.values["projection"]
+        proj_class_name = proj_config["class"]
+        proj_class = getattr(ccrs, proj_class_name)
+        proj_params = proj_config.get("kwargs", {})
+        return proj_class(**proj_params)
 
     def param_names(self):
         """Return parameter names."""

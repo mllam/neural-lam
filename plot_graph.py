@@ -82,6 +82,7 @@ def main():
     parser = ArgumentParser(description="Plot graph")
     parser.add_argument(
         "--data_config",
+        "--data_config",
         type=str,
         default="neural_lam/data_config.yaml",
         help="Path to data config file (default: neural_lam/data_config.yaml)",
@@ -110,6 +111,7 @@ def main():
     )
 
     args = parser.parse_args()
+    config_loader = config.Config.from_file(args.data_config)
 
     hierarchical, graph_ldict = utils.load_graph(args.graph)
     g2m_edge_index, m2g_edge_index, m2m_edge_index = (

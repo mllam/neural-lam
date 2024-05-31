@@ -1,13 +1,16 @@
 # Standard library
+import os
 from argparse import ArgumentParser
 
 # Third-party
+import numpy as np
 import torch
 import xarray as xr
 from tqdm import tqdm
 
 # First-party
-from neural_lam.weather_dataset import WeatherDataModule
+from neural_lam import config
+from neural_lam.weather_dataset import WeatherDataModule, WeatherDataset
 
 
 def main():
@@ -15,6 +18,12 @@ def main():
     Pre-compute parameter weights to be used in loss function
     """
     parser = ArgumentParser(description="Training arguments")
+    parser.add_argument(
+        "--data_config",
+        type=str,
+        default="neural_lam/data_config.yaml",
+        help="Path to data config file (default: neural_lam/data_config.yaml)",
+    )
     parser.add_argument(
         "--batch_size",
         type=int,
@@ -36,6 +45,32 @@ def main():
 
     args = parser.parse_args()
 
+    config_loader = config.Config.from_file(args.data_config)
+    static_dir_path = os.path.join(
+        "data", config_loader.dataset.name, "static"
+    )
+
+    # Create parameter weights based on height
+    # based on fig A.1 in graph cast paper
+    w_dict = {
+        "2": 1.0,
+        "0": 0.1,
+        "65": 0.065,
+        "1000": 0.1,
+        "850": 0.05,
+        "500": 0.03,
+    }
+    w_list = np.array(
+        [
+            w_dict[par.split("_")[-2]]
+            for par in config_loader.dataset.var_longnames
+        ]
+    )
+    print("Saving parameter weights...")
+    np.save(
+        os.path.join(static_dir_path, "parameter_weights.npy"),
+        w_list.astype("float32"),
+    )
     data_module = WeatherDataModule(
         batch_size=args.batch_size, num_workers=args.num_workers
     )
@@ -43,6 +78,17 @@ def main():
     loader = data_module.train_dataloader()
 
     # Load dataset without any subsampling
+    ds = WeatherDataset(
+        config_loader.dataset.name,
+        split="train",
+        subsample_step=1,
+        pred_length=63,
+        standardize=False,
+    )  # Without standardization
+    loader = torch.utils.data.DataLoader(
+        ds, args.batch_size, shuffle=False, num_workers=args.n_workers
+    )
+    # Compute mean and std.-dev. of each parameter (+ flux forcing)
     # Compute mean and std.-dev. of each parameter (+ forcing forcing)
     # across full dataset
     print("Computing mean and std.-dev. for parameters...")
