@@ -1,8 +1,10 @@
 # Standard library
+from datetime import datetime, timedelta
 import glob
 import os
 
 # Third-party
+import earthkit.data
 import imageio
 import matplotlib.pyplot as plt
 import numpy as np
@@ -713,6 +715,7 @@ class ARModel(pl.LightningModule):
             prediction_array = prediction_rescaled.cpu().numpy()
             file_path = os.path.join(value_dir_path, f"prediction_{i}.npy")
             np.save(file_path, prediction_array)
+            self.save_pred_as_grib(file_path, value_dir_path)
 
         dir_path = f"{wandb.run.dir}/media/images"
         for var_name, _ in self.selected_vars_units:
@@ -738,6 +741,94 @@ class ARModel(pl.LightningModule):
                         writer.append_data(image)
 
         self.spatial_loss_maps.clear()
+
+    def _generate_time_steps(self):
+        """Generate a list with all time steps in inference."""
+        # Parse the times
+        base_time = self.config_loader.dataset.eval_datetime[0]
+
+        if isinstance(base_time, str):
+            base_time = datetime.strptime(base_time, "%Y%m%d%H")
+        time_steps = {}
+        # Generate dates for each step
+        for i in range(self.config_loader.dataset.eval_horizon - 2):
+            # Compute the new date by adding the step interval in hours - 3
+            new_date = base_time + timedelta(hours=i * self.config_loader.dataset.train_horizon)
+            # Format the date back
+            time_steps[i] = new_date.strftime("%Y%m%d%H")
+
+    def save_pred_as_grib(self, file_path: str, value_dir_path: str):
+        """Save the prediction values into GRIB format."""
+        # Initialize the lists to loop over
+        indices = self.precompute_variable_indices()
+        time_steps = self._generate_time_steps()
+        # Loop through all the time steps and all the variables
+        for time_idx, date_str in time_steps.items():
+            # Initialize final data object
+            final_data = earthkit.data.FieldList()
+            for variable, grib_code in self.config_loader.dataset.grib_names.items():
+                # here find the key of the cariable in constants.is_3D
+                #  and if == 7, assign a cut of 7 on the reshape. Else 1
+                if self.config_loader.dataset.var_is_3d[variable]:
+                    shape_val = len(self.config_loader.dataset.vertical_levels)
+                    vertical = self.config_loader.dataset.vertical_levels
+                else:
+                    # Special handling for T_2M and *_10M variables
+                    if variable == "T_2M":
+                        shape_val = 1
+                        vertical = 2
+                    elif variable.endswith("_10M"):
+                        shape_val = 1
+                        vertical = 10
+                    else:
+                        shape_val = 1
+                        vertical = 0
+                # Find the value range to sample
+                value_range = indices[variable]
+
+                sample_file = self.config_loader.dataset.sample_grib
+                if variable == "RELHUM":
+                    variable = "r"
+                    sample_file = self.config_loader.dataset.sample_z_grib
+
+                # Load the sample grib file
+                original_data = earthkit.data.from_source("file", sample_file)
+
+                subset = original_data.sel(shortName=grib_code, level=vertical)
+                md = subset.metadata()
+
+                # Cut the datestring into date and time and then override all
+                # values in md
+                date = date_str[:8]
+                time = date_str[8:]
+
+                for index, item in enumerate(md):
+                    md[index] = item.override({"date": date}).override(
+                        {"time": time}
+                    )
+                if len(md) > 0:
+                    # Load the array to replace the values with
+                    replacement_data = np.load(file_path)
+                    original_cut = replacement_data[
+                        0, time_idx, :, min(value_range) : max(value_range) + 1
+                    ].reshape(
+                        self.config_loader.dataset.grib_shape_state[1],
+                        self.config_loader.dataset.grib_shape_state[0],
+                        shape_val,
+                    )
+                    cut_values = np.moveaxis(
+                        original_cut, [-3, -2, -1], [-1, -2, -3]
+                    )
+                    # Can we stack Fieldlists?
+                    data_new = earthkit.data.FieldList.from_array(
+                        cut_values, md
+                    )
+                    final_data += data_new
+            # Create the modified GRIB file with the predicted data
+            grib_path = os.path.join(
+                value_dir_path, f"prediction_{date_str}_grib"
+            )
+            final_data.save(grib_path)
 
     def on_load_checkpoint(self, checkpoint):
         """

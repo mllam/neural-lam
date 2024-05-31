@@ -1,5 +1,7 @@
 dataset:
   name: cosmo
+
+  # Value definitions
   var_names:
     - "T"
     - "U"
@@ -28,14 +30,41 @@ dataset:
     - 1
     - 0
     - 1
+  grib_names:
+    PP: "pres"
+    QV: "q"
+    RELHUM: "r"
+    T: "t"
+    U: "u"
+    V: "v"
+    W: "wz"
+    CLCT: "ccl"
+    PMSL: "prmsl"
+    PS: "sp"
+    T_2M: "2t"
+    TOT_PREC: "tp"
+    U_10M: "10u"
+    V_10M: "10v"
   vertical_levels: [1, 5, 13, 22, 38, 41, 60]
   num_forcing_features: 16
+
+  # Plotting 
   eval_plot_vars: ["TQV"]
-  grid_shape_state: [268, 238]
+  grid_shape_state: [390, 582]
   projection:
     class: LambertConformal
     kwargs:
       central_longitude: 15.0
       central_latitude: 63.3
       standard_parallels: [63.3, 63.3]
+  sample_grib:
+    "templates/lfff02180000"
+  sample_z_grib:
+   "templates/lfff02180000z"
+  eval_datetime:
+    ["2020100215"]
+
+  # Time step prediction during training / prediction (eval)
+  train_horizon: 3
+  eval_horizon: 25
 
