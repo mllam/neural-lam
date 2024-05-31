@@ -293,6 +293,7 @@ def main():
         logger=logger,
         log_every_n_steps=1,
         devices=4,
+        num_nodes=1,
         callbacks=[checkpoint_callback],
         check_val_every_n_epoch=args.val_interval,
         precision=args.precision,
@@ -355,7 +356,7 @@ def main():
             model=model,
             train_dataloaders=train_loader,
             val_dataloaders=val_loader,
-            ckpt_path=args.load,
+            ckpt_path=args.load
         )
 
 
