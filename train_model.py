@@ -217,6 +217,7 @@ def main():
         None,
         "val",
         "test",
+        "predict",
     ), f"Unknown eval setting: {args.eval}"
 
     # Get an (actual) random run id as a unique identifier
@@ -294,6 +295,7 @@ def main():
         callbacks=[checkpoint_callback],
         check_val_every_n_epoch=args.val_interval,
         precision=args.precision,
+        limit_predict_batches=1
     )
 
     # Only init once, on rank 0 only
@@ -305,7 +307,7 @@ def main():
     if args.eval:
         if args.eval == "val":
             eval_loader = val_loader
-        else:  # Test
+        elif args.eval == "test":
             eval_loader = torch.utils.data.DataLoader(
                 WeatherDataset(
                     config_loader.dataset.name,
@@ -318,9 +320,34 @@ def main():
                 shuffle=False,
                 num_workers=args.n_workers,
             )
+        elif args.eval == "predict":
+            pred_loader =  torch.utils.data.DataLoader(
+                WeatherDataset(
+                    config_loader.dataset.name,
+                    pred_length=max_pred_length,
+                    split="predict",
+                    subsample_step=args.step_length,
+                    subset=bool(args.subset_ds),
+                ),
+                args.batch_size,
+                shuffle=False,
+                num_workers=args.n_workers,
+            )
+            print(f"Running prediction on {args.eval}")
+            trainer.predict(
+                model=model,
+                dataloaders=pred_loader,
+                return_predictions=True,
+                ckpt_path=args.load,
+            )
+        else:
+            print(f"Unknown evaluation mode: {args.eval}")
+            raise ValueError(f"Unknown evaluation mode: {args.eval}")
 
-        print(f"Running evaluation on {args.eval}")
-        trainer.test(model=model, dataloaders=eval_loader, ckpt_path=args.load)
+        if args.eval in ["val", "test"]:
+            print(f"Running evaluation on {args.eval}")
+            trainer.test(model=model, dataloaders=eval_loader, ckpt_path=args.load)
+            
     else:
         # Train model
         trainer.fit(
