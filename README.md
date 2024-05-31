@@ -1,10 +1,5 @@
-![Linting](https://github.com/SimonKamuk/neural-lam/actions/workflows/pre-commit.yml/badge.svg?branch=feature_add_tests)
-![Automatic tests](https://github.com/SimonKamuk/neural-lam/actions/workflows/run_tests.yml/badge.svg?branch=feature_add_tests)
-
-<!---
 ![Linting](https://github.com/mllam/neural-lam/actions/workflows/pre-commit.yml/badge.svg)
 ![Automatic tests](https://github.com/mllam/neural-lam/actions/workflows/run_tests.yml/badge.svg)
--->
 
 <p align="middle">
     <img src="figures/neural_lam_header.png" width="700">
