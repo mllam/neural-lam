@@ -11,19 +11,11 @@ import yaml
 
 
 class Config:
-    """
-    Class for loading configuration files.
-
-    This class loads a configuration file and provides a way to access its
-    values as attributes.
-    """
-
     def __init__(self, values):
         self.values = values
 
     @classmethod
     def from_file(cls, filepath):
-        """Load a configuration file."""
         if filepath.endswith(".yaml"):
             with open(filepath, encoding="utf-8", mode="r") as file:
                 return cls(values=yaml.safe_load(file))
@@ -53,7 +45,6 @@ class Config:
 
     @functools.cached_property
     def coords_projection(self):
-        """Return the projection."""
         proj_config = self.values["projection"]
         proj_class_name = proj_config["class"]
         proj_class = getattr(ccrs, proj_class_name)
@@ -62,7 +53,6 @@ class Config:
 
     @functools.cached_property
     def param_names(self):
-        """Return parameter names."""
         surface_vars_names = self.values["state"]["surface_vars"]
         atmosphere_vars_names = [
             f"{var}_{level}"
@@ -73,18 +63,16 @@ class Config:
 
     @functools.cached_property
     def param_units(self):
-        """Return parameter units."""
-        surface_vars_units = self.values["state"]["surface_vars_units"]
+        surface_vars_units = self.values["state"]["surface_units"]
         atmosphere_vars_units = [
             unit
-            for unit in self.values["state"]["atmosphere_vars_units"]
+            for unit in self.values["state"]["atmosphere_units"]
             for _ in self.values["state"]["levels"]
         ]
         return surface_vars_units + atmosphere_vars_units
 
     @functools.lru_cache()
     def num_data_vars(self, category):
-        """Return the number of data variables for a given category."""
         surface_vars = self.values[category].get("surface_vars", [])
         atmosphere_vars = self.values[category].get("atmosphere_vars", [])
         levels = self.values[category].get("levels", [])
@@ -101,31 +89,20 @@ class Config:
 
     @functools.lru_cache(maxsize=None)
     def open_zarr(self, category):
-        """Open a dataset specified by the category."""
-        zarr_config = self.zarrs[category]
+        zarr_configs = self.values[category]["zarrs"]
 
-        if isinstance(zarr_config, list):
-            try:
-                datasets = []
-                for config in zarr_config:
-                    dataset_path = config["path"]
-                    dataset = xr.open_zarr(dataset_path, consolidated=True)
-                    datasets.append(dataset)
-                return xr.merge(datasets)
-            except Exception:
-                print(f"Invalid zarr configuration for category: {category}")
-                return None
-
-        else:
-            try:
-                dataset_path = zarr_config["path"]
-                return xr.open_zarr(dataset_path, consolidated=True)
-            except Exception:
-                print(f"Invalid zarr configuration for category: {category}")
-                return None
+        try:
+            datasets = []
+            for config in zarr_configs:
+                dataset_path = config["path"]
+                dataset = xr.open_zarr(dataset_path, consolidated=True)
+                datasets.append(dataset)
+            return xr.merge(datasets)
+        except Exception:
+            print(f"Invalid zarr configuration for category: {category}")
+            return None
 
     def stack_grid(self, dataset):
-        """Stack grid dimensions."""
         dims = dataset.to_array().dims
 
         if "grid" not in dims and "x" in dims and "y" in dims:
@@ -145,10 +122,9 @@ class Config:
 
     @functools.lru_cache()
     def get_nwp_xy(self, category):
-        """Get the x and y coordinates for the NWP grid."""
         dataset = self.open_zarr(category)
-        lon_name = self.zarrs[category].lat_lon_names.lon
-        lat_name = self.zarrs[category].lat_lon_names.lat
+        lon_name = self.values[category]["zarrs"][0]["lat_lon_names"]["lon"]
+        lat_name = self.values[category]["zarrs"][0]["lat_lon_names"]["lat"]
         if lon_name in dataset and lat_name in dataset:
             lon = dataset[lon_name].values
             lat = dataset[lat_name].values
@@ -158,46 +134,42 @@ class Config:
             )
         if lon.ndim == 1:
             lon, lat = np.meshgrid(lat, lon)
-        lonlat = np.stack((lon, lat), axis=0)
+        lonlat = np.stack((lon.T, lat.T), axis=0)
 
         return lonlat
 
     @functools.cached_property
     def load_normalization_stats(self):
-        """Load normalization statistics from Zarr archive."""
-        normalization_path = self.normalization.zarr
-        if not os.path.exists(normalization_path):
-            print(
-                f"Normalization statistics not found at "
-                f"path: {normalization_path}"
-            )
-            return None
-        normalization_stats = xr.open_zarr(
-            normalization_path, consolidated=True
-        )
+        normalization_stats = {}
+        for zarr_config in self.values["normalization"]["zarrs"]:
+            normalization_path = zarr_config["path"]
+            if not os.path.exists(normalization_path):
+                print(
+                    f"Normalization statistics not found at path: "
+                    f"{normalization_path}"
+                )
+                return None
+            stats = xr.open_zarr(normalization_path, consolidated=True)
+            for var_name, var_path in zarr_config["stats_vars"].items():
+                normalization_stats[var_name] = stats[var_path]
         return normalization_stats
 
     @functools.lru_cache(maxsize=None)
     def process_dataset(self, category, split="train"):
-        """Process a single dataset specified by the dataset name."""
-
         dataset = self.open_zarr(category)
         if dataset is None:
             return None
 
         start, end = (
-            self.splits[split].start,
-            self.splits[split].end,
+            self.values["splits"][split]["start"],
+            self.values["splits"][split]["end"],
         )
         dataset = dataset.sel(time=slice(start, end))
 
         dims_mapping = {}
-        zarr_configs = self.zarrs[category]
-        if isinstance(zarr_configs, list):
-            for zarr_config in zarr_configs:
-                dims_mapping.update(zarr_config["dims"])
-        else:
-            dims_mapping.update(zarr_configs["dims"].values)
+        zarr_configs = self.values[category]["zarrs"]
+        for zarr_config in zarr_configs:
+            dims_mapping.update(zarr_config["dims"])
 
         dataset = dataset.rename_dims(
             {
@@ -236,18 +208,14 @@ class Config:
             print(f"No variables found in dataset {category}")
             return None
 
-        zarr_configs = self.zarrs[category]
         lat_lon_names = {}
-        if isinstance(self.zarrs[category], list):
-            for zarr_configs in self.zarrs[category]:
-                lat_lon_names.update(zarr_configs["lat_lon_names"])
-        else:
-            lat_lon_names.update(self.zarrs[category]["lat_lon_names"].values)
+        for zarr_config in self.values[category]["zarrs"]:
+            lat_lon_names.update(zarr_config["lat_lon_names"])
 
         if not all(
             lat_lon in lat_lon_names.values() for lat_lon in lat_lon_names
         ):
-            lat_name, lon_name = lat_lon_names[:2]
+            lat_name, lon_name = list(lat_lon_names.values())[:2]
             if dataset[lat_name].ndim == 2:
                 dataset[lat_name] = dataset[lat_name].isel(x=0, drop=True)
             if dataset[lon_name].ndim == 2:
@@ -260,10 +228,6 @@ class Config:
             {v: k for k, v in dims_mapping.items() if v in dataset.coords}
         )
         dataset = self.stack_grid(dataset)
-        return dataset
-
-        dataset = self.stack_grid(dataset)
-
         return dataset
 
 

@@ -1,6 +1,6 @@
 name: danra
-zarrs:
-  state:
+state:
+  zarrs:
     - path: "https://mllam-test-data.s3.eu-north-1.amazonaws.com/single_levels.zarr"
       dims:
         time: time
@@ -21,28 +21,6 @@ zarrs:
       lat_lon_names:
         lon: lon
         lat: lat
-  static:
-    path: "https://mllam-test-data.s3.eu-north-1.amazonaws.com/single_levels.zarr"
-    dims:
-      level: null
-      x: x
-      y: y
-      grid: null
-    lat_lon_names:
-      lon: lon
-      lat: lat
-  forcing:
-    path: "https://mllam-test-data.s3.eu-north-1.amazonaws.com/single_levels.zarr"
-    dims:
-      time: time
-      level: null
-      x: x
-      y: y
-      grid: null
-    lat_lon_names:
-      lon: lon
-      lat: lat
-state:
   surface_vars:
     - u10m
     - v10m
@@ -62,16 +40,50 @@ state:
   levels:
     - 100
 static:
+  zarrs:
+    - path: "https://mllam-test-data.s3.eu-north-1.amazonaws.com/single_levels.zarr"
+      dims:
+        level: null
+        x: x
+        y: y
+        grid: null
+      lat_lon_names:
+        lon: lon
+        lat: lat
   surface_vars:
     - pres0m # just as a technical test
   atmosphere_vars: null
   levels: null
 forcing:
+  zarrs:
+    - path: "https://mllam-test-data.s3.eu-north-1.amazonaws.com/single_levels.zarr"
+      dims:
+        time: time
+        level: null
+        x: x
+        y: y
+        grid: null
+      lat_lon_names:
+        lon: lon
+        lat: lat
   surface_vars:
     - cape_column # just as a technical test
   atmosphere_vars: null
   levels: null
   window: 3 # Number of time steps to use for forcing (odd)
+normalization:
+  zarrs:
+    - path: "normalization.zarr"
+      stats_vars:
+        data_mean: data_mean
+        data_std: data_std
+        forcing_mean: forcing_mean
+        forcing_std: forcing_std
+        boundary_mean: boundary_mean
+        boundary_std: boundary_std
+        diff_mean: diff_mean
+        diff_std: diff_std
+
 grid_shape_state:
   x: 582
   y: 390
@@ -91,14 +103,3 @@ projection:
     central_longitude: 6.22
     central_latitude: 56.0
     standard_parallels: [47.6, 64.4]
-normalization:
-  zarr: normalization.zarr
-  vars:
-    data_mean: data_mean
-    data_std: data_std
-    forcing_mean: forcing_mean
-    forcing_std: forcing_std
-    boundary_mean: boundary_mean
-    boundary_std: boundary_std
-    diff_mean: diff_mean
-    diff_std: diff_std
