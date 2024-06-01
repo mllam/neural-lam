@@ -140,8 +140,7 @@ class Config:
 
     @functools.cached_property
     def load_normalization_stats(self):
-        normalization_stats = {}
-        for zarr_config in self.values["normalization"]["zarrs"]:
+        for i, zarr_config in enumerate(self.values["normalization"]["zarrs"]):
             normalization_path = zarr_config["path"]
             if not os.path.exists(normalization_path):
                 print(
@@ -150,8 +149,11 @@ class Config:
                 )
                 return None
             stats = xr.open_zarr(normalization_path, consolidated=True)
-            for var_name, var_path in zarr_config["stats_vars"].items():
-                normalization_stats[var_name] = stats[var_path]
+            if i == 0:
+                normalization_stats = stats
+            else:
+                stats = xr.merge([stats, normalization_stats])
+                normalization_stats = stats
         return normalization_stats
 
     @functools.lru_cache(maxsize=None)
@@ -229,6 +231,3 @@ class Config:
         )
         dataset = self.stack_grid(dataset)
         return dataset
-
-
-config = Config.from_file("neural_lam/data_config.yaml")
