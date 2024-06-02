@@ -1,15 +1,13 @@
 ### Project Specific ###
 wandb
-slurm_log*
 saved_models
 data
 graphs
 *.sif
 sweeps
-test_*.sh
 .vscode
-cosmo_hilam.html
-normalization.zarr
+*.html
+*.zarr
 
 ### Python ###
 # Byte-compiled / optimized / DLL files
