@@ -71,19 +71,37 @@ forcing:
   atmosphere_vars: null
   levels: null
   window: 3 # Number of time steps to use for forcing (odd)
-normalization:
+boundary:
   zarrs:
-    - path: "normalization.zarr"
-      stats_vars:
-        state_mean: state_mean
-        state_std: state_std
-        forcing_mean: forcing_mean
-        forcing_std: forcing_std
-        diff_mean: diff_mean
-        diff_std: diff_std
+    - path: /scratch/sadamov/era5_template.zarr
+      dims:
+        time: time
+        level: level
+        x: longitude
+        y: latitude
+      lat_lon_names:
+        lon: longitude
+        lat: latitude
+  mask: boundary_mask
+utilities:
+  normalization:
+    zarrs:
+      - path: "normalization.zarr"
+        stats_vars:
+          state_mean: state_mean
+          state_std: state_std
+          forcing_mean: forcing_mean
+          forcing_std: forcing_std
+          diff_mean: diff_mean
+          diff_std: diff_std
+  boundary_mask:
+    zarrs:
+      - path: "boundary.zarr"
+        boundary_vars:
+          boundary_mask: boundary_mask
 grid_shape_state:
-  x: 582
-  y: 390
+  x: 789
+  y: 589
 splits:
   train:
     start: 1990-09-01T00

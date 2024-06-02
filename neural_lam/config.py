@@ -6,11 +6,14 @@ from pathlib import Path
 # Third-party
 import cartopy.crs as ccrs
 import numpy as np
+import pandas as pd
 import xarray as xr
 import yaml
 
 
 class Config:
+    DIMS_TO_KEEP = {"time", "grid", "variable"}
+
     def __init__(self, values):
         self.values = values
 
@@ -45,6 +48,7 @@ class Config:
 
     @functools.cached_property
     def coords_projection(self):
+        """Return the projection object for the coordinates."""
         proj_config = self.values["projection"]
         proj_class_name = proj_config["class"]
         proj_class = getattr(ccrs, proj_class_name)
@@ -52,7 +56,8 @@ class Config:
         return proj_class(**proj_params)
 
     @functools.cached_property
-    def param_names(self):
+    def vars_names(self):
+        """Return the names of the variables in the dataset."""
         surface_vars_names = self.values["state"]["surface_vars"]
         atmosphere_vars_names = [
             f"{var}_{level}"
@@ -62,7 +67,8 @@ class Config:
         return surface_vars_names + atmosphere_vars_names
 
     @functools.cached_property
-    def param_units(self):
+    def vars_units(self):
+        """Return the units of the variables in the dataset."""
         surface_vars_units = self.values["state"]["surface_units"]
         atmosphere_vars_units = [
             unit
@@ -73,6 +79,7 @@ class Config:
 
     @functools.lru_cache()
     def num_data_vars(self, category):
+        """Return the number of data variables in the dataset."""
         surface_vars = self.values[category].get("surface_vars", [])
         atmosphere_vars = self.values[category].get("atmosphere_vars", [])
         levels = self.values[category].get("levels", [])
@@ -87,8 +94,8 @@ class Config:
 
         return surface_vars_count + atmosphere_vars_count * levels_count
 
-    @functools.lru_cache(maxsize=None)
     def open_zarr(self, category):
+        """Open the zarr dataset for the given category."""
         zarr_configs = self.values[category]["zarrs"]
 
         try:
@@ -97,50 +104,148 @@ class Config:
                 dataset_path = config["path"]
                 dataset = xr.open_zarr(dataset_path, consolidated=True)
                 datasets.append(dataset)
-            return xr.merge(datasets)
+            merged_dataset = xr.merge(datasets)
+            merged_dataset.attrs["category"] = category
+            return merged_dataset
         except Exception:
             print(f"Invalid zarr configuration for category: {category}")
             return None
 
     def stack_grid(self, dataset):
+        """Stack the grid dimensions of the dataset."""
+        if dataset is None:
+            return None
         dims = dataset.to_array().dims
 
-        if "grid" not in dims and "x" in dims and "y" in dims:
-            dataset = dataset.squeeze().stack(grid=("x", "y")).to_array()
+        if "grid" in dims:
+            print("\033[94mGrid dimensions already stacked.\033[0m")
+            return dataset.squeeze()
         else:
-            try:
-                dataset = dataset.squeeze().to_array()
-            except ValueError:
-                print("Failed to stack grid dimensions.")
-                return None
-
-        if "time" in dataset.dims:
-            dataset = dataset.transpose("time", "grid", "variable")
-        else:
-            dataset = dataset.transpose("grid", "variable")
+            if "x" not in dims or "y" not in dims:
+                self.rename_dataset_dims_and_vars(dataset=dataset)
+            dataset = dataset.squeeze().stack(grid=("x", "y"))
         return dataset
 
-    @functools.lru_cache()
-    def get_nwp_xy(self, category):
-        dataset = self.open_zarr(category)
-        lon_name = self.values[category]["zarrs"][0]["lat_lon_names"]["lon"]
-        lat_name = self.values[category]["zarrs"][0]["lat_lon_names"]["lat"]
-        if lon_name in dataset and lat_name in dataset:
-            lon = dataset[lon_name].values
-            lat = dataset[lat_name].values
-        else:
-            raise ValueError(
-                f"Dataset does not contain " f"{lon_name} or {lat_name}"
+    def convert_dataset_to_dataarray(self, dataset):
+        """Convert the Dataset to a Dataarray."""
+        if isinstance(dataset, xr.Dataset):
+            dataset = dataset.to_array()
+            print(
+                "\033[92mSuccessfully converted Dataset to Dataarray.\033[0m"
             )
-        if lon.ndim == 1:
-            lon, lat = np.meshgrid(lat, lon)
-        lonlat = np.stack((lon.T, lat.T), axis=0)
+        return dataset.to_array()
 
-        return lonlat
+    def filter_dimensions(self, dataset, transpose_array=False):
+        """Filter the dimensions of the dataset."""
+        dims_to_keep = self.DIMS_TO_KEEP
+        dataset_dims = set(dataset.to_array().dims)
+        min_req_dims = dims_to_keep.copy()
+        min_req_dims.discard("time")
+        if not min_req_dims.issubset(dataset_dims):
+            missing_dims = min_req_dims - dataset_dims
+            print(
+                f"\033[91mMissing required dimensions in dataset: "
+                f"{missing_dims}\033[0m"
+            )
+            print(
+                "\033[91mAttempting to update dims and "
+                "vars based on zarr config...\033[0m"
+            )
+            dataset = self.rename_dataset_dims_and_vars(
+                dataset.attrs["category"], dataset=dataset
+            )
+            dataset = self.stack_grid(dataset)
+            dataset_dims = set(dataset.to_array().dims)
+            if min_req_dims.issubset(dataset_dims):
+                print(
+                    "\033[92mSuccessfully updated dims and "
+                    "vars based on zarr config.\033[0m"
+                )
+            else:
+                print(
+                    "\033[91mFailed to update dims and "
+                    "vars based on zarr config.\033[0m"
+                )
+                return None
+
+        dataset_dims = set(dataset.to_array().dims)
+        dims_to_drop = dataset_dims - dims_to_keep
+        dataset = dataset.drop_dims(dims_to_drop)
+        if dims_to_drop:
+            print(
+                "\033[91mDropped dimensions: --",
+                dims_to_drop,
+                "-- from dataset.\033[0m",
+            )
+            print(
+                "\033[91mAny data vars still dependent "
+                "on these variables were dropped!\033[0m"
+            )
+
+        if transpose_array:
+            dataset = self.convert_dataset_to_dataarray(dataset)
+
+            if "time" in dataset.dims:
+                dataset = dataset.transpose("time", "grid", "variable")
+            else:
+                dataset = dataset.transpose("grid", "variable")
+        dataset_vars = (
+            dataset["variable"].values.tolist()
+            if transpose_array
+            else list(dataset.data_vars)
+        )
+
+        print(
+            "\033[94mYour Dataarray has the following dimensions: ",
+            dataset.to_array().dims,
+            "\033[0m",
+        )
+        print(
+            "\033[94mYour Dataarray has the following variables: ",
+            dataset_vars,
+            "\033[0m",
+        )
+
+        return dataset
+
+    def reshape_grid_to_2d(self, dataset, grid_shape=None):
+        """Reshape the grid to 2D."""
+        if grid_shape is None:
+            grid_shape = dict(self.grid_shape_state.values.items())
+        x_dim, y_dim = (grid_shape["x"], grid_shape["y"])
+
+        x_coords = np.arange(x_dim)
+        y_coords = np.arange(y_dim)
+        multi_index = pd.MultiIndex.from_product(
+            [x_coords, y_coords], names=["x", "y"]
+        )
+
+        mindex_coords = xr.Coordinates.from_pandas_multiindex(
+            multi_index, "grid"
+        )
+        dataset = dataset.drop_vars(["grid", "x", "y"], errors="ignore")
+        dataset = dataset.assign_coords(mindex_coords)
+        reshaped_data = dataset.unstack("grid")
+
+        return reshaped_data
+
+    @functools.lru_cache()
+    def get_xy(self, category):
+        """Return the x, y coordinates of the dataset."""
+        dataset = self.open_zarr(category)
+        x, y = dataset.x.values, dataset.y.values
+        if x.ndim == 1:
+            x, y = np.meshgrid(y, x)
+        xy = np.stack((x, y), axis=0)
+
+        return xy
 
     @functools.cached_property
     def load_normalization_stats(self):
-        for i, zarr_config in enumerate(self.values["normalization"]["zarrs"]):
+        """Load the normalization statistics for the dataset."""
+        for i, zarr_config in enumerate(
+            self.values["utilities"]["normalization"]["zarrs"]
+        ):
             normalization_path = zarr_config["path"]
             if not os.path.exists(normalization_path):
                 print(
@@ -156,18 +261,69 @@ class Config:
                 normalization_stats = stats
         return normalization_stats
 
-    @functools.lru_cache(maxsize=None)
-    def process_dataset(self, category, split="train"):
-        dataset = self.open_zarr(category)
+    # def assign_lat_lon_coords(self, category, dataset=None):
+    #     """Process the latitude and longitude names of the dataset."""
+    #     if dataset is None:
+    #         dataset = self.open_zarr(category)
+    #     lat_lon_names = {}
+    #     for zarr_config in self.values[category]["zarrs"]:
+    #         lat_lon_names.update(zarr_config["lat_lon_names"])
+    #     lat_name, lon_name = (lat_lon_names["lat"], lat_lon_names["lon"])
+
+    #     if "x" not in dataset.dims or "y" in dataset.dims:
+    #         dataset = self.reshape_grid_to_2d(dataset)
+    #     if not set(lat_lon_names).issubset(dataset.to_array().dims):
+    #         dataset = dataset.assign_coords(
+    #             x=dataset[lon_name], y=dataset[lat_name]
+    #         )
+    #     return dataset
+
+    def extract_vars(self, category, dataset=None):
+        """Extract the variables from the dataset."""
         if dataset is None:
+            dataset = self.open_zarr(category)
+        surface_vars = (
+            dataset[self[category].surface_vars]
+            if self[category].surface_vars
+            else []
+        )
+
+        if (
+            "level" not in dataset.to_array().dims
+            and self[category].atmosphere_vars
+        ):
+            dataset = self.rename_dataset_dims_and_vars(
+                dataset.attrs["category"], dataset=dataset
+            )
+
+        atmosphere_vars = (
+            xr.merge(
+                [
+                    dataset[var]
+                    .sel(level=level, drop=True)
+                    .rename(f"{var}_{level}")
+                    for var in self[category].atmosphere_vars
+                    for level in self[category].levels
+                ]
+            )
+            if self[category].atmosphere_vars
+            else []
+        )
+
+        if surface_vars and atmosphere_vars:
+            return xr.merge([surface_vars, atmosphere_vars])
+        elif surface_vars:
+            return surface_vars
+        elif atmosphere_vars:
+            return atmosphere_vars
+        else:
+            print(f"No variables found in dataset {category}")
             return None
 
-        start, end = (
-            self.values["splits"][split]["start"],
-            self.values["splits"][split]["end"],
-        )
-        dataset = dataset.sel(time=slice(start, end))
-
+    def rename_dataset_dims_and_vars(self, category, dataset=None):
+        """Rename the dimensions and variables of the dataset."""
+        if dataset is None:
+            dataset = self.open_zarr(category)
         dims_mapping = {}
         zarr_configs = self.values[category]["zarrs"]
         for zarr_config in zarr_configs:
@@ -183,51 +339,40 @@ class Config:
         dataset = dataset.rename_vars(
             {v: k for k, v in dims_mapping.items() if v in dataset.coords}
         )
+        return dataset
 
-        surface_vars = []
-        if self[category].surface_vars:
-            surface_vars = dataset[self[category].surface_vars]
-
-        atmosphere_vars = []
-        if self[category].atmosphere_vars:
-            atmosphere_vars = xr.merge(
-                [
-                    dataset[var]
-                    .sel(level=level, drop=True)
-                    .rename(f"{var}_{level}")
-                    for var in self[category].atmosphere_vars
-                    for level in self[category].levels
-                ]
-            )
-
-        if surface_vars and atmosphere_vars:
-            dataset = xr.merge([surface_vars, atmosphere_vars])
-        elif surface_vars:
-            dataset = surface_vars
-        elif atmosphere_vars:
-            dataset = atmosphere_vars
-        else:
-            print(f"No variables found in dataset {category}")
-            return None
-
-        lat_lon_names = {}
-        for zarr_config in self.values[category]["zarrs"]:
-            lat_lon_names.update(zarr_config["lat_lon_names"])
-
-        if not all(
-            lat_lon in lat_lon_names.values() for lat_lon in lat_lon_names
-        ):
-            lat_name, lon_name = list(lat_lon_names.values())[:2]
-            if dataset[lat_name].ndim == 2:
-                dataset[lat_name] = dataset[lat_name].isel(x=0, drop=True)
-            if dataset[lon_name].ndim == 2:
-                dataset[lon_name] = dataset[lon_name].isel(y=0, drop=True)
-            dataset = dataset.assign_coords(
-                x=dataset[lon_name], y=dataset[lat_name]
-            )
-
-        dataset = dataset.rename(
-            {v: k for k, v in dims_mapping.items() if v in dataset.coords}
+    def filter_dataset_by_time(self, dataset, split="train"):
+        """Filter the dataset by the time split."""
+        start, end = (
+            self.values["splits"][split]["start"],
+            self.values["splits"][split]["end"],
         )
+        return dataset.sel(time=slice(start, end))
+
+    def process_dataset(self, category, split="train"):
+        """Process the dataset for the given category."""
+        print(f"Opening zarr dataset for category: {category}")
+        dataset = self.open_zarr(category)
+
+        print(f"Extracting variables for category: {category}")
+        dataset = self.extract_vars(category, dataset)
+
+        print(f"Filtering dataset by time for split: {split}")
+        dataset = self.filter_dataset_by_time(dataset, split)
+
+        print("Stacking grid dimensions of the dataset")
         dataset = self.stack_grid(dataset)
+
+        print("Filtering dimensions of the dataset")
+        dataset = self.filter_dimensions(dataset)
+
+        print(
+            "Renaming dataset dimensions and "
+            "variables for category: {category}"
+        )
+        dataset = self.rename_dataset_dims_and_vars(category, dataset)
+
+        print("Converting dataset to data array")
+        dataset = self.convert_dataset_to_dataarray(dataset)
+
         return dataset
