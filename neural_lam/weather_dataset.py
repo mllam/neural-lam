@@ -42,9 +42,6 @@ class WeatherDataset(torch.utils.data.Dataset):
         self.forcing = self.config_loader.process_dataset(
             "forcing", self.split
         )
-        self.boundary = self.config_loader.process_dataset(
-            "boundary", self.split
-        )
 
         self.state_times = self.state.time.values
         self.forcing_window = self.config_loader.forcing.window
@@ -61,23 +58,6 @@ class WeatherDataset(torch.utils.data.Dataset):
                     mode="edge",
                 )
                 .rolling(time=self.forcing_window, center=True)
-                .construct("window")
-            )
-
-        if self.boundary is not None:
-            self.boundary_windowed = (
-                self.boundary.sel(
-                    time=self.state.time,
-                    method="nearest",
-                )
-                .pad(
-                    time=(
-                        self.boundary_window // 2,
-                        self.boundary_window // 2,
-                    ),
-                    mode="edge",
-                )
-                .rolling(time=self.boundary_window, center=True)
                 .construct("window")
             )
 
@@ -101,16 +81,6 @@ class WeatherDataset(torch.utils.data.Dataset):
             else torch.tensor([])
         )
 
-        boundary = (
-            self.boundary_windowed.isel(
-                time=slice(idx + 2, idx + self.ar_steps)
-            )
-            .stack(variable_window=("variable", "window"))
-            .values
-            if self.boundary is not None
-            else torch.tensor([])
-        )
-
         init_states = sample[:2]
         target_states = sample[2:]
 
@@ -123,9 +93,8 @@ class WeatherDataset(torch.utils.data.Dataset):
         # init_states: (2, N_grid, d_features)
         # target_states: (ar_steps-2, N_grid, d_features)
         # forcing: (ar_steps-2, N_grid, d_windowed_forcing)
-        # boundary: (ar_steps-2, N_grid, d_windowed_boundary)
         # batch_times: (ar_steps-2,)
-        return init_states, target_states, forcing, boundary, batch_times
+        return init_states, target_states, forcing, batch_times
 
 
 class WeatherDataModule(pl.LightningDataModule):
