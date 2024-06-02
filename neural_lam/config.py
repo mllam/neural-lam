@@ -55,25 +55,25 @@ class Config:
         proj_params = proj_config.get("kwargs", {})
         return proj_class(**proj_params)
 
-    @functools.cached_property
-    def vars_names(self):
+    @functools.lru_cache()
+    def vars_names(self, category):
         """Return the names of the variables in the dataset."""
-        surface_vars_names = self.values["state"]["surface_vars"]
+        surface_vars_names = self.values[category].get("surface_vars") or []
         atmosphere_vars_names = [
             f"{var}_{level}"
-            for var in self.values["state"]["atmosphere_vars"]
-            for level in self.values["state"]["levels"]
+            for var in (self.values[category].get("atmosphere_vars") or [])
+            for level in (self.values[category].get("levels") or [])
         ]
         return surface_vars_names + atmosphere_vars_names
 
-    @functools.cached_property
-    def vars_units(self):
+    @functools.lru_cache()
+    def vars_units(self, category):
         """Return the units of the variables in the dataset."""
-        surface_vars_units = self.values["state"]["surface_units"]
+        surface_vars_units = self.values[category].get("surface_units") or []
         atmosphere_vars_units = [
             unit
-            for unit in self.values["state"]["atmosphere_units"]
-            for _ in self.values["state"]["levels"]
+            for unit in (self.values[category].get("atmosphere_units") or [])
+            for _ in (self.values[category].get("levels") or [])
         ]
         return surface_vars_units + atmosphere_vars_units
 
@@ -130,12 +130,9 @@ class Config:
         """Convert the Dataset to a Dataarray."""
         if isinstance(dataset, xr.Dataset):
             dataset = dataset.to_array()
-            print(
-                "\033[92mSuccessfully converted Dataset to Dataarray.\033[0m"
-            )
-        return dataset.to_array()
+        return dataset
 
-    def filter_dimensions(self, dataset, transpose_array=False):
+    def filter_dimensions(self, dataset, transpose_array=True):
         """Filter the dimensions of the dataset."""
         dims_to_keep = self.DIMS_TO_KEEP
         dataset_dims = set(dataset.to_array().dims)
@@ -190,15 +187,9 @@ class Config:
             else:
                 dataset = dataset.transpose("grid", "variable")
         dataset_vars = (
-            dataset["variable"].values.tolist()
-            if transpose_array
-            else list(dataset.data_vars)
-        )
-
-        print(
-            "\033[94mYour Dataarray has the following dimensions: ",
-            dataset.to_array().dims,
-            "\033[0m",
+            list(dataset.data_vars)
+            if isinstance(dataset, xr.Dataset)
+            else dataset["variable"].values.tolist()
         )
         print(
             "\033[94mYour Dataarray has the following variables: ",
@@ -240,26 +231,49 @@ class Config:
 
         return xy
 
-    @functools.cached_property
-    def load_normalization_stats(self):
+    @functools.lru_cache()
+    def load_normalization_stats(self, category):
         """Load the normalization statistics for the dataset."""
         for i, zarr_config in enumerate(
             self.values["utilities"]["normalization"]["zarrs"]
         ):
-            normalization_path = zarr_config["path"]
-            if not os.path.exists(normalization_path):
+            stats_path = zarr_config["path"]
+            if not os.path.exists(stats_path):
                 print(
                     f"Normalization statistics not found at path: "
-                    f"{normalization_path}"
+                    f"{stats_path}"
                 )
                 return None
-            stats = xr.open_zarr(normalization_path, consolidated=True)
+            stats = xr.open_zarr(stats_path, consolidated=True)
             if i == 0:
-                normalization_stats = stats
+                combined_stats = stats
             else:
-                stats = xr.merge([stats, normalization_stats])
-                normalization_stats = stats
-        return normalization_stats
+                stats = xr.merge([stats, combined_stats])
+                combined_stats = stats
+
+        # Rename data variables
+        vars_mapping = {}
+        zarr_configs = self.values["utilities"]["normalization"]["zarrs"]
+        for zarr_config in zarr_configs:
+            vars_mapping.update(zarr_config["stats_vars"])
+
+        combined_stats = combined_stats.rename_vars(
+            {
+                v: k
+                for k, v in vars_mapping.items()
+                if v in list(combined_stats.data_vars)
+            }
+        )
+
+        stats = combined_stats.loc[dict(variable=self.vars_names(category))]
+        if category == "state":
+            stats = stats.drop_vars(["forcing_mean", "forcing_std"])
+        elif category == "forcing":
+            stats = stats[["forcing_mean", "forcing_std"]]
+        else:
+            print(f"Invalid category: {category}")
+            return None
+        return stats
 
     # def assign_lat_lon_coords(self, category, dataset=None):
     #     """Process the latitude and longitude names of the dataset."""
@@ -322,8 +336,12 @@ class Config:
 
     def rename_dataset_dims_and_vars(self, category, dataset=None):
         """Rename the dimensions and variables of the dataset."""
+        convert = False
         if dataset is None:
             dataset = self.open_zarr(category)
+        elif isinstance(dataset, xr.DataArray):
+            convert = True
+            dataset = dataset.to_dataset("variable")
         dims_mapping = {}
         zarr_configs = self.values[category]["zarrs"]
         for zarr_config in zarr_configs:
@@ -339,6 +357,8 @@ class Config:
         dataset = dataset.rename_vars(
             {v: k for k, v in dims_mapping.items() if v in dataset.coords}
         )
+        if convert:
+            dataset = dataset.to_array()
         return dataset
 
     def filter_dataset_by_time(self, dataset, split="train"):
@@ -351,28 +371,12 @@ class Config:
 
     def process_dataset(self, category, split="train"):
         """Process the dataset for the given category."""
-        print(f"Opening zarr dataset for category: {category}")
         dataset = self.open_zarr(category)
-
-        print(f"Extracting variables for category: {category}")
         dataset = self.extract_vars(category, dataset)
-
-        print(f"Filtering dataset by time for split: {split}")
         dataset = self.filter_dataset_by_time(dataset, split)
-
-        print("Stacking grid dimensions of the dataset")
         dataset = self.stack_grid(dataset)
-
-        print("Filtering dimensions of the dataset")
-        dataset = self.filter_dimensions(dataset)
-
-        print(
-            "Renaming dataset dimensions and "
-            "variables for category: {category}"
-        )
         dataset = self.rename_dataset_dims_and_vars(category, dataset)
-
-        print("Converting dataset to data array")
+        dataset = self.filter_dimensions(dataset)
         dataset = self.convert_dataset_to_dataarray(dataset)
 
         return dataset

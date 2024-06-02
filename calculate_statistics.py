@@ -15,9 +15,6 @@ def compute_stats(data_array):
 
 
 def main():
-    """
-    Pre-compute parameter weights to be used in loss function
-    """
     parser = ArgumentParser(description="Training arguments")
     parser.add_argument(
         "--data_config",
@@ -31,16 +28,9 @@ def main():
         default="normalization.zarr",
         help="Directory where data is stored",
     )
-    parser.add_argument(
-        "--combined_forcings",
-        action="store_true",
-        help="Whether to compute combined stats forcing variables",
-    )
-
     args = parser.parse_args()
 
     config_loader = config.Config.from_file(args.data_config)
-
     state_data = config_loader.process_dataset("state", split="train")
     forcing_data = config_loader.process_dataset("forcing", split="train")
 
@@ -49,38 +39,48 @@ def main():
 
     if forcing_data is not None:
         forcing_mean, forcing_std = compute_stats(forcing_data)
-        if args.combined_forcings:
-            forcing_mean = forcing_mean.mean(dim="variable")
-            forcing_std = forcing_std.mean(dim="variable")
+        combined_stats = config_loader["utilities"]["normalization"][
+            "combined_stats"
+        ]
+
+        if combined_stats is not None:
+            for group in combined_stats:
+                vars_to_combine = group["vars"]
+                means = forcing_mean.sel(variable=vars_to_combine)
+                stds = forcing_std.sel(variable=vars_to_combine)
+
+                combined_mean = means.mean(dim="variable")
+                combined_std = (stds**2).mean(dim="variable") ** 0.5
+
+                forcing_mean.loc[
+                    dict(variable=vars_to_combine)
+                ] = combined_mean
+                forcing_std.loc[dict(variable=vars_to_combine)] = combined_std
 
     print(
         "Computing mean and std.-dev. for one-step differences...", flush=True
     )
-    state_data_diff = state_data.diff(dim="time")
-    diff_mean, diff_std = compute_stats(state_data_diff)
+    state_data_normalized = (state_data - state_mean) / state_std
+    state_data_diff_normalized = state_data_normalized.diff(dim="time")
+    diff_mean, diff_std = compute_stats(state_data_diff_normalized)
 
     ds = xr.Dataset(
         {
-            "state_mean": (["d_features"], state_mean.data),
-            "state_std": (["d_features"], state_std.data),
-            "diff_mean": (["d_features"], diff_mean.data),
-            "diff_std": (["d_features"], diff_std.data),
+            "state_mean": state_mean,
+            "state_std": state_std,
+            "diff_mean": diff_mean,
+            "diff_std": diff_std,
         }
     )
     if forcing_data is not None:
         dsf = xr.Dataset(
             {
-                "forcing_mean": (["d_forcings"], forcing_mean.data),
-                "forcing_std": (["d_forcings"], forcing_std.data),
+                "forcing_mean": forcing_mean,
+                "forcing_std": forcing_std,
             }
         )
-        ds = xr.merge(
-            [ds, dsf],
-        )
-    # Save dataset as Zarr
+        ds = xr.merge([ds, dsf])
+
     print("Saving dataset as Zarr...")
+    ds = ds.chunk({"variable": -1})
     ds.to_zarr(args.zarr_path, mode="w")
-
-
-if __name__ == "__main__":
-    main()

@@ -39,21 +39,6 @@ state:
     - K
   levels:
     - 100
-static:
-  zarrs:
-    - path: "https://mllam-test-data.s3.eu-north-1.amazonaws.com/single_levels.zarr"
-      dims:
-        level: null
-        x: x
-        y: y
-        grid: null
-      lat_lon_names:
-        lon: lon
-        lat: lat
-  surface_vars:
-    - pres0m # just as a technical test
-  atmosphere_vars: null
-  levels: null
 forcing:
   zarrs:
     - path: "https://mllam-test-data.s3.eu-north-1.amazonaws.com/single_levels.zarr"
@@ -68,12 +53,39 @@ forcing:
         lat: lat
   surface_vars:
     - cape_column # just as a technical test
+    - icei0m
+    - vis0m
+    - xhail0m
+  surface_units:
+    - J/kg
+    - kg/m^2 # just as a technical test :)
+    - m
+    - m
   atmosphere_vars: null
+  atmosphere_units: null
   levels: null
   window: 3 # Number of time steps to use for forcing (odd)
+static:
+  zarrs:
+    - path: "https://mllam-test-data.s3.eu-north-1.amazonaws.com/single_levels.zarr"
+      dims:
+        level: null
+        x: x
+        y: y
+        grid: null
+      lat_lon_names:
+        lon: lon
+        lat: lat
+  surface_vars:
+    - pres0m # just as a technical test
+  surface_units:
+    - Pa
+  atmosphere_vars: null
+  atmosphere_units: null
+  levels: null
 boundary:
   zarrs:
-    - path: /scratch/sadamov/era5_template.zarr
+    - path: "gs://weatherbench2/datasets/era5/1959-2023_01_10-wb13-6h-1440x721_with_derived_variables.zarr"
       dims:
         time: time
         level: level
@@ -94,6 +106,13 @@ utilities:
           forcing_std: forcing_std
           diff_mean: diff_mean
           diff_std: diff_std
+    combined_stats:
+      - vars:
+        - icei0m
+        - vis0m
+      - vars:
+        - cape_column
+        - xhail0m
   boundary_mask:
     zarrs:
       - path: "boundary.zarr"
