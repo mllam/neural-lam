@@ -161,7 +161,6 @@ def main():
     parser = ArgumentParser(description="Graph generation arguments")
     parser.add_argument(
         "--data_config",
-        "--data_config",
         type=str,
         default="neural_lam/data_config.yaml",
         help="Path to data config file (default: neural_lam/data_config.yaml)",
@@ -198,8 +197,7 @@ def main():
     graph_dir_path = os.path.join("graphs", args.graph)
     os.makedirs(graph_dir_path, exist_ok=True)
 
-    config_loader = config.Config(args.data_config)
-    xy = config_loader.get_nwp_xy()
+    xy = config_loader.get_xy("static")
     grid_xy = torch.tensor(xy)
     pos_max = torch.max(torch.abs(grid_xy))
 

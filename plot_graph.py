@@ -5,74 +5,13 @@ from argparse import ArgumentParser
 import numpy as np
 import plotly.graph_objects as go
 import torch_geometric as pyg
-import trimesh
-from tqdm import tqdm
-from trimesh.primitives import Box
 
 # First-party
 from neural_lam import config, utils
 
 MESH_HEIGHT = 0.1
-MESH_LEVEL_DIST = 0.05
+MESH_LEVEL_DIST = 0.2
 GRID_HEIGHT = 0
-
-
-def create_cubes_for_nodes(nodes, size=0.002):
-    """Create cubes for each node in the graph."""
-    cube_meshes = []
-    for node in tqdm(nodes, desc="Creating cubes"):
-        cube = Box(extents=[size, size, size])
-        cube.apply_translation(node)
-        cube_meshes.append(cube)
-    return cube_meshes
-
-
-def export_to_3d_model(node_pos, edge_plot_list, filename):
-    """Export the graph to a 3D model."""
-    paths = []
-    filtered_edge_plot_list = [
-        item for item in edge_plot_list if item[3] not in ["M2G", "G2M"]
-    ]
-
-    unique_node_indices = set()
-    for ei, _, _, _ in filtered_edge_plot_list:
-        unique_node_indices.update(ei.flatten())
-
-    filtered_node_positions = node_pos[np.array(list(unique_node_indices))]
-
-    for ei, _, _, _ in filtered_edge_plot_list:
-        edge_start = filtered_node_positions[ei[0]]
-        edge_end = filtered_node_positions[ei[1]]
-        for start, end in zip(edge_start, edge_end):
-            if not (np.isnan(start).any() or np.isnan(end).any()):
-                paths.append((start, end))
-
-    meshes = []
-    for start, end in tqdm(paths, desc="Creating meshes"):
-        offset_xyz = np.array([2e-4, 2e-4, 2e-4])
-        dummy_vertex = end + offset_xyz
-        vertices = [start, end, dummy_vertex]
-        faces = [[0, 1, 2]]
-        color_vertices = [[255, 179, 71], [255, 179, 71], [255, 179, 71]]
-        # color_faces = [[0, 0, 0]]
-
-        mesh = trimesh.Trimesh(
-            vertices=vertices,
-            faces=faces,
-            # face_colors=color_faces,
-            vertex_colors=color_vertices,
-        )
-        meshes.append(mesh)
-
-    node_spheres = create_cubes_for_nodes(filtered_node_positions)
-
-    scene = trimesh.Scene()
-    for mesh in meshes:
-        scene.add_geometry(mesh)
-    for sphere in node_spheres:
-        scene.add_geometry(sphere)
-
-    scene.export(filename, file_type="ply")
 
 
 def main():
@@ -81,7 +20,6 @@ def main():
     """
     parser = ArgumentParser(description="Plot graph")
     parser.add_argument(
-        "--data_config",
         "--data_config",
         type=str,
         default="neural_lam/data_config.yaml",
@@ -104,17 +42,17 @@ def main():
         default=0,
         help="If the axis should be displayed (default: 0 (No))",
     )
-    parser.add_argument(
-        "--export",
-        type=str,
-        help="Name of .obj file to export 3D model to (default: None)",
-    )
 
     args = parser.parse_args()
     config_loader = config.Config.from_file(args.data_config)
+    xy = config_loader.get_xy("state")  # (2, N_x, N_y)
+    xy = xy.reshape(2, -1).T  # (N_grid, 2)
+    pos_max = np.max(np.abs(xy))
+    grid_pos = xy / pos_max  # Divide by maximum coordinate
 
+    # Load graph data
     hierarchical, graph_ldict = utils.load_graph(args.graph)
-    g2m_edge_index, m2g_edge_index, m2m_edge_index = (
+    (g2m_edge_index, m2g_edge_index, m2m_edge_index,) = (
         graph_ldict["g2m_edge_index"],
         graph_ldict["m2g_edge_index"],
         graph_ldict["m2m_edge_index"],
@@ -125,22 +63,19 @@ def main():
     )
     mesh_static_features = graph_ldict["mesh_static_features"]
 
-    config_loader = config.Config(args.data_config)
-    xy = config_loader.get_nwp_xy()
-    grid_xy = xy.transpose(1, 2, 0).reshape(-1, 2)
-    pos_max = np.max(np.abs(grid_xy))
-    grid_pos = grid_xy / pos_max
-
+    # Add in z-dimension
     z_grid = GRID_HEIGHT * np.ones((grid_pos.shape[0],))
     grid_pos = np.concatenate(
         (grid_pos, np.expand_dims(z_grid, axis=1)), axis=1
     )
 
+    # List of edges to plot, (edge_index, color, line_width, label)
     edge_plot_list = [
         (m2g_edge_index.numpy(), "black", 0.4, "M2G"),
         (g2m_edge_index.numpy(), "black", 0.4, "G2M"),
     ]
 
+    # Mesh positioning and edges to plot differ if we have a hierarchical graph
     if hierarchical:
         mesh_level_pos = [
             np.concatenate(
@@ -159,11 +94,13 @@ def main():
         ]
         mesh_pos = np.concatenate(mesh_level_pos, axis=0)
 
+        # Add inter-level mesh edges
         edge_plot_list += [
             (level_ei.numpy(), "blue", 1, f"M2M Level {level}")
             for level, level_ei in enumerate(m2m_edge_index)
         ]
 
+        # Add intra-level mesh edges
         up_edges_ei = np.concatenate(
             [level_up_ei.numpy() for level_up_ei in mesh_up_edge_index], axis=1
         )
@@ -177,20 +114,30 @@ def main():
         mesh_node_size = 2.5
     else:
         mesh_pos = mesh_static_features.numpy()
+
         mesh_degrees = pyg.utils.degree(m2m_edge_index[1]).numpy()
         z_mesh = MESH_HEIGHT + 0.01 * mesh_degrees
         mesh_node_size = mesh_degrees / 2
+
         mesh_pos = np.concatenate(
             (mesh_pos, np.expand_dims(z_mesh, axis=1)), axis=1
         )
+
         edge_plot_list.append((m2m_edge_index.numpy(), "blue", 1, "M2M"))
 
+    # All node positions in one array
     node_pos = np.concatenate((mesh_pos, grid_pos), axis=0)
 
+    # Add edges
     data_objs = []
-    for ei, col, width, label in edge_plot_list:
-        edge_start = node_pos[ei[0]]
-        edge_end = node_pos[ei[1]]
+    for (
+        ei,
+        col,
+        width,
+        label,
+    ) in edge_plot_list:
+        edge_start = node_pos[ei[0]]  # (M, 2)
+        edge_end = node_pos[ei[1]]  # (M, 2)
         n_edges = edge_start.shape[0]
 
         x_edges = np.stack(
@@ -212,6 +159,8 @@ def main():
             name=label,
         )
         data_objs.append(scatter_obj)
+
+    # Add node objects
 
     data_objs.append(
         go.Scatter3d(
@@ -240,6 +189,7 @@ def main():
     fig.update_traces(connectgaps=False)
 
     if not args.show_axis:
+        # Hide axis
         fig.update_layout(
             scene={
                 "xaxis": {"visible": False},
@@ -250,9 +200,8 @@ def main():
 
     if args.save:
         fig.write_html(args.save, include_plotlyjs="cdn")
-
-    if args.export:
-        export_to_3d_model(node_pos, edge_plot_list, args.export)
+    else:
+        fig.show()
 
 
 if __name__ == "__main__":
