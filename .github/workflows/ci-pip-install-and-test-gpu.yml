@@ -22,6 +22,11 @@ jobs:
           python -m pip install .
           python -m pip install pytest
 
+      - name: Print and check torch version
+        run: |
+          python -c "import torch; print(torch.__version__)"
+          python -c "import torch; assert not torch.__version__.endswith('+cpu')"
+
       - name: Run tests
         run: |
           python -m pytest
