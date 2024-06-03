@@ -7,6 +7,7 @@ from pathlib import Path
 import cartopy.crs as ccrs
 import numpy as np
 import pandas as pd
+import torch
 import xarray as xr
 import yaml
 
@@ -232,7 +233,7 @@ class Config:
         return xy
 
     @functools.lru_cache()
-    def load_normalization_stats(self, category):
+    def load_normalization_stats(self, category, datatype="torch"):
         """Load the normalization statistics for the dataset."""
         for i, zarr_config in enumerate(
             self.values["utilities"]["normalization"]["zarrs"]
@@ -265,14 +266,30 @@ class Config:
             }
         )
 
-        stats = combined_stats.loc[dict(variable=self.vars_names(category))]
         if category == "state":
+            stats = combined_stats.loc[
+                dict(variable=self.vars_names(category))
+            ]
             stats = stats.drop_vars(["forcing_mean", "forcing_std"])
         elif category == "forcing":
+            vars = self.vars_names(category)
+            window = self["forcing"]["window"]
+            forcing_vars = [
+                f"{var}_{i}" for var in vars for i in range(window)
+            ]
+            stats = combined_stats.loc[dict(forcing_variable=forcing_vars)]
             stats = stats[["forcing_mean", "forcing_std"]]
         else:
             print(f"Invalid category: {category}")
             return None
+
+        if datatype == "torch":
+            stats_dict = {
+                var: torch.tensor(stats[var].values, dtype=torch.float32)
+                for var in stats.data_vars
+            }
+            return stats_dict
+
         return stats
 
     # def assign_lat_lon_coords(self, category, dataset=None):
@@ -369,7 +386,7 @@ class Config:
         )
         return dataset.sel(time=slice(start, end))
 
-    def process_dataset(self, category, split="train"):
+    def process_dataset(self, category, split="train", apply_windowing=True):
         """Process the dataset for the given category."""
         dataset = self.open_zarr(category)
         dataset = self.extract_vars(category, dataset)
@@ -378,5 +395,22 @@ class Config:
         dataset = self.rename_dataset_dims_and_vars(category, dataset)
         dataset = self.filter_dimensions(dataset)
         dataset = self.convert_dataset_to_dataarray(dataset)
+        if "window" in self.values[category] and apply_windowing:
+            dataset = self.apply_window(category, dataset)
 
+        return dataset
+
+    def apply_window(self, category, dataset=None):
+        """Apply the forcing window to the forcing dataset."""
+        if dataset is None:
+            dataset = self.open_zarr(category)
+        state_time = self.open_zarr("state").time.values
+        window = self[category].window
+        dataset = (
+            dataset.sel(time=state_time, method="nearest")
+            .pad(time=(window // 2, window // 2), mode="edge")
+            .rolling(time=window, center=True)
+            .construct("window")
+            .stack(variable_window=("variable", "window"))
+        )
         return dataset

@@ -95,6 +95,7 @@ boundary:
         lon: longitude
         lat: latitude
   mask: boundary_mask
+  window: 3
 utilities:
   normalization:
     zarrs:

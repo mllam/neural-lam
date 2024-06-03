@@ -238,6 +238,7 @@ def main():
     data_module = WeatherDataModule(
         ar_steps_train=args.ar_steps_train,
         ar_steps_eval=args.ar_steps_eval,
+        standardize=True,
         batch_size=args.batch_size,
         num_workers=args.num_workers,
     )

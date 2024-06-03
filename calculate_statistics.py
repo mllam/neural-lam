@@ -32,7 +32,9 @@ def main():
 
     config_loader = config.Config.from_file(args.data_config)
     state_data = config_loader.process_dataset("state", split="train")
-    forcing_data = config_loader.process_dataset("forcing", split="train")
+    forcing_data = config_loader.process_dataset(
+        "forcing", split="train", apply_windowing=False
+    )
 
     print("Computing mean and std.-dev. for parameters...", flush=True)
     state_mean, state_std = compute_stats(state_data)
@@ -56,6 +58,16 @@ def main():
                     dict(variable=vars_to_combine)
                 ] = combined_mean
                 forcing_std.loc[dict(variable=vars_to_combine)] = combined_std
+        window = config_loader["forcing"]["window"]
+        forcing_mean = xr.concat([forcing_mean] * window, dim="window").stack(
+            forcing_variable=("variable", "window")
+        )
+        forcing_std = xr.concat([forcing_std] * window, dim="window").stack(
+            forcing_variable=("variable", "window")
+        )
+        vars = forcing_data["variable"].values.tolist()
+        window = config_loader["forcing"]["window"]
+        forcing_vars = [f"{var}_{i}" for var in vars for i in range(window)]
 
     print(
         "Computing mean and std.-dev. for one-step differences...", flush=True
@@ -73,14 +85,25 @@ def main():
         }
     )
     if forcing_data is not None:
-        dsf = xr.Dataset(
-            {
-                "forcing_mean": forcing_mean,
-                "forcing_std": forcing_std,
-            }
+        dsf = (
+            xr.Dataset(
+                {
+                    "forcing_mean": forcing_mean,
+                    "forcing_std": forcing_std,
+                }
+            )
+            .reset_index(["forcing_variable"])
+            .drop_vars(["variable", "window"])
+            .assign_coords(forcing_variable=forcing_vars)
         )
         ds = xr.merge([ds, dsf])
 
+    print(ds)
+
+    ds = ds.chunk({"variable": -1, "forcing_variable": -1})
     print("Saving dataset as Zarr...")
-    ds = ds.chunk({"variable": -1})
     ds.to_zarr(args.zarr_path, mode="w")
+
+
+if __name__ == "__main__":
+    main()
