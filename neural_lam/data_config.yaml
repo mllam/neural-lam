@@ -51,11 +51,22 @@ forcing:
       lat_lon_names:
         lon: lon
         lat: lat
+    - path: "forcings.zarr"
+      dims:
+        time: time
+        level: null
+        x: x
+        y: y
+        grid: null
   surface_vars:
     - cape_column # just as a technical test
     - icei0m
     - vis0m
     - xhail0m
+    - hour_cos
+    - hour_sin
+    - year_cos
+    - year_sin
   surface_units:
     - J/kg
     - kg/m^2 # just as a technical test :)
