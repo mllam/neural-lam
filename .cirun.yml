@@ -1,0 +1,14 @@
+# setup for using github runners via https://cirun.io/
+runners:
+  - name: "aws-runner"
+    # Cloud Provider: AWS
+    cloud: "aws"
+    # https://aws.amazon.com/ec2/instance-types/g4/
+    instance_type: "g4dn.xlarge"
+    # Ubuntu-20.4, ami image
+    machine_image: "ami-06fd8a495a537da8b"
+    preemptible: false
+    # Add this label in the "runs-on" param in .github/workflows/<workflow-name>.yml
+    # So that this runner is created for running the workflow
+    labels:
+      - "cirun-aws-runner"

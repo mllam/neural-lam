@@ -1,0 +1,27 @@
+# cicd workflow for running tests with pytest
+# needs to first install pdm, then install torch cpu manually and then install the package
+# then run the tests
+
+name: test (pip install, gpu)
+
+on: [push, pull_request]
+
+jobs:
+  tests:
+    runs-on: "cirun-aws-runner--${{ github.run_id }}"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2
+
+      - name: Install torch (GPU CUDA 12.1)
+        run: |
+          python -m pip install torch  --index-url https://download.pytorch.org/whl/cu121
+
+      - name: Install package (including dev dependencies)
+        run: |
+          python -m pip install .
+          python -m pip install pytest
+
+      - name: Run tests
+        run: |
+          python -m pytest
