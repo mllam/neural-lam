@@ -157,16 +157,18 @@ def main():
     )
     parser.add_argument(
         "--distributed",
-        action="store_true",
-        help="Run the script in distributed mode",
+        type=int,
+        default=0,
+        help="Run the script in distributed mode (1) or not (0) (default: 0)",
     )
     args = parser.parse_args()
+    distributed = bool(args.distributed)
 
     rank = get_rank()
     world_size = get_world_size()
     config_loader = config.Config.from_file(args.data_config)
 
-    if args.distributed:
+    if distributed:
 
         setup(rank, world_size)
         device = torch.device(
@@ -208,7 +210,7 @@ def main():
         pred_length=63,
         standardize=False,
     )
-    if args.distributed:
+    if distributed:
         ds = PaddedWeatherDataset(
             ds,
             world_size,
@@ -232,7 +234,7 @@ def main():
     means, squares, flux_means, flux_squares = [], [], [], []
 
     for init_batch, target_batch, forcing_batch in tqdm(loader):
-        if args.distributed:
+        if distributed:
             init_batch, target_batch, forcing_batch = (
                 init_batch.to(device),
                 target_batch.to(device),
@@ -250,7 +252,7 @@ def main():
         flux_means.append(torch.mean(flux_batch).cpu())  # (,)
         flux_squares.append(torch.mean(flux_batch**2).cpu())  # (,)
 
-    if args.distributed and world_size > 1:
+    if distributed and world_size > 1:
         means_gathered, squares_gathered = [None] * world_size, [
             None
         ] * world_size
@@ -293,7 +295,7 @@ def main():
             "parameter",
         )
 
-    if args.distributed:
+    if distributed:
         dist.barrier()
 
     if rank == 0:
@@ -305,7 +307,7 @@ def main():
         pred_length=63,
         standardize=True,
     )  # Re-load with standardization
-    if args.distributed:
+    if distributed:
         ds_standard = PaddedWeatherDataset(
             ds_standard,
             world_size,
@@ -328,7 +330,7 @@ def main():
     diff_means, diff_squares = [], []
 
     for init_batch, target_batch, _ in tqdm(loader_standard, disable=rank != 0):
-        if args.distributed:
+        if distributed:
             init_batch, target_batch = init_batch.to(device), target_batch.to(
                 device
             )
@@ -351,7 +353,7 @@ def main():
         diff_squares.append(torch.mean(batch_diffs**2, dim=(1, 2)).cpu())
         # (N_batch', d_features,)
 
-    if args.distributed and world_size > 1:
+    if distributed and world_size > 1:
         dist.barrier()
         diff_means_gathered, diff_squares_gathered = [None] * world_size, [
             None
@@ -384,7 +386,7 @@ def main():
     if rank == 0:
         save_stats(static_dir_path, diff_means, diff_squares, [], [], "diff")
 
-    if args.distributed:
+    if distributed:
         dist.destroy_process_group()
 
 
