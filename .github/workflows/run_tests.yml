@@ -32,8 +32,9 @@ jobs:
         run: |
           pytest  -v -s
       - name: Cache data
-        uses: actions/cache@v2
-        path: data
-        key: ${{ runner.os }}-meps-reduced-example-data-v0.1.0
-        restore-keys: |
-          ${{ runner.os }}-meps-reduced-example-data-v0.1.0
+        uses: actions/cache@v4
+        with:
+          path: data
+          key: ${{ runner.os }}-meps-reduced-example-data-v0.1.0
+          restore-keys: |
+            ${{ runner.os }}-meps-reduced-example-data-v0.1.0
