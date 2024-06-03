@@ -30,7 +30,7 @@ jobs:
       - name: Print and check torch version
         run: |
           pdm run python -c "import torch; print(torch.__version__)"
-          pdm run python -c "import torch; assert torch.__version__.endswith('+gpu')"
+          pdm run python -c "import torch; assert torch.__version__.endswith('+cpu')"
 
       - name: Install package (including dev dependencies)
         run: |
