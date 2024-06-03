@@ -113,7 +113,6 @@ class Config:
             return None
 
     def stack_grid(self, dataset):
-        """Stack the grid dimensions of the dataset."""
         if dataset is None:
             return None
         dims = dataset.to_array().dims
@@ -124,7 +123,7 @@ class Config:
         else:
             if "x" not in dims or "y" not in dims:
                 self.rename_dataset_dims_and_vars(dataset=dataset)
-            dataset = dataset.squeeze().stack(grid=("x", "y"))
+            dataset = dataset.squeeze().stack(grid=("y", "x"))
         return dataset
 
     def convert_dataset_to_dataarray(self, dataset):
@@ -201,7 +200,7 @@ class Config:
         return dataset
 
     def reshape_grid_to_2d(self, dataset, grid_shape=None):
-        """Reshape the grid to 2D."""
+        """Reshape the grid to 2D for stacked data without multi-index."""
         if grid_shape is None:
             grid_shape = dict(self.grid_shape_state.values.items())
         x_dim, y_dim = (grid_shape["x"], grid_shape["y"])
@@ -209,7 +208,7 @@ class Config:
         x_coords = np.arange(x_dim)
         y_coords = np.arange(y_dim)
         multi_index = pd.MultiIndex.from_product(
-            [x_coords, y_coords], names=["x", "y"]
+            [y_coords, x_coords], names=["y", "x"]
         )
 
         mindex_coords = xr.Coordinates.from_pandas_multiindex(
@@ -227,8 +226,8 @@ class Config:
         dataset = self.open_zarr(category)
         x, y = dataset.x.values, dataset.y.values
         if x.ndim == 1:
-            x, y = np.meshgrid(y, x)
-        xy = np.stack((x, y), axis=0)
+            x, y = np.meshgrid(x, y)
+        xy = np.stack((x, y), axis=0)  # (2, N_y, N_x)
 
         return xy
 

@@ -197,7 +197,7 @@ def main():
     graph_dir_path = os.path.join("graphs", args.graph)
     os.makedirs(graph_dir_path, exist_ok=True)
 
-    xy = config_loader.get_xy("static")
+    xy = config_loader.get_xy("static")  # (2, N_y, N_x)
     grid_xy = torch.tensor(xy)
     pos_max = torch.max(torch.abs(grid_xy))
 
