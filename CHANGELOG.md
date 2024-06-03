@@ -69,6 +69,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   [\#29](https://github.com/mllam/neural-lam/pull/29)
   @leifdenby
 
+- change copyright formulation in license to encompass all contributors
+  [\#47](https://github.com/mllam/neural-lam/pull/47)
+  @joeloskarsson
 
 ## [v0.1.0](https://github.com/joeloskarsson/neural-lam/releases/tag/v0.1.0)
 

@@ -1,6 +1,7 @@
 ### Project Specific ###
 wandb
 saved_models
+lightning_logs
 data
 graphs
 *.sif
@@ -8,6 +9,7 @@ sweeps
 .vscode
 *.html
 *.zarr
+*slurm*
 
 ### Python ###
 # Byte-compiled / optimized / DLL files
