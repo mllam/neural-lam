@@ -4,7 +4,8 @@ runners:
     # Cloud Provider: AWS
     cloud: "aws"
     # https://aws.amazon.com/ec2/instance-types/g4/
-    instance_type: "g4dn.xlarge"
+    # instance_type: "g4dn.xlarge"
+    instance_type: "t2.nano"
     # Ubuntu-20.4, ami image
     machine_image: "ami-06fd8a495a537da8b"
     preemptible: false
