@@ -31,3 +31,10 @@ jobs:
       - name: Test with pytest
         run: |
           pytest  -v -s
+      - name: Cache data
+        uses: actions/cache@v2
+        with:
+        path: data
+        key: ${{ runner.os }}-meps-reduced-example-data-v0.1.0
+        restore-keys: |
+          ${{ runner.os }}-meps-reduced-example-data-v0.1.0
