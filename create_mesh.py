@@ -157,7 +157,7 @@ def prepend_node_index(graph, new_index):
     return networkx.relabel_nodes(graph, to_mapping, copy=True)
 
 
-def main():
+def main(input_args=None):
     parser = ArgumentParser(description="Graph generation arguments")
     parser.add_argument(
         "--data_config",
@@ -190,7 +190,7 @@ def main():
         default=0,
         help="Generate hierarchical mesh graph (default: 0, no)",
     )
-    args = parser.parse_args()
+    args = parser.parse_args(input_args)
 
     # Load grid positions
     config_loader = config.Config.from_file(args.data_config)

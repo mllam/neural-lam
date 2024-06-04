@@ -24,7 +24,7 @@ MODELS = {
 }
 
 
-def main():
+def main(input_args=None):
     """
     Main function for training and evaluating models
     """
@@ -208,7 +208,7 @@ def main():
         help="""JSON string with variable-IDs and lead times to log watched
              metrics (e.g. '{"1": [1, 2], "3": [3, 4]}')""",
     )
-    args = parser.parse_args()
+    args = parser.parse_args(input_args)
     args.var_leads_metrics_watch = {
         int(k): v for k, v in json.loads(args.var_leads_metrics_watch).items()
     }
