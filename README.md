@@ -45,14 +45,6 @@ Still, some restrictions are inevitable:
 </p>
 
 
-## A note on the limited area setting
-Currently we are using these models on a limited area covering the Nordic region, the so called MEPS area (see [paper](https://arxiv.org/abs/2309.17370)).
-There are still some parts of the code that is quite specific for the MEPS area use case.
-This is in particular true for the mesh graph creation (`create_mesh.py`) and some of the constants set in a `data_config.yaml` file (path specified in `train_model.py --data_config` ).
-If there is interest to use Neural-LAM for other areas it is not a substantial undertaking to refactor the code to be fully area-agnostic.
-We would be happy to support such enhancements.
-See the issues https://github.com/joeloskarsson/neural-lam/issues/2, https://github.com/joeloskarsson/neural-lam/issues/3 and https://github.com/joeloskarsson/neural-lam/issues/4 for some initial ideas on how this could be done.
-
 # Using Neural-LAM
 Below follows instructions on how to use Neural-LAM to train and evaluate models.
 
@@ -74,26 +66,25 @@ pip install pyg-lib==0.2.0 torch-scatter==2.1.1 torch-sparse==0.6.17 torch-clust
 You will have to adjust the `CUDA` variable to match the CUDA version on your system or to run on CPU. See the [installation webpage](https://pytorch-geometric.readthedocs.io/en/latest/install/installation.html) for more information.
 
 ## Data
-Datasets should be stored in a directory called `data`.
-See the [repository format section](#format-of-data-directory) for details on the directory structure.
-
-The full MEPS dataset can be shared with other researchers on request, contact us for this.
-A tiny subset of the data (named `meps_example`) is available in `example_data.zip`, which can be downloaded from [here](https://liuonline-my.sharepoint.com/:f:/g/personal/joeos82_liu_se/EuiUuiGzFIFHruPWpfxfUmYBSjhqMUjNExlJi9W6ULMZ1w?e=97pnGX).
-Download the file and unzip in the neural-lam directory.
-All graphs used in the paper are also available for download at the same link (but can as easily be re-generated using `create_mesh.py`).
-Note that this is far too little data to train any useful models, but all scripts can be ran with it.
-It should thus be useful to make sure that your python environment is set up correctly and that all the code can be ran without any issues.
+The repository is set up to work with `yaml` configuration files. These files are used to specify the dataset properties and location. An example of a dataset configuration file is stored in `neural_lam/data_config.yaml` and outlined below.
 
 ## Pre-processing
 An overview of how the different scripts and files depend on each other is given in this figure:
 <p align="middle">
   <img src="figures/component_dependencies.png"/>
 </p>
-In order to start training models at least three pre-processing scripts have to be ran:
+In order to start training models at least one pre-processing script has to be ran:
 
 * `create_mesh.py`
-* `create_grid_features.py`
-* `create_parameter_weights.py`
+
+If not provided directly by the user, the following scripts also has to be ran:
+
+* `calculate_statistics.py`
+* `create_boundary_mask.py`
+
+The following script is optional, but can be used to create additional features:
+
+* `create_forcing.py`
 
 ### Create graph
 Run `create_mesh.py` with suitable options to generate the graph you want to use (see `python create_mesh.py --help` for a list of options).
@@ -104,9 +95,6 @@ The graphs used for the different models in the [paper](https://arxiv.org/abs/23
 * **L1-LAM**: `python create_mesh.py --graph 1level --levels 1`
 
 The graph-related files are stored in a directory called `graphs`.
-
-### Create remaining static features
-To create the remaining static files run the scripts `create_grid_features.py` and `create_parameter_weights.py`.
 
 ## Weights & Biases Integration
 The project is fully integrated with [Weights & Biases](https://www.wandb.ai/) (W&B) for logging and visualization, but can just as easily be used without it.
@@ -129,7 +117,7 @@ Models can be trained using `train_model.py`.
 Run `python train_model.py --help` for a full list of training options.
 A few of the key ones are outlined below:
 
-* `--dataset`: Which data to train on
+* `--data_config`: Path to the data configuration file
 * `--model`: Which model to train
 * `--graph`: Which graph to use with the model
 * `--processor_layers`: Number of GNN layers to use in the processing part of the model
@@ -186,46 +174,102 @@ Some options specifically important for evaluation are:
 # Repository Structure
 Except for training and pre-processing scripts all the source code can be found in the `neural_lam` directory.
 Model classes, including abstract base classes, are located in `neural_lam/models`.
+Notebooks for visualization and analysis are located in `docs`.
+
 
 ## Format of data directory
-It is possible to store multiple datasets in the `data` directory.
-Each dataset contains a set of files with static features and a set of samples.
-The samples are split into different sub-directories for training, validation and testing.
-The directory structure is shown with examples below.
-Script names within parenthesis denote the script used to generate the file.
+The new workflow uses YAML configuration files to specify dataset properties and locations.
+Below is an example of how to structure your data directory and a condensed version of the YAML configuration file. The community decided for now, that a zarr-based approach is the most flexible and efficient way to store the data. Please make sure that your dataset is stored as zarr, contains the necessary dimensions, and is structured as described below. For optimal performance chunking the dataset along the time dimension only is recommended.
 ```
-data
-├── dataset1
-│   ├── samples                             - Directory with data samples
-│   │   ├── train                           - Training data
-│   │   │   ├── nwp_2022040100_mbr000.npy  - A time series sample
-│   │   │   ├── nwp_2022040100_mbr001.npy
-│   │   │   ├── ...
-│   │   │   ├── nwp_2022043012_mbr001.npy
-│   │   │   ├── nwp_toa_downwelling_shortwave_flux_2022040100.npy   - Solar flux forcing
-│   │   │   ├── nwp_toa_downwelling_shortwave_flux_2022040112.npy
-│   │   │   ├── ...
-│   │   │   ├── nwp_toa_downwelling_shortwave_flux_2022043012.npy
-│   │   │   ├── wtr_2022040100.npy          - Open water features for one sample
-│   │   │   ├── wtr_2022040112.npy
-│   │   │   ├── ...
-│   │   │   └── wtr_202204012.npy
-│   │   ├── val                             - Validation data
-│   │   └── test                            - Test data
-│   └── static                              - Directory with graph information and static features
-│       ├── nwp_xy.npy                      - Coordinates of grid nodes (part of dataset)
-│       ├── surface_geopotential.npy        - Geopotential at surface of grid nodes (part of dataset)
-│       ├── border_mask.npy                 - Mask with True for grid nodes that are part of border (part of dataset)
-│       ├── grid_features.pt                - Static features of grid nodes (create_grid_features.py)
-│       ├── parameter_mean.pt               - Means of state parameters (create_parameter_weights.py)
-│       ├── parameter_std.pt                - Std.-dev. of state parameters (create_parameter_weights.py)
-│       ├── diff_mean.pt                    - Means of one-step differences (create_parameter_weights.py)
-│       ├── diff_std.pt                     - Std.-dev. of one-step differences (create_parameter_weights.py)
-│       ├── flux_stats.pt                   - Mean and std.-dev. of solar flux forcing (create_parameter_weights.py)
-│       └── parameter_weights.npy           - Loss weights for different state parameters (create_parameter_weights.py)
-├── dataset2
-├── ...
-└── datasetN
+name: danra
+state:                                    # State variables vary in time and are predicted by the model
+  zarrs:
+    - path:                               # Path to the zarr file
+      dims:                               # Only the following dimensions will be mapped: time, level, x, y, grid
+        time: time                        # Required
+        level: null                       # Optional
+        x: x                              # Either x and y or grid must be specified
+        y: y
+        grid: null                        # Grid has precedence over x and y
+      lat_lon_names:                      # Required to map grid- projection to lat/lon
+        lon: lon
+        lat: lat
+    - path:
+      ...                                 # Additional zarr files are allowed
+  surface_vars:                           # Single level variables to include in the state (in this order)
+    - var1
+    - var2
+  surface_units:                          # Units for the surface variables
+    - unit1
+    - unit2
+  atmosphere_vars:                        # Multi-level variables to include in the state (in this order)
+    - var1
+    ...
+  atmosphere_units:                       # Units for the atmosphere variables
+    - unit1
+    ...
+  levels:                                 # Selection of vertical levels to include in the state (pressure/height/model level)
+    - 100
+    - 200
+    ...
+forcing:                                  # Forcing variables vary in time but are not predicted by the model
+  ...                                     # Same structure as state, multiple zarr files allowed
+  window: 3                               # Number of time steps to use for forcing (odd number)
+static:                                   # Static variables are not predicted by the model and do not vary in time
+  zarrs:
+    ...
+      dims:                               # Same structure as state but no "time" dimension
+        level: null
+        x: x
+        y: y
+        grid: null
+    ...
+boundary:                                 # Boundary variables are not predicted by the model and do not vary in time
+    ...                                   # They are used to inform the model about the surrounding weather conditions
+    ...                                   # The boundaries are often used from a separate model, specified identically to the state
+  mask:                                   # Boundary mask to indicate where the model should not make predictions
+    path: "boundary_mask.zarr"
+    dims:
+      x: x
+      y: y
+  window: 3                               # Windowing of the boundary variables (odd number), may differ from forcing window
+utilities:                                # Additional utilities to be used in the model
+  normalization:                          # Normalization statistics for the state, forcing, and one-step differences
+    zarrs:                                # Zarr files containing the normalization statistics, multiple allowed
+      - path: "normalization.zarr"        # Path to the zarr file, default locaton of `calculate_statistics.py`
+        stats_vars:                       # The variables to use for normalization, predefined and required
+          state_mean: name_in_dataset1
+          state_std: name_in_dataset2
+          forcing_mean: name_in_dataset3
+          forcing_std: name_in_dataset4
+          diff_mean: name_in_dataset5
+          diff_std: name_in_dataset6
+    combined_stats:                       # For some variables the statistics can be retrieved jointly
+      - vars:                             # List of variables that should end of with the same statistics
+        - vars1
+        - vars2
+      - vars:
+        ...
+grid_shape_state:                         # Shape of the state grid, used for reshaping the model output
+  y: 589                                  # Number of grid points in the y-direction (lat)
+  x: 789                                  # Number of grid points in the x-direction (lon)
+splits:                                   # Train, validation, and test splits based on time-sampling
+  train:
+    start: 1990-09-01T00
+    end: 1990-09-11T00
+  val:
+    start: 1990-09-11T03
+    end: 1990-09-13T09
+  test:
+    start: 1990-09-11T03
+    end: 1990-09-13T09
+projection:                               # Projection of the grid (only used for plotting)
+  class: LambertConformal                 # Name of class in cartopy.crs
+  kwargs:
+    central_longitude: 6.22
+    central_latitude: 56.0
+    standard_parallels: [47.6, 64.4]
+
 ```
 
 ## Format of graph directory
