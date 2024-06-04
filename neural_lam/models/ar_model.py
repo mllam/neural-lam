@@ -36,14 +36,10 @@ class ARModel(pl.LightningModule):
 
         # Double grid output dim. to also output std.-dev.
         self.output_std = bool(args.output_std)
+        self.grid_output_dim = self.config_loader.num_data_vars("state")
         if self.output_std:
             # Pred. dim. in grid cell
-            self.grid_output_dim = 2 * self.config_loader.num_data_vars(
-                "state"
-            )
-        else:
-            # Pred. dim. in grid cell
-            self.grid_output_dim = self.config_loader.num_data_vars("state")
+            self.grid_output_dim = 2 * self.grid_output_dim
 
         # grid_dim from data + static
         (
@@ -51,7 +47,7 @@ class ARModel(pl.LightningModule):
             grid_static_dim,
         ) = self.grid_static_features.shape
         self.grid_dim = (
-            2 * self.config_loader.num_data_vars("state")
+            2 * self.grid_output_dim
             + grid_static_dim
             + self.config_loader.num_data_vars("forcing")
             * self.config_loader.forcing.window
@@ -60,14 +56,15 @@ class ARModel(pl.LightningModule):
         # Instantiate loss function
         self.loss = metrics.get_metric(args.loss)
 
-        border_mask = torch.zeros(self.num_grid_nodes, 1)
-        self.register_buffer("border_mask", border_mask, persistent=False)
+        boundary_mask = self.config_loader.load_boundary_mask()
+        self.register_buffer("boundary_mask", boundary_mask, persistent=False)
         # Pre-compute interior mask for use in loss function
         self.register_buffer(
-            "interior_mask", 1.0 - self.border_mask, persistent=False
+            "interior_mask", 1.0 - self.boundary_mask, persistent=False
         )  # (num_grid_nodes, 1), 1 for non-border
 
-        self.step_length = args.step_length  # Number of hours per pred. step
+        # Number of hours per pred. step
+        self.step_length = self.config_loader.step_length
         self.val_metrics = {
             "mse": [],
         }
@@ -87,21 +84,6 @@ class ARModel(pl.LightningModule):
 
         # For storing spatial loss maps during evaluation
         self.spatial_loss_maps = []
-
-        # Load normalization statistics
-        self.normalization_stats = (
-            self.config_loader.load_normalization_stats()
-        )
-        if self.normalization_stats is not None:
-            for (
-                var_name,
-                var_data,
-            ) in self.normalization_stats.data_vars.items():
-                self.register_buffer(
-                    f"{var_name}",
-                    torch.tensor(var_data.values),
-                    persistent=False,
-                )
 
     def configure_optimizers(self):
         opt = torch.optim.AdamW(
@@ -157,7 +139,7 @@ class ARModel(pl.LightningModule):
 
             # Overwrite border with true state
             new_state = (
-                self.border_mask * border_state
+                self.boundary_mask * border_state
                 + self.interior_mask * pred_state
             )
 
@@ -202,25 +184,6 @@ class ARModel(pl.LightningModule):
         # pred_steps, num_grid_nodes, d_f) or (d_f,)
 
         return prediction, target_states, pred_std
-
-    def on_after_batch_transfer(self, batch, dataloader_idx):
-        """Normalize Batch data after transferring to the device."""
-        if self.normalization_stats is not None:
-            init_states, target_states, forcing_features, _, _ = batch
-            init_states = (init_states - self.mean) / self.std
-            target_states = (target_states - self.mean) / self.std
-            forcing_features = (
-                forcing_features - self.forcing_mean
-            ) / self.forcing_std
-            # boundary_features = ( boundary_features - self.boundary_mean ) /
-            #     self.boundary_std
-            batch = (
-                init_states,
-                target_states,
-                forcing_features,
-                # boundary_features,
-            )
-        return batch
 
     def training_step(self, batch):
         """

@@ -8,7 +8,7 @@ from neural_lam import utils
 
 
 @matplotlib.rc_context(utils.fractional_plot_bundle(1))
-def plot_error_map(errors, data_config, title=None, step_length=3):
+def plot_error_map(errors, data_config, title=None, step_length=1):
     """
     Plot a heatmap of errors of different variables at different
     predictions horizons

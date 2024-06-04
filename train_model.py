@@ -150,13 +150,6 @@ def main():
         help="Loss function to use, see metric.py (default: wmse)",
     )
     parser.add_argument(
-        "--step_length",
-        type=int,
-        default=1,
-        help="Step length in hours to consider single time step 1-3 "
-        "(default: 1)",
-    )
-    parser.add_argument(
         "--lr", type=float, default=1e-3, help="learning rate (default: 0.001)"
     )
     parser.add_argument(
@@ -222,7 +215,6 @@ def main():
 
     # Asserts for arguments
     assert args.model in MODELS, f"Unknown model: {args.model}"
-    assert args.step_length <= 3, "Too high step length"
     assert args.eval in (
         None,
         "val",

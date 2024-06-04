@@ -60,7 +60,7 @@ def main():
     args = parser.parse_args()
 
     config_loader = config.Config.from_file(args.data_config)
-    dataset = config_loader.open_zarr("state")
+    dataset = config_loader.open_zarrs("state")
     datetime_forcing = calculate_datetime_forcing(timesteps=dataset.time)
 
     # Expand dimensions to match the target dataset

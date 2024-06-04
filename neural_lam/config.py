@@ -95,7 +95,7 @@ class Config:
 
         return surface_vars_count + atmosphere_vars_count * levels_count
 
-    def open_zarr(self, category):
+    def open_zarrs(self, category):
         """Open the zarr dataset for the given category."""
         zarr_configs = self.values[category]["zarrs"]
 
@@ -103,7 +103,7 @@ class Config:
             datasets = []
             for config in zarr_configs:
                 dataset_path = config["path"]
-                dataset = xr.open_zarr(dataset_path, consolidated=True)
+                dataset = xr.open_zarrs(dataset_path, consolidated=True)
                 datasets.append(dataset)
             merged_dataset = xr.merge(datasets)
             merged_dataset.attrs["category"] = category
@@ -223,7 +223,7 @@ class Config:
     @functools.lru_cache()
     def get_xy(self, category):
         """Return the x, y coordinates of the dataset."""
-        dataset = self.open_zarr(category)
+        dataset = self.open_zarrs(category)
         x, y = dataset.x.values, dataset.y.values
         if x.ndim == 1:
             x, y = np.meshgrid(x, y)
@@ -244,7 +244,7 @@ class Config:
                     f"{stats_path}"
                 )
                 return None
-            stats = xr.open_zarr(stats_path, consolidated=True)
+            stats = xr.open_zarrs(stats_path, consolidated=True)
             if i == 0:
                 combined_stats = stats
             else:
@@ -294,7 +294,7 @@ class Config:
     # def assign_lat_lon_coords(self, category, dataset=None):
     #     """Process the latitude and longitude names of the dataset."""
     #     if dataset is None:
-    #         dataset = self.open_zarr(category)
+    #         dataset = self.open_zarrs(category)
     #     lat_lon_names = {}
     #     for zarr_config in self.values[category]["zarrs"]:
     #         lat_lon_names.update(zarr_config["lat_lon_names"])
@@ -311,7 +311,7 @@ class Config:
     def extract_vars(self, category, dataset=None):
         """Extract the variables from the dataset."""
         if dataset is None:
-            dataset = self.open_zarr(category)
+            dataset = self.open_zarrs(category)
         surface_vars = (
             dataset[self[category].surface_vars]
             if self[category].surface_vars
@@ -354,7 +354,7 @@ class Config:
         """Rename the dimensions and variables of the dataset."""
         convert = False
         if dataset is None:
-            dataset = self.open_zarr(category)
+            dataset = self.open_zarrs(category)
         elif isinstance(dataset, xr.DataArray):
             convert = True
             dataset = dataset.to_dataset("variable")
@@ -387,7 +387,7 @@ class Config:
 
     def process_dataset(self, category, split="train", apply_windowing=True):
         """Process the dataset for the given category."""
-        dataset = self.open_zarr(category)
+        dataset = self.open_zarrs(category)
         dataset = self.extract_vars(category, dataset)
         dataset = self.filter_dataset_by_time(dataset, split)
         dataset = self.stack_grid(dataset)
@@ -402,8 +402,8 @@ class Config:
     def apply_window(self, category, dataset=None):
         """Apply the forcing window to the forcing dataset."""
         if dataset is None:
-            dataset = self.open_zarr(category)
-        state_time = self.open_zarr("state").time.values
+            dataset = self.open_zarrs(category)
+        state_time = self.open_zarrs("state").time.values
         window = self[category].window
         dataset = (
             dataset.sel(time=state_time, method="nearest")
@@ -413,3 +413,8 @@ class Config:
             .stack(variable_window=("variable", "window"))
         )
         return dataset
+
+    def load_boundary_mask(self):
+        """Load the boundary mask for the dataset."""
+        boundary_mask = xr.open_zarr(self.values["boundary"]["mask"]["path"])
+        return boundary_mask.to_array().values

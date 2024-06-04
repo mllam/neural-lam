@@ -95,7 +95,7 @@ static:
   atmosphere_units: null
   levels: null
 boundary:
-  zarrs:
+  zarrs: # This is not used currently, but soon ERA% boundaries will be used
     - path: "gs://weatherbench2/datasets/era5/1959-2023_01_10-wb13-6h-1440x721_with_derived_variables.zarr"
       dims:
         time: time
@@ -105,7 +105,11 @@ boundary:
       lat_lon_names:
         lon: longitude
         lat: latitude
-  mask: boundary_mask
+  mask:
+    path: "boundary_mask.zarr"
+    dims:
+      x: x
+      y: y
   window: 3
 utilities:
   normalization:
