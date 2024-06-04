@@ -139,13 +139,13 @@ grid_shape_state:
 splits:
   train:
     start: 1990-09-01T00
-    end: 1990-09-11T00
+    end: 1990-09-01T02
   val:
-    start: 1990-09-11T03
-    end: 1990-09-13T09
+    start: 1990-09-11T00
+    end: 1990-09-11T02
   test:
-    start: 1990-09-11T03
-    end: 1990-09-13T09
+    start: 1990-09-11T00
+    end: 1990-09-11T02
 projection:
   class: LambertConformal # Name of class in cartopy.crs
   kwargs:
