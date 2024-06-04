@@ -1,3 +1,6 @@
+![Linting](https://github.com/mllam/neural-lam/actions/workflows/pre-commit.yml/badge.svg)
+![Automatic tests](https://github.com/mllam/neural-lam/actions/workflows/run_tests.yml/badge.svg)
+
 <p align="middle">
     <img src="figures/neural_lam_header.png" width="700">
 </p>
@@ -278,6 +281,8 @@ To test whether your code passes these checks before pushing, run
 pre-commit run --all-files
 ```
 from the root directory of the repository.
+
+Furthermore, all tests in the ```tests``` directory will be run upon pushing changes by a github action. Failure in any of the tests will also reject the push/PR.
 
 # Contact
 If you are interested in machine learning models for LAM, have questions about our implementation or ideas for extending it, feel free to get in touch.
