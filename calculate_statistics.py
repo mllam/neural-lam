@@ -98,8 +98,6 @@ def main():
         )
         ds = xr.merge([ds, dsf])
 
-    print(ds)
-
     ds = ds.chunk({"variable": -1, "forcing_variable": -1})
     print("Saving dataset as Zarr...")
     ds.to_zarr(args.zarr_path, mode="w")

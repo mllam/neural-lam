@@ -34,18 +34,39 @@ class ARModel(pl.LightningModule):
             persistent=False,
         )
 
+        state_stats = self.config_loader.load_normalization_stats(
+            "state", datatype="torch"
+        )
+        for key, val in state_stats.items():
+            self.register_buffer(key, val, persistent=False)
+
         # Double grid output dim. to also output std.-dev.
         self.output_std = bool(args.output_std)
         self.grid_output_dim = self.config_loader.num_data_vars("state")
         if self.output_std:
             # Pred. dim. in grid cell
-            self.grid_output_dim = 2 * self.grid_output_dim
+            self.grid_output_dim = 2 * self.config_loader.num_data_vars(
+                "state"
+            )
+        else:
+            # Pred. dim. in grid cell
+            self.grid_output_dim = self.config_loader.num_data_vars("state")
+            # Store constant per-variable std.-dev. weighting
+            # Note that this is the inverse of the multiplicative weighting
+            # in wMSE/wMAE
+            # TODO: Do we need param_weights for this?
+            self.register_buffer(
+                "per_var_std",
+                self.diff_std,
+                persistent=False,
+            )
 
         # grid_dim from data + static
         (
             self.num_grid_nodes,
             grid_static_dim,
         ) = self.grid_static_features.shape
+
         self.grid_dim = (
             2 * self.grid_output_dim
             + grid_static_dim

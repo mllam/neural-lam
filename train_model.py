@@ -44,12 +44,6 @@ def main(input_args=None):
         help="Model architecture to train/evaluate (default: graph_lam)",
     )
     parser.add_argument(
-        "--data_config",
-        type=str,
-        default="neural_lam/data_config.yaml",
-        help="Path to data config file (default: neural_lam/data_config.yaml)",
-    )
-    parser.add_argument(
         "--seed", type=int, default=42, help="random seed (default: 42)"
     )
     parser.add_argument(
@@ -281,7 +275,7 @@ def main(input_args=None):
     # Only init once, on rank 0 only
     if trainer.global_rank == 0:
         utils.init_wandb_metrics(
-            logger, val_steps=args.val_steps_log
+            logger, val_steps=args.val_steps_to_log
         )  # Do after wandb.init
         wandb.save(args.data_config)
     if args.eval:

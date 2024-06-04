@@ -103,7 +103,7 @@ class Config:
             datasets = []
             for config in zarr_configs:
                 dataset_path = config["path"]
-                dataset = xr.open_zarrs(dataset_path, consolidated=True)
+                dataset = xr.open_zarr(dataset_path, consolidated=True)
                 datasets.append(dataset)
             merged_dataset = xr.merge(datasets)
             merged_dataset.attrs["category"] = category
@@ -175,7 +175,7 @@ class Config:
                 "-- from dataset.\033[0m",
             )
             print(
-                "\033[91mAny data vars still dependent "
+                "\033[91mAny data vars dependent "
                 "on these variables were dropped!\033[0m"
             )
 
@@ -244,7 +244,7 @@ class Config:
                     f"{stats_path}"
                 )
                 return None
-            stats = xr.open_zarrs(stats_path, consolidated=True)
+            stats = xr.open_zarr(stats_path, consolidated=True)
             if i == 0:
                 combined_stats = stats
             else:
@@ -290,23 +290,6 @@ class Config:
             return stats_dict
 
         return stats
-
-    # def assign_lat_lon_coords(self, category, dataset=None):
-    #     """Process the latitude and longitude names of the dataset."""
-    #     if dataset is None:
-    #         dataset = self.open_zarrs(category)
-    #     lat_lon_names = {}
-    #     for zarr_config in self.values[category]["zarrs"]:
-    #         lat_lon_names.update(zarr_config["lat_lon_names"])
-    #     lat_name, lon_name = (lat_lon_names["lat"], lat_lon_names["lon"])
-
-    #     if "x" not in dataset.dims or "y" in dataset.dims:
-    #         dataset = self.reshape_grid_to_2d(dataset)
-    #     if not set(lat_lon_names).issubset(dataset.to_array().dims):
-    #         dataset = dataset.assign_coords(
-    #             x=dataset[lon_name], y=dataset[lat_name]
-    #         )
-    #     return dataset
 
     def extract_vars(self, category, dataset=None):
         """Extract the variables from the dataset."""
@@ -396,6 +379,8 @@ class Config:
         dataset = self.convert_dataset_to_dataarray(dataset)
         if "window" in self.values[category] and apply_windowing:
             dataset = self.apply_window(category, dataset)
+        if category == "static" and "time" in dataset.dims:
+            dataset = dataset.isel(time=0, drop=True)
 
         return dataset
 
@@ -417,4 +402,4 @@ class Config:
     def load_boundary_mask(self):
         """Load the boundary mask for the dataset."""
         boundary_mask = xr.open_zarr(self.values["boundary"]["mask"]["path"])
-        return boundary_mask.to_array().values
+        return torch.tensor(boundary_mask.to_array().values)

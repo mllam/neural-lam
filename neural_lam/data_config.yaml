@@ -72,6 +72,10 @@ forcing:
     - kg/m^2 # just as a technical test :)
     - m
     - m
+    - ""
+    - ""
+    - ""
+    - ""
   atmosphere_vars: null
   atmosphere_units: null
   levels: null
@@ -129,14 +133,9 @@ utilities:
       - vars:
         - cape_column
         - xhail0m
-  boundary_mask:
-    zarrs:
-      - path: "boundary.zarr"
-        boundary_vars:
-          boundary_mask: boundary_mask
 grid_shape_state:
-  x: 789
   y: 589
+  x: 789
 splits:
   train:
     start: 1990-09-01T00
