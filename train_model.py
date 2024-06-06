@@ -10,15 +10,15 @@ from lightning_fabric.utilities import seed
 
 # First-party
 from neural_lam import constants, utils
-from neural_lam.models.graph_lam import GraphLAM
-from neural_lam.models.hi_lam import HiLAM
-from neural_lam.models.hi_lam_parallel import HiLAMParallel
+from neural_lam.models.graph_efm import GraphEFM
+from neural_lam.models.graph_fm import GraphFM
+from neural_lam.models.graphcast import GraphCast
 from neural_lam.weather_dataset import WeatherDataset
 
 MODELS = {
-    "graph_lam": GraphLAM,
-    "hi_lam": HiLAM,
-    "hi_lam_parallel": HiLAMParallel,
+    "graphcast": GraphCast,
+    "graph_fm": GraphFM,
+    "graph_efm": GraphEFM,
 }
 
 
@@ -103,6 +103,13 @@ def main():
         help="Dimensionality of all hidden representations (default: 64)",
     )
     parser.add_argument(
+        "--latent_dim",
+        type=int,
+        default=None,
+        help="Dimensionality of latent R.V. at each node (if different than"
+        " hidden_dim) (default: None (same as hidden_dim))",
+    )
+    parser.add_argument(
         "--hidden_layers",
         type=int,
         default=1,
@@ -112,7 +119,20 @@ def main():
         "--processor_layers",
         type=int,
         default=4,
-        help="Number of GNN layers in processor GNN (default: 4)",
+        help="Number of GNN layers in processor GNN (for prob. model: in "
+        "decoder) (default: 4)",
+    )
+    parser.add_argument(
+        "--encoder_processor_layers",
+        type=int,
+        default=2,
+        help="Number of on-mesh GNN layers in encoder GNN (default: 2)",
+    )
+    parser.add_argument(
+        "--prior_processor_layers",
+        type=int,
+        default=2,
+        help="Number of on-mesh GNN layers in prior GNN (default: 2)",
     )
     parser.add_argument(
         "--mesh_aggr",
@@ -127,6 +147,28 @@ def main():
         default=0,
         help="If models should additionally output std.-dev. per "
         "output dimensions "
+        "(default: 0 (no))",
+    )
+    parser.add_argument(
+        "--prior_dist",
+        type=str,
+        default="isotropic",
+        help="Structure of Gaussian distribution in prior network output "
+        "(isotropic/diagonal) (default: isotropic)",
+    )
+    parser.add_argument(
+        "--learn_prior",
+        type=int,
+        default=1,
+        help="If the prior should be learned as a mapping from previous state "
+        "and forcing, otherwise static with mean 0 (default: 1 (yes))",
+    )
+    parser.add_argument(
+        "--vertical_propnets",
+        type=int,
+        default=0,
+        help="If PropagationNets should be used for all vertical message "
+        "passing (g2m, m2g, up in hierarchy), in deterministic models."
         "(default: 0 (no))",
     )
 
@@ -168,6 +210,28 @@ def main():
         help="Number of epochs training between each validation run "
         "(default: 1)",
     )
+    parser.add_argument(
+        "--kl_beta",
+        type=float,
+        default=1.0,
+        help="Beta weighting in front of kl-term in ELBO (default: 1)",
+    )
+    parser.add_argument(
+        "--crps_weight",
+        type=float,
+        default=0,
+        help="Weighting for CRPS term of loss, not computed if = 0. CRPS is "
+        "computed based on trajectories sampled using prior distribution. "
+        "(default: 0)",
+    )
+    parser.add_argument(
+        "--sample_obs_noise",
+        type=int,
+        default=0,
+        help="If observation noise should be sampled during rollouts (both "
+        "training and eval), or just mean prediction used "
+        "(default: 0 (no))",
+    )
 
     # Evaluation options
     parser.add_argument(
@@ -180,8 +244,14 @@ def main():
         "--n_example_pred",
         type=int,
         default=1,
-        help="Number of example predictions to plot during evaluation "
+        help="Number of example predictions to plot during val/test "
         "(default: 1)",
+    )
+    parser.add_argument(
+        "--ensemble_size",
+        type=int,
+        default=5,
+        help="Number of ensemble members during evaluation (default: 5)",
     )
     args = parser.parse_args()
 
@@ -256,24 +326,46 @@ def main():
         f"{prefix}{args.model}-{args.processor_layers}x{args.hidden_dim}-"
         f"{time.strftime('%m_%d_%H')}-{random_run_id:04d}"
     )
-    checkpoint_callback = pl.callbacks.ModelCheckpoint(
-        dirpath=f"saved_models/{run_name}",
-        filename="min_val_loss",
-        monitor="val_mean_loss",
-        mode="min",
-        save_last=True,
+
+    # Callbacks for saving model checkpoint
+    callbacks = []
+    callbacks.append(
+        pl.callbacks.ModelCheckpoint(
+            dirpath=f"saved_models/{run_name}",
+            filename="min_val_loss",
+            monitor="val_mean_loss",
+            mode="min",
+            save_last=True,
+        )
     )
+    # Save checkpoints for minimum loss at specific lead times
+    for unroll_time in constants.VAL_STEP_CHECKPOINTS:
+        metric_name = f"val_loss_unroll{unroll_time}"
+        callbacks.append(
+            pl.callbacks.ModelCheckpoint(
+                dirpath=f"saved_models/{run_name}",
+                filename=f"min_{metric_name}",
+                monitor=metric_name,
+                mode="min",
+            )
+        )
     logger = pl.loggers.WandbLogger(
         project=constants.WANDB_PROJECT, name=run_name, config=args
     )
+
+    # Training strategy
+    # If doing pure autoencoder training (kl_beta = 0), the prior network is not
+    # used at all in producing the loss. This is desired, but DDP complains.
+    strategy = "ddp" if args.kl_beta > 0 else "ddp_find_unused_parameters_true"
+
     trainer = pl.Trainer(
         max_epochs=args.epochs,
         deterministic=True,
-        strategy="ddp",
+        strategy=strategy,
         accelerator=device_name,
         logger=logger,
         log_every_n_steps=1,
-        callbacks=[checkpoint_callback],
+        callbacks=callbacks,
         check_val_every_n_epoch=args.val_interval,
         precision=args.precision,
     )

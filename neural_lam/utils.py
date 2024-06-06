@@ -4,11 +4,13 @@ import os
 # Third-party
 import numpy as np
 import torch
+import torch_geometric as pyg
 from torch import nn
 from tueplots import bundles, figsizes
 
 # First-party
 from neural_lam import constants
+from neural_lam.interaction_net import InteractionNet
 
 
 def load_dataset_stats(dataset_name, device="cpu"):
@@ -253,7 +255,7 @@ def fractional_plot_bundle(fraction):
     Get the tueplots bundle, but with figure width as a fraction of
     the page width.
     """
-    bundle = bundles.neurips2023(usetex=True, family="serif")
+    bundle = bundles.neurips2023(usetex=False, family="serif")
     bundle.update(figsizes.neurips2023())
     original_figsize = bundle["figure.figsize"]
     bundle["figure.figsize"] = (
@@ -271,3 +273,36 @@ def init_wandb_metrics(wandb_logger):
     experiment.define_metric("val_mean_loss", summary="min")
     for step in constants.VAL_STEP_LOG_ERRORS:
         experiment.define_metric(f"val_loss_unroll{step}", summary="min")
+
+
+class IdentityModule(nn.Module):
+    """
+    A identity operator that can return multiple inputs
+    """
+
+    def forward(self, *args):
+        """Return input args"""
+        return args
+
+
+def make_gnn_seq(edge_index, num_gnn_layers, hidden_layers, hidden_dim):
+    """
+    Make a sequential GNN module propagating both node and edge representations
+    """
+    if num_gnn_layers == 0:
+        # If no layers, return identity
+        return IdentityModule()
+    return pyg.nn.Sequential(
+        "mesh_rep, edge_rep",
+        [
+            (
+                InteractionNet(
+                    edge_index,
+                    hidden_dim,
+                    hidden_layers=hidden_layers,
+                ),
+                "mesh_rep, mesh_rep, edge_rep -> mesh_rep, edge_rep",
+            )
+            for _ in range(num_gnn_layers)
+        ],
+    )

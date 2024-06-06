@@ -2,6 +2,7 @@
 import matplotlib
 import matplotlib.pyplot as plt
 import numpy as np
+import torch
 
 # First-party
 from neural_lam import constants, utils
@@ -112,6 +113,117 @@ def plot_prediction(pred, target, obs_mask, title=None, vrange=None):
 
 
 @matplotlib.rc_context(utils.fractional_plot_bundle(1))
+def plot_ensemble_prediction(
+    samples, target, ens_mean, ens_std, obs_mask, title=None, vrange=None
+):
+    """
+    Plot example predictions, ground truth, mean and std.-dev.
+    from ensemble forecast
+
+    samples: (S, N_grid,)
+    target: (N_grid,)
+    ens_mean: (N_grid,)
+    ens_std: (N_grid,)
+    obs_mask: (N_grid,)
+    (optional) title: title of plot
+    (optional) vrange: tuple of length with common min and max of values
+        (not for std.)
+    """
+    # Get common scale for values
+    if vrange is None:
+        vmin = min(vals.min().cpu().item() for vals in (samples, target))
+        vmax = max(vals.max().cpu().item() for vals in (samples, target))
+    else:
+        vmin, vmax = vrange
+
+    # Set up masking of border region
+    mask_reshaped = obs_mask.reshape(*constants.GRID_SHAPE)
+    pixel_alpha = (
+        mask_reshaped.clamp(0.7, 1).cpu().numpy()
+    )  # Faded border region
+
+    fig, axes = plt.subplots(
+        3,
+        3,
+        figsize=(15, 15),
+        subplot_kw={"projection": constants.LAMBERT_PROJ},
+    )
+    axes = axes.flatten()
+
+    # Plot target, ensemble mean and std.
+    gt_im = plot_on_axis(
+        axes[0],
+        target,
+        alpha=pixel_alpha,
+        vmin=vmin,
+        vmax=vmax,
+        ax_title="Ground Truth",
+    )
+    plot_on_axis(
+        axes[1],
+        ens_mean,
+        alpha=pixel_alpha,
+        vmin=vmin,
+        vmax=vmax,
+        ax_title="Ens. Mean",
+    )
+    std_im = plot_on_axis(
+        axes[2], ens_std, alpha=pixel_alpha, ax_title="Ens. Std."
+    )  # Own vrange
+
+    # Plot samples
+    for member_i, (ax, member) in enumerate(
+        zip(axes[3:], samples[:6]), start=1
+    ):
+        plot_on_axis(
+            ax,
+            member,
+            alpha=pixel_alpha,
+            vmin=vmin,
+            vmax=vmax,
+            ax_title=f"Member {member_i}",
+        )
+
+    # Turn off unused axes
+    for ax in axes[(3 + samples.shape[0]) :]:
+        ax.axis("off")
+
+    # Add colorbars
+    values_cbar = fig.colorbar(
+        gt_im, ax=axes[:2], aspect=60, location="bottom", shrink=0.9
+    )
+    values_cbar.ax.tick_params(labelsize=10)
+    std_cbar = fig.colorbar(std_im, aspect=30, location="bottom", shrink=0.9)
+    std_cbar.ax.tick_params(labelsize=10)
+
+    if title:
+        fig.suptitle(title, size=20)
+
+    return fig
+
+
+def plot_on_axis(ax, data, alpha=None, vmin=None, vmax=None, ax_title=None):
+    """
+    Plot weather state on given axis
+    """
+    ax.coastlines()  # Add coastline outlines
+    data_grid = data.reshape(*constants.GRID_SHAPE).cpu().numpy()
+    im = ax.imshow(
+        data_grid,
+        origin="lower",
+        extent=constants.GRID_LIMITS,
+        alpha=alpha,
+        vmin=vmin,
+        vmax=vmax,
+        cmap="plasma",
+    )
+
+    if ax_title:
+        ax.set_title(ax_title, size=15)
+    return im
+
+
+@matplotlib.rc_context(utils.fractional_plot_bundle(1))
 def plot_spatial_error(error, obs_mask, title=None, vrange=None):
     """
     Plot errors over spatial map
@@ -155,5 +267,84 @@ def plot_spatial_error(error, obs_mask, title=None, vrange=None):
 
     if title:
         fig.suptitle(title, size=10)
+
+    return fig
+
+
+@matplotlib.rc_context(utils.fractional_plot_bundle(1))
+def plot_latent_samples(prior_samples, vi_samples, title=None):
+    """
+    Plot samples of latent variable drawn from prior and
+    variational distribution
+
+    prior_samples: (samples, N_mesh, d_latent)
+    vi_samples: (samples, N_mesh, d_latent)
+
+    Returns:
+    fig: the plot figure
+    """
+    num_samples, num_mesh_nodes, latent_dim = prior_samples.shape
+    plot_dims = min(latent_dim, 3)  # Plot first 3 dimensions
+    img_side_size = int(np.sqrt(num_mesh_nodes))
+    assert img_side_size**2 == num_mesh_nodes, (
+        "Number of mesh nodes is not a "
+        "square number, can not plot latent samples as images"
+    )
+
+    # Get common scale for values
+    vmin = min(
+        vals[..., :plot_dims].min().cpu().item()
+        for vals in (prior_samples, vi_samples)
+    )
+    vmax = max(
+        vals[..., :plot_dims].max().cpu().item()
+        for vals in (prior_samples, vi_samples)
+    )
+
+    # Create figure
+    fig, axes = plt.subplots(num_samples, 2 * plot_dims, figsize=(20, 16))
+
+    # Plot samples
+    for row_i, (axes_row, prior_sample, vi_sample) in enumerate(
+        zip(axes, prior_samples, vi_samples)
+    ):
+
+        for dim_i in range(plot_dims):
+            prior_sample_reshaped = (
+                prior_sample[:, dim_i]
+                .reshape(img_side_size, img_side_size)
+                .cpu()
+                .to(torch.float32)
+                .numpy()
+            )
+            vi_sample_reshaped = (
+                vi_sample[:, dim_i]
+                .reshape(img_side_size, img_side_size)
+                .cpu()
+                .to(torch.float32)
+                .numpy()
+            )
+            # Plot every other as prior and vi
+            prior_ax = axes_row[2 * dim_i]
+            vi_ax = axes_row[2 * dim_i + 1]
+            prior_ax.imshow(prior_sample_reshaped, vmin=vmin, vmax=vmax)
+            vi_im = vi_ax.imshow(vi_sample_reshaped, vmin=vmin, vmax=vmax)
+
+            if row_i == 0:
+                # Add titles at top of columns
+                prior_ax.set_title(f"d{dim_i} (prior)", size=15)
+                vi_ax.set_title(f"d{dim_i} (vi)", size=15)
+
+    # Remove ticks from all axes
+    for ax in axes.flatten():
+        ax.set_xticks([])
+        ax.set_yticks([])
+
+    # Add colorbar
+    cbar = fig.colorbar(vi_im, ax=axes, aspect=60, location="bottom")
+    cbar.ax.tick_params(labelsize=15)
+
+    if title:
+        fig.suptitle(title, size=20)
 
     return fig

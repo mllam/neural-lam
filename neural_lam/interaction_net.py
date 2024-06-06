@@ -131,6 +131,74 @@ class InteractionNet(pyg.nn.MessagePassing):
         return aggr, inputs
 
 
+class PropagationNet(InteractionNet):
+    """
+    Alternative version of InteractionNet that incentivices the propagation of
+    information from sender nodes to receivers.
+    """
+
+    def __init__(
+        self,
+        edge_index,
+        input_dim,
+        update_edges=True,
+        hidden_layers=1,
+        hidden_dim=None,
+        edge_chunk_sizes=None,
+        aggr_chunk_sizes=None,
+        aggr="sum",
+    ):
+        # Use mean aggregation in propagation version to avoid instability
+        super().__init__(
+            edge_index,
+            input_dim,
+            update_edges=update_edges,
+            hidden_layers=hidden_layers,
+            hidden_dim=hidden_dim,
+            edge_chunk_sizes=edge_chunk_sizes,
+            aggr_chunk_sizes=aggr_chunk_sizes,
+            aggr="mean",
+        )
+
+    def forward(self, send_rep, rec_rep, edge_rep):
+        """
+        Apply propagation network to update the representations of receiver
+        nodes, and optionally the edge representations.
+
+        send_rep: (N_send, d_h), vector representations of sender nodes
+        rec_rep: (N_rec, d_h), vector representations of receiver nodes
+        edge_rep: (M, d_h), vector representations of edges used
+
+        Returns:
+        rec_rep: (N_rec, d_h), updated vector representations of receiver nodes
+        (optionally) edge_rep: (M, d_h), updated vector representations
+            of edges
+        """
+        # Always concatenate to [rec_nodes, send_nodes] for propagation,
+        # but only aggregate to rec_nodes
+        node_reps = torch.cat((rec_rep, send_rep), dim=-2)
+        edge_rep_aggr, edge_diff = self.propagate(
+            self.edge_index, x=node_reps, edge_attr=edge_rep
+        )
+        rec_diff = self.aggr_mlp(torch.cat((rec_rep, edge_rep_aggr), dim=-1))
+
+        # Residual connections
+        rec_rep = edge_rep_aggr + rec_diff  # residual is to aggregation
+
+        if self.update_edges:
+            edge_rep = edge_rep + edge_diff
+            return rec_rep, edge_rep
+
+        return rec_rep
+
+    def message(self, x_j, x_i, edge_attr):
+        """
+        Compute messages from node j to node i.
+        """
+        # Residual connection is to sender node, propagating information to edge
+        return x_j + self.edge_mlp(torch.cat((edge_attr, x_j, x_i), dim=-1))
+
+
 class SplitMLPs(nn.Module):
     """
     Module that feeds chunks of input through different MLPs.

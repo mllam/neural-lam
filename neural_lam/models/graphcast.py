@@ -7,12 +7,11 @@ from neural_lam.interaction_net import InteractionNet
 from neural_lam.models.base_graph_model import BaseGraphModel
 
 
-class GraphLAM(BaseGraphModel):
+class GraphCast(BaseGraphModel):
     """
-    Full graph-based LAM model that can be used with different
-    (non-hierarchical )graphs. Mainly based on GraphCast, but the model from
-    Keisler (2022) is almost identical. Used for GC-LAM and L1-LAM in
-    Oskarsson et al. (2023).
+    Full graph-based model that can be used with different
+    (non-hierarchical) graphs. Mainly based on GraphCast, but the model from
+    Keisler (2022) is almost identical.
     """
 
     def __init__(self, args):
@@ -20,7 +19,7 @@ class GraphLAM(BaseGraphModel):
 
         assert (
             not self.hierarchical
-        ), "GraphLAM does not use a hierarchical mesh graph"
+        ), "GraphCast does not use a hierarchical mesh graph"
 
         # grid_dim from data + static + batch_static
         mesh_dim = self.mesh_static_features.shape[1]

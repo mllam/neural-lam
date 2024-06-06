@@ -51,8 +51,10 @@ generated-members = [
 [tool.pylint.'MESSAGES CONTROL']
 disable = [
     "C0114", # 'missing-module-docstring', Do not require module docstrings
+    "C0302", # 'too-many-lines ', Allow longer files
     "R0901", # 'too-many-ancestors', Allow many layers of sub-classing
     "R0902", # 'too-many-instance-attribtes', Allow many attributes
+    "R0912", # 'too-many-branches', Allow more branching
     "R0913", # 'too-many-arguments', Allow many function arguments
     "R0914", # 'too-many-locals', Allow many local variables
     "W0223", # 'abstract-method', Subclasses do not have to override all abstract methods

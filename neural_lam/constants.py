@@ -10,11 +10,16 @@ SECONDS_IN_YEAR = (
 
 # Log prediction error for these lead times
 VAL_STEP_LOG_ERRORS = np.array([1, 2, 3, 5, 10, 15, 19])
+# Also save checkpoints for minimum loss at these lead times
+VAL_STEP_CHECKPOINTS = (1, 19)
 
 # Log these metrics to wandb as scalar values for
 # specific variables and lead times
 # List of metrics to watch, including any prefix (e.g. val_rmse)
-METRICS_WATCH = []
+METRICS_WATCH = [
+    "val_spsk_ratio",
+    "val_spread",
+]
 # Dict with variables and lead times to log watched metrics for
 # Format is a dictionary that maps from a variable index to
 # a list of lead time steps
@@ -23,6 +28,18 @@ VAR_LEADS_METRICS_WATCH = {
     14: [2, 19],  # wvint_0
     15: [2, 19],  # z_1000
 }
+
+# Plot forecasts for these variables at given lead times during validation step
+# Format is a dictionary that maps from a variable index to a list of
+# lead time steps
+VAL_PLOT_VARS = {
+    4: [2, 19],  # r_2
+    14: [2, 19],  # wvint_0
+}
+
+# During validation, plot example samples of latent variable from prior and
+# variational distribution
+LATENT_SAMPLES_PLOT = 4  # Number of samples to plot
 
 # Variable names
 PARAM_NAMES = [
@@ -67,8 +84,8 @@ PARAM_NAMES_SHORT = [
 PARAM_UNITS = [
     "Pa",
     "Pa",
-    "W/m\\textsuperscript{2}",
-    "W/m\\textsuperscript{2}",
+    "W/m²",
+    "W/m²",
     "-",  # unitless
     "-",
     "K",
@@ -79,9 +96,9 @@ PARAM_UNITS = [
     "m/s",
     "m/s",
     "m/s",
-    "kg/m\\textsuperscript{2}",
-    "m\\textsuperscript{2}/s\\textsuperscript{2}",
-    "m\\textsuperscript{2}/s\\textsuperscript{2}",
+    "kg/m²",
+    "m²/s²",
+    "m²/s²",
 ]
 
 # Projection and grid

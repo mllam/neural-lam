@@ -503,10 +503,13 @@ class ARModel(pl.LightningModule):
                 metric_tensor_averaged = torch.mean(metric_tensor, dim=0)
                 # (pred_steps, d_f)
 
-                # Take square root after all averaging to change MSE to RMSE
+                # Take square root after averaging to change squared metrics
                 if "mse" in metric_name:
                     metric_tensor_averaged = torch.sqrt(metric_tensor_averaged)
                     metric_name = metric_name.replace("mse", "rmse")
+                elif metric_name.endswith("_squared"):
+                    metric_tensor_averaged = torch.sqrt(metric_tensor_averaged)
+                    metric_name = metric_name[: -len("_squared")]
 
                 # Note: we here assume rescaling for all metrics is linear
                 metric_rescaled = metric_tensor_averaged * self.data_std
