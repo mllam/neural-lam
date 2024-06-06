@@ -1,14 +1,13 @@
 # Standard library
 import os
-import shutil
 import random
+import shutil
 import time
 
 # Third-party
 import numpy as np
 import pytorch_lightning as pl
 import torch
-import wandb  # pylint: disable=wrong-import-order
 from pytorch_lightning.utilities import rank_zero_only
 from torch import nn
 from tueplots import bundles, figsizes
@@ -134,7 +133,8 @@ def load_graph(graph_name, device="cpu"):
     hierarchical = n_levels > 1  # Nor just single level mesh graph
 
     # Load static edge features
-    m2m_features = loads_file("m2m_features.pt")  # List of (M_m2m[l], d_edge_f)
+    # List of (M_m2m[l], d_edge_f)
+    m2m_features = loads_file("m2m_features.pt")
     g2m_features = loads_file("g2m_features.pt")  # (M_g2m, d_edge_f)
     m2g_features = loads_file("m2g_features.pt")  # (M_m2g, d_edge_f)
 
@@ -288,24 +288,12 @@ def init_wandb(args):
             f"{prefix}{args.model}-{args.processor_layers}x{args.hidden_dim}-"
             f"{time.strftime('%m_%d_%H_%M_%S')}-{random_int}"
         )
-        wandb.init(
-            name=run_name,
-            project=args.wandb_project,
-            config=args,
-        )
         logger = pl.loggers.WandbLogger(
             project=args.wandb_project,
             name=run_name,
             config=args,
         )
-        wandb.save("neural_lam/data_config.yaml")
     else:
-        wandb.init(
-            project=args.wandb_project,
-            config=args,
-            id=args.resume_run,
-            resume="must",
-        )
         logger = pl.loggers.WandbLogger(
             project=args.wandb_project,
             id=args.resume_run,

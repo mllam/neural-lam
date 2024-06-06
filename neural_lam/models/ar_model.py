@@ -597,3 +597,7 @@ class ARModel(pl.LightningModule):
         if not self.restore_opt:
             opt = self.configure_optimizers()
             checkpoint["optimizer_states"] = [opt.state_dict()]
+
+    def on_run_end(self):
+        if self.trainer.is_global_zero:
+            wandb.save("neural_lam/data_config.yaml")
