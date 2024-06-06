@@ -20,9 +20,9 @@ def main():
     parser.add_argument(
         "--zarr_path",
         type=str,
-        default="boundary_mask.zarr",
+        default="data/boundary_mask.zarr",
         help="Path to save the Zarr archive "
-        "(default: same directory as border_mask.npy)",
+        "(default: same directory as data/boundary_mask.zarr)",
     )
     parser.add_argument(
         "--boundaries",

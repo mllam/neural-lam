@@ -25,7 +25,7 @@ def main():
     parser.add_argument(
         "--zarr_path",
         type=str,
-        default="normalization.zarr",
+        default="data/normalization.zarr",
         help="Directory where data is stored",
     )
     args = parser.parse_args()

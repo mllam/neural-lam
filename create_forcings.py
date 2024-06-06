@@ -56,7 +56,7 @@ def main():
     parser.add_argument(
         "--data_config", type=str, default="neural_lam/data_config.yaml"
     )
-    parser.add_argument("--zarr_path", type=str, default="forcings.zarr")
+    parser.add_argument("--zarr_path", type=str, default="data/forcings.zarr")
     args = parser.parse_args()
 
     data_config = config.Config.from_file(args.data_config)

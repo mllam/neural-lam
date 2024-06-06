@@ -228,7 +228,7 @@ boundary:                                 # Boundary variables are not predicted
     ...                                   # They are used to inform the model about the surrounding weather conditions
     ...                                   # The boundaries are often used from a separate model, specified identically to the state
   mask:                                   # Boundary mask to indicate where the model should not make predictions
-    path: "boundary_mask.zarr"
+    path: "data/boundary_mask.zarr"
     dims:
       x: x
       y: y
@@ -236,7 +236,7 @@ boundary:                                 # Boundary variables are not predicted
 utilities:                                # Additional utilities to be used in the model
   normalization:                          # Normalization statistics for the state, forcing, and one-step differences
     zarrs:                                # Zarr files containing the normalization statistics, multiple allowed
-      - path: "normalization.zarr"        # Path to the zarr file, default locaton of `calculate_statistics.py`
+      - path: "data/normalization.zarr"        # Path to the zarr file, default locaton of `calculate_statistics.py`
         stats_vars:                       # The variables to use for normalization, predefined and required
           state_mean: name_in_dataset1
           state_std: name_in_dataset2
