@@ -275,16 +275,12 @@ class Config:
         )
 
         if category == "state":
-            stats = combined_stats.loc[
-                dict(variable=self.vars_names(category))
-            ]
+            stats = combined_stats.loc[dict(variable=self.vars_names(category))]
             stats = stats.drop_vars(["forcing_mean", "forcing_std"])
         elif category == "forcing":
             vars = self.vars_names(category)
             window = self["forcing"]["window"]
-            forcing_vars = [
-                f"{var}_{i}" for var in vars for i in range(window)
-            ]
+            forcing_vars = [f"{var}_{i}" for var in vars for i in range(window)]
             stats = combined_stats.loc[dict(forcing_variable=forcing_vars)]
             stats = stats[["forcing_mean", "forcing_std"]]
         else:

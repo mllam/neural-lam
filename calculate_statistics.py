@@ -54,9 +54,7 @@ def main():
                 combined_mean = means.mean(dim="variable")
                 combined_std = (stds**2).mean(dim="variable") ** 0.5
 
-                forcing_mean.loc[
-                    dict(variable=vars_to_combine)
-                ] = combined_mean
+                forcing_mean.loc[dict(variable=vars_to_combine)] = combined_mean
                 forcing_std.loc[dict(variable=vars_to_combine)] = combined_std
         window = data_config["forcing"]["window"]
         forcing_mean = xr.concat([forcing_mean] * window, dim="window").stack(

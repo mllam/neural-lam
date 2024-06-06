@@ -41,9 +41,7 @@ def load_graph(graph_name, device="cpu"):
     graph_dir_path = os.path.join("graphs", graph_name)
 
     def loads_file(fn):
-        return torch.load(
-            os.path.join(graph_dir_path, fn), map_location=device
-        )
+        return torch.load(os.path.join(graph_dir_path, fn), map_location=device)
 
     # Load edges (edge_index)
     m2m_edge_index = BufferList(
