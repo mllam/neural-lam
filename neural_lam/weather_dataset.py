@@ -44,7 +44,7 @@ class WeatherDataset(torch.utils.data.Dataset):
         self.state_times = self.state.time.values
 
         # Set up for standardization
-        # NOTE: This will become part of ar_model.py soon!
+        # TODO: This will become part of ar_model.py soon!
         self.standardize = standardize
         if standardize:
             state_stats = self.data_config.load_normalization_stats(

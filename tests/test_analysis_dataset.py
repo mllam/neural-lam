@@ -12,7 +12,7 @@ os.environ["WANDB_DISABLED"] = "true"
 
 
 def test_load_analysis_dataset():
-    # NOTE: Access rights should be fixed for pooch to work
+    # TODO: Access rights should be fixed for pooch to work
     if not os.path.exists("data/danra"):
         print("Please download test data first: python docs/download_danra.py")
         return

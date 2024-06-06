@@ -200,5 +200,6 @@ class HiLAM(BaseHiGraphModel):
                 up_same_gnns,
             )
 
-        # Note: We return all, even though only down edges really are used later
+        # NOTE: We return all, even though only down edges really are used
+        # later
         return mesh_rep_levels, mesh_same_rep, mesh_up_rep, mesh_down_rep

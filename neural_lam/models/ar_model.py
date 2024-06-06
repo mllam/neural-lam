@@ -14,11 +14,12 @@ from neural_lam import config, metrics, vis
 
 class ARModel(pl.LightningModule):
     """
-    Generic auto-regressive weather model. Abstract class that can be extended.
+    Generic auto-regressive weather model.
+    Abstract class that can be extended.
     """
 
-    # pylint: disable=arguments-differ Disable to override args/kwargs from
-    # superclass
+    # pylint: disable=arguments-differ
+    # Disable to override args/kwargs from superclass
 
     def __init__(self, args):
         super().__init__()
@@ -50,7 +51,7 @@ class ARModel(pl.LightningModule):
             # Pred. dim. in grid cell
             self.grid_output_dim = self.data_config.num_data_vars("state")
             # Store constant per-variable std.-dev. weighting
-            # Note that this is the inverse of the multiplicative weighting
+            # NOTE that this is the inverse of the multiplicative weighting
             # in wMSE/wMAE
             # TODO: Do we need param_weights for this?
             self.register_buffer(
@@ -291,7 +292,7 @@ class ARModel(pl.LightningModule):
         """
         Run test on single batch
         """
-        # NOTE Here batch_times can be used for plotting routines
+        # TODO Here batch_times can be used for plotting routines
         prediction, target, pred_std, batch_times = self.common_step(batch)
         # prediction: (B, pred_steps, num_grid_nodes, d_f) pred_std: (B,
         # pred_steps, num_grid_nodes, d_f) or (d_f,)
@@ -527,7 +528,7 @@ class ARModel(pl.LightningModule):
                     metric_tensor_averaged = torch.sqrt(metric_tensor_averaged)
                     metric_name = metric_name.replace("mse", "rmse")
 
-                # Note: we here assume rescaling for all metrics is linear
+                # NOTE: we here assume rescaling for all metrics is linear
                 metric_rescaled = metric_tensor_averaged * self.state_std
                 # (pred_steps, d_f)
                 log_dict.update(
