@@ -1,4 +1,5 @@
 # Third-party
+import cartopy
 import matplotlib
 import matplotlib.pyplot as plt
 import numpy as np
@@ -9,7 +10,7 @@ from neural_lam import constants, utils
 
 
 @matplotlib.rc_context(utils.fractional_plot_bundle(1))
-def plot_error_map(errors, title=None, step_length=3):
+def plot_error_map(errors, title=None):
     """
     Plot a heatmap of errors of different variables at different
     predictions horizons
@@ -22,7 +23,7 @@ def plot_error_map(errors, title=None, step_length=3):
     max_errors = errors_np.max(axis=1)  # d_f
     errors_norm = errors_np / np.expand_dims(max_errors, axis=1)
 
-    fig, ax = plt.subplots(figsize=(15, 10))
+    fig, ax = plt.subplots(figsize=(25, 25))
 
     ax.imshow(
         errors_norm,
@@ -37,14 +38,26 @@ def plot_error_map(errors, title=None, step_length=3):
     # ax and labels
     for (j, i), error in np.ndenumerate(errors_np):
         # Numbers > 9999 will be too large to fit
-        formatted_error = f"{error:.3f}" if error < 9999 else f"{error:.2E}"
-        ax.text(i, j, formatted_error, ha="center", va="center", usetex=False)
+        if 0.001 < error < 9999:
+            formatted_error = f"{error:.3f}"
+        else:
+            formatted_error = f"{error:.2E}"
+
+        ax.text(
+            i,
+            j,
+            formatted_error,
+            ha="center",
+            va="center",
+            usetex=False,
+            fontsize=8,
+        )
 
     # Ticks and labels
     label_size = 15
     ax.set_xticks(np.arange(pred_steps))
     pred_hor_i = np.arange(pred_steps) + 1  # Prediction horiz. in index
-    pred_hor_h = step_length * pred_hor_i  # Prediction horiz. in hours
+    pred_hor_h = constants.TIME_STEP_LENGTH * pred_hor_i  # Lead time in hours
     ax.set_xticklabels(pred_hor_h, size=label_size)
     ax.set_xlabel("Lead time (h)", size=label_size)
 
@@ -55,7 +68,7 @@ def plot_error_map(errors, title=None, step_length=3):
             constants.PARAM_NAMES_SHORT, constants.PARAM_UNITS
         )
     ]
-    ax.set_yticklabels(y_ticklabels, rotation=30, size=label_size)
+    ax.set_yticklabels(y_ticklabels, rotation=0, size=label_size)
 
     if title:
         ax.set_title(title, size=15)
@@ -63,8 +76,42 @@ def plot_error_map(errors, title=None, step_length=3):
     return fig
 
 
+def plot_on_axis(
+    ax, data, obs_mask=None, vmin=None, vmax=None, ax_title=None, cmap="plasma"
+):
+    """
+    Plot weather state on given axis
+    """
+    # Set up masking of border region
+    if obs_mask is None:
+        pixel_alpha = 1
+    else:
+        mask_reshaped = obs_mask.reshape(*constants.GRID_SHAPE)
+        pixel_alpha = (
+            mask_reshaped.clamp(0.7, 1).cpu().numpy()
+        )  # Faded border region
+
+    ax.set_global()
+    ax.coastlines()  # Add coastline outlines
+    data_grid = data.reshape(*constants.GRID_SHAPE).cpu().numpy().T
+    im = ax.imshow(
+        data_grid,
+        origin="lower",
+        extent=constants.GRID_LIMITS,
+        transform=cartopy.crs.PlateCarree(),
+        alpha=pixel_alpha,
+        vmin=vmin,
+        vmax=vmax,
+        cmap=cmap,
+    )
+
+    if ax_title:
+        ax.set_title(ax_title, size=15)
+    return im
+
+
 @matplotlib.rc_context(utils.fractional_plot_bundle(1))
-def plot_prediction(pred, target, obs_mask, title=None, vrange=None):
+def plot_prediction(pred, target, obs_mask=None, title=None, vrange=None):
     """
     Plot example prediction and grond truth.
     Each has shape (N_grid,)
@@ -76,29 +123,13 @@ def plot_prediction(pred, target, obs_mask, title=None, vrange=None):
     else:
         vmin, vmax = vrange
 
-    # Set up masking of border region
-    mask_reshaped = obs_mask.reshape(*constants.GRID_SHAPE)
-    pixel_alpha = (
-        mask_reshaped.clamp(0.7, 1).cpu().numpy()
-    )  # Faded border region
-
     fig, axes = plt.subplots(
-        1, 2, figsize=(13, 7), subplot_kw={"projection": constants.LAMBERT_PROJ}
+        1, 2, figsize=(13, 7), subplot_kw={"projection": constants.MAP_PROJ}
     )
 
     # Plot pred and target
     for ax, data in zip(axes, (target, pred)):
-        ax.coastlines()  # Add coastline outlines
-        data_grid = data.reshape(*constants.GRID_SHAPE).cpu().numpy()
-        im = ax.imshow(
-            data_grid,
-            origin="lower",
-            extent=constants.GRID_LIMITS,
-            alpha=pixel_alpha,
-            vmin=vmin,
-            vmax=vmax,
-            cmap="plasma",
-        )
+        im = plot_on_axis(ax, data, obs_mask, vmin, vmax)
 
     # Ticks and labels
     axes[0].set_title("Ground Truth", size=15)
@@ -114,7 +145,7 @@ def plot_prediction(pred, target, obs_mask, title=None, vrange=None):
 
 @matplotlib.rc_context(utils.fractional_plot_bundle(1))
 def plot_ensemble_prediction(
-    samples, target, ens_mean, ens_std, obs_mask, title=None, vrange=None
+    samples, target, ens_mean, ens_std, obs_mask=None, title=None, vrange=None
 ):
     """
     Plot example predictions, ground truth, mean and std.-dev.
@@ -136,17 +167,11 @@ def plot_ensemble_prediction(
     else:
         vmin, vmax = vrange
 
-    # Set up masking of border region
-    mask_reshaped = obs_mask.reshape(*constants.GRID_SHAPE)
-    pixel_alpha = (
-        mask_reshaped.clamp(0.7, 1).cpu().numpy()
-    )  # Faded border region
-
     fig, axes = plt.subplots(
         3,
         3,
         figsize=(15, 15),
-        subplot_kw={"projection": constants.LAMBERT_PROJ},
+        subplot_kw={"projection": constants.MAP_PROJ},
     )
     axes = axes.flatten()
 
@@ -154,7 +179,7 @@ def plot_ensemble_prediction(
     gt_im = plot_on_axis(
         axes[0],
         target,
-        alpha=pixel_alpha,
+        obs_mask=obs_mask,
         vmin=vmin,
         vmax=vmax,
         ax_title="Ground Truth",
@@ -162,13 +187,13 @@ def plot_ensemble_prediction(
     plot_on_axis(
         axes[1],
         ens_mean,
-        alpha=pixel_alpha,
+        obs_mask=obs_mask,
         vmin=vmin,
         vmax=vmax,
         ax_title="Ens. Mean",
     )
     std_im = plot_on_axis(
-        axes[2], ens_std, alpha=pixel_alpha, ax_title="Ens. Std."
+        axes[2], ens_std, obs_mask=obs_mask, ax_title="Ens. Std."
     )  # Own vrange
 
     # Plot samples
@@ -178,7 +203,7 @@ def plot_ensemble_prediction(
         plot_on_axis(
             ax,
             member,
-            alpha=pixel_alpha,
+            obs_mask=obs_mask,
             vmin=vmin,
             vmax=vmax,
             ax_title=f"Member {member_i}",
@@ -202,29 +227,8 @@ def plot_ensemble_prediction(
     return fig
 
 
-def plot_on_axis(ax, data, alpha=None, vmin=None, vmax=None, ax_title=None):
-    """
-    Plot weather state on given axis
-    """
-    ax.coastlines()  # Add coastline outlines
-    data_grid = data.reshape(*constants.GRID_SHAPE).cpu().numpy()
-    im = ax.imshow(
-        data_grid,
-        origin="lower",
-        extent=constants.GRID_LIMITS,
-        alpha=alpha,
-        vmin=vmin,
-        vmax=vmax,
-        cmap="plasma",
-    )
-
-    if ax_title:
-        ax.set_title(ax_title, size=15)
-    return im
-
-
 @matplotlib.rc_context(utils.fractional_plot_bundle(1))
-def plot_spatial_error(error, obs_mask, title=None, vrange=None):
+def plot_spatial_error(error, obs_mask=None, title=None, vrange=None):
     """
     Plot errors over spatial map
     Error and obs_mask has shape (N_grid,)
@@ -236,28 +240,11 @@ def plot_spatial_error(error, obs_mask, title=None, vrange=None):
     else:
         vmin, vmax = vrange
 
-    # Set up masking of border region
-    mask_reshaped = obs_mask.reshape(*constants.GRID_SHAPE)
-    pixel_alpha = (
-        mask_reshaped.clamp(0.7, 1).cpu().numpy()
-    )  # Faded border region
-
     fig, ax = plt.subplots(
-        figsize=(5, 4.8), subplot_kw={"projection": constants.LAMBERT_PROJ}
+        figsize=(5, 4.8), subplot_kw={"projection": constants.MAP_PROJ}
     )
 
-    ax.coastlines()  # Add coastline outlines
-    error_grid = error.reshape(*constants.GRID_SHAPE).cpu().numpy()
-
-    im = ax.imshow(
-        error_grid,
-        origin="lower",
-        extent=constants.GRID_LIMITS,
-        alpha=pixel_alpha,
-        vmin=vmin,
-        vmax=vmax,
-        cmap="OrRd",
-    )
+    im = plot_on_axis(ax, error, obs_mask, vmin, vmax, cmap="OrRd")
 
     # Ticks and labels
     cbar = fig.colorbar(im, aspect=30)
@@ -286,10 +273,15 @@ def plot_latent_samples(prior_samples, vi_samples, title=None):
     num_samples, num_mesh_nodes, latent_dim = prior_samples.shape
     plot_dims = min(latent_dim, 3)  # Plot first 3 dimensions
     img_side_size = int(np.sqrt(num_mesh_nodes))
-    assert img_side_size**2 == num_mesh_nodes, (
-        "Number of mesh nodes is not a "
-        "square number, can not plot latent samples as images"
-    )
+
+    # Check if number of nodes is a square
+    if img_side_size**2 != num_mesh_nodes:
+        # Number of mesh nodes is not a square number, can not directly plot
+        # latent samples as images"
+        # Fix this by not plotting all nodes (choose amount to work as image)
+        num_mesh_subset = img_side_size**2
+        prior_samples = prior_samples[:, :num_mesh_subset]
+        vi_samples = vi_samples[:, :num_mesh_subset]
 
     # Get common scale for values
     vmin = min(

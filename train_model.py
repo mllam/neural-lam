@@ -10,6 +10,8 @@ from lightning_fabric.utilities import seed
 
 # First-party
 from neural_lam import constants, utils
+from neural_lam.era5_dataset import ERA5Dataset
+from neural_lam.forecast_to_xarr import forecast_to_xarr
 from neural_lam.models.graph_efm import GraphEFM
 from neural_lam.models.graph_fm import GraphFM
 from neural_lam.models.graphcast import GraphCast
@@ -45,19 +47,12 @@ def main():
         help="Model architecture to train/evaluate (default: graph_lam)",
     )
     parser.add_argument(
-        "--subset_ds",
-        type=int,
-        default=0,
-        help="Use only a small subset of the dataset, for debugging"
-        "(default: 0=false)",
-    )
-    parser.add_argument(
         "--seed", type=int, default=42, help="random seed (default: 42)"
     )
     parser.add_argument(
         "--n_workers",
         type=int,
-        default=4,
+        default=16,
         help="Number of workers in data loader (default: 4)",
     )
     parser.add_argument(
@@ -84,8 +79,16 @@ def main():
     parser.add_argument(
         "--precision",
         type=str,
-        default=32,
-        help="Numerical precision to use for model (32/16/bf16) (default: 32)",
+        default="bf16-mixed",
+        help="Numerical precision to use for model (32/16/bf16-mixed) "
+        "(default: bf16-mixed)",
+    )
+    parser.add_argument(
+        "--sanity_batches",
+        type=int,
+        default=2,
+        help="Number of validation batches to run in sanity checking step "
+        "set to 0 to disable sanity checking (default: 2)",
     )
 
     # Model architecture
@@ -181,13 +184,6 @@ def main():
         "(default: 1)",
     )
     parser.add_argument(
-        "--control_only",
-        type=int,
-        default=0,
-        help="Train only on control member of ensemble data "
-        "(default: 0 (False))",
-    )
-    parser.add_argument(
         "--loss",
         type=str,
         default="wmse",
@@ -196,9 +192,9 @@ def main():
     parser.add_argument(
         "--step_length",
         type=int,
-        default=3,
+        default=6,
         help="Step length in hours to consider single time step 1-3 "
-        "(default: 3)",
+        "(default: 6)",
     )
     parser.add_argument(
         "--lr", type=float, default=1e-3, help="learning rate (default: 0.001)"
@@ -241,11 +237,46 @@ def main():
         "(default: None (train model))",
     )
     parser.add_argument(
+        "--save_forecasts",
+        type=int,
+        help="Save forecasts to Xarray for later evaluation, rather than "
+        "directly computing evaluation metrics (default: 0 (not))",
+    )
+    parser.add_argument(
+        "--save_vars",
+        type=str,
+        help="Which variables to save when save_forecasts=True. Should be "
+        "comma-separated list of short variable names. If None, save all."
+        "(default: None)",
+    )
+    parser.add_argument(
+        "--save_levels",
+        type=str,
+        help="Which pressure levels to save when save_forecasts=True. Should be"
+        " comma-separated list of integer pressure level. If None, save all. "
+        "Ground level variables are always saved if not filtered out."
+        "(default: None)",
+    )
+    parser.add_argument(
+        "--expanded_test",
+        type=int,
+        default=0,
+        help="Eval model on larger test set (2020-2023), rather than only 2020"
+        "(default: 0 (only 2020))",
+    )
+    parser.add_argument(
         "--n_example_pred",
         type=int,
         default=1,
         help="Number of example predictions to plot during val/test "
         "(default: 1)",
+    )
+    parser.add_argument(
+        "--eval_leads",
+        type=int,
+        default=40,
+        help="Number of time steps to predict and evaluat at during val/test"
+        "(default: 40)",
     )
     parser.add_argument(
         "--ensemble_size",
@@ -257,7 +288,6 @@ def main():
 
     # Asserts for arguments
     assert args.model in MODELS, f"Unknown model: {args.model}"
-    assert args.step_length <= 3, "Too high step length"
     assert args.eval in (
         None,
         "val",
@@ -271,28 +301,29 @@ def main():
     seed.seed_everything(args.seed)
 
     # Load data
+    if args.dataset.startswith("global"):
+        ds_class = ERA5Dataset
+    else:  # LAM
+        assert args.step_length <= 3, "Too high step length"
+        ds_class = WeatherDataset
+
     train_loader = torch.utils.data.DataLoader(
-        WeatherDataset(
+        ds_class(
             args.dataset,
             pred_length=args.ar_steps,
             split="train",
             subsample_step=args.step_length,
-            subset=bool(args.subset_ds),
-            control_only=args.control_only,
         ),
         args.batch_size,
         shuffle=True,
         num_workers=args.n_workers,
     )
-    max_pred_length = (65 // args.step_length) - 2  # 19
     val_loader = torch.utils.data.DataLoader(
-        WeatherDataset(
+        ds_class(
             args.dataset,
-            pred_length=max_pred_length,
+            pred_length=args.eval_leads,
             split="val",
             subsample_step=args.step_length,
-            subset=bool(args.subset_ds),
-            control_only=args.control_only,
         ),
         args.batch_size,
         shuffle=False,
@@ -319,9 +350,9 @@ def main():
     else:
         model = model_class(args)
 
-    prefix = "subset-" if args.subset_ds else ""
+    prefix = ""
     if args.eval:
-        prefix = prefix + f"eval-{args.eval}-"
+        prefix = f"eval-{args.eval}-"
     run_name = (
         f"{prefix}{args.model}-{args.processor_layers}x{args.hidden_dim}-"
         f"{time.strftime('%m_%d_%H')}-{random_run_id:04d}"
@@ -339,7 +370,11 @@ def main():
         )
     )
     # Save checkpoints for minimum loss at specific lead times
-    for unroll_time in constants.VAL_STEP_CHECKPOINTS:
+    # Only include lead times actually forecasted
+    checkpoint_times = constants.VAL_STEP_CHECKPOINTS[
+        constants.VAL_STEP_CHECKPOINTS <= args.eval_leads
+    ]
+    for unroll_time in checkpoint_times:
         metric_name = f"val_loss_unroll{unroll_time}"
         callbacks.append(
             pl.callbacks.ModelCheckpoint(
@@ -368,6 +403,7 @@ def main():
         callbacks=callbacks,
         check_val_every_n_epoch=args.val_interval,
         precision=args.precision,
+        num_sanity_val_steps=args.sanity_batches,
     )
 
     # Only init once, on rank 0 only
@@ -379,12 +415,12 @@ def main():
             eval_loader = val_loader
         else:  # Test
             eval_loader = torch.utils.data.DataLoader(
-                WeatherDataset(
+                ds_class(
                     args.dataset,
-                    pred_length=max_pred_length,
+                    pred_length=args.eval_leads,
                     split="test",
                     subsample_step=args.step_length,
-                    subset=bool(args.subset_ds),
+                    expanded_test=bool(args.expanded_test),
                 ),
                 args.batch_size,
                 shuffle=False,
@@ -392,7 +428,23 @@ def main():
             )
 
         print(f"Running evaluation on {args.eval}")
-        trainer.test(model=model, dataloaders=eval_loader)
+        if args.save_forecasts:
+            print("Saving eval forecasts to zarr")
+            assert args.load, "Need to load a model to save forecasts from"
+            load_name_cleaned = args.load.replace("/", "_")  # Replace /
+            fc_save_name = f"{args.dataset}-{args.eval}-{load_name_cleaned}"
+            forecast_to_xarr(
+                model,
+                eval_loader,
+                fc_save_name,
+                device_name,
+                var_filter=args.save_vars,
+                level_filter=args.save_levels,
+                ens_size=args.ensemble_size,
+            )
+            print("Forecasts saved")
+        else:
+            trainer.test(model=model, dataloaders=eval_loader)
     else:
         # Train model
         trainer.fit(

@@ -6,20 +6,22 @@ Neural-LAM is a repository of graph-based neural weather prediction models.
 The code uses [PyTorch](https://pytorch.org/) and [PyTorch Lightning](https://lightning.ai/pytorch-lightning).
 Graph Neural Networks are implemented using [PyG](https://pyg.org/) and logging is set up through [Weights & Biases](https://wandb.ai/).
 
-# This Branch: Probabilistic LAM Forecasting
+# This Branch: Probabilistic Global Forecasting
 <p align="middle">
-    <img src="figures/graph_efm_forecast_nlwrs.gif" width="700"/>
+    <img src="figures/graph_efm_forecast_q700.gif" width="700"/>
 </p>
 <p align="middle">
-    <em>Example ensemble forecast from Graph-EFM for net solar longwave radiation.</em>
+    <em>Example ensemble forecast from Graph-EFM for specific humidity at 700 hPa.</em>
 </p>
 
-This branch contains the code for our paper *Probabilistic Weather Forecasting with Hierarchical Graph Neural Networks*, for Limited Area Modeling (LAM).
+This branch contains the code for our paper *Probabilistic Weather Forecasting with Hierarchical Graph Neural Networks*, for global forecasting.
 In particular, it contains implementations of:
 
 * Our ensemble forecasting model Graph-EFM.
 * The hierarchical Graph-FM model (also called Hi-LAM in [Oskarsson et al. (2023)](https://arxiv.org/abs/2309.17370) and on the `main` branch).
 * Our re-implementation of GraphCast, by [Lam et al. (2023)](https://arxiv.org/abs/2212.12794).
+
+Note that while the code is called Neural-LAM, on this branch it is used for global forecasting.
 
 If you use these models in your work, please cite:
 ```
@@ -41,18 +43,11 @@ Models, graphs and data are stored separately and it should be possible to swap 
 Still, some restrictions are inevitable:
 
 * The graph used has to be compatible with what the model expects. E.g. a hierarchical model requires a hierarchical graph.
-* The graph and data are specific to the limited area under consideration. This is of course true for the data, but also the graph should be created with the exact geometry of the area in mind.
+* The graph and data are specific to the forecasting region under consideration. This is of course true for the data, but also the graph should be created with the exact geometry of the region in mind. This applies especially for global graphs vs LAM graphs.
 
 <p align="middle">
   <img src="figures/neural_lam_setup.png" width="600"/>
 </p>
-
-
-## A note on the limited area setting
-Currently we are using these models on a limited area covering the Nordic region, the so called MEPS area (see [paper](https://arxiv.org/abs/2309.17370)).
-There are still some parts of the code that is quite specific for the MEPS area use case.
-This is in particular true for the mesh graph creation (`create_mesh.py`) and some of the constants used (`neural_lam/constants.py`).
-Work is being done to refactor the code to be fully area-agnostic.
 
 # Using Neural-LAM
 Below follows instructions on how to use Neural-LAM to train and evaluate models.
@@ -63,6 +58,7 @@ Follow the steps below to create the necessary python environment.
 1. Use python 3.10.
 2. Install version 2.0.1 of PyTorch. Follow instructions on the [PyTorch webpage](https://pytorch.org/get-started/previous-versions/) for how to set this up with GPU support on your system.
 3. Install required packages specified in `requirements.txt`.
+    - Note that we have a dependency in `requirements.txt` to the [GraphCast repository](https://github.com/google-deepmind/graphcast) for some pre-processing and graph-construction.
 4. Install PyTorch Geometric version 2.3.1. This can be done by running
 ```
 TORCH="2.0.1"
@@ -76,37 +72,39 @@ You will have to adjust the `CUDA` variable to match the CUDA version on your sy
 ## Data
 Datasets should be stored in a directory called `data`.
 See the [repository format section](#format-of-data-directory) for details on the directory structure.
+To perform global forecasting, the dataset name (name of subdirectory in `data`)  must start with `global_`.
 
-The full MEPS dataset can be shared with other researchers on request, contact us for this.
-A tiny subset of the data (named `meps_example`) is available in `example_data.zip`, which can be downloaded from [here](https://liuonline-my.sharepoint.com/:u:/g/personal/joeos82_liu_se/EaUUq6h9og1EsLwJmKAltWwB7zP2gmObe-K8pL6qGYYiGg?e=yQbFuV).
-Download the file and unzip in the neural-lam directory.
-After downloading this data, the graphs used in the paper can be generated as described below.
-Note that this is far too little data to train any useful models, but all scripts can be ran with it.
-It should thus be useful to make sure that your python environment is set up correctly and that all the code can be ran without any issues.
+### ERA5 data
+The [exact version of ERA5](https://console.cloud.google.com/storage/browser/weatherbench2/datasets/era5/1959-2023_01_10-6h-240x121_equiangular_with_poles_conservative.zarr?pageState=(%22StorageObjectListTable%22:(%22f%22:%22%255B%255D%22))&prefix=&forceOnObjectsSortingFiltering=false) used in the paper is available from [WeatherBench 2](https://weatherbench2.readthedocs.io/en/latest/index.html).
+This zarr archive should be stored as `data/global_era5/fields.zarr` (if you name your dataset `global_era5`).
 
 ## Pre-processing
-An overview of how the different scripts and files depend on each other is given in this figure:
-<p align="middle">
-  <img src="figures/component_dependencies.png"/>
-</p>
 In order to start training models at least three pre-processing scripts have to be ran:
 
-* `create_mesh.py`
-* `create_grid_features.py`
-* `create_parameter_weights.py`
+* `create_global_mesh.py`, to create the mesh graphs
+* `create_global_forcing.py`, to create the forcing
+* `create_global_grid_features.py`, to create static features for the grid
+* `create_parameter_weights.py`, to create necessary variable and loss weights
+
+Note that all of these take a `--dataset` argument, that need to match the directory in `data` where your ERA5 data is stored.
 
 ### Create graph
-Run `create_mesh.py` with suitable options to generate the graph you want to use (see `python create_mesh.py --help` for a list of options).
+Run `create_global_mesh.py` with suitable options to generate the graph you want to use (see `python create_global_mesh.py --help` for a list of options).
 The graphs used in the paper can be created as:
 
-* **multi-scale**: `python create_mesh.py --graph multiscale`
-* **hierarchical**: `python create_mesh.py --graph hierarchical --hierarchical 1 --levels 3`
+* **multi-scale**:
+```
+python create_global_mesh.py --dataset global_era5 --graph global_multiscale --splits 4
+```
+* **hierarchical**:
+```
+python create_global_mesh.py --dataset global_era5 --graph global_hierarchical --hierarchical 1 --splits 4 --levels 4
+```
 
 The graph-related files are stored in a directory called `graphs`.
 
 ### Create remaining static features
-To create the remaining static files run the scripts `create_grid_features.py` and `create_parameter_weights.py`.
-The main option to set for these is just which dataset to use.
+To create the remaining static files run the scripts `create_global_grid_features.py`, `create_global_forcing.py` and `create_parameter_weights.py`.
 
 ## Weights & Biases Integration
 The project is fully integrated with [Weights & Biases](https://www.wandb.ai/) (W&B) for logging and visualization, but can just as easily be used without it.
@@ -148,7 +146,7 @@ The encode-process-decode framework is used with a mesh graph in order to make o
 
 To train GraphCast use
 ```
-python train_model.py --model graphcast --graph multiscale ...
+python train_model.py --model graphcast --graph global_multiscale ...
 ```
 
 ### Graph-FM
@@ -156,7 +154,7 @@ Deterministic graph-based forecasting model that uses a hierarchical mesh graph 
 
 To train Graph-FM use
 ```
-python train_model.py --model graph_fm --graph hierarchical ...
+python train_model.py --model graph_fm --graph gloal_hierarchical ...
 ```
 
 ### Graph-EFM
@@ -165,11 +163,11 @@ The same model can be used both with multi-scale and hierarchical graphs, with d
 
 To train Graph-EFM use e.g.
 ```
-python train_model.py --model graph_efm --graph multiscale ...
+python train_model.py --model graph_efm --graph global_multiscale ...
 ```
 or
 ```
-python train_model.py --model graph_efm --graph hierarchical ...
+python train_model.py --model graph_efm --graph global_hierarchical ...
 ```
 
 Checkpoint files for our models trained on the MEPS data are available upon request.
@@ -183,6 +181,7 @@ Some options specifically important for evaluation are:
 * `--load`: Path to model checkpoint file (`.ckpt`) to load parameters from
 * `--n_example_pred`: Number of example predictions to plot during evaluation.
 * `--ensemble_size`: Number of ensemble members to sample (for Graph-EFM)
+* `--eval_leads`: Lead times in the future to evaluate for, in 6h time steps
 
 **Note:** While it is technically possible to use multiple GPUs for running evaluation, this is strongly discouraged if using a batch size > 1. If using multiple devices the `DistributedSampler` will replicate some samples to make sure all devices have the same batch size, meaning that evaluation metrics will be unreliable. This issue stems from PyTorch Lightning. See for example [this draft PR](https://github.com/Lightning-AI/torchmetrics/pull/1886) for more discussion and ongoing work to remedy this.
 
@@ -198,37 +197,20 @@ The directory structure is shown with examples below.
 Script names within parenthesis denote the script used to generate the file.
 ```
 data
-├── dataset1
-│   ├── samples                             - Directory with data samples
-│   │   ├── train                           - Training data
-│   │   │   ├── nwp_2022040100_mbr000.npy  - A time series sample
-│   │   │   ├── nwp_2022040100_mbr001.npy
-│   │   │   ├── ...
-│   │   │   ├── nwp_2022043012_mbr001.npy
-│   │   │   ├── nwp_toa_downwelling_shortwave_flux_2022040100.npy   - Solar flux forcing
-│   │   │   ├── nwp_toa_downwelling_shortwave_flux_2022040112.npy
-│   │   │   ├── ...
-│   │   │   ├── nwp_toa_downwelling_shortwave_flux_2022043012.npy
-│   │   │   ├── wtr_2022040100.npy          - Open water features for one sample
-│   │   │   ├── wtr_2022040112.npy
-│   │   │   ├── ...
-│   │   │   └── wtr_202204012.npy
-│   │   ├── val                             - Validation data
-│   │   └── test                            - Test data
-│   └── static                              - Directory with graph information and static features
-│       ├── nwp_xy.npy                      - Coordinates of grid nodes (part of dataset)
-│       ├── surface_geopotential.npy        - Geopotential at surface of grid nodes (part of dataset)
-│       ├── border_mask.npy                 - Mask with True for grid nodes that are part of border (part of dataset)
-│       ├── grid_features.pt                - Static features of grid nodes (create_grid_features.py)
+├── global_dataset1
+│   ├── fields.zarr                         - dataset zarr archive
+│   ├── forcing.zarr                        - forcing zarr archive (create_global_forcing.py)
+│   └── static                              - Directory with static features
+│       ├── grid_features.pt                - Static features of grid nodes (create_global_grid_features.py)
+│       ├── grid_weights.pt                 - Loss weights for different grid nodes (create_parameter_weights.py)
 │       ├── parameter_mean.pt               - Means of state parameters (create_parameter_weights.py)
 │       ├── parameter_std.pt                - Std.-dev. of state parameters (create_parameter_weights.py)
 │       ├── diff_mean.pt                    - Means of one-step differences (create_parameter_weights.py)
 │       ├── diff_std.pt                     - Std.-dev. of one-step differences (create_parameter_weights.py)
-│       ├── flux_stats.pt                   - Mean and std.-dev. of solar flux forcing (create_parameter_weights.py)
 │       └── parameter_weights.npy           - Loss weights for different state parameters (create_parameter_weights.py)
-├── dataset2
+├── global_dataset2
 ├── ...
-└── datasetN
+└── global_datasetN
 ```
 
 ## Format of graph directory
@@ -237,13 +219,13 @@ The structure is shown with examples below:
 ```
 graphs
 ├── graph1                                  - Directory with a graph definition
-│   ├── m2m_edge_index.pt                   - Edges in mesh graph (create_mesh.py)
-│   ├── g2m_edge_index.pt                   - Edges from grid to mesh (create_mesh.py)
-│   ├── m2g_edge_index.pt                   - Edges from mesh to grid (create_mesh.py)
-│   ├── m2m_features.pt                     - Static features of mesh edges (create_mesh.py)
-│   ├── g2m_features.pt                     - Static features of grid to mesh edges (create_mesh.py)
-│   ├── m2g_features.pt                     - Static features of mesh to grid edges (create_mesh.py)
-│   └── mesh_features.pt                    - Static features of mesh nodes (create_mesh.py)
+│   ├── m2m_edge_index.pt                   - Edges in mesh graph (create_global_mesh.py)
+│   ├── g2m_edge_index.pt                   - Edges from grid to mesh (create_global_mesh.py)
+│   ├── m2g_edge_index.pt                   - Edges from mesh to grid (create_global_mesh.py)
+│   ├── m2m_features.pt                     - Static features of mesh edges (create_global_mesh.py)
+│   ├── g2m_features.pt                     - Static features of grid to mesh edges (create_global_mesh.py)
+│   ├── m2g_features.pt                     - Static features of mesh to grid edges (create_global_mesh.py)
+│   └── mesh_features.pt                    - Static features of mesh nodes (create_global_mesh.py)
 ├── graph2
 ├── ...
 └── graphN
@@ -253,9 +235,9 @@ graphs
 To keep track of levels in the mesh graph, a list format is used for the files with mesh graph information.
 In particular, the files
 ```
-│   ├── m2m_edge_index.pt                   - Edges in mesh graph (create_mesh.py)
-│   ├── m2m_features.pt                     - Static features of mesh edges (create_mesh.py)
-│   ├── mesh_features.pt                    - Static features of mesh nodes (create_mesh.py)
+│   ├── m2m_edge_index.pt                   - Edges in mesh graph (create_global_mesh.py)
+│   ├── m2m_features.pt                     - Static features of mesh edges (create_global_mesh.py)
+│   ├── mesh_features.pt                    - Static features of mesh nodes (create_global_mesh.py)
 ```
 all contain lists of length `L`, for a hierarchical mesh graph with `L` layers.
 For non-hierarchical graphs `L == 1` and these are all just singly-entry lists.
@@ -266,10 +248,10 @@ In addition, hierarchical mesh graphs (`L > 1`) feature a few additional files w
 ```
 ├── graph1
 │   ├── ...
-│   ├── mesh_down_edge_index.pt             - Downward edges in mesh graph (create_mesh.py)
-│   ├── mesh_up_edge_index.pt               - Upward edges in mesh graph (create_mesh.py)
-│   ├── mesh_down_features.pt               - Static features of downward mesh edges (create_mesh.py)
-│   ├── mesh_up_features.pt                 - Static features of upward mesh edges (create_mesh.py)
+│   ├── mesh_down_edge_index.pt             - Downward edges in mesh graph (create_global_mesh.py)
+│   ├── mesh_up_edge_index.pt               - Upward edges in mesh graph (create_global_mesh.py)
+│   ├── mesh_down_features.pt               - Static features of downward mesh edges (create_global_mesh.py)
+│   ├── mesh_up_features.pt                 - Static features of upward mesh edges (create_global_mesh.py)
 │   ├── ...
 ```
 These files have the same list format as the ones above, but each list has length `L-1` (as these edges describe connections between levels).

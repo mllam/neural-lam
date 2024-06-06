@@ -4,134 +4,137 @@ import numpy as np
 
 WANDB_PROJECT = "neural-lam"
 
-SECONDS_IN_YEAR = (
-    365 * 24 * 60 * 60
-)  # Assuming no leap years in dataset (2024 is next)
-
 # Log prediction error for these lead times
-VAL_STEP_LOG_ERRORS = np.array([1, 2, 3, 5, 10, 15, 19])
+VAL_STEP_LOG_ERRORS = np.array([1, 2, 5, 10, 20, 40])
 # Also save checkpoints for minimum loss at these lead times
-VAL_STEP_CHECKPOINTS = (1, 19)
+VAL_STEP_CHECKPOINTS = np.array([1, 20, 40])
 
 # Log these metrics to wandb as scalar values for
 # specific variables and lead times
 # List of metrics to watch, including any prefix (e.g. val_rmse)
 METRICS_WATCH = [
     "val_spsk_ratio",
-    "val_spread",
+    "val_rmse",
 ]
 # Dict with variables and lead times to log watched metrics for
 # Format is a dictionary that maps from a variable index to
 # a list of lead time steps
 VAR_LEADS_METRICS_WATCH = {
-    6: [2, 19],  # t_2
-    14: [2, 19],  # wvint_0
-    15: [2, 19],  # z_1000
+    7: [1, 10],  # z500
+    78: [1, 10],  # 2t
+    79: [1, 10],  # 10u
 }
 
 # Plot forecasts for these variables at given lead times during validation step
 # Format is a dictionary that maps from a variable index to a list of
 # lead time steps
 VAL_PLOT_VARS = {
-    4: [2, 19],  # r_2
-    14: [2, 19],  # wvint_0
+    7: np.array([2, 20]),  # z500
+    22: np.array([2, 20]),  # q700
+    36: np.array([2, 20]),  # t850
+    78: np.array([2, 20]),  # 2t
+    79: np.array([2, 20]),  # 10u
+    80: np.array([2, 20]),  # 10v
+    82: np.array([2, 20]),  # tp
 }
 
 # During validation, plot example samples of latent variable from prior and
 # variational distribution
 LATENT_SAMPLES_PLOT = 4  # Number of samples to plot
 
-# Variable names
-PARAM_NAMES = [
-    "pres_heightAboveGround_0_instant",
-    "pres_heightAboveSea_0_instant",
-    "nlwrs_heightAboveGround_0_accum",
-    "nswrs_heightAboveGround_0_accum",
-    "r_heightAboveGround_2_instant",
-    "r_hybrid_65_instant",
-    "t_heightAboveGround_2_instant",
-    "t_hybrid_65_instant",
-    "t_isobaricInhPa_500_instant",
-    "t_isobaricInhPa_850_instant",
-    "u_hybrid_65_instant",
-    "u_isobaricInhPa_850_instant",
-    "v_hybrid_65_instant",
-    "v_isobaricInhPa_850_instant",
-    "wvint_entireAtmosphere_0_instant",
-    "z_isobaricInhPa_1000_instant",
-    "z_isobaricInhPa_500_instant",
-]
+# Following table 2 in GC
+# Keys to read from fields zarr
+ATMOSPHERIC_PARAMS = [
+    "geopotential",
+    "specific_humidity",
+    "temperature",
+    "u_component_of_wind",
+    "v_component_of_wind",
+    "vertical_velocity",
+]  # times 13 pressure levels = 78 params
 
+SURFACE_PARAMS = [
+    "2m_temperature",
+    "10m_u_component_of_wind",
+    "10m_v_component_of_wind",
+    "mean_sea_level_pressure",
+    "total_precipitation_6hr",
+]  # = 5 params
+# Total = 83 params
+
+# Variable names
+ATMOSPHERIC_PARAMS_SHORT = [
+    "z",
+    "q",
+    "t",
+    "u",
+    "v",
+    "w",
+]
+SURFACE_PARAMS_SHORT = ["2t", "10u", "10v", "msl", "tp"]
+PRESSURE_LEVELS = [
+    50,
+    100,
+    150,
+    200,
+    250,
+    300,
+    400,
+    500,
+    600,
+    700,
+    850,
+    925,
+    1000,
+]  # 13 levels
 PARAM_NAMES_SHORT = [
-    "pres_0g",
-    "pres_0s",
-    "nlwrs_0",
-    "nswrs_0",
-    "r_2",
-    "r_65",
-    "t_2",
-    "t_65",
-    "t_500",
-    "t_850",
-    "u_65",
-    "u_850",
-    "v_65",
-    "v_850",
-    "wvint_0",
-    "z_1000",
-    "z_500",
+    f"{param}{level}"
+    for param in ATMOSPHERIC_PARAMS_SHORT
+    for level in PRESSURE_LEVELS
+] + SURFACE_PARAMS_SHORT
+
+ATMOSPHERIC_PARAMS_UNITS = [
+    "m²/s²",
+    "kg/kg",
+    "K",
+    "m/s",
+    "m/s",
+    "Pa/s",
 ]
 PARAM_UNITS = [
-    "Pa",
-    "Pa",
-    "W/m²",
-    "W/m²",
-    "-",  # unitless
-    "-",
-    "K",
-    "K",
-    "K",
-    "K",
-    "m/s",
-    "m/s",
-    "m/s",
-    "m/s",
-    "kg/m²",
-    "m²/s²",
-    "m²/s²",
-]
+    unit for unit in ATMOSPHERIC_PARAMS_UNITS for level in PRESSURE_LEVELS
+] + ["K", "m/s", "m/s", "Pa", "m"]
 
-# Projection and grid
-# Hard coded for now, but should eventually be part of dataset desc. files
-GRID_SHAPE = (268, 238)  # (y, x)
+# What variables (index) to plot during evaluation
 
-LAMBERT_PROJ_PARAMS = {
-    "a": 6367470,
-    "b": 6367470,
-    "lat_0": 63.3,
-    "lat_1": 63.3,
-    "lat_2": 63.3,
-    "lon_0": 15.0,
-    "proj": "lcc",
-}
-
-GRID_LIMITS = [  # In projection
-    -1059506.5523409774,  # min x
-    1310493.4476590226,  # max x
-    -1331732.4471934352,  # min y
-    1338267.5528065648,  # max y
-]
-
-# Create projection
-LAMBERT_PROJ = cartopy.crs.LambertConformal(
-    central_longitude=LAMBERT_PROJ_PARAMS["lon_0"],
-    central_latitude=LAMBERT_PROJ_PARAMS["lat_0"],
-    standard_parallels=(
-        LAMBERT_PROJ_PARAMS["lat_1"],
-        LAMBERT_PROJ_PARAMS["lat_2"],
-    ),
+EVAL_PLOT_VARS = np.concatenate(
+    [
+        level_start_i
+        + np.arange(0, len(ATMOSPHERIC_PARAMS)) * len(PRESSURE_LEVELS)
+        for level_start_i in (
+            PRESSURE_LEVELS.index(level) for level in (200, 500, 850)
+        )
+    ]
+    + [np.arange(78, 83)]  # Surface
 )
 
+# Projection and grid
+GRID_SHAPE = (240, 121)  # (long, lat)
+
+# Create projection
+MAP_PROJ = cartopy.crs.Robinson()
+GRID_LIMITS = [
+    -0.75,
+    359.25,
+    -90,
+    90,
+]
+
+# Time step length (hours)
+TIME_STEP_LENGTH = 6
+
 # Data dimensions
-GRID_FORCING_DIM = 5 * 3 + 1  # 5 feat. for 3 time-step window + 1 batch-static
-GRID_STATE_DIM = 17
+GRID_ORIGINAL_FORCING_DIM = 5  # 5 features
+GRID_FORCING_DIM = GRID_ORIGINAL_FORCING_DIM * 3
+# 5 features for 3 time-step window
+GRID_STATE_DIM = 6 * 13 + 5  # 83

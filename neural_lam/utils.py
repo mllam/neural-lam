@@ -24,18 +24,20 @@ def load_dataset_stats(dataset_name, device="cpu"):
             os.path.join(static_dir_path, fn), map_location=device
         )
 
-    data_mean = loads_file("parameter_mean.pt")  # (d_features,)
-    data_std = loads_file("parameter_std.pt")  # (d_features,)
-
-    flux_stats = loads_file("flux_stats.pt")  # (2,)
-    flux_mean, flux_std = flux_stats
-
-    return {
-        "data_mean": data_mean,
-        "data_std": data_std,
-        "flux_mean": flux_mean,
-        "flux_std": flux_std,
+    stats_dict = {
+        "data_mean": loads_file("parameter_mean.pt"),  # (d_features,)
+        "data_std": loads_file("parameter_std.pt"),  # (d_features,)
     }
+
+    # Load flux if exists
+    try:
+        flux_stats = loads_file("flux_stats.pt")  # (2,)
+        stats_dict["flux_mean"], stats_dict["flux_std"] = flux_stats
+    except FileNotFoundError:
+        # Do nothing, just don't include flux stats
+        pass
+
+    return stats_dict
 
 
 def load_static_data(dataset_name, device="cpu"):
@@ -49,13 +51,28 @@ def load_static_data(dataset_name, device="cpu"):
             os.path.join(static_dir_path, fn), map_location=device
         )
 
+    try:
+        grid_weights = loads_file("grid_weights.pt")
+    except FileNotFoundError:
+        print("No weighting file grid_weights.pt found: Using uniform weight")
+        grid_weights = None
+
     # Load border mask, 1. if node is part of border, else 0.
-    border_mask_np = np.load(os.path.join(static_dir_path, "border_mask.npy"))
-    border_mask = (
-        torch.tensor(border_mask_np, dtype=torch.float32, device=device)
-        .flatten(0, 1)
-        .unsqueeze(1)
-    )  # (N_grid, 1)
+    try:
+        border_mask_np = np.load(
+            os.path.join(static_dir_path, "border_mask.npy")
+        )
+        border_mask = (
+            torch.tensor(border_mask_np, dtype=torch.float32, device=device)
+            .flatten(0, 1)
+            .unsqueeze(1)
+        )  # (N_grid, 1)
+    except FileNotFoundError:
+        print(
+            "No border mask file border_mask.npy found: "
+            "Boundary forcing disabled"
+        )
+        border_mask = None
 
     grid_static_features = loads_file(
         "grid_features.pt"
@@ -77,6 +94,7 @@ def load_static_data(dataset_name, device="cpu"):
     )  # (d_f,)
 
     return {
+        "grid_weights": grid_weights,
         "border_mask": border_mask,
         "grid_static_features": grid_static_features,
         "step_diff_mean": step_diff_mean,

@@ -468,6 +468,7 @@ class GraphEFM(ARModel):
             current_state,
             pred_std,
             mask=self.interior_mask_bool,
+            grid_weights=self.grid_weights,
             average_grid=False,
             sum_vars=False,
         )  # (B, num_grid_nodes', d_state)
@@ -517,9 +518,9 @@ class GraphEFM(ARModel):
             predicted_state = self.sample_next_state(pred_mean, pred_std)
 
             # Overwrite border with true state
-            new_state = (
-                self.border_mask * target_state
-                + self.interior_mask * predicted_state
+
+            new_state = self.optional_boundary_forcing(
+                predicted_state, target_state
             )
 
             # Update conditioning states
@@ -566,6 +567,7 @@ class GraphEFM(ARModel):
                 pred_traj_means,
                 target_states,
                 pred_traj_stds,
+                grid_weights=self.grid_weights,
                 mask=self.interior_mask_bool,
             )  # (B, pred_steps)
             crps_loss = torch.mean(crps_estimate)
@@ -712,9 +714,8 @@ class GraphEFM(ARModel):
             # pred_std: (B, num_grid_nodes, d_f) or None
 
             # Overwrite border with true state
-            new_state = (
-                self.border_mask * current_state
-                + self.interior_mask * pred_state
+            new_state = self.optional_boundary_forcing(
+                pred_state, current_state
             )
 
             prediction_list.append(new_state)
@@ -806,6 +807,10 @@ class GraphEFM(ARModel):
             ):
                 time_title_part = f"t={t_i} ({self.step_length*t_i} h)"
                 # Create one figure per variable at this time step
+                var_names = [
+                    constants.PARAM_NAMES_SHORT[var_i]
+                    for var_i in constants.EVAL_PLOT_VARS
+                ]
                 var_figs = [
                     vis.plot_ensemble_prediction(
                         samples_t[:, :, var_i],
@@ -813,15 +818,15 @@ class GraphEFM(ARModel):
                         ens_mean_t[:, var_i],
                         ens_std_t[:, var_i],
                         self.interior_mask[:, 0],
-                        title=f"{var_name} ({var_unit}), {time_title_part}",
-                        vrange=var_vrange,
+                        title=(
+                            f"{var_name} "
+                            f"({constants.PARAM_UNITS[var_i]}), "
+                            f"{time_title_part}"
+                        ),
+                        vrange=var_vranges[var_i],
                     )
-                    for var_i, (var_name, var_unit, var_vrange) in enumerate(
-                        zip(
-                            constants.PARAM_NAMES_SHORT,
-                            constants.PARAM_UNITS,
-                            var_vranges,
-                        )
+                    for var_i, var_name in zip(
+                        constants.EVAL_PLOT_VARS, var_names
                     )
                 ]
 
@@ -829,9 +834,7 @@ class GraphEFM(ARModel):
                 wandb.log(
                     {
                         f"{var_name}_{example_title}": wandb.Image(fig)
-                        for var_name, fig in zip(
-                            constants.PARAM_NAMES_SHORT, var_figs
-                        )
+                        for var_name, fig in zip(var_names, var_figs)
                     }
                 )
                 plt.close(
@@ -867,6 +870,7 @@ class GraphEFM(ARModel):
             trajectories,
             target_states,
             traj_stds,
+            grid_weights=self.grid_weights,
             mask=self.interior_mask_bool,
             sum_vars=False,
         )
@@ -879,6 +883,7 @@ class GraphEFM(ARModel):
             ens_mean,
             target_states,
             None,
+            grid_weights=self.grid_weights,
             mask=self.interior_mask_bool,
             sum_vars=False,
         )  # (B, pred_steps, d_f)
@@ -943,7 +948,7 @@ class GraphEFM(ARModel):
                 # prior_traj and enc traj are
                 # (S, pred_steps, num_grid_nodes, d_f)
 
-                for var_i, timesteps in constants.VAL_PLOT_VARS.items():
+                for var_i, timesteps in self.val_plot_vars.items():
                     var_name = constants.PARAM_NAMES_SHORT[var_i]
                     var_unit = constants.PARAM_UNITS[var_i]
                     for step in timesteps:
@@ -1106,6 +1111,7 @@ class GraphEFM(ARModel):
             ens_mean,
             target_states,
             ens_std,
+            grid_weights=self.grid_weights,
             mask=self.interior_mask_bool,
             sum_vars=False,
         )  # (B, pred_steps, d_f)
@@ -1114,6 +1120,7 @@ class GraphEFM(ARModel):
             trajectories,
             target_states,
             traj_stds,
+            grid_weights=self.grid_weights,
             mask=self.interior_mask_bool,
             sum_vars=False,
         )  # (B, pred_steps, d_f)

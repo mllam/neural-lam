@@ -39,7 +39,10 @@ skip = "requirements/*"
 # Pylint config
 [tool.pylint]
 ignore = [
-    "create_mesh.py", # Disable linting for now, as major rework is planned/expected
+    "weather_dataset.py", # Not relevant here
+]
+ignored-modules = [
+    "graphcast", # Disable linting for graphcast imports
 ]
 # Temporary fix for import neural_lam statements until set up as proper package
 init-hook='import sys; sys.path.append(".")'

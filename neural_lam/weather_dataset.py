@@ -32,6 +32,7 @@ class WeatherDataset(torch.utils.data.Dataset):
         standardize=True,
         subset=False,
         control_only=False,
+        **kwarg,
     ):
         super().__init__()
 

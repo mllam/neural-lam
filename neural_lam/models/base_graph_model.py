@@ -1,8 +1,10 @@
 # Third-party
+import matplotlib.pyplot as plt
 import torch
+import wandb
 
 # First-party
-from neural_lam import utils
+from neural_lam import constants, utils, vis
 from neural_lam.interaction_net import InteractionNet, PropagationNet
 from neural_lam.models.ar_model import ARModel
 
@@ -15,6 +17,10 @@ class BaseGraphModel(ARModel):
 
     def __init__(self, args):
         super().__init__(args)
+
+        assert (
+            args.eval is None or args.n_example_pred <= args.batch_size
+        ), "Can not plot more examples than batch size during validation"
 
         # Load graph with static features
         # NOTE: (IMPORTANT!) mesh nodes MUST have the first
@@ -173,3 +179,60 @@ class BaseGraphModel(ARModel):
 
         # Residual connection for full state
         return prev_state + rescaled_delta_mean, pred_std
+
+    def validation_step(self, batch, *args):
+        """
+        Run validation on single batch
+        """
+        super().validation_step(batch, *args)
+        batch_idx = args[0]
+
+        # Plot some example predictions
+        if (
+            self.trainer.is_global_zero
+            and batch_idx == 0
+            and self.n_example_pred > 0
+        ):
+            prediction, target, _ = self.common_step(batch)
+
+            # Rescale to original data scale
+            prediction_rescaled = prediction * self.data_std + self.data_mean
+            target_rescaled = target * self.data_std + self.data_mean
+
+            # Plot samples
+            log_plot_dict = {}
+            for example_i, (pred_traj, target_traj) in enumerate(
+                zip(
+                    prediction_rescaled[: self.n_example_pred],
+                    target_rescaled[: self.n_example_pred],
+                ),
+                start=1,
+            ):
+
+                for var_i, timesteps in self.val_plot_vars.items():
+                    var_name = constants.PARAM_NAMES_SHORT[var_i]
+                    var_unit = constants.PARAM_UNITS[var_i]
+                    for step in timesteps:
+                        pred_state = pred_traj[step - 1, :, var_i]
+                        target_state = target_traj[step - 1, :, var_i]
+                        # both (num_grid_nodes,)
+                        plot_title = (
+                            f"{var_name} ({var_unit}), t={step} "
+                            f"({self.step_length*step} h)"
+                        )
+
+                        # Make plots
+                        log_plot_dict[
+                            f"{var_name}_step_{step}_ex{example_i}"
+                        ] = vis.plot_prediction(
+                            pred_state,
+                            target_state,
+                            self.interior_mask[:, 0],
+                            title=plot_title,
+                        )
+
+            if not self.trainer.sanity_checking:
+                # Log all plots to wandb
+                wandb.log(log_plot_dict)
+
+        plt.close("all")
