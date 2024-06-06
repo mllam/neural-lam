@@ -21,8 +21,8 @@ dataset:
   var_units:
     - Pa
     - Pa
-    - r"$\mathrm{W}/\mathrm{m}^2$"
-    - r"$\mathrm{W}/\mathrm{m}^2$"
+    - $\mathrm{W}/\mathrm{m}^2$
+    - $\mathrm{W}/\mathrm{m}^2$
     - ""
     - ""
     - K
@@ -33,9 +33,9 @@ dataset:
     - m/s
     - m/s
     - m/s
-    - r"$\mathrm{kg}/\mathrm{m}^2$"
-    - r"$\mathrm{m}^2/\mathrm{s}^2$"
-    - r"$\mathrm{m}^2/\mathrm{s}^2$"
+    - $\mathrm{kg}/\mathrm{m}^2$
+    - $\mathrm{m}^2/\mathrm{s}^2$
+    - $\mathrm{m}^2/\mathrm{s}^2$
   var_longnames:
     - pres_heightAboveGround_0_instant
     - pres_heightAboveSea_0_instant

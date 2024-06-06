@@ -13,3 +13,5 @@ plotly>=5.15.0
 
 # for dev
 pre-commit>=2.15.0
+pytest>=8.1.1
+pooch>=1.8.1

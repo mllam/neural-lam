@@ -1,4 +1,5 @@
 # Standard library
+import json
 import random
 import time
 from argparse import ArgumentParser
@@ -22,7 +23,7 @@ MODELS = {
 }
 
 
-def main():
+def main(input_args=None):
     """
     Main function for training and evaluating models
     """
@@ -199,18 +200,21 @@ def main():
     )
     parser.add_argument(
         "--metrics_watch",
-        type=list,
+        nargs="+",
         default=[],
         help="List of metrics to watch, including any prefix (e.g. val_rmse)",
     )
     parser.add_argument(
         "--var_leads_metrics_watch",
-        type=dict,
-        default={},
-        help="Dict with variables and lead times to log watched metrics for",
+        type=str,
+        default="{}",
+        help="""JSON string with variable-IDs and lead times to log watched
+             metrics (e.g. '{"1": [1, 2], "3": [3, 4]}')""",
     )
-    args = parser.parse_args()
-
+    args = parser.parse_args(input_args)
+    args.var_leads_metrics_watch = {
+        int(k): v for k, v in json.loads(args.var_leads_metrics_watch).items()
+    }
     config_loader = config.Config.from_file(args.data_config)
 
     # Asserts for arguments
@@ -268,14 +272,7 @@ def main():
 
     # Load model parameters Use new args for model
     model_class = MODELS[args.model]
-    if args.load:
-        model = model_class.load_from_checkpoint(args.load, args=args)
-        if args.restore_opt:
-            # Save for later
-            # Unclear if this works for multi-GPU
-            model.opt_state = torch.load(args.load)["optimizer_states"][0]
-    else:
-        model = model_class(args)
+    model = model_class(args)
 
     prefix = "subset-" if args.subset_ds else ""
     if args.eval:
@@ -324,13 +321,14 @@ def main():
             )
 
         print(f"Running evaluation on {args.eval}")
-        trainer.test(model=model, dataloaders=eval_loader)
+        trainer.test(model=model, dataloaders=eval_loader, ckpt_path=args.load)
     else:
         # Train model
         trainer.fit(
             model=model,
             train_dataloaders=train_loader,
             val_dataloaders=val_loader,
+            ckpt_path=args.load,
         )
 
 
