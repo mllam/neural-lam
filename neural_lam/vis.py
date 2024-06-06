@@ -51,7 +51,7 @@ def plot_error_map(errors, data_config, title=None, step_length=1):
     y_ticklabels = [
         f"{name} ({unit})"
         for name, unit in zip(
-            data_config.dataset.var_names, data_config.dataset.var_units
+            data_config.vars_names("state"), data_config.vars_units("state")
         )
     ]
     ax.set_yticklabels(y_ticklabels, rotation=30, size=label_size)
@@ -78,7 +78,9 @@ def plot_prediction(
         vmin, vmax = vrange
 
     # Set up masking of border region
-    mask_reshaped = obs_mask.reshape(*data_config.grid_shape_state)
+    mask_reshaped = obs_mask.reshape(
+        list(data_config.grid_shape_state.values.values())
+    )
     pixel_alpha = (
         mask_reshaped.clamp(0.7, 1).cpu().numpy()
     )  # Faded border region
@@ -93,7 +95,11 @@ def plot_prediction(
     # Plot pred and target
     for ax, data in zip(axes, (target, pred)):
         ax.coastlines()  # Add coastline outlines
-        data_grid = data.reshape(*data_config.grid_shape_state).cpu().numpy()
+        data_grid = (
+            data.reshape(list(data_config.grid_shape_state.values.values()))
+            .cpu()
+            .numpy()
+        )
         im = ax.imshow(
             data_grid,
             origin="lower",
@@ -129,7 +135,9 @@ def plot_spatial_error(error, obs_mask, data_config, title=None, vrange=None):
         vmin, vmax = vrange
 
     # Set up masking of border region
-    mask_reshaped = obs_mask.reshape(*data_config.grid_shape_state)
+    mask_reshaped = obs_mask.reshape(
+        list(data_config.grid_shape_state.values.values())
+    )
     pixel_alpha = (
         mask_reshaped.clamp(0.7, 1).cpu().numpy()
     )  # Faded border region
@@ -140,7 +148,11 @@ def plot_spatial_error(error, obs_mask, data_config, title=None, vrange=None):
     )
 
     ax.coastlines()  # Add coastline outlines
-    error_grid = error.reshape(*data_config.grid_shape_state).cpu().numpy()
+    error_grid = (
+        error.reshape(list(data_config.grid_shape_state.values.values()))
+        .cpu()
+        .numpy()
+    )
 
     im = ax.imshow(
         error_grid,

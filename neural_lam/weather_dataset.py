@@ -36,20 +36,18 @@ class WeatherDataset(torch.utils.data.Dataset):
         self.batch_size = batch_size
         self.ar_steps = ar_steps
         self.control_only = control_only
-        self.config_loader = config.Config.from_file(data_config)
+        self.data_config = config.Config.from_file(data_config)
 
-        self.state = self.config_loader.process_dataset("state", self.split)
+        self.state = self.data_config.process_dataset("state", self.split)
         assert self.state is not None, "State dataset not found"
-        self.forcing = self.config_loader.process_dataset(
-            "forcing", self.split
-        )
+        self.forcing = self.data_config.process_dataset("forcing", self.split)
         self.state_times = self.state.time.values
 
         # Set up for standardization
         # NOTE: This will become part of ar_model.py soon!
         self.standardize = standardize
         if standardize:
-            state_stats = self.config_loader.load_normalization_stats(
+            state_stats = self.data_config.load_normalization_stats(
                 "state", datatype="torch"
             )
             self.state_mean, self.state_std = (
@@ -58,7 +56,7 @@ class WeatherDataset(torch.utils.data.Dataset):
             )
 
             if self.forcing is not None:
-                forcing_stats = self.config_loader.load_normalization_stats(
+                forcing_stats = self.data_config.load_normalization_stats(
                     "forcing", datatype="torch"
                 )
                 self.forcing_mean, self.forcing_std = (
@@ -80,10 +78,11 @@ class WeatherDataset(torch.utils.data.Dataset):
             torch.tensor(
                 self.forcing.isel(
                     time=slice(idx + 2, idx + self.ar_steps)
-                ).values
+                ).values,
+                dtype=torch.float32,
             )
             if self.forcing is not None
-            else torch.tensor([])
+            else torch.tensor([], dtype=torch.float32)
         )
 
         init_states = sample[:2]

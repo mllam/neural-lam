@@ -59,8 +59,8 @@ def main():
     parser.add_argument("--zarr_path", type=str, default="forcings.zarr")
     args = parser.parse_args()
 
-    config_loader = config.Config.from_file(args.data_config)
-    dataset = config_loader.open_zarrs("state")
+    data_config = config.Config.from_file(args.data_config)
+    dataset = data_config.open_zarrs("state")
     datetime_forcing = calculate_datetime_forcing(timesteps=dataset.time)
 
     # Expand dimensions to match the target dataset

@@ -193,11 +193,11 @@ def main(input_args=None):
     args = parser.parse_args(input_args)
 
     # Load grid positions
-    config_loader = config.Config.from_file(args.data_config)
+    data_config = config.Config.from_file(args.data_config)
     graph_dir_path = os.path.join("graphs", args.graph)
     os.makedirs(graph_dir_path, exist_ok=True)
 
-    xy = config_loader.get_xy("static")  # (2, N_y, N_x)
+    xy = data_config.get_xy("static")  # (2, N_y, N_x)
     grid_xy = torch.tensor(xy)
     pos_max = torch.max(torch.abs(grid_xy))
 

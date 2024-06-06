@@ -164,9 +164,9 @@ def main(input_args=None):
     parser.add_argument(
         "--ar_steps_eval",
         type=int,
-        default=25,
+        default=10,
         help="Number of steps to unroll prediction for in loss function "
-        "(default: 25)",
+        "(default: 10)",
     )
     parser.add_argument(
         "--n_example_pred",
@@ -185,9 +185,10 @@ def main(input_args=None):
     )
     parser.add_argument(
         "--val_steps_to_log",
-        type=list,
+        nargs="+",
+        type=int,
         default=[1, 2, 3, 5, 10, 15, 19],
-        help="Steps to log val loss for (default: [1, 2, 3, 5, 10, 15, 19])",
+        help="Steps to log val loss for (default: 1 2 3 5 10 15 19)",
     )
     parser.add_argument(
         "--metrics_watch",

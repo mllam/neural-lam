@@ -44,8 +44,8 @@ def main():
     )
 
     args = parser.parse_args()
-    config_loader = config.Config.from_file(args.data_config)
-    xy = config_loader.get_xy("state")  # (2, N_y, N_x)
+    data_config = config.Config.from_file(args.data_config)
+    xy = data_config.get_xy("state")  # (2, N_y, N_x)
     xy = xy.reshape(2, -1).T  # (N_grid, 2)
     pos_max = np.max(np.abs(xy))
     grid_pos = xy / pos_max  # Divide by maximum coordinate

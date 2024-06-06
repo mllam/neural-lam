@@ -31,8 +31,8 @@ def main():
         help="Number of grid-cells to set to True along each boundary",
     )
     args = parser.parse_args()
-    config_loader = config.Config.from_file(args.data_config)
-    mask = np.zeros(list(config_loader.grid_shape_state.values.values()))
+    data_config = config.Config.from_file(args.data_config)
+    mask = np.zeros(list(data_config.grid_shape_state.values.values()))
 
     # Set the args.boundaries grid-cells closest to each boundary to True
     mask[: args.boundaries, :] = True  # top boundary
@@ -40,7 +40,7 @@ def main():
     mask[:, : args.boundaries] = True  # left boundary
     mask[:, -args.boundaries :] = True  # noqa right boundary
 
-    mask = xr.Dataset({"mask": (["x", "y"], mask)})
+    mask = xr.Dataset({"mask": (["y", "x"], mask)})
 
     print(f"Saving mask to {args.zarr_path}...")
     mask.to_zarr(args.zarr_path, mode="w")

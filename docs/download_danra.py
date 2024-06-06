@@ -1,3 +1,4 @@
+# Third-party
 import xarray as xr
 
 data_urls = [
@@ -18,8 +19,8 @@ for url, path in zip(data_urls, local_paths):
     ds = ds.chunk(chunk_dict)
 
     for var in ds.variables:
-        if 'chunks' in ds[var].encoding:
-            del ds[var].encoding['chunks']
+        if "chunks" in ds[var].encoding:
+            del ds[var].encoding["chunks"]
 
     ds.to_zarr(path, mode="w")
     print("DONE")

@@ -30,9 +30,9 @@ def main():
     )
     args = parser.parse_args()
 
-    config_loader = config.Config.from_file(args.data_config)
-    state_data = config_loader.process_dataset("state", split="train")
-    forcing_data = config_loader.process_dataset(
+    data_config = config.Config.from_file(args.data_config)
+    state_data = data_config.process_dataset("state", split="train")
+    forcing_data = data_config.process_dataset(
         "forcing", split="train", apply_windowing=False
     )
 
@@ -41,7 +41,7 @@ def main():
 
     if forcing_data is not None:
         forcing_mean, forcing_std = compute_stats(forcing_data)
-        combined_stats = config_loader["utilities"]["normalization"][
+        combined_stats = data_config["utilities"]["normalization"][
             "combined_stats"
         ]
 
@@ -58,7 +58,7 @@ def main():
                     dict(variable=vars_to_combine)
                 ] = combined_mean
                 forcing_std.loc[dict(variable=vars_to_combine)] = combined_std
-        window = config_loader["forcing"]["window"]
+        window = data_config["forcing"]["window"]
         forcing_mean = xr.concat([forcing_mean] * window, dim="window").stack(
             forcing_variable=("variable", "window")
         )
@@ -66,7 +66,7 @@ def main():
             forcing_variable=("variable", "window")
         )
         vars = forcing_data["variable"].values.tolist()
-        window = config_loader["forcing"]["window"]
+        window = data_config["forcing"]["window"]
         forcing_vars = [f"{var}_{i}" for var in vars for i in range(window)]
 
     print(

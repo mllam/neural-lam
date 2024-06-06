@@ -56,6 +56,15 @@ class Config:
         proj_params = proj_config.get("kwargs", {})
         return proj_class(**proj_params)
 
+    @functools.cached_property
+    def step_length(self):
+        """Return the step length of the dataset in hours."""
+        dataset = self.open_zarrs("state")
+        time = dataset.time.isel(time=slice(0, 2)).values
+        step_length_ns = time[1] - time[0]
+        step_length_hours = step_length_ns / np.timedelta64(1, "h")
+        return int(step_length_hours)
+
     @functools.lru_cache()
     def vars_names(self, category):
         """Return the names of the variables in the dataset."""
@@ -191,10 +200,10 @@ class Config:
             if isinstance(dataset, xr.Dataset)
             else dataset["variable"].values.tolist()
         )
-        print(
-            "\033[94mYour Dataarray has the following variables: ",
-            dataset_vars,
-            "\033[0m",
+
+        print(  # noqa
+            f"\033[94mYour {dataset.attrs['category']} xr.Dataarray has the "
+            f"following variables: {dataset_vars} \033[0m",
         )
 
         return dataset
@@ -366,7 +375,37 @@ class Config:
             self.values["splits"][split]["start"],
             self.values["splits"][split]["end"],
         )
-        return dataset.sel(time=slice(start, end))
+        dataset = dataset.sel(time=slice(start, end))
+        dataset.attrs["split"] = split
+        return dataset
+
+    def apply_window(self, category, dataset=None):
+        """Apply the forcing window to the forcing dataset."""
+        if dataset is None:
+            dataset = self.open_zarrs(category)
+        if isinstance(dataset, xr.Dataset):
+            dataset = self.convert_dataset_to_dataarray(dataset)
+        state = self.open_zarrs("state")
+        state = self.filter_dataset_by_time(state, dataset.attrs["split"])
+        state_time = state.time.values
+        window = self[category].window
+        dataset = (
+            dataset.sel(time=state_time, method="nearest")
+            .pad(time=(window // 2, window // 2), mode="edge")
+            .rolling(time=window, center=True)
+            .construct("window")
+            .stack(variable_window=("variable", "window"))
+        )
+        dataset = dataset.isel(time=slice(window // 2, -window // 2 + 1))
+        return dataset
+
+    def load_boundary_mask(self):
+        """Load the boundary mask for the dataset."""
+        boundary_mask = xr.open_zarr(self.values["boundary"]["mask"]["path"])
+        return torch.tensor(
+            boundary_mask.mask.stack(grid=("y", "x")).values,
+            dtype=torch.float32,
+        ).unsqueeze(1)
 
     def process_dataset(self, category, split="train", apply_windowing=True):
         """Process the dataset for the given category."""
@@ -383,23 +422,3 @@ class Config:
             dataset = dataset.isel(time=0, drop=True)
 
         return dataset
-
-    def apply_window(self, category, dataset=None):
-        """Apply the forcing window to the forcing dataset."""
-        if dataset is None:
-            dataset = self.open_zarrs(category)
-        state_time = self.open_zarrs("state").time.values
-        window = self[category].window
-        dataset = (
-            dataset.sel(time=state_time, method="nearest")
-            .pad(time=(window // 2, window // 2), mode="edge")
-            .rolling(time=window, center=True)
-            .construct("window")
-            .stack(variable_window=("variable", "window"))
-        )
-        return dataset
-
-    def load_boundary_mask(self):
-        """Load the boundary mask for the dataset."""
-        boundary_mask = xr.open_zarr(self.values["boundary"]["mask"]["path"])
-        return torch.tensor(boundary_mask.to_array().values)
