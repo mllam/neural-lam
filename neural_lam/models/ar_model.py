@@ -213,6 +213,11 @@ class ARModel(pl.LightningModule):
         )
         return batch_loss
 
+    def on_train_start(self):
+        """Save data config file to wandb at start of training"""
+        if self.trainer.is_global_zero:
+            wandb.save("neural_lam/data_config.yaml")
+
     def all_gather_cat(self, tensor_to_gather):
         """
         Gather tensors across all ranks, and concatenate across dim. 0
@@ -521,6 +526,11 @@ class ARModel(pl.LightningModule):
             wandb.log(log_dict)  # Log all
             plt.close("all")  # Close all figs
 
+    def on_test_start(self):
+        """Save data config file to wandb at start of test"""
+        if self.trainer.is_global_zero:
+            wandb.save("neural_lam/data_config.yaml")
+
     def on_test_epoch_end(self):
         """
         Compute test metrics and make plots at the end of test epoch.
@@ -597,7 +607,3 @@ class ARModel(pl.LightningModule):
         if not self.restore_opt:
             opt = self.configure_optimizers()
             checkpoint["optimizer_states"] = [opt.state_dict()]
-
-    def on_run_end(self):
-        if self.trainer.is_global_zero:
-            wandb.save("neural_lam/data_config.yaml")
