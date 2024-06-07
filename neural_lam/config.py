@@ -407,7 +407,8 @@ class Config:
         """Process the dataset for the given category."""
         dataset = self.open_zarrs(category)
         dataset = self.extract_vars(category, dataset)
-        dataset = self.filter_dataset_by_time(dataset, split)
+        if category != "static":
+            dataset = self.filter_dataset_by_time(dataset, split)
         dataset = self.stack_grid(dataset)
         dataset = self.rename_dataset_dims_and_vars(category, dataset)
         dataset = self.filter_dimensions(dataset)
