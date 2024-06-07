@@ -243,30 +243,45 @@ class Config:
     @functools.lru_cache()
     def load_normalization_stats(self, category, datatype="torch"):
         """Load the normalization statistics for the dataset."""
+        combined_stats = self._load_and_merge_stats()
+        if combined_stats is None:
+            return None
+
+        combined_stats = self._rename_data_vars(combined_stats)
+
+        stats = self._select_stats_by_category(combined_stats, category)
+        if stats is None:
+            return None
+
+        if datatype == "torch":
+            return self._convert_stats_to_torch(stats)
+
+        return stats
+
+    def _load_and_merge_stats(self):
+        combined_stats = None
         for i, zarr_config in enumerate(
             self.values["utilities"]["normalization"]["zarrs"]
         ):
             stats_path = zarr_config["path"]
             if not os.path.exists(stats_path):
                 print(
-                    f"Normalization statistics not found at path: "
-                    f"{stats_path}"
+                    f"Normalization statistics not found at path: {stats_path}"
                 )
                 return None
             stats = xr.open_zarr(stats_path, consolidated=True)
             if i == 0:
                 combined_stats = stats
             else:
-                stats = xr.merge([stats, combined_stats])
-                combined_stats = stats
+                combined_stats = xr.merge([stats, combined_stats])
+        return combined_stats
 
-        # Rename data variables
+    def _rename_data_vars(self, combined_stats):
         vars_mapping = {}
-        zarr_configs = self.values["utilities"]["normalization"]["zarrs"]
-        for zarr_config in zarr_configs:
+        for zarr_config in self.values["utilities"]["normalization"]["zarrs"]:
             vars_mapping.update(zarr_config["stats_vars"])
 
-        combined_stats = combined_stats.rename_vars(
+        return combined_stats.rename_vars(
             {
                 v: k
                 for k, v in vars_mapping.items()
@@ -274,38 +289,44 @@ class Config:
             }
         )
 
+    def _select_stats_by_category(self, combined_stats, category):
         if category == "state":
             stats = combined_stats.loc[dict(variable=self.vars_names(category))]
-            stats = stats.drop_vars(["forcing_mean", "forcing_std"])
+            return stats.drop_vars(["forcing_mean", "forcing_std"])
         elif category == "forcing":
             vars = self.vars_names(category)
             window = self["forcing"]["window"]
             forcing_vars = [f"{var}_{i}" for var in vars for i in range(window)]
             stats = combined_stats.loc[dict(forcing_variable=forcing_vars)]
-            stats = stats[["forcing_mean", "forcing_std"]]
+            return stats[["forcing_mean", "forcing_std"]]
         else:
             print(f"Invalid category: {category}")
             return None
 
-        if datatype == "torch":
-            stats_dict = {
-                var: torch.tensor(stats[var].values, dtype=torch.float32)
-                for var in stats.data_vars
-            }
-            return stats_dict
-
-        return stats
+    def _convert_stats_to_torch(self, stats):
+        return {
+            var: torch.tensor(stats[var].values, dtype=torch.float32)
+            for var in stats.data_vars
+        }
 
     def extract_vars(self, category, dataset=None):
         """Extract the variables from the dataset."""
         if dataset is None:
             dataset = self.open_zarrs(category)
-        surface_vars = (
+
+        surface_vars = self._extract_surface_vars(category, dataset)
+        atmosphere_vars = self._extract_atmosphere_vars(category, dataset)
+
+        return self._merge_vars(surface_vars, atmosphere_vars, category)
+
+    def _extract_surface_vars(self, category, dataset):
+        return (
             dataset[self[category].surface_vars]
             if self[category].surface_vars
             else []
         )
 
+    def _extract_atmosphere_vars(self, category, dataset):
         if (
             "level" not in dataset.to_array().dims
             and self[category].atmosphere_vars
@@ -314,7 +335,7 @@ class Config:
                 dataset.attrs["category"], dataset=dataset
             )
 
-        atmosphere_vars = (
+        return (
             xr.merge(
                 [
                     dataset[var]
@@ -328,6 +349,7 @@ class Config:
             else []
         )
 
+    def _merge_vars(self, surface_vars, atmosphere_vars, category):
         if surface_vars and atmosphere_vars:
             return xr.merge([surface_vars, atmosphere_vars])
         elif surface_vars:
