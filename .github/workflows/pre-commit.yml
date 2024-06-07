@@ -1,4 +1,4 @@
-name: lint
+name: Linting
 
 on:
   # trigger on pushes to any branch, but not main
