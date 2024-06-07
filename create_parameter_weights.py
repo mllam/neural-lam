@@ -43,7 +43,7 @@ class PaddedWeatherDataset(torch.utils.data.Dataset):
     def get_original_indices(self):
         return self.original_indices
 
-    def get_original_window_indices(self, step_length):
+    def get_window_indices(self, step_length):
         return [
             i // step_length
             for i in range(len(self.original_indices) * step_length)
@@ -120,10 +120,9 @@ def save_stats(
     flux_mean = torch.mean(flux_means)  # (,)
     flux_second_moment = torch.mean(flux_squares)  # (,)
     flux_std = torch.sqrt(flux_second_moment - flux_mean**2)  # (,)
-    torch.save(
-        torch.stack((flux_mean, flux_std)).cpu(),
-        os.path.join(static_dir_path, "flux_stats.pt"),
-    )
+    print("Saving mean, std.-dev, flux_mean, flux_std...")
+    torch.save(flux_mean, os.path.join(static_dir_path, "flux_mean.pt"))
+    torch.save(flux_std, os.path.join(static_dir_path, "flux_std.pt"))
 
 
 def main():
@@ -208,7 +207,6 @@ def main():
         split="train",
         subsample_step=1,
         pred_length=63,
-        standardize=False,
     )
     if distributed:
         ds = PaddedWeatherDataset(
@@ -264,33 +262,60 @@ def main():
         dist.all_gather_object(flux_means_gathered, flux_means)
         dist.all_gather_object(flux_squares_gathered, flux_squares)
 
-    flux_mean = torch.mean(torch.stack(flux_means))  # (,)
-    flux_second_moment = torch.mean(torch.stack(flux_squares))  # (,)
-    flux_std = torch.sqrt(flux_second_moment - flux_mean**2)  # (,)
-    flux_stats = torch.stack((flux_mean, flux_std))
+        if rank == 0:
+            means_gathered, squares_gathered = torch.cat(
+                means_gathered, dim=0
+            ), torch.cat(squares_gathered, dim=0)
+            flux_means_gathered, flux_squares_gathered = torch.tensor(
+                flux_means_gathered
+            ), torch.tensor(flux_squares_gathered)
 
-    print("Saving mean, std.-dev, flux_stats...")
-    torch.save(mean, os.path.join(static_dir_path, "parameter_mean.pt"))
-    torch.save(std, os.path.join(static_dir_path, "parameter_std.pt"))
-    torch.save(flux_stats, os.path.join(static_dir_path, "flux_stats.pt"))
+            original_indices = ds.get_original_indices()
+            means, squares = [means_gathered[i] for i in original_indices], [
+                squares_gathered[i] for i in original_indices
+            ]
+            flux_means, flux_squares = [
+                flux_means_gathered[i] for i in original_indices
+            ], [flux_squares_gathered[i] for i in original_indices]
+    else:
+        means = [torch.cat(means, dim=0)]  # (N_batch, d_features,)
+        squares = [torch.cat(squares, dim=0)]  # (N_batch, d_features,)
+        flux_means = [torch.tensor(flux_means)]  # (N_batch,)
+        flux_squares = [torch.tensor(flux_squares)]  # (N_batch,)
 
-    # Compute mean and std.-dev. of one-step differences across the dataset
+    if rank == 0:
+        save_stats(
+            static_dir_path,
+            means,
+            squares,
+            flux_means,
+            flux_squares,
+            "parameter",
+        )
+
+    if distributed:
+        dist.barrier()
+
     print("Computing mean and std.-dev. for one-step differences...")
-    ds_standard = WeatherDataset(
-        config_loader.dataset.name,
-        split="train",
-        subsample_step=1,
-        pred_length=63,
-        standardize=True,
-    )  # Re-load with standardization
-    loader_standard = torch.utils.data.DataLoader(
-        ds_standard, args.batch_size, shuffle=False, num_workers=args.n_workers
-    )
+
     used_subsample_len = (65 // args.step_length) * args.step_length
 
+    mean = torch.load(os.path.join(static_dir_path, "parameter_mean.pt"))
+    std = torch.load(os.path.join(static_dir_path, "parameter_std.pt"))
+    if distributed:
+        mean, std = mean.to(device), std.to(device)
     diff_means = []
     diff_squares = []
-    for init_batch, target_batch, _ in tqdm(loader_standard):
+    for init_batch, target_batch, _ in tqdm(loader):
+        if distributed:
+            init_batch, target_batch = (
+                init_batch.to(device),
+                target_batch.to(device),
+            )
+        # normalize the batch
+        init_batch = (init_batch - mean) / std
+        target_batch = (target_batch - mean) / std
+
         batch = torch.cat(
             (init_batch, target_batch), dim=1
         )  # (N_batch, N_t', N_grid, d_features)
@@ -331,9 +356,7 @@ def main():
             ).view(
                 -1, *diff_squares[0].shape
             )
-            original_indices = ds_standard.get_original_window_indices(
-                args.step_length
-            )
+            original_indices = ds.get_window_indices(args.step_length)
             diff_means, diff_squares = [
                 diff_means_gathered[i] for i in original_indices
             ], [diff_squares_gathered[i] for i in original_indices]
