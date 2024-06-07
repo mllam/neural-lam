@@ -73,6 +73,9 @@ def main(input_args=None):
         help="Path to load model parameters from (default: None)",
     )
     parser.add_argument(
+        "--resume_run", type=str, help="Run ID to resume (default: None)"
+    )
+    parser.add_argument(
         "--restore_opt",
         type=int,
         default=0,
@@ -285,9 +288,9 @@ def main(input_args=None):
         mode="min",
         save_last=True,
     )
-    logger = pl.loggers.WandbLogger(
-        project=args.wandb_project, name=run_name, config=args
-    )
+
+    logger = utils.init_wandb(args)
+
     trainer = pl.Trainer(
         max_epochs=args.epochs,
         deterministic=True,
@@ -299,12 +302,6 @@ def main(input_args=None):
         check_val_every_n_epoch=args.val_interval,
         precision=args.precision,
     )
-
-    # Only init once, on rank 0 only
-    if trainer.global_rank == 0:
-        utils.init_wandb_metrics(
-            logger, args.val_steps_to_log
-        )  # Do after wandb.init
 
     if args.eval:
         if args.eval == "val":

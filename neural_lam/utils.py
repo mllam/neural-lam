@@ -1,10 +1,14 @@
 # Standard library
 import os
+import random
 import shutil
+import time
 
 # Third-party
 import numpy as np
+import pytorch_lightning as pl
 import torch
+from pytorch_lightning.utilities import rank_zero_only
 from torch import nn
 from tueplots import bundles, figsizes
 
@@ -129,7 +133,8 @@ def load_graph(graph_name, device="cpu"):
     hierarchical = n_levels > 1  # Nor just single level mesh graph
 
     # Load static edge features
-    m2m_features = loads_file("m2m_features.pt")  # List of (M_m2m[l], d_edge_f)
+    # List of (M_m2m[l], d_edge_f)
+    m2m_features = loads_file("m2m_features.pt")
     g2m_features = loads_file("g2m_features.pt")  # (M_g2m, d_edge_f)
     m2g_features = loads_file("m2g_features.pt")  # (M_m2g, d_edge_f)
 
@@ -265,11 +270,38 @@ def fractional_plot_bundle(fraction):
     return bundle
 
 
-def init_wandb_metrics(wandb_logger, val_steps):
-    """
-    Set up wandb metrics to track
-    """
-    experiment = wandb_logger.experiment
+@rank_zero_only
+def rank_zero_print(*args, **kwargs):
+    """Print only from rank 0 process"""
+    print(*args, **kwargs)
+
+
+@rank_zero_only
+def init_wandb(args):
+    """Initialize wandb"""
+    if args.resume_run is None:
+        prefix = f"subset-{args.subset_ds}-" if args.subset_ds else ""
+        if args.eval:
+            prefix = prefix + f"eval-{args.eval}-"
+        random_int = random.randint(0, 10000)
+        run_name = (
+            f"{prefix}{args.model}-{args.processor_layers}x{args.hidden_dim}-"
+            f"{time.strftime('%m_%d_%H_%M_%S')}-{random_int}"
+        )
+        logger = pl.loggers.WandbLogger(
+            project=args.wandb_project,
+            name=run_name,
+            config=args,
+        )
+    else:
+        logger = pl.loggers.WandbLogger(
+            project=args.wandb_project,
+            id=args.resume_run,
+            config=args,
+        )
+    experiment = logger.experiment
     experiment.define_metric("val_mean_loss", summary="min")
-    for step in val_steps:
+    for step in args.val_steps_to_log:
         experiment.define_metric(f"val_loss_unroll{step}", summary="min")
+
+    return logger

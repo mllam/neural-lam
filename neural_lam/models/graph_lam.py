@@ -25,7 +25,7 @@ class GraphLAM(BaseGraphModel):
         # grid_dim from data + static + batch_static
         mesh_dim = self.mesh_static_features.shape[1]
         m2m_edges, m2m_dim = self.m2m_features.shape
-        print(
+        utils.rank_zero_print(
             f"Edges in subgraphs: m2m={m2m_edges}, g2m={self.g2m_edges}, "
             f"m2g={self.m2g_edges}"
         )

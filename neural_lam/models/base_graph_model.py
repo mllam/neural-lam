@@ -29,7 +29,7 @@ class BaseGraphModel(ARModel):
 
         # Specify dimensions of data
         self.num_mesh_nodes, _ = self.get_num_mesh()
-        print(
+        utils.rank_zero_print(
             f"Loaded graph with {self.num_grid_nodes + self.num_mesh_nodes} "
             f"nodes ({self.num_grid_nodes} grid, {self.num_mesh_nodes} mesh)"
         )
