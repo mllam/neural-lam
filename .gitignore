@@ -9,7 +9,6 @@ graphs
 sweeps
 test_*.sh
 .vscode
-*slurm*
 
 ### Python ###
 # Byte-compiled / optimized / DLL files
