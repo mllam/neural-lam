@@ -136,6 +136,7 @@ A few of the key ones are outlined below:
 * `--ar_steps`: Number of time steps to unroll for when making predictions and computing the loss
 
 Checkpoints of trained models are stored in the `saved_models` directory.
+
 The implemented models are:
 
 ### Graph-LAM
@@ -171,6 +172,14 @@ python train_model.py --model hi_lam_parallel --graph hierarchical ...
 ```
 
 Checkpoint files for our models trained on the MEPS data are available upon request.
+
+### High Performance Computing
+
+The training script can be run on a cluster with multiple GPU-nodes. Neural LAM is set up to use PyTorch Lightning's `DDP` backend for distributed training.
+Currently, only the SLURM (Simple Linux Utility for Resource Management) scheduler is supported.
+To run on a cluster, consider the following example script: `docs/examples/submit_slurm_job.sh`.
+This script must first be adapted to the specific requirements of the cluster and then submitted with `sbatch`.
+If SLURM is not available in the current environment, the script is run locally.
 
 ## Evaluate Models
 Evaluation is also done using `train_model.py`, but using the `--eval` option.
