@@ -6,6 +6,9 @@ from argparse import ArgumentParser
 import numpy as np
 import torch
 
+# First-party
+from neural_lam import config
+
 
 def main():
     """
@@ -13,26 +16,27 @@ def main():
     """
     parser = ArgumentParser(description="Training arguments")
     parser.add_argument(
-        "--dataset",
+        "--data_config",
         type=str,
-        default="meps_example",
-        help="Dataset to compute weights for (default: meps_example)",
+        default="neural_lam/data_config.yaml",
+        help="Path to data config file (default: neural_lam/data_config.yaml)",
     )
     args = parser.parse_args()
+    config_loader = config.Config.from_file(args.data_config)
 
-    static_dir_path = os.path.join("data", args.dataset, "static")
+    static_dir_path = os.path.join("data", config_loader.dataset.name, "static")
 
     # -- Static grid node features --
     grid_xy = torch.tensor(
         np.load(os.path.join(static_dir_path, "nwp_xy.npy"))
-    )  # (2, N_x, N_y)
+    )  # (2, N_y, N_x)
     grid_xy = grid_xy.flatten(1, 2).T  # (N_grid, 2)
     pos_max = torch.max(torch.abs(grid_xy))
     grid_xy = grid_xy / pos_max  # Divide by maximum coordinate
 
     geopotential = torch.tensor(
         np.load(os.path.join(static_dir_path, "surface_geopotential.npy"))
-    )  # (N_x, N_y)
+    )  # (N_y, N_x)
     geopotential = geopotential.flatten(0, 1).unsqueeze(1)  # (N_grid,1)
     gp_min = torch.min(geopotential)
     gp_max = torch.max(geopotential)
@@ -42,7 +46,7 @@ def main():
     grid_border_mask = torch.tensor(
         np.load(os.path.join(static_dir_path, "border_mask.npy")),
         dtype=torch.int64,
-    )  # (N_x, N_y)
+    )  # (N_y, N_x)
     grid_border_mask = (
         grid_border_mask.flatten(0, 1).to(torch.float).unsqueeze(1)
     )  # (N_grid, 1)

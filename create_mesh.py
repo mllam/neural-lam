@@ -12,6 +12,9 @@ import torch
 import torch_geometric as pyg
 from torch_geometric.utils.convert import from_networkx
 
+# First-party
+from neural_lam import config
+
 
 def plot_graph(graph, title=None):
     fig, axis = plt.subplots(figsize=(8, 8), dpi=200)  # W,H
@@ -150,14 +153,13 @@ def prepend_node_index(graph, new_index):
     return networkx.relabel_nodes(graph, to_mapping, copy=True)
 
 
-def main():
+def main(input_args=None):
     parser = ArgumentParser(description="Graph generation arguments")
     parser.add_argument(
-        "--dataset",
+        "--data_config",
         type=str,
-        default="meps_example",
-        help="Dataset to load grid point coordinates from "
-        "(default: meps_example)",
+        default="neural_lam/data_config.yaml",
+        help="Path to data config file (default: neural_lam/data_config.yaml)",
     )
     parser.add_argument(
         "--graph",
@@ -184,10 +186,11 @@ def main():
         default=0,
         help="Generate hierarchical mesh graph (default: 0, no)",
     )
-    args = parser.parse_args()
+    args = parser.parse_args(input_args)
 
     # Load grid positions
-    static_dir_path = os.path.join("data", args.dataset, "static")
+    config_loader = config.Config.from_file(args.data_config)
+    static_dir_path = os.path.join("data", config_loader.dataset.name, "static")
     graph_dir_path = os.path.join("graphs", args.graph)
     os.makedirs(graph_dir_path, exist_ok=True)
 

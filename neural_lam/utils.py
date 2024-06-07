@@ -1,14 +1,12 @@
 # Standard library
 import os
+import shutil
 
 # Third-party
 import numpy as np
 import torch
 from torch import nn
 from tueplots import bundles, figsizes
-
-# First-party
-from neural_lam import constants
 
 
 def load_dataset_stats(dataset_name, device="cpu"):
@@ -253,7 +251,11 @@ def fractional_plot_bundle(fraction):
     Get the tueplots bundle, but with figure width as a fraction of
     the page width.
     """
-    bundle = bundles.neurips2023(usetex=True, family="serif")
+    # If latex is not available, some visualizations might not render correctly,
+    # but will at least not raise an error.
+    # Alternatively, use unicode raised numbers.
+    usetex = True if shutil.which("latex") else False
+    bundle = bundles.neurips2023(usetex=usetex, family="serif")
     bundle.update(figsizes.neurips2023())
     original_figsize = bundle["figure.figsize"]
     bundle["figure.figsize"] = (
@@ -263,11 +265,11 @@ def fractional_plot_bundle(fraction):
     return bundle
 
 
-def init_wandb_metrics(wandb_logger):
+def init_wandb_metrics(wandb_logger, val_steps):
     """
     Set up wandb metrics to track
     """
     experiment = wandb_logger.experiment
     experiment.define_metric("val_mean_loss", summary="min")
-    for step in constants.VAL_STEP_LOG_ERRORS:
+    for step in val_steps:
         experiment.define_metric(f"val_loss_unroll{step}", summary="min")
