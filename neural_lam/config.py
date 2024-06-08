@@ -298,6 +298,8 @@ class Config:
             non_normalized_vars = (
                 self.utilities.normalization.non_normalized_vars
             )
+            if non_normalized_vars is None:
+                non_normalized_vars = []
             vars = self.vars_names(category)
             window = self["forcing"]["window"]
             forcing_vars = [f"{var}_{i}" for var in vars for i in range(window)]
