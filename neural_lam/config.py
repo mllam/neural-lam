@@ -124,7 +124,7 @@ class Config:
     def stack_grid(self, dataset):
         if dataset is None:
             return None
-        dims = dataset.to_array().dims
+        dims = list(dataset.dims)
 
         if "grid" in dims:
             print("\033[94mGrid dimensions already stacked.\033[0m")
@@ -144,7 +144,7 @@ class Config:
     def filter_dimensions(self, dataset, transpose_array=True):
         """Filter the dimensions of the dataset."""
         dims_to_keep = self.DIMS_TO_KEEP
-        dataset_dims = set(dataset.to_array().dims)
+        dataset_dims = set(list(dataset.dims) + ["variable"])
         min_req_dims = dims_to_keep.copy()
         min_req_dims.discard("time")
         if not min_req_dims.issubset(dataset_dims):
@@ -161,7 +161,7 @@ class Config:
                 dataset.attrs["category"], dataset=dataset
             )
             dataset = self.stack_grid(dataset)
-            dataset_dims = set(dataset.to_array().dims)
+            dataset_dims = set(list(dataset.dims) + ["variable"])
             if min_req_dims.issubset(dataset_dims):
                 print(
                     "\033[92mSuccessfully updated dims and "
@@ -174,7 +174,7 @@ class Config:
                 )
                 return None
 
-        dataset_dims = set(dataset.to_array().dims)
+        dataset_dims = set(list(dataset.dims) + ["variable"])
         dims_to_drop = dataset_dims - dims_to_keep
         dataset = dataset.drop_dims(dims_to_drop)
         if dims_to_drop:
@@ -327,10 +327,7 @@ class Config:
         )
 
     def _extract_atmosphere_vars(self, category, dataset):
-        if (
-            "level" not in dataset.to_array().dims
-            and self[category].atmosphere_vars
-        ):
+        if "level" not in list(dataset.dims) and self[category].atmosphere_vars:
             dataset = self.rename_dataset_dims_and_vars(
                 dataset.attrs["category"], dataset=dataset
             )
