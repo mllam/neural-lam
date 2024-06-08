@@ -335,19 +335,16 @@ class Config:
                 dataset.attrs["category"], dataset=dataset
             )
 
-        return (
-            xr.merge(
-                [
-                    dataset[var]
-                    .sel(level=level, drop=True)
-                    .rename(f"{var}_{level}")
-                    for var in self[category].atmosphere_vars
-                    for level in self[category].levels
-                ]
-            )
-            if self[category].atmosphere_vars
-            else []
-        )
+        data_arrays = [
+            dataset[var].sel(level=level, drop=True).rename(f"{var}_{level}")
+            for var in self[category].atmosphere_vars
+            for level in self[category].levels
+        ]
+
+        if self[category].atmosphere_vars:
+            return xr.merge(data_arrays)
+        else:
+            return xr.Dataset()
 
     def _merge_vars(self, surface_vars, atmosphere_vars, category):
         if surface_vars and atmosphere_vars:
