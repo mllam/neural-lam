@@ -77,6 +77,8 @@ def plot_prediction(
     else:
         vmin, vmax = vrange
 
+    extent = data_config.get_xy_extent("state")
+
     # Set up masking of border region
     mask_reshaped = obs_mask.reshape(
         list(data_config.grid_shape_state.values.values())
@@ -103,6 +105,7 @@ def plot_prediction(
         im = ax.imshow(
             data_grid,
             origin="lower",
+            extent=extent,
             alpha=pixel_alpha,
             vmin=vmin,
             vmax=vmax,
@@ -134,6 +137,8 @@ def plot_spatial_error(error, obs_mask, data_config, title=None, vrange=None):
     else:
         vmin, vmax = vrange
 
+    extent = data_config.get_xy_extent("state")
+
     # Set up masking of border region
     mask_reshaped = obs_mask.reshape(
         list(data_config.grid_shape_state.values.values())
@@ -157,6 +162,7 @@ def plot_spatial_error(error, obs_mask, data_config, title=None, vrange=None):
     im = ax.imshow(
         error_grid,
         origin="lower",
+        extent=extent,
         alpha=pixel_alpha,
         vmin=vmin,
         vmax=vmax,

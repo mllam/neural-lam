@@ -162,6 +162,6 @@ splits:
 projection:
   class: LambertConformal # Name of class in cartopy.crs
   kwargs:
-    central_longitude: 6.22
-    central_latitude: 56.0
-    standard_parallels: [47.6, 64.4]
+    central_longitude: 25
+    central_latitude: 56.4
+    standard_parallels: [50.4, 61.6]

@@ -230,15 +230,22 @@ class Config:
         return reshaped_data
 
     @functools.lru_cache()
-    def get_xy(self, category):
+    def get_xy(self, category, stacked=True):
         """Return the x, y coordinates of the dataset."""
         dataset = self.open_zarrs(category)
         x, y = dataset.x.values, dataset.y.values
         if x.ndim == 1:
             x, y = np.meshgrid(x, y)
-        xy = np.stack((x, y), axis=0)  # (2, N_y, N_x)
+        if stacked:
+            xy = np.stack((x, y), axis=0)  # (2, N_y, N_x)
+            return xy
+        return x, y
 
-        return xy
+    def get_xy_extent(self, category):
+        """Return the extent of the x, y coordinates."""
+        x, y = self.get_xy(category, stacked=False)
+        extent = [x.min(), x.max(), y.min(), y.max()]
+        return extent
 
     @functools.lru_cache()
     def load_normalization_stats(self, category, datatype="torch"):
