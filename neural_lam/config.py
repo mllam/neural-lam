@@ -292,13 +292,34 @@ class Config:
     def _select_stats_by_category(self, combined_stats, category):
         if category == "state":
             stats = combined_stats.loc[dict(variable=self.vars_names(category))]
-            return stats.drop_vars(["forcing_mean", "forcing_std"])
+            stats = stats.drop_vars(["forcing_mean", "forcing_std"])
+            return stats
         elif category == "forcing":
+            non_normalized_vars = (
+                self.utilities.normalization.non_normalized_vars
+            )
             vars = self.vars_names(category)
             window = self["forcing"]["window"]
             forcing_vars = [f"{var}_{i}" for var in vars for i in range(window)]
-            stats = combined_stats.loc[dict(forcing_variable=forcing_vars)]
-            return stats[["forcing_mean", "forcing_std"]]
+            normalized_vars = [
+                var for var in forcing_vars if var not in non_normalized_vars
+            ]
+            non_normalized_vars = [
+                var for var in forcing_vars if var in non_normalized_vars
+            ]
+            stats_normalized = combined_stats.loc[
+                dict(forcing_variable=normalized_vars)
+            ]
+            if non_normalized_vars:
+                stats_non_normalized = combined_stats.loc[
+                    dict(forcing_variable=non_normalized_vars)
+                ]
+                stats = xr.merge([stats_normalized, stats_non_normalized])
+            else:
+                stats = stats_normalized
+            stats_normalized = stats_normalized[["forcing_mean", "forcing_std"]]
+
+            return stats
         else:
             print(f"Invalid category: {category}")
             return None
@@ -310,14 +331,23 @@ class Config:
         }
 
     def extract_vars(self, category, dataset=None):
-        """Extract the variables from the dataset."""
         if dataset is None:
             dataset = self.open_zarrs(category)
-
-        surface_vars = self._extract_surface_vars(category, dataset)
-        atmosphere_vars = self._extract_atmosphere_vars(category, dataset)
-
-        return self._merge_vars(surface_vars, atmosphere_vars, category)
+        surface_vars = None
+        atmosphere_vars = None
+        if self[category].surface_vars:
+            surface_vars = self._extract_surface_vars(category, dataset)
+        if self[category].atmosphere_vars:
+            atmosphere_vars = self._extract_atmosphere_vars(category, dataset)
+        if surface_vars and atmosphere_vars:
+            return xr.merge([surface_vars, atmosphere_vars])
+        elif surface_vars:
+            return surface_vars
+        elif atmosphere_vars:
+            return atmosphere_vars
+        else:
+            print(f"No variables found in dataset {category}")
+            return None
 
     def _extract_surface_vars(self, category, dataset):
         return (
@@ -342,17 +372,6 @@ class Config:
             return xr.merge(data_arrays)
         else:
             return xr.Dataset()
-
-    def _merge_vars(self, surface_vars, atmosphere_vars, category):
-        if surface_vars and atmosphere_vars:
-            return xr.merge([surface_vars, atmosphere_vars])
-        elif surface_vars:
-            return surface_vars
-        elif atmosphere_vars:
-            return atmosphere_vars
-        else:
-            print(f"No variables found in dataset {category}")
-            return None
 
     def rename_dataset_dims_and_vars(self, category, dataset=None):
         """Rename the dimensions and variables of the dataset."""

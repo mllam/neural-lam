@@ -141,6 +141,11 @@ utilities:
       - vars:
         - cape_column
         - xhail0m
+    non_normalized_vars:
+      - hour_cos
+      - hour_sin
+      - year_cos
+      - year_sin
 grid_shape_state:
   y: 589
   x: 789
