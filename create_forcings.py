@@ -68,6 +68,10 @@ def main():
         {"y": dataset.y, "x": dataset.x}
     )
 
+    datetime_forcing_expanded = datetime_forcing_expanded.chunk(
+        {"time": 1, "y": -1, "x": -1}
+    )
+
     datetime_forcing_expanded.to_zarr(args.zarr_path, mode="w")
     print(f"Datetime forcing saved to {args.zarr_path}")
 
