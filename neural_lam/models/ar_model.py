@@ -6,6 +6,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pytorch_lightning as pl
 import torch
+
 import wandb
 
 # First-party
@@ -195,7 +196,8 @@ class ARModel(pl.LightningModule):
         return prediction, target_states, pred_std
 
     def on_after_batch_transfer(self, batch, dataloader_idx):
-        """Normalize Batch data after transferring to the device."""
+        """Normalize batch data to mean 0, std 1 after transferring to the
+        device."""
         init_states, target_states, forcing_features = batch
         init_states = (init_states - self.data_mean) / self.data_std
         target_states = (target_states - self.data_mean) / self.data_std
@@ -222,8 +224,11 @@ class ARModel(pl.LightningModule):
 
         log_dict = {"train_loss": batch_loss}
         self.log_dict(
-            log_dict, prog_bar=True, on_step=True, on_epoch=True, sync_dist=True
-        )
+            log_dict,
+            prog_bar=True,
+            on_step=True,
+            on_epoch=True,
+            sync_dist=True)
         return batch_loss
 
     def all_gather_cat(self, tensor_to_gather):
@@ -351,8 +356,9 @@ class ARModel(pl.LightningModule):
         ):
             # Need to plot more example predictions
             n_additional_examples = min(
-                prediction.shape[0], self.n_example_pred - self.plotted_examples
-            )
+                prediction.shape[0],
+                self.n_example_pred
+                - self.plotted_examples)
 
             self.plot_examples(
                 batch, n_additional_examples, prediction=prediction
@@ -574,10 +580,14 @@ class ARModel(pl.LightningModule):
                 )
                 for loss_map in mean_spatial_loss
             ]
-            pdf_loss_maps_dir = os.path.join(wandb.run.dir, "spatial_loss_maps")
+            pdf_loss_maps_dir = os.path.join(
+                wandb.run.dir, "spatial_loss_maps")
             os.makedirs(pdf_loss_maps_dir, exist_ok=True)
             for t_i, fig in zip(self.args.val_steps_to_log, pdf_loss_map_figs):
-                fig.savefig(os.path.join(pdf_loss_maps_dir, f"loss_t{t_i}.pdf"))
+                fig.savefig(
+                    os.path.join(
+                        pdf_loss_maps_dir,
+                        f"loss_t{t_i}.pdf"))
             # save mean spatial loss as .pt file also
             torch.save(
                 mean_spatial_loss.cpu(),
