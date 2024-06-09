@@ -165,3 +165,4 @@ projection:
     central_longitude: 25
     central_latitude: 56.4
     standard_parallels: [50.4, 61.6]
+  inverted: false # Whether the projection is inverted

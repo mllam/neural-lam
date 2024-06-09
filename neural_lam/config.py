@@ -244,7 +244,11 @@ class Config:
     def get_xy_extent(self, category):
         """Return the extent of the x, y coordinates."""
         x, y = self.get_xy(category, stacked=False)
-        extent = [x.min(), x.max(), y.min(), y.max()]
+        if self.projection.inverted:
+            extent = [x.max(), x.min(), y.max(), y.min()]
+        else:
+            extent = [x.min(), x.max(), y.min(), y.max()]
+
         return extent
 
     @functools.lru_cache()
