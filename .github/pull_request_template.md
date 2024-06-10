@@ -4,7 +4,8 @@
 < Please also include relevant motivation and context. >
 
 < List any dependencies that are required for this change. >
-
+## Issue Link
+< Link to the relevant issue or task. > (e.g. `closes #00` or `solves #00`)
 ## Type of change
 
 - [ ] 🐛 Bug fix (non-breaking change that fixes an issue)
