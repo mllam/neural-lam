@@ -8,8 +8,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [unreleased](https://github.com/joeloskarsson/neural-lam/compare/v0.1.0...HEAD)
 
 ### Added
-- Added tests for loading dataset, creating graph, and training model based on reduced MEPS dataset stored on AWS S3, along with automatic running of tests on push/PR to GitHub. Added caching of test data tp speed up running tests.
-  [/#38](https://github.com/mllam/neural-lam/pull/38)
+- Added tests for loading dataset, creating graph, and training model based on reduced MEPS dataset stored on AWS S3, along with automatic running of tests on push/PR to GitHub, including push to main branch. Added caching of test data to speed up running tests.
+  [\#38](https://github.com/mllam/neural-lam/pull/38) [\#55](https://github.com/mllam/neural-lam/pull/55)
   @SimonKamuk
 
 - Replaced `constants.py` with `data_config.yaml` for data configuration management
