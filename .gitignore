@@ -4,7 +4,7 @@ slurm_log*
 saved_models
 lightning_logs
 data
-graphs
+graphs/*
 *.sif
 sweeps
 test_*.sh
