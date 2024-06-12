@@ -14,7 +14,7 @@ Graph Neural Networks are implemented using [PyG](https://pyg.org/) and logging 
     <em>Example ensemble forecast from Graph-EFM for net solar longwave radiation.</em>
 </p>
 
-This branch contains the code for our paper *Probabilistic Weather Forecasting with Hierarchical Graph Neural Networks*, for Limited Area Modeling (LAM).
+This branch contains the code for our paper [*Probabilistic Weather Forecasting with Hierarchical Graph Neural Networks*](https://arxiv.org/abs/2406.04759), for Limited Area Modeling (LAM).
 In particular, it contains implementations of:
 
 * Our ensemble forecasting model Graph-EFM.
