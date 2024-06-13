@@ -194,6 +194,20 @@ class ARModel(pl.LightningModule):
 
         return prediction, target_states, pred_std
 
+    def on_after_batch_transfer(self, batch, dataloader_idx):
+        """Normalize batch data to mean 0, std 1 after transferring to the
+        device."""
+        init_states, target_states, forcing_features = batch
+        init_states = (init_states - self.data_mean) / self.data_std
+        target_states = (target_states - self.data_mean) / self.data_std
+        forcing_features = (forcing_features - self.flux_mean) / self.flux_std
+        batch = (
+            init_states,
+            target_states,
+            forcing_features,
+        )
+        return batch
+
     def training_step(self, batch):
         """
         Train on single batch

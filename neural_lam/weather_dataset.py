@@ -7,9 +7,6 @@ import os
 import numpy as np
 import torch
 
-# First-party
-from neural_lam import utils
-
 
 class WeatherDataset(torch.utils.data.Dataset):
     """
@@ -29,7 +26,6 @@ class WeatherDataset(torch.utils.data.Dataset):
         pred_length=19,
         split="train",
         subsample_step=3,
-        standardize=True,
         subset=False,
         control_only=False,
     ):
@@ -60,17 +56,6 @@ class WeatherDataset(torch.utils.data.Dataset):
         assert (
             self.sample_length <= self.original_sample_length
         ), "Requesting too long time series samples"
-
-        # Set up for standardization
-        self.standardize = standardize
-        if standardize:
-            ds_stats = utils.load_dataset_stats(dataset_name, "cpu")
-            self.data_mean, self.data_std, self.flux_mean, self.flux_std = (
-                ds_stats["data_mean"],
-                ds_stats["data_std"],
-                ds_stats["flux_mean"],
-                ds_stats["flux_std"],
-            )
 
         # If subsample index should be sampled (only duing training)
         self.random_subsample = split == "train"
@@ -148,10 +133,6 @@ class WeatherDataset(torch.utils.data.Dataset):
         sample = sample[init_id : (init_id + self.sample_length)]
         # (sample_length, N_grid, d_features)
 
-        if self.standardize:
-            # Standardize sample
-            sample = (sample - self.data_mean) / self.data_std
-
         # Split up sample in init. states and target states
         init_states = sample[:2]  # (2, N_grid, d_features)
         target_states = sample[2:]  # (sample_length-2, N_grid, d_features)
@@ -184,9 +165,6 @@ class WeatherDataset(torch.utils.data.Dataset):
         flux = torch.tensor(np.load(flux_path), dtype=torch.float32).unsqueeze(
             -1
         )  # (N_t', dim_y, dim_x, 1)
-
-        if self.standardize:
-            flux = (flux - self.flux_mean) / self.flux_std
 
         # Flatten and subsample flux forcing
         flux = flux.flatten(1, 2)  # (N_t, N_grid, 1)
