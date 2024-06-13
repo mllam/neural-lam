@@ -30,6 +30,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+  Optional multi-core/GPU support for statistics calculation in `create_parameter_weights.py`
+  [\#22](https://github.com/mllam/neural-lam/pull/22)
+  @sadamov
+
 - Robust restoration of optimizer and scheduler using `ckpt_path`
   [\#17](https://github.com/mllam/neural-lam/pull/17)
   @sadamov
