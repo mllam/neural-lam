@@ -1,14 +1,14 @@
 ### Project Specific ###
 wandb
-slurm_log*
 saved_models
 lightning_logs
 data
 graphs
 *.sif
 sweeps
-test_*.sh
 .vscode
+*.html
+*.zarr
 *slurm*
 
 ### Python ###
@@ -75,3 +75,4 @@ tags
 
 # Coc configuration directory
 .vim
+.vscode

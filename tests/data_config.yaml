@@ -141,28 +141,22 @@ utilities:
       - vars:
         - cape_column
         - xhail0m
-    non_normalized_vars:
-      - hour_cos
-      - hour_sin
-      - year_cos
-      - year_sin
 grid_shape_state:
   y: 589
   x: 789
 splits:
   train:
     start: 1990-09-01T00
-    end: 1990-09-11T00
+    end: 1990-09-01T02
   val:
-    start: 1990-09-11T03
-    end: 1990-09-13T09
+    start: 1990-09-11T00
+    end: 1990-09-11T02
   test:
-    start: 1990-09-11T03
-    end: 1990-09-13T09
+    start: 1990-09-11T00
+    end: 1990-09-11T02
 projection:
   class: LambertConformal # Name of class in cartopy.crs
   kwargs:
-    central_longitude: 25
-    central_latitude: 56.4
-    standard_parallels: [50.4, 61.6]
-  inverted: false # Whether the projection is inverted
+    central_longitude: 6.22
+    central_latitude: 56.0
+    standard_parallels: [47.6, 64.4]

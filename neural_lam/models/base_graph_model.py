@@ -157,7 +157,7 @@ class BaseGraphModel(ARModel):
             pred_delta_mean, pred_std_raw = net_output.chunk(
                 2, dim=-1
             )  # both (B, num_grid_nodes, d_f)
-            # Note: The predicted std. is not scaled in any way here
+            # NOTE: The predicted std. is not scaled in any way here
             # linter for some reason does not think softplus is callable
             # pylint: disable-next=not-callable
             pred_std = torch.nn.functional.softplus(pred_std_raw)
@@ -166,9 +166,7 @@ class BaseGraphModel(ARModel):
             pred_std = None
 
         # Rescale with one-step difference statistics
-        rescaled_delta_mean = (
-            pred_delta_mean * self.step_diff_std + self.step_diff_mean
-        )
+        rescaled_delta_mean = pred_delta_mean * self.diff_std + self.diff_mean
 
         # Residual connection for full state
         return prev_state + rescaled_delta_mean, pred_std
