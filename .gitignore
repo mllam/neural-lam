@@ -75,3 +75,8 @@ tags
 
 # Coc configuration directory
 .vim
+
+# pdm (https://pdm-project.org/en/stable/)
+.pdm-python
+# exclude pdm.lock file so that both cpu and gpu versions of torch will be accepted by pdm
+pdm.lock
