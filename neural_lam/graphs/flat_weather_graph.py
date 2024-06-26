@@ -19,6 +19,7 @@ class FlatWeatherGraph(BaseWeatherGraph):
     mesh_node_features: torch.Tensor
 
     def __post_init__(self):
+        super().__post_init__()
         BaseWeatherGraph.check_subgraph(
             self.m2m_edge_features, self.m2m_edge_index, "m2m"
         )
