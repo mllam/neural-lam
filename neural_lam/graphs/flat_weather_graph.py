@@ -1,37 +1,28 @@
+# Standard library
+from dataclasses import dataclass
+
+# Third-party
+import torch
+
 # First-party
 from neural_lam.graphs.base_weather_graph import BaseWeatherGraph
 
 
+@dataclass
 class FlatWeatherGraph(BaseWeatherGraph):
     """
     Graph object representing weather graph consisting of grid and mesh nodes
     """
 
-    def __init__(
-        self,
-        g2m_edge_index,
-        g2m_edge_features,
-        m2g_edge_index,
-        m2g_edge_features,
-        m2m_edge_index,
-        m2m_edge_features,
-        mesh_node_features,
-    ):
-        """
-        Create a new graph from tensors
-        """
-        super().__init__(
-            g2m_edge_index,
-            g2m_edge_features,
-            m2g_edge_index,
-            m2g_edge_features,
+    m2m_edge_index: torch.Tensor
+    m2m_edge_features: torch.Tensor
+    mesh_node_features: torch.Tensor
+
+    def __post_init__(self):
+        BaseWeatherGraph.check_subgraph(
+            self.m2m_edge_features, self.m2m_edge_index, "m2m"
         )
-
-        # Store mesh tensors
-        self.m2m_edge_index = m2m_edge_index
-        self.m2m_edge_features = m2m_edge_features
-        self.mesh_node_features = mesh_node_features
-
+        BaseWeatherGraph.check_features(self.mesh_node_features, "mesh nodes")
         # TODO Checks that node indices align
 
     def num_mesh_nodes(self):
