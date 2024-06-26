@@ -3,7 +3,8 @@ import os
 
 # First-party
 from create_mesh import main as create_mesh
-from neural_lam.config import Config
+from neural_lam.datastore.multizarr import MultiZarrDatastore
+# from neural_lam.datasets.config import Config
 from neural_lam.weather_dataset import WeatherDataset
 
 # Disable weights and biases to avoid unnecessary logging
@@ -13,28 +14,29 @@ os.environ["WANDB_DISABLED"] = "true"
 
 def test_load_analysis_dataset():
     # TODO: Access rights should be fixed for pooch to work
-    if not os.path.exists("data/danra"):
-        print("Please download test data first: python docs/download_danra.py")
-        return
-    data_config_file = "tests/data_config.yaml"
-    config = Config.from_file(data_config_file)
+    datastore = MultiZarrDatastore(
+        config_path="tests/datastore_configs/multizarr.danra.yaml"
+    )
 
-    var_state_names = config.vars_names("state")
-    var_state_units = config.vars_units("state")
-    num_state_vars = config.num_data_vars("state")
+    var_state_names = datastore.get_vars_names(category="state")
+    var_state_units = datastore.get_vars_units(category="state")
+    num_state_vars = datastore.get_num_data_vars(category="state")
 
     assert len(var_state_names) == len(var_state_units) == num_state_vars
 
-    var_forcing_names = config.vars_names("forcing")
-    var_forcing_units = config.vars_units("forcing")
-    num_forcing_vars = config.num_data_vars("forcing")
+    var_forcing_names = datastore.get_vars_names(category="forcing")
+    var_forcing_units = datastore.get_vars_units(category="forcing")
+    num_forcing_vars = datastore.get_num_data_vars(category="forcing")
 
     assert len(var_forcing_names) == len(var_forcing_units) == num_forcing_vars
+    
+    stats = datastore.get_normalization_stats(category="state")
+
 
     # Assert dataset can be loaded
-    ds = config.open_zarrs("state")
+    ds = datastore.get_dataarray(category="state")
     grid = ds.sizes["y"] * ds.sizes["x"]
-    dataset = WeatherDataset(split="train", ar_steps=3, standardize=False)
+    dataset = WeatherDataset(datastore=datastore, split="train", ar_steps=3, standardize=True)
     batch = dataset[0]
     # return init_states, target_states, forcing, batch_times
     # init_states: (2, N_grid, d_features)

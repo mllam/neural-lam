@@ -9,7 +9,8 @@ import torch
 import wandb
 
 # First-party
-from neural_lam import config, metrics, vis
+from neural_lam import metrics, vis
+from neural_lam.datastore.multizarr import config
 
 
 class ARModel(pl.LightningModule):
@@ -26,9 +27,13 @@ class ARModel(pl.LightningModule):
         self.save_hyperparameters()
         self.args = args
         self.data_config = config.Config.from_file(args.data_config)
+        
+        num_state_vars = self.data_config.num_data_vars("state")
+        num_forcing_vars = self.data_config.num_data_vars("forcing")
+        da_static_features = self.data_config.process_dataset("static")
 
         # Load static features for grid/data
-        static = self.data_config.process_dataset("static")
+        static = da_static_features.values
         self.register_buffer(
             "grid_static_features",
             torch.tensor(static.values, dtype=torch.float32),
@@ -43,13 +48,12 @@ class ARModel(pl.LightningModule):
 
         # Double grid output dim. to also output std.-dev.
         self.output_std = bool(args.output_std)
-        self.grid_output_dim = self.data_config.num_data_vars("state")
         if self.output_std:
             # Pred. dim. in grid cell
-            self.grid_output_dim = 2 * self.data_config.num_data_vars("state")
+            self.grid_output_dim = 2 * num_state_vars
         else:
             # Pred. dim. in grid cell
-            self.grid_output_dim = self.data_config.num_data_vars("state")
+            self.grid_output_dim = num_state_vars
             # Store constant per-variable std.-dev. weighting
             # NOTE that this is the inverse of the multiplicative weighting
             # in wMSE/wMAE

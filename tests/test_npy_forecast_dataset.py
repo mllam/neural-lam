@@ -3,12 +3,13 @@ import os
 
 # Third-party
 import pooch
+import pytest
 
 # First-party
 from create_mesh import main as create_mesh
-from neural_lam.config import Config
-from neural_lam.utils import load_static_data
 from neural_lam.weather_dataset import WeatherDataset
+from neural_lam.datastore.npyfiles import NumpyFilesDatastore
+from neural_lam.datastore.multizarr import MultiZarrDatastore
 from train_model import main as train_model
 
 # Disable weights and biases to avoid unnecessary logging
@@ -25,7 +26,8 @@ TEST_DATA_KNOWN_HASH = (
 )
 
 
-def test_retrieve_data_ewc():
+@pytest.fixture(scope="session", autouse=True)
+def ewc_testdata_path():
     # Download and unzip test data into data/meps_example_reduced
     pooch.retrieve(
         url=S3_FULL_PATH,
@@ -34,13 +36,30 @@ def test_retrieve_data_ewc():
         path="data",
         fname="meps_example_reduced.zip",
     )
+    
+    return "data/meps_example_reduced"
 
 
-def test_load_reduced_meps_dataset():
-    # The data_config.yaml file is downloaded and extracted in
-    # test_retrieve_data_ewc together with the dataset itself
-    data_config_file = "data/meps_example_reduced/data_config.yaml"
-    dataset_name = "meps_example_reduced"
+def test_load_reduced_meps_dataset(ewc_testdata_path):
+    datastore = NumpyFilesDatastore(
+        root_path=ewc_testdata_path
+    )
+    datastore = MultiZarrDatastore(
+        config_path="tests/data_config.yaml"
+    )
+    
+    datastore.get_xy(category="state", stacked=True)
+
+    import matplotlib.pyplot as plt
+    da = datastore.get_dataarray(category="forcing", split="train").unstack("grid_index")
+    da.isel(analysis_time=0, feature=-1, time=slice(0, 4)).plot(col="time", col_wrap=4)
+    plt.show()
+
+    da = datastore.get_dataarray(category="state", split="train").unstack("grid_index")
+    da.isel(analysis_time=0, feature=0, time=slice(0, 4)).plot(col="time", row="ensemble_member")
+    plt.show()
+    
+    import ipdb; ipdb.set_trace()
 
     dataset = WeatherDataset(dataset_name="meps_example_reduced")
     config = Config.from_file(data_config_file)

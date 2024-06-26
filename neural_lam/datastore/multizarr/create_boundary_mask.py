@@ -6,7 +6,7 @@ import numpy as np
 import xarray as xr
 
 # First-party
-from neural_lam import config
+from neural_lam.datastore.multizarr import config
 
 
 def main():

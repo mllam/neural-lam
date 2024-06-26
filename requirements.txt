@@ -12,7 +12,7 @@ tueplots>=0.0.8
 plotly>=5.15.0
 xarray>=0.20.1
 zarr>=2.10.0
-dask>=2022.0.0
+dask
 pandas>=1.4.0
 # for dev
 pre-commit>=2.15.0

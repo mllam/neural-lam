@@ -1,56 +1,57 @@
-# Standard library
-import functools
-import os
-from pathlib import Path
-
-# Third-party
 import cartopy.crs as ccrs
 import numpy as np
 import pandas as pd
-import torch
 import xarray as xr
 import yaml
 
+import functools
+import os
 
-class Config:
-    """Class to load and access the configuration file.
-    The class also preprocesses the dataset based on the config."""
+from .config import Config
+from ..base import BaseDatastore
 
-    DIMS_TO_KEEP = {"time", "grid", "variable"}
 
-    def __init__(self, values):
-        self.values = values
+def convert_stats_to_torch(stats):
+    """Convert the normalization statistics to torch tensors.
 
-    @classmethod
-    def from_file(cls, filepath):
-        """Load the configuration file from the given path."""
-        if filepath.endswith(".yaml"):
-            with open(filepath, encoding="utf-8", mode="r") as file:
-                return cls(values=yaml.safe_load(file))
-        else:
-            raise NotImplementedError(Path(filepath).suffix)
+    Args:
+        stats (xr.Dataset): The normalization statistics.
 
-    def __getattr__(self, name):
-        """Recursively access the values in the configuration."""
-        keys = name.split(".")
-        value = self.values
-        for key in keys:
-            if key in value:
-                value = value[key]
-            else:
-                return None
-        if isinstance(value, dict):
-            return Config(values=value)
-        return value
+    Returns:
+        dict(tensor): The normalization statistics as torch tensors."""
+    return {
+        var: torch.tensor(stats[var].values, dtype=torch.float32)
+        for var in stats.data_vars
+    }
 
-    def __getitem__(self, key):
-        value = self.values[key]
-        if isinstance(value, dict):
-            return Config(values=value)
-        return value
+class MultiZarrDatastore(BaseDatastore):
+    DIMS_TO_KEEP = {"time", "grid_index", "variable"}
 
-    def __contains__(self, key):
-        return key in self.values
+    def __init__(self, config_path):
+        with open(config_path, encoding="utf-8", mode="r") as file:
+            self._config = yaml.safe_load(file)
+
+    def open_zarrs(self, category):
+        """Open the zarr dataset for the given category.
+
+        Args:
+            category (str): The category of the dataset (state/forcing/static).
+
+            Returns:
+                xr.Dataset: The xarray Dataset object."""
+        zarr_configs = self._config[category]["zarrs"]
+
+        datasets = []
+        for config in zarr_configs:
+            dataset_path = config["path"]
+            try:
+                dataset = xr.open_zarr(dataset_path, consolidated=True)
+            except Exception as e:
+                raise Exception("Error opening dataset:", dataset_path) from e
+            datasets.append(dataset)
+        merged_dataset = xr.merge(datasets)
+        merged_dataset.attrs["category"] = category
+        return merged_dataset
 
     @functools.cached_property
     def coords_projection(self):
@@ -60,7 +61,7 @@ class Config:
 
         Returns:
             cartopy.crs.Projection: The projection object."""
-        proj_config = self.values["projection"]
+        proj_config = self._config["projection"]
         proj_class_name = proj_config["class"]
         proj_class = getattr(ccrs, proj_class_name)
         proj_params = proj_config.get("kwargs", {})
@@ -79,7 +80,7 @@ class Config:
         return int(step_length_hours)
 
     @functools.lru_cache()
-    def vars_names(self, category):
+    def get_vars_names(self, category):
         """Return the names of the variables in the dataset.
 
         Args:
@@ -87,16 +88,16 @@ class Config:
 
         Returns:
             list: The names of the variables in the dataset."""
-        surface_vars_names = self.values[category].get("surface_vars") or []
+        surface_vars_names = self._config[category].get("surface_vars") or []
         atmosphere_vars_names = [
             f"{var}_{level}"
-            for var in (self.values[category].get("atmosphere_vars") or [])
-            for level in (self.values[category].get("levels") or [])
+            for var in (self._config[category].get("atmosphere_vars") or [])
+            for level in (self._config[category].get("levels") or [])
         ]
         return surface_vars_names + atmosphere_vars_names
 
     @functools.lru_cache()
-    def vars_units(self, category):
+    def get_vars_units(self, category):
         """Return the units of the variables in the dataset.
 
         Args:
@@ -104,16 +105,16 @@ class Config:
 
             Returns:
                 list: The units of the variables in the dataset."""
-        surface_vars_units = self.values[category].get("surface_units") or []
+        surface_vars_units = self._config[category].get("surface_units") or []
         atmosphere_vars_units = [
             unit
-            for unit in (self.values[category].get("atmosphere_units") or [])
-            for _ in (self.values[category].get("levels") or [])
+            for unit in (self._config[category].get("atmosphere_units") or [])
+            for _ in (self._config[category].get("levels") or [])
         ]
         return surface_vars_units + atmosphere_vars_units
 
     @functools.lru_cache()
-    def num_data_vars(self, category):
+    def get_num_data_vars(self, category):
         """Return the number of data variables in the dataset.
 
         Args:
@@ -121,9 +122,9 @@ class Config:
 
         Returns:
             int: The number of data variables in the dataset."""
-        surface_vars = self.values[category].get("surface_vars", [])
-        atmosphere_vars = self.values[category].get("atmosphere_vars", [])
-        levels = self.values[category].get("levels", [])
+        surface_vars = self._config[category].get("surface_vars", [])
+        atmosphere_vars = self._config[category].get("atmosphere_vars", [])
+        levels = self._config[category].get("levels", [])
 
         surface_vars_count = (
             len(surface_vars) if surface_vars is not None else 0
@@ -135,51 +136,26 @@ class Config:
 
         return surface_vars_count + atmosphere_vars_count * levels_count
 
-    def open_zarrs(self, category):
-        """Open the zarr dataset for the given category.
-
-        Args:
-            category (str): The category of the dataset (state/forcing/static).
-
-            Returns:
-                xr.Dataset: The xarray Dataset object."""
-        zarr_configs = self.values[category]["zarrs"]
-
-        try:
-            datasets = []
-            for config in zarr_configs:
-                dataset_path = config["path"]
-                dataset = xr.open_zarr(dataset_path, consolidated=True)
-                datasets.append(dataset)
-            merged_dataset = xr.merge(datasets)
-            merged_dataset.attrs["category"] = category
-            return merged_dataset
-        except Exception:
-            print(f"Invalid zarr configuration for category: {category}")
-            return None
-
-    def stack_grid(self, dataset):
+    def _stack_grid(self, ds):
         """Stack the grid dimensions of the dataset.
 
         Args:
-            dataset (xr.Dataset): The xarray Dataset object.
+            ds (xr.Dataset): The xarray Dataset object.
 
         Returns:
             xr.Dataset: The xarray Dataset object with stacked grid dimensions."""
-        if dataset is None:
-            return None
-        dims = list(dataset.dims)
-
-        if "grid" in dims:
-            print("\033[94mGrid dimensions already stacked.\033[0m")
-            return dataset.squeeze()
+        if "grid_index" in ds.dims:
+            raise ValueError("Grid dimensions already stacked.")
         else:
-            if "x" not in dims or "y" not in dims:
-                self.rename_dataset_dims_and_vars(dataset=dataset)
-            dataset = dataset.squeeze().stack(grid=("y", "x"))
-        return dataset
+            if "x" not in ds.dims or "y" not in ds.dims:
+                self._rename_dataset_dims_and_vars(dataset=ds)
+            ds = ds.stack(grid_index=("y", "x")).reset_index("grid_index")
+            # reset the grid_index coordinates to have integer values, otherwise
+            # the serialisation to zarr will fail
+            ds["grid_index"] = np.arange(len(ds["grid_index"]))
+        return ds
 
-    def convert_dataset_to_dataarray(self, dataset):
+    def _convert_dataset_to_dataarray(self, dataset):
         """Convert the Dataset to a Dataarray.
 
         Args:
@@ -191,7 +167,7 @@ class Config:
             dataset = dataset.to_array()
         return dataset
 
-    def filter_dimensions(self, dataset, transpose_array=True):
+    def _filter_dimensions(self, dataset, transpose_array=True):
         """Drop the dimensions and filter the data_vars of the dataset.
 
         Args:
@@ -215,10 +191,10 @@ class Config:
                 "\033[91mAttempting to update dims and "
                 "vars based on zarr config...\033[0m"
             )
-            dataset = self.rename_dataset_dims_and_vars(
+            dataset = self._rename_dataset_dims_and_vars(
                 dataset.attrs["category"], dataset=dataset
             )
-            dataset = self.stack_grid(dataset)
+            dataset = self._stack_grid(dataset)
             dataset_dims = set(list(dataset.dims) + ["variable"])
             if min_req_dims.issubset(dataset_dims):
                 print(
@@ -247,12 +223,12 @@ class Config:
             )
 
         if transpose_array:
-            dataset = self.convert_dataset_to_dataarray(dataset)
+            dataset = self._convert_dataset_to_dataarray(dataset)
 
             if "time" in dataset.dims:
-                dataset = dataset.transpose("time", "grid", "variable")
+                dataset = dataset.transpose("time", "grid_index", "variable")
             else:
-                dataset = dataset.transpose("grid", "variable")
+                dataset = dataset.transpose("grid_index", "variable")
         dataset_vars = (
             list(dataset.data_vars)
             if isinstance(dataset, xr.Dataset)
@@ -266,7 +242,7 @@ class Config:
 
         return dataset
 
-    def reshape_grid_to_2d(self, dataset, grid_shape=None):
+    def _reshape_grid_to_2d(self, dataset, grid_shape=None):
         """Reshape the grid to 2D for stacked data without multi-index.
 
         Args:
@@ -317,7 +293,8 @@ class Config:
         return x, y
 
     def get_xy_extent(self, category):
-        """Return the extent of the x, y coordinates.
+        """Return the extent of the x, y coordinates. This should be a list
+        of 4 floats with `[xmin, xmax, ymin, ymax]`
 
         Args:
             category (str): The category of the dataset (state/forcing/static).
@@ -333,18 +310,15 @@ class Config:
         return extent
 
     @functools.lru_cache()
-    def load_normalization_stats(self, category, datatype="torch"):
+    def get_normalization_stats(self, category):
         """Load the normalization statistics for the dataset.
 
         Args:
             category (str): The category of the dataset (state/forcing/static).
-            datatype (str): The datatype of the statistics (torch/"").
 
             Returns:
-                tensor: The normalization statistics for the dataset.
-                (if datatype="torch")
                 OR xr.Dataset: The normalization statistics for the dataset.
-                (otherwise)"""
+        """
         combined_stats = self._load_and_merge_stats()
         if combined_stats is None:
             return None
@@ -355,9 +329,6 @@ class Config:
         if stats is None:
             return None
 
-        if datatype == "torch":
-            return self._convert_stats_to_torch(stats)
-
         return stats
 
     def _load_and_merge_stats(self):
@@ -367,14 +338,13 @@ class Config:
             xr.Dataset: The merged normalization statistics for the dataset."""
         combined_stats = None
         for i, zarr_config in enumerate(
-            self.values["utilities"]["normalization"]["zarrs"]
+            self._config["utilities"]["normalization"]["zarrs"]
         ):
             stats_path = zarr_config["path"]
             if not os.path.exists(stats_path):
-                print(
+                raise FileNotFoundError(
                     f"Normalization statistics not found at path: {stats_path}"
                 )
-                return None
             stats = xr.open_zarr(stats_path, consolidated=True)
             if i == 0:
                 combined_stats = stats
@@ -392,7 +362,7 @@ class Config:
             xr.Dataset: The combined normalization statistics with renamed data
             variables."""
         vars_mapping = {}
-        for zarr_config in self.values["utilities"]["normalization"]["zarrs"]:
+        for zarr_config in self._config["utilities"]["normalization"]["zarrs"]:
             vars_mapping.update(zarr_config["stats_vars"])
 
         return combined_stats.rename_vars(
@@ -448,20 +418,7 @@ class Config:
             print(f"Invalid category: {category}")
             return None
 
-    def _convert_stats_to_torch(self, stats):
-        """Convert the normalization statistics to torch tensors.
-
-        Args:
-            stats (xr.Dataset): The normalization statistics.
-
-        Returns:
-            dict(tensor): The normalization statistics as torch tensors."""
-        return {
-            var: torch.tensor(stats[var].values, dtype=torch.float32)
-            for var in stats.data_vars
-        }
-
-    def extract_vars(self, category, dataset=None):
+    def _extract_vars(self, category, ds=None):
         """Extract (select) the data variables from the dataset.
 
         Args:
@@ -469,67 +426,57 @@ class Config:
             dataset (xr.Dataset): The xarray Dataset object.
 
         Returns:
-            xr.Dataset: The xarray Dataset object with extracted variables."""
-        if dataset is None:
-            dataset = self.open_zarrs(category)
-        surface_vars = None
-        atmosphere_vars = None
-        if self[category].surface_vars:
-            surface_vars = self._extract_surface_vars(category, dataset)
-        if self[category].atmosphere_vars:
-            atmosphere_vars = self._extract_atmosphere_vars(category, dataset)
-        if surface_vars and atmosphere_vars:
-            return xr.merge([surface_vars, atmosphere_vars])
-        elif surface_vars:
-            return surface_vars
-        elif atmosphere_vars:
-            return atmosphere_vars
-        else:
-            print(f"No variables found in dataset {category}")
-            return None
-
-    def _extract_surface_vars(self, category, dataset):
-        """Extract the surface variables from the dataset.
-
-        Args:
-            category (str): The category of the dataset (state/forcing/static).
-            dataset (xr.Dataset): The xarray Dataset object.
-
-        Returns:
-            xr.Dataset: The xarray Dataset object with surface variables.
+            xr.Dataset: The xarray Dataset object with extracted variables.
         """
-        return (
-            dataset[self[category].surface_vars]
-            if self[category].surface_vars
-            else []
-        )
+        if ds is None:
+            ds = self.open_zarrs(category)
+        surface_vars = self._config[category].get("surface_vars")
+        atmoshere_vars = self._config[category].get("atmosphere_vars")
+        
+        ds_surface = None
+        if surface_vars is not None:
+            ds_surface = ds[surface_vars]
 
-    def _extract_atmosphere_vars(self, category, dataset):
+        ds_atmosphere = None
+        if atmoshere_vars is not None:
+            ds_atmosphere = self._extract_atmosphere_vars(category=category, ds=ds)
+
+        if ds_surface and ds_atmosphere:
+            return xr.merge([ds_surface, ds_atmosphere])
+        elif ds_surface:
+            return ds_surface
+        elif ds_atmosphere:
+            return ds_atmosphere
+        else:
+            raise ValueError(f"No variables found in dataset {category}")
+
+    def _extract_atmosphere_vars(self, category, ds):
         """Extract the atmosphere variables from the dataset.
 
         Args:
             category (str): The category of the dataset (state/forcing/static).
-            dataset (xr.Dataset): The xarray Dataset object.
+            ds (xr.Dataset): The xarray Dataset object.
 
         Returns:
             xr.Dataset: The xarray Dataset object with atmosphere variables."""
-        if "level" not in list(dataset.dims) and self[category].atmosphere_vars:
-            dataset = self.rename_dataset_dims_and_vars(
-                dataset.attrs["category"], dataset=dataset
+
+        if "level" not in list(ds.dims) and self._config[category]["atmosphere_vars"]:
+            ds = self._rename_dataset_dims_and_vars(
+                ds.attrs["category"], dataset=ds
             )
 
         data_arrays = [
-            dataset[var].sel(level=level, drop=True).rename(f"{var}_{level}")
-            for var in self[category].atmosphere_vars
-            for level in self[category].levels
+            ds[var].sel(level=level, drop=True).rename(f"{var}_{level}")
+            for var in self._config[category]["atmosphere_vars"]
+            for level in self._config[category]["levels"]
         ]
 
-        if self[category].atmosphere_vars:
+        if self._config[category]["atmosphere_vars"]:
             return xr.merge(data_arrays)
         else:
             return xr.Dataset()
 
-    def rename_dataset_dims_and_vars(self, category, dataset=None):
+    def _rename_dataset_dims_and_vars(self, category, dataset=None):
         """Rename the dimensions and variables of the dataset.
 
         Args:
@@ -549,7 +496,7 @@ class Config:
             convert = True
             dataset = dataset.to_dataset("variable")
         dims_mapping = {}
-        zarr_configs = self.values[category]["zarrs"]
+        zarr_configs = self._config[category]["zarrs"]
         for zarr_config in zarr_configs:
             dims_mapping.update(zarr_config["dims"])
 
@@ -567,7 +514,7 @@ class Config:
             dataset = dataset.to_array()
         return dataset
 
-    def filter_dataset_by_time(self, dataset, split="train"):
+    def _apply_time_split(self, dataset, split="train"):
         """Filter the dataset by the time split.
 
         Args:
@@ -577,8 +524,8 @@ class Config:
         Returns:
             xr.Dataset: The xarray Dataset object filtered by the time split."""
         start, end = (
-            self.values["splits"][split]["start"],
-            self.values["splits"][split]["end"],
+            self._config["splits"][split]["start"],
+            self._config["splits"][split]["end"],
         )
         dataset = dataset.sel(time=slice(start, end))
         dataset.attrs["split"] = split
@@ -596,11 +543,11 @@ class Config:
         if dataset is None:
             dataset = self.open_zarrs(category)
         if isinstance(dataset, xr.Dataset):
-            dataset = self.convert_dataset_to_dataarray(dataset)
+            dataset = self._convert_dataset_to_dataarray(dataset)
         state = self.open_zarrs("state")
-        state = self.filter_dataset_by_time(state, dataset.attrs["split"])
+        state = self._apply_time_split(state, dataset.attrs["split"])
         state_time = state.time.values
-        window = self[category].window
+        window = self._config[category]["window"]
         dataset = (
             dataset.sel(time=state_time, method="nearest")
             .pad(time=(window // 2, window // 2), mode="edge")
@@ -611,18 +558,21 @@ class Config:
         dataset = dataset.isel(time=slice(window // 2, -window // 2 + 1))
         return dataset
 
-    def load_boundary_mask(self):
-        """Load the boundary mask for the dataset.
+    @property
+    def boundary_mask(self):
+        """
+        Load the boundary mask for the dataset, with spatial dimensions stacked.
 
-        Returns:
-            tensor: The boundary mask for the dataset."""
-        boundary_mask = xr.open_zarr(self.values["boundary"]["mask"]["path"])
-        return torch.tensor(
-            boundary_mask.mask.stack(grid=("y", "x")).values,
-            dtype=torch.float32,
-        ).unsqueeze(1)
+        Returns
+        -------
+        xr.DataArray
+            The boundary mask for the dataset, with dimensions `('grid_index',)`.
+        """
+        ds_boundary_mask = xr.open_zarr(self._config["boundary"]["mask"]["path"])
+        return ds_boundary_mask.mask.stack(grid_index=("y", "x")).reset_index("grid_index")
 
-    def process_dataset(self, category, split="train", apply_windowing=True):
+
+    def get_dataarray(self, category, split="train", apply_windowing=True):
         """Process the dataset for the given category.
 
         Args:
@@ -633,14 +583,14 @@ class Config:
         Returns:
             xr.DataArray: The xarray DataArray object with processed dataset."""
         dataset = self.open_zarrs(category)
-        dataset = self.extract_vars(category, dataset)
+        dataset = self._extract_vars(category, dataset)
         if category != "static":
-            dataset = self.filter_dataset_by_time(dataset, split)
-        dataset = self.stack_grid(dataset)
-        dataset = self.rename_dataset_dims_and_vars(category, dataset)
-        dataset = self.filter_dimensions(dataset)
-        dataset = self.convert_dataset_to_dataarray(dataset)
-        if "window" in self.values[category] and apply_windowing:
+            dataset = self._apply_time_split(dataset, split)
+        dataset = self._stack_grid(dataset)
+        dataset = self._rename_dataset_dims_and_vars(category, dataset)
+        dataset = self._filter_dimensions(dataset)
+        dataset = self._convert_dataset_to_dataarray(dataset)
+        if "window" in self._config[category] and apply_windowing:
             dataset = self.apply_window(category, dataset)
         if category == "static" and "time" in dataset.dims:
             dataset = dataset.isel(time=0, drop=True)

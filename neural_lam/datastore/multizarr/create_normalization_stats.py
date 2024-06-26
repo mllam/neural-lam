@@ -5,12 +5,15 @@ from argparse import ArgumentParser
 import xarray as xr
 
 # First-party
-from neural_lam import config
+from neural_lam.datastore.multizarr import MultiZarrDatastore
 
 
-def compute_stats(data_array):
-    mean = data_array.mean(dim=("time", "grid"))
-    std = data_array.std(dim=("time", "grid"))
+DEFAULT_PATH = "tests/datastore_configs/multizarr.danra.yaml"
+
+
+def compute_stats(da):
+    mean = da.mean(dim=("time", "grid_index"))
+    std = da.std(dim=("time", "grid_index"))
     return mean, std
 
 
@@ -19,8 +22,8 @@ def main():
     parser.add_argument(
         "--data_config",
         type=str,
-        default="neural_lam/data_config.yaml",
-        help="Path to data config file (default: neural_lam/data_config.yaml)",
+        default=DEFAULT_PATH,
+        help=f"Path to data config file (default: {DEFAULT_PATH})",
     )
     parser.add_argument(
         "--zarr_path",
@@ -29,65 +32,65 @@ def main():
         help="Directory where data is stored",
     )
     args = parser.parse_args()
+    
+    datastore = MultiZarrDatastore(config_path=args.data_config)
 
-    data_config = config.Config.from_file(args.data_config)
-    state_data = data_config.process_dataset("state", split="train")
-    forcing_data = data_config.process_dataset(
-        "forcing", split="train", apply_windowing=False
-    )
+    da_state = datastore.get_dataarray(category="state", split="train")
+    da_forcing = datastore.get_dataarray(category="forcing", split="train")
 
     print("Computing mean and std.-dev. for parameters...", flush=True)
-    state_mean, state_std = compute_stats(state_data)
+    da_state_mean, da_state_std = compute_stats(da_state)
 
-    if forcing_data is not None:
-        forcing_mean, forcing_std = compute_stats(forcing_data)
-        combined_stats = data_config["utilities"]["normalization"][
-            "combined_stats"
-        ]
+    if da_forcing is not None:
+        da_forcing_mean, da_forcing_std = compute_stats(da_forcing)
+        combined_stats = datastore._config["utilities"]["normalization"]["combined_stats"]
 
         if combined_stats is not None:
             for group in combined_stats:
                 vars_to_combine = group["vars"]
-                means = forcing_mean.sel(variable=vars_to_combine)
-                stds = forcing_std.sel(variable=vars_to_combine)
+                import ipdb; ipdb.set_trace()
+                means = da_forcing_mean.sel(variable=vars_to_combine)
+                stds = da_forcing_std.sel(variable=vars_to_combine)
 
                 combined_mean = means.mean(dim="variable")
                 combined_std = (stds**2).mean(dim="variable") ** 0.5
 
-                forcing_mean.loc[dict(variable=vars_to_combine)] = combined_mean
-                forcing_std.loc[dict(variable=vars_to_combine)] = combined_std
-        window = data_config["forcing"]["window"]
-        forcing_mean = xr.concat([forcing_mean] * window, dim="window").stack(
+                da_forcing_mean.loc[dict(variable=vars_to_combine)] = combined_mean
+                da_forcing_std.loc[dict(variable=vars_to_combine)] = combined_std
+
+        window = datastore._config["forcing"]["window"]
+
+        da_forcing_mean = xr.concat([da_forcing_mean] * window, dim="window").stack(
             forcing_variable=("variable", "window")
         )
-        forcing_std = xr.concat([forcing_std] * window, dim="window").stack(
+        da_forcing_std = xr.concat([da_forcing_std] * window, dim="window").stack(
             forcing_variable=("variable", "window")
         )
-        vars = forcing_data["variable"].values.tolist()
-        window = data_config["forcing"]["window"]
+        vars = da_forcing["variable"].values.tolist()
+        window = datastore._config["forcing"]["window"]
         forcing_vars = [f"{var}_{i}" for var in vars for i in range(window)]
 
     print(
         "Computing mean and std.-dev. for one-step differences...", flush=True
     )
-    state_data_normalized = (state_data - state_mean) / state_std
+    state_data_normalized = (da_state - da_state_mean) / da_state_std
     state_data_diff_normalized = state_data_normalized.diff(dim="time")
     diff_mean, diff_std = compute_stats(state_data_diff_normalized)
 
     ds = xr.Dataset(
         {
-            "state_mean": state_mean,
-            "state_std": state_std,
+            "state_mean": da_state_mean,
+            "state_std": da_state_std,
             "diff_mean": diff_mean,
             "diff_std": diff_std,
         }
     )
-    if forcing_data is not None:
+    if da_forcing is not None:
         dsf = (
             xr.Dataset(
                 {
-                    "forcing_mean": forcing_mean,
-                    "forcing_std": forcing_std,
+                    "forcing_mean": da_forcing_mean,
+                    "forcing_std": da_forcing_std,
                 }
             )
             .reset_index(["forcing_variable"])

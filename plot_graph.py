@@ -7,7 +7,8 @@ import plotly.graph_objects as go
 import torch_geometric as pyg
 
 # First-party
-from neural_lam import config, utils
+from neural_lam import utils
+from neural_lam.datastore.multizarr import config
 
 MESH_HEIGHT = 0.1
 MESH_LEVEL_DIST = 0.2
