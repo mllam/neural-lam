@@ -1,10 +1,8 @@
 import cartopy.crs as ccrs
 import numpy as np
-import pandas as pd
-import torch
 import xarray as xr
 
-from typing import List, Dict
+from typing import List, Dict, Union
 import abc
 import dataclasses
 
@@ -83,15 +81,40 @@ class BaseDatastore(abc.ABC):
             The number of data variables.
         """
         pass
+    
+
+    @abc.abstractmethod
+    def get_normalization_dataarray(self, category: str) -> xr.Dataset:
+        """
+        Return the normalization dataarray for the given category. This should contain
+        a `{category}_mean` and `{category}_std` variable for each variable in the category.
+        For `category=="state"`, the dataarray should also contain a `state_diff_mean` and
+        `state_diff_std` variable for the one-step differences of the state variables. The
+        return dataarray should at least have dimensions of `({category}_feature)`, but can
+        also include for example `grid_index` (if the normalisation is done per grid point for
+        example).
+        
+        Parameters
+        ----------
+        category : str
+            The category of the dataset (state/forcing/static).
+
+        Returns
+        -------
+        xr.Dataset
+            The normalization dataarray for the given category, with variables for the mean
+            and standard deviation of the variables (and differences for state variables).
+        """
+        pass
         
     @abc.abstractmethod
     def get_dataarray(self, category: str, split: str) -> xr.DataArray:
         """
-        Return the processed dataset for the given category and test/train/val-split that covers
-        the entire timeline of the dataset.
-        The returned dataarray is expected to at minimum have dimensions of `(time, grid_index, feature)` so
+        Return the processed data (as a single `xr.DataArray`) for the given category and 
+        test/train/val-split that covers the entire timeline of the dataset.
+        The returned dataarray is expected to at minimum have dimensions of `(time, grid_index, {category}_feature)` so
         that any spatial dimensions have been stacked into a single dimension and all variables
-        and levels have been stacked into a single feature dimension.
+        and levels have been stacked into a single feature dimension named by the `category` of data being loaded.
         Any additional dimensions (for example `ensemble_member` or `analysis_time`) should be kept as separate
         dimensions in the dataarray, and `WeatherDataset` will handle the sampling of the data.
         
@@ -148,6 +171,8 @@ class BaseCartesianDatastore(BaseDatastore):
     - `get_xy_extent` (method): Return the extent of the x, y coordinates for a given category of data.
     - `get_xy` (method): Return the x, y coordinates of the dataset.
     """
+    
+    CARTESIAN_COORDS = ["y", "x"]
 
     @property
     @abc.abstractmethod
@@ -214,3 +239,37 @@ class BaseCartesianDatastore(BaseDatastore):
         """
         xy = self.get_xy(category, stacked=False)
         return [xy[0].min(), xy[0].max(), xy[1].min(), xy[1].max()]
+    
+    def unstack_grid_coords(self, da_or_ds: Union[xr.DataArray, xr.Dataset]) -> Union[xr.DataArray, xr.Dataset]:
+        """
+        Stack the spatial grid coordinates into separate `x` and `y` dimensions (the names
+        can be set by the `CARTESIAN_COORDS` attribute) to create a 2D grid.
+        
+        Parameters
+        ----------
+        da_or_ds : xr.DataArray or xr.Dataset
+            The dataarray or dataset to unstack the grid coordinates of.
+        
+        Returns
+        -------
+        xr.DataArray or xr.Dataset
+            The dataarray or dataset with the grid coordinates unstacked.
+        """
+        return da_or_ds.set_index(grid_index=self.CARTESIAN_COORDS).unstack("grid_index")
+    
+    def stack_grid_coords(self, da_or_ds: Union[xr.DataArray, xr.Dataset]) -> Union[xr.DataArray, xr.Dataset]:
+        """
+        Stack the spatial grid coordinated (by default `x` and `y`, but this can be set by the
+        `CARTESIAN_COORDS` attribute) into a single `grid_index` dimension.
+
+        Parameters
+        ----------
+        da_or_ds : xr.DataArray or xr.Dataset
+            The dataarray or dataset to stack the grid coordinates of.
+        
+        Returns
+        -------
+        xr.DataArray or xr.Dataset
+            The dataarray or dataset with the grid coordinates stacked.
+        """
+        return da_or_ds.stack(grid_index=self.CARTESIAN_COORDS)

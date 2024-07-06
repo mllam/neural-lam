@@ -26,7 +26,7 @@ TEST_DATA_KNOWN_HASH = (
 )
 
 
-@pytest.fixture(scope="session", autouse=True)
+@pytest.fixture(scope="session")
 def ewc_testdata_path():
     # Download and unzip test data into data/meps_example_reduced
     pooch.retrieve(
@@ -44,29 +44,16 @@ def test_load_reduced_meps_dataset(ewc_testdata_path):
     datastore = NumpyFilesDatastore(
         root_path=ewc_testdata_path
     )
-    datastore = MultiZarrDatastore(
-        config_path="tests/data_config.yaml"
-    )
-    
     datastore.get_xy(category="state", stacked=True)
 
-    import matplotlib.pyplot as plt
-    da = datastore.get_dataarray(category="forcing", split="train").unstack("grid_index")
-    da.isel(analysis_time=0, feature=-1, time=slice(0, 4)).plot(col="time", col_wrap=4)
-    plt.show()
+    datastore.get_dataarray(category="forcing", split="train").unstack("grid_index")
+    datastore.get_dataarray(category="state", split="train").unstack("grid_index")
 
-    da = datastore.get_dataarray(category="state", split="train").unstack("grid_index")
-    da.isel(analysis_time=0, feature=0, time=slice(0, 4)).plot(col="time", row="ensemble_member")
-    plt.show()
-    
-    import ipdb; ipdb.set_trace()
+    dataset = WeatherDataset(datastore=datastore)
 
-    dataset = WeatherDataset(dataset_name="meps_example_reduced")
-    config = Config.from_file(data_config_file)
-
-    var_names = config.values["dataset"]["var_names"]
-    var_units = config.values["dataset"]["var_units"]
-    var_longnames = config.values["dataset"]["var_longnames"]
+    var_names = datastore.config.values["dataset"]["var_names"]
+    var_units = datastore.config.values["dataset"]["var_units"]
+    var_longnames = datastore.config.values["dataset"]["var_longnames"]
 
     assert len(var_names) == len(var_longnames)
     assert len(var_names) == len(var_units)
@@ -77,19 +64,22 @@ def test_load_reduced_meps_dataset(ewc_testdata_path):
     # Hardcoded in model
     n_input_steps = 2
 
-    n_forcing_features = config.values["dataset"]["num_forcing_features"]
+    n_forcing_features = datastore.config.values["dataset"]["num_forcing_features"]
     n_state_features = len(var_names)
-    n_prediction_timesteps = dataset.sample_length - n_input_steps
+    n_prediction_timesteps = dataset.ar_steps
 
-    nx, ny = config.values["grid_shape_state"]
+    nx, ny = datastore.config.values["grid_shape_state"]
     n_grid = nx * ny
 
     # check that the dataset is not empty
     assert len(dataset) > 0
 
     # get the first item
-    init_states, target_states, forcing = dataset[0]
-
+    item = dataset[0]
+    init_states = item.init_states
+    target_states = item.target_states
+    forcing = item.forcing
+    
     # check that the shapes of the tensors are correct
     assert init_states.shape == (n_input_steps, n_grid, n_state_features)
     assert target_states.shape == (
@@ -102,8 +92,11 @@ def test_load_reduced_meps_dataset(ewc_testdata_path):
         n_grid,
         n_forcing_features,
     )
-
-    static_data = load_static_data(dataset_name=dataset_name)
+    
+    static_data = {
+        "border_mask": datastore.boundary_mask.values,
+        "grid_static_features": datastore.get_dataarray(category="static", split="train").values
+    }
 
     required_props = {
         "border_mask",
@@ -116,7 +109,7 @@ def test_load_reduced_meps_dataset(ewc_testdata_path):
     }
 
     # check the sizes of the props
-    assert static_data["border_mask"].shape == (n_grid, 1)
+    assert static_data["border_mask"].shape == (n_grid, )
     assert static_data["grid_static_features"].shape == (
         n_grid,
         n_grid_static_features,

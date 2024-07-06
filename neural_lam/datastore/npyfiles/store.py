@@ -123,6 +123,7 @@ class NumpyFilesDatastore(BaseCartesianDatastore):
     d_forcing = 1
     """
     is_ensemble = True
+    is_forecast = True
 
     def __init__(
         self,
@@ -134,8 +135,7 @@ class NumpyFilesDatastore(BaseCartesianDatastore):
         self._num_ensemble_members = 2
 
         self.root_path = Path(root_path)
-        self._config = NpyConfig.from_file(self.root_path / "data_config.yaml")
-        pass
+        self.config = NpyConfig.from_file(self.root_path / "data_config.yaml")
     
     def get_dataarray(self, category: str, split: str) -> DataArray:
         """
@@ -155,27 +155,66 @@ class NumpyFilesDatastore(BaseCartesianDatastore):
         -------
         xr.DataArray
             The data array for the given category and split, with dimensions per category:
-            state:              `[time, analysis_time, grid_index, feature, ensemble_member]`
-            forcing & static:   `[time, analysis_time, grid_index, feature]`
+            state:     `[time, analysis_time, grid_index, feature, ensemble_member]`
+            forcing:   `[time, analysis_time, grid_index, feature]`
+            static:    `[grid_index, feature]`
         """
         if category == "state":
+            das = []
             # for the state category, we need to load all ensemble members
-            da = xr.concat(
-                [
-                    self._get_single_timeseries_dataarray(category=category, split=split, member=member)
-                    for member in range(self._num_ensemble_members)
-                ],
-                dim="ensemble_member"
-            )
+            for member in range(self._num_ensemble_members):
+                da_member = self._get_single_timeseries_dataarray(features=self.get_vars_names(category="state"), split=split, member=member)
+                das.append(da_member)
+            da = xr.concat(das, dim="ensemble_member")
+
+        elif category == "forcing":
+            # the forcing features are in separate files, so we need to load them separately
+            features = ["toa_downwelling_shortwave_flux", "column_water"]
+            das = [self._get_single_timeseries_dataarray(features=[feature], split=split) for feature in features]
+            da = xr.concat(das, dim="feature")
+        
+        elif category == "static":
+            # the static features are collected in three files:
+            # - surface_geopotential
+            # - border_mask
+            # - x, y
+            das = []
+            for features in [["surface_geopotential"], ["border_mask"], ["x", "y"]]:
+                da = self._get_single_timeseries_dataarray(features=features, split=split)
+                das.append(da)
+            da = xr.concat(das, dim="feature").transpose("grid_index", "feature")
+
         else:
-            da = self._get_single_timeseries_dataarray(category=category, split=split)
+            raise NotImplementedError(category)
+        
+        da = da.rename(dict(feature=f"{category}_feature"))
+        
+        if category == "forcing":
+            # add datetime forcing as a feature
+            # to do this we create a forecast time variable which has the dimensions of
+            # (analysis_time, elapsed_forecast_time) with values that are the actual forecast time of each
+            # time step. By calling .chunk({"elapsed_forecast_time": 1}) this time variable is turned into
+            # a dask array and so execution of the calculation is delayed until the feature
+            # values are actually used.
+            da_forecast_time = (da.analysis_time + da.elapsed_forecast_time).chunk({"elapsed_forecast_time": 1})
+            da_datetime_forcing_features = self._calc_datetime_forcing_features(da_time=da_forecast_time)
+            da = xr.concat([da, da_datetime_forcing_features], dim=f"{category}_feature")
+            
+        da.name = category
+        
+        # check that we have the right features
+        actual_features = list(da[f"{category}_feature"].values)
+        expected_features = self.get_vars_names(category=category)
+        if actual_features != expected_features:
+            raise ValueError(f"Expected features {expected_features}, got {actual_features}")
+        
         return da
     
-    def _get_single_timeseries_dataarray(self, category: str, split: str, member: int = None) -> DataArray:
+    def _get_single_timeseries_dataarray(self, features: str, split: str, member: int = None) -> DataArray:
         """
-        Get the data array spanning the complete time series for a given category and split
+        Get the data array spanning the complete time series for a given set of features and split
         of data. If the category is 'state', the member argument should be specified to select
-        the ensemble member to load. The data will be loaded as a dask array, so that the data
+        the ensemble member to load. The data will be loaded using dask.delayed, so that the data
         isn't actually loaded until it's needed.
 
         Parameters
@@ -191,58 +230,95 @@ class NumpyFilesDatastore(BaseCartesianDatastore):
         -------
         xr.DataArray
             The data array for the given category and split, with dimensions
-            `[time, analysis_time, grid_index, feature]` for all categories of data
+            `[elapsed_forecast_time, analysis_time, grid_index, feature]` for all categories of data
         """
         assert split in ("train", "val", "test"), "Unknown dataset split"
         
-        if member is not None and category != "state":
+        if member is not None and features != self.get_vars_names(category="state"):
             raise ValueError("Member can only be specified for the 'state' category")
         
         # XXX: we here assume that the grid shape is the same for all categories
         grid_shape = self.grid_shape_state
 
-        analysis_times = self._get_analysis_times(split=split)
-        fp_split = self.root_path / "samples" / split
+        fp_samples = self.root_path / "samples" / split
         
-        file_dims = ["time", "y", "x", "feature"]
-        elapsed_time = self.step_length * np.arange(self._num_timesteps) * np.timedelta64(1, "h")
-        arr_shape = [len(elapsed_time)] + grid_shape
-        coords = dict(
-            analysis_time=analysis_times,
-            time=elapsed_time,
-            y=np.arange(grid_shape[0]),
-            x=np.arange(grid_shape[1]),
-        )
-        
-        extra_kwargs = {}
+        file_params = {}
         add_feature_dim = False
-        if category == "state":
+        features_vary_with_analysis_time = True
+        if features == self.get_vars_names(category="state"):
             filename_format = STATE_FILENAME_FORMAT
+            file_dims = ["elapsed_forecast_time", "y", "x", "feature"]
             # only select one member for now
-            extra_kwargs["member_id"] = member
-            # state has multiple features
-            num_state_variables = self.get_num_data_vars
-            arr_shape += [num_state_variables]
-            coords["feature"] = self.get_vars_names(category="state")
-        elif category == "forcing":
+            file_params["member_id"] = member
+        elif features == ["toa_downwelling_shortwave_flux"]:
             filename_format = TOA_SW_DOWN_FLUX_FILENAME_FORMAT
-            arr_shape += [1]
-            # XXX: this should really be saved in the data-config
-            coords["feature"] = ["toa_downwelling_shortwave_flux"]
+            file_dims = ["elapsed_forecast_time", "y", "x", "feature"]
             add_feature_dim = True
-        elif category == "static":
+        elif features == ["column_water"]:
             filename_format = COLUMN_WATER_FILENAME_FORMAT
-            arr_shape += [1]
-            # XXX: this should really be saved in the data-config
-            coords["feature"] = ["column_water"]
+            file_dims = ["y", "x", "feature"]
             add_feature_dim = True
+        elif features == ["surface_geopotential"]:
+            filename_format = "surface_geopotential.npy"
+            file_dims = ["y", "x", "feature"]
+            add_feature_dim = True
+            features_vary_with_analysis_time = False
+            # XXX: surface_geopotential is the same for all splits, and so saved in static/
+            fp_samples = self.root_path / "static"
+            import ipdb; ipdb.set_trace()
+        elif features == ["border_mask"]:
+            filename_format = "border_mask.npy"
+            file_dims = ["y", "x", "feature"]
+            add_feature_dim = True
+            features_vary_with_analysis_time = False
+            # XXX: border_mask is the same for all splits, and so saved in static/
+            fp_samples = self.root_path / "static"
+        elif features == ["x", "y"]:
+            filename_format = "nwp_xy.npy"
+            file_dims = ["y", "x", "feature"]
+            features_vary_with_analysis_time = False
+            # XXX: x, y are the same for all splits, and so saved in static/
+            fp_samples = self.root_path / "static"
         else:
-            raise NotImplementedError(f"Category {category} not supported")
+            raise NotImplementedError(f"Reading of variables set `{features}` not supported")
+        
+        if features_vary_with_analysis_time:
+            dims = ["analysis_time"] + file_dims
+        else:
+            dims = file_dims
+        
+        coords = {}
+        arr_shape = []
+        for d in dims:
+            if d == "elapsed_forecast_time":
+                coord_values = self.step_length * np.arange(self._num_timesteps) * np.timedelta64(1, "h")
+            elif d == "analysis_time":
+                coord_values = self._get_analysis_times(split=split)
+            elif d == "y":
+                coord_values = np.arange(grid_shape[0])
+            elif d == "x":
+                coord_values = np.arange(grid_shape[1])
+            elif d == "feature":
+                coord_values = features
+            else:
+                raise NotImplementedError(f"Dimension {d} not supported")
             
-        filepaths = [
-            fp_split / filename_format.format(analysis_time=analysis_time, **extra_kwargs)
-            for analysis_time in analysis_times
-        ]
+            print(f"{d}: {len(coord_values)}")
+            
+            coords[d] = coord_values
+            if d != "analysis_time":
+                # analysis_time varies across the different files, but not within a single file
+                arr_shape.append(len(coord_values))
+                
+        print(f"{features}: {dims=} {file_dims=} {arr_shape=}")
+            
+        if features_vary_with_analysis_time:
+            filepaths = [
+                fp_samples / filename_format.format(analysis_time=analysis_time, **file_params)
+                for analysis_time in coords["analysis_time"]
+            ]
+        else:
+            filepaths = [fp_samples / filename_format.format(**file_params)]
         
         # use dask.delayed to load the numpy files, so that loading isn't
         # done until the data is actually needed
@@ -259,28 +335,21 @@ class NumpyFilesDatastore(BaseCartesianDatastore):
              ) for fp in filepaths
         ]
         
-        arr_all = dask.array.stack(arrays, axis=0)
+        if features_vary_with_analysis_time:
+            arr_all = dask.array.stack(arrays, axis=0)
+        else:
+            arr_all = arrays[0]
         
-        da = xr.DataArray(
-            arr_all,
-            dims=["analysis_time"] + file_dims,
-            coords=coords,
-            name=category
-        )
+        # if features == ["column_water"]:
+        #     # for column water, we need to repeat the array for each forecast time
+        #     # first insert a new axis for the forecast time
+        #     arr_all = np.expand_dims(arr_all, 1)
+        #     # and then repeat
+        #     arr_all = dask.array.repeat(arr_all, self._num_timesteps, axis=1)
+        da = xr.DataArray(arr_all, dims=dims, coords=coords)
         
         # stack the [x, y] dimensions into a `grid_index` dimension
-        da = da.stack(grid_index=["y", "x"])
-        
-        if category == "forcing":
-            # add datetime forcing as a feature
-            # to do this we create a forecast time variable which has the dimensions of
-            # (analysis_time, time) with values that are the actual forecast time of each
-            # time step. But calling .chunk({"time": 1}) this time variable is turned into
-            # a dask array and so execution of the calculation is delayed until the feature
-            # values are actually used.
-            da_forecast_time = (da.time + da.analysis_time).chunk({"time": 1})
-            da_datetime_forcing_features = self._calc_datetime_forcing_features(da_time=da_forecast_time)
-            da = xr.concat([da, da_datetime_forcing_features], dim="feature")
+        da = self.stack_grid_coords(da)
         
         return da
         
@@ -322,22 +391,27 @@ class NumpyFilesDatastore(BaseCartesianDatastore):
                 np.sin(da_year_angle),
                 np.cos(da_year_angle),
             ),
-            dim="feature",
+            dim="forcing_feature",
         )
         da_datetime_forcing = (da_datetime_forcing + 1) / 2  # Rescale to [0,1]
-        da_datetime_forcing["feature"] = ["sin_hour", "cos_hour", "sin_year", "cos_year"]
+        da_datetime_forcing["forcing_feature"] = ["sin_hour", "cos_hour", "sin_year", "cos_year"]
         
         return da_datetime_forcing
 
     def get_vars_units(self, category: str) -> torch.List[str]:
         if category == "state":
-            return self._config["dataset"]["var_units"]
+            return self.config["dataset"]["var_units"]
         else:
             raise NotImplementedError(f"Category {category} not supported")
     
     def get_vars_names(self, category: str) -> torch.List[str]:
         if category == "state":
-            return self._config["dataset"]["var_names"]
+            return self.config["dataset"]["var_names"]
+        elif category == "forcing":
+            # XXX: this really shouldn't be hard-coded here, this should be in the config
+            return ["toa_downwelling_shortwave_flux", "column_water", "sin_hour", "cos_hour", "sin_year", "cos_year"]
+        elif category == "static":
+            return ["surface_geopotential", "border_mask", "x", "y"]
         else:
             raise NotImplementedError(f"Category {category} not supported")
         
@@ -362,12 +436,77 @@ class NumpyFilesDatastore(BaseCartesianDatastore):
         
     @property
     def coords_projection(self):
-        return self._config.coords_projection
+        return self.config.coords_projection
     
     @property
     def grid_shape_state(self):
-        return self._config.grid_shape_state
+        return self.config.grid_shape_state
     
     @property
     def boundary_mask(self):
-        return np.load(self.root_path / "static" / "border_mask.npy")
+        xs, ys = self.get_xy(category="state", stacked=False)
+        assert np.all(xs[0,:] == xs[-1,:])
+        assert np.all(ys[:,0] == ys[:,-1])
+        x = xs[0,:]
+        y = ys[:,0]
+        values = np.load(self.root_path / "static" / "border_mask.npy")
+        da_mask = xr.DataArray(values, dims=["y", "x"], coords=dict(x=x, y=y), name="boundary_mask")
+        da_mask_stacked_xy = self.stack_grid_coords(da_mask)
+        return da_mask_stacked_xy
+
+
+    def get_normalization_dataarray(self, category: str) -> xr.Dataset:
+        """
+        Return the normalization dataarray for the given category. This should contain
+        a `{category}_mean` and `{category}_std` variable for each variable in the category.
+        For `category=="state"`, the dataarray should also contain a `state_diff_mean` and
+        `state_diff_std` variable for the one-step differences of the state variables.
+        
+        Parameters
+        ----------
+        category : str
+            The category of the dataset (state/forcing/static).
+
+        Returns
+        -------
+        xr.Dataset
+            The normalization dataarray for the given category, with variables for the mean
+            and standard deviation of the variables (and differences for state variables).
+        """
+        def load_pickled_tensor(fn):
+            return torch.load(self.root_path / "static" / fn).numpy()
+            
+        mean_diff_values = None
+        std_diff_values = None
+        if category == "state":
+            mean_values = load_pickled_tensor("parameter_mean.pt")
+            std_values = load_pickled_tensor("parameter_std.pt")
+            mean_diff_values = load_pickled_tensor("diff_mean.pt")
+            std_diff_values = load_pickled_tensor("diff_std.pt")
+        elif category == "forcing":
+            flux_stats = load_pickled_tensor("flux_stats.pt")  # (2,)
+            flux_mean, flux_std = flux_stats
+            # manually add hour sin/cos and day-of-year sin/cos stats for now
+            # the mean/std for column_water is hardcoded for now
+            mean_values = np.array([flux_mean, 0.34033957, 0.0, 0.0, 0.0, 0.0])
+            std_values = np.array([flux_std, 0.4661307, 1.0, 1.0, 1.0, 1.0])
+
+        else:
+            raise NotImplementedError(f"Category {category} not supported")
+        
+        feature_dim_name = f"{category}_feature"
+        variables = {
+                f"{category}_mean": (feature_dim_name, mean_values),
+                f"{category}_std": (feature_dim_name, std_values),
+        }
+        
+        if mean_diff_values is not None and std_diff_values is not None:
+            variables["state_diff_mean"] = (feature_dim_name, mean_diff_values)
+            variables["state_diff_std"] = (feature_dim_name, std_diff_values)
+        
+        ds_norm = xr.Dataset(
+            variables,
+            coords={ feature_dim_name: self.get_vars_names(category=category) }
+        )
+        
+        return ds_norm

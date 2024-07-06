@@ -13,8 +13,8 @@ class BaseGraphModel(ARModel):
     the encode-process-decode idea.
     """
 
-    def __init__(self, args):
-        super().__init__(args)
+    def __init__(self, args, datastore, forcing_window_size):
+        super().__init__(args, datastore=datastore, forcing_window_size=forcing_window_size)
 
         # Load graph with static features
         # NOTE: (IMPORTANT!) mesh nodes MUST have the first

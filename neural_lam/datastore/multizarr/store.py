@@ -383,7 +383,7 @@ class MultiZarrDatastore(BaseDatastore):
         Returns:
             xr.Dataset: The normalization statistics for the dataset."""
         if category == "state":
-            stats = combined_stats.loc[dict(variable=self.vars_names(category))]
+            stats = combined_stats.loc[dict(variable=self.get_vars_names(category=category))]
             stats = stats.drop_vars(["forcing_mean", "forcing_std"])
             return stats
         elif category == "forcing":
@@ -521,7 +521,7 @@ class MultiZarrDatastore(BaseDatastore):
             dataset (xr.Dataset): The xarray Dataset object.
             split (str): The time split to filter the dataset.
 
-        Returns:
+        Returns:["window"]
             xr.Dataset: The xarray Dataset object filtered by the time split."""
         start, end = (
             self._config["splits"][split]["start"],

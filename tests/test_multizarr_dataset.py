@@ -15,7 +15,7 @@ os.environ["WANDB_DISABLED"] = "true"
 def test_load_analysis_dataset():
     # TODO: Access rights should be fixed for pooch to work
     datastore = MultiZarrDatastore(
-        config_path="tests/datastore_configs/multizarr.danra.yaml"
+        config_path="tests/datastore_configs/multizarr/data_config.yaml"
     )
 
     var_state_names = datastore.get_vars_names(category="state")
@@ -31,6 +31,9 @@ def test_load_analysis_dataset():
     assert len(var_forcing_names) == len(var_forcing_units) == num_forcing_vars
     
     stats = datastore.get_normalization_stats(category="state")
+    
+    import ipdb
+    ipdb.set_trace()
 
 
     # Assert dataset can be loaded

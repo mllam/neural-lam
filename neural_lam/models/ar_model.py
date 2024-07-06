@@ -10,7 +10,7 @@ import wandb
 
 # First-party
 from neural_lam import metrics, vis
-from neural_lam.datastore.multizarr import config
+from neural_lam.datastore.base import BaseDatastore
 
 
 class ARModel(pl.LightningModule):
@@ -22,27 +22,33 @@ class ARModel(pl.LightningModule):
     # pylint: disable=arguments-differ
     # Disable to override args/kwargs from superclass
 
-    def __init__(self, args):
+    def __init__(self, args, datastore: BaseDatastore, forcing_window_size: int):
         super().__init__()
         self.save_hyperparameters()
         self.args = args
-        self.data_config = config.Config.from_file(args.data_config)
-        
-        num_state_vars = self.data_config.num_data_vars("state")
-        num_forcing_vars = self.data_config.num_data_vars("forcing")
-        da_static_features = self.data_config.process_dataset("static")
+        # XXX: should be this be somewhere else?
+        split = "train"
+        num_state_vars = datastore.get_num_data_vars(category="state")
+        num_forcing_vars = datastore.get_num_data_vars(category="forcing")
+        da_static_features = datastore.get_dataarray(category="static", split=split)
+        da_state_stats = datastore.get_normalization_dataarray(category="state")
+        da_boundary_mask = datastore.boundary_mask
+
 
         # Load static features for grid/data
-        static = da_static_features.values
         self.register_buffer(
             "grid_static_features",
-            torch.tensor(static.values, dtype=torch.float32),
+            torch.tensor(da_static_features.values, dtype=torch.float32),
             persistent=False,
         )
 
-        state_stats = self.data_config.load_normalization_stats(
-            "state", datatype="torch"
-        )
+        state_stats = {
+            "state_mean": torch.tensor(da_state_stats.state_mean.values, dtype=torch.float32),
+            "state_std": torch.tensor(da_state_stats.state_std.values, dtype=torch.float32),
+            "diff_mean": torch.tensor(da_state_stats.state_diff_mean.values, dtype=torch.float32),
+            "diff_std": torch.tensor(da_state_stats.state_diff_std.values, dtype=torch.float32),
+        }
+
         for key, val in state_stats.items():
             self.register_buffer(key, val, persistent=False)
 
@@ -73,14 +79,14 @@ class ARModel(pl.LightningModule):
         self.grid_dim = (
             2 * self.grid_output_dim
             + grid_static_dim
-            + self.data_config.num_data_vars("forcing")
-            * self.data_config.forcing.window
+            + num_forcing_vars
+            * forcing_window_size
         )
 
         # Instantiate loss function
         self.loss = metrics.get_metric(args.loss)
 
-        boundary_mask = self.data_config.load_boundary_mask()
+        boundary_mask = torch.tensor(da_boundary_mask.values, dtype=torch.float32)
         self.register_buffer("boundary_mask", boundary_mask, persistent=False)
         # Pre-compute interior mask for use in loss function
         self.register_buffer(
@@ -88,7 +94,7 @@ class ARModel(pl.LightningModule):
         )  # (num_grid_nodes, 1), 1 for non-border
 
         # Number of hours per pred. step
-        self.step_length = self.data_config.step_length
+        self.step_length = datastore.step_length
         self.val_metrics = {
             "mse": [],
         }
@@ -423,7 +429,7 @@ class ARModel(pl.LightningModule):
                         pred_t[:, var_i],
                         target_t[:, var_i],
                         self.interior_mask[:, 0],
-                        self.data_config,
+                        self.datastore,
                         title=f"{var_name} ({var_unit}), "
                         f"t={t_i} ({self.step_length * t_i} h)",
                         vrange=var_vrange,
