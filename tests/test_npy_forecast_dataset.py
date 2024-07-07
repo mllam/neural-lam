@@ -93,9 +93,15 @@ def test_load_reduced_meps_dataset(ewc_testdata_path):
         n_forcing_features,
     )
     
+    ds_state_norm = datastore.get_normalization_dataarray(category="state")
+    
     static_data = {
         "border_mask": datastore.boundary_mask.values,
-        "grid_static_features": datastore.get_dataarray(category="static", split="train").values
+        "grid_static_features": datastore.get_dataarray(category="static", split="train").values,
+        "data_mean": ds_state_norm.state_mean.values,
+        "data_std": ds_state_norm.state_std.values,
+        "step_diff_mean": ds_state_norm.state_diff_mean.values,
+        "step_diff_std": ds_state_norm.state_diff_std.values,
     }
 
     required_props = {

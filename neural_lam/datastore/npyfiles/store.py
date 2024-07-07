@@ -4,6 +4,7 @@ import glob
 import os
 import re
 from pathlib import Path
+from typing import List
 
 # Third-party
 import dask.delayed
@@ -172,6 +173,16 @@ class NumpyFilesDatastore(BaseCartesianDatastore):
             features = ["toa_downwelling_shortwave_flux", "column_water"]
             das = [self._get_single_timeseries_dataarray(features=[feature], split=split) for feature in features]
             da = xr.concat(das, dim="feature")
+
+            # add datetime forcing as a feature
+            # to do this we create a forecast time variable which has the dimensions of
+            # (analysis_time, elapsed_forecast_time) with values that are the actual forecast time of each
+            # time step. By calling .chunk({"elapsed_forecast_time": 1}) this time variable is turned into
+            # a dask array and so execution of the calculation is delayed until the feature
+            # values are actually used.
+            da_forecast_time = (da.analysis_time + da.elapsed_forecast_time).chunk({"elapsed_forecast_time": 1})
+            da_datetime_forcing_features = self._calc_datetime_forcing_features(da_time=da_forecast_time)
+            da = xr.concat([da, da_datetime_forcing_features], dim="feature")
         
         elif category == "static":
             # the static features are collected in three files:
@@ -189,38 +200,28 @@ class NumpyFilesDatastore(BaseCartesianDatastore):
         
         da = da.rename(dict(feature=f"{category}_feature"))
         
-        if category == "forcing":
-            # add datetime forcing as a feature
-            # to do this we create a forecast time variable which has the dimensions of
-            # (analysis_time, elapsed_forecast_time) with values that are the actual forecast time of each
-            # time step. By calling .chunk({"elapsed_forecast_time": 1}) this time variable is turned into
-            # a dask array and so execution of the calculation is delayed until the feature
-            # values are actually used.
-            da_forecast_time = (da.analysis_time + da.elapsed_forecast_time).chunk({"elapsed_forecast_time": 1})
-            da_datetime_forcing_features = self._calc_datetime_forcing_features(da_time=da_forecast_time)
-            da = xr.concat([da, da_datetime_forcing_features], dim=f"{category}_feature")
-            
-        da.name = category
-        
         # check that we have the right features
-        actual_features = list(da[f"{category}_feature"].values)
+        actual_features = da[f"{category}_feature"].values.tolist()
         expected_features = self.get_vars_names(category=category)
         if actual_features != expected_features:
             raise ValueError(f"Expected features {expected_features}, got {actual_features}")
         
         return da
     
-    def _get_single_timeseries_dataarray(self, features: str, split: str, member: int = None) -> DataArray:
+    def _get_single_timeseries_dataarray(self, features: List[str], split: str, member: int = None) -> DataArray:
         """
         Get the data array spanning the complete time series for a given set of features and split
-        of data. If the category is 'state', the member argument should be specified to select
+        of data. For state features the `member` argument should be specified to select
         the ensemble member to load. The data will be loaded using dask.delayed, so that the data
         isn't actually loaded until it's needed.
 
         Parameters
         ----------
-        category : str
-            The category of the data to load. One of 'state', 'forcing', or 'static'.
+        features : List[str]
+            The list of features to load the data for. For the 'state' category, this should be
+            the result of `self.get_vars_names(category="state")`, for the 'forcing' category this
+            should be the list of forcing features to load, and for the 'static' category this should
+            be the list of static features to load.
         split : str
             The dataset split to load the data for. One of 'train', 'val', or 'test'.
         member : int, optional
@@ -265,7 +266,6 @@ class NumpyFilesDatastore(BaseCartesianDatastore):
             features_vary_with_analysis_time = False
             # XXX: surface_geopotential is the same for all splits, and so saved in static/
             fp_samples = self.root_path / "static"
-            import ipdb; ipdb.set_trace()
         elif features == ["border_mask"]:
             filename_format = "border_mask.npy"
             file_dims = ["y", "x", "feature"]
@@ -391,10 +391,10 @@ class NumpyFilesDatastore(BaseCartesianDatastore):
                 np.sin(da_year_angle),
                 np.cos(da_year_angle),
             ),
-            dim="forcing_feature",
+            dim="feature",
         )
         da_datetime_forcing = (da_datetime_forcing + 1) / 2  # Rescale to [0,1]
-        da_datetime_forcing["forcing_feature"] = ["sin_hour", "cos_hour", "sin_year", "cos_year"]
+        da_datetime_forcing["feature"] = ["sin_hour", "cos_hour", "sin_year", "cos_year"]
         
         return da_datetime_forcing
 
