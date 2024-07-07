@@ -19,7 +19,7 @@
 - [ ] I have commented my code, particularly in hard-to-understand areas
 - [ ] I have added tests that prove my fix is effective or that my feature works
 - [ ] I have requested a reviewer and an assignee (assignee is responsible for merging)
-- [ ] I have given the PR a name that clearly describes the change, written in imperative form ([context](https://www.gitkraken.com/learn/git/best-practices/git-commit-message#using-imperative-verb-form).
+- [ ] I have given the PR a name that clearly describes the change, written in imperative form ([context](https://www.gitkraken.com/learn/git/best-practices/git-commit-message#using-imperative-verb-form)).
 ## Checklist for reviewers
 
 Each PR comes with its own improvements and flaws. The reviewer should check the following:
