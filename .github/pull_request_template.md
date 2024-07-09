@@ -29,10 +29,10 @@
 ## Checklist for reviewers
 
 Each PR comes with its own improvements and flaws. The reviewer should check the following:
-- [ ] the code readable
-- [ ] the code well tested
-- [ ] the code documented (including return types and parameters)
-- [ ] the code easy to maintain
+- [ ] the code is readable
+- [ ] the code is well tested
+- [ ] the code is documented (including return types and parameters)
+- [ ] the code is easy to maintain
 
 ## Author checklist after completed review
 
