@@ -21,7 +21,7 @@ jobs:
         run: |
           python -m pip install .
           # pip can't install from "dev" pdm group in pyproject.toml, should we put these requirements
-          # for running tests in a seperate group? Using "dev" ensures that the these requirements aren't
+          # for running tests in a separate group? Using "dev" ensures that the these requirements aren't
           # included in build packages
           python -m pip install pytest pooch
 
