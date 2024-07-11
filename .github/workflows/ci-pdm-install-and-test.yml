@@ -37,6 +37,20 @@ jobs:
           pdm run python -c "import torch; print(torch.__version__)"
           pdm run python -c "import torch; assert torch.__version__.endswith('+cpu')"
 
+      - name: Load cache data
+        uses: actions/cache/restore@v4
+        with:
+          path: data
+          key: ${{ runner.os }}-meps-reduced-example-data-v0.1.0
+          restore-keys: |
+            ${{ runner.os }}-meps-reduced-example-data-v0.1.0
+
       - name: Run tests
         run: |
           pdm run pytest
+
+      - name: Save cache data
+        uses: actions/cache/save@v4
+        with:
+          path: data
+          key: ${{ runner.os }}-meps-reduced-example-data-v0.1.0
