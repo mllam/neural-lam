@@ -45,6 +45,6 @@ Each PR comes with its own improvements and flaws. The reviewer should check the
 ## Checklist for assignee
 
 - [ ] PR is up to date with the base branch
-- [ ] the tests passing
+- [ ] the tests pass
 - [ ] author has added an entry to the changelog (and designated the change as *added*, *changed* or *fixed*)
 - Once the PR ready to be merged, squash commits and merge the PR.
