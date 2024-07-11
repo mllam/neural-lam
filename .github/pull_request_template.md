@@ -21,7 +21,9 @@
 
 - [ ] My branch is up-to-date with the target branch - if not update your fork with the changes from the target branch (use `pull` with `--rebase` option if possible).
 - [ ] I have performed a self-review of my code
-- [ ] I have commented my code, particularly in hard-to-understand areas
+- [ ] For any new/modified functions/classes I have added docstrings that clearly describe its purpose, expected inputs and returned values
+- [ ] I have placed in-line comments to clarify the intent of any hard-to-understand passages of my code
+- [ ] I have updated the [README](README.MD) to cover introduced code changes
 - [ ] I have added tests that prove my fix is effective or that my feature works
 - [ ] I have given the PR a name that clearly describes the change, written in imperative form ([context](https://www.gitkraken.com/learn/git/best-practices/git-commit-message#using-imperative-verb-form)).
 - [ ] I have requested a reviewer and an assignee (assignee is responsible for merging)
