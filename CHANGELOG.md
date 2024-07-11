@@ -27,7 +27,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - pre-commit setup for linting and formatting
   [\#6](https://github.com/joeloskarsson/neural-lam/pull/6), [\#8](https://github.com/joeloskarsson/neural-lam/pull/8)
   @sadamov, @joeloskarsson
-  
+
 - added github pull-request template to ease contribution and review process
   [\#53](https://github.com/mllam/neural-lam/pull/53), @leifdenby
 
