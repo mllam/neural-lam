@@ -5,9 +5,10 @@ runners:
     cloud: "aws"
     # https://aws.amazon.com/ec2/instance-types/g4/
     instance_type: "g4ad.xlarge"
+    # Ubuntu-24.04 LTS, ami image, Frankfurt
+    machine_image: "ami-0e872aee57663ae2d"
     # use Frankfurt region
     region: "eu-central-1"
-    # use ubuntu 20.04
     preemptible: false
     # Add this label in the "runs-on" param in .github/workflows/<workflow-name>.yml
     # So that this runner is created for running the workflow
