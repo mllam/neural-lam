@@ -83,8 +83,8 @@ class ARModel(pl.LightningModule):
         if self.output_std:
             self.test_metrics["output_std"] = []  # Treat as metric
 
-        # For making restoring of optimizer state optional (slight hack)
-        self.opt_state = None
+        # For making restoring of optimizer state optional
+        self.restore_opt = args.restore_opt
 
         # For example plotting
         self.n_example_pred = args.n_example_pred
@@ -97,9 +97,6 @@ class ARModel(pl.LightningModule):
         opt = torch.optim.AdamW(
             self.parameters(), lr=self.args.lr, betas=(0.9, 0.95)
         )
-        if self.opt_state:
-            opt.load_state_dict(self.opt_state)
-
         return opt
 
     @property
@@ -476,7 +473,7 @@ class ARModel(pl.LightningModule):
         # Check if metrics are watched, log exact values for specific vars
         if full_log_name in self.args.metrics_watch:
             for var_i, timesteps in self.args.var_leads_metrics_watch.items():
-                var = self.config_loader.dataset.var_nums[var_i]
+                var = self.config_loader.dataset.var_names[var_i]
                 log_dict.update(
                     {
                         f"{full_log_name}_{var}_step_{step}": metric_tensor[
@@ -597,3 +594,6 @@ class ARModel(pl.LightningModule):
                 )
                 loaded_state_dict[new_key] = loaded_state_dict[old_key]
                 del loaded_state_dict[old_key]
+        if not self.restore_opt:
+            opt = self.configure_optimizers()
+            checkpoint["optimizer_states"] = [opt.state_dict()]
