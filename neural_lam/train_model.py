@@ -9,7 +9,7 @@ import pytorch_lightning as pl
 import torch
 from lightning_fabric.utilities import seed
 
-# First-party
+# Local
 from . import config, utils
 from .models.graph_lam import GraphLAM
 from .models.hi_lam import HiLAM

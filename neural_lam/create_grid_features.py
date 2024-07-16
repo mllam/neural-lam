@@ -6,7 +6,7 @@ from argparse import ArgumentParser
 import numpy as np
 import torch
 
-# First-party
+# Local
 from . import config
 
 

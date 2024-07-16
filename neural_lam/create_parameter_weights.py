@@ -10,7 +10,7 @@ import torch.distributed as dist
 from torch.utils.data.distributed import DistributedSampler
 from tqdm import tqdm
 
-# First-party
+# Local
 from . import config
 from .weather_dataset import WeatherDataset
 

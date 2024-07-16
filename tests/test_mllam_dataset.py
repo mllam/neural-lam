@@ -6,9 +6,8 @@ from pathlib import Path
 import pooch
 import pytest
 
-from neural_lam.config import Config
-
 # First-party
+from neural_lam.config import Config
 from neural_lam.create_mesh import main as create_mesh
 from neural_lam.train_model import main as train_model
 from neural_lam.utils import load_static_data

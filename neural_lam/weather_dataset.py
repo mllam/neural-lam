@@ -7,7 +7,7 @@ import os
 import numpy as np
 import torch
 
-# First-party
+# Local
 from . import utils
 
 

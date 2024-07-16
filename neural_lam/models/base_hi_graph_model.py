@@ -1,7 +1,7 @@
 # Third-party
 from torch import nn
 
-# First-party
+# Local
 from .. import utils
 from ..interaction_net import InteractionNet
 from .base_graph_model import BaseGraphModel

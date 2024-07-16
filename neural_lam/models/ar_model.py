@@ -8,7 +8,7 @@ import pytorch_lightning as pl
 import torch
 import wandb
 
-# First-party
+# Local
 from .. import config, metrics, utils, vis
 
 

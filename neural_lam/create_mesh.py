@@ -12,7 +12,7 @@ import torch
 import torch_geometric as pyg
 from torch_geometric.utils.convert import from_networkx
 
-# First-party
+# Local
 from . import config
 
 

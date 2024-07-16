@@ -3,7 +3,7 @@ import torch
 import torch_geometric as pyg
 from torch import nn
 
-# First-party
+# Local
 from . import utils
 
 

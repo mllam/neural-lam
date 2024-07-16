@@ -1,7 +1,7 @@
 # Third-party
 import torch
 
-# First-party
+# Local
 from .. import utils
 from ..interaction_net import InteractionNet
 from .ar_model import ARModel
