@@ -48,7 +48,7 @@ Still, some restrictions are inevitable:
 ## A note on the limited area setting
 Currently we are using these models on a limited area covering the Nordic region, the so called MEPS area (see [paper](https://arxiv.org/abs/2309.17370)).
 There are still some parts of the code that is quite specific for the MEPS area use case.
-This is in particular true for the mesh graph creation (`create_mesh.py`) and some of the constants set in a `data_config.yaml` file (path specified in `train_model.py --data_config` ).
+This is in particular true for the mesh graph creation (`python -m neural_lam.create_mesh`) and some of the constants set in a `data_config.yaml` file (path specified in `python -m neural_lam.train_model --data_config <data-config-filepath>` ).
 If there is interest to use Neural-LAM for other areas it is not a substantial undertaking to refactor the code to be fully area-agnostic.
 We would be happy to support such enhancements.
 See the issues https://github.com/joeloskarsson/neural-lam/issues/2, https://github.com/joeloskarsson/neural-lam/issues/3 and https://github.com/joeloskarsson/neural-lam/issues/4 for some initial ideas on how this could be done.
@@ -81,15 +81,15 @@ The full MEPS dataset can be shared with other researchers on request, contact u
 A tiny subset of the data (named `meps_example`) is available in `example_data.zip`, which can be downloaded from [here](https://liuonline-my.sharepoint.com/:f:/g/personal/joeos82_liu_se/EuiUuiGzFIFHruPWpfxfUmYBSjhqMUjNExlJi9W6ULMZ1w?e=97pnGX).
 Download the file and unzip in the neural-lam directory.
 All graphs used in the paper are also available for download at the same link (but can as easily be re-generated using `python -m neural_lam.create_mesh`).
-Note that this is far too little data to train any useful models, but all scripts can be ran with it.
+Note that this is far too little data to train any useful models, but all pre-processing and training steps can be run with it.
 It should thus be useful to make sure that your python environment is set up correctly and that all the code can be ran without any issues.
 
 ## Pre-processing
-An overview of how the different scripts and files depend on each other is given in this figure:
+An overview of how the different pre-processing steps, training and files depend on each other is given in this figure:
 <p align="middle">
   <img src="figures/component_dependencies.png"/>
 </p>
-In order to start training models at least three pre-processing scripts have to be run:
+In order to start training models at least three pre-processing steps have to be run:
 
 * `python -m neural_lam.create_mesh`
 * `python -m neural_lam.create_grid_features`
@@ -106,13 +106,13 @@ The graphs used for the different models in the [paper](https://arxiv.org/abs/23
 The graph-related files are stored in a directory called `graphs`.
 
 ### Create remaining static features
-To create the remaining static files run the scripts `create_grid_features.py` and `create_parameter_weights.py`.
+To create the remaining static files run `python -m neural_lam.create_grid_features` and `python -m neural_lam.create_parameter_weights`.
 
 ## Weights & Biases Integration
 The project is fully integrated with [Weights & Biases](https://www.wandb.ai/) (W&B) for logging and visualization, but can just as easily be used without it.
 When W&B is used, training configuration, training/test statistics and plots are sent to the W&B servers and made available in an interactive web interface.
 If W&B is turned off, logging instead saves everything locally to a directory like `wandb/dryrun...`.
-The W&B project name is set to `neural-lam`, but this can be changed in the flags of `train_model.py` (using argsparse).
+The W&B project name is set to `neural-lam`, but this can be changed in the flags of `python -m neural_lam.train_model` (using argsparse).
 See the [W&B documentation](https://docs.wandb.ai/) for details.
 
 If you would like to login and use W&B, run:
@@ -216,13 +216,13 @@ data
 │       ├── nwp_xy.npy                      - Coordinates of grid nodes (part of dataset)
 │       ├── surface_geopotential.npy        - Geopotential at surface of grid nodes (part of dataset)
 │       ├── border_mask.npy                 - Mask with True for grid nodes that are part of border (part of dataset)
-│       ├── grid_features.pt                - Static features of grid nodes (create_grid_features.py)
-│       ├── parameter_mean.pt               - Means of state parameters (create_parameter_weights.py)
-│       ├── parameter_std.pt                - Std.-dev. of state parameters (create_parameter_weights.py)
-│       ├── diff_mean.pt                    - Means of one-step differences (create_parameter_weights.py)
-│       ├── diff_std.pt                     - Std.-dev. of one-step differences (create_parameter_weights.py)
-│       ├── flux_stats.pt                   - Mean and std.-dev. of solar flux forcing (create_parameter_weights.py)
-│       └── parameter_weights.npy           - Loss weights for different state parameters (create_parameter_weights.py)
+│       ├── grid_features.pt                - Static features of grid nodes (neural_lam.create_grid_features)
+│       ├── parameter_mean.pt               - Means of state parameters (neural_lam.create_parameter_weights)
+│       ├── parameter_std.pt                - Std.-dev. of state parameters (neural_lam.create_parameter_weights)
+│       ├── diff_mean.pt                    - Means of one-step differences (neural_lam.create_parameter_weights)
+│       ├── diff_std.pt                     - Std.-dev. of one-step differences (neural_lam.create_parameter_weights)
+│       ├── flux_stats.pt                   - Mean and std.-dev. of solar flux forcing (neural_lam.create_parameter_weights)
+│       └── parameter_weights.npy           - Loss weights for different state parameters (neural_lam.create_parameter_weights)
 ├── dataset2
 ├── ...
 └── datasetN
@@ -234,13 +234,13 @@ The structure is shown with examples below:
 ```
 graphs
 ├── graph1                                  - Directory with a graph definition
-│   ├── m2m_edge_index.pt                   - Edges in mesh graph (create_mesh.py)
-│   ├── g2m_edge_index.pt                   - Edges from grid to mesh (create_mesh.py)
-│   ├── m2g_edge_index.pt                   - Edges from mesh to grid (create_mesh.py)
-│   ├── m2m_features.pt                     - Static features of mesh edges (create_mesh.py)
-│   ├── g2m_features.pt                     - Static features of grid to mesh edges (create_mesh.py)
-│   ├── m2g_features.pt                     - Static features of mesh to grid edges (create_mesh.py)
-│   └── mesh_features.pt                    - Static features of mesh nodes (create_mesh.py)
+│   ├── m2m_edge_index.pt                   - Edges in mesh graph (neural_lam.create_mesh)
+│   ├── g2m_edge_index.pt                   - Edges from grid to mesh (neural_lam.create_mesh)
+│   ├── m2g_edge_index.pt                   - Edges from mesh to grid (neural_lam.create_mesh)
+│   ├── m2m_features.pt                     - Static features of mesh edges (neural_lam.create_mesh)
+│   ├── g2m_features.pt                     - Static features of grid to mesh edges (neural_lam.create_mesh)
+│   ├── m2g_features.pt                     - Static features of mesh to grid edges (neural_lam.create_mesh)
+│   └── mesh_features.pt                    - Static features of mesh nodes (neural_lam.create_mesh)
 ├── graph2
 ├── ...
 └── graphN
@@ -250,9 +250,9 @@ graphs
 To keep track of levels in the mesh graph, a list format is used for the files with mesh graph information.
 In particular, the files
 ```
-│   ├── m2m_edge_index.pt                   - Edges in mesh graph (create_mesh.py)
-│   ├── m2m_features.pt                     - Static features of mesh edges (create_mesh.py)
-│   ├── mesh_features.pt                    - Static features of mesh nodes (create_mesh.py)
+│   ├── m2m_edge_index.pt                   - Edges in mesh graph (neural_lam.create_mesh)
+│   ├── m2m_features.pt                     - Static features of mesh edges (neural_lam.create_mesh)
+│   ├── mesh_features.pt                    - Static features of mesh nodes (neural_lam.create_mesh)
 ```
 all contain lists of length `L`, for a hierarchical mesh graph with `L` layers.
 For non-hierarchical graphs `L == 1` and these are all just singly-entry lists.
@@ -263,10 +263,10 @@ In addition, hierarchical mesh graphs (`L > 1`) feature a few additional files w
 ```
 ├── graph1
 │   ├── ...
-│   ├── mesh_down_edge_index.pt             - Downward edges in mesh graph (create_mesh.py)
-│   ├── mesh_up_edge_index.pt               - Upward edges in mesh graph (create_mesh.py)
-│   ├── mesh_down_features.pt               - Static features of downward mesh edges (create_mesh.py)
-│   ├── mesh_up_features.pt                 - Static features of upward mesh edges (create_mesh.py)
+│   ├── mesh_down_edge_index.pt             - Downward edges in mesh graph (neural_lam.create_mesh)
+│   ├── mesh_up_edge_index.pt               - Upward edges in mesh graph (neural_lam.create_mesh)
+│   ├── mesh_down_features.pt               - Static features of downward mesh edges (neural_lam.create_mesh)
+│   ├── mesh_up_features.pt                 - Static features of upward mesh edges (neural_lam.create_mesh)
 │   ├── ...
 ```
 These files have the same list format as the ones above, but each list has length `L-1` (as these edges describe connections between levels).
