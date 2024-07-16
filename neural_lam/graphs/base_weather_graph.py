@@ -4,7 +4,7 @@ from dataclasses import dataclass
 
 # Third-party
 import torch
-import torch.nn as nn
+from torch import nn
 
 
 @dataclass
@@ -26,8 +26,20 @@ class BaseWeatherGraph(nn.Module):
             self.m2g_edge_features, self.m2g_edge_index, "m2g"
         )
 
-        # TODO Checks that node indices align
-        # TODO Make all node indices start at 0
+        # Make all node indices start at 0, if not
+        # TODO Remove from Inets
+        self.g2m_edge_index = self._reindex_edge_index(self.g2m_edge_index)
+        self.m2g_edge_index = self._reindex_edge_index(self.m2g_edge_index)
+
+    @staticmethod
+    def _reindex_edge_index(edge_index):
+        """
+        Create a version of edge_index with both sender and receiver indices
+        starting at 0.
+
+        edge_index: (2, num_edges) tensor with edge index
+        """
+        return edge_index - edge_index.min(dim=1, keepdim=True)[0]
 
     @staticmethod
     def check_features(features, subgraph_name):
@@ -93,9 +105,26 @@ class BaseWeatherGraph(nn.Module):
             f"(edge_index.shape) and features {edge_features.shape}"
         )
 
+        # TODO Checks that node indices align between edge_index and features
+
+    # TODO Cache?
+    # @functools.cached_property
+    @property
+    def num_grid_nodes(self):
+        """
+        Get the number of grid nodes (grid cells) that the graph
+        is constructed for.
+        """
+        return self.g2m_edge_index[0].max().item() + 1
+
+    # TODO Cache?
+    # @functools.cached_property
+    @property
     def num_mesh_nodes(self):
-        # TODO use g2m
-        pass
+        """
+        Get the number of nodes in the mesh graph
+        """
+        return self.g2m_edge_index[1].max().item() + 1
 
     @staticmethod
     def from_graph_dir(path):

@@ -4,34 +4,61 @@ import copy
 # Third-party
 import pytest
 import torch
+import torch_geometric as pyg
 
 # First-party
 from neural_lam.graphs.flat_weather_graph import FlatWeatherGraph
 
+NUM_GRID = 10
+NUM_MESH = 5
+FEATURE_DIM = 3
+
 
 def create_dummy_graph_tensors():
     """
-    Create dummy tensors for instantiating a flat graph
+    Create dummy tensors for instantiating a flat graph.
+    In the dummy tensors all grid nodes connect to all mesh nodes in g2m and m2g
+    (complete bipartite graph).
+    m2m is a complete graph.
     """
-    num_grid = 10
-    num_mesh = 5
-    feature_dim = 3
-
     return {
-        "g2m_edge_index": torch.zeros(2, num_grid, dtype=torch.long),
+        "g2m_edge_index": torch.stack(
+            (
+                torch.repeat_interleave(torch.arange(NUM_GRID), NUM_MESH),
+                torch.arange(NUM_MESH).repeat(NUM_GRID),
+            ),
+            dim=0,
+        ),
         "g2m_edge_features": (
-            torch.zeros(num_grid, feature_dim, dtype=torch.float32)
+            torch.zeros(NUM_GRID * NUM_MESH, FEATURE_DIM, dtype=torch.float32)
         ),
-        "m2g_edge_index": torch.zeros(2, num_grid, dtype=torch.long),
+        "m2g_edge_index": torch.stack(
+            (
+                torch.arange(NUM_MESH).repeat(NUM_GRID),
+                torch.repeat_interleave(torch.arange(NUM_GRID), NUM_MESH),
+            ),
+            dim=0,
+        ),
         "m2g_edge_features": (
-            torch.zeros(num_grid, feature_dim, dtype=torch.float32)
+            torch.zeros(NUM_GRID * NUM_MESH, FEATURE_DIM, dtype=torch.float32)
         ),
-        "m2m_edge_index": torch.zeros(2, num_mesh, dtype=torch.long),
+        "m2m_edge_index": pyg.utils.remove_self_loops(
+            torch.stack(
+                (
+                    torch.repeat_interleave(torch.arange(NUM_MESH), NUM_MESH),
+                    torch.arange(NUM_MESH).repeat(NUM_MESH),
+                ),
+                dim=0,
+            )
+        )[0],
         "m2m_edge_features": (
-            torch.zeros(num_mesh, feature_dim, dtype=torch.float32)
+            # Number of edges in complete graph of N nodes is N(N-1)
+            torch.zeros(
+                NUM_MESH * (NUM_MESH - 1), FEATURE_DIM, dtype=torch.float32
+            )
         ),
         "mesh_node_features": (
-            torch.zeros(num_mesh, feature_dim, dtype=torch.float32)
+            torch.zeros(NUM_MESH, FEATURE_DIM, dtype=torch.float32)
         ),
     }
 
@@ -40,7 +67,17 @@ def test_create_flat_graph():
     """
     Test that a Flat weather graph can be created with correct tensors
     """
-    FlatWeatherGraph(**create_dummy_graph_tensors())
+    graph = FlatWeatherGraph(**create_dummy_graph_tensors())
+
+    # Check that node counts are correct
+    assert graph.num_grid_nodes == NUM_GRID, (
+        "num_grid_nodes returns wrong number of grid nodes: "
+        f"{graph.num_grid_nodes} (true number is {NUM_GRID})"
+    )
+    assert graph.num_mesh_nodes == NUM_MESH, (
+        "num_mesh_nodes returns wrong number of mesh nodes: "
+        f"{graph.num_mesh_nodes} (true number is {NUM_MESH})"
+    )
 
 
 @pytest.mark.parametrize(
@@ -66,7 +103,7 @@ def test_dtypes_flat_graph(subgraph_name, tensor_name):
         FlatWeatherGraph(**dummy_copy)
     assert subgraph_name in str(
         assertinfo
-    ), "AssertionError did not contain {subgraph_name}"
+    ), f"AssertionError did not contain {subgraph_name}"
 
     # Test wrong data type
     dummy_copy = copy.copy(dummy_tensors)
@@ -77,7 +114,7 @@ def test_dtypes_flat_graph(subgraph_name, tensor_name):
         FlatWeatherGraph(**dummy_copy)
     assert subgraph_name in str(
         assertinfo
-    ), "AssertionError did not contain {subgraph_name}"
+    ), f"AssertionError did not contain {subgraph_name}"
 
 
 @pytest.mark.parametrize("subgraph_name", ["g2m", "m2g", "m2m"])

@@ -3,6 +3,7 @@ from dataclasses import dataclass
 
 # Third-party
 import torch
+import torch_geometric as pyg
 
 # First-party
 from neural_lam.graphs.base_weather_graph import BaseWeatherGraph
@@ -24,11 +25,12 @@ class FlatWeatherGraph(BaseWeatherGraph):
             self.m2m_edge_features, self.m2m_edge_index, "m2m"
         )
         BaseWeatherGraph.check_features(self.mesh_node_features, "mesh nodes")
-        # TODO Checks that node indices align
 
-    def num_mesh_nodes(self):
-        # TODO use mesh_node_features
-        pass
+        # Check that m2m has correct properties
+        assert not pyg.utils.contains_isolated_nodes(
+            self.m2m_edge_index
+        ), "m2m_edge_index does not specify a connected graph"
+        # TODO Checks that node indices align with number of mesh nodes
 
     @staticmethod
     def from_graph_dir(path):
