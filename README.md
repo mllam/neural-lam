@@ -57,6 +57,13 @@ See the issues https://github.com/joeloskarsson/neural-lam/issues/2, https://git
 Below follows instructions on how to use Neural-LAM to train and evaluate models.
 
 ## Installation
+
+The dependencies in `neural-lam` is handled with [pdm](https://pdm.fming.dev/), but you can still install `neural-lam` directly with pip if you prefer. The benefits of using `pdm` are that [pyproject.toml](pyproject.toml) is automatically updated when you add/remove dependencies (with `pdm add <package_name>` or `pdm remove <package_name`).
+
+### Installing with pdm
+
+### Installing with pip
+
 Follow the steps below to create the necessary python environment.
 
 1. Install GEOS for your system. For example with `sudo apt-get install libgeos-dev`. This is necessary for the Cartopy requirement.
