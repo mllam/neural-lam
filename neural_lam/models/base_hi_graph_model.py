@@ -36,7 +36,7 @@ class BaseHiGraphModel(BaseGraphModel):
             if level_index < (self.num_levels - 1):
                 up_edges = self.mesh_up_features[level_index].shape[0]
                 down_edges = self.mesh_down_features[level_index].shape[0]
-                print(f"  {level_index}<->{level_index+1}")
+                print(f"  {level_index}<->{level_index + 1}")
                 print(f" - {up_edges} up edges, {down_edges} down edges")
         # Embedders
         # Assume all levels have same static feature dimensionality

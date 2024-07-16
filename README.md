@@ -45,7 +45,7 @@ Still, some restrictions are inevitable:
 ## A note on the limited area setting
 Currently we are using these models on a limited area covering the Nordic region, the so called MEPS area (see [paper](https://arxiv.org/abs/2309.17370)).
 There are still some parts of the code that is quite specific for the MEPS area use case.
-This is in particular true for the mesh graph creation (`neural_lam.create_mesh`) and some of the constants used (`neural_lam.constants`).
+This is in particular true for the mesh graph creation (`create_mesh.py`) and some of the constants set in a `data_config.yaml` file (path specified in `train_model.py --data_config` ).
 If there is interest to use Neural-LAM for other areas it is not a substantial undertaking to refactor the code to be fully area-agnostic.
 We would be happy to support such enhancements.
 See the issues https://github.com/joeloskarsson/neural-lam/issues/2, https://github.com/joeloskarsson/neural-lam/issues/3 and https://github.com/joeloskarsson/neural-lam/issues/4 for some initial ideas on how this could be done.
@@ -103,14 +103,13 @@ The graphs used for the different models in the [paper](https://arxiv.org/abs/23
 The graph-related files are stored in a directory called `graphs`.
 
 ### Create remaining static features
-To create the remaining static files run the scripts `python -m neural_lam.create_grid_features` and `python -m neural_lam.create_parameter_weights`.
-The main option to set for these is just which dataset to use.
+To create the remaining static files run the scripts `create_grid_features.py` and `create_parameter_weights.py`.
 
 ## Weights & Biases Integration
 The project is fully integrated with [Weights & Biases](https://www.wandb.ai/) (W&B) for logging and visualization, but can just as easily be used without it.
 When W&B is used, training configuration, training/test statistics and plots are sent to the W&B servers and made available in an interactive web interface.
 If W&B is turned off, logging instead saves everything locally to a directory like `wandb/dryrun...`.
-The W&B project name is set to `neural-lam`, but this can be changed in `neural_lam.constants`.
+The W&B project name is set to `neural-lam`, but this can be changed in the flags of `train_model.py` (using argsparse).
 See the [W&B documentation](https://docs.wandb.ai/) for details.
 
 If you would like to login and use W&B, run:

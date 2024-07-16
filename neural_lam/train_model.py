@@ -9,7 +9,7 @@ import torch
 from lightning_fabric.utilities import seed
 
 # First-party
-from . import constants, utils
+from . import config, utils
 from .models.graph_lam import GraphLAM
 from .models.hi_lam import HiLAM
 from .models.hi_lam_parallel import HiLAMParallel
@@ -29,14 +29,11 @@ def main():
     parser = ArgumentParser(
         description="Train or evaluate NeurWP models for LAM"
     )
-
-    # General options
     parser.add_argument(
-        "--dataset",
+        "--data_config",
         type=str,
-        default="meps_example",
-        help="Dataset, corresponding to name in data directory "
-        "(default: meps_example)",
+        default="neural_lam/data_config.yaml",
+        help="Path to data config file (default: neural_lam/data_config.yaml)",
     )
     parser.add_argument(
         "--model",
@@ -183,7 +180,35 @@ def main():
         help="Number of example predictions to plot during evaluation "
         "(default: 1)",
     )
+
+    # Logger Settings
+    parser.add_argument(
+        "--wandb_project",
+        type=str,
+        default="neural_lam",
+        help="Wandb project name (default: neural_lam)",
+    )
+    parser.add_argument(
+        "--val_steps_to_log",
+        type=list,
+        default=[1, 2, 3, 5, 10, 15, 19],
+        help="Steps to log val loss for (default: [1, 2, 3, 5, 10, 15, 19])",
+    )
+    parser.add_argument(
+        "--metrics_watch",
+        type=list,
+        default=[],
+        help="List of metrics to watch, including any prefix (e.g. val_rmse)",
+    )
+    parser.add_argument(
+        "--var_leads_metrics_watch",
+        type=dict,
+        default={},
+        help="Dict with variables and lead times to log watched metrics for",
+    )
     args = parser.parse_args()
+
+    config_loader = config.Config.from_file(args.data_config)
 
     # Asserts for arguments
     assert args.model in MODELS, f"Unknown model: {args.model}"
@@ -203,7 +228,7 @@ def main():
     # Load data
     train_loader = torch.utils.data.DataLoader(
         WeatherDataset(
-            args.dataset,
+            config_loader.dataset.name,
             pred_length=args.ar_steps,
             split="train",
             subsample_step=args.step_length,
@@ -217,7 +242,7 @@ def main():
     max_pred_length = (65 // args.step_length) - 2  # 19
     val_loader = torch.utils.data.DataLoader(
         WeatherDataset(
-            args.dataset,
+            config_loader.dataset.name,
             pred_length=max_pred_length,
             split="val",
             subsample_step=args.step_length,
@@ -264,7 +289,7 @@ def main():
         save_last=True,
     )
     logger = pl.loggers.WandbLogger(
-        project=constants.WANDB_PROJECT, name=run_name, config=args
+        project=args.wandb_project, name=run_name, config=args
     )
     trainer = pl.Trainer(
         max_epochs=args.epochs,
@@ -280,7 +305,9 @@ def main():
 
     # Only init once, on rank 0 only
     if trainer.global_rank == 0:
-        utils.init_wandb_metrics(logger)  # Do after wandb.init
+        utils.init_wandb_metrics(
+            logger, args.val_steps_to_log
+        )  # Do after wandb.init
 
     if args.eval:
         if args.eval == "val":
@@ -288,7 +315,7 @@ def main():
         else:  # Test
             eval_loader = torch.utils.data.DataLoader(
                 WeatherDataset(
-                    args.dataset,
+                    config_loader.dataset.name,
                     pred_length=max_pred_length,
                     split="test",
                     subsample_step=args.step_length,

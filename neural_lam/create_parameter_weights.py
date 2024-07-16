@@ -8,7 +8,7 @@ import torch
 from tqdm import tqdm
 
 # First-party
-from . import constants
+from . import config
 from .weather_dataset import WeatherDataset
 
 
@@ -18,10 +18,10 @@ def main():
     """
     parser = ArgumentParser(description="Training arguments")
     parser.add_argument(
-        "--dataset",
+        "--data_config",
         type=str,
-        default="meps_example",
-        help="Dataset to compute weights for (default: meps_example)",
+        default="neural_lam/data_config.yaml",
+        help="Path to data config file (default: neural_lam/data_config.yaml)",
     )
     parser.add_argument(
         "--batch_size",
@@ -43,7 +43,8 @@ def main():
     )
     args = parser.parse_args()
 
-    static_dir_path = os.path.join("data", args.dataset, "static")
+    config_loader = config.Config.from_file(args.data_config)
+    static_dir_path = os.path.join("data", config_loader.dataset.name, "static")
 
     # Create parameter weights based on height
     # based on fig A.1 in graph cast paper
@@ -56,7 +57,10 @@ def main():
         "500": 0.03,
     }
     w_list = np.array(
-        [w_dict[par.split("_")[-2]] for par in constants.PARAM_NAMES]
+        [
+            w_dict[par.split("_")[-2]]
+            for par in config_loader.dataset.var_longnames
+        ]
     )
     print("Saving parameter weights...")
     np.save(
@@ -66,7 +70,7 @@ def main():
 
     # Load dataset without any subsampling
     ds = WeatherDataset(
-        args.dataset,
+        config_loader.dataset.name,
         split="train",
         subsample_step=1,
         pred_length=63,
@@ -113,7 +117,7 @@ def main():
     # Compute mean and std.-dev. of one-step differences across the dataset
     print("Computing mean and std.-dev. for one-step differences...")
     ds_standard = WeatherDataset(
-        args.dataset,
+        config_loader.dataset.name,
         split="train",
         subsample_step=1,
         pred_length=63,
