@@ -8,21 +8,23 @@ import pytorch_lightning as pl
 import torch
 import wandb
 
-# First-party
-from neural_lam import metrics, vis
-from neural_lam.datastore.base import BaseDatastore
+# Local
+from .. import metrics, vis
+from ..datastore.base import BaseDatastore
 
 
 class ARModel(pl.LightningModule):
-    """
-    Generic auto-regressive weather model.
+    """Generic auto-regressive weather model.
+
     Abstract class that can be extended.
     """
 
     # pylint: disable=arguments-differ
     # Disable to override args/kwargs from superclass
 
-    def __init__(self, args, datastore: BaseDatastore, forcing_window_size: int):
+    def __init__(
+        self, args, datastore: BaseDatastore, forcing_window_size: int
+    ):
         super().__init__()
         self.save_hyperparameters()
         self.args = args
@@ -30,10 +32,11 @@ class ARModel(pl.LightningModule):
         split = "train"
         num_state_vars = datastore.get_num_data_vars(category="state")
         num_forcing_vars = datastore.get_num_data_vars(category="forcing")
-        da_static_features = datastore.get_dataarray(category="static", split=split)
+        da_static_features = datastore.get_dataarray(
+            category="static", split=split
+        )
         da_state_stats = datastore.get_normalization_dataarray(category="state")
         da_boundary_mask = datastore.boundary_mask
-
 
         # Load static features for grid/data
         self.register_buffer(
@@ -43,10 +46,18 @@ class ARModel(pl.LightningModule):
         )
 
         state_stats = {
-            "state_mean": torch.tensor(da_state_stats.state_mean.values, dtype=torch.float32),
-            "state_std": torch.tensor(da_state_stats.state_std.values, dtype=torch.float32),
-            "diff_mean": torch.tensor(da_state_stats.state_diff_mean.values, dtype=torch.float32),
-            "diff_std": torch.tensor(da_state_stats.state_diff_std.values, dtype=torch.float32),
+            "state_mean": torch.tensor(
+                da_state_stats.state_mean.values, dtype=torch.float32
+            ),
+            "state_std": torch.tensor(
+                da_state_stats.state_std.values, dtype=torch.float32
+            ),
+            "diff_mean": torch.tensor(
+                da_state_stats.state_diff_mean.values, dtype=torch.float32
+            ),
+            "diff_std": torch.tensor(
+                da_state_stats.state_diff_std.values, dtype=torch.float32
+            ),
         }
 
         for key, val in state_stats.items():
@@ -79,14 +90,15 @@ class ARModel(pl.LightningModule):
         self.grid_dim = (
             2 * self.grid_output_dim
             + grid_static_dim
-            + num_forcing_vars
-            * forcing_window_size
+            + num_forcing_vars * forcing_window_size
         )
 
         # Instantiate loss function
         self.loss = metrics.get_metric(args.loss)
 
-        boundary_mask = torch.tensor(da_boundary_mask.values, dtype=torch.float32)
+        boundary_mask = torch.tensor(
+            da_boundary_mask.values, dtype=torch.float32
+        )
         self.register_buffer("boundary_mask", boundary_mask, persistent=False)
         # Pre-compute interior mask for use in loss function
         self.register_buffer(
@@ -123,16 +135,12 @@ class ARModel(pl.LightningModule):
 
     @property
     def interior_mask_bool(self):
-        """
-        Get the interior mask as a boolean (N,) mask.
-        """
+        """Get the interior mask as a boolean (N,) mask."""
         return self.interior_mask[:, 0].to(torch.bool)
 
     @staticmethod
     def expand_to_batch(x, batch_size):
-        """
-        Expand tensor with initial batch dimension
-        """
+        """Expand tensor with initial batch dimension."""
         return x.unsqueeze(0).expand(batch_size, -1, -1)
 
     def predict_step(self, prev_state, prev_prev_state, forcing):
@@ -194,13 +202,11 @@ class ARModel(pl.LightningModule):
         return prediction, pred_std
 
     def common_step(self, batch):
-        """
-        Predict on single batch batch consists of: init_states: (B, 2,
+        """Predict on single batch batch consists of: init_states: (B, 2,
         num_grid_nodes, d_features) target_states: (B, pred_steps,
         num_grid_nodes, d_features) forcing_features: (B, pred_steps,
-        num_grid_nodes, d_forcing),
-            where index 0 corresponds to index 1 of init_states
-        """
+        num_grid_nodes, d_forcing), where index 0 corresponds to index 1 of
+        init_states."""
         (init_states, target_states, forcing_features, batch_times) = batch
 
         prediction, pred_std = self.unroll_prediction(
@@ -212,9 +218,7 @@ class ARModel(pl.LightningModule):
         return prediction, target_states, pred_std, batch_times
 
     def training_step(self, batch):
-        """
-        Train on single batch
-        """
+        """Train on single batch."""
         prediction, target, pred_std, _ = self.common_step(batch)
 
         # Compute loss
@@ -236,9 +240,8 @@ class ARModel(pl.LightningModule):
         return batch_loss
 
     def all_gather_cat(self, tensor_to_gather):
-        """
-        Gather tensors across all ranks, and concatenate across dim. 0 (instead
-        of stacking in new dim. 0)
+        """Gather tensors across all ranks, and concatenate across dim. 0
+        (instead of stacking in new dim. 0)
 
         tensor_to_gather: (d1, d2, ...), distributed over K ranks
 
@@ -249,9 +252,7 @@ class ARModel(pl.LightningModule):
     # newer lightning versions requires batch_idx argument, even if unused
     # pylint: disable-next=unused-argument
     def validation_step(self, batch, batch_idx):
-        """
-        Run validation on single batch
-        """
+        """Run validation on single batch."""
         prediction, target, pred_std, _ = self.common_step(batch)
 
         time_step_loss = torch.mean(
@@ -287,9 +288,7 @@ class ARModel(pl.LightningModule):
         self.val_metrics["mse"].append(entry_mses)
 
     def on_validation_epoch_end(self):
-        """
-        Compute val metrics at the end of val epoch
-        """
+        """Compute val metrics at the end of val epoch."""
         # Create error maps for all test metrics
         self.aggregate_and_plot_metrics(self.val_metrics, prefix="val")
 
@@ -299,9 +298,7 @@ class ARModel(pl.LightningModule):
 
     # pylint: disable-next=unused-argument
     def test_step(self, batch, batch_idx):
-        """
-        Run test on single batch
-        """
+        """Run test on single batch."""
         # TODO Here batch_times can be used for plotting routines
         prediction, target, pred_std, batch_times = self.common_step(batch)
         # prediction: (B, pred_steps, num_grid_nodes, d_f) pred_std: (B,
@@ -377,8 +374,7 @@ class ARModel(pl.LightningModule):
             )
 
     def plot_examples(self, batch, n_examples, prediction=None):
-        """
-        Plot the first n_examples forecasts from batch
+        """Plot the first n_examples forecasts from batch.
 
         batch: batch with data to plot corresponding forecasts for n_examples:
         number of forecasts to plot prediction: (B, pred_steps, num_grid_nodes,
@@ -471,9 +467,8 @@ class ARModel(pl.LightningModule):
             )
 
     def create_metric_log_dict(self, metric_tensor, prefix, metric_name):
-        """
-        Put together a dict with everything to log for one metric. Also saves
-        plots as pdf and csv if using test prefix.
+        """Put together a dict with everything to log for one metric. Also
+        saves plots as pdf and csv if using test prefix.
 
         metric_tensor: (pred_steps, d_f), metric values per time and variable
         prefix: string, prefix to use for logging metric_name: string, name of
@@ -516,8 +511,8 @@ class ARModel(pl.LightningModule):
         return log_dict
 
     def aggregate_and_plot_metrics(self, metrics_dict, prefix):
-        """
-        Aggregate and create error map plots for all metrics in metrics_dict
+        """Aggregate and create error map plots for all metrics in
+        metrics_dict.
 
         metrics_dict: dictionary with metric_names and list of tensors
             with step-evals.
@@ -552,9 +547,10 @@ class ARModel(pl.LightningModule):
             plt.close("all")  # Close all figs
 
     def on_test_epoch_end(self):
-        """
-        Compute test metrics and make plots at the end of test epoch. Will
-        gather stored tensors and perform plotting and logging on rank 0.
+        """Compute test metrics and make plots at the end of test epoch.
+
+        Will gather stored tensors and perform plotting and logging on
+        rank 0.
         """
         # Create error maps for all test metrics
         self.aggregate_and_plot_metrics(self.test_metrics, prefix="test")
@@ -604,9 +600,7 @@ class ARModel(pl.LightningModule):
         self.spatial_loss_maps.clear()
 
     def on_load_checkpoint(self, checkpoint):
-        """
-        Perform any changes to state dict before loading checkpoint
-        """
+        """Perform any changes to state dict before loading checkpoint."""
         loaded_state_dict = checkpoint["state_dict"]
 
         # Fix for loading older models after IneractionNet refactoring, where

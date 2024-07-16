@@ -1,18 +1,19 @@
 # Third-party
 import torch_geometric as pyg
 
-# First-party
-from neural_lam import utils
-from neural_lam.interaction_net import InteractionNet
-from neural_lam.models.base_graph_model import BaseGraphModel
+# Local
+from .. import utils
+from ..interaction_net import InteractionNet
+from .base_graph_model import BaseGraphModel
 
 
 class GraphLAM(BaseGraphModel):
-    """
-    Full graph-based LAM model that can be used with different
-    (non-hierarchical )graphs. Mainly based on GraphCast, but the model from
-    Keisler (2022) is almost identical. Used for GC-LAM and L1-LAM in
-    Oskarsson et al. (2023).
+    """Full graph-based LAM model that can be used with different (non-
+    hierarchical )graphs.
+
+    Mainly based on GraphCast, but the model from Keisler (2022) is
+    almost identical. Used for GC-LAM and L1-LAM in Oskarsson et al.
+    (2023).
     """
 
     def __init__(self, args, datastore, forcing_window_size):
@@ -55,23 +56,17 @@ class GraphLAM(BaseGraphModel):
         )
 
     def get_num_mesh(self):
-        """
-        Compute number of mesh nodes from loaded features,
-        and number of mesh nodes that should be ignored in encoding/decoding
-        """
+        """Compute number of mesh nodes from loaded features, and number of
+        mesh nodes that should be ignored in encoding/decoding."""
         return self.mesh_static_features.shape[0], 0
 
     def embedd_mesh_nodes(self):
-        """
-        Embed static mesh features
-        Returns tensor of shape (N_mesh, d_h)
-        """
+        """Embed static mesh features Returns tensor of shape (N_mesh, d_h)"""
         return self.mesh_embedder(self.mesh_static_features)  # (N_mesh, d_h)
 
     def process_step(self, mesh_rep):
-        """
-        Process step of embedd-process-decode framework
-        Processes the representation on the mesh, possible in multiple steps
+        """Process step of embedd-process-decode framework Processes the
+        representation on the mesh, possible in multiple steps.
 
         mesh_rep: has shape (B, N_mesh, d_h)
         Returns mesh_rep: (B, N_mesh, d_h)

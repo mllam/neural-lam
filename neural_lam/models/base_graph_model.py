@@ -1,20 +1,20 @@
 # Third-party
 import torch
 
-# First-party
-from neural_lam import utils
-from neural_lam.interaction_net import InteractionNet
-from neural_lam.models.ar_model import ARModel
+# Local
+from .. import utils
+from ..interaction_net import InteractionNet
+from .ar_model import ARModel
 
 
 class BaseGraphModel(ARModel):
-    """
-    Base (abstract) class for graph-based models building on
-    the encode-process-decode idea.
-    """
+    """Base (abstract) class for graph-based models building on the encode-
+    process- decode idea."""
 
     def __init__(self, args, datastore, forcing_window_size):
-        super().__init__(args, datastore=datastore, forcing_window_size=forcing_window_size)
+        super().__init__(
+            args, datastore=datastore, forcing_window_size=forcing_window_size
+        )
 
         # Load graph with static features
         # NOTE: (IMPORTANT!) mesh nodes MUST have the first
@@ -75,23 +75,18 @@ class BaseGraphModel(ARModel):
         )  # No layer norm on this one
 
     def get_num_mesh(self):
-        """
-        Compute number of mesh nodes from loaded features,
-        and number of mesh nodes that should be ignored in encoding/decoding
-        """
+        """Compute number of mesh nodes from loaded features, and number of
+        mesh nodes that should be ignored in encoding/decoding."""
         raise NotImplementedError("get_num_mesh not implemented")
 
     def embedd_mesh_nodes(self):
-        """
-        Embed static mesh features
-        Returns tensor of shape (num_mesh_nodes, d_h)
-        """
+        """Embed static mesh features Returns tensor of shape (num_mesh_nodes,
+        d_h)"""
         raise NotImplementedError("embedd_mesh_nodes not implemented")
 
     def process_step(self, mesh_rep):
-        """
-        Process step of embedd-process-decode framework
-        Processes the representation on the mesh, possible in multiple steps
+        """Process step of embedd-process-decode framework Processes the
+        representation on the mesh, possible in multiple steps.
 
         mesh_rep: has shape (B, num_mesh_nodes, d_h)
         Returns mesh_rep: (B, num_mesh_nodes, d_h)

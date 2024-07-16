@@ -10,12 +10,12 @@ import torch
 import wandb
 from lightning_fabric.utilities import seed
 
-# First-party
-from neural_lam import utils
-from neural_lam.models.graph_lam import GraphLAM
-from neural_lam.models.hi_lam import HiLAM
-from neural_lam.models.hi_lam_parallel import HiLAMParallel
-from neural_lam.weather_dataset import WeatherDataModule
+# Local
+from . import utils
+from .datasets import WeatherDataModule
+from .models.graph_lam import GraphLAM
+from .models.hi_lam import HiLAM
+from .models.hi_lam_parallel import HiLAMParallel
 
 MODELS = {
     "graph_lam": GraphLAM,
@@ -25,9 +25,7 @@ MODELS = {
 
 
 def main(input_args=None):
-    """
-    Main function for training and evaluating models
-    """
+    """Main function for training and evaluating models."""
     parser = ArgumentParser(
         description="Train or evaluate NeurWP models for LAM"
     )

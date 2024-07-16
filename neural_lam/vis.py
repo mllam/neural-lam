@@ -3,8 +3,8 @@ import matplotlib
 import matplotlib.pyplot as plt
 import numpy as np
 
-# First-party
-from neural_lam import utils
+# Local
+from . import utils
 
 
 @matplotlib.rc_context(utils.fractional_plot_bundle(1))
@@ -66,8 +66,8 @@ def plot_error_map(errors, data_config, title=None, step_length=1):
 def plot_prediction(
     pred, target, obs_mask, data_config, title=None, vrange=None
 ):
-    """
-    Plot example prediction and grond truth.
+    """Plot example prediction and grond truth.
+
     Each has shape (N_grid,)
     """
     # Get common scale for values
@@ -126,10 +126,7 @@ def plot_prediction(
 
 @matplotlib.rc_context(utils.fractional_plot_bundle(1))
 def plot_spatial_error(error, obs_mask, data_config, title=None, vrange=None):
-    """
-    Plot errors over spatial map
-    Error and obs_mask has shape (N_grid,)
-    """
+    """Plot errors over spatial map Error and obs_mask has shape (N_grid,)"""
     # Get common scale for values
     if vrange is None:
         vmin = error.min().cpu().item()

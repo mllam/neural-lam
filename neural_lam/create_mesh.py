@@ -12,8 +12,8 @@ import torch
 import torch_geometric as pyg
 from torch_geometric.utils.convert import from_networkx
 
-# First-party
-from neural_lam.datastore.multizarr import config
+# Local
+from . import config
 
 
 def plot_graph(graph, title=None):
@@ -189,11 +189,13 @@ def main(input_args=None):
     args = parser.parse_args(input_args)
 
     # Load grid positions
-    data_config = config.Config.from_file(args.data_config)
+    config_loader = config.Config.from_file(args.data_config)
+    static_dir_path = os.path.join("data", config_loader.dataset.name, "static")
     graph_dir_path = os.path.join("graphs", args.graph)
     os.makedirs(graph_dir_path, exist_ok=True)
 
-    xy = data_config.get_xy("static")  # (2, N_y, N_x)
+    xy = np.load(os.path.join(static_dir_path, "nwp_xy.npy"))
+
     grid_xy = torch.tensor(xy)
     pos_max = torch.max(torch.abs(grid_xy))
 

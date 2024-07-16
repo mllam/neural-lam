@@ -2,18 +2,17 @@
 import torch
 import torch_geometric as pyg
 
-# First-party
-from neural_lam.interaction_net import InteractionNet
-from neural_lam.models.base_hi_graph_model import BaseHiGraphModel
+# Local
+from ..interaction_net import InteractionNet
+from .base_hi_graph_model import BaseHiGraphModel
 
 
 class HiLAMParallel(BaseHiGraphModel):
-    """
-    Version of HiLAM where all message passing in the hierarchical mesh (up,
+    """Version of HiLAM where all message passing in the hierarchical mesh (up,
     down, inter-level) is ran in parallel.
 
-    This is a somewhat simpler alternative to the sequential message passing
-    of Hi-LAM.
+    This is a somewhat simpler alternative to the sequential message
+    passing of Hi-LAM.
     """
 
     def __init__(self, args):
@@ -53,9 +52,8 @@ class HiLAMParallel(BaseHiGraphModel):
     def hi_processor_step(
         self, mesh_rep_levels, mesh_same_rep, mesh_up_rep, mesh_down_rep
     ):
-        """
-        Internal processor step of hierarchical graph models.
-        Between mesh init and read out.
+        """Internal processor step of hierarchical graph models. Between mesh
+        init and read out.
 
         Each input is list with representations, each with shape
 
