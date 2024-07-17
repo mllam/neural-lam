@@ -6,11 +6,10 @@ import pooch
 import pytest
 
 # First-party
-from create_mesh import main as create_mesh
-from neural_lam.weather_dataset import WeatherDataset
+from neural_lam.create_graph import create_graph as create_graph
 from neural_lam.datastore.npyfiles import NumpyFilesDatastore
-from neural_lam.datastore.multizarr import MultiZarrDatastore
-from train_model import main as train_model
+from neural_lam.train_model import main as train_model
+from neural_lam.weather_dataset import WeatherDataset
 
 # Disable weights and biases to avoid unnecessary logging
 # and to avoid having to deal with authentication
@@ -36,18 +35,20 @@ def ewc_testdata_path():
         path="data",
         fname="meps_example_reduced.zip",
     )
-    
+
     return "data/meps_example_reduced"
 
 
 def test_load_reduced_meps_dataset(ewc_testdata_path):
-    datastore = NumpyFilesDatastore(
-        root_path=ewc_testdata_path
-    )
+    datastore = NumpyFilesDatastore(root_path=ewc_testdata_path)
     datastore.get_xy(category="state", stacked=True)
 
-    datastore.get_dataarray(category="forcing", split="train").unstack("grid_index")
-    datastore.get_dataarray(category="state", split="train").unstack("grid_index")
+    datastore.get_dataarray(category="forcing", split="train").unstack(
+        "grid_index"
+    )
+    datastore.get_dataarray(category="state", split="train").unstack(
+        "grid_index"
+    )
 
     dataset = WeatherDataset(datastore=datastore)
 
@@ -64,7 +65,9 @@ def test_load_reduced_meps_dataset(ewc_testdata_path):
     # Hardcoded in model
     n_input_steps = 2
 
-    n_forcing_features = datastore.config.values["dataset"]["num_forcing_features"]
+    n_forcing_features = datastore.config.values["dataset"][
+        "num_forcing_features"
+    ]
     n_state_features = len(var_names)
     n_prediction_timesteps = dataset.ar_steps
 
@@ -79,7 +82,7 @@ def test_load_reduced_meps_dataset(ewc_testdata_path):
     init_states = item.init_states
     target_states = item.target_states
     forcing = item.forcing
-    
+
     # check that the shapes of the tensors are correct
     assert init_states.shape == (n_input_steps, n_grid, n_state_features)
     assert target_states.shape == (
@@ -92,12 +95,14 @@ def test_load_reduced_meps_dataset(ewc_testdata_path):
         n_grid,
         n_forcing_features,
     )
-    
+
     ds_state_norm = datastore.get_normalization_dataarray(category="state")
-    
+
     static_data = {
         "border_mask": datastore.boundary_mask.values,
-        "grid_static_features": datastore.get_dataarray(category="static", split="train").values,
+        "grid_static_features": datastore.get_dataarray(
+            category="static", split="train"
+        ).values,
         "data_mean": ds_state_norm.state_mean.values,
         "data_std": ds_state_norm.state_std.values,
         "step_diff_mean": ds_state_norm.state_diff_mean.values,
@@ -115,7 +120,7 @@ def test_load_reduced_meps_dataset(ewc_testdata_path):
     }
 
     # check the sizes of the props
-    assert static_data["border_mask"].shape == (n_grid, )
+    assert static_data["border_mask"].shape == (n_grid,)
     assert static_data["grid_static_features"].shape == (
         n_grid,
         n_grid_static_features,
@@ -136,7 +141,7 @@ def test_create_graph_reduced_meps_dataset():
         "--data_config=data/meps_example_reduced/data_config.yaml",
         "--levels=2",
     ]
-    create_mesh(args)
+    create_graph(args)
 
 
 def test_train_model_reduced_meps_dataset():

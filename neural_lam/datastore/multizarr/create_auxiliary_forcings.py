@@ -18,15 +18,14 @@ def get_seconds_in_year(year):
 
 
 def calculate_datetime_forcing(da_time: xr.DataArray):
-    """
-    Compute the datetime forcing for a given set of timesteps, assuming
-    that timesteps is a DataArray with a type of `np.datetime64`.
-    
+    """Compute the datetime forcing for a given set of timesteps, assuming that
+    timesteps is a DataArray with a type of `np.datetime64`.
+
     Parameters
     ----------
     timesteps : xr.DataArray
         The timesteps for which to compute the datetime forcing.
-    
+
     Returns
     -------
     xr.Dataset
@@ -72,7 +71,11 @@ def calculate_datetime_forcing(da_time: xr.DataArray):
 def main():
     """Main function for creating the datetime forcing and boundary mask."""
     parser = argparse.ArgumentParser()
-    parser.add_argument("--data-config", type=str, default="tests/datastore_configs/multizarr.danra.yaml")
+    parser.add_argument(
+        "--data-config",
+        type=str,
+        default="tests/datastore_configs/multizarr.danra.yaml",
+    )
     parser.add_argument(
         "--zarr_path",
         type=str,
@@ -81,7 +84,7 @@ def main():
         "(default: same directory as the data-config)",
     )
     args = parser.parse_args()
-    
+
     zarr_path = args.zarr_path
     if zarr_path is None:
         zarr_path = Path(args.data_config).parent / "datetime_forcings.zarr"
@@ -89,23 +92,27 @@ def main():
     datastore = MultiZarrDatastore(config_path=args.data_config)
     da_state = datastore.get_dataarray(category="state", split="train")
 
-    da_datetime_forcing = calculate_datetime_forcing(da_time=da_state.time).expand_dims({"grid_index": da_state.grid_index})
+    da_datetime_forcing = calculate_datetime_forcing(
+        da_time=da_state.time
+    ).expand_dims({"grid_index": da_state.grid_index})
 
     chunking = {"time": 1}
-    
+
     if "x" in da_state.coords and "y" in da_state.coords:
         # copy the x and y coordinates to the datetime forcing
         for aux_coord in ["x", "y"]:
             da_datetime_forcing.coords[aux_coord] = da_state[aux_coord]
 
-        da_datetime_forcing = da_datetime_forcing.set_index(grid_index=("y", "x")).unstack("grid_index")
+        da_datetime_forcing = da_datetime_forcing.set_index(
+            grid_index=("y", "x")
+        ).unstack("grid_index")
         chunking["x"] = -1
         chunking["y"] = -1
     else:
         chunking["grid_index"] = -1
 
     da_datetime_forcing = da_datetime_forcing.chunk(chunking)
-    
+
     da_datetime_forcing.to_zarr(zarr_path, mode="w")
     print(da_datetime_forcing)
     print(f"Datetime forcing saved to {zarr_path}")

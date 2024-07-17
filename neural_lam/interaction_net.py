@@ -8,9 +8,9 @@ from . import utils
 
 
 class InteractionNet(pyg.nn.MessagePassing):
-    """
-    Implementation of a generic Interaction Network,
-    from Battaglia et al. (2016)
+    """Implementation of a generic Interaction Network, from Battaglia et al.
+
+    (2016)
     """
 
     # pylint: disable=arguments-differ
@@ -27,8 +27,7 @@ class InteractionNet(pyg.nn.MessagePassing):
         aggr_chunk_sizes=None,
         aggr="sum",
     ):
-        """
-        Create a new InteractionNet
+        """Create a new InteractionNet.
 
         edge_index: (2,M), Edges in pyg format
         input_dim: Dimensionality of input representations,
@@ -84,8 +83,7 @@ class InteractionNet(pyg.nn.MessagePassing):
         self.update_edges = update_edges
 
     def forward(self, send_rep, rec_rep, edge_rep):
-        """
-        Apply interaction network to update the representations of receiver
+        """Apply interaction network to update the representations of receiver
         nodes, and optionally the edge representations.
 
         send_rep: (N_send, d_h), vector representations of sender nodes
@@ -115,9 +113,7 @@ class InteractionNet(pyg.nn.MessagePassing):
         return rec_rep
 
     def message(self, x_j, x_i, edge_attr):
-        """
-        Compute messages from node j to node i.
-        """
+        """Compute messages from node j to node i."""
         return self.edge_mlp(torch.cat((edge_attr, x_j, x_i), dim=-1))
 
     # pylint: disable-next=signature-differs
@@ -132,10 +128,10 @@ class InteractionNet(pyg.nn.MessagePassing):
 
 
 class SplitMLPs(nn.Module):
-    """
-    Module that feeds chunks of input through different MLPs.
-    Split up input along dim -2 using given chunk sizes and feeds
-    each chunk through separate MLPs.
+    """Module that feeds chunks of input through different MLPs.
+
+    Split up input along dim -2 using given chunk sizes and feeds each
+    chunk through separate MLPs.
     """
 
     def __init__(self, mlps, chunk_sizes):
@@ -148,8 +144,7 @@ class SplitMLPs(nn.Module):
         self.chunk_sizes = chunk_sizes
 
     def forward(self, x):
-        """
-        Chunk up input and feed through MLPs
+        """Chunk up input and feed through MLPs.
 
         x: (..., N, d), where N = sum(chunk_sizes)
 

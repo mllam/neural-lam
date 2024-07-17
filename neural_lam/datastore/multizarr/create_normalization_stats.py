@@ -7,7 +7,6 @@ import xarray as xr
 # First-party
 from neural_lam.datastore.multizarr import MultiZarrDatastore
 
-
 DEFAULT_PATH = "tests/datastore_configs/multizarr.danra.yaml"
 
 
@@ -32,7 +31,7 @@ def main():
         help="Directory where data is stored",
     )
     args = parser.parse_args()
-    
+
     datastore = MultiZarrDatastore(config_path=args.data_config)
 
     da_state = datastore.get_dataarray(category="state", split="train")
@@ -43,29 +42,34 @@ def main():
 
     if da_forcing is not None:
         da_forcing_mean, da_forcing_std = compute_stats(da_forcing)
-        combined_stats = datastore._config["utilities"]["normalization"]["combined_stats"]
+        combined_stats = datastore._config["utilities"]["normalization"][
+            "combined_stats"
+        ]
 
         if combined_stats is not None:
             for group in combined_stats:
                 vars_to_combine = group["vars"]
-                import ipdb; ipdb.set_trace()
                 means = da_forcing_mean.sel(variable=vars_to_combine)
                 stds = da_forcing_std.sel(variable=vars_to_combine)
 
                 combined_mean = means.mean(dim="variable")
                 combined_std = (stds**2).mean(dim="variable") ** 0.5
 
-                da_forcing_mean.loc[dict(variable=vars_to_combine)] = combined_mean
-                da_forcing_std.loc[dict(variable=vars_to_combine)] = combined_std
+                da_forcing_mean.loc[
+                    dict(variable=vars_to_combine)
+                ] = combined_mean
+                da_forcing_std.loc[
+                    dict(variable=vars_to_combine)
+                ] = combined_std
 
         window = datastore._config["forcing"]["window"]
 
-        da_forcing_mean = xr.concat([da_forcing_mean] * window, dim="window").stack(
-            forcing_variable=("variable", "window")
-        )
-        da_forcing_std = xr.concat([da_forcing_std] * window, dim="window").stack(
-            forcing_variable=("variable", "window")
-        )
+        da_forcing_mean = xr.concat(
+            [da_forcing_mean] * window, dim="window"
+        ).stack(forcing_variable=("variable", "window"))
+        da_forcing_std = xr.concat(
+            [da_forcing_std] * window, dim="window"
+        ).stack(forcing_variable=("variable", "window"))
         vars = da_forcing["variable"].values.tolist()
         window = datastore._config["forcing"]["window"]
         forcing_vars = [f"{var}_{i}" for var in vars for i in range(window)]

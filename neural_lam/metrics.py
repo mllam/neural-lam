@@ -3,8 +3,7 @@ import torch
 
 
 def get_metric(metric_name):
-    """
-    Get a defined metric with given name
+    """Get a defined metric with given name.
 
     metric_name: str, name of the metric
 
@@ -19,8 +18,7 @@ def get_metric(metric_name):
 
 
 def mask_and_reduce_metric(metric_entry_vals, mask, average_grid, sum_vars):
-    """
-    Masks and (optionally) reduces entry-wise metric values
+    """Masks and (optionally) reduces entry-wise metric values.
 
     (...,) is any number of batch dimensions, potentially different
         but broadcastable
@@ -54,8 +52,7 @@ def mask_and_reduce_metric(metric_entry_vals, mask, average_grid, sum_vars):
 
 
 def wmse(pred, target, pred_std, mask=None, average_grid=True, sum_vars=True):
-    """
-    Weighted Mean Squared Error
+    """Weighted Mean Squared Error.
 
     (...,) is any number of batch dimensions, potentially different
         but broadcastable
@@ -85,8 +82,7 @@ def wmse(pred, target, pred_std, mask=None, average_grid=True, sum_vars=True):
 
 
 def mse(pred, target, pred_std, mask=None, average_grid=True, sum_vars=True):
-    """
-    (Unweighted) Mean Squared Error
+    """(Unweighted) Mean Squared Error.
 
     (...,) is any number of batch dimensions, potentially different
         but broadcastable
@@ -109,8 +105,7 @@ def mse(pred, target, pred_std, mask=None, average_grid=True, sum_vars=True):
 
 
 def wmae(pred, target, pred_std, mask=None, average_grid=True, sum_vars=True):
-    """
-    Weighted Mean Absolute Error
+    """Weighted Mean Absolute Error.
 
     (...,) is any number of batch dimensions, potentially different
         but broadcastable
@@ -140,8 +135,7 @@ def wmae(pred, target, pred_std, mask=None, average_grid=True, sum_vars=True):
 
 
 def mae(pred, target, pred_std, mask=None, average_grid=True, sum_vars=True):
-    """
-    (Unweighted) Mean Absolute Error
+    """(Unweighted) Mean Absolute Error.
 
     (...,) is any number of batch dimensions, potentially different
         but broadcastable
@@ -164,8 +158,7 @@ def mae(pred, target, pred_std, mask=None, average_grid=True, sum_vars=True):
 
 
 def nll(pred, target, pred_std, mask=None, average_grid=True, sum_vars=True):
-    """
-    Negative Log Likelihood loss, for isotropic Gaussian likelihood
+    """Negative Log Likelihood loss, for isotropic Gaussian likelihood.
 
     (...,) is any number of batch dimensions, potentially different
         but broadcastable
@@ -193,9 +186,8 @@ def nll(pred, target, pred_std, mask=None, average_grid=True, sum_vars=True):
 def crps_gauss(
     pred, target, pred_std, mask=None, average_grid=True, sum_vars=True
 ):
-    """
-    (Negative) Continuous Ranked Probability Score (CRPS)
-    Closed-form expression based on Gaussian predictive distribution
+    """(Negative) Continuous Ranked Probability Score (CRPS) Closed-form
+    expression based on Gaussian predictive distribution.
 
     (...,) is any number of batch dimensions, potentially different
             but broadcastable

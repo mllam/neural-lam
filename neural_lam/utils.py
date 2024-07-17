@@ -9,8 +9,7 @@ from tueplots import bundles, figsizes
 
 
 class BufferList(nn.Module):
-    """
-    A list of torch buffer tensors that sit together as a Module with no
+    """A list of torch buffer tensors that sit together as a Module with no
     parameters and only buffers.
 
     This should be replaced by a native torch BufferList once implemented.
@@ -34,9 +33,7 @@ class BufferList(nn.Module):
 
 
 def load_graph(graph_name, device="cpu"):
-    """
-    Load all tensors representing the graph
-    """
+    """Load all tensors representing the graph."""
     # Define helper lambda function
     graph_dir_path = os.path.join("graphs", graph_name)
 
@@ -173,10 +170,8 @@ def make_mlp(blueprint, layer_norm=True):
 
 
 def fractional_plot_bundle(fraction):
-    """
-    Get the tueplots bundle, but with figure width as a fraction of
-    the page width.
-    """
+    """Get the tueplots bundle, but with figure width as a fraction of the page
+    width."""
     # If latex is not available, some visualizations might not render
     # correctly, but will at least not raise an error. Alternatively, use
     # unicode raised numbers.
@@ -192,9 +187,7 @@ def fractional_plot_bundle(fraction):
 
 
 def init_wandb_metrics(wandb_logger, val_steps):
-    """
-    Set up wandb metrics to track
-    """
+    """Set up wandb metrics to track."""
     experiment = wandb_logger.experiment
     experiment.define_metric("val_mean_loss", summary="min")
     for step in val_steps:

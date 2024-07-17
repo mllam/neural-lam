@@ -8,11 +8,10 @@ import yaml
 
 
 class NpyConfig:
-    """
-    Class for loading configuration files.
+    """Class for loading configuration files.
 
-    This class loads a configuration file and provides a way to access its
-    values as attributes.
+    This class loads a configuration file and provides a way to access
+    its values as attributes.
     """
 
     def __init__(self, values):
@@ -29,7 +28,7 @@ class NpyConfig:
 
     def __getattr__(self, name):
         child, *children = name.split(".")
-        
+
         value = self.values[child]
         if len(children) > 0:
             return self.__class__(values=value).get(".".join(children))

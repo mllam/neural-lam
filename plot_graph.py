@@ -16,9 +16,7 @@ GRID_HEIGHT = 0
 
 
 def main():
-    """
-    Plot graph structure in 3D using plotly
-    """
+    """Plot graph structure in 3D using plotly."""
     parser = ArgumentParser(description="Plot graph")
     parser.add_argument(
         "--data_config",

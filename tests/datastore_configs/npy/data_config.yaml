@@ -1,0 +1,40 @@
+dataset:
+  name: meps_example_reduced
+  var_names:
+    - pres_0g
+    - pres_0s
+    - nlwrs_0
+    - nswrs_0
+    - r_2
+    - r_65
+    - t_2
+    - t_65
+  var_units:
+    - Pa
+    - Pa
+    - "W/m**2"
+    - "W/m**2"
+    - ""
+    - ""
+    - K
+    - K
+  var_longnames:
+    - pres_heightAboveGround_0_instant
+    - pres_heightAboveSea_0_instant
+    - nlwrs_heightAboveGround_0_accum
+    - nswrs_heightAboveGround_0_accum
+    - r_heightAboveGround_2_instant
+    - r_hybrid_65_instant
+    - t_heightAboveGround_2_instant
+    - t_hybrid_65_instant
+  # increased num_forcing_features from 16 to 18 so that it reflects
+  # ["toa_downwelling_shortwave_flux", "column_water", "sin_hour", "cos_hour", "sin_year", "cos_year"] x forcing_window_size
+  # i.e. 6 x 3 = 18 forcing features
+  num_forcing_features: 18
+grid_shape_state: [134, 119]
+projection:
+  class: LambertConformal
+  kwargs:
+    central_longitude: 15.0
+    central_latitude: 63.3
+    standard_parallels: [63.3, 63.3]

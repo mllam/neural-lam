@@ -1,2 +1,2 @@
-from .npyfiles.store import NpyConfig
-from .mllam import MLLAMDatastore
+# Local
+from .mllam import MLLAMDatastore  # noqa

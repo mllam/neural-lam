@@ -1,30 +1,19 @@
+# Standard library
+import functools
+import os
+
+# Third-party
 import cartopy.crs as ccrs
 import numpy as np
 import pandas as pd
 import xarray as xr
 import yaml
 
-import functools
-import os
-
-from .config import Config
-from ..base import BaseDatastore
+# Local
+from ..base import BaseCartesianDatastore, CartesianGridShape
 
 
-def convert_stats_to_torch(stats):
-    """Convert the normalization statistics to torch tensors.
-
-    Args:
-        stats (xr.Dataset): The normalization statistics.
-
-    Returns:
-        dict(tensor): The normalization statistics as torch tensors."""
-    return {
-        var: torch.tensor(stats[var].values, dtype=torch.float32)
-        for var in stats.data_vars
-    }
-
-class MultiZarrDatastore(BaseDatastore):
+class MultiZarrDatastore(BaseCartesianDatastore):
     DIMS_TO_KEEP = {"time", "grid_index", "variable"}
 
     def __init__(self, config_path):
@@ -38,7 +27,8 @@ class MultiZarrDatastore(BaseDatastore):
             category (str): The category of the dataset (state/forcing/static).
 
             Returns:
-                xr.Dataset: The xarray Dataset object."""
+                xr.Dataset: The xarray Dataset object.
+        """
         zarr_configs = self._config[category]["zarrs"]
 
         datasets = []
@@ -60,7 +50,8 @@ class MultiZarrDatastore(BaseDatastore):
         The projection object is used to plot the coordinates on a map.
 
         Returns:
-            cartopy.crs.Projection: The projection object."""
+            cartopy.crs.Projection: The projection object.
+        """
         proj_config = self._config["projection"]
         proj_class_name = proj_config["class"]
         proj_class = getattr(ccrs, proj_class_name)
@@ -72,7 +63,8 @@ class MultiZarrDatastore(BaseDatastore):
         """Return the step length of the dataset in hours.
 
         Returns:
-            int: The step length in hours."""
+            int: The step length in hours.
+        """
         dataset = self.open_zarrs("state")
         time = dataset.time.isel(time=slice(0, 2)).values
         step_length_ns = time[1] - time[0]
@@ -87,7 +79,8 @@ class MultiZarrDatastore(BaseDatastore):
             category (str): The category of the dataset (state/forcing/static).
 
         Returns:
-            list: The names of the variables in the dataset."""
+            list: The names of the variables in the dataset.
+        """
         surface_vars_names = self._config[category].get("surface_vars") or []
         atmosphere_vars_names = [
             f"{var}_{level}"
@@ -104,7 +97,8 @@ class MultiZarrDatastore(BaseDatastore):
             category (str): The category of the dataset (state/forcing/static).
 
             Returns:
-                list: The units of the variables in the dataset."""
+                list: The units of the variables in the dataset.
+        """
         surface_vars_units = self._config[category].get("surface_units") or []
         atmosphere_vars_units = [
             unit
@@ -121,7 +115,8 @@ class MultiZarrDatastore(BaseDatastore):
             category (str): The category of the dataset (state/forcing/static).
 
         Returns:
-            int: The number of data variables in the dataset."""
+            int: The number of data variables in the dataset.
+        """
         surface_vars = self._config[category].get("surface_vars", [])
         atmosphere_vars = self._config[category].get("atmosphere_vars", [])
         levels = self._config[category].get("levels", [])
@@ -143,7 +138,8 @@ class MultiZarrDatastore(BaseDatastore):
             ds (xr.Dataset): The xarray Dataset object.
 
         Returns:
-            xr.Dataset: The xarray Dataset object with stacked grid dimensions."""
+            xr.Dataset: The xarray Dataset object with stacked grid dimensions.
+        """
         if "grid_index" in ds.dims:
             raise ValueError("Grid dimensions already stacked.")
         else:
@@ -162,7 +158,8 @@ class MultiZarrDatastore(BaseDatastore):
             dataset (xr.Dataset): The xarray Dataset object.
 
         Returns:
-            xr.DataArray: The xarray DataArray object."""
+            xr.DataArray: The xarray DataArray object.
+        """
         if isinstance(dataset, xr.Dataset):
             dataset = dataset.to_array()
         return dataset
@@ -176,7 +173,8 @@ class MultiZarrDatastore(BaseDatastore):
 
         Returns:
             xr.Dataset: The xarray Dataset object with filtered dimensions.
-            OR xr.DataArray: The xarray DataArray object with filtered dimensions."""
+            OR xr.DataArray: The xarray DataArray object with filtered dimensions.
+        """
         dims_to_keep = self.DIMS_TO_KEEP
         dataset_dims = set(list(dataset.dims) + ["variable"])
         min_req_dims = dims_to_keep.copy()
@@ -250,7 +248,8 @@ class MultiZarrDatastore(BaseDatastore):
             grid_shape (dict): The shape of the grid.
 
         Returns:
-            xr.Dataset: The xarray Dataset object with reshaped grid dimensions."""
+            xr.Dataset: The xarray Dataset object with reshaped grid dimensions.
+        """
         if grid_shape is None:
             grid_shape = dict(self.grid_shape_state.values.items())
         x_dim, y_dim = (grid_shape["x"], grid_shape["y"])
@@ -274,33 +273,52 @@ class MultiZarrDatastore(BaseDatastore):
     def get_xy(self, category, stacked=True):
         """Return the x, y coordinates of the dataset.
 
-        Args:
-            category (str): The category of the dataset (state/forcing/static).
-            stacked (bool): Whether to stack the x, y coordinates.
+        Parameters
+        ----------
+        category : str
+            The category of the dataset (state/forcing/static).
+        stacked : bool
+            Whether to stack the x, y coordinates.
 
-        Returns:
-            np.ndarray: The x, y coordinates of the dataset (if stacked) (2, N_y, N_x)
-
-            OR tuple(np.ndarray, np.ndarray): The x, y coordinates of the dataset
-            (if not stacked) ((N_y, N_x), (N_y, N_x))"""
+        Returns
+        -------
+        np.ndarray
+            The x, y coordinates of the dataset, returned differently based on the
+            value of `stacked`:
+            - `stacked==True`: shape `(2, n_grid_points)` where n_grid_points=N_x*N_y.
+            - `stacked==False`: shape `(2, N_y, N_x)`
+        """
         dataset = self.open_zarrs(category)
-        x, y = dataset.x.values, dataset.y.values
-        if x.ndim == 1:
-            x, y = np.meshgrid(x, y)
+        xs, ys = dataset.x.values, dataset.y.values
+
+        assert (
+            xs.ndim == ys.ndim
+        ), "x and y coordinates must have the same dimensions."
+
+        if xs.ndim == 1:
+            x, y = np.meshgrid(xs, ys)
+        elif x.ndim == 2:
+            x, y = xs, ys
+        else:
+            raise ValueError("Invalid dimensions for x, y coordinates.")
+
+        xy = np.stack((x, y), axis=0)  # (2, N_y, N_x)
+
         if stacked:
-            xy = np.stack((x, y), axis=0)  # (2, N_y, N_x)
-            return xy
-        return x, y
+            xy = xy.reshape(2, -1)  # (2, n_grid_points)
+
+        return xy
 
     def get_xy_extent(self, category):
-        """Return the extent of the x, y coordinates. This should be a list
-        of 4 floats with `[xmin, xmax, ymin, ymax]`
+        """Return the extent of the x, y coordinates. This should be a list of
+        4 floats with `[xmin, xmax, ymin, ymax]`
 
         Args:
             category (str): The category of the dataset (state/forcing/static).
 
         Returns:
-            list(float): The extent of the x, y coordinates."""
+            list(float): The extent of the x, y coordinates.
+        """
         x, y = self.get_xy(category, stacked=False)
         if self.projection.inverted:
             extent = [x.max(), x.min(), y.max(), y.min()]
@@ -310,7 +328,7 @@ class MultiZarrDatastore(BaseDatastore):
         return extent
 
     @functools.lru_cache()
-    def get_normalization_stats(self, category):
+    def get_normalization_dataarray(self, category):
         """Load the normalization statistics for the dataset.
 
         Args:
@@ -335,7 +353,8 @@ class MultiZarrDatastore(BaseDatastore):
         """Load and merge the normalization statistics for the dataset.
 
         Returns:
-            xr.Dataset: The merged normalization statistics for the dataset."""
+            xr.Dataset: The merged normalization statistics for the dataset.
+        """
         combined_stats = None
         for i, zarr_config in enumerate(
             self._config["utilities"]["normalization"]["zarrs"]
@@ -360,7 +379,8 @@ class MultiZarrDatastore(BaseDatastore):
 
         Returns:
             xr.Dataset: The combined normalization statistics with renamed data
-            variables."""
+            variables.
+        """
         vars_mapping = {}
         for zarr_config in self._config["utilities"]["normalization"]["zarrs"]:
             vars_mapping.update(zarr_config["stats_vars"])
@@ -381,9 +401,12 @@ class MultiZarrDatastore(BaseDatastore):
             category (str): The category of the dataset (state/forcing/static).
 
         Returns:
-            xr.Dataset: The normalization statistics for the dataset."""
+            xr.Dataset: The normalization statistics for the dataset.
+        """
         if category == "state":
-            stats = combined_stats.loc[dict(variable=self.get_vars_names(category=category))]
+            stats = combined_stats.loc[
+                dict(variable=self.get_vars_names(category=category))
+            ]
             stats = stats.drop_vars(["forcing_mean", "forcing_std"])
             return stats
         elif category == "forcing":
@@ -432,14 +455,16 @@ class MultiZarrDatastore(BaseDatastore):
             ds = self.open_zarrs(category)
         surface_vars = self._config[category].get("surface_vars")
         atmoshere_vars = self._config[category].get("atmosphere_vars")
-        
+
         ds_surface = None
         if surface_vars is not None:
             ds_surface = ds[surface_vars]
 
         ds_atmosphere = None
         if atmoshere_vars is not None:
-            ds_atmosphere = self._extract_atmosphere_vars(category=category, ds=ds)
+            ds_atmosphere = self._extract_atmosphere_vars(
+                category=category, ds=ds
+            )
 
         if ds_surface and ds_atmosphere:
             return xr.merge([ds_surface, ds_atmosphere])
@@ -458,9 +483,13 @@ class MultiZarrDatastore(BaseDatastore):
             ds (xr.Dataset): The xarray Dataset object.
 
         Returns:
-            xr.Dataset: The xarray Dataset object with atmosphere variables."""
+            xr.Dataset: The xarray Dataset object with atmosphere variables.
+        """
 
-        if "level" not in list(ds.dims) and self._config[category]["atmosphere_vars"]:
+        if (
+            "level" not in list(ds.dims)
+            and self._config[category]["atmosphere_vars"]
+        ):
             ds = self._rename_dataset_dims_and_vars(
                 ds.attrs["category"], dataset=ds
             )
@@ -488,7 +517,8 @@ class MultiZarrDatastore(BaseDatastore):
             xr.Dataset: The xarray Dataset object with renamed dimensions and
             variables.
             OR xr.DataArray: The xarray DataArray object with renamed
-            dimensions and variables."""
+            dimensions and variables.
+        """
         convert = False
         if dataset is None:
             dataset = self.open_zarrs(category)
@@ -522,7 +552,8 @@ class MultiZarrDatastore(BaseDatastore):
             split (str): The time split to filter the dataset.
 
         Returns:["window"]
-            xr.Dataset: The xarray Dataset object filtered by the time split."""
+            xr.Dataset: The xarray Dataset object filtered by the time split.
+        """
         start, end = (
             self._config["splits"][split]["start"],
             self._config["splits"][split]["end"],
@@ -539,7 +570,8 @@ class MultiZarrDatastore(BaseDatastore):
             dataset (xr.Dataset): The xarray Dataset object.
 
         Returns:
-            xr.Dataset: The xarray Dataset object with the window applied."""
+            xr.Dataset: The xarray Dataset object with the window applied.
+        """
         if dataset is None:
             dataset = self.open_zarrs(category)
         if isinstance(dataset, xr.Dataset):
@@ -559,18 +591,33 @@ class MultiZarrDatastore(BaseDatastore):
         return dataset
 
     @property
-    def boundary_mask(self):
+    def grid_shape_state(self):
+        """Return the shape of the state grid.
+
+        Returns:
+            CartesianGridShape: The shape of the state grid.
         """
-        Load the boundary mask for the dataset, with spatial dimensions stacked.
+        return CartesianGridShape(
+            x=self._config["grid_shape_state"]["x"],
+            y=self._config["grid_shape_state"]["y"],
+        )
+
+    @property
+    def boundary_mask(self):
+        """Load the boundary mask for the dataset, with spatial dimensions
+        stacked.
 
         Returns
         -------
         xr.DataArray
             The boundary mask for the dataset, with dimensions `('grid_index',)`.
         """
-        ds_boundary_mask = xr.open_zarr(self._config["boundary"]["mask"]["path"])
-        return ds_boundary_mask.mask.stack(grid_index=("y", "x")).reset_index("grid_index")
-
+        ds_boundary_mask = xr.open_zarr(
+            self._config["boundary"]["mask"]["path"]
+        )
+        return ds_boundary_mask.mask.stack(grid_index=("y", "x")).reset_index(
+            "grid_index"
+        )
 
     def get_dataarray(self, category, split="train", apply_windowing=True):
         """Process the dataset for the given category.
@@ -581,7 +628,8 @@ class MultiZarrDatastore(BaseDatastore):
             apply_windowing (bool): Whether to apply windowing to the forcing dataset.
 
         Returns:
-            xr.DataArray: The xarray DataArray object with processed dataset."""
+            xr.DataArray: The xarray DataArray object with processed dataset.
+        """
         dataset = self.open_zarrs(category)
         dataset = self._extract_vars(category, dataset)
         if category != "static":

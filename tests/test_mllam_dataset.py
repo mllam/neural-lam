@@ -2,6 +2,7 @@
 import torch
 
 # First-party
+from neural_lam.create_graph import create_graph_from_datastore
 from neural_lam.datastore import MLLAMDatastore
 from neural_lam.models.graph_lam import GraphLAM
 from neural_lam.weather_dataset import WeatherDataModule, WeatherDataset
@@ -35,6 +36,11 @@ def test_mllam():
     )
 
     args = ModelArgs()
+
+    create_graph_from_datastore(
+        datastore=datastore,
+        graph_dir_path="tests/datastore_configs/mllam/graph",
+    )
 
     model = GraphLAM(  # noqa
         args=args,
