@@ -4,9 +4,9 @@
 - [x] `grid_shape_state` (property): Shape of the grid for the state variables.
 - [x] `get_xy` (method): Return the x, y coordinates of the dataset.
 - [x] `coords_projection` (property): Projection object for the coordinates.
-- [ ] `get_vars_units` (method): Get the units of the variables in the given category.
-- [ ] `get_vars_names` (method): Get the names of the variables in the given category.
-- [ ] `get_num_data_vars` (method): Get the number of data variables in the
+- [x] `get_vars_units` (method): Get the units of the variables in the given category.
+- [x] `get_vars_names` (method): Get the names of the variables in the given category.
+- [x] `get_num_data_vars` (method): Get the number of data variables in the
       given category.
 - [ ] `get_normalization_dataarray` (method): Return the normalization
       dataarray for the given category.
