@@ -51,10 +51,10 @@ class MLLAMDatastore(BaseCartesianDatastore):
         return da_dt.dt.seconds[0] // 3600
 
     def get_vars_units(self, category: str) -> List[str]:
-        return self._ds[f"{category}_unit"].values.tolist()
+        return self._ds[f"{category}_feature_units"].values.tolist()
 
     def get_vars_names(self, category: str) -> List[str]:
-        return self._ds[f"{category}_longname"].values.tolist()
+        return self._ds[f"{category}_feature"].values.tolist()
 
     def get_num_data_vars(self, category: str) -> int:
         return self._ds[f"{category}_feature"].count().item()

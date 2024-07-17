@@ -449,6 +449,17 @@ class NumpyFilesDatastore(BaseCartesianDatastore):
     def get_vars_units(self, category: str) -> torch.List[str]:
         if category == "state":
             return self.config["dataset"]["var_units"]
+        elif category == "forcing":
+            return [
+                "W/m^2",
+                "kg/m^2",
+                "1",
+                "1",
+                "1",
+                "1",
+            ]
+        elif category == "static":
+            return ["m^2/s^2", "1", "m", "m"]
         else:
             raise NotImplementedError(f"Category {category} not supported")
 
@@ -471,9 +482,8 @@ class NumpyFilesDatastore(BaseCartesianDatastore):
         else:
             raise NotImplementedError(f"Category {category} not supported")
 
-    @property
-    def get_num_data_vars(self) -> int:
-        return len(self.get_vars_names(category="state"))
+    def get_num_data_vars(self, category: str) -> int:
+        return len(self.get_vars_names(category=category))
 
     def get_xy(self, category: str, stacked: bool) -> np.ndarray:
         """Return the x, y coordinates of the dataset.

@@ -13,20 +13,21 @@ output:
       step: PT3H
   chunking:
     time: 1
-  splitting_dim: time
-  splits:
-    train:
-      start: 1990-09-03T00:00
-      end: 1990-09-06T00:00
-      compute_statistics:
-        ops: [mean, std]
-        dims: [grid_index, time]
-    validation:
-      start: 1990-09-06T00:00
-      end: 1990-09-07T00:00
-    test:
-      start: 1990-09-07T00:00
-      end: 1990-09-09T00:00
+  splitting:
+    dim: time
+    splits:
+      train:
+        start: 1990-09-03T00:00
+        end: 1990-09-06T00:00
+        compute_statistics:
+          ops: [mean, std]
+          dims: [grid_index, time]
+      validation:
+        start: 1990-09-06T00:00
+        end: 1990-09-07T00:00
+      test:
+        start: 1990-09-07T00:00
+        end: 1990-09-09T00:00
 
 inputs:
   danra_height_levels:
@@ -59,7 +60,7 @@ inputs:
     dims: [time, x, y]
     variables:
       # shouldn't really be using sea-surface pressure as "forcing", but don't
-      # have radiation varibles in danra yet
+      # have radiation variables in danra yet
       - pres_seasurface
     dim_mapping:
       time:
