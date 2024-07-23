@@ -1,13 +1,11 @@
 # Standard library
-from argparse import ArgumentParser
+import argparse
 
 # Third-party
 import xarray as xr
 
 # First-party
 from neural_lam.datastore.multizarr import MultiZarrDatastore
-
-DEFAULT_PATH = "tests/datastore_configs/multizarr.danra.yaml"
 
 
 def compute_stats(da):
@@ -17,17 +15,19 @@ def compute_stats(da):
 
 
 def main():
-    parser = ArgumentParser(description="Training arguments")
+    parser = argparse.ArgumentParser(
+        description="Training arguments",
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+    )
     parser.add_argument(
-        "--data_config",
+        "data_config",
         type=str,
-        default=DEFAULT_PATH,
-        help=f"Path to data config file (default: {DEFAULT_PATH})",
+        help="Path to data config file",
     )
     parser.add_argument(
         "--zarr_path",
         type=str,
-        default="data/normalization.zarr",
+        default="normalization.zarr",
         help="Directory where data is stored",
     )
     args = parser.parse_args()
@@ -49,6 +49,7 @@ def main():
         if combined_stats is not None:
             for group in combined_stats:
                 vars_to_combine = group["vars"]
+
                 means = da_forcing_mean.sel(variable=vars_to_combine)
                 stds = da_forcing_std.sel(variable=vars_to_combine)
 
@@ -85,8 +86,8 @@ def main():
         {
             "state_mean": da_state_mean,
             "state_std": da_state_std,
-            "diff_mean": diff_mean,
-            "diff_std": diff_std,
+            "state_diff_mean": diff_mean,
+            "state_diff_std": diff_std,
         }
     )
     if da_forcing is not None:

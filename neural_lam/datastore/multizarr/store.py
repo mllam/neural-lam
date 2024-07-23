@@ -17,8 +17,18 @@ class MultiZarrDatastore(BaseCartesianDatastore):
     DIMS_TO_KEEP = {"time", "grid_index", "variable"}
 
     def __init__(self, config_path):
+        self.config_path = config_path
         with open(config_path, encoding="utf-8", mode="r") as file:
             self._config = yaml.safe_load(file)
+
+    def _normalize_path(self, path):
+        # try to parse path to see if it defines a protocol, e.g. s3://
+        if "://" in path or path.startswith("/"):
+            pass
+        else:
+            # assume path is relative to config file
+            path = os.path.join(os.path.dirname(self.config_path), path)
+        return path
 
     def open_zarrs(self, category):
         """Open the zarr dataset for the given category.
@@ -33,7 +43,8 @@ class MultiZarrDatastore(BaseCartesianDatastore):
 
         datasets = []
         for config in zarr_configs:
-            dataset_path = config["path"]
+            dataset_path = self._normalize_path(config["path"])
+
             try:
                 dataset = xr.open_zarr(dataset_path, consolidated=True)
             except Exception as e:
@@ -359,7 +370,7 @@ class MultiZarrDatastore(BaseCartesianDatastore):
         for i, zarr_config in enumerate(
             self._config["utilities"]["normalization"]["zarrs"]
         ):
-            stats_path = zarr_config["path"]
+            stats_path = self._normalize_path(zarr_config["path"])
             if not os.path.exists(stats_path):
                 raise FileNotFoundError(
                     f"Normalization statistics not found at path: {stats_path}"
@@ -612,9 +623,10 @@ class MultiZarrDatastore(BaseCartesianDatastore):
         xr.DataArray
             The boundary mask for the dataset, with dimensions `('grid_index',)`.
         """
-        ds_boundary_mask = xr.open_zarr(
+        boundary_mask_path = self._normalize_path(
             self._config["boundary"]["mask"]["path"]
         )
+        ds_boundary_mask = xr.open_zarr(boundary_mask_path)
         return ds_boundary_mask.mask.stack(grid_index=("y", "x")).reset_index(
             "grid_index"
         )

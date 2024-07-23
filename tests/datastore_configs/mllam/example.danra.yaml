@@ -20,7 +20,7 @@ output:
         start: 1990-09-03T00:00
         end: 1990-09-06T00:00
         compute_statistics:
-          ops: [mean, std]
+          ops: [mean, std, diff_mean, diff_std]
           dims: [grid_index, time]
       validation:
         start: 1990-09-06T00:00

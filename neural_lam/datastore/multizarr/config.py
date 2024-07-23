@@ -25,10 +25,10 @@ class Config:
         keys = name.split(".")
         value = self.values
         for key in keys:
-            if key in value:
+            try:
                 value = value[key]
-            else:
-                return None
+            except KeyError:
+                raise AttributeError(f"Key '{key}' not found in {value}")
         if isinstance(value, dict):
             return Config(values=value)
         return value

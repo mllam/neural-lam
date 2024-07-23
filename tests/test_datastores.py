@@ -26,6 +26,7 @@ In addition BaseCartesianDatastore must have the following methods and attribute
 # Third-party
 import cartopy.crs as ccrs
 import pytest
+import xarray as xr
 
 # First-party
 from neural_lam.datastore.mllam import MLLAMDatastore
@@ -105,3 +106,30 @@ def test_get_vars(datastore_name):
         assert isinstance(units, list)
         assert isinstance(names, list)
         assert isinstance(num_vars, int)
+
+
+@pytest.mark.parametrize("datastore_name", DATASTORES.keys())
+def test_get_normalization_dataarray(datastore_name):
+    """Check that the `datastore.get_normalization_dataarray` method is
+    implemented."""
+    datastore = _init_datastore(datastore_name)
+
+    for category in ["state", "forcing", "static"]:
+        ds_stats = datastore.get_normalization_dataarray(category=category)
+
+        # check that the returned object is an xarray DataArray
+        # and that it has the correct variables
+        assert isinstance(ds_stats, xr.Dataset)
+
+        if category == "state":
+            ops = ["mean", "std", "diff_mean", "diff_std"]
+        elif category == "forcing":
+            ops = ["mean", "std"]
+        elif category == "static":
+            ops = []
+        else:
+            raise NotImplementedError(category)
+
+        for op in ops:
+            var_name = f"{category}_{op}"
+            assert var_name in ds_stats.data_vars

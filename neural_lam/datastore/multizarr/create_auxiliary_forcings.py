@@ -70,11 +70,14 @@ def calculate_datetime_forcing(da_time: xr.DataArray):
 
 def main():
     """Main function for creating the datetime forcing and boundary mask."""
-    parser = argparse.ArgumentParser()
+    parser = argparse.ArgumentParser(
+        description="Create the datetime forcing for neural LAM.",
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+    )
     parser.add_argument(
-        "--data-config",
+        "data_config",
         type=str,
-        default="tests/datastore_configs/multizarr.danra.yaml",
+        help="Path to data config file",
     )
     parser.add_argument(
         "--zarr_path",

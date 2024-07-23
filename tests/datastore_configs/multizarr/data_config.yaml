@@ -51,7 +51,7 @@ forcing:
       lat_lon_names:
         lon: lon
         lat: lat
-    - path: "tests/config_examples/multizarr/datetime_forcings.zarr"
+    - path: "datetime_forcings.zarr"
       dims:
         time: time
         level: null
@@ -111,7 +111,7 @@ boundary:
         lon: longitude
         lat: latitude
   mask:
-    path: "data/boundary_mask.zarr"
+    path: "boundary_mask.zarr"
     dims:
       x: x
       y: y
@@ -126,7 +126,7 @@ boundary:
 utilities:
   normalization:
     zarrs:
-      - path: "tests/datastore_configs/multizarr/normalization.zarr"
+      - path: "normalization.zarr"
         stats_vars:
           state_mean: state_mean
           state_std: state_std
