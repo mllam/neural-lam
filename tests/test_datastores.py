@@ -168,3 +168,22 @@ def test_get_dataarray(datastore_name):
             assert set(da.dims) == set(expected_dims)
             if isinstance(datastore, BaseCartesianDatastore):
                 assert da.grid_index.size == grid_shape.x * grid_shape.y
+
+
+@pytest.mark.parametrize("datastore_name", DATASTORES.keys())
+def test_boundary_mask(datastore_name):
+    """Check that the `datastore.boundary_mask` property is implemented and
+    that the returned object is an xarray DataArray with the correct shape."""
+    datastore = _init_datastore(datastore_name)
+    da_mask = datastore.boundary_mask
+
+    assert isinstance(da_mask, xr.DataArray)
+    assert set(da_mask.dims) == {"grid_index"}
+    assert da_mask.dtype == "int"
+    assert set(da_mask.values) == {0, 1}
+    assert da_mask.sum() > 0
+    assert da_mask.sum() < da_mask.size
+
+    if isinstance(datastore, BaseCartesianDatastore):
+        grid_shape = datastore.grid_shape_state
+        assert datastore.boundary_mask.size == grid_shape.x * grid_shape.y
