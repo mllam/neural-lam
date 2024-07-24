@@ -146,8 +146,7 @@ def test_get_dataarray(datastore_name):
     datastore = _init_datastore(datastore_name)
 
     for category in ["state", "forcing", "static"]:
-        # TODO: should we expect there to be a "test" split too?
-        for split in ["train", "val"]:
+        for split in ["train", "val", "test"]:
             expected_dims = ["grid_index", f"{category}_feature"]
             if category != "static":
                 if not datastore.is_forecast:

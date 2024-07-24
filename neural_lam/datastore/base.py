@@ -116,15 +116,22 @@ class BaseDatastore(abc.ABC):
     @abc.abstractmethod
     def get_dataarray(self, category: str, split: str) -> xr.DataArray:
         """Return the processed data (as a single `xr.DataArray`) for the given
-        category and test/train/val-split that covers the entire timeline of
-        the dataset. The returned dataarray is expected to at minimum have
-        dimensions of `(time, grid_index, {category}_feature)` so that any
-        spatial dimensions have been stacked into a single dimension and all
-        variables and levels have been stacked into a single feature dimension
-        named by the `category` of data being loaded. Any additional dimensions
-        (for example `ensemble_member` or `analysis_time`) should be kept as
-        separate dimensions in the dataarray, and `WeatherDataset` will handle
-        the sampling of the data.
+        category of data and test/train/val-split that covers all the data (in
+        space and time) of a given category.
+
+        The returned dataarray is expected to at minimum have dimensions of
+        `(grid_index, {category}_feature)` so that any spatial dimensions have
+        been stacked into a single dimension and all variables and levels have
+        been stacked into a single feature dimension named by the `category` of
+        data being loaded.
+
+        For categories of data that have a time dimension (i.e. not static
+        data), the dataarray is expected additionally have `(analysis_time,
+        elapsed_forecast_duration)` dimensions if `is_forecast` is True, or
+        `(time)` if `is_forecast` is False.
+
+        If the data is ensemble data, the dataarray is expected to have an
+        additional `ensemble_member` dimension.
 
         Parameters
         ----------
