@@ -245,7 +245,7 @@ def create_graph(
         # Limit the levels in mesh graph
         mesh_levels = min(mesh_levels, n_max_levels)
 
-    print(f"nlev: {nlev}, nleaf: {nleaf}, mesh_levels: {mesh_levels}")
+    # print(f"nlev: {nlev}, nleaf: {nleaf}, mesh_levels: {mesh_levels}")
 
     # multi resolution tree levels
     G = []

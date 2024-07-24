@@ -11,15 +11,25 @@ from test_datastores import DATASTORES, init_datastore
 from neural_lam.create_graph import create_graph_from_datastore
 
 
+@pytest.mark.parametrize("graph_name", ["1level", "multiscale", "hierarchical"])
 @pytest.mark.parametrize("datastore_name", DATASTORES.keys())
-def test_graph_creation(datastore_name):
+def test_graph_creation(datastore_name, graph_name):
     """Check that the `create_graph_from_datastore` function is implemented.
 
     And that the graph is created in the correct location.
     """
     datastore = init_datastore(datastore_name)
-    graph_name = "multiscale"
-    hierarchical = False
+    if graph_name == "hierarchical":
+        hierarchical = True
+        n_max_levels = 3
+    elif graph_name == "multiscale":
+        hierarchical = False
+        n_max_levels = 3
+    elif graph_name == "1level":
+        hierarchical = False
+        n_max_levels = 1
+    else:
+        raise ValueError(f"Unknown graph_name: {graph_name}")
 
     required_graph_files = [
         "m2m_edge_index.pt",
@@ -49,7 +59,10 @@ def test_graph_creation(datastore_name):
         graph_dir_path = Path(tmpdir) / "graph" / graph_name
 
         create_graph_from_datastore(
-            datastore=datastore, output_root_path=str(graph_dir_path)
+            datastore=datastore,
+            output_root_path=str(graph_dir_path),
+            hierarchical=hierarchical,
+            n_max_levels=n_max_levels,
         )
 
         assert graph_dir_path.exists()
@@ -75,6 +88,16 @@ def test_graph_creation(datastore_name):
 
             elif file_id.startswith("m2m") or file_id.startswith("mesh"):
                 assert isinstance(result, list)
+                if not hierarchical:
+                    assert len(result) == 1
+                else:
+                    if file_id.startswith("mesh_up") or file_id.startswith(
+                        "mesh_down"
+                    ):
+                        assert len(result) == n_max_levels - 1
+                    else:
+                        assert len(result) == n_max_levels
+
                 for r in result:
                     assert isinstance(r, torch.Tensor)
 
