@@ -38,10 +38,14 @@ class ARModel(pl.LightningModule):
         da_state_stats = datastore.get_normalization_dataarray(category="state")
         da_boundary_mask = datastore.boundary_mask
 
-        # Load static features for grid/data
+        # Load static features for grid/data, NB: self.predict_step assumes dimension
+        # order to be (grid_index, static_feature)
+        arr_static = da_static_features.transpose(
+            "grid_index", "static_feature"
+        ).values
         self.register_buffer(
             "grid_static_features",
-            torch.tensor(da_static_features.values, dtype=torch.float32),
+            torch.tensor(arr_static, dtype=torch.float32),
             persistent=False,
         )
 
@@ -98,7 +102,10 @@ class ARModel(pl.LightningModule):
 
         boundary_mask = torch.tensor(
             da_boundary_mask.values, dtype=torch.float32
-        )
+        ).unsqueeze(
+            1
+        )  # add feature dim
+
         self.register_buffer("boundary_mask", boundary_mask, persistent=False)
         # Pre-compute interior mask for use in loss function
         self.register_buffer(

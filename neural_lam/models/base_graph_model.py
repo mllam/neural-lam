@@ -105,11 +105,6 @@ class BaseGraphModel(ARModel):
         """
         batch_size = prev_state.shape[0]
 
-        print(f"prev_state.shape: {prev_state.shape}")
-        print(f"prev_prev_state.shape: {prev_prev_state.shape}")
-        print(f"forcing.shape: {forcing.shape}")
-        print(f"grid_static_features.shape: {self.grid_static_features.shape}")
-
         # Create full grid node features of shape (B, num_grid_nodes, grid_dim)
         grid_features = torch.cat(
             (

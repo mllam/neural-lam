@@ -23,13 +23,11 @@ class WeatherDataset(torch.utils.data.Dataset):
         split="train",
         ar_steps=3,
         forcing_window_size=3,
-        batch_size=4,
         standardize=True,
     ):
         super().__init__()
 
         self.split = split
-        self.batch_size = batch_size
         self.ar_steps = ar_steps
         self.datastore = datastore
 
