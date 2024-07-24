@@ -8,9 +8,9 @@
 - [x] `get_vars_names` (method): Get the names of the variables in the given category.
 - [x] `get_num_data_vars` (method): Get the number of data variables in the
       given category.
-- [ ] `get_normalization_dataarray` (method): Return the normalization
+- [x] `get_normalization_dataarray` (method): Return the normalization
       dataarray for the given category.
-- [ ] `get_dataarray` (method): Return the processed data (as a single
+- [x] `get_dataarray` (method): Return the processed data (as a single
       `xr.DataArray`) for the given category and test/train/val-split.
 - [ ] `boundary_mask` (property): Return the boundary mask for the dataset,
       with spatial dimensions stacked.
@@ -29,6 +29,7 @@ import pytest
 import xarray as xr
 
 # First-party
+from neural_lam.datastore.base import BaseCartesianDatastore
 from neural_lam.datastore.mllam import MLLAMDatastore
 from neural_lam.datastore.multizarr import MultiZarrDatastore
 from neural_lam.datastore.npyfiles import NumpyFilesDatastore
@@ -133,3 +134,38 @@ def test_get_normalization_dataarray(datastore_name):
         for op in ops:
             var_name = f"{category}_{op}"
             assert var_name in ds_stats.data_vars
+
+
+@pytest.mark.parametrize("datastore_name", DATASTORES.keys())
+def test_get_dataarray(datastore_name):
+    """Check that the `datastore.get_dataarray` method is implemented.
+
+    And that it returns an xarray DataArray with the correct dimensions.
+    """
+
+    datastore = _init_datastore(datastore_name)
+
+    for category in ["state", "forcing", "static"]:
+        # TODO: should we expect there to be a "test" split too?
+        for split in ["train", "val"]:
+            expected_dims = ["grid_index", f"{category}_feature"]
+            if category != "static":
+                if not datastore.is_forecast:
+                    expected_dims.append("time")
+                else:
+                    expected_dims += [
+                        "analysis_time",
+                        "elapsed_forecast_duration",
+                    ]
+
+            # XXX: for now we only have a single attribute to get the shape of
+            # the grid which uses the shape from the "state" category, maybe
+            # this should change?
+            grid_shape = datastore.grid_shape_state
+
+            da = datastore.get_dataarray(category=category, split=split)
+
+            assert isinstance(da, xr.DataArray)
+            assert set(da.dims) == set(expected_dims)
+            if isinstance(datastore, BaseCartesianDatastore):
+                assert da.grid_index.size == grid_shape.x * grid_shape.y

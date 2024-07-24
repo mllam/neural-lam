@@ -66,12 +66,14 @@ class MLLAMDatastore(BaseCartesianDatastore):
             return da_category
         else:
             t_start = (
-                self._ds.splits.sel(split_name=split, split_part="start")
+                self._ds.splits.sel(split_name=split)
+                .sel(split_part="start")
                 .load()
                 .item()
             )
             t_end = (
-                self._ds.splits.sel(split_name=split, split_part="end")
+                self._ds.splits.sel(split_name=split)
+                .sel(split_part="end")
                 .load()
                 .item()
             )
