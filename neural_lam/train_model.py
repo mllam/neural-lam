@@ -10,10 +10,8 @@ import torch
 from lightning_fabric.utilities import seed
 
 # Local
-from . import config, utils, WeatherDataset
-from .models import GraphLAM
-from .models import HiLAM
-from .models import HiLAMParallel
+from . import WeatherDataset, config, utils
+from .models import GraphLAM, HiLAM, HiLAMParallel
 
 MODELS = {
     "graph_lam": GraphLAM,
