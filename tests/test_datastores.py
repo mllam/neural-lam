@@ -149,6 +149,7 @@ def test_get_dataarray(datastore_name):
     datastore = init_datastore(datastore_name)
 
     for category in ["state", "forcing", "static"]:
+        n_features = {}
         for split in ["train", "val", "test"]:
             expected_dims = ["grid_index", f"{category}_feature"]
             if category != "static":
@@ -171,6 +172,11 @@ def test_get_dataarray(datastore_name):
             assert set(da.dims) == set(expected_dims)
             if isinstance(datastore, BaseCartesianDatastore):
                 assert da.grid_index.size == grid_shape.x * grid_shape.y
+
+            n_features[split] = da[category + "_feature"].size
+
+        # check that the number of features is the same for all splits
+        assert n_features["train"] == n_features["val"] == n_features["test"]
 
 
 @pytest.mark.parametrize("datastore_name", DATASTORES.keys())
