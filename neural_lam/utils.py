@@ -32,10 +32,8 @@ class BufferList(nn.Module):
         return (self[i] for i in range(len(self)))
 
 
-def load_graph(graph_name, device="cpu"):
+def load_graph(graph_dir_path, device="cpu"):
     """Load all tensors representing the graph."""
-    # Define helper lambda function
-    graph_dir_path = os.path.join("graphs", graph_name)
 
     def loads_file(fn):
         return torch.load(os.path.join(graph_dir_path, fn), map_location=device)

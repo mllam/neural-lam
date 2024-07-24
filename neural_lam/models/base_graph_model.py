@@ -19,7 +19,10 @@ class BaseGraphModel(ARModel):
         # Load graph with static features
         # NOTE: (IMPORTANT!) mesh nodes MUST have the first
         # num_mesh_nodes indices,
-        self.hierarchical, graph_ldict = utils.load_graph(args.graph)
+        graph_dir_path = datastore.root_path / "graph" / args.graph
+        self.hierarchical, graph_ldict = utils.load_graph(
+            graph_dir_path=graph_dir_path
+        )
         for name, attr_value in graph_ldict.items():
             # Make BufferLists module members and register tensors as buffers
             if isinstance(attr_value, torch.Tensor):
@@ -101,6 +104,11 @@ class BaseGraphModel(ARModel):
         forcing: (B, num_grid_nodes, forcing_dim)
         """
         batch_size = prev_state.shape[0]
+
+        print(f"prev_state.shape: {prev_state.shape}")
+        print(f"prev_prev_state.shape: {prev_prev_state.shape}")
+        print(f"forcing.shape: {forcing.shape}")
+        print(f"grid_static_features.shape: {self.grid_static_features.shape}")
 
         # Create full grid node features of shape (B, num_grid_nodes, grid_dim)
         grid_features = torch.cat(

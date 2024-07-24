@@ -71,7 +71,7 @@ def test_create_graph_analysis_dataset():
         config_path=DATASTORE_PATH / "data_config.yaml"
     )
     create_graph_from_datastore(
-        datastore=datastore, graph_dir_path=DATASTORE_PATH / "graph"
+        datastore=datastore, output_root_path=DATASTORE_PATH / "graph"
     )
 
     # test cli

@@ -1,6 +1,7 @@
 # Standard library
 import abc
 import dataclasses
+from pathlib import Path
 from typing import List, Union
 
 # Third-party
@@ -29,6 +30,19 @@ class BaseDatastore(abc.ABC):
 
     is_ensemble: bool = False
     is_forecast: bool = False
+
+    @property
+    @abc.abstractmethod
+    def root_path(self) -> Path:
+        """The root path to the datastore. It is relative to this that any
+        derived files (for example the graph components) are stored.
+
+        Returns
+        -------
+        pathlib.Path
+            The root path to the datastore.
+        """
+        pass
 
     @property
     @abc.abstractmethod

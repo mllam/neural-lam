@@ -46,6 +46,10 @@ class MLLAMDatastore(BaseCartesianDatastore):
                 self._ds.to_zarr(fp_ds)
         self._n_boundary_points = n_boundary_points
 
+    @property
+    def root_path(self) -> Path:
+        return Path(self._config_path.parent)
+
     def step_length(self) -> int:
         da_dt = self._ds["time"].diff("time")
         return da_dt.dt.seconds[0] // 3600

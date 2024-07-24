@@ -39,7 +39,7 @@ def test_mllam():
 
     create_graph_from_datastore(
         datastore=datastore,
-        graph_dir_path="tests/datastore_configs/mllam/graph",
+        output_root_path="tests/datastore_configs/mllam/graph",
     )
 
     model = GraphLAM(  # noqa

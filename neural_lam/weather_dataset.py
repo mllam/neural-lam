@@ -1,5 +1,4 @@
 # Standard library
-import dataclasses
 import warnings
 
 # Third-party
@@ -10,74 +9,6 @@ import xarray as xr
 
 # First-party
 from neural_lam.datastore.base import BaseDatastore
-
-
-@dataclasses.dataclass
-class TrainingSample:
-    """A dataclass to hold a single training sample of `ar_steps`
-    autoregressive steps, which consists of the initial states, target states,
-    forcing and batch times. The initial and target states should have
-    `d_features` features, and the forcing should have `d_windowed_forcing`
-    features.
-
-    Parameters
-    ----------
-    init_states : torch.Tensor
-        The initial states of the training sample,
-        shape (2, N_grid, d_features).
-    target_states : torch.Tensor
-        The target states of the training sample,
-        shape (ar_steps, N_grid, d_features).
-    forcing : torch.Tensor
-        The forcing of the training sample,
-        shape (ar_steps, N_grid, d_windowed_forcing).
-    batch_times : np.ndarray
-        The times of the batch, shape (ar_steps,).
-    """
-
-    init_states: torch.Tensor
-    target_states: torch.Tensor
-    forcing: torch.Tensor
-    batch_times: np.ndarray
-
-    def __post_init__(self):
-        """Validate the shapes of the tensors match between the different
-        components of the training sample.
-
-        init_states: (2, N_grid, d_features)
-        target_states: (ar_steps, N_grid, d_features)
-        forcing: (ar_steps, N_grid, d_windowed_forcing) # batch_times: (ar_steps,)
-        """
-        assert self.init_states.shape[0] == 2
-        _, N_grid, d_features = self.init_states.shape
-        N_pred_steps = self.target_states.shape[0]
-
-        # check number of grid points
-        if not (
-            self.target_states.shape[1] == self.target_states.shape[1] == N_grid
-        ):
-            raise Exception(
-                "Number of grid points do not match, got "
-                f"{self.target_states.shape[1]=} and "
-                f"{self.target_states.shape[2]=}, expected {N_grid=}"
-            )
-
-        # check number of features for init and target states
-        assert self.target_states.shape[2] == d_features
-
-        # check that target, forcing and batch times have the same number of
-        # prediction steps
-        if not (
-            self.target_states.shape[0]
-            == self.forcing.shape[0]
-            == self.batch_times.shape[0]
-            == N_pred_steps
-        ):
-            raise Exception(
-                "Number of prediction steps do not match, got "
-                f"{self.target_states.shape[0]=}, {self.forcing.shape[0]=} and "
-                f"{self.batch_times.shape[0]=}, expected {N_pred_steps=}"
-            )
 
 
 class WeatherDataset(torch.utils.data.Dataset):
@@ -268,7 +199,7 @@ class WeatherDataset(torch.utils.data.Dataset):
         da_init_states = da_state.isel(time=slice(None, 2))
         da_target_states = da_state.isel(time=slice(2, None))
 
-        batch_times = da_forcing_windowed.time
+        batch_times = da_forcing_windowed.time.values.astype(float)
 
         if self.standardize:
             da_init_states = (
@@ -300,12 +231,7 @@ class WeatherDataset(torch.utils.data.Dataset):
         # forcing: (ar_steps, N_grid, d_windowed_forcing)
         # batch_times: (ar_steps,)
 
-        return TrainingSample(
-            init_states=init_states,
-            target_states=target_states,
-            forcing=forcing,
-            batch_times=batch_times,
-        )
+        return init_states, target_states, forcing, batch_times
 
 
 class WeatherDataModule(pl.LightningDataModule):

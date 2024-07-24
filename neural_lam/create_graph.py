@@ -475,14 +475,14 @@ DATASTORES = dict(
 
 def create_graph_from_datastore(
     datastore: BaseCartesianDatastore,
-    graph_dir_path: str,
+    output_root_path: str,
     n_max_levels: int = None,
     hierarchical: bool = False,
     create_plot: bool = False,
 ):
     xy = datastore.get_xy(category="state", stacked=False)
     create_graph(
-        graph_dir_path=graph_dir_path,
+        graph_dir_path=output_root_path,
         xy=xy,
         n_max_levels=n_max_levels,
         hierarchical=hierarchical,
@@ -505,7 +505,7 @@ def cli(input_args=None):
         help="path to the data store",
     )
     parser.add_argument(
-        "--graph",
+        "--name",
         type=str,
         default="multiscale",
         help="Name to save graph as (default: multiscale)",
@@ -536,7 +536,7 @@ def cli(input_args=None):
 
     create_graph_from_datastore(
         datastore=datastore,
-        graph_dir_path=os.path.join("graphs", args.graph),
+        output_root_path=os.path.join(datastore.root_path, "graphs", args.name),
         n_max_levels=args.levels,
         hierarchical=args.hierarchical,
         create_plot=args.plot,
