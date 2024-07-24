@@ -12,11 +12,11 @@
       dataarray for the given category.
 - [x] `get_dataarray` (method): Return the processed data (as a single
       `xr.DataArray`) for the given category and test/train/val-split.
-- [ ] `boundary_mask` (property): Return the boundary mask for the dataset,
+- [x] `boundary_mask` (property): Return the boundary mask for the dataset,
       with spatial dimensions stacked.
 
 In addition BaseCartesianDatastore must have the following methods and attributes:
-- [ ] `get_xy_extent` (method): Return the extent of the x, y coordinates for a
+- [x] `get_xy_extent` (method): Return the extent of the x, y coordinates for a
         given category of data.
 - [ ] `get_xy` (method): Return the x, y coordinates of the dataset.
 - [ ] `coords_projection` (property): Projection object for the coordinates.
@@ -25,6 +25,7 @@ In addition BaseCartesianDatastore must have the following methods and attribute
 
 # Third-party
 import cartopy.crs as ccrs
+import numpy as np
 import pytest
 import xarray as xr
 
@@ -187,3 +188,55 @@ def test_boundary_mask(datastore_name):
     if isinstance(datastore, BaseCartesianDatastore):
         grid_shape = datastore.grid_shape_state
         assert datastore.boundary_mask.size == grid_shape.x * grid_shape.y
+
+
+@pytest.mark.parametrize("datastore_name", DATASTORES.keys())
+def test_get_xy_extent(datastore_name):
+    """Check that the `datastore.get_xy_extent` method is implemented and that
+    the returned object is a tuple of the correct length."""
+    datastore = _init_datastore(datastore_name)
+
+    if not isinstance(datastore, BaseCartesianDatastore):
+        pytest.skip("Datastore does not implement `BaseCartesianDatastore`")
+
+    extents = {}
+    # get the extents for each category, and finally check they are all the same
+    for category in ["state", "forcing", "static"]:
+        extent = datastore.get_xy_extent(category)
+        assert isinstance(extent, list)
+        assert len(extent) == 4
+        assert all(isinstance(e, (int, float)) for e in extent)
+        extents[category] = extent
+
+    # check that the extents are the same for all categories
+    for category in ["forcing", "static"]:
+        assert extents["state"] == extents[category]
+
+
+@pytest.mark.parametrize("datastore_name", DATASTORES.keys())
+def test_get_xy(datastore_name):
+    """Check that the `datastore.get_xy` method is implemented."""
+    datastore = _init_datastore(datastore_name)
+
+    if not isinstance(datastore, BaseCartesianDatastore):
+        pytest.skip("Datastore does not implement `BaseCartesianDatastore`")
+
+    for category in ["state", "forcing", "static"]:
+        xy_stacked = datastore.get_xy(category=category, stacked=True)
+        xy_unstacked = datastore.get_xy(category=category, stacked=False)
+
+        assert isinstance(xy_stacked, np.ndarray)
+        assert isinstance(xy_unstacked, np.ndarray)
+
+        nx, ny = datastore.grid_shape_state.x, datastore.grid_shape_state.y
+
+        # for stacked=True, the shape should be (2, n_grid_points)
+        assert xy_stacked.ndim == 2
+        assert xy_stacked.shape[0] == 2
+        assert xy_stacked.shape[1] == nx * ny
+
+        # for stacked=False, the shape should be (2, ny, nx)
+        assert xy_unstacked.ndim == 3
+        assert xy_unstacked.shape[0] == 2
+        assert xy_unstacked.shape[1] == ny
+        assert xy_unstacked.shape[2] == nx
