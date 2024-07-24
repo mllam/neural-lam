@@ -33,7 +33,48 @@ class BufferList(nn.Module):
 
 
 def load_graph(graph_dir_path, device="cpu"):
-    """Load all tensors representing the graph."""
+    """Load all tensors representing the graph from `graph_dir_path`.
+
+    Needs the following files for all graphs:
+    - m2m_edge_index.pt
+    - g2m_edge_index.pt
+    - m2g_edge_index.pt
+    - m2m_features.pt
+    - g2m_features.pt
+    - m2g_features.pt
+    - mesh_features.pt
+
+    And in addition for hierarchical graphs:
+    - mesh_up_edge_index.pt
+    - mesh_down_edge_index.pt
+    - mesh_up_features.pt
+    - mesh_down_features.pt
+
+    Parameters
+    ----------
+    graph_dir_path : str
+        Path to directory containing the graph files.
+    device : str
+        Device to load tensors to.
+
+    Returns
+    -------
+    hierarchical : bool
+        Whether the graph is hierarchical.
+    graph : dict
+        Dictionary containing the graph tensors, with keys as follows:
+        - g2m_edge_index
+        - m2g_edge_index
+        - m2m_edge_index
+        - mesh_up_edge_index
+        - mesh_down_edge_index
+        - g2m_features
+        - m2g_features
+        - m2m_features
+        - mesh_up_features
+        - mesh_down_features
+        - mesh_static_features
+    """
 
     def loads_file(fn):
         return torch.load(os.path.join(graph_dir_path, fn), map_location=device)
