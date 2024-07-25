@@ -50,6 +50,7 @@ class MLLAMDatastore(BaseCartesianDatastore):
     def root_path(self) -> Path:
         return Path(self._config_path.parent)
 
+    @property
     def step_length(self) -> int:
         da_dt = self._ds["time"].diff("time")
         return (da_dt.dt.seconds[0] // 3600).item()

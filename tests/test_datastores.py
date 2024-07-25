@@ -72,7 +72,7 @@ def test_root_path(datastore_name):
 def test_step_length(datastore_name):
     """Check that the `datastore.step_length` property is implemented."""
     datastore = init_datastore(datastore_name)
-    step_length = datastore.step_length()
+    step_length = datastore.step_length
     assert isinstance(step_length, int)
     assert step_length > 0
 
