@@ -1,4 +1,5 @@
 # Standard library
+import functools
 import os
 from dataclasses import dataclass
 
@@ -7,7 +8,7 @@ import torch
 from torch import nn
 
 
-@dataclass
+@dataclass(frozen=True)
 class BaseWeatherGraph(nn.Module):
     """
     Graph object representing weather graph consisting of grid and mesh nodes
@@ -27,9 +28,20 @@ class BaseWeatherGraph(nn.Module):
         )
 
         # Make all node indices start at 0, if not
-        # TODO Remove from Inets
-        self.g2m_edge_index = self._reindex_edge_index(self.g2m_edge_index)
-        self.m2g_edge_index = self._reindex_edge_index(self.m2g_edge_index)
+        # Use of setattr hereduring initialization, as dataclass is frozen.
+        # This matches dataclass behavior used in generated __init__
+        # https://docs.python.org/3/library/dataclasses.html#frozen-instances
+        # TODO Remove reindexing from from Inets
+        object.__setattr__(
+            self,
+            "g2m_edge_index",
+            self._reindex_edge_index(self.g2m_edge_index),
+        )
+        object.__setattr__(
+            self,
+            "m2g_edge_index",
+            self._reindex_edge_index(self.m2g_edge_index),
+        )
 
     @staticmethod
     def _reindex_edge_index(edge_index):
@@ -107,23 +119,21 @@ class BaseWeatherGraph(nn.Module):
 
         # TODO Checks that node indices align between edge_index and features
 
-    # TODO Cache?
-    # @functools.cached_property
-    @property
+    @functools.cached_property
     def num_grid_nodes(self):
         """
         Get the number of grid nodes (grid cells) that the graph
         is constructed for.
         """
+        # Assumes all grid nodes connected to grid
         return self.g2m_edge_index[0].max().item() + 1
 
-    # TODO Cache?
-    # @functools.cached_property
-    @property
+    @functools.cached_property
     def num_mesh_nodes(self):
         """
         Get the number of nodes in the mesh graph
         """
+        # Assumes all mesh nodes connected to grid
         return self.g2m_edge_index[1].max().item() + 1
 
     @staticmethod

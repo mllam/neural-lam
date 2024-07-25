@@ -1,4 +1,5 @@
 # Standard library
+import functools
 from dataclasses import dataclass
 
 # Third-party
@@ -9,7 +10,7 @@ import torch_geometric as pyg
 from neural_lam.graphs.base_weather_graph import BaseWeatherGraph
 
 
-@dataclass
+@dataclass(frozen=True)
 class FlatWeatherGraph(BaseWeatherGraph):
     """
     Graph object representing weather graph consisting of grid and mesh nodes
@@ -31,6 +32,15 @@ class FlatWeatherGraph(BaseWeatherGraph):
             self.m2m_edge_index
         ), "m2m_edge_index does not specify a connected graph"
         # TODO Checks that node indices align with number of mesh nodes
+
+    @functools.cached_property
+    def num_mesh_nodes(self):
+        """
+        Get the number of nodes in the mesh graph
+        """
+        # Override to determine in more robust way
+        # No longer assumes all mesh nodes connected to grid
+        return self.mesh_node_features.shape[0]
 
     @staticmethod
     def from_graph_dir(path):
