@@ -87,7 +87,7 @@ def test_single_batch(datastore_name, split="train"):
         # XXX: this should be superfluous when we have already defined the
         # model object no?
         graph = graph_name
-        hidden_dim = 64
+        hidden_dim = 8
         hidden_layers = 1
         processor_layers = 4
         mesh_aggr = "sum"
@@ -114,6 +114,6 @@ def test_single_batch(datastore_name, split="train"):
     model_device = model.to(device_name)
     data_loader = DataLoader(dataset, batch_size=2)
     batch = next(iter(data_loader))
-    model_device.common_step(batch)
-
-    assert False
+    batch_device = [part.to(device_name) for part in batch]
+    model_device.common_step(batch_device)
+    model_device.training_step(batch_device)
