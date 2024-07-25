@@ -76,8 +76,11 @@ class WeatherDataset(torch.utils.data.Dataset):
                 )
             return self.da_state.analysis_time.size
         else:
-            # Skip first and last time step
-            return len(self.da_state.time) - self.ar_steps
+            # sample_len = 2 + ar_steps  <-- 2 initial states + ar_steps target states
+            # n_samples = len(self.da_state.time) - sample_len + 1
+            #           = len(self.da_state.time) - 2 - ar_steps + 1
+            #           = len(self.da_state.time) - ar_steps - 1
+            return len(self.da_state.time) - self.ar_steps - 1
 
     def _sample_time(self, da, idx, n_steps: int, n_timesteps_offset: int = 0):
         """Produce a time slice of the given dataarray `da` (state or forcing)
@@ -181,7 +184,7 @@ class WeatherDataset(torch.utils.data.Dataset):
                 da=da_forcing,
                 idx=idx,
                 n_steps=self.ar_steps,
-                n_timesteps_offset=2 + n,
+                n_timesteps_offset=n,
             )
             if n > 0:
                 da_ = da_.drop_vars("time")
@@ -231,19 +234,32 @@ class WeatherDataset(torch.utils.data.Dataset):
 
         return init_states, target_states, forcing, batch_times
 
+    def __iter__(self):
+        """Convenience method to iterate over the dataset.
+
+        This isn't used by pytorch DataLoader which itself implements an
+        iterator that uses Dataset.__getitem__ and Dataset.__len__.
+        """
+        for i in range(len(self)):
+            yield self[i]
+
 
 class WeatherDataModule(pl.LightningDataModule):
     """DataModule for weather data."""
 
     def __init__(
         self,
+        datastore: BaseDatastore,
         ar_steps_train=3,
         ar_steps_eval=25,
         standardize=True,
+        forcing_window_size=3,
         batch_size=4,
         num_workers=16,
     ):
         super().__init__()
+        self._datastore = datastore
+        self.forcing_window_size = forcing_window_size
         self.ar_steps_train = ar_steps_train
         self.ar_steps_eval = ar_steps_eval
         self.standardize = standardize
@@ -256,24 +272,27 @@ class WeatherDataModule(pl.LightningDataModule):
     def setup(self, stage=None):
         if stage == "fit" or stage is None:
             self.train_dataset = WeatherDataset(
+                datastore=self._datastore,
                 split="train",
                 ar_steps=self.ar_steps_train,
                 standardize=self.standardize,
-                batch_size=self.batch_size,
+                forcing_window_size=self.forcing_window_size,
             )
             self.val_dataset = WeatherDataset(
+                datastore=self._datastore,
                 split="val",
                 ar_steps=self.ar_steps_eval,
                 standardize=self.standardize,
-                batch_size=self.batch_size,
+                forcing_window_size=self.forcing_window_size,
             )
 
         if stage == "test" or stage is None:
             self.test_dataset = WeatherDataset(
+                datastore=self._datastore,
                 split="test",
                 ar_steps=self.ar_steps_eval,
                 standardize=self.standardize,
-                batch_size=self.batch_size,
+                forcing_window_size=self.forcing_window_size,
             )
 
     def train_dataloader(self):

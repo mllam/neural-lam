@@ -27,7 +27,7 @@ def test_dataset_item(datastore_name):
     datastore = init_datastore(datastore_name)
     N_gridpoints = datastore.grid_shape_state.x * datastore.grid_shape_state.y
 
-    N_pred_steps = 4
+    N_pred_steps = 1
     forcing_window_size = 3
     dataset = WeatherDataset(
         datastore=datastore,
@@ -62,6 +62,12 @@ def test_dataset_item(datastore_name):
 
     # batch times
     assert batch_times.shape[0] == N_pred_steps
+
+    # try to run through the whole dataset to ensure slicing and stacking
+    # operations are working as expected and are consistent with the dataset
+    # length
+    for item in iter(dataset):
+        pass
 
 
 @pytest.mark.parametrize("datastore_name", DATASTORES.keys())
