@@ -7,7 +7,7 @@ import pytest
 
 # First-party
 from neural_lam.create_graph import create_graph as create_graph
-from neural_lam.datastore.npyfiles import NumpyFilesDatastore
+from neural_lam.datastore.npyfiles import NpyFilesDatastore
 from neural_lam.train_model import main as train_model
 from neural_lam.weather_dataset import WeatherDataset
 
@@ -40,7 +40,7 @@ def ewc_testdata_path():
 
 
 def test_load_reduced_meps_dataset(ewc_testdata_path):
-    datastore = NumpyFilesDatastore(root_path=ewc_testdata_path)
+    datastore = NpyFilesDatastore(root_path=ewc_testdata_path)
     datastore.get_xy(category="state", stacked=True)
 
     datastore.get_dataarray(category="forcing", split="train").unstack(

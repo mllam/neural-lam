@@ -26,7 +26,7 @@ class ARModel(pl.LightningModule):
         self, args, datastore: BaseDatastore, forcing_window_size: int
     ):
         super().__init__()
-        self.save_hyperparameters()
+        self.save_hyperparameters(ignore=["datastore"])
         self.args = args
         self._datastore = datastore
         # XXX: should be this be somewhere else?

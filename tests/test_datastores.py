@@ -2,7 +2,7 @@
 `BaseCartesianDatastore` (these are all decorated with `@abc.abstractmethod`):
 
 - [x] `root_path` (property): Root path of the datastore.
-- [ ] `step_length` (property): Length of the time step in hours.
+- [x] `step_length` (property): Length of the time step in hours.
 - [x] `grid_shape_state` (property): Shape of the grid for the state variables.
 - [x] `get_xy` (method): Return the x, y coordinates of the dataset.
 - [x] `coords_projection` (property): Projection object for the coordinates.
@@ -33,32 +33,10 @@ import cartopy.crs as ccrs
 import numpy as np
 import pytest
 import xarray as xr
+from conftest import DATASTORES, init_datastore
 
 # First-party
 from neural_lam.datastore.base import BaseCartesianDatastore
-from neural_lam.datastore.mllam import MLLAMDatastore
-from neural_lam.datastore.multizarr import MultiZarrDatastore
-from neural_lam.datastore.npyfiles import NumpyFilesDatastore
-
-DATASTORES = dict(
-    multizarr=MultiZarrDatastore,
-    mllam=MLLAMDatastore,
-    npyfiles=NumpyFilesDatastore,
-)
-
-
-EXAMPLES = dict(
-    multizarr=dict(
-        config_path="tests/datastore_configs/multizarr/data_config.yaml"
-    ),
-    mllam=dict(config_path="tests/datastore_configs/mllam/example.danra.yaml"),
-    npyfiles=dict(root_path="tests/datastore_configs/npy"),
-)
-
-
-def init_datastore(datastore_name):
-    DatastoreClass = DATASTORES[datastore_name]
-    return DatastoreClass(**EXAMPLES[datastore_name])
 
 
 @pytest.mark.parametrize("datastore_name", DATASTORES.keys())
@@ -270,3 +248,18 @@ def test_get_projection(datastore_name):
         pytest.skip("Datastore does not implement `BaseCartesianDatastore`")
 
     assert isinstance(datastore.coords_projection, ccrs.Projection)
+
+
+@pytest.mark.parametrize("datastore_name", DATASTORES.keys())
+def get_grid_shape_state(datastore_name):
+    """Check that the `datastore.grid_shape_state` property is implemented."""
+    datastore = init_datastore(datastore_name)
+
+    if not isinstance(datastore, BaseCartesianDatastore):
+        pytest.skip("Datastore does not implement `BaseCartesianDatastore`")
+
+    grid_shape = datastore.grid_shape_state
+    assert isinstance(grid_shape, tuple)
+    assert len(grid_shape) == 2
+    assert all(isinstance(e, int) for e in grid_shape)
+    assert all(e > 0 for e in grid_shape)

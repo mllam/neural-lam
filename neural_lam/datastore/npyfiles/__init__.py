@@ -1,2 +1,2 @@
 # Local
-from .store import NumpyFilesDatastore  # noqa
+from .store import NpyFilesDatastore  # noqa

@@ -70,10 +70,8 @@ class WeatherDataset(torch.utils.data.Dataset):
                     f"({self.da_state.ensemble_member.size})",
                     UserWarning,
                 )
-                return (
-                    self.da_state.analysis_time.size
-                    * self.da_state.ensemble_member.size
-                )
+            # XXX: we should maybe check that the 2+ar_steps actually fits
+            # in the elapsed_forecast_time dimension, should that be checked here?
             return self.da_state.analysis_time.size
         else:
             # sample_len = 2 + ar_steps  <-- 2 initial states + ar_steps target states

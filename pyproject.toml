@@ -36,6 +36,7 @@ dev = [
     "pooch>=1.8.1",
     "ipdb>=0.13.13",
     "gpustat>=1.1.1",
+    "zarrdump>=0.4.1",
 ]
 
 [tool.black]

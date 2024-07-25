@@ -24,7 +24,7 @@ TOA_SW_DOWN_FLUX_FILENAME_FORMAT = (
 COLUMN_WATER_FILENAME_FORMAT = "wtr_{analysis_time:%Y%m%d%H}.npy"
 
 
-class NumpyFilesDatastore(BaseCartesianDatastore):
+class NpyFilesDatastore(BaseCartesianDatastore):
     __doc__ = f"""
     Represents a dataset stored as numpy files on disk. The dataset is assumed
     to be stored in a directory structure where each sample is stored in a
@@ -132,8 +132,12 @@ class NumpyFilesDatastore(BaseCartesianDatastore):
         self._step_length = 3  # 3 hours
         self._num_ensemble_members = 2
 
-        self.root_path = Path(root_path)
+        self._root_path = Path(root_path)
         self.config = NpyConfig.from_file(self.root_path / "data_config.yaml")
+
+    @property
+    def root_path(self):
+        return self._root_path
 
     def get_dataarray(self, category: str, split: str) -> DataArray:
         """Get the data array for the given category and split of data. If the
@@ -334,9 +338,9 @@ class NumpyFilesDatastore(BaseCartesianDatastore):
             elif d == "analysis_time":
                 coord_values = self._get_analysis_times(split=split)
             elif d == "y":
-                coord_values = np.arange(grid_shape[0])
+                coord_values = np.arange(grid_shape.y)
             elif d == "x":
-                coord_values = np.arange(grid_shape[1])
+                coord_values = np.arange(grid_shape.x)
             elif d == "feature":
                 coord_values = features
             else:
@@ -420,6 +424,11 @@ class NumpyFilesDatastore(BaseCartesianDatastore):
         for fp in sample_files:
             name_parts = parse.parse(STATE_FILENAME_FORMAT, fp.name)
             times.append(name_parts["analysis_time"])
+
+        if len(times) == 0:
+            raise ValueError(
+                f"No files found in {sample_dir} with pattern {pattern}"
+            )
 
         return times
 
@@ -540,10 +549,10 @@ class NumpyFilesDatastore(BaseCartesianDatastore):
     @property
     def boundary_mask(self):
         xs, ys = self.get_xy(category="state", stacked=False)
-        assert np.all(xs[0, :] == xs[-1, :])
-        assert np.all(ys[:, 0] == ys[:, -1])
-        x = xs[0, :]
-        y = ys[:, 0]
+        assert np.all(xs[:, 0] == xs[:, -1])
+        assert np.all(ys[0, :] == ys[-1, :])
+        x = xs[:, 0]
+        y = ys[0, :]
         values = np.load(self.root_path / "static" / "border_mask.npy")
         da_mask = xr.DataArray(
             values, dims=["y", "x"], coords=dict(x=x, y=y), name="boundary_mask"
@@ -589,6 +598,12 @@ class NumpyFilesDatastore(BaseCartesianDatastore):
             mean_values = np.array([flux_mean, 0.34033957, 0.0, 0.0, 0.0, 0.0])
             std_values = np.array([flux_std, 0.4661307, 1.0, 1.0, 1.0, 1.0])
 
+        elif category == "static":
+            ds_static = self.get_dataarray(category="static", split="train")
+            ds_static_mean = ds_static.mean(dim=["grid_index"])
+            ds_static_std = ds_static.std(dim=["grid_index"])
+            mean_values = ds_static_mean["static_feature"].values
+            std_values = ds_static_std["static_feature"].values
         else:
             raise NotImplementedError(f"Category {category} not supported")
 

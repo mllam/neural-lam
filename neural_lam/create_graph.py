@@ -17,7 +17,7 @@ from torch_geometric.utils.convert import from_networkx
 from .datastore.base import BaseCartesianDatastore
 from .datastore.mllam import MLLAMDatastore
 from .datastore.multizarr import MultiZarrDatastore
-from .datastore.npyfiles import NumpyFilesDatastore
+from .datastore.npyfiles import NpyFilesDatastore
 
 
 def plot_graph(graph, title=None):
@@ -531,7 +531,7 @@ def create_graph(
 DATASTORES = dict(
     multizarr=MultiZarrDatastore,
     mllam=MLLAMDatastore,
-    npyfiles=NumpyFilesDatastore,
+    npyfiles=NpyFilesDatastore,
 )
 
 

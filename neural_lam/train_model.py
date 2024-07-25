@@ -14,7 +14,7 @@ from lightning_fabric.utilities import seed
 from . import utils
 from .datastore.mllam import MLLAMDatastore
 from .datastore.multizarr import MultiZarrDatastore
-from .datastore.npyfiles import NumpyFilesDatastore
+from .datastore.npyfiles import NpyFilesDatastore
 from .models.graph_lam import GraphLAM
 from .models.hi_lam import HiLAM
 from .models.hi_lam_parallel import HiLAMParallel
@@ -31,7 +31,7 @@ def _init_datastore(datastore_kind, data_config):
     if datastore_kind == "multizarr":
         datastore = MultiZarrDatastore(data_config)
     elif datastore_kind == "npyfiles":
-        datastore = NumpyFilesDatastore(data_config)
+        datastore = NpyFilesDatastore(data_config)
     elif datastore_kind == "mllam":
         datastore = MLLAMDatastore(data_config)
     else:
