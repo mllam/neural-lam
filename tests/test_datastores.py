@@ -1,6 +1,8 @@
 """List of methods and attributes that should be implemented in a subclass of
 `BaseCartesianDatastore` (these are all decorated with `@abc.abstractmethod`):
 
+- [x] `root_path` (property): Root path of the datastore.
+- [ ] `step_length` (property): Length of the time step in hours.
 - [x] `grid_shape_state` (property): Shape of the grid for the state variables.
 - [x] `get_xy` (method): Return the x, y coordinates of the dataset.
 - [x] `coords_projection` (property): Projection object for the coordinates.
@@ -64,6 +66,15 @@ def test_root_path(datastore_name):
     """Check that the `datastore.root_path` property is implemented."""
     datastore = init_datastore(datastore_name)
     assert isinstance(datastore.root_path, Path)
+
+
+@pytest.mark.parametrize("datastore_name", DATASTORES.keys())
+def test_step_length(datastore_name):
+    """Check that the `datastore.step_length` property is implemented."""
+    datastore = init_datastore(datastore_name)
+    step_length = datastore.step_length()
+    assert isinstance(step_length, int)
+    assert step_length > 0
 
 
 @pytest.mark.parametrize("datastore_name", DATASTORES.keys())

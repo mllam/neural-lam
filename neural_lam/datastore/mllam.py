@@ -52,7 +52,7 @@ class MLLAMDatastore(BaseCartesianDatastore):
 
     def step_length(self) -> int:
         da_dt = self._ds["time"].diff("time")
-        return da_dt.dt.seconds[0] // 3600
+        return (da_dt.dt.seconds[0] // 3600).item()
 
     def get_vars_units(self, category: str) -> List[str]:
         return self._ds[f"{category}_feature_units"].values.tolist()
