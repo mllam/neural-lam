@@ -31,7 +31,6 @@ def test_dataset_item(datastore_name):
     forcing_window_size = 3
     dataset = WeatherDataset(
         datastore=datastore,
-        batch_size=1,
         split="train",
         ar_steps=N_pred_steps,
         forcing_window_size=forcing_window_size,
