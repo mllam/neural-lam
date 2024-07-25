@@ -28,6 +28,7 @@ class ARModel(pl.LightningModule):
         super().__init__()
         self.save_hyperparameters()
         self.args = args
+        self._datastore = datastore
         # XXX: should be this be somewhere else?
         split = "train"
         num_state_vars = datastore.get_num_data_vars(category="state")
@@ -429,18 +430,18 @@ class ARModel(pl.LightningModule):
                 # Create one figure per variable at this time step
                 var_figs = [
                     vis.plot_prediction(
-                        pred_t[:, var_i],
-                        target_t[:, var_i],
-                        self.interior_mask[:, 0],
-                        self.datastore,
+                        pred=pred_t[:, var_i],
+                        target=target_t[:, var_i],
+                        obs_mask=self.interior_mask[:, 0],
+                        datastore=self.datastore,
                         title=f"{var_name} ({var_unit}), "
                         f"t={t_i} ({self.step_length * t_i} h)",
                         vrange=var_vrange,
                     )
                     for var_i, (var_name, var_unit, var_vrange) in enumerate(
                         zip(
-                            self.data_config.vars_names("state"),
-                            self.data_config.vars_units("state"),
+                            self._datastore.get_vars_names("state"),
+                            self._datastore.get_vars_units("state"),
                             var_vranges,
                         )
                     )
@@ -451,7 +452,7 @@ class ARModel(pl.LightningModule):
                     {
                         f"{var_name}_example_{example_i}": wandb.Image(fig)
                         for var_name, fig in zip(
-                            self.data_config.vars_names("state"), var_figs
+                            self._datastore.get_vars_names("state"), var_figs
                         )
                     }
                 )
@@ -485,7 +486,9 @@ class ARModel(pl.LightningModule):
         """
         log_dict = {}
         metric_fig = vis.plot_error_map(
-            metric_tensor, self.data_config, step_length=self.step_length
+            errors=metric_tensor,
+            datastore=self._datastore,
+            step_length=self.step_length,
         )
         full_log_name = f"{prefix}_{metric_name}"
         log_dict[full_log_name] = wandb.Image(metric_fig)
