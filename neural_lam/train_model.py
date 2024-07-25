@@ -12,6 +12,9 @@ from lightning_fabric.utilities import seed
 
 # Local
 from . import utils
+from .datastore.mllam import MLLAMDatastore
+from .datastore.multizarr import MultiZarrDatastore
+from .datastore.npyfiles import NumpyFilesDatastore
 from .models.graph_lam import GraphLAM
 from .models.hi_lam import HiLAM
 from .models.hi_lam_parallel import HiLAMParallel
@@ -24,16 +27,35 @@ MODELS = {
 }
 
 
+def _init_datastore(datastore_kind, data_config):
+    if datastore_kind == "multizarr":
+        datastore = MultiZarrDatastore(data_config)
+    elif datastore_kind == "npyfiles":
+        datastore = NumpyFilesDatastore(data_config)
+    elif datastore_kind == "mllam":
+        datastore = MLLAMDatastore(data_config)
+    else:
+        raise ValueError(f"Unknown datastore kind: {datastore_kind}")
+    return datastore
+
+
 def main(input_args=None):
     """Main function for training and evaluating models."""
     parser = ArgumentParser(
         description="Train or evaluate NeurWP models for LAM"
     )
     parser.add_argument(
-        "--data_config",
+        "--datastore-kind",
         type=str,
-        default="neural_lam/data_config.yaml",
-        help="Path to data config file (default: neural_lam/data_config.yaml)",
+        choices=["multizarr", "npyfiles", "mllam"],
+        default="multizarr",
+        help="Kind of datastore to use (default: multizarr)",
+    )
+    parser.add_argument(
+        "--datastore-config",
+        type=str,
+        default="tests/datastore_configs/multizarr/data_config.yaml",
+        help="Path to data config file",
     )
     parser.add_argument(
         "--model",
@@ -201,6 +223,12 @@ def main(input_args=None):
         help="""JSON string with variable-IDs and lead times to log watched
              metrics (e.g. '{"1": [1, 2], "3": [3, 4]}')""",
     )
+    parser.add_argument(
+        "--forcing-window-size",
+        type=int,
+        default=3,
+        help="Number of time steps to use as input for forcing data",
+    )
     args = parser.parse_args(input_args)
     args.var_leads_metrics_watch = {
         int(k): v for k, v in json.loads(args.var_leads_metrics_watch).items()
@@ -219,11 +247,15 @@ def main(input_args=None):
 
     # Set seed
     seed.seed_everything(args.seed)
+    # Create datastore
+    datastore = _init_datastore(args.datastore_kind, args.datastore_config)
     # Create datamodule
     data_module = WeatherDataModule(
+        datastore=datastore,
         ar_steps_train=args.ar_steps_train,
         ar_steps_eval=args.ar_steps_eval,
         standardize=True,
+        forcing_window_size=args.forcing_window_size,
         batch_size=args.batch_size,
         num_workers=args.num_workers,
     )
@@ -238,8 +270,10 @@ def main(input_args=None):
         device_name = "cpu"
 
     # Load model parameters Use new args for model
-    model_class = MODELS[args.model]
-    model = model_class(args)
+    ModelClass = MODELS[args.model]
+    model = ModelClass(
+        args, datastore=datastore, forcing_window_size=args.forcing_window_size
+    )
 
     if args.eval:
         prefix = f"eval-{args.eval}-"
@@ -276,7 +310,7 @@ def main(input_args=None):
         utils.init_wandb_metrics(
             logger, val_steps=args.val_steps_to_log
         )  # Do after wandb.init
-        wandb.save(args.data_config)
+        wandb.save(args.datastore_config)
     if args.eval:
         trainer.test(model=model, datamodule=data_module, ckpt_path=args.load)
     else:
