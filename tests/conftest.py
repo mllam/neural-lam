@@ -4,6 +4,7 @@ from pathlib import Path
 
 # Third-party
 import pooch
+import yaml
 
 # First-party
 from neural_lam.datastore.mllam import MLLAMDatastore
@@ -32,7 +33,10 @@ TEST_DATA_KNOWN_HASH = (
 
 def download_meps_example_reduced_dataset():
     # Download and unzip test data into data/meps_example_reduced
-    root_path = Path("tests/datastores_examples/npy")
+    root_path = Path("tests/datastore_configs/npy")
+    dataset_path = root_path / "meps_example_reduced"
+    will_download = not dataset_path.exists()
+
     pooch.retrieve(
         url=S3_FULL_PATH,
         known_hash=TEST_DATA_KNOWN_HASH,
@@ -40,14 +44,23 @@ def download_meps_example_reduced_dataset():
         path=root_path,
         fname="meps_example_reduced.zip",
     )
-    return root_path / "meps_example_reduced"
+
+    if will_download:
+        # XXX: should update the dataset stored on S3 the change below
+        config_path = dataset_path / "data_config.yaml"
+        # rename the `projection.class` key to `projection.class_name` in the config
+        with open(config_path, "r") as f:
+            config = yaml.safe_load(f)
+        config["projection.class_name"] = config.pop("projection.class")
+        with open(config_path, "w") as f:
+            yaml.dump(config, f)
+
+    return dataset_path
 
 
 DATASTORES_EXAMPLES = dict(
-    multizarr=dict(
-        config_path="tests/datastore_configs/multizarr/data_config.yaml"
-    ),
-    mllam=dict(config_path="tests/datastore_configs/mllam/example.danra.yaml"),
+    multizarr=dict(root_path="tests/datastore_configs/multizarr"),
+    mllam=dict(root_path="tests/datastore_configs/mllam"),
     npyfiles=dict(root_path=download_meps_example_reduced_dataset()),
 )
 

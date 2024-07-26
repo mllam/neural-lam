@@ -15,7 +15,7 @@ from .base import BaseCartesianDatastore, CartesianGridShape
 class MLLAMDatastore(BaseCartesianDatastore):
     """Datastore class for the MLLAM dataset."""
 
-    def __init__(self, config_path, n_boundary_points=30, reuse_existing=True):
+    def __init__(self, root_path, n_boundary_points=30, reuse_existing=True):
         """Construct a new MLLAMDatastore from the configuration file at
         `config_path`. A boundary mask is created with `n_boundary_points`
         boundary points. If `reuse_existing` is True, the dataset is loaded
@@ -33,7 +33,9 @@ class MLLAMDatastore(BaseCartesianDatastore):
         reuse_existing : bool
             Whether to reuse an existing dataset zarr file if it exists.
         """
-        self._config_path = Path(config_path)
+        config_filename = "data_config.yaml"
+        self._root_path = Path(root_path)
+        config_path = self._root_path / config_filename
         self._config = mdp.Config.from_yaml_file(config_path)
         fp_ds = self._config_path.parent / self._config_path.name.replace(
             ".yaml", ".zarr"
@@ -48,7 +50,7 @@ class MLLAMDatastore(BaseCartesianDatastore):
 
     @property
     def root_path(self) -> Path:
-        return Path(self._config_path.parent)
+        return self._root_path
 
     @property
     def step_length(self) -> int:

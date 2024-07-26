@@ -228,6 +228,8 @@ def create_graph(
     """
     os.makedirs(graph_dir_path, exist_ok=True)
 
+    print(f"Writing graph components to {graph_dir_path}")
+
     grid_xy = torch.tensor(xy)
     pos_max = torch.max(torch.abs(grid_xy))
 
@@ -562,7 +564,7 @@ def cli(input_args=None):
         help="kind of data store to use (default: multizarr)",
     )
     parser.add_argument(
-        "datastore-path",
+        "datastore_path",
         type=str,
         help="path to the data store",
     )
@@ -594,11 +596,11 @@ def cli(input_args=None):
     args = parser.parse_args(input_args)
 
     DatastoreClass = DATASTORES[args.datastore]
-    datastore = DatastoreClass(args.datastore_path)
+    datastore = DatastoreClass(root_path=args.datastore_path)
 
     create_graph_from_datastore(
         datastore=datastore,
-        output_root_path=os.path.join(datastore.root_path, "graphs", args.name),
+        output_root_path=os.path.join(datastore.root_path, "graph", args.name),
         n_max_levels=args.levels,
         hierarchical=args.hierarchical,
         create_plot=args.plot,

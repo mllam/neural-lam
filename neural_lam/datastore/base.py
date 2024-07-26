@@ -266,7 +266,8 @@ class BaseCartesianDatastore(BaseDatastore):
             The extent of the x, y coordinates.
         """
         xy = self.get_xy(category, stacked=False)
-        return [xy[0].min(), xy[0].max(), xy[1].min(), xy[1].max()]
+        extent = [xy[0].min(), xy[0].max(), xy[1].min(), xy[1].max()]
+        return [float(v) for v in extent]
 
     def unstack_grid_coords(
         self, da_or_ds: Union[xr.DataArray, xr.Dataset]

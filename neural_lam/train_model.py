@@ -7,7 +7,6 @@ from argparse import ArgumentParser
 # Third-party
 import pytorch_lightning as pl
 import torch
-import wandb
 from lightning_fabric.utilities import seed
 
 # Local
@@ -27,13 +26,13 @@ MODELS = {
 }
 
 
-def _init_datastore(datastore_kind, data_config):
+def _init_datastore(datastore_kind, path):
     if datastore_kind == "multizarr":
-        datastore = MultiZarrDatastore(data_config)
+        datastore = MultiZarrDatastore(root_path=path)
     elif datastore_kind == "npyfiles":
-        datastore = NpyFilesDatastore(data_config)
+        datastore = NpyFilesDatastore(root_path=path)
     elif datastore_kind == "mllam":
-        datastore = MLLAMDatastore(data_config)
+        datastore = MLLAMDatastore(root_path=path)
     else:
         raise ValueError(f"Unknown datastore kind: {datastore_kind}")
     return datastore
@@ -52,10 +51,10 @@ def main(input_args=None):
         help="Kind of datastore to use (default: multizarr)",
     )
     parser.add_argument(
-        "--datastore-config",
+        "--datastore-path",
         type=str,
-        default="tests/datastore_configs/multizarr/data_config.yaml",
-        help="Path to data config file",
+        default="tests/datastore_configs/multizarr",
+        help="The root path for the datastore",
     )
     parser.add_argument(
         "--model",
@@ -248,7 +247,9 @@ def main(input_args=None):
     # Set seed
     seed.seed_everything(args.seed)
     # Create datastore
-    datastore = _init_datastore(args.datastore_kind, args.datastore_config)
+    datastore = _init_datastore(
+        datastore_kind=args.datastore_kind, path=args.datastore_path
+    )
     # Create datamodule
     data_module = WeatherDataModule(
         datastore=datastore,
@@ -303,6 +304,7 @@ def main(input_args=None):
         callbacks=[checkpoint_callback],
         check_val_every_n_epoch=args.val_interval,
         precision=args.precision,
+        devices=1,
     )
 
     # Only init once, on rank 0 only
@@ -310,7 +312,8 @@ def main(input_args=None):
         utils.init_wandb_metrics(
             logger, val_steps=args.val_steps_to_log
         )  # Do after wandb.init
-        wandb.save(args.datastore_config)
+        # TODO: should we save the datastore config here?
+        # wandb.save()
     if args.eval:
         trainer.test(model=model, datamodule=data_module, ckpt_path=args.load)
     else:

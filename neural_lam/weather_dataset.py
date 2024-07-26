@@ -71,7 +71,7 @@ class WeatherDataset(torch.utils.data.Dataset):
                     UserWarning,
                 )
             # XXX: we should maybe check that the 2+ar_steps actually fits
-            # in the elapsed_forecast_time dimension, should that be checked here?
+            # in the elapsed_forecast_duration dimension, should that be checked here?
             return self.da_state.analysis_time.size
         else:
             # sample_len = 2 + ar_steps  <-- 2 initial states + ar_steps target states
@@ -93,7 +93,7 @@ class WeatherDataset(torch.utils.data.Dataset):
         da : xr.DataArray
             The dataarray to sample from. This is expected to have a `time`
             dimension if the datastore is providing analysis only data, and a
-            `analysis_time` and `elapsed_forecast_time` dimensions if the
+            `analysis_time` and `elapsed_forecast_duration` dimensions if the
             datastore is providing forecast data.
         idx : int
             The index of the time step to start the sample from.
@@ -103,19 +103,19 @@ class WeatherDataset(torch.utils.data.Dataset):
         # selecting the time slice
         if self.datastore.is_forecast:
             # this implies that the data will have both `analysis_time` and
-            # `elapsed_forecast_time` dimensions for forecasts we for now
+            # `elapsed_forecast_duration` dimensions for forecasts we for now
             # simply select a analysis time and then the next ar_steps forecast
             # times
             da = da.isel(
                 analysis_time=idx,
-                elapsed_forecast_time=slice(
+                elapsed_forecast_duration=slice(
                     n_timesteps_offset, n_steps + n_timesteps_offset
                 ),
             )
             # create a new time dimension so that the produced sample has a
             # `time` dimension, similarly to the analysis only data
-            da["time"] = da.analysis_time + da.elapsed_forecast_time
-            da = da.swap_dims({"elapsed_forecast_time": "time"})
+            da["time"] = da.analysis_time + da.elapsed_forecast_duration
+            da = da.swap_dims({"elapsed_forecast_duration": "time"})
         else:
             # only `time` dimension for analysis only data
             da = da.isel(

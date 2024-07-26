@@ -1,9 +1,11 @@
 # Standard library
+import functools
 import re
 from pathlib import Path
 from typing import List
 
 # Third-party
+import cartopy.crs as ccrs
 import dask
 import dask.array
 import dask.delayed
@@ -15,13 +17,20 @@ from xarray.core.dataarray import DataArray
 
 # Local
 from ..base import BaseCartesianDatastore, CartesianGridShape
-from .config import NpyConfig
+from .config import NpyDatastoreConfig
 
 STATE_FILENAME_FORMAT = "nwp_{analysis_time:%Y%m%d%H}_mbr{member_id:03d}.npy"
 TOA_SW_DOWN_FLUX_FILENAME_FORMAT = (
     "nwp_toa_downwelling_shortwave_flux_{analysis_time:%Y%m%d%H}.npy"
 )
 COLUMN_WATER_FILENAME_FORMAT = "wtr_{analysis_time:%Y%m%d%H}.npy"
+
+
+def _load_np(fp, add_feature_dim):
+    arr = np.load(fp)
+    if add_feature_dim:
+        arr = arr[..., np.newaxis]
+    return arr
 
 
 class NpyFilesDatastore(BaseCartesianDatastore):
@@ -133,7 +142,9 @@ class NpyFilesDatastore(BaseCartesianDatastore):
         self._num_ensemble_members = 2
 
         self._root_path = Path(root_path)
-        self.config = NpyConfig.from_file(self.root_path / "data_config.yaml")
+        self.config = NpyDatastoreConfig.from_yaml_file(
+            self.root_path / "data_config.yaml"
+        )
 
     @property
     def root_path(self):
@@ -157,9 +168,9 @@ class NpyFilesDatastore(BaseCartesianDatastore):
         xr.DataArray
             The data array for the given category and split, with dimensions
             per category:
-            state:     `[elapsed_forecast_time, analysis_time, grid_index, feature,
+            state:     `[elapsed_forecast_duration, analysis_time, grid_index, feature,
                          ensemble_member]`
-            forcing:   `[elapsed_forecast_time, analysis_time, grid_index, feature]`
+            forcing:   `[elapsed_forecast_duration, analysis_time, grid_index, feature]`
             static:    `[grid_index, feature]`
         """
         if category == "state":
@@ -188,14 +199,14 @@ class NpyFilesDatastore(BaseCartesianDatastore):
 
             # add datetime forcing as a feature
             # to do this we create a forecast time variable which has the
-            # dimensions of (analysis_time, elapsed_forecast_time) with values
+            # dimensions of (analysis_time, elapsed_forecast_duration) with values
             # that are the actual forecast time of each time step. By calling
-            # .chunk({"elapsed_forecast_time": 1}) this time variable is turned
+            # .chunk({"elapsed_forecast_duration": 1}) this time variable is turned
             # into a dask array and so execution of the calculation is delayed
             # until the feature values are actually used.
             da_forecast_time = (
-                da.analysis_time + da.elapsed_forecast_time
-            ).chunk({"elapsed_forecast_time": 1})
+                da.analysis_time + da.elapsed_forecast_duration
+            ).chunk({"elapsed_forecast_duration": 1})
             da_datetime_forcing_features = self._calc_datetime_forcing_features(
                 da_time=da_forecast_time
             )
@@ -262,7 +273,7 @@ class NpyFilesDatastore(BaseCartesianDatastore):
         -------
         xr.DataArray
             The data array for the given category and split, with dimensions
-            `[elapsed_forecast_time, analysis_time, grid_index, feature]` for
+            `[elapsed_forecast_duration, analysis_time, grid_index, feature]` for
             all categories of data
         """
         assert split in ("train", "val", "test"), "Unknown dataset split"
@@ -284,12 +295,12 @@ class NpyFilesDatastore(BaseCartesianDatastore):
         features_vary_with_analysis_time = True
         if features == self.get_vars_names(category="state"):
             filename_format = STATE_FILENAME_FORMAT
-            file_dims = ["elapsed_forecast_time", "y", "x", "feature"]
+            file_dims = ["elapsed_forecast_duration", "y", "x", "feature"]
             # only select one member for now
             file_params["member_id"] = member
         elif features == ["toa_downwelling_shortwave_flux"]:
             filename_format = TOA_SW_DOWN_FLUX_FILENAME_FORMAT
-            file_dims = ["elapsed_forecast_time", "y", "x", "feature"]
+            file_dims = ["elapsed_forecast_duration", "y", "x", "feature"]
             add_feature_dim = True
         elif features == ["column_water"]:
             filename_format = COLUMN_WATER_FILENAME_FORMAT
@@ -329,7 +340,7 @@ class NpyFilesDatastore(BaseCartesianDatastore):
         coords = {}
         arr_shape = []
         for d in dims:
-            if d == "elapsed_forecast_time":
+            if d == "elapsed_forecast_duration":
                 coord_values = (
                     self.step_length
                     * np.arange(self._num_timesteps)
@@ -346,15 +357,11 @@ class NpyFilesDatastore(BaseCartesianDatastore):
             else:
                 raise NotImplementedError(f"Dimension {d} not supported")
 
-            print(f"{d}: {len(coord_values)}")
-
             coords[d] = coord_values
             if d != "analysis_time":
                 # analysis_time varies across the different files, but not
                 # within a single file
                 arr_shape.append(len(coord_values))
-
-        print(f"{features}: {dims=} {file_dims=} {arr_shape=}")
 
         if features_vary_with_analysis_time:
             filepaths = [
@@ -369,16 +376,11 @@ class NpyFilesDatastore(BaseCartesianDatastore):
 
         # use dask.delayed to load the numpy files, so that loading isn't
         # done until the data is actually needed
-        @dask.delayed
-        def _load_np(fp):
-            arr = np.load(fp)
-            if add_feature_dim:
-                arr = arr[..., np.newaxis]
-            return arr
-
         arrays = [
             dask.array.from_delayed(
-                _load_np(fp), shape=arr_shape, dtype=np.float32
+                dask.delayed(_load_np)(fp=fp, add_feature_dim=add_feature_dim),
+                shape=arr_shape,
+                dtype=np.float32,
             )
             for fp in filepaths
         ]
@@ -457,7 +459,7 @@ class NpyFilesDatastore(BaseCartesianDatastore):
 
     def get_vars_units(self, category: str) -> torch.List[str]:
         if category == "state":
-            return self.config["dataset"]["var_units"]
+            return self.config.dataset.var_units
         elif category == "forcing":
             return [
                 "W/m^2",
@@ -474,7 +476,7 @@ class NpyFilesDatastore(BaseCartesianDatastore):
 
     def get_vars_names(self, category: str) -> torch.List[str]:
         if category == "state":
-            return self.config["dataset"]["var_names"]
+            return self.config.dataset.var_names
         elif category == "forcing":
             # XXX: this really shouldn't be hard-coded here, this should be in
             # the config
@@ -557,7 +559,7 @@ class NpyFilesDatastore(BaseCartesianDatastore):
         da_mask = xr.DataArray(
             values, dims=["y", "x"], coords=dict(x=x, y=y), name="boundary_mask"
         )
-        da_mask_stacked_xy = self.stack_grid_coords(da_mask)
+        da_mask_stacked_xy = self.stack_grid_coords(da_mask).astype(int)
         return da_mask_stacked_xy
 
     def get_normalization_dataarray(self, category: str) -> xr.Dataset:
@@ -623,3 +625,11 @@ class NpyFilesDatastore(BaseCartesianDatastore):
         )
 
         return ds_norm
+
+    @functools.cached_property
+    def coords_projection(self):
+        """Return the projection."""
+        proj_class_name = self.config.projection.class_name
+        ProjectionClass = getattr(ccrs, proj_class_name)
+        proj_params = self.config.projection.kwargs
+        return ProjectionClass(**proj_params)

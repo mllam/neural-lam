@@ -150,6 +150,10 @@ def test_get_dataarray(datastore_name):
                         "elapsed_forecast_duration",
                     ]
 
+            if datastore.is_ensemble and category == "state":
+                # assume that only state variables change with ensemble members
+                expected_dims.append("ensemble_member")
+
             # XXX: for now we only have a single attribute to get the shape of
             # the grid which uses the shape from the "state" category, maybe
             # this should change?

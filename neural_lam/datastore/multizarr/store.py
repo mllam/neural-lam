@@ -1,6 +1,7 @@
 # Standard library
 import functools
 import os
+from pathlib import Path
 
 # Third-party
 import cartopy.crs as ccrs
@@ -16,10 +17,15 @@ from ..base import BaseCartesianDatastore, CartesianGridShape
 class MultiZarrDatastore(BaseCartesianDatastore):
     DIMS_TO_KEEP = {"time", "grid_index", "variable"}
 
-    def __init__(self, config_path):
-        self.config_path = config_path
+    def __init__(self, root_path):
+        self._root_path = Path(root_path)
+        config_path = self._root_path / "data_config.yaml"
         with open(config_path, encoding="utf-8", mode="r") as file:
             self._config = yaml.safe_load(file)
+
+    @property
+    def root_path(self):
+        return self._root_path
 
     def _normalize_path(self, path):
         # try to parse path to see if it defines a protocol, e.g. s3://

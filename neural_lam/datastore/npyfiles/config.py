@@ -1,10 +1,61 @@
 # Standard library
-import functools
-from pathlib import Path
+from dataclasses import dataclass
+from typing import Any, Dict, List
 
 # Third-party
-import cartopy.crs as ccrs
-import yaml
+import dataclass_wizard
+
+
+@dataclass
+class Projection:
+    """Represents the projection information for a dataset, including the type
+    of projection and its parameters. Capable of creating a cartopy.crs
+    projection object.
+
+    Attributes:
+        class_name: The class name of the projection, this should be a valid
+        cartopy.crs class.
+        kwargs: A dictionary of keyword arguments specific to the projection type.
+    """
+
+    class_name: str  # = field(metadata={'data_key': 'class'})
+    kwargs: Dict[str, Any]
+
+
+@dataclass
+class Dataset:
+    """Contains information about the dataset, including variable names, units,
+    and descriptions.
+
+    Attributes:
+        name: The name of the dataset.
+        var_names: A list of variable names in the dataset.
+        var_units: A list of units for each variable.
+        var_longnames: A list of long, descriptive names for each variable.
+        num_forcing_features: The number of forcing features in the dataset.
+    """
+
+    name: str
+    var_names: List[str]
+    var_units: List[str]
+    var_longnames: List[str]
+    num_forcing_features: int
+
+
+@dataclass
+class NpyDatastoreConfig(dataclass_wizard.YAMLWizard):
+    """Configuration for loading and processing a dataset, including dataset
+    details, grid shape, and projection information.
+
+    Attributes:
+        dataset: An instance of Dataset containing details about the dataset.
+        grid_shape_state: A list representing the shape of the grid state.
+        projection: An instance of Projection containing projection details.
+    """
+
+    dataset: Dataset
+    grid_shape_state: List[int]
+    projection: Projection
 
 
 class NpyConfig:
@@ -14,48 +65,6 @@ class NpyConfig:
     its values as attributes.
     """
 
-    def __init__(self, values):
-        self.values = values
-
-    @classmethod
-    def from_file(cls, filepath):
-        """Load a configuration file."""
-        if str(filepath).endswith(".yaml"):
-            with open(filepath, encoding="utf-8", mode="r") as file:
-                return cls(values=yaml.safe_load(file))
-        else:
-            raise NotImplementedError(Path(filepath).suffix)
-
-    def __getattr__(self, name):
-        child, *children = name.split(".")
-
-        value = self.values[child]
-        if len(children) > 0:
-            return self.__class__(values=value).get(".".join(children))
-        else:
-            if isinstance(value, dict):
-                return self.__class__(values=value)
-            else:
-                return value
-
-    def __getitem__(self, key):
-        value = self.values[key]
-        if isinstance(value, dict):
-            return self.__class__(values=value)
-        return value
-
-    def __contains__(self, key):
-        return key in self.values
-
     def num_data_vars(self):
         """Return the number of data variables for a given key."""
         return len(self.dataset.var_names)
-
-    @functools.cached_property
-    def coords_projection(self):
-        """Return the projection."""
-        proj_config = self.values["projection"]
-        proj_class_name = proj_config["class"]
-        proj_class = getattr(ccrs, proj_class_name)
-        proj_params = proj_config.get("kwargs", {})
-        return proj_class(**proj_params)
