@@ -18,7 +18,7 @@ class Projection:
         kwargs: A dictionary of keyword arguments specific to the projection type.
     """
 
-    class_name: str  # = field(metadata={'data_key': 'class'})
+    class_name: str
     kwargs: Dict[str, Any]
 
 
@@ -56,15 +56,3 @@ class NpyDatastoreConfig(dataclass_wizard.YAMLWizard):
     dataset: Dataset
     grid_shape_state: List[int]
     projection: Projection
-
-
-class NpyConfig:
-    """Class for loading configuration files.
-
-    This class loads a configuration file and provides a way to access
-    its values as attributes.
-    """
-
-    def num_data_vars(self):
-        """Return the number of data variables for a given key."""
-        return len(self.dataset.var_names)

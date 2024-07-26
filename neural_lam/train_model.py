@@ -44,16 +44,14 @@ def main(input_args=None):
         description="Train or evaluate NeurWP models for LAM"
     )
     parser.add_argument(
-        "--datastore-kind",
+        "datastore-kind",
         type=str,
         choices=["multizarr", "npyfiles", "mllam"],
-        default="multizarr",
-        help="Kind of datastore to use (default: multizarr)",
+        help="Kind of datastore to use",
     )
     parser.add_argument(
-        "--datastore-path",
+        "datastore-path",
         type=str,
-        default="tests/datastore_configs/multizarr",
         help="The root path for the datastore",
     )
     parser.add_argument(
