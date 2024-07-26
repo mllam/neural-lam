@@ -37,9 +37,7 @@ class MLLAMDatastore(BaseCartesianDatastore):
         self._root_path = Path(root_path)
         config_path = self._root_path / config_filename
         self._config = mdp.Config.from_yaml_file(config_path)
-        fp_ds = self._config_path.parent / self._config_path.name.replace(
-            ".yaml", ".zarr"
-        )
+        fp_ds = self._root_path / config_path.name.replace(".yaml", ".zarr")
         if reuse_existing and fp_ds.exists():
             self._ds = xr.open_zarr(fp_ds, consolidated=True)
         else:

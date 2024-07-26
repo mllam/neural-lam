@@ -44,13 +44,13 @@ def main(input_args=None):
         description="Train or evaluate NeurWP models for LAM"
     )
     parser.add_argument(
-        "datastore-kind",
+        "datastore_kind",
         type=str,
         choices=["multizarr", "npyfiles", "mllam"],
         help="Kind of datastore to use",
     )
     parser.add_argument(
-        "datastore-path",
+        "datastore_path",
         type=str,
         help="The root path for the datastore",
     )
@@ -302,7 +302,6 @@ def main(input_args=None):
         callbacks=[checkpoint_callback],
         check_val_every_n_epoch=args.val_interval,
         precision=args.precision,
-        devices=1,
     )
 
     # Only init once, on rank 0 only

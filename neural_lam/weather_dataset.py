@@ -39,6 +39,16 @@ class WeatherDataset(torch.utils.data.Dataset):
         )
         self.forcing_window_size = forcing_window_size
 
+        # check that with the provided data-arrays and ar_steps that we have a
+        # non-zero amount of samples
+        if self.__len__() <= 0:
+            raise ValueError(
+                f"The provided datastore only provides {len(self.da_state.time)} "
+                f"time steps for `{split}` split, which is less than the "
+                f"required 2+ar_steps (2+{self.ar_steps}={2+self.ar_steps}) "
+                "for creating a sample with initial and target states."
+            )
+
         # Set up for standardization
         # TODO: This will become part of ar_model.py soon!
         self.standardize = standardize
