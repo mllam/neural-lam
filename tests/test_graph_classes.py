@@ -135,3 +135,25 @@ def test_shape_match_flat_graph(subgraph_name):
     assert subgraph_name in str(
         assertinfo
     ), "AssertionError did not contain {subgraph_name}"
+
+
+def test_create_graph_str_rep():
+    """
+    Test that string representation of graph is correct
+    """
+    graph = FlatWeatherGraph(**create_dummy_graph_tensors())
+    str_rep = str(graph)
+    # Simple test that all relevant numbers are present
+    assert (
+        str(NUM_GRID) in str_rep
+    ), "Correct number of grid nodes not in string representation of graph"
+    assert (
+        str(NUM_MESH) in str_rep
+    ), "Correct number of mesh nodes not in string representation of graph"
+
+    assert (
+        str(NUM_MESH * NUM_GRID) in str_rep
+    ), "Correct number of g2m/m2g edges not in string representation of graph"
+    assert (
+        str(NUM_MESH * (NUM_MESH - 1)) in str_rep
+    ), "Correct number of m2m edges not in string representation of graph"

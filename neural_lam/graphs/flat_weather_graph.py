@@ -42,6 +42,13 @@ class FlatWeatherGraph(BaseWeatherGraph):
         # No longer assumes all mesh nodes connected to grid
         return self.mesh_node_features.shape[0]
 
+    @functools.cached_property
+    def num_m2m_edges(self):
+        """
+        Get the number of edges in the mesh graph
+        """
+        return self.m2m_edge_index.shape[1]
+
     @staticmethod
     def from_graph_dir(path):
         """
@@ -78,3 +85,11 @@ class FlatWeatherGraph(BaseWeatherGraph):
             m2m_edge_features,
             mesh_node_features,
         )
+
+    def __str__(self):
+        """
+        Returns a string representation of the graph, including the total
+        number of nodes and the breakdown of nodes and edges in subgraphs.
+        """
+        return super().__str__() + f"\nm2m with {self.num_m2m_edges} edges"
+

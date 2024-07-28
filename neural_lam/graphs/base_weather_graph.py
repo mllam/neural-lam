@@ -117,8 +117,6 @@ class BaseWeatherGraph(nn.Module):
             f"(edge_index.shape) and features {edge_features.shape}"
         )
 
-        # TODO Checks that node indices align between edge_index and features
-
     @functools.cached_property
     def num_grid_nodes(self):
         """
@@ -135,6 +133,20 @@ class BaseWeatherGraph(nn.Module):
         """
         # Assumes all mesh nodes connected to grid
         return self.g2m_edge_index[1].max().item() + 1
+
+    @functools.cached_property
+    def num_m2g_edges(self):
+        """
+        Get the number of edges in the grid-to-mesh graph
+        """
+        return self.g2m_edge_index.shape[1]
+
+    @functools.cached_property
+    def num_g2m_edges(self):
+        """
+        Get the number of edges in the mesh-to-grid graph
+        """
+        return self.m2g_edge_index.shape[1]
 
     @staticmethod
     def from_graph_dir(path):
@@ -197,6 +209,16 @@ class BaseWeatherGraph(nn.Module):
         """
         return torch.load(os.path.join(graph_dir_path, file_name))
 
-    def __str__():
-        # TODO Get from graph model init functions
-        pass
+    def __str__(self):
+        """
+        Returns a string representation of the graph, including the total
+        number of nodes and the breakdown of nodes and edges in subgraphs.
+        """
+        total_nodes = self.num_grid_nodes + self.num_mesh_nodes
+        return (
+            f"Graph with {total_nodes} nodes ({self.num_grid_nodes} grid, "
+            f"{self.num_mesh_nodes} mesh)\n"
+            f"Subgraphs:\n"
+            f"g2m with {self.num_g2m_edges} edges\n"
+            f"m2g with {self.num_m2g_edges} edges"
+        )
