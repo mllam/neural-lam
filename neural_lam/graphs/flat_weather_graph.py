@@ -31,7 +31,22 @@ class FlatWeatherGraph(BaseWeatherGraph):
         assert not pyg.utils.contains_isolated_nodes(
             self.m2m_edge_index
         ), "m2m_edge_index does not specify a connected graph"
-        # TODO Checks that node indices align with number of mesh nodes
+
+        # Check that number of mesh nodes is consistent in node and edge sets
+        g2m_num = self.g2m_edge_index[1].max().item() + 1
+        m2g_num = self.m2g_edge_index[0].max().item() + 1
+        m2m_num_from = self.m2m_edge_index[0].max().item() + 1
+        m2m_num_to = self.m2m_edge_index[1].max().item() + 1
+        for edge_num_mesh, edge_description in (
+            (g2m_num, "g2m edges"),
+            (m2g_num, "m2g edges"),
+            (m2m_num_from, "m2m edges (senders)"),
+            (m2m_num_to, "m2m edges (receivers)"),
+        ):
+            assert edge_num_mesh == self.num_mesh_nodes, (
+                "Different number of mesh nodes represented by: "
+                f"{edge_description} and mesh node features"
+            )
 
     @functools.cached_property
     def num_mesh_nodes(self):
@@ -92,4 +107,3 @@ class FlatWeatherGraph(BaseWeatherGraph):
         number of nodes and the breakdown of nodes and edges in subgraphs.
         """
         return super().__str__() + f"\nm2m with {self.num_m2m_edges} edges"
-
