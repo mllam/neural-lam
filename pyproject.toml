@@ -24,9 +24,9 @@ dependencies = [
     "plotly>=5.15.0",
     "torch>=2.3.0",
     "torch-geometric==2.3.1",
-    "mllam-data-prep @ git+https://github.com/mllam/mllam-data-prep",
     "parse>=1.20.2",
     "dataclass-wizard>=0.22.3",
+    "mllam-data-prep>=0.2.0",
 ]
 requires-python = ">=3.9"
 
@@ -38,6 +38,8 @@ dev = [
     "ipdb>=0.13.13",
     "gpustat>=1.1.1",
     "zarrdump>=0.4.1",
+    "dask[distributed]>=2024.7.1",
+    "bokeh!=3.0.*,>=2.4.2",
 ]
 
 [tool.black]
