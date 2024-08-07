@@ -633,16 +633,17 @@ class Config:
         Returns:
             xr.DataArray: The xarray DataArray object with processed dataset."""
         dataset = self.open_zarrs(category)
-        dataset = self.extract_vars(category, dataset)
-        if category != "static":
-            dataset = self.filter_dataset_by_time(dataset, split)
-        dataset = self.stack_grid(dataset)
-        dataset = self.rename_dataset_dims_and_vars(category, dataset)
-        dataset = self.filter_dimensions(dataset)
-        dataset = self.convert_dataset_to_dataarray(dataset)
-        if "window" in self.values[category] and apply_windowing:
-            dataset = self.apply_window(category, dataset)
-        if category == "static" and "time" in dataset.dims:
-            dataset = dataset.isel(time=0, drop=True)
+        if dataset is not None:
+            dataset = self.extract_vars(category, dataset)
+            if category != "static":
+                dataset = self.filter_dataset_by_time(dataset, split)
+            dataset = self.stack_grid(dataset)
+            dataset = self.rename_dataset_dims_and_vars(category, dataset)
+            dataset = self.filter_dimensions(dataset)
+            dataset = self.convert_dataset_to_dataarray(dataset)
+            if "window" in self.values[category] and apply_windowing:
+                dataset = self.apply_window(category, dataset)
+            if category == "static" and "time" in dataset.dims:
+                dataset = dataset.isel(time=0, drop=True)
 
         return dataset

@@ -41,45 +41,22 @@ state:
     - 100
 forcing:
   zarrs:
-    - path: "data/danra/single_levels.zarr"
+    - path:
       dims:
-        time: time
-        level: null
-        x: x
-        y: y
-        grid: null
+        time:
+        level:
+        x:
+        y:
+        grid:
       lat_lon_names:
-        lon: lon
-        lat: lat
-    - path: "data/forcings.zarr"
-      dims:
-        time: time
-        level: null
-        x: x
-        y: y
-        grid: null
+        lon:
+        lat:
   surface_vars:
-    - cape_column # just as a technical test
-    - icei0m
-    - vis0m
-    - xhail0m
-    - hour_cos
-    - hour_sin
-    - year_cos
-    - year_sin
   surface_units:
-    - J/kg
-    - kg/m^2 # just as a technical test :)
-    - m
-    - m
-    - ""
-    - ""
-    - ""
-    - ""
-  atmosphere_vars: null
-  atmosphere_units: null
-  levels: null
-  window: 3 # Number of time steps to use for forcing (odd)
+  atmosphere_vars:
+  atmosphere_units:
+  levels:
+  window: 0 # Number of time steps to use for forcing (odd)
 static:
   zarrs:
     - path: "data/danra/single_levels.zarr"

@@ -82,7 +82,10 @@ class WeatherDataset(torch.utils.data.Dataset):
                 dtype=torch.float32,
             )
             if self.forcing is not None
-            else torch.tensor([], dtype=torch.float32)
+            else torch.empty(
+                (self.ar_steps - 2, sample.size()[1], 0),
+                dtype=torch.float32,
+            )
         )
 
         init_states = sample[:2]
