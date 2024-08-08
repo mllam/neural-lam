@@ -43,7 +43,7 @@ class PaddedWeatherDataset(torch.utils.data.Dataset):
     def get_original_indices(self):
         return self.original_indices
 
-    def get_original_window_indices(self, step_length):
+    def get_window_indices(self, step_length):
         return [
             i // step_length
             for i in range(len(self.original_indices) * step_length)
@@ -120,10 +120,9 @@ def save_stats(
     flux_mean = torch.mean(flux_means)  # (,)
     flux_second_moment = torch.mean(flux_squares)  # (,)
     flux_std = torch.sqrt(flux_second_moment - flux_mean**2)  # (,)
-    torch.save(
-        torch.stack((flux_mean, flux_std)).cpu(),
-        os.path.join(static_dir_path, "flux_stats.pt"),
-    )
+    print("Saving mean, std.-dev, flux_mean, flux_std...")
+    torch.save(flux_mean, os.path.join(static_dir_path, "flux_mean.pt"))
+    torch.save(flux_std, os.path.join(static_dir_path, "flux_std.pt"))
 
 
 def main():
@@ -208,7 +207,6 @@ def main():
         split="train",
         subsample_step=1,
         pred_length=63,
-        standardize=False,
     )
     if distributed:
         ds = PaddedWeatherDataset(
@@ -298,44 +296,29 @@ def main():
     if distributed:
         dist.barrier()
 
-    if rank == 0:
-        print("Computing mean and std.-dev. for one-step differences...")
-    ds_standard = WeatherDataset(
-        config_loader.dataset.name,
-        split="train",
-        subsample_step=1,
-        pred_length=63,
-        standardize=True,
-    )  # Re-load with standardization
-    if distributed:
-        ds_standard = PaddedWeatherDataset(
-            ds_standard,
-            world_size,
-            args.batch_size,
-        )
-        sampler_standard = DistributedSampler(
-            ds_standard, num_replicas=world_size, rank=rank, shuffle=False
-        )
-    else:
-        sampler_standard = None
-    loader_standard = torch.utils.data.DataLoader(
-        ds_standard,
-        args.batch_size,
-        shuffle=False,
-        num_workers=args.n_workers,
-        sampler=sampler_standard,
-    )
+    print("Computing mean and std.-dev. for one-step differences...")
+
     used_subsample_len = (65 // args.step_length) * args.step_length
 
-    diff_means, diff_squares = [], []
-
-    for init_batch, target_batch, _ in tqdm(loader_standard, disable=rank != 0):
+    mean = torch.load(os.path.join(static_dir_path, "parameter_mean.pt"))
+    std = torch.load(os.path.join(static_dir_path, "parameter_std.pt"))
+    if distributed:
+        mean, std = mean.to(device), std.to(device)
+    diff_means = []
+    diff_squares = []
+    for init_batch, target_batch, _ in tqdm(loader):
         if distributed:
-            init_batch, target_batch = init_batch.to(device), target_batch.to(
-                device
+            init_batch, target_batch = (
+                init_batch.to(device),
+                target_batch.to(device),
             )
-        # (N_batch, N_t', N_grid, d_features)
-        batch = torch.cat((init_batch, target_batch), dim=1)
+        # normalize the batch
+        init_batch = (init_batch - mean) / std
+        target_batch = (target_batch - mean) / std
+
+        batch = torch.cat(
+            (init_batch, target_batch), dim=1
+        )  # (N_batch, N_t', N_grid, d_features)
         # Note: batch contains only 1h-steps
         stepped_batch = torch.cat(
             [
@@ -373,9 +356,7 @@ def main():
             ).view(
                 -1, *diff_squares[0].shape
             )
-            original_indices = ds_standard.get_original_window_indices(
-                args.step_length
-            )
+            original_indices = ds.get_window_indices(args.step_length)
             diff_means, diff_squares = [
                 diff_means_gathered[i] for i in original_indices
             ], [diff_squares_gathered[i] for i in original_indices]

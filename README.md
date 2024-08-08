@@ -221,7 +221,8 @@ data
 │       ├── parameter_std.pt                - Std.-dev. of state parameters (create_parameter_weights.py)
 │       ├── diff_mean.pt                    - Means of one-step differences (create_parameter_weights.py)
 │       ├── diff_std.pt                     - Std.-dev. of one-step differences (create_parameter_weights.py)
-│       ├── flux_stats.pt                   - Mean and std.-dev. of solar flux forcing (create_parameter_weights.py)
+│       ├── flux_mean.pt                    - Mean of solar flux forcing (create_parameter_weights.py)
+│       ├── flux_std.pt                     - Std.-dev. of solar flux forcing (create_parameter_weights.py)
 │       └── parameter_weights.npy           - Loss weights for different state parameters (create_parameter_weights.py)
 ├── dataset2
 ├── ...
