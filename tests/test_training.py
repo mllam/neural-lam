@@ -29,8 +29,8 @@ def test_training(datastore_name):
     trainer = pl.Trainer(
         max_epochs=3,
         deterministic=True,
-        strategy="ddp",
         accelerator=device_name,
+        devices=1,
         log_every_n_steps=1,
     )
 

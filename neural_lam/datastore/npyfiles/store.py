@@ -1,3 +1,5 @@
+"""Numpy-files based datastore to support the MEPS example dataset introduced
+in neural-lam v0.1.0."""
 # Standard library
 import functools
 import re
@@ -134,20 +136,39 @@ class NpyFilesDatastore(BaseCartesianDatastore):
 
     def __init__(
         self,
-        root_path,
+        config_path,
     ):
+        """Create a new NpyFilesDatastore using the configuration file at the
+        given path. The config file should be a YAML file and will be loaded
+        into an instance of the `NpyDatastoreConfig` dataclass.
+
+        Internally, the datastore uses dask.delayed to load the data from the
+        numpy files, so that the data isn't actually loaded until it's needed.
+
+        Parameters
+        ----------
+        config_path : str
+            The path to the configuration file for the datastore.
+        """
         # XXX: This should really be in the config file, not hard-coded in this class
         self._num_timesteps = 65
         self._step_length = 3  # 3 hours
         self._num_ensemble_members = 2
 
-        self._root_path = Path(root_path)
-        self.config = NpyDatastoreConfig.from_yaml_file(
-            self.root_path / "data_config.yaml"
-        )
+        self._config_path = Path(config_path)
+        self._root_path = self._config_path.parent
+        self.config = NpyDatastoreConfig.from_yaml_file(self._config_path)
 
     @property
-    def root_path(self):
+    def root_path(self) -> Path:
+        """The root path of the datastore on disk. This is the directory
+        relative to which graphs and other files can be stored.
+
+        Returns
+        -------
+        Path
+            The root path of the datastore
+        """
         return self._root_path
 
     def get_dataarray(self, category: str, split: str) -> DataArray:
@@ -403,7 +424,7 @@ class NpyFilesDatastore(BaseCartesianDatastore):
 
         return da
 
-    def _get_analysis_times(self, split):
+    def _get_analysis_times(self, split) -> List[np.datetime64]:
         """Get the analysis times for the given split by parsing the filenames
         of all the files found for the given split.
 
@@ -529,15 +550,18 @@ class NpyFilesDatastore(BaseCartesianDatastore):
             return arr
 
     @property
-    def step_length(self):
+    def step_length(self) -> int:
+        """The length of each time step in hours.
+
+        Returns
+        -------
+        int
+            The length of each time step in hours.
+        """
         return self._step_length
 
     @property
-    def coords_projection(self):
-        return self.config.coords_projection
-
-    @property
-    def grid_shape_state(self):
+    def grid_shape_state(self) -> CartesianGridShape:
         """The shape of the cartesian grid for the state variables.
 
         Returns
@@ -549,7 +573,15 @@ class NpyFilesDatastore(BaseCartesianDatastore):
         return CartesianGridShape(x=nx, y=ny)
 
     @property
-    def boundary_mask(self):
+    def boundary_mask(self) -> xr.DataArray:
+        """The boundary mask for the dataset. This is a binary mask that is 1
+        where the grid cell is on the boundary of the domain, and 0 otherwise.
+
+        Returns
+        -------
+        xr.DataArray
+            The boundary mask for the dataset, with dimensions `[grid_index]`.
+        """
         xs, ys = self.get_xy(category="state", stacked=False)
         assert np.all(xs[:, 0] == xs[:, -1])
         assert np.all(ys[0, :] == ys[-1, :])
@@ -627,8 +659,14 @@ class NpyFilesDatastore(BaseCartesianDatastore):
         return ds_norm
 
     @functools.cached_property
-    def coords_projection(self):
-        """Return the projection."""
+    def coords_projection(self) -> ccrs.Projection:
+        """The projection of the spatial coordinates.
+
+        Returns
+        -------
+        ccrs.Projection
+            The projection of the spatial coordinates.
+        """
         proj_class_name = self.config.projection.class_name
         ProjectionClass = getattr(ccrs, proj_class_name)
         proj_params = self.config.projection.kwargs

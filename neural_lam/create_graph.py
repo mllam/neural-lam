@@ -564,9 +564,9 @@ def cli(input_args=None):
         help="kind of data store to use (default: multizarr)",
     )
     parser.add_argument(
-        "datastore_path",
+        "datastore_config_path",
         type=str,
-        help="path to the data store",
+        help="path to the data store config",
     )
     parser.add_argument(
         "--name",
@@ -596,7 +596,7 @@ def cli(input_args=None):
     args = parser.parse_args(input_args)
 
     DatastoreClass = DATASTORES[args.datastore]
-    datastore = DatastoreClass(root_path=args.datastore_path)
+    datastore = DatastoreClass(config_path=args.datastore_config_path)
 
     create_graph_from_datastore(
         datastore=datastore,

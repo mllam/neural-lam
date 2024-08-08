@@ -7,19 +7,19 @@ import pooch
 import yaml
 
 # First-party
-from neural_lam.datastore.mllam import MLLAMDatastore
-from neural_lam.datastore.multizarr import MultiZarrDatastore
-from neural_lam.datastore.npyfiles import NpyFilesDatastore
+from neural_lam.datastore import mllam, multizarr, npyfiles
 
 # Disable weights and biases to avoid unnecessary logging
 # and to avoid having to deal with authentication
 os.environ["WANDB_DISABLED"] = "true"
 
 DATASTORES = dict(
-    multizarr=MultiZarrDatastore,
-    mllam=MLLAMDatastore,
-    npyfiles=NpyFilesDatastore,
+    multizarr=multizarr.MultiZarrDatastore,
+    mllam=mllam.MLLAMDatastore,
+    npyfiles=npyfiles.NpyFilesDatastore,
 )
+
+DATASTORE_EXAMPLES_ROOT_PATH = Path("tests/datastore_examples")
 
 # Initializing variables for the s3 client
 S3_BUCKET_NAME = "mllam-testdata"
@@ -33,9 +33,8 @@ TEST_DATA_KNOWN_HASH = (
 
 def download_meps_example_reduced_dataset():
     # Download and unzip test data into data/meps_example_reduced
-    root_path = Path("tests/datastore_configs/npy")
+    root_path = DATASTORE_EXAMPLES_ROOT_PATH / "npy"
     dataset_path = root_path / "meps_example_reduced"
-    will_download = not dataset_path.exists()
 
     pooch.retrieve(
         url=S3_FULL_PATH,
@@ -45,23 +44,60 @@ def download_meps_example_reduced_dataset():
         fname="meps_example_reduced.zip",
     )
 
-    if will_download:
-        # XXX: should update the dataset stored on S3 the change below
-        config_path = dataset_path / "data_config.yaml"
-        # rename the `projection.class` key to `projection.class_name` in the config
-        with open(config_path, "r") as f:
-            config = yaml.safe_load(f)
-        config["projection.class_name"] = config.pop("projection.class")
+    config_path = dataset_path / "data_config.yaml"
+
+    with open(config_path, "r") as f:
+        config = yaml.safe_load(f)
+
+    if "class" in config["projection"]:
+        # XXX: should update the dataset stored on S3 with the change below
+        #
+        # rename the `projection.class` key to `projection.class_name` in the
+        # config this is because the `class` key is reserved for the class
+        # attribute of the object and so we can't use it to define a python
+        # dataclass
+        config["projection"]["class_name"] = config["projection"].pop("class")
+
         with open(config_path, "w") as f:
             yaml.dump(config, f)
 
-    return dataset_path
+    return config_path
+
+
+def bootstrap_multizarr_example():
+    multizarr_path = DATASTORE_EXAMPLES_ROOT_PATH / "multizarr"
+    data_config_path = multizarr_path / "data_config.yaml"
+    # here assume that the data-config is referring the the default path
+    # for the "datetime forcings" dataset
+    datetime_forcing_zarr_path = (
+        data_config_path.parent
+        / multizarr.create_datetime_forcings.DEFAULT_FILENAME
+    )
+    if not datetime_forcing_zarr_path.exists():
+        multizarr.create_datetime_forcings.create_datetime_forcing_zarr(
+            data_config_path=data_config_path
+        )
+
+    normalized_forcing_zarr_path = (
+        data_config_path.parent
+        / multizarr.create_normalization_stats.DEFAULT_FILENAME
+    )
+    if not normalized_forcing_zarr_path.exists():
+        multizarr.create_normalization_stats.create_normalization_stats_zarr(
+            data_config_path=data_config_path
+        )
+
+    return data_config_path
 
 
 DATASTORES_EXAMPLES = dict(
-    multizarr=dict(root_path="tests/datastore_configs/multizarr"),
-    mllam=dict(root_path="tests/datastore_configs/mllam"),
-    npyfiles=dict(root_path=download_meps_example_reduced_dataset()),
+    multizarr=dict(config_path=bootstrap_multizarr_example()),
+    mllam=dict(
+        config_path=DATASTORE_EXAMPLES_ROOT_PATH
+        / "mllam"
+        / "danra.example.yaml"
+    ),
+    npyfiles=dict(config_path=download_meps_example_reduced_dataset()),
 )
 
 

@@ -15,35 +15,71 @@ from ..base import BaseCartesianDatastore, CartesianGridShape
 
 
 class MultiZarrDatastore(BaseCartesianDatastore):
-    DIMS_TO_KEEP = {"time", "grid_index", "variable"}
+    DIMS_TO_KEEP = {"time", "grid_index", "variable_name"}
 
-    def __init__(self, root_path):
-        self._root_path = Path(root_path)
-        config_path = self._root_path / "data_config.yaml"
+    def __init__(self, config_path):
+        """Create a multi-zarr datastore from the given configuration file. The
+        configuration file should be a YAML file, the format of which is should
+        be inferred from the example configuration file in
+        `tests/datastore_examples/multizarr/data_config.yml`.
+
+        Parameters
+        ----------
+        config_path : str
+            The path to the configuration file.
+        """
+        self._config_path = Path(config_path)
+        self._root_path = self._config_path.parent
         with open(config_path, encoding="utf-8", mode="r") as file:
             self._config = yaml.safe_load(file)
 
     @property
     def root_path(self):
+        """Return the root path of the datastore.
+
+        Returns
+        -------
+        str
+            The root path of the datastore.
+        """
         return self._root_path
 
-    def _normalize_path(self, path):
+    def _normalize_path(self, path) -> str:
+        """
+        Normalize the path of source-dataset defined in the configuration file.
+        This assumes that any paths that do not start with a protocol (e.g. `s3://`)
+        or are not absolute paths, are relative to the configuration file.
+
+        Parameters
+        ----------
+        path : str
+            The path to normalize.
+
+        Returns
+        -------
+        str
+            The normalized path.
+        """
         # try to parse path to see if it defines a protocol, e.g. s3://
         if "://" in path or path.startswith("/"):
             pass
         else:
             # assume path is relative to config file
-            path = os.path.join(os.path.dirname(self.config_path), path)
+            path = os.path.join(self._root_path, path)
         return path
 
     def open_zarrs(self, category):
         """Open the zarr dataset for the given category.
 
-        Args:
-            category (str): The category of the dataset (state/forcing/static).
+        Parameters
+        ----------
+        category : str
+            The category of the dataset (state/forcing/static).
 
-            Returns:
-                xr.Dataset: The xarray Dataset object.
+        Returns
+        -------
+        xr.Dataset
+            The xarray Dataset object.
         """
         zarr_configs = self._config[category]["zarrs"]
 
@@ -178,7 +214,7 @@ class MultiZarrDatastore(BaseCartesianDatastore):
             xr.DataArray: The xarray DataArray object.
         """
         if isinstance(dataset, xr.Dataset):
-            dataset = dataset.to_array()
+            dataset = dataset.to_array(dim="variable_name")
         return dataset
 
     def _filter_dimensions(self, dataset, transpose_array=True):
@@ -193,7 +229,7 @@ class MultiZarrDatastore(BaseCartesianDatastore):
             OR xr.DataArray: The xarray DataArray object with filtered dimensions.
         """
         dims_to_keep = self.DIMS_TO_KEEP
-        dataset_dims = set(list(dataset.dims) + ["variable"])
+        dataset_dims = set(list(dataset.dims) + ["variable_name"])
         min_req_dims = dims_to_keep.copy()
         min_req_dims.discard("time")
         if not min_req_dims.issubset(dataset_dims):
@@ -210,7 +246,7 @@ class MultiZarrDatastore(BaseCartesianDatastore):
                 dataset.attrs["category"], dataset=dataset
             )
             dataset = self._stack_grid(dataset)
-            dataset_dims = set(list(dataset.dims) + ["variable"])
+            dataset_dims = set(list(dataset.dims) + ["variable_name"])
             if min_req_dims.issubset(dataset_dims):
                 print(
                     "\033[92mSuccessfully updated dims and "
@@ -223,7 +259,7 @@ class MultiZarrDatastore(BaseCartesianDatastore):
                 )
                 return None
 
-        dataset_dims = set(list(dataset.dims) + ["variable"])
+        dataset_dims = set(list(dataset.dims) + ["variable_name"])
         dims_to_drop = dataset_dims - dims_to_keep
         dataset = dataset.drop_dims(dims_to_drop)
         if dims_to_drop:
@@ -241,13 +277,15 @@ class MultiZarrDatastore(BaseCartesianDatastore):
             dataset = self._convert_dataset_to_dataarray(dataset)
 
             if "time" in dataset.dims:
-                dataset = dataset.transpose("time", "grid_index", "variable")
+                dataset = dataset.transpose(
+                    "time", "grid_index", "variable_name"
+                )
             else:
-                dataset = dataset.transpose("grid_index", "variable")
+                dataset = dataset.transpose("grid_index", "variable_name")
         dataset_vars = (
             list(dataset.data_vars)
             if isinstance(dataset, xr.Dataset)
-            else dataset["variable"].values.tolist()
+            else dataset["variable_name"].values.tolist()
         )
 
         print(  # noqa
@@ -345,26 +383,42 @@ class MultiZarrDatastore(BaseCartesianDatastore):
         return extent
 
     @functools.lru_cache()
-    def get_normalization_dataarray(self, category):
-        """Load the normalization statistics for the dataset.
+    def get_normalization_dataarray(self, category: str) -> xr.Dataset:
+        """Return the normalization dataarray for the given category. This
+        should contain a `{category}_mean` and `{category}_std` variable for
+        each variable in the category. For `category=="state"`, the dataarray
+        should also contain a `state_diff_mean` and `state_diff_std` variable
+        for the one-step differences of the state variables. The return
+        dataarray should at least have dimensions of `({category}_feature)`,
+        but can also include for example `grid_index` (if the normalisation is
+        done per grid point for example).
 
-        Args:
-            category (str): The category of the dataset (state/forcing/static).
+        Parameters
+        ----------
+        category : str
+            The category of the dataset (state/forcing/static).
 
-            Returns:
-                OR xr.Dataset: The normalization statistics for the dataset.
+        Returns
+        -------
+        xr.Dataset
+            The normalization dataarray for the given category, with variables
+            for the mean and standard deviation of the variables (and
+            differences for state variables).
         """
-        combined_stats = self._load_and_merge_stats()
-        if combined_stats is None:
+        ds_combined_stats = self._load_and_merge_stats()
+        if ds_combined_stats is None:
             return None
 
-        combined_stats = self._rename_data_vars(combined_stats)
+        ds_combined_stats = self._rename_data_vars(ds_combined_stats)
 
-        stats = self._select_stats_by_category(combined_stats, category)
-        if stats is None:
-            return None
+        ops = ["mean", "std"]
+        stats_variables = [f"{category}_{op}" for op in ops]
+        if category == "state":
+            stats_variables += [f"state_diff_{op}" for op in ops]
 
-        return stats
+        ds_stats = ds_combined_stats[stats_variables]
+
+        return ds_stats
 
     def _load_and_merge_stats(self):
         """Load and merge the normalization statistics for the dataset.
@@ -422,7 +476,7 @@ class MultiZarrDatastore(BaseCartesianDatastore):
         """
         if category == "state":
             stats = combined_stats.loc[
-                dict(variable=self.get_vars_names(category=category))
+                dict(variable_name=self.get_vars_names(category=category))
             ]
             stats = stats.drop_vars(["forcing_mean", "forcing_std"])
             return stats
@@ -432,9 +486,7 @@ class MultiZarrDatastore(BaseCartesianDatastore):
             )
             if non_normalized_vars is None:
                 non_normalized_vars = []
-            vars = self.vars_names(category)
-            window = self["forcing"]["window"]
-            forcing_vars = [f"{var}_{i}" for var in vars for i in range(window)]
+            forcing_vars = self.vars_names(category)
             normalized_vars = [
                 var for var in forcing_vars if var not in non_normalized_vars
             ]
@@ -541,7 +593,7 @@ class MultiZarrDatastore(BaseCartesianDatastore):
             dataset = self.open_zarrs(category)
         elif isinstance(dataset, xr.DataArray):
             convert = True
-            dataset = dataset.to_dataset("variable")
+            dataset = dataset.to_dataset("variable_name")
         dims_mapping = {}
         zarr_configs = self._config[category]["zarrs"]
         for zarr_config in zarr_configs:
@@ -579,34 +631,6 @@ class MultiZarrDatastore(BaseCartesianDatastore):
         dataset.attrs["split"] = split
         return dataset
 
-    def apply_window(self, category, dataset=None):
-        """Apply the forcing window to the forcing dataset.
-
-        Args:
-            category (str): The category of the dataset (state/forcing/static).
-            dataset (xr.Dataset): The xarray Dataset object.
-
-        Returns:
-            xr.Dataset: The xarray Dataset object with the window applied.
-        """
-        if dataset is None:
-            dataset = self.open_zarrs(category)
-        if isinstance(dataset, xr.Dataset):
-            dataset = self._convert_dataset_to_dataarray(dataset)
-        state = self.open_zarrs("state")
-        state = self._apply_time_split(state, dataset.attrs["split"])
-        state_time = state.time.values
-        window = self._config[category]["window"]
-        dataset = (
-            dataset.sel(time=state_time, method="nearest")
-            .pad(time=(window // 2, window // 2), mode="edge")
-            .rolling(time=window, center=True)
-            .construct("window")
-            .stack(variable_window=("variable", "window"))
-        )
-        dataset = dataset.isel(time=slice(window // 2, -window // 2 + 1))
-        return dataset
-
     @property
     def grid_shape_state(self):
         """Return the shape of the state grid.
@@ -637,13 +661,12 @@ class MultiZarrDatastore(BaseCartesianDatastore):
             "grid_index"
         )
 
-    def get_dataarray(self, category, split="train", apply_windowing=True):
+    def get_dataarray(self, category, split="train"):
         """Process the dataset for the given category.
 
         Args:
             category (str): The category of the dataset (state/forcing/static).
             split (str): The time split to filter the dataset (train/val/test).
-            apply_windowing (bool): Whether to apply windowing to the forcing dataset.
 
         Returns:
             xr.DataArray: The xarray DataArray object with processed dataset.
@@ -656,9 +679,9 @@ class MultiZarrDatastore(BaseCartesianDatastore):
         dataset = self._rename_dataset_dims_and_vars(category, dataset)
         dataset = self._filter_dimensions(dataset)
         dataset = self._convert_dataset_to_dataarray(dataset)
-        if "window" in self._config[category] and apply_windowing:
-            dataset = self.apply_window(category, dataset)
         if category == "static" and "time" in dataset.dims:
             dataset = dataset.isel(time=0, drop=True)
+
+        dataset = dataset.rename(dict(variable_name=f"{category}_feature"))
 
         return dataset

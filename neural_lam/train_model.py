@@ -26,13 +26,13 @@ MODELS = {
 }
 
 
-def _init_datastore(datastore_kind, path):
+def _init_datastore(datastore_kind, config_path):
     if datastore_kind == "multizarr":
-        datastore = MultiZarrDatastore(root_path=path)
+        datastore = MultiZarrDatastore(config_path=config_path)
     elif datastore_kind == "npyfiles":
-        datastore = NpyFilesDatastore(root_path=path)
+        datastore = NpyFilesDatastore(config_path=config_path)
     elif datastore_kind == "mllam":
-        datastore = MLLAMDatastore(root_path=path)
+        datastore = MLLAMDatastore(config_path=config_path)
     else:
         raise ValueError(f"Unknown datastore kind: {datastore_kind}")
     return datastore
@@ -50,9 +50,9 @@ def main(input_args=None):
         help="Kind of datastore to use",
     )
     parser.add_argument(
-        "datastore_path",
+        "datastore_config_path",
         type=str,
-        help="The root path for the datastore",
+        help="Path for the datastore config",
     )
     parser.add_argument(
         "--model",
@@ -246,7 +246,8 @@ def main(input_args=None):
     seed.seed_everything(args.seed)
     # Create datastore
     datastore = _init_datastore(
-        datastore_kind=args.datastore_kind, path=args.datastore_path
+        datastore_kind=args.datastore_kind,
+        config_path=args.datastore_config_path,
     )
     # Create datamodule
     data_module = WeatherDataModule(

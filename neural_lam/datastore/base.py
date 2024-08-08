@@ -128,10 +128,14 @@ class BaseDatastore(abc.ABC):
         pass
 
     @abc.abstractmethod
-    def get_dataarray(self, category: str, split: str) -> xr.DataArray:
+    def get_dataarray(
+        self, category: str, split: str
+    ) -> Union[xr.DataArray, None]:
         """Return the processed data (as a single `xr.DataArray`) for the given
         category of data and test/train/val-split that covers all the data (in
-        space and time) of a given category.
+        space and time) of a given category (state/forcing/static). A datastore
+        must be able to return for the "state" category, but "forcing" and
+        "static" are optional (in which case the method should return `None`).
 
         The returned dataarray is expected to at minimum have dimensions of
         `(grid_index, {category}_feature)` so that any spatial dimensions have
@@ -156,14 +160,14 @@ class BaseDatastore(abc.ABC):
 
         Returns
         -------
-        xr.DataArray
+        xr.DataArray or None
             The xarray DataArray object with processed dataset.
         """
         pass
 
     @property
     @abc.abstractmethod
-    def boundary_mask(self):
+    def boundary_mask(self) -> xr.DataArray:
         """Return the boundary mask for the dataset, with spatial dimensions
         stacked. Where the value is 1, the grid point is a boundary point, and
         where the value is 0, the grid point is not a boundary point.

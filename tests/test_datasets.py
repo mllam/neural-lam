@@ -70,8 +70,9 @@ def test_dataset_item(datastore_name):
         pass
 
 
+@pytest.mark.parametrize("split", ["train", "val", "test"])
 @pytest.mark.parametrize("datastore_name", DATASTORES.keys())
-def test_single_batch(datastore_name, split="train"):
+def test_single_batch(datastore_name, split):
     """Check that the `datastore.get_dataarray` method is implemented.
 
     And that it returns an xarray DataArray with the correct dimensions.

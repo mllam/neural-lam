@@ -1,4 +1,6 @@
 # Standard library
+import shutil
+import warnings
 from pathlib import Path
 from typing import List
 
@@ -6,6 +8,7 @@ from typing import List
 import cartopy.crs as ccrs
 import mllam_data_prep as mdp
 import xarray as xr
+from loguru import logger
 from numpy import ndarray
 
 # Local
@@ -15,11 +18,12 @@ from .base import BaseCartesianDatastore, CartesianGridShape
 class MLLAMDatastore(BaseCartesianDatastore):
     """Datastore class for the MLLAM dataset."""
 
-    def __init__(self, root_path, n_boundary_points=30, reuse_existing=True):
+    def __init__(self, config_path, n_boundary_points=30, reuse_existing=True):
         """Construct a new MLLAMDatastore from the configuration file at
         `config_path`. A boundary mask is created with `n_boundary_points`
         boundary points. If `reuse_existing` is True, the dataset is loaded
-        from a zarr file if it exists, otherwise it is created from the
+        from a zarr file if it exists (unless the config has been modified
+        since the zarr was created), otherwise it is created from the
         configuration file.
 
         Parameters
@@ -31,16 +35,29 @@ class MLLAMDatastore(BaseCartesianDatastore):
         n_boundary_points : int
             The number of boundary points to use in the boundary mask.
         reuse_existing : bool
-            Whether to reuse an existing dataset zarr file if it exists.
+            Whether to reuse an existing dataset zarr file if it exists and its
+            creation date is newer than the configuration file.
         """
-        config_filename = "data_config.yaml"
-        self._root_path = Path(root_path)
-        config_path = self._root_path / config_filename
-        self._config = mdp.Config.from_yaml_file(config_path)
-        fp_ds = self._root_path / config_path.name.replace(".yaml", ".zarr")
+        self._config_path = Path(config_path)
+        self._root_path = self._config_path.parent
+        self._config = mdp.Config.from_yaml_file(self._config_path)
+        fp_ds = self._root_path / self._config_path.name.replace(
+            ".yaml", ".zarr"
+        )
+
+        self._ds = None
         if reuse_existing and fp_ds.exists():
-            self._ds = xr.open_zarr(fp_ds, consolidated=True)
-        else:
+            # check that the zarr directory is newer than the config file
+            if fp_ds.stat().st_mtime > self._config_path.stat().st_mtime:
+                self._ds = xr.open_zarr(fp_ds, consolidated=True)
+            else:
+                logger.warning(
+                    "config file has been modified since zarr was created. "
+                    "recreating dataset."
+                )
+                shutil.rmtree(fp_ds)
+
+        if self._ds is None:
             self._ds = mdp.create_dataset(config=self._config)
             if reuse_existing:
                 self._ds.to_zarr(fp_ds)
@@ -48,23 +65,115 @@ class MLLAMDatastore(BaseCartesianDatastore):
 
     @property
     def root_path(self) -> Path:
+        """The root path of the dataset.
+
+        Returns
+        -------
+        Path
+            The root path of the dataset.
+        """
         return self._root_path
 
     @property
     def step_length(self) -> int:
+        """The length of the time steps in hours.
+
+        Returns
+        -------
+        int
+            The length of the time steps in hours.
+        """
         da_dt = self._ds["time"].diff("time")
         return (da_dt.dt.seconds[0] // 3600).item()
 
     def get_vars_units(self, category: str) -> List[str]:
+        """Return the units of the variables in the given category.
+
+        Parameters
+        ----------
+        category : str
+            The category of the dataset (state/forcing/static).
+
+        Returns
+        -------
+        List[str]
+            The units of the variables in the given category.
+        """
+        if category not in self._ds and category == "forcing":
+            warnings.warn("no forcing data found in datastore")
+            return []
         return self._ds[f"{category}_feature_units"].values.tolist()
 
     def get_vars_names(self, category: str) -> List[str]:
+        """Return the names of the variables in the given category.
+
+        Parameters
+        ----------
+        category : str
+            The category of the dataset (state/forcing/static).
+
+        Returns
+        -------
+        List[str]
+            The names of the variables in the given category.
+        """
+        if category not in self._ds and category == "forcing":
+            warnings.warn("no forcing data found in datastore")
+            return []
         return self._ds[f"{category}_feature"].values.tolist()
 
     def get_num_data_vars(self, category: str) -> int:
-        return self._ds[f"{category}_feature"].count().item()
+        """Return the number of variables in the given category.
+
+        Parameters
+        ----------
+        category : str
+            The category of the dataset (state/forcing/static).
+
+        Returns
+        -------
+        int
+            The number of variables in the given category.
+        """
+        return len(self.get_vars_names(category))
 
     def get_dataarray(self, category: str, split: str) -> xr.DataArray:
+        """Return the processed data (as a single `xr.DataArray`) for the given
+        category of data and test/train/val-split that covers all the data (in
+        space and time) of a given category (state/forcing/static). "state" is
+        the only required category, for other categories, the method will
+        return `None` if the category is not found in the datastore.
+
+        The returned dataarray will at minimum have dimensions of `(grid_index,
+        {category}_feature)` so that any spatial dimensions have been stacked
+        into a single dimension and all variables and levels have been stacked
+        into a single feature dimension named by the `category` of data being
+        loaded.
+
+        For categories of data that have a time dimension (i.e. not static
+        data), the dataarray will additionally have `(analysis_time,
+        elapsed_forecast_duration)` dimensions if `is_forecast` is True, or
+        `(time)` if `is_forecast` is False.
+
+        If the data is ensemble data, the dataarray will have an additional
+        `ensemble_member` dimension.
+
+        Parameters
+        ----------
+        category : str
+            The category of the dataset (state/forcing/static).
+        split : str
+            The time split to filter the dataset (train/val/test).
+
+        Returns
+        -------
+        xr.DataArray or None
+            The xarray DataArray object with processed dataset.
+        """
+        if category not in self._ds and category == "forcing":
+            warnings.warn("no forcing data found in datastore")
+            return None
+
         da_category = self._ds[category]
 
         if "time" not in da_category.dims:
