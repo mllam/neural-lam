@@ -88,6 +88,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   [\#52](https://github.com/mllam/neural-lam/pull/52)
   @joeloskarsson
 
+- Cap numpy version to < 2.0.0
+  [\#68](https://github.com/mllam/neural-lam/pull/68)
+  @joeloskarsson
+
+
+
 ## [v0.1.0](https://github.com/joeloskarsson/neural-lam/releases/tag/v0.1.0)
 
 First tagged release of `neural-lam`, matching Oskarsson et al 2023 publication
