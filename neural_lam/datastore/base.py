@@ -16,14 +16,20 @@ class BaseDatastore(abc.ABC):
     access the data in a processed format that can be used for training and
     evaluation of neural networks.
 
+    NOTE: All methods return either primitive types, `numpy.ndarray`,
+    `xarray.DataArray` or `xarray.Dataset` objects, not `pytorch.Tensor`
+    objects. Conversion to `pytorch.Tensor` objects should be done in the
+    `weather_dataset.WeatherDataset` class (which inherits from
+    `torch.utils.data.Dataset` and uses the datastore to access the data).
+
     # Forecast vs analysis data
-    If the datastore should represent forecast rather than analysis data, then
+    If the datastore is used represent forecast rather than analysis data, then
     the `is_forecast` attribute should be set to True, and returned data from
     `get_dataarray` is assumed to have `analysis_time` and `forecast_time` dimensions
     (rather than just `time`).
 
     # Ensemble vs deterministic data
-    If the datastore should represent ensemble data, then the `is_ensemble`
+    If the datastore is used to represent ensemble data, then the `is_ensemble`
     attribute should be set to True, and returned data from `get_dataarray` is
     assumed to have an `ensemble_member` dimension.
     """
@@ -108,7 +114,7 @@ class BaseDatastore(abc.ABC):
         should contain a `{category}_mean` and `{category}_std` variable for
         each variable in the category. For `category=="state"`, the dataarray
         should also contain a `state_diff_mean` and `state_diff_std` variable
-        for the one-step differences of the state variables. The return
+        for the one-step differences of the state variables. The returned
         dataarray should at least have dimensions of `({category}_feature)`,
         but can also include for example `grid_index` (if the normalisation is
         done per grid point for example).

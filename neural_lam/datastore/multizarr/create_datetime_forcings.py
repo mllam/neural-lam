@@ -7,8 +7,8 @@ import numpy as np
 import pandas as pd
 import xarray as xr
 
-# First-party
-from neural_lam.datastore.multizarr import MultiZarrDatastore
+# Local
+from .store import MultiZarrDatastore
 
 DEFAULT_FILENAME = "datetime_forcings.zarr"
 

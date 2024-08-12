@@ -84,7 +84,7 @@ class WeatherDataset(torch.utils.data.Dataset):
             # in the elapsed_forecast_duration dimension, should that be checked here?
             return self.da_state.analysis_time.size
         else:
-            # sample_len = 2 + ar_steps  <-- 2 initial states + ar_steps target states
+            # sample_len = 2 + ar_steps  (2 initial states + ar_steps target states)
             # n_samples = len(self.da_state.time) - sample_len + 1
             #           = len(self.da_state.time) - 2 - ar_steps + 1
             #           = len(self.da_state.time) - ar_steps - 1

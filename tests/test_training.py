@@ -30,7 +30,10 @@ def test_training(datastore_name):
         max_epochs=3,
         deterministic=True,
         accelerator=device_name,
-        devices=1,
+        # XXX: `devices` has to be set to 2 otherwise
+        # neural_lam.models.ar_model.ARModel.aggregate_and_plot_metrics fails
+        # because it expects to aggregate over multiple devices
+        devices=2,
         log_every_n_steps=1,
     )
 
@@ -68,7 +71,7 @@ def test_training(datastore_name):
         processor_layers = 4
         mesh_aggr = "sum"
         lr = 1.0e-3
-        val_steps_to_log = [1]
+        val_steps_to_log = [1, 3]
         metrics_watch = []
 
     model_args = ModelArgs()

@@ -5,8 +5,8 @@ from pathlib import Path
 # Third-party
 import xarray as xr
 
-# First-party
-from neural_lam.datastore.multizarr import MultiZarrDatastore
+# Local
+from .store import MultiZarrDatastore
 
 DEFAULT_FILENAME = "normalization.zarr"
 
@@ -54,31 +54,20 @@ def create_normalization_stats_zarr(
             for group in combined_stats:
                 vars_to_combine = group["vars"]
 
-                means = da_forcing_mean.sel(variable_name=vars_to_combine)
-                stds = da_forcing_std.sel(variable_name=vars_to_combine)
+                da_forcing_means = da_forcing_mean.sel(
+                    forcing_feature=vars_to_combine
+                )
+                stds = da_forcing_std.sel(forcing_feature=vars_to_combine)
 
-                combined_mean = means.mean(dim="variable_name")
-                combined_std = (stds**2).mean(dim="variable_name") ** 0.5
+                combined_mean = da_forcing_means.mean(dim="forcing_feature")
+                combined_std = (stds**2).mean(dim="forcing_feature") ** 0.5
 
                 da_forcing_mean.loc[
-                    dict(variable_name=vars_to_combine)
+                    dict(forcing_feature=vars_to_combine)
                 ] = combined_mean
                 da_forcing_std.loc[
-                    dict(variable_name=vars_to_combine)
+                    dict(forcing_feature=vars_to_combine)
                 ] = combined_std
-
-        window = datastore._config["forcing"]["window"]
-
-        da_forcing_mean = xr.concat(
-            [da_forcing_mean] * window, dim="window"
-        ).stack(forcing_variable=("variable_name", "window"))
-        da_forcing_std = xr.concat(
-            [da_forcing_std] * window, dim="window"
-        ).stack(forcing_variable=("variable_name", "window"))
-        vars = da_forcing["variable_name"].values.tolist()
-        window = datastore._config["forcing"]["window"]
-        forcing_vars = [f"{var}_{i}" for var in vars for i in range(window)]
-
     print(
         "Computing mean and std.-dev. for one-step differences...", flush=True
     )
@@ -94,21 +83,17 @@ def create_normalization_stats_zarr(
             "state_diff_std": diff_std,
         }
     )
+
     if da_forcing is not None:
-        dsf = (
-            xr.Dataset(
-                {
-                    "forcing_mean": da_forcing_mean,
-                    "forcing_std": da_forcing_std,
-                }
-            )
-            .reset_index(["forcing_variable"])
-            .drop_vars(["variable_name", "window"])
-            .assign_coords(forcing_variable=forcing_vars)
+        dsf = xr.Dataset(
+            {
+                "forcing_mean": da_forcing_mean,
+                "forcing_std": da_forcing_std,
+            }
         )
         ds = xr.merge([ds, dsf])
 
-    ds = ds.chunk({"variable_name": -1, "forcing_variable": -1})
+    ds = ds.chunk({"state_feature": -1, "forcing_feature": -1})
     print("Saving dataset as Zarr...")
     ds.to_zarr(zarr_path, mode="w")
 

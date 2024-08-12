@@ -364,24 +364,6 @@ class MultiZarrDatastore(BaseCartesianDatastore):
 
         return xy
 
-    def get_xy_extent(self, category):
-        """Return the extent of the x, y coordinates. This should be a list of
-        4 floats with `[xmin, xmax, ymin, ymax]`
-
-        Args:
-            category (str): The category of the dataset (state/forcing/static).
-
-        Returns:
-            list(float): The extent of the x, y coordinates.
-        """
-        x, y = self.get_xy(category, stacked=False)
-        if self.projection.inverted:
-            extent = [x.max(), x.min(), y.max(), y.min()]
-        else:
-            extent = [x.min(), x.max(), y.min(), y.max()]
-
-        return extent
-
     @functools.lru_cache()
     def get_normalization_dataarray(self, category: str) -> xr.Dataset:
         """Return the normalization dataarray for the given category. This
@@ -405,6 +387,22 @@ class MultiZarrDatastore(BaseCartesianDatastore):
             for the mean and standard deviation of the variables (and
             differences for state variables).
         """
+        # XXX: the multizarr code didn't include routines for computing the
+        # normalization of "static" features previously, we'll just hack
+        # something in here and assume they are already normalized
+        if category == "static":
+            da_mean = xr.DataArray(
+                np.zeros(self.get_num_data_vars(category)),
+                dims=("static_feature",),
+                coords={"static_feature": self.get_vars_names(category)},
+            )
+            da_std = xr.DataArray(
+                np.ones(self.get_num_data_vars(category)),
+                dims=("static_feature",),
+                coords={"static_feature": self.get_vars_names(category)},
+            )
+            return xr.Dataset(dict(static_mean=da_mean, static_std=da_std))
+
         ds_combined_stats = self._load_and_merge_stats()
         if ds_combined_stats is None:
             return None
@@ -644,7 +642,7 @@ class MultiZarrDatastore(BaseCartesianDatastore):
         )
 
     @property
-    def boundary_mask(self):
+    def boundary_mask(self) -> xr.DataArray:
         """Load the boundary mask for the dataset, with spatial dimensions
         stacked.
 
@@ -657,8 +655,10 @@ class MultiZarrDatastore(BaseCartesianDatastore):
             self._config["boundary"]["mask"]["path"]
         )
         ds_boundary_mask = xr.open_zarr(boundary_mask_path)
-        return ds_boundary_mask.mask.stack(grid_index=("y", "x")).reset_index(
-            "grid_index"
+        return (
+            ds_boundary_mask.mask.stack(grid_index=("y", "x"))
+            .reset_index("grid_index")
+            .astype(int)
         )
 
     def get_dataarray(self, category, split="train"):

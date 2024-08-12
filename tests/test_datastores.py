@@ -126,6 +126,8 @@ def test_get_normalization_dataarray(datastore_name):
         for op in ops:
             var_name = f"{category}_{op}"
             assert var_name in ds_stats.data_vars
+            da_val = ds_stats[var_name]
+            assert set(da_val.dims) == {f"{category}_feature"}
 
 
 @pytest.mark.parametrize("datastore_name", DATASTORES.keys())

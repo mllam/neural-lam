@@ -27,7 +27,7 @@ def test_dataset_item(datastore_name):
     datastore = init_datastore(datastore_name)
     N_gridpoints = datastore.grid_shape_state.x * datastore.grid_shape_state.y
 
-    N_pred_steps = 1
+    N_pred_steps = 4
     forcing_window_size = 3
     dataset = WeatherDataset(
         datastore=datastore,
@@ -43,16 +43,19 @@ def test_dataset_item(datastore_name):
     init_states, target_states, forcing, batch_times = item
 
     # initial states
+    assert init_states.ndim == 3
     assert init_states.shape[0] == 2  # two time steps go into the input
     assert init_states.shape[1] == N_gridpoints
     assert init_states.shape[2] == datastore.get_num_data_vars("state")
 
     # output states
+    assert target_states.ndim == 3
     assert target_states.shape[0] == N_pred_steps
     assert target_states.shape[1] == N_gridpoints
     assert target_states.shape[2] == datastore.get_num_data_vars("state")
 
     # forcing
+    assert forcing.ndim == 3
     assert forcing.shape[0] == N_pred_steps
     assert forcing.shape[1] == N_gridpoints
     assert (
@@ -61,13 +64,13 @@ def test_dataset_item(datastore_name):
     )
 
     # batch times
+    assert batch_times.ndim == 1
     assert batch_times.shape[0] == N_pred_steps
 
-    # try to run through the whole dataset to ensure slicing and stacking
+    # try to get the last item of the dataset to ensure slicing and stacking
     # operations are working as expected and are consistent with the dataset
     # length
-    for item in iter(dataset):
-        pass
+    dataset[len(dataset) - 1]
 
 
 @pytest.mark.parametrize("split", ["train", "val", "test"])
@@ -118,7 +121,7 @@ def test_single_batch(datastore_name, split):
     )
 
     model_device = model.to(device_name)
-    data_loader = DataLoader(dataset, batch_size=2)
+    data_loader = DataLoader(dataset, batch_size=5)
     batch = next(iter(data_loader))
     batch_device = [part.to(device_name) for part in batch]
     model_device.common_step(batch_device)
