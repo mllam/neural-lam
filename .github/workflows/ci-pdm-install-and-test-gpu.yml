@@ -27,7 +27,6 @@ jobs:
           pdm config venv.in_project False
           pdm config venv.location /opt/dlami/nvme/venv
           pdm venv create --with-pip
-          pdm use --venv in-project
 
       - name: Install torch (GPU CUDA 12.1)
         run: |
