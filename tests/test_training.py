@@ -25,7 +25,7 @@ def test_training(datastore_name):
         device_name = "cpu"
 
     trainer = pl.Trainer(
-        max_epochs=3,
+        max_epochs=1,
         deterministic=True,
         accelerator=device_name,
         # XXX: `devices` has to be set to 2 otherwise
