@@ -3,8 +3,8 @@ import matplotlib
 import matplotlib.pyplot as plt
 import numpy as np
 
-# First-party
-from neural_lam import utils
+# Local
+from . import utils
 
 
 @matplotlib.rc_context(utils.fractional_plot_bundle(1))

@@ -1,10 +1,10 @@
 # Third-party
 import torch_geometric as pyg
 
-# First-party
-from neural_lam import utils
-from neural_lam.interaction_net import InteractionNet
-from neural_lam.models.base_graph_model import BaseGraphModel
+# Local
+from .. import utils
+from ..interaction_net import InteractionNet
+from .base_graph_model import BaseGraphModel
 
 
 class GraphLAM(BaseGraphModel):
