@@ -14,9 +14,7 @@ from . import utils
 from .datastore.mllam import MLLAMDatastore
 from .datastore.multizarr import MultiZarrDatastore
 from .datastore.npyfiles import NpyFilesDatastore
-from .models.graph_lam import GraphLAM
-from .models.hi_lam import HiLAM
-from .models.hi_lam_parallel import HiLAMParallel
+from .models import GraphLAM, HiLAM, HiLAMParallel
 from .weather_dataset import WeatherDataModule
 
 MODELS = {
