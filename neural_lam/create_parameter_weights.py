@@ -11,8 +11,7 @@ from torch.utils.data.distributed import DistributedSampler
 from tqdm import tqdm
 
 # Local
-from . import config
-from .weather_dataset import WeatherDataset
+from . import WeatherDataset, config
 
 
 class PaddedWeatherDataset(torch.utils.data.Dataset):
