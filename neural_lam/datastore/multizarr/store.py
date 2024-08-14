@@ -55,6 +55,18 @@ class MultiZarrDatastore(BaseCartesianDatastore):
         """
         return self._root_path
 
+    @property
+    def config(self) -> dict:
+        """Return the configuration dictionary.
+
+        Returns
+        -------
+        dict
+            The configuration dictionary.
+
+        """
+        return self._config
+
     def _normalize_path(self, path) -> str:
         """
         Normalize the path of source-dataset defined in the configuration file.

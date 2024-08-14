@@ -138,17 +138,9 @@ class NpyFilesDatastore(BaseCartesianDatastore):
         self,
         config_path,
     ):
-        """Create a new
-        NpyFilesDatastore
-        using the
-        configuration file at
-        the given path. The
-        config file should be
-        a YAML file and will
-        be loaded into an
-        instance of the
-        `NpyDatastoreConfig`
-        dataclass.
+        """Create a new NpyFilesDatastore using the configuration file at the given
+        path. The config file should be a YAML file and will be loaded into an instance
+        of the `NpyDatastoreConfig` dataclass.
 
         Internally, the datastore uses dask.delayed to load the data from the
         numpy files, so that the data isn't actually loaded until it's needed.
@@ -166,7 +158,7 @@ class NpyFilesDatastore(BaseCartesianDatastore):
 
         self._config_path = Path(config_path)
         self._root_path = self._config_path.parent
-        self.config = NpyDatastoreConfig.from_yaml_file(self._config_path)
+        self._config = NpyDatastoreConfig.from_yaml_file(self._config_path)
 
     @property
     def root_path(self) -> Path:
@@ -181,21 +173,23 @@ class NpyFilesDatastore(BaseCartesianDatastore):
         """
         return self._root_path
 
+    @property
+    def config(self) -> NpyDatastoreConfig:
+        """The configuration for the datastore.
+
+        Returns
+        -------
+        NpyDatastoreConfig
+            The configuration for the datastore.
+
+        """
+        return self._config
+
     def get_dataarray(self, category: str, split: str) -> DataArray:
-        """Get the data array
-        for the given category
-        and split of data. If
-        the category is
-        'state', the data
-        array will be a
-        concatenation of the
-        data arrays for all
-        ensemble members. The
-        data will be loaded as
-        a dask array, so that
-        the data isn't
-        actually loaded until
-        it's needed.
+        """Get the data array for the given category and split of data. If the category
+        is 'state', the data array will be a concatenation of the data arrays for all
+        ensemble members. The data will be loaded as a dask array, so that the data
+        isn't actually loaded until it's needed.
 
         Parameters
         ----------

@@ -16,6 +16,7 @@
       `xr.DataArray`) for the given category and test/train/val-split.
 - [x] `boundary_mask` (property): Return the boundary mask for the dataset,
       with spatial dimensions stacked.
+- [x] `config` (property): Return the configuration of the datastore.
 
 In addition BaseCartesianDatastore must have the following methods and attributes:
 - [x] `get_xy_extent` (method): Return the extent of the x, y coordinates for a
@@ -27,6 +28,8 @@ In addition BaseCartesianDatastore must have the following methods and attribute
 """
 
 # Standard library
+import collections
+import dataclasses
 from pathlib import Path
 
 # Third-party
@@ -45,6 +48,17 @@ def test_root_path(datastore_name):
     """Check that the `datastore.root_path` property is implemented."""
     datastore = init_datastore(datastore_name)
     assert isinstance(datastore.root_path, Path)
+
+
+@pytest.mark.parametrize("datastore_name", DATASTORES.keys())
+def test_config(datastore_name):
+    """Check that the `datastore.config` property is implemented."""
+    datastore = init_datastore(datastore_name)
+    # check the config is a mapping or a dataclass
+    config = datastore.config
+    assert isinstance(config, collections.abc.Mapping) or dataclasses.is_dataclass(
+        config
+    )
 
 
 @pytest.mark.parametrize("datastore_name", DATASTORES.keys())

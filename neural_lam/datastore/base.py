@@ -1,5 +1,6 @@
 # Standard library
 import abc
+import collections
 import dataclasses
 from pathlib import Path
 from typing import List, Union
@@ -55,6 +56,19 @@ class BaseDatastore(abc.ABC):
         -------
         pathlib.Path
             The root path to the datastore.
+
+        """
+        pass
+
+    @property
+    @abc.abstractmethod
+    def config(self) -> collections.abc.Mapping:
+        """The configuration of the datastore.
+
+        Returns
+        -------
+        collections.abc.Mapping
+            The configuration of the datastore, any dict like object can be returned.
 
         """
         pass

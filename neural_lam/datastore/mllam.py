@@ -87,6 +87,18 @@ class MLLAMDatastore(BaseCartesianDatastore):
         return self._root_path
 
     @property
+    def config(self) -> mdp.Config:
+        """The configuration of the dataset.
+
+        Returns
+        -------
+        mdp.Config
+            The configuration of the dataset.
+
+        """
+        return self._config
+
+    @property
     def step_length(self) -> int:
         """The length of the time steps in hours.
 

@@ -280,7 +280,9 @@ def main(input_args=None):
         save_last=True,
     )
     logger = pl.loggers.WandbLogger(
-        project=args.wandb_project, name=run_name, config=args
+        project=args.wandb_project,
+        name=run_name,
+        config=dict(training=vars(args), datastore=datastore._config),
     )
     trainer = pl.Trainer(
         max_epochs=args.epochs,
