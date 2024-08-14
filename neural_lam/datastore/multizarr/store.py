@@ -18,15 +18,25 @@ class MultiZarrDatastore(BaseCartesianDatastore):
     DIMS_TO_KEEP = {"time", "grid_index", "variable_name"}
 
     def __init__(self, config_path):
-        """Create a multi-zarr datastore from the given configuration file. The
-        configuration file should be a YAML file, the format of which is should
-        be inferred from the example configuration file in
-        `tests/datastore_examples/multizarr/data_config.yml`.
+        """Create a multi-zarr
+        datastore from the
+        given configuration
+        file. The
+        configuration file
+        should be a YAML file,
+        the format of which is
+        should be inferred
+        from the example
+        configuration file in
+        `tests/datastore_examp
+        les/multizarr/data_con
+        fig.yml`.
 
         Parameters
         ----------
         config_path : str
             The path to the configuration file.
+
         """
         self._config_path = Path(config_path)
         self._root_path = self._config_path.parent
@@ -41,6 +51,7 @@ class MultiZarrDatastore(BaseCartesianDatastore):
         -------
         str
             The root path of the datastore.
+
         """
         return self._root_path
 
@@ -80,6 +91,7 @@ class MultiZarrDatastore(BaseCartesianDatastore):
         -------
         xr.Dataset
             The xarray Dataset object.
+
         """
         zarr_configs = self._config[category]["zarrs"]
 
@@ -104,6 +116,7 @@ class MultiZarrDatastore(BaseCartesianDatastore):
 
         Returns:
             cartopy.crs.Projection: The projection object.
+
         """
         proj_config = self._config["projection"]
         proj_class_name = proj_config["class"]
@@ -117,6 +130,7 @@ class MultiZarrDatastore(BaseCartesianDatastore):
 
         Returns:
             int: The step length in hours.
+
         """
         dataset = self.open_zarrs("state")
         time = dataset.time.isel(time=slice(0, 2)).values
@@ -133,6 +147,7 @@ class MultiZarrDatastore(BaseCartesianDatastore):
 
         Returns:
             list: The names of the variables in the dataset.
+
         """
         surface_vars_names = self._config[category].get("surface_vars") or []
         atmosphere_vars_names = [
@@ -151,6 +166,7 @@ class MultiZarrDatastore(BaseCartesianDatastore):
 
             Returns:
                 list: The units of the variables in the dataset.
+
         """
         surface_vars_units = self._config[category].get("surface_units") or []
         atmosphere_vars_units = [
@@ -169,14 +185,13 @@ class MultiZarrDatastore(BaseCartesianDatastore):
 
         Returns:
             int: The number of data variables in the dataset.
+
         """
         surface_vars = self._config[category].get("surface_vars", [])
         atmosphere_vars = self._config[category].get("atmosphere_vars", [])
         levels = self._config[category].get("levels", [])
 
-        surface_vars_count = (
-            len(surface_vars) if surface_vars is not None else 0
-        )
+        surface_vars_count = len(surface_vars) if surface_vars is not None else 0
         atmosphere_vars_count = (
             len(atmosphere_vars) if atmosphere_vars is not None else 0
         )
@@ -192,6 +207,7 @@ class MultiZarrDatastore(BaseCartesianDatastore):
 
         Returns:
             xr.Dataset: The xarray Dataset object with stacked grid dimensions.
+
         """
         if "grid_index" in ds.dims:
             raise ValueError("Grid dimensions already stacked.")
@@ -212,6 +228,7 @@ class MultiZarrDatastore(BaseCartesianDatastore):
 
         Returns:
             xr.DataArray: The xarray DataArray object.
+
         """
         if isinstance(dataset, xr.Dataset):
             dataset = dataset.to_array(dim="variable_name")
@@ -227,6 +244,7 @@ class MultiZarrDatastore(BaseCartesianDatastore):
         Returns:
             xr.Dataset: The xarray Dataset object with filtered dimensions.
             OR xr.DataArray: The xarray DataArray object with filtered dimensions.
+
         """
         dims_to_keep = self.DIMS_TO_KEEP
         dataset_dims = set(list(dataset.dims) + ["variable_name"])
@@ -277,9 +295,7 @@ class MultiZarrDatastore(BaseCartesianDatastore):
             dataset = self._convert_dataset_to_dataarray(dataset)
 
             if "time" in dataset.dims:
-                dataset = dataset.transpose(
-                    "time", "grid_index", "variable_name"
-                )
+                dataset = dataset.transpose("time", "grid_index", "variable_name")
             else:
                 dataset = dataset.transpose("grid_index", "variable_name")
         dataset_vars = (
@@ -304,6 +320,7 @@ class MultiZarrDatastore(BaseCartesianDatastore):
 
         Returns:
             xr.Dataset: The xarray Dataset object with reshaped grid dimensions.
+
         """
         if grid_shape is None:
             grid_shape = dict(self.grid_shape_state.values.items())
@@ -311,13 +328,9 @@ class MultiZarrDatastore(BaseCartesianDatastore):
 
         x_coords = np.arange(x_dim)
         y_coords = np.arange(y_dim)
-        multi_index = pd.MultiIndex.from_product(
-            [y_coords, x_coords], names=["y", "x"]
-        )
+        multi_index = pd.MultiIndex.from_product([y_coords, x_coords], names=["y", "x"])
 
-        mindex_coords = xr.Coordinates.from_pandas_multiindex(
-            multi_index, "grid"
-        )
+        mindex_coords = xr.Coordinates.from_pandas_multiindex(multi_index, "grid")
         dataset = dataset.drop_vars(["grid", "x", "y"], errors="ignore")
         dataset = dataset.assign_coords(mindex_coords)
         reshaped_data = dataset.unstack("grid")
@@ -342,13 +355,12 @@ class MultiZarrDatastore(BaseCartesianDatastore):
             value of `stacked`:
             - `stacked==True`: shape `(2, n_grid_points)` where n_grid_points=N_x*N_y.
             - `stacked==False`: shape `(2, N_y, N_x)`
+
         """
         dataset = self.open_zarrs(category)
         xs, ys = dataset.x.values, dataset.y.values
 
-        assert (
-            xs.ndim == ys.ndim
-        ), "x and y coordinates must have the same dimensions."
+        assert xs.ndim == ys.ndim, "x and y coordinates must have the same dimensions."
 
         if xs.ndim == 1:
             x, y = np.meshgrid(xs, ys)
@@ -366,14 +378,33 @@ class MultiZarrDatastore(BaseCartesianDatastore):
 
     @functools.lru_cache()
     def get_normalization_dataarray(self, category: str) -> xr.Dataset:
-        """Return the normalization dataarray for the given category. This
-        should contain a `{category}_mean` and `{category}_std` variable for
-        each variable in the category. For `category=="state"`, the dataarray
-        should also contain a `state_diff_mean` and `state_diff_std` variable
-        for the one-step differences of the state variables. The return
-        dataarray should at least have dimensions of `({category}_feature)`,
-        but can also include for example `grid_index` (if the normalisation is
-        done per grid point for example).
+        """Return the
+        normalization
+        dataarray for the
+        given category. This
+        should contain a
+        `{category}_mean` and
+        `{category}_std`
+        variable for each
+        variable in the
+        category. For
+        `category=="state"`,
+        the dataarray should
+        also contain a
+        `state_diff_mean` and
+        `state_diff_std`
+        variable for the one-
+        step differences of
+        the state variables.
+        The return dataarray
+        should at least have
+        dimensions of `({categ
+        ory}_feature)`, but
+        can also include for
+        example `grid_index`
+        (if the normalisation
+        is done per grid point
+        for example).
 
         Parameters
         ----------
@@ -386,6 +417,7 @@ class MultiZarrDatastore(BaseCartesianDatastore):
             The normalization dataarray for the given category, with variables
             for the mean and standard deviation of the variables (and
             differences for state variables).
+
         """
         # XXX: the multizarr code didn't include routines for computing the
         # normalization of "static" features previously, we'll just hack
@@ -423,6 +455,7 @@ class MultiZarrDatastore(BaseCartesianDatastore):
 
         Returns:
             xr.Dataset: The merged normalization statistics for the dataset.
+
         """
         combined_stats = None
         for i, zarr_config in enumerate(
@@ -449,6 +482,7 @@ class MultiZarrDatastore(BaseCartesianDatastore):
         Returns:
             xr.Dataset: The combined normalization statistics with renamed data
             variables.
+
         """
         vars_mapping = {}
         for zarr_config in self._config["utilities"]["normalization"]["zarrs"]:
@@ -471,6 +505,7 @@ class MultiZarrDatastore(BaseCartesianDatastore):
 
         Returns:
             xr.Dataset: The normalization statistics for the dataset.
+
         """
         if category == "state":
             stats = combined_stats.loc[
@@ -479,9 +514,7 @@ class MultiZarrDatastore(BaseCartesianDatastore):
             stats = stats.drop_vars(["forcing_mean", "forcing_std"])
             return stats
         elif category == "forcing":
-            non_normalized_vars = (
-                self.utilities.normalization.non_normalized_vars
-            )
+            non_normalized_vars = self.utilities.normalization.non_normalized_vars
             if non_normalized_vars is None:
                 non_normalized_vars = []
             forcing_vars = self.vars_names(category)
@@ -517,6 +550,7 @@ class MultiZarrDatastore(BaseCartesianDatastore):
 
         Returns:
             xr.Dataset: The xarray Dataset object with extracted variables.
+
         """
         if ds is None:
             ds = self.open_zarrs(category)
@@ -529,9 +563,7 @@ class MultiZarrDatastore(BaseCartesianDatastore):
 
         ds_atmosphere = None
         if atmoshere_vars is not None:
-            ds_atmosphere = self._extract_atmosphere_vars(
-                category=category, ds=ds
-            )
+            ds_atmosphere = self._extract_atmosphere_vars(category=category, ds=ds)
 
         if ds_surface and ds_atmosphere:
             return xr.merge([ds_surface, ds_atmosphere])
@@ -551,15 +583,11 @@ class MultiZarrDatastore(BaseCartesianDatastore):
 
         Returns:
             xr.Dataset: The xarray Dataset object with atmosphere variables.
+
         """
 
-        if (
-            "level" not in list(ds.dims)
-            and self._config[category]["atmosphere_vars"]
-        ):
-            ds = self._rename_dataset_dims_and_vars(
-                ds.attrs["category"], dataset=ds
-            )
+        if "level" not in list(ds.dims) and self._config[category]["atmosphere_vars"]:
+            ds = self._rename_dataset_dims_and_vars(ds.attrs["category"], dataset=ds)
 
         data_arrays = [
             ds[var].sel(level=level, drop=True).rename(f"{var}_{level}")
@@ -585,6 +613,7 @@ class MultiZarrDatastore(BaseCartesianDatastore):
             variables.
             OR xr.DataArray: The xarray DataArray object with renamed
             dimensions and variables.
+
         """
         convert = False
         if dataset is None:
@@ -620,6 +649,7 @@ class MultiZarrDatastore(BaseCartesianDatastore):
 
         Returns:["window"]
             xr.Dataset: The xarray Dataset object filtered by the time split.
+
         """
         start, end = (
             self._config["splits"][split]["start"],
@@ -635,6 +665,7 @@ class MultiZarrDatastore(BaseCartesianDatastore):
 
         Returns:
             CartesianGridShape: The shape of the state grid.
+
         """
         return CartesianGridShape(
             x=self._config["grid_shape_state"]["x"],
@@ -643,13 +674,13 @@ class MultiZarrDatastore(BaseCartesianDatastore):
 
     @property
     def boundary_mask(self) -> xr.DataArray:
-        """Load the boundary mask for the dataset, with spatial dimensions
-        stacked.
+        """Load the boundary mask for the dataset, with spatial dimensions stacked.
 
         Returns
         -------
         xr.DataArray
             The boundary mask for the dataset, with dimensions `('grid_index',)`.
+
         """
         boundary_mask_path = self._normalize_path(
             self._config["boundary"]["mask"]["path"]
@@ -670,6 +701,7 @@ class MultiZarrDatastore(BaseCartesianDatastore):
 
         Returns:
             xr.DataArray: The xarray DataArray object with processed dataset.
+
         """
         dataset = self.open_zarrs(category)
         dataset = self._extract_vars(category, dataset)

@@ -9,11 +9,10 @@ def get_metric(metric_name):
 
     Returns:
     metric: function implementing the metric
+
     """
     metric_name_lower = metric_name.lower()
-    assert (
-        metric_name_lower in DEFINED_METRICS
-    ), f"Unknown metric: {metric_name}"
+    assert metric_name_lower in DEFINED_METRICS, f"Unknown metric: {metric_name}"
     return DEFINED_METRICS[metric_name_lower]
 
 
@@ -31,22 +30,17 @@ def mask_and_reduce_metric(metric_entry_vals, mask, average_grid, sum_vars):
     Returns:
     metric_val: One of (...,), (..., d_state), (..., N), (..., N, d_state),
     depending on reduction arguments.
+
     """
     # Only keep grid nodes in mask
     if mask is not None:
-        metric_entry_vals = metric_entry_vals[
-            ..., mask, :
-        ]  # (..., N', d_state)
+        metric_entry_vals = metric_entry_vals[..., mask, :]  # (..., N', d_state)
 
     # Optionally reduce last two dimensions
     if average_grid:  # Reduce grid first
-        metric_entry_vals = torch.mean(
-            metric_entry_vals, dim=-2
-        )  # (..., d_state)
+        metric_entry_vals = torch.mean(metric_entry_vals, dim=-2)  # (..., d_state)
     if sum_vars:  # Reduce vars second
-        metric_entry_vals = torch.sum(
-            metric_entry_vals, dim=-1
-        )  # (..., N) or (...,)
+        metric_entry_vals = torch.sum(metric_entry_vals, dim=-1)  # (..., N) or (...,)
 
     return metric_entry_vals
 
@@ -67,6 +61,7 @@ def wmse(pred, target, pred_std, mask=None, average_grid=True, sum_vars=True):
     Returns:
     metric_val: One of (...,), (..., d_state), (..., N), (..., N, d_state),
     depending on reduction arguments.
+
     """
     entry_mse = torch.nn.functional.mse_loss(
         pred, target, reduction="none"
@@ -97,11 +92,10 @@ def mse(pred, target, pred_std, mask=None, average_grid=True, sum_vars=True):
     Returns:
     metric_val: One of (...,), (..., d_state), (..., N), (..., N, d_state),
     depending on reduction arguments.
+
     """
     # Replace pred_std with constant ones
-    return wmse(
-        pred, target, torch.ones_like(pred_std), mask, average_grid, sum_vars
-    )
+    return wmse(pred, target, torch.ones_like(pred_std), mask, average_grid, sum_vars)
 
 
 def wmae(pred, target, pred_std, mask=None, average_grid=True, sum_vars=True):
@@ -120,6 +114,7 @@ def wmae(pred, target, pred_std, mask=None, average_grid=True, sum_vars=True):
     Returns:
     metric_val: One of (...,), (..., d_state), (..., N), (..., N, d_state),
     depending on reduction arguments.
+
     """
     entry_mae = torch.nn.functional.l1_loss(
         pred, target, reduction="none"
@@ -150,11 +145,10 @@ def mae(pred, target, pred_std, mask=None, average_grid=True, sum_vars=True):
     Returns:
     metric_val: One of (...,), (..., d_state), (..., N), (..., N, d_state),
     depending on reduction arguments.
+
     """
     # Replace pred_std with constant ones
-    return wmae(
-        pred, target, torch.ones_like(pred_std), mask, average_grid, sum_vars
-    )
+    return wmae(pred, target, torch.ones_like(pred_std), mask, average_grid, sum_vars)
 
 
 def nll(pred, target, pred_std, mask=None, average_grid=True, sum_vars=True):
@@ -173,6 +167,7 @@ def nll(pred, target, pred_std, mask=None, average_grid=True, sum_vars=True):
     Returns:
     metric_val: One of (...,), (..., d_state), (..., N), (..., N, d_state),
     depending on reduction arguments.
+
     """
     # Broadcast pred_std if shaped (d_state,), done internally in Normal class
     dist = torch.distributions.Normal(pred, pred_std)  # (..., N, d_state)
@@ -183,11 +178,9 @@ def nll(pred, target, pred_std, mask=None, average_grid=True, sum_vars=True):
     )
 
 
-def crps_gauss(
-    pred, target, pred_std, mask=None, average_grid=True, sum_vars=True
-):
-    """(Negative) Continuous Ranked Probability Score (CRPS) Closed-form
-    expression based on Gaussian predictive distribution.
+def crps_gauss(pred, target, pred_std, mask=None, average_grid=True, sum_vars=True):
+    """(Negative) Continuous Ranked Probability Score (CRPS) Closed-form expression
+    based on Gaussian predictive distribution.
 
     (...,) is any number of batch dimensions, potentially different
             but broadcastable
@@ -202,6 +195,7 @@ def crps_gauss(
     Returns:
     metric_val: One of (...,), (..., d_state), (..., N), (..., N, d_state),
     depending on reduction arguments.
+
     """
     std_normal = torch.distributions.Normal(
         torch.zeros((), device=pred.device), torch.ones((), device=pred.device)

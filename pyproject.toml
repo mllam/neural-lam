@@ -45,9 +45,6 @@ dev = [
 [tool.setuptools]
 py-modules = ["neural_lam"]
 
-[tool.black]
-line-length = 80
-
 [tool.isort]
 default_section = "THIRDPARTY"
 profile = "black"
@@ -70,7 +67,7 @@ known_first_party = [
 ]
 
 [tool.flake8]
-max-line-length = 80
+max-line-length = 88
 ignore = [
     "E203", # Allow whitespace before ':' (https://github.com/PyCQA/pycodestyle/issues/373)
     "I002", # Don't check for isort configuration
@@ -114,3 +111,9 @@ min-similarity-lines=10
 [build-system]
 requires = ["pdm-backend"]
 build-backend = "pdm.backend"
+
+
+[tool.docformatter]
+recursive = true
+blank = true
+black = true

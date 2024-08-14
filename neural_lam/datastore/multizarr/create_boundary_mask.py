@@ -21,6 +21,7 @@ def create_boundary_mask(data_config_path, zarr_path, n_boundary_cells):
         Data configuration.
     zarr_path : str
         Path to save the Zarr archive.
+
     """
     data_config_path = config.Config.from_file(str(data_config_path))
     mask = np.zeros(list(data_config_path.grid_shape_state.values.values()))

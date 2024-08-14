@@ -1,5 +1,5 @@
-"""Numpy-files based datastore to support the MEPS example dataset introduced
-in neural-lam v0.1.0."""
+"""Numpy-files based datastore to support the MEPS example dataset introduced in neural-
+lam v0.1.0."""
 # Standard library
 import functools
 import re
@@ -138,9 +138,17 @@ class NpyFilesDatastore(BaseCartesianDatastore):
         self,
         config_path,
     ):
-        """Create a new NpyFilesDatastore using the configuration file at the
-        given path. The config file should be a YAML file and will be loaded
-        into an instance of the `NpyDatastoreConfig` dataclass.
+        """Create a new
+        NpyFilesDatastore
+        using the
+        configuration file at
+        the given path. The
+        config file should be
+        a YAML file and will
+        be loaded into an
+        instance of the
+        `NpyDatastoreConfig`
+        dataclass.
 
         Internally, the datastore uses dask.delayed to load the data from the
         numpy files, so that the data isn't actually loaded until it's needed.
@@ -149,6 +157,7 @@ class NpyFilesDatastore(BaseCartesianDatastore):
         ----------
         config_path : str
             The path to the configuration file for the datastore.
+
         """
         # XXX: This should really be in the config file, not hard-coded in this class
         self._num_timesteps = 65
@@ -161,21 +170,32 @@ class NpyFilesDatastore(BaseCartesianDatastore):
 
     @property
     def root_path(self) -> Path:
-        """The root path of the datastore on disk. This is the directory
-        relative to which graphs and other files can be stored.
+        """The root path of the datastore on disk. This is the directory relative to
+        which graphs and other files can be stored.
 
         Returns
         -------
         Path
             The root path of the datastore
+
         """
         return self._root_path
 
     def get_dataarray(self, category: str, split: str) -> DataArray:
-        """Get the data array for the given category and split of data. If the
-        category is 'state', the data array will be a concatenation of the data
-        arrays for all ensemble members. The data will be loaded as a dask
-        array, so that the data isn't actually loaded until it's needed.
+        """Get the data array
+        for the given category
+        and split of data. If
+        the category is
+        'state', the data
+        array will be a
+        concatenation of the
+        data arrays for all
+        ensemble members. The
+        data will be loaded as
+        a dask array, so that
+        the data isn't
+        actually loaded until
+        it's needed.
 
         Parameters
         ----------
@@ -193,6 +213,7 @@ class NpyFilesDatastore(BaseCartesianDatastore):
                          ensemble_member]`
             forcing:   `[elapsed_forecast_duration, analysis_time, grid_index, feature]`
             static:    `[grid_index, feature]`
+
         """
         if category == "state":
             das = []
@@ -211,9 +232,7 @@ class NpyFilesDatastore(BaseCartesianDatastore):
             # them separately
             features = ["toa_downwelling_shortwave_flux", "column_water"]
             das = [
-                self._get_single_timeseries_dataarray(
-                    features=[feature], split=split
-                )
+                self._get_single_timeseries_dataarray(features=[feature], split=split)
                 for feature in features
             ]
             da = xr.concat(das, dim="feature")
@@ -225,9 +244,9 @@ class NpyFilesDatastore(BaseCartesianDatastore):
             # .chunk({"elapsed_forecast_duration": 1}) this time variable is turned
             # into a dask array and so execution of the calculation is delayed
             # until the feature values are actually used.
-            da_forecast_time = (
-                da.analysis_time + da.elapsed_forecast_duration
-            ).chunk({"elapsed_forecast_duration": 1})
+            da_forecast_time = (da.analysis_time + da.elapsed_forecast_duration).chunk(
+                {"elapsed_forecast_duration": 1}
+            )
             da_datetime_forcing_features = self._calc_datetime_forcing_features(
                 da_time=da_forecast_time
             )
@@ -248,9 +267,7 @@ class NpyFilesDatastore(BaseCartesianDatastore):
                     features=features, split=split
                 )
                 das.append(da)
-            da = xr.concat(das, dim="feature").transpose(
-                "grid_index", "feature"
-            )
+            da = xr.concat(das, dim="feature").transpose("grid_index", "feature")
 
         else:
             raise NotImplementedError(category)
@@ -270,11 +287,21 @@ class NpyFilesDatastore(BaseCartesianDatastore):
     def _get_single_timeseries_dataarray(
         self, features: List[str], split: str, member: int = None
     ) -> DataArray:
-        """Get the data array spanning the complete time series for a given set
-        of features and split of data. For state features the `member` argument
-        should be specified to select the ensemble member to load. The data
-        will be loaded using dask.delayed, so that the data isn't actually
-        loaded until it's needed.
+        """Get the data array
+        spanning the complete
+        time series for a
+        given set of features
+        and split of data. For
+        state features the
+        `member` argument
+        should be specified to
+        select the ensemble
+        member to load. The
+        data will be loaded
+        using dask.delayed, so
+        that the data isn't
+        actually loaded until
+        it's needed.
 
         Parameters
         ----------
@@ -296,15 +323,12 @@ class NpyFilesDatastore(BaseCartesianDatastore):
             The data array for the given category and split, with dimensions
             `[elapsed_forecast_duration, analysis_time, grid_index, feature]` for
             all categories of data
+
         """
         assert split in ("train", "val", "test"), "Unknown dataset split"
 
-        if member is not None and features != self.get_vars_names(
-            category="state"
-        ):
-            raise ValueError(
-                "Member can only be specified for the 'state' category"
-            )
+        if member is not None and features != self.get_vars_names(category="state"):
+            raise ValueError("Member can only be specified for the 'state' category")
 
         # XXX: we here assume that the grid shape is the same for all categories
         grid_shape = self.grid_shape_state
@@ -387,9 +411,7 @@ class NpyFilesDatastore(BaseCartesianDatastore):
         if features_vary_with_analysis_time:
             filepaths = [
                 fp_samples
-                / filename_format.format(
-                    analysis_time=analysis_time, **file_params
-                )
+                / filename_format.format(analysis_time=analysis_time, **file_params)
                 for analysis_time in coords["analysis_time"]
             ]
         else:
@@ -425,8 +447,8 @@ class NpyFilesDatastore(BaseCartesianDatastore):
         return da
 
     def _get_analysis_times(self, split) -> List[np.datetime64]:
-        """Get the analysis times for the given split by parsing the filenames
-        of all the files found for the given split.
+        """Get the analysis times for the given split by parsing the filenames of all
+        the files found for the given split.
 
         Parameters
         ----------
@@ -437,6 +459,7 @@ class NpyFilesDatastore(BaseCartesianDatastore):
         -------
         List[dt.datetime]
             The analysis times for the given split.
+
         """
         pattern = re.sub(r"{analysis_time:[^}]*}", "*", STATE_FILENAME_FORMAT)
         pattern = re.sub(r"{member_id:[^}]*}", "*", pattern)
@@ -449,9 +472,7 @@ class NpyFilesDatastore(BaseCartesianDatastore):
             times.append(name_parts["analysis_time"])
 
         if len(times) == 0:
-            raise ValueError(
-                f"No files found in {sample_dir} with pattern {pattern}"
-            )
+            raise ValueError(f"No files found in {sample_dir} with pattern {pattern}")
 
         return times
 
@@ -534,6 +555,7 @@ class NpyFilesDatastore(BaseCartesianDatastore):
             value of `stacked`:
             - `stacked==True`: shape `(2, n_grid_points)` where n_grid_points=N_x*N_y.
             - `stacked==False`: shape `(2, N_y, N_x)`
+
         """
 
         # the array on disk has shape [2, N_x, N_y], but we want to return it
@@ -557,6 +579,7 @@ class NpyFilesDatastore(BaseCartesianDatastore):
         -------
         int
             The length of each time step in hours.
+
         """
         return self._step_length
 
@@ -568,19 +591,21 @@ class NpyFilesDatastore(BaseCartesianDatastore):
         -------
         CartesianGridShape
             The shape of the cartesian grid for the state variables.
+
         """
         nx, ny = self.config.grid_shape_state
         return CartesianGridShape(x=nx, y=ny)
 
     @property
     def boundary_mask(self) -> xr.DataArray:
-        """The boundary mask for the dataset. This is a binary mask that is 1
-        where the grid cell is on the boundary of the domain, and 0 otherwise.
+        """The boundary mask for the dataset. This is a binary mask that is 1 where the
+        grid cell is on the boundary of the domain, and 0 otherwise.
 
         Returns
         -------
         xr.DataArray
             The boundary mask for the dataset, with dimensions `[grid_index]`.
+
         """
         xs, ys = self.get_xy(category="state", stacked=False)
         assert np.all(xs[:, 0] == xs[:, -1])
@@ -595,11 +620,24 @@ class NpyFilesDatastore(BaseCartesianDatastore):
         return da_mask_stacked_xy
 
     def get_normalization_dataarray(self, category: str) -> xr.Dataset:
-        """Return the normalization dataarray for the given category. This
-        should contain a `{category}_mean` and `{category}_std` variable for
-        each variable in the category. For `category=="state"`, the dataarray
-        should also contain a `state_diff_mean` and `state_diff_std` variable
-        for the one-step differences of the state variables.
+        """Return the
+        normalization
+        dataarray for the
+        given category. This
+        should contain a
+        `{category}_mean` and
+        `{category}_std`
+        variable for each
+        variable in the
+        category. For
+        `category=="state"`,
+        the dataarray should
+        also contain a
+        `state_diff_mean` and
+        `state_diff_std`
+        variable for the one-
+        step differences of
+        the state variables.
 
         Parameters
         ----------
@@ -612,6 +650,7 @@ class NpyFilesDatastore(BaseCartesianDatastore):
             The normalization dataarray for the given category, with variables
             for the mean and standard deviation of the variables (and
             differences for state variables).
+
         """
 
         def load_pickled_tensor(fn):
@@ -666,6 +705,7 @@ class NpyFilesDatastore(BaseCartesianDatastore):
         -------
         ccrs.Projection
             The projection of the spatial coordinates.
+
         """
         proj_class_name = self.config.projection.class_name
         ProjectionClass = getattr(ccrs, proj_class_name)

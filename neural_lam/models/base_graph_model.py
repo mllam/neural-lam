@@ -8,8 +8,8 @@ from .ar_model import ARModel
 
 
 class BaseGraphModel(ARModel):
-    """Base (abstract) class for graph-based models building on the encode-
-    process- decode idea."""
+    """Base (abstract) class for graph-based models building on the encode- process-
+    decode idea."""
 
     def __init__(self, args, datastore, forcing_window_size):
         super().__init__(
@@ -20,9 +20,7 @@ class BaseGraphModel(ARModel):
         # NOTE: (IMPORTANT!) mesh nodes MUST have the first
         # num_mesh_nodes indices,
         graph_dir_path = datastore.root_path / "graph" / args.graph
-        self.hierarchical, graph_ldict = utils.load_graph(
-            graph_dir_path=graph_dir_path
-        )
+        self.hierarchical, graph_ldict = utils.load_graph(graph_dir_path=graph_dir_path)
         for name, attr_value in graph_ldict.items():
             # Make BufferLists module members and register tensors as buffers
             if isinstance(attr_value, torch.Tensor):
@@ -44,9 +42,7 @@ class BaseGraphModel(ARModel):
         # Define sub-models
         # Feature embedders for grid
         self.mlp_blueprint_end = [args.hidden_dim] * (args.hidden_layers + 1)
-        self.grid_embedder = utils.make_mlp(
-            [self.grid_dim] + self.mlp_blueprint_end
-        )
+        self.grid_embedder = utils.make_mlp([self.grid_dim] + self.mlp_blueprint_end)
         self.g2m_embedder = utils.make_mlp([g2m_dim] + self.mlp_blueprint_end)
         self.m2g_embedder = utils.make_mlp([m2g_dim] + self.mlp_blueprint_end)
 
@@ -72,27 +68,26 @@ class BaseGraphModel(ARModel):
 
         # Output mapping (hidden_dim -> output_dim)
         self.output_map = utils.make_mlp(
-            [args.hidden_dim] * (args.hidden_layers + 1)
-            + [self.grid_output_dim],
+            [args.hidden_dim] * (args.hidden_layers + 1) + [self.grid_output_dim],
             layer_norm=False,
         )  # No layer norm on this one
 
     def get_num_mesh(self):
-        """Compute number of mesh nodes from loaded features, and number of
-        mesh nodes that should be ignored in encoding/decoding."""
+        """Compute number of mesh nodes from loaded features, and number of mesh nodes
+        that should be ignored in encoding/decoding."""
         raise NotImplementedError("get_num_mesh not implemented")
 
     def embedd_mesh_nodes(self):
-        """Embed static mesh features Returns tensor of shape (num_mesh_nodes,
-        d_h)"""
+        """Embed static mesh features Returns tensor of shape (num_mesh_nodes, d_h)"""
         raise NotImplementedError("embedd_mesh_nodes not implemented")
 
     def process_step(self, mesh_rep):
-        """Process step of embedd-process-decode framework Processes the
-        representation on the mesh, possible in multiple steps.
+        """Process step of embedd-process-decode framework Processes the representation
+        on the mesh, possible in multiple steps.
 
         mesh_rep: has shape (B, num_mesh_nodes, d_h)
         Returns mesh_rep: (B, num_mesh_nodes, d_h)
+
         """
         raise NotImplementedError("process_step not implemented")
 
@@ -147,9 +142,7 @@ class BaseGraphModel(ARModel):
         )  # (B, num_grid_nodes, d_h)
 
         # Map to output dimension, only for grid
-        net_output = self.output_map(
-            grid_rep
-        )  # (B, num_grid_nodes, d_grid_out)
+        net_output = self.output_map(grid_rep)  # (B, num_grid_nodes, d_grid_out)
 
         if self.output_std:
             pred_delta_mean, pred_std_raw = net_output.chunk(

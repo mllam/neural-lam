@@ -36,6 +36,7 @@ def calculate_datetime_forcing(da_time: xr.DataArray):
         - hour_cos: The cosine of the hour of the day, normalized to [0, 1].
         - year_sin: The sine of the time of year, normalized to [0, 1].
         - year_cos: The cosine of the time of year, normalized to [0, 1].
+
     """
     hours_of_day = xr.DataArray(da_time.dt.hour, dims=["time"])
     seconds_into_year = xr.DataArray(
@@ -49,10 +50,7 @@ def calculate_datetime_forcing(da_time: xr.DataArray):
         dims=["time"],
     )
     year_seconds = xr.DataArray(
-        [
-            get_seconds_in_year(pd.Timestamp(dt_obj).year)
-            for dt_obj in da_time.values
-        ],
+        [get_seconds_in_year(pd.Timestamp(dt_obj).year) for dt_obj in da_time.values],
         dims=["time"],
     )
     hour_angle = (hours_of_day / 12) * np.pi
@@ -85,6 +83,7 @@ def create_datetime_forcing_zarr(
         The time DataArray for which to create the datetime forcing.
     chunking : dict, optional
         The chunking to use when saving the Zarr archive.
+
     """
     if zarr_path is None:
         zarr_path = Path(data_config_path).parent / DEFAULT_FILENAME
@@ -92,9 +91,9 @@ def create_datetime_forcing_zarr(
     datastore = MultiZarrDatastore(config_path=data_config_path)
     da_state = datastore.get_dataarray(category="state", split="train")
 
-    da_datetime_forcing = calculate_datetime_forcing(
-        da_time=da_state.time
-    ).expand_dims({"grid_index": da_state.grid_index})
+    da_datetime_forcing = calculate_datetime_forcing(da_time=da_state.time).expand_dims(
+        {"grid_index": da_state.grid_index}
+    )
 
     if "x" in da_state.coords and "y" in da_state.coords:
         # copy the x and y coordinates to the datetime forcing

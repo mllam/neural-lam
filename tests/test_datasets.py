@@ -15,7 +15,7 @@ from neural_lam.weather_dataset import WeatherDataset
 
 @pytest.mark.parametrize("datastore_name", DATASTORES.keys())
 def test_dataset_item(datastore_name):
-    """Check that the `datastore.get_dataarray` method is implemented.
+    """Check that the `datasto re.get_dataarray` method is implemented.
 
     Validate the shapes of the tensors match between the different
     components of the training sample.
@@ -23,6 +23,7 @@ def test_dataset_item(datastore_name):
     init_states: (2, N_grid, d_features)
     target_states: (ar_steps, N_grid, d_features)
     forcing: (ar_steps, N_grid, d_windowed_forcing) # batch_times: (ar_steps,)
+
     """
     datastore = init_datastore(datastore_name)
     N_gridpoints = datastore.grid_shape_state.x * datastore.grid_shape_state.y
@@ -59,8 +60,7 @@ def test_dataset_item(datastore_name):
     assert forcing.shape[0] == N_pred_steps
     assert forcing.shape[1] == N_gridpoints
     assert (
-        forcing.shape[2]
-        == datastore.get_num_data_vars("forcing") * forcing_window_size
+        forcing.shape[2] == datastore.get_num_data_vars("forcing") * forcing_window_size
     )
 
     # batch times
@@ -76,15 +76,14 @@ def test_dataset_item(datastore_name):
 @pytest.mark.parametrize("split", ["train", "val", "test"])
 @pytest.mark.parametrize("datastore_name", DATASTORES.keys())
 def test_single_batch(datastore_name, split):
-    """Check that the `datastore.get_dataarray` method is implemented.
+    """Check that the `datasto re.get_dataarray` method is implemented.
 
     And that it returns an xarray DataArray with the correct dimensions.
+
     """
     datastore = init_datastore(datastore_name)
 
-    device_name = (  # noqa
-        torch.device("cuda") if torch.cuda.is_available() else "cpu"
-    )
+    device_name = torch.device("cuda") if torch.cuda.is_available() else "cpu"  # noqa
 
     graph_name = "1level"
 

@@ -11,6 +11,7 @@ class InteractionNet(pyg.nn.MessagePassing):
     """Implementation of a generic Interaction Network, from Battaglia et al.
 
     (2016)
+
     """
 
     # pylint: disable=arguments-differ
@@ -43,6 +44,7 @@ class InteractionNet(pyg.nn.MessagePassing):
             representation into and use separate MLPs for
             (None = no chunking, same MLP)
         aggr: Message aggregation method (sum/mean)
+
         """
         assert aggr in ("sum", "mean"), f"Unknown aggregation method: {aggr}"
         super().__init__(aggr=aggr)
@@ -55,9 +57,7 @@ class InteractionNet(pyg.nn.MessagePassing):
         edge_index = edge_index - edge_index.min(dim=1, keepdim=True)[0]
         # Store number of receiver nodes according to edge_index
         self.num_rec = edge_index[1].max() + 1
-        edge_index[0] = (
-            edge_index[0] + self.num_rec
-        )  # Make sender indices after rec
+        edge_index[0] = edge_index[0] + self.num_rec  # Make sender indices after rec
         self.register_buffer("edge_index", edge_index, persistent=False)
 
         # Create MLPs
@@ -83,8 +83,8 @@ class InteractionNet(pyg.nn.MessagePassing):
         self.update_edges = update_edges
 
     def forward(self, send_rep, rec_rep, edge_rep):
-        """Apply interaction network to update the representations of receiver
-        nodes, and optionally the edge representations.
+        """Apply interaction network to update the representations of receiver nodes,
+        and optionally the edge representations.
 
         send_rep: (N_send, d_h), vector representations of sender nodes
         rec_rep: (N_rec, d_h), vector representations of receiver nodes
@@ -94,6 +94,7 @@ class InteractionNet(pyg.nn.MessagePassing):
         rec_rep: (N_rec, d_h), updated vector representations of receiver nodes
         (optionally) edge_rep: (M, d_h), updated vector representations
             of edges
+
         """
         # Always concatenate to [rec_nodes, send_nodes] for propagation,
         # but only aggregate to rec_nodes
@@ -130,8 +131,11 @@ class InteractionNet(pyg.nn.MessagePassing):
 class SplitMLPs(nn.Module):
     """Module that feeds chunks of input through different MLPs.
 
-    Split up input along dim -2 using given chunk sizes and feeds each
-    chunk through separate MLPs.
+    Split up input along dim
+    -2 using given chunk sizes
+    and feeds each chunk
+    through separate MLPs.
+
     """
 
     def __init__(self, mlps, chunk_sizes):
@@ -150,6 +154,7 @@ class SplitMLPs(nn.Module):
 
         Returns:
         joined_output: (..., N, d), concatenated results from the MLPs
+
         """
         chunks = torch.split(x, self.chunk_sizes, dim=-2)
         chunk_outputs = [

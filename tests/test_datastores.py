@@ -23,6 +23,7 @@ In addition BaseCartesianDatastore must have the following methods and attribute
 - [x] `get_xy` (method): Return the x, y coordinates of the dataset.
 - [x] `coords_projection` (property): Projection object for the coordinates.
 - [x] `grid_shape_state` (property): Shape of the grid for the state variables.
+
 """
 
 # Standard library
@@ -57,9 +58,9 @@ def test_step_length(datastore_name):
 
 @pytest.mark.parametrize("datastore_name", DATASTORES.keys())
 def test_datastore_grid_xy(datastore_name):
-    """Use the `datastore.get_xy` method to get the x, y coordinates of the
-    dataset and check that the shape is correct against the
-    `datastore.grid_shape_state` property."""
+    """Use the `datastore.get_xy` method to get the x, y coordinates of the dataset and
+    check that the shape is correct against the `da tastore.grid_shape_state`
+    property."""
     datastore = init_datastore(datastore_name)
 
     # check the shapes of the xy grid
@@ -87,6 +88,7 @@ def test_get_vars(datastore_name):
 
     are consistent (as in the number of variables are the same) and that the
     return types of each are correct.
+
     """
     datastore = init_datastore(datastore_name)
 
@@ -103,7 +105,7 @@ def test_get_vars(datastore_name):
 
 @pytest.mark.parametrize("datastore_name", DATASTORES.keys())
 def test_get_normalization_dataarray(datastore_name):
-    """Check that the `datastore.get_normalization_dataarray` method is
+    """Check that the `datasto re.get_normalization_dataa rray` method is
     implemented."""
     datastore = init_datastore(datastore_name)
 
@@ -132,9 +134,10 @@ def test_get_normalization_dataarray(datastore_name):
 
 @pytest.mark.parametrize("datastore_name", DATASTORES.keys())
 def test_get_dataarray(datastore_name):
-    """Check that the `datastore.get_dataarray` method is implemented.
+    """Check that the `datasto re.get_dataarray` method is implemented.
 
     And that it returns an xarray DataArray with the correct dimensions.
+
     """
 
     datastore = init_datastore(datastore_name)
@@ -176,8 +179,8 @@ def test_get_dataarray(datastore_name):
 
 @pytest.mark.parametrize("datastore_name", DATASTORES.keys())
 def test_boundary_mask(datastore_name):
-    """Check that the `datastore.boundary_mask` property is implemented and
-    that the returned object is an xarray DataArray with the correct shape."""
+    """Check that the `datastore.boundary_mask` property is implemented and that the
+    returned object is an xarray DataArray with the correct shape."""
     datastore = init_datastore(datastore_name)
     da_mask = datastore.boundary_mask
 
@@ -195,8 +198,8 @@ def test_boundary_mask(datastore_name):
 
 @pytest.mark.parametrize("datastore_name", DATASTORES.keys())
 def test_get_xy_extent(datastore_name):
-    """Check that the `datastore.get_xy_extent` method is implemented and that
-    the returned object is a tuple of the correct length."""
+    """Check that the `datastore.get_xy_extent` method is implemented and that the
+    returned object is a tuple of the correct length."""
     datastore = init_datastore(datastore_name)
 
     if not isinstance(datastore, BaseCartesianDatastore):
@@ -247,7 +250,7 @@ def test_get_xy(datastore_name):
 
 @pytest.mark.parametrize("datastore_name", DATASTORES.keys())
 def test_get_projection(datastore_name):
-    """Check that the `datastore.coords_projection` property is implemented."""
+    """Check that the `datasto re.coords_projection` property is implemented."""
     datastore = init_datastore(datastore_name)
 
     if not isinstance(datastore, BaseCartesianDatastore):
@@ -258,7 +261,7 @@ def test_get_projection(datastore_name):
 
 @pytest.mark.parametrize("datastore_name", DATASTORES.keys())
 def get_grid_shape_state(datastore_name):
-    """Check that the `datastore.grid_shape_state` property is implemented."""
+    """Check that the `datasto re.grid_shape_state` property is implemented."""
     datastore = init_datastore(datastore_name)
 
     if not isinstance(datastore, BaseCartesianDatastore):
