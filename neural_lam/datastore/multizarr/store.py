@@ -18,19 +18,10 @@ class MultiZarrDatastore(BaseCartesianDatastore):
     DIMS_TO_KEEP = {"time", "grid_index", "variable_name"}
 
     def __init__(self, config_path):
-        """Create a multi-zarr
-        datastore from the
-        given configuration
-        file. The
-        configuration file
-        should be a YAML file,
-        the format of which is
-        should be inferred
-        from the example
-        configuration file in
-        `tests/datastore_examp
-        les/multizarr/data_con
-        fig.yml`.
+        """Create a multi-zarr datastore from the given configuration file. The
+        configuration file should be a YAML file, the format of which is should be
+        inferred from the example configuration file in `tests/datastore_examp
+        les/multizarr/data_con fig.yml`.
 
         Parameters
         ----------
@@ -390,33 +381,13 @@ class MultiZarrDatastore(BaseCartesianDatastore):
 
     @functools.lru_cache()
     def get_normalization_dataarray(self, category: str) -> xr.Dataset:
-        """Return the
-        normalization
-        dataarray for the
-        given category. This
-        should contain a
-        `{category}_mean` and
-        `{category}_std`
-        variable for each
-        variable in the
-        category. For
-        `category=="state"`,
-        the dataarray should
-        also contain a
-        `state_diff_mean` and
-        `state_diff_std`
-        variable for the one-
-        step differences of
-        the state variables.
-        The return dataarray
-        should at least have
-        dimensions of `({categ
-        ory}_feature)`, but
-        can also include for
-        example `grid_index`
-        (if the normalisation
-        is done per grid point
-        for example).
+        """Return the normalization dataarray for the given category. This should
+        contain a `{category}_mean` and `{category}_std` variable for each variable in
+        the category. For `category=="state"`, the dataarray should also contain a
+        `state_diff_mean` and `state_diff_std` variable for the one- step differences of
+        the state variables. The return dataarray should at least have dimensions of
+        `({categ ory}_feature)`, but can also include for example `grid_index` (if the
+        normalisation is done per grid point for example).
 
         Parameters
         ----------

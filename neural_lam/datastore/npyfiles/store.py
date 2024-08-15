@@ -281,21 +281,10 @@ class NpyFilesDatastore(BaseCartesianDatastore):
     def _get_single_timeseries_dataarray(
         self, features: List[str], split: str, member: int = None
     ) -> DataArray:
-        """Get the data array
-        spanning the complete
-        time series for a
-        given set of features
-        and split of data. For
-        state features the
-        `member` argument
-        should be specified to
-        select the ensemble
-        member to load. The
-        data will be loaded
-        using dask.delayed, so
-        that the data isn't
-        actually loaded until
-        it's needed.
+        """Get the data array spanning the complete time series for a given set of
+        features and split of data. For state features the `member` argument should be
+        specified to select the ensemble member to load. The data will be loaded using
+        dask.delayed, so that the data isn't actually loaded until it's needed.
 
         Parameters
         ----------
@@ -614,23 +603,10 @@ class NpyFilesDatastore(BaseCartesianDatastore):
         return da_mask_stacked_xy
 
     def get_normalization_dataarray(self, category: str) -> xr.Dataset:
-        """Return the
-        normalization
-        dataarray for the
-        given category. This
-        should contain a
-        `{category}_mean` and
-        `{category}_std`
-        variable for each
-        variable in the
-        category. For
-        `category=="state"`,
-        the dataarray should
-        also contain a
-        `state_diff_mean` and
-        `state_diff_std`
-        variable for the one-
-        step differences of
+        """Return the normalization dataarray for the given category. This should
+        contain a `{category}_mean` and `{category}_std` variable for each variable in
+        the category. For `category=="state"`, the dataarray should also contain a
+        `state_diff_mean` and `state_diff_std` variable for the one- step differences of
         the state variables.
 
         Parameters
