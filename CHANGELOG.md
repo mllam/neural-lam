@@ -88,6 +88,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   [\#52](https://github.com/mllam/neural-lam/pull/52)
   @joeloskarsson
 
+- Cap numpy version to < 2.0.0
+  [\#68](https://github.com/mllam/neural-lam/pull/68)
+  @joeloskarsson
+
 - turn `neural-lam` into a python package by moving all `*.py`-files into the
   `neural_lam/` source directory and updating imports accordingly. This means
   all cli functions are now invoke through the package name, e.g. `python -m
