@@ -9,12 +9,9 @@ import pytorch_lightning as pl
 import torch
 from lightning_fabric.utilities import seed
 
-# First-party
-from neural_lam import config, utils
-from neural_lam.models.graph_lam import GraphLAM
-from neural_lam.models.hi_lam import HiLAM
-from neural_lam.models.hi_lam_parallel import HiLAMParallel
-from neural_lam.weather_dataset import WeatherDataset
+# Local
+from . import WeatherDataset, config, utils
+from .models import GraphLAM, HiLAM, HiLAMParallel
 
 MODELS = {
     "graph_lam": GraphLAM,
