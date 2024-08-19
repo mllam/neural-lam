@@ -101,6 +101,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   anywhere once the package has been installed).
   [\#32](https://github.com/mllam/neural-lam/pull/32), @leifdenby
 
+- move from `requirements.txt` to `pyproject.toml` for defining package dependencies.
+  [\#37](https://github.com/mllam/neural-lam/pull/37), @leifdenby
+
 ## [v0.1.0](https://github.com/joeloskarsson/neural-lam/releases/tag/v0.1.0)
 
 First tagged release of `neural-lam`, matching Oskarsson et al 2023 publication
