@@ -24,17 +24,18 @@ jobs:
 
       - name: Create venv
         run: |
+          pdm config venv.in_project False
+          pdm config venv.location /opt/dlami/nvme/venv
           pdm venv create --with-pip
-          pdm use --venv in-project
 
       - name: Install torch (GPU CUDA 12.1)
         run: |
-          python -m pip install torch  --index-url https://download.pytorch.org/whl/cu121
+          pdm run python -m pip install torch  --index-url https://download.pytorch.org/whl/cu121
 
       - name: Print and check torch version
         run: |
-          python -c "import torch; print(torch.__version__)"
-          python -c "import torch; assert not torch.__version__.endswith('+cpu')"
+          pdm run python -c "import torch; print(torch.__version__)"
+          pdm run python -c "import torch; assert not torch.__version__.endswith('+cpu')"
 
       - name: Install package (including dev dependencies)
         run: |
