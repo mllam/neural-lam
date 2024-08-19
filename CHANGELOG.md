@@ -88,6 +88,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   [\#52](https://github.com/mllam/neural-lam/pull/52)
   @joeloskarsson
 
+- turn `neural-lam` into a python package by moving all `*.py`-files into the
+  `neural_lam/` source directory and updating imports accordingly. This means
+  all cli functions are now invoke through the package name, e.g. `python -m
+  neural_lam.train_model` instead of `python train_model.py` (and can be done
+  anywhere once the package has been installed).
+  [\#32](https://github.com/mllam/neural-lam/pull/32), @leifdenby
+
 ## [v0.1.0](https://github.com/joeloskarsson/neural-lam/releases/tag/v0.1.0)
 
 First tagged release of `neural-lam`, matching Oskarsson et al 2023 publication
