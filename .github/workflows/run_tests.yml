@@ -35,7 +35,7 @@ jobs:
             ${{ runner.os }}-meps-reduced-example-data-v0.1.0
       - name: Test with pytest
         run: |
-          pytest  -v -s
+          python -m pytest -v -s tests/
       - name: Save cache data
         uses: actions/cache/save@v4
         with:

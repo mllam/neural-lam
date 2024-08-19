@@ -8,8 +8,8 @@ import pytorch_lightning as pl
 import torch
 import wandb
 
-# First-party
-from neural_lam import config, metrics, utils, vis
+# Local
+from .. import config, metrics, utils, vis
 
 
 class ARModel(pl.LightningModule):
