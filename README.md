@@ -62,16 +62,10 @@ Follow the steps below to create the necessary python environment.
 1. Install GEOS for your system. For example with `sudo apt-get install libgeos-dev`. This is necessary for the Cartopy requirement.
 2. Use python 3.9.
 3. Install version 2.0.1 of PyTorch. Follow instructions on the [PyTorch webpage](https://pytorch.org/get-started/previous-versions/) for how to set this up with GPU support on your system.
-4. Install required packages specified in `requirements.txt`.
-5. Install PyTorch Geometric version 2.2.0. This can be done by running
+4. Install `neural-lam` with pip:
 ```
-TORCH="2.0.1"
-CUDA="cu117"
-
-pip install pyg-lib==0.2.0 torch-scatter==2.1.1 torch-sparse==0.6.17 torch-cluster==1.6.1\
-    torch-geometric==2.3.1 -f https://pytorch-geometric.com/whl/torch-${TORCH}+${CUDA}.html
+pip install -e .
 ```
-You will have to adjust the `CUDA` variable to match the CUDA version on your system or to run on CPU. See the [installation webpage](https://pytorch-geometric.readthedocs.io/en/latest/install/installation.html) for more information.
 
 ## Data
 Datasets should be stored in a directory called `data`.

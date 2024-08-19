@@ -27,7 +27,7 @@ TEST_DATA_KNOWN_HASH = (
 )
 
 
-@pytest.fixture
+@pytest.fixture(scope="module")
 def meps_example_reduced_filepath():
     # Download and unzip test data into data/meps_example_reduced
     pooch.retrieve(

@@ -1,3 +1,10 @@
+[project]
+name = "neural-lam"
+version = "0.1.0"
+
+[tool.setuptools]
+py-modules = ["neural_lam"]
+
 [tool.black]
 line-length = 80
 
