@@ -50,7 +50,10 @@ def calculate_datetime_forcing(da_time: xr.DataArray):
         dims=["time"],
     )
     year_seconds = xr.DataArray(
-        [get_seconds_in_year(pd.Timestamp(dt_obj).year) for dt_obj in da_time.values],
+        [
+            get_seconds_in_year(pd.Timestamp(dt_obj).year)
+            for dt_obj in da_time.values
+        ],
         dims=["time"],
     )
     hour_angle = (hours_of_day / 12) * np.pi
@@ -91,9 +94,9 @@ def create_datetime_forcing_zarr(
     datastore = MultiZarrDatastore(config_path=data_config_path)
     da_state = datastore.get_dataarray(category="state", split="train")
 
-    da_datetime_forcing = calculate_datetime_forcing(da_time=da_state.time).expand_dims(
-        {"grid_index": da_state.grid_index}
-    )
+    da_datetime_forcing = calculate_datetime_forcing(
+        da_time=da_state.time
+    ).expand_dims({"grid_index": da_state.grid_index})
 
     if "x" in da_state.coords and "y" in da_state.coords:
         # copy the x and y coordinates to the datetime forcing

@@ -55,7 +55,9 @@ def create_normalization_stats_zarr(
             for group in combined_stats:
                 vars_to_combine = group["vars"]
 
-                da_forcing_means = da_forcing_mean.sel(forcing_feature=vars_to_combine)
+                da_forcing_means = da_forcing_mean.sel(
+                    forcing_feature=vars_to_combine
+                )
                 stds = da_forcing_std.sel(forcing_feature=vars_to_combine)
 
                 combined_mean = da_forcing_means.mean(dim="forcing_feature")
@@ -64,8 +66,12 @@ def create_normalization_stats_zarr(
                 da_forcing_mean.loc[
                     dict(forcing_feature=vars_to_combine)
                 ] = combined_mean
-                da_forcing_std.loc[dict(forcing_feature=vars_to_combine)] = combined_std
-    print("Computing mean and std.-dev. for one-step differences...", flush=True)
+                da_forcing_std.loc[
+                    dict(forcing_feature=vars_to_combine)
+                ] = combined_std
+    print(
+        "Computing mean and std.-dev. for one-step differences...", flush=True
+    )
     state_data_normalized = (da_state - da_state_mean) / da_state_std
     state_data_diff_normalized = state_data_normalized.diff(dim="time")
     diff_mean, diff_std = compute_stats(state_data_diff_normalized)

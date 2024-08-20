@@ -23,7 +23,9 @@ class ARModel(pl.LightningModule):
     # pylint: disable=arguments-differ
     # Disable to override args/kwargs from superclass
 
-    def __init__(self, args, datastore: BaseDatastore, forcing_window_size: int):
+    def __init__(
+        self, args, datastore: BaseDatastore, forcing_window_size: int
+    ):
         super().__init__()
         self.save_hyperparameters(ignore=["datastore"])
         self.args = args
@@ -32,13 +34,17 @@ class ARModel(pl.LightningModule):
         split = "train"
         num_state_vars = datastore.get_num_data_vars(category="state")
         num_forcing_vars = datastore.get_num_data_vars(category="forcing")
-        da_static_features = datastore.get_dataarray(category="static", split=split)
+        da_static_features = datastore.get_dataarray(
+            category="static", split=split
+        )
         da_state_stats = datastore.get_normalization_dataarray(category="state")
         da_boundary_mask = datastore.boundary_mask
 
         # Load static features for grid/data, NB: self.predict_step assumes dimension
         # order to be (grid_index, static_feature)
-        arr_static = da_static_features.transpose("grid_index", "static_feature").values
+        arr_static = da_static_features.transpose(
+            "grid_index", "static_feature"
+        ).values
         self.register_buffer(
             "grid_static_features",
             torch.tensor(arr_static, dtype=torch.float32),
@@ -131,7 +137,9 @@ class ARModel(pl.LightningModule):
         self.spatial_loss_maps = []
 
     def configure_optimizers(self):
-        opt = torch.optim.AdamW(self.parameters(), lr=self.args.lr, betas=(0.9, 0.95))
+        opt = torch.optim.AdamW(
+            self.parameters(), lr=self.args.lr, betas=(0.9, 0.95)
+        )
         return opt
 
     @property
@@ -178,7 +186,8 @@ class ARModel(pl.LightningModule):
 
             # Overwrite border with true state
             new_state = (
-                self.boundary_mask * border_state + self.interior_mask * pred_state
+                self.boundary_mask * border_state
+                + self.interior_mask * pred_state
             )
 
             prediction_list.append(new_state)
@@ -223,7 +232,9 @@ class ARModel(pl.LightningModule):
 
         # Compute loss
         batch_loss = torch.mean(
-            self.loss(prediction, target, pred_std, mask=self.interior_mask_bool)
+            self.loss(
+                prediction, target, pred_std, mask=self.interior_mask_bool
+            )
         )  # mean over unrolled times and batch
 
         log_dict = {"train_loss": batch_loss}
@@ -255,7 +266,9 @@ class ARModel(pl.LightningModule):
         prediction, target, pred_std, _ = self.common_step(batch)
 
         time_step_loss = torch.mean(
-            self.loss(prediction, target, pred_std, mask=self.interior_mask_bool),
+            self.loss(
+                prediction, target, pred_std, mask=self.interior_mask_bool
+            ),
             dim=0,
         )  # (time_steps-1)
         mean_loss = torch.mean(time_step_loss)
@@ -303,7 +316,9 @@ class ARModel(pl.LightningModule):
         # pred_steps, num_grid_nodes, d_f) or (d_f,)
 
         time_step_loss = torch.mean(
-            self.loss(prediction, target, pred_std, mask=self.interior_mask_bool),
+            self.loss(
+                prediction, target, pred_std, mask=self.interior_mask_bool
+            ),
             dim=0,
         )  # (time_steps-1,)
         mean_loss = torch.mean(time_step_loss)
@@ -355,14 +370,19 @@ class ARModel(pl.LightningModule):
         # (B, N_log, num_grid_nodes)
 
         # Plot example predictions (on rank 0 only)
-        if self.trainer.is_global_zero and self.plotted_examples < self.n_example_pred:
+        if (
+            self.trainer.is_global_zero
+            and self.plotted_examples < self.n_example_pred
+        ):
             # Need to plot more example predictions
             n_additional_examples = min(
                 prediction.shape[0],
                 self.n_example_pred - self.plotted_examples,
             )
 
-            self.plot_examples(batch, n_additional_examples, prediction=prediction)
+            self.plot_examples(
+                batch, n_additional_examples, prediction=prediction
+            )
 
     def plot_examples(self, batch, n_examples, prediction=None):
         """Plot the first n_examples forecasts from batch.
@@ -440,12 +460,16 @@ class ARModel(pl.LightningModule):
                         )
                     }
                 )
-                plt.close("all")  # Close all figs for this time step, saves memory
+                plt.close(
+                    "all"
+                )  # Close all figs for this time step, saves memory
 
             # Save pred and target as .pt files
             torch.save(
                 pred_slice.cpu(),
-                os.path.join(wandb.run.dir, f"example_pred_{self.plotted_examples}.pt"),
+                os.path.join(
+                    wandb.run.dir, f"example_pred_{self.plotted_examples}.pt"
+                ),
             )
             torch.save(
                 target_slice.cpu(),
@@ -476,7 +500,9 @@ class ARModel(pl.LightningModule):
 
         if prefix == "test":
             # Save pdf
-            metric_fig.savefig(os.path.join(wandb.run.dir, f"{full_log_name}.pdf"))
+            metric_fig.savefig(
+                os.path.join(wandb.run.dir, f"{full_log_name}.pdf")
+            )
             # Save errors also as csv
             np.savetxt(
                 os.path.join(wandb.run.dir, f"{full_log_name}.csv"),
@@ -526,7 +552,9 @@ class ARModel(pl.LightningModule):
                 metric_rescaled = metric_tensor_averaged * self.state_std
                 # (pred_steps, d_f)
                 log_dict.update(
-                    self.create_metric_log_dict(metric_rescaled, prefix, metric_name)
+                    self.create_metric_log_dict(
+                        metric_rescaled, prefix, metric_name
+                    )
                 )
 
         if self.trainer.is_global_zero and not self.trainer.sanity_checking:
@@ -558,7 +586,9 @@ class ARModel(pl.LightningModule):
                     self.data_config,
                     title=f"Test loss, t={t_i} ({self.step_length * t_i} h)",
                 )
-                for t_i, loss_map in zip(self.args.val_steps_to_log, mean_spatial_loss)
+                for t_i, loss_map in zip(
+                    self.args.val_steps_to_log, mean_spatial_loss
+                )
             ]
 
             # log all to same wandb key, sequentially
@@ -598,7 +628,9 @@ class ARModel(pl.LightningModule):
                 )
             )
             for old_key in replace_keys:
-                new_key = old_key.replace("g2m_gnn.grid_mlp", "encoding_grid_mlp")
+                new_key = old_key.replace(
+                    "g2m_gnn.grid_mlp", "encoding_grid_mlp"
+                )
                 loaded_state_dict[new_key] = loaded_state_dict[old_key]
                 del loaded_state_dict[old_key]
         if not self.restore_opt:

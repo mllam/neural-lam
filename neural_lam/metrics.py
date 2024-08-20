@@ -12,7 +12,9 @@ def get_metric(metric_name):
 
     """
     metric_name_lower = metric_name.lower()
-    assert metric_name_lower in DEFINED_METRICS, f"Unknown metric: {metric_name}"
+    assert (
+        metric_name_lower in DEFINED_METRICS
+    ), f"Unknown metric: {metric_name}"
     return DEFINED_METRICS[metric_name_lower]
 
 
@@ -34,13 +36,19 @@ def mask_and_reduce_metric(metric_entry_vals, mask, average_grid, sum_vars):
     """
     # Only keep grid nodes in mask
     if mask is not None:
-        metric_entry_vals = metric_entry_vals[..., mask, :]  # (..., N', d_state)
+        metric_entry_vals = metric_entry_vals[
+            ..., mask, :
+        ]  # (..., N', d_state)
 
     # Optionally reduce last two dimensions
     if average_grid:  # Reduce grid first
-        metric_entry_vals = torch.mean(metric_entry_vals, dim=-2)  # (..., d_state)
+        metric_entry_vals = torch.mean(
+            metric_entry_vals, dim=-2
+        )  # (..., d_state)
     if sum_vars:  # Reduce vars second
-        metric_entry_vals = torch.sum(metric_entry_vals, dim=-1)  # (..., N) or (...,)
+        metric_entry_vals = torch.sum(
+            metric_entry_vals, dim=-1
+        )  # (..., N) or (...,)
 
     return metric_entry_vals
 
@@ -95,7 +103,9 @@ def mse(pred, target, pred_std, mask=None, average_grid=True, sum_vars=True):
 
     """
     # Replace pred_std with constant ones
-    return wmse(pred, target, torch.ones_like(pred_std), mask, average_grid, sum_vars)
+    return wmse(
+        pred, target, torch.ones_like(pred_std), mask, average_grid, sum_vars
+    )
 
 
 def wmae(pred, target, pred_std, mask=None, average_grid=True, sum_vars=True):
@@ -148,7 +158,9 @@ def mae(pred, target, pred_std, mask=None, average_grid=True, sum_vars=True):
 
     """
     # Replace pred_std with constant ones
-    return wmae(pred, target, torch.ones_like(pred_std), mask, average_grid, sum_vars)
+    return wmae(
+        pred, target, torch.ones_like(pred_std), mask, average_grid, sum_vars
+    )
 
 
 def nll(pred, target, pred_std, mask=None, average_grid=True, sum_vars=True):
@@ -178,7 +190,9 @@ def nll(pred, target, pred_std, mask=None, average_grid=True, sum_vars=True):
     )
 
 
-def crps_gauss(pred, target, pred_std, mask=None, average_grid=True, sum_vars=True):
+def crps_gauss(
+    pred, target, pred_std, mask=None, average_grid=True, sum_vars=True
+):
     """(Negative) Continuous Ranked Probability Score (CRPS) Closed-form expression
     based on Gaussian predictive distribution.
 

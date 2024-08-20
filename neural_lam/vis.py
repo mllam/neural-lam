@@ -53,7 +53,9 @@ def plot_error_map(
     ax.set_yticks(np.arange(d_f))
     var_names = datastore.get_vars_names(category="state")
     var_units = datastore.get_vars_units(category="state")
-    y_ticklabels = [f"{name} ({unit})" for name, unit in zip(var_names, var_units)]
+    y_ticklabels = [
+        f"{name} ({unit})" for name, unit in zip(var_names, var_units)
+    ]
     ax.set_yticklabels(y_ticklabels, rotation=30, size=label_size)
 
     if title:
@@ -88,7 +90,9 @@ def plot_prediction(
     # Set up masking of border region
     da_mask = datastore.unstack_grid_coords(datastore.boundary_mask)
     mask_reshaped = da_mask.values
-    pixel_alpha = mask_reshaped.clamp(0.7, 1).cpu().numpy()  # Faded border region
+    pixel_alpha = (
+        mask_reshaped.clamp(0.7, 1).cpu().numpy()
+    )  # Faded border region
 
     fig, axes = plt.subplots(
         1,
@@ -101,7 +105,9 @@ def plot_prediction(
     for ax, data in zip(axes, (target, pred)):
         ax.coastlines()  # Add coastline outlines
         data_grid = (
-            data.reshape(list(datastore.grid_shape_state.values.values())).cpu().numpy()
+            data.reshape(list(datastore.grid_shape_state.values.values()))
+            .cpu()
+            .numpy()
         )
         im = ax.imshow(
             data_grid,
@@ -138,8 +144,12 @@ def plot_spatial_error(error, obs_mask, data_config, title=None, vrange=None):
     extent = data_config.get_xy_extent("state")
 
     # Set up masking of border region
-    mask_reshaped = obs_mask.reshape(list(data_config.grid_shape_state.values.values()))
-    pixel_alpha = mask_reshaped.clamp(0.7, 1).cpu().numpy()  # Faded border region
+    mask_reshaped = obs_mask.reshape(
+        list(data_config.grid_shape_state.values.values())
+    )
+    pixel_alpha = (
+        mask_reshaped.clamp(0.7, 1).cpu().numpy()
+    )  # Faded border region
 
     fig, ax = plt.subplots(
         figsize=(5, 4.8),
@@ -148,7 +158,9 @@ def plot_spatial_error(error, obs_mask, data_config, title=None, vrange=None):
 
     ax.coastlines()  # Add coastline outlines
     error_grid = (
-        error.reshape(list(data_config.grid_shape_state.values.values())).cpu().numpy()
+        error.reshape(list(data_config.grid_shape_state.values.values()))
+        .cpu()
+        .numpy()
     )
 
     im = ax.imshow(

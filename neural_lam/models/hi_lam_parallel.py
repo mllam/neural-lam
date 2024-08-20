@@ -76,7 +76,9 @@ class HiLAMParallel(BaseHiGraphModel):
         mesh_rep, mesh_edge_rep = self.processor(mesh_rep, mesh_edge_rep)
 
         # Split up again for read-out step
-        mesh_rep_levels = list(torch.split(mesh_rep, self.level_mesh_sizes, dim=1))
+        mesh_rep_levels = list(
+            torch.split(mesh_rep, self.level_mesh_sizes, dim=1)
+        )
         mesh_edge_rep_sections = torch.split(
             mesh_edge_rep, self.edge_split_sections, dim=1
         )

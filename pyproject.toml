@@ -45,6 +45,9 @@ dev = [
 [tool.setuptools]
 py-modules = ["neural_lam"]
 
+[tool.black]
+line-length = 80
+
 [tool.isort]
 default_section = "THIRDPARTY"
 profile = "black"
@@ -67,7 +70,7 @@ known_first_party = [
 ]
 
 [tool.flake8]
-max-line-length = 88
+max-line-length = 80
 ignore = [
     "E203", # Allow whitespace before ':' (https://github.com/PyCQA/pycodestyle/issues/373)
     "I002", # Don't check for isort configuration

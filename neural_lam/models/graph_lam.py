@@ -19,7 +19,9 @@ class GraphLAM(BaseGraphModel):
     def __init__(self, args, datastore, forcing_window_size):
         super().__init__(args, datastore, forcing_window_size)
 
-        assert not self.hierarchical, "GraphLAM does not use a hierarchical mesh graph"
+        assert (
+            not self.hierarchical
+        ), "GraphLAM does not use a hierarchical mesh graph"
 
         # grid_dim from data + static + batch_static
         mesh_dim = self.mesh_static_features.shape[1]
@@ -73,7 +75,11 @@ class GraphLAM(BaseGraphModel):
         # Embed m2m here first
         batch_size = mesh_rep.shape[0]
         m2m_emb = self.m2m_embedder(self.m2m_features)  # (M_mesh, d_h)
-        m2m_emb_expanded = self.expand_to_batch(m2m_emb, batch_size)  # (B, M_mesh, d_h)
+        m2m_emb_expanded = self.expand_to_batch(
+            m2m_emb, batch_size
+        )  # (B, M_mesh, d_h)
 
-        mesh_rep, _ = self.processor(mesh_rep, m2m_emb_expanded)  # (B, N_mesh, d_h)
+        mesh_rep, _ = self.processor(
+            mesh_rep, m2m_emb_expanded
+        )  # (B, N_mesh, d_h)
         return mesh_rep

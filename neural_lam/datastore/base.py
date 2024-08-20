@@ -173,7 +173,9 @@ class BaseDatastore(abc.ABC):
         pass
 
     @abc.abstractmethod
-    def get_dataarray(self, category: str, split: str) -> Union[xr.DataArray, None]:
+    def get_dataarray(
+        self, category: str, split: str
+    ) -> Union[xr.DataArray, None]:
         """Return the
         processed data (as a
         single `xr.DataArray`)

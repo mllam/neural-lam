@@ -32,7 +32,9 @@ class WeatherDataset(torch.utils.data.Dataset):
         self.ar_steps = ar_steps
         self.datastore = datastore
 
-        self.da_state = self.datastore.get_dataarray(category="state", split=self.split)
+        self.da_state = self.datastore.get_dataarray(
+            category="state", split=self.split
+        )
         self.da_forcing = self.datastore.get_dataarray(
             category="forcing", split=self.split
         )
@@ -60,8 +62,10 @@ class WeatherDataset(torch.utils.data.Dataset):
             self.da_state_std = self.ds_state_stats.state_std
 
             if self.da_forcing is not None:
-                self.ds_forcing_stats = self.datastore.get_normalization_dataarray(
-                    category="forcing"
+                self.ds_forcing_stats = (
+                    self.datastore.get_normalization_dataarray(
+                        category="forcing"
+                    )
                 )
                 self.da_forcing_mean = self.ds_forcing_stats.forcing_mean
                 self.da_forcing_std = self.ds_forcing_stats.forcing_std
@@ -139,7 +143,9 @@ class WeatherDataset(torch.utils.data.Dataset):
         else:
             # only `time` dimension for analysis only data
             da = da.isel(
-                time=slice(idx + n_timesteps_offset, idx + n_steps + n_timesteps_offset)
+                time=slice(
+                    idx + n_timesteps_offset, idx + n_steps + n_timesteps_offset
+                )
             )
         return da
 
@@ -191,7 +197,9 @@ class WeatherDataset(torch.utils.data.Dataset):
 
         # handle time sampling in a way that is compatible with both analysis
         # and forecast data
-        da_state = self._sample_time(da=da_state, idx=idx, n_steps=2 + self.ar_steps)
+        da_state = self._sample_time(
+            da=da_state, idx=idx, n_steps=2 + self.ar_steps
+        )
 
         if da_forcing is not None:
             das_forcing = []
@@ -226,7 +234,9 @@ class WeatherDataset(torch.utils.data.Dataset):
         batch_times = da_target_states.time.values.astype(float)
 
         if self.standardize:
-            da_init_states = (da_init_states - self.da_state_mean) / self.da_state_std
+            da_init_states = (
+                da_init_states - self.da_state_mean
+            ) / self.da_state_std
             da_target_states = (
                 da_target_states - self.da_state_mean
             ) / self.da_state_std
@@ -244,7 +254,9 @@ class WeatherDataset(torch.utils.data.Dataset):
             )
 
         init_states = torch.tensor(da_init_states.values, dtype=torch.float32)
-        target_states = torch.tensor(da_target_states.values, dtype=torch.float32)
+        target_states = torch.tensor(
+            da_target_states.values, dtype=torch.float32
+        )
 
         if self.da_forcing is None:
             # create an empty forcing tensor
@@ -253,7 +265,9 @@ class WeatherDataset(torch.utils.data.Dataset):
                 dtype=torch.float32,
             )
         else:
-            forcing = torch.tensor(da_forcing_windowed.values, dtype=torch.float32)
+            forcing = torch.tensor(
+                da_forcing_windowed.values, dtype=torch.float32
+            )
 
         # init_states: (2, N_grid, d_features)
         # target_states: (ar_steps, N_grid, d_features)

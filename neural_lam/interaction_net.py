@@ -57,7 +57,9 @@ class InteractionNet(pyg.nn.MessagePassing):
         edge_index = edge_index - edge_index.min(dim=1, keepdim=True)[0]
         # Store number of receiver nodes according to edge_index
         self.num_rec = edge_index[1].max() + 1
-        edge_index[0] = edge_index[0] + self.num_rec  # Make sender indices after rec
+        edge_index[0] = (
+            edge_index[0] + self.num_rec
+        )  # Make sender indices after rec
         self.register_buffer("edge_index", edge_index, persistent=False)
 
         # Create MLPs

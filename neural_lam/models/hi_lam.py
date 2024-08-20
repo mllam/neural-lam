@@ -94,7 +94,9 @@ class HiLAM(BaseHiGraphModel):
             reversed(same_gnns[:-1]),
         ):
             # Extract representations
-            send_node_rep = mesh_rep_levels[level_l + 1]  # (B, N_mesh[l+1], d_h)
+            send_node_rep = mesh_rep_levels[
+                level_l + 1
+            ]  # (B, N_mesh[l+1], d_h)
             rec_node_rep = mesh_rep_levels[level_l]  # (B, N_mesh[l], d_h)
             down_edge_rep = mesh_down_rep[level_l]
             same_edge_rep = mesh_same_rep[level_l]
@@ -128,7 +130,9 @@ class HiLAM(BaseHiGraphModel):
             zip(up_gnns, same_gnns[1:]), start=1
         ):
             # Extract representations
-            send_node_rep = mesh_rep_levels[level_l - 1]  # (B, N_mesh[l-1], d_h)
+            send_node_rep = mesh_rep_levels[
+                level_l - 1
+            ]  # (B, N_mesh[l-1], d_h)
             rec_node_rep = mesh_rep_levels[level_l]  # (B, N_mesh[l], d_h)
             up_edge_rep = mesh_up_rep[level_l - 1]
             same_edge_rep = mesh_same_rep[level_l]

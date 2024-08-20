@@ -64,7 +64,9 @@ def main():
 
     # Add in z-dimension
     z_grid = GRID_HEIGHT * np.ones((grid_pos.shape[0],))
-    grid_pos = np.concatenate((grid_pos, np.expand_dims(z_grid, axis=1)), axis=1)
+    grid_pos = np.concatenate(
+        (grid_pos, np.expand_dims(z_grid, axis=1)), axis=1
+    )
 
     # List of edges to plot, (edge_index, color, line_width, label)
     edge_plot_list = [
@@ -116,7 +118,9 @@ def main():
         z_mesh = MESH_HEIGHT + 0.01 * mesh_degrees
         mesh_node_size = mesh_degrees / 2
 
-        mesh_pos = np.concatenate((mesh_pos, np.expand_dims(z_mesh, axis=1)), axis=1)
+        mesh_pos = np.concatenate(
+            (mesh_pos, np.expand_dims(z_mesh, axis=1)), axis=1
+        )
 
         edge_plot_list.append((m2m_edge_index.numpy(), "blue", 1, "M2M"))
 

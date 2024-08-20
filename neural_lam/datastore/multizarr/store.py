@@ -194,7 +194,9 @@ class MultiZarrDatastore(BaseCartesianDatastore):
         atmosphere_vars = self._config[category].get("atmosphere_vars", [])
         levels = self._config[category].get("levels", [])
 
-        surface_vars_count = len(surface_vars) if surface_vars is not None else 0
+        surface_vars_count = (
+            len(surface_vars) if surface_vars is not None else 0
+        )
         atmosphere_vars_count = (
             len(atmosphere_vars) if atmosphere_vars is not None else 0
         )
@@ -298,7 +300,9 @@ class MultiZarrDatastore(BaseCartesianDatastore):
             dataset = self._convert_dataset_to_dataarray(dataset)
 
             if "time" in dataset.dims:
-                dataset = dataset.transpose("time", "grid_index", "variable_name")
+                dataset = dataset.transpose(
+                    "time", "grid_index", "variable_name"
+                )
             else:
                 dataset = dataset.transpose("grid_index", "variable_name")
         dataset_vars = (
@@ -331,9 +335,13 @@ class MultiZarrDatastore(BaseCartesianDatastore):
 
         x_coords = np.arange(x_dim)
         y_coords = np.arange(y_dim)
-        multi_index = pd.MultiIndex.from_product([y_coords, x_coords], names=["y", "x"])
+        multi_index = pd.MultiIndex.from_product(
+            [y_coords, x_coords], names=["y", "x"]
+        )
 
-        mindex_coords = xr.Coordinates.from_pandas_multiindex(multi_index, "grid")
+        mindex_coords = xr.Coordinates.from_pandas_multiindex(
+            multi_index, "grid"
+        )
         dataset = dataset.drop_vars(["grid", "x", "y"], errors="ignore")
         dataset = dataset.assign_coords(mindex_coords)
         reshaped_data = dataset.unstack("grid")
@@ -363,7 +371,9 @@ class MultiZarrDatastore(BaseCartesianDatastore):
         dataset = self.open_zarrs(category)
         xs, ys = dataset.x.values, dataset.y.values
 
-        assert xs.ndim == ys.ndim, "x and y coordinates must have the same dimensions."
+        assert (
+            xs.ndim == ys.ndim
+        ), "x and y coordinates must have the same dimensions."
 
         if xs.ndim == 1:
             x, y = np.meshgrid(xs, ys)
@@ -497,7 +507,9 @@ class MultiZarrDatastore(BaseCartesianDatastore):
             stats = stats.drop_vars(["forcing_mean", "forcing_std"])
             return stats
         elif category == "forcing":
-            non_normalized_vars = self.utilities.normalization.non_normalized_vars
+            non_normalized_vars = (
+                self.utilities.normalization.non_normalized_vars
+            )
             if non_normalized_vars is None:
                 non_normalized_vars = []
             forcing_vars = self.vars_names(category)
@@ -546,7 +558,9 @@ class MultiZarrDatastore(BaseCartesianDatastore):
 
         ds_atmosphere = None
         if atmoshere_vars is not None:
-            ds_atmosphere = self._extract_atmosphere_vars(category=category, ds=ds)
+            ds_atmosphere = self._extract_atmosphere_vars(
+                category=category, ds=ds
+            )
 
         if ds_surface and ds_atmosphere:
             return xr.merge([ds_surface, ds_atmosphere])
@@ -569,8 +583,13 @@ class MultiZarrDatastore(BaseCartesianDatastore):
 
         """
 
-        if "level" not in list(ds.dims) and self._config[category]["atmosphere_vars"]:
-            ds = self._rename_dataset_dims_and_vars(ds.attrs["category"], dataset=ds)
+        if (
+            "level" not in list(ds.dims)
+            and self._config[category]["atmosphere_vars"]
+        ):
+            ds = self._rename_dataset_dims_and_vars(
+                ds.attrs["category"], dataset=ds
+            )
 
         data_arrays = [
             ds[var].sel(level=level, drop=True).rename(f"{var}_{level}")

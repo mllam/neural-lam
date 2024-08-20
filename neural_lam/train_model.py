@@ -38,7 +38,9 @@ def _init_datastore(datastore_kind, config_path):
 
 def main(input_args=None):
     """Main function for training and evaluating models."""
-    parser = ArgumentParser(description="Train or evaluate NeurWP models for LAM")
+    parser = ArgumentParser(
+        description="Train or evaluate NeurWP models for LAM"
+    )
     parser.add_argument(
         "datastore_kind",
         type=str,
@@ -83,7 +85,8 @@ def main(input_args=None):
         "--restore_opt",
         type=int,
         default=0,
-        help="If optimizer state should be restored with model " "(default: 0 (false))",
+        help="If optimizer state should be restored with model "
+        "(default: 0 (false))",
     )
     parser.add_argument(
         "--precision",
@@ -97,7 +100,8 @@ def main(input_args=None):
         "--graph",
         type=str,
         default="multiscale",
-        help="Graph to load and use in graph-based model " "(default: multiscale)",
+        help="Graph to load and use in graph-based model "
+        "(default: multiscale)",
     )
     parser.add_argument(
         "--hidden_dim",
@@ -145,7 +149,8 @@ def main(input_args=None):
         "--control_only",
         type=int,
         default=0,
-        help="Train only on control member of ensemble data " "(default: 0 (False))",
+        help="Train only on control member of ensemble data "
+        "(default: 0 (False))",
     )
     parser.add_argument(
         "--loss",
@@ -160,7 +165,8 @@ def main(input_args=None):
         "--val_interval",
         type=int,
         default=1,
-        help="Number of epochs training between each validation run " "(default: 1)",
+        help="Number of epochs training between each validation run "
+        "(default: 1)",
     )
 
     # Evaluation options
@@ -181,7 +187,8 @@ def main(input_args=None):
         "--n_example_pred",
         type=int,
         default=1,
-        help="Number of example predictions to plot during evaluation " "(default: 1)",
+        help="Number of example predictions to plot during evaluation "
+        "(default: 1)",
     )
 
     # Logger Settings
@@ -254,7 +261,9 @@ def main(input_args=None):
     # Instantiate model + trainer
     if torch.cuda.is_available():
         device_name = "cuda"
-        torch.set_float32_matmul_precision("high")  # Allows using Tensor Cores on A100s
+        torch.set_float32_matmul_precision(
+            "high"
+        )  # Allows using Tensor Cores on A100s
     else:
         device_name = "cpu"
 

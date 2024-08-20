@@ -114,7 +114,9 @@ def load_graph(graph_dir_path, device="cpu"):
     )  # List of (N_mesh[l], d_mesh_static)
 
     # Some checks for consistency
-    assert len(m2m_features) == n_levels, "Inconsistent number of levels in mesh"
+    assert (
+        len(m2m_features) == n_levels
+    ), "Inconsistent number of levels in mesh"
     assert (
         len(mesh_static_features) == n_levels
     ), "Inconsistent number of levels in mesh"
@@ -137,15 +139,23 @@ def load_graph(graph_dir_path, device="cpu"):
 
         # Rescale
         mesh_up_features = BufferList(
-            [edge_features / longest_edge for edge_features in mesh_up_features],
+            [
+                edge_features / longest_edge
+                for edge_features in mesh_up_features
+            ],
             persistent=False,
         )
         mesh_down_features = BufferList(
-            [edge_features / longest_edge for edge_features in mesh_down_features],
+            [
+                edge_features / longest_edge
+                for edge_features in mesh_down_features
+            ],
             persistent=False,
         )
 
-        mesh_static_features = BufferList(mesh_static_features, persistent=False)
+        mesh_static_features = BufferList(
+            mesh_static_features, persistent=False
+        )
     else:
         # Extract single mesh level
         m2m_edge_index = m2m_edge_index[0]

@@ -105,7 +105,8 @@ def bootstrap_multizarr_example():
     # here assume that the data-config is referring the the default path
     # for the "datetime forcings" dataset
     datetime_forcing_zarr_path = (
-        data_config_path.parent / multizarr.create_datetime_forcings.DEFAULT_FILENAME
+        data_config_path.parent
+        / multizarr.create_datetime_forcings.DEFAULT_FILENAME
     )
     if not datetime_forcing_zarr_path.exists():
         multizarr.create_datetime_forcings.create_datetime_forcing_zarr(
@@ -113,7 +114,8 @@ def bootstrap_multizarr_example():
         )
 
     normalized_forcing_zarr_path = (
-        data_config_path.parent / multizarr.create_normalization_stats.DEFAULT_FILENAME
+        data_config_path.parent
+        / multizarr.create_normalization_stats.DEFAULT_FILENAME
     )
     if not normalized_forcing_zarr_path.exists():
         multizarr.create_normalization_stats.create_normalization_stats_zarr(
@@ -121,7 +123,8 @@ def bootstrap_multizarr_example():
         )
 
     boundary_mask_path = (
-        data_config_path.parent / multizarr.create_boundary_mask.DEFAULT_FILENAME
+        data_config_path.parent
+        / multizarr.create_boundary_mask.DEFAULT_FILENAME
     )
 
     if not boundary_mask_path.exists():
@@ -137,7 +140,9 @@ def bootstrap_multizarr_example():
 DATASTORES_EXAMPLES = dict(
     multizarr=dict(config_path=bootstrap_multizarr_example()),
     mllam=dict(
-        config_path=DATASTORE_EXAMPLES_ROOT_PATH / "mllam" / "danra.example.yaml"
+        config_path=DATASTORE_EXAMPLES_ROOT_PATH
+        / "mllam"
+        / "danra.example.yaml"
     ),
     npyfiles=dict(config_path=download_meps_example_reduced_dataset()),
 )

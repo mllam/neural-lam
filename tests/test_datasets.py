@@ -60,7 +60,8 @@ def test_dataset_item(datastore_name):
     assert forcing.shape[0] == N_pred_steps
     assert forcing.shape[1] == N_gridpoints
     assert (
-        forcing.shape[2] == datastore.get_num_data_vars("forcing") * forcing_window_size
+        forcing.shape[2]
+        == datastore.get_num_data_vars("forcing") * forcing_window_size
     )
 
     # batch times
@@ -83,7 +84,9 @@ def test_single_batch(datastore_name, split):
     """
     datastore = init_datastore(datastore_name)
 
-    device_name = torch.device("cuda") if torch.cuda.is_available() else "cpu"  # noqa
+    device_name = (
+        torch.device("cuda") if torch.cuda.is_available() else "cpu"
+    )  # noqa
 
     graph_name = "1level"
 

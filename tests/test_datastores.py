@@ -56,9 +56,9 @@ def test_config(datastore_name):
     datastore = init_datastore(datastore_name)
     # check the config is a mapping or a dataclass
     config = datastore.config
-    assert isinstance(config, collections.abc.Mapping) or dataclasses.is_dataclass(
-        config
-    )
+    assert isinstance(
+        config, collections.abc.Mapping
+    ) or dataclasses.is_dataclass(config)
 
 
 @pytest.mark.parametrize("datastore_name", DATASTORES.keys())

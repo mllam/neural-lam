@@ -226,7 +226,9 @@ class NpyFilesDatastore(BaseCartesianDatastore):
             # them separately
             features = ["toa_downwelling_shortwave_flux", "column_water"]
             das = [
-                self._get_single_timeseries_dataarray(features=[feature], split=split)
+                self._get_single_timeseries_dataarray(
+                    features=[feature], split=split
+                )
                 for feature in features
             ]
             da = xr.concat(das, dim="feature")
@@ -238,9 +240,9 @@ class NpyFilesDatastore(BaseCartesianDatastore):
             # .chunk({"elapsed_forecast_duration": 1}) this time variable is turned
             # into a dask array and so execution of the calculation is delayed
             # until the feature values are actually used.
-            da_forecast_time = (da.analysis_time + da.elapsed_forecast_duration).chunk(
-                {"elapsed_forecast_duration": 1}
-            )
+            da_forecast_time = (
+                da.analysis_time + da.elapsed_forecast_duration
+            ).chunk({"elapsed_forecast_duration": 1})
             da_datetime_forcing_features = self._calc_datetime_forcing_features(
                 da_time=da_forecast_time
             )
@@ -261,7 +263,9 @@ class NpyFilesDatastore(BaseCartesianDatastore):
                     features=features, split=split
                 )
                 das.append(da)
-            da = xr.concat(das, dim="feature").transpose("grid_index", "feature")
+            da = xr.concat(das, dim="feature").transpose(
+                "grid_index", "feature"
+            )
 
         else:
             raise NotImplementedError(category)
@@ -310,8 +314,12 @@ class NpyFilesDatastore(BaseCartesianDatastore):
         """
         assert split in ("train", "val", "test"), "Unknown dataset split"
 
-        if member is not None and features != self.get_vars_names(category="state"):
-            raise ValueError("Member can only be specified for the 'state' category")
+        if member is not None and features != self.get_vars_names(
+            category="state"
+        ):
+            raise ValueError(
+                "Member can only be specified for the 'state' category"
+            )
 
         # XXX: we here assume that the grid shape is the same for all categories
         grid_shape = self.grid_shape_state
@@ -394,7 +402,9 @@ class NpyFilesDatastore(BaseCartesianDatastore):
         if features_vary_with_analysis_time:
             filepaths = [
                 fp_samples
-                / filename_format.format(analysis_time=analysis_time, **file_params)
+                / filename_format.format(
+                    analysis_time=analysis_time, **file_params
+                )
                 for analysis_time in coords["analysis_time"]
             ]
         else:
@@ -455,7 +465,9 @@ class NpyFilesDatastore(BaseCartesianDatastore):
             times.append(name_parts["analysis_time"])
 
         if len(times) == 0:
-            raise ValueError(f"No files found in {sample_dir} with pattern {pattern}")
+            raise ValueError(
+                f"No files found in {sample_dir} with pattern {pattern}"
+            )
 
         return times
 

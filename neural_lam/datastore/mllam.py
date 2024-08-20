@@ -41,7 +41,9 @@ class MLLAMDatastore(BaseCartesianDatastore):
         self._config_path = Path(config_path)
         self._root_path = self._config_path.parent
         self._config = mdp.Config.from_yaml_file(self._config_path)
-        fp_ds = self._root_path / self._config_path.name.replace(".yaml", ".zarr")
+        fp_ds = self._root_path / self._config_path.name.replace(
+            ".yaml", ".zarr"
+        )
 
         self._ds = None
         if reuse_existing and fp_ds.exists():
@@ -263,13 +265,17 @@ class MLLAMDatastore(BaseCartesianDatastore):
 
         """
         ds_unstacked = self.unstack_grid_coords(da_or_ds=self._ds)
-        da_state_variable = ds_unstacked["state"].isel(time=0).isel(state_feature=0)
+        da_state_variable = (
+            ds_unstacked["state"].isel(time=0).isel(state_feature=0)
+        )
         da_domain_allzero = xr.zeros_like(da_state_variable)
         ds_unstacked["boundary_mask"] = da_domain_allzero.isel(
             x=slice(self._n_boundary_points, -self._n_boundary_points),
             y=slice(self._n_boundary_points, -self._n_boundary_points),
         )
-        ds_unstacked["boundary_mask"] = ds_unstacked.boundary_mask.fillna(1).astype(int)
+        ds_unstacked["boundary_mask"] = ds_unstacked.boundary_mask.fillna(
+            1
+        ).astype(int)
         return self.stack_grid_coords(da_or_ds=ds_unstacked.boundary_mask)
 
     @property
