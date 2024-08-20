@@ -1,5 +1,7 @@
-"""Numpy-files based datastore to support the MEPS example dataset introduced in neural-
-lam v0.1.0."""
+"""
+Numpy-files based datastore to support the MEPS example dataset introduced in
+neural-lam v0.1.0.
+"""
 # Standard library
 import functools
 import re
@@ -39,7 +41,8 @@ class NpyFilesDatastore(BaseCartesianDatastore):
     __doc__ = f"""
     Represents a dataset stored as numpy files on disk. The dataset is assumed
     to be stored in a directory structure where each sample is stored in a
-    separate file. The file-name format is assumed to be '{STATE_FILENAME_FORMAT}'
+    separate file. The file-name format is assumed to be
+    '{STATE_FILENAME_FORMAT}'
 
     The MEPS dataset is organised into three splits: train, val, and test. Each
     split has a set of files which are:
@@ -138,9 +141,10 @@ class NpyFilesDatastore(BaseCartesianDatastore):
         self,
         config_path,
     ):
-        """Create a new NpyFilesDatastore using the configuration file at the given
-        path. The config file should be a YAML file and will be loaded into an instance
-        of the `NpyDatastoreConfig` dataclass.
+        """
+        Create a new NpyFilesDatastore using the configuration file at the
+        given path. The config file should be a YAML file and will be loaded
+        into an instance of the `NpyDatastoreConfig` dataclass.
 
         Internally, the datastore uses dask.delayed to load the data from the
         numpy files, so that the data isn't actually loaded until it's needed.
@@ -151,7 +155,8 @@ class NpyFilesDatastore(BaseCartesianDatastore):
             The path to the configuration file for the datastore.
 
         """
-        # XXX: This should really be in the config file, not hard-coded in this class
+        # XXX: This should really be in the config file, not hard-coded in this
+        # class
         self._num_timesteps = 65
         self._step_length = 3  # 3 hours
         self._num_ensemble_members = 2
@@ -162,8 +167,9 @@ class NpyFilesDatastore(BaseCartesianDatastore):
 
     @property
     def root_path(self) -> Path:
-        """The root path of the datastore on disk. This is the directory relative to
-        which graphs and other files can be stored.
+        """
+        The root path of the datastore on disk. This is the directory relative
+        to which graphs and other files can be stored.
 
         Returns
         -------
@@ -186,26 +192,30 @@ class NpyFilesDatastore(BaseCartesianDatastore):
         return self._config
 
     def get_dataarray(self, category: str, split: str) -> DataArray:
-        """Get the data array for the given category and split of data. If the category
-        is 'state', the data array will be a concatenation of the data arrays for all
-        ensemble members. The data will be loaded as a dask array, so that the data
-        isn't actually loaded until it's needed.
+        """
+        Get the data array for the given category and split of data. If the
+        category is 'state', the data array will be a concatenation of the data
+        arrays for all ensemble members. The data will be loaded as a dask
+        array, so that the data isn't actually loaded until it's needed.
 
         Parameters
         ----------
         category : str
-            The category of the data to load. One of 'state', 'forcing', or 'static'.
+            The category of the data to load. One of 'state', 'forcing', or
+            'static'.
         split : str
-            The dataset split to load the data for. One of 'train', 'val', or 'test'.
+            The dataset split to load the data for. One of 'train', 'val', or
+            'test'.
 
         Returns
         -------
         xr.DataArray
             The data array for the given category and split, with dimensions
             per category:
-            state:     `[elapsed_forecast_duration, analysis_time, grid_index, feature,
-                         ensemble_member]`
-            forcing:   `[elapsed_forecast_duration, analysis_time, grid_index, feature]`
+            state:     `[elapsed_forecast_duration, analysis_time, grid_index,
+                        feature, ensemble_member]`
+            forcing:   `[elapsed_forecast_duration, analysis_time, grid_index,
+                        feature]`
             static:    `[grid_index, feature]`
 
         """
@@ -235,11 +245,12 @@ class NpyFilesDatastore(BaseCartesianDatastore):
 
             # add datetime forcing as a feature
             # to do this we create a forecast time variable which has the
-            # dimensions of (analysis_time, elapsed_forecast_duration) with values
-            # that are the actual forecast time of each time step. By calling
-            # .chunk({"elapsed_forecast_duration": 1}) this time variable is turned
-            # into a dask array and so execution of the calculation is delayed
-            # until the feature values are actually used.
+            # dimensions of (analysis_time, elapsed_forecast_duration) with
+            # values that are the actual forecast time of each time step. By
+            # calling .chunk({"elapsed_forecast_duration": 1}) this time
+            # variable is turned into a dask array and so execution of the
+            # calculation is delayed until the feature values are actually
+            # used.
             da_forecast_time = (
                 da.analysis_time + da.elapsed_forecast_duration
             ).chunk({"elapsed_forecast_duration": 1})
@@ -285,10 +296,12 @@ class NpyFilesDatastore(BaseCartesianDatastore):
     def _get_single_timeseries_dataarray(
         self, features: List[str], split: str, member: int = None
     ) -> DataArray:
-        """Get the data array spanning the complete time series for a given set of
-        features and split of data. For state features the `member` argument should be
-        specified to select the ensemble member to load. The data will be loaded using
-        dask.delayed, so that the data isn't actually loaded until it's needed.
+        """
+        Get the data array spanning the complete time series for a given set of
+        features and split of data. For state features the `member` argument
+        should be specified to select the ensemble member to load. The data
+        will be loaded using dask.delayed, so that the data isn't actually
+        loaded until it's needed.
 
         Parameters
         ----------
@@ -300,16 +313,18 @@ class NpyFilesDatastore(BaseCartesianDatastore):
             'static' category this should be the list of static features to
             load.
         split : str
-            The dataset split to load the data for. One of 'train', 'val', or 'test'.
+            The dataset split to load the data for. One of 'train', 'val', or
+            'test'.
         member : int, optional
-            The ensemble member to load. Only applicable for the 'state' category.
+            The ensemble member to load. Only applicable for the 'state'
+            category.
 
         Returns
         -------
         xr.DataArray
             The data array for the given category and split, with dimensions
-            `[elapsed_forecast_duration, analysis_time, grid_index, feature]` for
-            all categories of data
+            `[elapsed_forecast_duration, analysis_time, grid_index, feature]`
+            for all categories of data
 
         """
         assert split in ("train", "val", "test"), "Unknown dataset split"
@@ -355,7 +370,8 @@ class NpyFilesDatastore(BaseCartesianDatastore):
             file_dims = ["y", "x", "feature"]
             add_feature_dim = True
             features_vary_with_analysis_time = False
-            # XXX: border_mask is the same for all splits, and so saved in static/
+            # XXX: border_mask is the same for all splits, and so saved in
+            # static/
             fp_samples = self.root_path / "static"
         elif features == ["x", "y"]:
             filename_format = "nwp_xy.npy"
@@ -426,12 +442,6 @@ class NpyFilesDatastore(BaseCartesianDatastore):
         else:
             arr_all = arrays[0]
 
-        # if features == ["column_water"]:
-        #     # for column water, we need to repeat the array for each forecast time
-        #     # first insert a new axis for the forecast time
-        #     arr_all = np.expand_dims(arr_all, 1)
-        #     # and then repeat
-        #     arr_all = dask.array.repeat(arr_all, self._num_timesteps, axis=1)
         da = xr.DataArray(arr_all, dims=dims, coords=coords)
 
         # stack the [x, y] dimensions into a `grid_index` dimension
@@ -440,8 +450,8 @@ class NpyFilesDatastore(BaseCartesianDatastore):
         return da
 
     def _get_analysis_times(self, split) -> List[np.datetime64]:
-        """Get the analysis times for the given split by parsing the filenames of all
-        the files found for the given split.
+        """Get the analysis times for the given split by parsing the filenames
+        of all the files found for the given split.
 
         Parameters
         ----------
@@ -546,9 +556,10 @@ class NpyFilesDatastore(BaseCartesianDatastore):
         Returns
         -------
         np.ndarray
-            The x, y coordinates of the dataset, returned differently based on the
-            value of `stacked`:
-            - `stacked==True`: shape `(2, n_grid_points)` where n_grid_points=N_x*N_y.
+            The x, y coordinates of the dataset, returned differently based on
+            the value of `stacked`:
+            - `stacked==True`: shape `(2, n_grid_points)` where
+                                      n_grid_points=N_x*N_y.
             - `stacked==False`: shape `(2, N_y, N_x)`
 
         """
@@ -593,8 +604,8 @@ class NpyFilesDatastore(BaseCartesianDatastore):
 
     @property
     def boundary_mask(self) -> xr.DataArray:
-        """The boundary mask for the dataset. This is a binary mask that is 1 where the
-        grid cell is on the boundary of the domain, and 0 otherwise.
+        """The boundary mask for the dataset. This is a binary mask that is 1
+        where the grid cell is on the boundary of the domain, and 0 otherwise.
 
         Returns
         -------
@@ -615,11 +626,11 @@ class NpyFilesDatastore(BaseCartesianDatastore):
         return da_mask_stacked_xy
 
     def get_normalization_dataarray(self, category: str) -> xr.Dataset:
-        """Return the normalization dataarray for the given category. This should
-        contain a `{category}_mean` and `{category}_std` variable for each variable in
-        the category. For `category=="state"`, the dataarray should also contain a
-        `state_diff_mean` and `state_diff_std` variable for the one- step differences of
-        the state variables.
+        """Return the normalization dataarray for the given category. This
+        should contain a `{category}_mean` and `{category}_std` variable for
+        each variable in the category. For `category=="state"`, the dataarray
+        should also contain a `state_diff_mean` and `state_diff_std` variable
+        for the one- step differences of the state variables.
 
         Parameters
         ----------

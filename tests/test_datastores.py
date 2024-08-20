@@ -6,8 +6,10 @@
 - [x] `grid_shape_state` (property): Shape of the grid for the state variables.
 - [x] `get_xy` (method): Return the x, y coordinates of the dataset.
 - [x] `coords_projection` (property): Projection object for the coordinates.
-- [x] `get_vars_units` (method): Get the units of the variables in the given category.
-- [x] `get_vars_names` (method): Get the names of the variables in the given category.
+- [x] `get_vars_units` (method): Get the units of the variables in the given
+      category.
+- [x] `get_vars_names` (method): Get the names of the variables in the given
+      category.
 - [x] `get_num_data_vars` (method): Get the number of data variables in the
       given category.
 - [x] `get_normalization_dataarray` (method): Return the normalization
@@ -18,7 +20,8 @@
       with spatial dimensions stacked.
 - [x] `config` (property): Return the configuration of the datastore.
 
-In addition BaseCartesianDatastore must have the following methods and attributes:
+In addition BaseCartesianDatastore must have the following methods and
+attributes:
 - [x] `get_xy_extent` (method): Return the extent of the x, y coordinates for a
         given category of data.
 - [x] `get_xy` (method): Return the x, y coordinates of the dataset.
@@ -72,9 +75,9 @@ def test_step_length(datastore_name):
 
 @pytest.mark.parametrize("datastore_name", DATASTORES.keys())
 def test_datastore_grid_xy(datastore_name):
-    """Use the `datastore.get_xy` method to get the x, y coordinates of the dataset and
-    check that the shape is correct against the `da tastore.grid_shape_state`
-    property."""
+    """Use the `datastore.get_xy` method to get the x, y coordinates of the
+    dataset and check that the shape is correct against the `da
+    tastore.grid_shape_state` property."""
     datastore = init_datastore(datastore_name)
 
     # check the shapes of the xy grid
@@ -82,10 +85,6 @@ def test_datastore_grid_xy(datastore_name):
     nx, ny = grid_shape.x, grid_shape.y
     for stacked in [True, False]:
         xy = datastore.get_xy("static", stacked=stacked)
-        """
-            - `stacked==True`: shape `(2, n_grid_points)` where n_grid_points=N_x*N_y.
-            - `stacked==False`: shape `(2, N_y, N_x)`
-        """
         if stacked:
             assert xy.shape == (2, nx * ny)
         else:
@@ -193,8 +192,8 @@ def test_get_dataarray(datastore_name):
 
 @pytest.mark.parametrize("datastore_name", DATASTORES.keys())
 def test_boundary_mask(datastore_name):
-    """Check that the `datastore.boundary_mask` property is implemented and that the
-    returned object is an xarray DataArray with the correct shape."""
+    """Check that the `datastore.boundary_mask` property is implemented and
+    that the returned object is an xarray DataArray with the correct shape."""
     datastore = init_datastore(datastore_name)
     da_mask = datastore.boundary_mask
 
@@ -212,8 +211,8 @@ def test_boundary_mask(datastore_name):
 
 @pytest.mark.parametrize("datastore_name", DATASTORES.keys())
 def test_get_xy_extent(datastore_name):
-    """Check that the `datastore.get_xy_extent` method is implemented and that the
-    returned object is a tuple of the correct length."""
+    """Check that the `datastore.get_xy_extent` method is implemented and that
+    the returned object is a tuple of the correct length."""
     datastore = init_datastore(datastore_name)
 
     if not isinstance(datastore, BaseCartesianDatastore):

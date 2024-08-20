@@ -18,10 +18,11 @@ class MultiZarrDatastore(BaseCartesianDatastore):
     DIMS_TO_KEEP = {"time", "grid_index", "variable_name"}
 
     def __init__(self, config_path):
-        """Create a multi-zarr datastore from the given configuration file. The
-        configuration file should be a YAML file, the format of which is should be
-        inferred from the example configuration file in `tests/datastore_examp
-        les/multizarr/data_con fig.yml`.
+        """
+        Create a multi-zarr datastore from the given configuration file. The
+        configuration file should be a YAML file, the format of which is should
+        be inferred from the example configuration file in
+        `tests/datastore_examp les/multizarr/data_config.yml`.
 
         Parameters
         ----------
@@ -61,8 +62,9 @@ class MultiZarrDatastore(BaseCartesianDatastore):
     def _normalize_path(self, path) -> str:
         """
         Normalize the path of source-dataset defined in the configuration file.
-        This assumes that any paths that do not start with a protocol (e.g. `s3://`)
-        or are not absolute paths, are relative to the configuration file.
+        This assumes that any paths that do not start with a protocol (e.g.
+        `s3://`) or are not absolute paths, are relative to the configuration
+        file.
 
         Parameters
         ----------
@@ -83,7 +85,8 @@ class MultiZarrDatastore(BaseCartesianDatastore):
         return path
 
     def open_zarrs(self, category):
-        """Open the zarr dataset for the given category.
+        """
+        Open the zarr dataset for the given category.
 
         Parameters
         ----------
@@ -113,7 +116,8 @@ class MultiZarrDatastore(BaseCartesianDatastore):
 
     @functools.cached_property
     def coords_projection(self):
-        """Return the projection object for the coordinates.
+        """
+        Return the projection object for the coordinates.
 
         The projection object is used to plot the coordinates on a map.
 
@@ -248,7 +252,8 @@ class MultiZarrDatastore(BaseCartesianDatastore):
 
         Returns:
             xr.Dataset: The xarray Dataset object with filtered dimensions.
-            OR xr.DataArray: The xarray DataArray object with filtered dimensions.
+            OR xr.DataArray: The xarray DataArray object with filtered
+                             dimensions.
 
         """
         dims_to_keep = self.DIMS_TO_KEEP
@@ -362,9 +367,10 @@ class MultiZarrDatastore(BaseCartesianDatastore):
         Returns
         -------
         np.ndarray
-            The x, y coordinates of the dataset, returned differently based on the
-            value of `stacked`:
-            - `stacked==True`: shape `(2, n_grid_points)` where n_grid_points=N_x*N_y.
+            The x, y coordinates of the dataset, returned differently based on
+            the value of `stacked`:
+            - `stacked==True`: shape `(2, n_grid_points)` where
+                               n_grid_points=N_x*N_y.
             - `stacked==False`: shape `(2, N_y, N_x)`
 
         """
@@ -391,13 +397,15 @@ class MultiZarrDatastore(BaseCartesianDatastore):
 
     @functools.lru_cache()
     def get_normalization_dataarray(self, category: str) -> xr.Dataset:
-        """Return the normalization dataarray for the given category. This should
-        contain a `{category}_mean` and `{category}_std` variable for each variable in
-        the category. For `category=="state"`, the dataarray should also contain a
-        `state_diff_mean` and `state_diff_std` variable for the one- step differences of
-        the state variables. The return dataarray should at least have dimensions of
-        `({categ ory}_feature)`, but can also include for example `grid_index` (if the
-        normalisation is done per grid point for example).
+        """
+        Return the normalization dataarray for the given category. This should
+        contain a `{category}_mean` and `{category}_std` variable for each
+        variable in the category. For `category=="state"`, the dataarray should
+        also contain a `state_diff_mean` and `state_diff_std` variable for the
+        one- step differences of the state variables. The return dataarray
+        should at least have dimensions of `({category}_feature)`, but can
+        also include for example `grid_index` (if the normalisation is done per
+        grid point for example).
 
         Parameters
         ----------
@@ -676,12 +684,15 @@ class MultiZarrDatastore(BaseCartesianDatastore):
 
     @property
     def boundary_mask(self) -> xr.DataArray:
-        """Load the boundary mask for the dataset, with spatial dimensions stacked.
+        """
+        Load the boundary mask for the dataset, with spatial dimensions
+        stacked.
 
         Returns
         -------
         xr.DataArray
-            The boundary mask for the dataset, with dimensions `('grid_index',)`.
+            The boundary mask for the dataset, with dimensions
+            `('grid_index',)`.
 
         """
         boundary_mask_path = self._normalize_path(

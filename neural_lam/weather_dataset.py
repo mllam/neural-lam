@@ -47,8 +47,8 @@ class WeatherDataset(torch.utils.data.Dataset):
                 "The provided datastore only provides "
                 f"{len(self.da_state.time)} time steps for `{split}` split, "
                 f"which is less than the required 2+ar_steps "
-                f"(2+{self.ar_steps}={2+self.ar_steps}) for creating a sample "
-                "with initial and target states."
+                f"(2+{self.ar_steps}={2 + self.ar_steps}) for creating a "
+                "sample with initial and target states."
             )
 
         # Set up for standardization

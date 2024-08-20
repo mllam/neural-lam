@@ -21,8 +21,9 @@ def create_normalization_stats_zarr(
     data_config_path: str,
     zarr_path: str = None,
 ):
-    """Compute mean and std.-dev. for state and forcing variables and save them to a
-    Zarr file.
+    """
+    Compute mean and std.-dev. for state and forcing variables and save them to
+    a Zarr file.
 
     Parameters
     ----------

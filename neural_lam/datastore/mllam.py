@@ -19,11 +19,13 @@ class MLLAMDatastore(BaseCartesianDatastore):
     """Datastore class for the MLLAM dataset."""
 
     def __init__(self, config_path, n_boundary_points=30, reuse_existing=True):
-        """Construct a new MLLAMDatastore from the configuration file at `config_path`.
-        A boundary mask is created with `n_boundary_points` boundary points. If
-        `reuse_existing` is True, the dataset is loaded from a zarr file if it exists
-        (unless the config has been modified since the zarr was created), otherwise it
-        is created from the configuration file.
+        """
+        Construct a new MLLAMDatastore from the configuration file at
+        `config_path`. A boundary mask is created with `n_boundary_points`
+        boundary points. If `reuse_existing` is True, the dataset is loaded
+        from a zarr file if it exists (unless the config has been modified
+        since the zarr was created), otherwise it is created from the
+        configuration file.
 
         Parameters
         ----------
@@ -160,11 +162,12 @@ class MLLAMDatastore(BaseCartesianDatastore):
         return len(self.get_vars_names(category))
 
     def get_dataarray(self, category: str, split: str) -> xr.DataArray:
-        """Return the processed data (as a single `xr.DataArray`) for the given category
-        of data and test/train/val-split that covers all the data (in space and time) of
-        a given category (state/forcin g/static). "state" is the only required category,
-        for other categories, the method will return `None` if the category is not found
-        in the datastore.
+        """
+        Return the processed data (as a single `xr.DataArray`) for the given
+        category of data and test/train/val-split that covers all the data (in
+        space and time) of a given category (state/forcin g/static). "state" is
+        the only required category, for other categories, the method will
+        return `None` if the category is not found in the datastore.
 
         The returned dataarray will at minimum have dimensions of `(grid_index,
         {category}_feature)` so that any spatial dimensions have been stacked
@@ -217,11 +220,12 @@ class MLLAMDatastore(BaseCartesianDatastore):
             return da_category.sel(time=slice(t_start, t_end))
 
     def get_normalization_dataarray(self, category: str) -> xr.Dataset:
-        """Return the normalization dataarray for the given category. This should
-        contain a `{category}_mean` and `{category}_std` variable for each variable in
-        the category. For `category=="state"`, the dataarray should also contain a
-        `state_diff_mean` and `state_diff_std` variable for the one- step differences of
-        the state variables.
+        """
+        Return the normalization dataarray for the given category. This should
+        contain a `{category}_mean` and `{category}_std` variable for each
+        variable in the category. For `category=="state"`, the dataarray should
+        also contain a `state_diff_mean` and `state_diff_std` variable for the
+        one- step differences of the state variables.
 
         Parameters
         ----------
@@ -251,11 +255,13 @@ class MLLAMDatastore(BaseCartesianDatastore):
 
     @property
     def boundary_mask(self) -> xr.DataArray:
-        """Produce a 0/1 mask for the boundary points of the dataset, these will sit at
-        the edges of the domain (in x/y extent) and will be used to mask out the
-        boundary points from the loss function and to overwrite the boundary points from
-        the prediction. For now this is created when the mask is requested, but in the
-        future this could be saved to the zarr file.
+        """
+        Produce a 0/1 mask for the boundary points of the dataset, these will
+        sit at the edges of the domain (in x/y extent) and will be used to mask
+        out the boundary points from the loss function and to overwrite the
+        boundary points from the prediction. For now this is created when the
+        mask is requested, but in the future this could be saved to the zarr
+        file.
 
         Returns
         -------
@@ -321,9 +327,10 @@ class MLLAMDatastore(BaseCartesianDatastore):
         Returns
         -------
         np.ndarray
-            The x, y coordinates of the dataset, returned differently based on the
-            value of `stacked`:
-            - `stacked==True`: shape `(2, n_grid_points)` where n_grid_points=N_x*N_y.
+            The x, y coordinates of the dataset, returned differently based on
+            the value of `stacked`:
+            - `stacked==True`: shape `(2, n_grid_points)` where
+                               n_grid_points=N_x*N_y.
             - `stacked==False`: shape `(2, N_y, N_x)`
 
         """

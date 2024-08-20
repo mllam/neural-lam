@@ -79,9 +79,10 @@ def bootstrap_multizarr_example():
     multizarr_path = DATASTORE_EXAMPLES_ROOT_PATH / "multizarr"
     n_boundary_cells = 10
 
+    base_url = "https://mllam-test-data.s3.eu-north-1.amazonaws.com/"
     data_urls = [
-        "https://mllam-test-data.s3.eu-north-1.amazonaws.com/single_levels.zarr",
-        "https://mllam-test-data.s3.eu-north-1.amazonaws.com/height_levels.zarr",
+        base_url + "single_levels.zarr",
+        base_url + "height_levels.zarr",
     ]
 
     for url in data_urls:
