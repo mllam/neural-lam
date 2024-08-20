@@ -90,9 +90,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   [\#52](https://github.com/mllam/neural-lam/pull/52)
   @joeloskarsson
 
-- Cap numpy version to < 2.0.0
+- Cap numpy version to < 2.0.0 (this cap was removed in #37, see below)
   [\#68](https://github.com/mllam/neural-lam/pull/68)
   @joeloskarsson
+
+- Remove numpy < 2.0.0 version cap
+  [\#37](https://github.com/mllam/neural-lam/pull/37)
+  @leifdenby
 
 - turn `neural-lam` into a python package by moving all `*.py`-files into the
   `neural_lam/` source directory and updating imports accordingly. This means
