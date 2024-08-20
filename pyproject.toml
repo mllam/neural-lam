@@ -27,13 +27,12 @@ dependencies = [
 ]
 requires-python = ">=3.9"
 
-[tool.pdm.dev-dependencies]
+[project.optional-dependencies]
 dev = [
-    "pre-commit>=2.15.0",
-    "pytest>=8.2.1",
-    "pooch>=1.8.1",
+    "pre-commit>=3.8.0",
+    "pytest>=8.3.2",
+    "pooch>=1.8.2",
 ]
-
 [tool.setuptools]
 py-modules = ["neural_lam"]
 
@@ -103,6 +102,8 @@ allow-any-import-level="neural_lam"
 [tool.pylint.SIMILARITIES]
 min-similarity-lines=10
 
+
+[tool.pdm]
 [build-system]
 requires = ["pdm-backend"]
 build-backend = "pdm.backend"
