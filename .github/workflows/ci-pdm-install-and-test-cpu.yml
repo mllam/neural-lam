@@ -46,7 +46,7 @@ jobs:
 
       - name: Run tests
         run: |
-          pdm run pytest -s tests/
+          pdm run pytest
 
       - name: Save cache data
         uses: actions/cache/save@v4

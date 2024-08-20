@@ -126,14 +126,10 @@ setup](.github/workflows/) which you can use as a reference.
 1. Clone this repository and navigate to the root directory.
 > If you are happy using the latest version of `torch` with GPU support (expecting the latest version of CUDA is installed on your system) you can skip to step 3.
 2. Install a specific version of `torch` with `python -m pip install torch --index-url https://download.pytorch.org/whl/cpu` for a CPU-only version or `python -m pip install torch --index-url https://download.pytorch.org/whl/cu111` for CUDA 11.1 support (you can find the correct URL for the variant you want on [PyTorch webpage](https://pytorch.org/get-started/locally/)).
-3. Install the dependencies with `python -m pip install .`. If you will be developing `neural-lam` we recommend to install in editable mode with `python -m pip install -e .` so you can make changes to the code and see the effects immediately. The development dependencies to install are listed in `pyproject.toml`.
+3. Install the dependencies with `python -m pip install .`. If you will be developing `neural-lam` we recommend to install in editable mode and install the development dependencies with `python -m pip install -e ".[dev]"` so you can make changes to the code and see the effects immediately.
 
 
-For each of these three datastore implementations there is a section below detailing how to use them.
-
-support both input data in `.npy`-file format (introduced in `v0.1.0`)
-
-
+## Data
 Datasets should be stored in a directory called `data`.
 See the [repository format section](#format-of-data-directory) for details on the directory structure.
 
