@@ -19,11 +19,7 @@ jobs:
 
       - name: Install package (including dev dependencies)
         run: |
-          python -m pip install .
-          # pip can't install from "dev" pdm group in pyproject.toml, should we put these requirements
-          # for running tests in a separate group? Using "dev" ensures that the these requirements aren't
-          # included in build packages
-          python -m pip install pytest pooch
+          python -m pip install ".[dev]"
 
       - name: Print and check torch version
         run: |
