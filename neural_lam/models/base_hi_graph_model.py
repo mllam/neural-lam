@@ -8,7 +8,9 @@ from .base_graph_model import BaseGraphModel
 
 
 class BaseHiGraphModel(BaseGraphModel):
-    """Base class for hierarchical graph models."""
+    """
+    Base class for hierarchical graph models.
+    """
 
     def __init__(self, args):
         super().__init__(args)
@@ -96,8 +98,10 @@ class BaseHiGraphModel(BaseGraphModel):
         )
 
     def get_num_mesh(self):
-        """Compute number of mesh nodes from loaded features, and number of mesh nodes
-        that should be ignored in encoding/decoding."""
+        """
+        Compute number of mesh nodes from loaded features,
+        and number of mesh nodes that should be ignored in encoding/decoding
+        """
         num_mesh_nodes = sum(
             node_feat.shape[0] for node_feat in self.mesh_static_features
         )
@@ -107,25 +111,21 @@ class BaseHiGraphModel(BaseGraphModel):
         return num_mesh_nodes, num_mesh_nodes_ignore
 
     def embedd_mesh_nodes(self):
-        """Embed static mesh
-        features This embeds
-        only bottom level,
-        rest is done at
-        beginning of
+        """
+        Embed static mesh features
+        This embeds only bottom level, rest is done at beginning of
         processing step
-        Returns tensor of
-        shape
-        (num_mesh_nodes[0],
-        d_h)"""
+        Returns tensor of shape (num_mesh_nodes[0], d_h)
+        """
         return self.mesh_embedders[0](self.mesh_static_features[0])
 
     def process_step(self, mesh_rep):
-        """Process step of embedd-process-decode framework Processes the representation
-        on the mesh, possible in multiple steps.
+        """
+        Process step of embedd-process-decode framework
+        Processes the representation on the mesh, possible in multiple steps
 
         mesh_rep: has shape (B, num_mesh_nodes, d_h)
         Returns mesh_rep: (B, num_mesh_nodes, d_h)
-
         """
         batch_size = mesh_rep.shape[0]
 
@@ -217,8 +217,9 @@ class BaseHiGraphModel(BaseGraphModel):
     def hi_processor_step(
         self, mesh_rep_levels, mesh_same_rep, mesh_up_rep, mesh_down_rep
     ):
-        """Internal processor step of hierarchical graph models. Between mesh init and
-        read out.
+        """
+        Internal processor step of hierarchical graph models.
+        Between mesh init and read out.
 
         Each input is list with representations, each with shape
 
@@ -228,6 +229,5 @@ class BaseHiGraphModel(BaseGraphModel):
         mesh_down_rep: (B, M_down[l <- l+1], d_h)
 
         Returns same lists
-
         """
         raise NotImplementedError("hi_process_step not implemented")

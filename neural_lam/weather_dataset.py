@@ -44,10 +44,11 @@ class WeatherDataset(torch.utils.data.Dataset):
         # non-zero amount of samples
         if self.__len__() <= 0:
             raise ValueError(
-                f"The provided datastore only provides {len(self.da_state.time)} "
-                f"time steps for `{split}` split, which is less than the "
-                f"required 2+ar_steps (2+{self.ar_steps}={2+self.ar_steps}) "
-                "for creating a sample with initial and target states."
+                "The provided datastore only provides "
+                f"{len(self.da_state.time)} time steps for `{split}` split, "
+                f"which is less than the required 2+ar_steps "
+                f"(2+{self.ar_steps}={2+self.ar_steps}) for creating a sample "
+                "with initial and target states."
             )
 
         # Set up for standardization
@@ -81,34 +82,25 @@ class WeatherDataset(torch.utils.data.Dataset):
                     f"({self.da_state.ensemble_member.size})",
                     UserWarning,
                 )
-            # XXX: we should maybe check that the 2+ar_steps actually fits
-            # in the elapsed_forecast_duration dimension, should that be checked here?
+            # XXX: we should maybe check that the 2+ar_steps actually fits in
+            # the elapsed_forecast_duration dimension, should that be checked
+            # here?
             return self.da_state.analysis_time.size
         else:
-            # sample_len = 2 + ar_steps  (2 initial states + ar_steps target states)
+            # sample_len = 2 + ar_steps
+            #             (2 initial states + ar_steps target states)
             # n_samples = len(self.da_state.time) - sample_len + 1
             #           = len(self.da_state.time) - 2 - ar_steps + 1
             #           = len(self.da_state.time) - ar_steps - 1
             return len(self.da_state.time) - self.ar_steps - 1
 
     def _sample_time(self, da, idx, n_steps: int, n_timesteps_offset: int = 0):
-        """Produce a time
-        slice of the given
-        dataarray `da` (state
-        or forcing) starting
-        at `idx` and with
-        `n_steps` steps. The
-        `n_timesteps_offset`
-        parameter is used to
-        offset the start of
-        the sample, for
-        example to exclude the
-        first two steps when
-        sampling the forcing
-        data (and to produce
-        the windowing samples
-        of forcing data by
-        increasing the offset
+        """
+        Produce a time slice of the given dataarray `da` (state or forcing)
+        starting at `idx` and with `n_steps` steps. The `n_timesteps_offset`
+        parameter is used to offset the start of the sample, for example to
+        exclude the first two steps when sampling the forcing data (and to
+        produce the windowing samples of forcing data by increasing the offset
         for each window).
 
         Parameters
@@ -150,8 +142,9 @@ class WeatherDataset(torch.utils.data.Dataset):
         return da
 
     def __getitem__(self, idx):
-        """Return a single training sample, which consists of the initial states, target
-        states, forcing and batch times.
+        """
+        Return a single training sample, which consists of the initial states,
+        target states, forcing and batch times.
 
         The implementation currently uses xarray.DataArray objects for the
         normalisation so that we can make us of xarray's broadcasting
@@ -176,7 +169,8 @@ class WeatherDataset(torch.utils.data.Dataset):
         """
         # handling ensemble data
         if self.datastore.is_ensemble:
-            # for the now the strategy is to simply select a random ensemble member
+            # for the now the strategy is to simply select a random ensemble
+            # member
             # XXX: this could be changed to include all ensemble members by
             # splitting `idx` into two parts, one for the analysis time and one
             # for the ensemble member and then increasing self.__len__ to
@@ -277,10 +271,11 @@ class WeatherDataset(torch.utils.data.Dataset):
         return init_states, target_states, forcing, batch_times
 
     def __iter__(self):
-        """Convenience method to iterate over the dataset.
+        """
+        Convenience method to iterate over the dataset.
 
-        This isn't used by pytorch DataLoader which itself implements an iterator that
-        uses Dataset.__getitem__ and Dataset.__len__.
+        This isn't used by pytorch DataLoader which itself implements an
+        iterator that uses Dataset.__getitem__ and Dataset.__len__.
 
         """
         for i in range(len(self)):

@@ -8,8 +8,10 @@ from .ar_model import ARModel
 
 
 class BaseGraphModel(ARModel):
-    """Base (abstract) class for graph-based models building on the encode- process-
-    decode idea."""
+    """
+    Base (abstract) class for graph-based models building on
+    the encode-process-decode idea.
+    """
 
     def __init__(self, args, datastore, forcing_window_size):
         super().__init__(
@@ -78,21 +80,26 @@ class BaseGraphModel(ARModel):
         )  # No layer norm on this one
 
     def get_num_mesh(self):
-        """Compute number of mesh nodes from loaded features, and number of mesh nodes
-        that should be ignored in encoding/decoding."""
+        """
+        Compute number of mesh nodes from loaded features,
+        and number of mesh nodes that should be ignored in encoding/decoding
+        """
         raise NotImplementedError("get_num_mesh not implemented")
 
     def embedd_mesh_nodes(self):
-        """Embed static mesh features Returns tensor of shape (num_mesh_nodes, d_h)"""
+        """
+        Embed static mesh features
+        Returns tensor of shape (num_mesh_nodes, d_h)
+        """
         raise NotImplementedError("embedd_mesh_nodes not implemented")
 
     def process_step(self, mesh_rep):
-        """Process step of embedd-process-decode framework Processes the representation
-        on the mesh, possible in multiple steps.
+        """
+        Process step of embedd-process-decode framework
+        Processes the representation on the mesh, possible in multiple steps
 
         mesh_rep: has shape (B, num_mesh_nodes, d_h)
         Returns mesh_rep: (B, num_mesh_nodes, d_h)
-
         """
         raise NotImplementedError("process_step not implemented")
 
