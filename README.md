@@ -115,14 +115,16 @@ setup](.github/workflows/) which you can use as a reference.
 ### Using `pdm`
 
 1. Clone this repository and navigate to the root directory.
-2. Install `pdm` if you don't have it installed on your system (either with `pip install pdm` or [following the install instructions](https://pdm-project.org/latest/#installation)). If you are happy using the latest version of `torch` with GPU support (expecting the latest version of CUDA is installed on your system) you can skip to step 5.
+2. Install `pdm` if you don't have it installed on your system (either with `pip install pdm` or [following the install instructions](https://pdm-project.org/latest/#installation)).
+> If you are happy using the latest version of `torch` with GPU support (expecting the latest version of CUDA is installed on your system) you can skip to step 5.
 3. Create a virtual environment for pdm to use with `pdm venv create --with-pip`.
 4. Install a specific version of `torch` with `pdm run python -m pip install torch --index-url https://download.pytorch.org/whl/cpu` for a CPU-only version or `pdm run python -m pip install torch --index-url https://download.pytorch.org/whl/cu111` for CUDA 11.1 support (you can find the correct URL for the variant you want on [PyTorch webpage](https://pytorch.org/get-started/locally/)).
-5. Install the dependencies with `pdm install`. If you will be developing `neural-lam` we recommend to install the development dependencies with `pdm install --dev`. By default `pdm` installs the `neural-lam` package in editable mode, so you can make changes to the code and see the effects immediately.
+5. Install the dependencies with `pdm install` (by default this in include the). If you will be developing `neural-lam` we recommend to install the development dependencies with `pdm install --group dev`. By default `pdm` installs the `neural-lam` package in editable mode, so you can make changes to the code and see the effects immediately.
 
 ### Using `pip`
 
-1. Clone this repository and navigate to the root directory. If you are happy using the latest version of `torch` with GPU support (expecting the latest version of CUDA is installed on your system) you can skip to step 3.
+1. Clone this repository and navigate to the root directory.
+> If you are happy using the latest version of `torch` with GPU support (expecting the latest version of CUDA is installed on your system) you can skip to step 3.
 2. Install a specific version of `torch` with `python -m pip install torch --index-url https://download.pytorch.org/whl/cpu` for a CPU-only version or `python -m pip install torch --index-url https://download.pytorch.org/whl/cu111` for CUDA 11.1 support (you can find the correct URL for the variant you want on [PyTorch webpage](https://pytorch.org/get-started/locally/)).
 3. Install the dependencies with `python -m pip install .`. If you will be developing `neural-lam` we recommend to install in editable mode with `python -m pip install -e .` so you can make changes to the code and see the effects immediately. The development dependencies to install are listed in `pyproject.toml`.
 
@@ -138,8 +140,8 @@ See the [repository format section](#format-of-data-directory) for details on th
 The full MEPS dataset can be shared with other researchers on request, contact us for this.
 A tiny subset of the data (named `meps_example`) is available in `example_data.zip`, which can be downloaded from [here](https://liuonline-my.sharepoint.com/:f:/g/personal/joeos82_liu_se/EuiUuiGzFIFHruPWpfxfUmYBSjhqMUjNExlJi9W6ULMZ1w?e=97pnGX).
 Download the file and unzip in the neural-lam directory.
-All graphs used in the paper are also available for download at the same link (but can as easily be re-generated using `create_mesh.py`).
-Note that this is far too little data to train any useful models, but all scripts can be ran with it.
+All graphs used in the paper are also available for download at the same link (but can as easily be re-generated using `python -m neural_lam.create_mesh`).
+Note that this is far too little data to train any useful models, but all pre-processing and training steps can be run with it.
 It should thus be useful to make sure that your python environment is set up correctly and that all the code can be ran without any issues.
 
 ## Pre-processing
@@ -148,11 +150,11 @@ An overview of how the different pre-processing steps, training and files depend
 <p align="middle">
   <img src="figures/component_dependencies.png"/>
 </p>
-In order to start training models at least three pre-processing scripts have to be ran:
+In order to start training models at least three pre-processing steps have to be run:
 
-* `create_mesh.py`
-* `create_grid_features.py`
-* `create_parameter_weights.py`
+* `python -m neural_lam.create_mesh`
+* `python -m neural_lam.create_grid_features`
+* `python -m neural_lam.create_parameter_weights`
 
 ### Create graph
 Run `python -m neural_lam.create_mesh` with suitable options to generate the graph you want to use (see `python neural_lam.create_mesh --help` for a list of options).
@@ -165,7 +167,7 @@ The graphs used for the different models in the [paper](https://arxiv.org/abs/23
 The graph-related files are stored in a directory called `graphs`.
 
 ### Create remaining static features
-To create the remaining static files run the scripts `create_grid_features.py` and `create_parameter_weights.py`.
+To create the remaining static files run `python -m neural_lam.create_grid_features` and `python -m neural_lam.create_parameter_weights`.
 
 ## Weights & Biases Integration
 The project is fully integrated with [Weights & Biases](https://www.wandb.ai/) (W&B) for logging and visualization, but can just as easily be used without it.
@@ -278,13 +280,13 @@ data
 │       ├── nwp_xy.npy                      - Coordinates of grid nodes (part of dataset)
 │       ├── surface_geopotential.npy        - Geopotential at surface of grid nodes (part of dataset)
 │       ├── border_mask.npy                 - Mask with True for grid nodes that are part of border (part of dataset)
-│       ├── grid_features.pt                - Static features of grid nodes (create_grid_features.py)
-│       ├── parameter_mean.pt               - Means of state parameters (create_parameter_weights.py)
-│       ├── parameter_std.pt                - Std.-dev. of state parameters (create_parameter_weights.py)
-│       ├── diff_mean.pt                    - Means of one-step differences (create_parameter_weights.py)
-│       ├── diff_std.pt                     - Std.-dev. of one-step differences (create_parameter_weights.py)
-│       ├── flux_stats.pt                   - Mean and std.-dev. of solar flux forcing (create_parameter_weights.py)
-│       └── parameter_weights.npy           - Loss weights for different state parameters (create_parameter_weights.py)
+│       ├── grid_features.pt                - Static features of grid nodes (neural_lam.create_grid_features)
+│       ├── parameter_mean.pt               - Means of state parameters (neural_lam.create_parameter_weights)
+│       ├── parameter_std.pt                - Std.-dev. of state parameters (neural_lam.create_parameter_weights)
+│       ├── diff_mean.pt                    - Means of one-step differences (neural_lam.create_parameter_weights)
+│       ├── diff_std.pt                     - Std.-dev. of one-step differences (neural_lam.create_parameter_weights)
+│       ├── flux_stats.pt                   - Mean and std.-dev. of solar flux forcing (neural_lam.create_parameter_weights)
+│       └── parameter_weights.npy           - Loss weights for different state parameters (neural_lam.create_parameter_weights)
 ├── dataset2
 ├── ...
 └── datasetN

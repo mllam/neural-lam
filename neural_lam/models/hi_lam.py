@@ -1,9 +1,9 @@
 # Third-party
 from torch import nn
 
-# First-party
-from neural_lam.interaction_net import InteractionNet
-from neural_lam.models.base_hi_graph_model import BaseHiGraphModel
+# Local
+from ..interaction_net import InteractionNet
+from .base_hi_graph_model import BaseHiGraphModel
 
 
 class HiLAM(BaseHiGraphModel):

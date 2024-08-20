@@ -29,8 +29,7 @@ jobs:
 
       - name: Install package (including dev dependencies)
         run: |
-          pdm install
-          pdm install --dev
+          pdm install --group :all
 
       - name: Print and check torch version
         run: |

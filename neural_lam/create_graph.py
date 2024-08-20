@@ -13,7 +13,6 @@ import torch_geometric as pyg
 from torch_geometric.utils.convert import from_networkx
 
 # Local
-# from . import config
 from .datastore.base import BaseCartesianDatastore
 from .datastore.mllam import MLLAMDatastore
 from .datastore.multizarr import MultiZarrDatastore
@@ -164,7 +163,9 @@ def create_graph(
     hierarchical: bool,
     create_plot: bool,
 ):
-    """Create graph components from `xy` grid coordinates and store in `graph_dir_path`.
+    """
+    Create graph components from `xy` grid coordinates and store in
+    `graph_dir_path`.
 
     Creates the following files for all graphs:
     - g2m_edge_index.pt  [2, N_g2m_edges]
@@ -172,8 +173,10 @@ def create_graph(
     - m2g_edge_index.pt  [2, N_m2m_edges]
     - m2g_features.pt    [N_m2m_edges, d_features]
     - m2m_edge_index.pt  list of [2, N_m2m_edges_level], length==n_levels
-    - m2m_features.pt    list of [N_m2m_edges_level, d_features], length==n_levels
-    - mesh_features.pt   list of [N_mesh_nodes_level, d_mesh_static], length==n_levels
+    - m2m_features.pt    list of [N_m2m_edges_level, d_features],
+                         length==n_levels
+    - mesh_features.pt   list of [N_mesh_nodes_level, d_mesh_static],
+                         length==n_levels
 
     where
       d_features:

@@ -11,7 +11,7 @@ authors = [
 # PEP 621 project metadata
 # See https://www.python.org/dev/peps/pep-0621/
 dependencies = [
-    "numpy>=1.24.2",
+    "numpy<2.0.0,>=1.24.2",
     "wandb>=0.13.10",
     "scipy>=1.10.0",
     "pytorch-lightning>=2.0.3",
@@ -30,11 +30,11 @@ dependencies = [
 ]
 requires-python = ">=3.9"
 
-[tool.pdm.dev-dependencies]
+[project.optional-dependencies]
 dev = [
-    "pre-commit>=2.15.0",
-    "pytest>=8.2.1",
-    "pooch>=1.8.1",
+    "pre-commit>=3.8.0",
+    "pytest>=8.3.2",
+    "pooch>=1.8.2",
     "ipdb>=0.13.13",
     "gpustat>=1.1.1",
     "zarrdump>=0.4.1",
@@ -111,6 +111,8 @@ allow-any-import-level="neural_lam"
 [tool.pylint.SIMILARITIES]
 min-similarity-lines=10
 
+
+[tool.pdm]
 [build-system]
 requires = ["pdm-backend"]
 build-backend = "pdm.backend"
