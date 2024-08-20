@@ -1,5 +1,6 @@
 ![Linting](https://github.com/mllam/neural-lam/actions/workflows/pre-commit.yml/badge.svg?branch=main)
-![Automatic tests](https://github.com/mllam/neural-lam/actions/workflows/run_tests.yml/badge.svg?branch=main)
+[![test (pdm install, gpu)](https://github.com/mllam/neural-lam/actions/workflows/ci-pdm-install-and-test-gpu.yml/badge.svg)](https://github.com/mllam/neural-lam/actions/workflows/ci-pdm-install-and-test-gpu.yml)
+[![test (pdm install, cpu)](https://github.com/mllam/neural-lam/actions/workflows/ci-pdm-install-and-test-cpu.yml/badge.svg)](https://github.com/mllam/neural-lam/actions/workflows/ci-pdm-install-and-test-cpu.yml)
 
 <p align="middle">
     <img src="figures/neural_lam_header.png" width="700">
@@ -57,15 +58,38 @@ See the issues https://github.com/joeloskarsson/neural-lam/issues/2, https://git
 Below follows instructions on how to use Neural-LAM to train and evaluate models.
 
 ## Installation
-Follow the steps below to create the necessary python environment.
 
-1. Install GEOS for your system. For example with `sudo apt-get install libgeos-dev`. This is necessary for the Cartopy requirement.
-2. Use python 3.9.
-3. Install version 2.0.1 of PyTorch. Follow instructions on the [PyTorch webpage](https://pytorch.org/get-started/previous-versions/) for how to set this up with GPU support on your system.
-4. Install `neural-lam` with pip:
-```
-pip install -e .
-```
+When installing `neural-lam` you have a choice of either installing with
+directly `pip` or using the `pdm` package manager.
+We recommend using `pdm` as it makes it easy to add/remove packages while
+keeping versions consistent (it automatically updates the `pyproject.toml`
+file), makes it easy to handle virtual environments and includes the
+development toolchain packages installation too.
+
+**regarding `torch` installation**: because `torch` creates different package
+variants for different CUDA versions and cpu-only support you will need to install
+`torch` separately if you don't want the most recent GPU variant that also
+expects the most recent version of CUDA on your system.
+
+We cover all the installation options in our [github actions ci/cd
+setup](.github/workflows/) which you can use as a reference.
+
+### Using `pdm`
+
+1. Clone this repository and navigate to the root directory.
+2. Install `pdm` if you don't have it installed on your system (either with `pip install pdm` or [following the install instructions](https://pdm-project.org/latest/#installation)).
+> If you are happy using the latest version of `torch` with GPU support (expecting the latest version of CUDA is installed on your system) you can skip to step 5.
+3. Create a virtual environment for pdm to use with `pdm venv create --with-pip`.
+4. Install a specific version of `torch` with `pdm run python -m pip install torch --index-url https://download.pytorch.org/whl/cpu` for a CPU-only version or `pdm run python -m pip install torch --index-url https://download.pytorch.org/whl/cu111` for CUDA 11.1 support (you can find the correct URL for the variant you want on [PyTorch webpage](https://pytorch.org/get-started/locally/)).
+5. Install the dependencies with `pdm install` (by default this in include the). If you will be developing `neural-lam` we recommend to install the development dependencies with `pdm install --group dev`. By default `pdm` installs the `neural-lam` package in editable mode, so you can make changes to the code and see the effects immediately.
+
+### Using `pip`
+
+1. Clone this repository and navigate to the root directory.
+> If you are happy using the latest version of `torch` with GPU support (expecting the latest version of CUDA is installed on your system) you can skip to step 3.
+2. Install a specific version of `torch` with `python -m pip install torch --index-url https://download.pytorch.org/whl/cpu` for a CPU-only version or `python -m pip install torch --index-url https://download.pytorch.org/whl/cu111` for CUDA 11.1 support (you can find the correct URL for the variant you want on [PyTorch webpage](https://pytorch.org/get-started/locally/)).
+3. Install the dependencies with `python -m pip install .`. If you will be developing `neural-lam` we recommend to install in editable mode and install the development dependencies with `python -m pip install -e ".[dev]"` so you can make changes to the code and see the effects immediately.
+
 
 ## Data
 Datasets should be stored in a directory called `data`.
