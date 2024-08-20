@@ -24,9 +24,9 @@ dependencies = [
     "plotly>=5.15.0",
     "torch>=2.3.0",
     "torch-geometric==2.3.1",
-    "mllam-data-prep @ git+https://github.com/mllam/mllam-data-prep",
     "parse>=1.20.2",
     "dataclass-wizard>=0.22.3",
+    "mllam-data-prep[dask-distributed]>=0.3.0",
 ]
 requires-python = ">=3.9"
 
@@ -38,10 +38,12 @@ dev = [
     "ipdb>=0.13.13",
     "gpustat>=1.1.1",
     "zarrdump>=0.4.1",
+    "dask[distributed]>=2024.7.1",
+    "bokeh!=3.0.*,>=2.4.2",
 ]
 
-[tool.black]
-line-length = 80
+[tool.setuptools]
+py-modules = ["neural_lam"]
 
 [tool.isort]
 default_section = "THIRDPARTY"
@@ -65,7 +67,7 @@ known_first_party = [
 ]
 
 [tool.flake8]
-max-line-length = 80
+max-line-length = 88
 ignore = [
     "E203", # Allow whitespace before ':' (https://github.com/PyCQA/pycodestyle/issues/373)
     "I002", # Don't check for isort configuration
@@ -109,3 +111,9 @@ min-similarity-lines=10
 [build-system]
 requires = ["pdm-backend"]
 build-backend = "pdm.backend"
+
+
+[tool.docformatter]
+recursive = true
+blank = true
+black = true

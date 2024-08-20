@@ -31,6 +31,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - added github pull-request template to ease contribution and review process
   [\#53](https://github.com/mllam/neural-lam/pull/53), @leifdenby
 
+- ci/cd setup for running both CPU and GPU-based testing both with pdm and pip based installs [\#37](https://github.com/mllam/neural-lam/pull/37), @khintz, @leifdenby
+
 ### Changed
 
   Optional multi-core/GPU support for statistics calculation in `create_parameter_weights.py`
@@ -86,6 +88,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Fix incorrect ordering of x- and y-dimensions in comments describing tensor
   shapes for MEPS data
   [\#52](https://github.com/mllam/neural-lam/pull/52)
+  @joeloskarsson
+
+- Cap numpy version to < 2.0.0
+  [\#68](https://github.com/mllam/neural-lam/pull/68)
   @joeloskarsson
 
 ## [v0.1.0](https://github.com/joeloskarsson/neural-lam/releases/tag/v0.1.0)

@@ -20,17 +20,18 @@ def test_training(datastore_name):
 
     if torch.cuda.is_available():
         device_name = "cuda"
-        torch.set_float32_matmul_precision(
-            "high"
-        )  # Allows using Tensor Cores on A100s
+        torch.set_float32_matmul_precision("high")  # Allows using Tensor Cores on A100s
     else:
         device_name = "cpu"
 
     trainer = pl.Trainer(
-        max_epochs=3,
+        max_epochs=1,
         deterministic=True,
-        strategy="ddp",
         accelerator=device_name,
+        # XXX: `devices` has to be set to 2 otherwise
+        # neural_lam.models.ar_model.ARModel.aggregate_and_plot_metrics fails
+        # because it expects to aggregate over multiple devices
+        devices=2,
         log_every_n_steps=1,
     )
 
@@ -68,7 +69,7 @@ def test_training(datastore_name):
         processor_layers = 4
         mesh_aggr = "sum"
         lr = 1.0e-3
-        val_steps_to_log = [1]
+        val_steps_to_log = [1, 3]
         metrics_watch = []
 
     model_args = ModelArgs()

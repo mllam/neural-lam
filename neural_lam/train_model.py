@@ -14,9 +14,7 @@ from . import utils
 from .datastore.mllam import MLLAMDatastore
 from .datastore.multizarr import MultiZarrDatastore
 from .datastore.npyfiles import NpyFilesDatastore
-from .models.graph_lam import GraphLAM
-from .models.hi_lam import HiLAM
-from .models.hi_lam_parallel import HiLAMParallel
+from .models import GraphLAM, HiLAM, HiLAMParallel
 from .weather_dataset import WeatherDataModule
 
 MODELS = {
@@ -26,13 +24,13 @@ MODELS = {
 }
 
 
-def _init_datastore(datastore_kind, path):
+def _init_datastore(datastore_kind, config_path):
     if datastore_kind == "multizarr":
-        datastore = MultiZarrDatastore(root_path=path)
+        datastore = MultiZarrDatastore(config_path=config_path)
     elif datastore_kind == "npyfiles":
-        datastore = NpyFilesDatastore(root_path=path)
+        datastore = NpyFilesDatastore(config_path=config_path)
     elif datastore_kind == "mllam":
-        datastore = MLLAMDatastore(root_path=path)
+        datastore = MLLAMDatastore(config_path=config_path)
     else:
         raise ValueError(f"Unknown datastore kind: {datastore_kind}")
     return datastore
@@ -40,19 +38,17 @@ def _init_datastore(datastore_kind, path):
 
 def main(input_args=None):
     """Main function for training and evaluating models."""
-    parser = ArgumentParser(
-        description="Train or evaluate NeurWP models for LAM"
-    )
+    parser = ArgumentParser(description="Train or evaluate NeurWP models for LAM")
     parser.add_argument(
-        "datastore-kind",
+        "datastore_kind",
         type=str,
         choices=["multizarr", "npyfiles", "mllam"],
         help="Kind of datastore to use",
     )
     parser.add_argument(
-        "datastore-path",
+        "datastore_config_path",
         type=str,
-        help="The root path for the datastore",
+        help="Path for the datastore config",
     )
     parser.add_argument(
         "--model",
@@ -87,8 +83,7 @@ def main(input_args=None):
         "--restore_opt",
         type=int,
         default=0,
-        help="If optimizer state should be restored with model "
-        "(default: 0 (false))",
+        help="If optimizer state should be restored with model " "(default: 0 (false))",
     )
     parser.add_argument(
         "--precision",
@@ -102,8 +97,7 @@ def main(input_args=None):
         "--graph",
         type=str,
         default="multiscale",
-        help="Graph to load and use in graph-based model "
-        "(default: multiscale)",
+        help="Graph to load and use in graph-based model " "(default: multiscale)",
     )
     parser.add_argument(
         "--hidden_dim",
@@ -151,8 +145,7 @@ def main(input_args=None):
         "--control_only",
         type=int,
         default=0,
-        help="Train only on control member of ensemble data "
-        "(default: 0 (False))",
+        help="Train only on control member of ensemble data " "(default: 0 (False))",
     )
     parser.add_argument(
         "--loss",
@@ -167,8 +160,7 @@ def main(input_args=None):
         "--val_interval",
         type=int,
         default=1,
-        help="Number of epochs training between each validation run "
-        "(default: 1)",
+        help="Number of epochs training between each validation run " "(default: 1)",
     )
 
     # Evaluation options
@@ -189,8 +181,7 @@ def main(input_args=None):
         "--n_example_pred",
         type=int,
         default=1,
-        help="Number of example predictions to plot during evaluation "
-        "(default: 1)",
+        help="Number of example predictions to plot during evaluation " "(default: 1)",
     )
 
     # Logger Settings
@@ -246,7 +237,8 @@ def main(input_args=None):
     seed.seed_everything(args.seed)
     # Create datastore
     datastore = _init_datastore(
-        datastore_kind=args.datastore_kind, path=args.datastore_path
+        datastore_kind=args.datastore_kind,
+        config_path=args.datastore_config_path,
     )
     # Create datamodule
     data_module = WeatherDataModule(
@@ -262,9 +254,7 @@ def main(input_args=None):
     # Instantiate model + trainer
     if torch.cuda.is_available():
         device_name = "cuda"
-        torch.set_float32_matmul_precision(
-            "high"
-        )  # Allows using Tensor Cores on A100s
+        torch.set_float32_matmul_precision("high")  # Allows using Tensor Cores on A100s
     else:
         device_name = "cpu"
 
@@ -290,7 +280,9 @@ def main(input_args=None):
         save_last=True,
     )
     logger = pl.loggers.WandbLogger(
-        project=args.wandb_project, name=run_name, config=args
+        project=args.wandb_project,
+        name=run_name,
+        config=dict(training=vars(args), datastore=datastore._config),
     )
     trainer = pl.Trainer(
         max_epochs=args.epochs,
@@ -302,7 +294,6 @@ def main(input_args=None):
         callbacks=[checkpoint_callback],
         check_val_every_n_epoch=args.val_interval,
         precision=args.precision,
-        devices=1,
     )
 
     # Only init once, on rank 0 only

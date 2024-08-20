@@ -7,8 +7,10 @@ import numpy as np
 import pandas as pd
 import xarray as xr
 
-# First-party
-from neural_lam.datastore.multizarr import MultiZarrDatastore
+# Local
+from .store import MultiZarrDatastore
+
+DEFAULT_FILENAME = "datetime_forcings.zarr"
 
 
 def get_seconds_in_year(year):
@@ -34,6 +36,7 @@ def calculate_datetime_forcing(da_time: xr.DataArray):
         - hour_cos: The cosine of the hour of the day, normalized to [0, 1].
         - year_sin: The sine of the time of year, normalized to [0, 1].
         - year_cos: The cosine of the time of year, normalized to [0, 1].
+
     """
     hours_of_day = xr.DataArray(da_time.dt.hour, dims=["time"])
     seconds_into_year = xr.DataArray(
@@ -47,10 +50,7 @@ def calculate_datetime_forcing(da_time: xr.DataArray):
         dims=["time"],
     )
     year_seconds = xr.DataArray(
-        [
-            get_seconds_in_year(pd.Timestamp(dt_obj).year)
-            for dt_obj in da_time.values
-        ],
+        [get_seconds_in_year(pd.Timestamp(dt_obj).year) for dt_obj in da_time.values],
         dims=["time"],
     )
     hour_angle = (hours_of_day / 12) * np.pi
@@ -66,6 +66,53 @@ def calculate_datetime_forcing(da_time: xr.DataArray):
     )
     datetime_forcing = (datetime_forcing + 1) / 2
     return datetime_forcing
+
+
+def create_datetime_forcing_zarr(
+    data_config_path: str,
+    zarr_path: str = None,
+    chunking: dict = {"time": 1},
+):
+    """Create the datetime forcing and save it to a Zarr archive.
+
+    Parameters
+    ----------
+    zarr_path : str
+        The path to save the Zarr archive.
+    da_time : xr.DataArray
+        The time DataArray for which to create the datetime forcing.
+    chunking : dict, optional
+        The chunking to use when saving the Zarr archive.
+
+    """
+    if zarr_path is None:
+        zarr_path = Path(data_config_path).parent / DEFAULT_FILENAME
+
+    datastore = MultiZarrDatastore(config_path=data_config_path)
+    da_state = datastore.get_dataarray(category="state", split="train")
+
+    da_datetime_forcing = calculate_datetime_forcing(da_time=da_state.time).expand_dims(
+        {"grid_index": da_state.grid_index}
+    )
+
+    if "x" in da_state.coords and "y" in da_state.coords:
+        # copy the x and y coordinates to the datetime forcing
+        for aux_coord in ["x", "y"]:
+            da_datetime_forcing.coords[aux_coord] = da_state[aux_coord]
+
+        da_datetime_forcing = da_datetime_forcing.set_index(
+            grid_index=("y", "x")
+        ).unstack("grid_index")
+        chunking["x"] = -1
+        chunking["y"] = -1
+    else:
+        chunking["grid_index"] = -1
+
+    da_datetime_forcing = da_datetime_forcing.chunk(chunking)
+
+    da_datetime_forcing.to_zarr(zarr_path, mode="w")
+    print(da_datetime_forcing)
+    print(f"Datetime forcing saved to {zarr_path}")
 
 
 def main():
@@ -88,37 +135,10 @@ def main():
     )
     args = parser.parse_args()
 
-    zarr_path = args.zarr_path
-    if zarr_path is None:
-        zarr_path = Path(args.data_config).parent / "datetime_forcings.zarr"
-
-    datastore = MultiZarrDatastore(config_path=args.data_config)
-    da_state = datastore.get_dataarray(category="state", split="train")
-
-    da_datetime_forcing = calculate_datetime_forcing(
-        da_time=da_state.time
-    ).expand_dims({"grid_index": da_state.grid_index})
-
-    chunking = {"time": 1}
-
-    if "x" in da_state.coords and "y" in da_state.coords:
-        # copy the x and y coordinates to the datetime forcing
-        for aux_coord in ["x", "y"]:
-            da_datetime_forcing.coords[aux_coord] = da_state[aux_coord]
-
-        da_datetime_forcing = da_datetime_forcing.set_index(
-            grid_index=("y", "x")
-        ).unstack("grid_index")
-        chunking["x"] = -1
-        chunking["y"] = -1
-    else:
-        chunking["grid_index"] = -1
-
-    da_datetime_forcing = da_datetime_forcing.chunk(chunking)
-
-    da_datetime_forcing.to_zarr(zarr_path, mode="w")
-    print(da_datetime_forcing)
-    print(f"Datetime forcing saved to {zarr_path}")
+    create_datetime_forcing_zarr(
+        data_config_path=args.data_config,
+        zarr_path=args.zarr_path,
+    )
 
 
 if __name__ == "__main__":

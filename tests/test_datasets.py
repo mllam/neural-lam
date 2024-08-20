@@ -15,7 +15,7 @@ from neural_lam.weather_dataset import WeatherDataset
 
 @pytest.mark.parametrize("datastore_name", DATASTORES.keys())
 def test_dataset_item(datastore_name):
-    """Check that the `datastore.get_dataarray` method is implemented.
+    """Check that the `datasto re.get_dataarray` method is implemented.
 
     Validate the shapes of the tensors match between the different
     components of the training sample.
@@ -23,11 +23,12 @@ def test_dataset_item(datastore_name):
     init_states: (2, N_grid, d_features)
     target_states: (ar_steps, N_grid, d_features)
     forcing: (ar_steps, N_grid, d_windowed_forcing) # batch_times: (ar_steps,)
+
     """
     datastore = init_datastore(datastore_name)
     N_gridpoints = datastore.grid_shape_state.x * datastore.grid_shape_state.y
 
-    N_pred_steps = 1
+    N_pred_steps = 4
     forcing_window_size = 3
     dataset = WeatherDataset(
         datastore=datastore,
@@ -43,44 +44,46 @@ def test_dataset_item(datastore_name):
     init_states, target_states, forcing, batch_times = item
 
     # initial states
+    assert init_states.ndim == 3
     assert init_states.shape[0] == 2  # two time steps go into the input
     assert init_states.shape[1] == N_gridpoints
     assert init_states.shape[2] == datastore.get_num_data_vars("state")
 
     # output states
+    assert target_states.ndim == 3
     assert target_states.shape[0] == N_pred_steps
     assert target_states.shape[1] == N_gridpoints
     assert target_states.shape[2] == datastore.get_num_data_vars("state")
 
     # forcing
+    assert forcing.ndim == 3
     assert forcing.shape[0] == N_pred_steps
     assert forcing.shape[1] == N_gridpoints
     assert (
-        forcing.shape[2]
-        == datastore.get_num_data_vars("forcing") * forcing_window_size
+        forcing.shape[2] == datastore.get_num_data_vars("forcing") * forcing_window_size
     )
 
     # batch times
+    assert batch_times.ndim == 1
     assert batch_times.shape[0] == N_pred_steps
 
-    # try to run through the whole dataset to ensure slicing and stacking
+    # try to get the last item of the dataset to ensure slicing and stacking
     # operations are working as expected and are consistent with the dataset
     # length
-    for item in iter(dataset):
-        pass
+    dataset[len(dataset) - 1]
 
 
+@pytest.mark.parametrize("split", ["train", "val", "test"])
 @pytest.mark.parametrize("datastore_name", DATASTORES.keys())
-def test_single_batch(datastore_name, split="train"):
-    """Check that the `datastore.get_dataarray` method is implemented.
+def test_single_batch(datastore_name, split):
+    """Check that the `datasto re.get_dataarray` method is implemented.
 
     And that it returns an xarray DataArray with the correct dimensions.
+
     """
     datastore = init_datastore(datastore_name)
 
-    device_name = (  # noqa
-        torch.device("cuda") if torch.cuda.is_available() else "cpu"
-    )
+    device_name = torch.device("cuda") if torch.cuda.is_available() else "cpu"  # noqa
 
     graph_name = "1level"
 
@@ -117,7 +120,7 @@ def test_single_batch(datastore_name, split="train"):
     )
 
     model_device = model.to(device_name)
-    data_loader = DataLoader(dataset, batch_size=2)
+    data_loader = DataLoader(dataset, batch_size=5)
     batch = next(iter(data_loader))
     batch_device = [part.to(device_name) for part in batch]
     model_device.common_step(batch_device)

@@ -15,6 +15,7 @@ class WeatherDataset(torch.utils.data.Dataset):
     """Dataset class for weather data.
 
     This class loads and processes weather data from a given datastore.
+
     """
 
     def __init__(
@@ -31,13 +32,21 @@ class WeatherDataset(torch.utils.data.Dataset):
         self.ar_steps = ar_steps
         self.datastore = datastore
 
-        self.da_state = self.datastore.get_dataarray(
-            category="state", split=self.split
-        )
+        self.da_state = self.datastore.get_dataarray(category="state", split=self.split)
         self.da_forcing = self.datastore.get_dataarray(
             category="forcing", split=self.split
         )
         self.forcing_window_size = forcing_window_size
+
+        # check that with the provided data-arrays and ar_steps that we have a
+        # non-zero amount of samples
+        if self.__len__() <= 0:
+            raise ValueError(
+                f"The provided datastore only provides {len(self.da_state.time)} "
+                f"time steps for `{split}` split, which is less than the "
+                f"required 2+ar_steps (2+{self.ar_steps}={2+self.ar_steps}) "
+                "for creating a sample with initial and target states."
+            )
 
         # Set up for standardization
         # TODO: This will become part of ar_model.py soon!
@@ -51,10 +60,8 @@ class WeatherDataset(torch.utils.data.Dataset):
             self.da_state_std = self.ds_state_stats.state_std
 
             if self.da_forcing is not None:
-                self.ds_forcing_stats = (
-                    self.datastore.get_normalization_dataarray(
-                        category="forcing"
-                    )
+                self.ds_forcing_stats = self.datastore.get_normalization_dataarray(
+                    category="forcing"
                 )
                 self.da_forcing_mean = self.ds_forcing_stats.forcing_mean
                 self.da_forcing_std = self.ds_forcing_stats.forcing_std
@@ -74,18 +81,30 @@ class WeatherDataset(torch.utils.data.Dataset):
             # in the elapsed_forecast_duration dimension, should that be checked here?
             return self.da_state.analysis_time.size
         else:
-            # sample_len = 2 + ar_steps  <-- 2 initial states + ar_steps target states
+            # sample_len = 2 + ar_steps  (2 initial states + ar_steps target states)
             # n_samples = len(self.da_state.time) - sample_len + 1
             #           = len(self.da_state.time) - 2 - ar_steps + 1
             #           = len(self.da_state.time) - ar_steps - 1
             return len(self.da_state.time) - self.ar_steps - 1
 
     def _sample_time(self, da, idx, n_steps: int, n_timesteps_offset: int = 0):
-        """Produce a time slice of the given dataarray `da` (state or forcing)
-        starting at `idx` and with `n_steps` steps. The `n_timesteps_offset`
-        parameter is used to offset the start of the sample, for example to
-        exclude the first two steps when sampling the forcing data (and to
-        produce the windowing samples of forcing data by increasing the offset
+        """Produce a time
+        slice of the given
+        dataarray `da` (state
+        or forcing) starting
+        at `idx` and with
+        `n_steps` steps. The
+        `n_timesteps_offset`
+        parameter is used to
+        offset the start of
+        the sample, for
+        example to exclude the
+        first two steps when
+        sampling the forcing
+        data (and to produce
+        the windowing samples
+        of forcing data by
+        increasing the offset
         for each window).
 
         Parameters
@@ -99,6 +118,7 @@ class WeatherDataset(torch.utils.data.Dataset):
             The index of the time step to start the sample from.
         n_steps : int
             The number of time steps to include in the sample.
+
         """
         # selecting the time slice
         if self.datastore.is_forecast:
@@ -119,15 +139,13 @@ class WeatherDataset(torch.utils.data.Dataset):
         else:
             # only `time` dimension for analysis only data
             da = da.isel(
-                time=slice(
-                    idx + n_timesteps_offset, idx + n_steps + n_timesteps_offset
-                )
+                time=slice(idx + n_timesteps_offset, idx + n_steps + n_timesteps_offset)
             )
         return da
 
     def __getitem__(self, idx):
-        """Return a single training sample, which consists of the initial
-        states, target states, forcing and batch times.
+        """Return a single training sample, which consists of the initial states, target
+        states, forcing and batch times.
 
         The implementation currently uses xarray.DataArray objects for the
         normalisation so that we can make us of xarray's broadcasting
@@ -148,6 +166,7 @@ class WeatherDataset(torch.utils.data.Dataset):
             A training sample object containing the initial states, target
             states, forcing and batch times. The batch times are the times of
             the target steps.
+
         """
         # handling ensemble data
         if self.datastore.is_ensemble:
@@ -168,42 +187,46 @@ class WeatherDataset(torch.utils.data.Dataset):
                 )
             da_forcing = self.da_forcing
         else:
-            da_forcing = xr.DataArray()
+            da_forcing = None
 
         # handle time sampling in a way that is compatible with both analysis
         # and forecast data
-        da_state = self._sample_time(
-            da=da_state, idx=idx, n_steps=2 + self.ar_steps
-        )
+        da_state = self._sample_time(da=da_state, idx=idx, n_steps=2 + self.ar_steps)
 
-        das_forcing = []
-        for n in range(self.forcing_window_size):
-            da_ = self._sample_time(
-                da=da_forcing,
-                idx=idx,
-                n_steps=self.ar_steps,
-                n_timesteps_offset=n,
-            )
-            if n > 0:
-                da_ = da_.drop_vars("time")
-            das_forcing.append(da_)
-        da_forcing_windowed = xr.concat(das_forcing, dim="window_sample")
+        if da_forcing is not None:
+            das_forcing = []
+            for n in range(self.forcing_window_size):
+                da_ = self._sample_time(
+                    da=da_forcing,
+                    idx=idx,
+                    n_steps=self.ar_steps,
+                    n_timesteps_offset=n,
+                )
+                if n > 0:
+                    da_ = da_.drop_vars("time")
+                das_forcing.append(da_)
+            da_forcing_windowed = xr.concat(das_forcing, dim="window_sample")
+
+        # load the data into memory
+        da_state = da_state.load()
+        if da_forcing is not None:
+            da_forcing_windowed = da_forcing_windowed.load()
 
         # ensure the dimensions are in the correct order
         da_state = da_state.transpose("time", "grid_index", "state_feature")
-        da_forcing_windowed = da_forcing_windowed.transpose(
-            "time", "grid_index", "forcing_feature", "window_sample"
-        )
+
+        if da_forcing is not None:
+            da_forcing_windowed = da_forcing_windowed.transpose(
+                "time", "grid_index", "forcing_feature", "window_sample"
+            )
 
         da_init_states = da_state.isel(time=slice(None, 2))
         da_target_states = da_state.isel(time=slice(2, None))
 
-        batch_times = da_forcing_windowed.time.values.astype(float)
+        batch_times = da_target_states.time.values.astype(float)
 
         if self.standardize:
-            da_init_states = (
-                da_init_states - self.da_state_mean
-            ) / self.da_state_std
+            da_init_states = (da_init_states - self.da_state_mean) / self.da_state_std
             da_target_states = (
                 da_target_states - self.da_state_mean
             ) / self.da_state_std
@@ -213,17 +236,24 @@ class WeatherDataset(torch.utils.data.Dataset):
                     da_forcing_windowed - self.da_forcing_mean
                 ) / self.da_forcing_std
 
-        # stack the `forcing_feature` and `window_sample` dimensions into a
-        # single `forcing_feature` dimension
-        da_forcing_windowed = da_forcing_windowed.stack(
-            forcing_feature_windowed=("forcing_feature", "window_sample")
-        )
+        if self.da_forcing is not None:
+            # stack the `forcing_feature` and `window_sample` dimensions into a
+            # single `forcing_feature` dimension
+            da_forcing_windowed = da_forcing_windowed.stack(
+                forcing_feature_windowed=("forcing_feature", "window_sample")
+            )
 
         init_states = torch.tensor(da_init_states.values, dtype=torch.float32)
-        target_states = torch.tensor(
-            da_target_states.values, dtype=torch.float32
-        )
-        forcing = torch.tensor(da_forcing_windowed.values, dtype=torch.float32)
+        target_states = torch.tensor(da_target_states.values, dtype=torch.float32)
+
+        if self.da_forcing is None:
+            # create an empty forcing tensor
+            forcing = torch.empty(
+                (self.ar_steps, da_state.grid_index.size, 0),
+                dtype=torch.float32,
+            )
+        else:
+            forcing = torch.tensor(da_forcing_windowed.values, dtype=torch.float32)
 
         # init_states: (2, N_grid, d_features)
         # target_states: (ar_steps, N_grid, d_features)
@@ -235,8 +265,9 @@ class WeatherDataset(torch.utils.data.Dataset):
     def __iter__(self):
         """Convenience method to iterate over the dataset.
 
-        This isn't used by pytorch DataLoader which itself implements an
-        iterator that uses Dataset.__getitem__ and Dataset.__len__.
+        This isn't used by pytorch DataLoader which itself implements an iterator that
+        uses Dataset.__getitem__ and Dataset.__len__.
+
         """
         for i in range(len(self)):
             yield self[i]
@@ -266,6 +297,12 @@ class WeatherDataModule(pl.LightningDataModule):
         self.train_dataset = None
         self.val_dataset = None
         self.test_dataset = None
+        if num_workers > 0:
+            # default to spawn for now, as the default on linux "fork" hangs
+            # when using dask (which the npyfiles datastore uses)
+            self.multiprocessing_context = "spawn"
+        else:
+            self.multiprocessing_context = None
 
     def setup(self, stage=None):
         if stage == "fit" or stage is None:
@@ -300,6 +337,8 @@ class WeatherDataModule(pl.LightningDataModule):
             batch_size=self.batch_size,
             num_workers=self.num_workers,
             shuffle=False,
+            multiprocessing_context=self.multiprocessing_context,
+            persistent_workers=True,
         )
 
     def val_dataloader(self):
@@ -309,6 +348,8 @@ class WeatherDataModule(pl.LightningDataModule):
             batch_size=self.batch_size,
             num_workers=self.num_workers,
             shuffle=False,
+            multiprocessing_context=self.multiprocessing_context,
+            persistent_workers=True,
         )
 
     def test_dataloader(self):
@@ -318,4 +359,6 @@ class WeatherDataModule(pl.LightningDataModule):
             batch_size=self.batch_size,
             num_workers=self.num_workers,
             shuffle=False,
+            multiprocessing_context=self.multiprocessing_context,
+            persistent_workers=True,
         )

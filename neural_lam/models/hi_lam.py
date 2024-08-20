@@ -7,10 +7,11 @@ from .base_hi_graph_model import BaseHiGraphModel
 
 
 class HiLAM(BaseHiGraphModel):
-    """Hierarchical graph model with message passing that goes sequentially
-    down and up the hierarchy during processing.
+    """Hierarchical graph model with message passing that goes sequentially down and up
+    the hierarchy during processing.
 
     The Hi-LAM model from Oskarsson et al. (2023)
+
     """
 
     def __init__(self, args):
@@ -79,8 +80,8 @@ class HiLAM(BaseHiGraphModel):
         down_gnns,
         same_gnns,
     ):
-        """Run down-part of vertical processing, sequentially alternating
-        between processing using down edges and same-level edges."""
+        """Run down-part of vertical processing, sequentially alternating between
+        processing using down edges and same-level edges."""
         # Run same level processing on level L
         mesh_rep_levels[-1], mesh_same_rep[-1] = same_gnns[-1](
             mesh_rep_levels[-1], mesh_rep_levels[-1], mesh_same_rep[-1]
@@ -93,9 +94,7 @@ class HiLAM(BaseHiGraphModel):
             reversed(same_gnns[:-1]),
         ):
             # Extract representations
-            send_node_rep = mesh_rep_levels[
-                level_l + 1
-            ]  # (B, N_mesh[l+1], d_h)
+            send_node_rep = mesh_rep_levels[level_l + 1]  # (B, N_mesh[l+1], d_h)
             rec_node_rep = mesh_rep_levels[level_l]  # (B, N_mesh[l], d_h)
             down_edge_rep = mesh_down_rep[level_l]
             same_edge_rep = mesh_same_rep[level_l]
@@ -129,9 +128,7 @@ class HiLAM(BaseHiGraphModel):
             zip(up_gnns, same_gnns[1:]), start=1
         ):
             # Extract representations
-            send_node_rep = mesh_rep_levels[
-                level_l - 1
-            ]  # (B, N_mesh[l-1], d_h)
+            send_node_rep = mesh_rep_levels[level_l - 1]  # (B, N_mesh[l-1], d_h)
             rec_node_rep = mesh_rep_levels[level_l]  # (B, N_mesh[l], d_h)
             up_edge_rep = mesh_up_rep[level_l - 1]
             same_edge_rep = mesh_same_rep[level_l]
@@ -153,8 +150,8 @@ class HiLAM(BaseHiGraphModel):
     def hi_processor_step(
         self, mesh_rep_levels, mesh_same_rep, mesh_up_rep, mesh_down_rep
     ):
-        """Internal processor step of hierarchical graph models. Between mesh
-        init and read out.
+        """Internal processor step of hierarchical graph models. Between mesh init and
+        read out.
 
         Each input is list with representations, each with shape
 
@@ -164,6 +161,7 @@ class HiLAM(BaseHiGraphModel):
         mesh_down_rep: (B, M_down[l <- l+1], d_h)
 
         Returns same lists
+
         """
         for down_gnns, down_same_gnns, up_gnns, up_same_gnns in zip(
             self.mesh_down_gnns,

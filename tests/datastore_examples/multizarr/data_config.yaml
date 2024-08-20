@@ -1,7 +1,7 @@
 name: danra
 state:
   zarrs:
-    - path: "https://mllam-test-data.s3.eu-north-1.amazonaws.com/single_levels.zarr"
+    - path: "danra/single_levels.zarr"
       dims:
         time: time
         level: null
@@ -11,7 +11,7 @@ state:
       lat_lon_names:
         lon: lon
         lat: lat
-    - path: "https://mllam-test-data.s3.eu-north-1.amazonaws.com/height_levels.zarr"
+    - path: "danra/height_levels.zarr"
       dims:
         time: time
         level: altitude
@@ -41,7 +41,7 @@ state:
     - 100
 forcing:
   zarrs:
-    - path: "https://mllam-test-data.s3.eu-north-1.amazonaws.com/single_levels.zarr"
+    - path: "danra/single_levels.zarr"
       dims:
         time: time
         level: null
@@ -82,7 +82,7 @@ forcing:
   window: 3 # Number of time steps to use for forcing (odd)
 static:
   zarrs:
-    - path: "https://mllam-test-data.s3.eu-north-1.amazonaws.com/single_levels.zarr"
+    - path: "danra/single_levels.zarr"
       dims:
         level: null
         x: x

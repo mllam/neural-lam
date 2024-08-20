@@ -14,9 +14,10 @@ from neural_lam.create_graph import create_graph_from_datastore
 @pytest.mark.parametrize("graph_name", ["1level", "multiscale", "hierarchical"])
 @pytest.mark.parametrize("datastore_name", DATASTORES.keys())
 def test_graph_creation(datastore_name, graph_name):
-    """Check that the `create_graph_from_datastore` function is implemented.
+    """Check that the `create_ graph_from_datastore` function is implemented.
 
     And that the graph is created in the correct location.
+
     """
     datastore = init_datastore(datastore_name)
     if graph_name == "hierarchical":
@@ -80,9 +81,7 @@ def test_graph_creation(datastore_name, graph_name):
                 assert isinstance(result, torch.Tensor)
 
                 if file_id.endswith("_index"):
-                    assert (
-                        result.shape[0] == 2
-                    )  # adjacency matrix uses two rows
+                    assert result.shape[0] == 2  # adjacency matrix uses two rows
                 elif file_id.endswith("_features"):
                     assert result.shape[1] == d_features
 
@@ -91,9 +90,7 @@ def test_graph_creation(datastore_name, graph_name):
                 if not hierarchical:
                     assert len(result) == 1
                 else:
-                    if file_id.startswith("mesh_up") or file_id.startswith(
-                        "mesh_down"
-                    ):
+                    if file_id.startswith("mesh_up") or file_id.startswith("mesh_down"):
                         assert len(result) == n_max_levels - 1
                     else:
                         assert len(result) == n_max_levels

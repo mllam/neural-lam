@@ -8,11 +8,11 @@ from .base_hi_graph_model import BaseHiGraphModel
 
 
 class HiLAMParallel(BaseHiGraphModel):
-    """Version of HiLAM where all message passing in the hierarchical mesh (up,
-    down, inter-level) is ran in parallel.
+    """Version of HiLAM where all message passing in the hierarchical mesh (up, down,
+    inter-level) is ran in parallel.
 
-    This is a somewhat simpler alternative to the sequential message
-    passing of Hi-LAM.
+    This is a somewhat simpler alternative to the sequential message passing of Hi-LAM.
+
     """
 
     def __init__(self, args):
@@ -52,8 +52,8 @@ class HiLAMParallel(BaseHiGraphModel):
     def hi_processor_step(
         self, mesh_rep_levels, mesh_same_rep, mesh_up_rep, mesh_down_rep
     ):
-        """Internal processor step of hierarchical graph models. Between mesh
-        init and read out.
+        """Internal processor step of hierarchical graph models. Between mesh init and
+        read out.
 
         Each input is list with representations, each with shape
 
@@ -63,6 +63,7 @@ class HiLAMParallel(BaseHiGraphModel):
         mesh_down_rep: (B, M_down[l <- l+1], d_h)
 
         Returns same lists
+
         """
 
         # First join all node and edge representations to single tensors
@@ -75,9 +76,7 @@ class HiLAMParallel(BaseHiGraphModel):
         mesh_rep, mesh_edge_rep = self.processor(mesh_rep, mesh_edge_rep)
 
         # Split up again for read-out step
-        mesh_rep_levels = list(
-            torch.split(mesh_rep, self.level_mesh_sizes, dim=1)
-        )
+        mesh_rep_levels = list(torch.split(mesh_rep, self.level_mesh_sizes, dim=1))
         mesh_edge_rep_sections = torch.split(
             mesh_edge_rep, self.edge_split_sections, dim=1
         )

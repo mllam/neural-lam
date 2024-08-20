@@ -96,28 +96,34 @@ class BaseHiGraphModel(BaseGraphModel):
         )
 
     def get_num_mesh(self):
-        """Compute number of mesh nodes from loaded features, and number of
-        mesh nodes that should be ignored in encoding/decoding."""
+        """Compute number of mesh nodes from loaded features, and number of mesh nodes
+        that should be ignored in encoding/decoding."""
         num_mesh_nodes = sum(
             node_feat.shape[0] for node_feat in self.mesh_static_features
         )
-        num_mesh_nodes_ignore = (
-            num_mesh_nodes - self.mesh_static_features[0].shape[0]
-        )
+        num_mesh_nodes_ignore = num_mesh_nodes - self.mesh_static_features[0].shape[0]
         return num_mesh_nodes, num_mesh_nodes_ignore
 
     def embedd_mesh_nodes(self):
-        """Embed static mesh features This embeds only bottom level, rest is
-        done at beginning of processing step Returns tensor of shape
-        (num_mesh_nodes[0], d_h)"""
+        """Embed static mesh
+        features This embeds
+        only bottom level,
+        rest is done at
+        beginning of
+        processing step
+        Returns tensor of
+        shape
+        (num_mesh_nodes[0],
+        d_h)"""
         return self.mesh_embedders[0](self.mesh_static_features[0])
 
     def process_step(self, mesh_rep):
-        """Process step of embedd-process-decode framework Processes the
-        representation on the mesh, possible in multiple steps.
+        """Process step of embedd-process-decode framework Processes the representation
+        on the mesh, possible in multiple steps.
 
         mesh_rep: has shape (B, num_mesh_nodes, d_h)
         Returns mesh_rep: (B, num_mesh_nodes, d_h)
+
         """
         batch_size = mesh_rep.shape[0]
 
@@ -136,21 +142,15 @@ class BaseHiGraphModel(BaseGraphModel):
         # Embed edges, expand with batch dimension
         mesh_same_rep = [
             self.expand_to_batch(emb(edge_feat), batch_size)
-            for emb, edge_feat in zip(
-                self.mesh_same_embedders, self.m2m_features
-            )
+            for emb, edge_feat in zip(self.mesh_same_embedders, self.m2m_features)
         ]
         mesh_up_rep = [
             self.expand_to_batch(emb(edge_feat), batch_size)
-            for emb, edge_feat in zip(
-                self.mesh_up_embedders, self.mesh_up_features
-            )
+            for emb, edge_feat in zip(self.mesh_up_embedders, self.mesh_up_features)
         ]
         mesh_down_rep = [
             self.expand_to_batch(emb(edge_feat), batch_size)
-            for emb, edge_feat in zip(
-                self.mesh_down_embedders, self.mesh_down_features
-            )
+            for emb, edge_feat in zip(self.mesh_down_embedders, self.mesh_down_features)
         ]
 
         # - MESH INIT. -
@@ -160,20 +160,14 @@ class BaseHiGraphModel(BaseGraphModel):
             send_node_rep = mesh_rep_levels[
                 level_l - 1
             ]  # (B, num_mesh_nodes[l-1], d_h)
-            rec_node_rep = mesh_rep_levels[
-                level_l
-            ]  # (B, num_mesh_nodes[l], d_h)
+            rec_node_rep = mesh_rep_levels[level_l]  # (B, num_mesh_nodes[l], d_h)
             edge_rep = mesh_up_rep[level_l - 1]
 
             # Apply GNN
-            new_node_rep, new_edge_rep = gnn(
-                send_node_rep, rec_node_rep, edge_rep
-            )
+            new_node_rep, new_edge_rep = gnn(send_node_rep, rec_node_rep, edge_rep)
 
             # Update node and edge vectors in lists
-            mesh_rep_levels[
-                level_l
-            ] = new_node_rep  # (B, num_mesh_nodes[l], d_h)
+            mesh_rep_levels[level_l] = new_node_rep  # (B, num_mesh_nodes[l], d_h)
             mesh_up_rep[level_l - 1] = new_edge_rep  # (B, M_up[l-1], d_h)
 
         # - PROCESSOR -
@@ -190,18 +184,14 @@ class BaseHiGraphModel(BaseGraphModel):
             send_node_rep = mesh_rep_levels[
                 level_l + 1
             ]  # (B, num_mesh_nodes[l+1], d_h)
-            rec_node_rep = mesh_rep_levels[
-                level_l
-            ]  # (B, num_mesh_nodes[l], d_h)
+            rec_node_rep = mesh_rep_levels[level_l]  # (B, num_mesh_nodes[l], d_h)
             edge_rep = mesh_down_rep[level_l]
 
             # Apply GNN
             new_node_rep = gnn(send_node_rep, rec_node_rep, edge_rep)
 
             # Update node and edge vectors in lists
-            mesh_rep_levels[
-                level_l
-            ] = new_node_rep  # (B, num_mesh_nodes[l], d_h)
+            mesh_rep_levels[level_l] = new_node_rep  # (B, num_mesh_nodes[l], d_h)
 
         # Return only bottom level representation
         return mesh_rep_levels[0]  # (B, num_mesh_nodes[0], d_h)
@@ -209,8 +199,8 @@ class BaseHiGraphModel(BaseGraphModel):
     def hi_processor_step(
         self, mesh_rep_levels, mesh_same_rep, mesh_up_rep, mesh_down_rep
     ):
-        """Internal processor step of hierarchical graph models. Between mesh
-        init and read out.
+        """Internal processor step of hierarchical graph models. Between mesh init and
+        read out.
 
         Each input is list with representations, each with shape
 
@@ -220,5 +210,6 @@ class BaseHiGraphModel(BaseGraphModel):
         mesh_down_rep: (B, M_down[l <- l+1], d_h)
 
         Returns same lists
+
         """
         raise NotImplementedError("hi_process_step not implemented")

@@ -1,5 +1,6 @@
 ![Linting](https://github.com/mllam/neural-lam/actions/workflows/pre-commit.yml/badge.svg?branch=main)
-![Automatic tests](https://github.com/mllam/neural-lam/actions/workflows/run_tests.yml/badge.svg?branch=main)
+[![test (pdm install, gpu)](https://github.com/mllam/neural-lam/actions/workflows/ci-pdm-install-and-test-gpu.yml/badge.svg)](https://github.com/mllam/neural-lam/actions/workflows/ci-pdm-install-and-test-gpu.yml)
+[![test (pdm install, cpu)](https://github.com/mllam/neural-lam/actions/workflows/ci-pdm-install-and-test-cpu.yml/badge.svg)](https://github.com/mllam/neural-lam/actions/workflows/ci-pdm-install-and-test-cpu.yml)
 
 <p align="middle">
     <img src="figures/neural_lam_header.png" width="700">
@@ -45,42 +46,92 @@ Still, some restrictions are inevitable:
 </p>
 
 
-## A note on the limited area setting
-Currently we are using these models on a limited area covering the Nordic region, the so called MEPS area (see [paper](https://arxiv.org/abs/2309.17370)).
-There are still some parts of the code that is quite specific for the MEPS area use case.
-This is in particular true for the mesh graph creation (`create_mesh.py`) and some of the constants set in a `data_config.yaml` file (path specified in `train_model.py --data_config` ).
-If there is interest to use Neural-LAM for other areas it is not a substantial undertaking to refactor the code to be fully area-agnostic.
-We would be happy to support such enhancements.
-See the issues https://github.com/joeloskarsson/neural-lam/issues/2, https://github.com/joeloskarsson/neural-lam/issues/3 and https://github.com/joeloskarsson/neural-lam/issues/4 for some initial ideas on how this could be done.
-
 # Using Neural-LAM
-Below follows instructions on how to use Neural-LAM to train and evaluate models.
+Below follows instructions on how to use Neural-LAM to train and evaluate models. Once `neural-lam` has been installed the general process is:
+
+1. Run any pre-processing scripts to generate the necessary derived data that your chosen datastore requires
+2. Run graph-creation step
+3. Train the model
+
+## Data
+
+To enable flexibility in what input-data sources can be used with neural-lam,
+the input-data representation is split into two parts:
+
+1. a "datastore" (represented by instances of
+   [neural_lam.datastore.BaseDataStore](neural_lam/datastore/base.py)) which
+   takes care of loading a given category (state, forcing or static) and split
+   (train/val/test) of data from disk and returning it as a `xarray.DataArray`.
+   The returned data-array is expected to have the spatial coordinates
+   flattened into a single `grid_index` dimension and all variables and vertical
+   levels stacked into a feature dimension (named as `{category}_feature`) The
+   datastore also provides information about the number, names and units of
+   variables in the data, the boundary mask, normalisation values and grid
+   information.
+
+2. a `pytorch.Dataset`-derived class (called
+   `neural_lam.weather_dataset.WeatherDataset`) which takes care of sampling in
+   time to create individual samples for training, validation and testing. The
+   `WeatherDataset` class is also responsible for normalising the values and
+   returning `torch.Tensor`-objects.
+
+There are currently three different datastores implemented in the codebase:
+
+1. `neural_lam.datastore.NpyDataStore` which reads data from `.npy`-files in
+   the format introduced in neural-lam `v0.1.0`.
+
+2. `neural_lam.datastore.MultizarrDatastore` which can combines multiple zarr
+   files during train/val/test sampling, with the transformations to facilitate
+   this implemented within `neural_lam.datastore.MultizarrDatastore`.
+
+3. `neural_lam.datastore.MLLAMDatastore` which can combine multiple zarr
+   datasets either either as a preprocessing step or during sampling, but
+   offloads the implementation of the transformations the
+   [mllam-data-prep](https://github.com/mllam/mllam-data-prep) package.
+
+If neither of these options fit your need you can create your own datastore by
+subclassing the `neural_lam.datastore.BaseDataStore` class or
+`neural_lam.datastore.BaseCartesianDatastore` class (if your data is stored on
+a Cartesian grid) and implementing the abstract methods.
+
 
 ## Installation
 
-The dependencies in `neural-lam` is handled with [pdm](https://pdm.fming.dev/), but you can still install `neural-lam` directly with pip if you prefer. The benefits of using `pdm` are that [pyproject.toml](pyproject.toml) is automatically updated when you add/remove dependencies (with `pdm add <package_name>` or `pdm remove <package_name`).
+When installing `neural-lam` you have a choice of either installing with
+directly `pip` or using the `pdm` package manager.
+We recommend using `pdm` as it makes it easy to add/remove packages while
+keeping versions consistent (it automatically updates the `pyproject.toml`
+file), makes it easy to handle virtual environments and includes the
+development toolchain packages installation too.
 
-### Installing with pdm
+**regarding `torch` installation**: because `torch` creates different package
+variants for different CUDA versions and cpu-only support you will need to install
+`torch` separately if you don't want the most recent GPU variant that also
+expects the most recent version of CUDA on your system.
 
-### Installing with pip
+We cover all the installation options in our [github actions ci/cd
+setup](.github/workflows/) which you can use as a reference.
 
-Follow the steps below to create the necessary python environment.
+### Using `pdm`
 
-1. Install GEOS for your system. For example with `sudo apt-get install libgeos-dev`. This is necessary for the Cartopy requirement.
-2. Use python 3.9.
-3. Install version 2.0.1 of PyTorch. Follow instructions on the [PyTorch webpage](https://pytorch.org/get-started/previous-versions/) for how to set this up with GPU support on your system.
-4. Install required packages specified in `requirements.txt`.
-5. Install PyTorch Geometric version 2.2.0. This can be done by running
-```
-TORCH="2.0.1"
-CUDA="cu117"
+1. Clone this repository and navigate to the root directory.
+2. Install `pdm` if you don't have it installed on your system (either with `pip install pdm` or [following the install instructions](https://pdm-project.org/latest/#installation)). If you are happy using the latest version of `torch` with GPU support (expecting the latest version of CUDA is installed on your system) you can skip to step 5.
+3. Create a virtual environment for pdm to use with `pdm venv create --with-pip`.
+4. Install a specific version of `torch` with `pdm run python -m pip install torch --index-url https://download.pytorch.org/whl/cpu` for a CPU-only version or `pdm run python -m pip install torch --index-url https://download.pytorch.org/whl/cu111` for CUDA 11.1 support (you can find the correct URL for the variant you want on [PyTorch webpage](https://pytorch.org/get-started/locally/)).
+5. Install the dependencies with `pdm install`. If you will be developing `neural-lam` we recommend to install the development dependencies with `pdm install --dev`. By default `pdm` installs the `neural-lam` package in editable mode, so you can make changes to the code and see the effects immediately.
 
-pip install pyg-lib==0.2.0 torch-scatter==2.1.1 torch-sparse==0.6.17 torch-cluster==1.6.1\
-    torch-geometric==2.3.1 -f https://pytorch-geometric.com/whl/torch-${TORCH}+${CUDA}.html
-```
-You will have to adjust the `CUDA` variable to match the CUDA version on your system or to run on CPU. See the [installation webpage](https://pytorch-geometric.readthedocs.io/en/latest/install/installation.html) for more information.
+### Using `pip`
 
-## Data
+1. Clone this repository and navigate to the root directory. If you are happy using the latest version of `torch` with GPU support (expecting the latest version of CUDA is installed on your system) you can skip to step 3.
+2. Install a specific version of `torch` with `python -m pip install torch --index-url https://download.pytorch.org/whl/cpu` for a CPU-only version or `python -m pip install torch --index-url https://download.pytorch.org/whl/cu111` for CUDA 11.1 support (you can find the correct URL for the variant you want on [PyTorch webpage](https://pytorch.org/get-started/locally/)).
+3. Install the dependencies with `python -m pip install .`. If you will be developing `neural-lam` we recommend to install in editable mode with `python -m pip install -e .` so you can make changes to the code and see the effects immediately. The development dependencies to install are listed in `pyproject.toml`.
+
+
+For each of these three datastore implementations there is a section below detailing how to use them.
+
+support both input data in `.npy`-file format (introduced in `v0.1.0`)
+
+
 Datasets should be stored in a directory called `data`.
 See the [repository format section](#format-of-data-directory) for details on the directory structure.
 
@@ -92,6 +143,7 @@ Note that this is far too little data to train any useful models, but all script
 It should thus be useful to make sure that your python environment is set up correctly and that all the code can be ran without any issues.
 
 ## Pre-processing
+
 An overview of how the different pre-processing steps, training and files depend on each other is given in this figure:
 <p align="middle">
   <img src="figures/component_dependencies.png"/>
@@ -132,11 +184,12 @@ wandb off
 ```
 
 ## Train Models
-Models can be trained using `python -m neural_lam.train_model`.
+Models can be trained using `python -m neural_lam.train_model <datastore_type> <datastore_config_path>`.
 Run `python neural_lam.train_model --help` for a full list of training options.
 A few of the key ones are outlined below:
 
-* `--data_config`: Path to the data configuration file
+* `<datastore_type>`: The kind of datastore that you are using (should be one of `npyfiles`, `multizarr` or `mllam`)
+* `<datastore_config_path>`: Path to the data store configuration file
 * `--model`: Which model to train
 * `--graph`: Which graph to use with the model
 * `--processor_layers`: Number of GNN layers to use in the processing part of the model
