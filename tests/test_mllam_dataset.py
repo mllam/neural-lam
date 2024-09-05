@@ -132,7 +132,6 @@ def test_train_model_reduced_meps_dataset():
         "--n_workers=4",
         "--epochs=1",
         "--graph=hierarchical",
-        "--hierarchical",
         "--hidden_dim=16",
         "--hidden_layers=1",
         "--processor_layers=1",
