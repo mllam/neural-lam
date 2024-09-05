@@ -156,9 +156,8 @@ def main():
     )
     parser.add_argument(
         "--distributed",
-        type=int,
-        default=0,
-        help="Run the script in distributed mode (1) or not (0) (default: 0)",
+        action="store_true",
+        help="Run the script in distributed mode (default: False)",
     )
     args = parser.parse_args()
     distributed = bool(args.distributed)
