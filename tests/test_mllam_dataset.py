@@ -118,7 +118,7 @@ def test_load_reduced_meps_dataset(meps_example_reduced_filepath):
 def test_create_graph_reduced_meps_dataset():
     args = [
         "--graph=hierarchical",
-        "--hierarchical=1",
+        "--hierarchical",
         "--data_config=data/meps_example_reduced/data_config.yaml",
         "--levels=2",
     ]
