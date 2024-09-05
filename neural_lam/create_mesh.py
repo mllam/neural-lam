@@ -12,8 +12,8 @@ import torch
 import torch_geometric as pyg
 from torch_geometric.utils.convert import from_networkx
 
-# First-party
-from neural_lam import config
+# Local
+from . import config
 
 
 def plot_graph(graph, title=None):

@@ -1,15 +1,17 @@
 # Standard library
 import os
+from pathlib import Path
 
 # Third-party
 import pooch
+import pytest
 
 # First-party
-from create_mesh import main as create_mesh
 from neural_lam.config import Config
+from neural_lam.create_mesh import main as create_mesh
+from neural_lam.train_model import main as train_model
 from neural_lam.utils import load_static_data
 from neural_lam.weather_dataset import WeatherDataset
-from train_model import main as train_model
 
 # Disable weights and biases to avoid unnecessary logging
 # and to avoid having to deal with authentication
@@ -25,7 +27,8 @@ TEST_DATA_KNOWN_HASH = (
 )
 
 
-def test_retrieve_data_ewc():
+@pytest.fixture(scope="module")
+def meps_example_reduced_filepath():
     # Download and unzip test data into data/meps_example_reduced
     pooch.retrieve(
         url=S3_FULL_PATH,
@@ -34,16 +37,17 @@ def test_retrieve_data_ewc():
         path="data",
         fname="meps_example_reduced.zip",
     )
+    return Path("data/meps_example_reduced")
 
 
-def test_load_reduced_meps_dataset():
+def test_load_reduced_meps_dataset(meps_example_reduced_filepath):
     # The data_config.yaml file is downloaded and extracted in
     # test_retrieve_data_ewc together with the dataset itself
-    data_config_file = "data/meps_example_reduced/data_config.yaml"
-    dataset_name = "meps_example_reduced"
+    data_config_file = meps_example_reduced_filepath / "data_config.yaml"
+    dataset_name = meps_example_reduced_filepath.name
 
-    dataset = WeatherDataset(dataset_name="meps_example_reduced")
-    config = Config.from_file(data_config_file)
+    dataset = WeatherDataset(dataset_name=dataset_name)
+    config = Config.from_file(str(data_config_file))
 
     var_names = config.values["dataset"]["var_names"]
     var_units = config.values["dataset"]["var_units"]

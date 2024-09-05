@@ -1,3 +1,41 @@
+[project]
+name = "neural-lam"
+version = "0.1.0"
+description = "LAM-based data-driven forecasting"
+authors = [
+    {name = "Joel Oskarsson", email = "joel.oskarsson@liu.se"},
+    {name = "Simon Adamov", email = "Simon.Adamov@meteoswiss.ch"},
+    {name = "Leif Denby", email = "lcd@dmi.dk"},
+]
+
+# PEP 621 project metadata
+# See https://www.python.org/dev/peps/pep-0621/
+dependencies = [
+    "numpy>=1.24.2",
+    "wandb>=0.13.10",
+    "scipy>=1.10.0",
+    "pytorch-lightning>=2.0.3",
+    "shapely>=2.0.1",
+    "networkx>=3.0",
+    "Cartopy>=0.22.0",
+    "pyproj>=3.4.1",
+    "tueplots>=0.0.8",
+    "matplotlib>=3.7.0",
+    "plotly>=5.15.0",
+    "torch>=2.3.0",
+    "torch-geometric==2.3.1",
+]
+requires-python = ">=3.9"
+
+[project.optional-dependencies]
+dev = [
+    "pre-commit>=3.8.0",
+    "pytest>=8.3.2",
+    "pooch>=1.8.2",
+]
+[tool.setuptools]
+py-modules = ["neural_lam"]
+
 [tool.black]
 line-length = 80
 
@@ -63,3 +101,9 @@ max-statements=100 # Allow for some more involved functions
 allow-any-import-level="neural_lam"
 [tool.pylint.SIMILARITIES]
 min-similarity-lines=10
+
+
+[tool.pdm]
+[build-system]
+requires = ["pdm-backend"]
+build-backend = "pdm.backend"

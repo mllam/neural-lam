@@ -31,6 +31,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - added github pull-request template to ease contribution and review process
   [\#53](https://github.com/mllam/neural-lam/pull/53), @leifdenby
 
+- ci/cd setup for running both CPU and GPU-based testing both with pdm and pip based installs [\#37](https://github.com/mllam/neural-lam/pull/37), @khintz, @leifdenby
+
 ### Changed
 
   Optional multi-core/GPU support for statistics calculation in `create_parameter_weights.py`
@@ -88,9 +90,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   [\#52](https://github.com/mllam/neural-lam/pull/52)
   @joeloskarsson
 
-- Cap numpy version to < 2.0.0
+- Cap numpy version to < 2.0.0 (this cap was removed in #37, see below)
   [\#68](https://github.com/mllam/neural-lam/pull/68)
   @joeloskarsson
+
+- Remove numpy < 2.0.0 version cap
+  [\#37](https://github.com/mllam/neural-lam/pull/37)
+  @leifdenby
+
+- turn `neural-lam` into a python package by moving all `*.py`-files into the
+  `neural_lam/` source directory and updating imports accordingly. This means
+  all cli functions are now invoke through the package name, e.g. `python -m
+  neural_lam.train_model` instead of `python train_model.py` (and can be done
+  anywhere once the package has been installed).
+  [\#32](https://github.com/mllam/neural-lam/pull/32), @leifdenby
+
+- move from `requirements.txt` to `pyproject.toml` for defining package dependencies.
+  [\#37](https://github.com/mllam/neural-lam/pull/37), @leifdenby
 
 ## [v0.1.0](https://github.com/joeloskarsson/neural-lam/releases/tag/v0.1.0)
 

@@ -3,8 +3,8 @@ import torch
 import torch_geometric as pyg
 from torch import nn
 
-# First-party
-from neural_lam import utils
+# Local
+from . import utils
 
 
 class InteractionNet(pyg.nn.MessagePassing):
