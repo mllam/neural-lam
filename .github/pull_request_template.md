@@ -26,7 +26,7 @@
 - [ ] I have updated the [README](README.MD) to cover introduced code changes
 - [ ] I have added tests that prove my fix is effective or that my feature works
 - [ ] I have given the PR a name that clearly describes the change, written in imperative form ([context](https://www.gitkraken.com/learn/git/best-practices/git-commit-message#using-imperative-verb-form)).
-- [ ] I have requested a reviewer and an assignee (assignee is responsible for merging)
+- [ ] I have requested a reviewer and an assignee (assignee is responsible for merging). This applies only if you have write access to the repo, otherwise feel free to tag a maintainer to add a reviewer and asignee.
 
 ## Checklist for reviewers
 
