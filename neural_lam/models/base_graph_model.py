@@ -1,10 +1,10 @@
 # Third-party
 import torch
 
-# First-party
-from neural_lam import utils
-from neural_lam.interaction_net import InteractionNet
-from neural_lam.models.ar_model import ARModel
+# Local
+from .. import utils
+from ..interaction_net import InteractionNet
+from .ar_model import ARModel
 
 
 class BaseGraphModel(ARModel):

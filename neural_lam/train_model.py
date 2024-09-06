@@ -9,12 +9,9 @@ import pytorch_lightning as pl
 import torch
 from lightning_fabric.utilities import seed
 
-# First-party
-from neural_lam import config, utils
-from neural_lam.models.graph_lam import GraphLAM
-from neural_lam.models.hi_lam import HiLAM
-from neural_lam.models.hi_lam_parallel import HiLAMParallel
-from neural_lam.weather_dataset import WeatherDataset
+# Local
+from . import WeatherDataset, config, utils
+from .models import GraphLAM, HiLAM, HiLAMParallel
 
 MODELS = {
     "graph_lam": GraphLAM,
@@ -44,10 +41,9 @@ def main(input_args=None):
     )
     parser.add_argument(
         "--subset_ds",
-        type=int,
-        default=0,
+        action="store_true",
         help="Use only a small subset of the dataset, for debugging"
-        "(default: 0=false)",
+        "(default: false)",
     )
     parser.add_argument(
         "--seed", type=int, default=42, help="random seed (default: 42)"
@@ -77,10 +73,9 @@ def main(input_args=None):
     )
     parser.add_argument(
         "--restore_opt",
-        type=int,
-        default=0,
+        action="store_true",
         help="If optimizer state should be restored with model "
-        "(default: 0 (false))",
+        "(default: false)",
     )
     parser.add_argument(
         "--precision",
@@ -124,11 +119,10 @@ def main(input_args=None):
     )
     parser.add_argument(
         "--output_std",
-        type=int,
-        default=0,
+        action="store_true",
         help="If models should additionally output std.-dev. per "
         "output dimensions "
-        "(default: 0 (no))",
+        "(default: False (no))",
     )
 
     # Training options
@@ -141,10 +135,9 @@ def main(input_args=None):
     )
     parser.add_argument(
         "--control_only",
-        type=int,
-        default=0,
+        action="store_true",
         help="Train only on control member of ensemble data "
-        "(default: 0 (False))",
+        "(default: False)",
     )
     parser.add_argument(
         "--loss",
@@ -239,7 +232,7 @@ def main(input_args=None):
             pred_length=args.ar_steps,
             split="train",
             subsample_step=args.step_length,
-            subset=bool(args.subset_ds),
+            subset=args.subset_ds,
             control_only=args.control_only,
         ),
         args.batch_size,
@@ -253,7 +246,7 @@ def main(input_args=None):
             pred_length=max_pred_length,
             split="val",
             subsample_step=args.step_length,
-            subset=bool(args.subset_ds),
+            subset=args.subset_ds,
             control_only=args.control_only,
         ),
         args.batch_size,
@@ -313,7 +306,7 @@ def main(input_args=None):
                     pred_length=max_pred_length,
                     split="test",
                     subsample_step=args.step_length,
-                    subset=bool(args.subset_ds),
+                    subset=args.subset_ds,
                 ),
                 args.batch_size,
                 shuffle=False,
