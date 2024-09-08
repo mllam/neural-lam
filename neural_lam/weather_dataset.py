@@ -119,9 +119,10 @@ class WeatherDataset(torch.utils.data.Dataset):
         # selecting the time slice
         if self.datastore.is_forecast:
             # this implies that the data will have both `analysis_time` and
-            # `elapsed_forecast_duration` dimensions for forecasts we for now
-            # simply select a analysis time and then the next ar_steps forecast
-            # times
+            # `elapsed_forecast_duration` dimensions for forecasts. We for now
+            # simply select a analysis time and the first `n_steps` forecast
+            # times (given no offset). Note that this means that we get one sample 
+            # per forecast, always starting at forecast time 2.
             da = da.isel(
                 analysis_time=idx,
                 elapsed_forecast_duration=slice(
