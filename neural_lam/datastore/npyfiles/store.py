@@ -661,8 +661,8 @@ class NpyFilesDatastore(BaseCartesianDatastore):
             flux_mean, flux_std = flux_stats
             # manually add hour sin/cos and day-of-year sin/cos stats for now
             # the mean/std for column_water is hardcoded for now
-            mean_values = np.array([flux_mean, 0.34033957, 0.0, 0.0, 0.0, 0.0])
-            std_values = np.array([flux_std, 0.4661307, 1.0, 1.0, 1.0, 1.0])
+            mean_values = np.array([flux_mean, 0.0, 0.0, 0.0, 0.0, 0.0])
+            std_values = np.array([flux_std, 1.0, 1.0, 1.0, 1.0, 1.0])
 
         elif category == "static":
             ds_static = self.get_dataarray(category="static", split="train")
