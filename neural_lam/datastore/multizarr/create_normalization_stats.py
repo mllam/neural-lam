@@ -102,7 +102,7 @@ def create_normalization_stats_zarr(
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Training arguments",
+        description="Create standardization statistics",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
     parser.add_argument(
