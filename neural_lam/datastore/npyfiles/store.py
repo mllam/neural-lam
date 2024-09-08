@@ -510,7 +510,7 @@ class NpyFilesDatastore(BaseCartesianDatastore):
         elif category == "forcing":
             return [
                 "W/m^2",
-                "kg/m^2",
+                "1",
                 "1",
                 "1",
                 "1",
