@@ -27,7 +27,7 @@ STATE_FILENAME_FORMAT = "nwp_{analysis_time:%Y%m%d%H}_mbr{member_id:03d}.npy"
 TOA_SW_DOWN_FLUX_FILENAME_FORMAT = (
     "nwp_toa_downwelling_shortwave_flux_{analysis_time:%Y%m%d%H}.npy"
 )
-COLUMN_WATER_FILENAME_FORMAT = "wtr_{analysis_time:%Y%m%d%H}.npy"
+OPEN_WATER_FILENAME_FORMAT = "wtr_{analysis_time:%Y%m%d%H}.npy"
 
 
 def _load_np(fp, add_feature_dim):
