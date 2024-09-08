@@ -83,20 +83,3 @@ def test_training(datastore_name):
     )
     wandb.init()
     trainer.fit(model=model, datamodule=data_module)
-
-
-# def test_train_model_reduced_meps_dataset():
-#     args = [
-#         "--model=hi_lam",
-#         "--data_config=data/meps_example_reduced/data_config.yaml",
-#         "--n_workers=4",
-#         "--epochs=1",
-#         "--graph=hierarchical",
-#         "--hidden_dim=16",
-#         "--hidden_layers=1",
-#         "--processor_layers=1",
-#         "--ar_steps=1",
-#         "--eval=val",
-#         "--n_example_pred=0",
-#     ]
-#     train_model(args)
