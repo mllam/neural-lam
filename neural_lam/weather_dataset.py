@@ -2,7 +2,6 @@
 import warnings
 
 # Third-party
-import numpy as np
 import pytorch_lightning as pl
 import torch
 import xarray as xr
@@ -170,13 +169,17 @@ class WeatherDataset(torch.utils.data.Dataset):
         """
         # handling ensemble data
         if self.datastore.is_ensemble:
-            # for the now the strategy is to simply select a random ensemble
+            # for the now the strategy is to only include the first ensemble
             # member
             # XXX: this could be changed to include all ensemble members by
             # splitting `idx` into two parts, one for the analysis time and one
             # for the ensemble member and then increasing self.__len__ to
             # include all ensemble members
-            i_ensemble = np.random.randint(self.da_state.ensemble_member.size)
+            warnings.warn(
+                "only use of ensemble member 0 (the first member) is "
+                "implemented for ensemble data"
+            )
+            i_ensemble = 0
             da_state = self.da_state.isel(ensemble_member=i_ensemble)
         else:
             da_state = self.da_state
