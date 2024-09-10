@@ -157,7 +157,16 @@ def test_get_dataarray(datastore_name):
 
     for category in ["state", "forcing", "static"]:
         n_features = {}
-        for split in ["train", "val", "test"]:
+        if category in ["state", "forcing"]:
+            splits = ["train", "val", "test"]
+        elif category == "static":
+            # static data should be the same for all splits, so split
+            # should be allowed to be None
+            splits = ["train", "val", "test", None]
+        else:
+            raise NotImplementedError(category)
+
+        for split in splits:
             expected_dims = ["grid_index", f"{category}_feature"]
             if category != "static":
                 if not datastore.is_forecast:

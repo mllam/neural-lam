@@ -168,7 +168,8 @@ class BaseDatastore(abc.ABC):
         space and time) of a given category (state/forcin g/static). A
         datastore must be able to return for the "state" category, but
         "forcing" and "static" are optional (in which case the method should
-        return `None`).
+        return `None`). For the "static" category the `split` is allowed to be
+        `None` because the static data is the same for all splits.
 
         The returned dataarray is expected to at minimum have dimensions of
         `(grid_index, {category}_feature)` so that any spatial dimensions have
