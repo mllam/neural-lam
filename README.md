@@ -142,15 +142,27 @@ It should thus be useful to make sure that your python environment is set up cor
 
 ## Pre-processing
 
+There are two main steps in the pre-processing pipeline: creating the graph and creating additional features/normalisation/boundary-masks.
+
+The amount of pre-processing required will depend on what kind of datastore you will be using for training.
+
+### Additional inputs
+
+#### MultiZarr Datastore
+
+* `python -m neural_lam.create_boundary_mask`
+* `python -m neural_lam.create_datetime_forcings`
+* `python -m neural_lam.create_norm`
+
+#### NpyFiles Datastore
+
+#### MLLAM Datastore
+
 An overview of how the different pre-processing steps, training and files depend on each other is given in this figure:
 <p align="middle">
   <img src="figures/component_dependencies.png"/>
 </p>
 In order to start training models at least three pre-processing steps have to be run:
-
-* `python -m neural_lam.create_mesh`
-* `python -m neural_lam.create_grid_features`
-* `python -m neural_lam.create_parameter_weights`
 
 ### Create graph
 Run `python -m neural_lam.create_mesh` with suitable options to generate the graph you want to use (see `python neural_lam.create_mesh --help` for a list of options).
