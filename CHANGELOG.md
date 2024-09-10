@@ -35,6 +35,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Clarify routine around requesting reviewer and assignee in PR template
+  [\#74](https://github.com/mllam/neural-lam/pull/74)
+  @joeloskarsson
+
 - Argument Parser updated to use action="store_true" instead of 0/1 for boolean arguments.
   (https://github.com/mllam/neural-lam/pull/72)
   @ErikLarssonDev
