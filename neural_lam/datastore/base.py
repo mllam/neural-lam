@@ -87,7 +87,7 @@ class BaseDatastore(abc.ABC):
         Parameters
         ----------
         category : str
-            The category of the variables.
+            The category of the variables (state/forcing/static).
 
         Returns
         -------
@@ -104,7 +104,7 @@ class BaseDatastore(abc.ABC):
         Parameters
         ----------
         category : str
-            The category of the variables.
+            The category of the variables (state/forcing/static).
 
         Returns
         -------
@@ -121,7 +121,7 @@ class BaseDatastore(abc.ABC):
         Parameters
         ----------
         category : str
-            The category of the variables.
+            The category of the variables (state/forcing/static).
 
         Returns
         -------
