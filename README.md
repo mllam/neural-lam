@@ -77,8 +77,8 @@ the input-data representation is split into two parts:
 
 There are currently three different datastores implemented in the codebase:
 
-1. `neural_lam.datastore.NpyDataStore` which reads data from `.npy`-files in
-   the format introduced in neural-lam `v0.1.0`.
+1. `neural_lam.datastore.NpyDataStore` which reads MEPS data from `.npy`-files in
+   the format introduced in neural-lam `v0.1.0`. Note that this datastore is specific to the format of the MEPS dataset, but can act as an example for how to create similar numpy-based datastores.
 
 2. `neural_lam.datastore.MultizarrDatastore` which can combines multiple zarr
    files during train/val/test sampling, with the transformations to facilitate

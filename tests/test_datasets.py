@@ -15,7 +15,7 @@ from neural_lam.weather_dataset import WeatherDataset
 
 @pytest.mark.parametrize("datastore_name", DATASTORES.keys())
 def test_dataset_item(datastore_name):
-    """Check that the `datasto re.get_dataarray` method is implemented.
+    """Check that the `datastore.get_dataarray` method is implemented.
 
     Validate the shapes of the tensors match between the different
     components of the training sample.

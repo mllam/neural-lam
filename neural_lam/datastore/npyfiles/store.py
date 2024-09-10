@@ -27,7 +27,7 @@ STATE_FILENAME_FORMAT = "nwp_{analysis_time:%Y%m%d%H}_mbr{member_id:03d}.npy"
 TOA_SW_DOWN_FLUX_FILENAME_FORMAT = (
     "nwp_toa_downwelling_shortwave_flux_{analysis_time:%Y%m%d%H}.npy"
 )
-COLUMN_WATER_FILENAME_FORMAT = "wtr_{analysis_time:%Y%m%d%H}.npy"
+OPEN_WATER_FILENAME_FORMAT = "wtr_{analysis_time:%Y%m%d%H}.npy"
 
 
 def _load_np(fp, add_feature_dim):
@@ -510,7 +510,7 @@ class NpyFilesDatastore(BaseCartesianDatastore):
         elif category == "forcing":
             return [
                 "W/m^2",
-                "kg/m^2",
+                "1",
                 "1",
                 "1",
                 "1",
@@ -661,8 +661,8 @@ class NpyFilesDatastore(BaseCartesianDatastore):
             flux_mean, flux_std = flux_stats
             # manually add hour sin/cos and day-of-year sin/cos stats for now
             # the mean/std for column_water is hardcoded for now
-            mean_values = np.array([flux_mean, 0.34033957, 0.0, 0.0, 0.0, 0.0])
-            std_values = np.array([flux_std, 0.4661307, 1.0, 1.0, 1.0, 1.0])
+            mean_values = np.array([flux_mean, 0.0, 0.0, 0.0, 0.0, 0.0])
+            std_values = np.array([flux_std, 1.0, 1.0, 1.0, 1.0, 1.0])
 
         elif category == "static":
             ds_static = self.get_dataarray(category="static", split="train")
