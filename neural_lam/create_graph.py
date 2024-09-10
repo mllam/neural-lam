@@ -15,7 +15,6 @@ from torch_geometric.utils.convert import from_networkx
 # Local
 from .datastore.base import BaseCartesianDatastore
 from .datastore.mllam import MLLAMDatastore
-from .datastore.multizarr import MultiZarrDatastore
 from .datastore.npyfiles import NpyFilesDatastore
 
 
@@ -534,7 +533,6 @@ def create_graph(
 
 
 DATASTORES = dict(
-    multizarr=MultiZarrDatastore,
     mllam=MLLAMDatastore,
     npyfiles=NpyFilesDatastore,
 )
@@ -562,9 +560,8 @@ def cli(input_args=None):
     parser.add_argument(
         "datastore",
         type=str,
-        default="multizarr",
         choices=DATASTORES.keys(),
-        help="kind of data store to use (default: multizarr)",
+        help="kind of data store to use",
     )
     parser.add_argument(
         "datastore_config_path",

@@ -12,7 +12,6 @@ from lightning_fabric.utilities import seed
 # Local
 from . import utils
 from .datastore.mllam import MLLAMDatastore
-from .datastore.multizarr import MultiZarrDatastore
 from .datastore.npyfiles import NpyFilesDatastore
 from .models import GraphLAM, HiLAM, HiLAMParallel
 from .weather_dataset import WeatherDataModule
@@ -25,9 +24,7 @@ MODELS = {
 
 
 def _init_datastore(datastore_kind, config_path):
-    if datastore_kind == "multizarr":
-        datastore = MultiZarrDatastore(config_path=config_path)
-    elif datastore_kind == "npyfiles":
+    if datastore_kind == "npyfiles":
         datastore = NpyFilesDatastore(config_path=config_path)
     elif datastore_kind == "mllam":
         datastore = MLLAMDatastore(config_path=config_path)
@@ -44,7 +41,7 @@ def main(input_args=None):
     parser.add_argument(
         "datastore_kind",
         type=str,
-        choices=["multizarr", "npyfiles", "mllam"],
+        choices=["npyfiles", "mllam"],
         help="Kind of datastore to use",
     )
     parser.add_argument(
