@@ -56,8 +56,8 @@ class NpyFilesDatastore(BaseCartesianDatastore):
         The top-of-atmosphere downwelling shortwave flux at `time`. The
         dimensions of the array are `[forecast_timestep, y, x]`.
 
-    - `{COLUMN_WATER_FILENAME_FORMAT}`:
-        The column water at `time`. The dimensions of the array are
+    - `{OPEN_WATER_FILENAME_FORMAT}`:
+        The open water fraction at `time`. The dimensions of the array are
         `[y, x]`.
 
 
@@ -234,7 +234,7 @@ class NpyFilesDatastore(BaseCartesianDatastore):
         elif category == "forcing":
             # the forcing features are in separate files, so we need to load
             # them separately
-            features = ["toa_downwelling_shortwave_flux", "column_water"]
+            features = ["toa_downwelling_shortwave_flux", "open_water_fraction"]
             das = [
                 self._get_single_timeseries_dataarray(
                     features=[feature], split=split
@@ -353,8 +353,8 @@ class NpyFilesDatastore(BaseCartesianDatastore):
             filename_format = TOA_SW_DOWN_FLUX_FILENAME_FORMAT
             file_dims = ["elapsed_forecast_duration", "y", "x", "feature"]
             add_feature_dim = True
-        elif features == ["column_water"]:
-            filename_format = COLUMN_WATER_FILENAME_FORMAT
+        elif features == ["open_water_fraction"]:
+            filename_format = OPEN_WATER_FILENAME_FORMAT
             file_dims = ["y", "x", "feature"]
             add_feature_dim = True
         elif features == ["surface_geopotential"]:
@@ -529,7 +529,7 @@ class NpyFilesDatastore(BaseCartesianDatastore):
             # the config
             return [
                 "toa_downwelling_shortwave_flux",
-                "column_water",
+                "open_water_fraction",
                 "sin_hour",
                 "cos_hour",
                 "sin_year",
@@ -660,7 +660,7 @@ class NpyFilesDatastore(BaseCartesianDatastore):
             flux_stats = load_pickled_tensor("flux_stats.pt")  # (2,)
             flux_mean, flux_std = flux_stats
             # manually add hour sin/cos and day-of-year sin/cos stats for now
-            # the mean/std for column_water is hardcoded for now
+            # the mean/std for open_water_fraction is hardcoded for now
             mean_values = np.array([flux_mean, 0.0, 0.0, 0.0, 0.0, 0.0])
             std_values = np.array([flux_std, 1.0, 1.0, 1.0, 1.0, 1.0])
 
