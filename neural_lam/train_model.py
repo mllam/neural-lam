@@ -11,8 +11,7 @@ from lightning_fabric.utilities import seed
 
 # Local
 from . import utils
-from .datastore.mllam import MLLAMDatastore
-from .datastore.npyfiles import NpyFilesDatastore
+from .datastore import init_datastore
 from .models import GraphLAM, HiLAM, HiLAMParallel
 from .weather_dataset import WeatherDataModule
 
@@ -21,16 +20,6 @@ MODELS = {
     "hi_lam": HiLAM,
     "hi_lam_parallel": HiLAMParallel,
 }
-
-
-def _init_datastore(datastore_kind, config_path):
-    if datastore_kind == "npyfiles":
-        datastore = NpyFilesDatastore(config_path=config_path)
-    elif datastore_kind == "mllam":
-        datastore = MLLAMDatastore(config_path=config_path)
-    else:
-        raise ValueError(f"Unknown datastore kind: {datastore_kind}")
-    return datastore
 
 
 def main(input_args=None):
@@ -238,7 +227,7 @@ def main(input_args=None):
     seed.seed_everything(args.seed)
 
     # Create datastore
-    datastore = _init_datastore(
+    datastore = init_datastore(
         datastore_kind=args.datastore_kind,
         config_path=args.datastore_config_path,
     )

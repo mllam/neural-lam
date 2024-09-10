@@ -40,7 +40,7 @@ import cartopy.crs as ccrs
 import numpy as np
 import pytest
 import xarray as xr
-from conftest import DATASTORES, init_datastore
+from conftest import DATASTORES, init_datastore_example
 
 # First-party
 from neural_lam.datastore.base import BaseCartesianDatastore
@@ -49,14 +49,14 @@ from neural_lam.datastore.base import BaseCartesianDatastore
 @pytest.mark.parametrize("datastore_name", DATASTORES.keys())
 def test_root_path(datastore_name):
     """Check that the `datastore.root_path` property is implemented."""
-    datastore = init_datastore(datastore_name)
+    datastore = init_datastore_example(datastore_name)
     assert isinstance(datastore.root_path, Path)
 
 
 @pytest.mark.parametrize("datastore_name", DATASTORES.keys())
 def test_config(datastore_name):
     """Check that the `datastore.config` property is implemented."""
-    datastore = init_datastore(datastore_name)
+    datastore = init_datastore_example(datastore_name)
     # check the config is a mapping or a dataclass
     config = datastore.config
     assert isinstance(
@@ -67,7 +67,7 @@ def test_config(datastore_name):
 @pytest.mark.parametrize("datastore_name", DATASTORES.keys())
 def test_step_length(datastore_name):
     """Check that the `datastore.step_length` property is implemented."""
-    datastore = init_datastore(datastore_name)
+    datastore = init_datastore_example(datastore_name)
     step_length = datastore.step_length
     assert isinstance(step_length, int)
     assert step_length > 0
@@ -78,7 +78,7 @@ def test_datastore_grid_xy(datastore_name):
     """Use the `datastore.get_xy` method to get the x, y coordinates of the
     dataset and check that the shape is correct against the `da
     tastore.grid_shape_state` property."""
-    datastore = init_datastore(datastore_name)
+    datastore = init_datastore_example(datastore_name)
 
     # check the shapes of the xy grid
     grid_shape = datastore.grid_shape_state
@@ -103,7 +103,7 @@ def test_get_vars(datastore_name):
     return types of each are correct.
 
     """
-    datastore = init_datastore(datastore_name)
+    datastore = init_datastore_example(datastore_name)
 
     for category in ["state", "forcing", "static"]:
         units = datastore.get_vars_units(category)
@@ -120,7 +120,7 @@ def test_get_vars(datastore_name):
 def test_get_normalization_dataarray(datastore_name):
     """Check that the `datasto re.get_normalization_dataa rray` method is
     implemented."""
-    datastore = init_datastore(datastore_name)
+    datastore = init_datastore_example(datastore_name)
 
     for category in ["state", "forcing", "static"]:
         ds_stats = datastore.get_normalization_dataarray(category=category)
@@ -153,7 +153,7 @@ def test_get_dataarray(datastore_name):
 
     """
 
-    datastore = init_datastore(datastore_name)
+    datastore = init_datastore_example(datastore_name)
 
     for category in ["state", "forcing", "static"]:
         n_features = {}
@@ -203,7 +203,7 @@ def test_get_dataarray(datastore_name):
 def test_boundary_mask(datastore_name):
     """Check that the `datastore.boundary_mask` property is implemented and
     that the returned object is an xarray DataArray with the correct shape."""
-    datastore = init_datastore(datastore_name)
+    datastore = init_datastore_example(datastore_name)
     da_mask = datastore.boundary_mask
 
     assert isinstance(da_mask, xr.DataArray)
@@ -222,7 +222,7 @@ def test_boundary_mask(datastore_name):
 def test_get_xy_extent(datastore_name):
     """Check that the `datastore.get_xy_extent` method is implemented and that
     the returned object is a tuple of the correct length."""
-    datastore = init_datastore(datastore_name)
+    datastore = init_datastore_example(datastore_name)
 
     if not isinstance(datastore, BaseCartesianDatastore):
         pytest.skip("Datastore does not implement `BaseCartesianDatastore`")
@@ -244,7 +244,7 @@ def test_get_xy_extent(datastore_name):
 @pytest.mark.parametrize("datastore_name", DATASTORES.keys())
 def test_get_xy(datastore_name):
     """Check that the `datastore.get_xy` method is implemented."""
-    datastore = init_datastore(datastore_name)
+    datastore = init_datastore_example(datastore_name)
 
     if not isinstance(datastore, BaseCartesianDatastore):
         pytest.skip("Datastore does not implement `BaseCartesianDatastore`")
@@ -273,7 +273,7 @@ def test_get_xy(datastore_name):
 @pytest.mark.parametrize("datastore_name", DATASTORES.keys())
 def test_get_projection(datastore_name):
     """Check that the `datasto re.coords_projection` property is implemented."""
-    datastore = init_datastore(datastore_name)
+    datastore = init_datastore_example(datastore_name)
 
     if not isinstance(datastore, BaseCartesianDatastore):
         pytest.skip("Datastore does not implement `BaseCartesianDatastore`")
@@ -284,7 +284,7 @@ def test_get_projection(datastore_name):
 @pytest.mark.parametrize("datastore_name", DATASTORES.keys())
 def get_grid_shape_state(datastore_name):
     """Check that the `datasto re.grid_shape_state` property is implemented."""
-    datastore = init_datastore(datastore_name)
+    datastore = init_datastore_example(datastore_name)
 
     if not isinstance(datastore, BaseCartesianDatastore):
         pytest.skip("Datastore does not implement `BaseCartesianDatastore`")

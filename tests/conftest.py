@@ -7,16 +7,11 @@ import pooch
 import yaml
 
 # First-party
-from neural_lam.datastore import mllam, npyfiles
+from neural_lam.datastore import init_datastore
 
 # Disable weights and biases to avoid unnecessary logging
 # and to avoid having to deal with authentication
 os.environ["WANDB_DISABLED"] = "true"
-
-DATASTORES = dict(
-    mllam=mllam.MLLAMDatastore,
-    npyfiles=npyfiles.NpyFilesDatastore,
-)
 
 DATASTORE_EXAMPLES_ROOT_PATH = Path("tests/datastore_examples")
 
@@ -64,15 +59,15 @@ def download_meps_example_reduced_dataset():
 
 
 DATASTORES_EXAMPLES = dict(
-    mllam=dict(
-        config_path=DATASTORE_EXAMPLES_ROOT_PATH
-        / "mllam"
-        / "danra.example.yaml"
-    ),
-    npyfiles=dict(config_path=download_meps_example_reduced_dataset()),
+    mllam=(DATASTORE_EXAMPLES_ROOT_PATH / "mllam" / "danra.example.yaml"),
+    npyfiles=download_meps_example_reduced_dataset(),
 )
 
 
-def init_datastore(datastore_name):
-    DatastoreClass = DATASTORES[datastore_name]
-    return DatastoreClass(**DATASTORES_EXAMPLES[datastore_name])
+def init_datastore_example(datastore_kind):
+    datastore = init_datastore(
+        datastore_kind=datastore_kind,
+        config_path=DATASTORES_EXAMPLES[datastore_kind],
+    )
+
+    return datastore

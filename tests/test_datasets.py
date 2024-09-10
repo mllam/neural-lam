@@ -4,7 +4,7 @@ from pathlib import Path
 # Third-party
 import pytest
 import torch
-from test_datastores import DATASTORES, init_datastore
+from conftest import DATASTORES, init_datastore_example
 from torch.utils.data import DataLoader
 
 # First-party
@@ -25,7 +25,7 @@ def test_dataset_item(datastore_name):
     forcing: (ar_steps, N_grid, d_windowed_forcing) # batch_times: (ar_steps,)
 
     """
-    datastore = init_datastore(datastore_name)
+    datastore = init_datastore_example(datastore_name)
     N_gridpoints = datastore.grid_shape_state.x * datastore.grid_shape_state.y
 
     N_pred_steps = 4
@@ -82,7 +82,7 @@ def test_single_batch(datastore_name, split):
     And that it returns an xarray DataArray with the correct dimensions.
 
     """
-    datastore = init_datastore(datastore_name)
+    datastore = init_datastore_example(datastore_name)
 
     device_name = (
         torch.device("cuda") if torch.cuda.is_available() else "cpu"
@@ -102,6 +102,7 @@ def test_single_batch(datastore_name, split):
         hidden_layers = 1
         processor_layers = 4
         mesh_aggr = "sum"
+        forcing_window_size = 3
 
     args = ModelArgs()
 
@@ -118,7 +119,6 @@ def test_single_batch(datastore_name, split):
 
     model = GraphLAM(  # noqa
         args=args,
-        forcing_window_size=dataset.forcing_window_size,
         datastore=datastore,
     )
 

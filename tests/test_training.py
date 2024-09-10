@@ -6,7 +6,7 @@ import pytest
 import pytorch_lightning as pl
 import torch
 import wandb
-from test_datastores import DATASTORES, init_datastore
+from conftest import DATASTORES, init_datastore_example
 
 # First-party
 from neural_lam.create_graph import create_graph_from_datastore
@@ -16,7 +16,7 @@ from neural_lam.weather_dataset import WeatherDataModule
 
 @pytest.mark.parametrize("datastore_name", DATASTORES.keys())
 def test_training(datastore_name):
-    datastore = init_datastore(datastore_name)
+    datastore = init_datastore_example(datastore_name)
 
     if torch.cuda.is_available():
         device_name = "cuda"
@@ -73,12 +73,12 @@ def test_training(datastore_name):
         lr = 1.0e-3
         val_steps_to_log = [1, 3]
         metrics_watch = []
+        forcing_window_size = 3
 
     model_args = ModelArgs()
 
     model = GraphLAM(  # noqa
         args=model_args,
-        forcing_window_size=data_module.forcing_window_size,
         datastore=datastore,
     )
     wandb.init()

@@ -327,7 +327,18 @@ class NpyFilesDatastore(BaseCartesianDatastore):
             for all categories of data
 
         """
-        assert split in ("train", "val", "test"), "Unknown dataset split"
+        if (
+            set(features).difference(self.get_vars_names(category="static"))
+            == set()
+        ):
+            assert split in (
+                "train",
+                "val",
+                "test",
+                None,
+            ), "Unknown dataset split"
+        else:
+            assert split in ("train", "val", "test"), "Unknown dataset split"
 
         if member is not None and features != self.get_vars_names(
             category="state"
@@ -339,8 +350,6 @@ class NpyFilesDatastore(BaseCartesianDatastore):
         # XXX: we here assume that the grid shape is the same for all categories
         grid_shape = self.grid_shape_state
 
-        fp_samples = self.root_path / "samples" / split
-
         file_params = {}
         add_feature_dim = False
         features_vary_with_analysis_time = True
@@ -349,14 +358,17 @@ class NpyFilesDatastore(BaseCartesianDatastore):
             file_dims = ["elapsed_forecast_duration", "y", "x", "feature"]
             # only select one member for now
             file_params["member_id"] = member
+            fp_samples = self.root_path / "samples" / split
         elif features == ["toa_downwelling_shortwave_flux"]:
             filename_format = TOA_SW_DOWN_FLUX_FILENAME_FORMAT
             file_dims = ["elapsed_forecast_duration", "y", "x", "feature"]
             add_feature_dim = True
+            fp_samples = self.root_path / "samples" / split
         elif features == ["open_water_fraction"]:
             filename_format = OPEN_WATER_FILENAME_FORMAT
             file_dims = ["y", "x", "feature"]
             add_feature_dim = True
+            fp_samples = self.root_path / "samples" / split
         elif features == ["surface_geopotential"]:
             filename_format = "surface_geopotential.npy"
             file_dims = ["y", "x", "feature"]

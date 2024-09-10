@@ -5,7 +5,7 @@ from pathlib import Path
 # Third-party
 import pytest
 import torch
-from test_datastores import DATASTORES, init_datastore
+from conftest import DATASTORES, init_datastore_example
 
 # First-party
 from neural_lam.create_graph import create_graph_from_datastore
@@ -19,7 +19,7 @@ def test_graph_creation(datastore_name, graph_name):
     And that the graph is created in the correct location.
 
     """
-    datastore = init_datastore(datastore_name)
+    datastore = init_datastore_example(datastore_name)
     if graph_name == "hierarchical":
         hierarchical = True
         n_max_levels = 3
