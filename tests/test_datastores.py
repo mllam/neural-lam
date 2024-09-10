@@ -40,9 +40,10 @@ import cartopy.crs as ccrs
 import numpy as np
 import pytest
 import xarray as xr
-from conftest import DATASTORES, init_datastore_example
+from conftest import init_datastore_example
 
 # First-party
+from neural_lam.datastore import DATASTORES
 from neural_lam.datastore.base import BaseCartesianDatastore
 
 

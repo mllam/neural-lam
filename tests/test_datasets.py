@@ -4,11 +4,12 @@ from pathlib import Path
 # Third-party
 import pytest
 import torch
-from conftest import DATASTORES, init_datastore_example
+from conftest import init_datastore_example
 from torch.utils.data import DataLoader
 
 # First-party
 from neural_lam.create_graph import create_graph_from_datastore
+from neural_lam.datastore import DATASTORES
 from neural_lam.models.graph_lam import GraphLAM
 from neural_lam.weather_dataset import WeatherDataset
 

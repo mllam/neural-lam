@@ -5,10 +5,11 @@ from pathlib import Path
 # Third-party
 import pytest
 import torch
-from conftest import DATASTORES, init_datastore_example
+from conftest import init_datastore_example
 
 # First-party
 from neural_lam.create_graph import create_graph_from_datastore
+from neural_lam.datastore import DATASTORES
 
 
 @pytest.mark.parametrize("graph_name", ["1level", "multiscale", "hierarchical"])
