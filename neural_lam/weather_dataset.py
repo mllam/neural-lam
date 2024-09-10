@@ -54,7 +54,7 @@ class WeatherDataset(torch.utils.data.Dataset):
         # TODO: This will become part of ar_model.py soon!
         self.standardize = standardize
         if standardize:
-            self.ds_state_stats = self.datastore.get_normalization_dataarray(
+            self.ds_state_stats = self.datastore.get_standardization_dataarray(
                 category="state"
             )
 
@@ -63,7 +63,7 @@ class WeatherDataset(torch.utils.data.Dataset):
 
             if self.da_forcing is not None:
                 self.ds_forcing_stats = (
-                    self.datastore.get_normalization_dataarray(
+                    self.datastore.get_standardization_dataarray(
                         category="forcing"
                     )
                 )
@@ -147,11 +147,12 @@ class WeatherDataset(torch.utils.data.Dataset):
         target states, forcing and batch times.
 
         The implementation currently uses xarray.DataArray objects for the
-        normalisation so that we can make us of xarray's broadcasting
-        capabilities. This makes it possible to normalise with both global
-        means, but also for example where a grid-point mean has been computed.
-        This code will have to be replace if normalisation is to be done on the
-        GPU to handle different shapes of the normalisation.
+        standardization (scaling to mean 0.0 and standard deviation of 1.0) so
+        that we can make us of xarray's broadcasting capabilities. This makes
+        it possible to standardization with both global means, but also for
+        example where a grid-point mean has been computed. This code will have
+        to be replace if standardization is to be done on the GPU to handle
+        different shapes of the standardization.
 
         Parameters
         ----------

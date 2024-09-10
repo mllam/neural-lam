@@ -132,15 +132,16 @@ class BaseDatastore(abc.ABC):
         pass
 
     @abc.abstractmethod
-    def get_normalization_dataarray(self, category: str) -> xr.Dataset:
+    def get_standardization_dataarray(self, category: str) -> xr.Dataset:
         """
-        Return the normalization dataarray for the given category. This should
-        contain a `{category}_mean` and `{category}_std` variable for each
-        variable in the category. For `category=="state"`, the dataarray should
-        also contain a `state_diff_mean` and `state_diff_std` variable for the
-        one- step differences of the state variables. The returned dataarray
-        should at least have dimensions of `({categ ory}_feature)`, but can
-        also include for example `grid_index` (if the normalisation is done per
+        Return the standardization (i.e. scaling to mean of 0.0 and standard
+        deviation of 1.0) dataarray for the given category. This should contain
+        a `{category}_mean` and `{category}_std` variable for each variable in
+        the category. For `category=="state"`, the dataarray should also
+        contain a `state_diff_mean` and `state_diff_std` variable for the one-
+        step differences of the state variables. The returned dataarray should
+        at least have dimensions of `({categ ory}_feature)`, but can also
+        include for example `grid_index` (if the standardization is done per
         grid point for example).
 
         Parameters
@@ -151,7 +152,7 @@ class BaseDatastore(abc.ABC):
         Returns
         -------
         xr.Dataset
-            The normalization dataarray for the given category, with variables
+            The standardization dataarray for the given category, with variables
             for the mean and standard deviation of the variables (and
             differences for state variables).
 

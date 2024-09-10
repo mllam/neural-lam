@@ -219,13 +219,13 @@ class MLLAMDatastore(BaseCartesianDatastore):
             )
             return da_category.sel(time=slice(t_start, t_end))
 
-    def get_normalization_dataarray(self, category: str) -> xr.Dataset:
+    def get_standardization_dataarray(self, category: str) -> xr.Dataset:
         """
-        Return the normalization dataarray for the given category. This should
-        contain a `{category}_mean` and `{category}_std` variable for each
-        variable in the category. For `category=="state"`, the dataarray should
-        also contain a `state_diff_mean` and `state_diff_std` variable for the
-        one- step differences of the state variables.
+        Return the standardization dataarray for the given category. This
+        should contain a `{category}_mean` and `{category}_std` variable for
+        each variable in the category. For `category=="state"`, the dataarray
+        should also contain a `state_diff_mean` and `state_diff_std` variable
+        for the one- step differences of the state variables.
 
         Parameters
         ----------
@@ -235,8 +235,8 @@ class MLLAMDatastore(BaseCartesianDatastore):
         Returns
         -------
         xr.Dataset
-            The normalization dataarray for the given category, with variables
-            for the mean and standard deviation of the variables (and
+            The standardization dataarray for the given category, with
+            variables for the mean and standard deviation of the variables (and
             differences for state variables).
 
         """

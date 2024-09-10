@@ -38,7 +38,9 @@ class ARModel(pl.LightningModule):
         da_static_features = datastore.get_dataarray(
             category="static", split=split
         )
-        da_state_stats = datastore.get_normalization_dataarray(category="state")
+        da_state_stats = datastore.get_standardization_dataarray(
+            category="state"
+        )
         da_boundary_mask = datastore.boundary_mask
         forcing_window_size = args.forcing_window_size
 

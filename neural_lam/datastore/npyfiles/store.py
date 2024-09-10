@@ -637,8 +637,8 @@ class NpyFilesDatastore(BaseCartesianDatastore):
         da_mask_stacked_xy = self.stack_grid_coords(da_mask).astype(int)
         return da_mask_stacked_xy
 
-    def get_normalization_dataarray(self, category: str) -> xr.Dataset:
-        """Return the normalization dataarray for the given category. This
+    def get_standardization_dataarray(self, category: str) -> xr.Dataset:
+        """Return the standardization dataarray for the given category. This
         should contain a `{category}_mean` and `{category}_std` variable for
         each variable in the category. For `category=="state"`, the dataarray
         should also contain a `state_diff_mean` and `state_diff_std` variable
@@ -652,8 +652,8 @@ class NpyFilesDatastore(BaseCartesianDatastore):
         Returns
         -------
         xr.Dataset
-            The normalization dataarray for the given category, with variables
-            for the mean and standard deviation of the variables (and
+            The standardization dataarray for the given category, with
+            variables for the mean and standard deviation of the variables (and
             differences for state variables).
 
         """
