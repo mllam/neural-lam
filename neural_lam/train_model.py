@@ -83,10 +83,9 @@ def main(input_args=None):
     )
     parser.add_argument(
         "--restore_opt",
-        type=int,
-        default=0,
+        action="store_true",
         help="If optimizer state should be restored with model "
-        "(default: 0 (false))",
+        "(default: false)",
     )
     parser.add_argument(
         "--precision",
@@ -130,11 +129,10 @@ def main(input_args=None):
     )
     parser.add_argument(
         "--output_std",
-        type=int,
-        default=0,
+        action="store_true",
         help="If models should additionally output std.-dev. per "
         "output dimensions "
-        "(default: 0 (no))",
+        "(default: False (no))",
     )
 
     # Training options
@@ -147,10 +145,9 @@ def main(input_args=None):
     )
     parser.add_argument(
         "--control_only",
-        type=int,
-        default=0,
+        action="store_true",
         help="Train only on control member of ensemble data "
-        "(default: 0 (False))",
+        "(default: False)",
     )
     parser.add_argument(
         "--loss",
@@ -242,6 +239,7 @@ def main(input_args=None):
 
     # Set seed
     seed.seed_everything(args.seed)
+
     # Create datastore
     datastore = _init_datastore(
         datastore_kind=args.datastore_kind,

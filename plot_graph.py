@@ -37,9 +37,8 @@ def main():
     )
     parser.add_argument(
         "--show_axis",
-        type=int,
-        default=0,
-        help="If the axis should be displayed (default: 0 (No))",
+        action="store_true",
+        help="If the axis should be displayed (default: False)",
     )
 
     args = parser.parse_args()

@@ -169,7 +169,7 @@ Run `python -m neural_lam.create_mesh` with suitable options to generate the gra
 The graphs used for the different models in the [paper](https://arxiv.org/abs/2309.17370) can be created as:
 
 * **GC-LAM**: `python -m neural_lam.create_mesh --graph multiscale`
-* **Hi-LAM**: `python -m neural_lam.create_mesh --graph hierarchical --hierarchical 1` (also works for Hi-LAM-Parallel)
+* **Hi-LAM**: `python -m neural_lam.create_mesh --graph hierarchical --hierarchical` (also works for Hi-LAM-Parallel)
 * **L1-LAM**: `python -m neural_lam.create_mesh --graph 1level --levels 1`
 
 The graph-related files are stored in a directory called `graphs`.

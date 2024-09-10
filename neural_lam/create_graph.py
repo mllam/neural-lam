@@ -579,10 +579,9 @@ def cli(input_args=None):
     )
     parser.add_argument(
         "--plot",
-        type=int,
-        default=0,
+        action="store_true",
         help="If graphs should be plotted during generation "
-        "(default: 0 (false))",
+        "(default: False)",
     )
     parser.add_argument(
         "--levels",
@@ -592,9 +591,8 @@ def cli(input_args=None):
     )
     parser.add_argument(
         "--hierarchical",
-        type=int,
-        default=0,
-        help="Generate hierarchical mesh graph (default: 0, no)",
+        action="store_true",
+        help="Generate hierarchical mesh graph (default: False)",
     )
     args = parser.parse_args(input_args)
 
