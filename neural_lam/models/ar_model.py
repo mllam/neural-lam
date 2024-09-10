@@ -23,7 +23,9 @@ class ARModel(pl.LightningModule):
     # Disable to override args/kwargs from superclass
 
     def __init__(
-        self, args, datastore: BaseDatastore, forcing_window_size: int
+        self,
+        args,
+        datastore: BaseDatastore,
     ):
         super().__init__()
         self.save_hyperparameters(ignore=["datastore"])
@@ -38,6 +40,7 @@ class ARModel(pl.LightningModule):
         )
         da_state_stats = datastore.get_normalization_dataarray(category="state")
         da_boundary_mask = datastore.boundary_mask
+        forcing_window_size = args.forcing_window_size
 
         # Load static features for grid/data, NB: self.predict_step assumes
         # dimension order to be (grid_index, static_feature)
