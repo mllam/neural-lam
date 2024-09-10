@@ -166,7 +166,7 @@ class BaseDatastore(abc.ABC):
         """
         Return the processed data (as a single `xr.DataArray`) for the given
         category of data and test/train/val-split that covers all the data (in
-        space and time) of a given category (state/forcin g/static). A
+        space and time) of a given category (state/forcing/static). A
         datastore must be able to return for the "state" category, but
         "forcing" and "static" are optional (in which case the method should
         return `None`). For the "static" category the `split` is allowed to be
