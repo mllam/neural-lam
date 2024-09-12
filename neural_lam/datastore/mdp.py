@@ -164,6 +164,26 @@ class MDPDatastore(BaseCartesianDatastore):
             return []
         return self._ds[f"{category}_feature"].values.tolist()
 
+    def get_vars_long_names(self, category: str) -> List[str]:
+        """
+        Return the long names of the variables in the given category.
+
+        Parameters
+        ----------
+        category : str
+            The category of the dataset (state/forcing/static).
+
+        Returns
+        -------
+        List[str]
+            The long names of the variables in the given category.
+
+        """
+        if category not in self._ds and category == "forcing":
+            warnings.warn("no forcing data found in datastore")
+            return []
+        return self._ds[f"{category}_feature_long_name"].values.tolist()
+
     def get_num_data_vars(self, category: str) -> int:
         """Return the number of variables in the given category.
 

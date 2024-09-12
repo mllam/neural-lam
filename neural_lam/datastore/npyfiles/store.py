@@ -558,6 +558,13 @@ class NpyFilesDatastore(BaseCartesianDatastore):
         else:
             raise NotImplementedError(f"Category {category} not supported")
 
+    def get_vars_long_names(self, category: str) -> List[str]:
+        if category == "state":
+            return self.config.dataset.var_longnames
+        else:
+            # TODO: should we add these?
+            return self.get_vars_names(category=category)
+
     def get_num_data_vars(self, category: str) -> int:
         return len(self.get_vars_names(category=category))
 

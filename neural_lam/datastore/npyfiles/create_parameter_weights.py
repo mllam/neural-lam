@@ -11,7 +11,8 @@ from torch.utils.data.distributed import DistributedSampler
 from tqdm import tqdm
 
 # Local
-from . import WeatherDataset, config
+from ... import WeatherDataset
+from ...datastore import init_datastore
 
 
 class PaddedWeatherDataset(torch.utils.data.Dataset):
@@ -131,10 +132,7 @@ def main():
     """
     parser = ArgumentParser(description="Training arguments")
     parser.add_argument(
-        "--data_config",
-        type=str,
-        default="neural_lam/data_config.yaml",
-        help="Path to data config file (default: neural_lam/data_config.yaml)",
+        "datastore_config", type=str, help="Path to data config file"
     )
     parser.add_argument(
         "--batch_size",
@@ -164,7 +162,9 @@ def main():
 
     rank = get_rank()
     world_size = get_world_size()
-    config_loader = config.Config.from_file(args.data_config)
+    datastore = init_datastore(
+        datastore_kind="npyfiles", config_path=args.datastore_config
+    )
 
     if distributed:
 
@@ -175,9 +175,7 @@ def main():
         torch.cuda.set_device(device) if torch.cuda.is_available() else None
 
     if rank == 0:
-        static_dir_path = os.path.join(
-            "data", config_loader.dataset.name, "static"
-        )
+        static_dir_path = os.path.join(datastore.root_path, "static")
         # Create parameter weights based on height
         # based on fig A.1 in graph cast paper
         w_dict = {
@@ -191,7 +189,7 @@ def main():
         w_list = np.array(
             [
                 w_dict[par.split("_")[-2]]
-                for par in config_loader.dataset.var_longnames
+                for par in datastore.get_vars_long_names(category="state")
             ]
         )
         print("Saving parameter weights...")
@@ -200,12 +198,13 @@ def main():
             w_list.astype("float32"),
         )
 
-    # Load dataset without any subsampling
+        # XXX: is this correct?
+    ar_steps = 61
     ds = WeatherDataset(
-        config_loader.dataset.name,
+        datastore=datastore,
         split="train",
-        subsample_step=1,
-        pred_length=63,
+        ar_steps=ar_steps,
+        # pred_length=63,
         standardize=False,
     )
     if distributed:
@@ -231,7 +230,7 @@ def main():
         print("Computing mean and std.-dev. for parameters...")
     means, squares, flux_means, flux_squares = [], [], [], []
 
-    for init_batch, target_batch, forcing_batch in tqdm(loader):
+    for init_batch, target_batch, forcing_batch, _ in tqdm(loader):
         if distributed:
             init_batch, target_batch, forcing_batch = (
                 init_batch.to(device),
@@ -299,10 +298,9 @@ def main():
     if rank == 0:
         print("Computing mean and std.-dev. for one-step differences...")
     ds_standard = WeatherDataset(
-        config_loader.dataset.name,
+        datastore=datastore,
         split="train",
-        subsample_step=1,
-        pred_length=63,
+        ar_steps=ar_steps,
         standardize=True,
     )  # Re-load with standardization
     if distributed:
@@ -327,7 +325,9 @@ def main():
 
     diff_means, diff_squares = [], []
 
-    for init_batch, target_batch, _ in tqdm(loader_standard, disable=rank != 0):
+    for init_batch, target_batch, _, _ in tqdm(
+        loader_standard, disable=rank != 0
+    ):
         if distributed:
             init_batch, target_batch = init_batch.to(device), target_batch.to(
                 device

@@ -117,6 +117,23 @@ class BaseDatastore(abc.ABC):
         pass
 
     @abc.abstractmethod
+    def get_vars_long_names(self, category: str) -> List[str]:
+        """Get the long names of the variables in the given category.
+
+        Parameters
+        ----------
+        category : str
+            The category of the variables (state/forcing/static).
+
+        Returns
+        -------
+        List[str]
+            The long names of the variables.
+
+        """
+        pass
+
+    @abc.abstractmethod
     def get_num_data_vars(self, category: str) -> int:
         """Get the number of data variables in the given category.
 

@@ -10,6 +10,8 @@
       category.
 - [x] `get_vars_names` (method): Get the names of the variables in the given
       category.
+- [x] `get_vars_long_names` (method): Get the long names of the variables in
+      the given category.
 - [x] `get_num_data_vars` (method): Get the number of data variables in the
       given category.
 - [x] `get_normalization_dataarray` (method): Return the normalization
@@ -99,6 +101,7 @@ def test_get_vars(datastore_name):
 
     - `datastore.get_vars_units`
     - `datastore.get_vars_names`
+    - `datastore.get_vars_long_names`
     - `datastore.get_num_data_vars`
 
     are consistent (as in the number of variables are the same) and that the
@@ -110,11 +113,13 @@ def test_get_vars(datastore_name):
     for category in ["state", "forcing", "static"]:
         units = datastore.get_vars_units(category)
         names = datastore.get_vars_names(category)
+        long_names = datastore.get_vars_long_names(category)
         num_vars = datastore.get_num_data_vars(category)
 
         assert len(units) == len(names) == num_vars
         assert isinstance(units, list)
         assert isinstance(names, list)
+        assert isinstance(long_names, list)
         assert isinstance(num_vars, int)
 
 
