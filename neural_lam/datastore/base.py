@@ -2,6 +2,7 @@
 import abc
 import collections
 import dataclasses
+import functools
 from pathlib import Path
 from typing import List, Union
 
@@ -300,6 +301,7 @@ class BaseCartesianDatastore(BaseDatastore):
         """
         pass
 
+    @functools.lru_cache
     def get_xy_extent(self, category: str) -> List[float]:
         """
         Return the extent of the x, y coordinates for a given category of data.
