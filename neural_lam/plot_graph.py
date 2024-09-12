@@ -1,4 +1,5 @@
 # Standard library
+import os
 from argparse import ArgumentParser
 
 # Third-party
@@ -8,7 +9,9 @@ import torch_geometric as pyg
 
 # First-party
 from neural_lam import utils
-from neural_lam.datastore.multizarr import config
+
+# Local
+from .datastore import DATASTORES, init_datastore
 
 MESH_HEIGHT = 0.1
 MESH_LEVEL_DIST = 0.2
@@ -19,10 +22,15 @@ def main():
     """Plot graph structure in 3D using plotly."""
     parser = ArgumentParser(description="Plot graph")
     parser.add_argument(
-        "--data_config",
+        "datastore_kind",
         type=str,
-        default="neural_lam/data_config.yaml",
-        help="Path to data config file (default: neural_lam/data_config.yaml)",
+        choices=DATASTORES.keys(),
+        help="Kind of datastore to use",
+    )
+    parser.add_argument(
+        "datastore_config_path",
+        type=str,
+        help="Path for the datastore config",
     )
     parser.add_argument(
         "--graph",
@@ -42,14 +50,18 @@ def main():
     )
 
     args = parser.parse_args()
-    data_config = config.Config.from_file(args.data_config)
-    xy = data_config.get_xy("state")  # (2, N_y, N_x)
+    datastore = init_datastore(
+        datastore_kind=args.datastore_kind,
+        config_path=args.datastore_config_path,
+    )
+    xy = datastore.get_xy("state", stacked=False)  # (2, N_y, N_x)
     xy = xy.reshape(2, -1).T  # (N_grid, 2)
     pos_max = np.max(np.abs(xy))
     grid_pos = xy / pos_max  # Divide by maximum coordinate
 
     # Load graph data
-    hierarchical, graph_ldict = utils.load_graph(args.graph)
+    graph_dir_path = os.path.join(datastore.root_path, "graph", args.graph)
+    hierarchical, graph_ldict = utils.load_graph(graph_dir_path=graph_dir_path)
     (g2m_edge_index, m2g_edge_index, m2m_edge_index,) = (
         graph_ldict["g2m_edge_index"],
         graph_ldict["m2g_edge_index"],
