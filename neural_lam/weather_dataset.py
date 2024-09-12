@@ -1,7 +1,10 @@
 # Standard library
+import datetime
 import warnings
+from typing import Union
 
 # Third-party
+import numpy as np
 import pytorch_lightning as pl
 import torch
 import xarray as xr
@@ -141,32 +144,26 @@ class WeatherDataset(torch.utils.data.Dataset):
             )
         return da
 
-    def __getitem__(self, idx):
+    def _build_item_dataarrays(self, idx):
         """
-        Return a single training sample, which consists of the initial states,
-        target states, forcing and batch times.
-
-        The implementation currently uses xarray.DataArray objects for the
-        standardization (scaling to mean 0.0 and standard deviation of 1.0) so
-        that we can make us of xarray's broadcasting capabilities. This makes
-        it possible to standardization with both global means, but also for
-        example where a grid-point mean has been computed. This code will have
-        to be replace if standardization is to be done on the GPU to handle
-        different shapes of the standardization.
+        Create the dataarrays for the initial states, target states and forcing
+        data for the sample at index `idx`.
 
         Parameters
         ----------
         idx : int
-            The index of the sample to return, this will refer to the time of
-            the initial state.
+            The index of the sample to create the dataarrays for.
 
         Returns
         -------
-        init_states : TrainingSample
-            A training sample object containing the initial states, target
-            states, forcing and batch times. The batch times are the times of
-            the target steps.
-
+        da_init_states : xr.DataArray
+            The dataarray for the initial states.
+        da_target_states : xr.DataArray
+            The dataarray for the target states.
+        da_forcing_windowed : xr.DataArray
+            The dataarray for the forcing data, windowed for the sample.
+        da_target_times : xr.DataArray
+            The dataarray for the target times.
         """
         # handling ensemble data
         if self.datastore.is_ensemble:
@@ -230,7 +227,7 @@ class WeatherDataset(torch.utils.data.Dataset):
         da_init_states = da_state.isel(time=slice(None, 2))
         da_target_states = da_state.isel(time=slice(2, None))
 
-        batch_times = da_target_states.time.values.astype(float)
+        da_target_times = da_target_states.time
 
         if self.standardize:
             da_init_states = (
@@ -251,29 +248,81 @@ class WeatherDataset(torch.utils.data.Dataset):
             da_forcing_windowed = da_forcing_windowed.stack(
                 forcing_feature_windowed=("forcing_feature", "window_sample")
             )
+        else:
+            # create an empty forcing tensor with the right shape
+            da_forcing_windowed = xr.DataArray(
+                data=np.empty(
+                    (self.ar_steps, da_state.grid_index.size, 0),
+                ),
+                dims=("time", "grid_index", "forcing_feature"),
+                coords={
+                    "time": da_target_times,
+                    "grid_index": da_state.grid_index,
+                    "forcing_feature": [],
+                },
+            )
 
-        init_states = torch.tensor(da_init_states.values, dtype=torch.float32)
-        target_states = torch.tensor(
-            da_target_states.values, dtype=torch.float32
+        return (
+            da_init_states,
+            da_target_states,
+            da_forcing_windowed,
+            da_target_times,
         )
 
-        if self.da_forcing is None:
-            # create an empty forcing tensor
-            forcing = torch.empty(
-                (self.ar_steps, da_state.grid_index.size, 0),
-                dtype=torch.float32,
-            )
-        else:
-            forcing = torch.tensor(
-                da_forcing_windowed.values, dtype=torch.float32
-            )
+    def __getitem__(self, idx):
+        """
+        Return a single training sample, which consists of the initial states,
+        target states, forcing and batch times.
+
+        The implementation currently uses xarray.DataArray objects for the
+        standardization (scaling to mean 0.0 and standard deviation of 1.0) so
+        that we can make us of xarray's broadcasting capabilities. This makes
+        it possible to standardization with both global means, but also for
+        example where a grid-point mean has been computed. This code will have
+        to be replace if standardization is to be done on the GPU to handle
+        different shapes of the standardization.
+
+        Parameters
+        ----------
+        idx : int
+            The index of the sample to return, this will refer to the time of
+            the initial state.
+
+        Returns
+        -------
+        init_states : TrainingSample
+            A training sample object containing the initial states, target
+            states, forcing and batch times. The batch times are the times of
+            the target steps.
+
+        """
+        (
+            da_init_states,
+            da_target_states,
+            da_forcing_windowed,
+            da_target_times,
+        ) = self._build_item_dataarrays(idx=idx)
+
+        tensor_dtype = torch.float32
+
+        init_states = torch.tensor(da_init_states.values, dtype=tensor_dtype)
+        target_states = torch.tensor(
+            da_target_states.values, dtype=tensor_dtype
+        )
+
+        target_times = torch.tensor(
+            da_target_times.astype("datetime64[ns]").astype("int64").values,
+            dtype=torch.int64,
+        )
+
+        forcing = torch.tensor(da_forcing_windowed.values, dtype=tensor_dtype)
 
         # init_states: (2, N_grid, d_features)
         # target_states: (ar_steps, N_grid, d_features)
         # forcing: (ar_steps, N_grid, d_windowed_forcing)
-        # batch_times: (ar_steps,)
+        # target_times: (ar_steps,)
 
-        return init_states, target_states, forcing, batch_times
+        return init_states, target_states, forcing, target_times
 
     def __iter__(self):
         """
@@ -285,6 +334,98 @@ class WeatherDataset(torch.utils.data.Dataset):
         """
         for i in range(len(self)):
             yield self[i]
+
+    def create_dataarray_from_tensor(
+        self,
+        tensor: torch.Tensor,
+        time: Union[datetime.datetime, list[datetime.datetime]],
+        category: str,
+    ):
+        """
+        Construct a xarray.DataArray from a `pytorch.Tensor` with coordinates
+        for `grid_index`, `time` and `{category}_feature` matching the shape
+        and number of times provided and add the x/y coordinates from the
+        datastore.
+
+        The number if times provided is expected to match the shape of the
+        tensor. For a 2D tensor, the dimensions are assumed to be (grid_index,
+        {category}_feature) and only a single time should be provided. For a 3D
+        tensor, the dimensions are assumed to be (time, grid_index,
+        {category}_feature) and a list of times should be provided.
+
+        Parameters
+        ----------
+        tensor : torch.Tensor
+            The tensor to construct the DataArray from, this assumed to have
+            the same dimension ordering as returned by the __getitem__ method
+            (i.e. time, grid_index, {category}_feature).
+        time : datetime.datetime or list[datetime.datetime]
+            The time or times of the tensor.
+        category : str
+            The category of the tensor, either "state", "forcing" or "static".
+
+        Returns
+        -------
+        da : xr.DataArray
+            The constructed DataArray.
+        """
+
+        def _is_listlike(obj):
+            # match list, tuple, numpy array
+            return hasattr(obj, "__iter__") and not isinstance(obj, str)
+
+        add_time_as_dim = False
+        if len(tensor.shape) == 2:
+            dims = ["grid_index", f"{category}_feature"]
+            if _is_listlike(time):
+                raise ValueError(
+                    "Expected a single time for a 2D tensor with assumed "
+                    "dimensions (grid_index, {category}_feature), but got "
+                    f"{len(time)} times"
+                )
+        elif len(tensor.shape) == 3:
+            add_time_as_dim = True
+            dims = ["time", "grid_index", f"{category}_feature"]
+            if not _is_listlike(time):
+                raise ValueError(
+                    "Expected a list of times for a 3D tensor with assumed "
+                    "dimensions (time, grid_index, {category}_feature), but "
+                    "got a single time"
+                )
+        else:
+            raise ValueError(
+                "Expected tensor to have 2 or 3 dimensions, but got "
+                f"{len(tensor.shape)}"
+            )
+
+        da_datastore_state = getattr(self, f"da_{category}")
+        da_grid_index = da_datastore_state.grid_index
+        da_state_feature = da_datastore_state.state_feature
+
+        coords = {
+            f"{category}_feature": da_state_feature,
+            "grid_index": da_grid_index,
+        }
+        if add_time_as_dim:
+            coords["time"] = time
+
+        da = xr.DataArray(
+            tensor.numpy(),
+            dims=dims,
+            coords=coords,
+        )
+
+        for grid_coord in ["x", "y"]:
+            if (
+                grid_coord in da_datastore_state.coords
+                and grid_coord not in da.coords
+            ):
+                da.coords[grid_coord] = da_datastore_state[grid_coord]
+
+        if not add_time_as_dim:
+            da.coords["time"] = time
+
+        return da
 
 
 class WeatherDataModule(pl.LightningDataModule):

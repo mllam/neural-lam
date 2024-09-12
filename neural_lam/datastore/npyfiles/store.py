@@ -347,8 +347,7 @@ class NpyFilesDatastore(BaseCartesianDatastore):
                 "Member can only be specified for the 'state' category"
             )
 
-        # XXX: we here assume that the grid shape is the same for all categories
-        grid_shape = self.grid_shape_state
+        concat_axis = 0
 
         file_params = {}
         add_feature_dim = False
@@ -387,7 +386,8 @@ class NpyFilesDatastore(BaseCartesianDatastore):
             fp_samples = self.root_path / "static"
         elif features == ["x", "y"]:
             filename_format = "nwp_xy.npy"
-            file_dims = ["y", "x", "feature"]
+            # NB: for x, y the feature dimension is the first one
+            file_dims = ["feature", "y", "x"]
             features_vary_with_analysis_time = False
             # XXX: x, y are the same for all splits, and so saved in static/
             fp_samples = self.root_path / "static"
@@ -403,6 +403,12 @@ class NpyFilesDatastore(BaseCartesianDatastore):
 
         coords = {}
         arr_shape = []
+
+        xs, ys = self.get_xy(category="state", stacked=False)
+        assert np.all(xs[0, :] == xs[-1, :])
+        assert np.all(ys[:, 0] == ys[:, -1])
+        x = xs[0, :]
+        y = ys[:, 0]
         for d in dims:
             if d == "elapsed_forecast_duration":
                 coord_values = (
@@ -413,9 +419,9 @@ class NpyFilesDatastore(BaseCartesianDatastore):
             elif d == "analysis_time":
                 coord_values = self._get_analysis_times(split=split)
             elif d == "y":
-                coord_values = np.arange(grid_shape.y)
+                coord_values = y
             elif d == "x":
-                coord_values = np.arange(grid_shape.x)
+                coord_values = x
             elif d == "feature":
                 coord_values = features
             else:
@@ -450,7 +456,7 @@ class NpyFilesDatastore(BaseCartesianDatastore):
         ]
 
         if features_vary_with_analysis_time:
-            arr_all = dask.array.stack(arrays, axis=0)
+            arr_all = dask.array.stack(arrays, axis=concat_axis)
         else:
             arr_all = arrays[0]
 
@@ -568,17 +574,17 @@ class NpyFilesDatastore(BaseCartesianDatastore):
         Returns
         -------
         np.ndarray
-            The x, y coordinates of the dataset, returned differently based on
-            the value of `stacked`:
+            The x, y coordinates of the dataset (with x first then y second),
+            returned differently based on the value of `stacked`:
             - `stacked==True`: shape `(2, n_grid_points)` where
                                       n_grid_points=N_x*N_y.
             - `stacked==False`: shape `(2, N_y, N_x)`
 
         """
 
-        # the array on disk has shape [2, N_x, N_y], but we want to return it
-        # as [2, N_y, N_x] so we swap the axes
-        arr = np.load(self.root_path / "static" / "nwp_xy.npy").swapaxes(1, 2)
+        # the array on disk has shape [2, N_y, N_x], with the first dimension
+        # being [x, y]
+        arr = np.load(self.root_path / "static" / "nwp_xy.npy")
 
         assert arr.shape[0] == 2, "Expected 2D array"
         grid_shape = self.grid_shape_state
@@ -611,7 +617,7 @@ class NpyFilesDatastore(BaseCartesianDatastore):
             The shape of the cartesian grid for the state variables.
 
         """
-        nx, ny = self.config.grid_shape_state
+        ny, nx = self.config.grid_shape_state
         return CartesianGridShape(x=nx, y=ny)
 
     @property
@@ -626,10 +632,10 @@ class NpyFilesDatastore(BaseCartesianDatastore):
 
         """
         xs, ys = self.get_xy(category="state", stacked=False)
-        assert np.all(xs[:, 0] == xs[:, -1])
-        assert np.all(ys[0, :] == ys[-1, :])
-        x = xs[:, 0]
-        y = ys[0, :]
+        assert np.all(xs[0, :] == xs[-1, :])
+        assert np.all(ys[:, 0] == ys[:, -1])
+        x = xs[0, :]
+        y = ys[:, 0]
         values = np.load(self.root_path / "static" / "border_mask.npy")
         da_mask = xr.DataArray(
             values, dims=["y", "x"], coords=dict(x=x, y=y), name="boundary_mask"
@@ -677,11 +683,11 @@ class NpyFilesDatastore(BaseCartesianDatastore):
             std_values = np.array([flux_std, 1.0, 1.0, 1.0, 1.0, 1.0])
 
         elif category == "static":
-            ds_static = self.get_dataarray(category="static", split="train")
-            ds_static_mean = ds_static.mean(dim=["grid_index"])
-            ds_static_std = ds_static.std(dim=["grid_index"])
-            mean_values = ds_static_mean["static_feature"].values
-            std_values = ds_static_std["static_feature"].values
+            da_static = self.get_dataarray(category="static", split="train")
+            da_static_mean = da_static.mean(dim=["grid_index"]).compute()
+            da_static_std = da_static.std(dim=["grid_index"]).compute()
+            mean_values = da_static_mean.values
+            std_values = da_static_std.values
         else:
             raise NotImplementedError(f"Category {category} not supported")
 

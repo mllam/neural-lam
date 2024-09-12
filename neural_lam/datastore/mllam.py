@@ -70,6 +70,19 @@ class MLLAMDatastore(BaseCartesianDatastore):
             if len(self.get_vars_names(category)) > 0:
                 print(f"{category}: {' '.join(self.get_vars_names(category))}")
 
+        # find out the dimension order for the stacking to grid-index
+        dim_order = None
+        for input_dataset in self._config.inputs.values():
+            dim_order_ = input_dataset.dim_mapping["grid_index"].dims
+            if dim_order is None:
+                dim_order = dim_order_
+            else:
+                assert (
+                    dim_order == dim_order_
+                ), "all inputs must have the same dimension order"
+
+        self.CARTESIAN_COORDS = dim_order
+
     @property
     def root_path(self) -> Path:
         """The root path of the dataset.
@@ -202,6 +215,14 @@ class MLLAMDatastore(BaseCartesianDatastore):
 
         da_category = self._ds[category]
 
+        # set units on x y coordinates if missing
+        for coord in ["x", "y"]:
+            if "units" not in da_category[coord].attrs:
+                da_category[coord].attrs["units"] = "m"
+
+        # set multi-index for grid-index
+        da_category = da_category.set_index(grid_index=self.CARTESIAN_COORDS)
+
         if "time" not in da_category.dims:
             return da_category
         else:
@@ -294,10 +315,26 @@ class MLLAMDatastore(BaseCartesianDatastore):
             The projection of the coordinates.
 
         """
-        # TODO: danra doesn't contain projection information yet, but the next
-        # version will for now we hardcode the projection
-        # XXX: this is wrong
-        return ccrs.PlateCarree()
+        # XXX: this should move to config
+        kwargs = {
+            "LoVInDegrees": 25.0,
+            "LaDInDegrees": 56.7,
+            "Latin1InDegrees": 56.7,
+            "Latin2InDegrees": 56.7,
+        }
+
+        lon_0 = kwargs["LoVInDegrees"]  # Latitude of first standard parallel
+        lat_0 = kwargs["LaDInDegrees"]  # Latitude of second standard parallel
+        lat_1 = kwargs["Latin1InDegrees"]  # Origin latitude
+        lat_2 = kwargs["Latin2InDegrees"]  # Origin longitude
+
+        crs = ccrs.LambertConformal(
+            central_longitude=lon_0,
+            central_latitude=lat_0,
+            standard_parallels=(lat_1, lat_2),
+        )
+
+        return crs
 
     @property
     def grid_shape_state(self):
@@ -346,10 +383,11 @@ class MLLAMDatastore(BaseCartesianDatastore):
         da_xy = xr.concat([da_x, da_y], dim="grid_coord")
 
         if stacked:
-            da_xy = da_xy.stack(grid_index=("y", "x")).transpose(
+            da_xy = da_xy.stack(grid_index=self.CARTESIAN_COORDS).transpose(
                 "grid_coord", "grid_index"
             )
         else:
-            da_xy = da_xy.transpose("grid_coord", "y", "x")
+            dims = ["grid_coord", "y", "x"]
+            da_xy = da_xy.transpose(*dims)
 
         return da_xy.values

@@ -27,6 +27,7 @@ attributes:
 - [x] `get_xy` (method): Return the x, y coordinates of the dataset.
 - [x] `coords_projection` (property): Projection object for the coordinates.
 - [x] `grid_shape_state` (property): Shape of the grid for the state variables.
+- [x] `stack_grid_coords` (method): Stack the grid coordinates of the dataset
 
 """
 
@@ -124,7 +125,7 @@ def test_get_normalization_dataarray(datastore_name):
     datastore = init_datastore_example(datastore_name)
 
     for category in ["state", "forcing", "static"]:
-        ds_stats = datastore.get_normalization_dataarray(category=category)
+        ds_stats = datastore.get_standardization_dataarray(category=category)
 
         # check that the returned object is an xarray DataArray
         # and that it has the correct variables
@@ -295,3 +296,23 @@ def get_grid_shape_state(datastore_name):
     assert len(grid_shape) == 2
     assert all(isinstance(e, int) for e in grid_shape)
     assert all(e > 0 for e in grid_shape)
+
+
+@pytest.mark.parametrize("datastore_name", DATASTORES.keys())
+def test_stacking_grid_coords(datastore_name):
+    """Check that the `datastore.stack_grid_coords` method is implemented."""
+    datastore = init_datastore_example(datastore_name)
+
+    if not isinstance(datastore, BaseCartesianDatastore):
+        pytest.skip("Datastore does not implement `BaseCartesianDatastore`")
+
+    da_static = datastore.get_dataarray("static", split=None)
+
+    da_static_unstacked = datastore.unstack_grid_coords(da_static).load()
+    da_static_test = datastore.stack_grid_coords(da_static_unstacked)
+
+    # XXX: for the moment unstacking doesn't guarantee the order of the
+    # dimensions maybe we should enforce this?
+    da_static_test = da_static_test.transpose(*da_static.dims)
+
+    xr.testing.assert_equal(da_static, da_static_test)

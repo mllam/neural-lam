@@ -9,6 +9,7 @@ from typing import List, Union
 import cartopy.crs as ccrs
 import numpy as np
 import xarray as xr
+from pandas.core.indexes.multi import MultiIndex
 
 
 class BaseDatastore(abc.ABC):
@@ -228,21 +229,13 @@ class CartesianGridShape:
 
 
 class BaseCartesianDatastore(BaseDatastore):
-    """Base class for weather
-    data stored on a Cartesian
-    grid. In addition to the
-    methods and attributes
-    required for weather data
-    in general (see
-    `BaseDatastore`) for
-    Cartesian gridded source
-    data each `grid_index`
-    coordinate value is assume
-    to have an associated `x`
-    and `y`-value so that the
-    processed data-arrays can
-    be reshaped back into into
-    2D xy-gridded arrays.
+    """
+    Base class for weather data stored on a Cartesian grid. In addition to the
+    methods and attributes required for weather data in general (see
+    `BaseDatastore`) for Cartesian gridded source data each `grid_index`
+    coordinate value is assume to have an associated `x` and `y`-value so that
+    the processed data-arrays can be reshaped back into into 2D xy-gridded
+    arrays.
 
     In addition the following attributes and methods are required:
     - `coords_projection` (property): Projection object for the coordinates.
@@ -253,7 +246,7 @@ class BaseCartesianDatastore(BaseDatastore):
 
     """
 
-    CARTESIAN_COORDS = ["y", "x"]
+    CARTESIAN_COORDS = ["x", "y"]
 
     @property
     @abc.abstractmethod
@@ -347,9 +340,20 @@ class BaseCartesianDatastore(BaseDatastore):
             The dataarray or dataset with the grid coordinates unstacked.
 
         """
-        return da_or_ds.set_index(grid_index=self.CARTESIAN_COORDS).unstack(
-            "grid_index"
-        )
+        # check whether `grid_index` is a multi-index
+        if not isinstance(da_or_ds.indexes.get("grid_index"), MultiIndex):
+            da_or_ds = da_or_ds.set_index(grid_index=self.CARTESIAN_COORDS)
+
+        da_or_ds_unstacked = da_or_ds.unstack("grid_index")
+
+        # ensure that the x, y dimensions are in the correct order
+        dims = da_or_ds_unstacked.dims
+        xy_dim_order = [d for d in dims if d in self.CARTESIAN_COORDS]
+
+        if xy_dim_order != self.CARTESIAN_COORDS:
+            da_or_ds_unstacked = da_or_ds_unstacked.transpose("y", "x")
+
+        return da_or_ds_unstacked
 
     def stack_grid_coords(
         self, da_or_ds: Union[xr.DataArray, xr.Dataset]

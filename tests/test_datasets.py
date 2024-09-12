@@ -2,6 +2,7 @@
 from pathlib import Path
 
 # Third-party
+import numpy as np
 import pytest
 import torch
 from conftest import init_datastore_example
@@ -15,7 +16,7 @@ from neural_lam.weather_dataset import WeatherDataset
 
 
 @pytest.mark.parametrize("datastore_name", DATASTORES.keys())
-def test_dataset_item(datastore_name):
+def test_dataset_item_shapes(datastore_name):
     """Check that the `datastore.get_dataarray` method is implemented.
 
     Validate the shapes of the tensors match between the different
@@ -42,7 +43,7 @@ def test_dataset_item(datastore_name):
 
     # unpack the item, this is the current return signature for
     # WeatherDataset.__getitem__
-    init_states, target_states, forcing, batch_times = item
+    init_states, target_states, forcing, target_times = item
 
     # initial states
     assert init_states.ndim == 3
@@ -66,13 +67,82 @@ def test_dataset_item(datastore_name):
     )
 
     # batch times
-    assert batch_times.ndim == 1
-    assert batch_times.shape[0] == N_pred_steps
+    assert target_times.ndim == 1
+    assert target_times.shape[0] == N_pred_steps
 
     # try to get the last item of the dataset to ensure slicing and stacking
     # operations are working as expected and are consistent with the dataset
     # length
     dataset[len(dataset) - 1]
+
+
+@pytest.mark.parametrize("datastore_name", DATASTORES.keys())
+def test_dataset_item_create_dataarray_from_tensor(datastore_name):
+    datastore = init_datastore_example(datastore_name)
+
+    N_pred_steps = 4
+    forcing_window_size = 3
+    dataset = WeatherDataset(
+        datastore=datastore,
+        split="train",
+        ar_steps=N_pred_steps,
+        forcing_window_size=forcing_window_size,
+    )
+
+    idx = 0
+
+    # unpack the item, this is the current return signature for
+    # WeatherDataset.__getitem__
+    _, target_states, _, target_times_arr = dataset[idx]
+    _, da_target_true, _, da_target_times_true = dataset._build_item_dataarrays(
+        idx=idx
+    )
+
+    target_times = np.array(target_times_arr, dtype="datetime64[ns]")
+    np.testing.assert_equal(target_times, da_target_times_true.values)
+
+    da_target = dataset.create_dataarray_from_tensor(
+        tensor=target_states, category="state", time=target_times
+    )
+
+    # conversion to torch.float32 may lead to loss of precision
+    np.testing.assert_allclose(
+        da_target.values, da_target_true.values, rtol=1e-6
+    )
+    assert da_target.dims == da_target_true.dims
+    for dim in da_target.dims:
+        np.testing.assert_equal(
+            da_target[dim].values, da_target_true[dim].values
+        )
+
+    # test unstacking the grid coordinates
+    da_target_unstacked = datastore.unstack_grid_coords(da_target)
+    assert all(
+        coord_name in da_target_unstacked.coords for coord_name in ["x", "y"]
+    )
+
+    # check construction of a single time
+    da_target_single = dataset.create_dataarray_from_tensor(
+        tensor=target_states[0], category="state", time=target_times[0]
+    )
+
+    # check that the content is the same
+    # conversion to torch.float32 may lead to loss of precision
+    np.testing.assert_allclose(
+        da_target_single.values, da_target_true[0].values, rtol=1e-6
+    )
+    assert da_target_single.dims == da_target_true[0].dims
+    for dim in da_target_single.dims:
+        np.testing.assert_equal(
+            da_target_single[dim].values, da_target_true[0][dim].values
+        )
+
+    # test unstacking the grid coordinates
+    da_target_single_unstacked = datastore.unstack_grid_coords(da_target_single)
+    assert all(
+        coord_name in da_target_single_unstacked.coords
+        for coord_name in ["x", "y"]
+    )
 
 
 @pytest.mark.parametrize("split", ["train", "val", "test"])

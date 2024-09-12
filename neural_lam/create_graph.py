@@ -13,9 +13,8 @@ import torch_geometric as pyg
 from torch_geometric.utils.convert import from_networkx
 
 # Local
+from .datastore import DATASTORES
 from .datastore.base import BaseCartesianDatastore
-from .datastore.mllam import MLLAMDatastore
-from .datastore.npyfiles import NpyFilesDatastore
 
 
 def plot_graph(graph, title=None):
@@ -530,12 +529,6 @@ def create_graph(
     save_edges(pyg_g2m, "g2m", graph_dir_path)
     # m2g
     save_edges(pyg_m2g, "m2g", graph_dir_path)
-
-
-DATASTORES = dict(
-    mllam=MLLAMDatastore,
-    npyfiles=NpyFilesDatastore,
-)
 
 
 def create_graph_from_datastore(
