@@ -84,7 +84,7 @@ There are currently three different datastores implemented in the codebase:
    files during train/val/test sampling, with the transformations to facilitate
    this implemented within `neural_lam.datastore.MultizarrDatastore`.
 
-3. `neural_lam.datastore.MLLAMDatastore` which can combine multiple zarr
+3. `neural_lam.datastore.MDPDatastore` which can combine multiple zarr
    datasets either either as a preprocessing step or during sampling, but
    offloads the implementation of the transformations the
    [mllam-data-prep](https://github.com/mllam/mllam-data-prep) package.
@@ -156,7 +156,7 @@ The amount of pre-processing required will depend on what kind of datastore you 
 
 #### NpyFiles Datastore
 
-#### MLLAM Datastore
+#### MDP (mllam-data-prep) Datastore
 
 An overview of how the different pre-processing steps, training and files depend on each other is given in this figure:
 <p align="middle">

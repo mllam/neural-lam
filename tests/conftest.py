@@ -59,7 +59,7 @@ def download_meps_example_reduced_dataset():
 
 
 DATASTORES_EXAMPLES = dict(
-    mllam=(DATASTORE_EXAMPLES_ROOT_PATH / "mllam" / "danra.example.yaml"),
+    mdp=(DATASTORE_EXAMPLES_ROOT_PATH / "mdp" / "danra.example.yaml"),
     npyfiles=download_meps_example_reduced_dataset(),
 )
 
