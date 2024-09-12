@@ -7,10 +7,8 @@ import numpy as np
 import plotly.graph_objects as go
 import torch_geometric as pyg
 
-# First-party
-from neural_lam import utils
-
 # Local
+from . import utils
 from .datastore import DATASTORES, init_datastore
 
 MESH_HEIGHT = 0.1
