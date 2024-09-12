@@ -1,9 +1,9 @@
 # Local
-from .mllam import MLLAMDatastore  # noqa
+from .mdp import MDPDatastore  # noqa
 from .npyfiles import NpyFilesDatastore  # noqa
 
 DATASTORES = dict(
-    mllam=MLLAMDatastore,
+    mdp=MDPDatastore,
     npyfiles=NpyFilesDatastore,
 )
 

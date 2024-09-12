@@ -15,12 +15,18 @@ from numpy import ndarray
 from .base import BaseCartesianDatastore, CartesianGridShape
 
 
-class MLLAMDatastore(BaseCartesianDatastore):
-    """Datastore class for the MLLAM dataset."""
+class MDPDatastore(BaseCartesianDatastore):
+    """
+    Datastore class for datasets made with the mllam_data_prep library
+    (https://github.com/mllam/mllam-data-prep). This class wraps the
+    `mllam_data_prep` library to do the necessary transforms to create the
+    different categories (state/forcing/static) of data, with the actual
+    transform to do being specified in the configuration file.
+    """
 
     def __init__(self, config_path, n_boundary_points=30, reuse_existing=True):
         """
-        Construct a new MLLAMDatastore from the configuration file at
+        Construct a new MDPDatastore from the configuration file at
         `config_path`. A boundary mask is created with `n_boundary_points`
         boundary points. If `reuse_existing` is True, the dataset is loaded
         from a zarr file if it exists (unless the config has been modified

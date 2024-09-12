@@ -11,7 +11,7 @@ from lightning_fabric.utilities import seed
 
 # Local
 from . import utils
-from .datastore import init_datastore
+from .datastore import DATASTORES, init_datastore
 from .models import GraphLAM, HiLAM, HiLAMParallel
 from .weather_dataset import WeatherDataModule
 
@@ -30,7 +30,7 @@ def main(input_args=None):
     parser.add_argument(
         "datastore_kind",
         type=str,
-        choices=["npyfiles", "mllam"],
+        choices=DATASTORES.keys(),
         help="Kind of datastore to use",
     )
     parser.add_argument(
