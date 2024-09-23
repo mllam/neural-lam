@@ -116,7 +116,8 @@ class WeatherDataset(torch.utils.data.Dataset):
             The index of the time step to start the sample from.
         n_steps : int
             The number of time steps to include in the sample.
-
+        n_timestep_offset : int
+            A number of timesteps to use as offset from the start time of the slice
         """
         # selecting the time slice
         if self.datastore.is_forecast:
