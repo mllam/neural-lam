@@ -108,7 +108,7 @@ class WeatherDataset(torch.utils.data.Dataset):
         Parameters
         ----------
         da : xr.DataArray
-            The dataarray to sample from. This is expected to have a `time`
+            The dataarray to slice. This is expected to have a `time`
             dimension if the datastore is providing analysis only data, and a
             `analysis_time` and `elapsed_forecast_duration` dimensions if the
             datastore is providing forecast data.
