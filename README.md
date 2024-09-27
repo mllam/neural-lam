@@ -258,48 +258,6 @@ Except for training and pre-processing scripts all the source code can be found 
 Model classes, including abstract base classes, are located in `neural_lam/models`.
 Notebooks for visualization and analysis are located in `docs`.
 
-
-## Format of data directory
-It is possible to store multiple datasets in the `data` directory.
-Each dataset contains a set of files with static features and a set of samples.
-The samples are split into different sub-directories for training, validation and testing.
-The directory structure is shown with examples below.
-Script names within parenthesis denote the script used to generate the file.
-```
-data
-├── dataset1
-│   ├── samples                             - Directory with data samples
-│   │   ├── train                           - Training data
-│   │   │   ├── nwp_2022040100_mbr000.npy  - A time series sample
-│   │   │   ├── nwp_2022040100_mbr001.npy
-│   │   │   ├── ...
-│   │   │   ├── nwp_2022043012_mbr001.npy
-│   │   │   ├── nwp_toa_downwelling_shortwave_flux_2022040100.npy   - Solar flux forcing
-│   │   │   ├── nwp_toa_downwelling_shortwave_flux_2022040112.npy
-│   │   │   ├── ...
-│   │   │   ├── nwp_toa_downwelling_shortwave_flux_2022043012.npy
-│   │   │   ├── wtr_2022040100.npy          - Open water features for one sample
-│   │   │   ├── wtr_2022040112.npy
-│   │   │   ├── ...
-│   │   │   └── wtr_202204012.npy
-│   │   ├── val                             - Validation data
-│   │   └── test                            - Test data
-│   └── static                              - Directory with graph information and static features
-│       ├── nwp_xy.npy                      - Coordinates of grid nodes (part of dataset)
-│       ├── surface_geopotential.npy        - Geopotential at surface of grid nodes (part of dataset)
-│       ├── border_mask.npy                 - Mask with True for grid nodes that are part of border (part of dataset)
-│       ├── grid_features.pt                - Static features of grid nodes (neural_lam.create_grid_features)
-│       ├── parameter_mean.pt               - Means of state parameters (neural_lam.create_parameter_weights)
-│       ├── parameter_std.pt                - Std.-dev. of state parameters (neural_lam.create_parameter_weights)
-│       ├── diff_mean.pt                    - Means of one-step differences (neural_lam.create_parameter_weights)
-│       ├── diff_std.pt                     - Std.-dev. of one-step differences (neural_lam.create_parameter_weights)
-│       ├── flux_stats.pt                   - Mean and std.-dev. of solar flux forcing (neural_lam.create_parameter_weights)
-│       └── parameter_weights.npy           - Loss weights for different state parameters (neural_lam.create_parameter_weights)
-├── dataset2
-├── ...
-└── datasetN
-```
-
 ## Format of graph directory
 The `graphs` directory contains generated graph structures that can be used by different graph-based models.
 The structure is shown with examples below:

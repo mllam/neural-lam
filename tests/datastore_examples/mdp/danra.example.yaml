@@ -1,4 +1,4 @@
-schema_version: v0.2.0
+schema_version: v0.2.0+dev
 dataset_version: v0.1.0
 
 output:
@@ -49,7 +49,7 @@ inputs:
       state_feature:
         method: stack_variables_by_var_name
         dims: [altitude]
-        name_format: f"{var_name}{altitude}m"
+        name_format: "{var_name}{altitude}m"
       grid_index:
         method: stack
         dims: [x, y]
@@ -70,7 +70,7 @@ inputs:
         dims: [x, y]
       forcing_feature:
         method: stack_variables_by_var_name
-        name_format: f"{var_name}"
+        name_format: "{var_name}"
     target_output_variable: forcing
 
   danra_lsm:
@@ -84,5 +84,13 @@ inputs:
         dims: [x, y]
       static_feature:
         method: stack_variables_by_var_name
-        name_format: f"{var_name}"
+        name_format: "{var_name}"
     target_output_variable: static
+
+extra:
+  projection:
+    class_name: LambertConformal
+    kwargs:
+      central_longitude: 25.0
+      central_latitude: 56.7
+      standard_parallels: [56.7, 56.7]

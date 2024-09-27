@@ -333,7 +333,17 @@ class MDPDatastore(BaseCartesianDatastore):
 
     @property
     def coords_projection(self) -> ccrs.Projection:
-        """Return the projection of the coordinates.
+        """
+        Return the projection of the coordinates.
+
+        NOTE: currently this expects the projection information to be in the
+        `extra` section of the configuration file, with a `projection` key
+        containing a `class_name` and `kwargs` for constructing the
+        `cartopy.crs.Projection` object. This is a temporary solution until
+        the projection information can be parsed in the produced dataset
+        itself. `mllam-data-prep` ignores the contents of the `extra` section
+        of the config file which is why we need to check that the necessary
+        parts are there.
 
         Returns
         -------
@@ -341,26 +351,33 @@ class MDPDatastore(BaseCartesianDatastore):
             The projection of the coordinates.
 
         """
-        # XXX: this should move to config
-        kwargs = {
-            "LoVInDegrees": 25.0,
-            "LaDInDegrees": 56.7,
-            "Latin1InDegrees": 56.7,
-            "Latin2InDegrees": 56.7,
-        }
+        if "projection" not in self._config.extra:
+            raise ValueError(
+                "projection information not found in the configuration file "
+                f"({self._config_path}). Please add the projection information"
+                "to the `extra` section of the config, by adding a "
+                "`projection` key with the class name and kwargs of the "
+                "projection."
+            )
 
-        lon_0 = kwargs["LoVInDegrees"]  # Latitude of first standard parallel
-        lat_0 = kwargs["LaDInDegrees"]  # Latitude of second standard parallel
-        lat_1 = kwargs["Latin1InDegrees"]  # Origin latitude
-        lat_2 = kwargs["Latin2InDegrees"]  # Origin longitude
+        projection_info = self._config.extra["projection"]
+        if "class_name" not in projection_info:
+            raise ValueError(
+                "class_name not found in the projection information. Please "
+                "add the class name of the projection to the `projection` key "
+                "in the `extra` section of the config."
+            )
+        if "kwargs" not in projection_info:
+            raise ValueError(
+                "kwargs not found in the projection information. Please add "
+                "the keyword arguments of the projection to the `projection` "
+                "key in the `extra` section of the config."
+            )
 
-        crs = ccrs.LambertConformal(
-            central_longitude=lon_0,
-            central_latitude=lat_0,
-            standard_parallels=(lat_1, lat_2),
-        )
-
-        return crs
+        class_name = projection_info["class_name"]
+        ProjectionClass = getattr(ccrs, class_name)
+        kwargs = projection_info["kwargs"]
+        return ProjectionClass(**kwargs)
 
     @property
     def grid_shape_state(self):

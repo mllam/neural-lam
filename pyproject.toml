@@ -26,7 +26,7 @@ dependencies = [
     "torch-geometric==2.3.1",
     "parse>=1.20.2",
     "dataclass-wizard>=0.22.3",
-    "mllam-data-prep[dask-distributed]>=0.3.0",
+    "mllam-data-prep @ git+https://github.com/leifdenby/mllam-data-prep/@feat/extra-section-in-config",
 ]
 requires-python = ">=3.9"
 

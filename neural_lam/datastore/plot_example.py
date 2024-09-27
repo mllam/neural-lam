@@ -119,10 +119,8 @@ if __name__ == "__main__":
         nargs="+",
         default=[],
         type=_parse_dict,
-        help=(
-            "Selections to apply to the dataarray, for example "
-            '`time="1990-09-03T0:00" would select this single timestep',
-        ),
+        help="Selections to apply to the dataarray, for example "
+        "`time='1990-09-03T0:00' would select this single timestep",
     )
     args = parser.parse_args()
 
