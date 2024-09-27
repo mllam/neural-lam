@@ -16,8 +16,8 @@ class HiLAMParallel(BaseHiGraphModel):
     of Hi-LAM.
     """
 
-    def __init__(self, args):
-        super().__init__(args)
+    def __init__(self, args, datastore):
+        super().__init__(args, datastore=datastore)
 
         # Processor GNNs
         # Create the complete edge_index combining all edges for processing
