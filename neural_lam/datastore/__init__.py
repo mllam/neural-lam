@@ -1,10 +1,10 @@
 # Local
 from .mdp import MDPDatastore  # noqa
-from .npyfiles import NpyFilesDatastore  # noqa
+from .npyfilesmeps import NpyFilesDatastoreMEPS  # noqa
 
 DATASTORES = dict(
     mdp=MDPDatastore,
-    npyfiles=NpyFilesDatastore,
+    npyfilesmeps=NpyFilesDatastoreMEPS,
 )
 
 

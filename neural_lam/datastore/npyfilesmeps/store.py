@@ -37,7 +37,7 @@ def _load_np(fp, add_feature_dim):
     return arr
 
 
-class NpyFilesDatastore(BaseCartesianDatastore):
+class NpyFilesDatastoreMEPS(BaseCartesianDatastore):
     __doc__ = f"""
     Represents a dataset stored as numpy files on disk. The dataset is assumed
     to be stored in a directory structure where each sample is stored in a

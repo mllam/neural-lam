@@ -163,7 +163,7 @@ def main():
     rank = get_rank()
     world_size = get_world_size()
     datastore = init_datastore(
-        datastore_kind="npyfiles", config_path=args.datastore_config
+        datastore_kind="npyfilesmeps", config_path=args.datastore_config
     )
 
     if distributed:
