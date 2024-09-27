@@ -76,7 +76,11 @@ class WeatherDataset(torch.utils.data.Dataset):
     def __len__(self):
         if self.datastore.is_forecast:
             # for now we simply create a single sample for each analysis time
-            # and then the next ar_steps forecast times
+            # and then take the first (2 + ar_steps) forecast times. In
+            # addition we only use the first ensemble member (if ensemble data
+            # has been provided).
+            # This means that for each analysis time we get a single sample
+
             if self.datastore.is_ensemble:
                 warnings.warn(
                     "only using first ensemble member, so dataset size is "
@@ -84,9 +88,18 @@ class WeatherDataset(torch.utils.data.Dataset):
                     f"({self.da_state.ensemble_member.size})",
                     UserWarning,
                 )
-            # XXX: we should maybe check that the 2+ar_steps actually fits in
-            # the elapsed_forecast_duration dimension, should that be checked
-            # here?
+
+            # check that there are enough forecast steps available to create
+            # samples given the number of autoregressive steps requested
+            n_forecast_steps = self.da_state.elapsed_forecast_duration.size
+            if n_forecast_steps < 2 + self.ar_steps:
+                raise ValueError(
+                    "The number of forecast steps available "
+                    f"({n_forecast_steps}) is less than the required "
+                    f"2+ar_steps (2+{self.ar_steps}={2 + self.ar_steps}) for "
+                    "creating a sample with initial and target states."
+                )
+
             return self.da_state.analysis_time.size
         else:
             # sample_len = 2 + ar_steps
