@@ -492,7 +492,7 @@ class WeatherDataModule(pl.LightningDataModule):
             self.train_dataset,
             batch_size=self.batch_size,
             num_workers=self.num_workers,
-            shuffle=False,
+            shuffle=True,
             multiprocessing_context=self.multiprocessing_context,
             persistent_workers=True,
         )
