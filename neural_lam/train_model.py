@@ -292,8 +292,6 @@ def main(input_args=None):
         utils.init_wandb_metrics(
             logger, val_steps=args.val_steps_to_log
         )  # Do after wandb.init
-        # TODO: should we save the datastore config here?
-        # wandb.save()
     if args.eval:
         trainer.test(model=model, datamodule=data_module, ckpt_path=args.load)
     else:
