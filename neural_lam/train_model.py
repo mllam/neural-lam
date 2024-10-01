@@ -295,7 +295,7 @@ def main(input_args=None):
     if args.eval:
         trainer.test(model=model, datamodule=data_module, ckpt_path=args.load)
     else:
-        trainer.fit(model=model, datamodule=data_module)
+        trainer.fit(model=model, datamodule=data_module, ckpt_path=args.load)
 
 
 if __name__ == "__main__":
