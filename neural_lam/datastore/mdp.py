@@ -71,7 +71,7 @@ class MDPDatastore(BaseCartesianDatastore):
                 self._ds.to_zarr(fp_ds)
         self._n_boundary_points = n_boundary_points
 
-        print("Training with the following features:")
+        print("The loaded datastore contains the following features:")
         for category in ["state", "forcing", "static"]:
             if len(self.get_vars_names(category)) > 0:
                 print(f"{category}: {' '.join(self.get_vars_names(category))}")
