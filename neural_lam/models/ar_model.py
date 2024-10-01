@@ -452,7 +452,6 @@ class ARModel(pl.LightningModule):
                     vis.plot_prediction(
                         pred=pred_t[:, var_i],
                         target=target_t[:, var_i],
-                        obs_mask=self.interior_mask[:, 0],
                         datastore=self.datastore,
                         title=f"{var_name} ({var_unit}), "
                         f"t={t_i} ({self._datastore.step_length * t_i} h)",

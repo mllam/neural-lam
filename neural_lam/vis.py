@@ -67,7 +67,6 @@ def plot_error_map(errors, datastore: BaseCartesianDatastore, title=None):
 def plot_prediction(
     pred,
     target,
-    obs_mask,
     datastore: BaseCartesianDatastore,
     title=None,
     vrange=None,
