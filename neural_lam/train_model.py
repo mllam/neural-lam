@@ -253,9 +253,7 @@ def main(input_args=None):
 
     # Load model parameters Use new args for model
     ModelClass = MODELS[args.model]
-    model = ModelClass(
-        args, datastore=datastore, forcing_window_size=args.forcing_window_size
-    )
+    model = ModelClass(args, datastore=datastore)
 
     if args.eval:
         prefix = f"eval-{args.eval}-"
