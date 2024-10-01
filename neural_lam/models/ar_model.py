@@ -525,17 +525,13 @@ class ARModel(pl.LightningModule):
             )
 
         # Check if metrics are watched, log exact values for specific vars
+        var_names = self._datastore.get_vars_names(category="state")
         if full_log_name in self.args.metrics_watch:
             for var_i, timesteps in self.args.var_leads_metrics_watch.items():
-                var = self.data_config.vars_names("state")[var_i]
-                log_dict.update(
-                    {
-                        f"{full_log_name}_{var}_step_{step}": metric_tensor[
-                            step - 1, var_i
-                        ]  # 1-indexed in data_config
-                        for step in timesteps
-                    }
-                )
+                var_name = var_names[var_i]
+                for step in timesteps:
+                    key = f"{full_log_name}_{var_name}_step_{step}"
+                    log_dict[key] = metric_tensor[step - 1, var_i]
 
         return log_dict
 
@@ -594,9 +590,8 @@ class ARModel(pl.LightningModule):
 
             loss_map_figs = [
                 vis.plot_spatial_error(
-                    loss_map,
-                    self.interior_mask[:, 0],
-                    self.data_config,
+                    error=loss_map,
+                    datastore=self._datastore,
                     title=f"Test loss, t={t_i} ({self.step_length * t_i} h)",
                 )
                 for t_i, loss_map in zip(
@@ -611,7 +606,7 @@ class ARModel(pl.LightningModule):
             # also make without title and save as pdf
             pdf_loss_map_figs = [
                 vis.plot_spatial_error(
-                    loss_map, self.interior_mask[:, 0], self.data_config
+                    error=loss_map, datastore=self._datastore
                 )
                 for loss_map in mean_spatial_loss
             ]

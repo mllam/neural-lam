@@ -131,7 +131,9 @@ def plot_prediction(
 
 
 @matplotlib.rc_context(utils.fractional_plot_bundle(1))
-def plot_spatial_error(error, obs_mask, data_config, title=None, vrange=None):
+def plot_spatial_error(
+    error, datastore: BaseCartesianDatastore, title=None, vrange=None
+):
     """
     Plot errors over spatial map
     Error and obs_mask has shape (N_grid,)
@@ -143,24 +145,23 @@ def plot_spatial_error(error, obs_mask, data_config, title=None, vrange=None):
     else:
         vmin, vmax = vrange
 
-    extent = data_config.get_xy_extent("state")
+    extent = datastore.get_xy_extent("state")
 
     # Set up masking of border region
-    mask_reshaped = obs_mask.reshape(
-        list(data_config.grid_shape_state.values.values())
-    )
+    da_mask = datastore.unstack_grid_coords(datastore.boundary_mask)
+    mask_reshaped = da_mask.values
     pixel_alpha = (
         mask_reshaped.clamp(0.7, 1).cpu().numpy()
     )  # Faded border region
 
     fig, ax = plt.subplots(
         figsize=(5, 4.8),
-        subplot_kw={"projection": data_config.coords_projection},
+        subplot_kw={"projection": datastore.coords_projection},
     )
 
     ax.coastlines()  # Add coastline outlines
     error_grid = (
-        error.reshape(list(data_config.grid_shape_state.values.values()))
+        error.reshape(list(datastore.grid_shape_state.values.values()))
         .cpu()
         .numpy()
     )
