@@ -118,8 +118,6 @@ class ARModel(pl.LightningModule):
             "interior_mask", 1.0 - self.boundary_mask, persistent=False
         )  # (num_grid_nodes, 1), 1 for non-border
 
-        # Number of hours per pred. step
-        self.step_length = datastore.step_length
         self.val_metrics = {
             "mse": [],
         }
@@ -457,7 +455,7 @@ class ARModel(pl.LightningModule):
                         obs_mask=self.interior_mask[:, 0],
                         datastore=self.datastore,
                         title=f"{var_name} ({var_unit}), "
-                        f"t={t_i} ({self.step_length * t_i} h)",
+                        f"t={t_i} ({self._datastore.step_length * t_i} h)",
                         vrange=var_vrange,
                     )
                     for var_i, (var_name, var_unit, var_vrange) in enumerate(
