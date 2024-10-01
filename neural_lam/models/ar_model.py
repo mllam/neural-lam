@@ -511,7 +511,6 @@ class ARModel(pl.LightningModule):
         metric_fig = vis.plot_error_map(
             errors=metric_tensor,
             datastore=self._datastore,
-            step_length=self.step_length,
         )
         full_log_name = f"{prefix}_{metric_name}"
         log_dict[full_log_name] = wandb.Image(metric_fig)

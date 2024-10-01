@@ -9,9 +9,7 @@ from .datastore.base import BaseCartesianDatastore
 
 
 @matplotlib.rc_context(utils.fractional_plot_bundle(1))
-def plot_error_map(
-    errors, datastore: BaseCartesianDatastore, title=None, step_length=1
-):
+def plot_error_map(errors, datastore: BaseCartesianDatastore, title=None):
     """
     Plot a heatmap of errors of different variables at different
     predictions horizons
@@ -19,6 +17,7 @@ def plot_error_map(
     """
     errors_np = errors.T.cpu().numpy()  # (d_f, pred_steps)
     d_f, pred_steps = errors_np.shape
+    step_length = datastore.step_length
 
     # Normalize all errors to [0,1] for color map
     max_errors = errors_np.max(axis=1)  # d_f
