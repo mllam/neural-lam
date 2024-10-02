@@ -8,6 +8,7 @@ from argparse import ArgumentParser
 import pytorch_lightning as pl
 import torch
 from lightning_fabric.utilities import seed
+from loguru import logger
 
 # Local
 from . import utils
@@ -22,6 +23,31 @@ MODELS = {
 }
 
 
+def _setup_training_logger(config, datastore, args, run_name):
+    if config.training.logger == "wandb":
+        logger = pl.loggers.WandbLogger(
+            project=args.wandb_project,
+            name=run_name,
+            config=dict(training=vars(args), datastore=datastore._config),
+        )
+    elif config.training.logger == "mlflow":
+        url = config.training.logger_url
+        if url is None:
+            raise ValueError(
+                "MLFlow logger requires a URL to the MLFlow server"
+            )
+        logger = pl.loggers.MLFlowLogger(
+            experiment_name=args.wandb_project,
+            tracking_uri=url,
+        )
+        logger.log_hyperparams(
+            dict(training=vars(args), datastore=datastore._config)
+        )
+
+    return logger
+
+
+@logger.catch
 def main(input_args=None):
     """Main function for training and evaluating models."""
     parser = ArgumentParser(
@@ -260,6 +286,11 @@ def main(input_args=None):
         f"{prefix}{args.model}-{args.processor_layers}x{args.hidden_dim}-"
         f"{time.strftime('%m_%d_%H')}-{random_run_id:04d}"
     )
+
+    training_logger = _setup_training_logger(
+        config=config, datastore=datastore, args=args, run_name=run_name
+    )
+
     checkpoint_callback = pl.callbacks.ModelCheckpoint(
         dirpath=f"saved_models/{run_name}",
         filename="min_val_loss",
@@ -267,17 +298,12 @@ def main(input_args=None):
         mode="min",
         save_last=True,
     )
-    logger = pl.loggers.WandbLogger(
-        project=args.wandb_project,
-        name=run_name,
-        config=dict(training=vars(args), datastore=datastore._config),
-    )
     trainer = pl.Trainer(
         max_epochs=args.epochs,
         deterministic=True,
         strategy="ddp",
         accelerator=device_name,
-        logger=logger,
+        logger=training_logger,
         log_every_n_steps=1,
         callbacks=[checkpoint_callback],
         check_val_every_n_epoch=args.val_interval,
@@ -286,8 +312,8 @@ def main(input_args=None):
 
     # Only init once, on rank 0 only
     if trainer.global_rank == 0:
-        utils.init_wandb_metrics(
-            logger, val_steps=args.val_steps_to_log
+        utils.init_training_logger_metrics(
+            training_logger, val_steps=args.val_steps_to_log
         )  # Do after wandb.init
     if args.eval:
         trainer.test(model=model, datamodule=data_module, ckpt_path=args.load)

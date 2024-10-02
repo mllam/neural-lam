@@ -56,6 +56,8 @@ class TrainingConfig:
     """
 
     state_feature_weights: Dict[str, float]
+    logger: str = "wandb"
+    logger_url: str = None
 
 
 @dataclasses.dataclass

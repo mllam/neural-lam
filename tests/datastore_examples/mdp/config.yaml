@@ -2,6 +2,8 @@ datastore:
   kind: mdp
   config_path: danra.example.yaml
 training:
+  logger: mlflow
+  logger_url: https://mlflow.dmidev.org
   state_feature_weights:
     u100m: 1.0
     v100m: 1.0
