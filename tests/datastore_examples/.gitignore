@@ -1,1 +1,2 @@
-npy/
+npy/*.zip
+npy/meps_example_reduced/
