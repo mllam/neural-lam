@@ -13,7 +13,7 @@ import torch_geometric as pyg
 from torch_geometric.utils.convert import from_networkx
 
 # Local
-from .datastore import DATASTORES
+from .config import load_config_and_datastore
 from .datastore.base import BaseCartesianDatastore
 
 
@@ -551,15 +551,9 @@ def create_graph_from_datastore(
 def cli(input_args=None):
     parser = ArgumentParser(description="Graph generation arguments")
     parser.add_argument(
-        "datastore",
+        "--config",
         type=str,
-        choices=DATASTORES.keys(),
-        help="kind of data store to use",
-    )
-    parser.add_argument(
-        "datastore_config_path",
-        type=str,
-        help="path to the data store config",
+        default="tests/datastore_examples/mdp/config.yaml",
     )
     parser.add_argument(
         "--name",
@@ -586,8 +580,8 @@ def cli(input_args=None):
     )
     args = parser.parse_args(input_args)
 
-    DatastoreClass = DATASTORES[args.datastore]
-    datastore = DatastoreClass(config_path=args.datastore_config_path)
+    # Load neural-lam configuration and datastore to use
+    _, datastore = load_config_and_datastore(config_path=args.config)
 
     create_graph_from_datastore(
         datastore=datastore,

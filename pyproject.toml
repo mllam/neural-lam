@@ -68,6 +68,7 @@ known_first_party = [
     # Add first-party modules that may be misclassified by isort
     "neural_lam",
 ]
+line_length = 80
 
 [tool.flake8]
 max-line-length = 80

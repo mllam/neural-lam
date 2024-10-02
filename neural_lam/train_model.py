@@ -11,7 +11,7 @@ from lightning_fabric.utilities import seed
 
 # Local
 from . import utils
-from .datastore import DATASTORES, init_datastore
+from .config import load_config_and_datastore
 from .models import GraphLAM, HiLAM, HiLAMParallel
 from .weather_dataset import WeatherDataModule
 
@@ -28,15 +28,9 @@ def main(input_args=None):
         description="Train or evaluate NeurWP models for LAM"
     )
     parser.add_argument(
-        "datastore_kind",
+        "--config",
         type=str,
-        choices=DATASTORES.keys(),
-        help="Kind of datastore to use",
-    )
-    parser.add_argument(
-        "datastore_config_path",
-        type=str,
-        help="Path for the datastore config",
+        default="tests/datastore_examples/mdp/config.yaml",
     )
     parser.add_argument(
         "--model",
@@ -226,11 +220,14 @@ def main(input_args=None):
     # Set seed
     seed.seed_everything(args.seed)
 
-    # Create datastore
-    datastore = init_datastore(
-        datastore_kind=args.datastore_kind,
-        config_path=args.datastore_config_path,
-    )
+    # Load neural-lam configuration and datastore to use
+    config, datastore = load_config_and_datastore(config_path=args.config)
+    # TODO: config.training.state_feature_weights need passing in somewhere,
+    # probably to ARModel, so that it can be used in the loss function
+    assert (
+        config.training.state_feature_weights
+    ), "No state feature weights found in config"
+
     # Create datamodule
     data_module = WeatherDataModule(
         datastore=datastore,
