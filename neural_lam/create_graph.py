@@ -14,7 +14,7 @@ from torch_geometric.utils.convert import from_networkx
 
 # Local
 from .config import load_config_and_datastore
-from .datastore.base import BaseCartesianDatastore
+from .datastore.base import BaseRegularGridDatastore
 
 
 def plot_graph(graph, title=None):
@@ -532,13 +532,19 @@ def create_graph(
 
 
 def create_graph_from_datastore(
-    datastore: BaseCartesianDatastore,
+    datastore: BaseRegularGridDatastore,
     output_root_path: str,
     n_max_levels: int = None,
     hierarchical: bool = False,
     create_plot: bool = False,
 ):
-    xy = datastore.get_xy(category="state", stacked=False)
+    if isinstance(datastore, BaseRegularGridDatastore):
+        xy = datastore.get_xy(category="state", stacked=False)
+    else:
+        raise NotImplementedError(
+            "Only graph creation for BaseRegularGridDatastore is supported"
+        )
+
     create_graph(
         graph_dir_path=output_root_path,
         xy=xy,

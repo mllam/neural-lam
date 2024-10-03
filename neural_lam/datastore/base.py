@@ -15,7 +15,7 @@ from pandas.core.indexes.multi import MultiIndex
 
 class BaseDatastore(abc.ABC):
     """
-    Base class for weather data used in the neural- lam package. A datastore
+    Base class for weather data used in the neural-lam package. A datastore
     defines the interface for accessing weather data by providing methods to
     access the data in a processed format that can be used for training and
     evaluation of neural networks.
@@ -37,6 +37,13 @@ class BaseDatastore(abc.ABC):
     attribute should be set to True, and returned data from `get_dataarray` is
     assumed to have an `ensemble_member` dimension.
 
+    # Grid index
+    All methods that return data specific to a grid point (like
+    `get_dataarray`) should have a single dimension named `grid_index` that
+    represents the spatial grid index of the data. The actual x, y coordinates
+    of the grid points should be stored in the `x` and `y` coordinates of the
+    dataarray or dataset with the `grid_index` dimension as the coordinate for
+    each of the `x` and `y` coordinates.
     """
 
     is_ensemble: bool = False
@@ -237,34 +244,22 @@ class BaseDatastore(abc.ABC):
         """
         pass
 
+    @abc.abstractmethod
+    def get_xy(self, category: str) -> np.ndarray:
+        """
+        Return the x, y coordinates of the dataset as a numpy arrays for a
+        given category of data.
 
-@dataclasses.dataclass
-class CartesianGridShape:
-    """Dataclass to store the shape of a grid."""
+        Parameters
+        ----------
+        category : str
+            The category of the dataset (state/forcing/static).
 
-    x: int
-    y: int
-
-
-class BaseCartesianDatastore(BaseDatastore):
-    """
-    Base class for weather data stored on a Cartesian grid. In addition to the
-    methods and attributes required for weather data in general (see
-    `BaseDatastore`) for Cartesian gridded source data each `grid_index`
-    coordinate value is assume to have an associated `x` and `y`-value so that
-    the processed data-arrays can be reshaped back into into 2D xy-gridded
-    arrays.
-
-    In addition the following attributes and methods are required:
-    - `coords_projection` (property): Projection object for the coordinates.
-    - `grid_shape_state` (property): Shape of the grid for the state variables.
-    - `get_xy_extent` (method): Return the extent of the x, y coordinates for a
-      given category of data.
-    - `get_xy` (method): Return the x, y coordinates of the dataset.
-
-    """
-
-    CARTESIAN_COORDS = ["x", "y"]
+        Returns
+        -------
+        np.ndarray
+            The x, y coordinates of the dataset with shape `[2, n_grid_points]`.
+        """
 
     @property
     @abc.abstractmethod
@@ -280,6 +275,78 @@ class BaseCartesianDatastore(BaseDatastore):
 
         """
         pass
+
+    @functools.lru_cache
+    def get_xy_extent(self, category: str) -> List[float]:
+        """
+        Return the extent of the x, y coordinates for a given category of data.
+        The extent should be returned as a list of 4 floats with `[xmin, xmax,
+        ymin, ymax]` which can then be used to set the extent of a plot.
+
+        Parameters
+        ----------
+        category : str
+            The category of the dataset (state/forcing/static).
+
+        Returns
+        -------
+        List[float]
+            The extent of the x, y coordinates.
+
+        """
+        xy = self.get_xy(category, stacked=False)
+        extent = [xy[0].min(), xy[0].max(), xy[1].min(), xy[1].max()]
+        return [float(v) for v in extent]
+
+    @property
+    @abc.abstractmethod
+    def num_grid_points(self) -> int:
+        """Return the number of grid points in the dataset.
+
+        Returns
+        -------
+        int
+            The number of grid points in the dataset.
+
+        """
+        pass
+
+
+@dataclasses.dataclass
+class CartesianGridShape:
+    """Dataclass to store the shape of a grid."""
+
+    x: int
+    y: int
+
+
+class BaseRegularGridDatastore(BaseDatastore):
+    """
+    Base class for weather data stored on a regular grid (like a chess-board,
+    as opposed to a irregular grid where each cell cannot be indexed by just
+    two integers, see https://en.wikipedia.org/wiki/Regular_grid). In addition
+    to the methods and attributes required for weather data in general (see
+    `BaseDatastore`) for regular-gridded source data each `grid_index`
+    coordinate value is assumed to be associated with `x` and `y`-values that
+    allow the processed data-arrays can be reshaped back into into 2D
+    xy-gridded arrays.
+
+    The following methods and attributes must be implemented for datastore that
+    represents regular-gridded data:
+    - `grid_shape_state` (property): 2D shape of the grid for the state
+      variables.
+    - `get_xy` (method): Return the x, y coordinates of the dataset, with the
+      option to not stack the coordinates (so that they are returned as a 2D
+      grid).
+
+    The operation of going from (x,y)-indexed regular grid
+    to `grid_index`-indexed data-array is called "stacking" and the reverse
+    operation is called "unstacking". This class provides methods to stack and
+    unstack the spatial grid coordinates of the data-arrays (called
+    `stack_grid_coords` and `unstack_grid_coords` respectively).
+    """
+
+    CARTESIAN_COORDS = ["x", "y"]
 
     @property
     @abc.abstractmethod
@@ -314,31 +381,10 @@ class BaseCartesianDatastore(BaseDatastore):
             - `stacked==True`: shape `(2, n_grid_points)` where
                                n_grid_points=N_x*N_y.
             - `stacked==False`: shape `(2, N_y, N_x)`
-
+            The values for the x-coordinates are in the first row and the
+            values for the y-coordinates are in the second row.
         """
         pass
-
-    @functools.lru_cache
-    def get_xy_extent(self, category: str) -> List[float]:
-        """
-        Return the extent of the x, y coordinates for a given category of data.
-        The extent should be returned as a list of 4 floats with `[xmin, xmax,
-        ymin, ymax]` which can then be used to set the extent of a plot.
-
-        Parameters
-        ----------
-        category : str
-            The category of the dataset (state/forcing/static).
-
-        Returns
-        -------
-        List[float]
-            The extent of the x, y coordinates.
-
-        """
-        xy = self.get_xy(category, stacked=False)
-        extent = [xy[0].min(), xy[0].max(), xy[1].min(), xy[1].max()]
-        return [float(v) for v in extent]
 
     def unstack_grid_coords(
         self, da_or_ds: Union[xr.DataArray, xr.Dataset]
@@ -394,3 +440,16 @@ class BaseCartesianDatastore(BaseDatastore):
 
         """
         return da_or_ds.stack(grid_index=self.CARTESIAN_COORDS)
+
+    @property
+    @functools.lru_cache
+    def num_grid_points(self) -> int:
+        """Return the number of grid points in the dataset.
+
+        Returns
+        -------
+        int
+            The number of grid points in the dataset.
+
+        """
+        return self.grid_shape_state.x * self.grid_shape_state.y

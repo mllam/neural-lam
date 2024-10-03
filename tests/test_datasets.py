@@ -11,6 +11,7 @@ from torch.utils.data import DataLoader
 # First-party
 from neural_lam.create_graph import create_graph_from_datastore
 from neural_lam.datastore import DATASTORES
+from neural_lam.datastore.base import BaseRegularGridDatastore
 from neural_lam.models.graph_lam import GraphLAM
 from neural_lam.weather_dataset import WeatherDataset
 
@@ -28,7 +29,7 @@ def test_dataset_item_shapes(datastore_name):
 
     """
     datastore = init_datastore_example(datastore_name)
-    N_gridpoints = datastore.grid_shape_state.x * datastore.grid_shape_state.y
+    N_gridpoints = datastore.num_grid_points
 
     N_pred_steps = 4
     forcing_window_size = 3
@@ -115,11 +116,13 @@ def test_dataset_item_create_dataarray_from_tensor(datastore_name):
             da_target[dim].values, da_target_true[dim].values
         )
 
-    # test unstacking the grid coordinates
-    da_target_unstacked = datastore.unstack_grid_coords(da_target)
-    assert all(
-        coord_name in da_target_unstacked.coords for coord_name in ["x", "y"]
-    )
+    if isinstance(datastore, BaseRegularGridDatastore):
+        # test unstacking the grid coordinates
+        da_target_unstacked = datastore.unstack_grid_coords(da_target)
+        assert all(
+            coord_name in da_target_unstacked.coords
+            for coord_name in ["x", "y"]
+        )
 
     # check construction of a single time
     da_target_single = dataset.create_dataarray_from_tensor(
@@ -137,12 +140,15 @@ def test_dataset_item_create_dataarray_from_tensor(datastore_name):
             da_target_single[dim].values, da_target_true[0][dim].values
         )
 
-    # test unstacking the grid coordinates
-    da_target_single_unstacked = datastore.unstack_grid_coords(da_target_single)
-    assert all(
-        coord_name in da_target_single_unstacked.coords
-        for coord_name in ["x", "y"]
-    )
+    if isinstance(datastore, BaseRegularGridDatastore):
+        # test unstacking the grid coordinates
+        da_target_single_unstacked = datastore.unstack_grid_coords(
+            da_target_single
+        )
+        assert all(
+            coord_name in da_target_single_unstacked.coords
+            for coord_name in ["x", "y"]
+        )
 
 
 @pytest.mark.parametrize("split", ["train", "val", "test"])
@@ -179,12 +185,18 @@ def test_single_batch(datastore_name, split):
 
     graph_dir_path = Path(datastore.root_path) / "graph" / graph_name
 
-    if not graph_dir_path.exists():
-        create_graph_from_datastore(
-            datastore=datastore,
-            output_root_path=str(graph_dir_path),
-            n_max_levels=1,
-        )
+    def _create_graph():
+        if not graph_dir_path.exists():
+            create_graph_from_datastore(
+                datastore=datastore,
+                output_root_path=str(graph_dir_path),
+                n_max_levels=1,
+            )
+
+    if not isinstance(datastore, BaseRegularGridDatastore):
+        with pytest.raises(NotImplementedError):
+            _create_graph()
+        pytest.skip("Skipping on model-run on non-regular grid datastores")
 
     dataset = WeatherDataset(datastore=datastore, split=split)
 

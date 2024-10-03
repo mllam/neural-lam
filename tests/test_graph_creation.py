@@ -10,6 +10,7 @@ from conftest import init_datastore_example
 # First-party
 from neural_lam.create_graph import create_graph_from_datastore
 from neural_lam.datastore import DATASTORES
+from neural_lam.datastore.base import BaseRegularGridDatastore
 
 
 @pytest.mark.parametrize("graph_name", ["1level", "multiscale", "hierarchical"])
@@ -21,6 +22,13 @@ def test_graph_creation(datastore_name, graph_name):
 
     """
     datastore = init_datastore_example(datastore_name)
+
+    if not isinstance(datastore, BaseRegularGridDatastore):
+        pytest.skip(
+            f"Skipping test for {datastore_name} as it is not a regular "
+            "grid datastore."
+        )
+
     if graph_name == "hierarchical":
         hierarchical = True
         n_max_levels = 3

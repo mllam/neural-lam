@@ -12,10 +12,10 @@ from loguru import logger
 from numpy import ndarray
 
 # Local
-from .base import BaseCartesianDatastore, CartesianGridShape
+from .base import BaseRegularGridDatastore, CartesianGridShape
 
 
-class MDPDatastore(BaseCartesianDatastore):
+class MDPDatastore(BaseRegularGridDatastore):
     """
     Datastore class for datasets made with the mllam_data_prep library
     (https://github.com/mllam/mllam-data-prep). This class wraps the
