@@ -1,4 +1,5 @@
 # Standard library
+import os
 from argparse import ArgumentParser
 
 # Third-party
@@ -6,8 +7,9 @@ import numpy as np
 import plotly.graph_objects as go
 import torch_geometric as pyg
 
-# First-party
-from neural_lam import config, utils
+# Local
+from . import utils
+from .datastore import DATASTORES, init_datastore
 
 MESH_HEIGHT = 0.1
 MESH_LEVEL_DIST = 0.2
@@ -15,15 +17,18 @@ GRID_HEIGHT = 0
 
 
 def main():
-    """
-    Plot graph structure in 3D using plotly
-    """
+    """Plot graph structure in 3D using plotly."""
     parser = ArgumentParser(description="Plot graph")
     parser.add_argument(
-        "--data_config",
+        "datastore_kind",
         type=str,
-        default="neural_lam/data_config.yaml",
-        help="Path to data config file (default: neural_lam/data_config.yaml)",
+        choices=DATASTORES.keys(),
+        help="Kind of datastore to use",
+    )
+    parser.add_argument(
+        "datastore_config_path",
+        type=str,
+        help="Path for the datastore config",
     )
     parser.add_argument(
         "--graph",
@@ -43,10 +48,18 @@ def main():
     )
 
     args = parser.parse_args()
-    config_loader = config.Config.from_file(args.data_config)
+    datastore = init_datastore(
+        datastore_kind=args.datastore_kind,
+        config_path=args.datastore_config_path,
+    )
+    xy = datastore.get_xy("state", stacked=False)  # (2, N_y, N_x)
+    xy = xy.reshape(2, -1).T  # (N_grid, 2)
+    pos_max = np.max(np.abs(xy))
+    grid_pos = xy / pos_max  # Divide by maximum coordinate
 
     # Load graph data
-    hierarchical, graph_ldict = utils.load_graph(args.graph)
+    graph_dir_path = os.path.join(datastore.root_path, "graph", args.graph)
+    hierarchical, graph_ldict = utils.load_graph(graph_dir_path=graph_dir_path)
     (g2m_edge_index, m2g_edge_index, m2m_edge_index,) = (
         graph_ldict["g2m_edge_index"],
         graph_ldict["m2g_edge_index"],
@@ -58,12 +71,6 @@ def main():
     )
     mesh_static_features = graph_ldict["mesh_static_features"]
 
-    grid_static_features = utils.load_static_data(config_loader.dataset.name)[
-        "grid_static_features"
-    ]
-
-    # Extract values needed, turn to numpy
-    grid_pos = grid_static_features[:, :2].numpy()
     # Add in z-dimension
     z_grid = GRID_HEIGHT * np.ones((grid_pos.shape[0],))
     grid_pos = np.concatenate(

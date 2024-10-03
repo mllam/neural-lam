@@ -1,262 +1,534 @@
 # Standard library
-import datetime as dt
-import glob
-import os
+import datetime
+import warnings
+from typing import Union
 
 # Third-party
 import numpy as np
+import pytorch_lightning as pl
 import torch
+import xarray as xr
 
-# Local
-from . import utils
+# First-party
+from neural_lam.datastore.base import BaseDatastore
 
 
 class WeatherDataset(torch.utils.data.Dataset):
-    """
-    For our dataset:
-    N_t' = 65
-    N_t = 65//subsample_step (= 21 for 3h steps)
-    dim_y = 268
-    dim_x = 238
-    N_grid = 268x238 = 63784
-    d_features = 17 (d_features' = 18)
-    d_forcing = 5
+    """Dataset class for weather data.
+
+    This class loads and processes weather data from a given datastore.
+
     """
 
     def __init__(
         self,
-        dataset_name,
-        pred_length=19,
+        datastore: BaseDatastore,
         split="train",
-        subsample_step=3,
+        ar_steps=3,
+        forcing_window_size=3,
         standardize=True,
-        subset=False,
-        control_only=False,
     ):
         super().__init__()
 
-        assert split in ("train", "val", "test"), "Unknown dataset split"
-        self.sample_dir_path = os.path.join(
-            "data", dataset_name, "samples", split
+        self.split = split
+        self.ar_steps = ar_steps
+        self.datastore = datastore
+
+        self.da_state = self.datastore.get_dataarray(
+            category="state", split=self.split
         )
-
-        member_file_regexp = (
-            "nwp*mbr000.npy" if control_only else "nwp*mbr*.npy"
+        self.da_forcing = self.datastore.get_dataarray(
+            category="forcing", split=self.split
         )
-        sample_paths = glob.glob(
-            os.path.join(self.sample_dir_path, member_file_regexp)
-        )
-        self.sample_names = [path.split("/")[-1][4:-4] for path in sample_paths]
-        # Now on form "yyymmddhh_mbrXXX"
+        self.forcing_window_size = forcing_window_size
 
-        if subset:
-            self.sample_names = self.sample_names[:50]  # Limit to 50 samples
-
-        self.sample_length = pred_length + 2  # 2 init states
-        self.subsample_step = subsample_step
-        self.original_sample_length = (
-            65 // self.subsample_step
-        )  # 21 for 3h steps
-        assert (
-            self.sample_length <= self.original_sample_length
-        ), "Requesting too long time series samples"
-
-        # Set up for standardization
-        self.standardize = standardize
-        if standardize:
-            ds_stats = utils.load_dataset_stats(dataset_name, "cpu")
-            self.data_mean, self.data_std, self.flux_mean, self.flux_std = (
-                ds_stats["data_mean"],
-                ds_stats["data_std"],
-                ds_stats["flux_mean"],
-                ds_stats["flux_std"],
+        # check that with the provided data-arrays and ar_steps that we have a
+        # non-zero amount of samples
+        if self.__len__() <= 0:
+            raise ValueError(
+                "The provided datastore only provides "
+                f"{len(self.da_state.time)} time steps for `{split}` split, "
+                f"which is less than the required 2+ar_steps "
+                f"(2+{self.ar_steps}={2 + self.ar_steps}) for creating a "
+                "sample with initial and target states."
             )
 
-        # If subsample index should be sampled (only duing training)
-        self.random_subsample = split == "train"
+        # Set up for standardization
+        # TODO: This will become part of ar_model.py soon!
+        self.standardize = standardize
+        if standardize:
+            self.ds_state_stats = self.datastore.get_standardization_dataarray(
+                category="state"
+            )
+
+            self.da_state_mean = self.ds_state_stats.state_mean
+            self.da_state_std = self.ds_state_stats.state_std
+
+            if self.da_forcing is not None:
+                self.ds_forcing_stats = (
+                    self.datastore.get_standardization_dataarray(
+                        category="forcing"
+                    )
+                )
+                self.da_forcing_mean = self.ds_forcing_stats.forcing_mean
+                self.da_forcing_std = self.ds_forcing_stats.forcing_std
 
     def __len__(self):
-        return len(self.sample_names)
+        if self.datastore.is_forecast:
+            # for now we simply create a single sample for each analysis time
+            # and then take the first (2 + ar_steps) forecast times. In
+            # addition we only use the first ensemble member (if ensemble data
+            # has been provided).
+            # This means that for each analysis time we get a single sample
+
+            if self.datastore.is_ensemble:
+                warnings.warn(
+                    "only using first ensemble member, so dataset size is "
+                    " effectively reduced by the number of ensemble members "
+                    f"({self.da_state.ensemble_member.size})",
+                    UserWarning,
+                )
+
+            # check that there are enough forecast steps available to create
+            # samples given the number of autoregressive steps requested
+            n_forecast_steps = self.da_state.elapsed_forecast_duration.size
+            if n_forecast_steps < 2 + self.ar_steps:
+                raise ValueError(
+                    "The number of forecast steps available "
+                    f"({n_forecast_steps}) is less than the required "
+                    f"2+ar_steps (2+{self.ar_steps}={2 + self.ar_steps}) for "
+                    "creating a sample with initial and target states."
+                )
+
+            return self.da_state.analysis_time.size
+        else:
+            # sample_len = 2 + ar_steps
+            #             (2 initial states + ar_steps target states)
+            # n_samples = len(self.da_state.time) - sample_len + 1
+            #           = len(self.da_state.time) - 2 - ar_steps + 1
+            #           = len(self.da_state.time) - ar_steps - 1
+            return len(self.da_state.time) - self.ar_steps - 1
+
+    def _sample_time(self, da, idx, n_steps: int, n_timesteps_offset: int = 0):
+        """
+        Produce a time slice of the given dataarray `da` (state or forcing)
+        starting at `idx` and with `n_steps` steps. The `n_timesteps_offset`
+        parameter is used to offset the start of the sample, for example to
+        exclude the first two steps when sampling the forcing data (and to
+        produce the windowing samples of forcing data by increasing the offset
+        for each window).
+
+        Parameters
+        ----------
+        da : xr.DataArray
+            The dataarray to slice. This is expected to have a `time`
+            dimension if the datastore is providing analysis only data, and a
+            `analysis_time` and `elapsed_forecast_duration` dimensions if the
+            datastore is providing forecast data.
+        idx : int
+            The index of the time step to start the sample from.
+        n_steps : int
+            The number of time steps to include in the sample.
+        n_timestep_offset : int
+            A number of timesteps to use as offset from the start time of the
+            slice
+        """
+        # selecting the time slice
+        if self.datastore.is_forecast:
+            # this implies that the data will have both `analysis_time` and
+            # `elapsed_forecast_duration` dimensions for forecasts. We for now
+            # simply select a analysis time and the first `n_steps` forecast
+            # times (given no offset). Note that this means that we get one
+            # sample per forecast, always starting at forecast time 2.
+            da = da.isel(
+                analysis_time=idx,
+                elapsed_forecast_duration=slice(
+                    n_timesteps_offset, n_steps + n_timesteps_offset
+                ),
+            )
+            # create a new time dimension so that the produced sample has a
+            # `time` dimension, similarly to the analysis only data
+            da["time"] = da.analysis_time + da.elapsed_forecast_duration
+            da = da.swap_dims({"elapsed_forecast_duration": "time"})
+        else:
+            # only `time` dimension for analysis only data
+            da = da.isel(
+                time=slice(
+                    idx + n_timesteps_offset, idx + n_steps + n_timesteps_offset
+                )
+            )
+        return da
+
+    def _build_item_dataarrays(self, idx):
+        """
+        Create the dataarrays for the initial states, target states and forcing
+        data for the sample at index `idx`.
+
+        Parameters
+        ----------
+        idx : int
+            The index of the sample to create the dataarrays for.
+
+        Returns
+        -------
+        da_init_states : xr.DataArray
+            The dataarray for the initial states.
+        da_target_states : xr.DataArray
+            The dataarray for the target states.
+        da_forcing_windowed : xr.DataArray
+            The dataarray for the forcing data, windowed for the sample.
+        da_target_times : xr.DataArray
+            The dataarray for the target times.
+        """
+        # handling ensemble data
+        if self.datastore.is_ensemble:
+            # for the now the strategy is to only include the first ensemble
+            # member
+            # XXX: this could be changed to include all ensemble members by
+            # splitting `idx` into two parts, one for the analysis time and one
+            # for the ensemble member and then increasing self.__len__ to
+            # include all ensemble members
+            warnings.warn(
+                "only use of ensemble member 0 (the first member) is "
+                "implemented for ensemble data"
+            )
+            i_ensemble = 0
+            da_state = self.da_state.isel(ensemble_member=i_ensemble)
+        else:
+            da_state = self.da_state
+
+        if self.da_forcing is not None:
+            if "ensemble_member" in self.da_forcing.dims:
+                raise NotImplementedError(
+                    "Ensemble member not yet supported for forcing data"
+                )
+            da_forcing = self.da_forcing
+        else:
+            da_forcing = None
+
+        # handle time sampling in a way that is compatible with both analysis
+        # and forecast data
+        da_state = self._sample_time(
+            da=da_state, idx=idx, n_steps=2 + self.ar_steps
+        )
+
+        if da_forcing is not None:
+            das_forcing = []
+            for n in range(self.forcing_window_size):
+                da_ = self._sample_time(
+                    da=da_forcing,
+                    idx=idx,
+                    n_steps=self.ar_steps,
+                    n_timesteps_offset=n,
+                )
+                if n > 0:
+                    da_ = da_.drop_vars("time")
+                das_forcing.append(da_)
+            da_forcing_windowed = xr.concat(das_forcing, dim="window_sample")
+
+        # load the data into memory
+        da_state = da_state.load()
+        if da_forcing is not None:
+            da_forcing_windowed = da_forcing_windowed.load()
+
+        # ensure the dimensions are in the correct order
+        da_state = da_state.transpose("time", "grid_index", "state_feature")
+
+        if da_forcing is not None:
+            da_forcing_windowed = da_forcing_windowed.transpose(
+                "time", "grid_index", "forcing_feature", "window_sample"
+            )
+
+        da_init_states = da_state.isel(time=slice(None, 2))
+        da_target_states = da_state.isel(time=slice(2, None))
+
+        da_target_times = da_target_states.time
+
+        if self.standardize:
+            da_init_states = (
+                da_init_states - self.da_state_mean
+            ) / self.da_state_std
+            da_target_states = (
+                da_target_states - self.da_state_mean
+            ) / self.da_state_std
+
+            if self.da_forcing is not None:
+                da_forcing_windowed = (
+                    da_forcing_windowed - self.da_forcing_mean
+                ) / self.da_forcing_std
+
+        if self.da_forcing is not None:
+            # stack the `forcing_feature` and `window_sample` dimensions into a
+            # single `forcing_feature` dimension
+            da_forcing_windowed = da_forcing_windowed.stack(
+                forcing_feature_windowed=("forcing_feature", "window_sample")
+            )
+        else:
+            # create an empty forcing tensor with the right shape
+            da_forcing_windowed = xr.DataArray(
+                data=np.empty(
+                    (self.ar_steps, da_state.grid_index.size, 0),
+                ),
+                dims=("time", "grid_index", "forcing_feature"),
+                coords={
+                    "time": da_target_times,
+                    "grid_index": da_state.grid_index,
+                    "forcing_feature": [],
+                },
+            )
+
+        return (
+            da_init_states,
+            da_target_states,
+            da_forcing_windowed,
+            da_target_times,
+        )
 
     def __getitem__(self, idx):
-        # === Sample ===
-        sample_name = self.sample_names[idx]
-        sample_path = os.path.join(
-            self.sample_dir_path, f"nwp_{sample_name}.npy"
-        )
-        try:
-            full_sample = torch.tensor(
-                np.load(sample_path), dtype=torch.float32
-            )  # (N_t', dim_y, dim_x, d_features')
-        except ValueError:
-            print(f"Failed to load {sample_path}")
+        """
+        Return a single training sample, which consists of the initial states,
+        target states, forcing and batch times.
 
-        # Only use every ss_step:th time step, sample which of ss_step
-        # possible such time series
-        if self.random_subsample:
-            subsample_index = torch.randint(0, self.subsample_step, ()).item()
+        The implementation currently uses xarray.DataArray objects for the
+        standardization (scaling to mean 0.0 and standard deviation of 1.0) so
+        that we can make us of xarray's broadcasting capabilities. This makes
+        it possible to standardization with both global means, but also for
+        example where a grid-point mean has been computed. This code will have
+        to be replace if standardization is to be done on the GPU to handle
+        different shapes of the standardization.
+
+        Parameters
+        ----------
+        idx : int
+            The index of the sample to return, this will refer to the time of
+            the initial state.
+
+        Returns
+        -------
+        init_states : TrainingSample
+            A training sample object containing the initial states, target
+            states, forcing and batch times. The batch times are the times of
+            the target steps.
+
+        """
+        (
+            da_init_states,
+            da_target_states,
+            da_forcing_windowed,
+            da_target_times,
+        ) = self._build_item_dataarrays(idx=idx)
+
+        tensor_dtype = torch.float32
+
+        init_states = torch.tensor(da_init_states.values, dtype=tensor_dtype)
+        target_states = torch.tensor(
+            da_target_states.values, dtype=tensor_dtype
+        )
+
+        target_times = torch.tensor(
+            da_target_times.astype("datetime64[ns]").astype("int64").values,
+            dtype=torch.int64,
+        )
+
+        forcing = torch.tensor(da_forcing_windowed.values, dtype=tensor_dtype)
+
+        # init_states: (2, N_grid, d_features)
+        # target_states: (ar_steps, N_grid, d_features)
+        # forcing: (ar_steps, N_grid, d_windowed_forcing)
+        # target_times: (ar_steps,)
+
+        return init_states, target_states, forcing, target_times
+
+    def __iter__(self):
+        """
+        Convenience method to iterate over the dataset.
+
+        This isn't used by pytorch DataLoader which itself implements an
+        iterator that uses Dataset.__getitem__ and Dataset.__len__.
+
+        """
+        for i in range(len(self)):
+            yield self[i]
+
+    def create_dataarray_from_tensor(
+        self,
+        tensor: torch.Tensor,
+        time: Union[datetime.datetime, list[datetime.datetime]],
+        category: str,
+    ):
+        """
+        Construct a xarray.DataArray from a `pytorch.Tensor` with coordinates
+        for `grid_index`, `time` and `{category}_feature` matching the shape
+        and number of times provided and add the x/y coordinates from the
+        datastore.
+
+        The number if times provided is expected to match the shape of the
+        tensor. For a 2D tensor, the dimensions are assumed to be (grid_index,
+        {category}_feature) and only a single time should be provided. For a 3D
+        tensor, the dimensions are assumed to be (time, grid_index,
+        {category}_feature) and a list of times should be provided.
+
+        Parameters
+        ----------
+        tensor : torch.Tensor
+            The tensor to construct the DataArray from, this assumed to have
+            the same dimension ordering as returned by the __getitem__ method
+            (i.e. time, grid_index, {category}_feature).
+        time : datetime.datetime or list[datetime.datetime]
+            The time or times of the tensor.
+        category : str
+            The category of the tensor, either "state", "forcing" or "static".
+
+        Returns
+        -------
+        da : xr.DataArray
+            The constructed DataArray.
+        """
+
+        def _is_listlike(obj):
+            # match list, tuple, numpy array
+            return hasattr(obj, "__iter__") and not isinstance(obj, str)
+
+        add_time_as_dim = False
+        if len(tensor.shape) == 2:
+            dims = ["grid_index", f"{category}_feature"]
+            if _is_listlike(time):
+                raise ValueError(
+                    "Expected a single time for a 2D tensor with assumed "
+                    "dimensions (grid_index, {category}_feature), but got "
+                    f"{len(time)} times"
+                )
+        elif len(tensor.shape) == 3:
+            add_time_as_dim = True
+            dims = ["time", "grid_index", f"{category}_feature"]
+            if not _is_listlike(time):
+                raise ValueError(
+                    "Expected a list of times for a 3D tensor with assumed "
+                    "dimensions (time, grid_index, {category}_feature), but "
+                    "got a single time"
+                )
         else:
-            subsample_index = 0
-        subsample_end_index = self.original_sample_length * self.subsample_step
-        sample = full_sample[
-            subsample_index : subsample_end_index : self.subsample_step
-        ]
-        # (N_t, dim_y, dim_x, d_features')
+            raise ValueError(
+                "Expected tensor to have 2 or 3 dimensions, but got "
+                f"{len(tensor.shape)}"
+            )
 
-        # Remove feature 15, "z_height_above_ground"
-        sample = torch.cat(
-            (sample[:, :, :, :15], sample[:, :, :, 16:]), dim=3
-        )  # (N_t, dim_y, dim_x, d_features)
+        da_datastore_state = getattr(self, f"da_{category}")
+        da_grid_index = da_datastore_state.grid_index
+        da_state_feature = da_datastore_state.state_feature
 
-        # Accumulate solar radiation instead of just subsampling
-        rad_features = full_sample[:, :, :, 2:4]  # (N_t', dim_y, dim_x, 2)
-        # Accumulate for first time step
-        init_accum_rad = torch.sum(
-            rad_features[: (subsample_index + 1)], dim=0, keepdim=True
-        )  # (1, dim_y, dim_x, 2)
-        # Accumulate for rest of subsampled sequence
-        in_subsample_len = (
-            subsample_end_index - self.subsample_step + subsample_index + 1
+        coords = {
+            f"{category}_feature": da_state_feature,
+            "grid_index": da_grid_index,
+        }
+        if add_time_as_dim:
+            coords["time"] = time
+
+        da = xr.DataArray(
+            tensor.numpy(),
+            dims=dims,
+            coords=coords,
         )
-        rad_features_in_subsample = rad_features[
-            (subsample_index + 1) : in_subsample_len
-        ]  # (N_t*, dim_y, dim_x, 2), N_t* = (N_t-1)*ss_step
-        _, dim_y, dim_x, _ = sample.shape
-        rest_accum_rad = torch.sum(
-            rad_features_in_subsample.view(
-                self.original_sample_length - 1,
-                self.subsample_step,
-                dim_y,
-                dim_x,
-                2,
-            ),
-            dim=1,
-        )  # (N_t-1, dim_y, dim_x, 2)
-        accum_rad = torch.cat(
-            (init_accum_rad, rest_accum_rad), dim=0
-        )  # (N_t, dim_y, dim_x, 2)
-        # Replace in sample
-        sample[:, :, :, 2:4] = accum_rad
 
-        # Flatten spatial dim
-        sample = sample.flatten(1, 2)  # (N_t, N_grid, d_features)
+        for grid_coord in ["x", "y"]:
+            if (
+                grid_coord in da_datastore_state.coords
+                and grid_coord not in da.coords
+            ):
+                da.coords[grid_coord] = da_datastore_state[grid_coord]
 
-        # Uniformly sample time id to start sample from
-        init_id = torch.randint(
-            0, 1 + self.original_sample_length - self.sample_length, ()
+        if not add_time_as_dim:
+            da.coords["time"] = time
+
+        return da
+
+
+class WeatherDataModule(pl.LightningDataModule):
+    """DataModule for weather data."""
+
+    def __init__(
+        self,
+        datastore: BaseDatastore,
+        ar_steps_train=3,
+        ar_steps_eval=25,
+        standardize=True,
+        forcing_window_size=3,
+        batch_size=4,
+        num_workers=16,
+    ):
+        super().__init__()
+        self._datastore = datastore
+        self.forcing_window_size = forcing_window_size
+        self.ar_steps_train = ar_steps_train
+        self.ar_steps_eval = ar_steps_eval
+        self.standardize = standardize
+        self.batch_size = batch_size
+        self.num_workers = num_workers
+        self.train_dataset = None
+        self.val_dataset = None
+        self.test_dataset = None
+        if num_workers > 0:
+            # default to spawn for now, as the default on linux "fork" hangs
+            # when using dask (which the npyfilesmeps datastore uses)
+            self.multiprocessing_context = "spawn"
+        else:
+            self.multiprocessing_context = None
+
+    def setup(self, stage=None):
+        if stage == "fit" or stage is None:
+            self.train_dataset = WeatherDataset(
+                datastore=self._datastore,
+                split="train",
+                ar_steps=self.ar_steps_train,
+                standardize=self.standardize,
+                forcing_window_size=self.forcing_window_size,
+            )
+            self.val_dataset = WeatherDataset(
+                datastore=self._datastore,
+                split="val",
+                ar_steps=self.ar_steps_eval,
+                standardize=self.standardize,
+                forcing_window_size=self.forcing_window_size,
+            )
+
+        if stage == "test" or stage is None:
+            self.test_dataset = WeatherDataset(
+                datastore=self._datastore,
+                split="test",
+                ar_steps=self.ar_steps_eval,
+                standardize=self.standardize,
+                forcing_window_size=self.forcing_window_size,
+            )
+
+    def train_dataloader(self):
+        """Load train dataset."""
+        return torch.utils.data.DataLoader(
+            self.train_dataset,
+            batch_size=self.batch_size,
+            num_workers=self.num_workers,
+            shuffle=True,
+            multiprocessing_context=self.multiprocessing_context,
+            persistent_workers=True,
         )
-        sample = sample[init_id : (init_id + self.sample_length)]
-        # (sample_length, N_grid, d_features)
 
-        if self.standardize:
-            # Standardize sample
-            sample = (sample - self.data_mean) / self.data_std
-
-        # Split up sample in init. states and target states
-        init_states = sample[:2]  # (2, N_grid, d_features)
-        target_states = sample[2:]  # (sample_length-2, N_grid, d_features)
-
-        # === Forcing features ===
-        # Now batch-static features are just part of forcing,
-        # repeated over temporal dimension
-        # Load water coverage
-        sample_datetime = sample_name[:10]
-        water_path = os.path.join(
-            self.sample_dir_path, f"wtr_{sample_datetime}.npy"
+    def val_dataloader(self):
+        """Load validation dataset."""
+        return torch.utils.data.DataLoader(
+            self.val_dataset,
+            batch_size=self.batch_size,
+            num_workers=self.num_workers,
+            shuffle=False,
+            multiprocessing_context=self.multiprocessing_context,
+            persistent_workers=True,
         )
-        water_cover_features = torch.tensor(
-            np.load(water_path), dtype=torch.float32
-        ).unsqueeze(
-            -1
-        )  # (dim_y, dim_x, 1)
-        # Flatten
-        water_cover_features = water_cover_features.flatten(0, 1)  # (N_grid, 1)
-        # Expand over temporal dimension
-        water_cover_expanded = water_cover_features.unsqueeze(0).expand(
-            self.sample_length - 2, -1, -1  # -2 as added on after windowing
-        )  # (sample_len, N_grid, 1)
 
-        # TOA flux
-        flux_path = os.path.join(
-            self.sample_dir_path,
-            f"nwp_toa_downwelling_shortwave_flux_{sample_datetime}.npy",
+    def test_dataloader(self):
+        """Load test dataset."""
+        return torch.utils.data.DataLoader(
+            self.test_dataset,
+            batch_size=self.batch_size,
+            num_workers=self.num_workers,
+            shuffle=False,
+            multiprocessing_context=self.multiprocessing_context,
+            persistent_workers=True,
         )
-        flux = torch.tensor(np.load(flux_path), dtype=torch.float32).unsqueeze(
-            -1
-        )  # (N_t', dim_y, dim_x, 1)
-
-        if self.standardize:
-            flux = (flux - self.flux_mean) / self.flux_std
-
-        # Flatten and subsample flux forcing
-        flux = flux.flatten(1, 2)  # (N_t, N_grid, 1)
-        flux = flux[subsample_index :: self.subsample_step]  # (N_t, N_grid, 1)
-        flux = flux[
-            init_id : (init_id + self.sample_length)
-        ]  # (sample_len, N_grid, 1)
-
-        # Time of day and year
-        dt_obj = dt.datetime.strptime(sample_datetime, "%Y%m%d%H")
-        dt_obj = dt_obj + dt.timedelta(
-            hours=2 + subsample_index
-        )  # Offset for first index
-        # Extract for initial step
-        init_hour_in_day = dt_obj.hour
-        start_of_year = dt.datetime(dt_obj.year, 1, 1)
-        init_seconds_into_year = (dt_obj - start_of_year).total_seconds()
-
-        # Add increments for all steps
-        hour_inc = (
-            torch.arange(self.sample_length) * self.subsample_step
-        )  # (sample_len,)
-        hour_of_day = (
-            init_hour_in_day + hour_inc
-        )  # (sample_len,), Can be > 24 but ok
-        second_into_year = (
-            init_seconds_into_year + hour_inc * 3600
-        )  # (sample_len,)
-        # can roll over to next year, ok because periodicity
-
-        # Encode as sin/cos
-        # ! Make this more flexible in a separate create_forcings.py script
-        seconds_in_year = 365 * 24 * 3600
-        hour_angle = (hour_of_day / 12) * torch.pi  # (sample_len,)
-        year_angle = (
-            (second_into_year / seconds_in_year) * 2 * torch.pi
-        )  # (sample_len,)
-        datetime_forcing = torch.stack(
-            (
-                torch.sin(hour_angle),
-                torch.cos(hour_angle),
-                torch.sin(year_angle),
-                torch.cos(year_angle),
-            ),
-            dim=1,
-        )  # (N_t, 4)
-        datetime_forcing = (datetime_forcing + 1) / 2  # Rescale to [0,1]
-        datetime_forcing = datetime_forcing.unsqueeze(1).expand(
-            -1, flux.shape[1], -1
-        )  # (sample_len, N_grid, 4)
-
-        # Put forcing features together
-        forcing_features = torch.cat(
-            (flux, datetime_forcing), dim=-1
-        )  # (sample_len, N_grid, d_forcing)
-
-        # Combine forcing over each window of 3 time steps
-        forcing_windowed = torch.cat(
-            (
-                forcing_features[:-2],
-                forcing_features[1:-1],
-                forcing_features[2:],
-            ),
-            dim=2,
-        )  # (sample_len-2, N_grid, 3*d_forcing)
-        # Now index 0 of ^ corresponds to forcing at index 0-2 of sample
-
-        # batch-static water cover is added after windowing,
-        # as it is static over time
-        forcing = torch.cat((water_cover_expanded, forcing_windowed), dim=2)
-        # (sample_len-2, N_grid, forcing_dim)
-
-        return init_states, target_states, forcing
