@@ -568,8 +568,16 @@ class ARModel(pl.LightningModule):
                     )
                 )
 
+        # Ensure that log_dict has structure for logging as dict(str, plt.Figure)
+        assert all(
+            isinstance(key, str) and isinstance(value, plt.Figure)
+            for key, value in log_dict.items()
+        )
+
         if self.trainer.is_global_zero and not self.trainer.sanity_checking:
-            self.logger.log_image(log_dict)  # Log all
+            for key, figure in log_dict.items():
+                self.logger.log_image(key=key, images=[figure])
+
             plt.close("all")  # Close all figs
 
     def on_test_epoch_end(self):
