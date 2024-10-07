@@ -10,6 +10,8 @@ import torch
 from lightning_fabric.utilities import seed
 from loguru import logger
 
+import mlflow
+
 # Local
 from . import utils
 from .config import load_config_and_datastore
@@ -24,15 +26,13 @@ MODELS = {
 
 class CustomMLFlowLogger(pl.loggers.MLFlowLogger):
 
-    def log_image(self, key, images):
-        import mlflow
-        import io
-        from PIL import Image
+    def __init__(self, experiment_name, tracking_uri):
+        super().__init__(experiment_name=experiment_name, tracking_uri=tracking_uri)
+        mlflow.start_run(run_id=self.run_id, log_system_metrics=True)
 
-        # Retrieve the active run ID from the logger
-        run_id = self.run_id
-        # Ensure mlflow uses the same run
-        mlflow.start_run(run_id=run_id)
+
+    def log_image(self, key, images):
+        from PIL import Image
 
         # Need to save the image to a temporary file, then log that file
         # mlflow.log_image, should do this automatically, but it doesn't work
@@ -40,12 +40,7 @@ class CustomMLFlowLogger(pl.loggers.MLFlowLogger):
         images[0].savefig(temporary_image)
 
         img = Image.open(temporary_image)
-        print(images)
-        print(images[0])
         mlflow.log_image(img, f"{key}.png")
-
-        #mlflow.log_figure(images[0], key)
-        mlflow.end_run()
 
 
 def _setup_training_logger(config, datastore, args, run_name):
@@ -69,32 +64,13 @@ def _setup_training_logger(config, datastore, args, run_name):
             experiment_name=args.wandb_project,
             tracking_uri=url,
         )
-        print(logger)
         logger.log_hyperparams(
             dict(training=vars(args), datastore=datastore._config)
         )
         print("Logged hyperparams")
-        print(run_name)
-
-        print(logger.__str__)
-       # logger.log_image = log_image
 
     return logger
 
-
-# def log_image(key, images):
-#     import mlflow
-
-#     # Log the image
-#     # https://learn.microsoft.com/en-us/azure/machine-learning/how-to-log-view-metrics?view=azureml-api-2&tabs=interactive#log-images
-#     # For mlflow a matplotlib figure should use log_figure instead of log_image
-#     # Need to save the image to a temporary file, then log that file
-#     # mlflow.log_image, should do this automatically, but it doesn't work
-#     temporary_image = f"/tmp/key.png"
-#     images[0].savefig(temporary_image)
-
-#     mlflow.log_figure(temporary_image, key)
-#     mlflow.log_figure(images[0], key)
 
 
 @logger.catch
