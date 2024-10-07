@@ -13,7 +13,8 @@ import torch_geometric as pyg
 from torch_geometric.utils.convert import from_networkx
 
 # Local
-from . import config
+from .config import load_config_and_datastore
+from .datastore.base import BaseCartesianDatastore
 
 
 def plot_graph(graph, title=None):
@@ -153,46 +154,82 @@ def prepend_node_index(graph, new_index):
     return networkx.relabel_nodes(graph, to_mapping, copy=True)
 
 
-def main(input_args=None):
-    parser = ArgumentParser(description="Graph generation arguments")
-    parser.add_argument(
-        "--data_config",
-        type=str,
-        default="neural_lam/data_config.yaml",
-        help="Path to data config file (default: neural_lam/data_config.yaml)",
-    )
-    parser.add_argument(
-        "--graph",
-        type=str,
-        default="multiscale",
-        help="Name to save graph as (default: multiscale)",
-    )
-    parser.add_argument(
-        "--plot",
-        action="store_true",
-        help="If graphs should be plotted during generation "
-        "(default: False)",
-    )
-    parser.add_argument(
-        "--levels",
-        type=int,
-        help="Limit multi-scale mesh to given number of levels, "
-        "from bottom up (default: None (no limit))",
-    )
-    parser.add_argument(
-        "--hierarchical",
-        action="store_true",
-        help="Generate hierarchical mesh graph (default: False)",
-    )
-    args = parser.parse_args(input_args)
+def create_graph(
+    graph_dir_path: str,
+    xy: np.ndarray,
+    n_max_levels: int,
+    hierarchical: bool,
+    create_plot: bool,
+):
+    """
+    Create graph components from `xy` grid coordinates and store in
+    `graph_dir_path`.
 
-    # Load grid positions
-    config_loader = config.Config.from_file(args.data_config)
-    static_dir_path = os.path.join("data", config_loader.dataset.name, "static")
-    graph_dir_path = os.path.join("graphs", args.graph)
+    Creates the following files for all graphs:
+    - g2m_edge_index.pt  [2, N_g2m_edges]
+    - g2m_features.pt    [N_g2m_edges, d_features]
+    - m2g_edge_index.pt  [2, N_m2m_edges]
+    - m2g_features.pt    [N_m2m_edges, d_features]
+    - m2m_edge_index.pt  list of [2, N_m2m_edges_level], length==n_levels
+    - m2m_features.pt    list of [N_m2m_edges_level, d_features],
+                         length==n_levels
+    - mesh_features.pt   list of [N_mesh_nodes_level, d_mesh_static],
+                         length==n_levels
+
+    where
+      d_features:
+            number of features per edge (currently d_features==3, for
+            edge-length, x and y)
+      N_g2m_edges:
+            number of edges in the graph from grid-to-mesh
+      N_m2g_edges:
+            number of edges in the graph from mesh-to-grid
+      N_m2m_edges_level:
+            number of edges in the graph from mesh-to-mesh at a given level
+            (list index corresponds to the level)
+      d_mesh_static:
+            number of static features per mesh node (currently
+            d_mesh_static==2, for x and y)
+      N_mesh_nodes_level:
+            number of nodes in the mesh at a given level
+
+    And in addition for hierarchical graphs:
+    - mesh_up_edge_index.pt
+        list of [2, N_mesh_updown_edges_level], length==n_levels-1
+    - mesh_up_features.pt
+        list of [N_mesh_updown_edges_level, d_features], length==n_levels-1
+    - mesh_down_edge_index.pt
+        list of [2, N_mesh_updown_edges_level], length==n_levels-1
+    - mesh_down_features.pt
+        list of [N_mesh_updown_edges_level, d_features], length==n_levels-1
+
+    where N_mesh_updown_edges_level is the number of edges in the graph from
+    mesh-to-mesh between two consecutive levels (list index corresponds index
+    of lower level)
+
+
+    Parameters
+    ----------
+    graph_dir_path : str
+        Path to store the graph components.
+    xy : np.ndarray
+        Grid coordinates, expected to be of shape (2, Ny, Nx).
+    n_max_levels : int
+        Limit multi-scale mesh to given number of levels, from bottom up
+        (default: None (no limit)).
+    hierarchical : bool
+        Generate hierarchical mesh graph (default: False).
+    create_plot : bool
+        If graphs should be plotted during generation (default: False).
+
+    Returns
+    -------
+    None
+
+    """
     os.makedirs(graph_dir_path, exist_ok=True)
 
-    xy = np.load(os.path.join(static_dir_path, "nwp_xy.npy"))
+    print(f"Writing graph components to {graph_dir_path}")
 
     grid_xy = torch.tensor(xy)
     pos_max = torch.max(torch.abs(grid_xy))
@@ -207,24 +244,24 @@ def main(input_args=None):
     nleaf = nx**nlev  # leaves at the bottom = nleaf**2
 
     mesh_levels = nlev - 1
-    if args.levels:
+    if n_max_levels:
         # Limit the levels in mesh graph
-        mesh_levels = min(mesh_levels, args.levels)
+        mesh_levels = min(mesh_levels, n_max_levels)
 
-    print(f"nlev: {nlev}, nleaf: {nleaf}, mesh_levels: {mesh_levels}")
+    # print(f"nlev: {nlev}, nleaf: {nleaf}, mesh_levels: {mesh_levels}")
 
     # multi resolution tree levels
     G = []
     for lev in range(1, mesh_levels + 1):
         n = int(nleaf / (nx**lev))
         g = mk_2d_graph(xy, n, n)
-        if args.plot:
+        if create_plot:
             plot_graph(from_networkx(g), title=f"Mesh graph, level {lev}")
             plt.show()
 
         G.append(g)
 
-    if args.hierarchical:
+    if hierarchical:
         # Relabel nodes of each level with level index first
         G = [
             prepend_node_index(graph, level_i)
@@ -297,7 +334,7 @@ def main(input_args=None):
             up_graphs.append(pyg_up)
             down_graphs.append(pyg_down)
 
-            if args.plot:
+            if create_plot:
                 plot_graph(
                     pyg_down, title=f"Down graph, {from_level} -> {to_level}"
                 )
@@ -363,7 +400,7 @@ def main(input_args=None):
         m2m_graphs = [pyg_m2m]
         mesh_pos = [pyg_m2m.pos.to(torch.float32)]
 
-        if args.plot:
+        if create_plot:
             plot_graph(pyg_m2m, title="Mesh-to-mesh")
             plt.show()
 
@@ -444,7 +481,7 @@ def main(input_args=None):
 
     pyg_g2m = from_networkx(G_g2m)
 
-    if args.plot:
+    if create_plot:
         plot_graph(pyg_g2m, title="Grid-to-mesh")
         plt.show()
 
@@ -483,7 +520,7 @@ def main(input_args=None):
     )
     pyg_m2g = from_networkx(G_m2g_int)
 
-    if args.plot:
+    if create_plot:
         plot_graph(pyg_m2g, title="Mesh-to-grid")
         plt.show()
 
@@ -494,5 +531,66 @@ def main(input_args=None):
     save_edges(pyg_m2g, "m2g", graph_dir_path)
 
 
+def create_graph_from_datastore(
+    datastore: BaseCartesianDatastore,
+    output_root_path: str,
+    n_max_levels: int = None,
+    hierarchical: bool = False,
+    create_plot: bool = False,
+):
+    xy = datastore.get_xy(category="state", stacked=False)
+    create_graph(
+        graph_dir_path=output_root_path,
+        xy=xy,
+        n_max_levels=n_max_levels,
+        hierarchical=hierarchical,
+        create_plot=create_plot,
+    )
+
+
+def cli(input_args=None):
+    parser = ArgumentParser(description="Graph generation arguments")
+    parser.add_argument(
+        "--config",
+        type=str,
+        default="tests/datastore_examples/mdp/config.yaml",
+    )
+    parser.add_argument(
+        "--name",
+        type=str,
+        default="multiscale",
+        help="Name to save graph as (default: multiscale)",
+    )
+    parser.add_argument(
+        "--plot",
+        action="store_true",
+        help="If graphs should be plotted during generation "
+        "(default: False)",
+    )
+    parser.add_argument(
+        "--levels",
+        type=int,
+        help="Limit multi-scale mesh to given number of levels, "
+        "from bottom up (default: None (no limit))",
+    )
+    parser.add_argument(
+        "--hierarchical",
+        action="store_true",
+        help="Generate hierarchical mesh graph (default: False)",
+    )
+    args = parser.parse_args(input_args)
+
+    # Load neural-lam configuration and datastore to use
+    _, datastore = load_config_and_datastore(config_path=args.config)
+
+    create_graph_from_datastore(
+        datastore=datastore,
+        output_root_path=os.path.join(datastore.root_path, "graph", args.name),
+        n_max_levels=args.levels,
+        hierarchical=args.hierarchical,
+        create_plot=args.plot,
+    )
+
+
 if __name__ == "__main__":
-    main()
+    cli()

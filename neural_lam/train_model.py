@@ -8,10 +8,18 @@ from argparse import ArgumentParser
 import pytorch_lightning as pl
 import torch
 from lightning_fabric.utilities import seed
+from loguru import logger
+
+import mlflow
+# for logging the model:
+import mlflow.pytorch
+from mlflow.models import infer_signature
 
 # Local
-from . import WeatherDataset, config, utils
+from . import utils
+from .config import load_config_and_datastore
 from .models import GraphLAM, HiLAM, HiLAMParallel
+from .weather_dataset import WeatherDataModule
 
 MODELS = {
     "graph_lam": GraphLAM,
@@ -19,19 +27,71 @@ MODELS = {
     "hi_lam_parallel": HiLAMParallel,
 }
 
+class CustomMLFlowLogger(pl.loggers.MLFlowLogger):
 
+    def __init__(self, experiment_name, tracking_uri):
+        super().__init__(experiment_name=experiment_name, tracking_uri=tracking_uri)
+        mlflow.start_run(run_id=self.run_id, log_system_metrics=True)
+        mlflow.log_param("run_id", self.run_id)
+        #mlflow.pytorch.autolog() # Can be used to log the model, but without signature
+
+    def log_image(self, key, images):
+        from PIL import Image
+
+        # Need to save the image to a temporary file, then log that file
+        # mlflow.log_image, should do this automatically, but it doesn't work
+        temporary_image = f"{key}.png"
+        images[0].savefig(temporary_image)
+
+        img = Image.open(temporary_image)
+        mlflow.log_image(img, f"{key}.png")
+
+    def log_model(self, model):
+        # Create model signature
+        #signature = infer_signature(train_dataset.numpy(), model(train_dataset).detach().numpy())
+        mlflow.pytorch.log_model(model, "model")
+
+
+def _setup_training_logger(config, datastore, args, run_name):
+    if config.training.logger == "wandb":
+        logger = pl.loggers.WandbLogger(
+            project=args.wandb_project,
+            name=run_name,
+            config=dict(training=vars(args), datastore=datastore._config),
+        )
+    elif config.training.logger == "mlflow":
+        url = config.training.logger_url
+        if url is None:
+            raise ValueError(
+                "MLFlow logger requires a URL to the MLFlow server"
+            )
+        # logger = pl.loggers.MLFlowLogger(
+        #     experiment_name=args.wandb_project,
+        #     tracking_uri=url,
+        # )
+        logger = CustomMLFlowLogger(
+            experiment_name=args.wandb_project,
+            tracking_uri=url,
+        )
+        logger.log_hyperparams(
+            dict(training=vars(args), datastore=datastore._config)
+        )
+        print("Logged hyperparams")
+
+    return logger
+
+
+
+@logger.catch
 def main(input_args=None):
-    """
-    Main function for training and evaluating models
-    """
+    """Main function for training and evaluating models."""
     parser = ArgumentParser(
         description="Train or evaluate NeurWP models for LAM"
     )
     parser.add_argument(
-        "--data_config",
+        "--config",
         type=str,
-        default="neural_lam/data_config.yaml",
-        help="Path to data config file (default: neural_lam/data_config.yaml)",
+        default="tests/datastore_examples/mdp/config.yaml",
     )
     parser.add_argument(
         "--model",
@@ -40,16 +100,10 @@ def main(input_args=None):
         help="Model architecture to train/evaluate (default: graph_lam)",
     )
     parser.add_argument(
-        "--subset_ds",
-        action="store_true",
-        help="Use only a small subset of the dataset, for debugging"
-        "(default: false)",
-    )
-    parser.add_argument(
         "--seed", type=int, default=42, help="random seed (default: 42)"
     )
     parser.add_argument(
-        "--n_workers",
+        "--num_workers",
         type=int,
         default=4,
         help="Number of workers in data loader (default: 4)",
@@ -124,10 +178,10 @@ def main(input_args=None):
 
     # Training options
     parser.add_argument(
-        "--ar_steps",
+        "--ar_steps_train",
         type=int,
         default=1,
-        help="Number of steps to unroll prediction for in loss (1-19) "
+        help="Number of steps to unroll prediction for in loss function "
         "(default: 1)",
     )
     parser.add_argument(
@@ -141,13 +195,6 @@ def main(input_args=None):
         type=str,
         default="wmse",
         help="Loss function to use, see metric.py (default: wmse)",
-    )
-    parser.add_argument(
-        "--step_length",
-        type=int,
-        default=3,
-        help="Step length in hours to consider single time step 1-3 "
-        "(default: 3)",
     )
     parser.add_argument(
         "--lr", type=float, default=1e-3, help="learning rate (default: 0.001)"
@@ -168,6 +215,13 @@ def main(input_args=None):
         "(default: None (train model))",
     )
     parser.add_argument(
+        "--ar_steps_eval",
+        type=int,
+        default=10,
+        help="Number of steps to unroll prediction for in loss function "
+        "(default: 10)",
+    )
+    parser.add_argument(
         "--n_example_pred",
         type=int,
         default=1,
@@ -184,9 +238,10 @@ def main(input_args=None):
     )
     parser.add_argument(
         "--val_steps_to_log",
-        type=list,
+        nargs="+",
+        type=int,
         default=[1, 2, 3, 5, 10, 15, 19],
-        help="Steps to log val loss for (default: [1, 2, 3, 5, 10, 15, 19])",
+        help="Steps to log val loss for (default: 1 2 3 5 10 15 19)",
     )
     parser.add_argument(
         "--metrics_watch",
@@ -201,15 +256,19 @@ def main(input_args=None):
         help="""JSON string with variable-IDs and lead times to log watched
              metrics (e.g. '{"1": [1, 2], "3": [3, 4]}')""",
     )
+    parser.add_argument(
+        "--forcing-window-size",
+        type=int,
+        default=3,
+        help="Number of time steps to use as input for forcing data",
+    )
     args = parser.parse_args(input_args)
     args.var_leads_metrics_watch = {
         int(k): v for k, v in json.loads(args.var_leads_metrics_watch).items()
     }
-    config_loader = config.Config.from_file(args.data_config)
 
     # Asserts for arguments
     assert args.model in MODELS, f"Unknown model: {args.model}"
-    assert args.step_length <= 3, "Too high step length"
     assert args.eval in (
         None,
         "val",
@@ -222,33 +281,23 @@ def main(input_args=None):
     # Set seed
     seed.seed_everything(args.seed)
 
-    # Load data
-    train_loader = torch.utils.data.DataLoader(
-        WeatherDataset(
-            config_loader.dataset.name,
-            pred_length=args.ar_steps,
-            split="train",
-            subsample_step=args.step_length,
-            subset=args.subset_ds,
-            control_only=args.control_only,
-        ),
-        args.batch_size,
-        shuffle=True,
-        num_workers=args.n_workers,
-    )
-    max_pred_length = (65 // args.step_length) - 2  # 19
-    val_loader = torch.utils.data.DataLoader(
-        WeatherDataset(
-            config_loader.dataset.name,
-            pred_length=max_pred_length,
-            split="val",
-            subsample_step=args.step_length,
-            subset=args.subset_ds,
-            control_only=args.control_only,
-        ),
-        args.batch_size,
-        shuffle=False,
-        num_workers=args.n_workers,
+    # Load neural-lam configuration and datastore to use
+    config, datastore = load_config_and_datastore(config_path=args.config)
+    # TODO: config.training.state_feature_weights need passing in somewhere,
+    # probably to ARModel, so that it can be used in the loss function
+    assert (
+        config.training.state_feature_weights
+    ), "No state feature weights found in config"
+
+    # Create datamodule
+    data_module = WeatherDataModule(
+        datastore=datastore,
+        ar_steps_train=args.ar_steps_train,
+        ar_steps_eval=args.ar_steps_eval,
+        standardize=True,
+        forcing_window_size=args.forcing_window_size,
+        batch_size=args.batch_size,
+        num_workers=args.num_workers,
     )
 
     # Instantiate model + trainer
@@ -261,16 +310,22 @@ def main(input_args=None):
         device_name = "cpu"
 
     # Load model parameters Use new args for model
-    model_class = MODELS[args.model]
-    model = model_class(args)
+    ModelClass = MODELS[args.model]
+    model = ModelClass(args, datastore=datastore)
 
-    prefix = "subset-" if args.subset_ds else ""
     if args.eval:
-        prefix = prefix + f"eval-{args.eval}-"
+        prefix = f"eval-{args.eval}-"
+    else:
+        prefix = "train-"
     run_name = (
         f"{prefix}{args.model}-{args.processor_layers}x{args.hidden_dim}-"
         f"{time.strftime('%m_%d_%H')}-{random_run_id:04d}"
     )
+
+    training_logger = _setup_training_logger(
+        config=config, datastore=datastore, args=args, run_name=run_name
+    )
+
     checkpoint_callback = pl.callbacks.ModelCheckpoint(
         dirpath=f"saved_models/{run_name}",
         filename="min_val_loss",
@@ -278,55 +333,35 @@ def main(input_args=None):
         mode="min",
         save_last=True,
     )
-    logger = pl.loggers.WandbLogger(
-        project=args.wandb_project, name=run_name, config=args
-    )
     trainer = pl.Trainer(
         max_epochs=args.epochs,
         deterministic=True,
-        strategy="ddp",
+        #strategy="ddp",
+        #devices=2,
+        devices=[0, 1],
+        strategy="auto",
         accelerator=device_name,
-        logger=logger,
+        logger=training_logger,
         log_every_n_steps=1,
         callbacks=[checkpoint_callback],
         check_val_every_n_epoch=args.val_interval,
         precision=args.precision,
     )
-
+    import ipdb
     # Only init once, on rank 0 only
     if trainer.global_rank == 0:
-        utils.init_wandb_metrics(
-            logger, args.val_steps_to_log
+        utils.init_training_logger_metrics(
+            training_logger, val_steps=args.val_steps_to_log
         )  # Do after wandb.init
-
     if args.eval:
-        if args.eval == "val":
-            eval_loader = val_loader
-        else:  # Test
-            eval_loader = torch.utils.data.DataLoader(
-                WeatherDataset(
-                    config_loader.dataset.name,
-                    pred_length=max_pred_length,
-                    split="test",
-                    subsample_step=args.step_length,
-                    subset=args.subset_ds,
-                ),
-                args.batch_size,
-                shuffle=False,
-                num_workers=args.n_workers,
-            )
-
-        print(f"Running evaluation on {args.eval}")
-        trainer.test(model=model, dataloaders=eval_loader, ckpt_path=args.load)
+        trainer.test(model=model, datamodule=data_module, ckpt_path=args.load)
     else:
-        # Train model
-        trainer.fit(
-            model=model,
-            train_dataloaders=train_loader,
-            val_dataloaders=val_loader,
-            ckpt_path=args.load,
-        )
+        with ipdb.launch_ipdb_on_exception():
+            trainer.fit(model=model, datamodule=data_module, ckpt_path=args.load)
 
+        # Log the model
+        training_logger.log_model(model)
+        # data_module.train_dataloader().dataset.data
 
 if __name__ == "__main__":
     main()
