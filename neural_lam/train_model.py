@@ -11,6 +11,9 @@ from lightning_fabric.utilities import seed
 from loguru import logger
 
 import mlflow
+# for logging the model:
+import mlflow.pytorch
+from mlflow.models import infer_signature
 
 # Local
 from . import utils
@@ -29,7 +32,8 @@ class CustomMLFlowLogger(pl.loggers.MLFlowLogger):
     def __init__(self, experiment_name, tracking_uri):
         super().__init__(experiment_name=experiment_name, tracking_uri=tracking_uri)
         mlflow.start_run(run_id=self.run_id, log_system_metrics=True)
-
+        mlflow.log_param("run_id", self.run_id)
+        #mlflow.pytorch.autolog() # Can be used to log the model, but without signature
 
     def log_image(self, key, images):
         from PIL import Image
@@ -41,6 +45,11 @@ class CustomMLFlowLogger(pl.loggers.MLFlowLogger):
 
         img = Image.open(temporary_image)
         mlflow.log_image(img, f"{key}.png")
+
+    def log_model(self, model):
+        # Create model signature
+        #signature = infer_signature(X.numpy(), model(X).detach().numpy())
+        mlflow.pytorch.log_model(model, "model")
 
 
 def _setup_training_logger(config, datastore, args, run_name):
@@ -349,6 +358,9 @@ def main(input_args=None):
     else:
         with ipdb.launch_ipdb_on_exception():
             trainer.fit(model=model, datamodule=data_module, ckpt_path=args.load)
+
+        # Log the model
+        training_logger.log_model(model)
 
 
 if __name__ == "__main__":
