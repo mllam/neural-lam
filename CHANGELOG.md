@@ -81,6 +81,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Maintenance
 
+- Add slack and new publication info to readme
+  [\#78](https://github.com/mllam/neural-lam/pull/78)
+  @joeloskarsson
+
 - simplify pre-commit setup by 1) reducing linting to only cover static
   analysis excluding imports from external dependencies (this will be handled
   in build/test cicd action introduced later), 2) pinning versions of linting
