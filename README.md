@@ -1,3 +1,4 @@
+[![slack](https://img.shields.io/badge/slack-join-brightgreen.svg?logo=slack)](https://join.slack.com/t/ml-lam/shared_invite/zt-2t112zvm8-Vt6aBvhX7nYa6Kbj_LkCBQ)
 ![Linting](https://github.com/mllam/neural-lam/actions/workflows/pre-commit.yml/badge.svg?branch=main)
 [![test (pdm install, gpu)](https://github.com/mllam/neural-lam/actions/workflows/ci-pdm-install-and-test-gpu.yml/badge.svg)](https://github.com/mllam/neural-lam/actions/workflows/ci-pdm-install-and-test-gpu.yml)
 [![test (pdm install, cpu)](https://github.com/mllam/neural-lam/actions/workflows/ci-pdm-install-and-test-cpu.yml/badge.svg)](https://github.com/mllam/neural-lam/actions/workflows/ci-pdm-install-and-test-cpu.yml)
@@ -7,6 +8,7 @@
 </p>
 
 Neural-LAM is a repository of graph-based neural weather prediction models for Limited Area Modeling (LAM).
+Also global forecasting is possible, but currently on a [different branch](https://github.com/mllam/neural-lam/tree/prob_model_global) ([planned to be merged with main](https://github.com/mllam/neural-lam/issues/63)).
 The code uses [PyTorch](https://pytorch.org/) and [PyTorch Lightning](https://lightning.ai/pytorch-lightning).
 Graph Neural Networks are implemented using [PyG](https://pyg.org/) and logging is set up through [Weights & Biases](https://wandb.ai/).
 
@@ -16,8 +18,15 @@ The repository contains LAM versions of:
 * GraphCast, by [Lam et al. (2023)](https://arxiv.org/abs/2212.12794).
 * The hierarchical model from [Oskarsson et al. (2023)](https://arxiv.org/abs/2309.17370).
 
-For more information see our paper: [*Graph-based Neural Weather Prediction for Limited Area Modeling*](https://arxiv.org/abs/2309.17370).
-If you use Neural-LAM in your work, please cite:
+# Publications
+For a more in-depth scientific introduction to machine learning for LAM weather forecasting see the publications listed here.
+As the code in the repository is continuously evolving, the latest version might feature some small differences to what was used for these publications.
+We retain some paper-specific branches for reproducibility purposes.
+
+
+*If you use Neural-LAM in your work, please cite the relevant paper(s)*.
+
+#### [Graph-based Neural Weather Prediction for Limited Area Modeling](https://arxiv.org/abs/2309.17370)
 ```
 @inproceedings{oskarsson2023graphbased,
     title={Graph-based Neural Weather Prediction for Limited Area Modeling},
@@ -26,12 +35,20 @@ If you use Neural-LAM in your work, please cite:
     year={2023}
 }
 ```
-As the code in the repository is continuously evolving, the latest version might feature some small differences to what was used in the paper.
-See the branch [`ccai_paper_2023`](https://github.com/joeloskarsson/neural-lam/tree/ccai_paper_2023) for a revision of the code that reproduces the workshop paper.
+See the branch [`ccai_paper_2023`](https://github.com/joeloskarsson/neural-lam/tree/ccai_paper_2023) for a revision of the code that reproduces this workshop paper.
 
-We plan to continue updating this repository as we improve existing models and develop new ones.
-Collaborations around this implementation are very welcome.
-If you are working with Neural-LAM feel free to get in touch and/or submit pull requests to the repository.
+#### [Probabilistic Weather Forecasting with Hierarchical Graph Neural Networks](https://arxiv.org/abs/2406.04759)
+```
+@inproceedings{oskarsson2024probabilistic,
+  title = {Probabilistic Weather Forecasting with Hierarchical Graph Neural Networks},
+  author = {Oskarsson, Joel and Landelius, Tomas and Deisenroth, Marc Peter and Lindsten, Fredrik},
+  booktitle = {Advances in Neural Information Processing Systems},
+  volume = {37},
+  year = {2024},
+}
+```
+See the branches [`prob_model_lam`](https://github.com/mllam/neural-lam/tree/prob_model_lam) and [`prob_model_global`](https://github.com/mllam/neural-lam/tree/prob_model_global) for revisions of the code that reproduces this paper.
+The global and probabilistic models from this paper are not yet fully merged with `main` (see issues [62](https://github.com/mllam/neural-lam/issues/62) and [63](https://github.com/mllam/neural-lam/issues/63)).
 
 # Modularity
 The Neural-LAM code is designed to modularize the different components involved in training and evaluating neural weather prediction models.
@@ -47,12 +64,11 @@ Still, some restrictions are inevitable:
 
 
 ## A note on the limited area setting
-Currently we are using these models on a limited area covering the Nordic region, the so called MEPS area (see [paper](https://arxiv.org/abs/2309.17370)).
+Currently we are using these models on a limited area covering the Nordic region, the so called MEPS area (see [paper](#graph-based-neural-weather-prediction-for-limited-area-modeling)).
 There are still some parts of the code that is quite specific for the MEPS area use case.
 This is in particular true for the mesh graph creation (`python -m neural_lam.create_mesh`) and some of the constants set in a `data_config.yaml` file (path specified in `python -m neural_lam.train_model --data_config <data-config-filepath>` ).
-If there is interest to use Neural-LAM for other areas it is not a substantial undertaking to refactor the code to be fully area-agnostic.
-We would be happy to support such enhancements.
-See the issues https://github.com/joeloskarsson/neural-lam/issues/2, https://github.com/joeloskarsson/neural-lam/issues/3 and https://github.com/joeloskarsson/neural-lam/issues/4 for some initial ideas on how this could be done.
+There is ongoing efforts to refactor the code to be fully area-agnostic.
+See issues [4](https://github.com/mllam/neural-lam/issues/4) and [24](https://github.com/mllam/neural-lam/issues/24) for more about this.
 
 # Using Neural-LAM
 Below follows instructions on how to use Neural-LAM to train and evaluate models.
@@ -98,7 +114,7 @@ See the [repository format section](#format-of-data-directory) for details on th
 The full MEPS dataset can be shared with other researchers on request, contact us for this.
 A tiny subset of the data (named `meps_example`) is available in `example_data.zip`, which can be downloaded from [here](https://liuonline-my.sharepoint.com/:f:/g/personal/joeos82_liu_se/EuiUuiGzFIFHruPWpfxfUmYBSjhqMUjNExlJi9W6ULMZ1w?e=97pnGX).
 Download the file and unzip in the neural-lam directory.
-All graphs used in the paper are also available for download at the same link (but can as easily be re-generated using `python -m neural_lam.create_mesh`).
+Graphs used in the initial paper are also available for download at the same link (but can as easily be re-generated using `python -m neural_lam.create_mesh`).
 Note that this is far too little data to train any useful models, but all pre-processing and training steps can be run with it.
 It should thus be useful to make sure that your python environment is set up correctly and that all the code can be ran without any issues.
 
@@ -115,7 +131,7 @@ In order to start training models at least three pre-processing steps have to be
 
 ### Create graph
 Run `python -m neural_lam.create_mesh` with suitable options to generate the graph you want to use (see `python neural_lam.create_mesh --help` for a list of options).
-The graphs used for the different models in the [paper](https://arxiv.org/abs/2309.17370) can be created as:
+The graphs used for the different models in the [paper](#graph-based-neural-weather-prediction-for-limited-area-modeling) can be created as:
 
 * **GC-LAM**: `python -m neural_lam.create_mesh --graph multiscale`
 * **Hi-LAM**: `python -m neural_lam.create_mesh --graph hierarchical --hierarchical` (also works for Hi-LAM-Parallel)
@@ -159,7 +175,7 @@ The implemented models are:
 ### Graph-LAM
 This is the basic graph-based LAM model.
 The encode-process-decode framework is used with a mesh graph in order to make one-step pedictions.
-This model class is used both for the L1-LAM and GC-LAM models from the [paper](https://arxiv.org/abs/2309.17370), only with different graphs.
+This model class is used both for the L1-LAM and GC-LAM models from the [paper](#graph-based-neural-weather-prediction-for-limited-area-modeling), only with different graphs.
 
 To train 1L-LAM use
 ```
@@ -199,7 +215,9 @@ Some options specifically important for evaluation are:
 * `--load`: Path to model checkpoint file (`.ckpt`) to load parameters from
 * `--n_example_pred`: Number of example predictions to plot during evaluation.
 
-**Note:** While it is technically possible to use multiple GPUs for running evaluation, this is strongly discouraged. If using multiple devices the `DistributedSampler` will replicate some samples to make sure all devices have the same batch size, meaning that evaluation metrics will be unreliable. This issue stems from PyTorch Lightning. See for example [this draft PR](https://github.com/Lightning-AI/torchmetrics/pull/1886) for more discussion and ongoing work to remedy this.
+**Note:** While it is technically possible to use multiple GPUs for running evaluation, this is strongly discouraged. If using multiple devices the `DistributedSampler` will replicate some samples to make sure all devices have the same batch size, meaning that evaluation metrics will be unreliable.
+A possible workaround is to just use batch size 1 during evaluation.
+This issue stems from PyTorch Lightning. See for example [this PR](https://github.com/Lightning-AI/torchmetrics/pull/1886) for more discussion.
 
 # Repository Structure
 Except for training and pre-processing scripts all the source code can be found in the `neural_lam` directory.
@@ -303,5 +321,5 @@ from the root directory of the repository.
 Furthermore, all tests in the ```tests``` directory will be run upon pushing changes by a github action. Failure in any of the tests will also reject the push/PR.
 
 # Contact
-If you are interested in machine learning models for LAM, have questions about our implementation or ideas for extending it, feel free to get in touch.
-You can open a github issue on this page, or (if more suitable) send an email to [joel.oskarsson@liu.se](mailto:joel.oskarsson@liu.se).
+If you are interested in machine learning models for LAM, have questions about the implementation or ideas for extending it, feel free to get in touch.
+You can join the [slack channel](https://join.slack.com/t/ml-lam/shared_invite/zt-2t112zvm8-Vt6aBvhX7nYa6Kbj_LkCBQ), open a github issue on this page, or (if more suitable) send an email to [joel.oskarsson@liu.se](mailto:joel.oskarsson@liu.se).
