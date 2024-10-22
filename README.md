@@ -69,6 +69,7 @@ There are still some parts of the code that is quite specific for the MEPS area 
 This is in particular true for the mesh graph creation (`python -m neural_lam.create_mesh`) and some of the constants set in a `data_config.yaml` file (path specified in `python -m neural_lam.train_model --data_config <data-config-filepath>` ).
 There is ongoing efforts to refactor the code to be fully area-agnostic.
 See issues [4](https://github.com/mllam/neural-lam/issues/4) and [24](https://github.com/mllam/neural-lam/issues/24) for more about this.
+See also the [weather-model-graphs](https://github.com/mllam/weather-model-graphs) package for constructing graphs for arbitrary areas.
 
 # Using Neural-LAM
 Below follows instructions on how to use Neural-LAM to train and evaluate models.
