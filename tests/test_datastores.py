@@ -42,12 +42,13 @@ from pathlib import Path
 import cartopy.crs as ccrs
 import numpy as np
 import pytest
+import torch
 import xarray as xr
-from conftest import init_datastore_example
 
 # First-party
 from neural_lam.datastore import DATASTORES
 from neural_lam.datastore.base import BaseRegularGridDatastore
+from tests.conftest import init_datastore_example
 
 
 @pytest.mark.parametrize("datastore_name", DATASTORES.keys())
@@ -326,3 +327,36 @@ def test_stacking_grid_coords(datastore_name):
     da_static_test = da_static_test.transpose(*da_static.dims)
 
     xr.testing.assert_equal(da_static, da_static_test)
+
+
+@pytest.mark.parametrize("datastore_name", DATASTORES.keys())
+def test_dataarray_shapes(datastore_name):
+    datastore = init_datastore_example(datastore_name)
+    static_da = datastore.get_dataarray("static", split="train")
+
+    # Convert the unstacked grid coordinates and static data array to tensors
+    unstacked_tensor = torch.tensor(
+        datastore.unstack_grid_coords(static_da).to_numpy(), dtype=torch.float32
+    )
+    reshaped_tensor = torch.tensor(
+        static_da.to_numpy(), dtype=torch.float32
+    ).reshape(datastore.grid_shape_state.y, datastore.grid_shape_state.x)
+
+    # Compute the difference
+    diff = unstacked_tensor - reshaped_tensor
+
+    # Check the shapes
+    assert unstacked_tensor.shape == (
+        datastore.grid_shape_state.y,
+        datastore.grid_shape_state.x,
+    )
+    assert reshaped_tensor.shape == (
+        datastore.grid_shape_state.y,
+        datastore.grid_shape_state.x,
+    )
+    assert diff.shape == (
+        datastore.grid_shape_state.y,
+        datastore.grid_shape_state.x,
+    )
+    # assert diff == 0 with tolerance 1e-6
+    assert torch.allclose(diff, torch.zeros_like(diff), atol=1e-6)
