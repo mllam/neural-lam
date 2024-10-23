@@ -80,11 +80,7 @@ There are currently three different datastores implemented in the codebase:
 1. `neural_lam.datastore.NpyDataStore` which reads MEPS data from `.npy`-files in
    the format introduced in neural-lam `v0.1.0`. Note that this datastore is specific to the format of the MEPS dataset, but can act as an example for how to create similar numpy-based datastores.
 
-2. `neural_lam.datastore.MultizarrDatastore` which can combines multiple zarr
-   files during train/val/test sampling, with the transformations to facilitate
-   this implemented within `neural_lam.datastore.MultizarrDatastore`.
-
-3. `neural_lam.datastore.MDPDatastore` which can combine multiple zarr
+2. `neural_lam.datastore.MDPDatastore` which can combine multiple zarr
    datasets either either as a preprocessing step or during sampling, but
    offloads the implementation of the transformations the
    [mllam-data-prep](https://github.com/mllam/mllam-data-prep) package.
@@ -148,12 +144,6 @@ The amount of pre-processing required will depend on what kind of datastore you 
 
 ### Additional inputs
 
-#### MultiZarr Datastore
-
-* `python -m neural_lam.create_boundary_mask`
-* `python -m neural_lam.create_datetime_forcings`
-* `python -m neural_lam.create_norm`
-
 #### NpyFiles Datastore
 
 #### MDP (mllam-data-prep) Datastore
@@ -198,7 +188,7 @@ Models can be trained using `python -m neural_lam.train_model --datastore_type <
 Run `python neural_lam.train_model --help` for a full list of training options.
 A few of the key ones are outlined below:
 
-* `--datastore_type`: The kind of datastore that you are using (should be one of `npyfiles`, `multizarr` or `mllam`)
+* `--datastore_type`: The kind of datastore that you are using (should be one of `npyfiles`, or `mllam`)
 * `--datastore_config_path`: Path to the data store configuration file
 * `--model`: Which model to train
 * `--graph`: Which graph to use with the model
