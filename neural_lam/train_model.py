@@ -124,12 +124,6 @@ def main(input_args=None):
         "(default: 1)",
     )
     parser.add_argument(
-        "--control_only",
-        action="store_true",
-        help="Train only on control member of ensemble data "
-        "(default: False)",
-    )
-    parser.add_argument(
         "--loss",
         type=str,
         default="wmse",
