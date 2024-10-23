@@ -132,7 +132,7 @@ def main():
     """
     parser = ArgumentParser(description="Training arguments")
     parser.add_argument(
-        "datastore_config", type=str, help="Path to data config file"
+        "--datastore_config_path", type=str, help="Path to data config file"
     )
     parser.add_argument(
         "--batch_size",
@@ -163,11 +163,10 @@ def main():
     rank = get_rank()
     world_size = get_world_size()
     datastore = init_datastore(
-        datastore_kind="npyfilesmeps", config_path=args.datastore_config
+        datastore_kind="npyfilesmeps", config_path=args.datastore_config_path
     )
 
     if distributed:
-
         setup(rank, world_size)
         device = torch.device(
             f"cuda:{rank}" if torch.cuda.is_available() else "cpu"
@@ -253,29 +252,34 @@ def main():
         means_gathered, squares_gathered = [None] * world_size, [
             None
         ] * world_size
-        flux_means_gathered, flux_squares_gathered = [None] * world_size, [
-            None
-        ] * world_size
+        flux_means_gathered, flux_squares_gathered = (
+            [None] * world_size,
+            [None] * world_size,
+        )
         dist.all_gather_object(means_gathered, torch.cat(means, dim=0))
         dist.all_gather_object(squares_gathered, torch.cat(squares, dim=0))
         dist.all_gather_object(flux_means_gathered, flux_means)
         dist.all_gather_object(flux_squares_gathered, flux_squares)
 
         if rank == 0:
-            means_gathered, squares_gathered = torch.cat(
-                means_gathered, dim=0
-            ), torch.cat(squares_gathered, dim=0)
-            flux_means_gathered, flux_squares_gathered = torch.tensor(
-                flux_means_gathered
-            ), torch.tensor(flux_squares_gathered)
+            means_gathered, squares_gathered = (
+                torch.cat(means_gathered, dim=0),
+                torch.cat(squares_gathered, dim=0),
+            )
+            flux_means_gathered, flux_squares_gathered = (
+                torch.tensor(flux_means_gathered),
+                torch.tensor(flux_squares_gathered),
+            )
 
             original_indices = ds.get_original_indices()
-            means, squares = [means_gathered[i] for i in original_indices], [
-                squares_gathered[i] for i in original_indices
-            ]
-            flux_means, flux_squares = [
-                flux_means_gathered[i] for i in original_indices
-            ], [flux_squares_gathered[i] for i in original_indices]
+            means, squares = (
+                [means_gathered[i] for i in original_indices],
+                [squares_gathered[i] for i in original_indices],
+            )
+            flux_means, flux_squares = (
+                [flux_means_gathered[i] for i in original_indices],
+                [flux_squares_gathered[i] for i in original_indices],
+            )
     else:
         means = [torch.cat(means, dim=0)]  # (N_batch, d_features,)
         squares = [torch.cat(squares, dim=0)]  # (N_batch, d_features,)
@@ -353,9 +357,10 @@ def main():
 
     if distributed and world_size > 1:
         dist.barrier()
-        diff_means_gathered, diff_squares_gathered = [None] * world_size, [
-            None
-        ] * world_size
+        diff_means_gathered, diff_squares_gathered = (
+            [None] * world_size,
+            [None] * world_size,
+        )
         dist.all_gather_object(
             diff_means_gathered, torch.cat(diff_means, dim=0)
         )
@@ -364,19 +369,21 @@ def main():
         )
 
         if rank == 0:
-            diff_means_gathered, diff_squares_gathered = torch.cat(
-                diff_means_gathered, dim=0
-            ).view(-1, *diff_means[0].shape), torch.cat(
-                diff_squares_gathered, dim=0
-            ).view(
-                -1, *diff_squares[0].shape
+            diff_means_gathered, diff_squares_gathered = (
+                torch.cat(diff_means_gathered, dim=0).view(
+                    -1, *diff_means[0].shape
+                ),
+                torch.cat(diff_squares_gathered, dim=0).view(
+                    -1, *diff_squares[0].shape
+                ),
             )
             original_indices = ds_standard.get_original_window_indices(
                 args.step_length
             )
-            diff_means, diff_squares = [
-                diff_means_gathered[i] for i in original_indices
-            ], [diff_squares_gathered[i] for i in original_indices]
+            diff_means, diff_squares = (
+                [diff_means_gathered[i] for i in original_indices],
+                [diff_squares_gathered[i] for i in original_indices],
+            )
 
     diff_means = [torch.cat(diff_means, dim=0)]  # (N_batch', d_features,)
     diff_squares = [torch.cat(diff_squares, dim=0)]  # (N_batch', d_features,)

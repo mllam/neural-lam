@@ -20,13 +20,13 @@ def main():
     """Plot graph structure in 3D using plotly."""
     parser = ArgumentParser(description="Plot graph")
     parser.add_argument(
-        "datastore_kind",
+        "--datastore_kind",
         type=str,
         choices=DATASTORES.keys(),
         help="Kind of datastore to use",
     )
     parser.add_argument(
-        "datastore_config_path",
+        "--datastore_config_path",
         type=str,
         help="Path for the datastore config",
     )

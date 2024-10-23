@@ -194,12 +194,12 @@ wandb off
 ```
 
 ## Train Models
-Models can be trained using `python -m neural_lam.train_model <datastore_type> <datastore_config_path>`.
+Models can be trained using `python -m neural_lam.train_model --datastore_type <datastore_type> --datastore_config_path <datastore_config_path>`.
 Run `python neural_lam.train_model --help` for a full list of training options.
 A few of the key ones are outlined below:
 
-* `<datastore_type>`: The kind of datastore that you are using (should be one of `npyfiles`, `multizarr` or `mllam`)
-* `<datastore_config_path>`: Path to the data store configuration file
+* `--datastore_type`: The kind of datastore that you are using (should be one of `npyfiles`, `multizarr` or `mllam`)
+* `--datastore_config_path`: Path to the data store configuration file
 * `--model`: Which model to train
 * `--graph`: Which graph to use with the model
 * `--processor_layers`: Number of GNN layers to use in the processing part of the model
