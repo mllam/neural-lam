@@ -15,8 +15,8 @@ class GraphLAM(BaseGraphModel):
     Oskarsson et al. (2023).
     """
 
-    def __init__(self, args):
-        super().__init__(args)
+    def __init__(self, args, datastore):
+        super().__init__(args, datastore)
 
         assert (
             not self.hierarchical

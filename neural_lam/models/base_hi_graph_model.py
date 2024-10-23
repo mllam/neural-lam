@@ -12,8 +12,8 @@ class BaseHiGraphModel(BaseGraphModel):
     Base class for hierarchical graph models.
     """
 
-    def __init__(self, args):
-        super().__init__(args)
+    def __init__(self, args, datastore):
+        super().__init__(args, datastore=datastore)
 
         # Track number of nodes, edges on each level
         # Flatten lists for efficient embedding

@@ -1,5 +1,4 @@
 # First-party
-import neural_lam.config
 import neural_lam.interaction_net
 import neural_lam.metrics
 import neural_lam.models
