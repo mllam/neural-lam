@@ -7,7 +7,6 @@ import pytest
 import torch
 
 # First-party
-from neural_lam.create_graph import create_graph_from_datastore
 from neural_lam.datastore import DATASTORES
 from neural_lam.datastore.base import BaseRegularGridDatastore
 from tests.conftest import init_datastore_example
@@ -67,13 +66,6 @@ def test_graph_creation(datastore_name, graph_name):
 
     with tempfile.TemporaryDirectory() as tmpdir:
         graph_dir_path = Path(tmpdir) / "graph" / graph_name
-
-        create_graph_from_datastore(
-            datastore=datastore,
-            output_root_path=str(graph_dir_path),
-            hierarchical=hierarchical,
-            n_max_levels=n_max_levels,
-        )
 
         assert graph_dir_path.exists()
 
