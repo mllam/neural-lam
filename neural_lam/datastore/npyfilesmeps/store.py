@@ -2,6 +2,7 @@
 Numpy-files based datastore to support the MEPS example dataset introduced in
 neural-lam v0.1.0.
 """
+
 # Standard library
 import functools
 import re
@@ -522,7 +523,7 @@ class NpyFilesDatastoreMEPS(BaseRegularGridDatastore):
 
         return da_datetime_forcing
 
-    def get_vars_units(self, category: str) -> torch.List[str]:
+    def get_vars_units(self, category: str) -> List[str]:
         if category == "state":
             return self.config.dataset.var_units
         elif category == "forcing":
@@ -539,7 +540,7 @@ class NpyFilesDatastoreMEPS(BaseRegularGridDatastore):
         else:
             raise NotImplementedError(f"Category {category} not supported")
 
-    def get_vars_names(self, category: str) -> torch.List[str]:
+    def get_vars_names(self, category: str) -> List[str]:
         if category == "state":
             return self.config.dataset.var_names
         elif category == "forcing":
