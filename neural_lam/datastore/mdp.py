@@ -1,6 +1,7 @@
 # Standard library
 import shutil
 import warnings
+from functools import cached_property
 from pathlib import Path
 from typing import List
 
@@ -317,7 +318,7 @@ class MDPDatastore(BaseRegularGridDatastore):
         ds_stats = self._ds[stats_variables.keys()].rename(stats_variables)
         return ds_stats
 
-    @property
+    @cached_property
     def boundary_mask(self) -> xr.DataArray:
         """
         Produce a 0/1 mask for the boundary points of the dataset, these will
@@ -396,7 +397,7 @@ class MDPDatastore(BaseRegularGridDatastore):
         kwargs = projection_info["kwargs"]
         return ProjectionClass(**kwargs)
 
-    @property
+    @cached_property
     def grid_shape_state(self):
         """The shape of the cartesian grid for the state variables.
 

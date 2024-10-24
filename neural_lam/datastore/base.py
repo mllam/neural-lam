@@ -3,6 +3,7 @@ import abc
 import collections
 import dataclasses
 import functools
+from functools import cached_property
 from pathlib import Path
 from typing import List, Union
 
@@ -227,7 +228,7 @@ class BaseDatastore(abc.ABC):
         """
         pass
 
-    @property
+    @cached_property
     @abc.abstractmethod
     def boundary_mask(self) -> xr.DataArray:
         """
@@ -348,7 +349,7 @@ class BaseRegularGridDatastore(BaseDatastore):
 
     CARTESIAN_COORDS = ["x", "y"]
 
-    @property
+    @cached_property
     @abc.abstractmethod
     def grid_shape_state(self) -> CartesianGridShape:
         """The shape of the grid for the state variables.

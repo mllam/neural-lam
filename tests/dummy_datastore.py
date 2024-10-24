@@ -1,6 +1,7 @@
 # Standard library
 import datetime
 import tempfile
+from functools import cached_property
 from pathlib import Path
 from typing import List, Union
 
@@ -314,7 +315,7 @@ class DummyDatastore(BaseRegularGridDatastore):
         """
         return self.ds[category]
 
-    @property
+    @cached_property
     def boundary_mask(self) -> xr.DataArray:
         """
         Return the boundary mask for the dataset, with spatial dimensions
@@ -405,7 +406,7 @@ class DummyDatastore(BaseRegularGridDatastore):
         """
         return self._num_grid_points
 
-    @property
+    @cached_property
     def grid_shape_state(self) -> CartesianGridShape:
         """The shape of the grid for the state variables.
 
