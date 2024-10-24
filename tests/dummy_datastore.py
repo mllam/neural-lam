@@ -9,20 +9,20 @@ import isodate
 import numpy as np
 import xarray as xr
 from cartopy import crs as ccrs
+from numpy import ndarray
 
 # First-party
-from neural_lam.datastore.base import BaseDatastore
+from neural_lam.datastore.base import (
+    BaseRegularGridDatastore,
+    CartesianGridShape,
+)
 
 
-class DummyDatastore(BaseDatastore):
-    """
-    Dummy datastore for testing purposes. It generates random data for a
-    irregular grid with a random boundary mask.
-    """
-
+class DummyDatastore(BaseRegularGridDatastore):
     SHORT_NAME = "dummydata"
     T0 = isodate.parse_datetime("2021-01-01T00:00:00")
     N_FEATURES = dict(state=5, forcing=2, static=1)
+    CARTESIAN_COORDS = ["x", "y"]
 
     def __init__(
         self, config_path=None, n_grid_points=100, n_timesteps=10
@@ -31,97 +31,109 @@ class DummyDatastore(BaseDatastore):
             config_path is None
         ), "No config file is needed for the dummy datastore"
 
-        self.da_grid = xr.DataArray(
-            np.random.rand(n_grid_points),
-            dims=("grid_index"),
-            coords={
-                "grid_index": range(n_grid_points),
-            },
-        )
-        self._num_grid_points = n_grid_points
+        # Ensure n_grid_points is a perfect square
+        n_points_1d = int(np.sqrt(n_grid_points))
+        assert (
+            n_points_1d * n_points_1d == n_grid_points
+        ), "n_grid_points must be a perfect square"
 
-        dt = datetime.timedelta(hours=self.step_length)
-        times = [self.T0 + dt * i for i in range(n_timesteps)]
+        # Create lat/lon coordinates for Denmark region
+        lon_1d = np.linspace(8, 13, n_points_1d)  # Denmark longitude range
+        lat_1d = np.linspace(54, 58, n_points_1d)  # Denmark latitude range
+        lon_mesh, lat_mesh = np.meshgrid(lon_1d, lat_1d)
+
+        # Project the lat/lon coordinates to x/y using the projection
+        coords = self.coords_projection.transform_points(
+            src_crs=ccrs.PlateCarree(),
+            x=lon_mesh.flatten(),
+            y=lat_mesh.flatten(),
+        )
+
+        # Reshape the projected coordinates back to 2D
+        x_2d = coords[:, 0].reshape(n_points_1d, n_points_1d)
+        y_2d = coords[:, 1].reshape(n_points_1d, n_points_1d)
+
+        # Create base dataset with proper coordinates
         self.ds = xr.Dataset(
-            coords={"grid_index": range(n_grid_points), "time": times}
+            coords={
+                "x": (
+                    "x",
+                    x_2d[:, 0],
+                    {"units": "m"},
+                ),  # Use first column for x coordinates
+                "y": (
+                    "y",
+                    y_2d[0, :],
+                    {"units": "m"},
+                ),  # Use first row for y coordinates
+                "longitude": (
+                    "grid_index",
+                    lon_mesh.flatten(),
+                    {"units": "degrees_east"},
+                ),
+                "latitude": (
+                    "grid_index",
+                    lat_mesh.flatten(),
+                    {"units": "degrees_north"},
+                ),
+            }
         )
-
+        # Create data variables with proper dimensions
         for category, n in self.N_FEATURES.items():
+            feature_names = [f"{category}_feat_{i}" for i in range(n)]
+            feature_units = ["-" for _ in range(n)]  # Placeholder units
+            feature_long_names = [
+                f"Long name for {name}" for name in feature_names
+            ]
+
+            self.ds[f"{category}_feature"] = feature_names
+            self.ds[f"{category}_feature_units"] = (
+                f"{category}_feature",
+                feature_units,
+            )
+            self.ds[f"{category}_feature_long_name"] = (
+                f"{category}_feature",
+                feature_long_names,
+            )
+
+            # Define dimensions and create random data
             dims = ["grid_index", f"{category}_feature"]
-            shape = [n_grid_points, n]
             if category != "static":
                 dims.append("time")
-                shape.append(n_timesteps)
+                shape = (n_grid_points, n, n_timesteps)
+            else:
+                shape = (n_grid_points, n)
 
+            # Create random data
+            data = np.random.randn(*shape)
+
+            # Create DataArray with proper dimensions
             self.ds[category] = xr.DataArray(
-                np.random.rand(*shape),
+                data,
                 dims=dims,
                 coords={
-                    f"{category}_feature": [
-                        f"{category}_feat_{i}" for i in range(n)
-                    ],
+                    f"{category}_feature": feature_names,
                 },
             )
 
-        # add units and long_name to the features
-        for category, n in self.N_FEATURES.items():
-            self.ds[f"{category}_feature_units"] = ["1"] * n
-            self.ds[f"{category}_feature_long_name"] = [
-                f"{category} feature {i}" for i in range(n)
-            ]
+            if category != "static":
+                dt = datetime.timedelta(hours=self.step_length)
+                times = [self.T0 + dt * i for i in range(n_timesteps)]
+                self.ds.coords["time"] = times
 
-        # pick a random grid point as the boundary
+        # Add boundary mask
         self.ds["boundary_mask"] = xr.DataArray(
-            np.random.choice([0, 1], n_grid_points),
-            dims=("grid_index",),
-            coords={
-                "grid_index": range(n_grid_points),
-            },
+            np.random.choice([0, 1], size=(n_points_1d, n_points_1d)),
+            dims=["x", "y"],
         )
 
-        # create some lat/lon coordinates randomly sampled around Denmark
-        lat = np.random.uniform(54, 58, n_grid_points)
-        lon = np.random.uniform(8, 13, n_grid_points)
-        self.ds.coords["lat"] = xr.DataArray(
-            lat,
-            dims=("grid_index",),
-            coords={
-                "grid_index": range(n_grid_points),
-            },
-        )
-        self.ds.coords["lon"] = xr.DataArray(
-            lon,
-            dims=("grid_index",),
-            coords={
-                "grid_index": range(n_grid_points),
-            },
-        )
+        # Stack the spatial dimensions into grid_index
+        self.ds = self.ds.stack(grid_index=self.CARTESIAN_COORDS)
 
-        # project the lat/lon coordinates to x/y using the projection
-        coords = self.coords_projection.transform_points(
-            src_crs=ccrs.PlateCarree(), x=lon, y=lat
-        )
-        x = coords[:, 0]
-        y = coords[:, 1]
-        self.ds.coords["x"] = xr.DataArray(
-            x,
-            dims=("grid_index",),
-            coords={
-                "grid_index": range(n_grid_points),
-            },
-        )
-        self.ds.coords["y"] = xr.DataArray(
-            y,
-            dims=("grid_index",),
-            coords={
-                "grid_index": range(n_grid_points),
-            },
-        )
-
-        # create a temporary path for the datastore so that graphs etc can be
-        # stored with it
+        # Create temporary directory for storing derived files
         self._tempdir = tempfile.TemporaryDirectory()
         self._root_path = Path(self._tempdir.name)
+        self._num_grid_points = n_grid_points
 
     @property
     def root_path(self) -> Path:
@@ -318,22 +330,51 @@ class DummyDatastore(BaseDatastore):
         """
         return self.ds["boundary_mask"]
 
-    def get_xy(self, category: str) -> np.ndarray:
-        """
-        Return the x, y coordinates of the dataset as a numpy arrays for a
-        given category of data.
+    def get_xy(self, category: str, stacked: bool) -> ndarray:
+        """Return the x, y coordinates of the dataset.
 
         Parameters
         ----------
         category : str
             The category of the dataset (state/forcing/static).
+        stacked : bool
+            Whether to stack the x, y coordinates.
 
         Returns
         -------
         np.ndarray
-            The x, y coordinates of the dataset with shape `[2, n_grid_points]`.
+            The x, y coordinates of the dataset, returned differently based on
+            the value of `stacked`:
+            - `stacked==True`: shape `(n_grid_points, 2)` where
+                               n_grid_points=N_x*N_y.
+            - `stacked==False`: shape `(N_x, N_y, 2)`
+
         """
-        return np.stack([self.ds["x"].values, self.ds["y"].values], axis=0)
+        # assume variables are stored in dimensions [grid_index, ...]
+        ds_category = self.unstack_grid_coords(da_or_ds=self.ds[category])
+
+        da_xs = ds_category.x
+        da_ys = ds_category.y
+
+        assert da_xs.ndim == da_ys.ndim == 1, "x and y coordinates must be 1D"
+
+        da_x, da_y = xr.broadcast(da_xs, da_ys)
+        da_xy = xr.concat([da_x, da_y], dim="grid_coord")
+
+        if stacked:
+            da_xy = da_xy.stack(grid_index=self.CARTESIAN_COORDS).transpose(
+                "grid_index",
+                "grid_coord",
+            )
+        else:
+            dims = [
+                "x",
+                "y",
+                "grid_coord",
+            ]
+            da_xy = da_xy.transpose(*dims)
+
+        return da_xy.values
 
     @property
     def coords_projection(self) -> ccrs.Projection:
@@ -363,3 +404,17 @@ class DummyDatastore(BaseDatastore):
 
         """
         return self._num_grid_points
+
+    @property
+    def grid_shape_state(self) -> CartesianGridShape:
+        """The shape of the grid for the state variables.
+
+        Returns
+        -------
+        CartesianGridShape:
+            The shape of the grid for the state variables, which has `x` and
+            `y` attributes.
+        """
+
+        n_points_1d = int(np.sqrt(self.num_grid_points))
+        return CartesianGridShape(x=n_points_1d, y=n_points_1d)
