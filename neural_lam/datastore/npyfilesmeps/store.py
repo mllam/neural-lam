@@ -595,8 +595,8 @@ class NpyFilesDatastoreMEPS(BaseRegularGridDatastore):
 
         """
 
-        # the array on disk has shape [2, N_y, N_x], with the first dimension
-        # being [x, y]
+        # the array on disk has shape [2, N_y, N_x], where dimension 0 
+        # contains the [x,y] coordinate pairs for each grid point
         arr = np.load(self.root_path / "static" / "nwp_xy.npy")
 
         assert arr.shape[0] == 2, "Expected 2D array"
