@@ -5,7 +5,9 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [unreleased](https://github.com/joeloskarsson/neural-lam/compare/v0.1.0...HEAD)
+## [unreleased](https://github.com/joeloskarsson/neural-lam/compare/v0.2.0...HEAD)
+
+## [v0.2.0](https://github.com/joeloskarsson/neural-lam/releases/tag/v0.2.0)
 
 ### Added
 - Added tests for loading dataset, creating graph, and training model based on reduced MEPS dataset stored on AWS S3, along with automatic running of tests on push/PR to GitHub, including push to main branch. Added caching of test data to speed up running tests.
@@ -81,10 +83,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Maintenance
 
-- Add slack and new publication info to readme
-  [\#78](https://github.com/mllam/neural-lam/pull/78)
-  @joeloskarsson
-
 - simplify pre-commit setup by 1) reducing linting to only cover static
   analysis excluding imports from external dependencies (this will be handled
   in build/test cicd action introduced later), 2) pinning versions of linting
@@ -119,6 +117,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - move from `requirements.txt` to `pyproject.toml` for defining package dependencies.
   [\#37](https://github.com/mllam/neural-lam/pull/37), @leifdenby
+
+- Add slack and new publication info to readme
+  [\#78](https://github.com/mllam/neural-lam/pull/78)
+  @joeloskarsson
 
 ## [v0.1.0](https://github.com/joeloskarsson/neural-lam/releases/tag/v0.1.0)
 
