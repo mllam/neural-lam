@@ -1,5 +1,4 @@
 # Standard library
-import shutil
 import warnings
 from functools import cached_property
 from pathlib import Path
@@ -57,14 +56,13 @@ class MDPDatastore(BaseRegularGridDatastore):
         self._ds = None
         if reuse_existing and fp_ds.exists():
             # check that the zarr directory is newer than the config file
-            if fp_ds.stat().st_mtime > self._config_path.stat().st_mtime:
-                self._ds = xr.open_zarr(fp_ds, consolidated=True)
-            else:
+            if fp_ds.stat().st_mtime < self._config_path.stat().st_mtime:
                 logger.warning(
-                    "config file has been modified since zarr was created. "
-                    "recreating dataset."
+                    "Config file has been modified since zarr was created. "
+                    "The old zarr archive will be used."
+                    "To generate new zarr-archive, move the old one first."
                 )
-                shutil.rmtree(fp_ds)
+            self._ds = xr.open_zarr(fp_ds, consolidated=True)
 
         if self._ds is None:
             self._ds = mdp.create_dataset(config=self._config)
