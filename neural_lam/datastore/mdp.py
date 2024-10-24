@@ -426,9 +426,9 @@ class MDPDatastore(BaseRegularGridDatastore):
         np.ndarray
             The x, y coordinates of the dataset, returned differently based on
             the value of `stacked`:
-            - `stacked==True`: shape `(2, n_grid_points)` where
+            - `stacked==True`: shape `(n_grid_points, 2)` where
                                n_grid_points=N_x*N_y.
-            - `stacked==False`: shape `(2, N_y, N_x)`
+            - `stacked==False`: shape `(N_x, N_y, 2)`
 
         """
         # assume variables are stored in dimensions [grid_index, ...]
@@ -444,10 +444,15 @@ class MDPDatastore(BaseRegularGridDatastore):
 
         if stacked:
             da_xy = da_xy.stack(grid_index=self.CARTESIAN_COORDS).transpose(
-                "grid_coord", "grid_index"
+                "grid_index",
+                "grid_coord",
             )
         else:
-            dims = ["grid_coord", "y", "x"]
+            dims = [
+                "x",
+                "y",
+                "grid_coord",
+            ]
             da_xy = da_xy.transpose(*dims)
 
         return da_xy.values

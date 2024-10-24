@@ -96,9 +96,9 @@ def test_datastore_grid_xy(datastore_name):
     for stacked in [True, False]:
         xy = datastore.get_xy("static", stacked=stacked)
         if stacked:
-            assert xy.shape == (2, nx * ny)
+            assert xy.shape == (nx * ny, 2)
         else:
-            assert xy.shape == (2, ny, nx)
+            assert xy.shape == (nx, ny, 2)
 
 
 @pytest.mark.parametrize("datastore_name", DATASTORES.keys())
@@ -271,16 +271,16 @@ def test_get_xy(datastore_name):
 
         nx, ny = datastore.grid_shape_state.x, datastore.grid_shape_state.y
 
-        # for stacked=True, the shape should be (2, n_grid_points)
+        # for stacked=True, the shape should be (n_grid_points, 2)
         assert xy_stacked.ndim == 2
-        assert xy_stacked.shape[0] == 2
-        assert xy_stacked.shape[1] == nx * ny
+        assert xy_stacked.shape[0] == nx * ny
+        assert xy_stacked.shape[1] == 2
 
-        # for stacked=False, the shape should be (2, ny, nx)
+        # for stacked=False, the shape should be (nx, ny, 2)
         assert xy_unstacked.ndim == 3
-        assert xy_unstacked.shape[0] == 2
+        assert xy_unstacked.shape[0] == nx
         assert xy_unstacked.shape[1] == ny
-        assert xy_unstacked.shape[2] == nx
+        assert xy_unstacked.shape[2] == 2
 
 
 @pytest.mark.parametrize("datastore_name", DATASTORES.keys())
@@ -332,31 +332,37 @@ def test_stacking_grid_coords(datastore_name):
 @pytest.mark.parametrize("datastore_name", DATASTORES.keys())
 def test_dataarray_shapes(datastore_name):
     datastore = init_datastore_example(datastore_name)
-    static_da = datastore.get_dataarray("static", split="train")
+    static_da = datastore.get_dataarray("static", split=None)
+    static_da = datastore.stack_grid_coords(static_da)
+    static_da = static_da.isel(static_feature=0)
 
     # Convert the unstacked grid coordinates and static data array to tensors
     unstacked_tensor = torch.tensor(
         datastore.unstack_grid_coords(static_da).to_numpy(), dtype=torch.float32
+    ).squeeze()
+    print(static_da)
+
+    reshaped_tensor = (
+        torch.tensor(static_da.to_numpy(), dtype=torch.float32)
+        .reshape(datastore.grid_shape_state.x, datastore.grid_shape_state.y)
+        .squeeze()
     )
-    reshaped_tensor = torch.tensor(
-        static_da.to_numpy(), dtype=torch.float32
-    ).reshape(datastore.grid_shape_state.y, datastore.grid_shape_state.x)
 
     # Compute the difference
     diff = unstacked_tensor - reshaped_tensor
 
     # Check the shapes
     assert unstacked_tensor.shape == (
-        datastore.grid_shape_state.y,
         datastore.grid_shape_state.x,
+        datastore.grid_shape_state.y,
     )
     assert reshaped_tensor.shape == (
-        datastore.grid_shape_state.y,
         datastore.grid_shape_state.x,
+        datastore.grid_shape_state.y,
     )
     assert diff.shape == (
-        datastore.grid_shape_state.y,
         datastore.grid_shape_state.x,
+        datastore.grid_shape_state.y,
     )
     # assert diff == 0 with tolerance 1e-6
     assert torch.allclose(diff, torch.zeros_like(diff), atol=1e-6)

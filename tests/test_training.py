@@ -1,6 +1,3 @@
-# Standard library
-from pathlib import Path
-
 # Third-party
 import pytest
 import pytorch_lightning as pl

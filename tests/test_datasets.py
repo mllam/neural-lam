@@ -1,6 +1,3 @@
-# Standard library
-from pathlib import Path
-
 # Third-party
 import numpy as np
 import pytest
@@ -181,7 +178,6 @@ def test_single_batch(datastore_name, split):
         forcing_window_size = 3
 
     args = ModelArgs()
-
 
     dataset = WeatherDataset(datastore=datastore, split=split)
 

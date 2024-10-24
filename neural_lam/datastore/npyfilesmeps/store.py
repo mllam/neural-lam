@@ -405,11 +405,16 @@ class NpyFilesDatastoreMEPS(BaseRegularGridDatastore):
         coords = {}
         arr_shape = []
 
-        xs, ys = self.get_xy(category="state", stacked=False)
-        assert np.all(xs[0, :] == xs[-1, :])
-        assert np.all(ys[:, 0] == ys[:, -1])
-        x = xs[0, :]
-        y = ys[:, 0]
+        xy = self.get_xy(category="state", stacked=False)
+        xs = xy[:, :, 0]
+        ys = xy[:, :, 1]
+        # Check if x-coordinates are constant along columns
+        assert np.allclose(xs, xs[:, [0]]), "x-coordinates are not constant"
+        # Check if y-coordinates are constant along rows
+        assert np.allclose(ys, ys[[0], :]), "y-coordinates are not constant"
+        # Extract unique x and y coordinates
+        x = xs[:, 0]  # Unique x-coordinates (changes along the first axis)
+        y = ys[0, :]  # Unique y-coordinates (changes along the second axis)
         for d in dims:
             if d == "elapsed_forecast_duration":
                 coord_values = (
@@ -584,9 +589,9 @@ class NpyFilesDatastoreMEPS(BaseRegularGridDatastore):
         np.ndarray
             The x, y coordinates of the dataset (with x first then y second),
             returned differently based on the value of `stacked`:
-            - `stacked==True`: shape `(2, n_grid_points)` where
+            - `stacked==True`: shape `(n_grid_points, 2)` where
                                       n_grid_points=N_x*N_y.
-            - `stacked==False`: shape `(2, N_y, N_x)`
+            - `stacked==False`: shape `(N_x, N_y, 2)`
 
         """
 
@@ -598,8 +603,10 @@ class NpyFilesDatastoreMEPS(BaseRegularGridDatastore):
         grid_shape = self.grid_shape_state
         assert arr.shape[1:] == (grid_shape.y, grid_shape.x), "Unexpected shape"
 
+        arr = arr.transpose(2, 1, 0)
+
         if stacked:
-            return arr.reshape(2, -1)
+            return arr.reshape(-1, 2)
         else:
             return arr
 
@@ -639,11 +646,16 @@ class NpyFilesDatastoreMEPS(BaseRegularGridDatastore):
             The boundary mask for the dataset, with dimensions `[grid_index]`.
 
         """
-        xs, ys = self.get_xy(category="state", stacked=False)
-        assert np.all(xs[0, :] == xs[-1, :])
-        assert np.all(ys[:, 0] == ys[:, -1])
-        x = xs[0, :]
-        y = ys[:, 0]
+        xy = self.get_xy(category="state", stacked=False)
+        xs = xy[:, :, 0]
+        ys = xy[:, :, 1]
+        # Check if x-coordinates are constant along columns
+        assert np.allclose(xs, xs[:, [0]]), "x-coordinates are not constant"
+        # Check if y-coordinates are constant along rows
+        assert np.allclose(ys, ys[[0], :]), "y-coordinates are not constant"
+        # Extract unique x and y coordinates
+        x = xs[:, 0]  # Unique x-coordinates (changes along the first axis)
+        y = ys[0, :]  # Unique y-coordinates (changes along the second axis)
         values = np.load(self.root_path / "static" / "border_mask.npy")
         da_mask = xr.DataArray(
             values, dims=["y", "x"], coords=dict(x=x, y=y), name="boundary_mask"

@@ -52,8 +52,7 @@ def main():
         datastore_kind=args.datastore_kind,
         config_path=args.datastore_config_path,
     )
-    xy = datastore.get_xy("state", stacked=False)  # (2, N_y, N_x)
-    xy = xy.reshape(2, -1).T  # (N_grid, 2)
+    xy = datastore.get_xy("state", stacked=True)  # (N_grid, 2)
     pos_max = np.max(np.abs(xy))
     grid_pos = xy / pos_max  # Divide by maximum coordinate
 
