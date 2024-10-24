@@ -109,13 +109,13 @@ class WeatherDataset(torch.utils.data.Dataset):
             #           = len(self.da_state.time) - ar_steps - 1
             return len(self.da_state.time) - self.ar_steps - 1
 
-    def _sample_time(self, da, idx, n_steps: int, n_timesteps_offset: int = 0):
+    def _slice_time(self, da, idx, n_steps: int, n_timesteps_offset: int = 0):
         """
         Produce a time slice of the given dataarray `da` (state or forcing)
         starting at `idx` and with `n_steps` steps. The `n_timesteps_offset`
-        parameter is used to offset the start of the sample, for example to
-        exclude the first two steps when sampling the forcing data (and to
-        produce the windowing samples of forcing data by increasing the offset
+        parameter is used to offset the start of the slice, for example to
+        exclude the first two steps when slicing the forcing data (and to
+        produce the windowing indices of forcing data by increasing the offset
         for each window).
 
         Parameters
@@ -208,14 +208,14 @@ class WeatherDataset(torch.utils.data.Dataset):
 
         # handle time sampling in a way that is compatible with both analysis
         # and forecast data
-        da_state = self._sample_time(
+        da_state = self._slice_time(
             da=da_state, idx=idx, n_steps=2 + self.ar_steps
         )
 
         if da_forcing is not None:
             das_forcing = []
             for n in range(self.forcing_window_size):
-                da_ = self._sample_time(
+                da_ = self._slice_time(
                     da=da_forcing,
                     idx=idx,
                     n_steps=self.ar_steps,
