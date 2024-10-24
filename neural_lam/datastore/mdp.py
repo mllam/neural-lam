@@ -68,8 +68,7 @@ class MDPDatastore(BaseRegularGridDatastore):
 
         if self._ds is None:
             self._ds = mdp.create_dataset(config=self._config)
-            if reuse_existing:
-                self._ds.to_zarr(fp_ds)
+            self._ds.to_zarr(fp_ds)
         self._n_boundary_points = n_boundary_points
 
         print("The loaded datastore contains the following features:")
