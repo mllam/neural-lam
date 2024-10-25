@@ -372,14 +372,16 @@ class BaseRegularGridDatastore(BaseDatastore):
         category : str
             The category of the dataset (state/forcing/static).
         stacked : bool
-            Whether to stack the x, y coordinates.
+            Whether to stack the x, y coordinates. The parameter `stacked` has
+            been introduced in this class. Parent class `BaseDatastore` has the
+            same method signature but without the `stacked` parameter.
 
         Returns
         -------
         np.ndarray
             The x, y coordinates of the dataset, returned differently based on
-            the value of `stacked`:
-            - `stacked==True`: shape `(n_grid_points, 2)` where
+            the value of `stacked`: - `stacked==True`: shape `(n_grid_points,
+            2)` where
                                n_grid_points=N_x*N_y.
             - `stacked==False`: shape `(N_x, N_y, 2)`
         """
