@@ -25,7 +25,8 @@ class WeatherDataset(torch.utils.data.Dataset):
         datastore: BaseDatastore,
         split="train",
         ar_steps=3,
-        forcing_window_size=3,
+        include_past_forcing=1,
+        include_future_forcing=1,
         standardize=True,
     ):
         super().__init__()
@@ -40,7 +41,8 @@ class WeatherDataset(torch.utils.data.Dataset):
         self.da_forcing = self.datastore.get_dataarray(
             category="forcing", split=self.split
         )
-        self.forcing_window_size = forcing_window_size
+        self.include_past_forcing = include_past_forcing
+        self.include_future_forcing = include_future_forcing
 
         # check that with the provided data-arrays and ar_steps that we have a
         # non-zero amount of samples
@@ -132,6 +134,11 @@ class WeatherDataset(torch.utils.data.Dataset):
         n_timestep_offset : int
             A number of timesteps to use as offset from the start time of the
             slice
+
+        Returns
+        -------
+        da : xr.DataArray
+            The sliced dataarray.
         """
         # selecting the time slice
         if self.datastore.is_forecast:
@@ -157,6 +164,54 @@ class WeatherDataset(torch.utils.data.Dataset):
                     idx + n_timesteps_offset, idx + n_steps + n_timesteps_offset
                 )
             )
+        return da
+
+    def _slice_forcing_time(self, da, idx, n_timesteps_offset: int = 0):
+        """
+        Produce a windowed time slice of the given dataarray `da` (state or
+        forcing) starting at `idx` and with `n_steps` steps. The
+        `n_timesteps_offset` parameter is used to offset the start of the slice,
+        for example to exclude the first two steps when slicing the forcing data
+        (and to produce the windowing indices of forcing data by increasing the
+        offset for each window).
+
+        Parameters
+        ----------
+        da : xr.DataArray
+            The dataarray to slice. This is expected to have a `time` dimension
+            if the datastore is providing analysis only data, and a
+            `analysis_time` and `elapsed_forecast_duration` dimensions if the
+            datastore is providing forecast data.
+        idx : int
+            The index of the time step to start the sample from.
+        n_timesteps_offset : int
+            A number of timesteps to use as offset from the start time of the
+            slice.
+
+        Returns
+        -------
+        da : xr.DataArray
+            The sliced forcing data.
+        """
+        if self.datastore.is_forecast:
+            # Handle forecast data with `analysis_time` and
+            # `elapsed_forecast_duration`
+            da = da.isel(
+                analysis_time=idx,
+                elapsed_forecast_duration=slice(
+                    n_timesteps_offset,
+                    self.include_future_forcing + 1 + n_timesteps_offset,
+                ),
+            )
+            # Create a new time dimension
+            da["time"] = da.analysis_time + da.elapsed_forecast_duration
+            da = da.swap_dims({"elapsed_forecast_duration": "time"})
+        else:
+            # Handle analysis only data with `time` dimension
+            start_idx = idx - self.include_past_forcing
+            end_idx = idx + self.include_future_forcing + 1
+            da = da.isel(time=slice(start_idx, end_idx))
+
         return da
 
     def _build_item_dataarrays(self, idx):
@@ -213,18 +268,9 @@ class WeatherDataset(torch.utils.data.Dataset):
         )
 
         if da_forcing is not None:
-            das_forcing = []
-            for n in range(self.forcing_window_size):
-                da_ = self._slice_time(
-                    da=da_forcing,
-                    idx=idx,
-                    n_steps=self.ar_steps,
-                    n_timesteps_offset=n,
-                )
-                if n > 0:
-                    da_ = da_.drop_vars("time")
-                das_forcing.append(da_)
-            da_forcing_windowed = xr.concat(das_forcing, dim="window_sample")
+            da_forcing_windowed = self._slice_forcing_time(
+                da=da_forcing, idx=idx
+            )
 
         # load the data into memory
         da_state = da_state.load()
@@ -452,13 +498,15 @@ class WeatherDataModule(pl.LightningDataModule):
         ar_steps_train=3,
         ar_steps_eval=25,
         standardize=True,
-        forcing_window_size=3,
+        include_past_forcing=1,
+        include_future_forcing=1,
         batch_size=4,
         num_workers=16,
     ):
         super().__init__()
         self._datastore = datastore
-        self.forcing_window_size = forcing_window_size
+        self.include_past_forcing = include_past_forcing
+        self.include_future_forcing = include_future_forcing
         self.ar_steps_train = ar_steps_train
         self.ar_steps_eval = ar_steps_eval
         self.standardize = standardize
@@ -481,14 +529,16 @@ class WeatherDataModule(pl.LightningDataModule):
                 split="train",
                 ar_steps=self.ar_steps_train,
                 standardize=self.standardize,
-                forcing_window_size=self.forcing_window_size,
+                include_past_forcing=self.include_past_forcing,
+                include_future_forcing=self.include_future_forcing,
             )
             self.val_dataset = WeatherDataset(
                 datastore=self._datastore,
                 split="val",
                 ar_steps=self.ar_steps_eval,
                 standardize=self.standardize,
-                forcing_window_size=self.forcing_window_size,
+                include_past_forcing=self.include_past_forcing,
+                include_future_forcing=self.include_future_forcing,
             )
 
         if stage == "test" or stage is None:
@@ -497,7 +547,8 @@ class WeatherDataModule(pl.LightningDataModule):
                 split="test",
                 ar_steps=self.ar_steps_eval,
                 standardize=self.standardize,
-                forcing_window_size=self.forcing_window_size,
+                include_past_forcing=self.include_past_forcing,
+                include_future_forcing=self.include_future_forcing,
             )
 
     def train_dataloader(self):

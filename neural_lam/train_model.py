@@ -191,10 +191,16 @@ def main(input_args=None):
              metrics (e.g. '{"1": [1, 2], "3": [3, 4]}')""",
     )
     parser.add_argument(
-        "--forcing-window-size",
+        "--include_past_forcing",
         type=int,
-        default=3,
-        help="Number of time steps to use as input for forcing data",
+        default=1,
+        help="Number of past time steps to use as input for forcing data",
+    )
+    parser.add_argument(
+        "--include_future_forcing",
+        type=int,
+        default=1,
+        help="Number of future time steps to use as input for forcing data",
     )
     args = parser.parse_args(input_args)
     args.var_leads_metrics_watch = {
@@ -231,7 +237,8 @@ def main(input_args=None):
         ar_steps_train=args.ar_steps_train,
         ar_steps_eval=args.ar_steps_eval,
         standardize=True,
-        forcing_window_size=args.forcing_window_size,
+        include_past_forcing=args.include_past_forcing,
+        include_future_forcing=args.include_future_forcing,
         batch_size=args.batch_size,
         num_workers=args.num_workers,
     )

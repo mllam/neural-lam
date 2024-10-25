@@ -28,12 +28,14 @@ def test_dataset_item_shapes(datastore_name):
     N_gridpoints = datastore.num_grid_points
 
     N_pred_steps = 4
-    forcing_window_size = 3
+    include_past_forcing = 1
+    include_future_forcing = 1
     dataset = WeatherDataset(
         datastore=datastore,
         split="train",
         ar_steps=N_pred_steps,
-        forcing_window_size=forcing_window_size,
+        include_past_forcing=include_past_forcing,
+        include_future_forcing=include_future_forcing,
     )
 
     item = dataset[0]
@@ -58,9 +60,8 @@ def test_dataset_item_shapes(datastore_name):
     assert forcing.ndim == 3
     assert forcing.shape[0] == N_pred_steps
     assert forcing.shape[1] == N_gridpoints
-    assert (
-        forcing.shape[2]
-        == datastore.get_num_data_vars("forcing") * forcing_window_size
+    assert forcing.shape[2] == datastore.get_num_data_vars("forcing") * (
+        include_past_forcing + include_future_forcing
     )
 
     # batch times
@@ -78,12 +79,14 @@ def test_dataset_item_create_dataarray_from_tensor(datastore_name):
     datastore = init_datastore_example(datastore_name)
 
     N_pred_steps = 4
-    forcing_window_size = 3
+    include_past_forcing = 1
+    include_future_forcing = 1
     dataset = WeatherDataset(
         datastore=datastore,
         split="train",
         ar_steps=N_pred_steps,
-        forcing_window_size=forcing_window_size,
+        include_past_forcing=include_past_forcing,
+        include_future_forcing=include_future_forcing,
     )
 
     idx = 0
@@ -175,7 +178,8 @@ def test_single_batch(datastore_name, split):
         hidden_layers = 1
         processor_layers = 4
         mesh_aggr = "sum"
-        forcing_window_size = 3
+        include_past_forcing = 1
+        include_future_forcing = 1
 
     args = ModelArgs()
 
