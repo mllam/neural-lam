@@ -28,9 +28,10 @@ def main(input_args=None):
         description="Train or evaluate NeurWP models for LAM"
     )
     parser.add_argument(
-        "--config",
+        "--datastore_config_path",
         type=str,
         default="tests/datastore_examples/mdp/config.yaml",
+        help="Path for the datastore config",
     )
     parser.add_argument(
         "--model",
@@ -215,7 +216,9 @@ def main(input_args=None):
     seed.seed_everything(args.seed)
 
     # Load neural-lam configuration and datastore to use
-    config, datastore = load_config_and_datastore(config_path=args.config)
+    config, datastore = load_config_and_datastore(
+        config_path=args.datastore_config_path
+    )
     # TODO: config.training.state_feature_weights need passing in somewhere,
     # probably to ARModel, so that it can be used in the loss function
     assert (
