@@ -197,7 +197,7 @@ def main():
             w_list.astype("float32"),
         )
 
-        # XXX: is this correct?
+    # XXX: is this correct?
     ar_steps = 61
     ds = WeatherDataset(
         datastore=datastore,

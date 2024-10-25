@@ -1,35 +1,35 @@
 """List of methods and attributes that should be implemented in a subclass of
 `` (these are all decorated with `@abc.abstractmethod`):
 
-- [x] `root_path` (property): Root path of the datastore.
-- [x] `step_length` (property): Length of the time step in hours.
-- [x] `grid_shape_state` (property): Shape of the grid for the state variables.
-- [x] `get_xy` (method): Return the x, y coordinates of the dataset.
-- [x] `coords_projection` (property): Projection object for the coordinates.
-- [x] `get_vars_units` (method): Get the units of the variables in the given
+- `root_path` (property): Root path of the datastore.
+- `step_length` (property): Length of the time step in hours.
+- `grid_shape_state` (property): Shape of the grid for the state variables.
+- `get_xy` (method): Return the x, y coordinates of the dataset.
+- `coords_projection` (property): Projection object for the coordinates.
+- `get_vars_units` (method): Get the units of the variables in the given
       category.
-- [x] `get_vars_names` (method): Get the names of the variables in the given
+- `get_vars_names` (method): Get the names of the variables in the given
       category.
-- [x] `get_vars_long_names` (method): Get the long names of the variables in
+- `get_vars_long_names` (method): Get the long names of the variables in
       the given category.
-- [x] `get_num_data_vars` (method): Get the number of data variables in the
+- `get_num_data_vars` (method): Get the number of data variables in the
       given category.
-- [x] `get_normalization_dataarray` (method): Return the normalization
+- `get_normalization_dataarray` (method): Return the normalization
       dataarray for the given category.
-- [x] `get_dataarray` (method): Return the processed data (as a single
+- `get_dataarray` (method): Return the processed data (as a single
       `xr.DataArray`) for the given category and test/train/val-split.
-- [x] `boundary_mask` (property): Return the boundary mask for the dataset,
+- `boundary_mask` (property): Return the boundary mask for the dataset,
       with spatial dimensions stacked.
-- [x] `config` (property): Return the configuration of the datastore.
+- `config` (property): Return the configuration of the datastore.
 
 In addition BaseRegularGridDatastore must have the following methods and
 attributes:
-- [x] `get_xy_extent` (method): Return the extent of the x, y coordinates for a
+- `get_xy_extent` (method): Return the extent of the x, y coordinates for a
         given category of data.
-- [x] `get_xy` (method): Return the x, y coordinates of the dataset.
-- [x] `coords_projection` (property): Projection object for the coordinates.
-- [x] `grid_shape_state` (property): Shape of the grid for the state variables.
-- [x] `stack_grid_coords` (method): Stack the grid coordinates of the dataset
+- `get_xy` (method): Return the x, y coordinates of the dataset.
+- `coords_projection` (property): Projection object for the coordinates.
+- `grid_shape_state` (property): Shape of the grid for the state variables.
+- `stack_grid_coords` (method): Stack the grid coordinates of the dataset
 
 """
 
