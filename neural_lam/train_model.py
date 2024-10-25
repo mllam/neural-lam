@@ -225,11 +225,6 @@ def main(input_args=None):
     config, datastore = load_config_and_datastore(
         config_path=args.datastore_config_path
     )
-    # TODO: config.training.state_feature_weights need passing in somewhere,
-    # probably to ARModel, so that it can be used in the loss function
-    assert (
-        config.training.state_feature_weights
-    ), "No state feature weights found in config"
 
     # Create datamodule
     data_module = WeatherDataModule(

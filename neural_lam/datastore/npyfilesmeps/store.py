@@ -743,3 +743,48 @@ class NpyFilesDatastoreMEPS(BaseRegularGridDatastore):
         ProjectionClass = getattr(ccrs, proj_class_name)
         proj_params = self.config.projection.kwargs
         return ProjectionClass(**proj_params)
+
+    @cached_property
+    def state_feature_weights_values(self) -> List[float]:
+        """
+        Return the weights for each state feature as a list of floats. The
+        weights are defined by the user in a config file for the datastore.
+
+        Implementations of this method must assert that there is one weight for
+        each state feature in the datastore. The weights can be used to scale
+        the loss function for each state variable (e.g. via the standard
+        deviation of the 1-step differences of the state variables).
+
+        Returns:
+            List[float]: The weights for each state feature.
+        """
+        config = self._config
+        state_feature_names = self.get_vars_names(category="state")
+        named_feature_weights = config.get("state_feature_weights", {})
+
+        # Check that the state_feature_weights dictionary has a weight for each
+        # state feature in the datastore.
+        if set(named_feature_weights) != set(state_feature_names):
+            additional_features = set(named_feature_weights) - set(
+                state_feature_names
+            )
+            missing_features = set(state_feature_names) - set(
+                named_feature_weights
+            )
+            raise ValueError(
+                f"State feature weights must be provided for each state feature"
+                f"in the datastore ({state_feature_names}). {missing_features}"
+                " are missing and weights are defined for the features "
+                f"{additional_features} which are not in the datastore."
+            )
+
+        # Extract the state_feature_weights dictionary from config
+        _state_feature_weights_values = config.training.state_feature_weights
+        # Apply sorting of datastore to the state_feature_weights dictionary
+        _state_feature_weights_values = {
+            feature: _state_feature_weights_values[feature]
+            for feature in state_feature_names
+        }
+
+        # Convert the dictionary values to a list
+        return list(_state_feature_weights_values.values())

@@ -312,6 +312,23 @@ class BaseDatastore(abc.ABC):
         """
         pass
 
+    @cached_property
+    @abc.abstractmethod
+    def state_feature_weights_values(self) -> List[float]:
+        """
+        Return the weights for each state feature as a list of floats. The
+        weights are defined by the user in a config file for the datastore.
+
+        Implementations of this method must assert that there is one weight for
+        each state feature in the datastore. The weights can be used to scale
+        the loss function for each state variable (e.g. via the standard
+        deviation of the 1-step differences of the state variables).
+
+        Returns:
+            List[float]: The weights for each state feature.
+        """
+        pass
+
 
 @dataclasses.dataclass
 class CartesianGridShape:
