@@ -61,7 +61,7 @@ def test_dataset_item_shapes(datastore_name):
     assert forcing.shape[0] == N_pred_steps
     assert forcing.shape[1] == N_gridpoints
     assert forcing.shape[2] == datastore.get_num_data_vars("forcing") * (
-        include_past_forcing + include_future_forcing
+        include_past_forcing + include_future_forcing + 1
     )
 
     # batch times

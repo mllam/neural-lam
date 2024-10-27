@@ -34,6 +34,8 @@ class WeatherDataset(torch.utils.data.Dataset):
         self.split = split
         self.ar_steps = ar_steps
         self.datastore = datastore
+        self.include_past_forcing = include_past_forcing
+        self.include_future_forcing = include_future_forcing
 
         self.da_state = self.datastore.get_dataarray(
             category="state", split=self.split
@@ -41,8 +43,6 @@ class WeatherDataset(torch.utils.data.Dataset):
         self.da_forcing = self.datastore.get_dataarray(
             category="forcing", split=self.split
         )
-        self.include_past_forcing = include_past_forcing
-        self.include_future_forcing = include_future_forcing
 
         # check that with the provided data-arrays and ar_steps that we have a
         # non-zero amount of samples
@@ -104,26 +104,92 @@ class WeatherDataset(torch.utils.data.Dataset):
 
             return self.da_state.analysis_time.size
         else:
-            # sample_len = 2 + ar_steps
-            #             (2 initial states + ar_steps target states)
-            # n_samples = len(self.da_state.time) - sample_len + 1
-            #           = len(self.da_state.time) - 2 - ar_steps + 1
-            #           = len(self.da_state.time) - ar_steps - 1
-            return len(self.da_state.time) - self.ar_steps - 1
+            # Calculate the number of samples in the dataset n_samples = total
+            # time steps - (autoregressive steps + past forcing + future
+            # forcing)
+            #:
+            # Where:
+            #   - total time steps: len(self.da_state.time)
+            #   - autoregressive steps: self.ar_steps
+            #   - past forcing: max(2, self.include_past_forcing) (at least 2
+            #     time steps are required for the initial state)
+            #   - future forcing: self.include_future_forcing
+            return (
+                len(self.da_state.time)
+                - self.ar_steps
+                - max(2, self.include_past_forcing)
+                - self.include_future_forcing
+            )
 
-    def _slice_time(self, da, idx, n_steps: int, n_timesteps_offset: int = 0):
+    def _slice_state_time(self, da_state, idx, n_steps: int):
         """
-        Produce a time slice of the given dataarray `da` (state or forcing)
-        starting at `idx` and with `n_steps` steps. The `n_timesteps_offset`
-        parameter is used to offset the start of the slice, for example to
-        exclude the first two steps when slicing the forcing data (and to
-        produce the windowing indices of forcing data by increasing the offset
-        for each window).
+        Produce a time slice of the given dataarray `da_state` (state) starting
+        at `idx` and with `n_steps` steps. An `offset`is calculated based on the
+        `include_past_forcing` class attribute. `Offset` is used to offset the
+        start of the sample, to assert that enough previous time steps are
+        available for the 2 initial states and any corresponding forcings
+        (calculated in `_slice_forcing_time`).
 
         Parameters
         ----------
-        da : xr.DataArray
-            The dataarray to slice. This is expected to have a `time`
+        da_state : xr.DataArray
+            The dataarray to slice. This is expected to have a `time` dimension
+            if the datastore is providing analysis only data, and a
+            `analysis_time` and `elapsed_forecast_duration` dimensions if the
+            datastore is providing forecast data.
+        idx : int
+            The index of the time step to start the sample from.
+        n_steps : int
+            The number of time steps to include in the sample.
+        """
+        # The current implementation requires at least 2 time steps for the
+        # initial state (see GraphCast).
+        init_steps = 2
+        offset = idx + max(init_steps, self.include_past_forcing)
+        # slice the dataarray to include the required number of time steps
+        if self.datastore.is_forecast:
+            # this implies that the data will have both `analysis_time` and
+            # `elapsed_forecast_duration` dimensions for forecasts. We for now
+            # simply select a analysis time and the first `n_steps` forecast
+            # times (given no offset). Note that this means that we get one
+            # sample per forecast, always starting at forecast time 2.
+            start_idx = offset
+            end_idx = offset + init_steps + n_steps
+            da_sliced = da_state.isel(
+                analysis_time=idx,
+                elapsed_forecast_duration=slice(start_idx, end_idx),
+            )
+            # create a new time dimension so that the produced sample has a
+            # `time` dimension, similarly to the analysis only data
+            da_sliced["time"] = (
+                da_sliced.analysis_time + da_sliced.elapsed_forecast_duration
+            )
+            da_sliced = da_sliced.swap_dims(
+                {"elapsed_forecast_duration": "time"}
+            )
+        else:
+            # For analysis data we slice the time dimension directly. The offset
+            # is only relevant for the very first (and last) samples in the
+            # dataset.
+            start_idx = offset
+            end_idx = offset + init_steps + n_steps
+            da_sliced = da_state.isel(time=slice(start_idx, end_idx))
+        return da_sliced
+
+    def _slice_forcing_time(self, da_forcing, idx, n_steps: int):
+        """
+        Produce a time slice of the given dataarray `da_forcing` (forcing)
+        starting at `idx` and with `n_steps` steps. An `offset` is calculated
+        based on the `include_past_forcing` class attribute. It is used to
+        offset the start of the sample, to ensure that enough previous time
+        steps are available for the forcing data. The forcing data is windowed
+        around the current autoregressive time step to include the past and
+        future forcings.
+
+        Parameters
+        ----------
+        da_forcing : xr.DataArray
+            The forcing dataarray to slice. This is expected to have a `time`
             dimension if the datastore is providing analysis only data, and a
             `analysis_time` and `elapsed_forecast_duration` dimensions if the
             datastore is providing forecast data.
@@ -131,88 +197,72 @@ class WeatherDataset(torch.utils.data.Dataset):
             The index of the time step to start the sample from.
         n_steps : int
             The number of time steps to include in the sample.
-        n_timestep_offset : int
-            A number of timesteps to use as offset from the start time of the
-            slice
-
-        Returns
-        -------
-        da : xr.DataArray
-            The sliced dataarray.
         """
-        # selecting the time slice
+        # The current implementation requires at least 2 time steps for the
+        # initial state (see GraphCast). The forcing data is windowed around the
+        # current autregressive time step. The two `init_steps` can also be used
+        # as past forcings.
+        init_steps = 2
+        da_list = []
+        offset = idx + max(init_steps, self.include_past_forcing)
+
         if self.datastore.is_forecast:
-            # this implies that the data will have both `analysis_time` and
+            # This implies that the data will have both `analysis_time` and
             # `elapsed_forecast_duration` dimensions for forecasts. We for now
-            # simply select a analysis time and the first `n_steps` forecast
+            # simply select an analysis time and the first `n_steps` forecast
             # times (given no offset). Note that this means that we get one
-            # sample per forecast, always starting at forecast time 2.
-            da = da.isel(
-                analysis_time=idx,
-                elapsed_forecast_duration=slice(
-                    n_timesteps_offset, n_steps + n_timesteps_offset
-                ),
-            )
-            # create a new time dimension so that the produced sample has a
-            # `time` dimension, similarly to the analysis only data
-            da["time"] = da.analysis_time + da.elapsed_forecast_duration
-            da = da.swap_dims({"elapsed_forecast_duration": "time"})
-        else:
-            # only `time` dimension for analysis only data
-            da = da.isel(
-                time=slice(
-                    idx + n_timesteps_offset, idx + n_steps + n_timesteps_offset
+            # sample per forecast.
+            for step in range(n_steps):
+                start_idx = offset + step - self.include_past_forcing
+                end_idx = offset + step + self.include_future_forcing
+
+                da_forcing_windowed = da_forcing.expand_dims(
+                    dim={"window": end_idx - start_idx + 1}
                 )
-            )
-        return da
+                # create a new time dimension so that the produced sample has a
+                # `time` dimension, similarly to the analysis only data
+                da_sliced = da_forcing_windowed.isel(
+                    analysis_time=idx,
+                )
+                time_step = (
+                    da_sliced.analysis_time
+                    + da_sliced.elapsed_forecast_duration[
+                        self.include_past_forcing
+                    ]
+                )
+                da_sliced = da_sliced.expand_dims(
+                    dim={"time": [time_step.values]}
+                )
+                da_sliced = da_sliced.isel(elapsed_forecast_duration=0)
 
-    def _slice_forcing_time(self, da, idx, n_timesteps_offset: int = 0):
-        """
-        Produce a windowed time slice of the given dataarray `da` (state or
-        forcing) starting at `idx` and with `n_steps` steps. The
-        `n_timesteps_offset` parameter is used to offset the start of the slice,
-        for example to exclude the first two steps when slicing the forcing data
-        (and to produce the windowing indices of forcing data by increasing the
-        offset for each window).
+                da_list.append(da_sliced)
 
-        Parameters
-        ----------
-        da : xr.DataArray
-            The dataarray to slice. This is expected to have a `time` dimension
-            if the datastore is providing analysis only data, and a
-            `analysis_time` and `elapsed_forecast_duration` dimensions if the
-            datastore is providing forecast data.
-        idx : int
-            The index of the time step to start the sample from.
-        n_timesteps_offset : int
-            A number of timesteps to use as offset from the start time of the
-            slice.
+            da_concat = xr.concat(da_list, dim="time")
 
-        Returns
-        -------
-        da : xr.DataArray
-            The sliced forcing data.
-        """
-        if self.datastore.is_forecast:
-            # Handle forecast data with `analysis_time` and
-            # `elapsed_forecast_duration`
-            da = da.isel(
-                analysis_time=idx,
-                elapsed_forecast_duration=slice(
-                    n_timesteps_offset,
-                    self.include_future_forcing + 1 + n_timesteps_offset,
-                ),
-            )
-            # Create a new time dimension
-            da["time"] = da.analysis_time + da.elapsed_forecast_duration
-            da = da.swap_dims({"elapsed_forecast_duration": "time"})
         else:
-            # Handle analysis only data with `time` dimension
-            start_idx = idx - self.include_past_forcing
-            end_idx = idx + self.include_future_forcing + 1
-            da = da.isel(time=slice(start_idx, end_idx))
+            # For analysis data we slice the time dimension directly. The offset
+            # is only relevant for the very first (and last) samples in the
+            # dataset.
+            for step in range(n_steps):
+                start_idx = offset + step - self.include_past_forcing
+                end_idx = offset + step + self.include_future_forcing
 
-        return da
+                da_forcing_windowed = da_forcing.expand_dims(
+                    dim={"window": end_idx - start_idx + 1}
+                )
+
+                da_sliced = da_forcing_windowed.isel(
+                    time=slice(start_idx, end_idx + 1)
+                )
+
+                # Select the current time step of corresponding state data
+                da_sliced = da_sliced.isel(time=self.include_past_forcing)
+
+                da_list.append(da_sliced)
+
+            da_concat = xr.concat(da_list, dim="time")
+
+        return da_concat
 
     def _build_item_dataarrays(self, idx):
         """
@@ -263,31 +313,27 @@ class WeatherDataset(torch.utils.data.Dataset):
 
         # handle time sampling in a way that is compatible with both analysis
         # and forecast data
-        da_state = self._slice_time(
-            da=da_state, idx=idx, n_steps=2 + self.ar_steps
+        da_state = self._slice_state_time(
+            da_state=da_state, idx=idx, n_steps=self.ar_steps
         )
-
         if da_forcing is not None:
             da_forcing_windowed = self._slice_forcing_time(
-                da=da_forcing, idx=idx
+                da_forcing=da_forcing, idx=idx, n_steps=self.ar_steps
             )
 
         # load the data into memory
-        da_state = da_state.load()
+        da_state.load()
         if da_forcing is not None:
-            da_forcing_windowed = da_forcing_windowed.load()
+            da_forcing_windowed.load()
 
-        # ensure the dimensions are in the correct order
         da_state = da_state.transpose("time", "grid_index", "state_feature")
-
         if da_forcing is not None:
             da_forcing_windowed = da_forcing_windowed.transpose(
-                "time", "grid_index", "forcing_feature", "window_sample"
+                "time", "grid_index", "window", "forcing_feature"
             )
 
-        da_init_states = da_state.isel(time=slice(None, 2))
+        da_init_states = da_state.isel(time=slice(0, 2))
         da_target_states = da_state.isel(time=slice(2, None))
-
         da_target_times = da_target_states.time
 
         if self.standardize:
@@ -298,16 +344,20 @@ class WeatherDataset(torch.utils.data.Dataset):
                 da_target_states - self.da_state_mean
             ) / self.da_state_std
 
-            if self.da_forcing is not None:
+            if da_forcing is not None:
+                # XXX: Here we implicitly assume that the last dimension of the
+                # forcing data is the forcing feature dimension. To standardize
+                # on `.device` we need a different implementation. (e.g. a
+                # tensor with repeated means and stds for each "windowed" time.)
                 da_forcing_windowed = (
                     da_forcing_windowed - self.da_forcing_mean
                 ) / self.da_forcing_std
 
-        if self.da_forcing is not None:
+        if da_forcing is not None:
             # stack the `forcing_feature` and `window_sample` dimensions into a
             # single `forcing_feature` dimension
             da_forcing_windowed = da_forcing_windowed.stack(
-                forcing_feature_windowed=("forcing_feature", "window_sample")
+                forcing_feature_windowed=("forcing_feature", "window")
             )
         else:
             # create an empty forcing tensor with the right shape
