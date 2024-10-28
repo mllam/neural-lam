@@ -127,7 +127,11 @@ def mk_2d_graph(xy, nx, ny):
     # add diagonal edges
     g.add_edges_from(
         [((x, y), (x + 1, y + 1)) for y in range(ny - 1) for x in range(nx - 1)]
-        + [((x + 1, y), (x, y + 1)) for y in range(ny - 1) for x in range(nx - 1)]
+        + [
+            ((x + 1, y), (x, y + 1))
+            for y in range(ny - 1)
+            for x in range(nx - 1)
+        ]
     )
 
     # turn into directed graph
@@ -436,7 +440,9 @@ def create_graph(
     # vg features (only pos introduced here)
     for node in G_grid.nodes:
         # pos is in feature but here explicit for convenience
-        G_grid.nodes[node]["pos"] = xy[node[1], node[0]]  # xy is already (Nx,Ny,2)
+        G_grid.nodes[node]["pos"] = xy[
+            node[1], node[0]
+        ]  # xy is already (Nx,Ny,2)
 
     # add 1000 to node key to separate grid nodes (1000,i,j) from mesh nodes
     # (i,j) and impose sorting order such that vm are the first nodes
@@ -445,7 +451,9 @@ def create_graph(
     # build kd tree for grid point pos
     # order in vg_list should be same as in vg_xy
     vg_list = list(G_grid.nodes)
-    vg_xy = np.array([xy[node[2], node[1]] for node in vg_list])  # xy is already (Nx,Ny,2)
+    vg_xy = np.array(
+        [xy[node[2], node[1]] for node in vg_list]
+    )  # xy is already (Nx,Ny,2)
     kdt_g = scipy.spatial.KDTree(vg_xy)
 
     # now add (all) mesh nodes, include features (pos)
