@@ -131,7 +131,7 @@ def test_get_vars(datastore_name):
 
 @pytest.mark.parametrize("datastore_name", DATASTORES.keys())
 def test_get_normalization_dataarray(datastore_name):
-    """Check that the `datasto re.get_normalization_dataa rray` method is
+    """Check that the `datastore.get_normalization_dataa rray` method is
     implemented."""
     datastore = init_datastore_example(datastore_name)
 
@@ -160,7 +160,7 @@ def test_get_normalization_dataarray(datastore_name):
 
 @pytest.mark.parametrize("datastore_name", DATASTORES.keys())
 def test_get_dataarray(datastore_name):
-    """Check that the `datasto re.get_dataarray` method is implemented.
+    """Check that the `datastore.get_dataarray` method is implemented.
 
     And that it returns an xarray DataArray with the correct dimensions.
 
@@ -285,7 +285,7 @@ def test_get_xy(datastore_name):
 
 @pytest.mark.parametrize("datastore_name", DATASTORES.keys())
 def test_get_projection(datastore_name):
-    """Check that the `datasto re.coords_projection` property is implemented."""
+    """Check that the `datastore.coords_projection` property is implemented."""
     datastore = init_datastore_example(datastore_name)
 
     if not isinstance(datastore, BaseRegularGridDatastore):
@@ -296,7 +296,7 @@ def test_get_projection(datastore_name):
 
 @pytest.mark.parametrize("datastore_name", DATASTORES.keys())
 def get_grid_shape_state(datastore_name):
-    """Check that the `datasto re.grid_shape_state` property is implemented."""
+    """Check that the `datastore.grid_shape_state` property is implemented."""
     datastore = init_datastore_example(datastore_name)
 
     if not isinstance(datastore, BaseRegularGridDatastore):

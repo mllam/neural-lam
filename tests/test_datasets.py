@@ -1,3 +1,6 @@
+# Standard library
+from pathlib import Path
+
 # Third-party
 import numpy as np
 import pytest
@@ -5,6 +8,7 @@ import torch
 from torch.utils.data import DataLoader
 
 # First-party
+from neural_lam.create_graph import create_graph_from_datastore
 from neural_lam.datastore import DATASTORES
 from neural_lam.datastore.base import BaseRegularGridDatastore
 from neural_lam.models.graph_lam import GraphLAM
@@ -153,7 +157,7 @@ def test_dataset_item_create_dataarray_from_tensor(datastore_name):
 @pytest.mark.parametrize("split", ["train", "val", "test"])
 @pytest.mark.parametrize("datastore_name", DATASTORES.keys())
 def test_single_batch(datastore_name, split):
-    """Check that the `datasto re.get_dataarray` method is implemented.
+    """Check that the `datastore.get_dataarray` method is implemented.
 
     And that it returns an xarray DataArray with the correct dimensions.
 
@@ -182,6 +186,23 @@ def test_single_batch(datastore_name, split):
         include_future_forcing = 1
 
     args = ModelArgs()
+
+    graph_dir_path = Path(datastore.root_path) / "graph" / graph_name
+
+    def _create_graph():
+        if not graph_dir_path.exists():
+            create_graph_from_datastore(
+                datastore=datastore,
+                output_root_path=str(graph_dir_path),
+                n_max_levels=1,
+            )
+
+    if not isinstance(datastore, BaseRegularGridDatastore):
+        with pytest.raises(NotImplementedError):
+            _create_graph()
+        pytest.skip("Skipping on model-run on non-regular grid datastores")
+
+    _create_graph()
 
     dataset = WeatherDataset(datastore=datastore, split=split)
 

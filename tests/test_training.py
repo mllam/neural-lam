@@ -1,3 +1,6 @@
+# Standard library
+from pathlib import Path
+
 # Third-party
 import pytest
 import pytorch_lightning as pl
@@ -5,6 +8,7 @@ import torch
 import wandb
 
 # First-party
+from neural_lam.create_graph import create_graph_from_datastore
 from neural_lam.datastore import DATASTORES
 from neural_lam.datastore.base import BaseRegularGridDatastore
 from neural_lam.models.graph_lam import GraphLAM
@@ -42,6 +46,15 @@ def test_training(datastore_name):
     )
 
     graph_name = "1level"
+
+    graph_dir_path = Path(datastore.root_path) / "graph" / graph_name
+
+    if not graph_dir_path.exists():
+        create_graph_from_datastore(
+            datastore=datastore,
+            output_root_path=str(graph_dir_path),
+            n_max_levels=1,
+        )
 
     data_module = WeatherDataModule(
         datastore=datastore,
