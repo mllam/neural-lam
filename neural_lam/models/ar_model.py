@@ -104,7 +104,8 @@ class ARModel(pl.LightningModule):
         self.grid_dim = (
             2 * self.grid_output_dim
             + grid_static_dim
-            + num_forcing_vars * (include_past_forcing + include_future_forcing)
+            + num_forcing_vars
+            * (include_past_forcing + include_future_forcing + 1)
         )
 
         # Instantiate loss function
