@@ -758,18 +758,21 @@ class NpyFilesDatastoreMEPS(BaseRegularGridDatastore):
         Returns:
             List[float]: The weights for each state feature.
         """
-        config = self._config
+
+        config_training = self._config.training
+        feature_weight_names = (
+            config_training.training.state_feature_weights.keys()
+        )
         state_feature_names = self.get_vars_names(category="state")
-        named_feature_weights = config.get("state_feature_weights", {})
 
         # Check that the state_feature_weights dictionary has a weight for each
         # state feature in the datastore.
-        if set(named_feature_weights) != set(state_feature_names):
-            additional_features = set(named_feature_weights) - set(
+        if set(feature_weight_names) != set(state_feature_names):
+            additional_features = set(feature_weight_names) - set(
                 state_feature_names
             )
             missing_features = set(state_feature_names) - set(
-                named_feature_weights
+                feature_weight_names
             )
             raise ValueError(
                 f"State feature weights must be provided for each state feature"
@@ -778,13 +781,11 @@ class NpyFilesDatastoreMEPS(BaseRegularGridDatastore):
                 f"{additional_features} which are not in the datastore."
             )
 
-        # Extract the state_feature_weights dictionary from config
-        _state_feature_weights_values = config.training.state_feature_weights
         # Apply sorting of datastore to the state_feature_weights dictionary
-        _state_feature_weights_values = {
-            feature: _state_feature_weights_values[feature]
+        state_feature_weights_sorted = {
+            feature: config_training.training.state_feature_weights[feature]
             for feature in state_feature_names
         }
 
         # Convert the dictionary values to a list
-        return list(_state_feature_weights_values.values())
+        return list(state_feature_weights_sorted.values())

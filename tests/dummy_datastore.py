@@ -26,7 +26,7 @@ class DummyDatastore(BaseRegularGridDatastore):
     CARTESIAN_COORDS = ["x", "y"]
 
     def __init__(
-        self, config_path=None, n_grid_points=100, n_timesteps=10
+        self, config_path=None, n_grid_points=10000, n_timesteps=10
     ) -> None:
         assert (
             config_path is None
@@ -419,3 +419,20 @@ class DummyDatastore(BaseRegularGridDatastore):
 
         n_points_1d = int(np.sqrt(self.num_grid_points))
         return CartesianGridShape(x=n_points_1d, y=n_points_1d)
+
+    @cached_property
+    def state_feature_weights_values(self) -> List[float]:
+        """
+        Return randomized dummy weights for each state feature.
+
+        Returns
+        -------
+        List[float]
+            Random weights for each state feature, normalized to sum to 1.
+        """
+        n_features = self.N_FEATURES["state"]
+        # Create random weights between 0.1 and 1.0
+        weights = 0.1 + 0.9 * np.random.rand(n_features)
+        # Normalize to sum to 1
+        weights = weights / weights.sum()
+        return weights.tolist()
