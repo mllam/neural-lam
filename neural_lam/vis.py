@@ -64,6 +64,40 @@ def plot_error_map(errors, datastore: BaseRegularGridDatastore, title=None):
     return fig
 
 
+def plot_on_axis(
+    ax,
+    da,
+    datastore,
+    obs_mask=None,
+    vmin=None,
+    vmax=None,
+    ax_title=None,
+    cmap="plasma",
+):
+    """
+    Plot weather state on given axis
+    """
+    ax.set_global()
+    ax.coastlines()  # Add coastline outlines
+
+    extent = datastore.get_xy_extent("state")
+
+    da.plot.imshow(
+        ax=ax,
+        origin="lower",
+        x="x",
+        extent=extent,
+        vmin=vmin,
+        vmax=vmax,
+        cmap=cmap,
+        transform=datastore.coords_projection,
+    )
+
+    if ax_title:
+        ax.set_title(ax_title, size=15)
+    return im
+
+
 @matplotlib.rc_context(utils.fractional_plot_bundle(1))
 def plot_prediction(
     datastore: BaseRegularGridDatastore,
@@ -85,8 +119,6 @@ def plot_prediction(
     else:
         vmin, vmax = vrange
 
-    extent = datastore.get_xy_extent("state")
-
     fig, axes = plt.subplots(
         1,
         2,
@@ -96,16 +128,12 @@ def plot_prediction(
 
     # Plot pred and target
     for ax, da in zip(axes, (da_target, da_prediction)):
-        ax.coastlines()  # Add coastline outlines
-        da.plot.imshow(
-            ax=ax,
-            origin="lower",
-            x="x",
-            extent=extent,
+        im = plot_on_axis(
+            ax,
+            da,
+            datastore,
             vmin=vmin,
             vmax=vmax,
-            cmap="plasma",
-            transform=datastore.coords_projection,
         )
 
     # Ticks and labels
@@ -133,14 +161,11 @@ def plot_spatial_error(
     else:
         vmin, vmax = vrange
 
-    extent = datastore.get_xy_extent("state")
-
     fig, ax = plt.subplots(
         figsize=(5, 4.8),
         subplot_kw={"projection": datastore.coords_projection},
     )
 
-    ax.coastlines()  # Add coastline outlines
     error_grid = (
         error.reshape(
             [datastore.grid_shape_state.x, datastore.grid_shape_state.y]
@@ -149,6 +174,7 @@ def plot_spatial_error(
         .numpy()
     )
 
+    # TODO: This needs to be converted to DA and use plot_on_axis
     im = ax.imshow(
         error_grid,
         origin="lower",
