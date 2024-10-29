@@ -158,6 +158,7 @@ training:
     v10m: 1.0
 ```
 A reference to the configuration file used for mllam-data-prep is needed in the `datastore` dictionary. Please see the [mllam-data-prep](https://github.com/mllam/mllam-data-prep) repository for more information on how to create this configuration file.
+The `kind` key in the `datastore` dictionary specifies the type of datastore that will be used (should be one of `npyfiles`, or `mdp`).
 
 ### Additional inputs
 
@@ -166,10 +167,91 @@ A reference to the configuration file used for mllam-data-prep is needed in the 
 #### MDP (mllam-data-prep) Datastore
 
 An overview of how the different pre-processing steps, training and files depend on each other is given in this figure:
-<p align="middle">
-  <img src="figures/component_dependencies.png"/>
-</p>
-In order to start training models at least three pre-processing steps have to be run:
+```mermaid
+graph LR
+%% styling
+classDef proc_step stroke:#ffa49b
+classDef npy_file stroke:#8cdecf
+classDef pt_file stroke:#8fd7f1
+
+%% processing steps
+create_grid_features_step["create_grid_features.py"]:::proc_step
+create_mesh_step["create_graph.py"]:::proc_step
+create_parameter_weights_step["create_parameter_weights.py"]:::proc_step
+
+%% data-collections
+
+%% files
+source_xy_coordinates["nwp_xy.npy"]:::npy_file
+surface_geopotential["surface_geopotential.npy"]:::npy_file
+grid_features["grid_features.pt"]:::pt_file
+border_mask["border_mask.npy"]:::npy_file
+nwp_mbr_files["nwp_*_mbr*.npy: [Nt,Ny,Nx,Nv]"]:::npy_file
+wtr_files["wtr_*.npy: [Ny,Nx]"]:::npy_file
+nwp_toa_files["nwp_toa*.npy: [Nt,Ny,Nx]"]:::npy_file
+
+%% connections
+border_mask -- read by --> training_step
+grid_features -- read by --> training_step
+parameter_weights -- read by --> training_step
+mesh_information -- read by --> training_step
+dynamic_variables -- read by --> training_step
+
+subgraph Dataset
+  subgraph static_variables["static variables [Nx,Ny]"]
+    source_xy_coordinates
+    surface_geopotential
+    border_mask
+   end
+
+   subgraph dynamic_variables["dynamic variables"]
+    direction LR
+    nwp_mbr_files
+    wtr_files
+    nwp_toa_files
+  end
+
+  dynamic_variables -- read by --> create_parameter_weights_step
+  create_parameter_weights_step -- writes --> parameter_weights
+
+  surface_geopotential -- read by --> create_grid_features_step
+  source_xy_coordinates -- read by --> create_grid_features_step
+  border_mask -- read by --> create_grid_features_step
+  create_grid_features_step -- writes --> grid_features
+
+  subgraph parameter_weights
+    direction LR
+    parameter_mean.pt:::pt_file
+    parameter_std.pt:::pt_file
+    diff_mean.pt:::pt_file
+    diff_std.pt:::pt_file
+    flux_stats.pt:::pt_file
+  end
+end
+subgraph Graph
+  source_xy_coordinates -- read by --> create_mesh_step
+  create_mesh_step -- writes --> mesh_information
+
+  subgraph mesh_information["Mesh information"]
+    direction LR
+    subgraph mesh_common["Mesh (common)"]
+        mesh_features.pt:::pt_file
+        m2m_edge_index.pt:::pt_file
+        g2m_edge_index.pt:::pt_file
+        m2g_edge_index.pt:::pt_file
+        m2m_features.pt:::pt_file
+        g2m_features.pt:::pt_file
+        m2g_features.pt:::pt_file
+    end
+      subgraph mesh_hierarchical["Mesh (hierarchical)"]
+        mesh_down_edge_index.pt:::pt_file
+        mesh_up_edge_index.pt:::pt_file
+        mesh_down_features.pt:::pt_file
+        mesh_up_features.pt:::pt_file
+      end
+  end
+end
+```
 
 ### Create graph
 Run `python -m neural_lam.create_graph` with suitable options to generate the graph you want to use (see `python -m neural_lam.create_graph --help` for a list of options).
@@ -201,14 +283,14 @@ wandb off
 ```
 
 ## Train Models
-Models can be trained using `python -m neural_lam.train_model --datastore_type <datastore_type> --datastore_config_path <datastore_config_path>`.
-Run `python neural_lam.train_model --help` for a full list of training options.
+Models can be trained using `python -m neural_lam.train_model --config CONFIG`, where `CONFIG` is the path to the configuration file that was also used in the pre-processing steps.
+Run `python -m neural_lam.train_model --help` for a full list of training options.
 A few of the key ones are outlined below:
 
-* `--datastore_type`: The kind of datastore that you are using (should be one of `npyfiles`, or `mllam`)
-* `--datastore_config_path`: Path to the data store configuration file
+* `--hidden_dim`: Hidden dimensions of the model
 * `--model`: Which model to train
 * `--graph`: Which graph to use with the model
+* `--epochs`: Number of epochs to train for
 * `--processor_layers`: Number of GNN layers to use in the processing part of the model
 * `--ar_steps`: Number of time steps to unroll for when making predictions and computing the loss
 
