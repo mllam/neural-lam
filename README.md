@@ -132,7 +132,7 @@ See the [repository format section](#format-of-data-directory) for details on th
 The full MEPS dataset can be shared with other researchers on request, contact us for this.
 A tiny subset of the data (named `meps_example`) is available in `example_data.zip`, which can be downloaded from [here](https://liuonline-my.sharepoint.com/:f:/g/personal/joeos82_liu_se/EuiUuiGzFIFHruPWpfxfUmYBSjhqMUjNExlJi9W6ULMZ1w?e=97pnGX).
 Download the file and unzip in the neural-lam directory.
-All graphs used in the paper are also available for download at the same link (but can as easily be re-generated using `python -m neural_lam.create_mesh`).
+All graphs used in the paper are also available for download at the same link (but can as easily be re-generated using `python -m neural_lam.create_graph`).
 Note that this is far too little data to train any useful models, but all pre-processing and training steps can be run with it.
 It should thus be useful to make sure that your python environment is set up correctly and that all the code can be ran without any issues.
 
@@ -155,12 +155,12 @@ An overview of how the different pre-processing steps, training and files depend
 In order to start training models at least three pre-processing steps have to be run:
 
 ### Create graph
-Run `python -m neural_lam.create_mesh` with suitable options to generate the graph you want to use (see `python neural_lam.create_mesh --help` for a list of options).
+Run `python -m neural_lam.create_graph` with suitable options to generate the graph you want to use (see `python -m neural_lam.create_graph --help` for a list of options).
 The graphs used for the different models in the [paper](https://arxiv.org/abs/2309.17370) can be created as:
 
-* **GC-LAM**: `python -m neural_lam.create_mesh --graph multiscale`
-* **Hi-LAM**: `python -m neural_lam.create_mesh --graph hierarchical --hierarchical` (also works for Hi-LAM-Parallel)
-* **L1-LAM**: `python -m neural_lam.create_mesh --graph 1level --levels 1`
+* **GC-LAM**: `python -m neural_lam.create_graph --graph multiscale`
+* **Hi-LAM**: `python -m neural_lam.create_graph --graph hierarchical --hierarchical` (also works for Hi-LAM-Parallel)
+* **L1-LAM**: `python -m neural_lam.create_graph --graph 1level --levels 1`
 
 The graph-related files are stored in a directory called `graphs`.
 
@@ -254,13 +254,13 @@ The structure is shown with examples below:
 ```
 graphs
 ├── graph1                                  - Directory with a graph definition
-│   ├── m2m_edge_index.pt                   - Edges in mesh graph (neural_lam.create_mesh)
-│   ├── g2m_edge_index.pt                   - Edges from grid to mesh (neural_lam.create_mesh)
-│   ├── m2g_edge_index.pt                   - Edges from mesh to grid (neural_lam.create_mesh)
-│   ├── m2m_features.pt                     - Static features of mesh edges (neural_lam.create_mesh)
-│   ├── g2m_features.pt                     - Static features of grid to mesh edges (neural_lam.create_mesh)
-│   ├── m2g_features.pt                     - Static features of mesh to grid edges (neural_lam.create_mesh)
-│   └── mesh_features.pt                    - Static features of mesh nodes (neural_lam.create_mesh)
+│   ├── m2m_edge_index.pt                   - Edges in mesh graph (neural_lam.create_graph)
+│   ├── g2m_edge_index.pt                   - Edges from grid to mesh (neural_lam.create_graph)
+│   ├── m2g_edge_index.pt                   - Edges from mesh to grid (neural_lam.create_graph)
+│   ├── m2m_features.pt                     - Static features of mesh edges (neural_lam.create_graph)
+│   ├── g2m_features.pt                     - Static features of grid to mesh edges (neural_lam.create_graph)
+│   ├── m2g_features.pt                     - Static features of mesh to grid edges (neural_lam.create_graph)
+│   └── mesh_features.pt                    - Static features of mesh nodes (neural_lam.create_graph)
 ├── graph2
 ├── ...
 └── graphN
@@ -270,9 +270,9 @@ graphs
 To keep track of levels in the mesh graph, a list format is used for the files with mesh graph information.
 In particular, the files
 ```
-│   ├── m2m_edge_index.pt                   - Edges in mesh graph (neural_lam.create_mesh)
-│   ├── m2m_features.pt                     - Static features of mesh edges (neural_lam.create_mesh)
-│   ├── mesh_features.pt                    - Static features of mesh nodes (neural_lam.create_mesh)
+│   ├── m2m_edge_index.pt                   - Edges in mesh graph (neural_lam.create_graph)
+│   ├── m2m_features.pt                     - Static features of mesh edges (neural_lam.create_graph)
+│   ├── mesh_features.pt                    - Static features of mesh nodes (neural_lam.create_graph)
 ```
 all contain lists of length `L`, for a hierarchical mesh graph with `L` layers.
 For non-hierarchical graphs `L == 1` and these are all just singly-entry lists.
@@ -283,10 +283,10 @@ In addition, hierarchical mesh graphs (`L > 1`) feature a few additional files w
 ```
 ├── graph1
 │   ├── ...
-│   ├── mesh_down_edge_index.pt             - Downward edges in mesh graph (neural_lam.create_mesh)
-│   ├── mesh_up_edge_index.pt               - Upward edges in mesh graph (neural_lam.create_mesh)
-│   ├── mesh_down_features.pt               - Static features of downward mesh edges (neural_lam.create_mesh)
-│   ├── mesh_up_features.pt                 - Static features of upward mesh edges (neural_lam.create_mesh)
+│   ├── mesh_down_edge_index.pt             - Downward edges in mesh graph (neural_lam.create_graph)
+│   ├── mesh_up_edge_index.pt               - Upward edges in mesh graph (neural_lam.create_graph)
+│   ├── mesh_down_features.pt               - Static features of downward mesh edges (neural_lam.create_graph)
+│   ├── mesh_up_features.pt                 - Static features of upward mesh edges (neural_lam.create_graph)
 │   ├── ...
 ```
 These files have the same list format as the ones above, but each list has length `L-1` (as these edges describe connections between levels).
