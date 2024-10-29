@@ -142,6 +142,23 @@ There are two main steps in the pre-processing pipeline: creating the graph and 
 
 The amount of pre-processing required will depend on what kind of datastore you will be using for training.
 
+### Config
+When creating the graph for the model and for training, a configuration file is needed. The configuration file is a `.yaml` file that contains two dictionaries. One for `datastore` and one for `training`.
+An example of a configuration file for the DANRA dataset is given below:
+```yaml
+datastore:
+  kind: mdp
+  config_path: /path/to/mllam-data-prep-configuration.yaml
+training:
+  state_feature_weights:
+    pres_seasurface: 1.0
+    t2m: 1.0
+    r2m: 1.0
+    u10m: 1.0
+    v10m: 1.0
+```
+A reference to the configuration file used for mllam-data-prep is needed in the `datastore` dictionary. Please see the [mllam-data-prep](https://github.com/mllam/mllam-data-prep) repository for more information on how to create this configuration file.
+
 ### Additional inputs
 
 #### NpyFiles Datastore
@@ -158,11 +175,11 @@ In order to start training models at least three pre-processing steps have to be
 Run `python -m neural_lam.create_graph` with suitable options to generate the graph you want to use (see `python -m neural_lam.create_graph --help` for a list of options).
 The graphs used for the different models in the [paper](https://arxiv.org/abs/2309.17370) can be created as:
 
-* **GC-LAM**: `python -m neural_lam.create_graph --graph multiscale`
-* **Hi-LAM**: `python -m neural_lam.create_graph --graph hierarchical --hierarchical` (also works for Hi-LAM-Parallel)
-* **L1-LAM**: `python -m neural_lam.create_graph --graph 1level --levels 1`
+* **GC-LAM**: `python -m neural_lam.create_graph --config CONFIG --name multiscale`
+* **Hi-LAM**: `python -m neural_lam.create_graph --config CONFIG --name hierarchical --hierarchical` (also works for Hi-LAM-Parallel)
+* **L1-LAM**: `python -m neural_lam.create_graph --config CONFIG --name 1level --levels 1`
 
-The graph-related files are stored in a directory called `graphs`.
+The graph-related files are stored in the same folder as the configuration file under the directory `graph`
 
 ### Create remaining static features
 To create the remaining static files run `python -m neural_lam.create_grid_features` and `python -m neural_lam.create_parameter_weights`.
