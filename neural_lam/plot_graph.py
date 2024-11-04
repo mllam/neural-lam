@@ -47,10 +47,6 @@ def main():
         config_path=args.datastore_config_path
     )
 
-    xy = datastore.get_xy("state", stacked=True)  # (N_grid, 2)
-    pos_max = np.max(np.abs(xy))
-    grid_pos = xy / pos_max  # Divide by maximum coordinate
-
     # Load graph data
     graph_dir_path = os.path.join(datastore.root_path, "graph", args.graph)
     hierarchical, graph_ldict = utils.load_graph(graph_dir_path=graph_dir_path)
@@ -65,6 +61,8 @@ def main():
     )
     mesh_static_features = graph_ldict["mesh_static_features"]
 
+    # Extract values needed, turn to numpy
+    grid_pos = utils.get_reordered_grid_pos(datastore).numpy()
     # Add in z-dimension
     z_grid = GRID_HEIGHT * np.ones((grid_pos.shape[0],))
     grid_pos = np.concatenate(

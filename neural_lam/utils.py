@@ -114,7 +114,7 @@ def load_graph(graph_dir_path, device="cpu"):
 
     # Load static node features
     mesh_static_features = loads_file(
-        "mesh_features.pt"
+        "m2m_node_features.pt"
     )  # List of (N_mesh[l], d_mesh_static)
 
     # Some checks for consistency
@@ -241,3 +241,26 @@ def init_wandb_metrics(wandb_logger, val_steps):
     experiment.define_metric("val_mean_loss", summary="min")
     for step in val_steps:
         experiment.define_metric(f"val_loss_unroll{step}", summary="min")
+
+
+def get_reordered_grid_pos(datastore):
+    """
+    Interior nodes first, then boundary
+    """
+    xy_np = datastore.get_xy() # np, (num_grid, 2)
+    xy_torch = torch.tensor(xy_np, dtype=torch.float32)
+
+    da_boundary_mask = datastore.boundary_mask
+    boundary_mask = torch.tensor(
+        da_boundary_mask.values, dtype=torch.bool
+    )
+    interior_mask = torch.logical_not(boundary_mask)
+
+    return torch.cat(
+        (
+            xy_torch[interior_mask],
+            xy_torch[boundary_mask],
+        ),
+        dim=0,
+    )
+    # (num_total_grid_nodes, 2)
