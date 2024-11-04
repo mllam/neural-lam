@@ -3,7 +3,13 @@ import matplotlib.pyplot as plt
 
 
 def plot_example_from_datastore(
-    category, datastore, col_dim, split="train", standardize=True, selection={}
+    category,
+    datastore,
+    col_dim,
+    split="train",
+    standardize=True,
+    selection={},
+    index_selection={},
 ):
     """
     Create a plot of the data from the datastore.
@@ -25,6 +31,10 @@ def plot_example_from_datastore(
         Selections to apply to the dataarray, for example
         `time="1990-09-03T0:00" would select this single timestep, by default
         {}.
+    index_selection: dict, optional
+        Index-based selection to apply to the dataarray, for example
+        `time=0` would select the first item along the `time` dimension, by
+        default {}.
 
     Returns
     -------
@@ -39,25 +49,30 @@ def plot_example_from_datastore(
 
     if len(selection) > 0:
         da = da.sel(**selection)
+    if len(index_selection) > 0:
+        da = da.isel(**index_selection)
 
     col = col_dim.format(category=category)
 
     # check that the column dimension exists and that the resulting shape is 2D
     if col not in da.dims:
         raise ValueError(f"Column dimension {col} not found in dataarray.")
-    if not len(da.isel({col: 0}).squeeze().shape) == 2:
+    da_col_item = da.isel({col: 0}).squeeze()
+    if not len(da_col_item.shape) == 2:
         raise ValueError(
             f"Column dimension {col} and selection {selection} does not "
             "result in a 2D dataarray. Please adjust the column dimension "
-            "and/or selection."
+            "and/or selection. Instead the resulting dataarray is:\n"
+            f"{da_col_item}"
         )
 
     crs = datastore.coords_projection
+    col_wrap = min(4, int(da[col].count()))
     g = da.plot(
         x="x",
         y="y",
         col=col,
-        col_wrap=min(4, int(da[col].count())),
+        col_wrap=col_wrap,
         subplot_kws={"projection": crs},
         transform=crs,
         size=4,
@@ -65,6 +80,7 @@ def plot_example_from_datastore(
     for ax in g.axes.flat:
         ax.coastlines()
         ax.gridlines(draw_labels=["left", "bottom"])
+        ax.set_extent(datastore.get_xy_extent(category=category), crs=crs)
 
     return g.fig
 
@@ -122,9 +138,18 @@ if __name__ == "__main__":
         help="Selections to apply to the dataarray, for example "
         "`time='1990-09-03T0:00' would select this single timestep",
     )
+    parser.add_argument(
+        "--index-selection",
+        nargs="+",
+        default=[],
+        type=_parse_dict,
+        help="Index-based selection to apply to the dataarray, for example "
+        "`time=0` would select the first item along the `time` dimension",
+    )
     args = parser.parse_args()
 
     selection = dict(args.selection)
+    index_selection = dict(args.index_selection)
 
     # check that column dimension is not in the selection
     if args.col_dim.format(category=args.category) in selection:
@@ -137,6 +162,7 @@ if __name__ == "__main__":
     datastore = init_datastore(
         datastore_kind=args.datastore_kind, config_path=args.config_path
     )
+
     plot_example_from_datastore(
         args.category,
         datastore,
@@ -144,5 +170,6 @@ if __name__ == "__main__":
         col_dim=args.col_dim,
         standardize=args.standardize,
         selection=selection,
+        index_selection=index_selection,
     )
     plt.show()
