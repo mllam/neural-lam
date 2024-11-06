@@ -5,7 +5,6 @@ from pathlib import Path
 import numpy as np
 import pytest
 import torch
-from conftest import init_datastore_example
 from torch.utils.data import DataLoader
 
 # First-party
@@ -14,6 +13,7 @@ from neural_lam.datastore import DATASTORES
 from neural_lam.datastore.base import BaseRegularGridDatastore
 from neural_lam.models.graph_lam import GraphLAM
 from neural_lam.weather_dataset import WeatherDataset
+from tests.conftest import init_datastore_example
 
 
 @pytest.mark.parametrize("datastore_name", DATASTORES.keys())
@@ -32,12 +32,14 @@ def test_dataset_item_shapes(datastore_name):
     N_gridpoints = datastore.num_grid_points
 
     N_pred_steps = 4
-    forcing_window_size = 3
+    include_past_forcing = 1
+    include_future_forcing = 1
     dataset = WeatherDataset(
         datastore=datastore,
         split="train",
         ar_steps=N_pred_steps,
-        forcing_window_size=forcing_window_size,
+        include_past_forcing=include_past_forcing,
+        include_future_forcing=include_future_forcing,
     )
 
     item = dataset[0]
@@ -62,9 +64,8 @@ def test_dataset_item_shapes(datastore_name):
     assert forcing.ndim == 3
     assert forcing.shape[0] == N_pred_steps
     assert forcing.shape[1] == N_gridpoints
-    assert (
-        forcing.shape[2]
-        == datastore.get_num_data_vars("forcing") * forcing_window_size
+    assert forcing.shape[2] == datastore.get_num_data_vars("forcing") * (
+        include_past_forcing + include_future_forcing + 1
     )
 
     # batch times
@@ -82,12 +83,14 @@ def test_dataset_item_create_dataarray_from_tensor(datastore_name):
     datastore = init_datastore_example(datastore_name)
 
     N_pred_steps = 4
-    forcing_window_size = 3
+    include_past_forcing = 1
+    include_future_forcing = 1
     dataset = WeatherDataset(
         datastore=datastore,
         split="train",
         ar_steps=N_pred_steps,
-        forcing_window_size=forcing_window_size,
+        include_past_forcing=include_past_forcing,
+        include_future_forcing=include_future_forcing,
     )
 
     idx = 0
@@ -154,7 +157,7 @@ def test_dataset_item_create_dataarray_from_tensor(datastore_name):
 @pytest.mark.parametrize("split", ["train", "val", "test"])
 @pytest.mark.parametrize("datastore_name", DATASTORES.keys())
 def test_single_batch(datastore_name, split):
-    """Check that the `datasto re.get_dataarray` method is implemented.
+    """Check that the `datastore.get_dataarray` method is implemented.
 
     And that it returns an xarray DataArray with the correct dimensions.
 
@@ -179,7 +182,8 @@ def test_single_batch(datastore_name, split):
         hidden_layers = 1
         processor_layers = 4
         mesh_aggr = "sum"
-        forcing_window_size = 3
+        include_past_forcing = 1
+        include_future_forcing = 1
 
     args = ModelArgs()
 
@@ -197,6 +201,8 @@ def test_single_batch(datastore_name, split):
         with pytest.raises(NotImplementedError):
             _create_graph()
         pytest.skip("Skipping on model-run on non-regular grid datastores")
+
+    _create_graph()
 
     dataset = WeatherDataset(datastore=datastore, split=split)
 

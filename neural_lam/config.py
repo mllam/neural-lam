@@ -102,22 +102,4 @@ def load_config_and_datastore(
         datastore_kind=config.datastore.kind, config_path=datastore_config_path
     )
 
-    # TODO: This check should maybe be moved somewhere else, but I'm not sure
-    # where right now... check that the config state feature weights include a
-    # weight for each state feature
-    state_feature_names = datastore.get_vars_names(category="state")
-    named_feature_weights = config.training.state_feature_weights.keys()
-
-    if set(named_feature_weights) != set(state_feature_names):
-        additional_features = set(named_feature_weights) - set(
-            state_feature_names
-        )
-        missing_features = set(state_feature_names) - set(named_feature_weights)
-        raise ValueError(
-            f"State feature weights must be provided for each state feature in "
-            f"the datastore ({state_feature_names}). {missing_features} are "
-            "missing and weights are defined for the features "
-            f"{additional_features} which are not in the datastore."
-        )
-
     return config, datastore

@@ -1,6 +1,6 @@
 # Standard library
-import shutil
 import warnings
+from functools import cached_property
 from pathlib import Path
 from typing import List
 
@@ -56,19 +56,17 @@ class MDPDatastore(BaseRegularGridDatastore):
         self._ds = None
         if reuse_existing and fp_ds.exists():
             # check that the zarr directory is newer than the config file
-            if fp_ds.stat().st_mtime > self._config_path.stat().st_mtime:
-                self._ds = xr.open_zarr(fp_ds, consolidated=True)
-            else:
+            if fp_ds.stat().st_mtime < self._config_path.stat().st_mtime:
                 logger.warning(
-                    "config file has been modified since zarr was created. "
-                    "recreating dataset."
+                    "Config file has been modified since zarr was created. "
+                    "The old zarr archive will be used."
+                    "To generate new zarr-archive, move the old one first."
                 )
-                shutil.rmtree(fp_ds)
+            self._ds = xr.open_zarr(fp_ds, consolidated=True)
 
         if self._ds is None:
             self._ds = mdp.create_dataset(config=self._config)
-            if reuse_existing:
-                self._ds.to_zarr(fp_ds)
+            self._ds.to_zarr(fp_ds)
         self._n_boundary_points = n_boundary_points
 
         print("The loaded datastore contains the following features:")
@@ -317,7 +315,7 @@ class MDPDatastore(BaseRegularGridDatastore):
         ds_stats = self._ds[stats_variables.keys()].rename(stats_variables)
         return ds_stats
 
-    @property
+    @cached_property
     def boundary_mask(self) -> xr.DataArray:
         """
         Produce a 0/1 mask for the boundary points of the dataset, these will
@@ -396,7 +394,7 @@ class MDPDatastore(BaseRegularGridDatastore):
         kwargs = projection_info["kwargs"]
         return ProjectionClass(**kwargs)
 
-    @property
+    @cached_property
     def grid_shape_state(self):
         """The shape of the cartesian grid for the state variables.
 
@@ -426,9 +424,9 @@ class MDPDatastore(BaseRegularGridDatastore):
         np.ndarray
             The x, y coordinates of the dataset, returned differently based on
             the value of `stacked`:
-            - `stacked==True`: shape `(2, n_grid_points)` where
+            - `stacked==True`: shape `(n_grid_points, 2)` where
                                n_grid_points=N_x*N_y.
-            - `stacked==False`: shape `(2, N_y, N_x)`
+            - `stacked==False`: shape `(N_x, N_y, 2)`
 
         """
         # assume variables are stored in dimensions [grid_index, ...]
@@ -444,10 +442,65 @@ class MDPDatastore(BaseRegularGridDatastore):
 
         if stacked:
             da_xy = da_xy.stack(grid_index=self.CARTESIAN_COORDS).transpose(
-                "grid_coord", "grid_index"
+                "grid_index",
+                "grid_coord",
             )
         else:
-            dims = ["grid_coord", "y", "x"]
+            dims = [
+                "x",
+                "y",
+                "grid_coord",
+            ]
             da_xy = da_xy.transpose(*dims)
 
         return da_xy.values
+
+    @cached_property
+    def state_feature_weights_values(self) -> List[float]:
+        """
+        Return the weights for each state feature as a list of floats. The
+        weights are defined by the user in a config file for the datastore.
+
+        Implementations of this method must assert that there is one weight for
+        each state feature in the datastore. The weights can be used to scale
+        the loss function for each state variable (e.g. via the standard
+        deviation of the 1-step differences of the state variables).
+
+        Returns:
+            List[float]: The weights for each state feature.
+        """
+        # First-party
+        from neural_lam.config import NeuralLAMConfig
+
+        config_training = NeuralLAMConfig.from_yaml_file(
+            self.root_path / "config.yaml"
+        )
+        feature_weight_names = (
+            config_training.training.state_feature_weights.keys()
+        )
+        state_feature_names = self.get_vars_names(category="state")
+
+        # Check that the state_feature_weights dictionary has a weight for each
+        # state feature in the datastore.
+        if set(feature_weight_names) != set(state_feature_names):
+            additional_features = set(feature_weight_names) - set(
+                state_feature_names
+            )
+            missing_features = set(state_feature_names) - set(
+                feature_weight_names
+            )
+            raise ValueError(
+                f"State feature weights must be provided for each state feature"
+                f"in the datastore ({state_feature_names}). {missing_features}"
+                " are missing and weights are defined for the features "
+                f"{additional_features} which are not in the datastore."
+            )
+
+        # Apply sorting of datastore to the state_feature_weights dictionary
+        state_feature_weights_sorted = {
+            feature: config_training.training.state_feature_weights[feature]
+            for feature in state_feature_names
+        }
+
+        # Convert the dictionary values to a list
+        return list(state_feature_weights_sorted.values())

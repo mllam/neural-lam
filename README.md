@@ -80,11 +80,7 @@ There are currently three different datastores implemented in the codebase:
 1. `neural_lam.datastore.NpyDataStore` which reads MEPS data from `.npy`-files in
    the format introduced in neural-lam `v0.1.0`. Note that this datastore is specific to the format of the MEPS dataset, but can act as an example for how to create similar numpy-based datastores.
 
-2. `neural_lam.datastore.MultizarrDatastore` which can combines multiple zarr
-   files during train/val/test sampling, with the transformations to facilitate
-   this implemented within `neural_lam.datastore.MultizarrDatastore`.
-
-3. `neural_lam.datastore.MDPDatastore` which can combine multiple zarr
+2. `neural_lam.datastore.MDPDatastore` which can combine multiple zarr
    datasets either either as a preprocessing step or during sampling, but
    offloads the implementation of the transformations the
    [mllam-data-prep](https://github.com/mllam/mllam-data-prep) package.
@@ -136,7 +132,7 @@ See the [repository format section](#format-of-data-directory) for details on th
 The full MEPS dataset can be shared with other researchers on request, contact us for this.
 A tiny subset of the data (named `meps_example`) is available in `example_data.zip`, which can be downloaded from [here](https://liuonline-my.sharepoint.com/:f:/g/personal/joeos82_liu_se/EuiUuiGzFIFHruPWpfxfUmYBSjhqMUjNExlJi9W6ULMZ1w?e=97pnGX).
 Download the file and unzip in the neural-lam directory.
-All graphs used in the paper are also available for download at the same link (but can as easily be re-generated using `python -m neural_lam.create_mesh`).
+All graphs used in the paper are also available for download at the same link (but can as easily be re-generated using `python -m neural_lam.create_graph`).
 Note that this is far too little data to train any useful models, but all pre-processing and training steps can be run with it.
 It should thus be useful to make sure that your python environment is set up correctly and that all the code can be ran without any issues.
 
@@ -146,33 +142,126 @@ There are two main steps in the pre-processing pipeline: creating the graph and 
 
 The amount of pre-processing required will depend on what kind of datastore you will be using for training.
 
+### Config
+When creating the graph for the model and for training, a configuration file is needed. The configuration file is a `.yaml` file that contains two dictionaries. One for `datastore` and one for `training`.
+An example of a configuration file for the DANRA dataset is given below:
+```yaml
+datastore:
+  kind: mdp
+  config_path: /path/to/mllam-data-prep-configuration.yaml
+training:
+  state_feature_weights:
+    pres_seasurface: 1.0
+    t2m: 1.0
+    r2m: 1.0
+    u10m: 1.0
+    v10m: 1.0
+```
+A reference to the configuration file used for mllam-data-prep is needed in the `datastore` dictionary. Please see the [mllam-data-prep](https://github.com/mllam/mllam-data-prep) repository for more information on how to create this configuration file.
+The `kind` key in the `datastore` dictionary specifies the type of datastore that will be used (should be one of `npyfiles`, or `mdp`).
+
 ### Additional inputs
-
-#### MultiZarr Datastore
-
-* `python -m neural_lam.create_boundary_mask`
-* `python -m neural_lam.create_datetime_forcings`
-* `python -m neural_lam.create_norm`
 
 #### NpyFiles Datastore
 
 #### MDP (mllam-data-prep) Datastore
 
 An overview of how the different pre-processing steps, training and files depend on each other is given in this figure:
-<p align="middle">
-  <img src="figures/component_dependencies.png"/>
-</p>
-In order to start training models at least three pre-processing steps have to be run:
+```mermaid
+graph LR
+%% styling
+classDef proc_step stroke:#ffa49b
+classDef npy_file stroke:#8cdecf
+classDef pt_file stroke:#8fd7f1
+
+%% processing steps
+create_grid_features_step["create_grid_features.py"]:::proc_step
+create_mesh_step["create_graph.py"]:::proc_step
+create_parameter_weights_step["create_parameter_weights.py"]:::proc_step
+
+%% data-collections
+
+%% files
+source_xy_coordinates["nwp_xy.npy"]:::npy_file
+surface_geopotential["surface_geopotential.npy"]:::npy_file
+grid_features["grid_features.pt"]:::pt_file
+border_mask["border_mask.npy"]:::npy_file
+nwp_mbr_files["nwp_*_mbr*.npy: [Nt,Ny,Nx,Nv]"]:::npy_file
+wtr_files["wtr_*.npy: [Ny,Nx]"]:::npy_file
+nwp_toa_files["nwp_toa*.npy: [Nt,Ny,Nx]"]:::npy_file
+
+%% connections
+border_mask -- read by --> training_step
+grid_features -- read by --> training_step
+parameter_weights -- read by --> training_step
+mesh_information -- read by --> training_step
+dynamic_variables -- read by --> training_step
+
+subgraph Dataset
+  subgraph static_variables["static variables [Nx,Ny]"]
+    source_xy_coordinates
+    surface_geopotential
+    border_mask
+   end
+
+   subgraph dynamic_variables["dynamic variables"]
+    direction LR
+    nwp_mbr_files
+    wtr_files
+    nwp_toa_files
+  end
+
+  dynamic_variables -- read by --> create_parameter_weights_step
+  create_parameter_weights_step -- writes --> parameter_weights
+
+  surface_geopotential -- read by --> create_grid_features_step
+  source_xy_coordinates -- read by --> create_grid_features_step
+  border_mask -- read by --> create_grid_features_step
+  create_grid_features_step -- writes --> grid_features
+
+  subgraph parameter_weights
+    direction LR
+    parameter_mean.pt:::pt_file
+    parameter_std.pt:::pt_file
+    diff_mean.pt:::pt_file
+    diff_std.pt:::pt_file
+    flux_stats.pt:::pt_file
+  end
+end
+subgraph Graph
+  source_xy_coordinates -- read by --> create_mesh_step
+  create_mesh_step -- writes --> mesh_information
+
+  subgraph mesh_information["Mesh information"]
+    direction LR
+    subgraph mesh_common["Mesh (common)"]
+        mesh_features.pt:::pt_file
+        m2m_edge_index.pt:::pt_file
+        g2m_edge_index.pt:::pt_file
+        m2g_edge_index.pt:::pt_file
+        m2m_features.pt:::pt_file
+        g2m_features.pt:::pt_file
+        m2g_features.pt:::pt_file
+    end
+      subgraph mesh_hierarchical["Mesh (hierarchical)"]
+        mesh_down_edge_index.pt:::pt_file
+        mesh_up_edge_index.pt:::pt_file
+        mesh_down_features.pt:::pt_file
+        mesh_up_features.pt:::pt_file
+      end
+  end
+end
+```
 
 ### Create graph
-Run `python -m neural_lam.create_mesh` with suitable options to generate the graph you want to use (see `python neural_lam.create_mesh --help` for a list of options).
+Run `python -m neural_lam.create_graph` with suitable options to generate the graph you want to use (see `python -m neural_lam.create_graph --help` for a list of options).
 The graphs used for the different models in the [paper](https://arxiv.org/abs/2309.17370) can be created as:
 
-* **GC-LAM**: `python -m neural_lam.create_mesh --graph multiscale`
-* **Hi-LAM**: `python -m neural_lam.create_mesh --graph hierarchical --hierarchical` (also works for Hi-LAM-Parallel)
-* **L1-LAM**: `python -m neural_lam.create_mesh --graph 1level --levels 1`
+* **GC-LAM**: `python -m neural_lam.create_graph --config CONFIG --name multiscale`
+* **Hi-LAM**: `python -m neural_lam.create_graph --config CONFIG --name hierarchical --hierarchical` (also works for Hi-LAM-Parallel)
+* **L1-LAM**: `python -m neural_lam.create_graph --config CONFIG --name 1level --levels 1`
 
-The graph-related files are stored in a directory called `graphs`.
+The graph-related files are stored in the same folder as the configuration file under the directory `graph`
 
 ### Create remaining static features
 To create the remaining static files run `python -m neural_lam.create_grid_features` and `python -m neural_lam.create_parameter_weights`.
@@ -194,14 +283,14 @@ wandb off
 ```
 
 ## Train Models
-Models can be trained using `python -m neural_lam.train_model <datastore_type> <datastore_config_path>`.
-Run `python neural_lam.train_model --help` for a full list of training options.
+Models can be trained using `python -m neural_lam.train_model --config CONFIG`, where `CONFIG` is the path to the configuration file that was also used in the pre-processing steps.
+Run `python -m neural_lam.train_model --help` for a full list of training options.
 A few of the key ones are outlined below:
 
-* `<datastore_type>`: The kind of datastore that you are using (should be one of `npyfiles`, `multizarr` or `mllam`)
-* `<datastore_config_path>`: Path to the data store configuration file
+* `--hidden_dim`: Hidden dimensions of the model
 * `--model`: Which model to train
 * `--graph`: Which graph to use with the model
+* `--epochs`: Number of epochs to train for
 * `--processor_layers`: Number of GNN layers to use in the processing part of the model
 * `--ar_steps`: Number of time steps to unroll for when making predictions and computing the loss
 
@@ -264,13 +353,13 @@ The structure is shown with examples below:
 ```
 graphs
 ├── graph1                                  - Directory with a graph definition
-│   ├── m2m_edge_index.pt                   - Edges in mesh graph (neural_lam.create_mesh)
-│   ├── g2m_edge_index.pt                   - Edges from grid to mesh (neural_lam.create_mesh)
-│   ├── m2g_edge_index.pt                   - Edges from mesh to grid (neural_lam.create_mesh)
-│   ├── m2m_features.pt                     - Static features of mesh edges (neural_lam.create_mesh)
-│   ├── g2m_features.pt                     - Static features of grid to mesh edges (neural_lam.create_mesh)
-│   ├── m2g_features.pt                     - Static features of mesh to grid edges (neural_lam.create_mesh)
-│   └── mesh_features.pt                    - Static features of mesh nodes (neural_lam.create_mesh)
+│   ├── m2m_edge_index.pt                   - Edges in mesh graph (neural_lam.create_graph)
+│   ├── g2m_edge_index.pt                   - Edges from grid to mesh (neural_lam.create_graph)
+│   ├── m2g_edge_index.pt                   - Edges from mesh to grid (neural_lam.create_graph)
+│   ├── m2m_features.pt                     - Static features of mesh edges (neural_lam.create_graph)
+│   ├── g2m_features.pt                     - Static features of grid to mesh edges (neural_lam.create_graph)
+│   ├── m2g_features.pt                     - Static features of mesh to grid edges (neural_lam.create_graph)
+│   └── mesh_features.pt                    - Static features of mesh nodes (neural_lam.create_graph)
 ├── graph2
 ├── ...
 └── graphN
@@ -280,9 +369,9 @@ graphs
 To keep track of levels in the mesh graph, a list format is used for the files with mesh graph information.
 In particular, the files
 ```
-│   ├── m2m_edge_index.pt                   - Edges in mesh graph (neural_lam.create_mesh)
-│   ├── m2m_features.pt                     - Static features of mesh edges (neural_lam.create_mesh)
-│   ├── mesh_features.pt                    - Static features of mesh nodes (neural_lam.create_mesh)
+│   ├── m2m_edge_index.pt                   - Edges in mesh graph (neural_lam.create_graph)
+│   ├── m2m_features.pt                     - Static features of mesh edges (neural_lam.create_graph)
+│   ├── mesh_features.pt                    - Static features of mesh nodes (neural_lam.create_graph)
 ```
 all contain lists of length `L`, for a hierarchical mesh graph with `L` layers.
 For non-hierarchical graphs `L == 1` and these are all just singly-entry lists.
@@ -293,10 +382,10 @@ In addition, hierarchical mesh graphs (`L > 1`) feature a few additional files w
 ```
 ├── graph1
 │   ├── ...
-│   ├── mesh_down_edge_index.pt             - Downward edges in mesh graph (neural_lam.create_mesh)
-│   ├── mesh_up_edge_index.pt               - Upward edges in mesh graph (neural_lam.create_mesh)
-│   ├── mesh_down_features.pt               - Static features of downward mesh edges (neural_lam.create_mesh)
-│   ├── mesh_up_features.pt                 - Static features of upward mesh edges (neural_lam.create_mesh)
+│   ├── mesh_down_edge_index.pt             - Downward edges in mesh graph (neural_lam.create_graph)
+│   ├── mesh_up_edge_index.pt               - Upward edges in mesh graph (neural_lam.create_graph)
+│   ├── mesh_down_features.pt               - Static features of downward mesh edges (neural_lam.create_graph)
+│   ├── mesh_up_features.pt                 - Static features of upward mesh edges (neural_lam.create_graph)
 │   ├── ...
 ```
 These files have the same list format as the ones above, but each list has length `L-1` (as these edges describe connections between levels).

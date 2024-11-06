@@ -1,6 +1,9 @@
 # Third-party
 import matplotlib.pyplot as plt
 
+# Local
+from .config import load_config_and_datastore
+
 
 def plot_example_from_datastore(
     category, datastore, col_dim, split="train", standardize=True, selection={}
@@ -73,9 +76,6 @@ if __name__ == "__main__":
     # Standard library
     import argparse
 
-    # Local
-    from . import init_datastore
-
     def _parse_dict(arg_str):
         key, value = arg_str.split("=")
         for op in [int, float]:
@@ -89,9 +89,11 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(
         formatter_class=argparse.ArgumentDefaultsHelpFormatter
     )
-    parser.add_argument("datastore_kind", help="Kind of datastore to use.")
     parser.add_argument(
-        "config_path", help="Path to the datastore configuration file."
+        "--datastore_config_path",
+        type=str,
+        default="tests/datastore_examples/mdp/config.yaml",
+        help="Path for the datastore config",
     )
     parser.add_argument(
         "--category",
@@ -134,9 +136,10 @@ if __name__ == "__main__":
             "column dimension and/or selection."
         )
 
-    datastore = init_datastore(
-        datastore_kind=args.datastore_kind, config_path=args.config_path
+    _, datastore = load_config_and_datastore(
+        config_path=args.datastore_config_path
     )
+
     plot_example_from_datastore(
         args.category,
         datastore,

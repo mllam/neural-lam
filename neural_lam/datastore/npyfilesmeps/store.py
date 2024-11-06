@@ -2,9 +2,11 @@
 Numpy-files based datastore to support the MEPS example dataset introduced in
 neural-lam v0.1.0.
 """
+
 # Standard library
 import functools
 import re
+from functools import cached_property
 from pathlib import Path
 from typing import List
 
@@ -404,11 +406,16 @@ class NpyFilesDatastoreMEPS(BaseRegularGridDatastore):
         coords = {}
         arr_shape = []
 
-        xs, ys = self.get_xy(category="state", stacked=False)
-        assert np.all(xs[0, :] == xs[-1, :])
-        assert np.all(ys[:, 0] == ys[:, -1])
-        x = xs[0, :]
-        y = ys[:, 0]
+        xy = self.get_xy(category="state", stacked=False)
+        xs = xy[:, :, 0]
+        ys = xy[:, :, 1]
+        # Check if x-coordinates are constant along columns
+        assert np.allclose(xs, xs[:, [0]]), "x-coordinates are not constant"
+        # Check if y-coordinates are constant along rows
+        assert np.allclose(ys, ys[[0], :]), "y-coordinates are not constant"
+        # Extract unique x and y coordinates
+        x = xs[:, 0]  # Unique x-coordinates (changes along the first axis)
+        y = ys[0, :]  # Unique y-coordinates (changes along the second axis)
         for d in dims:
             if d == "elapsed_forecast_duration":
                 coord_values = (
@@ -522,7 +529,7 @@ class NpyFilesDatastoreMEPS(BaseRegularGridDatastore):
 
         return da_datetime_forcing
 
-    def get_vars_units(self, category: str) -> torch.List[str]:
+    def get_vars_units(self, category: str) -> List[str]:
         if category == "state":
             return self.config.dataset.var_units
         elif category == "forcing":
@@ -539,7 +546,7 @@ class NpyFilesDatastoreMEPS(BaseRegularGridDatastore):
         else:
             raise NotImplementedError(f"Category {category} not supported")
 
-    def get_vars_names(self, category: str) -> torch.List[str]:
+    def get_vars_names(self, category: str) -> List[str]:
         if category == "state":
             return self.config.dataset.var_names
         elif category == "forcing":
@@ -583,22 +590,24 @@ class NpyFilesDatastoreMEPS(BaseRegularGridDatastore):
         np.ndarray
             The x, y coordinates of the dataset (with x first then y second),
             returned differently based on the value of `stacked`:
-            - `stacked==True`: shape `(2, n_grid_points)` where
+            - `stacked==True`: shape `(n_grid_points, 2)` where
                                       n_grid_points=N_x*N_y.
-            - `stacked==False`: shape `(2, N_y, N_x)`
+            - `stacked==False`: shape `(N_x, N_y, 2)`
 
         """
 
-        # the array on disk has shape [2, N_y, N_x], with the first dimension
-        # being [x, y]
+        # the array on disk has shape [2, N_y, N_x], where dimension 0
+        # contains the [x,y] coordinate pairs for each grid point
         arr = np.load(self.root_path / "static" / "nwp_xy.npy")
 
         assert arr.shape[0] == 2, "Expected 2D array"
         grid_shape = self.grid_shape_state
         assert arr.shape[1:] == (grid_shape.y, grid_shape.x), "Unexpected shape"
 
+        arr = arr.transpose(2, 1, 0)
+
         if stacked:
-            return arr.reshape(2, -1)
+            return arr.reshape(-1, 2)
         else:
             return arr
 
@@ -614,7 +623,7 @@ class NpyFilesDatastoreMEPS(BaseRegularGridDatastore):
         """
         return self._step_length
 
-    @property
+    @cached_property
     def grid_shape_state(self) -> CartesianGridShape:
         """The shape of the cartesian grid for the state variables.
 
@@ -627,7 +636,7 @@ class NpyFilesDatastoreMEPS(BaseRegularGridDatastore):
         ny, nx = self.config.grid_shape_state
         return CartesianGridShape(x=nx, y=ny)
 
-    @property
+    @cached_property
     def boundary_mask(self) -> xr.DataArray:
         """The boundary mask for the dataset. This is a binary mask that is 1
         where the grid cell is on the boundary of the domain, and 0 otherwise.
@@ -638,11 +647,16 @@ class NpyFilesDatastoreMEPS(BaseRegularGridDatastore):
             The boundary mask for the dataset, with dimensions `[grid_index]`.
 
         """
-        xs, ys = self.get_xy(category="state", stacked=False)
-        assert np.all(xs[0, :] == xs[-1, :])
-        assert np.all(ys[:, 0] == ys[:, -1])
-        x = xs[0, :]
-        y = ys[:, 0]
+        xy = self.get_xy(category="state", stacked=False)
+        xs = xy[:, :, 0]
+        ys = xy[:, :, 1]
+        # Check if x-coordinates are constant along columns
+        assert np.allclose(xs, xs[:, [0]]), "x-coordinates are not constant"
+        # Check if y-coordinates are constant along rows
+        assert np.allclose(ys, ys[[0], :]), "y-coordinates are not constant"
+        # Extract unique x and y coordinates
+        x = xs[:, 0]  # Unique x-coordinates (changes along the first axis)
+        y = ys[0, :]  # Unique y-coordinates (changes along the second axis)
         values = np.load(self.root_path / "static" / "border_mask.npy")
         da_mask = xr.DataArray(
             values, dims=["y", "x"], coords=dict(x=x, y=y), name="boundary_mask"
@@ -729,3 +743,49 @@ class NpyFilesDatastoreMEPS(BaseRegularGridDatastore):
         ProjectionClass = getattr(ccrs, proj_class_name)
         proj_params = self.config.projection.kwargs
         return ProjectionClass(**proj_params)
+
+    @cached_property
+    def state_feature_weights_values(self) -> List[float]:
+        """
+        Return the weights for each state feature as a list of floats. The
+        weights are defined by the user in a config file for the datastore.
+
+        Implementations of this method must assert that there is one weight for
+        each state feature in the datastore. The weights can be used to scale
+        the loss function for each state variable (e.g. via the standard
+        deviation of the 1-step differences of the state variables).
+
+        Returns:
+            List[float]: The weights for each state feature.
+        """
+
+        config_training = self._config.training
+        feature_weight_names = (
+            config_training.training.state_feature_weights.keys()
+        )
+        state_feature_names = self.get_vars_names(category="state")
+
+        # Check that the state_feature_weights dictionary has a weight for each
+        # state feature in the datastore.
+        if set(feature_weight_names) != set(state_feature_names):
+            additional_features = set(feature_weight_names) - set(
+                state_feature_names
+            )
+            missing_features = set(state_feature_names) - set(
+                feature_weight_names
+            )
+            raise ValueError(
+                f"State feature weights must be provided for each state feature"
+                f"in the datastore ({state_feature_names}). {missing_features}"
+                " are missing and weights are defined for the features "
+                f"{additional_features} which are not in the datastore."
+            )
+
+        # Apply sorting of datastore to the state_feature_weights dictionary
+        state_feature_weights_sorted = {
+            feature: config_training.training.state_feature_weights[feature]
+            for feature in state_feature_names
+        }
+
+        # Convert the dictionary values to a list
+        return list(state_feature_weights_sorted.values())

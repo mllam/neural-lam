@@ -6,7 +6,6 @@ import pytest
 import pytorch_lightning as pl
 import torch
 import wandb
-from conftest import init_datastore_example
 
 # First-party
 from neural_lam.create_graph import create_graph_from_datastore
@@ -14,6 +13,7 @@ from neural_lam.datastore import DATASTORES
 from neural_lam.datastore.base import BaseRegularGridDatastore
 from neural_lam.models.graph_lam import GraphLAM
 from neural_lam.weather_dataset import WeatherDataModule
+from tests.conftest import init_datastore_example
 
 
 @pytest.mark.parametrize("datastore_name", DATASTORES.keys())
@@ -63,7 +63,8 @@ def test_training(datastore_name):
         standardize=True,
         batch_size=2,
         num_workers=1,
-        forcing_window_size=3,
+        include_past_forcing=1,
+        include_future_forcing=1,
     )
 
     class ModelArgs:
@@ -81,7 +82,8 @@ def test_training(datastore_name):
         lr = 1.0e-3
         val_steps_to_log = [1, 3]
         metrics_watch = []
-        forcing_window_size = 3
+        include_past_forcing = 1
+        include_future_forcing = 1
 
     model_args = ModelArgs()
 

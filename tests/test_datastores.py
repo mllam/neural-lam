@@ -1,35 +1,35 @@
 """List of methods and attributes that should be implemented in a subclass of
 `` (these are all decorated with `@abc.abstractmethod`):
 
-- [x] `root_path` (property): Root path of the datastore.
-- [x] `step_length` (property): Length of the time step in hours.
-- [x] `grid_shape_state` (property): Shape of the grid for the state variables.
-- [x] `get_xy` (method): Return the x, y coordinates of the dataset.
-- [x] `coords_projection` (property): Projection object for the coordinates.
-- [x] `get_vars_units` (method): Get the units of the variables in the given
+- `root_path` (property): Root path of the datastore.
+- `step_length` (property): Length of the time step in hours.
+- `grid_shape_state` (property): Shape of the grid for the state variables.
+- `get_xy` (method): Return the x, y coordinates of the dataset.
+- `coords_projection` (property): Projection object for the coordinates.
+- `get_vars_units` (method): Get the units of the variables in the given
       category.
-- [x] `get_vars_names` (method): Get the names of the variables in the given
+- `get_vars_names` (method): Get the names of the variables in the given
       category.
-- [x] `get_vars_long_names` (method): Get the long names of the variables in
+- `get_vars_long_names` (method): Get the long names of the variables in
       the given category.
-- [x] `get_num_data_vars` (method): Get the number of data variables in the
+- `get_num_data_vars` (method): Get the number of data variables in the
       given category.
-- [x] `get_normalization_dataarray` (method): Return the normalization
+- `get_normalization_dataarray` (method): Return the normalization
       dataarray for the given category.
-- [x] `get_dataarray` (method): Return the processed data (as a single
+- `get_dataarray` (method): Return the processed data (as a single
       `xr.DataArray`) for the given category and test/train/val-split.
-- [x] `boundary_mask` (property): Return the boundary mask for the dataset,
+- `boundary_mask` (property): Return the boundary mask for the dataset,
       with spatial dimensions stacked.
-- [x] `config` (property): Return the configuration of the datastore.
+- `config` (property): Return the configuration of the datastore.
 
 In addition BaseRegularGridDatastore must have the following methods and
 attributes:
-- [x] `get_xy_extent` (method): Return the extent of the x, y coordinates for a
+- `get_xy_extent` (method): Return the extent of the x, y coordinates for a
         given category of data.
-- [x] `get_xy` (method): Return the x, y coordinates of the dataset.
-- [x] `coords_projection` (property): Projection object for the coordinates.
-- [x] `grid_shape_state` (property): Shape of the grid for the state variables.
-- [x] `stack_grid_coords` (method): Stack the grid coordinates of the dataset
+- `get_xy` (method): Return the x, y coordinates of the dataset.
+- `coords_projection` (property): Projection object for the coordinates.
+- `grid_shape_state` (property): Shape of the grid for the state variables.
+- `stack_grid_coords` (method): Stack the grid coordinates of the dataset
 
 """
 
@@ -42,12 +42,13 @@ from pathlib import Path
 import cartopy.crs as ccrs
 import numpy as np
 import pytest
+import torch
 import xarray as xr
-from conftest import init_datastore_example
 
 # First-party
 from neural_lam.datastore import DATASTORES
 from neural_lam.datastore.base import BaseRegularGridDatastore
+from tests.conftest import init_datastore_example
 
 
 @pytest.mark.parametrize("datastore_name", DATASTORES.keys())
@@ -95,9 +96,9 @@ def test_datastore_grid_xy(datastore_name):
     for stacked in [True, False]:
         xy = datastore.get_xy("static", stacked=stacked)
         if stacked:
-            assert xy.shape == (2, nx * ny)
+            assert xy.shape == (nx * ny, 2)
         else:
-            assert xy.shape == (2, ny, nx)
+            assert xy.shape == (nx, ny, 2)
 
 
 @pytest.mark.parametrize("datastore_name", DATASTORES.keys())
@@ -130,7 +131,7 @@ def test_get_vars(datastore_name):
 
 @pytest.mark.parametrize("datastore_name", DATASTORES.keys())
 def test_get_normalization_dataarray(datastore_name):
-    """Check that the `datasto re.get_normalization_dataa rray` method is
+    """Check that the `datastore.get_normalization_dataa rray` method is
     implemented."""
     datastore = init_datastore_example(datastore_name)
 
@@ -159,7 +160,7 @@ def test_get_normalization_dataarray(datastore_name):
 
 @pytest.mark.parametrize("datastore_name", DATASTORES.keys())
 def test_get_dataarray(datastore_name):
-    """Check that the `datasto re.get_dataarray` method is implemented.
+    """Check that the `datastore.get_dataarray` method is implemented.
 
     And that it returns an xarray DataArray with the correct dimensions.
 
@@ -270,21 +271,21 @@ def test_get_xy(datastore_name):
 
         nx, ny = datastore.grid_shape_state.x, datastore.grid_shape_state.y
 
-        # for stacked=True, the shape should be (2, n_grid_points)
+        # for stacked=True, the shape should be (n_grid_points, 2)
         assert xy_stacked.ndim == 2
-        assert xy_stacked.shape[0] == 2
-        assert xy_stacked.shape[1] == nx * ny
+        assert xy_stacked.shape[0] == nx * ny
+        assert xy_stacked.shape[1] == 2
 
-        # for stacked=False, the shape should be (2, ny, nx)
+        # for stacked=False, the shape should be (nx, ny, 2)
         assert xy_unstacked.ndim == 3
-        assert xy_unstacked.shape[0] == 2
+        assert xy_unstacked.shape[0] == nx
         assert xy_unstacked.shape[1] == ny
-        assert xy_unstacked.shape[2] == nx
+        assert xy_unstacked.shape[2] == 2
 
 
 @pytest.mark.parametrize("datastore_name", DATASTORES.keys())
 def test_get_projection(datastore_name):
-    """Check that the `datasto re.coords_projection` property is implemented."""
+    """Check that the `datastore.coords_projection` property is implemented."""
     datastore = init_datastore_example(datastore_name)
 
     if not isinstance(datastore, BaseRegularGridDatastore):
@@ -295,7 +296,7 @@ def test_get_projection(datastore_name):
 
 @pytest.mark.parametrize("datastore_name", DATASTORES.keys())
 def get_grid_shape_state(datastore_name):
-    """Check that the `datasto re.grid_shape_state` property is implemented."""
+    """Check that the `datastore.grid_shape_state` property is implemented."""
     datastore = init_datastore_example(datastore_name)
 
     if not isinstance(datastore, BaseRegularGridDatastore):
@@ -326,3 +327,42 @@ def test_stacking_grid_coords(datastore_name):
     da_static_test = da_static_test.transpose(*da_static.dims)
 
     xr.testing.assert_equal(da_static, da_static_test)
+
+
+@pytest.mark.parametrize("datastore_name", DATASTORES.keys())
+def test_dataarray_shapes(datastore_name):
+    datastore = init_datastore_example(datastore_name)
+    static_da = datastore.get_dataarray("static", split=None)
+    static_da = datastore.stack_grid_coords(static_da)
+    static_da = static_da.isel(static_feature=0)
+
+    # Convert the unstacked grid coordinates and static data array to tensors
+    unstacked_tensor = torch.tensor(
+        datastore.unstack_grid_coords(static_da).to_numpy(), dtype=torch.float32
+    ).squeeze()
+    print(static_da)
+
+    reshaped_tensor = (
+        torch.tensor(static_da.to_numpy(), dtype=torch.float32)
+        .reshape(datastore.grid_shape_state.x, datastore.grid_shape_state.y)
+        .squeeze()
+    )
+
+    # Compute the difference
+    diff = unstacked_tensor - reshaped_tensor
+
+    # Check the shapes
+    assert unstacked_tensor.shape == (
+        datastore.grid_shape_state.x,
+        datastore.grid_shape_state.y,
+    )
+    assert reshaped_tensor.shape == (
+        datastore.grid_shape_state.x,
+        datastore.grid_shape_state.y,
+    )
+    assert diff.shape == (
+        datastore.grid_shape_state.x,
+        datastore.grid_shape_state.y,
+    )
+    # assert diff == 0 with tolerance 1e-6
+    assert torch.allclose(diff, torch.zeros_like(diff), atol=1e-6)

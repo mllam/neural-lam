@@ -9,7 +9,7 @@ import torch_geometric as pyg
 
 # Local
 from . import utils
-from .datastore import DATASTORES, init_datastore
+from .config import load_config_and_datastore
 
 MESH_HEIGHT = 0.1
 MESH_LEVEL_DIST = 0.2
@@ -20,14 +20,9 @@ def main():
     """Plot graph structure in 3D using plotly."""
     parser = ArgumentParser(description="Plot graph")
     parser.add_argument(
-        "datastore_kind",
+        "--datastore_config_path",
         type=str,
-        choices=DATASTORES.keys(),
-        help="Kind of datastore to use",
-    )
-    parser.add_argument(
-        "datastore_config_path",
-        type=str,
+        default="tests/datastore_examples/mdp/config.yaml",
         help="Path for the datastore config",
     )
     parser.add_argument(
@@ -48,12 +43,11 @@ def main():
     )
 
     args = parser.parse_args()
-    datastore = init_datastore(
-        datastore_kind=args.datastore_kind,
-        config_path=args.datastore_config_path,
+    _, datastore = load_config_and_datastore(
+        config_path=args.datastore_config_path
     )
-    xy = datastore.get_xy("state", stacked=False)  # (2, N_y, N_x)
-    xy = xy.reshape(2, -1).T  # (N_grid, 2)
+
+    xy = datastore.get_xy("state", stacked=True)  # (N_grid, 2)
     pos_max = np.max(np.abs(xy))
     grid_pos = xy / pos_max  # Divide by maximum coordinate
 

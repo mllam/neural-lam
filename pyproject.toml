@@ -3,9 +3,9 @@ name = "neural-lam"
 version = "0.1.0"
 description = "LAM-based data-driven forecasting"
 authors = [
-    {name = "Joel Oskarsson", email = "joel.oskarsson@liu.se"},
-    {name = "Simon Adamov", email = "Simon.Adamov@meteoswiss.ch"},
-    {name = "Leif Denby", email = "lcd@dmi.dk"},
+    { name = "Joel Oskarsson", email = "joel.oskarsson@liu.se" },
+    { name = "Simon Adamov", email = "Simon.Adamov@meteoswiss.ch" },
+    { name = "Leif Denby", email = "lcd@dmi.dk" },
 ]
 
 # PEP 621 project metadata
@@ -26,21 +26,12 @@ dependencies = [
     "torch-geometric==2.3.1",
     "parse>=1.20.2",
     "dataclass-wizard>=0.22.3",
-    "mllam-data-prep @ git+https://github.com/leifdenby/mllam-data-prep/@feat/extra-section-in-config",
+    "mllam-data-prep[dask-distributed] @ git+https://github.com/mllam/mllam-data-prep",
 ]
 requires-python = ">=3.9"
 
 [project.optional-dependencies]
-dev = [
-    "pre-commit>=3.8.0",
-    "pytest>=8.3.2",
-    "pooch>=1.8.2",
-    "ipdb>=0.13.13",
-    "gpustat>=1.1.1",
-    "zarrdump>=0.4.1",
-    "dask[distributed]>=2024.7.1",
-    "bokeh!=3.0.*,>=2.4.2",
-]
+dev = ["pre-commit>=3.8.0", "pytest>=8.3.2", "pooch>=1.8.2"]
 
 [tool.setuptools]
 py-modules = ["neural_lam"]
@@ -90,12 +81,9 @@ ignore = [
     "create_mesh.py", # Disable linting for now, as major rework is planned/expected
 ]
 # Temporary fix for import neural_lam statements until set up as proper package
-init-hook='import sys; sys.path.append(".")'
+init-hook = 'import sys; sys.path.append(".")'
 [tool.pylint.TYPECHECK]
-generated-members = [
-    "numpy.*",
-    "torch.*",
-]
+generated-members = ["numpy.*", "torch.*"]
 [tool.pylint.'MESSAGES CONTROL']
 disable = [
     "C0114", # 'missing-module-docstring', Do not require module docstrings
@@ -106,11 +94,11 @@ disable = [
     "W0223", # 'abstract-method', Subclasses do not have to override all abstract methods
 ]
 [tool.pylint.DESIGN]
-max-statements=100 # Allow for some more involved functions
+max-statements = 100 # Allow for some more involved functions
 [tool.pylint.IMPORTS]
-allow-any-import-level="neural_lam"
+allow-any-import-level = "neural_lam"
 [tool.pylint.SIMILARITIES]
-min-similarity-lines=10
+min-similarity-lines = 10
 
 
 [tool.pdm]

@@ -5,12 +5,12 @@ from pathlib import Path
 # Third-party
 import pytest
 import torch
-from conftest import init_datastore_example
 
 # First-party
 from neural_lam.create_graph import create_graph_from_datastore
 from neural_lam.datastore import DATASTORES
 from neural_lam.datastore.base import BaseRegularGridDatastore
+from tests.conftest import init_datastore_example
 
 
 @pytest.mark.parametrize("graph_name", ["1level", "multiscale", "hierarchical"])
