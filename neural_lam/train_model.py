@@ -28,9 +28,10 @@ def main(input_args=None):
         description="Train or evaluate NeurWP models for LAM"
     )
     parser.add_argument(
-        "--config",
+        "--datastore_config_path",
         type=str,
         default="tests/datastore_examples/mdp/config.yaml",
+        help="Path for the datastore config",
     )
     parser.add_argument(
         "--model",
@@ -124,12 +125,6 @@ def main(input_args=None):
         "(default: 1)",
     )
     parser.add_argument(
-        "--control_only",
-        action="store_true",
-        help="Train only on control member of ensemble data "
-        "(default: False)",
-    )
-    parser.add_argument(
         "--loss",
         type=str,
         default="wmse",
@@ -196,10 +191,16 @@ def main(input_args=None):
              metrics (e.g. '{"1": [1, 2], "3": [3, 4]}')""",
     )
     parser.add_argument(
-        "--forcing-window-size",
+        "--include_past_forcing",
         type=int,
-        default=3,
-        help="Number of time steps to use as input for forcing data",
+        default=1,
+        help="Number of past time steps to use as input for forcing data",
+    )
+    parser.add_argument(
+        "--include_future_forcing",
+        type=int,
+        default=1,
+        help="Number of future time steps to use as input for forcing data",
     )
     args = parser.parse_args(input_args)
     args.var_leads_metrics_watch = {
@@ -221,12 +222,9 @@ def main(input_args=None):
     seed.seed_everything(args.seed)
 
     # Load neural-lam configuration and datastore to use
-    config, datastore = load_config_and_datastore(config_path=args.config)
-    # TODO: config.training.state_feature_weights need passing in somewhere,
-    # probably to ARModel, so that it can be used in the loss function
-    assert (
-        config.training.state_feature_weights
-    ), "No state feature weights found in config"
+    config, datastore = load_config_and_datastore(
+        config_path=args.datastore_config_path
+    )
 
     # Create datamodule
     data_module = WeatherDataModule(
@@ -234,7 +232,8 @@ def main(input_args=None):
         ar_steps_train=args.ar_steps_train,
         ar_steps_eval=args.ar_steps_eval,
         standardize=True,
-        forcing_window_size=args.forcing_window_size,
+        include_past_forcing=args.include_past_forcing,
+        include_future_forcing=args.include_future_forcing,
         batch_size=args.batch_size,
         num_workers=args.num_workers,
     )

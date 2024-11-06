@@ -42,7 +42,8 @@ class ARModel(pl.LightningModule):
             category="state"
         )
         da_boundary_mask = datastore.boundary_mask
-        forcing_window_size = args.forcing_window_size
+        include_past_forcing = args.include_past_forcing
+        include_future_forcing = args.include_future_forcing
 
         # Load static features for grid/data, NB: self.predict_step assumes
         # dimension order to be (grid_index, static_feature)
@@ -73,6 +74,10 @@ class ARModel(pl.LightningModule):
         for key, val in state_stats.items():
             self.register_buffer(key, val, persistent=False)
 
+        self.feature_weights = torch.tensor(
+            datastore.state_feature_weights_values, dtype=torch.float32
+        )
+
         # Double grid output dim. to also output std.-dev.
         self.output_std = bool(args.output_std)
         if self.output_std:
@@ -84,10 +89,9 @@ class ARModel(pl.LightningModule):
             # Store constant per-variable std.-dev. weighting
             # NOTE that this is the inverse of the multiplicative weighting
             # in wMSE/wMAE
-            # TODO: Do we need param_weights for this?
             self.register_buffer(
                 "per_var_std",
-                self.diff_std,
+                self.diff_std / torch.sqrt(self.feature_weights),
                 persistent=False,
             )
 
@@ -100,7 +104,8 @@ class ARModel(pl.LightningModule):
         self.grid_dim = (
             2 * self.grid_output_dim
             + grid_static_dim
-            + num_forcing_vars * forcing_window_size
+            + num_forcing_vars
+            * (include_past_forcing + include_future_forcing + 1)
         )
 
         # Instantiate loss function
@@ -212,7 +217,7 @@ class ARModel(pl.LightningModule):
                 pred_std_list, dim=1
             )  # (B, pred_steps, num_grid_nodes, d_f)
         else:
-            pred_std = self.diff_std  # (d_f,)
+            pred_std = self.per_var_std  # (d_f,)
 
         return prediction, pred_std
 

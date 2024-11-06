@@ -3,6 +3,7 @@ import abc
 import collections
 import dataclasses
 import functools
+from functools import cached_property
 from pathlib import Path
 from typing import List, Union
 
@@ -227,7 +228,7 @@ class BaseDatastore(abc.ABC):
         """
         pass
 
-    @property
+    @cached_property
     @abc.abstractmethod
     def boundary_mask(self) -> xr.DataArray:
         """
@@ -258,7 +259,7 @@ class BaseDatastore(abc.ABC):
         Returns
         -------
         np.ndarray
-            The x, y coordinates of the dataset with shape `[2, n_grid_points]`.
+            The x, y coordinates of the dataset with shape `[n_grid_points, 2]`.
         """
 
     @property
@@ -311,6 +312,23 @@ class BaseDatastore(abc.ABC):
         """
         pass
 
+    @cached_property
+    @abc.abstractmethod
+    def state_feature_weights_values(self) -> List[float]:
+        """
+        Return the weights for each state feature as a list of floats. The
+        weights are defined by the user in a config file for the datastore.
+
+        Implementations of this method must assert that there is one weight for
+        each state feature in the datastore. The weights can be used to scale
+        the loss function for each state variable (e.g. via the standard
+        deviation of the 1-step differences of the state variables).
+
+        Returns:
+            List[float]: The weights for each state feature.
+        """
+        pass
+
 
 @dataclasses.dataclass
 class CartesianGridShape:
@@ -348,7 +366,7 @@ class BaseRegularGridDatastore(BaseDatastore):
 
     CARTESIAN_COORDS = ["x", "y"]
 
-    @property
+    @cached_property
     @abc.abstractmethod
     def grid_shape_state(self) -> CartesianGridShape:
         """The shape of the grid for the state variables.
@@ -371,18 +389,18 @@ class BaseRegularGridDatastore(BaseDatastore):
         category : str
             The category of the dataset (state/forcing/static).
         stacked : bool
-            Whether to stack the x, y coordinates.
+            Whether to stack the x, y coordinates. The parameter `stacked` has
+            been introduced in this class. Parent class `BaseDatastore` has the
+            same method signature but without the `stacked` parameter.
 
         Returns
         -------
         np.ndarray
             The x, y coordinates of the dataset, returned differently based on
-            the value of `stacked`:
-            - `stacked==True`: shape `(2, n_grid_points)` where
+            the value of `stacked`: - `stacked==True`: shape `(n_grid_points,
+            2)` where
                                n_grid_points=N_x*N_y.
-            - `stacked==False`: shape `(2, N_y, N_x)`
-            The values for the x-coordinates are in the first row and the
-            values for the y-coordinates are in the second row.
+            - `stacked==False`: shape `(N_x, N_y, 2)`
         """
         pass
 
@@ -390,9 +408,9 @@ class BaseRegularGridDatastore(BaseDatastore):
         self, da_or_ds: Union[xr.DataArray, xr.Dataset]
     ) -> Union[xr.DataArray, xr.Dataset]:
         """
-        Stack the spatial grid coordinates into separate `x` and `y` dimensions
-        (the names can be set by the `CARTESIAN_COORDS` attribute) to create a
-        2D grid.
+        Unstack the spatial grid coordinates from `grid_index` into separate `x`
+        and `y` dimensions to create a 2D grid. Only performs unstacking if the
+        data is currently stacked (has grid_index dimension).
 
         Parameters
         ----------
@@ -403,20 +421,23 @@ class BaseRegularGridDatastore(BaseDatastore):
         -------
         xr.DataArray or xr.Dataset
             The dataarray or dataset with the grid coordinates unstacked.
-
         """
-        # check whether `grid_index` is a multi-index
+        # Return original data if already unstacked (no grid_index dimension)
+        if "grid_index" not in da_or_ds.dims:
+            return da_or_ds
+
+        # Check whether `grid_index` is a multi-index
         if not isinstance(da_or_ds.indexes.get("grid_index"), MultiIndex):
             da_or_ds = da_or_ds.set_index(grid_index=self.CARTESIAN_COORDS)
 
         da_or_ds_unstacked = da_or_ds.unstack("grid_index")
 
-        # ensure that the x, y dimensions are in the correct order
+        # Ensure that the x, y dimensions are in the correct order
         dims = da_or_ds_unstacked.dims
         xy_dim_order = [d for d in dims if d in self.CARTESIAN_COORDS]
 
         if xy_dim_order != self.CARTESIAN_COORDS:
-            da_or_ds_unstacked = da_or_ds_unstacked.transpose("y", "x")
+            da_or_ds_unstacked = da_or_ds_unstacked.transpose("x", "y")
 
         return da_or_ds_unstacked
 
@@ -424,9 +445,9 @@ class BaseRegularGridDatastore(BaseDatastore):
         self, da_or_ds: Union[xr.DataArray, xr.Dataset]
     ) -> Union[xr.DataArray, xr.Dataset]:
         """
-        Stack the spatial grid coordinated (by default `x` and `y`, but this
-        can be set by the `CARTESIAN_COORDS` attribute) into a single
-        `grid_index` dimension.
+        Stack the spatial grid coordinates (x and y) into a single `grid_index`
+        dimension. Only performs stacking if the data is currently unstacked
+        (has x and y dimensions).
 
         Parameters
         ----------
@@ -437,8 +458,11 @@ class BaseRegularGridDatastore(BaseDatastore):
         -------
         xr.DataArray or xr.Dataset
             The dataarray or dataset with the grid coordinates stacked.
-
         """
+        # Return original data if already stacked (has grid_index dimension)
+        if "grid_index" in da_or_ds.dims:
+            return da_or_ds
+
         return da_or_ds.stack(grid_index=self.CARTESIAN_COORDS)
 
     @property
