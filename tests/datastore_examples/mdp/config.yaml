@@ -1,6 +1,6 @@
 datastore:
   kind: mdp
-  config_path: danra.example.yaml
+  config_path: danra.datastore.yaml
 training:
   state_feature_weights:
     u100m: 1.0

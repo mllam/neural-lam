@@ -8,6 +8,7 @@ from argparse import ArgumentParser
 import pytorch_lightning as pl
 import torch
 from lightning_fabric.utilities import seed
+from loguru import logger
 
 # Local
 from . import utils
@@ -22,16 +23,16 @@ MODELS = {
 }
 
 
+@logger.catch
 def main(input_args=None):
     """Main function for training and evaluating models."""
     parser = ArgumentParser(
         description="Train or evaluate NeurWP models for LAM"
     )
     parser.add_argument(
-        "--datastore_config_path",
+        "config",
         type=str,
-        default="tests/datastore_examples/mdp/config.yaml",
-        help="Path for the datastore config",
+        help="Path to the configuration for neural-lam",
     )
     parser.add_argument(
         "--model",

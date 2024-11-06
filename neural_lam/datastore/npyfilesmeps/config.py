@@ -43,6 +43,10 @@ class Dataset:
     var_units: List[str]
     var_longnames: List[str]
     num_forcing_features: int
+    num_timesteps: int
+    step_length: int
+    num_ensemble_members: int
+    remove_state_features_with_index: List[int]
 
 
 @dataclass

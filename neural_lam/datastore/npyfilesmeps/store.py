@@ -32,10 +32,12 @@ TOA_SW_DOWN_FLUX_FILENAME_FORMAT = (
 OPEN_WATER_FILENAME_FORMAT = "wtr_{analysis_time:%Y%m%d%H}.npy"
 
 
-def _load_np(fp, add_feature_dim):
+def _load_np(fp, add_feature_dim, feature_dim_mask=None):
     arr = np.load(fp)
     if add_feature_dim:
         arr = arr[..., np.newaxis]
+    if feature_dim_mask is not None:
+        arr = arr[..., feature_dim_mask]
     return arr
 
 
@@ -157,15 +159,16 @@ class NpyFilesDatastoreMEPS(BaseRegularGridDatastore):
             The path to the configuration file for the datastore.
 
         """
-        # XXX: This should really be in the config file, not hard-coded in this
-        # class
-        self._num_timesteps = 65
-        self._step_length = 3  # 3 hours
-        self._num_ensemble_members = 2
-
         self._config_path = Path(config_path)
         self._root_path = self._config_path.parent
         self._config = NpyDatastoreConfig.from_yaml_file(self._config_path)
+
+        self._num_ensemble_members = self.config.dataset.num_ensemble_members
+        self._num_timesteps = self.config.dataset.num_timesteps
+        self._step_length = self.config.dataset.step_length
+        self._remove_state_features_with_index = (
+            self.config.dataset.remove_state_features_with_index
+        )
 
     @property
     def root_path(self) -> Path:
@@ -354,12 +357,19 @@ class NpyFilesDatastoreMEPS(BaseRegularGridDatastore):
         file_params = {}
         add_feature_dim = False
         features_vary_with_analysis_time = True
+        feature_dim_mask = None
         if features == self.get_vars_names(category="state"):
             filename_format = STATE_FILENAME_FORMAT
             file_dims = ["elapsed_forecast_duration", "y", "x", "feature"]
             # only select one member for now
             file_params["member_id"] = member
             fp_samples = self.root_path / "samples" / split
+            if self._remove_state_features_with_index:
+                n_to_drop = len(self._remove_state_features_with_index)
+                feature_dim_mask = np.ones(
+                    len(features) + n_to_drop, dtype=bool
+                )
+                feature_dim_mask[self._remove_state_features_with_index] = False
         elif features == ["toa_downwelling_shortwave_flux"]:
             filename_format = TOA_SW_DOWN_FLUX_FILENAME_FORMAT
             file_dims = ["elapsed_forecast_duration", "y", "x", "feature"]
@@ -455,12 +465,25 @@ class NpyFilesDatastoreMEPS(BaseRegularGridDatastore):
         # done until the data is actually needed
         arrays = [
             dask.array.from_delayed(
-                dask.delayed(_load_np)(fp=fp, add_feature_dim=add_feature_dim),
+                dask.delayed(_load_np)(
+                    fp=fp,
+                    add_feature_dim=add_feature_dim,
+                    feature_dim_mask=feature_dim_mask,
+                ),
                 shape=arr_shape,
                 dtype=np.float32,
             )
             for fp in filepaths
         ]
+
+        # read a single timestep and check the shape
+        arr0 = arrays[0].compute()
+        if not list(arr0.shape) == arr_shape:
+            raise Exception(
+                f"Expected shape {arr_shape} for a single file, got "
+                f"{list(arr0.shape)}. Maybe the number of features given "
+                f"in the datastore config ({features}) is incorrect?"
+            )
 
         if features_vary_with_analysis_time:
             arr_all = dask.array.stack(arrays, axis=concat_axis)
@@ -599,10 +622,11 @@ class NpyFilesDatastoreMEPS(BaseRegularGridDatastore):
         # the array on disk has shape [2, N_y, N_x], where dimension 0
         # contains the [x,y] coordinate pairs for each grid point
         arr = np.load(self.root_path / "static" / "nwp_xy.npy")
+        arr_shape = arr.shape
 
-        assert arr.shape[0] == 2, "Expected 2D array"
+        assert arr_shape[0] == 2, "Expected 2D array"
         grid_shape = self.grid_shape_state
-        assert arr.shape[1:] == (grid_shape.y, grid_shape.x), "Unexpected shape"
+        assert arr_shape[1:] == (grid_shape.y, grid_shape.x), "Unexpected shape"
 
         arr = arr.transpose(2, 1, 0)
 
