@@ -44,22 +44,51 @@ class DatastoreSelection:
 
 
 @dataclasses.dataclass
+class ManualStateFeatureWeighting:
+    """
+    Configuration for weighting the state features in the loss function where
+    the weights are manually specified.
+
+    Attributes
+    ----------
+    values : Dict[str, float]
+        Manual weights for the state features.
+    """
+
+    values: Dict[str, float]
+
+
+@dataclasses.dataclass
+class UniformFeatureWeighting:
+    """
+    Configuration for weighting the state features in the loss function where
+    all state features are weighted equally.
+    """
+
+    pass
+
+
+@dataclasses.dataclass
 class TrainingConfig:
     """
     Configuration related to training neural-lam
 
     Attributes
     ----------
-    state_feature_weights : Dict[str, float]
-        The weights for each state feature in the datastore to use in the loss
-        function during training.
+    state_feature_weighting : Union[ManualStateFeatureWeighting,
+                                    UnformFeatureWeighting]
+        The method to use for weighting the state features in the loss
+        function. Defaults to uniform weighting (`UnformFeatureWeighting`, i.e.
+        all features are weighted equally).
     """
 
-    state_feature_weights: Dict[str, float]
+    state_feature_weighting: Union[
+        ManualStateFeatureWeighting, UniformFeatureWeighting
+    ] = dataclasses.field(default_factory=UniformFeatureWeighting)
 
 
 @dataclasses.dataclass
-class NeuralLAMConfig(dataclass_wizard.YAMLWizard):
+class NeuralLAMConfig(dataclass_wizard.JSONWizard, dataclass_wizard.YAMLWizard):
     """
     Dataclass for Neural-LAM configuration. This class is used to load and
     store the configuration for using Neural-LAM.
@@ -73,7 +102,27 @@ class NeuralLAMConfig(dataclass_wizard.YAMLWizard):
     """
 
     datastore: DatastoreSelection
-    training: TrainingConfig
+    training: TrainingConfig = dataclasses.field(default_factory=TrainingConfig)
+
+    class _(dataclass_wizard.JSONWizard.Meta):
+        """
+        Define the configuration class as a JSON wizard class.
+
+        Together `tag_key` and `auto_assign_tags` enable that when a `Union` of
+        types are used for an attribute, the specific type to deserialize to
+        can be specified in the serialised data using the `tag_key` value. In
+        our case we call the tag key `__config_class__` to indicate to the
+        user that they should pick a dataclass describing configuration in
+        neural-lam. This Union-based selection allows us to support different
+        configuration attributes for different choices of methods for example
+        and is used when picking between different feature weighting methods in
+        the `TrainingConfig` class. `auto_assign_tags` is set to True to
+        automatically set that tag key (i.e. `__config_class__` in the config
+        file) should just be the class name of the dataclass to deserialize to.
+        """
+
+        tag_key = "__config_class__"
+        auto_assign_tags = True
 
 
 def load_config_and_datastore(

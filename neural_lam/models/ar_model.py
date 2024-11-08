@@ -10,7 +10,9 @@ import wandb
 
 # Local
 from .. import metrics, vis
-from ..datastore.base import BaseDatastore
+from ..config import NeuralLAMConfig
+from ..datastore import BaseDatastore
+from ..loss_weighting import get_state_feature_weighting
 
 
 class ARModel(pl.LightningModule):
@@ -25,6 +27,7 @@ class ARModel(pl.LightningModule):
     def __init__(
         self,
         args,
+        config: NeuralLAMConfig,
         datastore: BaseDatastore,
     ):
         super().__init__()
@@ -74,8 +77,11 @@ class ARModel(pl.LightningModule):
         for key, val in state_stats.items():
             self.register_buffer(key, val, persistent=False)
 
+        state_feature_weights = get_state_feature_weighting(
+            config=config, datastore=datastore
+        )
         self.feature_weights = torch.tensor(
-            datastore.state_feature_weights_values, dtype=torch.float32
+            state_feature_weights, dtype=torch.float32
         )
 
         # Double grid output dim. to also output std.-dev.

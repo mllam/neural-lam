@@ -5,10 +5,12 @@ from pathlib import Path
 # Third-party
 import pooch
 import yaml
-from dummy_datastore import DummyDatastore
 
 # First-party
 from neural_lam.datastore import DATASTORES, init_datastore
+
+# Local
+from .dummy_datastore import DummyDatastore
 
 # Disable weights and biases to avoid unnecessary logging
 # and to avoid having to deal with authentication
@@ -60,7 +62,7 @@ def download_meps_example_reduced_dataset():
 
 
 DATASTORES_EXAMPLES = dict(
-    mdp=(DATASTORE_EXAMPLES_ROOT_PATH / "mdp" / "danra.example.yaml"),
+    mdp=(DATASTORE_EXAMPLES_ROOT_PATH / "mdp" / "danra.datastore.yaml"),
     npyfilesmeps=download_meps_example_reduced_dataset(),
     dummydata=None,
 )

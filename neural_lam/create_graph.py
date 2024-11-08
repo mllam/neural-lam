@@ -561,9 +561,9 @@ def create_graph_from_datastore(
 def cli(input_args=None):
     parser = ArgumentParser(description="Graph generation arguments")
     parser.add_argument(
-        "--config",
+        "config_path",
         type=str,
-        default="tests/datastore_examples/mdp/config.yaml",
+        help="Path to neural-lam configuration file",
     )
     parser.add_argument(
         "--name",
@@ -591,7 +591,7 @@ def cli(input_args=None):
     args = parser.parse_args(input_args)
 
     # Load neural-lam configuration and datastore to use
-    _, datastore = load_config_and_datastore(config_path=args.config)
+    _, datastore = load_config_and_datastore(config_path=args.config_path)
 
     create_graph_from_datastore(
         datastore=datastore,

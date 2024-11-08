@@ -46,56 +46,8 @@ Still, some restrictions are inevitable:
 </p>
 
 
-# Using Neural-LAM
-Below follows instructions on how to use Neural-LAM to train and evaluate models. Once `neural-lam` has been installed the general process is:
 
-1. Run any pre-processing scripts to generate the necessary derived data that your chosen datastore requires
-2. Run graph-creation step
-3. Train the model
-
-## Data
-
-To enable flexibility in what input-data sources can be used with neural-lam,
-the input-data representation is split into two parts:
-
-1. a "datastore" (represented by instances of
-   [neural_lam.datastore.BaseDataStore](neural_lam/datastore/base.py)) which
-   takes care of loading a given category (state, forcing or static) and split
-   (train/val/test) of data from disk and returning it as a `xarray.DataArray`.
-   The returned data-array is expected to have the spatial coordinates
-   flattened into a single `grid_index` dimension and all variables and vertical
-   levels stacked into a feature dimension (named as `{category}_feature`) The
-   datastore also provides information about the number, names and units of
-   variables in the data, the boundary mask, normalisation values and grid
-   information.
-
-2. a `pytorch.Dataset`-derived class (called
-   `neural_lam.weather_dataset.WeatherDataset`) which takes care of sampling in
-   time to create individual samples for training, validation and testing. The
-   `WeatherDataset` class is also responsible for normalising the values and
-   returning `torch.Tensor`-objects.
-
-There are currently three different datastores implemented in the codebase:
-
-1. `neural_lam.datastore.NpyDataStore` which reads MEPS data from `.npy`-files in
-   the format introduced in neural-lam `v0.1.0`. Note that this datastore is specific to the format of the MEPS dataset, but can act as an example for how to create similar numpy-based datastores.
-
-2. `neural_lam.datastore.MultizarrDatastore` which can combines multiple zarr
-   files during train/val/test sampling, with the transformations to facilitate
-   this implemented within `neural_lam.datastore.MultizarrDatastore`.
-
-3. `neural_lam.datastore.MDPDatastore` which can combine multiple zarr
-   datasets either either as a preprocessing step or during sampling, but
-   offloads the implementation of the transformations the
-   [mllam-data-prep](https://github.com/mllam/mllam-data-prep) package.
-
-If neither of these options fit your need you can create your own datastore by
-subclassing the `neural_lam.datastore.BaseDataStore` class or
-`neural_lam.datastore.BaseCartesianDatastore` class (if your data is stored on
-a Cartesian grid) and implementing the abstract methods.
-
-
-## Installation
+# Installing Neural-LAM
 
 When installing `neural-lam` you have a choice of either installing with
 directly `pip` or using the `pdm` package manager.
@@ -112,7 +64,7 @@ expects the most recent version of CUDA on your system.
 We cover all the installation options in our [github actions ci/cd
 setup](.github/workflows/) which you can use as a reference.
 
-### Using `pdm`
+## Using `pdm`
 
 1. Clone this repository and navigate to the root directory.
 2. Install `pdm` if you don't have it installed on your system (either with `pip install pdm` or [following the install instructions](https://pdm-project.org/latest/#installation)).
@@ -121,7 +73,7 @@ setup](.github/workflows/) which you can use as a reference.
 4. Install a specific version of `torch` with `pdm run python -m pip install torch --index-url https://download.pytorch.org/whl/cpu` for a CPU-only version or `pdm run python -m pip install torch --index-url https://download.pytorch.org/whl/cu111` for CUDA 11.1 support (you can find the correct URL for the variant you want on [PyTorch webpage](https://pytorch.org/get-started/locally/)).
 5. Install the dependencies with `pdm install` (by default this in include the). If you will be developing `neural-lam` we recommend to install the development dependencies with `pdm install --group dev`. By default `pdm` installs the `neural-lam` package in editable mode, so you can make changes to the code and see the effects immediately.
 
-### Using `pip`
+## Using `pip`
 
 1. Clone this repository and navigate to the root directory.
 > If you are happy using the latest version of `torch` with GPU support (expecting the latest version of CUDA is installed on your system) you can skip to step 3.
@@ -131,18 +83,18 @@ setup](.github/workflows/) which you can use as a reference.
 
 # Using Neural-LAM
 
-Once installed, to next train/evaluate models in Neural-LAM you will in general need two things:
+Once `neural-lam` is installed you will be able to train/evaluate models. For this you will in general need two things:
 
-1. Data to train/evaluate the model. To represent this data we use a concept of
+1. **Data to train/evaluate the model**. To represent this data we use a concept of
    *datastores* in Neural-LAM (see the [Data](#data) section for more details).
    In brief, a datastore implements the process of loading data from disk in a
    specific format (for example zarr or numpy files) by implementing an
-   interface that provides the data in a format that can be used within
+   interface that provides the data in a data-structure that can be used within
    neural-lam. A datastore is the used to create a `pytorch.Dataset`-derived
    class that samples the data in time to create individual samples for
    training, validation and testing.
 
-2. The graph structure on which message-passing is used to represent the flow
+2. **The graph structure** on which message-passing is used to represent the flow
    of information that emulates fluid flow in the atmosphere over time. The
    graph structure is created for a specific datastore.
 
@@ -168,6 +120,24 @@ data/
 ├── danra.datastore.yaml  - Configuration file for the datastore, referred to from config.yaml
 └── graphs/               - Directory containing graphs for training
 ```
+
+And the content of `config.yaml` could in this case look like:
+```yaml
+datastore:
+  kind: mdp
+  config_path: danra.datastore.yaml
+training:
+  state_feature_weighting:
+    __config_class__: ManualStateFeatureWeighting
+    values:
+      u100m: 1.0
+      v100m: 1.0
+```
+
+For now the neural-lam config only defines two things: 1) the kind of data store and the path to its config, and 2) the weighting of different features in the loss function.
+
+(This example is taken from the `tests/datastore_examples/mdp` directory.)
+
 
 Below follows instructions on how to use Neural-LAM to train and evaluate
 models, with details given first given for each kind of datastore implemented
@@ -283,6 +253,22 @@ Download the file and unzip in the neural-lam directory.
 All graphs used in the paper are also available for download at the same link (but can as easily be re-generated using `python -m neural_lam.create_graph`).
 Note that this is far too little data to train any useful models, but all pre-processing and training steps can be run with it.
 It should thus be useful to make sure that your python environment is set up correctly and that all the code can be ran without any issues.
+
+```yaml
+# meps.datastore.yaml
+```
+
+```yaml
+datastore:
+  kind: npyfilesmeps
+  config_path: meps.datastore.yaml
+training:
+  state_feature_weighting:
+    __config_class__: ManualStateFeatureWeighting
+    values:
+      u100m: 1.0
+      v100m: 1.0
+```
 
 ## Pre-processing
 

@@ -12,7 +12,7 @@ from tqdm import tqdm
 
 # Local
 from ... import WeatherDataset
-from ...datastore import init_datastore
+from .. import init_datastore
 
 
 class PaddedWeatherDataset(torch.utils.data.Dataset):

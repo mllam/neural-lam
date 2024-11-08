@@ -138,6 +138,8 @@ class NpyFilesDatastoreMEPS(BaseRegularGridDatastore):
     d_features = 8
     d_forcing = 1
     """
+    SHORT_NAME = "npyfilesmeps"
+
     is_ensemble = True
     is_forecast = True
 
@@ -767,49 +769,3 @@ class NpyFilesDatastoreMEPS(BaseRegularGridDatastore):
         ProjectionClass = getattr(ccrs, proj_class_name)
         proj_params = self.config.projection.kwargs
         return ProjectionClass(**proj_params)
-
-    @cached_property
-    def state_feature_weights_values(self) -> List[float]:
-        """
-        Return the weights for each state feature as a list of floats. The
-        weights are defined by the user in a config file for the datastore.
-
-        Implementations of this method must assert that there is one weight for
-        each state feature in the datastore. The weights can be used to scale
-        the loss function for each state variable (e.g. via the standard
-        deviation of the 1-step differences of the state variables).
-
-        Returns:
-            List[float]: The weights for each state feature.
-        """
-
-        config_training = self._config.training
-        feature_weight_names = (
-            config_training.training.state_feature_weights.keys()
-        )
-        state_feature_names = self.get_vars_names(category="state")
-
-        # Check that the state_feature_weights dictionary has a weight for each
-        # state feature in the datastore.
-        if set(feature_weight_names) != set(state_feature_names):
-            additional_features = set(feature_weight_names) - set(
-                state_feature_names
-            )
-            missing_features = set(state_feature_names) - set(
-                feature_weight_names
-            )
-            raise ValueError(
-                f"State feature weights must be provided for each state feature"
-                f"in the datastore ({state_feature_names}). {missing_features}"
-                " are missing and weights are defined for the features "
-                f"{additional_features} which are not in the datastore."
-            )
-
-        # Apply sorting of datastore to the state_feature_weights dictionary
-        state_feature_weights_sorted = {
-            feature: config_training.training.state_feature_weights[feature]
-            for feature in state_feature_names
-        }
-
-        # Convert the dictionary values to a list
-        return list(state_feature_weights_sorted.values())

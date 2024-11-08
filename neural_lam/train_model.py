@@ -30,7 +30,7 @@ def main(input_args=None):
         description="Train or evaluate NeurWP models for LAM"
     )
     parser.add_argument(
-        "config",
+        "config_path",
         type=str,
         help="Path to the configuration for neural-lam",
     )
@@ -223,9 +223,7 @@ def main(input_args=None):
     seed.seed_everything(args.seed)
 
     # Load neural-lam configuration and datastore to use
-    config, datastore = load_config_and_datastore(
-        config_path=args.datastore_config_path
-    )
+    config, datastore = load_config_and_datastore(config_path=args.config_path)
 
     # Create datamodule
     data_module = WeatherDataModule(
@@ -250,7 +248,7 @@ def main(input_args=None):
 
     # Load model parameters Use new args for model
     ModelClass = MODELS[args.model]
-    model = ModelClass(args, datastore=datastore)
+    model = ModelClass(args, config=config, datastore=datastore)
 
     if args.eval:
         prefix = f"eval-{args.eval}-"

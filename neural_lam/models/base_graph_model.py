@@ -3,6 +3,8 @@ import torch
 
 # Local
 from .. import utils
+from ..config import NeuralLAMConfig
+from ..datastore import BaseDatastore
 from ..interaction_net import InteractionNet
 from .ar_model import ARModel
 
@@ -13,8 +15,8 @@ class BaseGraphModel(ARModel):
     the encode-process-decode idea.
     """
 
-    def __init__(self, args, datastore):
-        super().__init__(args, datastore=datastore)
+    def __init__(self, args, config: NeuralLAMConfig, datastore: BaseDatastore):
+        super().__init__(args, config=config, datastore=datastore)
 
         # Load graph with static features
         # NOTE: (IMPORTANT!) mesh nodes MUST have the first

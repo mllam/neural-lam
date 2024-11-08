@@ -8,6 +8,7 @@ import torch
 from torch.utils.data import DataLoader
 
 # First-party
+from neural_lam import config as nlconfig
 from neural_lam.create_graph import create_graph_from_datastore
 from neural_lam.datastore import DATASTORES
 from neural_lam.datastore.base import BaseRegularGridDatastore
@@ -204,12 +205,15 @@ def test_single_batch(datastore_name, split):
 
     _create_graph()
 
+    config = nlconfig.NeuralLAMConfig(
+        datastore=nlconfig.DatastoreSelection(
+            kind=datastore.SHORT_NAME, config_path=datastore.root_path
+        )
+    )
+
     dataset = WeatherDataset(datastore=datastore, split=split)
 
-    model = GraphLAM(  # noqa
-        args=args,
-        datastore=datastore,
-    )
+    model = GraphLAM(args=args, datastore=datastore, config=config)  # noqa
 
     model_device = model.to(device_name)
     data_loader = DataLoader(dataset, batch_size=5)

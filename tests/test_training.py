@@ -8,6 +8,7 @@ import torch
 import wandb
 
 # First-party
+from neural_lam import config as nlconfig
 from neural_lam.create_graph import create_graph_from_datastore
 from neural_lam.datastore import DATASTORES
 from neural_lam.datastore.base import BaseRegularGridDatastore
@@ -87,9 +88,16 @@ def test_training(datastore_name):
 
     model_args = ModelArgs()
 
+    config = nlconfig.NeuralLAMConfig(
+        datastore=nlconfig.DatastoreSelection(
+            kind=datastore.SHORT_NAME, config_path=datastore.root_path
+        )
+    )
+
     model = GraphLAM(  # noqa
         args=model_args,
         datastore=datastore,
+        config=config,
     )
     wandb.init()
     trainer.fit(model=model, datamodule=data_module)
