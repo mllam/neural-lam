@@ -141,6 +141,12 @@ class WeatherDataset(torch.utils.data.Dataset):
             The index of the time step to start the sample from.
         n_steps : int
             The number of time steps to include in the sample.
+
+        Returns
+        -------
+        da_sliced : xr.DataArray
+            The sliced dataarray with dims ('time', 'grid_index',
+            'state_feature').
         """
         # The current implementation requires at least 2 time steps for the
         # initial state (see GraphCast).
@@ -197,6 +203,12 @@ class WeatherDataset(torch.utils.data.Dataset):
             The index of the time step to start the sample from.
         n_steps : int
             The number of time steps to include in the sample.
+
+        Returns
+        -------
+        da_concat : xr.DataArray
+            The sliced dataarray with dims ('time', 'grid_index',
+            'window', 'forcing_feature').
         """
         # The current implementation requires at least 2 time steps for the
         # initial state (see GraphCast). The forcing data is windowed around the
@@ -212,54 +224,67 @@ class WeatherDataset(torch.utils.data.Dataset):
             # simply select an analysis time and the first `n_steps` forecast
             # times (given no offset). Note that this means that we get one
             # sample per forecast.
+            # Add a 'time' dimension using the actual forecast times
             for step in range(n_steps):
                 start_idx = offset + step - self.include_past_forcing
                 end_idx = offset + step + self.include_future_forcing
 
-                da_forcing_windowed = da_forcing.expand_dims(
-                    dim={"window": end_idx - start_idx + 1}
+                current_time = (
+                    da_forcing.analysis_time[idx]
+                    + da_forcing.elapsed_forecast_duration[offset + step]
                 )
-                # create a new time dimension so that the produced sample has a
-                # `time` dimension, similarly to the analysis only data
-                da_sliced = da_forcing_windowed.isel(
+
+                da_sliced = da_forcing.isel(
                     analysis_time=idx,
+                    elapsed_forecast_duration=slice(start_idx, end_idx + 1),
                 )
-                time_step = (
-                    da_sliced.analysis_time
-                    + da_sliced.elapsed_forecast_duration[
-                        self.include_past_forcing
-                    ]
+
+                da_sliced = da_sliced.rename(
+                    {"elapsed_forecast_duration": "window"}
                 )
+
+                # Assign the 'window' coordinate to be relative positions
+                da_sliced = da_sliced.assign_coords(
+                    window=np.arange(len(da_sliced.window))
+                )
+
                 da_sliced = da_sliced.expand_dims(
-                    dim={"time": [time_step.values]}
+                    dim={"time": [current_time.values]}
                 )
-                da_sliced = da_sliced.isel(elapsed_forecast_duration=0)
 
                 da_list.append(da_sliced)
 
+            # Concatenate the list of DataArrays along the 'time' dimension
             da_concat = xr.concat(da_list, dim="time")
 
         else:
-            # For analysis data we slice the time dimension directly. The offset
-            # is only relevant for the very first (and last) samples in the
-            # dataset.
+            # For analysis data, we slice the time dimension directly. The
+            # offset is only relevant for the very first (and last) samples in
+            # the dataset.
             for step in range(n_steps):
                 start_idx = offset + step - self.include_past_forcing
                 end_idx = offset + step + self.include_future_forcing
 
-                da_forcing_windowed = da_forcing.expand_dims(
-                    dim={"window": end_idx - start_idx + 1}
+                # Slice the data over the desired time window
+                da_sliced = da_forcing.isel(time=slice(start_idx, end_idx + 1))
+
+                da_sliced = da_sliced.rename({"time": "window"})
+
+                # Assign the 'window' coordinate to be relative positions
+                da_sliced = da_sliced.assign_coords(
+                    window=np.arange(len(da_sliced.window))
                 )
 
-                da_sliced = da_forcing_windowed.isel(
-                    time=slice(start_idx, end_idx + 1)
+                # Add a 'time' dimension to keep track of steps using actual
+                # time coordinates
+                current_time = da_forcing.time[offset + step]
+                da_sliced = da_sliced.expand_dims(
+                    dim={"time": [current_time.values]}
                 )
-
-                # Select the current time step of corresponding state data
-                da_sliced = da_sliced.isel(time=self.include_past_forcing)
 
                 da_list.append(da_sliced)
 
+            # Concatenate the list of DataArrays along the 'time' dimension
             da_concat = xr.concat(da_list, dim="time")
 
         return da_concat
