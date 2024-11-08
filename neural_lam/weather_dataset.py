@@ -159,8 +159,8 @@ class WeatherDataset(torch.utils.data.Dataset):
             # simply select a analysis time and the first `n_steps` forecast
             # times (given no offset). Note that this means that we get one
             # sample per forecast, always starting at forecast time 2.
-            start_idx = offset
-            end_idx = offset + init_steps + n_steps
+            start_idx = idx
+            end_idx = offset + n_steps
             da_sliced = da_state.isel(
                 analysis_time=idx,
                 elapsed_forecast_duration=slice(start_idx, end_idx),
@@ -177,8 +177,8 @@ class WeatherDataset(torch.utils.data.Dataset):
             # For analysis data we slice the time dimension directly. The offset
             # is only relevant for the very first (and last) samples in the
             # dataset.
-            start_idx = offset
-            end_idx = offset + init_steps + n_steps
+            start_idx = idx
+            end_idx = offset + n_steps
             da_sliced = da_state.isel(time=slice(start_idx, end_idx))
         return da_sliced
 
