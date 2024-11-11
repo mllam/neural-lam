@@ -1,0 +1,13 @@
+python train_model.py\
+    --dataset global_era5\
+    --model graph_fm\
+    --n_workers 16\
+    --n_example_pred 0\
+    --eval_leads 40\
+    --hidden_dim 256\
+    --processor_layers 4\
+    --vertical_propnets 1\
+    --batch_size 1\
+    --graph global_hierarchical\
+    --load paper_checkpoints/graph_fm.ckpt\
+    --eval test\

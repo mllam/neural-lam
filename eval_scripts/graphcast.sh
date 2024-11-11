@@ -1,0 +1,12 @@
+python train_model.py\
+    --dataset global_era5\
+    --model graphcast\
+    --n_workers 16\
+    --n_example_pred 0\
+    --eval_leads 40\
+    --hidden_dim 256\
+    --processor_layers 8\
+    --batch_size 1\
+    --graph global_multiscale\
+    --load paper_checkpoints/graphcast.ckpt\
+    --eval test\

@@ -1,0 +1,15 @@
+python train_model.py\
+    --dataset global_era5\
+    --model graph_efm\
+    --n_workers 16\
+    --n_example_pred 0\
+    --eval_leads 40\
+    --hidden_dim 256\
+    --prior_processor_layers 1\
+    --encoder_processor_layers 1\
+    --processor_layers 1\
+    --graph global_hierarchical\
+    --batch_size 1\
+    --ensemble_size 80\
+    --load paper_checkpoints/graph_efm.ckpt\
+    --eval test\
