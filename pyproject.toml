@@ -1,6 +1,6 @@
 [project]
 name = "neural-lam"
-version = "0.1.0"
+version = "0.2.0"
 description = "LAM-based data-driven forecasting"
 authors = [
     { name = "Joel Oskarsson", email = "joel.oskarsson@liu.se" },
