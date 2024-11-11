@@ -117,7 +117,8 @@ def main():
     # Save graph
     os.makedirs(args.output_dir, exist_ok=True)
     for component, graph in graph_comp.items():
-        # TODO This is all hack, saving in wmg needs to be consistent with nl
+        # This seems like a bit of a hack, maybe better if saving in wmg
+        # was made consistent with nl
         if component == "m2m":
             if args.archetype == "hierarchical":
                 # Split by direction
@@ -136,7 +137,7 @@ def main():
                 wmg.save.to_pyg(
                     graph=graph,
                     name=component,
-                    list_from_attribute="dummy",
+                    list_from_attribute="dummy", # Note: Needed to output list
                     edge_features=["len", "vdiff"],
                     output_directory=args.output_dir,
                 )

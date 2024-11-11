@@ -150,16 +150,8 @@ class BaseGraphModel(ARModel):
         mesh_emb = self.embedd_mesh_nodes()
 
         # Merge interior and boundary emb into input embedding
-        # TODO Can we enforce ordering in the graph creation process to make
-        # this just a concat instead?
-        input_emb = torch.zeros(
-            batch_size,
-            self.num_input_nodes,
-            grid_emb.shape[2],
-            device=grid_emb.device,
-        )
-        input_emb[:, self.interior_mask] = grid_emb
-        input_emb[:, self.boundary_mask] = boundary_emb
+        # We enforce ordering (interior, boundary) of nodes
+        input_emb = torch.cat((grid_emb, boundary_emb), dim=1)
 
         # Map from grid to mesh
         mesh_emb_expanded = self.expand_to_batch(
