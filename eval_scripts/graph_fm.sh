@@ -1,0 +1,13 @@
+python train_model.py\
+    --dataset meps\
+    --model graph_fm\
+    --n_example_pred 0\
+    --graph hierarchical\
+    --n_workers 16\
+    --hidden_dim 128\
+    --processor_layers 3\
+    --vertical_propnets 1\
+    --output_std 1\
+    --batch_size 1\
+    --load paper_checkpoints/graph_fm.ckpt\
+    --eval test\

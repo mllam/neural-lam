@@ -1,0 +1,15 @@
+python train_model.py\
+    --dataset meps\
+    --model graph_efm\
+    --n_example_pred 0\
+    --graph hierarchical\
+    --n_workers 16\
+    --hidden_dim 128\
+    --processor_layers 1\
+    --prior_processor_layers 1\
+    --encoder_processor_layers 1\
+    --output_std 1\
+    --ensemble_size 100\
+    --batch_size 1\
+    --load paper_checkpoints/graph_efm.ckpt\
+    --eval test\
