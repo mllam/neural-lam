@@ -16,7 +16,7 @@ WMG_ARCHETYPES = {
 }
 
 
-def main():
+def main(input_args=None):
     parser = argparse.ArgumentParser(
         description="Graph generation using WMG",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
@@ -61,16 +61,12 @@ def main():
         help="Limit multi-scale mesh to given number of levels, "
         "from bottom up",
     )
-    parser.add_argument(
-        "--hierarchical",
-        action="store_true",
-        help="Generate hierarchical mesh graph (default: False)",
-    )
-    args = parser.parse_args()
+    args = parser.parse_args(input_args)
 
     # Load grid positions
     config_loader = config.Config.from_file(args.data_config)
 
+    # TODO Do not get normalised positions
     coords = utils.get_reordered_grid_pos(config_loader.dataset.name).numpy()
     # (num_nodes_full, 2)
 
@@ -126,13 +122,24 @@ def main():
                     graph, attr="direction"
                 )
                 for direction, graph in m2m_direction_comp.items():
-                    wmg.save.to_pyg(
-                        graph=graph,
-                        name=f"mesh_{direction}",
-                        list_from_attribute="level",
-                        edge_features=["len", "vdiff"],
-                        output_directory=args.output_dir,
-                    )
+                    if direction == "same":
+                        # Name just m2m to be consistent with non-hierarchical
+                        wmg.save.to_pyg(
+                            graph=graph,
+                            name="m2m",
+                            list_from_attribute="level",
+                            edge_features=["len", "vdiff"],
+                            output_directory=args.output_dir,
+                        )
+                    else:
+                        # up and down directions
+                        wmg.save.to_pyg(
+                            graph=graph,
+                            name=f"mesh_{direction}",
+                            list_from_attribute="levels",
+                            edge_features=["len", "vdiff"],
+                            output_directory=args.output_dir,
+                        )
             else:
                 wmg.save.to_pyg(
                     graph=graph,

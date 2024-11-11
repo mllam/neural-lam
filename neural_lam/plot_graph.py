@@ -69,11 +69,9 @@ def main():
         (grid_pos, np.expand_dims(z_grid, axis=1)), axis=1
     )
 
-    # List of edges to plot, (edge_index, color, line_width, label)
-    edge_plot_list = [
-        (m2g_edge_index.numpy(), "black", 0.4, "M2G"),
-        (g2m_edge_index.numpy(), "black", 0.4, "G2M"),
-    ]
+    # List of edges to plot, (edge_index, from_pos, to_pos, color,
+    # line_width, label)
+    edge_plot_list = []
 
     # Mesh positioning and edges to plot differ if we have a hierarchical graph
     if hierarchical:
@@ -92,24 +90,80 @@ def main():
                 mesh_static_features, start=1
             )
         ]
-        mesh_pos = np.concatenate(mesh_level_pos, axis=0)
+        all_mesh_pos = np.concatenate(mesh_level_pos, axis=0)
+        grid_con_mesh_pos = mesh_level_pos[0]
 
         # Add inter-level mesh edges
         edge_plot_list += [
-            (level_ei.numpy(), "blue", 1, f"M2M Level {level}")
-            for level, level_ei in enumerate(m2m_edge_index)
+            (
+                level_ei.numpy(),
+                level_pos,
+                level_pos,
+                "blue",
+                1,
+                f"M2M Level {level}",
+            )
+            for level, (level_ei, level_pos) in enumerate(
+                zip(m2m_edge_index, mesh_level_pos)
+            )
         ]
 
         # Add intra-level mesh edges
-        up_edges_ei = np.concatenate(
-            [level_up_ei.numpy() for level_up_ei in mesh_up_edge_index], axis=1
+        up_edges_ei = [
+            level_up_ei.numpy() for level_up_ei in mesh_up_edge_index
+        ]
+        down_edges_ei = [
+            level_down_ei.numpy() for level_down_ei in mesh_down_edge_index
+        ]
+        # Add up edges
+        for level_i, (up_ei, from_pos, to_pos) in enumerate(
+            zip(up_edges_ei, mesh_level_pos[:-1], mesh_level_pos[1:])
+        ):
+            edge_plot_list.append(
+                (
+                    up_ei,
+                    from_pos,
+                    to_pos,
+                    "green",
+                    1,
+                    f"Mesh up {level_i}-{level_i+1}",
+                )
+            )
+        #  Add down edges
+        for level_i, (down_ei, from_pos, to_pos) in enumerate(
+            zip(down_edges_ei, mesh_level_pos[1:], mesh_level_pos[:-1])
+        ):
+            edge_plot_list.append(
+                (
+                    down_ei,
+                    from_pos,
+                    to_pos,
+                    "green",
+                    1,
+                    f"Mesh down {level_i+1}-{level_i}",
+                )
+            )
+
+        edge_plot_list.append(
+            (
+                m2g_edge_index.numpy(),
+                grid_con_mesh_pos,
+                grid_pos,
+                "black",
+                0.4,
+                "M2G",
+            )
         )
-        down_edges_ei = np.concatenate(
-            [level_down_ei.numpy() for level_down_ei in mesh_down_edge_index],
-            axis=1,
+        edge_plot_list.append(
+            (
+                g2m_edge_index.numpy(),
+                grid_pos,
+                grid_con_mesh_pos,
+                "black",
+                0.4,
+                "G2M",
+            )
         )
-        edge_plot_list.append((up_edges_ei, "green", 1, "Mesh up"))
-        edge_plot_list.append((down_edges_ei, "green", 1, "Mesh down"))
 
         mesh_node_size = 2.5
     else:
@@ -123,21 +177,30 @@ def main():
             (mesh_pos, np.expand_dims(z_mesh, axis=1)), axis=1
         )
 
-        edge_plot_list.append((m2m_edge_index.numpy(), "blue", 1, "M2M"))
+        edge_plot_list.append(
+            (m2m_edge_index.numpy(), mesh_pos, mesh_pos, "blue", 1, "M2M")
+        )
+        edge_plot_list.append(
+            (m2g_edge_index.numpy(), mesh_pos, grid_pos, "black", 0.4, "M2G")
+        )
+        edge_plot_list.append(
+            (g2m_edge_index.numpy(), grid_pos, mesh_pos, "black", 0.4, "G2M")
+        )
 
-    # All node positions in one array
-    node_pos = np.concatenate((mesh_pos, grid_pos), axis=0)
+        all_mesh_pos = mesh_pos
 
     # Add edges
     data_objs = []
     for (
         ei,
+        from_pos,
+        to_pos,
         col,
         width,
         label,
     ) in edge_plot_list:
-        edge_start = node_pos[ei[0]]  # (M, 2)
-        edge_end = node_pos[ei[1]]  # (M, 2)
+        edge_start = from_pos[ei[0]]  # (M, 2)
+        edge_end = to_pos[ei[1]]  # (M, 2)
         n_edges = edge_start.shape[0]
 
         x_edges = np.stack(
@@ -174,9 +237,9 @@ def main():
     )
     data_objs.append(
         go.Scatter3d(
-            x=mesh_pos[:, 0],
-            y=mesh_pos[:, 1],
-            z=mesh_pos[:, 2],
+            x=all_mesh_pos[:, 0],
+            y=all_mesh_pos[:, 1],
+            z=all_mesh_pos[:, 2],
             mode="markers",
             marker={"color": "blue", "size": mesh_node_size},
             name="Mesh nodes",

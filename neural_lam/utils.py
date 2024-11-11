@@ -33,6 +33,13 @@ class BufferList(nn.Module):
         return (self[i] for i in range(len(self)))
 
 
+def zero_index_edge_index(edge_index):
+    """
+    Make both sender and receiver indices of edge_index start at 0
+    """
+    return edge_index - edge_index.min(dim=1, keepdim=True)[0]
+
+
 def load_graph(graph_dir_path, device="cpu"):
     """Load all tensors representing the graph from `graph_dir_path`.
 
@@ -71,11 +78,13 @@ def load_graph(graph_dir_path, device="cpu"):
         - mesh_down_edge_index
         - g2m_features
         - m2g_features
-        - m2m_features
+        - m2m_node_features
         - mesh_up_features
         - mesh_down_features
         - mesh_static_features
 
+
+    Load all tensors representing the graph
     """
 
     def loads_file(fn):
@@ -87,10 +96,15 @@ def load_graph(graph_dir_path, device="cpu"):
 
     # Load edges (edge_index)
     m2m_edge_index = BufferList(
-        loads_file("m2m_edge_index.pt"), persistent=False
+        [zero_index_edge_index(ei) for ei in loads_file("m2m_edge_index.pt")],
+        persistent=False,
     )  # List of (2, M_m2m[l])
     g2m_edge_index = loads_file("g2m_edge_index.pt")  # (2, M_g2m)
     m2g_edge_index = loads_file("m2g_edge_index.pt")  # (2, M_m2g)
+
+    # Change first indices to 0
+    g2m_edge_index = zero_index_edge_index(g2m_edge_index)
+    m2g_edge_index = zero_index_edge_index(m2g_edge_index)
 
     n_levels = len(m2m_edge_index)
     hierarchical = n_levels > 1  # Nor just single level mesh graph
@@ -128,10 +142,18 @@ def load_graph(graph_dir_path, device="cpu"):
     if hierarchical:
         # Load up and down edges and features
         mesh_up_edge_index = BufferList(
-            loads_file("mesh_up_edge_index.pt"), persistent=False
+            [
+                zero_index_edge_index(ei)
+                for ei in loads_file("mesh_up_edge_index.pt")
+            ],
+            persistent=False,
         )  # List of (2, M_up[l])
         mesh_down_edge_index = BufferList(
-            loads_file("mesh_down_edge_index.pt"), persistent=False
+            [
+                zero_index_edge_index(ei)
+                for ei in loads_file("mesh_down_edge_index.pt")
+            ],
+            persistent=False,
         )  # List of (2, M_down[l])
 
         mesh_up_features = loads_file(
