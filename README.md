@@ -106,6 +106,12 @@ The graph-related files are stored in a directory called `graphs`.
 ### Create remaining static features
 To create the remaining static files run the scripts `create_global_grid_features.py`, `create_global_forcing.py` and `create_parameter_weights.py`.
 
+## Loading Pre-Trained Models
+
+Checkpoints for the pre-trained models from the paper can be downloaded from [here](https://liuonline-my.sharepoint.com/:f:/g/personal/joeos82_liu_se/Eux3kNp8ZitPuuMSa_XyV8EBdFhHxxuaP7OVPFAW2Tb0xg?e=oI7ac7). 
+The directory `eval_scripts` in this repository contains example scripts that load these checkpoints and run evaluation.
+For these scripts to work the downloaded checkpoints should be placed in a directory called `paper_checkpoints` and the graphs named as described above.
+
 ## Weights & Biases Integration
 The project is fully integrated with [Weights & Biases](https://www.wandb.ai/) (W&B) for logging and visualization, but can just as easily be used without it.
 When W&B is used, training configuration, training/test statistics and plots are sent to the W&B servers and made available in an interactive web interface.
