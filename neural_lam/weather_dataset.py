@@ -50,8 +50,11 @@ class WeatherDataset(torch.utils.data.Dataset):
             raise ValueError(
                 "The provided datastore only provides "
                 f"{len(self.da_state.time)} total time steps, which is too few "
-                "to create a single sample for the WeatherDataset configuration used"
-                f" in the `{split}` split."
+                "to create a single sample for the WeatherDataset "
+                f"configuration used in the `{split}` split. You could try "
+                "either reducing the number of autoregressive steps "
+                "(`ar_steps`) and/or the forcing window size "
+                "(`include_past_forcing` and `include_future_forcing`)"
             )
 
         # Set up for standardization
