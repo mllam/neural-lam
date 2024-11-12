@@ -561,7 +561,7 @@ def create_graph_from_datastore(
 def cli(input_args=None):
     parser = ArgumentParser(description="Graph generation arguments")
     parser.add_argument(
-        "config_path",
+        "--config_path",
         type=str,
         help="Path to neural-lam configuration file",
     )
@@ -589,6 +589,8 @@ def cli(input_args=None):
         help="Generate hierarchical mesh graph (default: False)",
     )
     args = parser.parse_args(input_args)
+
+    assert args.config is not None, "Specify your config with --config_path"
 
     # Load neural-lam configuration and datastore to use
     _, datastore = load_config_and_datastore(config_path=args.config_path)

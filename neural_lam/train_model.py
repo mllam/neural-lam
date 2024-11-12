@@ -30,7 +30,7 @@ def main(input_args=None):
         description="Train or evaluate NeurWP models for LAM"
     )
     parser.add_argument(
-        "config_path",
+        "--config_path",
         type=str,
         help="Path to the configuration for neural-lam",
     )
@@ -209,6 +209,7 @@ def main(input_args=None):
     }
 
     # Asserts for arguments
+    assert args.config is not None, "Specify your config with --config_path"
     assert args.model in MODELS, f"Unknown model: {args.model}"
     assert args.eval in (
         None,

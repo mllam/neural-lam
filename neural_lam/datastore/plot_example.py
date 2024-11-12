@@ -2,7 +2,7 @@
 import matplotlib.pyplot as plt
 
 # Local
-from .config import load_config_and_datastore
+from . import DATASTORES, init_datastore
 
 
 def plot_example_from_datastore(
@@ -106,6 +106,13 @@ if __name__ == "__main__":
         formatter_class=argparse.ArgumentDefaultsHelpFormatter
     )
     parser.add_argument(
+        "--datastore_kind",
+        type=str,
+        choices=DATASTORES.keys(),
+        default="mdp",
+        help="Kind of datastore to use",
+    )
+    parser.add_argument(
         "--datastore_config_path",
         type=str,
         default="tests/datastore_examples/mdp/config.yaml",
@@ -150,6 +157,10 @@ if __name__ == "__main__":
     )
     args = parser.parse_args()
 
+    assert (
+        args.datastore_config_path is not None
+    ), "Specify your datastore config with --datastore_config_path"
+
     selection = dict(args.selection)
     index_selection = dict(args.index_selection)
 
@@ -161,9 +172,7 @@ if __name__ == "__main__":
             "column dimension and/or selection."
         )
 
-    _, datastore = load_config_and_datastore(
-        config_path=args.datastore_config_path
-    )
+    _, datastore = init_datastore(config_path=args.datastore_config_path)
 
     plot_example_from_datastore(
         args.category,
