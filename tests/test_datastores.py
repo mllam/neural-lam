@@ -48,6 +48,7 @@ import xarray as xr
 # First-party
 from neural_lam.datastore import DATASTORES
 from neural_lam.datastore.base import BaseRegularGridDatastore
+from neural_lam.datastore.plot_example import plot_example_from_datastore
 from tests.conftest import init_datastore_example
 
 
@@ -364,3 +365,21 @@ def test_dataarray_shapes(datastore_name):
     )
     # assert diff == 0 with tolerance 1e-6
     assert torch.allclose(diff, torch.zeros_like(diff), atol=1e-6)
+
+
+@pytest.mark.parametrize("datastore_name", DATASTORES.keys())
+def test_plot_example_from_datastore(datastore_name):
+    """Check that the `plot_example_from_datastore` function is implemented."""
+    datastore = init_datastore_example(datastore_name)
+    fig = plot_example_from_datastore(
+        category="static",
+        datastore=datastore,
+        col_dim="{category}_feature",
+        split="train",
+        standardize=True,
+        selection={},
+        index_selection={},
+    )
+
+    assert fig is not None
+    assert fig.get_axes()
