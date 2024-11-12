@@ -310,22 +310,20 @@ def get_grid_shape_state(datastore_name):
 
 
 @pytest.mark.parametrize("datastore_name", DATASTORES.keys())
-def test_stacking_grid_coords(datastore_name):
+@pytest.mark.parametrize("category", ["state", "forcing", "static"])
+def test_stacking_grid_coords(datastore_name, category):
     """Check that the `datastore.stack_grid_coords` method is implemented."""
     datastore = init_datastore_example(datastore_name)
 
     if not isinstance(datastore, BaseRegularGridDatastore):
         pytest.skip("Datastore does not implement `BaseCartesianDatastore`")
 
-    da_static = datastore.get_dataarray("static", split=None)
+    da_static = datastore.get_dataarray(category=category, split=None)
 
     da_static_unstacked = datastore.unstack_grid_coords(da_static).load()
     da_static_test = datastore.stack_grid_coords(da_static_unstacked)
 
-    # XXX: for the moment unstacking doesn't guarantee the order of the
-    # dimensions maybe we should enforce this?
-    da_static_test = da_static_test.transpose(*da_static.dims)
-
+    assert da_static.dims == da_static_test.dims
     xr.testing.assert_equal(da_static, da_static_test)
 
 

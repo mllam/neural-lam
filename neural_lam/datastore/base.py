@@ -463,7 +463,22 @@ class BaseRegularGridDatastore(BaseDatastore):
         if "grid_index" in da_or_ds.dims:
             return da_or_ds
 
-        return da_or_ds.stack(grid_index=self.CARTESIAN_COORDS)
+        da_or_ds_stacked = da_or_ds.stack(grid_index=self.CARTESIAN_COORDS)
+        # find the feature dimension, which has named with the format
+        # `{category}_feature`
+        potential_feature_dims = [
+            d for d in da_or_ds_stacked.dims if d.endswith("_feature")
+        ]
+        if not len(potential_feature_dims) == 1:
+            raise ValueError(
+                "Expected exactly one feature dimension in the stacked data, "
+                f"got {potential_feature_dims}"
+            )
+        feature_dim = potential_feature_dims[0]
+
+        # ensure that grid_index is the first dimension, and the feature
+        # dimension is the second
+        return da_or_ds_stacked.transpose("grid_index", feature_dim, ...)
 
     @property
     @functools.lru_cache
