@@ -64,14 +64,24 @@ def download_meps_example_reduced_dataset():
         with open(config_path, "w") as f:
             yaml.dump(config, f)
 
-    # create parameters
-    compute_standardization_stats_meps.main(
-        datastore_config_path=config_path,
-        batch_size=8,
-        step_length=3,
-        n_workers=1,
-        distributed=False,
-    )
+    # create parameters, only run if the files we expect are not present
+    expected_parameter_files = [
+        "parameter_mean.pt",
+        "parameter_std.pt",
+        "diff_mean.pt",
+        "diff_std.pt",
+    ]
+    expected_parameter_filepaths = [
+        dataset_path / "static" / fn for fn in expected_parameter_files
+    ]
+    if any(not p.exists() for p in expected_parameter_filepaths):
+        compute_standardization_stats_meps.main(
+            datastore_config_path=config_path,
+            batch_size=8,
+            step_length=3,
+            n_workers=1,
+            distributed=False,
+        )
 
     return config_path
 
