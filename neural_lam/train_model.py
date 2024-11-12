@@ -153,7 +153,7 @@ def main(input_args=None):
         "--ar_steps_eval",
         type=int,
         default=10,
-        help="Number of steps to unroll prediction for in loss function "
+        help="Number of steps to unroll prediction for during evaluation "
         "(default: 10)",
     )
     parser.add_argument(
