@@ -20,14 +20,38 @@ from neural_lam.datastore.base import (
 
 
 class DummyDatastore(BaseRegularGridDatastore):
+    """
+    Datastore that creates some dummy data for testing purposes. The data
+    consists of state, forcing, and static variables, and is stored in a
+    regular grid (using Lambert Azimuthal Equal Area projection). The domain
+    is centered on Denmark and has a size of 500x500 km.
+    """
+
     SHORT_NAME = "dummydata"
     T0 = isodate.parse_datetime("2021-01-01T00:00:00")
     N_FEATURES = dict(state=5, forcing=2, static=1)
     CARTESIAN_COORDS = ["x", "y"]
 
+    # center the domain on Denmark
+    latlon_center = [56, 10]  # latitude, longitude
+    bbox_size_km = [500, 500]  # km
+
     def __init__(
         self, config_path=None, n_grid_points=10000, n_timesteps=10
     ) -> None:
+        """
+        Create a dummy datastore with random data.
+
+        Parameters
+        ----------
+        config_path : None
+            No config file is needed for the dummy datastore. This argument is
+            only present to match the signature of the other datastores.
+        n_grid_points : int
+            The number of grid points in the dataset. Must be a perfect square.
+        n_timesteps : int
+            The number of timesteps in the dataset.
+        """
         assert (
             config_path is None
         ), "No config file is needed for the dummy datastore"
@@ -38,33 +62,35 @@ class DummyDatastore(BaseRegularGridDatastore):
             n_points_1d * n_points_1d == n_grid_points
         ), "n_grid_points must be a perfect square"
 
-        # Create lat/lon coordinates for Denmark region
-        lon_1d = np.linspace(8, 13, n_points_1d)  # Denmark longitude range
-        lat_1d = np.linspace(54, 58, n_points_1d)  # Denmark latitude range
-        lon_mesh, lat_mesh = np.meshgrid(lon_1d, lat_1d)
+        # create equal area grid
+        lx, ly = self.bbox_size_km
+        x = np.linspace(-lx / 2.0 * 1.0e3, lx / 2.0 * 1.0e3, n_points_1d)
+        y = np.linspace(-ly / 2.0 * 1.0e3, ly / 2.0 * 1.0e3, n_points_1d)
 
-        # Project the lat/lon coordinates to x/y using the projection
-        coords = self.coords_projection.transform_points(
-            src_crs=ccrs.PlateCarree(),
-            x=lon_mesh.flatten(),
-            y=lat_mesh.flatten(),
+        xs, ys = np.meshgrid(x, y)
+
+        # Create lat/lon coordinates using equal area projection
+        lon_mesh, lat_mesh = (
+            ccrs.PlateCarree()
+            .transform_points(
+                src_crs=self.coords_projection,
+                x=xs.flatten(),
+                y=ys.flatten(),
+            )[:, :2]
+            .T
         )
-
-        # Reshape the projected coordinates back to 2D
-        x_2d = coords[:, 0].reshape(n_points_1d, n_points_1d)
-        y_2d = coords[:, 1].reshape(n_points_1d, n_points_1d)
 
         # Create base dataset with proper coordinates
         self.ds = xr.Dataset(
             coords={
                 "x": (
                     "x",
-                    x_2d[:, 0],
+                    x,
                     {"units": "m"},
                 ),  # Use first column for x coordinates
                 "y": (
                     "y",
-                    y_2d[0, :],
+                    y,
                     {"units": "m"},
                 ),  # Use first row for y coordinates
                 "longitude": (
@@ -390,8 +416,9 @@ class DummyDatastore(BaseRegularGridDatastore):
 
         """
         # make a projection centered on Denmark
+        lat_center, lon_center = self.latlon_center
         return ccrs.LambertAzimuthalEqualArea(
-            central_latitude=56, central_longitude=10
+            central_latitude=lat_center, central_longitude=lon_center
         )
 
     @property
