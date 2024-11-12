@@ -73,6 +73,7 @@ def plot_on_axis(
     vmax=None,
     ax_title=None,
     cmap="plasma",
+    grid_limits=None
 ):
     """
     Plot weather state on given axis
@@ -82,7 +83,7 @@ def plot_on_axis(
 
     extent = datastore.get_xy_extent("state")
 
-    da.plot.imshow(
+    im = da.plot.imshow(
         ax=ax,
         origin="lower",
         x="x",
@@ -95,6 +96,7 @@ def plot_on_axis(
 
     if ax_title:
         ax.set_title(ax_title, size=15)
+
     return im
 
 
@@ -173,6 +175,7 @@ def plot_spatial_error(
         .T.cpu()
         .numpy()
     )
+    extent = datastore.get_xy_extent("state")
 
     # TODO: This needs to be converted to DA and use plot_on_axis
     im = ax.imshow(
