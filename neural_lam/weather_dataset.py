@@ -49,10 +49,9 @@ class WeatherDataset(torch.utils.data.Dataset):
         if self.__len__() <= 0:
             raise ValueError(
                 "The provided datastore only provides "
-                f"{len(self.da_state.time)} time steps for `{split}` split, "
-                f"which is less than the required 2+ar_steps "
-                f"(2+{self.ar_steps}={2 + self.ar_steps}) for creating a "
-                "sample with initial and target states."
+                f"{len(self.da_state.time)} total time steps, which is too few "
+                "to create a single sample for the WeatherDataset configuration used"
+                f" in the `{split}` split."
             )
 
         # Set up for standardization
