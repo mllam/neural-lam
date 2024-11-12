@@ -6,6 +6,7 @@ neural-lam v0.1.0.
 # Standard library
 import functools
 import re
+import warnings
 from functools import cached_property
 from pathlib import Path
 from typing import List
@@ -719,8 +720,17 @@ class NpyFilesDatastoreMEPS(BaseRegularGridDatastore):
         if category == "state":
             mean_values = load_pickled_tensor("parameter_mean.pt")
             std_values = load_pickled_tensor("parameter_std.pt")
-            mean_diff_values = load_pickled_tensor("diff_mean.pt")
-            std_diff_values = load_pickled_tensor("diff_std.pt")
+            try:
+                mean_diff_values = load_pickled_tensor("diff_mean.pt")
+                std_diff_values = load_pickled_tensor("diff_std.pt")
+            except FileNotFoundError:
+                warnings.warn(f"Could not load diff mean/std for {category}")
+                # XXX: this is a hack, but when running
+                # compute_standardization_stats the diff mean/std files are
+                # created, but require the std and mean files
+                mean_diff_values = np.empty_like(mean_values)
+                std_diff_values = np.empty_like(std_values)
+
         elif category == "forcing":
             flux_stats = load_pickled_tensor("flux_stats.pt")  # (2,)
             flux_mean, flux_std = flux_stats

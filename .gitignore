@@ -79,6 +79,7 @@ tags
 
 # macos
 .DS_Store
+__MACOSX
 
 # pdm (https://pdm-project.org/en/stable/)
 .pdm-python

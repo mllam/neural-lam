@@ -1,5 +1,5 @@
 # Standard library
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any, Dict, List
 
 # Third-party
@@ -46,7 +46,7 @@ class Dataset:
     num_timesteps: int
     step_length: int
     num_ensemble_members: int
-    remove_state_features_with_index: List[int]
+    remove_state_features_with_index: List[int] = field(default_factory=list)
 
 
 @dataclass

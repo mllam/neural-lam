@@ -51,11 +51,11 @@ class ManualStateFeatureWeighting:
 
     Attributes
     ----------
-    values : Dict[str, float]
+    weights : Dict[str, float]
         Manual weights for the state features.
     """
 
-    values: Dict[str, float]
+    weights: Dict[str, float]
 
 
 @dataclasses.dataclass
@@ -123,6 +123,17 @@ class NeuralLAMConfig(dataclass_wizard.JSONWizard, dataclass_wizard.YAMLWizard):
 
         tag_key = "__config_class__"
         auto_assign_tags = True
+        # ensure that all parts of the loaded configuration match the
+        # dataclasses used
+        # TODO: this should be enabled once
+        # https://github.com/rnag/dataclass-wizard/issues/137 is fixed, but
+        # currently cannot be used together with `auto_assign_tags` due to a
+        # bug it seems
+        # raise_on_unknown_json_key = True
+
+
+class InvalidConfigError(Exception):
+    pass
 
 
 def load_config_and_datastore(
@@ -142,7 +153,13 @@ def load_config_and_datastore(
     tuple[NeuralLAMConfig, Union[MDPDatastore, NpyFilesDatastoreMEPS]]
         The Neural-LAM configuration and the loaded datastore.
     """
-    config = NeuralLAMConfig.from_yaml_file(config_path)
+    try:
+        config = NeuralLAMConfig.from_yaml_file(config_path)
+    except dataclass_wizard.errors.UnknownJSONKey as ex:
+        raise InvalidConfigError(
+            "There was an error loading the configuration file at "
+            f"{config_path}. "
+        ) from ex
     # datastore config is assumed to be relative to the config file
     datastore_config_path = (
         Path(config_path).parent / config.datastore.config_path

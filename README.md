@@ -150,7 +150,10 @@ training:
       v100m: 1.0
 ```
 
-For now the neural-lam config only defines two things: 1) the kind of data store and the path to its config, and 2) the weighting of different features in the loss function.
+For now the neural-lam config only defines two things: 1) the kind of data
+store and the path to its config, and 2) the weighting of different features in
+the loss function. If you don't define the state feature weighting it will default
+to weighting all features equally.
 
 (This example is taken from the `tests/datastore_examples/mdp` directory.)
 
@@ -270,11 +273,88 @@ Graphs used in the initial paper are also available for download at the same lin
 Note that this is far too little data to train any useful models, but all pre-processing and training steps can be run with it.
 It should thus be useful to make sure that your python environment is set up correctly and that all the code can be ran without any issues.
 
-```yaml
-# meps.datastore.yaml
-```
+The following datastore configuration works with MEPS dataset:
 
 ```yaml
+# meps.datastore.yaml
+dataset:
+  name: meps_example
+  num_forcing_features: 16
+  var_longnames:
+  - pres_heightAboveGround_0_instant
+  - pres_heightAboveSea_0_instant
+  - nlwrs_heightAboveGround_0_accum
+  - nswrs_heightAboveGround_0_accum
+  - r_heightAboveGround_2_instant
+  - r_hybrid_65_instant
+  - t_heightAboveGround_2_instant
+  - t_hybrid_65_instant
+  - t_isobaricInhPa_500_instant
+  - t_isobaricInhPa_850_instant
+  - u_hybrid_65_instant
+  - u_isobaricInhPa_850_instant
+  - v_hybrid_65_instant
+  - v_isobaricInhPa_850_instant
+  - wvint_entireAtmosphere_0_instant
+  - z_isobaricInhPa_1000_instant
+  - z_isobaricInhPa_500_instant
+  var_names:
+  - pres_0g
+  - pres_0s
+  - nlwrs_0
+  - nswrs_0
+  - r_2
+  - r_65
+  - t_2
+  - t_65
+  - t_500
+  - t_850
+  - u_65
+  - u_850
+  - v_65
+  - v_850
+  - wvint_0
+  - z_1000
+  - z_500
+  var_units:
+  - Pa
+  - Pa
+  - W/m\textsuperscript{2}
+  - W/m\textsuperscript{2}
+  - "-"
+  - "-"
+  - K
+  - K
+  - K
+  - K
+  - m/s
+  - m/s
+  - m/s
+  - m/s
+  - kg/m\textsuperscript{2}
+  - m\textsuperscript{2}/s\textsuperscript{2}
+  - m\textsuperscript{2}/s\textsuperscript{2}
+  num_timesteps: 65
+  num_ensemble_members: 2
+  step_length: 3
+  remove_state_features_with_index: [15]
+grid_shape_state:
+- 268
+- 238
+projection:
+  class_name: LambertConformal
+  kwargs:
+    central_latitude: 63.3
+    central_longitude: 15.0
+    standard_parallels:
+    - 63.3
+    - 63.3
+```
+
+Which you can then use in a neural-lam configuration file like this:
+
+```yaml
+# config.yaml
 datastore:
   kind: npyfilesmeps
   config_path: meps.datastore.yaml
@@ -286,42 +366,22 @@ training:
       v100m: 1.0
 ```
 
-## Pre-processing
+For npy-file based datastores you must separately run the command that creates the variables used for standardization:
 
-There are two main steps in the pre-processing pipeline: creating the graph and creating additional features/normalisation/boundary-masks.
+```bash
+python -m neural_lam.datastore.npyfilesmeps.compute_standardization_stats <path-to-datastore-config>
+```
 
-The amount of pre-processing required will depend on what kind of datastore you will be using for training.
+### Graph creation
 
-### Additional inputs
-
-#### MultiZarr Datastore
-
-* `python -m neural_lam.create_boundary_mask`
-* `python -m neural_lam.create_datetime_forcings`
-* `python -m neural_lam.create_norm`
-
-#### NpyFiles Datastore
-
-#### MDP (mllam-data-prep) Datastore
-
-An overview of how the different pre-processing steps, training and files depend on each other is given in this figure:
-<p align="middle">
-  <img src="figures/component_dependencies.png"/>
-</p>
-In order to start training models at least three pre-processing steps have to be run:
-
-### Create graph
 Run `python -m neural_lam.create_mesh` with suitable options to generate the graph you want to use (see `python neural_lam.create_mesh --help` for a list of options).
 The graphs used for the different models in the [paper](#graph-based-neural-weather-prediction-for-limited-area-modeling) can be created as:
 
-* **GC-LAM**: `python -m neural_lam.create_mesh --graph multiscale`
-* **Hi-LAM**: `python -m neural_lam.create_mesh --graph hierarchical --hierarchical` (also works for Hi-LAM-Parallel)
-* **L1-LAM**: `python -m neural_lam.create_mesh --graph 1level --levels 1`
+* **GC-LAM**: `python -m neural_lam.create_mesh <neural-lam-config-path> --graph multiscale`
+* **Hi-LAM**: `python -m neural_lam.create_mesh <neural-lam-config-path> --graph hierarchical --hierarchical` (also works for Hi-LAM-Parallel)
+* **L1-LAM**: `python -m neural_lam.create_mesh <neural-lam-config-path> --graph 1level --levels 1`
 
 The graph-related files are stored in a directory called `graphs`.
-
-### Create remaining static features
-To create the remaining static files run `python -m neural_lam.create_grid_features` and `python -m neural_lam.create_parameter_weights`.
 
 ## Weights & Biases Integration
 The project is fully integrated with [Weights & Biases](https://www.wandb.ai/) (W&B) for logging and visualization, but can just as easily be used without it.
@@ -340,12 +400,11 @@ wandb off
 ```
 
 ## Train Models
-Models can be trained using `python -m neural_lam.train_model <datastore_type> <datastore_config_path>`.
+Models can be trained using `python -m neural_lam.train_model <config_path>`.
 Run `python neural_lam.train_model --help` for a full list of training options.
 A few of the key ones are outlined below:
 
-* `<datastore_type>`: The kind of datastore that you are using (should be one of `npyfiles`, `multizarr` or `mllam`)
-* `<datastore_config_path>`: Path to the data store configuration file
+* `<config_path>`: Path to the configuration for neural-lam (for example in `data/myexperiment/config.yaml`).
 * `--model`: Which model to train
 * `--graph`: Which graph to use with the model
 * `--epochs`: Number of epochs to train for

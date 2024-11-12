@@ -27,7 +27,7 @@ def get_manual_state_feature_weights(
         List of floats containing the state feature weights.
     """
     state_feature_names = datastore.get_vars_names(category="state")
-    feature_weight_names = weighting_config.keys()
+    feature_weight_names = weighting_config.weights.keys()
 
     # Check that the state_feature_weights dictionary has a weight for each
     # state feature in the datastore.
@@ -44,7 +44,7 @@ def get_manual_state_feature_weights(
         )
 
     state_feature_weights = [
-        weighting_config.values[feature] for feature in state_feature_names
+        weighting_config.weights[feature] for feature in state_feature_names
     ]
     return state_feature_weights
 

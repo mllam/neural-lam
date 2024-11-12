@@ -8,7 +8,9 @@ import neural_lam.config as nlconfig
 @pytest.mark.parametrize(
     "state_weighting_config",
     [
-        nlconfig.ManualStateFeatureWeighting(values=dict(u100m=1.0, v100m=0.5)),
+        nlconfig.ManualStateFeatureWeighting(
+            weights=dict(u100m=1.0, v100m=0.5)
+        ),
         nlconfig.UniformFeatureWeighting(),
     ],
 )
@@ -53,7 +55,7 @@ manual_weights_config = nlconfig.NeuralLAMConfig(
     datastore=nlconfig.DatastoreSelection(kind="mdp", config_path=""),
     training=nlconfig.TrainingConfig(
         state_feature_weighting=nlconfig.ManualStateFeatureWeighting(
-            values=dict(u100m=1.0, v100m=1.0)
+            weights=dict(u100m=1.0, v100m=1.0)
         )
     ),
 )
