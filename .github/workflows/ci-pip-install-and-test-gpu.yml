@@ -35,16 +35,16 @@ jobs:
         uses: actions/cache/restore@v4
         with:
           path: data
-          key: ${{ runner.os }}-meps-reduced-example-data-v0.1.0
+          key: ${{ runner.os }}-meps-reduced-example-data-v0.2.0
           restore-keys: |
-            ${{ runner.os }}-meps-reduced-example-data-v0.1.0
+            ${{ runner.os }}-meps-reduced-example-data-v0.2.0
 
       - name: Run tests
         run: |
-          python -m pytest
+          python -m pytest -vv -s
 
       - name: Save cache data
         uses: actions/cache/save@v4
         with:
           path: data
-          key: ${{ runner.os }}-meps-reduced-example-data-v0.1.0
+          key: ${{ runner.os }}-meps-reduced-example-data-v0.2.0
