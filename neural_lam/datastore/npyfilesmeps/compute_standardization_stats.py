@@ -167,7 +167,9 @@ def main(
         )
         torch.cuda.set_device(device) if torch.cuda.is_available() else None
 
-    ar_steps = datastore._num_timesteps - 10
+    # Setting this to the original value of the original Oskarsson et al. paper
+    # (2023) -> 65 forecast steps - 2 initial steps = 63
+    ar_steps = 63
     ds = WeatherDataset(
         datastore=datastore,
         split="train",
