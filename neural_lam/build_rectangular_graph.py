@@ -18,7 +18,7 @@ WMG_ARCHETYPES = {
 
 def main(input_args=None):
     parser = argparse.ArgumentParser(
-        description="Graph generation using WMG",
+        description="Rectangular graph generation using weather-models-graph",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
 
