@@ -339,7 +339,6 @@ def test_dataarray_shapes(datastore_name):
     unstacked_tensor = torch.tensor(
         datastore.unstack_grid_coords(static_da).to_numpy(), dtype=torch.float32
     ).squeeze()
-    print(static_da)
 
     reshaped_tensor = (
         torch.tensor(static_da.to_numpy(), dtype=torch.float32)
