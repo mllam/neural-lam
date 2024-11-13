@@ -601,7 +601,8 @@ class ARModel(pl.LightningModule):
                 vis.plot_spatial_error(
                     error=loss_map,
                     datastore=self._datastore,
-                    title=f"Test loss, t={t_i} ({self.step_length * t_i} h)",
+                    title=f"Test loss, t={t_i} "
+                    f"({self._datastore.step_length * t_i} h)",
                 )
                 for t_i, loss_map in zip(
                     self.args.val_steps_to_log, mean_spatial_loss
