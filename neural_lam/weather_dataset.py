@@ -26,10 +26,16 @@ class WeatherDataset(torch.utils.data.Dataset):
         The data split to use ("train", "val" or "test"). Default is "train".
     ar_steps : int, optional
         The number of autoregressive steps. Default is 3.
-    num_past_forcing_steps : int, optional
-        The number of past forcing steps to include. Default is 1.
-    num_future_forcing_steps : int, optional
-        The number of future forcing steps to include. Default is 1.
+    num_past_forcing_steps: int, optional
+        Number of past time steps to include in forcing input. If set to i,
+        forcing from times t-i, t-i+1, ..., t-1, t (and potentially beyond,
+        given num_future_forcing_steps) are included as forcing inputs at time t
+        Default is 1.
+    num_future_forcing_steps: int, optional
+        Number of future time steps to include in forcing input. If set to j,
+        forcing from times t, t+1, ..., t+j-1, t+j (and potentially times before
+        t, given num_past_forcing_steps) are included as forcing inputs at time
+        t. Default is 1.
     standardize : bool, optional
         Whether to standardize the data. Default is True.
     """
