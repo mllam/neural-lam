@@ -48,7 +48,6 @@ class BaseGraphModel(ARModel):
             [self.grid_dim] + self.mlp_blueprint_end
         )
         # Optional separate embedder for boundary nodes
-        print(args.shared_grid_embedder)
         if args.shared_grid_embedder:
             assert self.grid_dim == self.boundary_dim, (
                 "Grid and boundary input dimension must be the same when using "

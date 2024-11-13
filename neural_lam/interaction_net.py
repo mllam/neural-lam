@@ -30,7 +30,7 @@ class InteractionNet(pyg.nn.MessagePassing):
         """
         Create a new InteractionNet
 
-        edge_index: (2,M), Edges in pyg format, with boeth sender and receiver
+        edge_index: (2,M), Edges in pyg format, with both sender and receiver
             node indices starting at 0
         input_dim: Dimensionality of input representations,
             for both nodes and edges
