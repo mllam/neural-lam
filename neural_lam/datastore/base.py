@@ -330,7 +330,7 @@ class BaseDatastore(abc.ABC):
         pass
 
     @functools.lru_cache
-    def expected_dim_order(self, category: str) -> List[str]:
+    def expected_dim_order(self, category: str = None) -> List[str]:
         """
         Return the expected dimension order for the dataarray or dataset
         returned by `get_dataarray` for the given category of data. The
@@ -341,6 +341,9 @@ class BaseDatastore(abc.ABC):
         we can ensure that the dimension order is the same as what is returned
         from `get_dataarray`. And also ensures that downstream uses of a
         datastore (e.g. WeatherDataset) sees the data in a common structure.
+
+        If the category is None, then the it assumed that data only represents
+        a 1D scalar field varying with grid-index.
 
         Parameters
         ----------
@@ -353,13 +356,24 @@ class BaseDatastore(abc.ABC):
             The expected dimension order for the dataarray or dataset.
 
         """
-        dim_order = ["grid_index", f"{category}_feature"]
-        if self.is_forecast:
-            dim_order.extend(["analysis_time", "elapsed_forecast_duration"])
-        elif not self.is_forecast:
-            dim_order.append("time")
-        if self.is_ensemble:
-            dim_order.append("ensemble_member")
+        dim_order = ["grid_index"]
+
+        if category is not None:
+            dim_order.append(f"{category}_feature")
+
+            if category != "static":
+                # static data does not vary in time
+                if self.is_forecast:
+                    dim_order.extend(
+                        ["analysis_time", "elapsed_forecast_duration"]
+                    )
+                elif not self.is_forecast:
+                    dim_order.append("time")
+
+            if self.is_ensemble and category == "state":
+                # XXX: for now we only assume ensemble data for state variables
+                dim_order.append("ensemble_member")
+
         return dim_order
 
 
@@ -498,8 +512,8 @@ class BaseRegularGridDatastore(BaseDatastore):
 
         da_or_ds_stacked = da_or_ds.stack(grid_index=self.CARTESIAN_COORDS)
 
-        # infer what category of data by finding the dimension named in the
-        # format `{category}_feature`
+        # infer what category of data the array represents by finding the
+        # dimension named in the format `{category}_feature`
         category = None
         for dim in da_or_ds_stacked.dims:
             if dim.endswith("_feature"):
@@ -512,7 +526,7 @@ class BaseRegularGridDatastore(BaseDatastore):
 
         dim_order = self.expected_dim_order(category=category)
 
-        return da_or_ds_stacked.transpose(dim_order)
+        return da_or_ds_stacked.transpose(*dim_order)
 
     @property
     @functools.lru_cache

@@ -281,7 +281,8 @@ class MDPDatastore(BaseRegularGridDatastore):
             )
             da_category = da_category.sel(time=slice(t_start, t_end))
 
-        return da_category.transpose(self.expected_dim_order(category=category))
+        dim_order = self.expected_dim_order(category=category)
+        return da_category.transpose(*dim_order)
 
     def get_standardization_dataarray(self, category: str) -> xr.Dataset:
         """
