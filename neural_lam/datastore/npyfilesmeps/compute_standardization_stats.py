@@ -209,8 +209,8 @@ def main(
             )
         # (N_batch, N_t, N_grid, d_features)
         batch = torch.cat((init_batch, target_batch), dim=1)
-        # Flux at 1st windowed position is index 1 in forcing
-        flux_batch = forcing_batch[:, :, :, 1]
+        # Flux at 1st windowed position is index 0 in forcing
+        flux_batch = forcing_batch[:, :, :, 0]
         # (N_batch, d_features,)
         means.append(torch.mean(batch, dim=(1, 2)).cpu())
         squares.append(
