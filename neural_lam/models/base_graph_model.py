@@ -44,15 +44,23 @@ class BaseGraphModel(ARModel):
         # Define sub-models
         # Feature embedders for grid
         self.mlp_blueprint_end = [args.hidden_dim] * (args.hidden_layers + 1)
-        # TODO Optional separate embedder for boundary nodes
-        assert self.grid_dim == self.boundary_dim, (
-            "Grid and boundary input dimension must be the same when using "
-            f"the same encoder, got grid_dim={self.grid_dim}, "
-            f"boundary_dim={self.boundary_dim}"
-        )
         self.grid_embedder = utils.make_mlp(
             [self.grid_dim] + self.mlp_blueprint_end
         )
+        # Optional separate embedder for boundary nodes
+        print(args.shared_grid_embedder)
+        if args.shared_grid_embedder:
+            assert self.grid_dim == self.boundary_dim, (
+                "Grid and boundary input dimension must be the same when using "
+                f"the same embedder, got grid_dim={self.grid_dim}, "
+                f"boundary_dim={self.boundary_dim}"
+            )
+            self.boundary_embedder = self.grid_embedder
+        else:
+            self.boundary_embedder = utils.make_mlp(
+                [self.boundary_dim] + self.mlp_blueprint_end
+            )
+
         self.g2m_embedder = utils.make_mlp([g2m_dim] + self.mlp_blueprint_end)
         self.m2g_embedder = utils.make_mlp([m2g_dim] + self.mlp_blueprint_end)
 
@@ -141,7 +149,7 @@ class BaseGraphModel(ARModel):
 
         # Embed all features
         grid_emb = self.grid_embedder(grid_features)  # (B, num_grid_nodes, d_h)
-        boundary_emb = self.grid_embedder(boundary_features)
+        boundary_emb = self.boundary_embedder(boundary_features)
         # (B, num_boundary_nodes, d_h)
         g2m_emb = self.g2m_embedder(self.g2m_features)  # (M_g2m, d_h)
         m2g_emb = self.m2g_embedder(self.m2g_features)  # (M_m2g, d_h)

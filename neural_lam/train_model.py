@@ -116,6 +116,13 @@ def main(input_args=None):
         "output dimensions "
         "(default: False (no))",
     )
+    parser.add_argument(
+        "--shared_grid_embedder",
+        action="store_true",  # Default to separate embedders
+        help="If the same embedder MLP should be used for interior and boundary"
+        " grid nodes. Note that this requires the same dimensionality for "
+        "both kinds of grid inputs. (default: False (no))",
+    )
 
     # Training options
     parser.add_argument(

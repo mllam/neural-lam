@@ -128,7 +128,7 @@ class ARModel(pl.LightningModule):
 
         (
             self.num_boundary_nodes,
-            boundary_static_dim,  # TODO Need for computation below
+            boundary_static_dim,  # TODO Will need for computation below
         ) = self.boundary_static_features.shape
         self.num_input_nodes = self.num_grid_nodes + self.num_boundary_nodes
         self.grid_dim = (
