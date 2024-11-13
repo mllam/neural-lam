@@ -209,7 +209,9 @@ def main(input_args=None):
     }
 
     # Asserts for arguments
-    assert args.config is not None, "Specify your config with --config_path"
+    assert (
+        args.config_path is not None
+    ), "Specify your config with --config_path"
     assert args.model in MODELS, f"Unknown model: {args.model}"
     assert args.eval in (
         None,
