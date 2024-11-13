@@ -192,13 +192,13 @@ def main(input_args=None):
              metrics (e.g. '{"1": [1, 2], "3": [3, 4]}')""",
     )
     parser.add_argument(
-        "--include_past_forcing",
+        "--num_past_forcing_steps",
         type=int,
         default=1,
         help="Number of past time steps to use as input for forcing data",
     )
     parser.add_argument(
-        "--include_future_forcing",
+        "--num_future_forcing_steps",
         type=int,
         default=1,
         help="Number of future time steps to use as input for forcing data",
@@ -232,8 +232,8 @@ def main(input_args=None):
         ar_steps_train=args.ar_steps_train,
         ar_steps_eval=args.ar_steps_eval,
         standardize=True,
-        include_past_forcing=args.include_past_forcing,
-        include_future_forcing=args.include_future_forcing,
+        num_past_forcing_steps=args.num_past_forcing_steps,
+        num_future_forcing_steps=args.num_future_forcing_steps,
         batch_size=args.batch_size,
         num_workers=args.num_workers,
     )

@@ -43,8 +43,8 @@ class ARModel(pl.LightningModule):
             category="state"
         )
         da_boundary_mask = datastore.boundary_mask
-        include_past_forcing = args.include_past_forcing
-        include_future_forcing = args.include_future_forcing
+        num_past_forcing_steps = args.num_past_forcing_steps
+        num_future_forcing_steps = args.num_future_forcing_steps
 
         # Load static features for grid/data, NB: self.predict_step assumes
         # dimension order to be (grid_index, static_feature)
@@ -109,7 +109,7 @@ class ARModel(pl.LightningModule):
             2 * self.grid_output_dim
             + grid_static_dim
             + num_forcing_vars
-            * (include_past_forcing + include_future_forcing + 1)
+            * (num_past_forcing_steps + num_future_forcing_steps + 1)
         )
 
         # Instantiate loss function

@@ -64,8 +64,8 @@ def test_training(datastore_name):
         standardize=True,
         batch_size=2,
         num_workers=1,
-        include_past_forcing=1,
-        include_future_forcing=1,
+        num_past_forcing_steps=1,
+        num_future_forcing_steps=1,
     )
 
     class ModelArgs:
@@ -83,8 +83,8 @@ def test_training(datastore_name):
         lr = 1.0e-3
         val_steps_to_log = [1, 3]
         metrics_watch = []
-        include_past_forcing = 1
-        include_future_forcing = 1
+        num_past_forcing_steps = 1
+        num_future_forcing_steps = 1
 
     model_args = ModelArgs()
 

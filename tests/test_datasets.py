@@ -34,14 +34,14 @@ def test_dataset_item_shapes(datastore_name):
     N_gridpoints = datastore.num_grid_points
 
     N_pred_steps = 4
-    include_past_forcing = 1
-    include_future_forcing = 1
+    num_past_forcing_steps = 1
+    num_future_forcing_steps = 1
     dataset = WeatherDataset(
         datastore=datastore,
         split="train",
         ar_steps=N_pred_steps,
-        include_past_forcing=include_past_forcing,
-        include_future_forcing=include_future_forcing,
+        num_past_forcing_steps=num_past_forcing_steps,
+        num_future_forcing_steps=num_future_forcing_steps,
     )
 
     item = dataset[0]
@@ -67,7 +67,7 @@ def test_dataset_item_shapes(datastore_name):
     assert forcing.shape[0] == N_pred_steps
     assert forcing.shape[1] == N_gridpoints
     assert forcing.shape[2] == datastore.get_num_data_vars("forcing") * (
-        include_past_forcing + include_future_forcing + 1
+        num_past_forcing_steps + num_future_forcing_steps + 1
     )
 
     # batch times
@@ -85,14 +85,14 @@ def test_dataset_item_create_dataarray_from_tensor(datastore_name):
     datastore = init_datastore_example(datastore_name)
 
     N_pred_steps = 4
-    include_past_forcing = 1
-    include_future_forcing = 1
+    num_past_forcing_steps = 1
+    num_future_forcing_steps = 1
     dataset = WeatherDataset(
         datastore=datastore,
         split="train",
         ar_steps=N_pred_steps,
-        include_past_forcing=include_past_forcing,
-        include_future_forcing=include_future_forcing,
+        num_past_forcing_steps=num_past_forcing_steps,
+        num_future_forcing_steps=num_future_forcing_steps,
     )
 
     idx = 0
@@ -184,8 +184,8 @@ def test_single_batch(datastore_name, split):
         hidden_layers = 1
         processor_layers = 4
         mesh_aggr = "sum"
-        include_past_forcing = 1
-        include_future_forcing = 1
+        num_past_forcing_steps = 1
+        num_future_forcing_steps = 1
 
     args = ModelArgs()
 
@@ -248,8 +248,8 @@ def test_dataset_length(dataset_config):
         datastore=datastore,
         split="train",
         ar_steps=dataset_config["ar_steps"],
-        include_past_forcing=dataset_config["past"],
-        include_future_forcing=dataset_config["future"],
+        num_past_forcing_steps=dataset_config["past"],
+        num_future_forcing_steps=dataset_config["future"],
     )
 
     # We expect dataset to contain this many samples

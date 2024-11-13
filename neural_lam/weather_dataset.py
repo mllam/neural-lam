@@ -18,6 +18,20 @@ class WeatherDataset(torch.utils.data.Dataset):
 
     This class loads and processes weather data from a given datastore.
 
+    Parameters
+    ----------
+    datastore : BaseDatastore
+        The datastore to load the data from (e.g. mdp).
+    split : str, optional
+        The data split to use ("train", "val" or "test"). Default is "train".
+    ar_steps : int, optional
+        The number of autoregressive steps. Default is 3.
+    num_past_forcing_steps : int, optional
+        The number of past forcing steps to include. Default is 1.
+    num_future_forcing_steps : int, optional
+        The number of future forcing steps to include. Default is 1.
+    standardize : bool, optional
+        Whether to standardize the data. Default is True.
     """
 
     def __init__(
@@ -25,8 +39,8 @@ class WeatherDataset(torch.utils.data.Dataset):
         datastore: BaseDatastore,
         split="train",
         ar_steps=3,
-        include_past_forcing=1,
-        include_future_forcing=1,
+        num_past_forcing_steps=1,
+        num_future_forcing_steps=1,
         standardize=True,
     ):
         super().__init__()
@@ -34,8 +48,8 @@ class WeatherDataset(torch.utils.data.Dataset):
         self.split = split
         self.ar_steps = ar_steps
         self.datastore = datastore
-        self.include_past_forcing = include_past_forcing
-        self.include_future_forcing = include_future_forcing
+        self.num_past_forcing_steps = num_past_forcing_steps
+        self.num_future_forcing_steps = num_future_forcing_steps
 
         self.da_state = self.datastore.get_dataarray(
             category="state", split=self.split
@@ -54,7 +68,7 @@ class WeatherDataset(torch.utils.data.Dataset):
                 f"configuration used in the `{split}` split. You could try "
                 "either reducing the number of autoregressive steps "
                 "(`ar_steps`) and/or the forcing window size "
-                "(`include_past_forcing` and `include_future_forcing`)"
+                "(`num_past_forcing_steps` and `num_future_forcing_steps`)"
             )
 
         # Set up for standardization
@@ -113,21 +127,21 @@ class WeatherDataset(torch.utils.data.Dataset):
             # Where:
             #   - total time steps: len(self.da_state.time)
             #   - autoregressive steps: self.ar_steps
-            #   - past forcing: max(2, self.include_past_forcing) (at least 2
+            #   - past forcing: max(2, self.num_past_forcing_steps) (at least 2
             #     time steps are required for the initial state)
-            #   - future forcing: self.include_future_forcing
+            #   - future forcing: self.num_future_forcing_steps
             return (
                 len(self.da_state.time)
                 - self.ar_steps
-                - max(2, self.include_past_forcing)
-                - self.include_future_forcing
+                - max(2, self.num_past_forcing_steps)
+                - self.num_future_forcing_steps
             )
 
     def _slice_state_time(self, da_state, idx, n_steps: int):
         """
         Produce a time slice of the given dataarray `da_state` (state) starting
         at `idx` and with `n_steps` steps. An `offset`is calculated based on the
-        `include_past_forcing` class attribute. `Offset` is used to offset the
+        `num_past_forcing_steps` class attribute. `Offset` is used to offset the
         start of the sample, to assert that enough previous time steps are
         available for the 2 initial states and any corresponding forcings
         (calculated in `_slice_forcing_time`).
@@ -153,8 +167,8 @@ class WeatherDataset(torch.utils.data.Dataset):
         # The current implementation requires at least 2 time steps for the
         # initial state (see GraphCast).
         init_steps = 2
-        start_idx = idx + max(0, self.include_past_forcing - init_steps)
-        end_idx = idx + max(init_steps, self.include_past_forcing) + n_steps
+        start_idx = idx + max(0, self.num_past_forcing_steps - init_steps)
+        end_idx = idx + max(init_steps, self.num_past_forcing_steps) + n_steps
         # slice the dataarray to include the required number of time steps
         if self.datastore.is_forecast:
             # this implies that the data will have both `analysis_time` and
@@ -185,7 +199,7 @@ class WeatherDataset(torch.utils.data.Dataset):
         """
         Produce a time slice of the given dataarray `da_forcing` (forcing)
         starting at `idx` and with `n_steps` steps. An `offset` is calculated
-        based on the `include_past_forcing` class attribute. It is used to
+        based on the `num_past_forcing_steps` class attribute. It is used to
         offset the start of the sample, to ensure that enough previous time
         steps are available for the forcing data. The forcing data is windowed
         around the current autoregressive time step to include the past and
@@ -215,7 +229,7 @@ class WeatherDataset(torch.utils.data.Dataset):
         # as past forcings.
         init_steps = 2
         da_list = []
-        offset = idx + max(init_steps, self.include_past_forcing)
+        offset = idx + max(init_steps, self.num_past_forcing_steps)
 
         if self.datastore.is_forecast:
             # This implies that the data will have both `analysis_time` and
@@ -225,8 +239,8 @@ class WeatherDataset(torch.utils.data.Dataset):
             # sample per forecast.
             # Add a 'time' dimension using the actual forecast times
             for step in range(n_steps):
-                start_idx = offset + step - self.include_past_forcing
-                end_idx = offset + step + self.include_future_forcing
+                start_idx = offset + step - self.num_past_forcing_steps
+                end_idx = offset + step + self.num_future_forcing_steps
 
                 current_time = (
                     da_forcing.analysis_time[idx]
@@ -261,8 +275,8 @@ class WeatherDataset(torch.utils.data.Dataset):
             # offset is only relevant for the very first (and last) samples in
             # the dataset.
             for step in range(n_steps):
-                start_idx = offset + step - self.include_past_forcing
-                end_idx = offset + step + self.include_future_forcing
+                start_idx = offset + step - self.num_past_forcing_steps
+                end_idx = offset + step + self.num_future_forcing_steps
 
                 # Slice the data over the desired time window
                 da_sliced = da_forcing.isel(time=slice(start_idx, end_idx + 1))
@@ -572,15 +586,15 @@ class WeatherDataModule(pl.LightningDataModule):
         ar_steps_train=3,
         ar_steps_eval=25,
         standardize=True,
-        include_past_forcing=1,
-        include_future_forcing=1,
+        num_past_forcing_steps=1,
+        num_future_forcing_steps=1,
         batch_size=4,
         num_workers=16,
     ):
         super().__init__()
         self._datastore = datastore
-        self.include_past_forcing = include_past_forcing
-        self.include_future_forcing = include_future_forcing
+        self.num_past_forcing_steps = num_past_forcing_steps
+        self.num_future_forcing_steps = num_future_forcing_steps
         self.ar_steps_train = ar_steps_train
         self.ar_steps_eval = ar_steps_eval
         self.standardize = standardize
@@ -603,16 +617,16 @@ class WeatherDataModule(pl.LightningDataModule):
                 split="train",
                 ar_steps=self.ar_steps_train,
                 standardize=self.standardize,
-                include_past_forcing=self.include_past_forcing,
-                include_future_forcing=self.include_future_forcing,
+                num_past_forcing_steps=self.num_past_forcing_steps,
+                num_future_forcing_steps=self.num_future_forcing_steps,
             )
             self.val_dataset = WeatherDataset(
                 datastore=self._datastore,
                 split="val",
                 ar_steps=self.ar_steps_eval,
                 standardize=self.standardize,
-                include_past_forcing=self.include_past_forcing,
-                include_future_forcing=self.include_future_forcing,
+                num_past_forcing_steps=self.num_past_forcing_steps,
+                num_future_forcing_steps=self.num_future_forcing_steps,
             )
 
         if stage == "test" or stage is None:
@@ -621,8 +635,8 @@ class WeatherDataModule(pl.LightningDataModule):
                 split="test",
                 ar_steps=self.ar_steps_eval,
                 standardize=self.standardize,
-                include_past_forcing=self.include_past_forcing,
-                include_future_forcing=self.include_future_forcing,
+                num_past_forcing_steps=self.num_past_forcing_steps,
+                num_future_forcing_steps=self.num_future_forcing_steps,
             )
 
     def train_dataloader(self):
