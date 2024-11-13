@@ -73,7 +73,7 @@ def plot_on_axis(
     vmax=None,
     ax_title=None,
     cmap="plasma",
-    grid_limits=None
+    grid_limits=None,
 ):
     """
     Plot weather state on given axis

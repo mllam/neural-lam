@@ -41,7 +41,8 @@ def main(input_args=None):
         "--archetype",
         type=str,
         default="keisler",
-        help="Archetype to use to create graph (keisler/graphcast/hierarchical)",
+        help="Archetype to use to create graph "
+        "(keisler/graphcast/hierarchical)",
     )
     parser.add_argument(
         "--mesh_node_distance",
@@ -53,7 +54,8 @@ def main(input_args=None):
         "--level_refinement_factor",
         type=float,
         default=3,
-        help="Refinement factor between grid points and bottom level of mesh hierarchy",
+        help="Refinement factor between grid points and bottom level of "
+        "mesh hierarchy",
     )
     parser.add_argument(
         "--max_num_levels",
@@ -144,7 +146,7 @@ def main(input_args=None):
                 wmg.save.to_pyg(
                     graph=graph,
                     name=component,
-                    list_from_attribute="dummy", # Note: Needed to output list
+                    list_from_attribute="dummy",  # Note: Needed to output list
                     edge_features=["len", "vdiff"],
                     output_directory=args.output_dir,
                 )
