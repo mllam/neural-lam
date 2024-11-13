@@ -167,15 +167,14 @@ def main(
         )
         torch.cuda.set_device(device) if torch.cuda.is_available() else None
 
-    # XXX (lcd@dmi.dk): I don't quite understand why, but below fails with the
-    # MEPS example dataset if I just use `datastore._num_timesteps - 2` which
-    # would assume would be ok
     ar_steps = datastore._num_timesteps - 10
     ds = WeatherDataset(
         datastore=datastore,
         split="train",
         ar_steps=ar_steps,
         standardize=False,
+        num_past_forcing_steps=0,
+        num_future_forcing_steps=0,
     )
     if distributed:
         ds = PaddedWeatherDataset(
@@ -277,6 +276,8 @@ def main(
         split="train",
         ar_steps=ar_steps,
         standardize=True,
+        num_past_forcing_steps=0,
+        num_future_forcing_steps=0,
     )  # Re-load with standardization
     if distributed:
         ds_standard = PaddedWeatherDataset(
