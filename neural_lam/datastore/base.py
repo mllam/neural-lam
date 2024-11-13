@@ -329,6 +329,53 @@ class BaseDatastore(abc.ABC):
         """
         pass
 
+    @functools.lru_cache
+    def expected_dim_order(self, category: str = None) -> List[str]:
+        """
+        Return the expected dimension order for the dataarray or dataset
+        returned by `get_dataarray` for the given category of data. The
+        dimension order is the order of the dimensions in the dataarray or
+        dataset, and is used to check that the data is in the expected format.
+
+        This is necessary so that when stacking and unstacking the spatial grid
+        we can ensure that the dimension order is the same as what is returned
+        from `get_dataarray`. And also ensures that downstream uses of a
+        datastore (e.g. WeatherDataset) sees the data in a common structure.
+
+        If the category is None, then the it assumed that data only represents
+        a 1D scalar field varying with grid-index.
+
+        Parameters
+        ----------
+        category : str
+            The category of the dataset (state/forcing/static).
+
+        Returns
+        -------
+        List[str]
+            The expected dimension order for the dataarray or dataset.
+
+        """
+        dim_order = ["grid_index"]
+
+        if category is not None:
+            dim_order.append(f"{category}_feature")
+
+            if category != "static":
+                # static data does not vary in time
+                if self.is_forecast:
+                    dim_order.extend(
+                        ["analysis_time", "elapsed_forecast_duration"]
+                    )
+                elif not self.is_forecast:
+                    dim_order.append("time")
+
+            if self.is_ensemble and category == "state":
+                # XXX: for now we only assume ensemble data for state variables
+                dim_order.append("ensemble_member")
+
+        return dim_order
+
 
 @dataclasses.dataclass
 class CartesianGridShape:
@@ -464,21 +511,22 @@ class BaseRegularGridDatastore(BaseDatastore):
             return da_or_ds
 
         da_or_ds_stacked = da_or_ds.stack(grid_index=self.CARTESIAN_COORDS)
-        # find the feature dimension, which has named with the format
-        # `{category}_feature`
-        potential_feature_dims = [
-            d for d in da_or_ds_stacked.dims if d.endswith("_feature")
-        ]
-        if not len(potential_feature_dims) == 1:
-            raise ValueError(
-                "Expected exactly one feature dimension in the stacked data, "
-                f"got {potential_feature_dims}"
-            )
-        feature_dim = potential_feature_dims[0]
 
-        # ensure that grid_index is the first dimension, and the feature
-        # dimension is the second
-        return da_or_ds_stacked.transpose("grid_index", feature_dim, ...)
+        # infer what category of data the array represents by finding the
+        # dimension named in the format `{category}_feature`
+        category = None
+        for dim in da_or_ds_stacked.dims:
+            if dim.endswith("_feature"):
+                if category is not None:
+                    raise ValueError(
+                        "Multiple dimensions ending with '_feature' found in "
+                        f"dataarray: {da_or_ds_stacked}. Cannot infer category."
+                    )
+                category = dim.split("_")[0]
+
+        dim_order = self.expected_dim_order(category=category)
+
+        return da_or_ds_stacked.transpose(*dim_order)
 
     @property
     @functools.lru_cache

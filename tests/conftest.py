@@ -23,11 +23,8 @@ DATASTORE_EXAMPLES_ROOT_PATH = Path("tests/datastore_examples")
 
 # Initializing variables for the s3 client
 S3_BUCKET_NAME = "mllam-testdata"
-# S3_ENDPOINT_URL = "https://object-store.os-api.cci1.ecmwf.int"
-S3_ENDPOINT_URL = "http://localhost:8000"
-# S3_FILE_PATH = "neural-lam/npy/meps_example_reduced.v0.1.0.zip"
-# TODO: I will upload this to AWS S3 once I have located the credentials...
-S3_FILE_PATH = "meps_example_reduced.v0.2.0.zip"
+S3_ENDPOINT_URL = "https://object-store.os-api.cci1.ecmwf.int"
+S3_FILE_PATH = "neural-lam/npy/meps_example_reduced.v0.2.0.zip"
 S3_FULL_PATH = "/".join([S3_ENDPOINT_URL, S3_BUCKET_NAME, S3_FILE_PATH])
 TEST_DATA_KNOWN_HASH = (
     "7ff2e07e04cfcd77631115f800c9d49188bb2a7c2a2777da3cea219f926d0c86"

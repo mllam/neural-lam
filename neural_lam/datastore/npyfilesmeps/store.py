@@ -282,14 +282,15 @@ class NpyFilesDatastoreMEPS(BaseRegularGridDatastore):
                     features=features, split=split
                 )
                 das.append(da)
-            da = xr.concat(das, dim="feature").transpose(
-                "grid_index", "feature"
-            )
+            da = xr.concat(das, dim="feature")
 
         else:
             raise NotImplementedError(category)
 
         da = da.rename(dict(feature=f"{category}_feature"))
+
+        # stack the [x, y] dimensions into a `grid_index` dimension
+        da = self.stack_grid_coords(da)
 
         # check that we have the right features
         actual_features = da[f"{category}_feature"].values.tolist()
@@ -298,6 +299,9 @@ class NpyFilesDatastoreMEPS(BaseRegularGridDatastore):
             raise ValueError(
                 f"Expected features {expected_features}, got {actual_features}"
             )
+
+        dim_order = self.expected_dim_order(category=category)
+        da = da.transpose(*dim_order)
 
         return da
 
@@ -346,7 +350,11 @@ class NpyFilesDatastoreMEPS(BaseRegularGridDatastore):
                 None,
             ), "Unknown dataset split"
         else:
-            assert split in ("train", "val", "test"), "Unknown dataset split"
+            assert split in (
+                "train",
+                "val",
+                "test",
+            ), f"Unknown dataset split {split} for features {features}"
 
         if member is not None and features != self.get_vars_names(
             category="state"
@@ -494,9 +502,6 @@ class NpyFilesDatastoreMEPS(BaseRegularGridDatastore):
             arr_all = arrays[0]
 
         da = xr.DataArray(arr_all, dims=dims, coords=coords)
-
-        # stack the [x, y] dimensions into a `grid_index` dimension
-        da = self.stack_grid_coords(da)
 
         return da
 
