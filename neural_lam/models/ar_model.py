@@ -579,6 +579,7 @@ class ARModel(pl.LightningModule):
             current_epoch = self.trainer.current_epoch
 
             for key, figure in log_dict.items():
+                # For other loggers than wandb, add epoch to key
                 if not isinstance(self.logger, pl.loggers.WandbLogger):
                     key = f"{key}-{current_epoch}"
 

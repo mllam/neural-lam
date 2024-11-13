@@ -326,6 +326,7 @@ def main(input_args=None):
         config=config, datastore=datastore, args=args, run_name=run_name
     )
 
+
     checkpoint_callback = pl.callbacks.ModelCheckpoint(
         dirpath=f"saved_models/{run_name}",
         filename="min_val_loss",
@@ -338,7 +339,7 @@ def main(input_args=None):
         deterministic=True,
         #strategy="ddp",
         #devices=2,
-        devices=[0, 1],
+        devices=[0, 1, 2],
         strategy="auto",
         accelerator=device_name,
         logger=training_logger,
@@ -359,9 +360,12 @@ def main(input_args=None):
         with ipdb.launch_ipdb_on_exception():
             trainer.fit(model=model, datamodule=data_module, ckpt_path=args.load)
 
+        # Get a sample of training data to log
+        #sample_data = data_module.train_dataset
+        #print("Logging sample data")
+        #print(sample_data.train_dataset)
         # Log the model
         training_logger.log_model(model)
-        # data_module.train_dataloader().dataset.data
 
 if __name__ == "__main__":
     main()
