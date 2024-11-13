@@ -173,10 +173,10 @@ class WeatherDataset(torch.utils.data.Dataset):
         # The current implementation requires at least 2 time steps for the
         # initial state (see GraphCast).
         init_steps = 2
-        start_idx = idx + max(0, self.num_past_forcing_steps - init_steps)
-        end_idx = idx + max(init_steps, self.num_past_forcing_steps) + n_steps
         # slice the dataarray to include the required number of time steps
         if self.datastore.is_forecast:
+            start_idx = max(0, self.num_past_forcing_steps - init_steps)
+            end_idx = max(init_steps, self.num_past_forcing_steps) + n_steps
             # this implies that the data will have both `analysis_time` and
             # `elapsed_forecast_duration` dimensions for forecasts. We for now
             # simply select a analysis time and the first `n_steps` forecast
@@ -198,6 +198,10 @@ class WeatherDataset(torch.utils.data.Dataset):
             # For analysis data we slice the time dimension directly. The offset
             # is only relevant for the very first (and last) samples in the
             # dataset.
+            start_idx = idx + max(0, self.num_past_forcing_steps - init_steps)
+            end_idx = (
+                idx + max(init_steps, self.num_past_forcing_steps) + n_steps
+            )
             da_sliced = da_state.isel(time=slice(start_idx, end_idx))
         return da_sliced
 
@@ -235,7 +239,6 @@ class WeatherDataset(torch.utils.data.Dataset):
         # as past forcings.
         init_steps = 2
         da_list = []
-        offset = idx + max(init_steps, self.num_past_forcing_steps)
 
         if self.datastore.is_forecast:
             # This implies that the data will have both `analysis_time` and
@@ -244,6 +247,7 @@ class WeatherDataset(torch.utils.data.Dataset):
             # times (given no offset). Note that this means that we get one
             # sample per forecast.
             # Add a 'time' dimension using the actual forecast times
+            offset = max(init_steps, self.num_past_forcing_steps)
             for step in range(n_steps):
                 start_idx = offset + step - self.num_past_forcing_steps
                 end_idx = offset + step + self.num_future_forcing_steps
@@ -280,6 +284,7 @@ class WeatherDataset(torch.utils.data.Dataset):
             # For analysis data, we slice the time dimension directly. The
             # offset is only relevant for the very first (and last) samples in
             # the dataset.
+            offset = idx + max(init_steps, self.num_past_forcing_steps)
             for step in range(n_steps):
                 start_idx = offset + step - self.num_past_forcing_steps
                 end_idx = offset + step + self.num_future_forcing_steps
