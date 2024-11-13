@@ -319,7 +319,7 @@ def test_stacking_grid_coords(datastore_name, category):
     if not isinstance(datastore, BaseRegularGridDatastore):
         pytest.skip("Datastore does not implement `BaseCartesianDatastore`")
 
-    da_static = datastore.get_dataarray(category=category, split=None)
+    da_static = datastore.get_dataarray(category=category, split="train")
 
     da_static_unstacked = datastore.unstack_grid_coords(da_static).load()
     da_static_test = datastore.stack_grid_coords(da_static_unstacked)

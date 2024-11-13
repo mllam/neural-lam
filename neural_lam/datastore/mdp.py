@@ -266,9 +266,7 @@ class MDPDatastore(BaseRegularGridDatastore):
         # set multi-index for grid-index
         da_category = da_category.set_index(grid_index=self.CARTESIAN_COORDS)
 
-        if "time" not in da_category.dims:
-            return da_category
-        else:
+        if "time" in da_category.dims:
             t_start = (
                 self._ds.splits.sel(split_name=split)
                 .sel(split_part="start")
@@ -281,7 +279,9 @@ class MDPDatastore(BaseRegularGridDatastore):
                 .load()
                 .item()
             )
-            return da_category.sel(time=slice(t_start, t_end))
+            da_category = da_category.sel(time=slice(t_start, t_end))
+
+        return da_category.transpose(self.expected_dim_order(category=category))
 
     def get_standardization_dataarray(self, category: str) -> xr.Dataset:
         """

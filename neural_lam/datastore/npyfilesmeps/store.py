@@ -299,6 +299,8 @@ class NpyFilesDatastoreMEPS(BaseRegularGridDatastore):
                 f"Expected features {expected_features}, got {actual_features}"
             )
 
+        da = da.transpose(self.expected_dim_order(category=category))
+
         return da
 
     def _get_single_timeseries_dataarray(
@@ -346,7 +348,11 @@ class NpyFilesDatastoreMEPS(BaseRegularGridDatastore):
                 None,
             ), "Unknown dataset split"
         else:
-            assert split in ("train", "val", "test"), "Unknown dataset split"
+            assert split in (
+                "train",
+                "val",
+                "test",
+            ), f"Unknown dataset split {split} for features {features}"
 
         if member is not None and features != self.get_vars_names(
             category="state"
