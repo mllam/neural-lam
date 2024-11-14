@@ -372,7 +372,9 @@ def main(
 def cli():
     parser = ArgumentParser(description="Training arguments")
     parser.add_argument(
-        "datastore_config_path", type=str, help="Path to data config file"
+        "--datastore_config_path",
+        type=str,
+        help="Path to data config file",
     )
     parser.add_argument(
         "--batch_size",
