@@ -10,9 +10,9 @@ import torch.distributed as dist
 from torch.utils.data.distributed import DistributedSampler
 from tqdm import tqdm
 
-# Local
-from ... import WeatherDataset
-from .. import init_datastore
+# First-party
+from neural_lam import WeatherDataset
+from neural_lam.datastore import init_datastore
 
 
 class PaddedWeatherDataset(torch.utils.data.Dataset):
