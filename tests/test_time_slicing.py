@@ -93,8 +93,8 @@ def test_time_slicing_analysis(
     dataset = WeatherDataset(
         datastore=datastore,
         ar_steps=ar_steps,
-        num_future_forcing_steps=num_past_forcing_steps,
-        num_past_forcing_steps=num_future_forcing_steps,
+        num_future_forcing_steps=num_future_forcing_steps,
+        num_past_forcing_steps=num_past_forcing_steps,
         standardize=False,
     )
 
