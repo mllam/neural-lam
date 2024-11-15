@@ -34,6 +34,12 @@ class CustomMLFlowLogger(pl.loggers.MLFlowLogger):
         mlflow.start_run(run_id=self.run_id, log_system_metrics=True)
         mlflow.log_param("run_id", self.run_id)
         #mlflow.pytorch.autolog() # Can be used to log the model, but without signature
+        #mlflow.save_dir = "mlruns"
+        #self.save_dir = "mlruns"
+
+    @property
+    def save_dir(self):
+        return "mlruns"
 
     def log_image(self, key, images):
         from PIL import Image
@@ -50,6 +56,7 @@ class CustomMLFlowLogger(pl.loggers.MLFlowLogger):
         # Create model signature
         #signature = infer_signature(train_dataset.numpy(), model(train_dataset).detach().numpy())
         mlflow.pytorch.log_model(model, "model")
+
 
 
 def _setup_training_logger(config, datastore, args, run_name):
@@ -76,7 +83,6 @@ def _setup_training_logger(config, datastore, args, run_name):
         logger.log_hyperparams(
             dict(training=vars(args), datastore=datastore._config)
         )
-        print("Logged hyperparams")
 
     return logger
 
@@ -337,10 +343,13 @@ def main(input_args=None):
     trainer = pl.Trainer(
         max_epochs=args.epochs,
         deterministic=True,
-        #strategy="ddp",
+        strategy="ddp",
         #devices=2,
-        devices=[0, 1, 2],
-        strategy="auto",
+        #devices=[1,2],
+        #devices=[0, 1, 2],
+        #strategy="auto",
+        devices=1,
+        num_nodes=1,
         accelerator=device_name,
         logger=training_logger,
         log_every_n_steps=1,
@@ -355,7 +364,11 @@ def main(input_args=None):
             training_logger, val_steps=args.val_steps_to_log
         )  # Do after wandb.init
     if args.eval:
-        trainer.test(model=model, datamodule=data_module, ckpt_path=args.load)
+        trainer.test(
+            model=model,
+            datamodule=data_module,
+            ckpt_path=args.load,
+            )
     else:
         with ipdb.launch_ipdb_on_exception():
             trainer.fit(model=model, datamodule=data_module, ckpt_path=args.load)

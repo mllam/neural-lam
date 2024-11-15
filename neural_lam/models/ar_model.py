@@ -451,7 +451,7 @@ class ARModel(pl.LightningModule):
                     vis.plot_prediction(
                         pred=pred_t[:, var_i],
                         target=target_t[:, var_i],
-                        datastore=self.datastore,
+                        datastore=self._datastore,
                         title=f"{var_name} ({var_unit}), "
                         f"t={t_i} ({self._datastore.step_length * t_i} h)",
                         vrange=var_vrange,
@@ -466,14 +466,23 @@ class ARModel(pl.LightningModule):
                 ]
 
                 example_i = self.plotted_examples
-                self.logger.log_image(
-                    {
-                        f"{var_name}_example_{example_i}": fig
-                        for var_name, fig in zip(
-                            self._datastore.get_vars_names("state"), var_figs
-                        )
-                    }
-                )
+
+
+
+                for var_name, fig in zip(
+                    self._datastore.get_vars_names("state"), var_figs
+                ):
+                    key=f"{var_name}_example_{example_i}"
+                    self.logger.log_image(key=key, images=[fig])
+
+                # self.logger.log_image(
+                #     {
+                #         f"{var_name}_example_{example_i}": fig
+                #         for var_name, fig in zip(
+                #             self._datastore.get_vars_names("state"), var_figs
+                #         )
+                #     }
+                # )
                 plt.close(
                     "all"
                 )  # Close all figs for this time step, saves memory
@@ -608,7 +617,8 @@ class ARModel(pl.LightningModule):
                 vis.plot_spatial_error(
                     error=loss_map,
                     datastore=self._datastore,
-                    title=f"Test loss, t={t_i} ({self.step_length * t_i} h)",
+                    title=f"Test loss, t={t_i} "
+                    f"({self._datastore.step_length * t_i} h)",
                 )
                 for t_i, loss_map in zip(
                     self.args.val_steps_to_log, mean_spatial_loss
@@ -616,8 +626,11 @@ class ARModel(pl.LightningModule):
             ]
 
             # log all to same key, sequentially
-            for fig in loss_map_figs:
-                self.logger.log_image({"test_loss": fig})
+            for i, fig in enumerate(loss_map_figs):
+                key=f"test_loss"
+                if not isinstance(self.logger, pl.loggers.WandbLogger):
+                    key=f"{key}_{i}"
+                self.logger.log_image(key=key, images=[fig])
 
             # also make without title and save as pdf
             pdf_loss_map_figs = [
