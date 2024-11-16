@@ -193,7 +193,7 @@ def main(
         ds,
         batch_size,
         shuffle=False,
-        # num_workers=args.n_workers,
+        num_workers=n_workers,
         sampler=sampler,
     )
 

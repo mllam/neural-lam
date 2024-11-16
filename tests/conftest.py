@@ -76,7 +76,7 @@ def download_meps_example_reduced_dataset():
             datastore_config_path=config_path,
             batch_size=8,
             step_length=3,
-            n_workers=1,
+            n_workers=0,
             distributed=False,
         )
 
