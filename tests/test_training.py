@@ -63,7 +63,7 @@ def test_training(datastore_name):
         ar_steps_eval=5,
         standardize=True,
         batch_size=2,
-        num_workers=0,
+        num_workers=1,
         num_past_forcing_steps=1,
         num_future_forcing_steps=1,
     )
