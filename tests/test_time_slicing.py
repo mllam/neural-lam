@@ -119,7 +119,11 @@ def test_time_slicing_analysis(
     elif num_past_forcing_steps == 3 and num_future_forcing_steps == 0:
         expected_init_states = [1, 2]
         expected_target_states = [3, 4, 5]
-        expected_forcing_values = [[10, 11, 12, 13], [11, 12, 13, 14], [12, 13, 14, 15]]
+        expected_forcing_values = [
+            [10, 11, 12, 13],
+            [11, 12, 13, 14],
+            [12, 13, 14, 15],
+        ]
     else:
         raise NotImplementedError()
 
