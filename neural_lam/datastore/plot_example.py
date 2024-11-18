@@ -172,7 +172,10 @@ if __name__ == "__main__":
             "column dimension and/or selection."
         )
 
-    _, datastore = init_datastore(config_path=args.datastore_config_path)
+    datastore = init_datastore(
+        datastore_kind=args.datastore_kind,
+        config_path=args.datastore_config_path,
+    )
 
     plot_example_from_datastore(
         args.category,
