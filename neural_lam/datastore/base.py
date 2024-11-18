@@ -437,7 +437,7 @@ class BaseRegularGridDatastore(BaseDatastore):
         pass
 
     @abc.abstractmethod
-    def get_xy(self, category: str, stacked: bool) -> np.ndarray:
+    def get_xy(self, category: str, stacked: bool = True) -> np.ndarray:
         """Return the x, y coordinates of the dataset.
 
         Parameters
@@ -447,7 +447,9 @@ class BaseRegularGridDatastore(BaseDatastore):
         stacked : bool
             Whether to stack the x, y coordinates. The parameter `stacked` has
             been introduced in this class. Parent class `BaseDatastore` has the
-            same method signature but without the `stacked` parameter.
+            same method signature but without the `stacked` parameter. Defaults
+            to `True` to match the behaviour of `BaseDatastore.get_xy()` which
+            always returns the coordinates stacked.
 
         Returns
         -------
