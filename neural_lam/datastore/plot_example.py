@@ -115,7 +115,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--datastore_config_path",
         type=str,
-        default="tests/datastore_examples/mdp/config.yaml",
+        default=None,
         help="Path for the datastore config",
     )
     parser.add_argument(
