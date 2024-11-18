@@ -22,6 +22,8 @@ class WeatherDataset(torch.utils.data.Dataset):
     ----------
     datastore : BaseDatastore
         The datastore to load the data from (e.g. mdp).
+    datastore_boundary : BaseDatastore
+        The boundary datastore to load the data from (e.g. mdp).
     split : str, optional
         The data split to use ("train", "val" or "test"). Default is "train".
     ar_steps : int, optional
@@ -43,6 +45,7 @@ class WeatherDataset(torch.utils.data.Dataset):
     def __init__(
         self,
         datastore: BaseDatastore,
+        datastore_boundary: BaseDatastore,
         split="train",
         ar_steps=3,
         num_past_forcing_steps=1,
@@ -54,6 +57,7 @@ class WeatherDataset(torch.utils.data.Dataset):
         self.split = split
         self.ar_steps = ar_steps
         self.datastore = datastore
+        self.datastore_boundary = datastore_boundary
         self.num_past_forcing_steps = num_past_forcing_steps
         self.num_future_forcing_steps = num_future_forcing_steps
 
@@ -605,6 +609,7 @@ class WeatherDataModule(pl.LightningDataModule):
     def __init__(
         self,
         datastore: BaseDatastore,
+        datastore_boundary: BaseDatastore,
         ar_steps_train=3,
         ar_steps_eval=25,
         standardize=True,
@@ -615,6 +620,7 @@ class WeatherDataModule(pl.LightningDataModule):
     ):
         super().__init__()
         self._datastore = datastore
+        self._datastore_boundary = datastore_boundary
         self.num_past_forcing_steps = num_past_forcing_steps
         self.num_future_forcing_steps = num_future_forcing_steps
         self.ar_steps_train = ar_steps_train
@@ -626,6 +632,7 @@ class WeatherDataModule(pl.LightningDataModule):
         self.val_dataset = None
         self.test_dataset = None
         if num_workers > 0:
+            # BUG: There also seem to be issues with "spawn", to be investigated
             # default to spawn for now, as the default on linux "fork" hangs
             # when using dask (which the npyfilesmeps datastore uses)
             self.multiprocessing_context = "spawn"
@@ -636,6 +643,7 @@ class WeatherDataModule(pl.LightningDataModule):
         if stage == "fit" or stage is None:
             self.train_dataset = WeatherDataset(
                 datastore=self._datastore,
+                datastore_boundary=self._datastore_boundary,
                 split="train",
                 ar_steps=self.ar_steps_train,
                 standardize=self.standardize,
@@ -644,6 +652,7 @@ class WeatherDataModule(pl.LightningDataModule):
             )
             self.val_dataset = WeatherDataset(
                 datastore=self._datastore,
+                datastore_boundary=self._datastore_boundary,
                 split="val",
                 ar_steps=self.ar_steps_eval,
                 standardize=self.standardize,
@@ -654,6 +663,7 @@ class WeatherDataModule(pl.LightningDataModule):
         if stage == "test" or stage is None:
             self.test_dataset = WeatherDataset(
                 datastore=self._datastore,
+                datastore_boundary=self._datastore_boundary,
                 split="test",
                 ar_steps=self.ar_steps_eval,
                 standardize=self.standardize,
