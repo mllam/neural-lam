@@ -27,7 +27,7 @@ class MDPDatastore(BaseRegularGridDatastore):
 
     SHORT_NAME = "mdp"
 
-    def __init__(self, config_path, n_boundary_points=30, reuse_existing=True):
+    def __init__(self, config_path, n_boundary_points=0, reuse_existing=True):
         """
         Construct a new MDPDatastore from the configuration file at
         `config_path`. A boundary mask is created with `n_boundary_points`
@@ -336,19 +336,22 @@ class MDPDatastore(BaseRegularGridDatastore):
             boundary point and 0 is not.
 
         """
-        ds_unstacked = self.unstack_grid_coords(da_or_ds=self._ds)
-        da_state_variable = (
-            ds_unstacked["state"].isel(time=0).isel(state_feature=0)
-        )
-        da_domain_allzero = xr.zeros_like(da_state_variable)
-        ds_unstacked["boundary_mask"] = da_domain_allzero.isel(
-            x=slice(self._n_boundary_points, -self._n_boundary_points),
-            y=slice(self._n_boundary_points, -self._n_boundary_points),
-        )
-        ds_unstacked["boundary_mask"] = ds_unstacked.boundary_mask.fillna(
-            1
-        ).astype(int)
-        return self.stack_grid_coords(da_or_ds=ds_unstacked.boundary_mask)
+        if self._n_boundary_points > 0:
+            ds_unstacked = self.unstack_grid_coords(da_or_ds=self._ds)
+            da_state_variable = (
+                ds_unstacked["state"].isel(time=0).isel(state_feature=0)
+            )
+            da_domain_allzero = xr.zeros_like(da_state_variable)
+            ds_unstacked["boundary_mask"] = da_domain_allzero.isel(
+                x=slice(self._n_boundary_points, -self._n_boundary_points),
+                y=slice(self._n_boundary_points, -self._n_boundary_points),
+            )
+            ds_unstacked["boundary_mask"] = ds_unstacked.boundary_mask.fillna(
+                1
+            ).astype(int)
+            return self.stack_grid_coords(da_or_ds=ds_unstacked.boundary_mask)
+        else:
+            return None
 
     @property
     def coords_projection(self) -> ccrs.Projection:
