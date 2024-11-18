@@ -79,7 +79,11 @@ def load_graph(graph_dir_path, device="cpu"):
     """
 
     def loads_file(fn):
-        return torch.load(os.path.join(graph_dir_path, fn), map_location=device)
+        return torch.load(
+            os.path.join(graph_dir_path, fn),
+            map_location=device,
+            weights_only=True,
+        )
 
     # Load edges (edge_index)
     m2m_edge_index = BufferList(

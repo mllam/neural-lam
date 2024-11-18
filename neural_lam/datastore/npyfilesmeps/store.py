@@ -718,7 +718,9 @@ class NpyFilesDatastoreMEPS(BaseRegularGridDatastore):
         """
 
         def load_pickled_tensor(fn):
-            return torch.load(self.root_path / "static" / fn).numpy()
+            return torch.load(
+                self.root_path / "static" / fn, weights_only=True
+            ).numpy()
 
         mean_diff_values = None
         std_diff_values = None
