@@ -35,6 +35,11 @@ def main(input_args=None):
         help="Path to the configuration for neural-lam",
     )
     parser.add_argument(
+        "--config_path_boundary",
+        type=str,
+        help="Path to the configuration for boundary conditions",
+    )
+    parser.add_argument(
         "--model",
         type=str,
         default="graph_lam",
@@ -212,6 +217,9 @@ def main(input_args=None):
     assert (
         args.config_path is not None
     ), "Specify your config with --config_path"
+    assert (
+        args.config_path_boundary is not None
+    ), "Specify your config with --config_path_boundary"
     assert args.model in MODELS, f"Unknown model: {args.model}"
     assert args.eval in (
         None,
@@ -227,10 +235,24 @@ def main(input_args=None):
 
     # Load neural-lam configuration and datastore to use
     config, datastore = load_config_and_datastore(config_path=args.config_path)
+    config_boundary, datastore_boundary = load_config_and_datastore(
+        config_path=args.config_path_boundary
+    )
+
+    # TODO this should not be required, make more flexible
+    assert (
+        datastore.num_past_forcing_steps
+        == datastore_boundary.num_past_forcing_steps
+    ), "Mismatch in num_past_forcing_steps"
+    assert (
+        datastore.num_future_forcing_steps
+        == datastore_boundary.num_future_forcing_steps
+    ), "Mismatch in num_future_forcing_steps"
 
     # Create datamodule
     data_module = WeatherDataModule(
         datastore=datastore,
+        datastore_boundary=datastore_boundary,
         ar_steps_train=args.ar_steps_train,
         ar_steps_eval=args.ar_steps_eval,
         standardize=True,
