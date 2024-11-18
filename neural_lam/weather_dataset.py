@@ -101,6 +101,82 @@ class WeatherDataset(torch.utils.data.Dataset):
                     "the data in `BaseDatastore.get_dataarray`?"
                 )
 
+        # Check time coverage for forcing and boundary data
+        if self.da_forcing is not None or self.da_boundary is not None:
+            state_times = self.da_state.time
+            state_time_min = state_times.min().values
+            state_time_max = state_times.max().values
+
+            def get_time_step(times):
+                """Calculate the time step from the data"""
+                time_diffs = np.diff(times)
+                if not np.all(time_diffs == time_diffs[0]):
+                    raise ValueError(
+                        "Inconsistent time steps in data. "
+                        f"Found different time steps: {np.unique(time_diffs)}"
+                    )
+                return time_diffs[0]
+
+            if self.da_forcing is not None:
+                forcing_times = self.da_forcing.time
+                forcing_time_step = get_time_step(forcing_times.values)
+                forcing_time_min = forcing_times.min().values
+                forcing_time_max = forcing_times.max().values
+
+                # Calculate required bounds for forcing using its time step
+                forcing_required_time_min = (
+                    state_time_min
+                    - self.num_past_forcing_steps * forcing_time_step
+                )
+                forcing_required_time_max = (
+                    state_time_max
+                    + self.num_future_forcing_steps * forcing_time_step
+                )
+
+                if forcing_time_min > forcing_required_time_min:
+                    raise ValueError(
+                        f"Forcing data starts too late."
+                        f"Required start: {forcing_required_time_min}, "
+                        f"but forcing starts at {forcing_time_min}."
+                    )
+
+                if forcing_time_max < forcing_required_time_max:
+                    raise ValueError(
+                        f"Forcing data ends too early."
+                        f"Required end: {forcing_required_time_max},"
+                        f"but forcing ends at {forcing_time_max}."
+                    )
+
+            if self.da_boundary is not None:
+                boundary_times = self.da_boundary.time
+                boundary_time_step = get_time_step(boundary_times.values)
+                boundary_time_min = boundary_times.min().values
+                boundary_time_max = boundary_times.max().values
+
+                # Calculate required bounds for boundary using its time step
+                boundary_required_time_min = (
+                    state_time_min
+                    - self.num_past_forcing_steps * boundary_time_step
+                )
+                boundary_required_time_max = (
+                    state_time_max
+                    + self.num_future_forcing_steps * boundary_time_step
+                )
+
+                if boundary_time_min > boundary_required_time_min:
+                    raise ValueError(
+                        f"Boundary data starts too late."
+                        f"Required start: {boundary_required_time_min}, "
+                        f"but boundary starts at {boundary_time_min}."
+                    )
+
+                if boundary_time_max < boundary_required_time_max:
+                    raise ValueError(
+                        f"Boundary data ends too early."
+                        f"Required end: {boundary_required_time_max}, "
+                        f"but boundary ends at {boundary_time_max}."
+                    )
+
         # Set up for standardization
         # TODO: This will become part of ar_model.py soon!
         self.standardize = standardize
