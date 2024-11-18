@@ -77,6 +77,23 @@ class WeatherDataset(torch.utils.data.Dataset):
                 "(`num_past_forcing_steps` and `num_future_forcing_steps`)"
             )
 
+        # Check the dimensions and their ordering
+        parts = dict(state=self.da_state)
+        if self.da_forcing is not None:
+            parts["forcing"] = self.da_forcing
+
+        for part, da in parts.items():
+            expected_dim_order = self.datastore.expected_dim_order(
+                category=part
+            )
+            if da.dims != expected_dim_order:
+                raise ValueError(
+                    f"The dimension order of the `{part}` data ({da.dims}) "
+                    f"does not match the expected dimension order "
+                    f"({expected_dim_order}). Maybe you forgot to transpose "
+                    "the data in `BaseDatastore.get_dataarray`?"
+                )
+
         # Set up for standardization
         # TODO: This will become part of ar_model.py soon!
         self.standardize = standardize
@@ -374,12 +391,6 @@ class WeatherDataset(torch.utils.data.Dataset):
         da_state.load()
         if da_forcing is not None:
             da_forcing_windowed.load()
-
-        da_state = da_state.transpose("time", "grid_index", "state_feature")
-        if da_forcing is not None:
-            da_forcing_windowed = da_forcing_windowed.transpose(
-                "time", "grid_index", "window", "forcing_feature"
-            )
 
         da_init_states = da_state.isel(time=slice(0, 2))
         da_target_states = da_state.isel(time=slice(2, None))

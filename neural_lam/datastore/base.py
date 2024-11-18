@@ -330,7 +330,7 @@ class BaseDatastore(abc.ABC):
         pass
 
     @functools.lru_cache
-    def expected_dim_order(self, category: str = None) -> List[str]:
+    def expected_dim_order(self, category: str = None) -> tuple[str]:
         """
         Return the expected dimension order for the dataarray or dataset
         returned by `get_dataarray` for the given category of data. The
@@ -345,6 +345,12 @@ class BaseDatastore(abc.ABC):
         If the category is None, then the it assumed that data only represents
         a 1D scalar field varying with grid-index.
 
+        The order is constructed to match the order in `pytorch.Tensor` objects
+        that will be constructed from the data so that the last two dimensions
+        are always the grid-index and feature dimensions (i.e. the order is
+        `[..., grid_index, {category}_feature]`), with any time-related and
+        ensemble-number dimension(s) coming before these two.
+
         Parameters
         ----------
         category : str
@@ -356,11 +362,9 @@ class BaseDatastore(abc.ABC):
             The expected dimension order for the dataarray or dataset.
 
         """
-        dim_order = ["grid_index"]
+        dim_order = []
 
         if category is not None:
-            dim_order.append(f"{category}_feature")
-
             if category != "static":
                 # static data does not vary in time
                 if self.is_forecast:
@@ -374,7 +378,12 @@ class BaseDatastore(abc.ABC):
                 # XXX: for now we only assume ensemble data for state variables
                 dim_order.append("ensemble_member")
 
-        return dim_order
+        dim_order.append("grid_index")
+
+        if category is not None:
+            dim_order.append(f"{category}_feature")
+
+        return tuple(dim_order)
 
 
 @dataclasses.dataclass

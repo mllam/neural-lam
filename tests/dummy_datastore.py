@@ -339,7 +339,8 @@ class DummyDatastore(BaseRegularGridDatastore):
             The xarray DataArray object with processed dataset.
 
         """
-        return self.ds[category]
+        dim_order = self.expected_dim_order(category=category)
+        return self.ds[category].transpose(*dim_order)
 
     @cached_property
     def boundary_mask(self) -> xr.DataArray:
