@@ -10,6 +10,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [v0.2.0](https://github.com/joeloskarsson/neural-lam/releases/tag/v0.2.0)
 
 ### Added
+
+- Added `rank_zero_print` function to `utils.py` for printing in multi-node distributed training
+  [\#16](https://github.com/mllam/neural-lam/pull/16)
+  @sadamov
+
 - Added tests for loading dataset, creating graph, and training model based on reduced MEPS dataset stored on AWS S3, along with automatic running of tests on push/PR to GitHub, including push to main branch. Added caching of test data to speed up running tests.
   [\#38](https://github.com/mllam/neural-lam/pull/38) [\#55](https://github.com/mllam/neural-lam/pull/55)
   @SimonKamuk
@@ -47,6 +52,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 -  Optional multi-core/GPU support for statistics calculation in `create_parameter_weights.py`
   [\#22](https://github.com/mllam/neural-lam/pull/22)
+  @sadamov
+
+- Initialization of wandb is now robust for multi-node distributed training and config files are saved to wandb
+  [\#16](https://github.com/mllam/neural-lam/pull/16)
   @sadamov
 
 - Robust restoration of optimizer and scheduler using `ckpt_path`
