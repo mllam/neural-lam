@@ -67,6 +67,9 @@ class WeatherDataset(torch.utils.data.Dataset):
         self.da_forcing = self.datastore.get_dataarray(
             category="forcing", split=self.split
         )
+        self.da_boundary = self.datastore_boundary.get_dataarray(
+            category="boundary", split=self.split
+        )
 
         # check that with the provided data-arrays and ar_steps that we have a
         # non-zero amount of samples
@@ -117,6 +120,15 @@ class WeatherDataset(torch.utils.data.Dataset):
                 )
                 self.da_forcing_mean = self.ds_forcing_stats.forcing_mean
                 self.da_forcing_std = self.ds_forcing_stats.forcing_std
+
+            if self.da_boundary is not None:
+                self.ds_boundary_stats = (
+                    self.datastore_boundary.get_standardization_dataarray(
+                        category="boundary"
+                    )
+                )
+                self.da_boundary_mean = self.ds_boundary_stats.boundary_mean
+                self.da_boundary_std = self.ds_boundary_stats.boundary_std
 
     def __len__(self):
         if self.datastore.is_forecast:
@@ -352,6 +364,8 @@ class WeatherDataset(torch.utils.data.Dataset):
             The dataarray for the target states.
         da_forcing_windowed : xr.DataArray
             The dataarray for the forcing data, windowed for the sample.
+        da_boundary_windowed : xr.DataArray
+            The dataarray for the boundary data, windowed for the sample.
         da_target_times : xr.DataArray
             The dataarray for the target times.
         """
@@ -381,6 +395,11 @@ class WeatherDataset(torch.utils.data.Dataset):
         else:
             da_forcing = None
 
+        if self.da_boundary is not None:
+            da_boundary = self.da_boundary
+        else:
+            da_boundary = None
+
         # handle time sampling in a way that is compatible with both analysis
         # and forecast data
         da_state = self._slice_state_time(
@@ -390,11 +409,17 @@ class WeatherDataset(torch.utils.data.Dataset):
             da_forcing_windowed = self._slice_forcing_time(
                 da_forcing=da_forcing, idx=idx, n_steps=self.ar_steps
             )
+        if da_boundary is not None:
+            da_boundary_windowed = self._slice_forcing_time(
+                da_forcing=da_boundary, idx=idx, n_steps=self.ar_steps
+            )
 
         # load the data into memory
         da_state.load()
         if da_forcing is not None:
             da_forcing_windowed.load()
+        if da_boundary is not None:
+            da_boundary_windowed.load()
 
         da_init_states = da_state.isel(time=slice(0, 2))
         da_target_states = da_state.isel(time=slice(2, None))
@@ -417,6 +442,11 @@ class WeatherDataset(torch.utils.data.Dataset):
                     da_forcing_windowed - self.da_forcing_mean
                 ) / self.da_forcing_std
 
+            if da_boundary is not None:
+                da_boundary_windowed = (
+                    da_boundary_windowed - self.da_boundary_mean
+                ) / self.da_boundary_std
+
         if da_forcing is not None:
             # stack the `forcing_feature` and `window_sample` dimensions into a
             # single `forcing_feature` dimension
@@ -436,11 +466,31 @@ class WeatherDataset(torch.utils.data.Dataset):
                     "forcing_feature": [],
                 },
             )
+        if da_boundary is not None:
+            # stack the `forcing_feature` and `window_sample` dimensions into a
+            # single `forcing_feature` dimension
+            da_boundary_windowed = da_boundary_windowed.stack(
+                boundary_feature_windowed=("boundary_feature", "window")
+            )
+        else:
+            # create an empty forcing tensor with the right shape
+            da_boundary_windowed = xr.DataArray(
+                data=np.empty(
+                    (self.ar_steps, da_state.grid_index.size, 0),
+                ),
+                dims=("time", "grid_index", "boundary_feature"),
+                coords={
+                    "time": da_target_times,
+                    "grid_index": da_state.grid_index,
+                    "boundary_feature": [],
+                },
+            )
 
         return (
             da_init_states,
             da_target_states,
             da_forcing_windowed,
+            da_boundary_windowed,
             da_target_times,
         )
 
@@ -475,6 +525,7 @@ class WeatherDataset(torch.utils.data.Dataset):
             da_init_states,
             da_target_states,
             da_forcing_windowed,
+            da_boundary_windowed,
             da_target_times,
         ) = self._build_item_dataarrays(idx=idx)
 
@@ -491,13 +542,15 @@ class WeatherDataset(torch.utils.data.Dataset):
         )
 
         forcing = torch.tensor(da_forcing_windowed.values, dtype=tensor_dtype)
+        boundary = torch.tensor(da_boundary_windowed.values, dtype=tensor_dtype)
 
         # init_states: (2, N_grid, d_features)
         # target_states: (ar_steps, N_grid, d_features)
         # forcing: (ar_steps, N_grid, d_windowed_forcing)
+        # boundary: (ar_steps, N_grid, d_windowed_boundary)
         # target_times: (ar_steps,)
 
-        return init_states, target_states, forcing, target_times
+        return init_states, target_states, forcing, boundary, target_times
 
     def __iter__(self):
         """
