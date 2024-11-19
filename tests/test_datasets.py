@@ -14,12 +14,19 @@ from neural_lam.datastore import DATASTORES
 from neural_lam.datastore.base import BaseRegularGridDatastore
 from neural_lam.models.graph_lam import GraphLAM
 from neural_lam.weather_dataset import WeatherDataset
-from tests.conftest import init_datastore_example
+from tests.conftest import (
+    DATASTORES_BOUNDARY_EXAMPLES,
+    init_datastore_boundary_example,
+    init_datastore_example,
+)
 from tests.dummy_datastore import DummyDatastore
 
 
 @pytest.mark.parametrize("datastore_name", DATASTORES.keys())
-def test_dataset_item_shapes(datastore_name):
+@pytest.mark.parametrize(
+    "datastore_boundary_name", DATASTORES_BOUNDARY_EXAMPLES.keys()
+)
+def test_dataset_item_shapes(datastore_name, datastore_boundary_name):
     """Check that the `datastore.get_dataarray` method is implemented.
 
     Validate the shapes of the tensors match between the different
@@ -31,6 +38,9 @@ def test_dataset_item_shapes(datastore_name):
 
     """
     datastore = init_datastore_example(datastore_name)
+    datastore_boundary = init_datastore_boundary_example(
+        datastore_boundary_name
+    )
     N_gridpoints = datastore.num_grid_points
 
     N_pred_steps = 4
@@ -38,6 +48,7 @@ def test_dataset_item_shapes(datastore_name):
     num_future_forcing_steps = 1
     dataset = WeatherDataset(
         datastore=datastore,
+        datastore_boundary=datastore_boundary,
         split="train",
         ar_steps=N_pred_steps,
         num_past_forcing_steps=num_past_forcing_steps,
@@ -48,7 +59,7 @@ def test_dataset_item_shapes(datastore_name):
 
     # unpack the item, this is the current return signature for
     # WeatherDataset.__getitem__
-    init_states, target_states, forcing, target_times = item
+    init_states, target_states, forcing, boundary, target_times = item
 
     # initial states
     assert init_states.ndim == 3
@@ -81,14 +92,23 @@ def test_dataset_item_shapes(datastore_name):
 
 
 @pytest.mark.parametrize("datastore_name", DATASTORES.keys())
-def test_dataset_item_create_dataarray_from_tensor(datastore_name):
+@pytest.mark.parametrize(
+    "datastore_boundary_name", DATASTORES_BOUNDARY_EXAMPLES.keys()
+)
+def test_dataset_item_create_dataarray_from_tensor(
+    datastore_name, datastore_boundary_name
+):
     datastore = init_datastore_example(datastore_name)
+    datastore_boundary = init_datastore_boundary_example(
+        datastore_boundary_name
+    )
 
     N_pred_steps = 4
     num_past_forcing_steps = 1
     num_future_forcing_steps = 1
     dataset = WeatherDataset(
         datastore=datastore,
+        datastore_boundary=datastore_boundary,
         split="train",
         ar_steps=N_pred_steps,
         num_past_forcing_steps=num_past_forcing_steps,
@@ -158,13 +178,19 @@ def test_dataset_item_create_dataarray_from_tensor(datastore_name):
 
 @pytest.mark.parametrize("split", ["train", "val", "test"])
 @pytest.mark.parametrize("datastore_name", DATASTORES.keys())
-def test_single_batch(datastore_name, split):
+@pytest.mark.parametrize(
+    "datastore_boundary_name", DATASTORES_BOUNDARY_EXAMPLES.keys()
+)
+def test_single_batch(datastore_name, datastore_boundary_name, split):
     """Check that the `datastore.get_dataarray` method is implemented.
 
     And that it returns an xarray DataArray with the correct dimensions.
 
     """
     datastore = init_datastore_example(datastore_name)
+    datastore_boundary = init_datastore_boundary_example(
+        datastore_boundary_name
+    )
 
     device_name = (
         torch.device("cuda") if torch.cuda.is_available() else "cpu"
@@ -212,7 +238,9 @@ def test_single_batch(datastore_name, split):
         )
     )
 
-    dataset = WeatherDataset(datastore=datastore, split=split)
+    dataset = WeatherDataset(
+        datastore=datastore, datastore_boundary=datastore_boundary, split=split
+    )
 
     model = GraphLAM(args=args, datastore=datastore, config=config)  # noqa
 
