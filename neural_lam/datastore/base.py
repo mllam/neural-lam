@@ -228,23 +228,6 @@ class BaseDatastore(abc.ABC):
         """
         pass
 
-    @cached_property
-    @abc.abstractmethod
-    def boundary_mask(self) -> xr.DataArray:
-        """
-        Return the boundary mask for the dataset, with spatial dimensions
-        stacked. Where the value is 1, the grid point is a boundary point, and
-        where the value is 0, the grid point is not a boundary point.
-
-        Returns
-        -------
-        xr.DataArray
-            The boundary mask for the dataset, with dimensions
-            `('grid_index',)`.
-
-        """
-        pass
-
     @abc.abstractmethod
     def get_xy(self, category: str) -> np.ndarray:
         """
