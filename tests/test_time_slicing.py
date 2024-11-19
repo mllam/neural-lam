@@ -48,7 +48,8 @@ class SinglePointDummyDatastore(BaseDatastore):
         da = da.expand_dims("grid_index")
         da = da.expand_dims(f"{category}_feature")
 
-        return da
+        dim_order = self.expected_dim_order(category=category)
+        return da.transpose(*dim_order)
 
     def get_standardization_dataarray(self, category):
         raise NotImplementedError()
