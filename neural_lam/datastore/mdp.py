@@ -26,11 +26,10 @@ class MDPDatastore(BaseRegularGridDatastore):
 
     SHORT_NAME = "mdp"
 
-    def __init__(self, config_path, n_boundary_points=0, reuse_existing=True):
+    def __init__(self, config_path, reuse_existing=True):
         """
         Construct a new MDPDatastore from the configuration file at
-        `config_path`. A boundary mask is created with `n_boundary_points`
-        boundary points. If `reuse_existing` is True, the dataset is loaded
+        `config_path`. If `reuse_existing` is True, the dataset is loaded
         from a zarr file if it exists (unless the config has been modified
         since the zarr was created), otherwise it is created from the
         configuration file.
@@ -41,8 +40,6 @@ class MDPDatastore(BaseRegularGridDatastore):
             The path to the configuration file, this will be fed to the
             `mllam_data_prep.Config.from_yaml_file` method to then call
             `mllam_data_prep.create_dataset` to create the dataset.
-        n_boundary_points : int
-            The number of boundary points to use in the boundary mask.
         reuse_existing : bool
             Whether to reuse an existing dataset zarr file if it exists and its
             creation date is newer than the configuration file.
@@ -69,7 +66,6 @@ class MDPDatastore(BaseRegularGridDatastore):
         if self._ds is None:
             self._ds = mdp.create_dataset(config=self._config)
             self._ds.to_zarr(fp_ds)
-        self._n_boundary_points = n_boundary_points
 
         print("The loaded datastore contains the following features:")
         for category in ["state", "forcing", "static"]:
