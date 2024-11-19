@@ -18,8 +18,6 @@
       dataarray for the given category.
 - `get_dataarray` (method): Return the processed data (as a single
       `xr.DataArray`) for the given category and test/train/val-split.
-- `boundary_mask` (property): Return the boundary mask for the dataset,
-      with spatial dimensions stacked.
 - `config` (property): Return the configuration of the datastore.
 
 In addition BaseRegularGridDatastore must have the following methods and
@@ -211,25 +209,6 @@ def test_get_dataarray(datastore_name):
 
         # check that the number of features is the same for all splits
         assert n_features["train"] == n_features["val"] == n_features["test"]
-
-
-@pytest.mark.parametrize("datastore_name", DATASTORES.keys())
-def test_boundary_mask(datastore_name):
-    """Check that the `datastore.boundary_mask` property is implemented and
-    that the returned object is an xarray DataArray with the correct shape."""
-    datastore = init_datastore_example(datastore_name)
-    da_mask = datastore.boundary_mask
-
-    assert isinstance(da_mask, xr.DataArray)
-    assert set(da_mask.dims) == {"grid_index"}
-    assert da_mask.dtype == "int"
-    assert set(da_mask.values) == {0, 1}
-    assert da_mask.sum() > 0
-    assert da_mask.sum() < da_mask.size
-
-    if isinstance(datastore, BaseRegularGridDatastore):
-        grid_shape = datastore.grid_shape_state
-        assert datastore.boundary_mask.size == grid_shape.x * grid_shape.y
 
 
 @pytest.mark.parametrize("datastore_name", DATASTORES.keys())
