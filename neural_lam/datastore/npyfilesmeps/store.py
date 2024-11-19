@@ -668,34 +668,6 @@ class NpyFilesDatastoreMEPS(BaseRegularGridDatastore):
         ny, nx = self.config.grid_shape_state
         return CartesianGridShape(x=nx, y=ny)
 
-    @cached_property
-    def boundary_mask(self) -> xr.DataArray:
-        """The boundary mask for the dataset. This is a binary mask that is 1
-        where the grid cell is on the boundary of the domain, and 0 otherwise.
-
-        Returns
-        -------
-        xr.DataArray
-            The boundary mask for the dataset, with dimensions `[grid_index]`.
-
-        """
-        xy = self.get_xy(category="state", stacked=False)
-        xs = xy[:, :, 0]
-        ys = xy[:, :, 1]
-        # Check if x-coordinates are constant along columns
-        assert np.allclose(xs, xs[:, [0]]), "x-coordinates are not constant"
-        # Check if y-coordinates are constant along rows
-        assert np.allclose(ys, ys[[0], :]), "y-coordinates are not constant"
-        # Extract unique x and y coordinates
-        x = xs[:, 0]  # Unique x-coordinates (changes along the first axis)
-        y = ys[0, :]  # Unique y-coordinates (changes along the second axis)
-        values = np.load(self.root_path / "static" / "border_mask.npy")
-        da_mask = xr.DataArray(
-            values, dims=["y", "x"], coords=dict(x=x, y=y), name="boundary_mask"
-        )
-        da_mask_stacked_xy = self.stack_grid_coords(da_mask).astype(int)
-        return da_mask_stacked_xy
-
     def get_standardization_dataarray(self, category: str) -> xr.Dataset:
         """Return the standardization dataarray for the given category. This
         should contain a `{category}_mean` and `{category}_std` variable for

@@ -319,40 +319,6 @@ class MDPDatastore(BaseRegularGridDatastore):
         ds_stats = self._ds[stats_variables.keys()].rename(stats_variables)
         return ds_stats
 
-    @cached_property
-    def boundary_mask(self) -> xr.DataArray:
-        """
-        Produce a 0/1 mask for the boundary points of the dataset, these will
-        sit at the edges of the domain (in x/y extent) and will be used to mask
-        out the boundary points from the loss function and to overwrite the
-        boundary points from the prediction. For now this is created when the
-        mask is requested, but in the future this could be saved to the zarr
-        file.
-
-        Returns
-        -------
-        xr.DataArray
-            A 0/1 mask for the boundary points of the dataset, where 1 is a
-            boundary point and 0 is not.
-
-        """
-        if self._n_boundary_points > 0:
-            ds_unstacked = self.unstack_grid_coords(da_or_ds=self._ds)
-            da_state_variable = (
-                ds_unstacked["state"].isel(time=0).isel(state_feature=0)
-            )
-            da_domain_allzero = xr.zeros_like(da_state_variable)
-            ds_unstacked["boundary_mask"] = da_domain_allzero.isel(
-                x=slice(self._n_boundary_points, -self._n_boundary_points),
-                y=slice(self._n_boundary_points, -self._n_boundary_points),
-            )
-            ds_unstacked["boundary_mask"] = ds_unstacked.boundary_mask.fillna(
-                1
-            ).astype(int)
-            return self.stack_grid_coords(da_or_ds=ds_unstacked.boundary_mask)
-        else:
-            return None
-
     @property
     def coords_projection(self) -> ccrs.Projection:
         """

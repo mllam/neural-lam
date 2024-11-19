@@ -148,12 +148,6 @@ class DummyDatastore(BaseRegularGridDatastore):
                 times = [self.T0 + dt * i for i in range(n_timesteps)]
                 self.ds.coords["time"] = times
 
-        # Add boundary mask
-        self.ds["boundary_mask"] = xr.DataArray(
-            np.random.choice([0, 1], size=(n_points_1d, n_points_1d)),
-            dims=["x", "y"],
-        )
-
         # Stack the spatial dimensions into grid_index
         self.ds = self.ds.stack(grid_index=self.CARTESIAN_COORDS)
 
@@ -341,22 +335,6 @@ class DummyDatastore(BaseRegularGridDatastore):
         """
         dim_order = self.expected_dim_order(category=category)
         return self.ds[category].transpose(*dim_order)
-
-    @cached_property
-    def boundary_mask(self) -> xr.DataArray:
-        """
-        Return the boundary mask for the dataset, with spatial dimensions
-        stacked. Where the value is 1, the grid point is a boundary point, and
-        where the value is 0, the grid point is not a boundary point.
-
-        Returns
-        -------
-        xr.DataArray
-            The boundary mask for the dataset, with dimensions
-            `('grid_index',)`.
-
-        """
-        return self.ds["boundary_mask"]
 
     def get_xy(self, category: str, stacked: bool) -> ndarray:
         """Return the x, y coordinates of the dataset.

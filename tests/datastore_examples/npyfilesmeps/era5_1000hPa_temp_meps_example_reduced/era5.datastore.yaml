@@ -1,0 +1,85 @@
+schema_version: v0.5.0
+dataset_version: v1.0.0
+
+output:
+  variables:
+    forcing: [time, grid_index, forcing_feature]
+  coord_ranges:
+    time:
+      start: 1990-09-01T00:00
+      end: 2022-09-30T00:00 
+      step: PT6H
+  chunking:
+    time: 1
+  splitting:
+    dim: time
+    splits:
+      train:
+        start: 1990-09-01T00:00
+        end: 2022-09-30T00:00 
+        compute_statistics:
+          ops: [mean, std, diff_mean, diff_std]
+          dims: [grid_index, time]
+      val:
+        start: 1990-09-01T00:00
+        end: 2022-09-30T00:00 
+      test:
+        start: 1990-09-01T00:00
+        end: 2022-09-30T00:00 
+
+inputs:
+  era_height_levels:
+    path: 'gs://weatherbench2/datasets/era5/1959-2023_01_10-wb13-6h-1440x721_with_derived_variables.zarr'
+    dims: [time, longitude, latitude, level]
+    variables:
+      u_component_of_wind:
+        level:
+          values: [1000,]
+          units: hPa
+    dim_mapping:
+      time:
+        method: rename
+        dim: time
+      x:
+        method: rename
+        dim: longitude
+      y:
+        method: rename
+        dim: latitude
+      forcing_feature:
+        method: stack_variables_by_var_name
+        dims: [level]
+        name_format: "{var_name}{level}hPa"
+      grid_index:
+        method: stack
+        dims: [x, y]
+    target_output_variable: forcing
+
+  era5_surface:
+    path: 'gs://weatherbench2/datasets/era5/1959-2023_01_10-wb13-6h-1440x721_with_derived_variables.zarr'
+    dims: [time, longitude, latitude, level]
+    variables:
+      - mean_surface_net_short_wave_radiation_flux
+    dim_mapping:
+      time:
+        method: rename
+        dim: time
+      x:
+        method: rename
+        dim: longitude
+      y:
+        method: rename
+        dim: latitude
+      forcing_feature:
+        method: stack_variables_by_var_name
+        name_format: "{var_name}"
+      grid_index:
+        method: stack
+        dims: [x, y]
+    target_output_variable: forcing
+
+extra:
+  projection:
+    class_name: PlateCarree
+    kwargs:
+      central_longitude: 0.0

@@ -1,0 +1,18 @@
+datastore:
+  kind: npyfilesmeps
+  config_path: meps_example_reduced.datastore.yaml
+datastore_boundary:
+  kind: mdp
+  config_path: era5.datastore.yaml
+training:
+  state_feature_weighting:
+    __config_class__: ManualStateFeatureWeighting
+    weights:
+      nlwrs_0: 1.0
+      nswrs_0: 1.0
+      pres_0g: 1.0
+      pres_0s: 1.0
+      r_2: 1.0
+      r_65: 1.0
+      t_2: 1.0
+      t_65: 1.0
