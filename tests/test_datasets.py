@@ -203,12 +203,10 @@ def test_single_batch(datastore_name, datastore_boundary_name, split):
         loss = "mse"
         restore_opt = False
         n_example_pred = 1
-        # XXX: this should be superfluous when we have already defined the
-        # model object no?
         graph = graph_name
-        hidden_dim = 8
+        hidden_dim = 4
         hidden_layers = 1
-        processor_layers = 4
+        processor_layers = 2
         mesh_aggr = "sum"
         num_past_forcing_steps = 1
         num_future_forcing_steps = 1
@@ -245,7 +243,7 @@ def test_single_batch(datastore_name, datastore_boundary_name, split):
     model = GraphLAM(args=args, datastore=datastore, config=config)  # noqa
 
     model_device = model.to(device_name)
-    data_loader = DataLoader(dataset, batch_size=5)
+    data_loader = DataLoader(dataset, batch_size=2)
     batch = next(iter(data_loader))
     batch_device = [part.to(device_name) for part in batch]
     model_device.common_step(batch_device)

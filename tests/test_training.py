@@ -76,9 +76,9 @@ def test_training(datastore_name):
         # XXX: this should be superfluous when we have already defined the
         # model object no?
         graph = graph_name
-        hidden_dim = 8
+        hidden_dim = 4
         hidden_layers = 1
-        processor_layers = 4
+        processor_layers = 2
         mesh_aggr = "sum"
         lr = 1.0e-3
         val_steps_to_log = [1, 3]
