@@ -102,16 +102,16 @@ setup](.github/workflows/) which you can use as a reference.
 Once `neural-lam` is installed you will be able to train/evaluate models. For this you will in general need two things:
 
 1. **Data to train/evaluate the model**. To represent this data we use a concept of
-   *datastores* in Neural-LAM (see the [Data](#data) section for more details).
+   *datastores* in Neural-LAM (see the [Data](#data-the-datastore-and-weatherdataset-classes) section for more details).
    In brief, a datastore implements the process of loading data from disk in a
    specific format (for example zarr or numpy files) by implementing an
    interface that provides the data in a data-structure that can be used within
-   neural-lam. A datastore is the used to create a `pytorch.Dataset`-derived
+   neural-lam. A datastore is used to create a `pytorch.Dataset`-derived
    class that samples the data in time to create individual samples for
    training, validation and testing.
 
-2. **The graph structure** on which message-passing is used to represent the flow
-   of information that emulates fluid flow in the atmosphere over time. The
+2. **The graph structure** is used to define message-passing GNN layers,
+   that are trained to emulate fluid flow in the atmosphere over time. The
    graph structure is created for a specific datastore.
 
 Any command you run in neural-lam will include the path to a configuration file
@@ -127,7 +127,7 @@ Exactly how and where a specific datastore expects its source data to be stored
 and where it stores its derived data is up to the implementation of the
 datastore.
 
-In general the folder structure assumed in Neural-LAM is follows (we will
+In general the folder structure assumed in Neural-LAM is as follows (we will
 assume you placed `config.yaml` in a folder called `data`):
 
 ```
@@ -159,7 +159,7 @@ to weighting all features equally.
 
 
 Below follows instructions on how to use Neural-LAM to train and evaluate
-models, with details given first given for each kind of datastore implemented
+models, with details first given for each kind of datastore implemented
 and later the graph generation. Once `neural-lam` has been installed the
 general process is:
 
@@ -172,7 +172,7 @@ general process is:
 To enable flexibility in what input-data sources can be used with neural-lam,
 the input-data representation is split into two parts:
 
-1. a "datastore" (represented by instances of
+1. A "datastore" (represented by instances of
    [neural_lam.datastore.BaseDataStore](neural_lam/datastore/base.py)) which
    takes care of loading a given category (state, forcing or static) and split
    (train/val/test) of data from disk and returning it as a `xarray.DataArray`.
@@ -183,7 +183,7 @@ the input-data representation is split into two parts:
    variables in the data, the boundary mask, normalisation values and grid
    information.
 
-2. a `pytorch.Dataset`-derived class (called
+2. A `pytorch.Dataset`-derived class (called
    `neural_lam.weather_dataset.WeatherDataset`) which takes care of sampling in
    time to create individual samples for training, validation and testing. The
    `WeatherDataset` class is also responsible for normalising the values and
@@ -240,7 +240,7 @@ python -m mllam_data_prep --config data/danra.datastore.yaml
 ```
 
 If you will be working on a large dataset (on the order of 10GB or more) it
-could be beneficial to produce the processed `.zarr` dataset ahead of using it
+could be beneficial to produce the processed `.zarr` dataset before using it
 in neural-lam so that you can do the processing across multiple CPU cores in parallel. This is done by including the `--dask-distributed-local-core-fraction` argument when calling mllam-data-prep to set the fraction of your system's CPU cores that should be used for processing (see the
 [mllam-data-prep
 README for details](https://github.com/mllam/mllam-data-prep?tab=readme-ov-file#creating-large-datasets-with-daskdistributed)).
@@ -254,8 +254,7 @@ python -m mllam_data_prep --config data/danra.datastore.yaml --dask-distributed-
 ### NpyFiles MEPS Datastore - `NpyFilesDatastoreMEPS`
 
 Version `v0.1.0` of Neural-LAM was built to train from numpy-files from the
-[](MEPS weather forecasting dataset) that stored physical atmospheric and
-surface fields that were used during training.
+MEPS weather forecasts dataset.
 To enable this functionality to live on in later versions of neural-lam we have
 built a datastore called `NpyFilesDatastoreMEPS` which implements functionality
 to read from these exact same numpy-files. At this stage this datastore class
@@ -273,7 +272,7 @@ Graphs used in the initial paper are also available for download at the same lin
 Note that this is far too little data to train any useful models, but all pre-processing and training steps can be run with it.
 It should thus be useful to make sure that your python environment is set up correctly and that all the code can be ran without any issues.
 
-The following datastore configuration works with MEPS dataset:
+The following datastore configuration works with the MEPS dataset:
 
 ```yaml
 # meps.datastore.yaml
@@ -377,9 +376,9 @@ python -m neural_lam.datastore.npyfilesmeps.compute_standardization_stats <path-
 Run `python -m neural_lam.create_mesh` with suitable options to generate the graph you want to use (see `python neural_lam.create_mesh --help` for a list of options).
 The graphs used for the different models in the [paper](#graph-based-neural-weather-prediction-for-limited-area-modeling) can be created as:
 
-* **GC-LAM**: `python -m neural_lam.create_mesh <neural-lam-config-path> --graph multiscale`
-* **Hi-LAM**: `python -m neural_lam.create_mesh <neural-lam-config-path> --graph hierarchical --hierarchical` (also works for Hi-LAM-Parallel)
-* **L1-LAM**: `python -m neural_lam.create_mesh <neural-lam-config-path> --graph 1level --levels 1`
+* **GC-LAM**: `python -m neural_lam.create_graph --config_path <neural-lam-config-path> --name multiscale`
+* **Hi-LAM**: `python -m neural_lam.create_graph --config_path <neural-lam-config-path> --name hierarchical --hierarchical` (also works for Hi-LAM-Parallel)
+* **L1-LAM**: `python -m neural_lam.create_graph --config_path <neural-lam-config-path> --name 1level --levels 1`
 
 The graph-related files are stored in a directory called `graphs`.
 
@@ -400,16 +399,17 @@ wandb off
 ```
 
 ## Train Models
-Models can be trained using `python -m neural_lam.train_model <config_path>`.
+Models can be trained using `python -m neural_lam.train_model --config_path <config_path>`.
 Run `python neural_lam.train_model --help` for a full list of training options.
 A few of the key ones are outlined below:
 
-* `<config_path>`: Path to the configuration for neural-lam (for example in `data/myexperiment/config.yaml`).
+* `--config_path`: Path to the configuration for neural-lam (for example in `data/myexperiment/config.yaml`).
 * `--model`: Which model to train
 * `--graph`: Which graph to use with the model
 * `--epochs`: Number of epochs to train for
 * `--processor_layers`: Number of GNN layers to use in the processing part of the model
-* `--ar_steps`: Number of time steps to unroll for when making predictions and computing the loss
+* `--ar_steps_train`: Number of time steps to unroll for when making predictions and computing the loss
+* `--ar_steps_eval`: Number of time steps to unroll for during validation steps
 
 Checkpoints of trained models are stored in the `saved_models` directory.
 The implemented models are:
@@ -449,13 +449,14 @@ python -m neural_lam.train_model --model hi_lam_parallel --graph hierarchical ..
 Checkpoint files for our models trained on the MEPS data are available upon request.
 
 ## Evaluate Models
-Evaluation is also done using `python -m neural_lam.train_model <config-path>`, but using the `--eval` option.
+Evaluation is also done using `python -m neural_lam.train_model --config_path <config-path>`, but using the `--eval` option.
 Use `--eval val` to evaluate the model on the validation set and `--eval test` to evaluate on test data.
-Most of the training options are also relevant for evaluation (not `ar_steps`, evaluation always unrolls full forecasts).
+Most of the training options are also relevant for evaluation.
 Some options specifically important for evaluation are:
 
 * `--load`: Path to model checkpoint file (`.ckpt`) to load parameters from
 * `--n_example_pred`: Number of example predictions to plot during evaluation.
+* `--ar_steps_eval`: Number of time steps to unroll for during evaluation
 
 **Note:** While it is technically possible to use multiple GPUs for running evaluation, this is strongly discouraged. If using multiple devices the `DistributedSampler` will replicate some samples to make sure all devices have the same batch size, meaning that evaluation metrics will be unreliable.
 A possible workaround is to just use batch size 1 during evaluation.
