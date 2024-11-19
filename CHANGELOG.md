@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [unreleased](https://github.com/joeloskarsson/neural-lam/compare/v0.2.0...HEAD)
 
+### Added
+
+- Introduce Datastores to represent input data from different sources, including zarr and numpy.
+  [\#66](https://github.com/mllam/neural-lam/pull/66)
+ @leifdenby @sadamov
+
 ## [v0.2.0](https://github.com/joeloskarsson/neural-lam/releases/tag/v0.2.0)
 
 ### Added
