@@ -61,7 +61,7 @@ class MDPDatastore(BaseRegularGridDatastore):
             if fp_ds.stat().st_mtime < self._config_path.stat().st_mtime:
                 logger.warning(
                     "Config file has been modified since zarr was created. "
-                    "The old zarr archive will be used."
+                    f"The old zarr archive (in {fp_ds}) will be used."
                     "To generate new zarr-archive, move the old one first."
                 )
             self._ds = xr.open_zarr(fp_ds, consolidated=True)
@@ -395,6 +395,11 @@ class MDPDatastore(BaseRegularGridDatastore):
         class_name = projection_info["class_name"]
         ProjectionClass = getattr(ccrs, class_name)
         kwargs = projection_info["kwargs"]
+
+        globe_kwargs = kwargs.pop("globe", {})
+        if len(globe_kwargs) > 0:
+            kwargs["globe"] = ccrs.Globe(**globe_kwargs)
+
         return ProjectionClass(**kwargs)
 
     @cached_property
