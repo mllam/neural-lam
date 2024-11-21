@@ -380,8 +380,17 @@ class MDPDatastore(BaseRegularGridDatastore):
             The shape of the cartesian grid for the state variables.
 
         """
-        ds_state = self.unstack_grid_coords(self._ds["state"])
-        da_x, da_y = ds_state.x, ds_state.y
+        # Boundary data often has no state features
+        if "state" not in self._ds:
+            warnings.warn(
+                "no state data found in datastore"
+                "returning grid shape from forcing data"
+            )
+            ds_forcing = self.unstack_grid_coords(self._ds["forcing"])
+            da_x, da_y = ds_forcing.x, ds_forcing.y
+        else:
+            ds_state = self.unstack_grid_coords(self._ds["state"])
+            da_x, da_y = ds_state.x, ds_state.y
         assert da_x.ndim == da_y.ndim == 1
         return CartesianGridShape(x=da_x.size, y=da_y.size)
 
