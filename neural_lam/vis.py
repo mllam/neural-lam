@@ -5,10 +5,11 @@ import numpy as np
 
 # Local
 from . import utils
+from .datastore.base import BaseRegularGridDatastore
 
 
 @matplotlib.rc_context(utils.fractional_plot_bundle(1))
-def plot_error_map(errors, data_config, title=None, step_length=3):
+def plot_error_map(errors, datastore: BaseRegularGridDatastore, title=None):
     """
     Plot a heatmap of errors of different variables at different
     predictions horizons
@@ -16,6 +17,7 @@ def plot_error_map(errors, data_config, title=None, step_length=3):
     """
     errors_np = errors.T.cpu().numpy()  # (d_f, pred_steps)
     d_f, pred_steps = errors_np.shape
+    step_length = datastore.step_length
 
     # Normalize all errors to [0,1] for color map
     max_errors = errors_np.max(axis=1)  # d_f
@@ -48,11 +50,10 @@ def plot_error_map(errors, data_config, title=None, step_length=3):
     ax.set_xlabel("Lead time (h)", size=label_size)
 
     ax.set_yticks(np.arange(d_f))
+    var_names = datastore.get_vars_names(category="state")
+    var_units = datastore.get_vars_units(category="state")
     y_ticklabels = [
-        f"{name} ({unit})"
-        for name, unit in zip(
-            data_config.dataset.var_names, data_config.dataset.var_units
-        )
+        f"{name} ({unit})" for name, unit in zip(var_names, var_units)
     ]
     ax.set_yticklabels(y_ticklabels, rotation=30, size=label_size)
 
@@ -64,11 +65,17 @@ def plot_error_map(errors, data_config, title=None, step_length=3):
 
 @matplotlib.rc_context(utils.fractional_plot_bundle(1))
 def plot_prediction(
-    pred, target, obs_mask, data_config, title=None, vrange=None
+    pred,
+    target,
+    datastore: BaseRegularGridDatastore,
+    title=None,
+    vrange=None,
 ):
     """
     Plot example prediction and grond truth.
+
     Each has shape (N_grid,)
+
     """
     # Get common scale for values
     if vrange is None:
@@ -77,8 +84,11 @@ def plot_prediction(
     else:
         vmin, vmax = vrange
 
+    extent = datastore.get_xy_extent("state")
+
     # Set up masking of border region
-    mask_reshaped = obs_mask.reshape(*data_config.grid_shape_state)
+    da_mask = datastore.unstack_grid_coords(datastore.boundary_mask)
+    mask_reshaped = da_mask.values
     pixel_alpha = (
         mask_reshaped.clamp(0.7, 1).cpu().numpy()
     )  # Faded border region
@@ -87,16 +97,21 @@ def plot_prediction(
         1,
         2,
         figsize=(13, 7),
-        subplot_kw={"projection": data_config.coords_projection},
+        subplot_kw={"projection": datastore.coords_projection},
     )
 
     # Plot pred and target
     for ax, data in zip(axes, (target, pred)):
         ax.coastlines()  # Add coastline outlines
-        data_grid = data.reshape(*data_config.grid_shape_state).cpu().numpy()
+        data_grid = (
+            data.reshape(list(datastore.grid_shape_state.values.values()))
+            .cpu()
+            .numpy()
+        )
         im = ax.imshow(
             data_grid,
             origin="lower",
+            extent=extent,
             alpha=pixel_alpha,
             vmin=vmin,
             vmax=vmax,
@@ -116,7 +131,9 @@ def plot_prediction(
 
 
 @matplotlib.rc_context(utils.fractional_plot_bundle(1))
-def plot_spatial_error(error, obs_mask, data_config, title=None, vrange=None):
+def plot_spatial_error(
+    error, datastore: BaseRegularGridDatastore, title=None, vrange=None
+):
     """
     Plot errors over spatial map
     Error and obs_mask has shape (N_grid,)
@@ -128,23 +145,31 @@ def plot_spatial_error(error, obs_mask, data_config, title=None, vrange=None):
     else:
         vmin, vmax = vrange
 
+    extent = datastore.get_xy_extent("state")
+
     # Set up masking of border region
-    mask_reshaped = obs_mask.reshape(*data_config.grid_shape_state)
+    da_mask = datastore.unstack_grid_coords(datastore.boundary_mask)
+    mask_reshaped = da_mask.values
     pixel_alpha = (
         mask_reshaped.clamp(0.7, 1).cpu().numpy()
     )  # Faded border region
 
     fig, ax = plt.subplots(
         figsize=(5, 4.8),
-        subplot_kw={"projection": data_config.coords_projection},
+        subplot_kw={"projection": datastore.coords_projection},
     )
 
     ax.coastlines()  # Add coastline outlines
-    error_grid = error.reshape(*data_config.grid_shape_state).cpu().numpy()
+    error_grid = (
+        error.reshape(list(datastore.grid_shape_state.values.values()))
+        .cpu()
+        .numpy()
+    )
 
     im = ax.imshow(
         error_grid,
         origin="lower",
+        extent=extent,
         alpha=pixel_alpha,
         vmin=vmin,
         vmax=vmax,

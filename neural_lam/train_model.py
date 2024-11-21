@@ -8,10 +8,13 @@ from argparse import ArgumentParser
 import pytorch_lightning as pl
 import torch
 from lightning_fabric.utilities import seed
+from loguru import logger
 
 # Local
-from . import WeatherDataset, config, utils
+from . import utils
+from .config import load_config_and_datastore
 from .models import GraphLAM, HiLAM, HiLAMParallel
+from .weather_dataset import WeatherDataModule
 
 MODELS = {
     "graph_lam": GraphLAM,
@@ -20,18 +23,16 @@ MODELS = {
 }
 
 
+@logger.catch
 def main(input_args=None):
-    """
-    Main function for training and evaluating models
-    """
+    """Main function for training and evaluating models."""
     parser = ArgumentParser(
         description="Train or evaluate NeurWP models for LAM"
     )
     parser.add_argument(
-        "--data_config",
+        "--config_path",
         type=str,
-        default="neural_lam/data_config.yaml",
-        help="Path to data config file (default: neural_lam/data_config.yaml)",
+        help="Path to the configuration for neural-lam",
     )
     parser.add_argument(
         "--model",
@@ -40,16 +41,10 @@ def main(input_args=None):
         help="Model architecture to train/evaluate (default: graph_lam)",
     )
     parser.add_argument(
-        "--subset_ds",
-        action="store_true",
-        help="Use only a small subset of the dataset, for debugging"
-        "(default: false)",
-    )
-    parser.add_argument(
         "--seed", type=int, default=42, help="random seed (default: 42)"
     )
     parser.add_argument(
-        "--n_workers",
+        "--num_workers",
         type=int,
         default=4,
         help="Number of workers in data loader (default: 4)",
@@ -124,30 +119,17 @@ def main(input_args=None):
 
     # Training options
     parser.add_argument(
-        "--ar_steps",
+        "--ar_steps_train",
         type=int,
         default=1,
-        help="Number of steps to unroll prediction for in loss (1-19) "
+        help="Number of steps to unroll prediction for in loss function "
         "(default: 1)",
-    )
-    parser.add_argument(
-        "--control_only",
-        action="store_true",
-        help="Train only on control member of ensemble data "
-        "(default: False)",
     )
     parser.add_argument(
         "--loss",
         type=str,
         default="wmse",
         help="Loss function to use, see metric.py (default: wmse)",
-    )
-    parser.add_argument(
-        "--step_length",
-        type=int,
-        default=3,
-        help="Step length in hours to consider single time step 1-3 "
-        "(default: 3)",
     )
     parser.add_argument(
         "--lr", type=float, default=1e-3, help="learning rate (default: 0.001)"
@@ -168,6 +150,13 @@ def main(input_args=None):
         "(default: None (train model))",
     )
     parser.add_argument(
+        "--ar_steps_eval",
+        type=int,
+        default=10,
+        help="Number of steps to unroll prediction for during evaluation "
+        "(default: 10)",
+    )
+    parser.add_argument(
         "--n_example_pred",
         type=int,
         default=1,
@@ -184,9 +173,10 @@ def main(input_args=None):
     )
     parser.add_argument(
         "--val_steps_to_log",
-        type=list,
+        nargs="+",
+        type=int,
         default=[1, 2, 3, 5, 10, 15, 19],
-        help="Steps to log val loss for (default: [1, 2, 3, 5, 10, 15, 19])",
+        help="Steps to log val loss for (default: 1 2 3 5 10 15 19)",
     )
     parser.add_argument(
         "--metrics_watch",
@@ -201,15 +191,28 @@ def main(input_args=None):
         help="""JSON string with variable-IDs and lead times to log watched
              metrics (e.g. '{"1": [1, 2], "3": [3, 4]}')""",
     )
+    parser.add_argument(
+        "--num_past_forcing_steps",
+        type=int,
+        default=1,
+        help="Number of past time steps to use as input for forcing data",
+    )
+    parser.add_argument(
+        "--num_future_forcing_steps",
+        type=int,
+        default=1,
+        help="Number of future time steps to use as input for forcing data",
+    )
     args = parser.parse_args(input_args)
     args.var_leads_metrics_watch = {
         int(k): v for k, v in json.loads(args.var_leads_metrics_watch).items()
     }
-    config_loader = config.Config.from_file(args.data_config)
 
     # Asserts for arguments
+    assert (
+        args.config_path is not None
+    ), "Specify your config with --config_path"
     assert args.model in MODELS, f"Unknown model: {args.model}"
-    assert args.step_length <= 3, "Too high step length"
     assert args.eval in (
         None,
         "val",
@@ -222,33 +225,19 @@ def main(input_args=None):
     # Set seed
     seed.seed_everything(args.seed)
 
-    # Load data
-    train_loader = torch.utils.data.DataLoader(
-        WeatherDataset(
-            config_loader.dataset.name,
-            pred_length=args.ar_steps,
-            split="train",
-            subsample_step=args.step_length,
-            subset=args.subset_ds,
-            control_only=args.control_only,
-        ),
-        args.batch_size,
-        shuffle=True,
-        num_workers=args.n_workers,
-    )
-    max_pred_length = (65 // args.step_length) - 2  # 19
-    val_loader = torch.utils.data.DataLoader(
-        WeatherDataset(
-            config_loader.dataset.name,
-            pred_length=max_pred_length,
-            split="val",
-            subsample_step=args.step_length,
-            subset=args.subset_ds,
-            control_only=args.control_only,
-        ),
-        args.batch_size,
-        shuffle=False,
-        num_workers=args.n_workers,
+    # Load neural-lam configuration and datastore to use
+    config, datastore = load_config_and_datastore(config_path=args.config_path)
+
+    # Create datamodule
+    data_module = WeatherDataModule(
+        datastore=datastore,
+        ar_steps_train=args.ar_steps_train,
+        ar_steps_eval=args.ar_steps_eval,
+        standardize=True,
+        num_past_forcing_steps=args.num_past_forcing_steps,
+        num_future_forcing_steps=args.num_future_forcing_steps,
+        batch_size=args.batch_size,
+        num_workers=args.num_workers,
     )
 
     # Instantiate model + trainer
@@ -261,12 +250,13 @@ def main(input_args=None):
         device_name = "cpu"
 
     # Load model parameters Use new args for model
-    model_class = MODELS[args.model]
-    model = model_class(args)
+    ModelClass = MODELS[args.model]
+    model = ModelClass(args, config=config, datastore=datastore)
 
-    prefix = "subset-" if args.subset_ds else ""
     if args.eval:
-        prefix = prefix + f"eval-{args.eval}-"
+        prefix = f"eval-{args.eval}-"
+    else:
+        prefix = "train-"
     run_name = (
         f"{prefix}{args.model}-{args.processor_layers}x{args.hidden_dim}-"
         f"{time.strftime('%m_%d_%H')}-{random_run_id:04d}"
@@ -279,7 +269,9 @@ def main(input_args=None):
         save_last=True,
     )
     logger = pl.loggers.WandbLogger(
-        project=args.wandb_project, name=run_name, config=args
+        project=args.wandb_project,
+        name=run_name,
+        config=dict(training=vars(args), datastore=datastore._config),
     )
     trainer = pl.Trainer(
         max_epochs=args.epochs,
@@ -296,36 +288,12 @@ def main(input_args=None):
     # Only init once, on rank 0 only
     if trainer.global_rank == 0:
         utils.init_wandb_metrics(
-            logger, args.val_steps_to_log
+            logger, val_steps=args.val_steps_to_log
         )  # Do after wandb.init
-
     if args.eval:
-        if args.eval == "val":
-            eval_loader = val_loader
-        else:  # Test
-            eval_loader = torch.utils.data.DataLoader(
-                WeatherDataset(
-                    config_loader.dataset.name,
-                    pred_length=max_pred_length,
-                    split="test",
-                    subsample_step=args.step_length,
-                    subset=args.subset_ds,
-                ),
-                args.batch_size,
-                shuffle=False,
-                num_workers=args.n_workers,
-            )
-
-        print(f"Running evaluation on {args.eval}")
-        trainer.test(model=model, dataloaders=eval_loader, ckpt_path=args.load)
+        trainer.test(model=model, datamodule=data_module, ckpt_path=args.load)
     else:
-        # Train model
-        trainer.fit(
-            model=model,
-            train_dataloaders=train_loader,
-            val_dataloaders=val_loader,
-            ckpt_path=args.load,
-        )
+        trainer.fit(model=model, datamodule=data_module, ckpt_path=args.load)
 
 
 if __name__ == "__main__":

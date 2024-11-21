@@ -3,88 +3,9 @@ import os
 import shutil
 
 # Third-party
-import numpy as np
 import torch
 from torch import nn
 from tueplots import bundles, figsizes
-
-
-def load_dataset_stats(dataset_name, device="cpu"):
-    """
-    Load arrays with stored dataset statistics from pre-processing
-    """
-    static_dir_path = os.path.join("data", dataset_name, "static")
-
-    def loads_file(fn):
-        return torch.load(
-            os.path.join(static_dir_path, fn),
-            map_location=device,
-            weights_only=True,
-        )
-
-    data_mean = loads_file("parameter_mean.pt")  # (d_features,)
-    data_std = loads_file("parameter_std.pt")  # (d_features,)
-
-    flux_stats = loads_file("flux_stats.pt")  # (2,)
-    flux_mean, flux_std = flux_stats
-
-    return {
-        "data_mean": data_mean,
-        "data_std": data_std,
-        "flux_mean": flux_mean,
-        "flux_std": flux_std,
-    }
-
-
-def load_static_data(dataset_name, device="cpu"):
-    """
-    Load static files related to dataset
-    """
-    static_dir_path = os.path.join("data", dataset_name, "static")
-
-    def loads_file(fn):
-        return torch.load(
-            os.path.join(static_dir_path, fn),
-            map_location=device,
-            weights_only=True,
-        )
-
-    # Load border mask, 1. if node is part of border, else 0.
-    border_mask_np = np.load(os.path.join(static_dir_path, "border_mask.npy"))
-    border_mask = (
-        torch.tensor(border_mask_np, dtype=torch.float32, device=device)
-        .flatten(0, 1)
-        .unsqueeze(1)
-    )  # (N_grid, 1)
-
-    grid_static_features = loads_file(
-        "grid_features.pt"
-    )  # (N_grid, d_grid_static)
-
-    # Load step diff stats
-    step_diff_mean = loads_file("diff_mean.pt")  # (d_f,)
-    step_diff_std = loads_file("diff_std.pt")  # (d_f,)
-
-    # Load parameter std for computing validation errors in original data scale
-    data_mean = loads_file("parameter_mean.pt")  # (d_features,)
-    data_std = loads_file("parameter_std.pt")  # (d_features,)
-
-    # Load loss weighting vectors
-    param_weights = torch.tensor(
-        np.load(os.path.join(static_dir_path, "parameter_weights.npy")),
-        dtype=torch.float32,
-        device=device,
-    )  # (d_f,)
-
-    return {
-        "border_mask": border_mask,
-        "grid_static_features": grid_static_features,
-        "step_diff_mean": step_diff_mean,
-        "step_diff_std": step_diff_std,
-        "data_mean": data_mean,
-        "data_std": data_std,
-        "param_weights": param_weights,
-    }
 
 
 class BufferList(nn.Module):
@@ -112,12 +33,50 @@ class BufferList(nn.Module):
         return (self[i] for i in range(len(self)))
 
 
-def load_graph(graph_name, device="cpu"):
+def load_graph(graph_dir_path, device="cpu"):
+    """Load all tensors representing the graph from `graph_dir_path`.
+
+    Needs the following files for all graphs:
+    - m2m_edge_index.pt
+    - g2m_edge_index.pt
+    - m2g_edge_index.pt
+    - m2m_features.pt
+    - g2m_features.pt
+    - m2g_features.pt
+    - mesh_features.pt
+
+    And in addition for hierarchical graphs:
+    - mesh_up_edge_index.pt
+    - mesh_down_edge_index.pt
+    - mesh_up_features.pt
+    - mesh_down_features.pt
+
+    Parameters
+    ----------
+    graph_dir_path : str
+        Path to directory containing the graph files.
+    device : str
+        Device to load tensors to.
+
+    Returns
+    -------
+    hierarchical : bool
+        Whether the graph is hierarchical.
+    graph : dict
+        Dictionary containing the graph tensors, with keys as follows:
+        - g2m_edge_index
+        - m2g_edge_index
+        - m2m_edge_index
+        - mesh_up_edge_index
+        - mesh_down_edge_index
+        - g2m_features
+        - m2g_features
+        - m2m_features
+        - mesh_up_features
+        - mesh_down_features
+        - mesh_static_features
+
     """
-    Load all tensors representing the graph
-    """
-    # Define helper lambda function
-    graph_dir_path = os.path.join("graphs", graph_name)
 
     def loads_file(fn):
         return torch.load(
@@ -137,7 +96,8 @@ def load_graph(graph_name, device="cpu"):
     hierarchical = n_levels > 1  # Nor just single level mesh graph
 
     # Load static edge features
-    m2m_features = loads_file("m2m_features.pt")  # List of (M_m2m[l], d_edge_f)
+    # List of (M_m2m[l], d_edge_f)
+    m2m_features = loads_file("m2m_features.pt")
     g2m_features = loads_file("g2m_features.pt")  # (M_g2m, d_edge_f)
     m2g_features = loads_file("m2g_features.pt")  # (M_m2g, d_edge_f)
 
@@ -259,9 +219,9 @@ def fractional_plot_bundle(fraction):
     Get the tueplots bundle, but with figure width as a fraction of
     the page width.
     """
-    # If latex is not available, some visualizations might not render correctly,
-    # but will at least not raise an error.
-    # Alternatively, use unicode raised numbers.
+    # If latex is not available, some visualizations might not render
+    # correctly, but will at least not raise an error. Alternatively, use
+    # unicode raised numbers.
     usetex = True if shutil.which("latex") else False
     bundle = bundles.neurips2023(usetex=usetex, family="serif")
     bundle.update(figsizes.neurips2023())
