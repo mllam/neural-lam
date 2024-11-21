@@ -14,7 +14,7 @@ from torch_geometric.utils.convert import from_networkx
 
 # Local
 from .config import load_config_and_datastore
-from .datastore.base import BaseCartesianDatastore
+from .datastore.base import BaseRegularGridDatastore
 
 
 def plot_graph(graph, title=None):
@@ -109,8 +109,8 @@ def from_networkx_with_start_index(nx_graph, start_index):
 
 
 def mk_2d_graph(xy, nx, ny):
-    xm, xM = np.amin(xy[0][0, :]), np.amax(xy[0][0, :])
-    ym, yM = np.amin(xy[1][:, 0]), np.amax(xy[1][:, 0])
+    xm, xM = np.amin(xy[:, :, 0][:, 0]), np.amax(xy[:, :, 0][:, 0])
+    ym, yM = np.amin(xy[:, :, 1][0, :]), np.amax(xy[:, :, 1][0, :])
 
     # avoid nodes on border
     dx = (xM - xm) / nx
@@ -118,19 +118,19 @@ def mk_2d_graph(xy, nx, ny):
     lx = np.linspace(xm + dx / 2, xM - dx / 2, nx)
     ly = np.linspace(ym + dy / 2, yM - dy / 2, ny)
 
-    mg = np.meshgrid(lx, ly)
-    g = networkx.grid_2d_graph(len(ly), len(lx))
+    mg = np.meshgrid(lx, ly, indexing="ij")  # Use 'ij' indexing for (Nx,Ny)
+    g = networkx.grid_2d_graph(len(lx), len(ly))
 
     for node in g.nodes:
         g.nodes[node]["pos"] = np.array([mg[0][node], mg[1][node]])
 
     # add diagonal edges
     g.add_edges_from(
-        [((x, y), (x + 1, y + 1)) for x in range(nx - 1) for y in range(ny - 1)]
+        [((x, y), (x + 1, y + 1)) for y in range(ny - 1) for x in range(nx - 1)]
         + [
             ((x + 1, y), (x, y + 1))
-            for x in range(nx - 1)
             for y in range(ny - 1)
+            for x in range(nx - 1)
         ]
     )
 
@@ -213,7 +213,7 @@ def create_graph(
     graph_dir_path : str
         Path to store the graph components.
     xy : np.ndarray
-        Grid coordinates, expected to be of shape (2, Ny, Nx).
+        Grid coordinates, expected to be of shape (Nx, Ny, 2).
     n_max_levels : int
         Limit multi-scale mesh to given number of levels, from bottom up
         (default: None (no limit)).
@@ -239,8 +239,8 @@ def create_graph(
     #
 
     # graph geometry
-    nx = 3  # number of children = nx**2
-    nlev = int(np.log(max(xy.shape)) / np.log(nx))
+    nx = 3  # number of children =nx**2
+    nlev = int(np.log(max(xy.shape[:2])) / np.log(nx))
     nleaf = nx**nlev  # leaves at the bottom = nleaf**2
 
     mesh_levels = nlev - 1
@@ -432,7 +432,7 @@ def create_graph(
     )
 
     # grid nodes
-    Ny, Nx = xy.shape[1:]
+    Nx, Ny = xy.shape[:2]
 
     G_grid = networkx.grid_2d_graph(Ny, Nx)
     G_grid.clear_edges()
@@ -440,7 +440,9 @@ def create_graph(
     # vg features (only pos introduced here)
     for node in G_grid.nodes:
         # pos is in feature but here explicit for convenience
-        G_grid.nodes[node]["pos"] = np.array([xy[0][node], xy[1][node]])
+        G_grid.nodes[node]["pos"] = xy[
+            node[1], node[0]
+        ]  # xy is already (Nx,Ny,2)
 
     # add 1000 to node key to separate grid nodes (1000,i,j) from mesh nodes
     # (i,j) and impose sorting order such that vm are the first nodes
@@ -449,7 +451,9 @@ def create_graph(
     # build kd tree for grid point pos
     # order in vg_list should be same as in vg_xy
     vg_list = list(G_grid.nodes)
-    vg_xy = np.array([[xy[0][node[1:]], xy[1][node[1:]]] for node in vg_list])
+    vg_xy = np.array(
+        [xy[node[2], node[1]] for node in vg_list]
+    )  # xy is already (Nx,Ny,2)
     kdt_g = scipy.spatial.KDTree(vg_xy)
 
     # now add (all) mesh nodes, include features (pos)
@@ -532,13 +536,19 @@ def create_graph(
 
 
 def create_graph_from_datastore(
-    datastore: BaseCartesianDatastore,
+    datastore: BaseRegularGridDatastore,
     output_root_path: str,
     n_max_levels: int = None,
     hierarchical: bool = False,
     create_plot: bool = False,
 ):
-    xy = datastore.get_xy(category="state", stacked=False)
+    if isinstance(datastore, BaseRegularGridDatastore):
+        xy = datastore.get_xy(category="state", stacked=False)
+    else:
+        raise NotImplementedError(
+            "Only graph creation for BaseRegularGridDatastore is supported"
+        )
+
     create_graph(
         graph_dir_path=output_root_path,
         xy=xy,
@@ -551,9 +561,9 @@ def create_graph_from_datastore(
 def cli(input_args=None):
     parser = ArgumentParser(description="Graph generation arguments")
     parser.add_argument(
-        "--config",
+        "--config_path",
         type=str,
-        default="tests/datastore_examples/mdp/config.yaml",
+        help="Path to neural-lam configuration file",
     )
     parser.add_argument(
         "--name",
@@ -580,8 +590,12 @@ def cli(input_args=None):
     )
     args = parser.parse_args(input_args)
 
+    assert (
+        args.config_path is not None
+    ), "Specify your config with --config_path"
+
     # Load neural-lam configuration and datastore to use
-    _, datastore = load_config_and_datastore(config_path=args.config)
+    _, datastore = load_config_and_datastore(config_path=args.config_path)
 
     create_graph_from_datastore(
         datastore=datastore,

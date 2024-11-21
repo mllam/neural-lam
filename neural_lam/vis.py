@@ -5,11 +5,11 @@ import numpy as np
 
 # Local
 from . import utils
-from .datastore.base import BaseCartesianDatastore
+from .datastore.base import BaseRegularGridDatastore
 
 
 @matplotlib.rc_context(utils.fractional_plot_bundle(1))
-def plot_error_map(errors, datastore: BaseCartesianDatastore, title=None):
+def plot_error_map(errors, datastore: BaseRegularGridDatastore, title=None):
     """
     Plot a heatmap of errors of different variables at different
     predictions horizons
@@ -67,7 +67,7 @@ def plot_error_map(errors, datastore: BaseCartesianDatastore, title=None):
 def plot_prediction(
     pred,
     target,
-    datastore: BaseCartesianDatastore,
+    datastore: BaseRegularGridDatastore,
     title=None,
     vrange=None,
 ):
@@ -105,7 +105,7 @@ def plot_prediction(
     for ax, data in zip(axes, (target, pred)):
         ax.coastlines()  # Add coastline outlines
         data_grid = (
-            data.reshape(datastore.grid_shape_state.x, datastore.grid_shape_state.y)
+            data.reshape(list(datastore.grid_shape_state.values.values()))
             .cpu()
             .numpy()
         )
@@ -133,7 +133,7 @@ def plot_prediction(
 
 @matplotlib.rc_context(utils.fractional_plot_bundle(1))
 def plot_spatial_error(
-    error, datastore: BaseCartesianDatastore, title=None, vrange=None
+    error, datastore: BaseRegularGridDatastore, title=None, vrange=None
 ):
     """
     Plot errors over spatial map
@@ -163,7 +163,7 @@ def plot_spatial_error(
 
     ax.coastlines()  # Add coastline outlines
     error_grid = (
-        error.reshape(list([datastore.grid_shape_state.x, datastore.grid_shape_state.y]))
+        error.reshape(list(datastore.grid_shape_state.values.values()))
         .cpu()
         .numpy()
     )

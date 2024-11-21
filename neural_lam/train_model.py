@@ -95,9 +95,9 @@ def main(input_args=None):
         description="Train or evaluate NeurWP models for LAM"
     )
     parser.add_argument(
-        "--config",
+        "--config_path",
         type=str,
-        default="tests/datastore_examples/mdp/config.yaml",
+        help="Path to the configuration for neural-lam",
     )
     parser.add_argument(
         "--model",
@@ -191,12 +191,6 @@ def main(input_args=None):
         "(default: 1)",
     )
     parser.add_argument(
-        "--control_only",
-        action="store_true",
-        help="Train only on control member of ensemble data "
-        "(default: False)",
-    )
-    parser.add_argument(
         "--loss",
         type=str,
         default="wmse",
@@ -224,7 +218,7 @@ def main(input_args=None):
         "--ar_steps_eval",
         type=int,
         default=10,
-        help="Number of steps to unroll prediction for in loss function "
+        help="Number of steps to unroll prediction for during evaluation "
         "(default: 10)",
     )
     parser.add_argument(
@@ -269,10 +263,16 @@ def main(input_args=None):
              metrics (e.g. '{"1": [1, 2], "3": [3, 4]}')""",
     )
     parser.add_argument(
-        "--forcing-window-size",
+        "--num_past_forcing_steps",
         type=int,
-        default=3,
-        help="Number of time steps to use as input for forcing data",
+        default=1,
+        help="Number of past time steps to use as input for forcing data",
+    )
+    parser.add_argument(
+        "--num_future_forcing_steps",
+        type=int,
+        default=1,
+        help="Number of future time steps to use as input for forcing data",
     )
     args = parser.parse_args(input_args)
     args.var_leads_metrics_watch = {
@@ -280,6 +280,9 @@ def main(input_args=None):
     }
 
     # Asserts for arguments
+    assert (
+        args.config_path is not None
+    ), "Specify your config with --config_path"
     assert args.model in MODELS, f"Unknown model: {args.model}"
     assert args.eval in (
         None,
@@ -294,12 +297,7 @@ def main(input_args=None):
     seed.seed_everything(args.seed)
 
     # Load neural-lam configuration and datastore to use
-    config, datastore = load_config_and_datastore(config_path=args.config)
-    # TODO: config.training.state_feature_weights need passing in somewhere,
-    # probably to ARModel, so that it can be used in the loss function
-    assert (
-        config.training.state_feature_weights
-    ), "No state feature weights found in config"
+    config, datastore = load_config_and_datastore(config_path=args.config_path)
 
     # Create datamodule
     data_module = WeatherDataModule(
@@ -307,7 +305,8 @@ def main(input_args=None):
         ar_steps_train=args.ar_steps_train,
         ar_steps_eval=args.ar_steps_eval,
         standardize=True,
-        forcing_window_size=args.forcing_window_size,
+        num_past_forcing_steps=args.num_past_forcing_steps,
+        num_future_forcing_steps=args.num_future_forcing_steps,
         batch_size=args.batch_size,
         num_workers=args.num_workers,
     )
@@ -323,7 +322,7 @@ def main(input_args=None):
 
     # Load model parameters Use new args for model
     ModelClass = MODELS[args.model]
-    model = ModelClass(args, datastore=datastore)
+    model = ModelClass(args, config=config, datastore=datastore)
 
     if args.eval:
         prefix = f"eval-{args.eval}-"

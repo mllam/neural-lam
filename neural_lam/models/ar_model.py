@@ -9,7 +9,9 @@ import torch
 
 # Local
 from .. import metrics, vis
-from ..datastore.base import BaseDatastore
+from ..config import NeuralLAMConfig
+from ..datastore import BaseDatastore
+from ..loss_weighting import get_state_feature_weighting
 
 
 class ARModel(pl.LightningModule):
@@ -24,24 +26,24 @@ class ARModel(pl.LightningModule):
     def __init__(
         self,
         args,
+        config: NeuralLAMConfig,
         datastore: BaseDatastore,
     ):
         super().__init__()
         self.save_hyperparameters(ignore=["datastore"])
         self.args = args
         self._datastore = datastore
-        # XXX: should be this be somewhere else?
-        split = "train"
         num_state_vars = datastore.get_num_data_vars(category="state")
         num_forcing_vars = datastore.get_num_data_vars(category="forcing")
         da_static_features = datastore.get_dataarray(
-            category="static", split=split
+            category="static", split=None
         )
         da_state_stats = datastore.get_standardization_dataarray(
             category="state"
         )
         da_boundary_mask = datastore.boundary_mask
-        forcing_window_size = args.forcing_window_size
+        num_past_forcing_steps = args.num_past_forcing_steps
+        num_future_forcing_steps = args.num_future_forcing_steps
 
         # Load static features for grid/data, NB: self.predict_step assumes
         # dimension order to be (grid_index, static_feature)
@@ -72,6 +74,13 @@ class ARModel(pl.LightningModule):
         for key, val in state_stats.items():
             self.register_buffer(key, val, persistent=False)
 
+        state_feature_weights = get_state_feature_weighting(
+            config=config, datastore=datastore
+        )
+        self.feature_weights = torch.tensor(
+            state_feature_weights, dtype=torch.float32
+        )
+
         # Double grid output dim. to also output std.-dev.
         self.output_std = bool(args.output_std)
         if self.output_std:
@@ -86,7 +95,7 @@ class ARModel(pl.LightningModule):
             # TODO: Do we need param_weights for this?
             self.register_buffer(
                 "per_var_std",
-                self.diff_std,
+                self.diff_std / torch.sqrt(self.feature_weights),
                 persistent=False,
             )
 
@@ -99,7 +108,8 @@ class ARModel(pl.LightningModule):
         self.grid_dim = (
             2 * self.grid_output_dim
             + grid_static_dim
-            + num_forcing_vars * forcing_window_size
+            + num_forcing_vars
+            * (num_past_forcing_steps + num_future_forcing_steps + 1)
         )
 
         # Instantiate loss function

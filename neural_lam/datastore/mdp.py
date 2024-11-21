@@ -1,6 +1,6 @@
 # Standard library
-import shutil
 import warnings
+from functools import cached_property
 from pathlib import Path
 from typing import List
 
@@ -12,10 +12,10 @@ from loguru import logger
 from numpy import ndarray
 
 # Local
-from .base import BaseCartesianDatastore, CartesianGridShape
+from .base import BaseRegularGridDatastore, CartesianGridShape
 
 
-class MDPDatastore(BaseCartesianDatastore):
+class MDPDatastore(BaseRegularGridDatastore):
     """
     Datastore class for datasets made with the mllam_data_prep library
     (https://github.com/mllam/mllam-data-prep). This class wraps the
@@ -23,6 +23,8 @@ class MDPDatastore(BaseCartesianDatastore):
     different categories (state/forcing/static) of data, with the actual
     transform to do being specified in the configuration file.
     """
+
+    SHORT_NAME = "mdp"
 
     def __init__(self, config_path, n_boundary_points=30, reuse_existing=True):
         """
@@ -56,19 +58,17 @@ class MDPDatastore(BaseCartesianDatastore):
         self._ds = None
         if reuse_existing and fp_ds.exists():
             # check that the zarr directory is newer than the config file
-            if fp_ds.stat().st_mtime > self._config_path.stat().st_mtime:
-                self._ds = xr.open_zarr(fp_ds, consolidated=True)
-            else:
+            if fp_ds.stat().st_mtime < self._config_path.stat().st_mtime:
                 logger.warning(
-                    "config file has been modified since zarr was created. "
-                    "recreating dataset."
+                    "Config file has been modified since zarr was created. "
+                    f"The old zarr archive (in {fp_ds}) will be used."
+                    "To generate new zarr-archive, move the old one first."
                 )
-                shutil.rmtree(fp_ds)
+            self._ds = xr.open_zarr(fp_ds, consolidated=True)
 
         if self._ds is None:
             self._ds = mdp.create_dataset(config=self._config)
-            if reuse_existing:
-                self._ds.to_zarr(fp_ds)
+            self._ds.to_zarr(fp_ds)
         self._n_boundary_points = n_boundary_points
 
         print("The loaded datastore contains the following features:")
@@ -266,9 +266,7 @@ class MDPDatastore(BaseCartesianDatastore):
         # set multi-index for grid-index
         da_category = da_category.set_index(grid_index=self.CARTESIAN_COORDS)
 
-        if "time" not in da_category.dims:
-            return da_category
-        else:
+        if "time" in da_category.dims:
             t_start = (
                 self._ds.splits.sel(split_name=split)
                 .sel(split_part="start")
@@ -281,7 +279,10 @@ class MDPDatastore(BaseCartesianDatastore):
                 .load()
                 .item()
             )
-            return da_category.sel(time=slice(t_start, t_end))
+            da_category = da_category.sel(time=slice(t_start, t_end))
+
+        dim_order = self.expected_dim_order(category=category)
+        return da_category.transpose(*dim_order)
 
     def get_standardization_dataarray(self, category: str) -> xr.Dataset:
         """
@@ -317,7 +318,7 @@ class MDPDatastore(BaseCartesianDatastore):
         ds_stats = self._ds[stats_variables.keys()].rename(stats_variables)
         return ds_stats
 
-    @property
+    @cached_property
     def boundary_mask(self) -> xr.DataArray:
         """
         Produce a 0/1 mask for the boundary points of the dataset, these will
@@ -394,9 +395,14 @@ class MDPDatastore(BaseCartesianDatastore):
         class_name = projection_info["class_name"]
         ProjectionClass = getattr(ccrs, class_name)
         kwargs = projection_info["kwargs"]
+
+        globe_kwargs = kwargs.pop("globe", {})
+        if len(globe_kwargs) > 0:
+            kwargs["globe"] = ccrs.Globe(**globe_kwargs)
+
         return ProjectionClass(**kwargs)
 
-    @property
+    @cached_property
     def grid_shape_state(self):
         """The shape of the cartesian grid for the state variables.
 
@@ -426,9 +432,9 @@ class MDPDatastore(BaseCartesianDatastore):
         np.ndarray
             The x, y coordinates of the dataset, returned differently based on
             the value of `stacked`:
-            - `stacked==True`: shape `(2, n_grid_points)` where
+            - `stacked==True`: shape `(n_grid_points, 2)` where
                                n_grid_points=N_x*N_y.
-            - `stacked==False`: shape `(2, N_y, N_x)`
+            - `stacked==False`: shape `(N_x, N_y, 2)`
 
         """
         # assume variables are stored in dimensions [grid_index, ...]
@@ -444,10 +450,15 @@ class MDPDatastore(BaseCartesianDatastore):
 
         if stacked:
             da_xy = da_xy.stack(grid_index=self.CARTESIAN_COORDS).transpose(
-                "grid_coord", "grid_index"
+                "grid_index",
+                "grid_coord",
             )
         else:
-            dims = ["grid_coord", "y", "x"]
+            dims = [
+                "x",
+                "y",
+                "grid_coord",
+            ]
             da_xy = da_xy.transpose(*dims)
 
         return da_xy.values

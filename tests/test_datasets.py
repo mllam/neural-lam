@@ -5,14 +5,17 @@ from pathlib import Path
 import numpy as np
 import pytest
 import torch
-from conftest import init_datastore_example
 from torch.utils.data import DataLoader
 
 # First-party
+from neural_lam import config as nlconfig
 from neural_lam.create_graph import create_graph_from_datastore
 from neural_lam.datastore import DATASTORES
+from neural_lam.datastore.base import BaseRegularGridDatastore
 from neural_lam.models.graph_lam import GraphLAM
 from neural_lam.weather_dataset import WeatherDataset
+from tests.conftest import init_datastore_example
+from tests.dummy_datastore import DummyDatastore
 
 
 @pytest.mark.parametrize("datastore_name", DATASTORES.keys())
@@ -28,16 +31,15 @@ def test_dataset_item_shapes(datastore_name):
 
     """
     datastore = init_datastore_example(datastore_name)
-    N_gridpoints = datastore.grid_shape_state.x * datastore.grid_shape_state.y
+    N_gridpoints = datastore.num_grid_points
 
     N_pred_steps = 4
-    forcing_window_size = 3
-    dataset = WeatherDataset(
-        datastore=datastore,
-        split="train",
-        ar_steps=N_pred_steps,
-        forcing_window_size=forcing_window_size,
-    )
+    num_past_forcing_steps = 1
+    num_future_forcing_steps = 1
+    forcing_window_size=forcing_window_size,
+
+    num_past_forcing_steps=num_past_forcing_steps,
+    num_future_forcing_steps=num_future_forcing_steps,
 
     item = dataset[0]
 
@@ -61,9 +63,8 @@ def test_dataset_item_shapes(datastore_name):
     assert forcing.ndim == 3
     assert forcing.shape[0] == N_pred_steps
     assert forcing.shape[1] == N_gridpoints
-    assert (
-        forcing.shape[2]
-        == datastore.get_num_data_vars("forcing") * forcing_window_size
+    assert forcing.shape[2] == datastore.get_num_data_vars("forcing") * (
+        num_past_forcing_steps + num_future_forcing_steps + 1
     )
 
     # batch times
@@ -81,12 +82,14 @@ def test_dataset_item_create_dataarray_from_tensor(datastore_name):
     datastore = init_datastore_example(datastore_name)
 
     N_pred_steps = 4
-    forcing_window_size = 3
+    num_past_forcing_steps = 1
+    num_future_forcing_steps = 1
     dataset = WeatherDataset(
         datastore=datastore,
         split="train",
         ar_steps=N_pred_steps,
-        forcing_window_size=forcing_window_size,
+        num_past_forcing_steps=num_past_forcing_steps,
+        num_future_forcing_steps=num_future_forcing_steps,
     )
 
     idx = 0
@@ -115,11 +118,13 @@ def test_dataset_item_create_dataarray_from_tensor(datastore_name):
             da_target[dim].values, da_target_true[dim].values
         )
 
-    # test unstacking the grid coordinates
-    da_target_unstacked = datastore.unstack_grid_coords(da_target)
-    assert all(
-        coord_name in da_target_unstacked.coords for coord_name in ["x", "y"]
-    )
+    if isinstance(datastore, BaseRegularGridDatastore):
+        # test unstacking the grid coordinates
+        da_target_unstacked = datastore.unstack_grid_coords(da_target)
+        assert all(
+            coord_name in da_target_unstacked.coords
+            for coord_name in ["x", "y"]
+        )
 
     # check construction of a single time
     da_target_single = dataset.create_dataarray_from_tensor(
@@ -137,18 +142,21 @@ def test_dataset_item_create_dataarray_from_tensor(datastore_name):
             da_target_single[dim].values, da_target_true[0][dim].values
         )
 
-    # test unstacking the grid coordinates
-    da_target_single_unstacked = datastore.unstack_grid_coords(da_target_single)
-    assert all(
-        coord_name in da_target_single_unstacked.coords
-        for coord_name in ["x", "y"]
-    )
+    if isinstance(datastore, BaseRegularGridDatastore):
+        # test unstacking the grid coordinates
+        da_target_single_unstacked = datastore.unstack_grid_coords(
+            da_target_single
+        )
+        assert all(
+            coord_name in da_target_single_unstacked.coords
+            for coord_name in ["x", "y"]
+        )
 
 
 @pytest.mark.parametrize("split", ["train", "val", "test"])
 @pytest.mark.parametrize("datastore_name", DATASTORES.keys())
 def test_single_batch(datastore_name, split):
-    """Check that the `datasto re.get_dataarray` method is implemented.
+    """Check that the `datastore.get_dataarray` method is implemented.
 
     And that it returns an xarray DataArray with the correct dimensions.
 
@@ -166,36 +174,85 @@ def test_single_batch(datastore_name, split):
         loss = "mse"
         restore_opt = False
         n_example_pred = 1
-        # XXX: this should be superfluous when we have already defined the
-        # model object no?
         graph = graph_name
-        hidden_dim = 8
+        hidden_dim = 4
         hidden_layers = 1
-        processor_layers = 4
+        processor_layers = 2
         mesh_aggr = "sum"
-        forcing_window_size = 3
+        num_past_forcing_steps = 1
+        num_future_forcing_steps = 1
 
     args = ModelArgs()
 
     graph_dir_path = Path(datastore.root_path) / "graph" / graph_name
 
-    if not graph_dir_path.exists():
-        create_graph_from_datastore(
-            datastore=datastore,
-            output_root_path=str(graph_dir_path),
-            n_max_levels=1,
+    def _create_graph():
+        if not graph_dir_path.exists():
+            create_graph_from_datastore(
+                datastore=datastore,
+                output_root_path=str(graph_dir_path),
+                n_max_levels=1,
+            )
+
+    if not isinstance(datastore, BaseRegularGridDatastore):
+        with pytest.raises(NotImplementedError):
+            _create_graph()
+        pytest.skip("Skipping on model-run on non-regular grid datastores")
+
+    _create_graph()
+
+    config = nlconfig.NeuralLAMConfig(
+        datastore=nlconfig.DatastoreSelection(
+            kind=datastore.SHORT_NAME, config_path=datastore.root_path
         )
-
-    dataset = WeatherDataset(datastore=datastore, split=split)
-
-    model = GraphLAM(  # noqa
-        args=args,
-        datastore=datastore,
     )
 
+    dataset = WeatherDataset(datastore=datastore, split=split, ar_steps=2)
+
+    model = GraphLAM(args=args, datastore=datastore, config=config)  # noqa
+
     model_device = model.to(device_name)
-    data_loader = DataLoader(dataset, batch_size=5)
+    data_loader = DataLoader(dataset, batch_size=2)
     batch = next(iter(data_loader))
     batch_device = [part.to(device_name) for part in batch]
     model_device.common_step(batch_device)
     model_device.training_step(batch_device)
+
+
+@pytest.mark.parametrize(
+    "dataset_config",
+    [
+        {"past": 0, "future": 0, "ar_steps": 1, "exp_len_reduction": 3},
+        {"past": 2, "future": 0, "ar_steps": 1, "exp_len_reduction": 3},
+        {"past": 0, "future": 2, "ar_steps": 1, "exp_len_reduction": 5},
+        {"past": 4, "future": 0, "ar_steps": 1, "exp_len_reduction": 5},
+        {"past": 0, "future": 0, "ar_steps": 5, "exp_len_reduction": 7},
+        {"past": 3, "future": 3, "ar_steps": 2, "exp_len_reduction": 8},
+    ],
+)
+def test_dataset_length(dataset_config):
+    """Check that correct number of samples can be extracted from the dataset,
+    given a specific configuration of forcing windowing and ar_steps.
+    """
+    # Use dummy datastore of length 10 here, only want to test slicing
+    # in dataset class
+    ds_len = 10
+    datastore = DummyDatastore(n_timesteps=ds_len)
+
+    dataset = WeatherDataset(
+        datastore=datastore,
+        split="train",
+        ar_steps=dataset_config["ar_steps"],
+        num_past_forcing_steps=dataset_config["past"],
+        num_future_forcing_steps=dataset_config["future"],
+    )
+
+    # We expect dataset to contain this many samples
+    expected_len = ds_len - dataset_config["exp_len_reduction"]
+
+    # Check that datast has correct length
+    assert len(dataset) == expected_len
+
+    # Check that we can actually get last and first sample
+    dataset[0]
+    dataset[expected_len - 1]

@@ -5,7 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [unreleased](https://github.com/joeloskarsson/neural-lam/compare/v0.1.0...HEAD)
+## [unreleased](https://github.com/joeloskarsson/neural-lam/compare/v0.2.0...HEAD)
+
+### Added
+
+- Introduce Datastores to represent input data from different sources, including zarr and numpy.
+  [\#66](https://github.com/mllam/neural-lam/pull/66)
+ @leifdenby @sadamov
+
+## [v0.2.0](https://github.com/joeloskarsson/neural-lam/releases/tag/v0.2.0)
 
 ### Added
 - Added tests for loading dataset, creating graph, and training model based on reduced MEPS dataset stored on AWS S3, along with automatic running of tests on push/PR to GitHub, including push to main branch. Added caching of test data to speed up running tests.
@@ -34,6 +42,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - ci/cd setup for running both CPU and GPU-based testing both with pdm and pip based installs [\#37](https://github.com/mllam/neural-lam/pull/37), @khintz, @leifdenby
 
 ### Changed
+
+- Clarify routine around requesting reviewer and assignee in PR template
+  [\#74](https://github.com/mllam/neural-lam/pull/74)
+  @joeloskarsson
 
 - Argument Parser updated to use action="store_true" instead of 0/1 for boolean arguments.
   (https://github.com/mllam/neural-lam/pull/72)
@@ -111,6 +123,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - move from `requirements.txt` to `pyproject.toml` for defining package dependencies.
   [\#37](https://github.com/mllam/neural-lam/pull/37), @leifdenby
+
+- Add slack and new publication info to readme
+  [\#78](https://github.com/mllam/neural-lam/pull/78)
+  @joeloskarsson
 
 ## [v0.1.0](https://github.com/joeloskarsson/neural-lam/releases/tag/v0.1.0)
 

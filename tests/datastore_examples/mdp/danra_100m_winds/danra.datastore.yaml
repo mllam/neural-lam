@@ -1,0 +1,99 @@
+schema_version: v0.5.0
+dataset_version: v0.1.0
+
+output:
+  variables:
+    static: [grid_index, static_feature]
+    state: [time, grid_index, state_feature]
+    forcing: [time, grid_index, forcing_feature]
+  coord_ranges:
+    time:
+      start: 1990-09-03T00:00
+      end: 1990-09-09T00:00
+      step: PT3H
+  chunking:
+    time: 1
+  splitting:
+    dim: time
+    splits:
+      train:
+        start: 1990-09-03T00:00
+        end: 1990-09-06T00:00
+        compute_statistics:
+          ops: [mean, std, diff_mean, diff_std]
+          dims: [grid_index, time]
+      val:
+        start: 1990-09-06T00:00
+        end: 1990-09-07T00:00
+      test:
+        start: 1990-09-07T00:00
+        end: 1990-09-09T00:00
+
+inputs:
+  danra_height_levels:
+    path: https://mllam-test-data.s3.eu-north-1.amazonaws.com/height_levels.zarr
+    dims: [time, x, y, altitude]
+    variables:
+      u:
+        altitude:
+          values: [100,]
+          units: m
+      v:
+        altitude:
+          values: [100, ]
+          units: m
+    dim_mapping:
+      time:
+        method: rename
+        dim: time
+      state_feature:
+        method: stack_variables_by_var_name
+        dims: [altitude]
+        name_format: "{var_name}{altitude}m"
+      grid_index:
+        method: stack
+        dims: [x, y]
+    target_output_variable: state
+
+  danra_surface:
+    path: https://mllam-test-data.s3.eu-north-1.amazonaws.com/single_levels.zarr
+    dims: [time, x, y]
+    variables:
+      # use surface incoming shortwave radiation as forcing
+      - swavr0m
+    dim_mapping:
+      time:
+        method: rename
+        dim: time
+      grid_index:
+        method: stack
+        dims: [x, y]
+      forcing_feature:
+        method: stack_variables_by_var_name
+        name_format: "{var_name}"
+    target_output_variable: forcing
+
+  danra_lsm:
+    path: https://mllam-test-data.s3.eu-north-1.amazonaws.com/lsm.zarr
+    dims: [x, y]
+    variables:
+      - lsm
+    dim_mapping:
+      grid_index:
+        method: stack
+        dims: [x, y]
+      static_feature:
+        method: stack_variables_by_var_name
+        name_format: "{var_name}"
+    target_output_variable: static
+
+extra:
+  projection:
+    class_name: LambertConformal
+    kwargs:
+      central_longitude: 25.0
+      central_latitude: 56.7
+      standard_parallels: [56.7, 56.7]
+      globe:
+        semimajor_axis: 6367470.0
+        semiminor_axis: 6367470.0

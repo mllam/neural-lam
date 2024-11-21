@@ -2,9 +2,12 @@
 Numpy-files based datastore to support the MEPS example dataset introduced in
 neural-lam v0.1.0.
 """
+
 # Standard library
 import functools
 import re
+import warnings
+from functools import cached_property
 from pathlib import Path
 from typing import List
 
@@ -20,7 +23,7 @@ import xarray as xr
 from xarray.core.dataarray import DataArray
 
 # Local
-from ..base import BaseCartesianDatastore, CartesianGridShape
+from ..base import BaseRegularGridDatastore, CartesianGridShape
 from .config import NpyDatastoreConfig
 
 STATE_FILENAME_FORMAT = "nwp_{analysis_time:%Y%m%d%H}_mbr{member_id:03d}.npy"
@@ -30,14 +33,16 @@ TOA_SW_DOWN_FLUX_FILENAME_FORMAT = (
 OPEN_WATER_FILENAME_FORMAT = "wtr_{analysis_time:%Y%m%d%H}.npy"
 
 
-def _load_np(fp, add_feature_dim):
+def _load_np(fp, add_feature_dim, feature_dim_mask=None):
     arr = np.load(fp)
     if add_feature_dim:
         arr = arr[..., np.newaxis]
+    if feature_dim_mask is not None:
+        arr = arr[..., feature_dim_mask]
     return arr
 
 
-class NpyFilesDatastoreMEPS(BaseCartesianDatastore):
+class NpyFilesDatastoreMEPS(BaseRegularGridDatastore):
     __doc__ = f"""
     Represents a dataset stored as numpy files on disk. The dataset is assumed
     to be stored in a directory structure where each sample is stored in a
@@ -134,6 +139,8 @@ class NpyFilesDatastoreMEPS(BaseCartesianDatastore):
     d_features = 8
     d_forcing = 1
     """
+    SHORT_NAME = "npyfilesmeps"
+
     is_ensemble = True
     is_forecast = True
 
@@ -155,15 +162,16 @@ class NpyFilesDatastoreMEPS(BaseCartesianDatastore):
             The path to the configuration file for the datastore.
 
         """
-        # XXX: This should really be in the config file, not hard-coded in this
-        # class
-        self._num_timesteps = 65
-        self._step_length = 3  # 3 hours
-        self._num_ensemble_members = 2
-
         self._config_path = Path(config_path)
         self._root_path = self._config_path.parent
         self._config = NpyDatastoreConfig.from_yaml_file(self._config_path)
+
+        self._num_ensemble_members = self.config.dataset.num_ensemble_members
+        self._num_timesteps = self.config.dataset.num_timesteps
+        self._step_length = self.config.dataset.step_length
+        self._remove_state_features_with_index = (
+            self.config.dataset.remove_state_features_with_index
+        )
 
     @property
     def root_path(self) -> Path:
@@ -274,14 +282,15 @@ class NpyFilesDatastoreMEPS(BaseCartesianDatastore):
                     features=features, split=split
                 )
                 das.append(da)
-            da = xr.concat(das, dim="feature").transpose(
-                "grid_index", "feature"
-            )
+            da = xr.concat(das, dim="feature")
 
         else:
             raise NotImplementedError(category)
 
         da = da.rename(dict(feature=f"{category}_feature"))
+
+        # stack the [x, y] dimensions into a `grid_index` dimension
+        da = self.stack_grid_coords(da)
 
         # check that we have the right features
         actual_features = da[f"{category}_feature"].values.tolist()
@@ -290,6 +299,9 @@ class NpyFilesDatastoreMEPS(BaseCartesianDatastore):
             raise ValueError(
                 f"Expected features {expected_features}, got {actual_features}"
             )
+
+        dim_order = self.expected_dim_order(category=category)
+        da = da.transpose(*dim_order)
 
         return da
 
@@ -338,7 +350,11 @@ class NpyFilesDatastoreMEPS(BaseCartesianDatastore):
                 None,
             ), "Unknown dataset split"
         else:
-            assert split in ("train", "val", "test"), "Unknown dataset split"
+            assert split in (
+                "train",
+                "val",
+                "test",
+            ), f"Unknown dataset split {split} for features {features}"
 
         if member is not None and features != self.get_vars_names(
             category="state"
@@ -352,12 +368,19 @@ class NpyFilesDatastoreMEPS(BaseCartesianDatastore):
         file_params = {}
         add_feature_dim = False
         features_vary_with_analysis_time = True
+        feature_dim_mask = None
         if features == self.get_vars_names(category="state"):
             filename_format = STATE_FILENAME_FORMAT
             file_dims = ["elapsed_forecast_duration", "y", "x", "feature"]
             # only select one member for now
             file_params["member_id"] = member
             fp_samples = self.root_path / "samples" / split
+            if self._remove_state_features_with_index:
+                n_to_drop = len(self._remove_state_features_with_index)
+                feature_dim_mask = np.ones(
+                    len(features) + n_to_drop, dtype=bool
+                )
+                feature_dim_mask[self._remove_state_features_with_index] = False
         elif features == ["toa_downwelling_shortwave_flux"]:
             filename_format = TOA_SW_DOWN_FLUX_FILENAME_FORMAT
             file_dims = ["elapsed_forecast_duration", "y", "x", "feature"]
@@ -404,11 +427,16 @@ class NpyFilesDatastoreMEPS(BaseCartesianDatastore):
         coords = {}
         arr_shape = []
 
-        xs, ys = self.get_xy(category="state", stacked=False)
-        assert np.all(xs[0, :] == xs[-1, :])
-        assert np.all(ys[:, 0] == ys[:, -1])
-        x = xs[0, :]
-        y = ys[:, 0]
+        xy = self.get_xy(category="state", stacked=False)
+        xs = xy[:, :, 0]
+        ys = xy[:, :, 1]
+        # Check if x-coordinates are constant along columns
+        assert np.allclose(xs, xs[:, [0]]), "x-coordinates are not constant"
+        # Check if y-coordinates are constant along rows
+        assert np.allclose(ys, ys[[0], :]), "y-coordinates are not constant"
+        # Extract unique x and y coordinates
+        x = xs[:, 0]  # Unique x-coordinates (changes along the first axis)
+        y = ys[0, :]  # Unique y-coordinates (changes along the second axis)
         for d in dims:
             if d == "elapsed_forecast_duration":
                 coord_values = (
@@ -448,12 +476,25 @@ class NpyFilesDatastoreMEPS(BaseCartesianDatastore):
         # done until the data is actually needed
         arrays = [
             dask.array.from_delayed(
-                dask.delayed(_load_np)(fp=fp, add_feature_dim=add_feature_dim),
+                dask.delayed(_load_np)(
+                    fp=fp,
+                    add_feature_dim=add_feature_dim,
+                    feature_dim_mask=feature_dim_mask,
+                ),
                 shape=arr_shape,
                 dtype=np.float32,
             )
             for fp in filepaths
         ]
+
+        # read a single timestep and check the shape
+        arr0 = arrays[0].compute()
+        if not list(arr0.shape) == arr_shape:
+            raise Exception(
+                f"Expected shape {arr_shape} for a single file, got "
+                f"{list(arr0.shape)}. Maybe the number of features given "
+                f"in the datastore config ({features}) is incorrect?"
+            )
 
         if features_vary_with_analysis_time:
             arr_all = dask.array.stack(arrays, axis=concat_axis)
@@ -461,9 +502,6 @@ class NpyFilesDatastoreMEPS(BaseCartesianDatastore):
             arr_all = arrays[0]
 
         da = xr.DataArray(arr_all, dims=dims, coords=coords)
-
-        # stack the [x, y] dimensions into a `grid_index` dimension
-        da = self.stack_grid_coords(da)
 
         return da
 
@@ -522,7 +560,7 @@ class NpyFilesDatastoreMEPS(BaseCartesianDatastore):
 
         return da_datetime_forcing
 
-    def get_vars_units(self, category: str) -> torch.List[str]:
+    def get_vars_units(self, category: str) -> List[str]:
         if category == "state":
             return self.config.dataset.var_units
         elif category == "forcing":
@@ -539,7 +577,7 @@ class NpyFilesDatastoreMEPS(BaseCartesianDatastore):
         else:
             raise NotImplementedError(f"Category {category} not supported")
 
-    def get_vars_names(self, category: str) -> torch.List[str]:
+    def get_vars_names(self, category: str) -> List[str]:
         if category == "state":
             return self.config.dataset.var_names
         elif category == "forcing":
@@ -583,22 +621,25 @@ class NpyFilesDatastoreMEPS(BaseCartesianDatastore):
         np.ndarray
             The x, y coordinates of the dataset (with x first then y second),
             returned differently based on the value of `stacked`:
-            - `stacked==True`: shape `(2, n_grid_points)` where
+            - `stacked==True`: shape `(n_grid_points, 2)` where
                                       n_grid_points=N_x*N_y.
-            - `stacked==False`: shape `(2, N_y, N_x)`
+            - `stacked==False`: shape `(N_x, N_y, 2)`
 
         """
 
-        # the array on disk has shape [2, N_y, N_x], with the first dimension
-        # being [x, y]
+        # the array on disk has shape [2, N_y, N_x], where dimension 0
+        # contains the [x,y] coordinate pairs for each grid point
         arr = np.load(self.root_path / "static" / "nwp_xy.npy")
+        arr_shape = arr.shape
 
-        assert arr.shape[0] == 2, "Expected 2D array"
+        assert arr_shape[0] == 2, "Expected 2D array"
         grid_shape = self.grid_shape_state
-        assert arr.shape[1:] == (grid_shape.y, grid_shape.x), "Unexpected shape"
+        assert arr_shape[1:] == (grid_shape.y, grid_shape.x), "Unexpected shape"
+
+        arr = arr.transpose(2, 1, 0)
 
         if stacked:
-            return arr.reshape(2, -1)
+            return arr.reshape(-1, 2)
         else:
             return arr
 
@@ -614,7 +655,7 @@ class NpyFilesDatastoreMEPS(BaseCartesianDatastore):
         """
         return self._step_length
 
-    @property
+    @cached_property
     def grid_shape_state(self) -> CartesianGridShape:
         """The shape of the cartesian grid for the state variables.
 
@@ -627,7 +668,7 @@ class NpyFilesDatastoreMEPS(BaseCartesianDatastore):
         ny, nx = self.config.grid_shape_state
         return CartesianGridShape(x=nx, y=ny)
 
-    @property
+    @cached_property
     def boundary_mask(self) -> xr.DataArray:
         """The boundary mask for the dataset. This is a binary mask that is 1
         where the grid cell is on the boundary of the domain, and 0 otherwise.
@@ -638,11 +679,16 @@ class NpyFilesDatastoreMEPS(BaseCartesianDatastore):
             The boundary mask for the dataset, with dimensions `[grid_index]`.
 
         """
-        xs, ys = self.get_xy(category="state", stacked=False)
-        assert np.all(xs[0, :] == xs[-1, :])
-        assert np.all(ys[:, 0] == ys[:, -1])
-        x = xs[0, :]
-        y = ys[:, 0]
+        xy = self.get_xy(category="state", stacked=False)
+        xs = xy[:, :, 0]
+        ys = xy[:, :, 1]
+        # Check if x-coordinates are constant along columns
+        assert np.allclose(xs, xs[:, [0]]), "x-coordinates are not constant"
+        # Check if y-coordinates are constant along rows
+        assert np.allclose(ys, ys[[0], :]), "y-coordinates are not constant"
+        # Extract unique x and y coordinates
+        x = xs[:, 0]  # Unique x-coordinates (changes along the first axis)
+        y = ys[0, :]  # Unique y-coordinates (changes along the second axis)
         values = np.load(self.root_path / "static" / "border_mask.npy")
         da_mask = xr.DataArray(
             values, dims=["y", "x"], coords=dict(x=x, y=y), name="boundary_mask"
@@ -672,15 +718,26 @@ class NpyFilesDatastoreMEPS(BaseCartesianDatastore):
         """
 
         def load_pickled_tensor(fn):
-            return torch.load(self.root_path / "static" / fn).numpy()
+            return torch.load(
+                self.root_path / "static" / fn, weights_only=True
+            ).numpy()
 
         mean_diff_values = None
         std_diff_values = None
         if category == "state":
             mean_values = load_pickled_tensor("parameter_mean.pt")
             std_values = load_pickled_tensor("parameter_std.pt")
-            mean_diff_values = load_pickled_tensor("diff_mean.pt")
-            std_diff_values = load_pickled_tensor("diff_std.pt")
+            try:
+                mean_diff_values = load_pickled_tensor("diff_mean.pt")
+                std_diff_values = load_pickled_tensor("diff_std.pt")
+            except FileNotFoundError:
+                warnings.warn(f"Could not load diff mean/std for {category}")
+                # XXX: this is a hack, but when running
+                # compute_standardization_stats the diff mean/std files are
+                # created, but require the std and mean files
+                mean_diff_values = np.empty_like(mean_values)
+                std_diff_values = np.empty_like(std_values)
+
         elif category == "forcing":
             flux_stats = load_pickled_tensor("flux_stats.pt")  # (2,)
             flux_mean, flux_std = flux_stats

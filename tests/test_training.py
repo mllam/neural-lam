@@ -6,18 +6,26 @@ import pytest
 import pytorch_lightning as pl
 import torch
 import wandb
-from conftest import init_datastore_example
 
 # First-party
+from neural_lam import config as nlconfig
 from neural_lam.create_graph import create_graph_from_datastore
 from neural_lam.datastore import DATASTORES
+from neural_lam.datastore.base import BaseRegularGridDatastore
 from neural_lam.models.graph_lam import GraphLAM
 from neural_lam.weather_dataset import WeatherDataModule
+from tests.conftest import init_datastore_example
 
 
 @pytest.mark.parametrize("datastore_name", DATASTORES.keys())
 def test_training(datastore_name):
     datastore = init_datastore_example(datastore_name)
+
+    if not isinstance(datastore, BaseRegularGridDatastore):
+        pytest.skip(
+            f"Skipping test for {datastore_name} as it is not a regular "
+            "grid datastore."
+        )
 
     if torch.cuda.is_available():
         device_name = "cuda"
@@ -56,7 +64,8 @@ def test_training(datastore_name):
         standardize=True,
         batch_size=2,
         num_workers=1,
-        forcing_window_size=3,
+        num_past_forcing_steps=1,
+        num_future_forcing_steps=1,
     )
 
     class ModelArgs:
@@ -67,20 +76,28 @@ def test_training(datastore_name):
         # XXX: this should be superfluous when we have already defined the
         # model object no?
         graph = graph_name
-        hidden_dim = 8
+        hidden_dim = 4
         hidden_layers = 1
-        processor_layers = 4
+        processor_layers = 2
         mesh_aggr = "sum"
         lr = 1.0e-3
         val_steps_to_log = [1, 3]
         metrics_watch = []
-        forcing_window_size = 3
+        num_past_forcing_steps = 1
+        num_future_forcing_steps = 1
 
     model_args = ModelArgs()
+
+    config = nlconfig.NeuralLAMConfig(
+        datastore=nlconfig.DatastoreSelection(
+            kind=datastore.SHORT_NAME, config_path=datastore.root_path
+        )
+    )
 
     model = GraphLAM(  # noqa
         args=model_args,
         datastore=datastore,
+        config=config,
     )
     wandb.init()
     trainer.fit(model=model, datamodule=data_module)
