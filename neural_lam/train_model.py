@@ -234,6 +234,12 @@ def main(input_args=None):
         help="Number of example predictions to plot during evaluation "
         "(default: 1)",
     )
+    parser.add_argument(
+        "--save_predictions",
+        action="store_true",
+        help="If predictions should be saved to disk as a zarr dataset "
+        "(default: false)",
+    )
 
     # Logger Settings
     parser.add_argument(

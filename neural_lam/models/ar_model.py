@@ -330,6 +330,9 @@ class ARModel(pl.LightningModule):
         # prediction: (B, pred_steps, num_grid_nodes, d_f) pred_std: (B,
         # pred_steps, num_grid_nodes, d_f) or (d_f,)
 
+        if self.args.save_predictions:
+            print("Saving predictions")
+
         time_step_loss = torch.mean(
             self.loss(
                 prediction, target, pred_std, mask=self.interior_mask_bool
@@ -399,6 +402,10 @@ class ARModel(pl.LightningModule):
                 batch, n_additional_examples, prediction=prediction
             )
 
+        # Save predictions if requested
+        if self.args.save_predictions:
+            print("Saving predictions")
+
     def plot_examples(self, batch, n_examples, prediction=None):
         """
         Plot the first n_examples forecasts from batch
@@ -467,12 +474,15 @@ class ARModel(pl.LightningModule):
 
                 example_i = self.plotted_examples
 
-
-
                 for var_name, fig in zip(
                     self._datastore.get_vars_names("state"), var_figs
                 ):
-                    key=f"{var_name}_example_{example_i}"
+
+                    if not isinstance(self.logger, pl.loggers.WandbLogger):
+                        key=f"{var_name}_example_{t_i}"
+                    else:
+                        key=f"{var_name}_example_{example_i}"
+
                     self.logger.log_image(key=key, images=[fig])
 
                 # self.logger.log_image(
