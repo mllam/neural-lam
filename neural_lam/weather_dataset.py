@@ -495,13 +495,6 @@ class WeatherDataset(torch.utils.data.Dataset):
 
         # if da_forcing is None, the function will return None for
         # da_forcing_windowed
-        da_state, da_forcing_windowed = self._slice_time(
-            da_state=da_state,
-            idx=idx,
-            n_steps=self.ar_steps,
-            da_forcing=da_forcing,
-        )
-
         if da_boundary is not None:
             _, da_boundary_windowed = self._slice_time(
                 da_state=da_state,
@@ -509,6 +502,12 @@ class WeatherDataset(torch.utils.data.Dataset):
                 n_steps=self.ar_steps,
                 da_forcing=da_boundary,
             )
+        da_state, da_forcing_windowed = self._slice_time(
+            da_state=da_state,
+            idx=idx,
+            n_steps=self.ar_steps,
+            da_forcing=da_forcing,
+        )
 
         # load the data into memory
         da_state.load()
