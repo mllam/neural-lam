@@ -295,8 +295,13 @@ class BaseDatastore(abc.ABC):
             The extent of the x, y coordinates.
 
         """
-        xy = self.get_xy(category, stacked=False)
-        extent = [xy[0].min(), xy[0].max(), xy[1].min(), xy[1].max()]
+        xy = self.get_xy(category, stacked=True)
+        extent = [
+            xy[:, 0].min(),
+            xy[:, 0].max(),
+            xy[:, 1].min(),
+            xy[:, 1].max(),
+        ]
         return [float(v) for v in extent]
 
     @property

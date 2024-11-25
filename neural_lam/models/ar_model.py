@@ -7,12 +7,14 @@ import numpy as np
 import pytorch_lightning as pl
 import torch
 import wandb
+from loguru import logger
 
 # Local
 from .. import metrics, vis
 from ..config import NeuralLAMConfig
 from ..datastore import BaseDatastore
 from ..loss_weighting import get_state_feature_weighting
+from ..weather_dataset import WeatherDataset
 
 
 class ARModel(pl.LightningModule):
@@ -146,6 +148,14 @@ class ARModel(pl.LightningModule):
 
         # For storing spatial loss maps during evaluation
         self.spatial_loss_maps = []
+
+    def _create_dataarray_from_tensor(self, tensor, time, split, category):
+        weather_dataset = WeatherDataset(datastore=self._datastore, split=split)
+        time = np.array(time, dtype="datetime64[ns]")
+        da = weather_dataset.create_dataarray_from_tensor(
+            tensor=tensor, time=time, category=category
+        )
+        return da
 
     def configure_optimizers(self):
         opt = torch.optim.AdamW(
@@ -406,10 +416,13 @@ class ARModel(pl.LightningModule):
             )
 
             self.plot_examples(
-                batch, n_additional_examples, prediction=prediction
+                batch,
+                n_additional_examples,
+                prediction=prediction,
+                split="test",
             )
 
-    def plot_examples(self, batch, n_examples, prediction=None):
+    def plot_examples(self, batch, n_examples, split, prediction=None):
         """
         Plot the first n_examples forecasts from batch
 
@@ -422,17 +435,33 @@ class ARModel(pl.LightningModule):
             prediction, target, _, _ = self.common_step(batch)
 
         target = batch[1]
+        time = batch[3]
 
         # Rescale to original data scale
         prediction_rescaled = prediction * self.state_std + self.state_mean
         target_rescaled = target * self.state_std + self.state_mean
 
         # Iterate over the examples
-        for pred_slice, target_slice in zip(
-            prediction_rescaled[:n_examples], target_rescaled[:n_examples]
+        for pred_slice, target_slice, time_slice in zip(
+            prediction_rescaled[:n_examples],
+            target_rescaled[:n_examples],
+            time[:n_examples],
         ):
             # Each slice is (pred_steps, num_grid_nodes, d_f)
             self.plotted_examples += 1  # Increment already here
+
+            da_prediction = self._create_dataarray_from_tensor(
+                tensor=pred_slice,
+                time=time_slice,
+                split=split,
+                category="state",
+            ).unstack("grid_index")
+            da_target = self._create_dataarray_from_tensor(
+                tensor=target_slice,
+                time=time_slice,
+                split=split,
+                category="state",
+            ).unstack("grid_index")
 
             var_vmin = (
                 torch.minimum(
@@ -465,6 +494,10 @@ class ARModel(pl.LightningModule):
                         title=f"{var_name} ({var_unit}), "
                         f"t={t_i} ({self._datastore.step_length * t_i} h)",
                         vrange=var_vrange,
+                        da_prediction=da_prediction.isel(
+                            state_feature=var_i
+                        ).squeeze(),
+                        da_target=da_target.isel(state_feature=var_i).squeeze(),
                     )
                     for var_i, (var_name, var_unit, var_vrange) in enumerate(
                         zip(
@@ -476,6 +509,11 @@ class ARModel(pl.LightningModule):
                 ]
 
                 example_i = self.plotted_examples
+                for i, fig in enumerate(var_figs):
+                    fn = f"example_{i}_{example_i}_t{t_i}.png"
+                    fig.savefig(fn)
+                    logger.info(f"Saved example plot to {fn}")
+
                 wandb.log(
                     {
                         f"{var_name}_example_{example_i}": wandb.Image(fig)
