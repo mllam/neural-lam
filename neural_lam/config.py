@@ -103,6 +103,9 @@ class TrainingConfig:
         ManualStateFeatureWeighting, UniformFeatureWeighting
     ] = dataclasses.field(default_factory=UniformFeatureWeighting)
 
+    logger: str = "wandb"
+    logger_url: str = None
+
 
 @dataclasses.dataclass
 class NeuralLAMConfig(dataclass_wizard.JSONWizard, dataclass_wizard.YAMLWizard):

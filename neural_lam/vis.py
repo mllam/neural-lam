@@ -90,7 +90,6 @@ def plot_prediction(
     da_mask = datastore.unstack_grid_coords(datastore.boundary_mask)
     mask_reshaped = da_mask.values
     pixel_alpha = (
-        #mask_reshaped.clamp(0.7, 1).cpu().numpy()
         mask_reshaped.clip(0.7, 1)
     )  # Faded border region
 
@@ -105,7 +104,7 @@ def plot_prediction(
     for ax, data in zip(axes, (target, pred)):
         ax.coastlines()  # Add coastline outlines
         data_grid = (
-            data.reshape(list(datastore.grid_shape_state.values.values()))
+            data.reshape(datastore.grid_shape_state.x, datastore.grid_shape_state.y)
             .cpu()
             .numpy()
         )
@@ -152,7 +151,6 @@ def plot_spatial_error(
     da_mask = datastore.unstack_grid_coords(datastore.boundary_mask)
     mask_reshaped = da_mask.values
     pixel_alpha = (
-        #mask_reshaped.clamp(0.7, 1).cpu().numpy()
         mask_reshaped.clip(0.7, 1)
     )  # Faded border region
 
@@ -163,7 +161,7 @@ def plot_spatial_error(
 
     ax.coastlines()  # Add coastline outlines
     error_grid = (
-        error.reshape(list(datastore.grid_shape_state.values.values()))
+        error.reshape(list([datastore.grid_shape_state.x, datastore.grid_shape_state.y]))
         .cpu()
         .numpy()
     )

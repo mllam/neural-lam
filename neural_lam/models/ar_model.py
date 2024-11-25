@@ -489,14 +489,6 @@ class ARModel(pl.LightningModule):
 
                     self.logger.log_image(key=key, images=[fig])
 
-                # self.logger.log_image(
-                #     {
-                #         f"{var_name}_example_{example_i}": fig
-                #         for var_name, fig in zip(
-                #             self._datastore.get_vars_names("state"), var_figs
-                #         )
-                #     }
-                # )
                 plt.close(
                     "all"
                 )  # Close all figs for this time step, saves memory

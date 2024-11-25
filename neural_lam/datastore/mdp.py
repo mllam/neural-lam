@@ -394,9 +394,8 @@ class MDPDatastore(BaseRegularGridDatastore):
 
         class_name = projection_info["class_name"]
         ProjectionClass = getattr(ccrs, class_name)
-        kwargs = projection_info["kwargs"]
-
-        globe_kwargs = kwargs.pop("globe", {})
+        kwargs = projection_info["kwargs"].copy()
+        globe_kwargs = kwargs.pop("globe", {}).copy()
         if len(globe_kwargs) > 0:
             kwargs["globe"] = ccrs.Globe(**globe_kwargs)
 
