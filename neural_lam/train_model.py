@@ -23,7 +23,7 @@ MODELS = {
 }
 
 
-@logger.catch(reraise=True)
+@logger.catch
 def main(input_args=None):
     """Main function for training and evaluating models."""
     parser = ArgumentParser(
