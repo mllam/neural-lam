@@ -534,10 +534,6 @@ class ARModel(pl.LightningModule):
                 ]
 
                 example_i = self.plotted_examples
-                # for i, fig in enumerate(var_figs):
-                #     fn = f"example_{i}_{example_i}_t{t_i}.png"
-                #     fig.savefig(fn)
-                #     logger.info(f"Saved example plot to {fn}")
 
                 wandb.log(
                     {
