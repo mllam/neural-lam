@@ -99,9 +99,6 @@ def plot_prediction(
     )
 
     # Plot pred and target
-    x = da_target.x.values
-    y = da_target.y.values
-    extent = [x.min(), x.max(), y.min(), y.max()]
     for ax, da in zip(axes, (da_target, da_prediction)):
         ax.coastlines()  # Add coastline outlines
         da.plot.imshow(
