@@ -1,5 +1,6 @@
 # Standard library
 import os
+from typing import List, Union
 
 # Third-party
 import matplotlib.pyplot as plt
@@ -7,7 +8,7 @@ import numpy as np
 import pytorch_lightning as pl
 import torch
 import wandb
-from loguru import logger
+import xarray as xr
 
 # Local
 from .. import metrics, vis
@@ -149,7 +150,35 @@ class ARModel(pl.LightningModule):
         # For storing spatial loss maps during evaluation
         self.spatial_loss_maps = []
 
-    def _create_dataarray_from_tensor(self, tensor, time, split, category):
+    def _create_dataarray_from_tensor(
+        self,
+        tensor: torch.Tensor,
+        time: Union[int, List[int]],
+        split: str,
+        category: str,
+    ) -> xr.DataArray:
+        """
+        Create an `xr.DataArray` from a tensor, with the correct dimensions and
+        coordinates to match the datastore used by the model. This function in
+        in effect is the inverse of what is returned by
+        `WeatherDataset.__getitem__`.
+
+        Parameters
+        ----------
+        tensor : torch.Tensor
+            The tensor to convert to a `xr.DataArray` with dimensions [time,
+            grid_index, feature]
+        time : Union[int,List[int]]
+            The time index or indices for the data, given as integers or a list
+            of integers representing epoch time in nanoseconds.
+        split : str
+            The split of the data, either 'train', 'val', or 'test'
+        category : str
+            The category of the data, either 'state' or 'forcing'
+        """
+        # TODO: creating an instance of WeatherDataset here on every call is
+        # not how this should be done but whether WeatherDataset should be
+        # provided to ARModel or where to put plotting still needs discussion
         weather_dataset = WeatherDataset(datastore=self._datastore, split=split)
         time = np.array(time, dtype="datetime64[ns]")
         da = weather_dataset.create_dataarray_from_tensor(
@@ -482,14 +511,10 @@ class ARModel(pl.LightningModule):
             var_vranges = list(zip(var_vmin, var_vmax))
 
             # Iterate over prediction horizon time steps
-            for t_i, (pred_t, target_t) in enumerate(
-                zip(pred_slice, target_slice), start=1
-            ):
+            for t_i, _ in enumerate(zip(pred_slice, target_slice), start=1):
                 # Create one figure per variable at this time step
                 var_figs = [
                     vis.plot_prediction(
-                        pred=pred_t[:, var_i],
-                        target=target_t[:, var_i],
                         datastore=self._datastore,
                         title=f"{var_name} ({var_unit}), "
                         f"t={t_i} ({self._datastore.step_length * t_i} h)",
@@ -509,10 +534,10 @@ class ARModel(pl.LightningModule):
                 ]
 
                 example_i = self.plotted_examples
-                for i, fig in enumerate(var_figs):
-                    fn = f"example_{i}_{example_i}_t{t_i}.png"
-                    fig.savefig(fn)
-                    logger.info(f"Saved example plot to {fn}")
+                # for i, fig in enumerate(var_figs):
+                #     fn = f"example_{i}_{example_i}_t{t_i}.png"
+                #     fig.savefig(fn)
+                #     logger.info(f"Saved example plot to {fn}")
 
                 wandb.log(
                     {

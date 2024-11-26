@@ -65,8 +65,6 @@ def plot_error_map(errors, datastore: BaseRegularGridDatastore, title=None):
 
 @matplotlib.rc_context(utils.fractional_plot_bundle(1))
 def plot_prediction(
-    pred,
-    target,
     datastore: BaseRegularGridDatastore,
     da_prediction=None,
     da_target=None,
@@ -81,8 +79,8 @@ def plot_prediction(
     """
     # Get common scale for values
     if vrange is None:
-        vmin = min(vals.min().cpu().item() for vals in (pred, target))
-        vmax = max(vals.max().cpu().item() for vals in (pred, target))
+        vmin = min(da_prediction.min(), da_target.min())
+        vmax = max(da_prediction.max(), da_target.max())
     else:
         vmin, vmax = vrange
 
@@ -100,39 +98,13 @@ def plot_prediction(
         subplot_kw={"projection": datastore.coords_projection},
     )
 
-    use_xarray = True
-
     # Plot pred and target
-
-    if not use_xarray:
-        for ax, data in zip(axes, (target, pred)):
-            ax.coastlines()  # Add coastline outlines
-            data_grid = (
-                data.reshape(
-                    [datastore.grid_shape_state.x, datastore.grid_shape_state.y]
-                )
-                .T.cpu()
-                .numpy()
-            )
-            im = ax.imshow(
-                data_grid,
-                origin="lower",
-                extent=extent,
-                alpha=pixel_alpha,
-                vmin=vmin,
-                vmax=vmax,
-                cmap="plasma",
-            )
-
-        cbar = fig.colorbar(im, aspect=30)
-        cbar.ax.tick_params(labelsize=10)
-
     x = da_target.x.values
     y = da_target.y.values
     extent = [x.min(), x.max(), y.min(), y.max()]
     for ax, da in zip(axes, (da_target, da_prediction)):
         ax.coastlines()  # Add coastline outlines
-        im = da.plot.imshow(
+        da.plot.imshow(
             ax=ax,
             origin="lower",
             x="x",
@@ -143,15 +115,6 @@ def plot_prediction(
             cmap="plasma",
             transform=datastore.coords_projection,
         )
-
-        # da.plot.pcolormesh(
-        #     ax=ax,
-        #     x="x",
-        #     vmin=vmin,
-        #     vmax=vmax,
-        #     transform=datastore.coords_projection,
-        #     cmap="plasma",
-        # )
 
     # Ticks and labels
     axes[0].set_title("Ground Truth", size=15)
