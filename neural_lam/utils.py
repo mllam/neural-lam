@@ -94,6 +94,11 @@ def load_graph(graph_dir_path, device="cpu"):
             weights_only=True,
         )
 
+    # Load static node features
+    mesh_static_features = loads_file(
+        "m2m_node_features.pt"
+    )  # List of (N_mesh[l], d_mesh_static)
+
     # Load edges (edge_index)
     m2m_edge_index = BufferList(
         [zero_index_edge_index(ei) for ei in loads_file("m2m_edge_index.pt")],
@@ -104,7 +109,33 @@ def load_graph(graph_dir_path, device="cpu"):
 
     # Change first indices to 0
     g2m_edge_index = zero_index_edge_index(g2m_edge_index)
-    m2g_edge_index = zero_index_edge_index(m2g_edge_index)
+    # m2g has to be handled specially as not all mesh nodes might be indexed in
+    # m2g_edge_index
+    m2g_min_indices = m2g_edge_index.min(dim=1, keepdim=True)[0]
+    if m2g_min_indices[0] < m2g_min_indices[1]:
+        # mesh has the first indices
+        # Number of mesh nodes at level that connects to grid
+        num_mesh_nodes = mesh_static_features[0].shape[0]
+
+        m2g_edge_index = torch.stack(
+            (
+                m2g_edge_index[0],
+                m2g_edge_index[1] - num_mesh_nodes,
+            ),
+            dim=0,
+        )
+    else:
+        # grid (interior) has the first indices
+        # NOTE: Below works, but would be good with a better way to get this
+        num_interior_nodes = m2g_edge_index[1].max() + 1
+
+        m2g_edge_index = torch.stack(
+            (
+                m2g_edge_index[0] - num_interior_nodes,
+                m2g_edge_index[1],
+            ),
+            dim=0,
+        )
 
     n_levels = len(m2m_edge_index)
     hierarchical = n_levels > 1  # Nor just single level mesh graph
@@ -125,11 +156,6 @@ def load_graph(graph_dir_path, device="cpu"):
     )
     g2m_features = g2m_features / longest_edge
     m2g_features = m2g_features / longest_edge
-
-    # Load static node features
-    mesh_static_features = loads_file(
-        "m2m_node_features.pt"
-    )  # List of (N_mesh[l], d_mesh_static)
 
     # Some checks for consistency
     assert (

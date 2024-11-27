@@ -93,8 +93,8 @@ def main(input_args=None):
     create_kwargs = {
         "coords": coords,
         "mesh_node_distance": args.mesh_node_distance,
-        "projection": None,
         "decode_mask": decode_mask,
+        "return_components": True,
     }
     if args.archetype != "keisler":
         # Add additional multi-level kwargs
@@ -105,8 +105,7 @@ def main(input_args=None):
             }
         )
 
-    graph = archetype_create_func(**create_kwargs)
-    graph_comp = wmg.split_graph_by_edge_attribute(graph, attr="component")
+    graph_comp = archetype_create_func(**create_kwargs)
 
     print("Created graph:")
     for name, subgraph in graph_comp.items():
