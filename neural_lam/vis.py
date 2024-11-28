@@ -104,7 +104,7 @@ def plot_prediction(
     for ax, data in zip(axes, (target, pred)):
         ax.coastlines()  # Add coastline outlines
         data_grid = (
-            data.reshape(datastore.grid_shape_state.x, datastore.grid_shape_state.y)
+            data.reshape(datastore.grid_shape_state.y, datastore.grid_shape_state.x)
             .cpu()
             .numpy()
         )
