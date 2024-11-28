@@ -181,7 +181,7 @@ class ARModel(pl.LightningModule):
         # not how this should be done but whether WeatherDataset should be
         # provided to ARModel or where to put plotting still needs discussion
         weather_dataset = WeatherDataset(datastore=self._datastore, split=split)
-        time = np.array(time, dtype="datetime64[ns]")
+        time = np.array(time.cpu(), dtype="datetime64[ns]")
         da = weather_dataset.create_dataarray_from_tensor(
             tensor=tensor, time=time, category=category
         )
@@ -514,6 +514,10 @@ class ARModel(pl.LightningModule):
             # Iterate over prediction horizon time steps
             for t_i, _ in enumerate(zip(pred_slice, target_slice), start=1):
                 # Create one figure per variable at this time step
+                print(t_i)
+                #print(da_prediction)
+                t_val = t_i * self._datastore.step_length
+                print(t_val)
                 var_figs = [
                     vis.plot_prediction(
                         datastore=self._datastore,
@@ -521,9 +525,13 @@ class ARModel(pl.LightningModule):
                         f"t={t_i} ({self._datastore.step_length * t_i} h)",
                         vrange=var_vrange,
                         da_prediction=da_prediction.isel(
-                            state_feature=var_i
+                            state_feature=var_i,
+                            time=t_i - 1
                         ).squeeze(),
-                        da_target=da_target.isel(state_feature=var_i).squeeze(),
+                        da_target=da_target.isel(
+                            state_feature=var_i,
+                            time=t_i - 1
+                        ).squeeze(),
                     )
                     for var_i, (var_name, var_unit, var_vrange) in enumerate(
                         zip(

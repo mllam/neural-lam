@@ -581,7 +581,7 @@ class WeatherDataset(torch.utils.data.Dataset):
             coords["time"] = time
 
         da = xr.DataArray(
-            tensor.numpy(),
+            tensor.cpu().numpy(),
             dims=dims,
             coords=coords,
         )
