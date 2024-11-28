@@ -1,4 +1,5 @@
 # Standard library
+import copy
 import warnings
 from functools import cached_property
 from pathlib import Path
@@ -394,8 +395,11 @@ class MDPDatastore(BaseRegularGridDatastore):
 
         class_name = projection_info["class_name"]
         ProjectionClass = getattr(ccrs, class_name)
-        kwargs = projection_info["kwargs"].copy()
-        globe_kwargs = kwargs.pop("globe", {}).copy()
+        # need to copy otherwise we modify the dict stored in the dataclass
+        # in-place
+        kwargs = copy.deepcopy(projection_info["kwargs"])
+
+        globe_kwargs = kwargs.pop("globe", {})
         if len(globe_kwargs) > 0:
             kwargs["globe"] = ccrs.Globe(**globe_kwargs)
 

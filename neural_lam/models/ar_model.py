@@ -1,17 +1,21 @@
 # Standard library
 import os
+from typing import List, Union
 
 # Third-party
 import matplotlib.pyplot as plt
 import numpy as np
 import pytorch_lightning as pl
 import torch
+import wandb
+import xarray as xr
 
 # Local
 from .. import metrics, vis
 from ..config import NeuralLAMConfig
 from ..datastore import BaseDatastore
 from ..loss_weighting import get_state_feature_weighting
+from ..weather_dataset import WeatherDataset
 
 
 class ARModel(pl.LightningModule):
@@ -146,6 +150,42 @@ class ARModel(pl.LightningModule):
 
         # For storing spatial loss maps during evaluation
         self.spatial_loss_maps = []
+
+    def _create_dataarray_from_tensor(
+        self,
+        tensor: torch.Tensor,
+        time: Union[int, List[int]],
+        split: str,
+        category: str,
+    ) -> xr.DataArray:
+        """
+        Create an `xr.DataArray` from a tensor, with the correct dimensions and
+        coordinates to match the datastore used by the model. This function in
+        in effect is the inverse of what is returned by
+        `WeatherDataset.__getitem__`.
+
+        Parameters
+        ----------
+        tensor : torch.Tensor
+            The tensor to convert to a `xr.DataArray` with dimensions [time,
+            grid_index, feature]
+        time : Union[int,List[int]]
+            The time index or indices for the data, given as integers or a list
+            of integers representing epoch time in nanoseconds.
+        split : str
+            The split of the data, either 'train', 'val', or 'test'
+        category : str
+            The category of the data, either 'state' or 'forcing'
+        """
+        # TODO: creating an instance of WeatherDataset here on every call is
+        # not how this should be done but whether WeatherDataset should be
+        # provided to ARModel or where to put plotting still needs discussion
+        weather_dataset = WeatherDataset(datastore=self._datastore, split=split)
+        time = np.array(time, dtype="datetime64[ns]")
+        da = weather_dataset.create_dataarray_from_tensor(
+            tensor=tensor, time=time, category=category
+        )
+        return da
 
     def configure_optimizers(self):
         opt = torch.optim.AdamW(
@@ -406,11 +446,13 @@ class ARModel(pl.LightningModule):
             )
 
             self.plot_examples(
-                batch, n_additional_examples, prediction=prediction
+                batch,
+                n_additional_examples,
+                prediction=prediction,
+                split="test",
             )
 
-
-    def plot_examples(self, batch, n_examples, prediction=None):
+    def plot_examples(self, batch, n_examples, split, prediction=None):
         """
         Plot the first n_examples forecasts from batch
 
@@ -423,17 +465,33 @@ class ARModel(pl.LightningModule):
             prediction, target, _, _ = self.common_step(batch)
 
         target = batch[1]
+        time = batch[3]
 
         # Rescale to original data scale
         prediction_rescaled = prediction * self.state_std + self.state_mean
         target_rescaled = target * self.state_std + self.state_mean
 
         # Iterate over the examples
-        for pred_slice, target_slice in zip(
-            prediction_rescaled[:n_examples], target_rescaled[:n_examples]
+        for pred_slice, target_slice, time_slice in zip(
+            prediction_rescaled[:n_examples],
+            target_rescaled[:n_examples],
+            time[:n_examples],
         ):
             # Each slice is (pred_steps, num_grid_nodes, d_f)
             self.plotted_examples += 1  # Increment already here
+
+            da_prediction = self._create_dataarray_from_tensor(
+                tensor=pred_slice,
+                time=time_slice,
+                split=split,
+                category="state",
+            ).unstack("grid_index")
+            da_target = self._create_dataarray_from_tensor(
+                tensor=target_slice,
+                time=time_slice,
+                split=split,
+                category="state",
+            ).unstack("grid_index")
 
             var_vmin = (
                 torch.minimum(
@@ -454,18 +512,18 @@ class ARModel(pl.LightningModule):
             var_vranges = list(zip(var_vmin, var_vmax))
 
             # Iterate over prediction horizon time steps
-            for t_i, (pred_t, target_t) in enumerate(
-                zip(pred_slice, target_slice), start=1
-            ):
+            for t_i, _ in enumerate(zip(pred_slice, target_slice), start=1):
                 # Create one figure per variable at this time step
                 var_figs = [
                     vis.plot_prediction(
-                        pred=pred_t[:, var_i],
-                        target=target_t[:, var_i],
                         datastore=self._datastore,
                         title=f"{var_name} ({var_unit}), "
                         f"t={t_i} ({self._datastore.step_length * t_i} h)",
                         vrange=var_vrange,
+                        da_prediction=da_prediction.isel(
+                            state_feature=var_i
+                        ).squeeze(),
+                        da_target=da_target.isel(state_feature=var_i).squeeze(),
                     )
                     for var_i, (var_name, var_unit, var_vrange) in enumerate(
                         zip(
@@ -489,6 +547,14 @@ class ARModel(pl.LightningModule):
 
                     self.logger.log_image(key=key, images=[fig])
 
+                # wandb.log(
+                #     {
+                #         f"{var_name}_example_{example_i}": wandb.Image(fig)
+                #         for var_name, fig in zip(
+                #             self._datastore.get_vars_names("state"), var_figs
+                #         )
+                #     }
+                # )
                 plt.close(
                     "all"
                 )  # Close all figs for this time step, saves memory
