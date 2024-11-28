@@ -130,7 +130,7 @@ def plot_prediction(
 
     # Plot pred and target
     for ax, da in zip(axes, (da_target, da_prediction)):
-        im = plot_on_axis(
+        plot_on_axis(
             ax,
             da,
             datastore,

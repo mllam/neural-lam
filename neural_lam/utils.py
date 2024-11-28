@@ -295,13 +295,11 @@ def get_reordered_grid_pos(datastore):
     """
     Interior nodes first, then boundary
     """
-    xy_np = datastore.get_xy() # np, (num_grid, 2)
+    xy_np = datastore.get_xy()  # np, (num_grid, 2)
     xy_torch = torch.tensor(xy_np, dtype=torch.float32)
 
     da_boundary_mask = datastore.boundary_mask
-    boundary_mask = torch.tensor(
-        da_boundary_mask.values, dtype=torch.bool
-    )
+    boundary_mask = torch.tensor(da_boundary_mask.values, dtype=torch.bool)
     interior_mask = torch.logical_not(boundary_mask)
 
     return torch.cat(
