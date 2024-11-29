@@ -108,8 +108,8 @@ class BaseGraphModel(ARModel):
             )
 
         # Constant parameters for clamping
-        sharpness_sigmoid, softplus_sharpness = 1, 1
-        sigmoid_center, softplus_center = 0, 0
+        sharpness_sigmoid = softplus_sharpness = 1
+        sigmoid_center = softplus_center = 0
 
         normalize_clamping_lim = (
             lambda x, feature_idx: (x - self.state_mean[feature_idx])
@@ -174,48 +174,61 @@ class BaseGraphModel(ARModel):
         self.clamp_upper_idx = torch.tensor(softplus_upper_idx)
 
         # Define clamping functions
-        self.clamp_lower_upper = lambda state: self.sigmoid_lower_lims + (
-            self.sigmoid_upper_lims - self.sigmoid_lower_lims
-        ) * torch.sigmoid(sharpness_sigmoid * (state - sigmoid_center))
-        self.clamp_lower = (
-            lambda state: self.softplus_lower_lims
+        self.clamp_lower_upper = lambda delta, lower, upper: (
+            lower
+            + (upper - lower)
+            * torch.sigmoid(sharpness_sigmoid * (delta - sigmoid_center))
+        )
+        self.clamp_lower = lambda delta, lower: (
+            lower
             + torch.nn.functional.softplus(
-                state - softplus_center, beta=softplus_sharpness
+                delta - softplus_center, beta=softplus_sharpness
             )
         )
-        self.clamp_upper = (
-            lambda state: self.softplus_upper_lims
+        self.clamp_upper = lambda delta, upper: (
+            upper
             - torch.nn.functional.softplus(
-                state - softplus_center, beta=softplus_sharpness
+                delta - softplus_center, beta=softplus_sharpness
             )
         )
 
-    def clamp_prediction(self, state):
+    def clamp_prediction(self, state_delta, prev_state):
         """
         Clamp prediction to valid range supplied in config
 
-        state: (B, num_grid_nodes, feature_dim)
+        state_delta: (B, num_grid_nodes, feature_dim)
+        prev_state: (B, num_grid_nodes, feature_dim)
         """
 
         # Sigmoid/logistic clamps between ]a,b[
         if self.clamp_lower_upper_idx.numel() > 0:
-            state[:, :, self.clamp_lower_upper_idx] = self.clamp_lower_upper(
-                state[:, :, self.clamp_lower_upper_idx]
+            idx = self.clamp_lower_upper_idx
+
+            state_delta[:, :, idx] = self.clamp_lower_upper(
+                state_delta[:, :, idx],
+                self.sigmoid_lower_lims - prev_state[:, :, idx],
+                self.sigmoid_upper_lims - prev_state[:, :, idx],
             )
 
         # Softplus clamps between ]a,infty[
         if self.clamp_lower_idx.numel() > 0:
-            state[:, :, self.clamp_lower_idx] = self.clamp_lower(
-                state[:, :, self.clamp_lower_idx]
+            idx = self.clamp_lower_idx
+
+            state_delta[:, :, idx] = self.clamp_lower(
+                state_delta[:, :, idx],
+                self.softplus_lower_lims - prev_state[:, :, idx],
             )
 
         # Softplus clamps between ]-infty,b[
         if self.clamp_upper_idx.numel() > 0:
-            state[:, :, self.clamp_upper_idx] = self.clamp_upper(
-                state[:, :, self.clamp_upper_idx]
+            idx = self.clamp_upper_idx
+
+            state_delta[:, :, idx] = self.clamp_upper(
+                state_delta[:, :, idx],
+                self.softplus_upper_lims - prev_state[:, :, idx],
             )
 
-        return state
+        return state_delta
 
     def get_num_mesh(self):
         """
@@ -311,10 +324,10 @@ class BaseGraphModel(ARModel):
         # Rescale with one-step difference statistics
         rescaled_delta_mean = pred_delta_mean * self.diff_std + self.diff_mean
 
-        # Residual connection for full state
-        new_state = prev_state + rescaled_delta_mean
-
         # Clamp values to valid range
-        new_state_clamped = self.clamp_prediction(new_state)
+        delta_clamped = self.clamp_prediction(rescaled_delta_mean, prev_state)
 
-        return new_state_clamped, pred_std
+        # Residual connection for full state
+        new_state = prev_state + delta_clamped
+
+        return new_state, pred_std
