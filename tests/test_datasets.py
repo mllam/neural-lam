@@ -36,10 +36,13 @@ def test_dataset_item_shapes(datastore_name):
     N_pred_steps = 4
     num_past_forcing_steps = 1
     num_future_forcing_steps = 1
-    forcing_window_size=forcing_window_size,
-
-    num_past_forcing_steps=num_past_forcing_steps,
-    num_future_forcing_steps=num_future_forcing_steps,
+    dataset = WeatherDataset(
+        datastore=datastore,
+        split="train",
+        ar_steps=N_pred_steps,
+        num_past_forcing_steps=num_past_forcing_steps,
+        num_future_forcing_steps=num_future_forcing_steps,
+    )
 
     item = dataset[0]
 
