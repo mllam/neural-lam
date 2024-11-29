@@ -5,7 +5,7 @@ import warnings
 
 # Third-party
 import torch
-from pytorch_lightning.loggers import WandbLogger
+from pytorch_lightning.loggers import MLFlowLogger, WandbLogger
 from torch import nn
 from tueplots import bundles, figsizes
 
@@ -237,12 +237,16 @@ def fractional_plot_bundle(fraction):
 
 def init_training_logger_metrics(training_logger, val_steps):
     """
-    Set up wandb metrics to track
+    Set up logger metrics to track
     """
     experiment = training_logger.experiment
     if isinstance(training_logger, WandbLogger):
         experiment.define_metric("val_mean_loss", summary="min")
         for step in val_steps:
             experiment.define_metric(f"val_loss_unroll{step}", summary="min")
+    elif isinstance(training_logger, MLFlowLogger):
+        pass
     else:
-        warnings.warn("Only WandbLogger is supported for tracking metrics")
+        warnings.warn(
+            "Only WandbLogger & MLFlowLogger is supported for tracking metrics"
+        )

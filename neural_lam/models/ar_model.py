@@ -7,7 +7,6 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pytorch_lightning as pl
 import torch
-import wandb
 import xarray as xr
 
 # Local
@@ -514,10 +513,6 @@ class ARModel(pl.LightningModule):
             # Iterate over prediction horizon time steps
             for t_i, _ in enumerate(zip(pred_slice, target_slice), start=1):
                 # Create one figure per variable at this time step
-                print(t_i)
-                #print(da_prediction)
-                t_val = t_i * self._datastore.step_length
-                print(t_val)
                 var_figs = [
                     vis.plot_prediction(
                         datastore=self._datastore,
@@ -525,12 +520,10 @@ class ARModel(pl.LightningModule):
                         f"t={t_i} ({self._datastore.step_length * t_i} h)",
                         vrange=var_vrange,
                         da_prediction=da_prediction.isel(
-                            state_feature=var_i,
-                            time=t_i - 1
+                            state_feature=var_i, time=t_i - 1
                         ).squeeze(),
                         da_target=da_target.isel(
-                            state_feature=var_i,
-                            time=t_i - 1
+                            state_feature=var_i, time=t_i - 1
                         ).squeeze(),
                     )
                     for var_i, (var_name, var_unit, var_vrange) in enumerate(
@@ -548,21 +541,13 @@ class ARModel(pl.LightningModule):
                     self._datastore.get_vars_names("state"), var_figs
                 ):
 
-                    if not isinstance(self.logger, pl.loggers.WandbLogger):
-                        key=f"{var_name}_example_{t_i}"
+                    if isinstance(self.logger, pl.loggers.WandbLogger):
+                        key = f"{var_name}_example_{example_i}"
                     else:
-                        key=f"{var_name}_example_{example_i}"
+                        key = f"{var_name}_example"
 
-                    self.logger.log_image(key=key, images=[fig])
+                    self.logger.log_image(key=key, images=[fig], step=t_i)
 
-                # wandb.log(
-                #     {
-                #         f"{var_name}_example_{example_i}": wandb.Image(fig)
-                #         for var_name, fig in zip(
-                #             self._datastore.get_vars_names("state"), var_figs
-                #         )
-                #     }
-                # )
                 plt.close(
                     "all"
                 )  # Close all figs for this time step, saves memory
@@ -657,7 +642,8 @@ class ARModel(pl.LightningModule):
                     )
                 )
 
-        # Ensure that log_dict has structure for logging as dict(str, plt.Figure)
+        # Ensure that log_dict has structure for
+        # logging as dict(str, plt.Figure)
         assert all(
             isinstance(key, str) and isinstance(value, plt.Figure)
             for key, value in log_dict.items()
@@ -707,9 +693,9 @@ class ARModel(pl.LightningModule):
 
             # log all to same key, sequentially
             for i, fig in enumerate(loss_map_figs):
-                key=f"test_loss"
+                key = "test_loss"
                 if not isinstance(self.logger, pl.loggers.WandbLogger):
-                    key=f"{key}_{i}"
+                    key = f"{key}_{i}"
                 self.logger.log_image(key=key, images=[fig])
 
             # also make without title and save as pdf

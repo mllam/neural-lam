@@ -44,23 +44,6 @@ class DatastoreSelection:
 
 
 @dataclasses.dataclass
-class TrainingConfig:
-    """
-    Configuration related to training neural-lam
-
-    Attributes
-    ----------
-    state_feature_weights : Dict[str, float]
-        The weights for each state feature in the datastore to use in the loss
-        function during training.
-    """
-
-    state_feature_weights: Dict[str, float]
-    logger: str = "wandb"
-    logger_url: str = None
-
-
-@dataclasses.dataclass
 class ManualStateFeatureWeighting:
     """
     Configuration for weighting the state features in the loss function where
