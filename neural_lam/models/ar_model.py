@@ -522,9 +522,11 @@ class ARModel(pl.LightningModule):
                         f"t={t_i} ({self._datastore.step_length * t_i} h)",
                         vrange=var_vrange,
                         da_prediction=da_prediction.isel(
-                            state_feature=var_i
+                            state_feature=var_i, time=t_i - 1
                         ).squeeze(),
-                        da_target=da_target.isel(state_feature=var_i).squeeze(),
+                        da_target=da_target.isel(
+                            state_feature=var_i, time=t_i - 1
+                        ).squeeze(),
                     )
                     for var_i, (var_name, var_unit, var_vrange) in enumerate(
                         zip(
