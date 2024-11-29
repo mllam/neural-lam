@@ -67,6 +67,7 @@ class UniformFeatureWeighting:
 
     pass
 
+
 @dataclasses.dataclass
 class OutputClamping:
     """
@@ -82,6 +83,7 @@ class OutputClamping:
 
     lower: Dict[str, float] = dataclasses.field(default_factory=dict)
     upper: Dict[str, float] = dataclasses.field(default_factory=dict)
+
 
 @dataclasses.dataclass
 class TrainingConfig:
@@ -101,7 +103,9 @@ class TrainingConfig:
         ManualStateFeatureWeighting, UniformFeatureWeighting
     ] = dataclasses.field(default_factory=UniformFeatureWeighting)
 
-    output_clamping: OutputClamping = dataclasses.field(default_factory=OutputClamping)
+    output_clamping: OutputClamping = dataclasses.field(
+        default_factory=OutputClamping
+    )
 
 
 @dataclasses.dataclass

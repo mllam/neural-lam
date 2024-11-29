@@ -80,9 +80,11 @@ class BaseGraphModel(ARModel):
         )  # No layer norm on this one
 
         # Compute indices and define clamping functions
-        self.prepare_clamping_parames(config,datastore)
+        self.prepare_clamping_parames(config, datastore)
 
-    def prepare_clamping_parames(self,config:NeuralLAMConfig,datastore:BaseDatastore):
+    def prepare_clamping_parames(
+        self, config: NeuralLAMConfig, datastore: BaseDatastore
+    ):
         """
         Prepare parameters for clamping predicted values to valid range
         """
@@ -93,16 +95,26 @@ class BaseGraphModel(ARModel):
         upper_lims = config.training.output_clamping.upper
 
         # Check that limits in config are for valid features
-        unknown_features_lower = set(lower_lims.keys()) - set(state_feature_names)
-        unknown_features_upper = set(upper_lims.keys()) - set(state_feature_names)
+        unknown_features_lower = set(lower_lims.keys()) - set(
+            state_feature_names
+        )
+        unknown_features_upper = set(upper_lims.keys()) - set(
+            state_feature_names
+        )
         if unknown_features_lower or unknown_features_upper:
-            raise ValueError(f"State feature limits were provided for unknown features: {unknown_features_lower.union(unknown_features_upper)}")
+            raise ValueError(
+                "State feature limits were provided for unknown features: "
+                f"{unknown_features_lower.union(unknown_features_upper)}"
+            )
 
         # Constant parameters for clamping
-        sharpness_sigmoid,softplus_sharpness = 1,1
-        sigmoid_center,softplus_center = 0,0
-        
-        normalize_clamping_lim = lambda x,feature_idx: (x-self.state_mean[feature_idx])/self.state_std[feature_idx]
+        sharpness_sigmoid, softplus_sharpness = 1, 1
+        sigmoid_center, softplus_center = 0, 0
+
+        normalize_clamping_lim = (
+            lambda x, feature_idx: (x - self.state_mean[feature_idx])
+            / self.state_std[feature_idx]
+        )
 
         # Check which clamping functions to use for each feature
         sigmoid_lower_upper_idx = []
@@ -114,55 +126,97 @@ class BaseGraphModel(ARModel):
 
         softplus_upper_idx = []
         softplus_upper_lims = []
-        
-        for feature_idx,feature in enumerate(state_feature_names):
+
+        for feature_idx, feature in enumerate(state_feature_names):
             if feature in lower_lims and feature in upper_lims:
                 sigmoid_lower_upper_idx.append(feature_idx)
-                sigmoid_lower_lims.append(normalize_clamping_lim(lower_lims[feature], feature_idx))
-                sigmoid_upper_lims.append(normalize_clamping_lim(upper_lims[feature], feature_idx))
-            elif feature in lower_lims and feature not in upper_lims:        
+                sigmoid_lower_lims.append(
+                    normalize_clamping_lim(lower_lims[feature], feature_idx)
+                )
+                sigmoid_upper_lims.append(
+                    normalize_clamping_lim(upper_lims[feature], feature_idx)
+                )
+            elif feature in lower_lims and feature not in upper_lims:
                 softplus_lower_idx.append(feature_idx)
-                softplus_lower_lims.append(normalize_clamping_lim(lower_lims[feature], feature_idx))
+                softplus_lower_lims.append(
+                    normalize_clamping_lim(lower_lims[feature], feature_idx)
+                )
             elif feature not in lower_lims and feature in upper_lims:
                 softplus_upper_idx.append(feature_idx)
-                softplus_upper_lims.append(normalize_clamping_lim(upper_lims[feature], feature_idx))
-        
+                softplus_upper_lims.append(
+                    normalize_clamping_lim(upper_lims[feature], feature_idx)
+                )
+
         # Convert to tensors
-        self.register_buffer('sigmoid_lower_lims', torch.tensor(sigmoid_lower_lims), persistent=False)
-        self.register_buffer('sigmoid_upper_lims', torch.tensor(sigmoid_upper_lims), persistent=False)
-        self.register_buffer('softplus_lower_lims', torch.tensor(softplus_lower_lims), persistent=False)
-        self.register_buffer('softplus_upper_lims', torch.tensor(softplus_upper_lims), persistent=False)
+        self.register_buffer(
+            "sigmoid_lower_lims",
+            torch.tensor(sigmoid_lower_lims),
+            persistent=False,
+        )
+        self.register_buffer(
+            "sigmoid_upper_lims",
+            torch.tensor(sigmoid_upper_lims),
+            persistent=False,
+        )
+        self.register_buffer(
+            "softplus_lower_lims",
+            torch.tensor(softplus_lower_lims),
+            persistent=False,
+        )
+        self.register_buffer(
+            "softplus_upper_lims",
+            torch.tensor(softplus_upper_lims),
+            persistent=False,
+        )
 
         self.clamp_lower_upper_idx = torch.tensor(sigmoid_lower_upper_idx)
         self.clamp_lower_idx = torch.tensor(softplus_lower_idx)
         self.clamp_upper_idx = torch.tensor(softplus_upper_idx)
-        
-        # Define clamping functions
-        self.clamp_lower_upper = lambda state: self.sigmoid_lower_lims+(self.sigmoid_upper_lims-self.sigmoid_lower_lims)*torch.sigmoid(sharpness_sigmoid*(state-sigmoid_center))
-        self.clamp_lower = lambda state: self.softplus_lower_lims+torch.nn.functional.softplus(state-softplus_center,beta=softplus_sharpness)
-        self.clamp_upper = lambda state: self.softplus_upper_lims-torch.nn.functional.softplus(state-softplus_center,beta=softplus_sharpness)
 
-    def clamp_prediction(self,state):
+        # Define clamping functions
+        self.clamp_lower_upper = lambda state: self.sigmoid_lower_lims + (
+            self.sigmoid_upper_lims - self.sigmoid_lower_lims
+        ) * torch.sigmoid(sharpness_sigmoid * (state - sigmoid_center))
+        self.clamp_lower = (
+            lambda state: self.softplus_lower_lims
+            + torch.nn.functional.softplus(
+                state - softplus_center, beta=softplus_sharpness
+            )
+        )
+        self.clamp_upper = (
+            lambda state: self.softplus_upper_lims
+            - torch.nn.functional.softplus(
+                state - softplus_center, beta=softplus_sharpness
+            )
+        )
+
+    def clamp_prediction(self, state):
         """
         Clamp prediction to valid range supplied in config
 
         state: (B, num_grid_nodes, feature_dim)
         """
-        
+
         # Sigmoid/logistic clamps between ]a,b[
         if self.clamp_lower_upper_idx.numel() > 0:
-            state[:,:,self.clamp_lower_upper_idx] = self.clamp_lower_upper(state[:,:,self.clamp_lower_upper_idx])
-        
+            state[:, :, self.clamp_lower_upper_idx] = self.clamp_lower_upper(
+                state[:, :, self.clamp_lower_upper_idx]
+            )
+
         # Softplus clamps between ]a,infty[
         if self.clamp_lower_idx.numel() > 0:
-            state[:,:,self.clamp_lower_idx] = self.clamp_lower(state[:,:,self.clamp_lower_idx])
-        
+            state[:, :, self.clamp_lower_idx] = self.clamp_lower(
+                state[:, :, self.clamp_lower_idx]
+            )
+
         # Softplus clamps between ]-infty,b[
         if self.clamp_upper_idx.numel() > 0:
-            state[:,:,self.clamp_upper_idx] = self.clamp_upper(state[:,:,self.clamp_upper_idx])
-        
+            state[:, :, self.clamp_upper_idx] = self.clamp_upper(
+                state[:, :, self.clamp_upper_idx]
+            )
+
         return state
-    
+
     def get_num_mesh(self):
         """
         Compute number of mesh nodes from loaded features,
@@ -258,8 +312,8 @@ class BaseGraphModel(ARModel):
         rescaled_delta_mean = pred_delta_mean * self.diff_std + self.diff_mean
 
         # Residual connection for full state
-        new_state =  prev_state + rescaled_delta_mean
-        
+        new_state = prev_state + rescaled_delta_mean
+
         # Clamp values to valid range
         new_state_clamped = self.clamp_prediction(new_state)
 
