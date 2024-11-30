@@ -94,14 +94,14 @@ DATASTORES_EXAMPLES = dict(
     dummydata=None,
 )
 
-DATASTORES_BOUNDARY_EXAMPLES = dict(
-    mdp=(
+DATASTORES_BOUNDARY_EXAMPLES = {
+    "mdp": (
         DATASTORE_EXAMPLES_ROOT_PATH
         / "mdp"
-        / "era5_1000hPa_winds"
+        / "era5_1000hPa_danra_100m_winds"
         / "era5.datastore.yaml"
-    )
-)
+    ),
+}
 
 DATASTORES[DummyDatastore.SHORT_NAME] = DummyDatastore
 
