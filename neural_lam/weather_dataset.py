@@ -38,6 +38,16 @@ class WeatherDataset(torch.utils.data.Dataset):
         forcing from times t, t+1, ..., t+j-1, t+j (and potentially times before
         t, given num_past_forcing_steps) are included as forcing inputs at time
         t. Default is 1.
+    num_past_boundary_steps: int, optional
+        Number of past time steps to include in boundary input. If set to i,
+        boundary from times t-i, t-i+1, ..., t-1, t (and potentially beyond,
+        given num_future_forcing_steps) are included as boundary inputs at time t
+        Default is 1.
+    num_future_boundary_steps: int, optional
+        Number of future time steps to include in boundary input. If set to j,
+        boundary from times t, t+1, ..., t+j-1, t+j (and potentially times before
+        t, given num_past_forcing_steps) are included as boundary inputs at time
+        t. Default is 1.
     standardize : bool, optional
         Whether to standardize the data. Default is True.
     """
@@ -50,6 +60,8 @@ class WeatherDataset(torch.utils.data.Dataset):
         ar_steps=3,
         num_past_forcing_steps=1,
         num_future_forcing_steps=1,
+        num_past_boundary_steps=1,
+        num_future_boundary_steps=1,
         standardize=True,
     ):
         super().__init__()
@@ -60,10 +72,10 @@ class WeatherDataset(torch.utils.data.Dataset):
         self.datastore_boundary = datastore_boundary
         self.num_past_forcing_steps = num_past_forcing_steps
         self.num_future_forcing_steps = num_future_forcing_steps
+        self.num_past_boundary_steps = num_past_boundary_steps
+        self.num_future_boundary_steps = num_future_boundary_steps
 
-        self.da_state = self.datastore.get_dataarray(
-            category="state", split=self.split
-        )
+        self.da_state = self.datastore.get_dataarray(category="state", split=self.split)
         if self.da_state is None:
             raise ValueError(
                 "A non-empty state dataarray must be provided. "
@@ -74,9 +86,12 @@ class WeatherDataset(torch.utils.data.Dataset):
             category="forcing", split=self.split
         )
         # XXX For now boundary data is always considered mdp-forcing data
-        self.da_boundary = self.datastore_boundary.get_dataarray(
-            category="forcing", split=self.split
-        )
+        if self.datastore_boundary is not None:
+            self.da_boundary = self.datastore_boundary.get_dataarray(
+                category="forcing", split=self.split
+            )
+        else:
+            self.da_boundary = None
 
         # check that with the provided data-arrays and ar_steps that we have a
         # non-zero amount of samples
@@ -97,9 +112,7 @@ class WeatherDataset(torch.utils.data.Dataset):
             parts["forcing"] = self.da_forcing
 
         for part, da in parts.items():
-            expected_dim_order = self.datastore.expected_dim_order(
-                category=part
-            )
+            expected_dim_order = self.datastore.expected_dim_order(category=part)
             if da.dims != expected_dim_order:
                 raise ValueError(
                     f"The dimension order of the `{part}` data ({da.dims}) "
@@ -107,6 +120,23 @@ class WeatherDataset(torch.utils.data.Dataset):
                     f"({expected_dim_order}). Maybe you forgot to transpose "
                     "the data in `BaseDatastore.get_dataarray`?"
                 )
+
+        # handling ensemble data
+        if self.datastore.is_ensemble:
+            # for the now the strategy is to only include the first ensemble
+            # member
+            # XXX: this could be changed to include all ensemble members by
+            # splitting `idx` into two parts, one for the analysis time and one
+            # for the ensemble member and then increasing self.__len__ to
+            # include all ensemble members
+            warnings.warn(
+                "only use of ensemble member 0 (the first member) is "
+                "implemented for ensemble data"
+            )
+            i_ensemble = 0
+            self.da_state = self.da_state.isel(ensemble_member=i_ensemble)
+        else:
+            self.da_state = self.da_state
 
         def get_time_step(times):
             """Calculate the time step from the data"""
@@ -119,11 +149,18 @@ class WeatherDataset(torch.utils.data.Dataset):
             return time_diffs[0]
 
         # Check time step consistency in state data
-        _ = get_time_step(self.da_state.time.values)
+        if self.datastore.is_forecast:
+            state_times = self.da_state.analysis_time
+        else:
+            state_times = self.da_state.time
+        _ = get_time_step(state_times)
 
         # Check time coverage for forcing and boundary data
         if self.da_forcing is not None or self.da_boundary is not None:
-            state_times = self.da_state.time
+            if self.datastore.is_forecast:
+                state_times = self.da_state.analysis_time
+            else:
+                state_times = self.da_state.time
             state_time_min = state_times.min().values
             state_time_max = state_times.max().values
 
@@ -131,26 +168,30 @@ class WeatherDataset(torch.utils.data.Dataset):
                 # Forcing data is part of the same datastore as state data
                 # During creation the time dimension of the forcing data
                 # is matched to the state data
-                forcing_times = self.da_forcing.time
-                _ = get_time_step(forcing_times.values)
+                if self.datastore.is_forecast:
+                    forcing_times = self.da_forcing.analysis_time
+                else:
+                    forcing_times = self.da_forcing.time
+                get_time_step(forcing_times.values)
 
             if self.da_boundary is not None:
                 # Boundary data is part of a separate datastore
                 # The boundary data is allowed to have a different time_step
                 # Check that the boundary data covers the required time range
-                boundary_times = self.da_boundary.time
+                if self.datastore_boundary.is_forecast:
+                    boundary_times = self.da_boundary.analysis_time
+                else:
+                    boundary_times = self.da_boundary.time
                 boundary_time_step = get_time_step(boundary_times.values)
                 boundary_time_min = boundary_times.min().values
                 boundary_time_max = boundary_times.max().values
 
                 # Calculate required bounds for boundary using its time step
                 boundary_required_time_min = (
-                    state_time_min
-                    - self.num_past_forcing_steps * boundary_time_step
+                    state_time_min - self.num_past_forcing_steps * boundary_time_step
                 )
                 boundary_required_time_max = (
-                    state_time_max
-                    + self.num_future_forcing_steps * boundary_time_step
+                    state_time_max + self.num_future_forcing_steps * boundary_time_step
                 )
 
                 if boundary_time_min > boundary_required_time_min:
@@ -179,10 +220,8 @@ class WeatherDataset(torch.utils.data.Dataset):
             self.da_state_std = self.ds_state_stats.state_std
 
             if self.da_forcing is not None:
-                self.ds_forcing_stats = (
-                    self.datastore.get_standardization_dataarray(
-                        category="forcing"
-                    )
+                self.ds_forcing_stats = self.datastore.get_standardization_dataarray(
+                    category="forcing"
                 )
                 self.da_forcing_mean = self.ds_forcing_stats.forcing_mean
                 self.da_forcing_std = self.ds_forcing_stats.forcing_std
@@ -208,7 +247,7 @@ class WeatherDataset(torch.utils.data.Dataset):
                 warnings.warn(
                     "only using first ensemble member, so dataset size is "
                     " effectively reduced by the number of ensemble members "
-                    f"({self.da_state.ensemble_member.size})",
+                    f"({self.datastore._num_ensemble_members})",
                     UserWarning,
                 )
 
@@ -242,36 +281,50 @@ class WeatherDataset(torch.utils.data.Dataset):
                 - self.num_future_forcing_steps
             )
 
-    def _slice_time(self, da_state, idx, n_steps: int, da_forcing=None):
+    def _slice_time(
+        self,
+        da_state,
+        idx,
+        n_steps: int,
+        da_forcing_boundary=None,
+        num_past_steps=None,
+        num_future_steps=None,
+    ):
         """
         Produce time slices of the given dataarrays `da_state` (state) and
-        `da_forcing` (forcing). For the state data, slicing is done based on
-        `idx`. For the forcing data, nearest neighbor matching is performed
-        based on the state times. Additionally, the time difference between the
-        matched forcing times and state times (in multiples of state time steps)
-        is added to the forcing dataarray. This will be used as an additional
-        feature in the model (temporal embedding).
+        `da_forcing_boundary`. For the state data, slicing is done
+        based on `idx`. For the forcing/boundary data, nearest neighbor matching
+        is performed based on the state times. Additionally, the time difference
+        between the matched forcing/boundary times and state times (in multiples
+        of state time steps) is added to the forcing dataarray. This will be
+        used as an additional feature in the model (temporal embedding).
 
         Parameters
         ----------
         da_state : xr.DataArray
             The state dataarray to slice.
-        da_forcing : xr.DataArray
-            The forcing dataarray to slice.
         idx : int
             The index of the time step to start the sample from in the state
             data.
         n_steps : int
             The number of time steps to include in the sample.
+        da_forcing_boundary : xr.DataArray
+            The forcing/boundary dataarray to slice.
+        num_past_steps : int, optional
+            The number of past time steps to include in the forcing/boundary
+            data. Default is `None`.
+        num_future_steps : int, optional
+            The number of future time steps to include in the forcing/boundary
+            data. Default is `None`.
 
         Returns
         -------
         da_state_sliced : xr.DataArray
             The sliced state dataarray with dims ('time', 'grid_index',
             'state_feature').
-        da_forcing_matched : xr.DataArray
+        da_forcing_boundary_matched : xr.DataArray
             The sliced state dataarray with dims ('time', 'grid_index',
-            'forcing_feature_windowed').
+            'forcing/boundary_feature_windowed').
         """
         # Number of initial steps required (e.g., for initializing models)
         init_steps = 2
@@ -279,8 +332,8 @@ class WeatherDataset(torch.utils.data.Dataset):
         # Slice the state data as before
         if self.datastore.is_forecast:
             # Calculate start and end indices for slicing
-            start_idx = max(0, self.num_past_forcing_steps - init_steps)
-            end_idx = max(init_steps, self.num_past_forcing_steps) + n_steps
+            start_idx = max(0, num_past_steps - init_steps)
+            end_idx = max(init_steps, num_past_steps) + n_steps
 
             # Slice the state data over the elapsed forecast duration
             da_state_sliced = da_state.isel(
@@ -299,13 +352,11 @@ class WeatherDataset(torch.utils.data.Dataset):
 
         else:
             # For analysis data, slice the time dimension directly
-            start_idx = idx + max(0, self.num_past_forcing_steps - init_steps)
-            end_idx = (
-                idx + max(init_steps, self.num_past_forcing_steps) + n_steps
-            )
+            start_idx = idx + max(0, num_past_steps - init_steps)
+            end_idx = idx + max(init_steps, num_past_steps) + n_steps
             da_state_sliced = da_state.isel(time=slice(start_idx, end_idx))
 
-        if da_forcing is None:
+        if da_forcing_boundary is None:
             return da_state_sliced, None
 
         # Get the state times and its temporal resolution for matching with
@@ -313,78 +364,66 @@ class WeatherDataset(torch.utils.data.Dataset):
         state_times = da_state_sliced["time"]
         state_time_step = state_times.values[1] - state_times.values[0]
 
-        # Match forcing data to state times based on nearest neighbor
-        if self.datastore.is_forecast:
-            # Calculate all possible forcing times
-            forcing_times = (
-                da_forcing.analysis_time + da_forcing.elapsed_forecast_duration
-            )
-            forcing_times_flat = forcing_times.stack(
-                forecast_time=("analysis_time", "elapsed_forecast_duration")
-            )
+        if "analysis_time" in da_forcing_boundary.dims:
+            idx = np.abs(
+                da_forcing_boundary.analysis_time.values
+                - self.da_state.analysis_time.values[idx]
+            ).argmin()
+            # Add a 'time' dimension using the actual forecast times
+            offset = max(init_steps, num_past_steps)
+            da_list = []
+            for step in range(n_steps):
+                start_idx = offset + step - num_past_steps
+                end_idx = offset + step + num_future_steps
 
-            # Compute time differences
-            time_deltas = (
-                forcing_times_flat.values[:, np.newaxis]
-                - state_times.values[np.newaxis, :]
-            )
-            time_diffs = np.abs(time_deltas)
-            idx_min = time_diffs.argmin(axis=0)
+                current_time = (
+                    da_forcing_boundary.analysis_time[idx]
+                    + da_forcing_boundary.elapsed_forecast_duration[offset + step]
+                )
 
-            # Retrieve corresponding indices for analysis_time and
-            # elapsed_forecast_duration
-            forecast_time_index = forcing_times_flat["forecast_time"][idx_min]
-            analysis_time_indices = forecast_time_index["analysis_time"]
-            elapsed_forecast_duration_indices = forecast_time_index[
-                "elapsed_forecast_duration"
-            ]
+                da_sliced = da_forcing_boundary.isel(
+                    analysis_time=idx,
+                    elapsed_forecast_duration=slice(start_idx, end_idx + 1),
+                )
 
-            # Slice the forcing data using matched indices
-            da_forcing_matched = da_forcing.isel(
-                analysis_time=("time", analysis_time_indices),
-                elapsed_forecast_duration=(
-                    "time",
-                    elapsed_forecast_duration_indices,
-                ),
-            )
+                da_sliced = da_sliced.rename({"elapsed_forecast_duration": "window"})
+                da_sliced = da_sliced.assign_coords(
+                    window=np.arange(-num_past_steps, num_future_steps + 1)
+                )
 
-            # Assign matched state times to the forcing data
-            da_forcing_matched["time"] = state_times
-            da_forcing_matched = da_forcing_matched.swap_dims(
-                {"elapsed_forecast_duration": "time"}
-            )
+                da_sliced = da_sliced.expand_dims(dim={"time": [current_time.values]})
 
-            # Calculate time differences in multiples of state time steps
-            state_time_step = state_times.values[1] - state_times.values[0]
-            time_diff_steps = (
-                time_deltas[idx_min, np.arange(len(state_times))]
-                / state_time_step
-            )
+                da_list.append(da_sliced)
 
-            # Add time difference as a new coordinate
-            da_forcing_matched = da_forcing_matched.assign_coords(
-                time_diff=("time", time_diff_steps)
+            # Concatenate the list of DataArrays along the 'time' dimension
+            da_forcing_boundary_matched = xr.concat(da_list, dim="time")
+            forcing_time_step = (
+                da_forcing_boundary_matched.time.values[1]
+                - da_forcing_boundary_matched.time.values[0]
             )
+            da_forcing_boundary_matched["window"] = da_forcing_boundary_matched["window"] * (
+                forcing_time_step / state_time_step
+            )
+            time_diff_steps = da_forcing_boundary_matched.isel(
+                grid_index=0, forcing_feature=0
+            ).data
+            
         else:
             # For analysis data, match directly using the 'time' coordinate
-            forcing_times = da_forcing["time"]
+            forcing_times = da_forcing_boundary["time"]
 
             # Compute time differences between forcing and state times
             # (in multiples of state time steps)
             # Retrieve the indices of the closest times in the forcing data
             time_deltas = (
-                forcing_times.values[:, np.newaxis]
-                - state_times.values[np.newaxis, :]
+                forcing_times.values[:, np.newaxis] - state_times.values[np.newaxis, :]
             ) / state_time_step
             idx_min = np.abs(time_deltas).argmin(axis=0)
 
             time_diff_steps = np.stack(
                 [
                     time_deltas[
-                        idx_i
-                        - self.num_past_forcing_steps : idx_i
-                        + self.num_future_forcing_steps
-                        + 1,
+                        idx_i - num_past_steps : idx_i + num_future_steps + 1,
                         init_steps + step_i,
                     ]
                     for (step_i, idx_i) in enumerate(idx_min[init_steps:])
@@ -392,24 +431,22 @@ class WeatherDataset(torch.utils.data.Dataset):
             )
 
             # Create window dimension for forcing data to stack later
-            window_size = (
-                self.num_past_forcing_steps + self.num_future_forcing_steps + 1
-            )
-            da_forcing_windowed = da_forcing.rolling(
-                time=window_size, center=True
+            window_size = num_past_steps + num_future_steps + 1
+            da_forcing_boundary_windowed = da_forcing_boundary.rolling(
+                time=window_size, center=False
             ).construct(window_dim="window")
-            da_forcing_matched = da_forcing_windowed.isel(
+            da_forcing_boundary_matched = da_forcing_boundary_windowed.isel(
                 time=idx_min[init_steps:]
             )
 
-            # Add time difference as a new coordinate to concatenate to the
-            # forcing features later
-            da_forcing_matched["time_diff_steps"] = (
-                ("time", "window"),
-                time_diff_steps,
-            )
+        # Add time difference as a new coordinate to concatenate to the
+        # forcing features later
+        da_forcing_boundary_matched["time_diff_steps"] = (
+            ("time", "window"),
+            time_diff_steps,
+        )
 
-        return da_state_sliced, da_forcing_matched
+        return da_state_sliced, da_forcing_boundary_matched
 
     def _process_windowed_data(self, da_windowed, da_state, da_target_times):
         """Helper function to process windowed data after standardization."""
@@ -462,23 +499,7 @@ class WeatherDataset(torch.utils.data.Dataset):
         da_target_times : xr.DataArray
             The dataarray for the target times.
         """
-        # handling ensemble data
-        if self.datastore.is_ensemble:
-            # for the now the strategy is to only include the first ensemble
-            # member
-            # XXX: this could be changed to include all ensemble members by
-            # splitting `idx` into two parts, one for the analysis time and one
-            # for the ensemble member and then increasing self.__len__ to
-            # include all ensemble members
-            warnings.warn(
-                "only use of ensemble member 0 (the first member) is "
-                "implemented for ensemble data"
-            )
-            i_ensemble = 0
-            da_state = self.da_state.isel(ensemble_member=i_ensemble)
-        else:
-            da_state = self.da_state
-
+        da_state = self.da_state
         if self.da_forcing is not None:
             if "ensemble_member" in self.da_forcing.dims:
                 raise NotImplementedError(
@@ -500,13 +521,19 @@ class WeatherDataset(torch.utils.data.Dataset):
                 da_state=da_state,
                 idx=idx,
                 n_steps=self.ar_steps,
-                da_forcing=da_boundary,
+                da_forcing_boundary=da_boundary,
+                num_future_steps=self.num_future_boundary_steps,
+                num_past_steps=self.num_past_boundary_steps,
             )
+        else:
+            da_boundary_windowed = None
         da_state, da_forcing_windowed = self._slice_time(
             da_state=da_state,
             idx=idx,
             n_steps=self.ar_steps,
-            da_forcing=da_forcing,
+            da_forcing_boundary=da_forcing,
+            num_future_steps=self.num_future_forcing_steps,
+            num_past_steps=self.num_past_forcing_steps,
         )
 
         # load the data into memory
@@ -521,9 +548,7 @@ class WeatherDataset(torch.utils.data.Dataset):
         da_target_times = da_target_states.time
 
         if self.standardize:
-            da_init_states = (
-                da_init_states - self.da_state_mean
-            ) / self.da_state_std
+            da_init_states = (da_init_states - self.da_state_mean) / self.da_state_std
             da_target_states = (
                 da_target_states - self.da_state_mean
             ) / self.da_state_std
@@ -595,9 +620,7 @@ class WeatherDataset(torch.utils.data.Dataset):
         tensor_dtype = torch.float32
 
         init_states = torch.tensor(da_init_states.values, dtype=tensor_dtype)
-        target_states = torch.tensor(
-            da_target_states.values, dtype=tensor_dtype
-        )
+        target_states = torch.tensor(da_target_states.values, dtype=tensor_dtype)
 
         target_times = torch.tensor(
             da_target_times.astype("datetime64[ns]").astype("int64").values,
@@ -708,10 +731,7 @@ class WeatherDataset(torch.utils.data.Dataset):
         )
 
         for grid_coord in ["x", "y"]:
-            if (
-                grid_coord in da_datastore_state.coords
-                and grid_coord not in da.coords
-            ):
+            if grid_coord in da_datastore_state.coords and grid_coord not in da.coords:
                 da.coords[grid_coord] = da_datastore_state[grid_coord]
 
         if not add_time_as_dim:
@@ -732,6 +752,8 @@ class WeatherDataModule(pl.LightningDataModule):
         standardize=True,
         num_past_forcing_steps=1,
         num_future_forcing_steps=1,
+        num_past_boundary_steps=1,
+        num_future_boundary_steps=1,
         batch_size=4,
         num_workers=16,
     ):
@@ -740,6 +762,8 @@ class WeatherDataModule(pl.LightningDataModule):
         self._datastore_boundary = datastore_boundary
         self.num_past_forcing_steps = num_past_forcing_steps
         self.num_future_forcing_steps = num_future_forcing_steps
+        self.num_past_boundary_steps = num_past_boundary_steps
+        self.num_future_boundary_steps = num_future_boundary_steps
         self.ar_steps_train = ar_steps_train
         self.ar_steps_eval = ar_steps_eval
         self.standardize = standardize
@@ -766,6 +790,8 @@ class WeatherDataModule(pl.LightningDataModule):
                 standardize=self.standardize,
                 num_past_forcing_steps=self.num_past_forcing_steps,
                 num_future_forcing_steps=self.num_future_forcing_steps,
+                num_past_boundary_steps=self.num_past_boundary_steps,
+                num_future_boundary_steps=self.num_future_boundary_steps,
             )
             self.val_dataset = WeatherDataset(
                 datastore=self._datastore,
@@ -775,6 +801,8 @@ class WeatherDataModule(pl.LightningDataModule):
                 standardize=self.standardize,
                 num_past_forcing_steps=self.num_past_forcing_steps,
                 num_future_forcing_steps=self.num_future_forcing_steps,
+                num_past_boundary_steps=self.num_past_boundary_steps,
+                num_future_boundary_steps=self.num_future_boundary_steps,
             )
 
         if stage == "test" or stage is None:
@@ -786,6 +814,8 @@ class WeatherDataModule(pl.LightningDataModule):
                 standardize=self.standardize,
                 num_past_forcing_steps=self.num_past_forcing_steps,
                 num_future_forcing_steps=self.num_future_forcing_steps,
+                num_past_boundary_steps=self.num_past_boundary_steps,
+                num_future_boundary_steps=self.num_future_boundary_steps,
             )
 
     def train_dataloader(self):
