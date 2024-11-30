@@ -28,7 +28,7 @@ class DummyDatastore(BaseRegularGridDatastore):
     """
 
     SHORT_NAME = "dummydata"
-    T0 = isodate.parse_datetime("2021-01-01T00:00:00")
+    T0 = isodate.parse_datetime("1990-09-02T00:00:00")
     N_FEATURES = dict(state=5, forcing=2, static=1)
     CARTESIAN_COORDS = ["x", "y"]
 
