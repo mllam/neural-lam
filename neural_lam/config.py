@@ -168,4 +168,15 @@ def load_config_and_datastore(
         datastore_kind=config.datastore.kind, config_path=datastore_config_path
     )
 
-    return config, datastore
+    if config.datastore_boundary is not None:
+        datastore_boundary_config_path = (
+            Path(config_path).parent / config.datastore_boundary.config_path
+        )
+        datastore_boundary = init_datastore(
+            datastore_kind=config.datastore_boundary.kind,
+            config_path=datastore_boundary_config_path,
+        )
+    else:
+        datastore_boundary = None
+
+    return config, datastore, datastore_boundary
