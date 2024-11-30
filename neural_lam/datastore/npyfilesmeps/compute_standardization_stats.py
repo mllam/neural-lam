@@ -172,6 +172,7 @@ def main(
     ar_steps = 63
     ds = WeatherDataset(
         datastore=datastore,
+        datastore_boundary=None,
         split="train",
         ar_steps=ar_steps,
         standardize=False,
