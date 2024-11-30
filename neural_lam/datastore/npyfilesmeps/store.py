@@ -244,9 +244,7 @@ class NpyFilesDatastoreMEPS(BaseRegularGridDatastore):
             # them separately
             features = ["toa_downwelling_shortwave_flux", "open_water_fraction"]
             das = [
-                self._get_single_timeseries_dataarray(
-                    features=[feature], split=split
-                )
+                self._get_single_timeseries_dataarray(features=[feature], split=split)
                 for feature in features
             ]
             da = xr.concat(das, dim="feature")
@@ -259,9 +257,9 @@ class NpyFilesDatastoreMEPS(BaseRegularGridDatastore):
             # variable is turned into a dask array and so execution of the
             # calculation is delayed until the feature values are actually
             # used.
-            da_forecast_time = (
-                da.analysis_time + da.elapsed_forecast_duration
-            ).chunk({"elapsed_forecast_duration": 1})
+            da_forecast_time = (da.analysis_time + da.elapsed_forecast_duration).chunk(
+                {"elapsed_forecast_duration": 1}
+            )
             da_datetime_forcing_features = self._calc_datetime_forcing_features(
                 da_time=da_forecast_time
             )
@@ -339,10 +337,7 @@ class NpyFilesDatastoreMEPS(BaseRegularGridDatastore):
             for all categories of data
 
         """
-        if (
-            set(features).difference(self.get_vars_names(category="static"))
-            == set()
-        ):
+        if set(features).difference(self.get_vars_names(category="static")) == set():
             assert split in (
                 "train",
                 "val",
@@ -356,12 +351,8 @@ class NpyFilesDatastoreMEPS(BaseRegularGridDatastore):
                 "test",
             ), f"Unknown dataset split {split} for features {features}"
 
-        if member is not None and features != self.get_vars_names(
-            category="state"
-        ):
-            raise ValueError(
-                "Member can only be specified for the 'state' category"
-            )
+        if member is not None and features != self.get_vars_names(category="state"):
+            raise ValueError("Member can only be specified for the 'state' category")
 
         concat_axis = 0
 
@@ -377,9 +368,7 @@ class NpyFilesDatastoreMEPS(BaseRegularGridDatastore):
             fp_samples = self.root_path / "samples" / split
             if self._remove_state_features_with_index:
                 n_to_drop = len(self._remove_state_features_with_index)
-                feature_dim_mask = np.ones(
-                    len(features) + n_to_drop, dtype=bool
-                )
+                feature_dim_mask = np.ones(len(features) + n_to_drop, dtype=bool)
                 feature_dim_mask[self._remove_state_features_with_index] = False
         elif features == ["toa_downwelling_shortwave_flux"]:
             filename_format = TOA_SW_DOWN_FLUX_FILENAME_FORMAT
@@ -445,7 +434,7 @@ class NpyFilesDatastoreMEPS(BaseRegularGridDatastore):
                     * np.timedelta64(1, "h")
                 )
             elif d == "analysis_time":
-                coord_values = self._get_analysis_times(split=split)
+                coord_values = self._get_analysis_times(split=split, member_id=member)
             elif d == "y":
                 coord_values = y
             elif d == "x":
@@ -464,9 +453,7 @@ class NpyFilesDatastoreMEPS(BaseRegularGridDatastore):
         if features_vary_with_analysis_time:
             filepaths = [
                 fp_samples
-                / filename_format.format(
-                    analysis_time=analysis_time, **file_params
-                )
+                / filename_format.format(analysis_time=analysis_time, **file_params)
                 for analysis_time in coords["analysis_time"]
             ]
         else:
@@ -505,7 +492,7 @@ class NpyFilesDatastoreMEPS(BaseRegularGridDatastore):
 
         return da
 
-    def _get_analysis_times(self, split) -> List[np.datetime64]:
+    def _get_analysis_times(self, split, member_id) -> List[np.datetime64]:
         """Get the analysis times for the given split by parsing the filenames
         of all the files found for the given split.
 
@@ -513,6 +500,8 @@ class NpyFilesDatastoreMEPS(BaseRegularGridDatastore):
         ----------
         split : str
             The dataset split to get the analysis times for.
+        member_id : int
+            The ensemble member to get the analysis times for.
 
         Returns
         -------
@@ -520,8 +509,12 @@ class NpyFilesDatastoreMEPS(BaseRegularGridDatastore):
             The analysis times for the given split.
 
         """
+        if member_id is None:
+            # Only interior state data files have member_id, to avoid duplicates
+            # we only look at the first member for all other categories
+            member_id = 0
         pattern = re.sub(r"{analysis_time:[^}]*}", "*", STATE_FILENAME_FORMAT)
-        pattern = re.sub(r"{member_id:[^}]*}", "*", pattern)
+        pattern = re.sub(r"{member_id:[^}]*}", f"{member_id:03d}", pattern)
 
         sample_dir = self.root_path / "samples" / split
         sample_files = sample_dir.glob(pattern)
@@ -531,9 +524,7 @@ class NpyFilesDatastoreMEPS(BaseRegularGridDatastore):
             times.append(name_parts["analysis_time"])
 
         if len(times) == 0:
-            raise ValueError(
-                f"No files found in {sample_dir} with pattern {pattern}"
-            )
+            raise ValueError(f"No files found in {sample_dir} with pattern {pattern}")
 
         return times
 
@@ -690,9 +681,7 @@ class NpyFilesDatastoreMEPS(BaseRegularGridDatastore):
         """
 
         def load_pickled_tensor(fn):
-            return torch.load(
-                self.root_path / "static" / fn, weights_only=True
-            ).numpy()
+            return torch.load(self.root_path / "static" / fn, weights_only=True).numpy()
 
         mean_diff_values = None
         std_diff_values = None
