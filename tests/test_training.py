@@ -14,16 +14,31 @@ from neural_lam.datastore import DATASTORES
 from neural_lam.datastore.base import BaseRegularGridDatastore
 from neural_lam.models.graph_lam import GraphLAM
 from neural_lam.weather_dataset import WeatherDataModule
-from tests.conftest import init_datastore_example
+from tests.conftest import (
+    DATASTORES_BOUNDARY_EXAMPLES,
+    init_datastore_boundary_example,
+    init_datastore_example,
+)
 
 
 @pytest.mark.parametrize("datastore_name", DATASTORES.keys())
-def test_training(datastore_name):
+@pytest.mark.parametrize(
+    "datastore_boundary_name", DATASTORES_BOUNDARY_EXAMPLES.keys()
+)
+def test_training(datastore_name, datastore_boundary_name):
     datastore = init_datastore_example(datastore_name)
+    datastore_boundary = init_datastore_boundary_example(
+        datastore_boundary_name
+    )
 
     if not isinstance(datastore, BaseRegularGridDatastore):
         pytest.skip(
             f"Skipping test for {datastore_name} as it is not a regular "
+            "grid datastore."
+        )
+    if not isinstance(datastore_boundary, BaseRegularGridDatastore):
+        pytest.skip(
+            f"Skipping test for {datastore_boundary_name} as it is not a regular "
             "grid datastore."
         )
 
@@ -59,6 +74,7 @@ def test_training(datastore_name):
 
     data_module = WeatherDataModule(
         datastore=datastore,
+        datastore_boundary=datastore_boundary,
         ar_steps_train=3,
         ar_steps_eval=5,
         standardize=True,
@@ -66,6 +82,8 @@ def test_training(datastore_name):
         num_workers=1,
         num_past_forcing_steps=1,
         num_future_forcing_steps=1,
+        num_past_boundary_steps=1,
+        num_future_boundary_steps=1,
     )
 
     class ModelArgs:
@@ -85,6 +103,8 @@ def test_training(datastore_name):
         metrics_watch = []
         num_past_forcing_steps = 1
         num_future_forcing_steps = 1
+        num_past_boundary_steps = 1
+        num_future_boundary_steps = 1
 
     model_args = ModelArgs()
 

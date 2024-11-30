@@ -42,10 +42,13 @@ def test_dataset_item_shapes(datastore_name, datastore_boundary_name):
         datastore_boundary_name
     )
     N_gridpoints = datastore.num_grid_points
+    N_gridpoints_boundary = datastore_boundary.num_grid_points
 
     N_pred_steps = 4
     num_past_forcing_steps = 1
     num_future_forcing_steps = 1
+    num_past_boundary_steps = 1
+    num_future_boundary_steps = 1
     dataset = WeatherDataset(
         datastore=datastore,
         datastore_boundary=datastore_boundary,
@@ -53,6 +56,8 @@ def test_dataset_item_shapes(datastore_name, datastore_boundary_name):
         ar_steps=N_pred_steps,
         num_past_forcing_steps=num_past_forcing_steps,
         num_future_forcing_steps=num_future_forcing_steps,
+        num_past_boundary_steps=num_past_boundary_steps,
+        num_future_boundary_steps=num_future_boundary_steps,
     )
 
     item = dataset[0]
@@ -77,8 +82,23 @@ def test_dataset_item_shapes(datastore_name, datastore_boundary_name):
     assert forcing.ndim == 3
     assert forcing.shape[0] == N_pred_steps
     assert forcing.shape[1] == N_gridpoints
-    assert forcing.shape[2] == datastore.get_num_data_vars("forcing") * (
-        num_past_forcing_steps + num_future_forcing_steps + 1
+    # each stacked forcing feature has one corresponding temporal embedding
+    assert (
+        forcing.shape[2]
+        == datastore.get_num_data_vars("forcing")
+        * (num_past_forcing_steps + num_future_forcing_steps + 1)
+        * 2
+    )
+
+    # boundary
+    assert boundary.ndim == 3
+    assert boundary.shape[0] == N_pred_steps
+    assert boundary.shape[1] == N_gridpoints_boundary
+    assert (
+        boundary.shape[2]
+        == datastore_boundary.get_num_data_vars("forcing")
+        * (num_past_boundary_steps + num_future_boundary_steps + 1)
+        * 2
     )
 
     # batch times
@@ -88,6 +108,7 @@ def test_dataset_item_shapes(datastore_name, datastore_boundary_name):
     # try to get the last item of the dataset to ensure slicing and stacking
     # operations are working as expected and are consistent with the dataset
     # length
+
     dataset[len(dataset) - 1]
 
 
@@ -106,6 +127,9 @@ def test_dataset_item_create_dataarray_from_tensor(
     N_pred_steps = 4
     num_past_forcing_steps = 1
     num_future_forcing_steps = 1
+    num_past_boundary_steps = 1
+    num_future_boundary_steps = 1
+
     dataset = WeatherDataset(
         datastore=datastore,
         datastore_boundary=datastore_boundary,
@@ -113,16 +137,22 @@ def test_dataset_item_create_dataarray_from_tensor(
         ar_steps=N_pred_steps,
         num_past_forcing_steps=num_past_forcing_steps,
         num_future_forcing_steps=num_future_forcing_steps,
+        num_past_boundary_steps=num_past_boundary_steps,
+        num_future_boundary_steps=num_future_boundary_steps,
     )
 
     idx = 0
 
     # unpack the item, this is the current return signature for
     # WeatherDataset.__getitem__
-    _, target_states, _, target_times_arr = dataset[idx]
-    _, da_target_true, _, da_target_times_true = dataset._build_item_dataarrays(
-        idx=idx
-    )
+    _, target_states, _, _, target_times_arr = dataset[idx]
+    (
+        _,
+        da_target_true,
+        _,
+        _,
+        da_target_times_true,
+    ) = dataset._build_item_dataarrays(idx=idx)
 
     target_times = np.array(target_times_arr, dtype="datetime64[ns]")
     np.testing.assert_equal(target_times, da_target_times_true.values)
@@ -272,6 +302,7 @@ def test_dataset_length(dataset_config):
 
     dataset = WeatherDataset(
         datastore=datastore,
+        datastore_boundary=None,
         split="train",
         ar_steps=dataset_config["ar_steps"],
         num_past_forcing_steps=dataset_config["past"],
