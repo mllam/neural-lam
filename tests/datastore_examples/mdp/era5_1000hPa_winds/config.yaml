@@ -1,3 +1,0 @@
-datastore:
-  kind: mdp
-  config_path: era5.datastore.yaml

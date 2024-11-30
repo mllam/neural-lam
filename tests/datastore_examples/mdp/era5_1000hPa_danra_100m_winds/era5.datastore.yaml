@@ -1,5 +1,4 @@
-#TODO: What do these versions mean? Should they be updated?
-schema_version: v0.2.0+dev
+schema_version: v0.5.0
 dataset_version: v1.0.0
 
 output:
@@ -7,8 +6,8 @@ output:
     forcing: [time, grid_index, forcing_feature]
   coord_ranges:
     time:
-      start: 1990-09-02T00:00
-      end: 1990-09-10T00:00
+      start: 1990-09-01T00:00
+      end: 2022-09-30T00:00
       step: PT6H
   chunking:
     time: 1
@@ -16,17 +15,17 @@ output:
     dim: time
     splits:
       train:
-        start: 1990-09-02T00:00
-        end: 1990-09-07T00:00
+        start: 1990-09-01T00:00
+        end: 2022-09-30T00:00
         compute_statistics:
           ops: [mean, std, diff_mean, diff_std]
           dims: [grid_index, time]
       val:
-        start: 1990-09-05T00:00
-        end: 1990-09-08T00:00
+        start: 1990-09-01T00:00
+        end: 2022-09-30T00:00
       test:
-        start: 1990-09-06T00:00
-        end: 1990-09-10T00:00
+        start: 1990-09-01T00:00
+        end: 2022-09-30T00:00 
 
 inputs:
   era_height_levels:
@@ -36,10 +35,6 @@ inputs:
       u_component_of_wind:
         level:
           values: [1000,]
-          units: hPa
-      v_component_of_wind:
-        level:
-          values: [1000, ]
           units: hPa
     dim_mapping:
       time:
