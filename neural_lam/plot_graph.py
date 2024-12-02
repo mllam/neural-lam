@@ -21,7 +21,7 @@ def main():
         help="Path to the configuration for neural-lam",
     )
     parser.add_argument(
-        "--name",
+        "--graph_name",
         type=str,
         default="multiscale",
         help="Name of saved graph to plot (default: multiscale)",
@@ -46,7 +46,9 @@ def main():
     _, datastore = load_config_and_datastore(config_path=args.config_path)
 
     # Load graph data
-    graph_dir_path = os.path.join(datastore.root_path, "graphs", args.name)
+    graph_dir_path = os.path.join(
+        datastore.root_path, "graphs", args.graph_name
+    )
     hierarchical, graph_ldict = utils.load_graph(graph_dir_path=graph_dir_path)
     (g2m_edge_index, m2g_edge_index, m2m_edge_index,) = (
         graph_ldict["g2m_edge_index"],

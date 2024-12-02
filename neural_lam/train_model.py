@@ -78,7 +78,7 @@ def main(input_args=None):
 
     # Model architecture
     parser.add_argument(
-        "--graph",
+        "--graph_name",
         type=str,
         default="multiscale",
         help="Graph to load and use in graph-based model "

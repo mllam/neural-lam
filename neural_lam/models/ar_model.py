@@ -69,12 +69,12 @@ class ARModel(pl.LightningModule):
         static_features_torch = torch.tensor(arr_static, dtype=torch.float32)
         self.register_buffer(
             "grid_static_features",
-            static_features_torch[self.boundary_mask.to(torch.bool)],
+            static_features_torch[self.boundary_mask[:, 0].to(torch.bool)],
             persistent=False,
         )
         self.register_buffer(
             "boundary_static_features",
-            static_features_torch[self.interior_mask.to(torch.bool)],
+            static_features_torch[self.interior_mask[:, 0].to(torch.bool)],
             persistent=False,
         )
 

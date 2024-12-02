@@ -30,7 +30,7 @@ def main(input_args=None):
         help="Path to the configuration for neural-lam",
     )
     parser.add_argument(
-        "--name",
+        "--graph_name",
         type=str,
         help="Name to save graph as (default: multiscale)",
     )
@@ -74,8 +74,8 @@ def main(input_args=None):
         args.config_path is not None
     ), "Specify your config with --config_path"
     assert (
-        args.name is not None
-    ), "Specify the name to save graph as with --name"
+        args.graph_name is not None
+    ), "Specify the name to save graph as with --graph_name"
 
     _, datastore = load_config_and_datastore(config_path=args.config_path)
 
@@ -124,7 +124,9 @@ def main(input_args=None):
         print(f"{name}: {subgraph}")
 
     # Save graph
-    graph_dir_path = os.path.join(datastore.root_path, "graphs", args.name)
+    graph_dir_path = os.path.join(
+        datastore.root_path, "graphs", args.graph_name
+    )
     os.makedirs(graph_dir_path, exist_ok=True)
     for component, graph in graph_comp.items():
         # This seems like a bit of a hack, maybe better if saving in wmg
