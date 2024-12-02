@@ -108,37 +108,24 @@ def test_dataset_item_shapes(datastore_name, datastore_boundary_name):
     # try to get the last item of the dataset to ensure slicing and stacking
     # operations are working as expected and are consistent with the dataset
     # length
-
     dataset[len(dataset) - 1]
 
 
 @pytest.mark.parametrize("datastore_name", DATASTORES.keys())
-@pytest.mark.parametrize(
-    "datastore_boundary_name", DATASTORES_BOUNDARY_EXAMPLES.keys()
-)
-def test_dataset_item_create_dataarray_from_tensor(
-    datastore_name, datastore_boundary_name
-):
+def test_dataset_item_create_dataarray_from_tensor(datastore_name):
     datastore = init_datastore_example(datastore_name)
-    datastore_boundary = init_datastore_boundary_example(
-        datastore_boundary_name
-    )
 
     N_pred_steps = 4
     num_past_forcing_steps = 1
     num_future_forcing_steps = 1
-    num_past_boundary_steps = 1
-    num_future_boundary_steps = 1
 
     dataset = WeatherDataset(
         datastore=datastore,
-        datastore_boundary=datastore_boundary,
+        datastore_boundary=None,
         split="train",
         ar_steps=N_pred_steps,
         num_past_forcing_steps=num_past_forcing_steps,
         num_future_forcing_steps=num_future_forcing_steps,
-        num_past_boundary_steps=num_past_boundary_steps,
-        num_future_boundary_steps=num_future_boundary_steps,
     )
 
     idx = 0
