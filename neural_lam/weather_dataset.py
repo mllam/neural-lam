@@ -142,28 +142,14 @@ class WeatherDataset(torch.utils.data.Dataset):
         else:
             self.da_state = self.da_state
 
-        def get_time_step(times):
-            """Calculate the time step from the data
 
-            Parameters
-            ----------
-            times : xr.DataArray
-                The time dataarray to calculate the time step from.
-            """
-            time_diffs = np.diff(times)
-            if not np.all(time_diffs == time_diffs[0]):
-                raise ValueError(
-                    "Inconsistent time steps in data. "
-                    f"Found different time steps: {np.unique(time_diffs)}"
-                )
-            return time_diffs[0]
 
         # Check time step consistency in state data
         if self.datastore.is_forecast:
             state_times = self.da_state.analysis_time
         else:
             state_times = self.da_state.time
-        _ = get_time_step(state_times)
+        _ = self._get_time_step(state_times)
 
         # Check time coverage for forcing and boundary data
         if self.da_forcing is not None or self.da_boundary is not None:
@@ -182,7 +168,7 @@ class WeatherDataset(torch.utils.data.Dataset):
                     forcing_times = self.da_forcing.analysis_time
                 else:
                     forcing_times = self.da_forcing.time
-                get_time_step(forcing_times.values)
+                self._get_time_step(forcing_times.values)
 
             if self.da_boundary is not None:
                 # Boundary data is part of a separate datastore
@@ -192,7 +178,7 @@ class WeatherDataset(torch.utils.data.Dataset):
                     boundary_times = self.da_boundary.analysis_time
                 else:
                     boundary_times = self.da_boundary.time
-                boundary_time_step = get_time_step(boundary_times.values)
+                boundary_time_step = self._get_time_step(boundary_times.values)
                 boundary_time_min = boundary_times.min().values
                 boundary_time_max = boundary_times.max().values
 
@@ -296,6 +282,22 @@ class WeatherDataset(torch.utils.data.Dataset):
                 - self.num_future_forcing_steps
             )
 
+    def _get_time_step(self, times):
+        """Calculate the time step from the data
+
+        Parameters
+        ----------
+        times : xr.DataArray
+            The time dataarray to calculate the time step from.
+        """
+        time_diffs = np.diff(times)
+        if not np.all(time_diffs == time_diffs[0]):
+            raise ValueError(
+                "Inconsistent time steps in data. "
+                f"Found different time steps: {np.unique(time_diffs)}"
+            )
+        return time_diffs[0]
+
     def _slice_time(
         self,
         da_state,
@@ -368,7 +370,7 @@ class WeatherDataset(torch.utils.data.Dataset):
                 {"elapsed_forecast_duration": "time"}
             )
             # Asserting that the forecast time step is consistent
-            self.get_time_step(da_state_sliced.time)
+            self._get_time_step(da_state_sliced.time)
 
         else:
             # For analysis data we slice the time dimension directly. The offset
