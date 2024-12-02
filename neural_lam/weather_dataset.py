@@ -142,8 +142,6 @@ class WeatherDataset(torch.utils.data.Dataset):
         else:
             self.da_state = self.da_state
 
-
-
         # Check time step consistency in state data
         if self.datastore.is_forecast:
             state_times = self.da_state.analysis_time
