@@ -614,7 +614,7 @@ class NpyFilesDatastoreMEPS(BaseRegularGridDatastore):
     def get_num_data_vars(self, category: str) -> int:
         return len(self.get_vars_names(category=category))
 
-    def get_xy(self, category: str, stacked: bool) -> np.ndarray:
+    def get_xy(self, category: str, stacked: bool = True) -> np.ndarray:
         """Return the x, y coordinates of the dataset.
 
         Parameters

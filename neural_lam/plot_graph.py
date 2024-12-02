@@ -11,25 +11,20 @@ import torch_geometric as pyg
 from . import utils
 from .config import load_config_and_datastore
 
-MESH_HEIGHT = 0.1
-MESH_LEVEL_DIST = 0.2
-GRID_HEIGHT = 0
-
 
 def main():
     """Plot graph structure in 3D using plotly."""
     parser = ArgumentParser(description="Plot graph")
     parser.add_argument(
-        "--datastore_config_path",
+        "--config_path",
         type=str,
-        default="tests/datastore_examples/mdp/config.yaml",
-        help="Path for the datastore config",
+        help="Path to the configuration for neural-lam",
     )
     parser.add_argument(
-        "--graph",
+        "--name",
         type=str,
         default="multiscale",
-        help="Graph to plot (default: multiscale)",
+        help="Name of saved graph to plot (default: multiscale)",
     )
     parser.add_argument(
         "--save",
@@ -43,12 +38,15 @@ def main():
     )
 
     args = parser.parse_args()
-    _, datastore = load_config_and_datastore(
-        config_path=args.datastore_config_path
-    )
+
+    assert (
+        args.config_path is not None
+    ), "Specify your config with --config_path"
+
+    _, datastore = load_config_and_datastore(config_path=args.config_path)
 
     # Load graph data
-    graph_dir_path = os.path.join(datastore.root_path, "graph", args.graph)
+    graph_dir_path = os.path.join(datastore.root_path, "graphs", args.name)
     hierarchical, graph_ldict = utils.load_graph(graph_dir_path=graph_dir_path)
     (g2m_edge_index, m2g_edge_index, m2m_edge_index,) = (
         graph_ldict["g2m_edge_index"],
@@ -63,11 +61,17 @@ def main():
 
     # Extract values needed, turn to numpy
     grid_pos = utils.get_reordered_grid_pos(datastore).numpy()
-    # Add in z-dimension
-    z_grid = GRID_HEIGHT * np.ones((grid_pos.shape[0],))
+    grid_scale = np.ptp(grid_pos)
+
+    # Add in z-dimension for grid
+    z_grid = np.zeros((grid_pos.shape[0],))  # Grid sits at z=0
     grid_pos = np.concatenate(
         (grid_pos, np.expand_dims(z_grid, axis=1)), axis=1
     )
+
+    # Compute z-coordinate height of mesh nodes
+    mesh_base_height = 0.05 * grid_scale
+    mesh_level_height_diff = 0.1 * grid_scale
 
     # List of edges to plot, (edge_index, from_pos, to_pos, color,
     # line_width, label)
@@ -79,8 +83,8 @@ def main():
             np.concatenate(
                 (
                     level_static_features.numpy(),
-                    MESH_HEIGHT
-                    + MESH_LEVEL_DIST
+                    mesh_base_height
+                    + mesh_level_height_diff
                     * height_level
                     * np.ones((level_static_features.shape[0], 1)),
                 ),
@@ -170,7 +174,8 @@ def main():
         mesh_pos = mesh_static_features.numpy()
 
         mesh_degrees = pyg.utils.degree(m2m_edge_index[1]).numpy()
-        z_mesh = MESH_HEIGHT + 0.01 * mesh_degrees
+        # 1% higher per neighbor
+        z_mesh = (1 + 0.01 * mesh_degrees) * mesh_base_height
         mesh_node_size = mesh_degrees / 2
 
         mesh_pos = np.concatenate(

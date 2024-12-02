@@ -19,7 +19,7 @@ class BaseGraphModel(ARModel):
         super().__init__(args, config=config, datastore=datastore)
 
         # Load graph with static features
-        graph_dir_path = datastore.root_path / "graph" / args.graph
+        graph_dir_path = datastore.root_path / "graphs" / args.graph
         self.hierarchical, graph_ldict = utils.load_graph(
             graph_dir_path=graph_dir_path
         )

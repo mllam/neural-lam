@@ -7,7 +7,8 @@ import numpy as np
 import weather_model_graphs as wmg
 
 # Local
-from . import config, utils
+from . import utils
+from .config import load_config_and_datastore
 
 WMG_ARCHETYPES = {
     "keisler": wmg.create.archetype.create_keisler_graph,
@@ -24,10 +25,14 @@ def main(input_args=None):
 
     # Inputs and outputs
     parser.add_argument(
-        "--data_config",
+        "--config_path",
         type=str,
-        default="neural_lam/data_config.yaml",
-        help="Path to data config file",
+        help="Path to the configuration for neural-lam",
+    )
+    parser.add_argument(
+        "--name",
+        type=str,
+        help="Name to save graph as (default: multiscale)",
     )
     parser.add_argument(
         "--output_dir",
@@ -65,21 +70,28 @@ def main(input_args=None):
     )
     args = parser.parse_args(input_args)
 
-    # Load grid positions
-    config_loader = config.Config.from_file(args.data_config)
+    assert (
+        args.config_path is not None
+    ), "Specify your config with --config_path"
+    assert (
+        args.name is not None
+    ), "Specify the name to save graph as with --name"
 
+    _, datastore = load_config_and_datastore(config_path=args.config_path)
+
+    # Load grid positions
     # TODO Do not get normalised positions
-    coords = utils.get_reordered_grid_pos(config_loader.dataset.name).numpy()
+    coords = utils.get_reordered_grid_pos(datastore).numpy()
     # (num_nodes_full, 2)
 
     # Construct mask
-    static_data = utils.load_static_data(config_loader.dataset.name)
+    num_full_grid = coords.shape[0]
+    num_boundary = datastore.boundary_mask.to_numpy().sum()
+    num_interior = num_full_grid - num_boundary
     decode_mask = np.concatenate(
         (
-            np.ones(static_data["grid_static_features"].shape[0], dtype=bool),
-            np.zeros(
-                static_data["boundary_static_features"].shape[0], dtype=bool
-            ),
+            np.ones(num_interior, dtype=bool),
+            np.zeros(num_boundary, dtype=bool),
         ),
         axis=0,
     )
@@ -112,7 +124,8 @@ def main(input_args=None):
         print(f"{name}: {subgraph}")
 
     # Save graph
-    os.makedirs(args.output_dir, exist_ok=True)
+    graph_dir_path = os.path.join(datastore.root_path, "graphs", args.name)
+    os.makedirs(graph_dir_path, exist_ok=True)
     for component, graph in graph_comp.items():
         # This seems like a bit of a hack, maybe better if saving in wmg
         # was made consistent with nl
@@ -130,7 +143,7 @@ def main(input_args=None):
                             name="m2m",
                             list_from_attribute="level",
                             edge_features=["len", "vdiff"],
-                            output_directory=args.output_dir,
+                            output_directory=graph_dir_path,
                         )
                     else:
                         # up and down directions
@@ -139,7 +152,7 @@ def main(input_args=None):
                             name=f"mesh_{direction}",
                             list_from_attribute="levels",
                             edge_features=["len", "vdiff"],
-                            output_directory=args.output_dir,
+                            output_directory=graph_dir_path,
                         )
             else:
                 wmg.save.to_pyg(
@@ -147,14 +160,14 @@ def main(input_args=None):
                     name=component,
                     list_from_attribute="dummy",  # Note: Needed to output list
                     edge_features=["len", "vdiff"],
-                    output_directory=args.output_dir,
+                    output_directory=graph_dir_path,
                 )
         else:
             wmg.save.to_pyg(
                 graph=graph,
                 name=component,
                 edge_features=["len", "vdiff"],
-                output_directory=args.output_dir,
+                output_directory=graph_dir_path,
             )
 
 

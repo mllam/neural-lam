@@ -394,7 +394,7 @@ class MDPDatastore(BaseRegularGridDatastore):
         assert da_x.ndim == da_y.ndim == 1
         return CartesianGridShape(x=da_x.size, y=da_y.size)
 
-    def get_xy(self, category: str, stacked: bool) -> ndarray:
+    def get_xy(self, category: str, stacked: bool = True) -> ndarray:
         """Return the x, y coordinates of the dataset.
 
         Parameters
