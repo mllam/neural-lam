@@ -40,7 +40,9 @@ class SinglePointDummyDatastore(BaseDatastore):
         if self.is_forecast:
             raise NotImplementedError()
         else:
-            da = xr.DataArray(values, dims=["time"], coords={"time": self._time_values})
+            da = xr.DataArray(
+                values, dims=["time"], coords={"time": self._time_values}
+            )
             # add `{category}_feature` and `grid_index` dimensions
 
         da = da.expand_dims("grid_index")
@@ -77,7 +79,9 @@ def test_time_slicing_analysis(
     ar_steps, num_past_forcing_steps, num_future_forcing_steps
 ):
     # state and forcing variables have only one dimension, `time`
-    time_values = np.datetime64("2020-01-01") + np.arange(len(ANALYSIS_STATE_VALUES))
+    time_values = np.datetime64("2020-01-01") + np.arange(
+        len(ANALYSIS_STATE_VALUES)
+    )
     assert len(ANALYSIS_STATE_VALUES) == len(FORCING_VALUES) == len(time_values)
 
     datastore = SinglePointDummyDatastore(
@@ -98,7 +102,9 @@ def test_time_slicing_analysis(
 
     sample = dataset[0]
 
-    init_states, target_states, forcing, _, _ = [tensor.numpy() for tensor in sample]
+    init_states, target_states, forcing, _, _ = [
+        tensor.numpy() for tensor in sample
+    ]
 
     expected_init_states = [0, 1]
     if ar_steps == 3:

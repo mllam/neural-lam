@@ -5,6 +5,7 @@ from pathlib import Path
 import pytest
 import pytorch_lightning as pl
 import torch
+
 import wandb
 
 # First-party
@@ -22,14 +23,10 @@ from tests.conftest import (
 
 
 @pytest.mark.parametrize("datastore_name", DATASTORES.keys())
-@pytest.mark.parametrize(
-    "datastore_boundary_name", DATASTORES_BOUNDARY_EXAMPLES.keys()
-)
+@pytest.mark.parametrize("datastore_boundary_name", DATASTORES_BOUNDARY_EXAMPLES.keys())
 def test_training(datastore_name, datastore_boundary_name):
     datastore = init_datastore_example(datastore_name)
-    datastore_boundary = init_datastore_boundary_example(
-        datastore_boundary_name
-    )
+    datastore_boundary = init_datastore_boundary_example(datastore_boundary_name)
 
     if not isinstance(datastore, BaseRegularGridDatastore):
         pytest.skip(
@@ -38,15 +35,13 @@ def test_training(datastore_name, datastore_boundary_name):
         )
     if not isinstance(datastore_boundary, BaseRegularGridDatastore):
         pytest.skip(
-            f"Skipping test for {datastore_boundary_name} as it is not a regular "
-            "grid datastore."
+            f"Skipping test for {datastore_boundary_name} as it is not a "
+            "regular grid datastore."
         )
 
     if torch.cuda.is_available():
         device_name = "cuda"
-        torch.set_float32_matmul_precision(
-            "high"
-        )  # Allows using Tensor Cores on A100s
+        torch.set_float32_matmul_precision("high")  # Allows using Tensor Cores on A100s
     else:
         device_name = "cpu"
 
