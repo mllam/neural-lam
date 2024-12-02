@@ -107,7 +107,9 @@ class ARModel(pl.LightningModule):
         self.grid_dim = (
             2 * self.grid_output_dim
             + grid_static_dim
-            + num_forcing_vars
+            # Factor 2 because of temporal embedding or windowed features
+            + 2
+            * num_forcing_vars
             * (num_past_forcing_steps + num_future_forcing_steps + 1)
         )
 
@@ -200,19 +202,20 @@ class ARModel(pl.LightningModule):
 
     def common_step(self, batch):
         """
-        Predict on single batch batch consists of: init_states: (B, 2,
-        num_grid_nodes, d_features) target_states: (B, pred_steps,
-        num_grid_nodes, d_features) forcing_features: (B, pred_steps,
-        num_grid_nodes, d_forcing),
-            where index 0 corresponds to index 1 of init_states
+        Predict on single batch batch consists of:
+        init_states: (B, 2,num_grid_nodes, d_features)
+        target_states: (B, pred_steps,num_grid_nodes, d_features)
+        forcing_features: (B, pred_steps,num_grid_nodes, d_forcing)
+        boundary_features: (B, pred_steps,num_grid_nodes, d_boundaries)
+        batch_times: (B, pred_steps)
         """
-        (init_states, target_states, forcing_features, batch_times) = batch
+        (init_states, target_states, forcing_features, _, batch_times) = batch
 
         prediction, pred_std = self.unroll_prediction(
             init_states, forcing_features, target_states
-        )  # (B, pred_steps, num_grid_nodes, d_f)
-        # prediction: (B, pred_steps, num_grid_nodes, d_f) pred_std: (B,
-        # pred_steps, num_grid_nodes, d_f) or (d_f,)
+        )
+        # prediction: (B, pred_steps, num_grid_nodes, d_f)
+        # pred_std: (B, pred_steps, num_grid_nodes, d_f) or (d_f,)
 
         return prediction, target_states, pred_std, batch_times
 
