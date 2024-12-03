@@ -275,7 +275,12 @@ def main(input_args=None):
 
     # Load model parameters Use new args for model
     ModelClass = MODELS[args.model]
-    model = ModelClass(args, config=config, datastore=datastore)
+    model = ModelClass(
+        args,
+        config=config,
+        datastore=datastore,
+        datastore_boundary=datastore_boundary,
+    )
 
     if args.eval:
         prefix = f"eval-{args.eval}-"
