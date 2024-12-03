@@ -7,7 +7,7 @@ output:
   coord_ranges:
     time:
       start: 1990-09-01T00:00
-      end: 2022-09-30T00:00 
+      end: 2022-09-30T00:00
       step: PT6H
   chunking:
     time: 1
@@ -16,16 +16,16 @@ output:
     splits:
       train:
         start: 1990-09-01T00:00
-        end: 2022-09-30T00:00 
+        end: 2022-09-30T00:00
         compute_statistics:
           ops: [mean, std, diff_mean, diff_std]
           dims: [grid_index, time]
       val:
         start: 1990-09-01T00:00
-        end: 2022-09-30T00:00 
+        end: 2022-09-30T00:00
       test:
         start: 1990-09-01T00:00
-        end: 2022-09-30T00:00 
+        end: 2022-09-30T00:00
 
 inputs:
   era_height_levels:
