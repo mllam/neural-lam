@@ -47,18 +47,22 @@ class BaseGraphModel(ARModel):
         self.grid_embedder = utils.make_mlp(
             [self.grid_dim] + self.mlp_blueprint_end
         )
-        # Optional separate embedder for boundary nodes
-        if args.shared_grid_embedder:
-            assert self.grid_dim == self.boundary_dim, (
-                "Grid and boundary input dimension must be the same when using "
-                f"the same embedder, got grid_dim={self.grid_dim}, "
-                f"boundary_dim={self.boundary_dim}"
-            )
-            self.boundary_embedder = self.grid_embedder
-        else:
-            self.boundary_embedder = utils.make_mlp(
-                [self.boundary_dim] + self.mlp_blueprint_end
-            )
+
+        if self.boundary_forced:
+            # Define embedder for boundary nodes
+            # Optional separate embedder for boundary nodes
+            if args.shared_grid_embedder:
+                assert self.grid_dim == self.boundary_dim, (
+                    "Grid and boundary input dimension must "
+                    "be the same when using "
+                    f"the same embedder, got grid_dim={self.grid_dim}, "
+                    f"boundary_dim={self.boundary_dim}"
+                )
+                self.boundary_embedder = self.grid_embedder
+            else:
+                self.boundary_embedder = utils.make_mlp(
+                    [self.boundary_dim] + self.mlp_blueprint_end
+                )
 
         self.g2m_embedder = utils.make_mlp([g2m_dim] + self.mlp_blueprint_end)
         self.m2g_embedder = utils.make_mlp([m2g_dim] + self.mlp_blueprint_end)
@@ -136,27 +140,37 @@ class BaseGraphModel(ARModel):
             ),
             dim=-1,
         )
-        # Create full boundary node features of shape
-        # (B, num_boundary_nodes, boundary_dim)
-        boundary_features = torch.cat(
-            (
-                boundary_forcing,
-                self.expand_to_batch(self.boundary_static_features, batch_size),
-            ),
-            dim=-1,
-        )
+
+        if self.boundary_forced:
+            # Create full boundary node features of shape
+            # (B, num_boundary_nodes, boundary_dim)
+            boundary_features = torch.cat(
+                (
+                    boundary_forcing,
+                    self.expand_to_batch(
+                        self.boundary_static_features, batch_size
+                    ),
+                ),
+                dim=-1,
+            )
+
+            # Embed boundary features
+            boundary_emb = self.boundary_embedder(boundary_features)
+            # (B, num_boundary_nodes, d_h)
 
         # Embed all features
         grid_emb = self.grid_embedder(grid_features)  # (B, num_grid_nodes, d_h)
-        boundary_emb = self.boundary_embedder(boundary_features)
-        # (B, num_boundary_nodes, d_h)
         g2m_emb = self.g2m_embedder(self.g2m_features)  # (M_g2m, d_h)
         m2g_emb = self.m2g_embedder(self.m2g_features)  # (M_m2g, d_h)
         mesh_emb = self.embedd_mesh_nodes()
 
-        # Merge interior and boundary emb into input embedding
-        # We enforce ordering (interior, boundary) of nodes
-        input_emb = torch.cat((grid_emb, boundary_emb), dim=1)
+        if self.boundary_forced:
+            # Merge interior and boundary emb into input embedding
+            # We enforce ordering (interior, boundary) of nodes
+            input_emb = torch.cat((grid_emb, boundary_emb), dim=1)
+        else:
+            # Only maps from interior to mesh
+            input_emb = grid_emb
 
         # Map from grid to mesh
         mesh_emb_expanded = self.expand_to_batch(

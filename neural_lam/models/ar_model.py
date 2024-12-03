@@ -48,6 +48,10 @@ class ARModel(pl.LightningModule):
         num_past_forcing_steps = args.num_past_forcing_steps
         num_future_forcing_steps = args.num_future_forcing_steps
 
+        # TODO: Set based on existing of boundary forcing datastore
+        # TODO: Adjust what is stored here based on self.boundary_forced
+        self.boundary_forced = False
+
         # Set up boundary mask
         boundary_mask = torch.tensor(
             da_boundary_mask.values, dtype=torch.float32
@@ -125,12 +129,6 @@ class ARModel(pl.LightningModule):
             self.num_grid_nodes,
             grid_static_dim,
         ) = self.grid_static_features.shape
-
-        (
-            self.num_boundary_nodes,
-            boundary_static_dim,  # TODO Will need for computation below
-        ) = self.boundary_static_features.shape
-        self.num_input_nodes = self.num_grid_nodes + self.num_boundary_nodes
         self.grid_dim = (
             2 * self.grid_output_dim
             + grid_static_dim
@@ -139,7 +137,16 @@ class ARModel(pl.LightningModule):
             * num_forcing_vars
             * (num_past_forcing_steps + num_future_forcing_steps + 1)
         )
-        self.boundary_dim = self.grid_dim  # TODO Compute separately
+        if self.boundary_forced:
+            self.boundary_dim = self.grid_dim  # TODO Compute separately
+            (
+                self.num_boundary_nodes,
+                boundary_static_dim,  # TODO Will need for computation below
+            ) = self.boundary_static_features.shape
+            self.num_input_nodes = self.num_grid_nodes + self.num_boundary_nodes
+        else:
+            # Only interior grid nodes
+            self.num_input_nodes = self.num_grid_nodes
 
         # Instantiate loss function
         self.loss = metrics.get_metric(args.loss)
@@ -241,7 +248,11 @@ class ARModel(pl.LightningModule):
 
         for i in range(pred_steps):
             forcing_step = forcing[:, i]
-            boundary_forcing_step = boundary_forcing[:, i]
+
+            if self.boundary_forced:
+                boundary_forcing_step = boundary_forcing[:, i]
+            else:
+                boundary_forcing_step = None
 
             pred_state, pred_std = self.predict_step(
                 prev_state, prev_prev_state, forcing_step, boundary_forcing_step
