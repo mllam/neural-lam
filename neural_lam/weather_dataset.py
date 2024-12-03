@@ -287,6 +287,11 @@ class WeatherDataset(torch.utils.data.Dataset):
         ----------
         times : xr.DataArray
             The time dataarray to calculate the time step from.
+
+        Returns
+        -------
+        time_step : float
+            The time step in the the format of the times dataarray.
         """
         time_diffs = np.diff(times)
         if not np.all(time_diffs == time_diffs[0]):
@@ -368,6 +373,7 @@ class WeatherDataset(torch.utils.data.Dataset):
                 {"elapsed_forecast_duration": "time"}
             )
             # Asserting that the forecast time step is consistent
+            # In init this was only done for the analysis_time
             self._get_time_step(da_state_sliced.time)
 
         else:
@@ -382,7 +388,8 @@ class WeatherDataset(torch.utils.data.Dataset):
             return da_state_sliced, None
 
         # Get the state times and its temporal resolution for matching with
-        # forcing data
+        # forcing data. No need to self._get_time_step as we have already
+        # checked the time step consistency in the state data.
         state_times = da_state_sliced["time"]
         state_time_step = state_times.values[1] - state_times.values[0]
 
@@ -440,12 +447,14 @@ class WeatherDataset(torch.utils.data.Dataset):
                 da_forcing_boundary_matched.time.values[1]
                 - da_forcing_boundary_matched.time.values[0]
             )
+            # Since all time, grid_index and forcing_features share the same
+            # temporal_embedding we can just use the first one
             da_forcing_boundary_matched["window"] = da_forcing_boundary_matched[
                 "window"
             ] * (forcing_time_step / state_time_step)
             time_diff_steps = da_forcing_boundary_matched.isel(
-                grid_index=0, forcing_feature=0
-            ).data
+                grid_index=0, forcing_feature=0, time=0
+            ).window.values
 
         else:
             # For analysis data, we slice the time dimension directly. The
@@ -462,15 +471,16 @@ class WeatherDataset(torch.utils.data.Dataset):
             ) / state_time_step
             idx_min = np.abs(time_deltas).argmin(axis=0)
 
-            time_diff_steps = np.stack(
-                [
-                    time_deltas[
-                        idx_i - num_past_steps : idx_i + num_future_steps + 1,
-                        init_steps + step_i,
-                    ]
-                    for (step_i, idx_i) in enumerate(idx_min[init_steps:])
-                ],
-            )
+            # Get the time differences for windowed time steps - they are
+            # used as temporal embeddings and concatenated to the forcing
+            # features later. All features share the same temporal embedding
+            time_diff_steps = time_deltas[
+                idx_min[init_steps]
+                - num_past_steps : idx_min[init_steps]
+                + num_future_steps
+                + 1,
+                init_steps,
+            ]
 
             # Create window dimension for forcing data to stack later
             window_size = num_past_steps + num_future_steps + 1
@@ -484,7 +494,7 @@ class WeatherDataset(torch.utils.data.Dataset):
         # Add time difference as a new coordinate to concatenate to the
         # forcing features later as temporal embedding
         da_forcing_boundary_matched["time_diff_steps"] = (
-            ("time", "window"),
+            ("window"),
             time_diff_steps,
         )
 
@@ -519,6 +529,8 @@ class WeatherDataset(torch.utils.data.Dataset):
             da_windowed = da_windowed.stack(
                 {stacked_dim: ("forcing_feature", "window")}
             )
+            # All data variables share the same temporal embedding, hence
+            # only the first one is used
             da_windowed = xr.concat(
                 [da_windowed, da_windowed.time_diff_steps],
                 dim="forcing_feature_windowed",

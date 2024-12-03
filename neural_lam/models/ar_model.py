@@ -108,9 +108,8 @@ class ARModel(pl.LightningModule):
         self.grid_dim = (
             2 * self.grid_output_dim
             + grid_static_dim
-            # Factor 2 because of temporal embedding or windowed features
-            + 2
-            * num_forcing_vars
+            # Temporal Embedding counts as one additional forcing_feature
+            + (num_forcing_vars + 1)
             * (num_past_forcing_steps + num_future_forcing_steps + 1)
         )
 
@@ -216,9 +215,9 @@ class ARModel(pl.LightningModule):
     ):
         """
         Step state one step ahead using prediction model, X_{t-1}, X_t -> X_t+1
-        prev_state: (B, num_grid_nodes, feature_dim), X_t prev_prev_state: (B,
-        num_grid_nodes, feature_dim), X_{t-1} forcing: (B, num_grid_nodes,
-        forcing_dim)
+        prev_state: (B, num_grid_nodes, feature_dim), X_t
+        prev_prev_state: (B, num_grid_nodes, feature_dim), X_{t-1}
+        forcing: (B, num_grid_nodes, forcing_dim)
         """
         raise NotImplementedError("No prediction step implemented")
 
