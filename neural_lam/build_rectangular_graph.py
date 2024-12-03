@@ -77,24 +77,28 @@ def main(input_args=None):
         args.graph_name is not None
     ), "Specify the name to save graph as with --graph_name"
 
-    _, datastore = load_config_and_datastore(config_path=args.config_path)
+    _, datastore, datastore_boundary = load_config_and_datastore(
+        config_path=args.config_path
+    )
 
     # Load grid positions
-    # TODO Do not get normalised positions
-    coords = utils.get_reordered_grid_pos(datastore).numpy()
+    coords = utils.stack_all_grid_coords(datastore, datastore_boundary)
     # (num_nodes_full, 2)
 
-    # Construct mask
-    num_full_grid = coords.shape[0]
-    num_boundary = datastore.boundary_mask.to_numpy().sum()
-    num_interior = num_full_grid - num_boundary
-    decode_mask = np.concatenate(
-        (
-            np.ones(num_interior, dtype=bool),
-            np.zeros(num_boundary, dtype=bool),
-        ),
-        axis=0,
-    )
+    if datastore_boundary is None:
+        # No mask
+        decode_mask = None
+    else:
+        # Construct mask to decode only to interior
+        num_interior = datastore.num_grid_points
+        num_boundary = datastore_boundary.num_grid_points
+        decode_mask = np.concatenate(
+            (
+                np.ones(num_interior, dtype=bool),
+                np.zeros(num_boundary, dtype=bool),
+            ),
+            axis=0,
+        )
 
     # Build graph
     assert (

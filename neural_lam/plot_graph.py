@@ -43,7 +43,9 @@ def main():
         args.config_path is not None
     ), "Specify your config with --config_path"
 
-    _, datastore = load_config_and_datastore(config_path=args.config_path)
+    _, datastore, datastore_boundary = load_config_and_datastore(
+        config_path=args.config_path
+    )
 
     # Load graph data
     graph_dir_path = os.path.join(
@@ -62,7 +64,8 @@ def main():
     mesh_static_features = graph_ldict["mesh_static_features"]
 
     # Extract values needed, turn to numpy
-    grid_pos = utils.get_reordered_grid_pos(datastore).numpy()
+    grid_pos = utils.stack_all_grid_coords(datastore, datastore_boundary)
+    # (num_nodes_full, 2)
     grid_scale = np.ptp(grid_pos)
 
     # Add in z-dimension for grid

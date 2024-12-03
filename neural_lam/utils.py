@@ -3,6 +3,7 @@ import os
 import shutil
 
 # Third-party
+import numpy as np
 import torch
 from torch import nn
 from tueplots import bundles, figsizes
@@ -291,22 +292,27 @@ def init_wandb_metrics(wandb_logger, val_steps):
         experiment.define_metric(f"val_loss_unroll{step}", summary="min")
 
 
-def get_reordered_grid_pos(datastore):
+def stack_all_grid_coords(datastore, datastore_boundary=None):
     """
-    Interior nodes first, then boundary
+    Stack the coordinates of all grid nodes in the correct ordering
+
+    Parameters
+    ----------
+    datastore : BaseDatastore
+        The datastore containing data for the interior region of the grid
+    datastore_boundary : BaseDatastore or None
+        (Optional) The datastore containing data for boundary forcing
+
+    Returns
+    -------
+    stacked_coords : np.ndarray
+        Array of all coordinates, shaped (num_total_grid_nodes, 2)
     """
-    xy_np = datastore.get_xy("state")  # np, (num_grid, 2)
-    xy_torch = torch.tensor(xy_np, dtype=torch.float32)
+    grid_xy = datastore.get_xy(category="state")
 
-    da_boundary_mask = datastore.boundary_mask
-    boundary_mask = torch.tensor(da_boundary_mask.values, dtype=torch.bool)
-    interior_mask = torch.logical_not(boundary_mask)
+    if datastore_boundary is None:
+        return grid_xy
 
-    return torch.cat(
-        (
-            xy_torch[interior_mask],
-            xy_torch[boundary_mask],
-        ),
-        dim=0,
-    )
-    # (num_total_grid_nodes, 2)
+    # Append boundary forcing positions last
+    boundary_xy = datastore_boundary.get_xy(category="forcing")
+    return np.concatenate((grid_xy, boundary_xy), axis=0)
