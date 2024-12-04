@@ -1,3 +1,6 @@
+# Standard library
+from typing import Union
+
 # Third-party
 from torch import nn
 
@@ -14,8 +17,19 @@ class BaseHiGraphModel(BaseGraphModel):
     Base class for hierarchical graph models.
     """
 
-    def __init__(self, args, config: NeuralLAMConfig, datastore: BaseDatastore):
-        super().__init__(args, config=config, datastore=datastore)
+    def __init__(
+        self,
+        args,
+        config: NeuralLAMConfig,
+        datastore: BaseDatastore,
+        datastore_boundary: Union[BaseDatastore, None],
+    ):
+        super().__init__(
+            args,
+            config=config,
+            datastore=datastore,
+            datastore_boundary=datastore_boundary,
+        )
 
         # Track number of nodes, edges on each level
         # Flatten lists for efficient embedding
