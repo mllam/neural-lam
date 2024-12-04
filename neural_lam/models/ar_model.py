@@ -167,10 +167,12 @@ class ARModel(pl.LightningModule):
         ----------
         tensor : torch.Tensor
             The tensor to convert to a `xr.DataArray` with dimensions [time,
-            grid_index, feature]
+            grid_index, feature]. The tensor will be copied to the CPU if it is
+            not already there.
         time : Union[int,List[int]]
             The time index or indices for the data, given as integers or a list
-            of integers representing epoch time in nanoseconds.
+            of integers representing epoch time in nanoseconds. The ints will be
+            copied to the CPU memory if they are not already there.
         split : str
             The split of the data, either 'train', 'val', or 'test'
         category : str
@@ -182,7 +184,7 @@ class ARModel(pl.LightningModule):
         weather_dataset = WeatherDataset(datastore=self._datastore, split=split)
         time = np.array(time.cpu(), dtype="datetime64[ns]")
         da = weather_dataset.create_dataarray_from_tensor(
-            tensor=tensor, time=time, category=category
+            tensor=tensor.cpu().numpy(), time=time, category=category
         )
         return da
 

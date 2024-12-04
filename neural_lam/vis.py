@@ -2,6 +2,7 @@
 import matplotlib
 import matplotlib.pyplot as plt
 import numpy as np
+import xarray as xr
 
 # Local
 from . import utils
@@ -66,8 +67,8 @@ def plot_error_map(errors, datastore: BaseRegularGridDatastore, title=None):
 @matplotlib.rc_context(utils.fractional_plot_bundle(1))
 def plot_prediction(
     datastore: BaseRegularGridDatastore,
-    da_prediction=None,
-    da_target=None,
+    da_prediction: xr.DataArray = None,
+    da_target: xr.DataArray = None,
     title=None,
     vrange=None,
 ):

@@ -529,7 +529,8 @@ class WeatherDataset(torch.utils.data.Dataset):
         tensor : torch.Tensor
             The tensor to construct the DataArray from, this assumed to have
             the same dimension ordering as returned by the __getitem__ method
-            (i.e. time, grid_index, {category}_feature).
+            (i.e. time, grid_index, {category}_feature). The tensor will be
+            copied to the CPU before constructing the DataArray.
         time : datetime.datetime or list[datetime.datetime]
             The time or times of the tensor.
         category : str
