@@ -108,7 +108,7 @@ class BaseGraphModel(ARModel):
             )
 
         # Constant parameters for clamping
-        sharpness_sigmoid = softplus_sharpness = 1
+        sigmoid_sharpness = softplus_sharpness = 1
         sigmoid_center = softplus_center = 0
 
         normalize_clamping_lim = (
@@ -148,87 +148,122 @@ class BaseGraphModel(ARModel):
                 )
 
         # Convert to tensors
-        self.register_buffer(
-            "sigmoid_lower_lims",
-            torch.tensor(sigmoid_lower_lims),
-            persistent=False,
-        )
-        self.register_buffer(
-            "sigmoid_upper_lims",
-            torch.tensor(sigmoid_upper_lims),
-            persistent=False,
-        )
-        self.register_buffer(
-            "softplus_lower_lims",
-            torch.tensor(softplus_lower_lims),
-            persistent=False,
-        )
-        self.register_buffer(
-            "softplus_upper_lims",
-            torch.tensor(softplus_upper_lims),
-            persistent=False,
-        )
+        # self.register_buffer(
+        #     "sigmoid_lower_lims",
+        #     torch.tensor(sigmoid_lower_lims),
+        #     persistent=False,
+        # )
+        # self.register_buffer(
+        #     "sigmoid_upper_lims",
+        #     torch.tensor(sigmoid_upper_lims),
+        #     persistent=False,
+        # )
+        # self.register_buffer(
+        #     "softplus_lower_lims",
+        #     torch.tensor(softplus_lower_lims),
+        #     persistent=False,
+        # )
+        # self.register_buffer(
+        #     "softplus_upper_lims",
+        #     torch.tensor(softplus_upper_lims),
+        #     persistent=False,
+        # )
+        sigmoid_lower_lims = torch.tensor(sigmoid_lower_lims)
+        sigmoid_upper_lims = torch.tensor(sigmoid_upper_lims)
+        softplus_lower_lims = torch.tensor(softplus_lower_lims)
+        softplus_upper_lims = torch.tensor(softplus_upper_lims)
 
         self.clamp_lower_upper_idx = torch.tensor(sigmoid_lower_upper_idx)
         self.clamp_lower_idx = torch.tensor(softplus_lower_idx)
         self.clamp_upper_idx = torch.tensor(softplus_upper_idx)
 
         # Define clamping functions
-        self.clamp_lower_upper = lambda delta, lower, upper: (
-            lower
-            + (upper - lower)
-            * torch.sigmoid(sharpness_sigmoid * (delta - sigmoid_center))
+        self.clamp_lower_upper = lambda x: (
+            sigmoid_lower_lims
+            + (sigmoid_upper_lims - sigmoid_lower_lims)
+            * torch.sigmoid(sigmoid_sharpness * (x - sigmoid_center))
         )
-        self.clamp_lower = lambda delta, lower: (
-            lower
+        self.clamp_lower = lambda x: (
+            softplus_lower_lims
             + torch.nn.functional.softplus(
-                delta - softplus_center, beta=softplus_sharpness
+                x - softplus_center, beta=softplus_sharpness
             )
         )
-        self.clamp_upper = lambda delta, upper: (
-            upper
+        self.clamp_upper = lambda x: (
+            softplus_upper_lims
             - torch.nn.functional.softplus(
-                delta - softplus_center, beta=softplus_sharpness
+                softplus_center - x, beta=softplus_sharpness
             )
+        )
+
+        # Define inverse clamping functions
+        def inverse_softplus(x, beta=1, threshold=20):
+            # If x*beta is above threshold, returns linear function
+            # for numerical stability
+            under_lim = x * beta <= threshold
+            x[under_lim] = torch.log(torch.expm1(x[under_lim] * beta)) / beta
+            return x
+
+        def inverse_sigmoid(x):
+            return torch.log(x / (1 - x))
+
+        self.inverse_clamp_lower_upper = lambda x: (
+            sigmoid_center
+            + inverse_sigmoid(
+                (x - sigmoid_lower_lims)
+                / (sigmoid_upper_lims - sigmoid_lower_lims)
+            )
+            / sigmoid_sharpness
+        )
+        self.inverse_clamp_lower = lambda x: (
+            inverse_softplus(x - softplus_lower_lims, beta=softplus_sharpness)
+            + softplus_center
+        )
+        self.inverse_clamp_upper = lambda x: (
+            -inverse_softplus(softplus_upper_lims - x, beta=softplus_sharpness)
+            + softplus_center
         )
 
     def clamp_prediction(self, state_delta, prev_state):
         """
         Clamp prediction to valid range supplied in config
+        Returns the clamped new state after adding delta to original state
 
         state_delta: (B, num_grid_nodes, feature_dim)
         prev_state: (B, num_grid_nodes, feature_dim)
         """
 
+        # Assign new state, but overwrite clamped values of each type later
+        new_state = prev_state + state_delta
+
         # Sigmoid/logistic clamps between ]a,b[
         if self.clamp_lower_upper_idx.numel() > 0:
             idx = self.clamp_lower_upper_idx
 
-            state_delta[:, :, idx] = self.clamp_lower_upper(
-                state_delta[:, :, idx],
-                self.sigmoid_lower_lims - prev_state[:, :, idx],
-                self.sigmoid_upper_lims - prev_state[:, :, idx],
+            new_state[:, :, idx] = self.clamp_lower_upper(
+                self.inverse_clamp_lower_upper(prev_state[:, :, idx])
+                + state_delta[:, :, idx]
             )
 
         # Softplus clamps between ]a,infty[
         if self.clamp_lower_idx.numel() > 0:
             idx = self.clamp_lower_idx
 
-            state_delta[:, :, idx] = self.clamp_lower(
-                state_delta[:, :, idx],
-                self.softplus_lower_lims - prev_state[:, :, idx],
+            new_state[:, :, idx] = self.clamp_lower(
+                self.inverse_clamp_lower(prev_state[:, :, idx])
+                + state_delta[:, :, idx]
             )
 
         # Softplus clamps between ]-infty,b[
         if self.clamp_upper_idx.numel() > 0:
             idx = self.clamp_upper_idx
 
-            state_delta[:, :, idx] = self.clamp_upper(
-                state_delta[:, :, idx],
-                self.softplus_upper_lims - prev_state[:, :, idx],
+            new_state[:, :, idx] = self.clamp_upper(
+                self.inverse_clamp_upper(prev_state[:, :, idx])
+                + state_delta[:, :, idx]
             )
 
-        return state_delta
+        return new_state
 
     def get_num_mesh(self):
         """
@@ -324,10 +359,7 @@ class BaseGraphModel(ARModel):
         # Rescale with one-step difference statistics
         rescaled_delta_mean = pred_delta_mean * self.diff_std + self.diff_mean
 
-        # Clamp values to valid range
-        delta_clamped = self.clamp_prediction(rescaled_delta_mean, prev_state)
-
-        # Residual connection for full state
-        new_state = prev_state + delta_clamped
+        # Clamp values to valid range (also add the delta to the previous state)
+        new_state = self.clamp_prediction(rescaled_delta_mean, prev_state)
 
         return new_state, pred_std
