@@ -97,11 +97,15 @@ class NeuralLAMConfig(dataclass_wizard.JSONWizard, dataclass_wizard.YAMLWizard):
     ----------
     datastore : DatastoreSelection
         The configuration for the datastore to use.
+    datastore_boundary : Union[DatastoreSelection, None]
+        The configuration for the boundary datastore to use, if any. If None,
+        no boundary datastore is used.
     training : TrainingConfig
         The configuration for training the model.
     """
 
     datastore: DatastoreSelection
+    datastore_boundary: Union[DatastoreSelection, None] = None
     training: TrainingConfig = dataclasses.field(default_factory=TrainingConfig)
 
     class _(dataclass_wizard.JSONWizard.Meta):
