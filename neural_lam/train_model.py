@@ -11,6 +11,7 @@ import mlflow
 import mlflow.pytorch
 import pytorch_lightning as pl
 import torch
+from mlflow.models import infer_signature
 from lightning_fabric.utilities import seed
 from loguru import logger
 
@@ -47,18 +48,41 @@ class CustomMLFlowLogger(pl.loggers.MLFlowLogger):
             key = f"{key}_{step}"
 
         # Need to save the image to a temporary file, then log that file
-        # mlflow.log_image, should do this automatically, but it doesn't work
+        # mlflow.log_image, should do this automatically, but is buggy
         temporary_image = f"{key}.png"
         images[0].savefig(temporary_image)
 
         img = Image.open(temporary_image)
         mlflow.log_image(img, f"{key}.png")
 
-    def log_model(self, model):
-        # Create model signature
-        # signature = infer_signature(train_dataset.numpy(),
-        # model(train_dataset).detach().numpy())
-        mlflow.pytorch.log_model(model, "model")
+    def log_model(self, data_module, model):
+        input_example = self.create_input_example(data_module)
+
+        with torch.no_grad():
+            model_output = model.common_step(input_example)[0] # expects batch, returns tuple (ar_model)
+
+        #TODO: Are we sure we can hardcode the input names?
+        signature = infer_signature(
+            {name: tensor.cpu().numpy() for name, tensor in zip(['init_states', 'target_states', 'forcing', 'target_times'], input_example)},
+            model_output.cpu().numpy()
+        )
+
+        mlflow.pytorch.log_model(
+            model,
+            "model",
+            input_example=input_example[0].cpu().numpy(),
+            signature=signature
+        )
+
+    def create_input_example(self, data_module):
+
+        if data_module.val_dataset is None:
+            data_module.setup(stage="fit")
+
+        data_loader = data_module.train_dataloader()
+        batch_sample = next(iter(data_loader))
+        return batch_sample
+
 
 
 def _setup_training_logger(config, datastore, args, run_name):
@@ -345,12 +369,12 @@ def main(input_args=None):
         max_epochs=args.epochs,
         deterministic=True,
         strategy="ddp",
-        # devices=3,
+        devices=4,
         # devices=[1,2],
         # devices=[0, 1, 2],
         # strategy="auto",
-        devices=1,  # For eval mode
-        num_nodes=1,  # For eval mode
+        #devices=1,  # For eval mode
+        #num_nodes=1,  # For eval mode
         accelerator=device_name,
         logger=training_logger,
         log_every_n_steps=1,
@@ -378,7 +402,7 @@ def main(input_args=None):
         # print("Logging sample data")
         # print(sample_data.train_dataset)
         # Log the model
-        training_logger.log_model(model)
+        training_logger.log_model(data_module, model)
 
 
 if __name__ == "__main__":
