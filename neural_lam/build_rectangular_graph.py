@@ -3,6 +3,7 @@ import argparse
 import os
 
 # Third-party
+import cartopy.crs as ccrs
 import numpy as np
 import weather_model_graphs as wmg
 
@@ -82,8 +83,11 @@ def main(input_args=None):
     )
 
     # Load grid positions
-    coords = utils.stack_all_grid_coords(datastore, datastore_boundary)
+    coords = utils.get_stacked_lat_lons(datastore, datastore_boundary)
     # (num_nodes_full, 2)
+    # Project using crs from datastore for graph building
+    coords_crs = ccrs.PlateCarree()
+    graph_crs = datastore.coords_projection
 
     if datastore_boundary is None:
         # No mask
@@ -110,6 +114,8 @@ def main(input_args=None):
         "coords": coords,
         "mesh_node_distance": args.mesh_node_distance,
         "decode_mask": decode_mask,
+        "graph_crs": graph_crs,
+        "coords_crs": coords_crs,
         "return_components": True,
     }
     if args.archetype != "keisler":

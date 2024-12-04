@@ -3,6 +3,7 @@ import os
 import shutil
 
 # Third-party
+import cartopy.crs as ccrs
 import numpy as np
 import torch
 from torch import nn
@@ -109,9 +110,8 @@ def load_graph(graph_dir_path, device="cpu"):
     m2g_edge_index = loads_file("m2g_edge_index.pt")  # (2, M_m2g)
 
     # Change first indices to 0
-    g2m_edge_index = zero_index_edge_index(g2m_edge_index)
-    # m2g has to be handled specially as not all mesh nodes might be indexed in
-    # m2g_edge_index
+    # m2g and g2m has to be handled specially as not all mesh nodes
+    # might be indexed
     m2g_min_indices = m2g_edge_index.min(dim=1, keepdim=True)[0]
     if m2g_min_indices[0] < m2g_min_indices[1]:
         # mesh has the first indices
@@ -125,15 +125,30 @@ def load_graph(graph_dir_path, device="cpu"):
             ),
             dim=0,
         )
+        g2m_edge_index = torch.stack(
+            (
+                g2m_edge_index[0] - num_mesh_nodes,
+                g2m_edge_index[1],
+            ),
+            dim=0,
+        )
     else:
         # grid (interior) has the first indices
         # NOTE: Below works, but would be good with a better way to get this
         num_interior_nodes = m2g_edge_index[1].max() + 1
+        num_grid_nodes = g2m_edge_index[0].max() + 1
 
         m2g_edge_index = torch.stack(
             (
                 m2g_edge_index[0] - num_interior_nodes,
                 m2g_edge_index[1],
+            ),
+            dim=0,
+        )
+        g2m_edge_index = torch.stack(
+            (
+                g2m_edge_index[0],
+                g2m_edge_index[1] - num_grid_nodes,
             ),
             dim=0,
         )
@@ -292,9 +307,9 @@ def init_wandb_metrics(wandb_logger, val_steps):
         experiment.define_metric(f"val_loss_unroll{step}", summary="min")
 
 
-def stack_all_grid_coords(datastore, datastore_boundary=None):
+def get_stacked_lat_lons(datastore, datastore_boundary=None):
     """
-    Stack the coordinates of all grid nodes in the correct ordering
+    Stack the lat-lon coordinates of all grid nodes in the correct ordering
 
     Parameters
     ----------
@@ -308,11 +323,37 @@ def stack_all_grid_coords(datastore, datastore_boundary=None):
     stacked_coords : np.ndarray
         Array of all coordinates, shaped (num_total_grid_nodes, 2)
     """
-    grid_xy = datastore.get_xy(category="state")
+    grid_coords = datastore.get_lat_lon(category="state")
 
     if datastore_boundary is None:
-        return grid_xy
+        return grid_coords
 
     # Append boundary forcing positions last
-    boundary_xy = datastore_boundary.get_xy(category="forcing")
-    return np.concatenate((grid_xy, boundary_xy), axis=0)
+    boundary_coords = datastore_boundary.get_lat_lon(category="forcing")
+    return np.concatenate((grid_coords, boundary_coords), axis=0)
+
+
+def get_stacked_xy(datastore, datastore_boundary=None):
+    """
+    Stack the xy coordinates of all grid nodes in the correct ordering,
+    with xy coordinates being in the CRS of the datastore
+
+    Parameters
+    ----------
+    datastore : BaseDatastore
+        The datastore containing data for the interior region of the grid
+    datastore_boundary : BaseDatastore or None
+        (Optional) The datastore containing data for boundary forcing
+
+    Returns
+    -------
+    stacked_coords : np.ndarray
+        Array of all coordinates, shaped (num_total_grid_nodes, 2)
+    """
+    lat_lons = get_stacked_lat_lons(datastore, datastore_boundary)
+
+    # transform to datastore CRS
+    xyz = datastore.coords_projection.transform_points(
+        ccrs.PlateCarree(), lat_lons[:, 0], lat_lons[:, 1]
+    )
+    return xyz[:, :2]

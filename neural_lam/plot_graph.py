@@ -64,7 +64,8 @@ def main():
     mesh_static_features = graph_ldict["mesh_static_features"]
 
     # Extract values needed, turn to numpy
-    grid_pos = utils.stack_all_grid_coords(datastore, datastore_boundary)
+    # Now plotting is in the 2d CRS of datastore
+    grid_pos = utils.get_stacked_xy(datastore, datastore_boundary)
     # (num_nodes_full, 2)
     grid_scale = np.ptp(grid_pos)
 
