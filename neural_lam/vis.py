@@ -2,6 +2,7 @@
 import matplotlib
 import matplotlib.pyplot as plt
 import numpy as np
+import xarray as xr
 
 # Local
 from . import utils
@@ -65,9 +66,9 @@ def plot_error_map(errors, datastore: BaseRegularGridDatastore, title=None):
 
 @matplotlib.rc_context(utils.fractional_plot_bundle(1))
 def plot_prediction(
-    pred,
-    target,
     datastore: BaseRegularGridDatastore,
+    da_prediction: xr.DataArray = None,
+    da_target: xr.DataArray = None,
     title=None,
     vrange=None,
 ):
@@ -79,8 +80,8 @@ def plot_prediction(
     """
     # Get common scale for values
     if vrange is None:
-        vmin = min(vals.min().cpu().item() for vals in (pred, target))
-        vmax = max(vals.max().cpu().item() for vals in (pred, target))
+        vmin = min(da_prediction.min(), da_target.min())
+        vmax = max(da_prediction.max(), da_target.max())
     else:
         vmin, vmax = vrange
 
@@ -88,10 +89,8 @@ def plot_prediction(
 
     # Set up masking of border region
     da_mask = datastore.unstack_grid_coords(datastore.boundary_mask)
-    mask_reshaped = da_mask.values
-    pixel_alpha = (
-        mask_reshaped.clamp(0.7, 1).cpu().numpy()
-    )  # Faded border region
+    mask_values = np.invert(da_mask.values.astype(bool)).astype(float)
+    pixel_alpha = mask_values.clip(0.7, 1)  # Faded border region
 
     fig, axes = plt.subplots(
         1,
@@ -101,28 +100,23 @@ def plot_prediction(
     )
 
     # Plot pred and target
-    for ax, data in zip(axes, (target, pred)):
+    for ax, da in zip(axes, (da_target, da_prediction)):
         ax.coastlines()  # Add coastline outlines
-        data_grid = (
-            data.reshape(list(datastore.grid_shape_state.values.values()))
-            .cpu()
-            .numpy()
-        )
-        im = ax.imshow(
-            data_grid,
+        da.plot.imshow(
+            ax=ax,
             origin="lower",
+            x="x",
             extent=extent,
-            alpha=pixel_alpha,
+            alpha=pixel_alpha.T,
             vmin=vmin,
             vmax=vmax,
             cmap="plasma",
+            transform=datastore.coords_projection,
         )
 
     # Ticks and labels
     axes[0].set_title("Ground Truth", size=15)
     axes[1].set_title("Prediction", size=15)
-    cbar = fig.colorbar(im, aspect=30)
-    cbar.ax.tick_params(labelsize=10)
 
     if title:
         fig.suptitle(title, size=20)
@@ -150,9 +144,7 @@ def plot_spatial_error(
     # Set up masking of border region
     da_mask = datastore.unstack_grid_coords(datastore.boundary_mask)
     mask_reshaped = da_mask.values
-    pixel_alpha = (
-        mask_reshaped.clamp(0.7, 1).cpu().numpy()
-    )  # Faded border region
+    pixel_alpha = mask_reshaped.clip(0.7, 1)  # Faded border region
 
     fig, ax = plt.subplots(
         figsize=(5, 4.8),
@@ -161,8 +153,10 @@ def plot_spatial_error(
 
     ax.coastlines()  # Add coastline outlines
     error_grid = (
-        error.reshape(list(datastore.grid_shape_state.values.values()))
-        .cpu()
+        error.reshape(
+            [datastore.grid_shape_state.x, datastore.grid_shape_state.y]
+        )
+        .T.cpu()
         .numpy()
     )
 

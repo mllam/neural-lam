@@ -25,7 +25,7 @@ dependencies = [
     "torch>=2.3.0",
     "torch-geometric==2.3.1",
     "parse>=1.20.2",
-    "dataclass-wizard>=0.22.3",
+    "dataclass-wizard<0.31.0",
     "mllam-data-prep>=0.5.0",
 ]
 requires-python = ">=3.9"
