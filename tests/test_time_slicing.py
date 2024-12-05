@@ -79,8 +79,8 @@ class SinglePointDummyDatastore(BaseDatastore):
                 da = xr.DataArray(
                     values, dims=["time"], coords={"time": self._time_values}
                 )
-                # add `{category}_feature` and `grid_index` dimensions
 
+            # add `{category}_feature` and `grid_index` dimensions
             da = da.expand_dims("grid_index")
             da = da.expand_dims(f"{category}_feature")
 
@@ -103,51 +103,55 @@ class SinglePointDummyDatastore(BaseDatastore):
         raise NotImplementedError()
 
 
-ANALYSIS_STATE_VALUES = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+INIT_STEPS = 2
+
+STATE_VALUES = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
 FORCING_VALUES = [10, 11, 12, 13, 14, 15, 16, 17, 18, 19]
 
-# Constants for forecast data
-FORECAST_ANALYSIS_TIMES = np.datetime64("2020-01-01") + np.arange(3)
-FORECAST_FORECAST_TIMES = np.timedelta64(0, "D") + np.arange(7)
+STATE_VALUES_FORECAST = [
+    [0, 1, 2, 3, 4, 5, 6, 7, 8, 9],  # Analysis time 0
+    [10, 11, 12, 13, 14, 15, 16, 17, 18, 19],  # Analysis time 1
+    [20, 21, 22, 23, 24, 25, 26, 27, 28, 29],  # Analysis time 2
+]
+FORCING_VALUES_FORECAST = [
+    [100, 101, 102, 103, 104, 105, 106, 107, 108, 109],  # Analysis time 0
+    [110, 111, 112, 113, 114, 115, 116, 117, 118, 119],  # Analysis time 1
+    [120, 121, 122, 123, 124, 125, 126, 127, 128, 129],  # Analysis time 2
+]
 
-FORECAST_STATE_VALUES = np.array(
-    [
-        # Analysis time 0
-        [0, 1, 2, 3, 4, 5, 6],
-        # Analysis time 1
-        [10, 11, 12, 13, 14, 15, 16],
-        # Analysis time 2
-        [20, 21, 22, 23, 24, 25, 26],
-    ]
-)
-
-FORECAST_FORCING_VALUES = np.array(
-    [
-        # Analysis time 0
-        [100, 101, 102, 103, 104, 105, 106],
-        # Analysis time 1
-        [110, 111, 112, 113, 114, 115, 116],
-        # Analysis time 2
-        [120, 121, 122, 123, 124, 125, 126],
-    ]
-)
+SCENARIOS = [
+    [3, 0, 0],
+    [3, 1, 0],
+    [3, 2, 0],
+    [3, 3, 0],
+    [3, 0, 1],
+    [3, 0, 2],
+    [3, 0, 3],
+    [3, 1, 1],
+    [3, 2, 1],
+    [3, 3, 1],
+    [3, 1, 2],
+    [3, 1, 3],
+    [3, 2, 2],
+    [3, 2, 3],
+    [3, 3, 2],
+    [3, 3, 3],
+]
 
 
 @pytest.mark.parametrize(
     "ar_steps,num_past_forcing_steps,num_future_forcing_steps",
-    [[3, 0, 0], [3, 1, 0], [3, 2, 0], [3, 3, 0]],
+    SCENARIOS,
 )
 def test_time_slicing_analysis(
     ar_steps, num_past_forcing_steps, num_future_forcing_steps
 ):
     # state and forcing variables have only one dimension, `time`
-    time_values = np.datetime64("2020-01-01") + np.arange(
-        len(ANALYSIS_STATE_VALUES)
-    )
-    assert len(ANALYSIS_STATE_VALUES) == len(FORCING_VALUES) == len(time_values)
+    time_values = np.datetime64("2020-01-01") + np.arange(len(STATE_VALUES))
+    assert len(STATE_VALUES) == len(FORCING_VALUES) == len(time_values)
 
     datastore = SinglePointDummyDatastore(
-        state_data=ANALYSIS_STATE_VALUES,
+        state_data=STATE_VALUES,
         forcing_data=FORCING_VALUES,
         time_values=time_values,
         is_forecast=False,
@@ -168,12 +172,10 @@ def test_time_slicing_analysis(
         tensor.numpy() for tensor in sample
     ]
 
+    # Some scenarios for the human reader
     expected_init_states = [0, 1]
     if ar_steps == 3:
         expected_target_states = [2, 3, 4]
-    else:
-        raise NotImplementedError()
-
     if num_past_forcing_steps == num_future_forcing_steps == 0:
         expected_forcing_values = [[12], [13], [14]]
     elif num_past_forcing_steps == 1 and num_future_forcing_steps == 0:
@@ -188,49 +190,72 @@ def test_time_slicing_analysis(
             [11, 12, 13, 14],
             [12, 13, 14, 15],
         ]
-    else:
-        raise NotImplementedError()
+
+    # Compute expected initial states and target states based on ar_steps
+    offset = max(0, num_past_forcing_steps - INIT_STEPS)
+    init_idx = INIT_STEPS + offset
+    # Compute expected forcing values based on num_past_forcing_steps and
+    # num_future_forcing_steps for all scenarios
+    expected_init_states = STATE_VALUES[offset:init_idx]
+    expected_target_states = STATE_VALUES[init_idx : init_idx + ar_steps]
+    total_forcing_window = num_past_forcing_steps + num_future_forcing_steps + 1
+    expected_forcing_values = []
+    for i in range(ar_steps):
+        start_idx = i + init_idx - num_past_forcing_steps
+        end_idx = i + init_idx + num_future_forcing_steps + 1
+        forcing_window = FORCING_VALUES[start_idx:end_idx]
+        expected_forcing_values.append(forcing_window)
 
     # init_states: (2, N_grid, d_features)
     # target_states: (ar_steps, N_grid, d_features)
     # forcing: (ar_steps, N_grid, d_windowed_forcing * 2)
     # target_times: (ar_steps,)
-    assert init_states.shape == (2, 1, 1)
-    assert init_states[:, 0, 0].tolist() == expected_init_states
 
-    assert target_states.shape == (3, 1, 1)
-    assert target_states[:, 0, 0].tolist() == expected_target_states
+    # Adjust assertions to use computed expected values
+    assert init_states.shape == (INIT_STEPS, 1, 1)
+    np.testing.assert_array_equal(init_states[:, 0, 0], expected_init_states)
+
+    assert target_states.shape == (ar_steps, 1, 1)
+    np.testing.assert_array_equal(
+        target_states[:, 0, 0], expected_target_states
+    )
 
     assert forcing.shape == (
-        3,
+        ar_steps,
         1,
-        # Factor 2 because each window step has a temporal embedding
-        (1 + num_past_forcing_steps + num_future_forcing_steps) * 2,
+        total_forcing_window
+        * 2,  # Each windowed feature includes temporal embedding
     )
-    np.testing.assert_equal(
-        forcing[:, 0, : num_past_forcing_steps + num_future_forcing_steps + 1],
-        np.array(expected_forcing_values),
-    )
+
+    # Extract the forcing values from the tensor (excluding temporal embeddings)
+    forcing_values = forcing[:, 0, :total_forcing_window]
+
+    # Compare with expected forcing values
+    for i in range(ar_steps):
+        np.testing.assert_array_equal(
+            forcing_values[i], expected_forcing_values[i]
+        )
 
 
 @pytest.mark.parametrize(
     "ar_steps,num_past_forcing_steps,num_future_forcing_steps",
-    [
-        [3, 0, 0],
-        [3, 1, 0],
-        [3, 2, 0],
-        [3, 0, 1],
-        [3, 0, 2],
-    ],
+    SCENARIOS,
 )
 def test_time_slicing_forecast(
     ar_steps, num_past_forcing_steps, num_future_forcing_steps
 ):
+    # Constants for forecast data
+    ANALYSIS_TIMES = np.datetime64("2020-01-01") + np.arange(
+        len(STATE_VALUES_FORECAST)
+    )
+    ELAPSED_FORECAST_DURATION = np.timedelta64(0, "D") + np.arange(
+        len(FORCING_VALUES_FORECAST[0])
+    )
     # Create a dummy datastore with forecast data
-    time_values = (FORECAST_ANALYSIS_TIMES, FORECAST_FORECAST_TIMES)
+    time_values = (ANALYSIS_TIMES, ELAPSED_FORECAST_DURATION)
     datastore = SinglePointDummyDatastore(
-        state_data=FORECAST_STATE_VALUES,
-        forcing_data=FORECAST_FORCING_VALUES,
+        state_data=STATE_VALUES_FORECAST,
+        forcing_data=FORCING_VALUES_FORECAST,
         time_values=time_values,
         is_forecast=True,
     )
@@ -246,7 +271,7 @@ def test_time_slicing_forecast(
     )
 
     # Test the dataset length
-    assert len(dataset) == len(FORECAST_ANALYSIS_TIMES)
+    assert len(dataset) == len(ANALYSIS_TIMES)
 
     sample = dataset[0]
 
@@ -254,18 +279,28 @@ def test_time_slicing_forecast(
         tensor.numpy() for tensor in sample
     ]
 
-    # Expected initial states and target states
-    expected_init_states = FORECAST_STATE_VALUES[0][:2]
-    expected_target_states = FORECAST_STATE_VALUES[0][2 : 2 + ar_steps]
+    # Compute expected initial states and target states based on ar_steps
+    offset = max(0, num_past_forcing_steps - INIT_STEPS)
+    init_idx = INIT_STEPS + offset
+    expected_init_states = STATE_VALUES_FORECAST[0][offset:init_idx]
+    expected_target_states = STATE_VALUES_FORECAST[0][
+        init_idx : init_idx + ar_steps
+    ]
 
-    # Expected forcing values
+    # Compute expected forcing values based on num_past_forcing_steps and
+    # num_future_forcing_steps
     total_forcing_window = num_past_forcing_steps + num_future_forcing_steps + 1
     expected_forcing_values = []
     for i in range(ar_steps):
-        start_idx = max(0, i + 2 - num_past_forcing_steps)
-        end_idx = i + 2 + num_future_forcing_steps + 1
-        forcing_window = FORECAST_FORCING_VALUES[0][start_idx:end_idx]
+        start_idx = i + init_idx - num_past_forcing_steps
+        end_idx = i + init_idx + num_future_forcing_steps + 1
+        forcing_window = FORCING_VALUES_FORECAST[INIT_STEPS][start_idx:end_idx]
         expected_forcing_values.append(forcing_window)
+
+    # init_states: (2, N_grid, d_features)
+    # target_states: (ar_steps, N_grid, d_features)
+    # forcing: (ar_steps, N_grid, d_windowed_forcing * 2)
+    # target_times: (ar_steps,)
 
     # Assertions
     np.testing.assert_array_equal(init_states[:, 0, 0], expected_init_states)
@@ -275,9 +310,9 @@ def test_time_slicing_forecast(
 
     # Verify the shape of the forcing data
     expected_forcing_shape = (
-        ar_steps,
-        1,
-        total_forcing_window
+        ar_steps,  # Number of AR steps
+        1,  # Number of grid points
+        total_forcing_window  # Total number of forcing steps in the window
         * 2,  # Each windowed feature includes temporal embedding
     )
     assert forcing.shape == expected_forcing_shape
