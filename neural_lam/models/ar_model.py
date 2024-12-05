@@ -109,7 +109,7 @@ class ARModel(pl.LightningModule):
             2 * self.grid_output_dim
             + grid_static_dim
             # Temporal Embedding counts as one additional forcing_feature
-            + 2*(num_forcing_vars)
+            + (num_forcing_vars + 1)
             * (num_past_forcing_steps + num_future_forcing_steps + 1)
         )
 
@@ -144,7 +144,7 @@ class ARModel(pl.LightningModule):
             self.boundary_dim = (
                 boundary_static_dim
                 # Temporal Embedding counts as one additional forcing_feature
-                + 2*(num_boundary_forcing_vars)
+                + (num_boundary_forcing_vars + 1)
                 * (num_past_boundary_steps + num_future_boundary_steps + 1)
             )
 
