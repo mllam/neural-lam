@@ -70,12 +70,20 @@ class GraphLAM(BaseGraphModel):
             ],
         )
 
-    def get_num_mesh(self):
+    @property
+    def num_mesh_nodes(self):
         """
-        Compute number of mesh nodes from loaded features,
-        and number of mesh nodes that should be ignored in encoding/decoding
+        Get the total number of mesh nodes in the used mesh graph
         """
-        return self.mesh_static_features.shape[0], 0
+        return self.mesh_static_features.shape[0]
+
+    @property
+    def num_grid_connected_mesh_nodes(self):
+        """
+        Get the total number of mesh nodes that have a connection to
+        the grid (e.g. bottom level in a hierarchy)
+        """
+        return self.num_mesh_nodes  # All nodes
 
     def embedd_mesh_nodes(self):
         """

@@ -113,18 +113,23 @@ class BaseHiGraphModel(BaseGraphModel):
             ]
         )
 
-    def get_num_mesh(self):
+    @property
+    def num_mesh_nodes(self):
         """
-        Compute number of mesh nodes from loaded features,
-        and number of mesh nodes that should be ignored in encoding/decoding
+        Get the total number of mesh nodes in the used mesh graph
         """
         num_mesh_nodes = sum(
             node_feat.shape[0] for node_feat in self.mesh_static_features
         )
-        num_mesh_nodes_ignore = (
-            num_mesh_nodes - self.mesh_static_features[0].shape[0]
-        )
-        return num_mesh_nodes, num_mesh_nodes_ignore
+        return num_mesh_nodes
+
+    @property
+    def num_grid_connected_mesh_nodes(self):
+        """
+        Get the total number of mesh nodes that have a connection to
+        the grid (e.g. bottom level in a hierarchy)
+        """
+        return self.mesh_static_features[0].shape[0]  # Bottom level
 
     def embedd_mesh_nodes(self):
         """

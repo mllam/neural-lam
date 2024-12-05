@@ -45,7 +45,6 @@ class BaseGraphModel(ARModel):
                 setattr(self, name, attr_value)
 
         # Specify dimensions of data
-        self.num_mesh_nodes, _ = self.get_num_mesh()
         print(
             f"Loaded graph with {self.num_grid_nodes + self.num_mesh_nodes} "
             f"nodes ({self.num_grid_nodes} grid, {self.num_mesh_nodes} mesh)"
@@ -88,6 +87,7 @@ class BaseGraphModel(ARModel):
             args.hidden_dim,
             hidden_layers=args.hidden_layers,
             update_edges=False,
+            num_rec=self.num_grid_connected_mesh_nodes,
         )
         self.encoding_grid_mlp = utils.make_mlp(
             [args.hidden_dim] + self.mlp_blueprint_end
@@ -99,6 +99,7 @@ class BaseGraphModel(ARModel):
             args.hidden_dim,
             hidden_layers=args.hidden_layers,
             update_edges=False,
+            num_rec=self.num_grid_nodes,
         )
 
         # Output mapping (hidden_dim -> output_dim)
@@ -108,12 +109,22 @@ class BaseGraphModel(ARModel):
             layer_norm=False,
         )  # No layer norm on this one
 
-    def get_num_mesh(self):
+    @property
+    def num_mesh_nodes(self):
         """
-        Compute number of mesh nodes from loaded features,
-        and number of mesh nodes that should be ignored in encoding/decoding
+        Get the total number of mesh nodes in the used mesh graph
         """
-        raise NotImplementedError("get_num_mesh not implemented")
+        raise NotImplementedError("num_mesh_nodes not implemented")
+
+    @property
+    def num_grid_connected_mesh_nodes(self):
+        """
+        Get the total number of mesh nodes that have a connection to
+        the grid (e.g. bottom level in a hierarchy)
+        """
+        raise NotImplementedError(
+            "num_grid_connected_mesh_nodes not implemented"
+        )
 
     def embedd_mesh_nodes(self):
         """
