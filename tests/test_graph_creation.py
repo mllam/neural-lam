@@ -1,5 +1,4 @@
 # Standard library
-import tempfile
 from pathlib import Path
 
 # Third-party
@@ -7,39 +6,55 @@ import pytest
 import torch
 
 # First-party
-from neural_lam.create_graph import create_graph_from_datastore
+from neural_lam.build_rectangular_graph import (
+    build_graph,
+    build_graph_from_archetype,
+)
 from neural_lam.datastore import DATASTORES
-from neural_lam.datastore.base import BaseRegularGridDatastore
-from tests.conftest import init_datastore_example
+from tests.conftest import (
+    DATASTORES_BOUNDARY_EXAMPLES,
+    init_datastore_boundary_example,
+    init_datastore_example,
+)
 
 
-@pytest.mark.parametrize("graph_name", ["1level", "multiscale", "hierarchical"])
 @pytest.mark.parametrize("datastore_name", DATASTORES.keys())
-def test_graph_creation(datastore_name, graph_name):
+@pytest.mark.parametrize(
+    "datastore_boundary_name",
+    list(DATASTORES_BOUNDARY_EXAMPLES.keys()) + [None],
+)
+@pytest.mark.parametrize("archetype", ["keisler", "graphcast", "hierarchical"])
+def test_graph_creation(datastore_name, datastore_boundary_name, archetype):
     """Check that the `create_ graph_from_datastore` function is implemented.
-
     And that the graph is created in the correct location.
 
     """
     datastore = init_datastore_example(datastore_name)
 
-    if not isinstance(datastore, BaseRegularGridDatastore):
-        pytest.skip(
-            f"Skipping test for {datastore_name} as it is not a regular "
-            "grid datastore."
+    if datastore_boundary_name is None:
+        # LAM scale
+        mesh_node_distance = 500000
+        datastore_boundary = None
+    else:
+        # Global scale, ERA5 coords flattened with proj
+        mesh_node_distance = 10000000
+        datastore_boundary = init_datastore_boundary_example(
+            datastore_boundary_name
         )
 
-    if graph_name == "hierarchical":
-        hierarchical = True
-        n_max_levels = 3
-    elif graph_name == "multiscale":
-        hierarchical = False
-        n_max_levels = 3
-    elif graph_name == "1level":
-        hierarchical = False
-        n_max_levels = 1
-    else:
-        raise ValueError(f"Unknown graph_name: {graph_name}")
+    create_kwargs = {
+        "mesh_node_distance": mesh_node_distance,
+    }
+
+    num_levels = 1
+    if archetype != "keisler":
+        # Add additional multi-level kwargs
+        create_kwargs.update(
+            {
+                "level_refinement_factor": 3,
+                "max_num_levels": num_levels,
+            }
+        )
 
     required_graph_files = [
         "m2m_edge_index.pt",
@@ -48,8 +63,10 @@ def test_graph_creation(datastore_name, graph_name):
         "m2m_features.pt",
         "g2m_features.pt",
         "m2g_features.pt",
-        "mesh_features.pt",
+        "m2m_node_features.pt",
     ]
+
+    hierarchical = archetype == "hierarchical"
     if hierarchical:
         required_graph_files.extend(
             [
@@ -59,61 +76,61 @@ def test_graph_creation(datastore_name, graph_name):
                 "mesh_down_features.pt",
             ]
         )
+        num_levels = 3
 
     # TODO: check that the number of edges is consistent over the files, for
     # now we just check the number of features
     d_features = 3
     d_mesh_static = 2
 
-    with tempfile.TemporaryDirectory() as tmpdir:
-        graph_dir_path = Path(tmpdir) / "graph" / graph_name
+    # Name graph
+    graph_name = f"{datastore_name}_{datastore_boundary_name}_{archetype}"
 
-        create_graph_from_datastore(
-            datastore=datastore,
-            output_root_path=str(graph_dir_path),
-            hierarchical=hierarchical,
-            n_max_levels=n_max_levels,
-        )
+    # Saved in datastore
+    # TODO: Maybe save in tmp dir?
+    graph_dir_path = Path(datastore.root_path) / "graphs" / graph_name
 
-        assert graph_dir_path.exists()
+    build_graph_from_archetype(
+        datastore, datastore_boundary, graph_name, archetype, **create_kwargs
+    )
 
-        # check that all the required files are present
-        for file_name in required_graph_files:
-            assert (graph_dir_path / file_name).exists()
+    assert graph_dir_path.exists()
 
-        # try to load each and ensure they have the right shape
-        for file_name in required_graph_files:
-            file_id = Path(file_name).stem  # remove the extension
-            result = torch.load(graph_dir_path / file_name)
+    # check that all the required files are present
+    for file_name in required_graph_files:
+        assert (graph_dir_path / file_name).exists()
 
-            if file_id.startswith("g2m") or file_id.startswith("m2g"):
-                assert isinstance(result, torch.Tensor)
+    # try to load each and ensure they have the right shape
+    for file_name in required_graph_files:
+        file_id = Path(file_name).stem  # remove the extension
+        result = torch.load(graph_dir_path / file_name)
 
-                if file_id.endswith("_index"):
-                    assert (
-                        result.shape[0] == 2
-                    )  # adjacency matrix uses two rows
-                elif file_id.endswith("_features"):
-                    assert result.shape[1] == d_features
+        if file_id.startswith("g2m") or file_id.startswith("m2g"):
+            assert isinstance(result, torch.Tensor)
 
-            elif file_id.startswith("m2m") or file_id.startswith("mesh"):
-                assert isinstance(result, list)
-                if not hierarchical:
-                    assert len(result) == 1
+            if file_id.endswith("_index"):
+                assert result.shape[0] == 2  # adjacency matrix uses two rows
+            elif file_id.endswith("_features"):
+                assert result.shape[1] == d_features
+
+        elif file_id.startswith("m2m") or file_id.startswith("mesh"):
+            assert isinstance(result, list)
+            if not hierarchical:
+                assert len(result) == 1
+            else:
+                if file_id.startswith("mesh_up") or file_id.startswith(
+                    "mesh_down"
+                ):
+                    assert len(result) == num_levels - 1
                 else:
-                    if file_id.startswith("mesh_up") or file_id.startswith(
-                        "mesh_down"
-                    ):
-                        assert len(result) == n_max_levels - 1
-                    else:
-                        assert len(result) == n_max_levels
+                    assert len(result) == num_levels
 
-                for r in result:
-                    assert isinstance(r, torch.Tensor)
+            for r in result:
+                assert isinstance(r, torch.Tensor)
 
-                    if file_id == "mesh_features":
-                        assert r.shape[1] == d_mesh_static
-                    elif file_id.endswith("_index"):
-                        assert r.shape[0] == 2  # adjacency matrix uses two rows
-                    elif file_id.endswith("_features"):
-                        assert r.shape[1] == d_features
+                if file_id == "m2m_node_features":
+                    assert r.shape[1] == d_mesh_static
+                elif file_id.endswith("_index"):
+                    assert r.shape[0] == 2  # adjacency matrix uses two rows
+                elif file_id.endswith("_features"):
+                    assert r.shape[1] == d_features

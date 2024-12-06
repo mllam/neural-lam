@@ -63,7 +63,7 @@ def test_training(datastore_name, datastore_boundary_name):
 
     graph_name = "1level"
 
-    graph_dir_path = Path(datastore.root_path) / "graph" / graph_name
+    graph_dir_path = Path(datastore.root_path) / "graphs" / graph_name
 
     if not graph_dir_path.exists():
         create_graph_from_datastore(

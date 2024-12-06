@@ -85,11 +85,6 @@ def main(input_args=None):
         config_path=args.config_path
     )
 
-    assert (
-        args.archetype in WMG_ARCHETYPES
-    ), f"Unknown archetype: {args.archetype}"
-    archetype_create_func = WMG_ARCHETYPES[args.archetype]
-
     create_kwargs = {
         "mesh_node_distance": args.mesh_node_distance,
     }
@@ -103,12 +98,12 @@ def main(input_args=None):
             }
         )
 
-    return _build_wmg_graph(
+    return build_graph_from_archetype(
         datastore=datastore,
         datastore_boundary=datastore_boundary,
-        graph_build_func=archetype_create_func,
-        kwargs=create_kwargs,
         graph_name=args.graph_name,
+        archetype=args.archetype,
+        **create_kwargs,
     )
 
 
@@ -116,8 +111,8 @@ def _build_wmg_graph(
     datastore,
     datastore_boundary,
     graph_build_func,
-    kwargs,
     graph_name,
+    kwargs,
 ):
     """
     Build a graph using WMG in a way that's compatible with neural-lam.
@@ -245,6 +240,43 @@ def _build_wmg_graph(
             )
 
 
+def build_graph_from_archetype(
+    datastore, datastore_boundary, graph_name, archetype, **kwargs
+):
+    """
+    Function that builds graph using wmg archetype.
+    Uses archetype functions from wmg.create.archetype with kwargs being passed
+    on directly to those functions.
+
+    Parameters
+    ----------
+    datastore : BaseDatastore
+        Datastore representing interior region of grid
+    datastore_boundary : BaseDatastore or None
+        Datastore representing boundary region, or None if no boundary forcing
+    graph_name : str
+        Name to save the graph as.
+    archetype : str
+        Archetype to build. Must be one of "keisler", "graphcast"
+        or "hierarchical"
+    **kwargs
+        Keyword arguments that are passed on to
+        wmg.create.base.create_all_graph_components. See WMG for accepted
+        values for these.
+    """
+
+    assert archetype in WMG_ARCHETYPES, f"Unknown archetype: {archetype}"
+    archetype_create_func = WMG_ARCHETYPES[archetype]
+
+    return _build_wmg_graph(
+        datastore=datastore,
+        datastore_boundary=datastore_boundary,
+        graph_build_func=archetype_create_func,
+        graph_name=graph_name,
+        kwargs=kwargs,
+    )
+
+
 def build_graph(datastore, datastore_boundary, graph_name, **kwargs):
     """
     Function that can be used for more fine-grained control of graph
@@ -268,8 +300,8 @@ def build_graph(datastore, datastore_boundary, graph_name, **kwargs):
         datastore=datastore,
         datastore_boundary=datastore_boundary,
         graph_build_func=wmg.create.base.create_all_graph_components,
-        kwargs=kwargs,
         graph_name=graph_name,
+        kwargs=kwargs,
     )
 
 

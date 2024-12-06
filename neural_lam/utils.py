@@ -52,7 +52,7 @@ def load_graph(graph_dir_path, device="cpu"):
     - m2m_features.pt
     - g2m_features.pt
     - m2g_features.pt
-    - mesh_features.pt
+    - m2m_node_features.pt
 
     And in addition for hierarchical graphs:
     - mesh_up_edge_index.pt
