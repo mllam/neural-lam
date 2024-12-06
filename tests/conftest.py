@@ -17,7 +17,7 @@ from .dummy_datastore import DummyDatastore
 
 # Disable weights and biases to avoid unnecessary logging
 # and to avoid having to deal with authentication
-os.environ["WANDB_DISABLED"] = "true"
+os.environ["WANDB_MODE"] = "disabled"
 
 DATASTORE_EXAMPLES_ROOT_PATH = Path("tests/datastore_examples")
 
