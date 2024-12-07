@@ -28,7 +28,6 @@ from tests.conftest import (
 def test_build_archetype(datastore_name, datastore_boundary_name, archetype):
     """Check that the `build_graph_from_archetype` function is implemented.
     And that the graph is created in the correct location.
-
     """
     datastore = init_datastore_example(datastore_name)
 
@@ -45,12 +44,14 @@ def test_build_archetype(datastore_name, datastore_boundary_name, archetype):
         "mesh_node_distance": get_test_mesh_dist(datastore, datastore_boundary),
     }
 
-    num_levels = 1
-    if archetype != "keisler":
+    if archetype == "keisler":
+        num_levels = 1
+    else:
         # Add additional multi-level kwargs
+        num_levels = 2
         create_kwargs.update(
             {
-                "level_refinement_factor": 2,
+                "level_refinement_factor": 3,
                 "max_num_levels": num_levels,
             }
         )
@@ -67,7 +68,7 @@ def test_build_archetype(datastore_name, datastore_boundary_name, archetype):
     )
 
     hierarchical = archetype == "hierarchical"
-    check_saved_graph(graph_dir_path, hierarchical)
+    check_saved_graph(graph_dir_path, hierarchical, num_levels)
 
 
 @pytest.mark.parametrize("datastore_name", DATASTORES.keys())
@@ -91,7 +92,8 @@ def test_build_archetype(datastore_name, datastore_boundary_name, archetype):
                 "m2g_connectivity": "nearest_neighbours",
                 "g2m_connectivity": "within_radius",
                 "m2m_connectivity_kwargs": {
-                    "level_refinement_factor": 2,
+                    "level_refinement_factor": 3,
+                    "max_num_levels": None,
                 },
                 "m2g_connectivity_kwargs": {
                     "max_num_neighbours": 4,
@@ -106,6 +108,7 @@ def test_build_archetype(datastore_name, datastore_boundary_name, archetype):
                 "g2m_connectivity": "within_radius",
                 "m2m_connectivity_kwargs": {
                     "level_refinement_factor": 2,
+                    "max_num_levels": 2,
                 },
                 "m2g_connectivity_kwargs": {},
                 "g2m_connectivity_kwargs": {
@@ -148,4 +151,5 @@ def test_build_from_options(
     build_graph(datastore, datastore_boundary, graph_name, **graph_kwargs)
 
     hierarchical = graph_kwargs["m2m_connectivity"] == "hierarchical"
-    check_saved_graph(graph_dir_path, hierarchical)
+    num_levels = 2 if hierarchical else 1
+    check_saved_graph(graph_dir_path, hierarchical, num_levels)

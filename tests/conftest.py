@@ -138,7 +138,7 @@ def get_test_mesh_dist(datastore, datastore_boundary):
     return min_extent / 10.0
 
 
-def check_saved_graph(graph_dir_path, hierarchical):
+def check_saved_graph(graph_dir_path, hierarchical, num_levels=1):
     """Perform all checking for a saved graph"""
     required_graph_files = [
         "m2m_edge_index.pt",
@@ -159,7 +159,6 @@ def check_saved_graph(graph_dir_path, hierarchical):
                 "mesh_down_features.pt",
             ]
         )
-        num_levels = 3
 
     # TODO: check that the number of edges is consistent over the files, for
     # now we just check the number of features
