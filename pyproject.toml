@@ -16,7 +16,6 @@ dependencies = [
     "scipy>=1.10.0",
     "pytorch-lightning>=2.0.3",
     "shapely>=2.0.1",
-    "networkx>=3.0",
     "Cartopy>=0.22.0",
     "pyproj>=3.4.1",
     "tueplots>=0.0.8",
