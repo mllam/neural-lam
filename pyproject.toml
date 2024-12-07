@@ -28,7 +28,7 @@ dependencies = [
     "mllam-data-prep>=0.5.0",
     "weather-model-graphs>=0.2.0"
 ]
-requires-python = ">=3.9"
+requires-python = ">=3.10"
 
 [project.optional-dependencies]
 dev = ["pre-commit>=3.8.0", "pytest>=8.3.2", "pooch>=1.8.2", "gcsfs>=2021.10.0"]
