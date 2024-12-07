@@ -336,7 +336,7 @@ class DummyDatastore(BaseRegularGridDatastore):
         dim_order = self.expected_dim_order(category=category)
         return self.ds[category].transpose(*dim_order)
 
-    def get_xy(self, category: str, stacked: bool) -> ndarray:
+    def get_xy(self, category: str, stacked: bool = True) -> ndarray:
         """Return the x, y coordinates of the dataset.
 
         Parameters

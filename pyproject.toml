@@ -26,7 +26,7 @@ dependencies = [
     "parse>=1.20.2",
     "dataclass-wizard<0.31.0",
     "mllam-data-prep>=0.5.0",
-    "weather-model-graphs>=0.2.0"
+    "weather-model-graphs @ git+https://github.com/joeloskarsson/weather-model-graphs.git@decoding_mask"
 ]
 requires-python = ">=3.10"
 

@@ -13,6 +13,7 @@ from neural_lam.build_rectangular_graph import (
 from neural_lam.datastore import DATASTORES
 from tests.conftest import (
     DATASTORES_BOUNDARY_EXAMPLES,
+    get_test_mesh_dist,
     init_datastore_boundary_example,
     init_datastore_example,
 )
@@ -33,17 +34,15 @@ def test_graph_creation(datastore_name, datastore_boundary_name, archetype):
 
     if datastore_boundary_name is None:
         # LAM scale
-        mesh_node_distance = 500000
         datastore_boundary = None
     else:
         # Global scale, ERA5 coords flattened with proj
-        mesh_node_distance = 10000000
         datastore_boundary = init_datastore_boundary_example(
             datastore_boundary_name
         )
 
     create_kwargs = {
-        "mesh_node_distance": mesh_node_distance,
+        "mesh_node_distance": get_test_mesh_dist(datastore, datastore_boundary),
     }
 
     num_levels = 1

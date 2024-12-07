@@ -9,13 +9,14 @@ import wandb
 
 # First-party
 from neural_lam import config as nlconfig
-from neural_lam.create_graph import create_graph_from_datastore
+from neural_lam.build_rectangular_graph import build_graph_from_archetype
 from neural_lam.datastore import DATASTORES
 from neural_lam.datastore.base import BaseRegularGridDatastore
 from neural_lam.models.graph_lam import GraphLAM
 from neural_lam.weather_dataset import WeatherDataModule
 from tests.conftest import (
     DATASTORES_BOUNDARY_EXAMPLES,
+    get_test_mesh_dist,
     init_datastore_boundary_example,
     init_datastore_example,
 )
@@ -65,12 +66,17 @@ def test_training(datastore_name, datastore_boundary_name):
 
     graph_dir_path = Path(datastore.root_path) / "graphs" / graph_name
 
-    if not graph_dir_path.exists():
-        create_graph_from_datastore(
-            datastore=datastore,
-            output_root_path=str(graph_dir_path),
-            n_max_levels=1,
-        )
+    def _create_graph():
+        if not graph_dir_path.exists():
+            build_graph_from_archetype(
+                datastore=datastore,
+                datastore_boundary=datastore_boundary,
+                graph_name=graph_name,
+                archetype="keisler",
+                mesh_node_distance=get_test_mesh_dist(
+                    datastore, datastore_boundary
+                ),
+            )
 
     data_module = WeatherDataModule(
         datastore=datastore,

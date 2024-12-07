@@ -3,6 +3,7 @@ import os
 from pathlib import Path
 
 # Third-party
+import numpy as np
 import pooch
 import yaml
 
@@ -11,6 +12,7 @@ from neural_lam.datastore import DATASTORES, init_datastore
 from neural_lam.datastore.npyfilesmeps import (
     compute_standardization_stats as compute_standardization_stats_meps,
 )
+from neural_lam.utils import get_stacked_xy
 
 # Local
 from .dummy_datastore import DummyDatastore
@@ -121,3 +123,15 @@ def init_datastore_boundary_example(datastore_kind):
     )
 
     return datastore_boundary
+
+
+def get_test_mesh_dist(datastore, datastore_boundary):
+    """Compute a good mesh_node_distance for testing graph creation with
+    given datastores
+    """
+    xy = get_stacked_xy(datastore, datastore_boundary)  # (num_grid, 2)
+    # Compute minimum coordinate extent
+    min_extent = min(np.ptp(xy, axis=0))
+
+    # Want at least 10 mesh nodes in each direction
+    return min_extent / 10.0
