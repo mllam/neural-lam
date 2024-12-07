@@ -111,8 +111,9 @@ def _build_wmg_graph(
     datastore,
     datastore_boundary,
     graph_build_func,
-    graph_name,
     kwargs,
+    graph_name,
+    dir_save_path=None,
 ):
     """
     Build a graph using WMG in a way that's compatible with neural-lam.
@@ -133,6 +134,9 @@ def _build_wmg_graph(
         these are here derived in a consistent way from the datastores.
     graph_name : str
         Name to save the graph as.
+    dir_save_path : str or None
+        Path to directory where graph should be saved, in directory graph_name.
+        If None, save in "graphs" directory in the root directory of datastore.
     """
 
     for derived_kwarg in (
@@ -193,7 +197,11 @@ def _build_wmg_graph(
     )
 
     # Save graph
-    graph_dir_path = os.path.join(datastore.root_path, "graphs", graph_name)
+    if dir_save_path is None:
+        graph_dir_path = os.path.join(datastore.root_path, "graphs", graph_name)
+    else:
+        graph_dir_path = os.path.join(dir_save_path, graph_name)
+
     os.makedirs(graph_dir_path, exist_ok=True)
     for component, graph in graph_comp.items():
         # This seems like a bit of a hack, maybe better if saving in wmg
@@ -241,7 +249,12 @@ def _build_wmg_graph(
 
 
 def build_graph_from_archetype(
-    datastore, datastore_boundary, graph_name, archetype, **kwargs
+    datastore,
+    datastore_boundary,
+    graph_name,
+    archetype,
+    dir_save_path,
+    **kwargs,
 ):
     """
     Function that builds graph using wmg archetype.
@@ -259,6 +272,9 @@ def build_graph_from_archetype(
     archetype : str
         Archetype to build. Must be one of "keisler", "graphcast"
         or "hierarchical"
+    dir_save_path : str or None
+        Path to directory where graph should be saved, in directory graph_name.
+        If None, save in "graphs" directory in the root directory of datastore.
     **kwargs
         Keyword arguments that are passed on to
         wmg.create.base.create_all_graph_components. See WMG for accepted
@@ -273,11 +289,14 @@ def build_graph_from_archetype(
         datastore_boundary=datastore_boundary,
         graph_build_func=archetype_create_func,
         graph_name=graph_name,
+        dir_save_path=dir_save_path,
         kwargs=kwargs,
     )
 
 
-def build_graph(datastore, datastore_boundary, graph_name, **kwargs):
+def build_graph(
+    datastore, datastore_boundary, graph_name, dir_save_path=None, **kwargs
+):
     """
     Function that can be used for more fine-grained control of graph
     construction. Directly uses wmg.create.base.create_all_graph_components,
@@ -291,6 +310,9 @@ def build_graph(datastore, datastore_boundary, graph_name, **kwargs):
         Datastore representing boundary region, or None if no boundary forcing
     graph_name : str
         Name to save the graph as.
+    dir_save_path : str or None
+        Path to directory where graph should be saved, in directory graph_name.
+        If None, save in "graphs" directory in the root directory of datastore.
     **kwargs
         Keyword arguments that are passed on to
         wmg.create.base.create_all_graph_components. See WMG for accepted
@@ -301,6 +323,7 @@ def build_graph(datastore, datastore_boundary, graph_name, **kwargs):
         datastore_boundary=datastore_boundary,
         graph_build_func=wmg.create.base.create_all_graph_components,
         graph_name=graph_name,
+        dir_save_path=dir_save_path,
         kwargs=kwargs,
     )
 

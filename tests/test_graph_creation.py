@@ -1,4 +1,5 @@
 # Standard library
+import tempfile
 from pathlib import Path
 
 # Third-party
@@ -59,16 +60,22 @@ def test_build_archetype(datastore_name, datastore_boundary_name, archetype):
     # Name graph
     graph_name = f"{datastore_name}_{datastore_boundary_name}_{archetype}"
 
-    # Saved in datastore
-    # TODO: Maybe save in tmp dir?
-    graph_dir_path = Path(datastore.root_path) / "graphs" / graph_name
+    # Saved in temporary dir
+    with tempfile.TemporaryDirectory() as tmpdir:
+        graph_saving_path = Path(tmpdir) / "graphs"
+        graph_dir_path = graph_saving_path / graph_name
 
-    build_graph_from_archetype(
-        datastore, datastore_boundary, graph_name, archetype, **create_kwargs
-    )
+        build_graph_from_archetype(
+            datastore,
+            datastore_boundary,
+            graph_name,
+            archetype,
+            dir_save_path=graph_saving_path,
+            **create_kwargs,
+        )
 
-    hierarchical = archetype == "hierarchical"
-    check_saved_graph(graph_dir_path, hierarchical, num_levels)
+        hierarchical = archetype == "hierarchical"
+        check_saved_graph(graph_dir_path, hierarchical, num_levels)
 
 
 @pytest.mark.parametrize("datastore_name", DATASTORES.keys())
@@ -144,12 +151,19 @@ def test_build_from_options(
     # Name graph
     graph_name = f"{datastore_name}_{datastore_boundary_name}_config{config_i}"
 
-    # Saved in datastore
-    # TODO: Maybe save in tmp dir?
-    graph_dir_path = Path(datastore.root_path) / "graphs" / graph_name
+    # Save in temporary dir
+    with tempfile.TemporaryDirectory() as tmpdir:
+        graph_saving_path = Path(tmpdir) / "graphs"
+        graph_dir_path = graph_saving_path / graph_name
 
-    build_graph(datastore, datastore_boundary, graph_name, **graph_kwargs)
+        build_graph(
+            datastore,
+            datastore_boundary,
+            graph_name,
+            dir_save_path=graph_saving_path,
+            **graph_kwargs,
+        )
 
-    hierarchical = graph_kwargs["m2m_connectivity"] == "hierarchical"
-    num_levels = 2 if hierarchical else 1
-    check_saved_graph(graph_dir_path, hierarchical, num_levels)
+        hierarchical = graph_kwargs["m2m_connectivity"] == "hierarchical"
+        num_levels = 2 if hierarchical else 1
+        check_saved_graph(graph_dir_path, hierarchical, num_levels)

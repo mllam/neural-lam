@@ -174,7 +174,7 @@ def check_saved_graph(graph_dir_path, hierarchical, num_levels=1):
     # try to load each and ensure they have the right shape
     for file_name in required_graph_files:
         file_id = Path(file_name).stem  # remove the extension
-        result = torch.load(graph_dir_path / file_name)
+        result = torch.load(graph_dir_path / file_name, weights_only=True)
 
         if file_id.startswith("g2m") or file_id.startswith("m2g"):
             assert isinstance(result, torch.Tensor)
