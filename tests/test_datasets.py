@@ -209,31 +209,34 @@ def test_single_batch(datastore_name, datastore_boundary_name, split):
         torch.device("cuda") if torch.cuda.is_available() else "cpu"
     )  # noqa
 
-    graph_name = "1level"
+    flat_graph_name = "1level"
 
     class ModelArgs:
         output_std = False
         loss = "mse"
         restore_opt = False
         n_example_pred = 1
-        graph = graph_name
+        graph_name = flat_graph_name
         hidden_dim = 4
         hidden_layers = 1
         processor_layers = 2
         mesh_aggr = "sum"
         num_past_forcing_steps = 1
         num_future_forcing_steps = 1
+        num_past_boundary_steps = 1
+        num_future_boundary_steps = 1
+        shared_grid_embedder = False
 
     args = ModelArgs()
 
-    graph_dir_path = Path(datastore.root_path) / "graphs" / graph_name
+    graph_dir_path = Path(datastore.root_path) / "graphs" / flat_graph_name
 
     def _create_graph():
         if not graph_dir_path.exists():
             build_graph_from_archetype(
                 datastore=datastore,
                 datastore_boundary=datastore_boundary,
-                graph_name=graph_name,
+                graph_name=flat_graph_name,
                 archetype="keisler",
                 mesh_node_distance=get_test_mesh_dist(
                     datastore, datastore_boundary
@@ -257,7 +260,12 @@ def test_single_batch(datastore_name, datastore_boundary_name, split):
         datastore=datastore, datastore_boundary=datastore_boundary, split=split
     )
 
-    model = GraphLAM(args=args, datastore=datastore, config=config)  # noqa
+    model = GraphLAM(
+        args=args,
+        datastore=datastore,
+        datastore_boundary=datastore_boundary,
+        config=config,
+    )  # noqa
 
     model_device = model.to(device_name)
     data_loader = DataLoader(dataset, batch_size=2)

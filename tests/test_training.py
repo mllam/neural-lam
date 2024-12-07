@@ -62,16 +62,16 @@ def test_training(datastore_name, datastore_boundary_name):
         log_every_n_steps=1,
     )
 
-    graph_name = "1level"
+    flat_graph_name = "1level"
 
-    graph_dir_path = Path(datastore.root_path) / "graphs" / graph_name
+    graph_dir_path = Path(datastore.root_path) / "graphs" / flat_graph_name
 
     def _create_graph():
         if not graph_dir_path.exists():
             build_graph_from_archetype(
                 datastore=datastore,
                 datastore_boundary=datastore_boundary,
-                graph_name=graph_name,
+                graph_name=flat_graph_name,
                 archetype="keisler",
                 mesh_node_distance=get_test_mesh_dist(
                     datastore, datastore_boundary
@@ -99,7 +99,7 @@ def test_training(datastore_name, datastore_boundary_name):
         n_example_pred = 1
         # XXX: this should be superfluous when we have already defined the
         # model object no?
-        graph = graph_name
+        graph_name = flat_graph_name
         hidden_dim = 4
         hidden_layers = 1
         processor_layers = 2
@@ -111,6 +111,7 @@ def test_training(datastore_name, datastore_boundary_name):
         num_future_forcing_steps = 1
         num_past_boundary_steps = 1
         num_future_boundary_steps = 1
+        shared_grid_embedder = False
 
     model_args = ModelArgs()
 
@@ -120,10 +121,12 @@ def test_training(datastore_name, datastore_boundary_name):
         )
     )
 
-    model = GraphLAM(  # noqa
+    model = GraphLAM(
         args=model_args,
         datastore=datastore,
+        datastore_boundary=datastore_boundary,
         config=config,
-    )
+    )  # noqa
+
     wandb.init()
     trainer.fit(model=model, datamodule=data_module)
