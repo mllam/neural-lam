@@ -53,32 +53,34 @@ class BaseGraphModel(ARModel):
 
         # Specify dimensions of data
         print(
-            f"Loaded graph with {self.num_grid_nodes + self.num_mesh_nodes} "
-            f"nodes ({self.num_grid_nodes} grid, {self.num_mesh_nodes} mesh)"
+            "Loaded graph with "
+            f"{self.num_total_grid_nodes + self.num_mesh_nodes} "
+            f"nodes ({self.num_total_grid_nodes} grid, "
+            f"{self.num_mesh_nodes} mesh)"
         )
 
-        # grid_dim from data + static
+        # interior_dim from data + static
         self.g2m_edges, g2m_dim = self.g2m_features.shape
         self.m2g_edges, m2g_dim = self.m2g_features.shape
 
         # Define sub-models
-        # Feature embedders for grid
+        # Feature embedders for interior
         self.mlp_blueprint_end = [args.hidden_dim] * (args.hidden_layers + 1)
-        self.grid_embedder = utils.make_mlp(
-            [self.grid_dim] + self.mlp_blueprint_end
+        self.interior_embedder = utils.make_mlp(
+            [self.interior_dim] + self.mlp_blueprint_end
         )
 
         if self.boundary_forced:
             # Define embedder for boundary nodes
             # Optional separate embedder for boundary nodes
             if args.shared_grid_embedder:
-                assert self.grid_dim == self.boundary_dim, (
+                assert self.interior_dim == self.boundary_dim, (
                     "Grid and boundary input dimension must "
                     "be the same when using "
-                    f"the same embedder, got grid_dim={self.grid_dim}, "
+                    f"the same embedder, got interior_dim={self.interior_dim}, "
                     f"boundary_dim={self.boundary_dim}"
                 )
-                self.boundary_embedder = self.grid_embedder
+                self.boundary_embedder = self.interior_embedder
             else:
                 self.boundary_embedder = utils.make_mlp(
                     [self.boundary_dim] + self.mlp_blueprint_end
@@ -106,7 +108,7 @@ class BaseGraphModel(ARModel):
             args.hidden_dim,
             hidden_layers=args.hidden_layers,
             update_edges=False,
-            num_rec=self.num_grid_nodes,
+            num_rec=self.num_interior_nodes,
         )
 
         # Output mapping (hidden_dim -> output_dim)
@@ -155,20 +157,21 @@ class BaseGraphModel(ARModel):
     ):
         """
         Step state one step ahead using prediction model, X_{t-1}, X_t -> X_t+1
-        prev_state: (B, num_grid_nodes, feature_dim), X_t
-        prev_prev_state: (B, num_grid_nodes, feature_dim), X_{t-1}
-        forcing: (B, num_grid_nodes, forcing_dim)
+        prev_state: (B, num_interior_nodes, feature_dim), X_t
+        prev_prev_state: (B, num_interior_nodes, feature_dim), X_{t-1}
+        forcing: (B, num_interior_nodes, forcing_dim)
         boundary_forcing: (B, num_boundary_nodes, boundary_forcing_dim)
         """
         batch_size = prev_state.shape[0]
 
-        # Create full grid node features of shape (B, num_grid_nodes, grid_dim)
-        grid_features = torch.cat(
+        # Create full interior node features of shape
+        # (B, num_interior_nodes, interior_dim)
+        interior_features = torch.cat(
             (
                 prev_state,
                 prev_prev_state,
                 forcing,
-                self.expand_to_batch(self.grid_static_features, batch_size),
+                self.expand_to_batch(self.interior_static_features, batch_size),
             ),
             dim=-1,
         )
@@ -191,7 +194,9 @@ class BaseGraphModel(ARModel):
             # (B, num_boundary_nodes, d_h)
 
         # Embed all features
-        grid_emb = self.grid_embedder(grid_features)  # (B, num_grid_nodes, d_h)
+        interior_emb = self.interior_embedder(
+            interior_features
+        )  # (B, num_interior_nodes, d_h)
         g2m_emb = self.g2m_embedder(self.g2m_features)  # (M_g2m, d_h)
         m2g_emb = self.m2g_embedder(self.m2g_features)  # (M_m2g, d_h)
         mesh_emb = self.embedd_mesh_nodes()
@@ -199,10 +204,10 @@ class BaseGraphModel(ARModel):
         if self.boundary_forced:
             # Merge interior and boundary emb into input embedding
             # We enforce ordering (interior, boundary) of nodes
-            input_emb = torch.cat((grid_emb, boundary_emb), dim=1)
+            full_grid_emb = torch.cat((interior_emb, boundary_emb), dim=1)
         else:
             # Only maps from interior to mesh
-            input_emb = grid_emb
+            full_grid_emb = interior_emb
 
         # Map from grid to mesh
         mesh_emb_expanded = self.expand_to_batch(
@@ -212,12 +217,12 @@ class BaseGraphModel(ARModel):
 
         # Encode to mesh
         mesh_rep = self.g2m_gnn(
-            input_emb, mesh_emb_expanded, g2m_emb_expanded
+            full_grid_emb, mesh_emb_expanded, g2m_emb_expanded
         )  # (B, num_mesh_nodes, d_h)
         # Also MLP with residual for grid representation
-        grid_rep = grid_emb + self.encoding_grid_mlp(
-            grid_emb
-        )  # (B, num_grid_nodes, d_h)
+        grid_rep = interior_emb + self.encoding_grid_mlp(
+            interior_emb
+        )  # (B, num_interior_nodes, d_h)
 
         # Run processor step
         mesh_rep = self.process_step(mesh_rep)
@@ -226,17 +231,17 @@ class BaseGraphModel(ARModel):
         m2g_emb_expanded = self.expand_to_batch(m2g_emb, batch_size)
         grid_rep = self.m2g_gnn(
             mesh_rep, grid_rep, m2g_emb_expanded
-        )  # (B, num_grid_nodes, d_h)
+        )  # (B, num_interior_nodes, d_h)
 
         # Map to output dimension, only for grid
         net_output = self.output_map(
             grid_rep
-        )  # (B, num_grid_nodes, d_grid_out)
+        )  # (B, num_interior_nodes, d_grid_out)
 
         if self.output_std:
             pred_delta_mean, pred_std_raw = net_output.chunk(
                 2, dim=-1
-            )  # both (B, num_grid_nodes, d_f)
+            )  # both (B, num_interior_nodes, d_f)
             # NOTE: The predicted std. is not scaled in any way here
             # linter for some reason does not think softplus is callable
             # pylint: disable-next=not-callable
