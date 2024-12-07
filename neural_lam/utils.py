@@ -34,6 +34,17 @@ class BufferList(nn.Module):
     def __iter__(self):
         return (self[i] for i in range(len(self)))
 
+    def __itruediv__(self, other):
+        """Divide each element in list with other"""
+        return self.__imul__(1.0 / other)
+
+    def __imul__(self, other):
+        """Multiply each element in list with other"""
+        for buffer_tensor in self:
+            buffer_tensor *= other
+
+        return self
+
 
 def zero_index_edge_index(edge_index):
     """
@@ -166,10 +177,8 @@ def load_graph(graph_dir_path, device="cpu"):
     longest_edge = max(
         torch.max(level_features[:, 0]) for level_features in m2m_features
     )  # Col. 0 is length
-    m2m_features = BufferList(
-        [level_features / longest_edge for level_features in m2m_features],
-        persistent=False,
-    )
+    m2m_features = BufferList(m2m_features, persistent=False)
+    m2m_features /= longest_edge
     g2m_features = g2m_features / longest_edge
     m2g_features = m2g_features / longest_edge
 
@@ -206,20 +215,10 @@ def load_graph(graph_dir_path, device="cpu"):
         )  # List of (M_down[l], d_edge_f)
 
         # Rescale
-        mesh_up_features = BufferList(
-            [
-                edge_features / longest_edge
-                for edge_features in mesh_up_features
-            ],
-            persistent=False,
-        )
-        mesh_down_features = BufferList(
-            [
-                edge_features / longest_edge
-                for edge_features in mesh_down_features
-            ],
-            persistent=False,
-        )
+        mesh_up_features = BufferList(mesh_up_features, persistent=False)
+        mesh_up_features /= longest_edge
+        mesh_down_features = BufferList(mesh_down_features, persistent=False)
+        mesh_down_features /= longest_edge
 
         mesh_static_features = BufferList(
             mesh_static_features, persistent=False
