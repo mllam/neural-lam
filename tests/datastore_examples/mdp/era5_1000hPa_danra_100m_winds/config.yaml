@@ -1,0 +1,12 @@
+datastore:
+  kind: mdp
+  config_path: danra.datastore.yaml
+datastore_boundary:
+  kind: mdp
+  config_path: era5.datastore.yaml
+training:
+  state_feature_weighting:
+    __config_class__: ManualStateFeatureWeighting
+    weights:
+      u100m: 1.0
+      v100m: 1.0

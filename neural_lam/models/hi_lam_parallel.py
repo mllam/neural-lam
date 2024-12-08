@@ -1,3 +1,6 @@
+# Standard library
+from typing import Union
+
 # Third-party
 import torch
 import torch_geometric as pyg
@@ -18,8 +21,19 @@ class HiLAMParallel(BaseHiGraphModel):
     of Hi-LAM.
     """
 
-    def __init__(self, args, config: NeuralLAMConfig, datastore: BaseDatastore):
-        super().__init__(args, config=config, datastore=datastore)
+    def __init__(
+        self,
+        args,
+        config: NeuralLAMConfig,
+        datastore: BaseDatastore,
+        datastore_boundary: Union[BaseDatastore, None],
+    ):
+        super().__init__(
+            args,
+            config=config,
+            datastore=datastore,
+            datastore_boundary=datastore_boundary,
+        )
 
         # Processor GNNs
         # Create the complete edge_index combining all edges for processing
