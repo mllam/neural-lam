@@ -548,7 +548,8 @@ class ARModel(pl.LightningModule):
                     else:
                         key = f"{var_name}_example"
 
-                    self.logger.log_image(key=key, images=[fig], step=t_i)
+                    if hasattr(self.logger, "log_image"):
+                        self.logger.log_image(key=key, images=[fig], step=t_i)
 
                 plt.close(
                     "all"
@@ -660,7 +661,8 @@ class ARModel(pl.LightningModule):
                 if not isinstance(self.logger, pl.loggers.WandbLogger):
                     key = f"{key}-{current_epoch}"
 
-                self.logger.log_image(key=key, images=[figure])
+                if hasattr(self.logger, "log_image"):
+                    self.logger.log_image(key=key, images=[figure])
 
             plt.close("all")  # Close all figs
 
@@ -698,7 +700,8 @@ class ARModel(pl.LightningModule):
                 key = "test_loss"
                 if not isinstance(self.logger, pl.loggers.WandbLogger):
                     key = f"{key}_{i}"
-                self.logger.log_image(key=key, images=[fig])
+                if hasattr(self.logger, "log_image"):
+                    self.logger.log_image(key=key, images=[fig])
 
             # also make without title and save as pdf
             pdf_loss_map_figs = [
