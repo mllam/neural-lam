@@ -420,5 +420,6 @@ def main(input_args=None):
     else:
         trainer.fit(model=model, datamodule=data_module, ckpt_path=args.load)
 
+
 if __name__ == "__main__":
     main()
