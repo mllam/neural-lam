@@ -29,6 +29,10 @@ MODELS = {
 
 
 class CustomMLFlowLogger(pl.loggers.MLFlowLogger):
+    """
+    Custom MLFlow logger that adds functionality not present in the default
+    """
+
     def __init__(self, experiment_name, tracking_uri):
         super().__init__(
             experiment_name=experiment_name, tracking_uri=tracking_uri
@@ -38,9 +42,22 @@ class CustomMLFlowLogger(pl.loggers.MLFlowLogger):
 
     @property
     def save_dir(self):
+        """
+        Returns the directory where the MLFlow artifacts are saved
+        """
         return "mlruns"
 
     def log_image(self, key, images, step=None):
+        """
+        Log a matplotlib figure as an image to MLFlow
+
+        key: str
+            Key to log the image under
+        images: list
+            List of matplotlib figures to log
+        step: Union[int, None]
+            Step to log the image under. If None, logs under the key directly
+        """
         # Third-party
         from PIL import Image
 
@@ -61,7 +78,7 @@ class CustomMLFlowLogger(pl.loggers.MLFlowLogger):
         with torch.no_grad():
             model_output = model.common_step(input_example)[
                 0
-            ]  # expects batch, returns tuple (prediction, target, pred_std, _)
+            ]  # common_step returns tuple (prediction, target, pred_std, _)
 
         log_model_input_example = {
             name: tensor.cpu().numpy()
@@ -80,8 +97,6 @@ class CustomMLFlowLogger(pl.loggers.MLFlowLogger):
             "model",
             signature=signature,
         )
-
-        # validate_serving_input(model_uri, validate_example)
 
     def create_input_example(self, data_module):
 
@@ -404,10 +419,6 @@ def main(input_args=None):
         )
     else:
         trainer.fit(model=model, datamodule=data_module, ckpt_path=args.load)
-
-        # Log model. TODO: only log for mlflow
-        training_logger.log_model(data_module, model)
-
 
 if __name__ == "__main__":
     main()

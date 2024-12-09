@@ -44,6 +44,8 @@ datastore:
   kind: mdp
   config_path: ""
 training:
+  logger: wandb
+  logger_url: https://wandb.ai
   state_feature_weighting:
     __config_class__: ManualStateFeatureWeighting
     weights:
