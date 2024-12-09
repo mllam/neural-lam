@@ -87,7 +87,7 @@ class TrainingConfig:
     ] = dataclasses.field(default_factory=UniformFeatureWeighting)
 
     logger: str = "wandb"
-    logger_url: str = None
+    logger_url: str = ""
 
 
 @dataclasses.dataclass

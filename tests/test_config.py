@@ -45,7 +45,7 @@ datastore:
   config_path: ""
 training:
   logger: wandb
-  logger_url: https://wandb.ai
+  logger_url: ""
   state_feature_weighting:
     __config_class__: ManualStateFeatureWeighting
     weights:
