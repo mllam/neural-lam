@@ -7,7 +7,6 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pytorch_lightning as pl
 import torch
-import wandb
 import xarray as xr
 
 # Local
@@ -96,6 +95,7 @@ class ARModel(pl.LightningModule):
             # Store constant per-variable std.-dev. weighting
             # NOTE that this is the inverse of the multiplicative weighting
             # in wMSE/wMAE
+            # TODO: Do we need param_weights for this?
             self.register_buffer(
                 "per_var_std",
                 self.diff_std / torch.sqrt(self.feature_weights),
@@ -262,7 +262,7 @@ class ARModel(pl.LightningModule):
                 pred_std_list, dim=1
             )  # (B, pred_steps, num_grid_nodes, d_f)
         else:
-            pred_std = self.per_var_std  # (d_f,)
+            pred_std = self.diff_std  # (d_f,)
 
         return prediction, pred_std
 
@@ -539,14 +539,18 @@ class ARModel(pl.LightningModule):
 
                 example_i = self.plotted_examples
 
-                wandb.log(
-                    {
-                        f"{var_name}_example_{example_i}": wandb.Image(fig)
-                        for var_name, fig in zip(
-                            self._datastore.get_vars_names("state"), var_figs
-                        )
-                    }
-                )
+                for var_name, fig in zip(
+                    self._datastore.get_vars_names("state"), var_figs
+                ):
+
+                    if isinstance(self.logger, pl.loggers.WandbLogger):
+                        key = f"{var_name}_example_{example_i}"
+                    else:
+                        key = f"{var_name}_example"
+
+                    if hasattr(self.logger, "log_image"):
+                        self.logger.log_image(key=key, images=[fig], step=t_i)
+
                 plt.close(
                     "all"
                 )  # Close all figs for this time step, saves memory
@@ -555,13 +559,15 @@ class ARModel(pl.LightningModule):
             torch.save(
                 pred_slice.cpu(),
                 os.path.join(
-                    wandb.run.dir, f"example_pred_{self.plotted_examples}.pt"
+                    self.logger.save_dir,
+                    f"example_pred_{self.plotted_examples}.pt",
                 ),
             )
             torch.save(
                 target_slice.cpu(),
                 os.path.join(
-                    wandb.run.dir, f"example_target_{self.plotted_examples}.pt"
+                    self.logger.save_dir,
+                    f"example_target_{self.plotted_examples}.pt",
                 ),
             )
 
@@ -582,16 +588,16 @@ class ARModel(pl.LightningModule):
             datastore=self._datastore,
         )
         full_log_name = f"{prefix}_{metric_name}"
-        log_dict[full_log_name] = wandb.Image(metric_fig)
+        log_dict[full_log_name] = metric_fig
 
         if prefix == "test":
             # Save pdf
             metric_fig.savefig(
-                os.path.join(wandb.run.dir, f"{full_log_name}.pdf")
+                os.path.join(self.logger.save_dir, f"{full_log_name}.pdf")
             )
             # Save errors also as csv
             np.savetxt(
-                os.path.join(wandb.run.dir, f"{full_log_name}.csv"),
+                os.path.join(self.logger.save_dir, f"{full_log_name}.csv"),
                 metric_tensor.cpu().numpy(),
                 delimiter=",",
             )
@@ -639,8 +645,25 @@ class ARModel(pl.LightningModule):
                     )
                 )
 
+        # Ensure that log_dict has structure for
+        # logging as dict(str, plt.Figure)
+        assert all(
+            isinstance(key, str) and isinstance(value, plt.Figure)
+            for key, value in log_dict.items()
+        )
+
         if self.trainer.is_global_zero and not self.trainer.sanity_checking:
-            wandb.log(log_dict)  # Log all
+
+            current_epoch = self.trainer.current_epoch
+
+            for key, figure in log_dict.items():
+                # For other loggers than wandb, add epoch to key
+                if not isinstance(self.logger, pl.loggers.WandbLogger):
+                    key = f"{key}-{current_epoch}"
+
+                if hasattr(self.logger, "log_image"):
+                    self.logger.log_image(key=key, images=[figure])
+
             plt.close("all")  # Close all figs
 
     def on_test_epoch_end(self):
@@ -672,9 +695,13 @@ class ARModel(pl.LightningModule):
                 )
             ]
 
-            # log all to same wandb key, sequentially
-            for fig in loss_map_figs:
-                wandb.log({"test_loss": wandb.Image(fig)})
+            # log all to same key, sequentially
+            for i, fig in enumerate(loss_map_figs):
+                key = "test_loss"
+                if not isinstance(self.logger, pl.loggers.WandbLogger):
+                    key = f"{key}_{i}"
+                if hasattr(self.logger, "log_image"):
+                    self.logger.log_image(key=key, images=[fig])
 
             # also make without title and save as pdf
             pdf_loss_map_figs = [
@@ -683,14 +710,16 @@ class ARModel(pl.LightningModule):
                 )
                 for loss_map in mean_spatial_loss
             ]
-            pdf_loss_maps_dir = os.path.join(wandb.run.dir, "spatial_loss_maps")
+            pdf_loss_maps_dir = os.path.join(
+                self.logger.save_dir, "spatial_loss_maps"
+            )
             os.makedirs(pdf_loss_maps_dir, exist_ok=True)
             for t_i, fig in zip(self.args.val_steps_to_log, pdf_loss_map_figs):
                 fig.savefig(os.path.join(pdf_loss_maps_dir, f"loss_t{t_i}.pdf"))
             # save mean spatial loss as .pt file also
             torch.save(
                 mean_spatial_loss.cpu(),
-                os.path.join(wandb.run.dir, "mean_spatial_loss.pt"),
+                os.path.join(self.logger.save_dir, "mean_spatial_loss.pt"),
             )
 
         self.spatial_loss_maps.clear()

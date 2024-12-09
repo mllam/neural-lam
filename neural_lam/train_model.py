@@ -5,10 +5,15 @@ import time
 from argparse import ArgumentParser
 
 # Third-party
+import mlflow
+
+# for logging the model:
+import mlflow.pytorch
 import pytorch_lightning as pl
 import torch
 from lightning_fabric.utilities import seed
 from loguru import logger
+from mlflow.models import infer_signature
 
 # Local
 from . import utils
@@ -21,6 +26,110 @@ MODELS = {
     "hi_lam": HiLAM,
     "hi_lam_parallel": HiLAMParallel,
 }
+
+
+class CustomMLFlowLogger(pl.loggers.MLFlowLogger):
+    """
+    Custom MLFlow logger that adds functionality not present in the default
+    """
+
+    def __init__(self, experiment_name, tracking_uri):
+        super().__init__(
+            experiment_name=experiment_name, tracking_uri=tracking_uri
+        )
+        mlflow.start_run(run_id=self.run_id, log_system_metrics=True)
+        mlflow.log_param("run_id", self.run_id)
+
+    @property
+    def save_dir(self):
+        """
+        Returns the directory where the MLFlow artifacts are saved
+        """
+        return "mlruns"
+
+    def log_image(self, key, images, step=None):
+        """
+        Log a matplotlib figure as an image to MLFlow
+
+        key: str
+            Key to log the image under
+        images: list
+            List of matplotlib figures to log
+        step: Union[int, None]
+            Step to log the image under. If None, logs under the key directly
+        """
+        # Third-party
+        from PIL import Image
+
+        if step is not None:
+            key = f"{key}_{step}"
+
+        # Need to save the image to a temporary file, then log that file
+        # mlflow.log_image, should do this automatically, but is buggy
+        temporary_image = f"{key}.png"
+        images[0].savefig(temporary_image)
+
+        img = Image.open(temporary_image)
+        mlflow.log_image(img, f"{key}.png")
+
+    def log_model(self, data_module, model):
+        input_example = self.create_input_example(data_module)
+
+        with torch.no_grad():
+            model_output = model.common_step(input_example)[
+                0
+            ]  # common_step returns tuple (prediction, target, pred_std, _)
+
+        log_model_input_example = {
+            name: tensor.cpu().numpy()
+            for name, tensor in zip(
+                ["init_states", "target_states", "forcing", "target_times"],
+                input_example,
+            )
+        }
+
+        signature = infer_signature(
+            log_model_input_example, model_output.cpu().numpy()
+        )
+
+        mlflow.pytorch.log_model(
+            model,
+            "model",
+            signature=signature,
+        )
+
+    def create_input_example(self, data_module):
+
+        if data_module.val_dataset is None:
+            data_module.setup(stage="fit")
+
+        data_loader = data_module.train_dataloader()
+        batch_sample = next(iter(data_loader))
+        return batch_sample
+
+
+def _setup_training_logger(config, datastore, args, run_name):
+    if config.training.logger == "wandb":
+        logger = pl.loggers.WandbLogger(
+            project=args.wandb_project,
+            name=run_name,
+            config=dict(training=vars(args), datastore=datastore._config),
+        )
+    elif config.training.logger == "mlflow":
+        url = config.training.logger_url
+        if url is None:
+            raise ValueError(
+                "MLFlow logger requires a URL to the MLFlow server"
+            )
+        logger = CustomMLFlowLogger(
+            experiment_name=args.wandb_project,
+            tracking_uri=url,
+        )
+        logger.log_hyperparams(
+            dict(training=vars(args), datastore=datastore._config)
+        )
+
+    return logger
 
 
 @logger.catch
@@ -163,6 +272,12 @@ def main(input_args=None):
         help="Number of example predictions to plot during evaluation "
         "(default: 1)",
     )
+    parser.add_argument(
+        "--save_predictions",
+        action="store_true",
+        help="If predictions should be saved to disk as a zarr dataset "
+        "(default: false)",
+    )
 
     # Logger Settings
     parser.add_argument(
@@ -261,6 +376,11 @@ def main(input_args=None):
         f"{prefix}{args.model}-{args.processor_layers}x{args.hidden_dim}-"
         f"{time.strftime('%m_%d_%H')}-{random_run_id:04d}"
     )
+
+    training_logger = _setup_training_logger(
+        config=config, datastore=datastore, args=args, run_name=run_name
+    )
+
     checkpoint_callback = pl.callbacks.ModelCheckpoint(
         dirpath=f"saved_models/{run_name}",
         filename="min_val_loss",
@@ -268,17 +388,18 @@ def main(input_args=None):
         mode="min",
         save_last=True,
     )
-    logger = pl.loggers.WandbLogger(
-        project=args.wandb_project,
-        name=run_name,
-        config=dict(training=vars(args), datastore=datastore._config),
-    )
     trainer = pl.Trainer(
         max_epochs=args.epochs,
         deterministic=True,
         strategy="ddp",
+        devices=4,
+        # devices=[1,2],
+        # devices=[0, 1, 2],
+        # strategy="auto",
+        # devices=1,  # For eval mode
+        # num_nodes=1,  # For eval mode
         accelerator=device_name,
-        logger=logger,
+        logger=training_logger,
         log_every_n_steps=1,
         callbacks=[checkpoint_callback],
         check_val_every_n_epoch=args.val_interval,
@@ -287,11 +408,15 @@ def main(input_args=None):
 
     # Only init once, on rank 0 only
     if trainer.global_rank == 0:
-        utils.init_wandb_metrics(
-            logger, val_steps=args.val_steps_to_log
-        )  # Do after wandb.init
+        utils.init_training_logger_metrics(
+            training_logger, val_steps=args.val_steps_to_log
+        )  # Do after initializing logger
     if args.eval:
-        trainer.test(model=model, datamodule=data_module, ckpt_path=args.load)
+        trainer.test(
+            model=model,
+            datamodule=data_module,
+            ckpt_path=args.load,
+        )
     else:
         trainer.fit(model=model, datamodule=data_module, ckpt_path=args.load)
 
