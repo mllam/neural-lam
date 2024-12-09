@@ -11,9 +11,9 @@ import mlflow
 import mlflow.pytorch
 import pytorch_lightning as pl
 import torch
-from mlflow.models import infer_signature
 from lightning_fabric.utilities import seed
 from loguru import logger
+from mlflow.models import infer_signature
 
 # Local
 from . import utils
@@ -59,20 +59,29 @@ class CustomMLFlowLogger(pl.loggers.MLFlowLogger):
         input_example = self.create_input_example(data_module)
 
         with torch.no_grad():
-            model_output = model.common_step(input_example)[0] # expects batch, returns tuple (ar_model)
+            model_output = model.common_step(input_example)[
+                0
+            ]  # expects batch, returns tuple (prediction, target, pred_std, _)
 
-        #TODO: Are we sure we can hardcode the input names?
+        log_model_input_example = {
+            name: tensor.cpu().numpy()
+            for name, tensor in zip(
+                ["init_states", "target_states", "forcing", "target_times"],
+                input_example,
+            )
+        }
+
         signature = infer_signature(
-            {name: tensor.cpu().numpy() for name, tensor in zip(['init_states', 'target_states', 'forcing', 'target_times'], input_example)},
-            model_output.cpu().numpy()
+            log_model_input_example, model_output.cpu().numpy()
         )
 
         mlflow.pytorch.log_model(
             model,
             "model",
-            input_example=input_example[0].cpu().numpy(),
-            signature=signature
+            signature=signature,
         )
+
+        # validate_serving_input(model_uri, validate_example)
 
     def create_input_example(self, data_module):
 
@@ -82,7 +91,6 @@ class CustomMLFlowLogger(pl.loggers.MLFlowLogger):
         data_loader = data_module.train_dataloader()
         batch_sample = next(iter(data_loader))
         return batch_sample
-
 
 
 def _setup_training_logger(config, datastore, args, run_name):
@@ -373,8 +381,8 @@ def main(input_args=None):
         # devices=[1,2],
         # devices=[0, 1, 2],
         # strategy="auto",
-        #devices=1,  # For eval mode
-        #num_nodes=1,  # For eval mode
+        # devices=1,  # For eval mode
+        # num_nodes=1,  # For eval mode
         accelerator=device_name,
         logger=training_logger,
         log_every_n_steps=1,
@@ -397,11 +405,7 @@ def main(input_args=None):
     else:
         trainer.fit(model=model, datamodule=data_module, ckpt_path=args.load)
 
-        # Get a sample of training data to log
-        # sample_data = data_module.train_dataset
-        # print("Logging sample data")
-        # print(sample_data.train_dataset)
-        # Log the model
+        # Log model. TODO: only log for mlflow
         training_logger.log_model(data_module, model)
 
 
