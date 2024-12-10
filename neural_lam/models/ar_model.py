@@ -39,8 +39,9 @@ class ARModel(pl.LightningModule):
         self._datastore = datastore
         num_state_vars = datastore.get_num_data_vars(category="state")
         num_forcing_vars = datastore.get_num_data_vars(category="forcing")
+        # Load static features standardized
         da_static_features = datastore.get_dataarray(
-            category="static", split=None
+            category="static", split=None, standardize=True
         )
         da_state_stats = datastore.get_standardization_dataarray(
             category="state"
@@ -49,14 +50,10 @@ class ARModel(pl.LightningModule):
         num_past_forcing_steps = args.num_past_forcing_steps
         num_future_forcing_steps = args.num_future_forcing_steps
 
-        # Load static features for grid/data, NB: self.predict_step assumes
-        # dimension order to be (grid_index, static_feature)
-        arr_static = da_static_features.transpose(
-            "grid_index", "static_feature"
-        ).values
+        # Load static features for grid/data,
         self.register_buffer(
             "grid_static_features",
-            torch.tensor(arr_static, dtype=torch.float32),
+            torch.tensor(da_static_features.values, dtype=torch.float32),
             persistent=False,
         )
 

@@ -199,7 +199,9 @@ class NpyFilesDatastoreMEPS(BaseRegularGridDatastore):
         """
         return self._config
 
-    def get_dataarray(self, category: str, split: str) -> DataArray:
+    def get_dataarray(
+        self, category: str, split: str, standardize: bool = False
+    ) -> DataArray:
         """
         Get the data array for the given category and split of data. If the
         category is 'state', the data array will be a concatenation of the data
@@ -214,6 +216,8 @@ class NpyFilesDatastoreMEPS(BaseRegularGridDatastore):
         split : str
             The dataset split to load the data for. One of 'train', 'val', or
             'test'.
+        standardize: bool
+            If the dataarray should be returned standardized
 
         Returns
         -------
@@ -302,6 +306,9 @@ class NpyFilesDatastoreMEPS(BaseRegularGridDatastore):
 
         dim_order = self.expected_dim_order(category=category)
         da = da.transpose(*dim_order)
+
+        if standardize:
+            return self._standardize_datarray(da, category=category)
 
         return da
 
