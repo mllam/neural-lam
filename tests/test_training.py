@@ -66,17 +66,16 @@ def test_training(datastore_name, datastore_boundary_name):
 
     graph_dir_path = Path(datastore.root_path) / "graphs" / flat_graph_name
 
-    def _create_graph():
-        if not graph_dir_path.exists():
-            build_graph_from_archetype(
-                datastore=datastore,
-                datastore_boundary=datastore_boundary,
-                graph_name=flat_graph_name,
-                archetype="keisler",
-                mesh_node_distance=get_test_mesh_dist(
-                    datastore, datastore_boundary
-                ),
-            )
+    if not graph_dir_path.exists():
+        build_graph_from_archetype(
+            datastore=datastore,
+            datastore_boundary=datastore_boundary,
+            graph_name=flat_graph_name,
+            archetype="keisler",
+            mesh_node_distance=get_test_mesh_dist(
+                datastore, datastore_boundary
+            ),
+        )
 
     data_module = WeatherDataModule(
         datastore=datastore,

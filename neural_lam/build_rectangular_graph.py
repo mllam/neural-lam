@@ -253,7 +253,7 @@ def build_graph_from_archetype(
     datastore_boundary,
     graph_name,
     archetype,
-    dir_save_path,
+    dir_save_path=None,
     **kwargs,
 ):
     """
