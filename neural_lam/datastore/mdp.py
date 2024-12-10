@@ -27,11 +27,10 @@ class MDPDatastore(BaseRegularGridDatastore):
 
     SHORT_NAME = "mdp"
 
-    def __init__(self, config_path, n_boundary_points=30, reuse_existing=True):
+    def __init__(self, config_path, reuse_existing=True):
         """
         Construct a new MDPDatastore from the configuration file at
-        `config_path`. A boundary mask is created with `n_boundary_points`
-        boundary points. If `reuse_existing` is True, the dataset is loaded
+        `config_path`. If `reuse_existing` is True, the dataset is loaded
         from a zarr file if it exists (unless the config has been modified
         since the zarr was created), otherwise it is created from the
         configuration file.
@@ -42,8 +41,6 @@ class MDPDatastore(BaseRegularGridDatastore):
             The path to the configuration file, this will be fed to the
             `mllam_data_prep.Config.from_yaml_file` method to then call
             `mllam_data_prep.create_dataset` to create the dataset.
-        n_boundary_points : int
-            The number of boundary points to use in the boundary mask.
         reuse_existing : bool
             Whether to reuse an existing dataset zarr file if it exists and its
             creation date is newer than the configuration file.
@@ -70,7 +67,6 @@ class MDPDatastore(BaseRegularGridDatastore):
         if self._ds is None:
             self._ds = mdp.create_dataset(config=self._config)
             self._ds.to_zarr(fp_ds)
-        self._n_boundary_points = n_boundary_points
 
         print("The loaded datastore contains the following features:")
         for category in ["state", "forcing", "static"]:
@@ -158,8 +154,8 @@ class MDPDatastore(BaseRegularGridDatastore):
             The units of the variables in the given category.
 
         """
-        if category not in self._ds and category == "forcing":
-            warnings.warn("no forcing data found in datastore")
+        if category not in self._ds:
+            warnings.warn(f"no {category} data found in datastore")
             return []
         return self._ds[f"{category}_feature_units"].values.tolist()
 
@@ -177,8 +173,8 @@ class MDPDatastore(BaseRegularGridDatastore):
             The names of the variables in the given category.
 
         """
-        if category not in self._ds and category == "forcing":
-            warnings.warn("no forcing data found in datastore")
+        if category not in self._ds:
+            warnings.warn(f"no {category} data found in datastore")
             return []
         return self._ds[f"{category}_feature"].values.tolist()
 
@@ -197,8 +193,8 @@ class MDPDatastore(BaseRegularGridDatastore):
             The long names of the variables in the given category.
 
         """
-        if category not in self._ds and category == "forcing":
-            warnings.warn("no forcing data found in datastore")
+        if category not in self._ds:
+            warnings.warn(f"no {category} data found in datastore")
             return []
         return self._ds[f"{category}_feature_long_name"].values.tolist()
 
@@ -253,9 +249,9 @@ class MDPDatastore(BaseRegularGridDatastore):
             The xarray DataArray object with processed dataset.
 
         """
-        if category not in self._ds and category == "forcing":
-            warnings.warn("no forcing data found in datastore")
-            return None
+        if category not in self._ds:
+            warnings.warn(f"no {category} data found in datastore")
+            return []
 
         da_category = self._ds[category]
 
@@ -318,37 +314,6 @@ class MDPDatastore(BaseRegularGridDatastore):
 
         ds_stats = self._ds[stats_variables.keys()].rename(stats_variables)
         return ds_stats
-
-    @cached_property
-    def boundary_mask(self) -> xr.DataArray:
-        """
-        Produce a 0/1 mask for the boundary points of the dataset, these will
-        sit at the edges of the domain (in x/y extent) and will be used to mask
-        out the boundary points from the loss function and to overwrite the
-        boundary points from the prediction. For now this is created when the
-        mask is requested, but in the future this could be saved to the zarr
-        file.
-
-        Returns
-        -------
-        xr.DataArray
-            A 0/1 mask for the boundary points of the dataset, where 1 is a
-            boundary point and 0 is not.
-
-        """
-        ds_unstacked = self.unstack_grid_coords(da_or_ds=self._ds)
-        da_state_variable = (
-            ds_unstacked["state"].isel(time=0).isel(state_feature=0)
-        )
-        da_domain_allzero = xr.zeros_like(da_state_variable)
-        ds_unstacked["boundary_mask"] = da_domain_allzero.isel(
-            x=slice(self._n_boundary_points, -self._n_boundary_points),
-            y=slice(self._n_boundary_points, -self._n_boundary_points),
-        )
-        ds_unstacked["boundary_mask"] = ds_unstacked.boundary_mask.fillna(
-            1
-        ).astype(int)
-        return self.stack_grid_coords(da_or_ds=ds_unstacked.boundary_mask)
 
     @property
     def coords_projection(self) -> ccrs.Projection:
@@ -415,12 +380,21 @@ class MDPDatastore(BaseRegularGridDatastore):
             The shape of the cartesian grid for the state variables.
 
         """
-        ds_state = self.unstack_grid_coords(self._ds["state"])
-        da_x, da_y = ds_state.x, ds_state.y
+        # Boundary data often has no state features
+        if "state" not in self._ds:
+            warnings.warn(
+                "no state data found in datastore"
+                "returning grid shape from forcing data"
+            )
+            ds_forcing = self.unstack_grid_coords(self._ds["forcing"])
+            da_x, da_y = ds_forcing.x, ds_forcing.y
+        else:
+            ds_state = self.unstack_grid_coords(self._ds["state"])
+            da_x, da_y = ds_state.x, ds_state.y
         assert da_x.ndim == da_y.ndim == 1
         return CartesianGridShape(x=da_x.size, y=da_y.size)
 
-    def get_xy(self, category: str, stacked: bool) -> ndarray:
+    def get_xy(self, category: str, stacked: bool = True) -> ndarray:
         """Return the x, y coordinates of the dataset.
 
         Parameters
