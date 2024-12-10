@@ -332,6 +332,8 @@ class DummyDatastore(BaseRegularGridDatastore):
             The category of the dataset (state/forcing/static).
         split : str
             The time split to filter the dataset (train/val/test).
+        standardize: bool
+            If the dataarray should be returned standardized
 
         Returns
         -------
