@@ -95,7 +95,6 @@ class ARModel(pl.LightningModule):
             # Store constant per-variable std.-dev. weighting
             # NOTE that this is the inverse of the multiplicative weighting
             # in wMSE/wMAE
-            # TODO: Do we need param_weights for this?
             self.register_buffer(
                 "per_var_std",
                 self.diff_std / torch.sqrt(self.feature_weights),
@@ -262,7 +261,7 @@ class ARModel(pl.LightningModule):
                 pred_std_list, dim=1
             )  # (B, pred_steps, num_grid_nodes, d_f)
         else:
-            pred_std = self.diff_std  # (d_f,)
+            pred_std = self.per_var_std  # (d_f,)
 
         return prediction, pred_std
 
