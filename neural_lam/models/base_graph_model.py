@@ -108,8 +108,10 @@ class BaseGraphModel(ARModel):
             )
 
         # Constant parameters for clamping
-        sigmoid_sharpness = softplus_sharpness = 1
-        sigmoid_center = softplus_center = 0
+        self.sigmoid_sharpness = 1
+        self.softplus_sharpness = 1
+        self.sigmoid_center = 0
+        self.softplus_center = 0
 
         normalize_clamping_lim = (
             lambda x, feature_idx: (x - self.state_mean[feature_idx])
@@ -129,6 +131,11 @@ class BaseGraphModel(ARModel):
 
         for feature_idx, feature in enumerate(state_feature_names):
             if feature in lower_lims and feature in upper_lims:
+                assert (
+                    lower_lims[feature] < upper_lims[feature]
+                ), f'Invalid clamping limits for feature "{feature}",\
+                     lower: {lower_lims[feature]}, larger than\
+                     upper: {upper_lims[feature]}'
                 sigmoid_lower_upper_idx.append(feature_idx)
                 sigmoid_lower_lims.append(
                     normalize_clamping_lim(lower_lims[feature], feature_idx)
@@ -147,31 +154,10 @@ class BaseGraphModel(ARModel):
                     normalize_clamping_lim(upper_lims[feature], feature_idx)
                 )
 
-        # Convert to tensors
-        # self.register_buffer(
-        #     "sigmoid_lower_lims",
-        #     torch.tensor(sigmoid_lower_lims),
-        #     persistent=False,
-        # )
-        # self.register_buffer(
-        #     "sigmoid_upper_lims",
-        #     torch.tensor(sigmoid_upper_lims),
-        #     persistent=False,
-        # )
-        # self.register_buffer(
-        #     "softplus_lower_lims",
-        #     torch.tensor(softplus_lower_lims),
-        #     persistent=False,
-        # )
-        # self.register_buffer(
-        #     "softplus_upper_lims",
-        #     torch.tensor(softplus_upper_lims),
-        #     persistent=False,
-        # )
-        sigmoid_lower_lims = torch.tensor(sigmoid_lower_lims)
-        sigmoid_upper_lims = torch.tensor(sigmoid_upper_lims)
-        softplus_lower_lims = torch.tensor(softplus_lower_lims)
-        softplus_upper_lims = torch.tensor(softplus_upper_lims)
+        self.sigmoid_lower_lims = torch.tensor(sigmoid_lower_lims)
+        self.sigmoid_upper_lims = torch.tensor(sigmoid_upper_lims)
+        self.softplus_lower_lims = torch.tensor(softplus_lower_lims)
+        self.softplus_upper_lims = torch.tensor(softplus_upper_lims)
 
         self.clamp_lower_upper_idx = torch.tensor(sigmoid_lower_upper_idx)
         self.clamp_lower_idx = torch.tensor(softplus_lower_idx)
@@ -179,20 +165,20 @@ class BaseGraphModel(ARModel):
 
         # Define clamping functions
         self.clamp_lower_upper = lambda x: (
-            sigmoid_lower_lims
-            + (sigmoid_upper_lims - sigmoid_lower_lims)
-            * torch.sigmoid(sigmoid_sharpness * (x - sigmoid_center))
+            self.sigmoid_lower_lims
+            + (self.sigmoid_upper_lims - self.sigmoid_lower_lims)
+            * torch.sigmoid(self.sigmoid_sharpness * (x - self.sigmoid_center))
         )
         self.clamp_lower = lambda x: (
-            softplus_lower_lims
+            self.softplus_lower_lims
             + torch.nn.functional.softplus(
-                x - softplus_center, beta=softplus_sharpness
+                x - self.softplus_center, beta=self.softplus_sharpness
             )
         )
         self.clamp_upper = lambda x: (
-            softplus_upper_lims
+            self.softplus_upper_lims
             - torch.nn.functional.softplus(
-                softplus_center - x, beta=softplus_sharpness
+                self.softplus_center - x, beta=self.softplus_sharpness
             )
         )
 
@@ -200,13 +186,11 @@ class BaseGraphModel(ARModel):
         def inverse_softplus(x, beta=1, threshold=20):
             # If x*beta is above threshold, returns linear function
             # for numerical stability
-            under_lim = x * beta <= threshold
-            x[under_lim] = (
-                torch.log(
-                    torch.clamp_min(torch.expm1(x[under_lim] * beta), 1e-6)
-                )
-                / beta
+            non_linear_part = (
+                torch.log(torch.clamp_min(torch.expm1(x * beta), 1e-6)) / beta
             )
+            x = torch.where(x * beta <= threshold, non_linear_part, x)
+
             return x
 
         def inverse_sigmoid(x):
@@ -214,20 +198,24 @@ class BaseGraphModel(ARModel):
             return torch.log(x_clamped / (1 - x_clamped))
 
         self.inverse_clamp_lower_upper = lambda x: (
-            sigmoid_center
+            self.sigmoid_center
             + inverse_sigmoid(
-                (x - sigmoid_lower_lims)
-                / (sigmoid_upper_lims - sigmoid_lower_lims)
+                (x - self.sigmoid_lower_lims)
+                / (self.sigmoid_upper_lims - self.sigmoid_lower_lims)
             )
-            / sigmoid_sharpness
+            / self.sigmoid_sharpness
         )
         self.inverse_clamp_lower = lambda x: (
-            inverse_softplus(x - softplus_lower_lims, beta=softplus_sharpness)
-            + softplus_center
+            inverse_softplus(
+                x - self.softplus_lower_lims, beta=self.softplus_sharpness
+            )
+            + self.softplus_center
         )
         self.inverse_clamp_upper = lambda x: (
-            -inverse_softplus(softplus_upper_lims - x, beta=softplus_sharpness)
-            + softplus_center
+            -inverse_softplus(
+                self.softplus_upper_lims - x, beta=self.softplus_sharpness
+            )
+            + self.softplus_center
         )
 
     def clamp_prediction(self, state_delta, prev_state):

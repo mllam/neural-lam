@@ -15,3 +15,4 @@ training:
       r2m: 0
     upper:
       r2m: 100.0
+      u100m: 100.0
