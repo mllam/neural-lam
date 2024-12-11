@@ -1,6 +1,7 @@
 # Standard library
 import json
 import random
+import sys
 import time
 from argparse import ArgumentParser
 
@@ -59,6 +60,7 @@ class CustomMLFlowLogger(pl.loggers.MLFlowLogger):
             Step to log the image under. If None, logs under the key directly
         """
         # Third-party
+        import botocore
         from PIL import Image
 
         if step is not None:
@@ -70,7 +72,11 @@ class CustomMLFlowLogger(pl.loggers.MLFlowLogger):
         images[0].savefig(temporary_image)
 
         img = Image.open(temporary_image)
-        mlflow.log_image(img, f"{key}.png")
+        try:
+            mlflow.log_image(img, f"{key}.png")
+        except botocore.exceptions.NoCredentialsError:
+            logger.error("Error logging image\nSet AWS credentials")
+            sys.exit(1)
 
     def log_model(self, data_module, model):
         input_example = self.create_input_example(data_module)
@@ -392,8 +398,8 @@ def main(input_args=None):
         max_epochs=args.epochs,
         deterministic=True,
         strategy="ddp",
-        devices=4,
-        # devices=[1,2],
+        # devices=4,
+        devices=[0, 3],
         # devices=[0, 1, 2],
         # strategy="auto",
         # devices=1,  # For eval mode
