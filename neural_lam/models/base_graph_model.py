@@ -80,9 +80,9 @@ class BaseGraphModel(ARModel):
         )  # No layer norm on this one
 
         # Compute indices and define clamping functions
-        self.prepare_clamping_parames(config, datastore)
+        self.prepare_clamping_params(config, datastore)
 
-    def prepare_clamping_parames(
+    def prepare_clamping_params(
         self, config: NeuralLAMConfig, datastore: BaseDatastore
     ):
         """
