@@ -9,22 +9,38 @@ import wandb
 
 # First-party
 from neural_lam import config as nlconfig
-from neural_lam.create_graph import create_graph_from_datastore
+from neural_lam.build_rectangular_graph import build_graph_from_archetype
 from neural_lam.datastore import DATASTORES
 from neural_lam.datastore.base import BaseRegularGridDatastore
 from neural_lam.models.graph_lam import GraphLAM
 from neural_lam.weather_dataset import WeatherDataModule
-from tests.conftest import init_datastore_example
+from tests.conftest import (
+    DATASTORES_BOUNDARY_EXAMPLES,
+    get_test_mesh_dist,
+    init_datastore_boundary_example,
+    init_datastore_example,
+)
 
 
 @pytest.mark.parametrize("datastore_name", DATASTORES.keys())
-def test_training(datastore_name):
+@pytest.mark.parametrize(
+    "datastore_boundary_name", DATASTORES_BOUNDARY_EXAMPLES.keys()
+)
+def test_training(datastore_name, datastore_boundary_name):
     datastore = init_datastore_example(datastore_name)
+    datastore_boundary = init_datastore_boundary_example(
+        datastore_boundary_name
+    )
 
     if not isinstance(datastore, BaseRegularGridDatastore):
         pytest.skip(
             f"Skipping test for {datastore_name} as it is not a regular "
             "grid datastore."
+        )
+    if not isinstance(datastore_boundary, BaseRegularGridDatastore):
+        pytest.skip(
+            f"Skipping test for {datastore_boundary_name} as it is not a "
+            "regular grid datastore."
         )
 
     if torch.cuda.is_available():
@@ -46,19 +62,24 @@ def test_training(datastore_name):
         log_every_n_steps=1,
     )
 
-    graph_name = "1level"
+    flat_graph_name = "1level"
 
-    graph_dir_path = Path(datastore.root_path) / "graph" / graph_name
+    graph_dir_path = Path(datastore.root_path) / "graphs" / flat_graph_name
 
     if not graph_dir_path.exists():
-        create_graph_from_datastore(
+        build_graph_from_archetype(
             datastore=datastore,
-            output_root_path=str(graph_dir_path),
-            n_max_levels=1,
+            datastore_boundary=datastore_boundary,
+            graph_name=flat_graph_name,
+            archetype="keisler",
+            mesh_node_distance=get_test_mesh_dist(
+                datastore, datastore_boundary
+            ),
         )
 
     data_module = WeatherDataModule(
         datastore=datastore,
+        datastore_boundary=datastore_boundary,
         ar_steps_train=3,
         ar_steps_eval=5,
         standardize=True,
@@ -66,6 +87,8 @@ def test_training(datastore_name):
         num_workers=1,
         num_past_forcing_steps=1,
         num_future_forcing_steps=1,
+        num_past_boundary_steps=1,
+        num_future_boundary_steps=1,
     )
 
     class ModelArgs:
@@ -75,7 +98,7 @@ def test_training(datastore_name):
         n_example_pred = 1
         # XXX: this should be superfluous when we have already defined the
         # model object no?
-        graph = graph_name
+        graph_name = flat_graph_name
         hidden_dim = 4
         hidden_layers = 1
         processor_layers = 2
@@ -85,6 +108,9 @@ def test_training(datastore_name):
         metrics_watch = []
         num_past_forcing_steps = 1
         num_future_forcing_steps = 1
+        num_past_boundary_steps = 1
+        num_future_boundary_steps = 1
+        shared_grid_embedder = False
 
     model_args = ModelArgs()
 
@@ -94,10 +120,12 @@ def test_training(datastore_name):
         )
     )
 
-    model = GraphLAM(  # noqa
+    model = GraphLAM(
         args=model_args,
         datastore=datastore,
+        datastore_boundary=datastore_boundary,
         config=config,
-    )
+    )  # noqa
+
     wandb.init()
     trainer.fit(model=model, datamodule=data_module)

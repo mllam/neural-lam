@@ -25,12 +25,14 @@ class InteractionNet(pyg.nn.MessagePassing):
         hidden_dim=None,
         edge_chunk_sizes=None,
         aggr_chunk_sizes=None,
+        num_rec=None,
         aggr="sum",
     ):
         """
         Create a new InteractionNet
 
-        edge_index: (2,M), Edges in pyg format
+        edge_index: (2,M), Edges in pyg format, with both sender and receiver
+            node indices starting at 0
         input_dim: Dimensionality of input representations,
             for both nodes and edges
         update_edges: If new edge representations should be computed
@@ -43,6 +45,8 @@ class InteractionNet(pyg.nn.MessagePassing):
         aggr_chunk_sizes: List of chunks sizes to split aggregated node
             representation into and use separate MLPs for
             (None = no chunking, same MLP)
+        num_rec: Number of receiver nodes. If None, derive from edge_index under
+            assumption that all receiver nodes have at least one incoming edge.
         aggr: Message aggregation method (sum/mean)
         """
         assert aggr in ("sum", "mean"), f"Unknown aggregation method: {aggr}"
@@ -52,12 +56,16 @@ class InteractionNet(pyg.nn.MessagePassing):
             # Default to input dim if not explicitly given
             hidden_dim = input_dim
 
-        # Make both sender and receiver indices of edge_index start at 0
-        edge_index = edge_index - edge_index.min(dim=1, keepdim=True)[0]
         # Store number of receiver nodes according to edge_index
-        self.num_rec = edge_index[1].max() + 1
-        edge_index[0] = (
-            edge_index[0] + self.num_rec
+        if num_rec is None:
+            # Derive from edge_index
+            self.num_rec = edge_index[1].max() + 1
+        else:
+            self.num_rec = num_rec
+
+        # any edge_index used here must start sender and rec. nodes at index 0
+        edge_index = torch.stack(
+            (edge_index[0] + self.num_rec, edge_index[1]), dim=0
         )  # Make sender indices after rec
         self.register_buffer("edge_index", edge_index, persistent=False)
 

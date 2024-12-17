@@ -1,2 +1,3 @@
 npyfilesmeps/*.zip
-npyfilesmeps/meps_example_reduced/
+npyfilesmeps/meps_example_reduced
+npyfilesmeps/era5_1000hPa_temp_meps_example_reduced

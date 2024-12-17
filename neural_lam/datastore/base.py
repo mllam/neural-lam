@@ -228,23 +228,6 @@ class BaseDatastore(abc.ABC):
         """
         pass
 
-    @cached_property
-    @abc.abstractmethod
-    def boundary_mask(self) -> xr.DataArray:
-        """
-        Return the boundary mask for the dataset, with spatial dimensions
-        stacked. Where the value is 1, the grid point is a boundary point, and
-        where the value is 0, the grid point is not a boundary point.
-
-        Returns
-        -------
-        xr.DataArray
-            The boundary mask for the dataset, with dimensions
-            `('grid_index',)`.
-
-        """
-        pass
-
     @abc.abstractmethod
     def get_xy(self, category: str) -> np.ndarray:
         """
@@ -261,6 +244,7 @@ class BaseDatastore(abc.ABC):
         np.ndarray
             The x, y coordinates of the dataset with shape `[n_grid_points, 2]`.
         """
+        pass
 
     @property
     @abc.abstractmethod
@@ -276,6 +260,30 @@ class BaseDatastore(abc.ABC):
 
         """
         pass
+
+    @functools.lru_cache
+    def get_lat_lon(self, category: str) -> np.ndarray:
+        """
+        Return the longitude, latitude coordinates of the dataset as numpy
+        array for a given category of data.
+
+        Parameters
+        ----------
+        category : str
+            The category of the dataset (state/forcing/static).
+
+        Returns
+        -------
+        np.ndarray
+            The longitude, latitude coordinates of the dataset
+            with shape `[n_grid_points, 2]`.
+        """
+        xy = self.get_xy(category=category)
+
+        transformed_points = ccrs.PlateCarree().transform_points(
+            self.coords_projection, xy[:, 0], xy[:, 1]
+        )
+        return transformed_points[:, :2]  # Remove z-dim
 
     @functools.lru_cache
     def get_xy_extent(self, category: str) -> List[float]:
