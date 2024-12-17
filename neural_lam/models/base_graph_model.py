@@ -43,7 +43,7 @@ class BaseGraphModel(ARModel):
             if name == "mesh_static_features":
                 max_coord = datastore.get_xy("state").max()
                 # Rescale by dividing by maximum coordinate in interior
-                attr_value = attr_value / max_coord
+                attr_value /= max_coord
 
             # Make BufferLists module members and register tensors as buffers
             if isinstance(attr_value, torch.Tensor):
