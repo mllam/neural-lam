@@ -1,5 +1,6 @@
 # Standard library
 import copy
+import functools
 import warnings
 from functools import cached_property
 from pathlib import Path
@@ -8,9 +9,9 @@ from typing import List
 # Third-party
 import cartopy.crs as ccrs
 import mllam_data_prep as mdp
+import numpy as np
 import xarray as xr
 from loguru import logger
-from numpy import ndarray
 
 # Local
 from .base import BaseRegularGridDatastore, CartesianGridShape
@@ -86,6 +87,8 @@ class MDPDatastore(BaseRegularGridDatastore):
         print("With the following splits (over time):")
         for split in required_splits:
             da_split = self._ds.splits.sel(split_name=split)
+            if "grid_index" in da_split.coords:
+                da_split = da_split.isel(grid_index=0)
             da_split_start = da_split.sel(split_part="start").load().item()
             da_split_end = da_split.sel(split_part="end").load().item()
             print(f" {split:<8s}: {da_split_start} to {da_split_end}")
@@ -266,27 +269,15 @@ class MDPDatastore(BaseRegularGridDatastore):
 
         da_category = self._ds[category]
 
-        # set units on x y coordinates if missing
-        for coord in ["x", "y"]:
-            if "units" not in da_category[coord].attrs:
-                da_category[coord].attrs["units"] = "m"
-
         # set multi-index for grid-index
         da_category = da_category.set_index(grid_index=self.CARTESIAN_COORDS)
 
         if "time" in da_category.dims:
-            t_start = (
-                self._ds.splits.sel(split_name=split)
-                .sel(split_part="start")
-                .load()
-                .item()
-            )
-            t_end = (
-                self._ds.splits.sel(split_name=split)
-                .sel(split_part="end")
-                .load()
-                .item()
-            )
+            da_split = self._ds.splits.sel(split_name=split)
+            if "grid_index" in da_split.coords:
+                da_split = da_split.isel(grid_index=0)
+            t_start = da_split.sel(split_part="start").load().item()
+            t_end = da_split.sel(split_part="end").load().item()
             da_category = da_category.sel(time=slice(t_start, t_end))
 
         dim_order = self.expected_dim_order(category=category)
@@ -324,6 +315,8 @@ class MDPDatastore(BaseRegularGridDatastore):
             )
 
         ds_stats = self._ds[stats_variables.keys()].rename(stats_variables)
+        if "grid_index" in ds_stats.coords:
+            ds_stats = ds_stats.isel(grid_index=0)
         return ds_stats
 
     @property
@@ -404,7 +397,7 @@ class MDPDatastore(BaseRegularGridDatastore):
         assert da_x.ndim == da_y.ndim == 1
         return CartesianGridShape(x=da_x.size, y=da_y.size)
 
-    def get_xy(self, category: str, stacked: bool) -> ndarray:
+    def get_xy(self, category: str, stacked: bool = True) -> np.ndarray:
         """Return the x, y coordinates of the dataset.
 
         Parameters
@@ -449,3 +442,48 @@ class MDPDatastore(BaseRegularGridDatastore):
             da_xy = da_xy.transpose(*dims)
 
         return da_xy.values
+
+    @functools.lru_cache
+    def get_lat_lon(self, category: str) -> np.ndarray:
+        """
+        Return the longitude, latitude coordinates of the dataset as numpy
+        array for a given category of data.
+        Override in MDP to use lat/lons directly from xr.Dataset, if available.
+
+        Parameters
+        ----------
+        category : str
+            The category of the dataset (state/forcing/static).
+
+        Returns
+        -------
+        np.ndarray
+            The longitude, latitude coordinates of the dataset
+            with shape `[n_grid_points, 2]`.
+        """
+        # Check first if lat/lon saved in ds
+        lookup_ds = self._ds
+        if "latitude" in lookup_ds.coords and "longitude" in lookup_ds.coords:
+            lon = lookup_ds.longitude
+            lat = lookup_ds.latitude
+        elif "lat" in lookup_ds.coords and "lon" in lookup_ds.coords:
+            lon = lookup_ds.lon
+            lat = lookup_ds.lat
+        else:
+            # Not saved, use method from BaseDatastore to derive from x/y
+            return super().get_lat_lon(category)
+
+        coords = np.stack((lon.values, lat.values), axis=1)
+        return coords
+
+    @property
+    def num_grid_points(self) -> int:
+        """Return the number of grid points in the dataset.
+
+        Returns
+        -------
+        int
+            The number of grid points in the dataset.
+
+        """
+        return len(self._ds.grid_index)
