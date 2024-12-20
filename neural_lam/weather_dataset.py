@@ -11,7 +11,11 @@ import xarray as xr
 
 # First-party
 from neural_lam.datastore.base import BaseDatastore
-from neural_lam.utils import check_time_overlap, get_time_step
+from neural_lam.utils import (
+    check_time_overlap,
+    crop_time_if_needed,
+    get_time_step,
+)
 
 
 class WeatherDataset(torch.utils.data.Dataset):
@@ -175,12 +179,24 @@ class WeatherDataset(torch.utils.data.Dataset):
                 boundary_times = self.da_boundary_forcing.time
             self.time_step_boundary = get_time_step(boundary_times.values)
 
-        # Forcing data is part of the same datastore as state data
-        # During creation the time dimension of the forcing data
-        # is matched to the state data
-        # Boundary data is part of a separate datastore
-        # The boundary data is allowed to have a different time_step
-        # Check that the boundary data covers the required time range
+        # Forcing data is part of the same datastore as state data. During
+        # creation, the time dimension of the forcing data is matched to the
+        # state data.
+        # Boundary data is part of a separate datastore The boundary data is
+        # allowed to have a different time_step Checks that the boundary data
+        # covers the required time range is required.
+
+        # Crop interior data if boundary coverage is insufficient
+        if self.da_boundary_forcing is not None:
+            self.da_state = crop_time_if_needed(
+                self.da_state,
+                self.da_boundary_forcing,
+                da1_is_forecast=self.datastore.is_forecast,
+                da2_is_forecast=self.datastore_boundary.is_forecast,
+                num_past_steps=self.num_past_boundary_steps,
+            )
+
+        # Now do final overlap check and possibly raise errors if still invalid
         if self.da_boundary_forcing is not None:
             check_time_overlap(
                 self.da_state,
