@@ -21,9 +21,9 @@ class WeatherDataset(torch.utils.data.Dataset):
     Parameters
     ----------
     datastore : BaseDatastore
-        The datastore to load the data from (e.g. mdp).
+        The datastore to load the data from.
     datastore_boundary : BaseDatastore
-        The boundary datastore to load the data from (e.g. mdp).
+        The boundary datastore to load the data from.
     split : str, optional
         The data split to use ("train", "val" or "test"). Default is "train".
     ar_steps : int, optional
