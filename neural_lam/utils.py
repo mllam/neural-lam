@@ -311,8 +311,8 @@ def check_time_overlap(
         times_da2 = da2.time
         time_step_da2 = get_time_step(times_da2.values)
 
-    time_min_da2 = da2.min().values
-    time_max_da2 = da2.max().values
+    time_min_da2 = times_da2.min().values
+    time_max_da2 = times_da2.max().values
 
     # Calculate required bounds for da2 using its time step
     da2_required_time_min = time_min_da1 - num_past_steps * time_step_da2
