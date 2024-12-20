@@ -154,9 +154,6 @@ class WeatherDataset(torch.utils.data.Dataset):
             state_times = self.da_state.time
         self.time_step_state = get_time_step(state_times)
         if self.da_forcing is not None:
-            # Forcing data is part of the same datastore as state data
-            # During creation the time dimension of the forcing data
-            # is matched to the state data
             if self.datastore.is_forecast:
                 forcing_times = self.da_forcing.analysis_time
                 self.forecast_step_forcing = self._get_time_step(
@@ -165,9 +162,6 @@ class WeatherDataset(torch.utils.data.Dataset):
             else:
                 forcing_times = self.da_forcing.time
             self.time_step_forcing = self._get_time_step(forcing_times.values)
-            # Boundary data is part of a separate datastore
-            # The boundary data is allowed to have a different time_step
-            # Check that the boundary data covers the required time range
             if self.datastore_boundary.is_forecast:
                 boundary_times = self.da_boundary_forcing.analysis_time
                 self.forecast_step_boundary = self._get_time_step(
@@ -177,6 +171,12 @@ class WeatherDataset(torch.utils.data.Dataset):
                 boundary_times = self.da_boundary_forcing.time
             self.time_step_boundary = self._get_time_step(boundary_times.values)
 
+        # Forcing data is part of the same datastore as state data
+        # During creation the time dimension of the forcing data
+        # is matched to the state data
+        # Boundary data is part of a separate datastore
+        # The boundary data is allowed to have a different time_step
+        # Check that the boundary data covers the required time range
         check_time_overlap(
             self.da_state,
             self.da_boundary_forcing,
