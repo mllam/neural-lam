@@ -3,6 +3,7 @@ import os
 import shutil
 
 # Third-party
+import numpy as np
 import torch
 from torch import nn
 from tueplots import bundles, figsizes
@@ -241,3 +242,92 @@ def init_wandb_metrics(wandb_logger, val_steps):
     experiment.define_metric("val_mean_loss", summary="min")
     for step in val_steps:
         experiment.define_metric(f"val_loss_unroll{step}", summary="min")
+
+
+def get_time_step(self, times):
+    """Calculate the time step from a time dataarray.
+
+    Parameters
+    ----------
+    times : xr.DataArray
+        The time dataarray to calculate the time step from.
+
+    Returns
+    -------
+    time_step : float
+        The time step in the the datetime-format of the times dataarray.
+    """
+    time_diffs = np.diff(times)
+    if not np.all(time_diffs == time_diffs[0]):
+        raise ValueError(
+            "Inconsistent time steps in data. "
+            f"Found different time steps: {np.unique(time_diffs)}"
+        )
+    return time_diffs[0]
+
+
+def check_time_overlap(
+    da1,
+    da2,
+    da1_is_forecast=False,
+    da2_is_forecast=False,
+    num_past_steps=1,
+    num_future_steps=1,
+):
+    """Check that the time coverage of two dataarrays overlap.
+
+    Parameters
+    ----------
+    da1 : xr.DataArray
+        The first dataarray to check.
+    da2 : xr.DataArray
+        The second dataarray to check.
+    da1_is_forecast : bool, optional
+        Whether the first dataarray is forecast data.
+    da2_is_forecast : bool, optional
+        Whether the second dataarray is forecast data.
+    num_past_steps : int, optional
+        Number of past forcing steps.
+    num_future_steps : int, optional
+        Number of future forcing steps.
+
+    Raises
+    ------
+    ValueError
+        If the time coverage of the dataarrays does not overlap.
+    """
+
+    if da1_is_forecast:
+        times_da1 = da1.analysis_time
+    else:
+        times_da1 = da1.time
+    time_min_da1 = times_da1.min().values
+    time_max_da1 = times_da1.max().values
+
+    if da2_is_forecast:
+        times_da2 = da2.analysis_time
+        _ = get_time_step(da2.elapsed_forecast_duration)
+    else:
+        times_da2 = da2.time
+        time_step_da2 = get_time_step(times_da2.values)
+
+    time_min_da2 = da2.min().values
+    time_max_da2 = da2.max().values
+
+    # Calculate required bounds for da2 using its time step
+    da2_required_time_min = time_min_da1 - num_past_steps * time_step_da2
+    da2_required_time_max = time_max_da1 + num_future_steps * time_step_da2
+
+    if time_min_da2 > da2_required_time_min:
+        raise ValueError(
+            f"The second DataArray ('Boundary forcing'?) data starts too late."
+            f"Required start: {da2_required_time_min}, "
+            f"but DataArray starts at {time_min_da2}."
+        )
+
+    if time_max_da2 < da2_required_time_max:
+        raise ValueError(
+            f"The second DataArray ('Boundary forcing'?) ends too early."
+            f"Required end: {da2_required_time_max}, "
+            f"but DataArray ends at {time_max_da2}."
+        )

@@ -11,6 +11,7 @@ import xarray as xr
 
 # First-party
 from neural_lam.datastore.base import BaseDatastore
+from neural_lam.utils import check_time_overlap, get_time_step
 
 
 class WeatherDataset(torch.utils.data.Dataset):
@@ -142,80 +143,48 @@ class WeatherDataset(torch.utils.data.Dataset):
         else:
             self.da_state = self.da_state
 
-        # Check time step consistency in state data
+        # Check time step consistency in state data and determine time steps
+        # for state, forcing and boundary data
         if self.datastore.is_forecast:
             state_times = self.da_state.analysis_time
-            self.forecast_step_state = self._get_time_step(
+            self.forecast_step_state = get_time_step(
                 self.da_state.elapsed_forecast_duration
             )
         else:
             state_times = self.da_state.time
-        self.time_step_state = self._get_time_step(state_times)
-
-        # Check time coverage for forcing and boundary data
-        if self.da_forcing is not None or self.da_boundary_forcing is not None:
+        self.time_step_state = get_time_step(state_times)
+        if self.da_forcing is not None:
+            # Forcing data is part of the same datastore as state data
+            # During creation the time dimension of the forcing data
+            # is matched to the state data
             if self.datastore.is_forecast:
-                state_times = self.da_state.analysis_time
+                forcing_times = self.da_forcing.analysis_time
+                self.forecast_step_forcing = self._get_time_step(
+                    self.da_forcing.elapsed_forecast_duration
+                )
             else:
-                state_times = self.da_state.time
-            state_time_min = state_times.min().values
-            state_time_max = state_times.max().values
-
-            if self.da_forcing is not None:
-                # Forcing data is part of the same datastore as state data
-                # During creation the time dimension of the forcing data
-                # is matched to the state data
-                if self.datastore.is_forecast:
-                    forcing_times = self.da_forcing.analysis_time
-                    self.forecast_step_forcing = self._get_time_step(
-                        self.da_forcing.elapsed_forecast_duration
-                    )
-                else:
-                    forcing_times = self.da_forcing.time
-                self.time_step_forcing = self._get_time_step(
-                    forcing_times.values
+                forcing_times = self.da_forcing.time
+            self.time_step_forcing = self._get_time_step(forcing_times.values)
+            # Boundary data is part of a separate datastore
+            # The boundary data is allowed to have a different time_step
+            # Check that the boundary data covers the required time range
+            if self.datastore_boundary.is_forecast:
+                boundary_times = self.da_boundary_forcing.analysis_time
+                self.forecast_step_boundary = self._get_time_step(
+                    self.da_boundary_forcing.elapsed_forecast_duration
                 )
+            else:
+                boundary_times = self.da_boundary_forcing.time
+            self.time_step_boundary = self._get_time_step(boundary_times.values)
 
-            if self.da_boundary_forcing is not None:
-                # Boundary data is part of a separate datastore
-                # The boundary data is allowed to have a different time_step
-                # Check that the boundary data covers the required time range
-                if self.datastore_boundary.is_forecast:
-                    boundary_times = self.da_boundary_forcing.analysis_time
-                    self.forecast_step_boundary = self._get_time_step(
-                        self.da_boundary_forcing.elapsed_forecast_duration
-                    )
-                else:
-                    boundary_times = self.da_boundary_forcing.time
-                self.time_step_boundary = self._get_time_step(
-                    boundary_times.values
-                )
-                boundary_time_min = boundary_times.min().values
-                boundary_time_max = boundary_times.max().values
-
-                # Calculate required bounds for boundary using its time step
-                boundary_required_time_min = (
-                    state_time_min
-                    - self.num_past_forcing_steps * self.time_step_boundary
-                )
-                boundary_required_time_max = (
-                    state_time_max
-                    + self.num_future_forcing_steps * self.time_step_boundary
-                )
-
-                if boundary_time_min > boundary_required_time_min:
-                    raise ValueError(
-                        f"Boundary data starts too late."
-                        f"Required start: {boundary_required_time_min}, "
-                        f"but boundary starts at {boundary_time_min}."
-                    )
-
-                if boundary_time_max < boundary_required_time_max:
-                    raise ValueError(
-                        f"Boundary data ends too early."
-                        f"Required end: {boundary_required_time_max}, "
-                        f"but boundary ends at {boundary_time_max}."
-                    )
+        check_time_overlap(
+            self.da_state,
+            self.da_boundary_forcing,
+            da1_is_forecast=self.datastore.is_forecast,
+            da2_is_forecast=self.datastore_boundary.is_forecast,
+            num_past_steps=self.num_past_boundary_steps,
+            num_future_steps=self.num_future_boundary_steps,
+        )
 
         # Set up for standardization
         # TODO: This will become part of ar_model.py soon!
@@ -292,27 +261,6 @@ class WeatherDataset(torch.utils.data.Dataset):
                 - max(2, self.num_past_forcing_steps)
                 - self.num_future_forcing_steps
             )
-
-    def _get_time_step(self, times):
-        """Calculate the time step from the data
-
-        Parameters
-        ----------
-        times : xr.DataArray
-            The time dataarray to calculate the time step from.
-
-        Returns
-        -------
-        time_step : float
-            The time step in the the format of the times dataarray.
-        """
-        time_diffs = np.diff(times)
-        if not np.all(time_diffs == time_diffs[0]):
-            raise ValueError(
-                "Inconsistent time steps in data. "
-                f"Found different time steps: {np.unique(time_diffs)}"
-            )
-        return time_diffs[0]
 
     def _slice_time(
         self,
