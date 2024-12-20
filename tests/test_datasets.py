@@ -82,7 +82,7 @@ def test_dataset_item_shapes(datastore_name, datastore_boundary_name):
     assert forcing.ndim == 3
     assert forcing.shape[0] == N_pred_steps
     assert forcing.shape[1] == N_gridpoints
-    # each time step in the window has one corresponding temporal embedding
+    # each time step in the window has one corresponding time deltas
     # that is shared across all grid points, times and variables
     assert forcing.shape[2] == (datastore.get_num_data_vars("forcing") + 1) * (
         num_past_forcing_steps + num_future_forcing_steps + 1

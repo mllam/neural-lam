@@ -273,13 +273,13 @@ class WeatherDataset(torch.utils.data.Dataset):
     ):
         """
         Produce time slices of the given dataarrays `da_state` (state) and
-        `da_forcing`. For the state data, slicing is done
-        based on `idx`. For the forcing/boundary data, nearest neighbor matching
-        is performed based on the state times (assuming constant timestep size).
-        Additionally, the time difference
-        between the matched forcing/boundary times and state times (in multiples
-        of state time steps) is added to the forcing dataarray. This will be
-        used as an additional input feature in the model (temporal embedding).
+        `da_forcing`. For the state data, slicing is done based on `idx`. For
+        the forcing/boundary data, nearest neighbor matching is performed based
+        on the state times (assuming constant timestep size). Additionally, the
+        time deltas between the matched forcing/boundary times and state times
+        (in multiples of state time steps) is added to the forcing dataarray.
+        This will be used as an additional input feature in the model (as
+        temporal embedding).
 
         Parameters
         ----------
@@ -423,10 +423,9 @@ class WeatherDataset(torch.utils.data.Dataset):
 
         da_forcing_matched = xr.concat(da_list, dim="time")
 
-        # Generate temporal embedding `time_deltas` for the
-        # forcing/boundary data. This is the time difference in multiples
-        # of state time steps between the forcing/boundary time and the
-        # state time
+        # Generate time_deltas for the forcing/boundary data. This is the time
+        # difference in multiples of state time steps between the
+        # forcing/boundary time and the state time
 
         if is_boundary:
             if self.datastore_boundary.is_forecast:
@@ -453,8 +452,8 @@ class WeatherDataset(torch.utils.data.Dataset):
         time_deltas = da_forcing_matched.isel(
             grid_index=0, forcing_feature=0
         ).window.values
-        # Add time difference as a new coordinate to concatenate to the
-        # forcing features later as temporal embedding
+        # Add time deltas as a new coordinate to concatenate to the
+        # forcing features later as temporal embedding in the model
         da_forcing_matched["time_deltas"] = (
             ("window"),
             time_deltas,
@@ -465,7 +464,7 @@ class WeatherDataset(torch.utils.data.Dataset):
     def _process_windowed_data(self, da_windowed, da_state, da_target_times):
         """Helper function to process windowed data. This function stacks the
         'forcing_feature' and 'window' dimensions and adds the time step
-        differences to the existing features as a temporal embedding.
+        deltas to the existing features.
 
         Parameters
         ----------
@@ -487,17 +486,16 @@ class WeatherDataset(torch.utils.data.Dataset):
         if da_windowed is not None:
             window_size = da_windowed.window.size
             # Stack the 'feature' and 'window' dimensions and add the
-            # time step differences to the existing features as a temporal
-            # embedding
+            # time deltas to the existing features
             da_windowed = da_windowed.stack(
                 {stacked_dim: ("forcing_feature", "window")}
             )
-            # Add the time step differences as a new feature to the windowed
+            # Add the time deltas a new feature to the windowed
             # data
             time_deltas = da_windowed["time_deltas"].isel(
                 forcing_feature_windowed=slice(0, window_size)
             )
-            # All data variables share the same temporal embedding
+            # All data variables share the same time deltas
             da_windowed = xr.concat(
                 [da_windowed, time_deltas],
                 dim="forcing_feature_windowed",
@@ -616,9 +614,8 @@ class WeatherDataset(torch.utils.data.Dataset):
                 ) / self.da_boundary_std
 
         # This function handles the stacking of the forcing and boundary data
-        # and adds the time step differences as a temporal embedding.
-        # It can handle `None` inputs for the forcing and boundary data
-        # (and simlpy return an empty DataArray in that case).
+        # and adds the time deltas. It can handle `None` inputs for the forcing
+        # and boundary data (and simlpy return an empty DataArray in that case).
         da_forcing_windowed = self._process_windowed_data(
             da_forcing_windowed, da_state, da_target_times
         )

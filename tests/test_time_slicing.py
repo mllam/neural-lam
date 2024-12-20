@@ -223,11 +223,10 @@ def test_time_slicing_analysis(
     assert forcing.shape == (
         ar_steps,
         1,
-        total_forcing_window
-        * 2,  # Each windowed feature includes temporal embedding
+        total_forcing_window * 2,  # Each windowed feature includes time deltas
     )
 
-    # Extract the forcing values from the tensor (excluding temporal embeddings)
+    # Extract the forcing values from the tensor (excluding time deltas)
     forcing_values = forcing[:, 0, :total_forcing_window]
 
     # Compare with expected forcing values
@@ -313,11 +312,11 @@ def test_time_slicing_forecast(
         ar_steps,  # Number of AR steps
         1,  # Number of grid points
         total_forcing_window  # Total number of forcing steps in the window
-        * 2,  # Each windowed feature includes temporal embedding
+        * 2,  # Each windowed feature includes time deltas
     )
     assert forcing.shape == expected_forcing_shape
 
-    # Extract the forcing values from the tensor (excluding temporal embeddings)
+    # Extract the forcing values from the tensor (excluding time deltas)
     forcing_values = forcing[:, 0, :total_forcing_window]
 
     # Compare with expected forcing values
