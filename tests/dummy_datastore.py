@@ -410,18 +410,6 @@ class DummyDatastore(BaseRegularGridDatastore):
         """
         return self._num_grid_points
 
-    @property
-    def num_ensemble_members(self) -> int:
-        """Return the number of ensemble members in the dataset.
-
-        Returns
-        -------
-        int
-            The number of ensemble members in the dataset.
-
-        """
-        return 1
-
     @cached_property
     def grid_shape_state(self) -> CartesianGridShape:
         """The shape of the grid for the state variables.

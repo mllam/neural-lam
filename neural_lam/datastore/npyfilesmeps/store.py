@@ -141,7 +141,6 @@ class NpyFilesDatastoreMEPS(BaseRegularGridDatastore):
     """
     SHORT_NAME = "npyfilesmeps"
 
-    is_ensemble = True
     is_forecast = True
 
     def __init__(
@@ -200,6 +199,15 @@ class NpyFilesDatastoreMEPS(BaseRegularGridDatastore):
 
     @property
     def num_ensemble_members(self) -> int:
+        """Return the number of ensemble members in the dataset as defined in
+           the config file.
+
+        Returns
+        -------
+        int
+            The number of ensemble members in the dataset.
+
+        """
         return self.config.dataset.num_ensemble_members
 
     def get_dataarray(self, category: str, split: str) -> DataArray:

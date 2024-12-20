@@ -47,7 +47,6 @@ class BaseDatastore(abc.ABC):
     each of the `x` and `y` coordinates.
     """
 
-    is_ensemble: bool = False
     is_forecast: bool = False
 
     @property
@@ -299,17 +298,29 @@ class BaseDatastore(abc.ABC):
         pass
 
     @property
-    @abc.abstractmethod
     def num_ensemble_members(self) -> int:
         """Return the number of ensemble members in the dataset.
 
         Returns
         -------
         int
-            The number of ensemble members in the dataset.
+            The number of ensemble members in the dataset (default is 1 -
+            not an ensemble).
 
         """
-        pass
+        return 1
+
+    @property
+    def is_ensemble(self) -> bool:
+        """Return whether the dataset represents ensemble data.
+
+        Returns
+        -------
+        bool
+            True if the dataset represents ensemble data, False otherwise.
+
+        """
+        return self.num_ensemble_members > 1
 
     @cached_property
     @abc.abstractmethod
