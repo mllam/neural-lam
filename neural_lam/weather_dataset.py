@@ -89,11 +89,11 @@ class WeatherDataset(torch.utils.data.Dataset):
         )
         # XXX For now boundary data is always considered mdp-forcing data
         if self.datastore_boundary is not None:
-            self.da_boundary = self.datastore_boundary.get_dataarray(
+            self.da_boundary_forcing = self.datastore_boundary.get_dataarray(
                 category="forcing", split=self.split
             )
         else:
-            self.da_boundary = None
+            self.da_boundary_forcing = None
 
         # check that with the provided data-arrays and ar_steps that we have a
         # non-zero amount of samples
@@ -153,7 +153,7 @@ class WeatherDataset(torch.utils.data.Dataset):
         self.time_step_state = self._get_time_step(state_times)
 
         # Check time coverage for forcing and boundary data
-        if self.da_forcing is not None or self.da_boundary is not None:
+        if self.da_forcing is not None or self.da_boundary_forcing is not None:
             if self.datastore.is_forecast:
                 state_times = self.da_state.analysis_time
             else:
@@ -176,17 +176,17 @@ class WeatherDataset(torch.utils.data.Dataset):
                     forcing_times.values
                 )
 
-            if self.da_boundary is not None:
+            if self.da_boundary_forcing is not None:
                 # Boundary data is part of a separate datastore
                 # The boundary data is allowed to have a different time_step
                 # Check that the boundary data covers the required time range
                 if self.datastore_boundary.is_forecast:
-                    boundary_times = self.da_boundary.analysis_time
+                    boundary_times = self.da_boundary_forcing.analysis_time
                     self.forecast_step_boundary = self._get_time_step(
-                        self.da_boundary.elapsed_forecast_duration
+                        self.da_boundary_forcing.elapsed_forecast_duration
                     )
                 else:
-                    boundary_times = self.da_boundary.time
+                    boundary_times = self.da_boundary_forcing.time
                 self.time_step_boundary = self._get_time_step(
                     boundary_times.values
                 )
@@ -238,7 +238,7 @@ class WeatherDataset(torch.utils.data.Dataset):
                 self.da_forcing_std = self.ds_forcing_stats.forcing_std
 
             # XXX: Again, the boundary data is considered forcing data for now
-            if self.da_boundary is not None:
+            if self.da_boundary_forcing is not None:
                 self.ds_boundary_stats = (
                     self.datastore_boundary.get_standardization_dataarray(
                         category="forcing"
@@ -601,8 +601,8 @@ class WeatherDataset(torch.utils.data.Dataset):
         else:
             da_forcing = None
 
-        if self.da_boundary is not None:
-            da_boundary = self.da_boundary
+        if self.da_boundary_forcing is not None:
+            da_boundary = self.da_boundary_forcing
         else:
             da_boundary = None
 
