@@ -140,6 +140,18 @@ class MDPDatastore(BaseRegularGridDatastore):
         da_dt = self._ds["time"].diff("time")
         return (da_dt.dt.seconds[0] // 3600).item()
 
+    @property
+    def num_ensemble_members(self) -> int:
+        """The number of ensemble members in the dataset.
+
+        Returns
+        -------
+        int
+            The number of ensemble members in the dataset.
+
+        """
+        return None
+
     def get_vars_units(self, category: str) -> List[str]:
         """Return the units of the variables in the given category.
 

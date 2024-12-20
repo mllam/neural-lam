@@ -198,6 +198,7 @@ class NpyFilesDatastoreMEPS(BaseRegularGridDatastore):
         """
         return self._config
 
+    @property
     def num_ensemble_members(self) -> int:
         return self.config.dataset.num_ensemble_members
 
