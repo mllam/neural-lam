@@ -87,11 +87,6 @@ def plot_prediction(
 
     extent = datastore.get_xy_extent("state")
 
-    # Set up masking of border region
-    da_mask = datastore.unstack_grid_coords(datastore.boundary_mask)
-    mask_values = np.invert(da_mask.values.astype(bool)).astype(float)
-    pixel_alpha = mask_values.clip(0.7, 1)  # Faded border region
-
     fig, axes = plt.subplots(
         1,
         2,
@@ -107,7 +102,6 @@ def plot_prediction(
             origin="lower",
             x="x",
             extent=extent,
-            alpha=pixel_alpha.T,
             vmin=vmin,
             vmax=vmax,
             cmap="plasma",
@@ -141,11 +135,6 @@ def plot_spatial_error(
 
     extent = datastore.get_xy_extent("state")
 
-    # Set up masking of border region
-    da_mask = datastore.unstack_grid_coords(datastore.boundary_mask)
-    mask_reshaped = da_mask.values
-    pixel_alpha = mask_reshaped.clip(0.7, 1)  # Faded border region
-
     fig, ax = plt.subplots(
         figsize=(5, 4.8),
         subplot_kw={"projection": datastore.coords_projection},
@@ -164,7 +153,6 @@ def plot_spatial_error(
         error_grid,
         origin="lower",
         extent=extent,
-        alpha=pixel_alpha,
         vmin=vmin,
         vmax=vmax,
         cmap="OrRd",

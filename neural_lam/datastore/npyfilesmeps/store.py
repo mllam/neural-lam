@@ -141,7 +141,6 @@ class NpyFilesDatastoreMEPS(BaseRegularGridDatastore):
     """
     SHORT_NAME = "npyfilesmeps"
 
-    is_ensemble = True
     is_forecast = True
 
     def __init__(
@@ -166,7 +165,6 @@ class NpyFilesDatastoreMEPS(BaseRegularGridDatastore):
         self._root_path = self._config_path.parent
         self._config = NpyDatastoreConfig.from_yaml_file(self._config_path)
 
-        self._num_ensemble_members = self.config.dataset.num_ensemble_members
         self._num_timesteps = self.config.dataset.num_timesteps
         self._step_length = self.config.dataset.step_length
         self._remove_state_features_with_index = (
@@ -199,6 +197,19 @@ class NpyFilesDatastoreMEPS(BaseRegularGridDatastore):
         """
         return self._config
 
+    @property
+    def num_ensemble_members(self) -> int:
+        """Return the number of ensemble members in the dataset as defined in
+           the config file.
+
+        Returns
+        -------
+        int
+            The number of ensemble members in the dataset.
+
+        """
+        return self.config.dataset.num_ensemble_members
+
     def get_dataarray(self, category: str, split: str) -> DataArray:
         """
         Get the data array for the given category and split of data. If the
@@ -230,7 +241,7 @@ class NpyFilesDatastoreMEPS(BaseRegularGridDatastore):
         if category == "state":
             das = []
             # for the state category, we need to load all ensemble members
-            for member in range(self._num_ensemble_members):
+            for member in range(self.num_ensemble_members):
                 da_member = self._get_single_timeseries_dataarray(
                     features=self.get_vars_names(category="state"),
                     split=split,
@@ -445,7 +456,9 @@ class NpyFilesDatastoreMEPS(BaseRegularGridDatastore):
                     * np.timedelta64(1, "h")
                 )
             elif d == "analysis_time":
-                coord_values = self._get_analysis_times(split=split)
+                coord_values = self._get_analysis_times(
+                    split=split, member_id=member
+                )
             elif d == "y":
                 coord_values = y
             elif d == "x":
@@ -505,7 +518,7 @@ class NpyFilesDatastoreMEPS(BaseRegularGridDatastore):
 
         return da
 
-    def _get_analysis_times(self, split) -> List[np.datetime64]:
+    def _get_analysis_times(self, split, member_id) -> List[np.datetime64]:
         """Get the analysis times for the given split by parsing the filenames
         of all the files found for the given split.
 
@@ -513,6 +526,8 @@ class NpyFilesDatastoreMEPS(BaseRegularGridDatastore):
         ----------
         split : str
             The dataset split to get the analysis times for.
+        member_id : int
+            The ensemble member to get the analysis times for.
 
         Returns
         -------
@@ -520,8 +535,12 @@ class NpyFilesDatastoreMEPS(BaseRegularGridDatastore):
             The analysis times for the given split.
 
         """
+        if member_id is None:
+            # Only interior state data files have member_id, to avoid duplicates
+            # we only look at the first member for all other categories
+            member_id = 0
         pattern = re.sub(r"{analysis_time:[^}]*}", "*", STATE_FILENAME_FORMAT)
-        pattern = re.sub(r"{member_id:[^}]*}", "*", pattern)
+        pattern = re.sub(r"{member_id:[^}]*}", f"{member_id:03d}", pattern)
 
         sample_dir = self.root_path / "samples" / split
         sample_files = sample_dir.glob(pattern)
@@ -667,34 +686,6 @@ class NpyFilesDatastoreMEPS(BaseRegularGridDatastore):
         """
         ny, nx = self.config.grid_shape_state
         return CartesianGridShape(x=nx, y=ny)
-
-    @cached_property
-    def boundary_mask(self) -> xr.DataArray:
-        """The boundary mask for the dataset. This is a binary mask that is 1
-        where the grid cell is on the boundary of the domain, and 0 otherwise.
-
-        Returns
-        -------
-        xr.DataArray
-            The boundary mask for the dataset, with dimensions `[grid_index]`.
-
-        """
-        xy = self.get_xy(category="state", stacked=False)
-        xs = xy[:, :, 0]
-        ys = xy[:, :, 1]
-        # Check if x-coordinates are constant along columns
-        assert np.allclose(xs, xs[:, [0]]), "x-coordinates are not constant"
-        # Check if y-coordinates are constant along rows
-        assert np.allclose(ys, ys[[0], :]), "y-coordinates are not constant"
-        # Extract unique x and y coordinates
-        x = xs[:, 0]  # Unique x-coordinates (changes along the first axis)
-        y = ys[0, :]  # Unique y-coordinates (changes along the second axis)
-        values = np.load(self.root_path / "static" / "border_mask.npy")
-        da_mask = xr.DataArray(
-            values, dims=["y", "x"], coords=dict(x=x, y=y), name="boundary_mask"
-        )
-        da_mask_stacked_xy = self.stack_grid_coords(da_mask).astype(int)
-        return da_mask_stacked_xy
 
     def get_standardization_dataarray(self, category: str) -> xr.Dataset:
         """Return the standardization dataarray for the given category. This
