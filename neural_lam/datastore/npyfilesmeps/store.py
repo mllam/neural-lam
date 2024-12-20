@@ -166,7 +166,6 @@ class NpyFilesDatastoreMEPS(BaseRegularGridDatastore):
         self._root_path = self._config_path.parent
         self._config = NpyDatastoreConfig.from_yaml_file(self._config_path)
 
-        self._num_ensemble_members = self.config.dataset.num_ensemble_members
         self._num_timesteps = self.config.dataset.num_timesteps
         self._step_length = self.config.dataset.step_length
         self._remove_state_features_with_index = (
@@ -199,6 +198,9 @@ class NpyFilesDatastoreMEPS(BaseRegularGridDatastore):
         """
         return self._config
 
+    def num_ensemble_members(self) -> int:
+        return self.config.dataset.num_ensemble_members
+
     def get_dataarray(self, category: str, split: str) -> DataArray:
         """
         Get the data array for the given category and split of data. If the
@@ -230,7 +232,7 @@ class NpyFilesDatastoreMEPS(BaseRegularGridDatastore):
         if category == "state":
             das = []
             # for the state category, we need to load all ensemble members
-            for member in range(self._num_ensemble_members):
+            for member in range(self.num_ensemble_members):
                 da_member = self._get_single_timeseries_dataarray(
                     features=self.get_vars_names(category="state"),
                     split=split,

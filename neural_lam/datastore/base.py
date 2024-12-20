@@ -298,6 +298,19 @@ class BaseDatastore(abc.ABC):
         """
         pass
 
+    @property
+    @abc.abstractmethod
+    def num_ensemble_members(self) -> int:
+        """Return the number of ensemble members in the dataset.
+
+        Returns
+        -------
+        int
+            The number of ensemble members in the dataset.
+
+        """
+        pass
+
     @cached_property
     @abc.abstractmethod
     def state_feature_weights_values(self) -> List[float]:

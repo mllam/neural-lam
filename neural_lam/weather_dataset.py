@@ -217,21 +217,21 @@ class WeatherDataset(torch.utils.data.Dataset):
                 self.da_boundary_std = self.ds_boundary_stats.forcing_std
 
     def __len__(self):
+
+        if self.datastore.is_ensemble:
+            warnings.warn(
+                "only using first ensemble member, so dataset size is "
+                " effectively reduced by the number of ensemble members "
+                f"({self.datastore.num_ensemble_members})",
+                UserWarning,
+            )
+
         if self.datastore.is_forecast:
             # for now we simply create a single sample for each analysis time
             # and then take the first (2 + ar_steps) forecast times. In
             # addition we only use the first ensemble member (if ensemble data
             # has been provided).
             # This means that for each analysis time we get a single sample
-
-            if self.datastore.is_ensemble:
-                warnings.warn(
-                    "only using first ensemble member, so dataset size is "
-                    " effectively reduced by the number of ensemble members "
-                    f"({self.datastore._num_ensemble_members})",
-                    UserWarning,
-                )
-
             # check that there are enough forecast steps available to create
             # samples given the number of autoregressive steps requested
             n_forecast_steps = self.da_state.elapsed_forecast_duration.size
