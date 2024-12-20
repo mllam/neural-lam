@@ -275,7 +275,8 @@ class WeatherDataset(torch.utils.data.Dataset):
         Produce time slices of the given dataarrays `da_state` (state) and
         `da_forcing`. For the state data, slicing is done
         based on `idx`. For the forcing/boundary data, nearest neighbor matching
-        is performed based on the state times. Additionally, the time difference
+        is performed based on the state times (assuming constant timestep size).
+        Additionally, the time difference
         between the matched forcing/boundary times and state times (in multiples
         of state time steps) is added to the forcing dataarray. This will be
         used as an additional input feature in the model (temporal embedding).
