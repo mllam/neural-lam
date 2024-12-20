@@ -248,6 +248,7 @@ def test_time_slicing_forecast(
         len(STATE_VALUES_FORECAST)
     )
     ELAPSED_FORECAST_DURATION = np.timedelta64(0, "D") + np.arange(
+        # Retrieving the first analysis_time
         len(FORCING_VALUES_FORECAST[0])
     )
     # Create a dummy datastore with forecast data
@@ -281,6 +282,7 @@ def test_time_slicing_forecast(
     # Compute expected initial states and target states based on ar_steps
     offset = max(0, num_past_forcing_steps - INIT_STEPS)
     init_idx = INIT_STEPS + offset
+    # Retrieving the first analysis_time
     expected_init_states = STATE_VALUES_FORECAST[0][offset:init_idx]
     expected_target_states = STATE_VALUES_FORECAST[0][
         init_idx : init_idx + ar_steps
@@ -293,6 +295,8 @@ def test_time_slicing_forecast(
     for i in range(ar_steps):
         start_idx = i + init_idx - num_past_forcing_steps
         end_idx = i + init_idx + num_future_forcing_steps + 1
+        # Retrieving the analysis_time relevant for forcing-windows (i.e.
+        # the first analysis_time after the 2 init_steps)
         forcing_window = FORCING_VALUES_FORECAST[INIT_STEPS][start_idx:end_idx]
         expected_forcing_values.append(forcing_window)
 
