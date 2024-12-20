@@ -144,7 +144,8 @@ class WeatherDataset(torch.utils.data.Dataset):
             self.da_state = self.da_state
 
         # Check time step consistency in state data and determine time steps
-        # for state, forcing and boundary data
+        # for state, forcing and boundary forcing data
+        # STATE
         if self.datastore.is_forecast:
             state_times = self.da_state.analysis_time
             self.forecast_step_state = get_time_step(
@@ -153,6 +154,7 @@ class WeatherDataset(torch.utils.data.Dataset):
         else:
             state_times = self.da_state.time
         self.time_step_state = get_time_step(state_times)
+        # FORCING
         if self.da_forcing is not None:
             if self.datastore.is_forecast:
                 forcing_times = self.da_forcing.analysis_time
@@ -162,6 +164,8 @@ class WeatherDataset(torch.utils.data.Dataset):
             else:
                 forcing_times = self.da_forcing.time
             self.time_step_forcing = get_time_step(forcing_times.values)
+        # BOUNDARY FORCING
+        if self.da_boundary_forcing is not None:
             if self.datastore_boundary.is_forecast:
                 boundary_times = self.da_boundary_forcing.analysis_time
                 self.forecast_step_boundary = get_time_step(
@@ -177,14 +181,15 @@ class WeatherDataset(torch.utils.data.Dataset):
         # Boundary data is part of a separate datastore
         # The boundary data is allowed to have a different time_step
         # Check that the boundary data covers the required time range
-        check_time_overlap(
-            self.da_state,
-            self.da_boundary_forcing,
-            da1_is_forecast=self.datastore.is_forecast,
-            da2_is_forecast=self.datastore_boundary.is_forecast,
-            num_past_steps=self.num_past_boundary_steps,
-            num_future_steps=self.num_future_boundary_steps,
-        )
+        if self.da_boundary_forcing is not None:
+            check_time_overlap(
+                self.da_state,
+                self.da_boundary_forcing,
+                da1_is_forecast=self.datastore.is_forecast,
+                da2_is_forecast=self.datastore_boundary.is_forecast,
+                num_past_steps=self.num_past_boundary_steps,
+                num_future_steps=self.num_future_boundary_steps,
+            )
 
         # Set up for standardization
         # TODO: This will become part of ar_model.py soon!
