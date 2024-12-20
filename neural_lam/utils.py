@@ -244,7 +244,7 @@ def init_wandb_metrics(wandb_logger, val_steps):
         experiment.define_metric(f"val_loss_unroll{step}", summary="min")
 
 
-def get_time_step(self, times):
+def get_time_step(times):
     """Calculate the time step from a time dataarray.
 
     Parameters

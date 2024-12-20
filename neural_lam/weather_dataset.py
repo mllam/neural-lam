@@ -156,20 +156,20 @@ class WeatherDataset(torch.utils.data.Dataset):
         if self.da_forcing is not None:
             if self.datastore.is_forecast:
                 forcing_times = self.da_forcing.analysis_time
-                self.forecast_step_forcing = self._get_time_step(
+                self.forecast_step_forcing = get_time_step(
                     self.da_forcing.elapsed_forecast_duration
                 )
             else:
                 forcing_times = self.da_forcing.time
-            self.time_step_forcing = self._get_time_step(forcing_times.values)
+            self.time_step_forcing = get_time_step(forcing_times.values)
             if self.datastore_boundary.is_forecast:
                 boundary_times = self.da_boundary_forcing.analysis_time
-                self.forecast_step_boundary = self._get_time_step(
+                self.forecast_step_boundary = get_time_step(
                     self.da_boundary_forcing.elapsed_forecast_duration
                 )
             else:
                 boundary_times = self.da_boundary_forcing.time
-            self.time_step_boundary = self._get_time_step(boundary_times.values)
+            self.time_step_boundary = get_time_step(boundary_times.values)
 
         # Forcing data is part of the same datastore as state data
         # During creation the time dimension of the forcing data

@@ -153,7 +153,7 @@ class MDPDatastore(BaseRegularGridDatastore):
             The number of ensemble members in the dataset.
 
         """
-        return None
+        return 1
 
     def get_vars_units(self, category: str) -> List[str]:
         """Return the units of the variables in the given category.
