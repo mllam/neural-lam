@@ -217,7 +217,6 @@ class WeatherDataset(torch.utils.data.Dataset):
                 self.da_boundary_std = self.ds_boundary_stats.forcing_std
 
     def __len__(self):
-
         if self.datastore.is_ensemble:
             warnings.warn(
                 "only using first ensemble member, so dataset size is "
@@ -423,7 +422,7 @@ class WeatherDataset(torch.utils.data.Dataset):
 
         da_forcing_matched = xr.concat(da_list, dim="time")
 
-        # Generate temporal embedding `time_diff_steps` for the
+        # Generate temporal embedding `time_deltas` for the
         # forcing/boundary data. This is the time difference in multiples
         # of state time steps between the forcing/boundary time and the
         # state time
@@ -435,7 +434,7 @@ class WeatherDataset(torch.utils.data.Dataset):
             else:
                 boundary_time_step = self.time_step_boundary
                 state_time_step = self.time_step_state
-            time_diff_steps = (
+            time_deltas = (
                 da_forcing_matched["window"]
                 * (boundary_time_step / state_time_step),
             )
@@ -446,18 +445,18 @@ class WeatherDataset(torch.utils.data.Dataset):
             else:
                 forcing_time_step = self.time_step_forcing
                 state_time_step = self.time_step_state
-            time_diff_steps = (
+            time_deltas = (
                 da_forcing_matched["window"]
                 * (forcing_time_step / state_time_step),
             )
-        time_diff_steps = da_forcing_matched.isel(
+        time_deltas = da_forcing_matched.isel(
             grid_index=0, forcing_feature=0
         ).window.values
         # Add time difference as a new coordinate to concatenate to the
         # forcing features later as temporal embedding
-        da_forcing_matched["time_diff_steps"] = (
+        da_forcing_matched["time_deltas"] = (
             ("window"),
-            time_diff_steps,
+            time_deltas,
         )
 
         return da_state_sliced, da_forcing_matched
@@ -494,12 +493,12 @@ class WeatherDataset(torch.utils.data.Dataset):
             )
             # Add the time step differences as a new feature to the windowed
             # data
-            time_diff_steps = da_windowed["time_diff_steps"].isel(
+            time_deltas = da_windowed["time_deltas"].isel(
                 forcing_feature_windowed=slice(0, window_size)
             )
             # All data variables share the same temporal embedding
             da_windowed = xr.concat(
-                [da_windowed, time_diff_steps],
+                [da_windowed, time_deltas],
                 dim="forcing_feature_windowed",
             )
         else:
