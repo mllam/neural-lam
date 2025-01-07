@@ -14,7 +14,6 @@ import pytorch_lightning as pl
 import torch
 from lightning_fabric.utilities import seed
 from loguru import logger
-from mlflow.models import infer_signature
 
 # Local
 from . import utils
@@ -77,41 +76,6 @@ class CustomMLFlowLogger(pl.loggers.MLFlowLogger):
         except botocore.exceptions.NoCredentialsError:
             logger.error("Error logging image\nSet AWS credentials")
             sys.exit(1)
-
-    def log_model(self, data_module, model):
-        input_example = self.create_input_example(data_module)
-
-        with torch.no_grad():
-            model_output = model.common_step(input_example)[
-                0
-            ]  # common_step returns tuple (prediction, target, pred_std, _)
-
-        log_model_input_example = {
-            name: tensor.cpu().numpy()
-            for name, tensor in zip(
-                ["init_states", "target_states", "forcing", "target_times"],
-                input_example,
-            )
-        }
-
-        signature = infer_signature(
-            log_model_input_example, model_output.cpu().numpy()
-        )
-
-        mlflow.pytorch.log_model(
-            model,
-            "model",
-            signature=signature,
-        )
-
-    def create_input_example(self, data_module):
-
-        if data_module.val_dataset is None:
-            data_module.setup(stage="fit")
-
-        data_loader = data_module.train_dataloader()
-        batch_sample = next(iter(data_loader))
-        return batch_sample
 
 
 def _setup_training_logger(config, datastore, args, run_name):
