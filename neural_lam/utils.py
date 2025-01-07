@@ -248,5 +248,6 @@ def init_training_logger_metrics(training_logger, val_steps):
         pass
     else:
         warnings.warn(
-            "Only WandbLogger & MLFlowLogger is supported for tracking metrics"
+            "Only WandbLogger & MLFlowLogger is supported for tracking metrics.\
+             Experiment results will only go to stdout."
         )
