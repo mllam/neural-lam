@@ -9,7 +9,7 @@ import torch_geometric as pyg
 
 # Local
 from . import utils
-from .config import load_config_and_datastore
+from .config import load_config_and_datastores
 
 
 def main():
@@ -43,7 +43,7 @@ def main():
         args.config_path is not None
     ), "Specify your config with --config_path"
 
-    _, datastore, datastore_boundary = load_config_and_datastore(
+    _, datastore, datastore_boundary = load_config_and_datastores(
         config_path=args.config_path
     )
 

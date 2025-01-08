@@ -109,7 +109,7 @@ class ARModel(pl.LightningModule):
         self.interior_dim = (
             2 * self.grid_output_dim
             + interior_static_dim
-            # Temporal Embedding counts as one additional forcing_feature
+            # Time deltas count as one additional forcing_feature
             + (num_forcing_vars + 1)
             * (num_past_forcing_steps + num_future_forcing_steps + 1)
         )

@@ -12,7 +12,7 @@ from loguru import logger
 
 # Local
 from . import utils
-from .config import load_config_and_datastore
+from .config import load_config_and_datastores
 from .models import GraphLAM, HiLAM, HiLAMParallel
 from .weather_dataset import WeatherDataModule
 
@@ -245,7 +245,7 @@ def main(input_args=None):
     seed.seed_everything(args.seed)
 
     # Load neural-lam configuration and datastore to use
-    config, datastore, datastore_boundary = load_config_and_datastore(
+    config, datastore, datastore_boundary = load_config_and_datastores(
         config_path=args.config_path
     )
 

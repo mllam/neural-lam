@@ -300,11 +300,9 @@ class DummyDatastore(BaseRegularGridDatastore):
         """
         Return the processed data (as a single `xr.DataArray`) for the given
         category of data and test/train/val-split that covers all the data (in
-        space and time) of a given category (state/forcing/static). A
-        datastore must be able to return for the "state" category, but
-        "forcing" and "static" are optional (in which case the method should
-        return `None`). For the "static" category the `split` is allowed to be
-        `None` because the static data is the same for all splits.
+        space and time) of a given category (state/forcing/static). For the
+        "static" category the `split` is allowed to be `None` because the static
+        data is the same for all splits.
 
         The returned dataarray is expected to at minimum have dimensions of
         `(grid_index, {category}_feature)` so that any spatial dimensions have

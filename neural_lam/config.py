@@ -140,11 +140,11 @@ class InvalidConfigError(Exception):
     pass
 
 
-def load_config_and_datastore(
+def load_config_and_datastores(
     config_path: str,
 ) -> tuple[NeuralLAMConfig, Union[MDPDatastore, NpyFilesDatastoreMEPS]]:
     """
-    Load the neural-lam configuration and the datastore specified in the
+    Load the neural-lam configuration and the datastores specified in the
     configuration.
 
     Parameters
@@ -155,7 +155,7 @@ def load_config_and_datastore(
     Returns
     -------
     tuple[NeuralLAMConfig, Union[MDPDatastore, NpyFilesDatastoreMEPS]]
-        The Neural-LAM configuration and the loaded datastore.
+        The Neural-LAM configuration and the loaded datastores.
     """
     try:
         config = NeuralLAMConfig.from_yaml_file(config_path)
