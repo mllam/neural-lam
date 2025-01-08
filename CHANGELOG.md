@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [v0.3.0](https://github.com/joeloskarsson/neural-lam/releases/tag/v0.3.0)
 
-This release introduces Datastores to represent input data from different sources (including zarr and numpy) whele keeping graph generation within neural-lam.
+This release introduces Datastores to represent input data from different sources (including zarr and numpy) while keeping graph generation within neural-lam.
 
 ### Added
 
