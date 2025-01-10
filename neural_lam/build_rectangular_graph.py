@@ -9,7 +9,7 @@ import weather_model_graphs as wmg
 
 # Local
 from . import utils
-from .config import load_config_and_datastore
+from .config import load_config_and_datastores
 
 WMG_ARCHETYPES = {
     "keisler": wmg.create.archetype.create_keisler_graph,
@@ -81,7 +81,7 @@ def main(input_args=None):
         args.graph_name is not None
     ), "Specify the name to save graph as with --graph_name"
 
-    _, datastore, datastore_boundary = load_config_and_datastore(
+    _, datastore, datastore_boundary = load_config_and_datastores(
         config_path=args.config_path
     )
 
