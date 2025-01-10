@@ -145,7 +145,7 @@ datastore:
 training:
   state_feature_weighting:
     __config_class__: ManualStateFeatureWeighting
-    values:
+    weights:
       u100m: 1.0
       v100m: 1.0
 ```
