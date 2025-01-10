@@ -218,10 +218,17 @@ class BaseGraphModel(ARModel):
             + self.softplus_center
         )
 
-    def clamp_prediction(self, state_delta, prev_state):
+    def get_clamped_new_state(self, state_delta, prev_state):
         """
         Clamp prediction to valid range supplied in config
         Returns the clamped new state after adding delta to original state
+
+        Instead of the new state being computed as
+        $X_{t+1} = X_t + \\delta = X_t + model(\\{X_t,X_{t-1},...\\}, forcing)$
+        The clamped values will be
+        $f(f^{-1}(X_t) + model(\\{X_t, X_{t-1},... \\}, forcing))$
+        Which means the model will learn to output values in the range of the
+        inverse clamping function
 
         state_delta: (B, num_grid_nodes, feature_dim)
         prev_state: (B, num_grid_nodes, feature_dim)
@@ -354,6 +361,6 @@ class BaseGraphModel(ARModel):
         rescaled_delta_mean = pred_delta_mean * self.diff_std + self.diff_mean
 
         # Clamp values to valid range (also add the delta to the previous state)
-        new_state = self.clamp_prediction(rescaled_delta_mean, prev_state)
+        new_state = self.get_clamped_new_state(rescaled_delta_mean, prev_state)
 
         return new_state, pred_std

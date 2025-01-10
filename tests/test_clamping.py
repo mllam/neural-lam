@@ -82,14 +82,14 @@ def test_clamping():
     delta[:, :, model.clamp_upper_idx] = 5
 
     # Check that a delta of 0 gives unchanged state
-    zero_prediction = model.clamp_prediction(zero_delta, original_state)
+    zero_prediction = model.get_clamped_new_state(zero_delta, original_state)
     assert (abs(original_state - zero_prediction) < 1e-6).all().item()
 
     # Make predictions towards bounds for each feature
     prediction = zero_prediction.clone()
     n_loops = 100
     for i in range(n_loops):
-        prediction = model.clamp_prediction(delta, prediction)
+        prediction = model.get_clamped_new_state(delta, prediction)
 
     # check that unclamped states are as expected
     # delta is 1, so they should be 1*n_loops
@@ -193,7 +193,7 @@ def test_clamping():
         .any()
         .item()
     )
-    invalid_prediction = model.clamp_prediction(zero_delta, invalid_state)
+    invalid_prediction = model.get_clamped_new_state(zero_delta, invalid_state)
     assert (
         (
             model.sigmoid_lower_lims
@@ -227,7 +227,7 @@ def test_clamping():
     prediction = zero_prediction.clone()
     n_loops = 100
     for i in range(n_loops):
-        prediction = model.clamp_prediction(-delta, prediction)
+        prediction = model.get_clamped_new_state(-delta, prediction)
 
     # Check that clamped states are within bounds
     assert (
@@ -271,7 +271,7 @@ def test_clamping():
         .any()
         .item()
     )
-    invalid_prediction = model.clamp_prediction(zero_delta, invalid_state)
+    invalid_prediction = model.get_clamped_new_state(zero_delta, invalid_state)
     assert (
         (
             model.sigmoid_lower_lims
