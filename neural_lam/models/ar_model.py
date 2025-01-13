@@ -505,7 +505,7 @@ class ARModel(pl.LightningModule):
             prediction, target, _, _ = self.common_step(batch)
 
         target = batch[1]
-        time = batch[3]
+        time = batch[-1]
 
         # Rescale to original data scale
         prediction_rescaled = prediction * self.state_std + self.state_mean
