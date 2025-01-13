@@ -205,7 +205,9 @@ class ARModel(pl.LightningModule):
         # TODO: creating an instance of WeatherDataset here on every call is
         # not how this should be done but whether WeatherDataset should be
         # provided to ARModel or where to put plotting still needs discussion
-        weather_dataset = WeatherDataset(datastore=self._datastore, split=split)
+        weather_dataset = WeatherDataset(
+            datastore=self._datastore, datastore_boundary=None, split=split
+        )
         time = np.array(time.cpu(), dtype="datetime64[ns]")
         da = weather_dataset.create_dataarray_from_tensor(
             tensor=tensor.cpu().numpy(), time=time, category=category
