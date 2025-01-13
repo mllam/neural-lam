@@ -78,7 +78,6 @@ def plot_on_axis(
     """
     Plot weather state on given axis
     """
-    ax.set_global()
     ax.coastlines()  # Add coastline outlines
 
     extent = datastore.get_xy_extent("state")
