@@ -4,7 +4,7 @@ import functools
 import warnings
 from functools import cached_property
 from pathlib import Path
-from typing import List
+from typing import List, Union
 
 # Third-party
 import cartopy.crs as ccrs
@@ -217,7 +217,7 @@ class MDPDatastore(BaseRegularGridDatastore):
         """
         return len(self.get_vars_names(category))
 
-    def get_dataarray(self, category: str, split: str) -> xr.DataArray:
+    def get_dataarray(self, category: str, split: str) -> Union[xr.DataArray, None]:
         """
         Return the processed data (as a single `xr.DataArray`) for the given
         category of data and test/train/val-split that covers all the data (in
@@ -253,7 +253,7 @@ class MDPDatastore(BaseRegularGridDatastore):
         """
         if category not in self._ds:
             warnings.warn(f"no {category} data found in datastore")
-            return []
+            return None
 
         da_category = self._ds[category]
 

@@ -194,6 +194,7 @@ class WeatherDataset(torch.utils.data.Dataset):
                 da1_is_forecast=self.datastore.is_forecast,
                 da2_is_forecast=self.datastore_boundary.is_forecast,
                 num_past_steps=self.num_past_boundary_steps,
+                num_future_steps=self.num_future_boundary_steps,
             )
 
         # Now do final overlap check and possibly raise errors if still invalid
