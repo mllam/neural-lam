@@ -448,7 +448,12 @@ def check_time_overlap(
 
 
 def crop_time_if_needed(
-    da1, da2, da1_is_forecast=False, da2_is_forecast=False, num_past_steps=1
+    da1,
+    da2,
+    da1_is_forecast=False,
+    da2_is_forecast=False,
+    num_past_steps=1,
+    num_future_steps=1,
 ):
     """
     Slice away the first few timesteps from the first DataArray (e.g. 'state')
@@ -467,6 +472,8 @@ def crop_time_if_needed(
         Whether the second dataarray is forecast data.
     num_past_steps : int
         Number of past time steps to consider.
+    num_future_steps : int
+        Number of future time steps to consider.
 
     Return
     ------
@@ -484,7 +491,7 @@ def crop_time_if_needed(
             da1_is_forecast,
             da2_is_forecast,
             num_past_steps,
-            num_future_steps=0,
+            num_future_steps,
         )
         return da1
     except ValueError:
@@ -499,22 +506,30 @@ def crop_time_if_needed(
         else:
             da2_tvals = da2.time.values
 
-        if da1_tvals[0] < da2_tvals[0]:
-            # Calculate how many steps to remove skip just enough steps so that:
-            if da2_is_forecast:
-                # The windowing for forecast type data happens in the
-                # elapsed_forecast_duration dimension, so we can omit it here.
-                required_min = da2_tvals[0]
-            else:
-                dt = get_time_step(da2_tvals)
-                required_min = da2_tvals[0] + num_past_steps * dt
-            first_valid_idx = (da1_tvals >= required_min).argmax()
-            n_removed = first_valid_idx
-            if n_removed > 0:
-                print(
-                    f"Warning: removing {n_removed} da1 (e.g. 'state') "
-                    f"timesteps to align with da2 (e.g. 'boundary forcing') "
-                    f"coverage."
-                )
-                da1 = da1.isel(time=slice(first_valid_idx, None))
+        # Calculate how many steps we would have to remove
+        if da2_is_forecast:
+            # The windowing for forecast type data happens in the
+            # elapsed_forecast_duration dimension, so we can omit it here.
+            required_min = da2_tvals[0]
+            required_max = da2_tvals[-1]
+        else:
+            dt = get_time_step(da2_tvals)
+            required_min = da2_tvals[0] + num_past_steps * dt
+            required_max = da2_tvals[-1] - num_future_steps * dt
+
+        # Calculate how many steps to remove at beginning and end
+        first_valid_idx = (da1_tvals >= required_min).argmax()
+        n_removed_begin = first_valid_idx
+        last_valid_idx_plus_one = (
+            da1_tvals > required_max
+        ).argmax()  # To use for slice
+        n_removed_begin = first_valid_idx
+        n_removed_end = len(da1_tvals) - last_valid_idx_plus_one
+        if n_removed_begin > 0 or n_removed_end > 0:
+            print(
+                f"Warning: cropping da1 (e.g. 'state') to align with da2 "
+                f"(e.g. 'boundary forcing'). Removed {n_removed_begin} steps "
+                f"at start of data interval and {n_removed_end} at the end."
+            )
+            da1 = da1.isel(time=slice(first_valid_idx, last_valid_idx_plus_one))
         return da1
