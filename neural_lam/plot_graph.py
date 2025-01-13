@@ -136,7 +136,7 @@ def main():
                     to_pos,
                     "green",
                     1,
-                    f"Mesh up {level_i}-{level_i+1}",
+                    f"Mesh up {level_i}-{level_i + 1}",
                 )
             )
         #  Add down edges
@@ -150,7 +150,7 @@ def main():
                     to_pos,
                     "green",
                     1,
-                    f"Mesh down {level_i+1}-{level_i}",
+                    f"Mesh down {level_i + 1}-{level_i}",
                 )
             )
 
