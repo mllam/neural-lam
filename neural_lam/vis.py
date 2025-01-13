@@ -64,6 +64,41 @@ def plot_error_map(errors, datastore: BaseRegularGridDatastore, title=None):
     return fig
 
 
+def plot_on_axis(
+    ax,
+    da,
+    datastore,
+    obs_mask=None,
+    vmin=None,
+    vmax=None,
+    ax_title=None,
+    cmap="plasma",
+    grid_limits=None,
+):
+    """
+    Plot weather state on given axis
+    """
+    ax.coastlines()  # Add coastline outlines
+
+    extent = datastore.get_xy_extent("state")
+
+    im = da.plot.imshow(
+        ax=ax,
+        origin="lower",
+        x="x",
+        extent=extent,
+        vmin=vmin,
+        vmax=vmax,
+        cmap=cmap,
+        transform=datastore.coords_projection,
+    )
+
+    if ax_title:
+        ax.set_title(ax_title, size=15)
+
+    return im
+
+
 @matplotlib.rc_context(utils.fractional_plot_bundle(1))
 def plot_prediction(
     datastore: BaseRegularGridDatastore,
@@ -85,13 +120,6 @@ def plot_prediction(
     else:
         vmin, vmax = vrange
 
-    extent = datastore.get_xy_extent("state")
-
-    # Set up masking of border region
-    da_mask = datastore.unstack_grid_coords(datastore.boundary_mask)
-    mask_values = np.invert(da_mask.values.astype(bool)).astype(float)
-    pixel_alpha = mask_values.clip(0.7, 1)  # Faded border region
-
     fig, axes = plt.subplots(
         1,
         2,
@@ -101,17 +129,12 @@ def plot_prediction(
 
     # Plot pred and target
     for ax, da in zip(axes, (da_target, da_prediction)):
-        ax.coastlines()  # Add coastline outlines
-        da.plot.imshow(
-            ax=ax,
-            origin="lower",
-            x="x",
-            extent=extent,
-            alpha=pixel_alpha.T,
+        plot_on_axis(
+            ax,
+            da,
+            datastore,
             vmin=vmin,
             vmax=vmax,
-            cmap="plasma",
-            transform=datastore.coords_projection,
         )
 
     # Ticks and labels
@@ -139,19 +162,11 @@ def plot_spatial_error(
     else:
         vmin, vmax = vrange
 
-    extent = datastore.get_xy_extent("state")
-
-    # Set up masking of border region
-    da_mask = datastore.unstack_grid_coords(datastore.boundary_mask)
-    mask_reshaped = da_mask.values
-    pixel_alpha = mask_reshaped.clip(0.7, 1)  # Faded border region
-
     fig, ax = plt.subplots(
         figsize=(5, 4.8),
         subplot_kw={"projection": datastore.coords_projection},
     )
 
-    ax.coastlines()  # Add coastline outlines
     error_grid = (
         error.reshape(
             [datastore.grid_shape_state.x, datastore.grid_shape_state.y]
@@ -159,12 +174,13 @@ def plot_spatial_error(
         .T.cpu()
         .numpy()
     )
+    extent = datastore.get_xy_extent("state")
 
+    # TODO: This needs to be converted to DA and use plot_on_axis
     im = ax.imshow(
         error_grid,
         origin="lower",
         extent=extent,
-        alpha=pixel_alpha,
         vmin=vmin,
         vmax=vmax,
         cmap="OrRd",

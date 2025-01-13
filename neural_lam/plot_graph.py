@@ -9,27 +9,22 @@ import torch_geometric as pyg
 
 # Local
 from . import utils
-from .config import load_config_and_datastore
-
-MESH_HEIGHT = 0.1
-MESH_LEVEL_DIST = 0.2
-GRID_HEIGHT = 0
+from .config import load_config_and_datastores
 
 
 def main():
     """Plot graph structure in 3D using plotly."""
     parser = ArgumentParser(description="Plot graph")
     parser.add_argument(
-        "--datastore_config_path",
+        "--config_path",
         type=str,
-        default="tests/datastore_examples/mdp/config.yaml",
-        help="Path for the datastore config",
+        help="Path to the configuration for neural-lam",
     )
     parser.add_argument(
-        "--graph",
+        "--graph_name",
         type=str,
         default="multiscale",
-        help="Graph to plot (default: multiscale)",
+        help="Name of saved graph to plot (default: multiscale)",
     )
     parser.add_argument(
         "--save",
@@ -43,16 +38,19 @@ def main():
     )
 
     args = parser.parse_args()
-    _, datastore = load_config_and_datastore(
-        config_path=args.datastore_config_path
+
+    assert (
+        args.config_path is not None
+    ), "Specify your config with --config_path"
+
+    _, datastore, datastore_boundary = load_config_and_datastores(
+        config_path=args.config_path
     )
 
-    xy = datastore.get_xy("state", stacked=True)  # (N_grid, 2)
-    pos_max = np.max(np.abs(xy))
-    grid_pos = xy / pos_max  # Divide by maximum coordinate
-
     # Load graph data
-    graph_dir_path = os.path.join(datastore.root_path, "graph", args.graph)
+    graph_dir_path = os.path.join(
+        datastore.root_path, "graphs", args.graph_name
+    )
     hierarchical, graph_ldict = utils.load_graph(graph_dir_path=graph_dir_path)
     (g2m_edge_index, m2g_edge_index, m2m_edge_index,) = (
         graph_ldict["g2m_edge_index"],
@@ -65,17 +63,25 @@ def main():
     )
     mesh_static_features = graph_ldict["mesh_static_features"]
 
-    # Add in z-dimension
-    z_grid = GRID_HEIGHT * np.ones((grid_pos.shape[0],))
+    # Extract values needed, turn to numpy
+    # Now plotting is in the 2d CRS of datastore
+    grid_pos = utils.get_stacked_xy(datastore, datastore_boundary)
+    # (num_nodes_full, 2)
+    grid_scale = np.ptp(grid_pos)
+
+    # Add in z-dimension for grid
+    z_grid = np.zeros((grid_pos.shape[0],))  # Grid sits at z=0
     grid_pos = np.concatenate(
         (grid_pos, np.expand_dims(z_grid, axis=1)), axis=1
     )
 
-    # List of edges to plot, (edge_index, color, line_width, label)
-    edge_plot_list = [
-        (m2g_edge_index.numpy(), "black", 0.4, "M2G"),
-        (g2m_edge_index.numpy(), "black", 0.4, "G2M"),
-    ]
+    # Compute z-coordinate height of mesh nodes
+    mesh_base_height = 0.05 * grid_scale
+    mesh_level_height_diff = 0.1 * grid_scale
+
+    # List of edges to plot, (edge_index, from_pos, to_pos, color,
+    # line_width, label)
+    edge_plot_list = []
 
     # Mesh positioning and edges to plot differ if we have a hierarchical graph
     if hierarchical:
@@ -83,8 +89,8 @@ def main():
             np.concatenate(
                 (
                     level_static_features.numpy(),
-                    MESH_HEIGHT
-                    + MESH_LEVEL_DIST
+                    mesh_base_height
+                    + mesh_level_height_diff
                     * height_level
                     * np.ones((level_static_features.shape[0], 1)),
                 ),
@@ -94,52 +100,118 @@ def main():
                 mesh_static_features, start=1
             )
         ]
-        mesh_pos = np.concatenate(mesh_level_pos, axis=0)
+        all_mesh_pos = np.concatenate(mesh_level_pos, axis=0)
+        grid_con_mesh_pos = mesh_level_pos[0]
 
         # Add inter-level mesh edges
         edge_plot_list += [
-            (level_ei.numpy(), "blue", 1, f"M2M Level {level}")
-            for level, level_ei in enumerate(m2m_edge_index)
+            (
+                level_ei.numpy(),
+                level_pos,
+                level_pos,
+                "blue",
+                1,
+                f"M2M Level {level}",
+            )
+            for level, (level_ei, level_pos) in enumerate(
+                zip(m2m_edge_index, mesh_level_pos)
+            )
         ]
 
         # Add intra-level mesh edges
-        up_edges_ei = np.concatenate(
-            [level_up_ei.numpy() for level_up_ei in mesh_up_edge_index], axis=1
+        up_edges_ei = [
+            level_up_ei.numpy() for level_up_ei in mesh_up_edge_index
+        ]
+        down_edges_ei = [
+            level_down_ei.numpy() for level_down_ei in mesh_down_edge_index
+        ]
+        # Add up edges
+        for level_i, (up_ei, from_pos, to_pos) in enumerate(
+            zip(up_edges_ei, mesh_level_pos[:-1], mesh_level_pos[1:])
+        ):
+            edge_plot_list.append(
+                (
+                    up_ei,
+                    from_pos,
+                    to_pos,
+                    "green",
+                    1,
+                    f"Mesh up {level_i}-{level_i + 1}",
+                )
+            )
+        #  Add down edges
+        for level_i, (down_ei, from_pos, to_pos) in enumerate(
+            zip(down_edges_ei, mesh_level_pos[1:], mesh_level_pos[:-1])
+        ):
+            edge_plot_list.append(
+                (
+                    down_ei,
+                    from_pos,
+                    to_pos,
+                    "green",
+                    1,
+                    f"Mesh down {level_i + 1}-{level_i}",
+                )
+            )
+
+        edge_plot_list.append(
+            (
+                m2g_edge_index.numpy(),
+                grid_con_mesh_pos,
+                grid_pos,
+                "black",
+                0.4,
+                "M2G",
+            )
         )
-        down_edges_ei = np.concatenate(
-            [level_down_ei.numpy() for level_down_ei in mesh_down_edge_index],
-            axis=1,
+        edge_plot_list.append(
+            (
+                g2m_edge_index.numpy(),
+                grid_pos,
+                grid_con_mesh_pos,
+                "black",
+                0.4,
+                "G2M",
+            )
         )
-        edge_plot_list.append((up_edges_ei, "green", 1, "Mesh up"))
-        edge_plot_list.append((down_edges_ei, "green", 1, "Mesh down"))
 
         mesh_node_size = 2.5
     else:
         mesh_pos = mesh_static_features.numpy()
 
         mesh_degrees = pyg.utils.degree(m2m_edge_index[1]).numpy()
-        z_mesh = MESH_HEIGHT + 0.01 * mesh_degrees
+        # 1% higher per neighbor
+        z_mesh = (1 + 0.01 * mesh_degrees) * mesh_base_height
         mesh_node_size = mesh_degrees / 2
 
         mesh_pos = np.concatenate(
             (mesh_pos, np.expand_dims(z_mesh, axis=1)), axis=1
         )
 
-        edge_plot_list.append((m2m_edge_index.numpy(), "blue", 1, "M2M"))
+        edge_plot_list.append(
+            (m2m_edge_index.numpy(), mesh_pos, mesh_pos, "blue", 1, "M2M")
+        )
+        edge_plot_list.append(
+            (m2g_edge_index.numpy(), mesh_pos, grid_pos, "black", 0.4, "M2G")
+        )
+        edge_plot_list.append(
+            (g2m_edge_index.numpy(), grid_pos, mesh_pos, "black", 0.4, "G2M")
+        )
 
-    # All node positions in one array
-    node_pos = np.concatenate((mesh_pos, grid_pos), axis=0)
+        all_mesh_pos = mesh_pos
 
     # Add edges
     data_objs = []
     for (
         ei,
+        from_pos,
+        to_pos,
         col,
         width,
         label,
     ) in edge_plot_list:
-        edge_start = node_pos[ei[0]]  # (M, 2)
-        edge_end = node_pos[ei[1]]  # (M, 2)
+        edge_start = from_pos[ei[0]]  # (M, 2)
+        edge_end = to_pos[ei[1]]  # (M, 2)
         n_edges = edge_start.shape[0]
 
         x_edges = np.stack(
@@ -176,9 +248,9 @@ def main():
     )
     data_objs.append(
         go.Scatter3d(
-            x=mesh_pos[:, 0],
-            y=mesh_pos[:, 1],
-            z=mesh_pos[:, 2],
+            x=all_mesh_pos[:, 0],
+            y=all_mesh_pos[:, 1],
+            z=all_mesh_pos[:, 2],
             mode="markers",
             marker={"color": "blue", "size": mesh_node_size},
             name="Mesh nodes",
