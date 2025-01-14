@@ -106,13 +106,12 @@ class ARModel(pl.LightningModule):
             interior_static_dim,
         ) = self.interior_static_features.shape
         self.num_total_grid_nodes = self.num_interior_nodes
-        self.interior_dim = 2 * self.grid_output_dim + interior_static_dim
-        if num_forcing_vars > 0:
-            # Interior has forcing, add on forcing dimensions
-            # Time deltas count as one additional forcing_feature
-            self.interior_dim = self.interior_dim + (num_forcing_vars + 1) * (
-                num_past_forcing_steps + num_future_forcing_steps + 1
-            )
+        self.interior_dim = (
+            2 * self.grid_output_dim
+            + interior_static_dim
+            + num_forcing_vars
+            * (num_past_forcing_steps + num_future_forcing_steps + 1)
+        )
 
         # If datastore_boundary is given, the model is forced from the boundary
         self.boundary_forced = datastore_boundary is not None
@@ -144,7 +143,7 @@ class ARModel(pl.LightningModule):
             num_future_boundary_steps = args.num_future_boundary_steps
             self.boundary_dim = (
                 boundary_static_dim
-                # Temporal Embedding counts as one additional forcing_feature
+                # Time delta counts as one additional forcing_feature
                 + (num_boundary_forcing_vars + 1)
                 * (num_past_boundary_steps + num_future_boundary_steps + 1)
             )

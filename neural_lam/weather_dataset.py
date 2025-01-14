@@ -478,7 +478,9 @@ class WeatherDataset(torch.utils.data.Dataset):
 
         return da_state_sliced, da_forcing_matched
 
-    def _process_windowed_data(self, da_windowed, da_state, da_target_times):
+    def _process_windowed_data(
+        self, da_windowed, da_state, da_target_times, add_time_deltas=True
+    ):
         """Helper function to process windowed data. This function stacks the
         'forcing_feature' and 'window' dimensions and adds the time step
         deltas to the existing features.
@@ -491,6 +493,9 @@ class WeatherDataset(torch.utils.data.Dataset):
             The state dataarray.
         da_target_times : xr.DataArray
             The target times.
+        add_time_deltas : bool
+            If time deltas to each window position should be concatenated
+            as features
 
         Returns
         -------
@@ -507,16 +512,17 @@ class WeatherDataset(torch.utils.data.Dataset):
             da_windowed = da_windowed.stack(
                 {stacked_dim: ("forcing_feature", "window")}
             )
-            # Add the time deltas a new feature to the windowed
-            # data
-            time_deltas = da_windowed["time_deltas"].isel(
-                forcing_feature_windowed=slice(0, window_size)
-            )
-            # All data variables share the same time deltas
-            da_windowed = xr.concat(
-                [da_windowed, time_deltas],
-                dim="forcing_feature_windowed",
-            )
+            if add_time_deltas:
+                # Add the time deltas a new feature to the windowed
+                # data
+                time_deltas = da_windowed["time_deltas"].isel(
+                    forcing_feature_windowed=slice(0, window_size)
+                )
+                # All data variables share the same time deltas
+                da_windowed = xr.concat(
+                    [da_windowed, time_deltas],
+                    dim="forcing_feature_windowed",
+                )
         else:
             # Create empty DataArray with the correct dimensions and coordinates
             da_windowed = xr.DataArray(
@@ -633,11 +639,19 @@ class WeatherDataset(torch.utils.data.Dataset):
         # This function handles the stacking of the forcing and boundary data
         # and adds the time deltas. It can handle `None` inputs for the forcing
         # and boundary data (and simlpy return an empty DataArray in that case).
+        # We don't need time delta features for interior forcing, as these
+        # deltas are always the same.
         da_forcing_windowed = self._process_windowed_data(
-            da_forcing_windowed, da_state, da_target_times
+            da_forcing_windowed,
+            da_state,
+            da_target_times,
+            add_time_deltas=False,
         )
         da_boundary_windowed = self._process_windowed_data(
-            da_boundary_windowed, da_state, da_target_times
+            da_boundary_windowed,
+            da_state,
+            da_target_times,
+            add_time_deltas=True,
         )
 
         return (
