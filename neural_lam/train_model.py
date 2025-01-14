@@ -123,6 +123,13 @@ def main(input_args=None):
         " grid nodes. Note that this requires the same dimensionality for "
         "both kinds of grid inputs. (default: False (no))",
     )
+    parser.add_argument(
+        "--time_delta_enc_dim",
+        type=int,
+        help="Dimensionality of positional encoding for time deltas of boundary"
+        " forcing. If None, same as hidden_dim. If given, must be even "
+        "(default: None)",
+    )
 
     # Training options
     parser.add_argument(

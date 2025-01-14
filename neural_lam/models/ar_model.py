@@ -139,13 +139,29 @@ class ARModel(pl.LightningModule):
             num_boundary_forcing_vars = datastore_boundary.get_num_data_vars(
                 category="forcing"
             )
+
+            # Dimensionality of encoded time deltas
+            self.time_delta_enc_dim = (
+                args.hidden_dim
+                if args.time_delta_enc_dim is None
+                else args.time_delta_enc_dim
+            )
+            assert self.time_delta_enc_dim % 2 == 0, (
+                "Number of dimensions to use for time delta encoding must be "
+                "even (sin and cos)"
+            )
+
             num_past_boundary_steps = args.num_past_boundary_steps
             num_future_boundary_steps = args.num_future_boundary_steps
             self.boundary_dim = (
                 boundary_static_dim
                 # Time delta counts as one additional forcing_feature
-                + (num_boundary_forcing_vars + 1)
+                + (num_boundary_forcing_vars + self.time_delta_enc_dim)
                 * (num_past_boundary_steps + num_future_boundary_steps + 1)
+            )
+            # How many of the last boundary forcing dims contain time-deltas
+            self.boundary_time_delta_dims = (
+                num_past_boundary_steps + num_future_boundary_steps + 1
             )
 
             self.num_total_grid_nodes += self.num_boundary_nodes

@@ -118,6 +118,25 @@ class BaseGraphModel(ARModel):
             layer_norm=False,
         )  # No layer norm on this one
 
+        # Compute constants for use in time_delta encoding
+        step_length_ratio = (
+            datastore_boundary.step_length / datastore.step_length
+        )
+        min_time_delta = -(args.num_past_boundary_steps + 1) * step_length_ratio
+        max_time_delta = args.num_future_boundary_steps * step_length_ratio
+        time_delta_magnitude = max(max_time_delta, abs(min_time_delta))
+
+        freq_indices = 1.0 + torch.arange(
+            self.time_delta_enc_dim // 2,
+            dtype=torch.float,
+        )
+        self.register_buffer(
+            "enc_freq_denom",
+            (2 * time_delta_magnitude)
+            ** (2 * freq_indices / self.time_delta_enc_dim),
+            persistent=False,
+        )
+
     @property
     def num_mesh_nodes(self):
         """
@@ -177,6 +196,9 @@ class BaseGraphModel(ARModel):
         )
 
         if self.boundary_forced:
+            # sin-encode time deltas for boundary forcing
+            boundary_forcing = self.encode_forcing_time_deltas(boundary_forcing)
+
             # Create full boundary node features of shape
             # (B, num_boundary_nodes, boundary_dim)
             boundary_features = torch.cat(
@@ -255,3 +277,37 @@ class BaseGraphModel(ARModel):
 
         # Residual connection for full state
         return prev_state + rescaled_delta_mean, pred_std
+
+    def encode_forcing_time_deltas(self, boundary_forcing):
+
+        """
+        TODO
+        boundary_forcing: (B, num_nodes, num_forcing_dims)
+        """
+        # Extract time delta dimensions
+        time_deltas = boundary_forcing[..., -self.boundary_time_delta_dims :]
+        # (B, num_boundary_nodes, num_time_deltas)
+
+        # Compute sinusoidal encodings
+        frequencies = time_deltas.unsqueeze(-1) / self.enc_freq_denom
+        # (B, num_boundary_nodes, num_time_deltas, num_freq)
+        encodings_stacked = torch.cat(
+            (
+                torch.sin(frequencies),
+                torch.cos(frequencies),
+            ),
+            dim=-1,
+        )
+        # (B, num_boundary_nodes, num_time_deltas, 2*num_freq)
+
+        encoded_time_deltas = encodings_stacked.flatten(-2, -1)
+        # (B, num_boundary_nodes, num_encoding_dims)
+
+        # Put together encoded time deltas with rest of boundary_forcing
+        return torch.cat(
+            (
+                boundary_forcing[..., : -self.boundary_time_delta_dims],
+                encoded_time_deltas,
+            ),
+            dim=-1,
+        )

@@ -407,6 +407,7 @@ class WeatherDataset(torch.utils.data.Dataset):
                 da_sliced = da_sliced.assign_coords(
                     window=np.arange(-num_past_steps, num_future_steps + 1)
                 )
+                # TODO Compute window_time_deltas for fc data
 
                 da_sliced = da_sliced.expand_dims(
                     dim={"time": [current_time.values]}
