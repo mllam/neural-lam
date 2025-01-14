@@ -158,12 +158,13 @@ training:
       r2m: 100.0
 ```
 
-For now the neural-lam config only defines few things: 1) the kind of data
-store and the path to its config, 2) the weighting of different features in
-the loss function, and 3) valid numerical range for output of each feature.
-If you don't define the state feature weighting it will default to
-weighting all features equally. The numerical range of all features default
-to $]-\infty, \infty[$.
+For now the neural-lam config only defines few things: 
+
+1. The kind of datastore and the path to its config
+2. The weighting of different features in
+the loss function. If you don't define the state feature weighting it will default to
+weighting all features equally.
+3. Valid numerical range for output of each feature.The numerical range of all features default to $]-\infty, \infty[$.
 
 (This example is taken from the `tests/datastore_examples/mdp` directory.)
 
