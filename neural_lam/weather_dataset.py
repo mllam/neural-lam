@@ -431,50 +431,21 @@ class WeatherDataset(torch.utils.data.Dataset):
                         forcing_time_idx + num_future_steps + 1,
                     ),
                 )
-
+                window_time_deltas = (da_window.time - state_time).values
                 da_window = da_window.rename({"time": "window"})
 
                 # Assign 'window' coordinate
                 da_window = da_window.assign_coords(
                     window=np.arange(-num_past_steps, num_future_steps + 1)
                 )
+                # Assign window time delta coordinate
+                da_window["window_time_deltas"] = ("window", window_time_deltas)
 
                 da_window = da_window.expand_dims(dim={"time": [state_time]})
 
                 da_list.append(da_window)
 
         da_forcing_matched = xr.concat(da_list, dim="time")
-
-        # Generate time_deltas for the forcing/boundary data. This is the time
-        # difference in multiples of state time steps between the
-        # forcing/boundary time and the state time
-
-        if is_boundary:
-            if self.datastore_boundary.is_forecast:
-                boundary_time_step = self.forecast_step_boundary
-                state_time_step = self.forecast_step_state
-            else:
-                boundary_time_step = self.time_step_boundary
-                state_time_step = self.time_step_state
-            time_deltas = da_forcing_matched["window"] * (
-                boundary_time_step / state_time_step
-            )
-        else:
-            if self.datastore.is_forecast:
-                forcing_time_step = self.forecast_step_forcing
-                state_time_step = self.forecast_step_state
-            else:
-                forcing_time_step = self.time_step_forcing
-                state_time_step = self.time_step_state
-            time_deltas = da_forcing_matched["window"] * (
-                forcing_time_step / state_time_step
-            )
-        # Add time deltas as a new coordinate to concatenate to the
-        # forcing features later as temporal embedding in the model
-        da_forcing_matched["time_deltas"] = (
-            ("window"),
-            time_deltas.values,
-        )
 
         return da_state_sliced, da_forcing_matched
 
@@ -514,9 +485,12 @@ class WeatherDataset(torch.utils.data.Dataset):
             )
             if add_time_deltas:
                 # Add the time deltas a new feature to the windowed
-                # data
-                time_deltas = da_windowed["time_deltas"].isel(
-                    forcing_feature_windowed=slice(0, window_size)
+                # data, as a multiple of the state time step
+                time_deltas = (
+                    da_windowed["window_time_deltas"].isel(
+                        forcing_feature_windowed=slice(0, window_size)
+                    )
+                    / self.time_step_state
                 )
                 # All data variables share the same time deltas
                 da_windowed = xr.concat(
