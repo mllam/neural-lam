@@ -158,7 +158,7 @@ training:
       r2m: 100.0
 ```
 
-For now the neural-lam config only defines few things: 
+For now the neural-lam config only defines few things:
 
 1. The kind of datastore and the path to its config
 2. The weighting of different features in
