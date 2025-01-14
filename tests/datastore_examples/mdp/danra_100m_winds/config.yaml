@@ -7,3 +7,12 @@ training:
     weights:
       u100m: 1.0
       v100m: 1.0
+      t2m: 1.0
+      r2m: 1.0
+  output_clamping:
+    lower:
+      t2m: 0.0
+      r2m: 0
+    upper:
+      r2m: 1.0
+      u100m: 100.0
