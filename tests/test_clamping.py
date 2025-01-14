@@ -51,7 +51,7 @@ def test_clamping():
         training=nlconfig.TrainingConfig(
             output_clamping=nlconfig.OutputClamping(
                 lower={"t2m": 0.0, "r2m": 0.0},
-                upper={"r2m": 100.0, "u100m": 100.0},
+                upper={"r2m": 1.0, "u100m": 100.0},
             )
         ),
     )

@@ -154,14 +154,28 @@ class BaseGraphModel(ARModel):
                     normalize_clamping_lim(upper_lims[feature], feature_idx)
                 )
 
-        self.sigmoid_lower_lims = torch.tensor(sigmoid_lower_lims)
-        self.sigmoid_upper_lims = torch.tensor(sigmoid_upper_lims)
-        self.softplus_lower_lims = torch.tensor(softplus_lower_lims)
-        self.softplus_upper_lims = torch.tensor(softplus_upper_lims)
+        self.register_buffer(
+            "sigmoid_lower_lims", torch.tensor(sigmoid_lower_lims)
+        )
+        self.register_buffer(
+            "sigmoid_upper_lims", torch.tensor(sigmoid_upper_lims)
+        )
+        self.register_buffer(
+            "softplus_lower_lims", torch.tensor(softplus_lower_lims)
+        )
+        self.register_buffer(
+            "softplus_upper_lims", torch.tensor(softplus_upper_lims)
+        )
 
-        self.clamp_lower_upper_idx = torch.tensor(sigmoid_lower_upper_idx)
-        self.clamp_lower_idx = torch.tensor(softplus_lower_idx)
-        self.clamp_upper_idx = torch.tensor(softplus_upper_idx)
+        self.register_buffer(
+            "clamp_lower_upper_idx", torch.tensor(sigmoid_lower_upper_idx)
+        )
+        self.register_buffer(
+            "clamp_lower_idx", torch.tensor(softplus_lower_idx)
+        )
+        self.register_buffer(
+            "clamp_upper_idx", torch.tensor(softplus_upper_idx)
+        )
 
         # Define clamping functions
         self.clamp_lower_upper = lambda x: (
