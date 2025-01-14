@@ -108,10 +108,10 @@ class BaseGraphModel(ARModel):
             )
 
         # Constant parameters for clamping
-        self.sigmoid_sharpness = 1
-        self.softplus_sharpness = 1
-        self.sigmoid_center = 0
-        self.softplus_center = 0
+        sigmoid_sharpness = 1
+        softplus_sharpness = 1
+        sigmoid_center = 0
+        softplus_center = 0
 
         normalize_clamping_lim = (
             lambda x, feature_idx: (x - self.state_mean[feature_idx])
@@ -167,58 +167,40 @@ class BaseGraphModel(ARModel):
         self.clamp_lower_upper = lambda x: (
             self.sigmoid_lower_lims
             + (self.sigmoid_upper_lims - self.sigmoid_lower_lims)
-            * torch.sigmoid(self.sigmoid_sharpness * (x - self.sigmoid_center))
+            * torch.sigmoid(sigmoid_sharpness * (x - sigmoid_center))
         )
         self.clamp_lower = lambda x: (
             self.softplus_lower_lims
             + torch.nn.functional.softplus(
-                x - self.softplus_center, beta=self.softplus_sharpness
+                x - softplus_center, beta=softplus_sharpness
             )
         )
         self.clamp_upper = lambda x: (
             self.softplus_upper_lims
             - torch.nn.functional.softplus(
-                self.softplus_center - x, beta=self.softplus_sharpness
+                softplus_center - x, beta=softplus_sharpness
             )
         )
 
-        # Define inverse clamping functions
-        def inverse_softplus(x, beta=1, threshold=20):
-            # If x*beta is above threshold, returns linear function
-            # for numerical stability
-            non_linear_part = (
-                torch.log(torch.clamp_min(torch.expm1(x * beta), 1e-6)) / beta
-            )
-            x = torch.where(x * beta <= threshold, non_linear_part, x)
-
-            return x
-
-        def inverse_sigmoid(x):
-            # Sigmoid output takes values in [0,1], this makes sure input is just within this interval
-            # Note that this torch.clamp will make gradients 0, but this is not a problem
-            # as values of x that are this close to 0 or 1 have gradient 0 anyhow.
-            x_clamped = torch.clamp(x, min=1e-6, max=1 - 1e-6)
-            return torch.log(x_clamped / (1 - x_clamped))
-
         self.inverse_clamp_lower_upper = lambda x: (
-            self.sigmoid_center
-            + inverse_sigmoid(
+            sigmoid_center
+            + utils.inverse_sigmoid(
                 (x - self.sigmoid_lower_lims)
                 / (self.sigmoid_upper_lims - self.sigmoid_lower_lims)
             )
-            / self.sigmoid_sharpness
+            / sigmoid_sharpness
         )
         self.inverse_clamp_lower = lambda x: (
-            inverse_softplus(
-                x - self.softplus_lower_lims, beta=self.softplus_sharpness
+            utils.inverse_softplus(
+                x - self.softplus_lower_lims, beta=softplus_sharpness
             )
-            + self.softplus_center
+            + softplus_center
         )
         self.inverse_clamp_upper = lambda x: (
-            -inverse_softplus(
-                self.softplus_upper_lims - x, beta=self.softplus_sharpness
+            -utils.inverse_softplus(
+                self.softplus_upper_lims - x, beta=softplus_sharpness
             )
-            + self.softplus_center
+            + softplus_center
         )
 
     def get_clamped_new_state(self, state_delta, prev_state):
