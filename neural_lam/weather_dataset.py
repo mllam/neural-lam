@@ -456,9 +456,8 @@ class WeatherDataset(torch.utils.data.Dataset):
             else:
                 boundary_time_step = self.time_step_boundary
                 state_time_step = self.time_step_state
-            time_deltas = (
-                da_forcing_matched["window"]
-                * (boundary_time_step / state_time_step),
+            time_deltas = da_forcing_matched["window"] * (
+                boundary_time_step / state_time_step
             )
         else:
             if self.datastore.is_forecast:
@@ -467,18 +466,14 @@ class WeatherDataset(torch.utils.data.Dataset):
             else:
                 forcing_time_step = self.time_step_forcing
                 state_time_step = self.time_step_state
-            time_deltas = (
-                da_forcing_matched["window"]
-                * (forcing_time_step / state_time_step),
+            time_deltas = da_forcing_matched["window"] * (
+                forcing_time_step / state_time_step
             )
-        time_deltas = da_forcing_matched.isel(
-            grid_index=0, forcing_feature=0
-        ).window.values
         # Add time deltas as a new coordinate to concatenate to the
         # forcing features later as temporal embedding in the model
         da_forcing_matched["time_deltas"] = (
             ("window"),
-            time_deltas,
+            time_deltas.values,
         )
 
         return da_state_sliced, da_forcing_matched
