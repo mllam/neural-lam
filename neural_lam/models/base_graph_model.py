@@ -194,6 +194,9 @@ class BaseGraphModel(ARModel):
             return x
 
         def inverse_sigmoid(x):
+            # Sigmoid output takes values in [0,1], this makes sure input is just within this interval
+            # Note that this torch.clamp will make gradients 0, but this is not a problem
+            # as values of x that are this close to 0 or 1 have gradient 0 anyhow.
             x_clamped = torch.clamp(x, min=1e-6, max=1 - 1e-6)
             return torch.log(x_clamped / (1 - x_clamped))
 
