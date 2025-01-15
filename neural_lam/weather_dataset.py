@@ -407,7 +407,13 @@ class WeatherDataset(torch.utils.data.Dataset):
                 da_sliced = da_sliced.assign_coords(
                     window=np.arange(-num_past_steps, num_future_steps + 1)
                 )
-                # TODO Compute window_time_deltas for fc data
+                # Calculate window time deltas for forecast data
+                window_time_deltas = (
+                    da_forcing.elapsed_forecast_duration[start_idx:end_idx].values 
+                    - da_forcing.elapsed_forecast_duration[step_idx].values
+                )
+                # Assign window time delta coordinate 
+                da_sliced["window_time_deltas"] = ("window", window_time_deltas)
 
                 da_sliced = da_sliced.expand_dims(
                     dim={"time": [current_time.values]}
