@@ -46,7 +46,7 @@ class ARModel(pl.LightningModule):
 
         # Load static features for interior
         da_static_features = datastore.get_dataarray(
-            category="static", split=None
+            category="static", split=None, standardize=True
         )
         self.register_buffer(
             "interior_static_features",
