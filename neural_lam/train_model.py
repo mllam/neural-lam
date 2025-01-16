@@ -50,6 +50,12 @@ def main(input_args=None):
         help="Number of workers in data loader (default: 4)",
     )
     parser.add_argument(
+        "--num_nodes",
+        type=int,
+        default=1,
+        help="Number of nodes to use in DDP (default: 1)",
+    )
+    parser.add_argument(
         "--epochs",
         type=int,
         default=200,
@@ -81,8 +87,7 @@ def main(input_args=None):
         "--graph_name",
         type=str,
         default="multiscale",
-        help="Graph to load and use in graph-based model "
-        "(default: multiscale)",
+        help="Graph to load and use in graph-based model (default: multiscale)",
     )
     parser.add_argument(
         "--hidden_dim",
@@ -314,6 +319,7 @@ def main(input_args=None):
         deterministic=True,
         strategy="ddp",
         accelerator=device_name,
+        num_nodes=args.num_nodes,
         logger=logger,
         log_every_n_steps=1,
         callbacks=[checkpoint_callback],
