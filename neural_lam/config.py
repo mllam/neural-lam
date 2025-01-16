@@ -69,6 +69,23 @@ class UniformFeatureWeighting:
 
 
 @dataclasses.dataclass
+class OutputClamping:
+    """
+    Configuration for clamping the output of the model.
+
+    Attributes
+    ----------
+    lower : Dict[str, float]
+        The minimum value to clamp each output feature to.
+    upper : Dict[str, float]
+        The maximum value to clamp each output feature to.
+    """
+
+    lower: Dict[str, float] = dataclasses.field(default_factory=dict)
+    upper: Dict[str, float] = dataclasses.field(default_factory=dict)
+
+
+@dataclasses.dataclass
 class TrainingConfig:
     """
     Configuration related to training neural-lam
@@ -85,6 +102,10 @@ class TrainingConfig:
     state_feature_weighting: Union[
         ManualStateFeatureWeighting, UniformFeatureWeighting
     ] = dataclasses.field(default_factory=UniformFeatureWeighting)
+
+    output_clamping: OutputClamping = dataclasses.field(
+        default_factory=OutputClamping
+    )
 
 
 @dataclasses.dataclass

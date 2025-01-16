@@ -533,3 +533,36 @@ def crop_time_if_needed(
             )
             da1 = da1.isel(time=slice(first_valid_idx, last_valid_idx_plus_one))
         return da1
+
+
+def inverse_softplus(x, beta=1, threshold=20):
+    """
+    Inverse of torch.nn.functional.softplus
+
+    For x*beta above threshold, returns linear function for numerical
+    stability.
+
+    Input is clamped to x > ln(1+1e-6)/beta which is approximately positive
+    values of x.
+    Note that this torch.clamp_min will make gradients 0, but this is not a
+    problem as values of x that are this close to 0 have gradients of 0 anyhow.
+    """
+    non_linear_part = (
+        torch.log(torch.clamp_min(torch.expm1(x * beta), 1e-6)) / beta
+    )
+    x = torch.where(x * beta <= threshold, non_linear_part, x)
+
+    return x
+
+
+def inverse_sigmoid(x):
+    """
+    Inverse of torch.sigmoid
+
+    Sigmoid output takes values in [0,1], this makes sure input is just within
+    this interval.
+    Note that this torch.clamp will make gradients 0, but this is not a problem
+    as values of x that are this close to 0 or 1 have gradients of 0 anyhow.
+    """
+    x_clamped = torch.clamp(x, min=1e-6, max=1 - 1e-6)
+    return torch.log(x_clamped / (1 - x_clamped))
