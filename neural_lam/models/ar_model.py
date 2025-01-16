@@ -119,7 +119,7 @@ class ARModel(pl.LightningModule):
         if self.boundary_forced:
             # Load static features for boundary
             da_boundary_static_features = datastore_boundary.get_dataarray(
-                category="static", split=None
+                category="static", split=None, standardize=True
             )
             self.register_buffer(
                 "boundary_static_features",
