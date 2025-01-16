@@ -81,6 +81,13 @@ def main(input_args=None):
         default=32,
         help="Numerical precision to use for model (32/16/bf16) (default: 32)",
     )
+    parser.add_argument(
+        "--num_sanity_steps",
+        type=int,
+        default=2,
+        help="Number of sanity checking validation steps to run before starting"
+        " training (default: 2)",
+    )
 
     # Model architecture
     parser.add_argument(
@@ -331,6 +338,7 @@ def main(input_args=None):
         callbacks=[checkpoint_callback],
         check_val_every_n_epoch=args.val_interval,
         precision=args.precision,
+        num_sanity_val_steps=args.num_sanity_steps,
     )
 
     # Only init once, on rank 0 only
