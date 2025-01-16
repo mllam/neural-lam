@@ -409,10 +409,12 @@ class WeatherDataset(torch.utils.data.Dataset):
                 )
                 # Calculate window time deltas for forecast data
                 window_time_deltas = (
-                    da_forcing.elapsed_forecast_duration[start_idx:end_idx].values 
+                    da_forcing.elapsed_forecast_duration[
+                        start_idx:end_idx
+                    ].values
                     - da_forcing.elapsed_forecast_duration[step_idx].values
                 )
-                # Assign window time delta coordinate 
+                # Assign window time delta coordinate
                 da_sliced["window_time_deltas"] = ("window", window_time_deltas)
 
                 da_sliced = da_sliced.expand_dims(

@@ -279,10 +279,26 @@ class BaseGraphModel(ARModel):
         return prev_state + rescaled_delta_mean, pred_std
 
     def encode_forcing_time_deltas(self, boundary_forcing):
-
         """
-        TODO
-        boundary_forcing: (B, num_nodes, num_forcing_dims)
+        Build sinusoidal encodings of time deltas in boundary forcing. Removes
+        original time delta features and replaces these with encoded sinusoidal
+        features, returning the full new forcing tensor.
+
+        Parameters
+        ----------
+        boundary_forcing : torch.Tensor
+            Tensor of shape (B, num_nodes, num_forcing_dims) containing boundary
+            forcing features. Time delta features are the last
+            self.boundary_time_delta_dims dimensions of the num_forcing_dims
+            feature dimensions.
+
+
+        Returns
+        -------
+        encoded_forcing : torch.Tensor
+            Tensor of shape (B, num_nodes, num_forcing_dims'), where the
+            time delta features have been removed and encoded versions added.
+            Note that this might change the number of feature dimensions.
         """
         # Extract time delta dimensions
         time_deltas = boundary_forcing[..., -self.boundary_time_delta_dims :]
