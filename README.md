@@ -155,7 +155,7 @@ training:
       t2m: 0.0
       r2m: 0
     upper:
-      r2m: 100.0
+      r2m: 1.0
 ```
 
 For now the neural-lam config only defines few things:
