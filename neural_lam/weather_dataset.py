@@ -955,6 +955,8 @@ class WeatherDataModule(pl.LightningDataModule):
         num_future_forcing_steps=1,
         num_past_boundary_steps=1,
         num_future_boundary_steps=1,
+        interior_subsample_step=1,
+        boundary_subsample_step=1,
         batch_size=4,
         num_workers=16,
     ):
@@ -965,6 +967,8 @@ class WeatherDataModule(pl.LightningDataModule):
         self.num_future_forcing_steps = num_future_forcing_steps
         self.num_past_boundary_steps = num_past_boundary_steps
         self.num_future_boundary_steps = num_future_boundary_steps
+        self.interior_subsample_step = interior_subsample_step
+        self.boundary_subsample_step = boundary_subsample_step
         self.ar_steps_train = ar_steps_train
         self.ar_steps_eval = ar_steps_eval
         self.standardize = standardize
@@ -994,6 +998,8 @@ class WeatherDataModule(pl.LightningDataModule):
                 num_future_forcing_steps=self.num_future_forcing_steps,
                 num_past_boundary_steps=self.num_past_boundary_steps,
                 num_future_boundary_steps=self.num_future_boundary_steps,
+                interior_subsample_step=self.interior_subsample_step,
+                boundary_subsample_step=self.boundary_subsample_step,
             )
             self.val_dataset = WeatherDataset(
                 datastore=self._datastore,
@@ -1005,6 +1011,8 @@ class WeatherDataModule(pl.LightningDataModule):
                 num_future_forcing_steps=self.num_future_forcing_steps,
                 num_past_boundary_steps=self.num_past_boundary_steps,
                 num_future_boundary_steps=self.num_future_boundary_steps,
+                interior_subsample_step=self.interior_subsample_step,
+                boundary_subsample_step=self.boundary_subsample_step,
             )
 
         if stage == "test" or stage is None:
@@ -1018,6 +1026,8 @@ class WeatherDataModule(pl.LightningDataModule):
                 num_future_forcing_steps=self.num_future_forcing_steps,
                 num_past_boundary_steps=self.num_past_boundary_steps,
                 num_future_boundary_steps=self.num_future_boundary_steps,
+                interior_subsample_step=self.interior_subsample_step,
+                boundary_subsample_step=self.boundary_subsample_step,
             )
 
     def train_dataloader(self):
