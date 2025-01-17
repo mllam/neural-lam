@@ -4,8 +4,14 @@ import pytest
 import xarray as xr
 
 # First-party
+from neural_lam.datastore import DATASTORES
 from neural_lam.datastore.base import BaseDatastore
 from neural_lam.weather_dataset import WeatherDataset
+from tests.conftest import (
+    DATASTORES_BOUNDARY_EXAMPLES,
+    init_datastore_boundary_example,
+    init_datastore_example,
+)
 
 
 class SinglePointDummyDatastore(BaseDatastore):
@@ -101,6 +107,12 @@ class SinglePointDummyDatastore(BaseDatastore):
 
     def get_vars_long_names(self, category):
         raise NotImplementedError()
+
+
+class BoundaryDummyDatastore(SinglePointDummyDatastore):
+    """Dummy datastore with 6h timesteps for testing boundary conditions"""
+
+    step_length = 6  # 6 hour timesteps
 
 
 INIT_STEPS = 2
@@ -327,4 +339,202 @@ def test_time_slicing_forecast(
     for i in range(ar_steps):
         np.testing.assert_array_equal(
             forcing_values[i], expected_forcing_values[i]
+        )
+
+
+@pytest.mark.parametrize("datastore_name", DATASTORES.keys())
+@pytest.mark.parametrize(
+    "datastore_boundary_name", DATASTORES_BOUNDARY_EXAMPLES.keys()
+)
+@pytest.mark.parametrize(
+    "subsample_config",
+    [
+        # (interior_subsample, boundary_subsample, ar_steps)
+        (1, 1, 1),  # Base case - no subsampling
+        (2, 1, 1),  # Interior subsampling only
+        (1, 2, 1),  # Boundary subsampling only
+        (2, 2, 1),  # Equal subsampling
+        (2, 2, 2),  # More AR steps
+    ],
+)
+def test_dataset_subsampling(
+    datastore_name, datastore_boundary_name, subsample_config
+):
+    """Test that WeatherDataset handles different subsample steps correctly for
+    interior and boundary data.
+
+    The test checks:
+    1. Dataset creation succeeds with different subsample configurations
+    2. Time differences between consecutive states match subsample steps
+    3. Shapes of returned tensors are correct
+    4. We can access the last item without errors
+    """
+    interior_subsample, boundary_subsample, ar_steps = subsample_config
+
+    datastore = init_datastore_example(datastore_name)
+    datastore_boundary = init_datastore_boundary_example(
+        datastore_boundary_name
+    )
+
+    # Configure dataset with subsampling
+    dataset = WeatherDataset(
+        datastore=datastore,
+        datastore_boundary=datastore_boundary,
+        split="train",
+        ar_steps=ar_steps,
+        num_past_forcing_steps=1,
+        num_future_forcing_steps=1,
+        num_past_boundary_steps=1,
+        num_future_boundary_steps=1,
+        interior_subsample_step=interior_subsample,
+        boundary_subsample_step=boundary_subsample,
+    )
+
+    # Get first sample
+    init_states, target_states, forcing, boundary, target_times = dataset[0]
+
+    # Check shapes
+    assert init_states.shape[0] == 2  # Always 2 initial states
+    assert target_states.shape[0] == ar_steps
+
+    # Check time differences
+    times = target_times.numpy()
+    for i in range(1, len(times)):
+        time_delta = np.timedelta64(times[i] - times[i - 1], "ns")
+        expected_hours = interior_subsample * datastore.step_length
+        np.testing.assert_equal(
+            time_delta.astype("timedelta64[h]").astype(int), expected_hours
+        )
+
+    # Verify boundary data timesteps if present
+    if boundary is not None:
+        assert boundary.shape[0] == ar_steps
+        # Each boundary window should have:
+        # (num_past + num_future + 1) timesteps * features * 2 (for time deltas)
+        expected_boundary_features = (
+            datastore_boundary.get_num_data_vars("forcing") + 1
+        ) * (
+            1 + 1 + 1
+        )  # past + future + current
+        assert boundary.shape[2] == expected_boundary_features
+
+    # Verify we can access the last item
+    dataset[len(dataset) - 1]
+
+
+@pytest.mark.parametrize(
+    "num_past_steps,num_future_steps,interior_step,boundary_step",
+    [
+        (1, 1, 1, 1),  # Base case, no subsampling
+        (2, 1, 1, 1),  # More past steps, no subsampling
+        (1, 2, 1, 1),  # More future steps, no subsampling
+        (2, 2, 1, 1),  # Equal past/future, no subsampling
+        (1, 1, 1, 2),  # Basic case with boundary subsampling
+        (2, 2, 1, 2),  # Equal past/future with boundary subsampling
+        (1, 1, 2, 1),  # Basic case with interior subsampling
+        (2, 2, 2, 1),  # Equal past/future with interior subsampling
+        (1, 1, 2, 2),  # Both subsamplings
+    ],
+)
+def test_time_deltas_in_boundary_data(
+    num_past_steps, num_future_steps, interior_step, boundary_step
+):
+    """Test that time deltas are correctly calculated for boundary data.
+
+    This test verifies:
+    1. Time deltas are included in boundary data
+    2. Time deltas are in units of state timesteps
+    3. Time deltas are correctly calculated relative to current timestep
+    4. Time steps scale correctly with subsampling
+    """
+    # Create dummy data with known timesteps (3 hour intervals for interior)
+    time_values_interior = np.datetime64("2020-01-01") + np.arange(
+        20
+    ) * np.timedelta64(3, "h")
+    # 6 hour intervals for boundary
+    time_values_boundary = np.datetime64("2020-01-01") + np.arange(
+        10
+    ) * np.timedelta64(6, "h")
+
+    time_step_ratio = (
+        6 / 3
+    )  # Boundary step is 6 hours, interior step is 3 hours
+
+    state_data = np.arange(20)
+    forcing_data = np.arange(20, 40)
+    boundary_data = np.arange(10)  # Fewer points due to larger time step
+
+    interior_datastore = SinglePointDummyDatastore(
+        state_data=state_data,
+        forcing_data=forcing_data,
+        time_values=time_values_interior,
+        is_forecast=False,
+    )
+
+    boundary_datastore = BoundaryDummyDatastore(
+        state_data=boundary_data,
+        forcing_data=boundary_data + 10,
+        time_values=time_values_boundary,
+        is_forecast=False,
+    )
+
+    dataset = WeatherDataset(
+        datastore=interior_datastore,
+        datastore_boundary=boundary_datastore,
+        split="train",
+        ar_steps=2,
+        num_past_boundary_steps=num_past_steps,
+        num_future_boundary_steps=num_future_steps,
+        interior_subsample_step=interior_step,
+        boundary_subsample_step=boundary_step,
+        standardize=False,
+    )
+
+    # Get first sample
+    _, _, _, boundary, target_times = dataset[0]
+
+    # Extract time deltas from boundary data
+    # Time deltas are the last features in the boundary tensor
+    window_size = num_past_steps + num_future_steps + 1
+    time_deltas = boundary[0, 0, -window_size:].numpy()
+
+    # Expected time deltas in state timesteps, adjusted for boundary subsampling
+    # For each window position, calculate expected offset from current time
+    expected_deltas = (
+        np.arange(-num_past_steps, num_future_steps + 1)
+        * boundary_step
+        * time_step_ratio
+    )
+
+    # Verify time deltas match expected values
+    np.testing.assert_array_equal(time_deltas, expected_deltas)
+
+    # Calculate expected hours offset from current time
+    # Each state timestep is 3 hours, scale by boundary step
+    expected_hours = expected_deltas * boundary_datastore.step_length
+    time_delta_hours = time_deltas * boundary_datastore.step_length
+
+    # Verify time delta hours match expected values
+    np.testing.assert_array_equal(time_delta_hours, expected_hours)
+
+    # Verify relative hour differences between timesteps
+    expected_hour_diff = (
+        boundary_step * boundary_datastore.step_length * time_step_ratio
+    )
+    hour_diffs = np.diff(time_delta_hours)
+    np.testing.assert_array_equal(
+        hour_diffs, [expected_hour_diff] * (len(time_delta_hours) - 1)
+    )
+
+    # Extract boundary times and verify they match expected hours
+    for i in range(len(target_times)):
+        window_start_idx = i * (window_size * 2)
+        window_end_idx = window_start_idx + window_size
+        boundary_times = boundary[i, 0, window_start_idx:window_end_idx].numpy()
+        boundary_time_diffs = (
+            np.diff(boundary_times) * boundary_datastore.step_length
+        )
+        expected_diff = boundary_step * boundary_datastore.step_length
+        np.testing.assert_array_equal(
+            boundary_time_diffs, [expected_diff] * (len(boundary_times) - 1)
         )
