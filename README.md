@@ -72,11 +72,13 @@ You will have to adjust the `CUDA` variable to match the CUDA version on your sy
 Datasets should be stored in a directory called `data`.
 See the [repository format section](#format-of-data-directory) for details on the directory structure.
 
-The full MEPS dataset can be shared with other researchers on request, contact us for this.
-A tiny subset of the data (named `meps_example`) is available in `example_data.zip`, which can be downloaded from [here](https://liuonline-my.sharepoint.com/:f:/g/personal/joeos82_liu_se/EuiUuiGzFIFHruPWpfxfUmYBSjhqMUjNExlJi9W6ULMZ1w?e=97pnGX).
-Download the file and unzip in the neural-lam directory.
+
+The full MEPS dataset is available for download [here](https://nextcloud.liu.se/s/meps). See instructions in the file `README.txt` for how to download and extract the full dataset.
+
+A tiny subset of the MEPS data (named `meps_example`) is also available in `example_data.zip`, which can be downloaded from [here](https://liuonline-my.sharepoint.com/:u:/g/personal/joeos82_liu_se/EaUUq6h9og1EsLwJmKAltWwB7zP2gmObe-K8pL6qGYYiGg?e=yQbFuV).
+Download the files and unzip in the neural-lam directory.
 All graphs used in the paper are also available for download at the same link (but can as easily be re-generated using `create_mesh.py`).
-Note that this is far too little data to train any useful models, but all scripts can be ran with it.
+Note that this subset is far too little data to train any useful models, but all scripts can be ran with it.
 It should thus be useful to make sure that your python environment is set up correctly and that all the code can be ran without any issues.
 
 ## Pre-processing
