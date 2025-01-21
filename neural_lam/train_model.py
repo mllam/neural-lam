@@ -79,20 +79,20 @@ class CustomMLFlowLogger(pl.loggers.MLFlowLogger):
 
 
 def _setup_training_logger(config, datastore, args, run_name):
-    if config.training.logger == "wandb":
+    if args.logger == "wandb":
         logger = pl.loggers.WandbLogger(
-            project=args.wandb_project,
+            project=args.logger_project,
             name=run_name,
             config=dict(training=vars(args), datastore=datastore._config),
         )
-    elif config.training.logger == "mlflow":
-        url = config.training.logger_url
+    elif args.logger == "mlflow":
+        url = args.logger_url
         if url is None:
             raise ValueError(
                 "MLFlow logger requires a URL to the MLFlow server"
             )
         logger = CustomMLFlowLogger(
-            experiment_name=args.wandb_project,
+            experiment_name=args.logger_project,
             tracking_uri=url,
         )
         logger.log_hyperparams(
@@ -251,10 +251,22 @@ def main(input_args=None):
 
     # Logger Settings
     parser.add_argument(
-        "--wandb_project",
+        "--logger",
+        type=str,
+        default="wandb",
+        help="Logger to use for training (wandb/mlflow) (default: wandb)",
+    )
+    parser.add_argument(
+        "--logger-url",
+        type=str,
+        default=None,
+        help="URL to the logger server (default: None)",
+    )
+    parser.add_argument(
+        "--logger_project",
         type=str,
         default="neural_lam",
-        help="Wandb project name (default: neural_lam)",
+        help="Logger project name, for eg. Wandb (default: neural_lam)",
     )
     parser.add_argument(
         "--val_steps_to_log",
