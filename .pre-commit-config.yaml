@@ -35,3 +35,4 @@ repos:
     hooks:
       - id: flake8
         description: Check Python code for correctness, consistency and adherence to best practices
+        additional_dependencies: [Flake8-pyproject]

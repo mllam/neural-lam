@@ -1,10 +1,12 @@
 # Third-party
 import torch_geometric as pyg
 
-# First-party
-from neural_lam import utils
-from neural_lam.interaction_net import InteractionNet
-from neural_lam.models.base_graph_model import BaseGraphModel
+# Local
+from .. import utils
+from ..config import NeuralLAMConfig
+from ..datastore import BaseDatastore
+from ..interaction_net import InteractionNet
+from .base_graph_model import BaseGraphModel
 
 
 class GraphLAM(BaseGraphModel):
@@ -15,8 +17,8 @@ class GraphLAM(BaseGraphModel):
     Oskarsson et al. (2023).
     """
 
-    def __init__(self, args):
-        super().__init__(args)
+    def __init__(self, args, config: NeuralLAMConfig, datastore: BaseDatastore):
+        super().__init__(args, config=config, datastore=datastore)
 
         assert (
             not self.hierarchical

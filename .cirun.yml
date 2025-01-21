@@ -1,0 +1,16 @@
+# setup for using github runners via https://cirun.io/
+runners:
+  - name: "aws-runner"
+    # Cloud Provider: AWS
+    cloud: "aws"
+    # https://aws.amazon.com/ec2/instance-types/g4/
+    instance_type: "g4ad.xlarge"
+    # Deep Learning Base OSS Nvidia Driver GPU AMI (Ubuntu 22.04), Frankfurt region
+    machine_image: "ami-0ba41b554b28d24a4"
+    # use Frankfurt region
+    region: "eu-central-1"
+    preemptible: false
+    # Add this label in the "runs-on" param in .github/workflows/<workflow-name>.yml
+    # So that this runner is created for running the workflow
+    labels:
+      - "cirun-aws-runner"

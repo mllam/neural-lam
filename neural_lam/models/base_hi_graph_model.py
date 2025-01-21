@@ -1,10 +1,12 @@
 # Third-party
 from torch import nn
 
-# First-party
-from neural_lam import utils
-from neural_lam.interaction_net import InteractionNet
-from neural_lam.models.base_graph_model import BaseGraphModel
+# Local
+from .. import utils
+from ..config import NeuralLAMConfig
+from ..datastore import BaseDatastore
+from ..interaction_net import InteractionNet
+from .base_graph_model import BaseGraphModel
 
 
 class BaseHiGraphModel(BaseGraphModel):
@@ -12,8 +14,8 @@ class BaseHiGraphModel(BaseGraphModel):
     Base class for hierarchical graph models.
     """
 
-    def __init__(self, args):
-        super().__init__(args)
+    def __init__(self, args, config: NeuralLAMConfig, datastore: BaseDatastore):
+        super().__init__(args, config=config, datastore=datastore)
 
         # Track number of nodes, edges on each level
         # Flatten lists for efficient embedding
