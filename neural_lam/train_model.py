@@ -34,11 +34,13 @@ class CustomMLFlowLogger(pl.loggers.MLFlowLogger):
     Custom MLFlow logger that adds functionality not present in the default
     """
 
-    def __init__(self, experiment_name, tracking_uri):
+    def __init__(self, experiment_name, tracking_uri, run_name):
         super().__init__(
             experiment_name=experiment_name, tracking_uri=tracking_uri
         )
+
         mlflow.start_run(run_id=self.run_id, log_system_metrics=True)
+        mlflow.set_tag("mlflow.runName", run_name)
         mlflow.log_param("run_id", self.run_id)
 
     @property
@@ -79,7 +81,9 @@ class CustomMLFlowLogger(pl.loggers.MLFlowLogger):
             sys.exit(1)
 
 
+@pl.utilities.rank_zero.rank_zero_only
 def _setup_training_logger(config, datastore, args, run_name):
+
     if args.logger == "wandb":
         logger = pl.loggers.WandbLogger(
             project=args.logger_project,
@@ -95,6 +99,7 @@ def _setup_training_logger(config, datastore, args, run_name):
         logger = CustomMLFlowLogger(
             experiment_name=args.logger_project,
             tracking_uri=url,
+            run_name=run_name,
         )
         logger.log_hyperparams(
             dict(training=vars(args), datastore=datastore._config)
@@ -349,6 +354,7 @@ def main(input_args=None):
         f"{time.strftime('%m_%d_%H')}-{random_run_id:04d}"
     )
 
+    # Only initialise logger on rank 0
     training_logger = _setup_training_logger(
         config=config, datastore=datastore, args=args, run_name=run_name
     )
