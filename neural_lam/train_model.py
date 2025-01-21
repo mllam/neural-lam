@@ -1,5 +1,6 @@
 # Standard library
 import json
+import os
 import random
 import sys
 import time
@@ -86,10 +87,10 @@ def _setup_training_logger(config, datastore, args, run_name):
             config=dict(training=vars(args), datastore=datastore._config),
         )
     elif args.logger == "mlflow":
-        url = args.logger_url
+        url = os.getenv("MLFLOW_TRACKING_URI")
         if url is None:
             raise ValueError(
-                "MLFlow logger requires a URL to the MLFlow server"
+                "MLFlow logger requires setting MLFLOW_TRACKING_URI in env."
             )
         logger = CustomMLFlowLogger(
             experiment_name=args.logger_project,
@@ -250,12 +251,6 @@ def main(input_args=None):
         default="wandb",
         choices=["wandb", "mlflow"],
         help="Logger to use for training (wandb/mlflow) (default: wandb)",
-    )
-    parser.add_argument(
-        "--logger-url",
-        type=str,
-        default=None,
-        help="URL to the logger server (default: None)",
     )
     parser.add_argument(
         "--logger-project",
