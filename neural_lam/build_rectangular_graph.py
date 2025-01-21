@@ -61,7 +61,7 @@ def main(input_args=None):
     )
     parser.add_argument(
         "--level_refinement_factor",
-        type=float,
+        type=int,
         default=3,
         help="Refinement factor between grid points and bottom level of "
         "mesh hierarchy",
