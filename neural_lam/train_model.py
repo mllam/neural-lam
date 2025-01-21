@@ -263,7 +263,7 @@ def main(input_args=None):
         help="URL to the logger server (default: None)",
     )
     parser.add_argument(
-        "--logger_project",
+        "--logger-project",
         type=str,
         default="neural_lam",
         help="Logger project name, for eg. Wandb (default: neural_lam)",
