@@ -172,6 +172,7 @@ def main(
     ar_steps = 63
     ds = WeatherDataset(
         datastore=datastore,
+        datastore_boundary=None,
         split="train",
         ar_steps=ar_steps,
         standardize=False,
@@ -201,7 +202,7 @@ def main(
         print("Computing mean and std.-dev. for parameters...")
     means, squares, flux_means, flux_squares = [], [], [], []
 
-    for init_batch, target_batch, forcing_batch, _ in tqdm(loader):
+    for init_batch, target_batch, forcing_batch, _, _ in tqdm(loader):
         if distributed:
             init_batch, target_batch, forcing_batch = (
                 init_batch.to(device),
@@ -275,6 +276,7 @@ def main(
         print("Computing mean and std.-dev. for one-step differences...")
     ds_standard = WeatherDataset(
         datastore=datastore,
+        datastore_boundary=None,
         split="train",
         ar_steps=ar_steps,
         standardize=True,
@@ -303,7 +305,7 @@ def main(
 
     diff_means, diff_squares = [], []
 
-    for init_batch, target_batch, _, _ in tqdm(
+    for init_batch, target_batch, _, _, _ in tqdm(
         loader_standard, disable=rank != 0
     ):
         if distributed:

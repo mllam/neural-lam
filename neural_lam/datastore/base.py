@@ -47,7 +47,6 @@ class BaseDatastore(abc.ABC):
     each of the `x` and `y` coordinates.
     """
 
-    is_ensemble: bool = False
     is_forecast: bool = False
 
     @property
@@ -193,11 +192,9 @@ class BaseDatastore(abc.ABC):
         """
         Return the processed data (as a single `xr.DataArray`) for the given
         category of data and test/train/val-split that covers all the data (in
-        space and time) of a given category (state/forcing/static). A
-        datastore must be able to return for the "state" category, but
-        "forcing" and "static" are optional (in which case the method should
-        return `None`). For the "static" category the `split` is allowed to be
-        `None` because the static data is the same for all splits.
+        space and time) of a given category (state/forcing/static). For the
+        "static" category the `split` is allowed to be `None` because the static
+        data is the same for all splits.
 
         The returned dataarray is expected to at minimum have dimensions of
         `(grid_index, {category}_feature)` so that any spatial dimensions have
@@ -228,23 +225,6 @@ class BaseDatastore(abc.ABC):
         """
         pass
 
-    @cached_property
-    @abc.abstractmethod
-    def boundary_mask(self) -> xr.DataArray:
-        """
-        Return the boundary mask for the dataset, with spatial dimensions
-        stacked. Where the value is 1, the grid point is a boundary point, and
-        where the value is 0, the grid point is not a boundary point.
-
-        Returns
-        -------
-        xr.DataArray
-            The boundary mask for the dataset, with dimensions
-            `('grid_index',)`.
-
-        """
-        pass
-
     @abc.abstractmethod
     def get_xy(self, category: str) -> np.ndarray:
         """
@@ -261,6 +241,7 @@ class BaseDatastore(abc.ABC):
         np.ndarray
             The x, y coordinates of the dataset with shape `[n_grid_points, 2]`.
         """
+        pass
 
     @property
     @abc.abstractmethod
@@ -276,6 +257,30 @@ class BaseDatastore(abc.ABC):
 
         """
         pass
+
+    @functools.lru_cache
+    def get_lat_lon(self, category: str) -> np.ndarray:
+        """
+        Return the longitude, latitude coordinates of the dataset as numpy
+        array for a given category of data.
+
+        Parameters
+        ----------
+        category : str
+            The category of the dataset (state/forcing/static).
+
+        Returns
+        -------
+        np.ndarray
+            The longitude, latitude coordinates of the dataset
+            with shape `[n_grid_points, 2]`.
+        """
+        xy = self.get_xy(category=category)
+
+        transformed_points = ccrs.PlateCarree().transform_points(
+            self.coords_projection, xy[:, 0], xy[:, 1]
+        )
+        return transformed_points[:, :2]  # Remove z-dim
 
     @functools.lru_cache
     def get_xy_extent(self, category: str) -> List[float]:
@@ -316,6 +321,31 @@ class BaseDatastore(abc.ABC):
 
         """
         pass
+
+    @property
+    def num_ensemble_members(self) -> int:
+        """Return the number of ensemble members in the dataset.
+
+        Returns
+        -------
+        int
+            The number of ensemble members in the dataset (default is 1 -
+            not an ensemble).
+
+        """
+        return 1
+
+    @property
+    def is_ensemble(self) -> bool:
+        """Return whether the dataset represents ensemble data.
+
+        Returns
+        -------
+        bool
+            True if the dataset represents ensemble data, False otherwise.
+
+        """
+        return self.num_ensemble_members > 1
 
     @cached_property
     @abc.abstractmethod

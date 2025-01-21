@@ -19,7 +19,6 @@ dependencies = [
     "scipy>=1.10.0",
     "pytorch-lightning>=2.0.3",
     "shapely>=2.0.1",
-    "networkx>=3.0",
     "Cartopy>=0.22.0",
     "pyproj>=3.4.1",
     "tueplots>=0.0.8",
@@ -30,11 +29,12 @@ dependencies = [
     "parse>=1.20.2",
     "dataclass-wizard<0.31.0",
     "mllam-data-prep>=0.5.0",
+    "weather-model-graphs @ git+https://github.com/joeloskarsson/weather-model-graphs.git@decoding_mask"
 ]
-requires-python = ">=3.9"
+requires-python = ">=3.10"
 
 [project.optional-dependencies]
-dev = ["pre-commit>=3.8.0", "pytest>=8.3.2", "pooch>=1.8.2"]
+dev = ["pre-commit>=3.8.0", "pytest>=8.3.2", "pooch>=1.8.2", "gcsfs>=2021.10.0"]
 
 [tool.setuptools]
 py-modules = ["neural_lam"]

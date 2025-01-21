@@ -9,17 +9,25 @@ from torch.utils.data import DataLoader
 
 # First-party
 from neural_lam import config as nlconfig
-from neural_lam.create_graph import create_graph_from_datastore
+from neural_lam.build_rectangular_graph import build_graph_from_archetype
 from neural_lam.datastore import DATASTORES
 from neural_lam.datastore.base import BaseRegularGridDatastore
 from neural_lam.models.graph_lam import GraphLAM
 from neural_lam.weather_dataset import WeatherDataset
-from tests.conftest import init_datastore_example
+from tests.conftest import (
+    DATASTORES_BOUNDARY_EXAMPLES,
+    get_test_mesh_dist,
+    init_datastore_boundary_example,
+    init_datastore_example,
+)
 from tests.dummy_datastore import DummyDatastore
 
 
 @pytest.mark.parametrize("datastore_name", DATASTORES.keys())
-def test_dataset_item_shapes(datastore_name):
+@pytest.mark.parametrize(
+    "datastore_boundary_name", DATASTORES_BOUNDARY_EXAMPLES.keys()
+)
+def test_dataset_item_shapes(datastore_name, datastore_boundary_name):
     """Check that the `datastore.get_dataarray` method is implemented.
 
     Validate the shapes of the tensors match between the different
@@ -31,24 +39,33 @@ def test_dataset_item_shapes(datastore_name):
 
     """
     datastore = init_datastore_example(datastore_name)
+    datastore_boundary = init_datastore_boundary_example(
+        datastore_boundary_name
+    )
     N_gridpoints = datastore.num_grid_points
+    N_gridpoints_boundary = datastore_boundary.num_grid_points
 
     N_pred_steps = 4
     num_past_forcing_steps = 1
     num_future_forcing_steps = 1
+    num_past_boundary_steps = 1
+    num_future_boundary_steps = 1
     dataset = WeatherDataset(
         datastore=datastore,
+        datastore_boundary=datastore_boundary,
         split="train",
         ar_steps=N_pred_steps,
         num_past_forcing_steps=num_past_forcing_steps,
         num_future_forcing_steps=num_future_forcing_steps,
+        num_past_boundary_steps=num_past_boundary_steps,
+        num_future_boundary_steps=num_future_boundary_steps,
     )
 
     item = dataset[0]
 
     # unpack the item, this is the current return signature for
     # WeatherDataset.__getitem__
-    init_states, target_states, forcing, target_times = item
+    init_states, target_states, forcing, boundary, target_times = item
 
     # initial states
     assert init_states.ndim == 3
@@ -66,9 +83,19 @@ def test_dataset_item_shapes(datastore_name):
     assert forcing.ndim == 3
     assert forcing.shape[0] == N_pred_steps
     assert forcing.shape[1] == N_gridpoints
-    assert forcing.shape[2] == datastore.get_num_data_vars("forcing") * (
+    # each time step in the window has one corresponding time deltas
+    # that is shared across all grid points, times and variables
+    assert forcing.shape[2] == (datastore.get_num_data_vars("forcing") + 1) * (
         num_past_forcing_steps + num_future_forcing_steps + 1
     )
+
+    # boundary
+    assert boundary.ndim == 3
+    assert boundary.shape[0] == N_pred_steps
+    assert boundary.shape[1] == N_gridpoints_boundary
+    assert boundary.shape[2] == (
+        datastore_boundary.get_num_data_vars("forcing") + 1
+    ) * (num_past_boundary_steps + num_future_boundary_steps + 1)
 
     # batch times
     assert target_times.ndim == 1
@@ -87,8 +114,10 @@ def test_dataset_item_create_dataarray_from_tensor(datastore_name):
     N_pred_steps = 4
     num_past_forcing_steps = 1
     num_future_forcing_steps = 1
+
     dataset = WeatherDataset(
         datastore=datastore,
+        datastore_boundary=None,
         split="train",
         ar_steps=N_pred_steps,
         num_past_forcing_steps=num_past_forcing_steps,
@@ -99,10 +128,14 @@ def test_dataset_item_create_dataarray_from_tensor(datastore_name):
 
     # unpack the item, this is the current return signature for
     # WeatherDataset.__getitem__
-    _, target_states, _, target_times_arr = dataset[idx]
-    _, da_target_true, _, da_target_times_true = dataset._build_item_dataarrays(
-        idx=idx
-    )
+    _, target_states, _, _, target_times_arr = dataset[idx]
+    (
+        _,
+        da_target_true,
+        _,
+        _,
+        da_target_times_true,
+    ) = dataset._build_item_dataarrays(idx=idx)
 
     target_times = np.array(target_times_arr, dtype="datetime64[ns]")
     np.testing.assert_equal(target_times, da_target_times_true.values)
@@ -158,43 +191,56 @@ def test_dataset_item_create_dataarray_from_tensor(datastore_name):
 
 @pytest.mark.parametrize("split", ["train", "val", "test"])
 @pytest.mark.parametrize("datastore_name", DATASTORES.keys())
-def test_single_batch(datastore_name, split):
+@pytest.mark.parametrize(
+    "datastore_boundary_name", DATASTORES_BOUNDARY_EXAMPLES.keys()
+)
+def test_single_batch(datastore_name, datastore_boundary_name, split):
     """Check that the `datastore.get_dataarray` method is implemented.
 
     And that it returns an xarray DataArray with the correct dimensions.
 
     """
     datastore = init_datastore_example(datastore_name)
+    datastore_boundary = init_datastore_boundary_example(
+        datastore_boundary_name
+    )
 
     device_name = (
         torch.device("cuda") if torch.cuda.is_available() else "cpu"
     )  # noqa
 
-    graph_name = "1level"
+    flat_graph_name = "1level"
 
     class ModelArgs:
         output_std = False
         loss = "mse"
         restore_opt = False
         n_example_pred = 1
-        graph = graph_name
+        graph_name = flat_graph_name
         hidden_dim = 4
         hidden_layers = 1
         processor_layers = 2
         mesh_aggr = "sum"
         num_past_forcing_steps = 1
         num_future_forcing_steps = 1
+        num_past_boundary_steps = 1
+        num_future_boundary_steps = 1
+        shared_grid_embedder = False
 
     args = ModelArgs()
 
-    graph_dir_path = Path(datastore.root_path) / "graph" / graph_name
+    graph_dir_path = Path(datastore.root_path) / "graphs" / flat_graph_name
 
     def _create_graph():
         if not graph_dir_path.exists():
-            create_graph_from_datastore(
+            build_graph_from_archetype(
                 datastore=datastore,
-                output_root_path=str(graph_dir_path),
-                n_max_levels=1,
+                datastore_boundary=datastore_boundary,
+                graph_name=flat_graph_name,
+                archetype="keisler",
+                mesh_node_distance=get_test_mesh_dist(
+                    datastore, datastore_boundary
+                ),
             )
 
     if not isinstance(datastore, BaseRegularGridDatastore):
@@ -210,9 +256,16 @@ def test_single_batch(datastore_name, split):
         )
     )
 
-    dataset = WeatherDataset(datastore=datastore, split=split, ar_steps=2)
+    dataset = WeatherDataset(
+        datastore=datastore, datastore_boundary=datastore_boundary, split=split
+    )
 
-    model = GraphLAM(args=args, datastore=datastore, config=config)  # noqa
+    model = GraphLAM(
+        args=args,
+        datastore=datastore,
+        datastore_boundary=datastore_boundary,
+        config=config,
+    )  # noqa
 
     model_device = model.to(device_name)
     data_loader = DataLoader(dataset, batch_size=2)
@@ -244,6 +297,7 @@ def test_dataset_length(dataset_config):
 
     dataset = WeatherDataset(
         datastore=datastore,
+        datastore_boundary=None,
         split="train",
         ar_steps=dataset_config["ar_steps"],
         num_past_forcing_steps=dataset_config["past"],
