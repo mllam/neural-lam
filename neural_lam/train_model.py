@@ -254,6 +254,7 @@ def main(input_args=None):
         "--logger",
         type=str,
         default="wandb",
+        choices=["wandb", "mlflow"],
         help="Logger to use for training (wandb/mlflow) (default: wandb)",
     )
     parser.add_argument(
