@@ -2,8 +2,6 @@ datastore:
   kind: mdp
   config_path: danra.datastore.yaml
 training:
-  logger: mlflow
-  logger_url: https://mlflow.dmidev.org
   state_feature_weighting:
     __config_class__: ManualStateFeatureWeighting
     weights:
