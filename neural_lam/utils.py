@@ -4,10 +4,14 @@ import shutil
 import warnings
 
 # Third-party
+import pytorch_lightning as pl
 import torch
 from pytorch_lightning.loggers import MLFlowLogger, WandbLogger
 from torch import nn
 from tueplots import bundles, figsizes
+
+# Local
+from .custom_loggers import CustomMLFlowLogger
 
 
 class BufferList(nn.Module):
@@ -251,3 +255,48 @@ def init_training_logger_metrics(training_logger, val_steps):
             "Only WandbLogger & MLFlowLogger is supported for tracking metrics.\
              Experiment results will only go to stdout."
         )
+
+
+@pl.utilities.rank_zero.rank_zero_only
+def setup_training_logger(datastore, args, run_name):
+    """
+
+    Parameters
+    ----------
+    datastore : Datastore
+        Datastore object.
+
+    args : argparse.Namespace
+        Arguments from command line.
+
+    run_name : str
+        Name of the run.
+
+    Returns
+    -------
+    logger : pytorch_lightning.loggers.base
+        Logger object.
+    """
+
+    if args.logger == "wandb":
+        logger = pl.loggers.WandbLogger(
+            project=args.logger_project,
+            name=run_name,
+            config=dict(training=vars(args), datastore=datastore._config),
+        )
+    elif args.logger == "mlflow":
+        url = os.getenv("MLFLOW_TRACKING_URI")
+        if url is None:
+            raise ValueError(
+                "MLFlow logger requires setting MLFLOW_TRACKING_URI in env."
+            )
+        logger = CustomMLFlowLogger(
+            experiment_name=args.logger_project,
+            tracking_uri=url,
+            run_name=run_name,
+        )
+        logger.log_hyperparams(
+            dict(training=vars(args), datastore=datastore._config)
+        )
+
+    return logger

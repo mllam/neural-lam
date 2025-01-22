@@ -1,16 +1,11 @@
 # Standard library
 import json
-import os
 import random
-import sys
 import time
 from argparse import ArgumentParser
 
 # Third-party
-import mlflow
-
 # for logging the model:
-import mlflow.pytorch
 import pytorch_lightning as pl
 import torch
 from lightning_fabric.utilities import seed
@@ -27,85 +22,6 @@ MODELS = {
     "hi_lam": HiLAM,
     "hi_lam_parallel": HiLAMParallel,
 }
-
-
-class CustomMLFlowLogger(pl.loggers.MLFlowLogger):
-    """
-    Custom MLFlow logger that adds functionality not present in the default
-    """
-
-    def __init__(self, experiment_name, tracking_uri, run_name):
-        super().__init__(
-            experiment_name=experiment_name, tracking_uri=tracking_uri
-        )
-
-        mlflow.start_run(run_id=self.run_id, log_system_metrics=True)
-        mlflow.set_tag("mlflow.runName", run_name)
-        mlflow.log_param("run_id", self.run_id)
-
-    @property
-    def save_dir(self):
-        """
-        Returns the directory where the MLFlow artifacts are saved
-        """
-        return "mlruns"
-
-    def log_image(self, key, images, step=None):
-        """
-        Log a matplotlib figure as an image to MLFlow
-
-        key: str
-            Key to log the image under
-        images: list
-            List of matplotlib figures to log
-        step: Union[int, None]
-            Step to log the image under. If None, logs under the key directly
-        """
-        # Third-party
-        import botocore
-        from PIL import Image
-
-        if step is not None:
-            key = f"{key}_{step}"
-
-        # Need to save the image to a temporary file, then log that file
-        # mlflow.log_image, should do this automatically, but is buggy
-        temporary_image = f"{key}.png"
-        images[0].savefig(temporary_image)
-
-        img = Image.open(temporary_image)
-        try:
-            mlflow.log_image(img, f"{key}.png")
-        except botocore.exceptions.NoCredentialsError:
-            logger.error("Error logging image\nSet AWS credentials")
-            sys.exit(1)
-
-
-@pl.utilities.rank_zero.rank_zero_only
-def _setup_training_logger(config, datastore, args, run_name):
-
-    if args.logger == "wandb":
-        logger = pl.loggers.WandbLogger(
-            project=args.logger_project,
-            name=run_name,
-            config=dict(training=vars(args), datastore=datastore._config),
-        )
-    elif args.logger == "mlflow":
-        url = os.getenv("MLFLOW_TRACKING_URI")
-        if url is None:
-            raise ValueError(
-                "MLFlow logger requires setting MLFLOW_TRACKING_URI in env."
-            )
-        logger = CustomMLFlowLogger(
-            experiment_name=args.logger_project,
-            tracking_uri=url,
-            run_name=run_name,
-        )
-        logger.log_hyperparams(
-            dict(training=vars(args), datastore=datastore._config)
-        )
-
-    return logger
 
 
 @logger.catch
@@ -354,9 +270,8 @@ def main(input_args=None):
         f"{time.strftime('%m_%d_%H')}-{random_run_id:04d}"
     )
 
-    # Only initialise logger on rank 0
-    training_logger = _setup_training_logger(
-        config=config, datastore=datastore, args=args, run_name=run_name
+    training_logger = utils.setup_training_logger(
+        datastore=datastore, args=args, run_name=run_name
     )
 
     checkpoint_callback = pl.callbacks.ModelCheckpoint(
