@@ -435,6 +435,57 @@ class ARModel(pl.LightningModule):
         self.spatial_loss_maps.append(log_spatial_losses)
         # (B, N_log, num_grid_nodes)
 
+        # Convert predictions to DataArray using _create_dataarray_from_tensor
+        prediction_da = self._create_dataarray_from_tensor(prediction, batch_times, "predictions")
+
+        # Extract dimensions and coordinates from prediction_da for the Dataset
+        elapsed_forecast_duration = np.arange(prediction.shape[1])  # TODO:Forecast steps
+        grid_index = np.arange(prediction.shape[2])  # TODO:Spatial grid points
+        state_features = [f"feature_{i}" for i in range(prediction.shape[-1])]  # TODO: State features
+
+        # Create Dataset with coordinates [analysis_time, elapsed_forecast_duration, grid_index, state_feature]
+        ds_prediction = xr.Dataset(
+            {
+                "state": (
+                    ["analysis_time", "elapsed_forecast_duration", "grid_index", "state_feature"],
+                    prediction_da.values,  # Use values from the DataArray
+                ),
+            },
+            coords={
+                "analysis_time": prediction_da.coords["analysis_time"].values,
+                "elapsed_forecast_duration": elapsed_forecast_duration,
+                "grid_index": grid_index,
+                "state_feature": state_features,
+            },
+            attrs={
+                "description": "Predictions from ARModel",
+                "model": self.hparams.model_name,
+            },
+        )
+
+        # Apply chunking along analysis_time
+        ds_prediction = ds_prediction.chunk({"analysis_time": 1})
+
+        # Save predictions to Zarr
+        forecast_save_path = "path/to/my/directory"
+        if forecast_save_path:
+        #if self.args.forecast_save_path:
+
+            #zarr_output_path = self.args.forecast_save_path
+            zarr_output_path = forecast_save_path
+            # Ensure the output directory exists
+            os.makedirs(os.path.dirname(zarr_output_path), exist_ok=True)
+
+            # Save or append to Zarr using region
+            if batch_idx == 0:
+                ds_prediction.to_zarr(zarr_output_path, mode="w", consolidated=True)
+            else:
+                ds_prediction.to_zarr(
+                    zarr_output_path,
+                    mode="a",
+                    region={"analysis_time": slice(batch_idx, batch_idx + 1)},
+                )
+
         # Plot example predictions (on rank 0 only)
         if (
             self.trainer.is_global_zero
