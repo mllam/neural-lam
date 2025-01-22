@@ -7,5 +7,3 @@ training:
     weights:
       u100m: 1.0
       v100m: 1.0
-      r2m: 1.0
-      t2m: 1.0
