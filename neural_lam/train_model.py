@@ -62,7 +62,8 @@ def main(input_args=None):
         default=["auto"],
         help="Devices to use for training. Can be the string 'auto' or a list "
         "of integer id's corresponding to the desired devices, e.g. "
-        "'--devices 0 1' (default: auto)",
+        "'--devices 0 1'. Note that this cannot be used with SLURM, instead "
+        "set 'ntasks-per-node' in the slurm setup (default: auto)",
     )
     parser.add_argument(
         "--epochs",
