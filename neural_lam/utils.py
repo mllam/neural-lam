@@ -7,6 +7,7 @@ import warnings
 import pytorch_lightning as pl
 import torch
 from pytorch_lightning.loggers import MLFlowLogger, WandbLogger
+from pytorch_lightning.utilities import rank_zero_only
 from torch import nn
 from tueplots import bundles, figsizes
 
@@ -238,6 +239,11 @@ def fractional_plot_bundle(fraction):
     )
     return bundle
 
+@rank_zero_only
+def rank_zero_print(*args, **kwargs):
+    """Print only from rank 0 process"""
+    print(*args, **kwargs)
+
 
 def init_training_logger_metrics(training_logger, val_steps):
     """
@@ -257,7 +263,7 @@ def init_training_logger_metrics(training_logger, val_steps):
         )
 
 
-@pl.utilities.rank_zero.rank_zero_only
+@rank_zero_only
 def setup_training_logger(datastore, args, run_name):
     """
 

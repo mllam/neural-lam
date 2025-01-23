@@ -12,6 +12,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Add support for MLFlow logging and metrics tracking. [\#77](https://github.com/mllam/neural-lam/pull/77)
   @khintz
 
+- Add support for multi-node training.
+[\#103](https://github.com/mllam/neural-lam/pull/103) @simonkamuk @sadamov
+
+### Fixed
+- Only print on rank 0 to avoid duplicates of all print statements.
+[\#103](https://github.com/mllam/neural-lam/pull/103) @simonkamuk @sadamov
+
 ## [v0.3.0](https://github.com/mllam/neural-lam/releases/tag/v0.3.0)
 
 This release introduces Datastores to represent input data from different sources (including zarr and numpy) while keeping graph generation within neural-lam.

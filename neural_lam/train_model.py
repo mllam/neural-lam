@@ -51,6 +51,22 @@ def main(input_args=None):
         help="Number of workers in data loader (default: 4)",
     )
     parser.add_argument(
+        "--num_nodes",
+        type=int,
+        default=1,
+        help="Number of nodes to use in DDP (default: 1)",
+    )
+    parser.add_argument(
+        "--devices",
+        nargs="+",
+        type=str,
+        default=["auto"],
+        help="Devices to use for training. Can be the string 'auto' or a list "
+        "of integer id's corresponding to the desired devices, e.g. "
+        "'--devices 0 1'. Note that this cannot be used with SLURM, instead "
+        "set 'ntasks-per-node' in the slurm setup (default: auto)",
+    )
+    parser.add_argument(
         "--epochs",
         type=int,
         default=200,
@@ -257,6 +273,15 @@ def main(input_args=None):
     else:
         device_name = "cpu"
 
+    # Set devices to use
+    if args.devices == ["auto"]:
+        devices = "auto"
+    else:
+        try:
+            devices = [int(i) for i in args.devices]
+        except ValueError:
+            raise ValueError("devices should be 'auto' or a list of integers")
+
     # Load model parameters Use new args for model
     ModelClass = MODELS[args.model]
     model = ModelClass(args, config=config, datastore=datastore)
@@ -286,6 +311,8 @@ def main(input_args=None):
         deterministic=True,
         strategy="ddp",
         accelerator=device_name,
+        num_nodes=args.num_nodes,
+        devices=devices,
         logger=training_logger,
         log_every_n_steps=1,
         callbacks=[checkpoint_callback],
