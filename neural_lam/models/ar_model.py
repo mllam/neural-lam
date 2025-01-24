@@ -37,6 +37,8 @@ class ARModel(pl.LightningModule):
         self.save_hyperparameters(ignore=["datastore"])
         self.args = args
         self._datastore = datastore
+        self.optimization_config = config.training.optimization
+
         num_state_vars = datastore.get_num_data_vars(category="state")
         num_forcing_vars = datastore.get_num_data_vars(category="forcing")
         da_static_features = datastore.get_dataarray(
@@ -189,10 +191,20 @@ class ARModel(pl.LightningModule):
         return da
 
     def configure_optimizers(self):
-        opt = torch.optim.AdamW(
-            self.parameters(), lr=self.args.lr, betas=(0.9, 0.95)
+        config = self.optimization_config
+
+        optimizer = torch.optim.AdamW(
+            self.parameters(), lr=config.lr, betas=(0.9, 0.95)
         )
-        return opt
+
+        if config.scheduler:
+            scheduler_class = getattr(
+                torch.optim.lr_scheduler, config.scheduler
+            )
+            scheduler = scheduler_class(optimizer, **config.scheduler_kwargs)
+            return [optimizer], [scheduler]
+
+        return optimizer
 
     @property
     def interior_mask_bool(self):
@@ -306,6 +318,9 @@ class ARModel(pl.LightningModule):
             sync_dist=True,
             batch_size=batch[0].shape[0],
         )
+        if scheduler := self.lr_schedulers():
+            scheduler.step()
+
         return batch_loss
 
     def all_gather_cat(self, tensor_to_gather):

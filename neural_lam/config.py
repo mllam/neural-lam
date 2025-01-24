@@ -44,6 +44,26 @@ class DatastoreSelection:
 
 
 @dataclasses.dataclass
+class Optimization:
+    """
+    Configuration for the learning rate scheduler.
+
+    Attributes
+    ----------
+    scheduler : str
+        The type of learning rate scheduler to use
+    scheduler_args : Dict[str, Union[int, float]]
+        Arguments to pass to the learning rate scheduler.
+    """
+
+    lr: float = 1e-3
+    scheduler: str = ""
+    scheduler_kwargs: Dict[str, Union[int, float]] = dataclasses.field(
+        default_factory=dict
+    )
+
+
+@dataclasses.dataclass
 class ManualStateFeatureWeighting:
     """
     Configuration for weighting the state features in the loss function where
@@ -85,6 +105,7 @@ class TrainingConfig:
     state_feature_weighting: Union[
         ManualStateFeatureWeighting, UniformFeatureWeighting
     ] = dataclasses.field(default_factory=UniformFeatureWeighting)
+    optimization: Optimization = dataclasses.field(default_factory=Optimization)
 
 
 @dataclasses.dataclass
