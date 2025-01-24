@@ -1,5 +1,6 @@
 # Standard library
 import copy
+import functools
 import warnings
 from functools import cached_property
 from pathlib import Path
@@ -8,9 +9,9 @@ from typing import List
 # Third-party
 import cartopy.crs as ccrs
 import mllam_data_prep as mdp
+import numpy as np
 import xarray as xr
 from loguru import logger
-from numpy import ndarray
 
 # Local
 from ..utils import rank_zero_print
@@ -28,11 +29,10 @@ class MDPDatastore(BaseRegularGridDatastore):
 
     SHORT_NAME = "mdp"
 
-    def __init__(self, config_path, n_boundary_points=30, reuse_existing=True):
+    def __init__(self, config_path, reuse_existing=True):
         """
         Construct a new MDPDatastore from the configuration file at
-        `config_path`. A boundary mask is created with `n_boundary_points`
-        boundary points. If `reuse_existing` is True, the dataset is loaded
+        `config_path`. If `reuse_existing` is True, the dataset is loaded
         from a zarr file if it exists (unless the config has been modified
         since the zarr was created), otherwise it is created from the
         configuration file.
@@ -43,8 +43,6 @@ class MDPDatastore(BaseRegularGridDatastore):
             The path to the configuration file, this will be fed to the
             `mllam_data_prep.Config.from_yaml_file` method to then call
             `mllam_data_prep.create_dataset` to create the dataset.
-        n_boundary_points : int
-            The number of boundary points to use in the boundary mask.
         reuse_existing : bool
             Whether to reuse an existing dataset zarr file if it exists and its
             creation date is newer than the configuration file.
@@ -71,7 +69,6 @@ class MDPDatastore(BaseRegularGridDatastore):
         if self._ds is None:
             self._ds = mdp.create_dataset(config=self._config)
             self._ds.to_zarr(fp_ds)
-        self._n_boundary_points = n_boundary_points
 
         rank_zero_print("The loaded datastore contains the following features:")
         for category in ["state", "forcing", "static"]:
@@ -91,6 +88,8 @@ class MDPDatastore(BaseRegularGridDatastore):
         rank_zero_print("With the following splits (over time):")
         for split in required_splits:
             da_split = self._ds.splits.sel(split_name=split)
+            if "grid_index" in da_split.coords:
+                da_split = da_split.isel(grid_index=0)
             da_split_start = da_split.sel(split_part="start").load().item()
             da_split_end = da_split.sel(split_part="end").load().item()
             rank_zero_print(f" {split:<8s}: {da_split_start} to {da_split_end}")
@@ -159,8 +158,8 @@ class MDPDatastore(BaseRegularGridDatastore):
             The units of the variables in the given category.
 
         """
-        if category not in self._ds and category == "forcing":
-            warnings.warn("no forcing data found in datastore")
+        if category not in self._ds:
+            warnings.warn(f"no {category} data found in datastore")
             return []
         return self._ds[f"{category}_feature_units"].values.tolist()
 
@@ -178,8 +177,8 @@ class MDPDatastore(BaseRegularGridDatastore):
             The names of the variables in the given category.
 
         """
-        if category not in self._ds and category == "forcing":
-            warnings.warn("no forcing data found in datastore")
+        if category not in self._ds:
+            warnings.warn(f"no {category} data found in datastore")
             return []
         return self._ds[f"{category}_feature"].values.tolist()
 
@@ -198,8 +197,8 @@ class MDPDatastore(BaseRegularGridDatastore):
             The long names of the variables in the given category.
 
         """
-        if category not in self._ds and category == "forcing":
-            warnings.warn("no forcing data found in datastore")
+        if category not in self._ds:
+            warnings.warn(f"no {category} data found in datastore")
             return []
         return self._ds[f"{category}_feature_long_name"].values.tolist()
 
@@ -223,9 +222,8 @@ class MDPDatastore(BaseRegularGridDatastore):
         """
         Return the processed data (as a single `xr.DataArray`) for the given
         category of data and test/train/val-split that covers all the data (in
-        space and time) of a given category (state/forcin g/static). "state" is
-        the only required category, for other categories, the method will
-        return `None` if the category is not found in the datastore.
+        space and time) of a given category (state/forcing/static). The method
+        will return `None` if the category is not found in the datastore.
 
         The returned dataarray will at minimum have dimensions of `(grid_index,
         {category}_feature)` so that any spatial dimensions have been stacked
@@ -254,33 +252,21 @@ class MDPDatastore(BaseRegularGridDatastore):
             The xarray DataArray object with processed dataset.
 
         """
-        if category not in self._ds and category == "forcing":
-            warnings.warn("no forcing data found in datastore")
-            return None
+        if category not in self._ds:
+            warnings.warn(f"no {category} data found in datastore")
+            return []
 
         da_category = self._ds[category]
-
-        # set units on x y coordinates if missing
-        for coord in ["x", "y"]:
-            if "units" not in da_category[coord].attrs:
-                da_category[coord].attrs["units"] = "m"
 
         # set multi-index for grid-index
         da_category = da_category.set_index(grid_index=self.CARTESIAN_COORDS)
 
         if "time" in da_category.dims:
-            t_start = (
-                self._ds.splits.sel(split_name=split)
-                .sel(split_part="start")
-                .load()
-                .item()
-            )
-            t_end = (
-                self._ds.splits.sel(split_name=split)
-                .sel(split_part="end")
-                .load()
-                .item()
-            )
+            da_split = self._ds.splits.sel(split_name=split)
+            if "grid_index" in da_split.coords:
+                da_split = da_split.isel(grid_index=0)
+            t_start = da_split.sel(split_part="start").load().item()
+            t_end = da_split.sel(split_part="end").load().item()
             da_category = da_category.sel(time=slice(t_start, t_end))
 
         dim_order = self.expected_dim_order(category=category)
@@ -318,38 +304,9 @@ class MDPDatastore(BaseRegularGridDatastore):
             )
 
         ds_stats = self._ds[stats_variables.keys()].rename(stats_variables)
+        if "grid_index" in ds_stats.coords:
+            ds_stats = ds_stats.isel(grid_index=0)
         return ds_stats
-
-    @cached_property
-    def boundary_mask(self) -> xr.DataArray:
-        """
-        Produce a 0/1 mask for the boundary points of the dataset, these will
-        sit at the edges of the domain (in x/y extent) and will be used to mask
-        out the boundary points from the loss function and to overwrite the
-        boundary points from the prediction. For now this is created when the
-        mask is requested, but in the future this could be saved to the zarr
-        file.
-
-        Returns
-        -------
-        xr.DataArray
-            A 0/1 mask for the boundary points of the dataset, where 1 is a
-            boundary point and 0 is not.
-
-        """
-        ds_unstacked = self.unstack_grid_coords(da_or_ds=self._ds)
-        da_state_variable = (
-            ds_unstacked["state"].isel(time=0).isel(state_feature=0)
-        )
-        da_domain_allzero = xr.zeros_like(da_state_variable)
-        ds_unstacked["boundary_mask"] = da_domain_allzero.isel(
-            x=slice(self._n_boundary_points, -self._n_boundary_points),
-            y=slice(self._n_boundary_points, -self._n_boundary_points),
-        )
-        ds_unstacked["boundary_mask"] = ds_unstacked.boundary_mask.fillna(
-            1
-        ).astype(int)
-        return self.stack_grid_coords(da_or_ds=ds_unstacked.boundary_mask)
 
     @property
     def coords_projection(self) -> ccrs.Projection:
@@ -416,12 +373,20 @@ class MDPDatastore(BaseRegularGridDatastore):
             The shape of the cartesian grid for the state variables.
 
         """
-        ds_state = self.unstack_grid_coords(self._ds["state"])
-        da_x, da_y = ds_state.x, ds_state.y
+        # Boundary data often has no state features
+        if "state" not in self._ds:
+            warnings.warn(
+                "no state data found in datastore"
+                "returning grid shape from forcing data"
+            )
+            da_grid_reference = self.unstack_grid_coords(self._ds["forcing"])
+        else:
+            da_grid_reference = self.unstack_grid_coords(self._ds["state"])
+        da_x, da_y = da_grid_reference.x, da_grid_reference.y
         assert da_x.ndim == da_y.ndim == 1
         return CartesianGridShape(x=da_x.size, y=da_y.size)
 
-    def get_xy(self, category: str, stacked: bool) -> ndarray:
+    def get_xy(self, category: str, stacked: bool = True) -> np.ndarray:
         """Return the x, y coordinates of the dataset.
 
         Parameters
@@ -466,3 +431,48 @@ class MDPDatastore(BaseRegularGridDatastore):
             da_xy = da_xy.transpose(*dims)
 
         return da_xy.values
+
+    @functools.lru_cache
+    def get_lat_lon(self, category: str) -> np.ndarray:
+        """
+        Return the longitude, latitude coordinates of the dataset as numpy
+        array for a given category of data.
+        Override in MDP to use lat/lons directly from xr.Dataset, if available.
+
+        Parameters
+        ----------
+        category : str
+            The category of the dataset (state/forcing/static).
+
+        Returns
+        -------
+        np.ndarray
+            The longitude, latitude coordinates of the dataset
+            with shape `[n_grid_points, 2]`.
+        """
+        # Check first if lat/lon saved in ds
+        lookup_ds = self._ds
+        if "latitude" in lookup_ds.coords and "longitude" in lookup_ds.coords:
+            lon = lookup_ds.longitude
+            lat = lookup_ds.latitude
+        elif "lat" in lookup_ds.coords and "lon" in lookup_ds.coords:
+            lon = lookup_ds.lon
+            lat = lookup_ds.lat
+        else:
+            # Not saved, use method from BaseDatastore to derive from x/y
+            return super().get_lat_lon(category)
+
+        coords = np.stack((lon.values, lat.values), axis=1)
+        return coords
+
+    @property
+    def num_grid_points(self) -> int:
+        """Return the number of grid points in the dataset.
+
+        Returns
+        -------
+        int
+            The number of grid points in the dataset.
+
+        """
+        return len(self._ds.grid_index)

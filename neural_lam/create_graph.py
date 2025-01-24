@@ -13,7 +13,7 @@ import torch_geometric as pyg
 from torch_geometric.utils.convert import from_networkx
 
 # Local
-from .config import load_config_and_datastore
+from .config import load_config_and_datastores
 from .datastore.base import BaseRegularGridDatastore
 
 
@@ -595,7 +595,7 @@ def cli(input_args=None):
     ), "Specify your config with --config_path"
 
     # Load neural-lam configuration and datastore to use
-    _, datastore = load_config_and_datastore(config_path=args.config_path)
+    _, datastore = load_config_and_datastores(config_path=args.config_path)
 
     create_graph_from_datastore(
         datastore=datastore,

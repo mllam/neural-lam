@@ -97,11 +97,15 @@ class NeuralLAMConfig(dataclass_wizard.JSONWizard, dataclass_wizard.YAMLWizard):
     ----------
     datastore : DatastoreSelection
         The configuration for the datastore to use.
+    datastore_boundary : Union[DatastoreSelection, None]
+        The configuration for the boundary datastore to use, if any. If None,
+        no boundary datastore is used.
     training : TrainingConfig
         The configuration for training the model.
     """
 
     datastore: DatastoreSelection
+    datastore_boundary: Union[DatastoreSelection, None] = None
     training: TrainingConfig = dataclasses.field(default_factory=TrainingConfig)
 
     class _(dataclass_wizard.JSONWizard.Meta):
@@ -136,11 +140,11 @@ class InvalidConfigError(Exception):
     pass
 
 
-def load_config_and_datastore(
+def load_config_and_datastores(
     config_path: str,
 ) -> tuple[NeuralLAMConfig, Union[MDPDatastore, NpyFilesDatastoreMEPS]]:
     """
-    Load the neural-lam configuration and the datastore specified in the
+    Load the neural-lam configuration and the datastores specified in the
     configuration.
 
     Parameters
@@ -151,7 +155,7 @@ def load_config_and_datastore(
     Returns
     -------
     tuple[NeuralLAMConfig, Union[MDPDatastore, NpyFilesDatastoreMEPS]]
-        The Neural-LAM configuration and the loaded datastore.
+        The Neural-LAM configuration and the loaded datastores.
     """
     try:
         config = NeuralLAMConfig.from_yaml_file(config_path)
@@ -168,4 +172,15 @@ def load_config_and_datastore(
         datastore_kind=config.datastore.kind, config_path=datastore_config_path
     )
 
-    return config, datastore
+    if config.datastore_boundary is not None:
+        datastore_boundary_config_path = (
+            Path(config_path).parent / config.datastore_boundary.config_path
+        )
+        datastore_boundary = init_datastore(
+            datastore_kind=config.datastore_boundary.kind,
+            config_path=datastore_boundary_config_path,
+        )
+    else:
+        datastore_boundary = None
+
+    return config, datastore, datastore_boundary

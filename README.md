@@ -108,7 +108,9 @@ Once `neural-lam` is installed you will be able to train/evaluate models. For th
    interface that provides the data in a data-structure that can be used within
    neural-lam. A datastore is used to create a `pytorch.Dataset`-derived
    class that samples the data in time to create individual samples for
-   training, validation and testing.
+   training, validation and testing. A secondary datastore can be provided
+   for the boundary data. Currently, boundary datastore must be of type `mdp`
+   and only contain forcing features. This can easily be expanded in the future.
 
 2. **The graph structure** is used to define message-passing GNN layers,
    that are trained to emulate fluid flow in the atmosphere over time. The
@@ -121,7 +123,7 @@ different aspects about the training and evaluation of the model.
 
 The path you provide to the neural-lam config (`config.yaml`) also sets the
 root directory relative to which all other paths are resolved, as in the parent
-directory of the config becomes the root directory. Both the datastore and
+directory of the config becomes the root directory. Both the datastores and
 graphs you generate are then stored in subdirectories of this root directory.
 Exactly how and where a specific datastore expects its source data to be stored
 and where it stores its derived data is up to the implementation of the
@@ -134,6 +136,7 @@ assume you placed `config.yaml` in a folder called `data`):
 data/
 ├── config.yaml           - Configuration file for neural-lam
 ├── danra.datastore.yaml  - Configuration file for the datastore, referred to from config.yaml
+├── era5.datastore.zarr/  - Optional configuration file for the  boundary datastore, referred to from config.yaml
 └── graphs/               - Directory containing graphs for training
 ```
 
@@ -142,6 +145,9 @@ And the content of `config.yaml` could in this case look like:
 datastore:
   kind: mdp
   config_path: danra.datastore.yaml
+datastore_boundary:
+  kind: mdp
+  config_path: era5.datastore.yaml
 training:
   state_feature_weighting:
     __config_class__: ManualStateFeatureWeighting
@@ -150,10 +156,9 @@ training:
       v100m: 1.0
 ```
 
-For now the neural-lam config only defines two things: 1) the kind of data
-store and the path to its config, and 2) the weighting of different features in
-the loss function. If you don't define the state feature weighting it will default
-to weighting all features equally.
+For now the neural-lam config only defines two things:
+1) the kind of datastores and the path to their config
+2) the weighting of different features in the loss function. If you don't define the state feature weighting it will default to weighting all features equally.
 
 (This example is taken from the `tests/datastore_examples/mdp` directory.)
 
@@ -555,5 +560,4 @@ Furthermore, all tests in the ```tests``` directory will be run upon pushing cha
 
 # Contact
 If you are interested in machine learning models for LAM, have questions about the implementation or ideas for extending it, feel free to get in touch.
-There is an open [mllam slack channel](https://join.slack.com/t/ml-lam/shared_invite/zt-2t112zvm8-Vt6aBvhX7nYa6Kbj_LkCBQ) that anyone can join (after following the link you have to request to join, this is to avoid spam bots).
-You can also open a github issue on this page, or (if more suitable) send an email to [joel.oskarsson@liu.se](mailto:joel.oskarsson@liu.se).
+There is an open [mllam slack channel](https://join.slack.com/t/ml-lam/shared_invite/zt-2t112zvm8-Vt6aBvhX7nYa6Kbj_LkCBQ) that anyone can join. You can also open a github issue on this page, or (if more suitable) send an email to [joel.oskarsson@liu.se](mailto:joel.oskarsson@liu.se).
