@@ -247,6 +247,18 @@ def main(input_args=None):
         default=1,
         help="Number of future time steps to use as input for boundary data",
     )
+    parser.add_argument(
+        "--interior_subsample_step",
+        type=int,
+        default=1,
+        help="Subsample step for interior grid nodes",
+    )
+    parser.add_argument(
+        "--boundary_subsample_step",
+        type=int,
+        default=1,
+        help="Subsample step for boundary grid nodes",
+    )
     args = parser.parse_args(input_args)
     args.var_leads_metrics_watch = {
         int(k): v for k, v in json.loads(args.var_leads_metrics_watch).items()
@@ -285,6 +297,8 @@ def main(input_args=None):
         num_future_forcing_steps=args.num_future_forcing_steps,
         num_past_boundary_steps=args.num_past_boundary_steps,
         num_future_boundary_steps=args.num_future_boundary_steps,
+        interior_subsample_step=args.interior_subsample_step,
+        boundary_subsample_step=args.boundary_subsample_step,
         batch_size=args.batch_size,
         num_workers=args.num_workers,
     )

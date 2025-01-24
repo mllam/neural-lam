@@ -37,7 +37,7 @@ class DummyDatastore(BaseRegularGridDatastore):
     bbox_size_km = [500, 500]  # km
 
     def __init__(
-        self, config_path=None, n_grid_points=10000, n_timesteps=10
+        self, config_path=None, n_grid_points=10000, n_timesteps=15
     ) -> None:
         """
         Create a dummy datastore with random data.
