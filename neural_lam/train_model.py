@@ -150,6 +150,11 @@ def main(input_args=None):
         "(default: None (train model))",
     )
     parser.add_argument(
+        "--save-eval-to-zarr-path",
+        type=str,
+        help="Save evaluation results to zarr dataset at given path ",
+    )
+    parser.add_argument(
         "--ar_steps_eval",
         type=int,
         default=10,
