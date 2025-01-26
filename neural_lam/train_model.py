@@ -1,4 +1,5 @@
 # Standard library
+import json
 import random
 import time
 from argparse import ArgumentParser
@@ -6,15 +7,14 @@ from argparse import ArgumentParser
 # Third-party
 import pytorch_lightning as pl
 import torch
-import wandb
 from lightning_fabric.utilities import seed
+from loguru import logger
 
-# First-party
-from neural_lam import utils
-from neural_lam.models.graph_lam import GraphLAM
-from neural_lam.models.hi_lam import HiLAM
-from neural_lam.models.hi_lam_parallel import HiLAMParallel
-from neural_lam.weather_dataset import WeatherDataModule
+# Local
+from . import utils
+from .config import load_config_and_datastores
+from .models import GraphLAM, HiLAM, HiLAMParallel
+from .weather_dataset import WeatherDataModule
 
 MODELS = {
     "graph_lam": GraphLAM,
@@ -23,25 +23,22 @@ MODELS = {
 }
 
 
-def main():
-    """
-    Main function for training and evaluating models
-    """
+@logger.catch
+def main(input_args=None):
+    """Main function for training and evaluating models."""
     parser = ArgumentParser(
         description="Train or evaluate NeurWP models for LAM"
     )
-
+    parser.add_argument(
+        "--config_path",
+        type=str,
+        help="Path to the configuration for neural-lam",
+    )
     parser.add_argument(
         "--model",
         type=str,
         default="graph_lam",
         help="Model architecture to train/evaluate (default: graph_lam)",
-    )
-    parser.add_argument(
-        "--data_config",
-        type=str,
-        default="neural_lam/data_config.yaml",
-        help="Path to data config file (default: neural_lam/data_config.yaml)",
     )
     parser.add_argument(
         "--seed", type=int, default=42, help="random seed (default: 42)"
@@ -51,6 +48,12 @@ def main():
         type=int,
         default=4,
         help="Number of workers in data loader (default: 4)",
+    )
+    parser.add_argument(
+        "--num_nodes",
+        type=int,
+        default=1,
+        help="Number of nodes to use in DDP (default: 1)",
     )
     parser.add_argument(
         "--epochs",
@@ -68,10 +71,9 @@ def main():
     )
     parser.add_argument(
         "--restore_opt",
-        type=int,
-        default=0,
+        action="store_true",
         help="If optimizer state should be restored with model "
-        "(default: 0 (false))",
+        "(default: false)",
     )
     parser.add_argument(
         "--precision",
@@ -79,14 +81,20 @@ def main():
         default=32,
         help="Numerical precision to use for model (32/16/bf16) (default: 32)",
     )
+    parser.add_argument(
+        "--num_sanity_steps",
+        type=int,
+        default=2,
+        help="Number of sanity checking validation steps to run before starting"
+        " training (default: 2)",
+    )
 
     # Model architecture
     parser.add_argument(
-        "--graph",
+        "--graph_name",
         type=str,
         default="multiscale",
-        help="Graph to load and use in graph-based model "
-        "(default: multiscale)",
+        help="Graph to load and use in graph-based model (default: multiscale)",
     )
     parser.add_argument(
         "--hidden_dim",
@@ -115,40 +123,39 @@ def main():
     )
     parser.add_argument(
         "--output_std",
-        type=int,
-        default=0,
+        action="store_true",
         help="If models should additionally output std.-dev. per "
         "output dimensions "
-        "(default: 0 (no))",
+        "(default: False (no))",
+    )
+    parser.add_argument(
+        "--shared_grid_embedder",
+        action="store_true",  # Default to separate embedders
+        help="If the same embedder MLP should be used for interior and boundary"
+        " grid nodes. Note that this requires the same dimensionality for "
+        "both kinds of grid inputs. (default: False (no))",
+    )
+    parser.add_argument(
+        "--time_delta_enc_dim",
+        type=int,
+        help="Dimensionality of positional encoding for time deltas of boundary"
+        " forcing. If None, same as hidden_dim. If given, must be even "
+        "(default: None)",
     )
 
     # Training options
     parser.add_argument(
         "--ar_steps_train",
         type=int,
-        default=3,
+        default=1,
         help="Number of steps to unroll prediction for in loss function "
-        "(default: 3)",
-    )
-    parser.add_argument(
-        "--control_only",
-        type=int,
-        default=0,
-        help="Train only on control member of ensemble data "
-        "(default: 0 (False))",
+        "(default: 1)",
     )
     parser.add_argument(
         "--loss",
         type=str,
         default="wmse",
         help="Loss function to use, see metric.py (default: wmse)",
-    )
-    parser.add_argument(
-        "--step_length",
-        type=int,
-        default=1,
-        help="Step length in hours to consider single time step 1-3 "
-        "(default: 1)",
     )
     parser.add_argument(
         "--lr", type=float, default=1e-3, help="learning rate (default: 0.001)"
@@ -159,6 +166,12 @@ def main():
         default=1,
         help="Number of epochs training between each validation run "
         "(default: 1)",
+    )
+    parser.add_argument(
+        "--grad_checkpointing",
+        action="store_true",
+        help="If gradient checkpointing should be used in-between each "
+        "unrolling step (default: false)",
     )
 
     # Evaluation options
@@ -171,9 +184,9 @@ def main():
     parser.add_argument(
         "--ar_steps_eval",
         type=int,
-        default=25,
-        help="Number of steps to unroll prediction for in loss function "
-        "(default: 25)",
+        default=10,
+        help="Number of steps to unroll prediction for during evaluation "
+        "(default: 10)",
     )
     parser.add_argument(
         "--n_example_pred",
@@ -183,36 +196,79 @@ def main():
         "(default: 1)",
     )
 
-    # Logging Options
+    # Logger Settings
     parser.add_argument(
         "--wandb_project",
         type=str,
-        default="neural-lam",
-        help="Wandb project to log to (default: neural-lam)",
+        default="neural_lam",
+        help="Wandb project name (default: neural_lam)",
     )
     parser.add_argument(
-        "--val_steps_log",
-        type=list,
+        "--val_steps_to_log",
+        nargs="+",
+        type=int,
         default=[1, 2, 3, 5, 10, 15, 19],
-        help="Steps to log val loss for (default: [1, 2, 3, 5, 10, 15, 19])",
+        help="Steps to log val loss for (default: 1 2 3 5 10 15 19)",
     )
     parser.add_argument(
         "--metrics_watch",
-        type=list,
+        nargs="+",
         default=[],
         help="List of metrics to watch, including any prefix (e.g. val_rmse)",
     )
     parser.add_argument(
         "--var_leads_metrics_watch",
-        type=dict,
-        default={},
-        help="Dict with variables and lead times to log watched metrics for",
+        type=str,
+        default="{}",
+        help="""JSON string with variable-IDs and lead times to log watched
+             metrics (e.g. '{"1": [1, 2], "3": [3, 4]}')""",
     )
-    args = parser.parse_args()
+    parser.add_argument(
+        "--num_past_forcing_steps",
+        type=int,
+        default=1,
+        help="Number of past time steps to use as input for forcing data",
+    )
+    parser.add_argument(
+        "--num_future_forcing_steps",
+        type=int,
+        default=1,
+        help="Number of future time steps to use as input for forcing data",
+    )
+    parser.add_argument(
+        "--num_past_boundary_steps",
+        type=int,
+        default=1,
+        help="Number of past time steps to use as input for boundary data",
+    )
+    parser.add_argument(
+        "--num_future_boundary_steps",
+        type=int,
+        default=1,
+        help="Number of future time steps to use as input for boundary data",
+    )
+    parser.add_argument(
+        "--interior_subsample_step",
+        type=int,
+        default=1,
+        help="Subsample step for interior grid nodes",
+    )
+    parser.add_argument(
+        "--boundary_subsample_step",
+        type=int,
+        default=1,
+        help="Subsample step for boundary grid nodes",
+    )
+    args = parser.parse_args(input_args)
+    args.var_leads_metrics_watch = {
+        int(k): v for k, v in json.loads(args.var_leads_metrics_watch).items()
+    }
 
     # Asserts for arguments
+    assert (
+        args.config_path is not None
+    ), "Specify your config with --config_path"
     assert args.model in MODELS, f"Unknown model: {args.model}"
-    assert args.step_length <= 3, "Too high step length"
     assert args.eval in (
         None,
         "val",
@@ -224,10 +280,25 @@ def main():
 
     # Set seed
     seed.seed_everything(args.seed)
+
+    # Load neural-lam configuration and datastore to use
+    config, datastore, datastore_boundary = load_config_and_datastores(
+        config_path=args.config_path
+    )
+
     # Create datamodule
     data_module = WeatherDataModule(
+        datastore=datastore,
+        datastore_boundary=datastore_boundary,
         ar_steps_train=args.ar_steps_train,
         ar_steps_eval=args.ar_steps_eval,
+        standardize=True,
+        num_past_forcing_steps=args.num_past_forcing_steps,
+        num_future_forcing_steps=args.num_future_forcing_steps,
+        num_past_boundary_steps=args.num_past_boundary_steps,
+        num_future_boundary_steps=args.num_future_boundary_steps,
+        interior_subsample_step=args.interior_subsample_step,
+        boundary_subsample_step=args.boundary_subsample_step,
         batch_size=args.batch_size,
         num_workers=args.num_workers,
     )
@@ -242,15 +313,13 @@ def main():
         device_name = "cpu"
 
     # Load model parameters Use new args for model
-    model_class = MODELS[args.model]
-    if args.load:
-        model = model_class.load_from_checkpoint(args.load, args=args)
-        if args.restore_opt:
-            # Save for later
-            # Unclear if this works for multi-GPU
-            model.opt_state = torch.load(args.load)["optimizer_states"][0]
-    else:
-        model = model_class(args)
+    ModelClass = MODELS[args.model]
+    model = ModelClass(
+        args,
+        config=config,
+        datastore=datastore,
+        datastore_boundary=datastore_boundary,
+    )
 
     if args.eval:
         prefix = f"eval-{args.eval}-"
@@ -268,30 +337,33 @@ def main():
         save_last=True,
     )
     logger = pl.loggers.WandbLogger(
-        project=args.wandb_project, name=run_name, config=args
+        project=args.wandb_project,
+        name=run_name,
+        config=dict(training=vars(args), datastore=datastore._config),
     )
     trainer = pl.Trainer(
         max_epochs=args.epochs,
         deterministic=True,
         strategy="ddp",
         accelerator=device_name,
+        num_nodes=args.num_nodes,
         logger=logger,
         log_every_n_steps=1,
         callbacks=[checkpoint_callback],
         check_val_every_n_epoch=args.val_interval,
         precision=args.precision,
+        num_sanity_val_steps=args.num_sanity_steps,
     )
 
     # Only init once, on rank 0 only
     if trainer.global_rank == 0:
         utils.init_wandb_metrics(
-            logger, val_steps=args.val_steps_log
+            logger, val_steps=args.val_steps_to_log
         )  # Do after wandb.init
-        wandb.save(args.data_config)
     if args.eval:
         trainer.test(model=model, datamodule=data_module, ckpt_path=args.load)
     else:
-        trainer.fit(model=model, datamodule=data_module)
+        trainer.fit(model=model, datamodule=data_module, ckpt_path=args.load)
 
 
 if __name__ == "__main__":

@@ -1,10 +1,15 @@
+# Standard library
+from typing import Union
+
 # Third-party
 from torch import nn
 
-# First-party
-from neural_lam import utils
-from neural_lam.interaction_net import InteractionNet
-from neural_lam.models.base_graph_model import BaseGraphModel
+# Local
+from .. import utils
+from ..config import NeuralLAMConfig
+from ..datastore import BaseDatastore
+from ..interaction_net import InteractionNet
+from .base_graph_model import BaseGraphModel
 
 
 class BaseHiGraphModel(BaseGraphModel):
@@ -12,8 +17,19 @@ class BaseHiGraphModel(BaseGraphModel):
     Base class for hierarchical graph models.
     """
 
-    def __init__(self, args):
-        super().__init__(args)
+    def __init__(
+        self,
+        args,
+        config: NeuralLAMConfig,
+        datastore: BaseDatastore,
+        datastore_boundary: Union[BaseDatastore, None],
+    ):
+        super().__init__(
+            args,
+            config=config,
+            datastore=datastore,
+            datastore_boundary=datastore_boundary,
+        )
 
         # Track number of nodes, edges on each level
         # Flatten lists for efficient embedding
@@ -36,7 +52,7 @@ class BaseHiGraphModel(BaseGraphModel):
             if level_index < (self.num_levels - 1):
                 up_edges = self.mesh_up_features[level_index].shape[0]
                 down_edges = self.mesh_down_features[level_index].shape[0]
-                print(f"  {level_index}<->{level_index+1}")
+                print(f"  {level_index}<->{level_index + 1}")
                 print(f" - {up_edges} up edges, {down_edges} down edges")
         # Embedders
         # Assume all levels have same static feature dimensionality
@@ -97,18 +113,23 @@ class BaseHiGraphModel(BaseGraphModel):
             ]
         )
 
-    def get_num_mesh(self):
+    @property
+    def num_mesh_nodes(self):
         """
-        Compute number of mesh nodes from loaded features,
-        and number of mesh nodes that should be ignored in encoding/decoding
+        Get the total number of mesh nodes in the used mesh graph
         """
         num_mesh_nodes = sum(
             node_feat.shape[0] for node_feat in self.mesh_static_features
         )
-        num_mesh_nodes_ignore = (
-            num_mesh_nodes - self.mesh_static_features[0].shape[0]
-        )
-        return num_mesh_nodes, num_mesh_nodes_ignore
+        return num_mesh_nodes
+
+    @property
+    def num_grid_connected_mesh_nodes(self):
+        """
+        Get the total number of mesh nodes that have a connection to
+        the grid (e.g. bottom level in a hierarchy)
+        """
+        return self.mesh_static_features[0].shape[0]  # Bottom level
 
     def embedd_mesh_nodes(self):
         """
@@ -179,9 +200,9 @@ class BaseHiGraphModel(BaseGraphModel):
             )
 
             # Update node and edge vectors in lists
-            mesh_rep_levels[level_l] = (
-                new_node_rep  # (B, num_mesh_nodes[l], d_h)
-            )
+            mesh_rep_levels[
+                level_l
+            ] = new_node_rep  # (B, num_mesh_nodes[l], d_h)
             mesh_up_rep[level_l - 1] = new_edge_rep  # (B, M_up[l-1], d_h)
 
         # - PROCESSOR -
@@ -207,9 +228,9 @@ class BaseHiGraphModel(BaseGraphModel):
             new_node_rep = gnn(send_node_rep, rec_node_rep, edge_rep)
 
             # Update node and edge vectors in lists
-            mesh_rep_levels[level_l] = (
-                new_node_rep  # (B, num_mesh_nodes[l], d_h)
-            )
+            mesh_rep_levels[
+                level_l
+            ] = new_node_rep  # (B, num_mesh_nodes[l], d_h)
 
         # Return only bottom level representation
         return mesh_rep_levels[0]  # (B, num_mesh_nodes[0], d_h)

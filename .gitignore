@@ -1,18 +1,15 @@
 ### Project Specific ###
 wandb
-slurm_log*
 saved_models
+lightning_logs
 data
 graphs
 *.sif
 sweeps
-test_*.sh
-cosmo_hilam.html
-.gitignore
 .vscode
+*.html
 *.zarr
-*.png
-shps
+*slurm*
 
 ### Python ###
 # Byte-compiled / optimized / DLL files
@@ -79,4 +76,14 @@ tags
 # Coc configuration directory
 .vim
 .vscode
-boundary_mask_donut.png
+
+# macos
+.DS_Store
+__MACOSX
+
+# pdm (https://pdm-project.org/en/stable/)
+.pdm-python
+.venv
+
+# exclude pdm.lock file so that both cpu and gpu versions of torch will be accepted by pdm
+pdm.lock

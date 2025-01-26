@@ -1,10 +1,15 @@
+# Standard library
+from typing import Union
+
 # Third-party
 import torch_geometric as pyg
 
-# First-party
-from neural_lam import utils
-from neural_lam.interaction_net import InteractionNet
-from neural_lam.models.base_graph_model import BaseGraphModel
+# Local
+from .. import utils
+from ..config import NeuralLAMConfig
+from ..datastore import BaseDatastore
+from ..interaction_net import InteractionNet
+from .base_graph_model import BaseGraphModel
 
 
 class GraphLAM(BaseGraphModel):
@@ -15,14 +20,24 @@ class GraphLAM(BaseGraphModel):
     Oskarsson et al. (2023).
     """
 
-    def __init__(self, args):
-        super().__init__(args)
+    def __init__(
+        self,
+        args,
+        config: NeuralLAMConfig,
+        datastore: BaseDatastore,
+        datastore_boundary: Union[BaseDatastore, None],
+    ):
+        super().__init__(
+            args,
+            config=config,
+            datastore=datastore,
+            datastore_boundary=datastore_boundary,
+        )
 
         assert (
             not self.hierarchical
         ), "GraphLAM does not use a hierarchical mesh graph"
 
-        # grid_dim from data + static + batch_static
         mesh_dim = self.mesh_static_features.shape[1]
         m2m_edges, m2m_dim = self.m2m_features.shape
         print(
@@ -54,12 +69,20 @@ class GraphLAM(BaseGraphModel):
             ],
         )
 
-    def get_num_mesh(self):
+    @property
+    def num_mesh_nodes(self):
         """
-        Compute number of mesh nodes from loaded features,
-        and number of mesh nodes that should be ignored in encoding/decoding
+        Get the total number of mesh nodes in the used mesh graph
         """
-        return self.mesh_static_features.shape[0], 0
+        return self.mesh_static_features.shape[0]
+
+    @property
+    def num_grid_connected_mesh_nodes(self):
+        """
+        Get the total number of mesh nodes that have a connection to
+        the grid (e.g. bottom level in a hierarchy)
+        """
+        return self.num_mesh_nodes  # All nodes
 
     def embedd_mesh_nodes(self):
         """

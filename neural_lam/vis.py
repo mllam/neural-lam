@@ -2,13 +2,15 @@
 import matplotlib
 import matplotlib.pyplot as plt
 import numpy as np
+import xarray as xr
 
-# First-party
-from neural_lam import utils
+# Local
+from . import utils
+from .datastore.base import BaseRegularGridDatastore
 
 
 @matplotlib.rc_context(utils.fractional_plot_bundle(1))
-def plot_error_map(errors, data_config, title=None, step_length=3):
+def plot_error_map(errors, datastore: BaseRegularGridDatastore, title=None):
     """
     Plot a heatmap of errors of different variables at different
     predictions horizons
@@ -16,6 +18,7 @@ def plot_error_map(errors, data_config, title=None, step_length=3):
     """
     errors_np = errors.T.cpu().numpy()  # (d_f, pred_steps)
     d_f, pred_steps = errors_np.shape
+    step_length = datastore.step_length
 
     # Normalize all errors to [0,1] for color map
     max_errors = errors_np.max(axis=1)  # d_f
@@ -48,11 +51,10 @@ def plot_error_map(errors, data_config, title=None, step_length=3):
     ax.set_xlabel("Lead time (h)", size=label_size)
 
     ax.set_yticks(np.arange(d_f))
+    var_names = datastore.get_vars_names(category="state")
+    var_units = datastore.get_vars_units(category="state")
     y_ticklabels = [
-        f"{name} ({unit})"
-        for name, unit in zip(
-            data_config.param_names(), data_config.param_units()
-        )
+        f"{name} ({unit})" for name, unit in zip(var_names, var_units)
     ]
     ax.set_yticklabels(y_ticklabels, rotation=30, size=label_size)
 
@@ -62,52 +64,82 @@ def plot_error_map(errors, data_config, title=None, step_length=3):
     return fig
 
 
+def plot_on_axis(
+    ax,
+    da,
+    datastore,
+    obs_mask=None,
+    vmin=None,
+    vmax=None,
+    ax_title=None,
+    cmap="plasma",
+    grid_limits=None,
+):
+    """
+    Plot weather state on given axis
+    """
+    ax.coastlines()  # Add coastline outlines
+
+    extent = datastore.get_xy_extent("state")
+
+    im = da.plot.imshow(
+        ax=ax,
+        origin="lower",
+        x="x",
+        extent=extent,
+        vmin=vmin,
+        vmax=vmax,
+        cmap=cmap,
+        transform=datastore.coords_projection,
+    )
+
+    if ax_title:
+        ax.set_title(ax_title, size=15)
+
+    return im
+
+
 @matplotlib.rc_context(utils.fractional_plot_bundle(1))
 def plot_prediction(
-    pred, target, obs_mask, data_config, title=None, vrange=None
+    datastore: BaseRegularGridDatastore,
+    da_prediction: xr.DataArray = None,
+    da_target: xr.DataArray = None,
+    title=None,
+    vrange=None,
 ):
     """
     Plot example prediction and grond truth.
+
     Each has shape (N_grid,)
+
     """
     # Get common scale for values
     if vrange is None:
-        vmin = min(vals.min().cpu().item() for vals in (pred, target))
-        vmax = max(vals.max().cpu().item() for vals in (pred, target))
+        vmin = min(da_prediction.min(), da_target.min())
+        vmax = max(da_prediction.max(), da_target.max())
     else:
         vmin, vmax = vrange
-
-    # Set up masking of border region
-    mask_reshaped = obs_mask.reshape(*data_config.grid_shape_state)
-    pixel_alpha = (
-        mask_reshaped.clamp(0.7, 1).cpu().numpy()
-    )  # Faded border region
 
     fig, axes = plt.subplots(
         1,
         2,
         figsize=(13, 7),
-        subplot_kw={"projection": data_config.projection()},
+        subplot_kw={"projection": datastore.coords_projection},
     )
 
     # Plot pred and target
-    for ax, data in zip(axes, (target, pred)):
-        ax.coastlines()  # Add coastline outlines
-        data_grid = data.reshape(*data_config.grid_shape_state).cpu().numpy()
-        im = ax.imshow(
-            data_grid,
-            origin="lower",
-            alpha=pixel_alpha,
+    for ax, da in zip(axes, (da_target, da_prediction)):
+        plot_on_axis(
+            ax,
+            da,
+            datastore,
             vmin=vmin,
             vmax=vmax,
-            cmap="plasma",
         )
 
     # Ticks and labels
     axes[0].set_title("Ground Truth", size=15)
     axes[1].set_title("Prediction", size=15)
-    cbar = fig.colorbar(im, aspect=30)
-    cbar.ax.tick_params(labelsize=10)
 
     if title:
         fig.suptitle(title, size=20)
@@ -116,7 +148,9 @@ def plot_prediction(
 
 
 @matplotlib.rc_context(utils.fractional_plot_bundle(1))
-def plot_spatial_error(error, obs_mask, data_config, title=None, vrange=None):
+def plot_spatial_error(
+    error, datastore: BaseRegularGridDatastore, title=None, vrange=None
+):
     """
     Plot errors over spatial map
     Error and obs_mask has shape (N_grid,)
@@ -128,23 +162,25 @@ def plot_spatial_error(error, obs_mask, data_config, title=None, vrange=None):
     else:
         vmin, vmax = vrange
 
-    # Set up masking of border region
-    mask_reshaped = obs_mask.reshape(*data_config.grid_shape_state)
-    pixel_alpha = (
-        mask_reshaped.clamp(0.7, 1).cpu().numpy()
-    )  # Faded border region
-
     fig, ax = plt.subplots(
-        figsize=(5, 4.8), subplot_kw={"projection": data_config.projection()}
+        figsize=(5, 4.8),
+        subplot_kw={"projection": datastore.coords_projection},
     )
 
-    ax.coastlines()  # Add coastline outlines
-    error_grid = error.reshape(*data_config.grid_shape_state).cpu().numpy()
+    error_grid = (
+        error.reshape(
+            [datastore.grid_shape_state.x, datastore.grid_shape_state.y]
+        )
+        .T.cpu()
+        .numpy()
+    )
+    extent = datastore.get_xy_extent("state")
 
+    # TODO: This needs to be converted to DA and use plot_on_axis
     im = ax.imshow(
         error_grid,
         origin="lower",
-        alpha=pixel_alpha,
+        extent=extent,
         vmin=vmin,
         vmax=vmax,
         cmap="OrRd",
