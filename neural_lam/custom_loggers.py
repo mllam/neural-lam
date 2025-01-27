@@ -10,7 +10,7 @@ from loguru import logger
 
 class CustomMLFlowLogger(pl.loggers.MLFlowLogger):
     """
-    Custom MLFlow logger that adds functionality not present in the default
+    Custom MLFlow logger that adds the `log_image()` functionality not present in the default implementation from pytorch-lightning as of version `2.0.3` at least.
     """
 
     def __init__(self, experiment_name, tracking_uri, run_name):
