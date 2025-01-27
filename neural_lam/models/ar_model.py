@@ -3,8 +3,6 @@ import os
 import warnings
 from typing import Any, Dict, List
 
-
-
 # Third-party
 import matplotlib.pyplot as plt
 import numpy as np
@@ -152,8 +150,7 @@ class ARModel(pl.LightningModule):
         self.plotted_examples = 0
 
         # For storing spatial loss maps during evaluation
-        self.spatial_loss_maps: List[
-        ] = []
+        self.spatial_loss_maps: List[Any] = []
 
     def _create_dataarray_from_tensor(
         self,
