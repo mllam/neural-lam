@@ -8,6 +8,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [unreleased](https://github.com/mllam/neural-lam/compare/v0.3.0...HEAD)
 
 ### Added
+
+- Add support for MLFlow logging and metrics tracking. [\#77](https://github.com/mllam/neural-lam/pull/77)
+  @khintz
+
 - Add support for multi-node training.
 [\#103](https://github.com/mllam/neural-lam/pull/103) @simonkamuk @sadamov
 
