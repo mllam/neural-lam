@@ -197,11 +197,13 @@ class ARModel(pl.LightningModule):
             self.parameters(), lr=config.lr, betas=(0.9, 0.95)
         )
 
-        if config.scheduler:
+        if self.optimization_config.scheduler:
             scheduler_class = getattr(
-                torch.optim.lr_scheduler, config.scheduler
+                torch.optim.lr_scheduler, self.optimization_config.scheduler
             )
-            scheduler = scheduler_class(optimizer, **config.scheduler_kwargs)
+            scheduler = scheduler_class(
+                optimizer, **self.optimization_config.scheduler_kwargs
+            )
             return [optimizer], [scheduler]
 
         return optimizer
