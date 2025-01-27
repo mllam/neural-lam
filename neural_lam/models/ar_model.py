@@ -542,6 +542,10 @@ class ARModel(pl.LightningModule):
                     self._datastore.get_vars_names("state"), var_figs
                 ):
 
+                    # We need treat logging images differently for different
+                    # loggers. WANDB can log multiple images to the same key,
+                    # while other loggers, as MLFlow, need unique keys for
+                    # each image.
                     if isinstance(self.logger, pl.loggers.WandbLogger):
                         key = f"{var_name}_example_{example_i}"
                     else:
