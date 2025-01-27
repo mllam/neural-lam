@@ -79,16 +79,16 @@ def test_config_load_lr_scheduler():
       config_path: ""
     training:
       optimization:
-        lr_scheduler: StepLR
+        lr_scheduler: CosineAnnealingLR
         lr_scheduler_kwargs:
-          step_size: 100
-          gamma: 0.5
+          T_max: 1000
+          eta_min: 0.0
     """
     c = nlconfig.NeuralLAMConfig.from_yaml(yaml_str)
 
-    assert c.training.optimization.lr_scheduler == "StepLR"
+    assert c.training.optimization.lr_scheduler == "CosineAnnealingLR"
     assert c.training.optimization.lr_scheduler_kwargs == dict(
-        step_size=100, gamma=0.5
+        T_max=1000, eta_min=0.0
     )
 
 
