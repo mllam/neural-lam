@@ -70,3 +70,39 @@ yaml_samples = zip(
 def test_config_load_from_yaml(yaml_str, config_expected):
     c = nlconfig.NeuralLAMConfig.from_yaml(yaml_str)
     assert c == config_expected
+
+
+def test_config_load_lr_scheduler():
+    yaml_str = """
+    datastore:
+      kind: mdp
+      config_path: ""
+    training:
+      optimization:
+        lr_scheduler: StepLR
+        lr_scheduler_kwargs:
+          step_size: 100
+          gamma: 0.5
+    """
+    c = nlconfig.NeuralLAMConfig.from_yaml(yaml_str)
+
+    assert c.training.optimization.lr_scheduler == "StepLR"
+    assert c.training.optimization.lr_scheduler_kwargs == dict(
+        step_size=100, gamma=0.5
+    )
+
+
+def test_config_load_invalid_lr_scheduler_fails():
+    yaml_str = """
+    datastore:
+      kind: mdp
+      config_path: ""
+    training:
+      optimization:
+        lr_scheduler: invalid_StepLR
+        lr_scheduler_kwargs:
+          step_size: 100
+          gamma: 0.5
+    """
+    with pytest.raises(nlconfig.InvalidConfigError):
+        nlconfig.NeuralLAMConfig.from_yaml(yaml_str)
