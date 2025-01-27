@@ -1,3 +1,6 @@
+# Standard library
+from pathlib import Path
+
 # Third-party
 import numpy as np
 import pytest
@@ -10,10 +13,10 @@ from neural_lam.weather_dataset import WeatherDataset
 
 class SinglePointDummyDatastore(BaseDatastore):
     step_length = 1
-    config = None
+    config = {}
     coords_projection = None
     num_grid_points = 1
-    root_path = None
+    root_path = Path("dummy")
 
     def __init__(self, time_values, state_data, forcing_data, is_forecast):
         self._time_values = np.array(time_values)
