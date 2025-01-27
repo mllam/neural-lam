@@ -27,7 +27,13 @@ class CustomMLFlowLogger(pl.loggers.MLFlowLogger):
     @property
     def save_dir(self):
         """
-        Returns the directory where the MLFlow artifacts are saved
+        Returns the directory where the MLFlow artifacts are saved.
+        Used to define the path to save output when using the logger.
+
+        Returns
+        -------
+        str
+            Path to the directory where the artifacts are saved.
         """
         return "mlruns"
 
