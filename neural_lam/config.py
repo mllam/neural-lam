@@ -5,6 +5,7 @@ from typing import Dict, Union
 
 # Third-party
 import dataclass_wizard
+import torch
 
 # Local
 from .datastore import (
@@ -61,6 +62,10 @@ class Optimization:
     scheduler_kwargs: Dict[str, Union[int, float]] = dataclasses.field(
         default_factory=dict
     )
+
+    def __post_init__(self):
+        if self.scheduler:
+            assert self.scheduler in dir(torch.optim.lr_scheduler)
 
 
 @dataclasses.dataclass
