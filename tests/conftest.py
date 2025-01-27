@@ -104,3 +104,20 @@ def init_datastore_example(datastore_kind):
     )
 
     return datastore
+
+
+def model_args():
+    class ModelArgs:
+        output_std = False
+        loss = "mse"
+        restore_opt = False
+        n_example_pred = 1
+        graph = graph_name
+        hidden_dim = 4
+        hidden_layers = 1
+        processor_layers = 2
+        mesh_aggr = "sum"
+        num_past_forcing_steps = 1
+        num_future_forcing_steps = 1
+
+    return ModelArgs()
