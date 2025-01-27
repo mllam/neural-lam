@@ -186,5 +186,4 @@ if __name__ == "__main__":
         selection=selection,
         index_selection=index_selection,
     )
-    # plt.show()
-    plt.savefig("plot_example.png")
+    plt.show()
