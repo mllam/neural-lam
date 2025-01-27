@@ -191,10 +191,8 @@ class ARModel(pl.LightningModule):
         return da
 
     def configure_optimizers(self):
-        config = self.optimization_config
-
         optimizer = torch.optim.AdamW(
-            self.parameters(), lr=config.lr, betas=(0.9, 0.95)
+            self.parameters(), lr=self.optimization_config.lr, betas=(0.9, 0.95)
         )
 
         if self.optimization_config.scheduler:
