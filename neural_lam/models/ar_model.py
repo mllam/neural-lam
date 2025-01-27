@@ -665,7 +665,9 @@ class ARModel(pl.LightningModule):
             current_epoch = self.trainer.current_epoch
 
             for key, figure in log_dict.items():
-                # For other loggers than wandb, add epoch to key
+                # For other loggers than wandb, add epoch to key.
+                # Wandb can log multiple images to the same key, while other
+                # loggers, such as MLFlow need unique keys for each image.
                 if not isinstance(self.logger, pl.loggers.WandbLogger):
                     key = f"{key}-{current_epoch}"
 
