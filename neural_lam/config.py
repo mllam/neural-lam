@@ -5,7 +5,6 @@ from typing import Dict, Union
 
 # Third-party
 import dataclass_wizard
-import torch
 
 # Local
 from .datastore import (
@@ -58,14 +57,33 @@ class Optimization:
     """
 
     lr: float = 1e-3
-    scheduler: str = ""
-    scheduler_kwargs: Dict[str, Union[int, float]] = dataclasses.field(
+    lr_scheduler: str = ""
+    lr_scheduler_kwargs: Dict[str, Union[int, float]] = dataclasses.field(
         default_factory=dict
     )
 
     def __post_init__(self):
-        if self.scheduler:
-            assert self.scheduler in dir(torch.optim.lr_scheduler)
+        valid_schedulers = [
+            "ConstantLR",
+            "CosineAnnealingLR",
+            "CosineAnnealingWarmRestarts",
+            "CyclicLR",
+            "ExponentialLR",
+            "LRScheduler",
+            "LambdaLR",
+            "LinearLR",
+            "MultiStepLR",
+            "MultiplicativeLR",
+            "OneCycleLR",
+            "PolynomialLR",
+            "ReduceLROnPlateau",
+            "SequentialLR",
+            "StepLR",
+        ]
+        if self.lr_scheduler and self.lr_scheduler not in valid_schedulers:
+            raise InvalidConfigError(
+                f"Invalid learning rate scheduler: {self.lr_scheduler}"
+            )
 
 
 @dataclasses.dataclass
