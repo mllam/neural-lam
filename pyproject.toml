@@ -30,6 +30,9 @@ dependencies = [
     "parse>=1.20.2",
     "dataclass-wizard<0.31.0",
     "mllam-data-prep>=0.5.0",
+    "mlflow>=2.16.2",
+    "boto3>=1.35.32",
+    "pynvml>=12.0.0",
 ]
 requires-python = ">=3.9"
 
