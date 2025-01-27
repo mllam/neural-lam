@@ -1,5 +1,6 @@
 # Standard library
 import os
+import warnings
 from typing import List, Union
 
 # Third-party
@@ -553,6 +554,10 @@ class ARModel(pl.LightningModule):
 
                     if hasattr(self.logger, "log_image"):
                         self.logger.log_image(key=key, images=[fig], step=t_i)
+                    else:
+                        warnings.warn(
+                            f"{self.logger} does not support image logging."
+                        )
 
                 plt.close(
                     "all"
