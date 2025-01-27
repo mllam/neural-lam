@@ -274,6 +274,11 @@ def main(input_args=None):
         "val",
         "test",
     ), f"Unknown eval setting: {args.eval}"
+    for step in args.val_steps_to_log:
+        assert step <= args.ar_steps_eval, (
+            f"Can not log validation step {step} when validation is "
+            f"only unrolled {args.ar_steps_eval} steps."
+        )
 
     # Get an (actual) random run id as a unique identifier
     random_run_id = random.randint(0, 9999)
@@ -329,13 +334,37 @@ def main(input_args=None):
         f"{prefix}{args.model}-{args.processor_layers}x{args.hidden_dim}-"
         f"{time.strftime('%m_%d_%H')}-{random_run_id:04d}"
     )
-    checkpoint_callback = pl.callbacks.ModelCheckpoint(
-        dirpath=f"saved_models/{run_name}",
-        filename="min_val_loss",
-        monitor="val_mean_loss",
-        mode="min",
-        save_last=True,
+    callbacks = []
+    # Checkpoint for minimum val_mean_loss + last
+    callbacks.append(
+        pl.callbacks.ModelCheckpoint(
+            dirpath=f"saved_models/{run_name}",
+            filename="min_val_mean_loss",
+            monitor="val_mean_loss",
+            mode="min",
+            save_last=True,
+        )
     )
+    # Checkpoint for min val loss at step ar_steps_train
+    possible_monitor_steps = [
+        step for step in args.val_steps_to_log if step <= args.ar_steps_train
+    ]
+    assert possible_monitor_steps, (
+        "Can not save checkpoints as no validation loss is logged for "
+        f"step {args.ar_steps_train} or earlier."
+    )
+    # Choose step closest to ar_steps_train
+    monitored_unroll_step = max(possible_monitor_steps)
+    callbacks.append(
+        pl.callbacks.ModelCheckpoint(
+            dirpath=f"saved_models/{run_name}",
+            filename=f"min_val_loss_unroll{monitored_unroll_step}",
+            monitor=f"val_loss_unroll{monitored_unroll_step}",
+            mode="min",
+            save_last=False,  # Only need one save_last=True
+        )
+    )
+
     logger = pl.loggers.WandbLogger(
         project=args.wandb_project,
         name=run_name,
@@ -349,7 +378,7 @@ def main(input_args=None):
         num_nodes=args.num_nodes,
         logger=logger,
         log_every_n_steps=1,
-        callbacks=[checkpoint_callback],
+        callbacks=callbacks,
         check_val_every_n_epoch=args.val_interval,
         precision=args.precision,
         num_sanity_val_steps=args.num_sanity_steps,
