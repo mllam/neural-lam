@@ -16,7 +16,9 @@ import neural_lam.config as nlconfig
 )
 def test_config_serialization(state_weighting_config):
     c = nlconfig.NeuralLAMConfig(
-        datastore=nlconfig.DatastoreSelection(kind="mdp", config_path=""),
+        datastore=nlconfig.DatastoreSelection(
+            kind=nlconfig.DatastoreKindStr("mdp"), config_path=""
+        ),
         training=nlconfig.TrainingConfig(
             state_feature_weighting=state_weighting_config
         ),
@@ -33,7 +35,9 @@ datastore:
 """
 
 default_config = nlconfig.NeuralLAMConfig(
-    datastore=nlconfig.DatastoreSelection(kind="mdp", config_path=""),
+    datastore=nlconfig.DatastoreSelection(
+        kind=nlconfig.DatastoreKindStr("mdp"), config_path=""
+    ),
     training=nlconfig.TrainingConfig(
         state_feature_weighting=nlconfig.UniformFeatureWeighting()
     ),
@@ -52,7 +56,9 @@ training:
 """
 
 manual_weights_config = nlconfig.NeuralLAMConfig(
-    datastore=nlconfig.DatastoreSelection(kind="mdp", config_path=""),
+    datastore=nlconfig.DatastoreSelection(
+        kind=nlconfig.DatastoreKindStr("mdp"), config_path=""
+    ),
     training=nlconfig.TrainingConfig(
         state_feature_weighting=nlconfig.ManualStateFeatureWeighting(
             weights=dict(u100m=1.0, v100m=1.0)

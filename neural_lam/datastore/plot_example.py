@@ -2,6 +2,7 @@
 import matplotlib.pyplot as plt
 
 # Local
+from ..config import DatastoreKindStr
 from . import DATASTORES, init_datastore
 
 
@@ -163,6 +164,7 @@ if __name__ == "__main__":
 
     selection = dict(args.selection)
     index_selection = dict(args.index_selection)
+    datastore_kind = DatastoreKindStr(args.datastore_kind)
 
     # check that column dimension is not in the selection
     if args.col_dim.format(category=args.category) in selection:
@@ -173,7 +175,7 @@ if __name__ == "__main__":
         )
 
     datastore = init_datastore(
-        datastore_kind=args.datastore_kind,
+        datastore_kind=datastore_kind,
         config_path=args.datastore_config_path,
     )
 

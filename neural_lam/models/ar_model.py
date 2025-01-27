@@ -1,6 +1,6 @@
 # Standard library
 import os
-from typing import List, Union
+from typing import Any, Dict, List
 
 # Third-party
 import matplotlib.pyplot as plt
@@ -42,6 +42,8 @@ class ARModel(pl.LightningModule):
         da_static_features = datastore.get_dataarray(
             category="static", split=None
         )
+        if da_static_features is None:
+            raise ValueError("Static features are required for ARModel")
         da_state_stats = datastore.get_standardization_dataarray(
             category="state"
         )
@@ -130,10 +132,10 @@ class ARModel(pl.LightningModule):
             "interior_mask", 1.0 - self.boundary_mask, persistent=False
         )  # (num_grid_nodes, 1), 1 for non-border
 
-        self.val_metrics = {
+        self.val_metrics: Dict[str, List] = {
             "mse": [],
         }
-        self.test_metrics = {
+        self.test_metrics: Dict[str, List] = {
             "mse": [],
             "mae": [],
         }
@@ -148,12 +150,12 @@ class ARModel(pl.LightningModule):
         self.plotted_examples = 0
 
         # For storing spatial loss maps during evaluation
-        self.spatial_loss_maps = []
+        self.spatial_loss_maps: List[Any] = []
 
     def _create_dataarray_from_tensor(
         self,
         tensor: torch.Tensor,
-        time: Union[int, List[int]],
+        time: torch.Tensor,
         split: str,
         category: str,
     ) -> xr.DataArray:
@@ -169,9 +171,9 @@ class ARModel(pl.LightningModule):
             The tensor to convert to a `xr.DataArray` with dimensions [time,
             grid_index, feature]. The tensor will be copied to the CPU if it is
             not already there.
-        time : Union[int,List[int]]
-            The time index or indices for the data, given as integers or a list
-            of integers representing epoch time in nanoseconds. The ints will be
+        time : torch.Tensor
+            The time index or indices for the data, given as tensor representing
+            epoch time in nanoseconds. The tensor will be
             copied to the CPU memory if they are not already there.
         split : str
             The split of the data, either 'train', 'val', or 'test'
