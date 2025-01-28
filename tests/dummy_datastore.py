@@ -301,7 +301,7 @@ class DummyDatastore(BaseRegularGridDatastore):
         return ds_standardization
 
     def get_dataarray(
-        self, category: str, split: str
+        self, category: str, split: str, standardize: bool = False
     ) -> Union[xr.DataArray, None]:
         """
         Return the processed data (as a single `xr.DataArray`) for the given
@@ -332,6 +332,8 @@ class DummyDatastore(BaseRegularGridDatastore):
             The category of the dataset (state/forcing/static).
         split : str
             The time split to filter the dataset (train/val/test).
+        standardize: bool
+            If the dataarray should be returned standardized
 
         Returns
         -------
@@ -340,7 +342,13 @@ class DummyDatastore(BaseRegularGridDatastore):
 
         """
         dim_order = self.expected_dim_order(category=category)
-        return self.ds[category].transpose(*dim_order)
+
+        da_category = self.ds[category].transpose(*dim_order)
+
+        if standardize:
+            return self._standardize_datarray(da_category, category=category)
+
+        return da_category
 
     @cached_property
     def boundary_mask(self) -> xr.DataArray:
