@@ -37,7 +37,7 @@ class ARModel(pl.LightningModule):
         self.save_hyperparameters(ignore=["datastore"])
         self.args = args
         self._datastore = datastore
-        self.optimization_config = config.training.optimization
+        self.config = config
 
         num_state_vars = datastore.get_num_data_vars(category="state")
         num_forcing_vars = datastore.get_num_data_vars(category="forcing")
@@ -188,19 +188,24 @@ class ARModel(pl.LightningModule):
         da = weather_dataset.create_dataarray_from_tensor(
             tensor=tensor.cpu().numpy(), time=time, category=category
         )
+
         return da
 
     def configure_optimizers(self):
         optimizer = torch.optim.AdamW(
-            self.parameters(), lr=self.optimization_config.lr, betas=(0.9, 0.95)
+            self.parameters(),
+            lr=self.config.training.optimization.lr,
+            betas=(0.9, 0.95),
         )
 
-        if self.optimization_config.lr_scheduler:
+        if self.config.training.optimization.lr_scheduler:
             lr_scheduler_class = getattr(
-                torch.optim.lr_scheduler, self.optimization_config.lr_scheduler
+                torch.optim.lr_scheduler,
+                self.config.training.optimization.lr_scheduler,
             )
             lr_scheduler = lr_scheduler_class(
-                optimizer, **self.optimization_config.lr_scheduler_kwargs
+                optimizer,
+                **self.config.training.optimization.lr_scheduler_kwargs,
             )
             return [optimizer], [lr_scheduler]
 
