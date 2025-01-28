@@ -27,6 +27,15 @@ class ARModel(pl.LightningModule):
     # pylint: disable=arguments-differ
     # Disable to override args/kwargs from superclass
 
+    @property
+    def lr(self):
+        """
+        Get learning rate of optimizer
+        """
+        if self._trainer:
+            return self.trainer.optimizers[0].param_groups[0]["lr"]
+        return self.config.training.optimization.lr
+
     def __init__(
         self,
         args,
@@ -316,7 +325,7 @@ class ARModel(pl.LightningModule):
 
         log_dict = {
             "train_loss": batch_loss,
-            "lr": self.trainer.optimizers[0].param_groups[0]["lr"],
+            "lr": self.lr,
         }
         self.log_dict(
             log_dict,
@@ -328,6 +337,11 @@ class ARModel(pl.LightningModule):
         )
 
         return batch_loss
+
+    def get_lr(self):
+        if hasattr(self, "trainer"):
+            return self.trainer.optimizers[0].param_groups[0]["lr"]
+        return None
 
     def on_train_batch_end(self, outputs, batch, batch_idx):
         if scheduler := self.lr_schedulers():
