@@ -41,7 +41,7 @@ jobs:
 
       - name: Run tests
         run: |
-          python -m pytest -vv -s
+          python -m pytest -vv -s --ff
 
       - name: Save cache data
         uses: actions/cache/save@v4
