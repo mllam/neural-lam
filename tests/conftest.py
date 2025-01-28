@@ -127,6 +127,7 @@ def model_args():
         mesh_aggr = "sum"
         num_past_forcing_steps = 1
         num_future_forcing_steps = 1
+        val_steps_to_log = [1, 3]
 
     return ModelArgs()
 
