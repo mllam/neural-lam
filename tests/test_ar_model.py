@@ -1,5 +1,4 @@
 # Third-party
-import pytorch_lightning as pl
 import torch
 
 # First-party
