@@ -50,14 +50,19 @@ class Optimization:
 
     Attributes
     ----------
-    scheduler : str
+    lr: float
+        The initial learning rate.
+    lr_scheduler : str
         The type of learning rate scheduler to use
-    scheduler_args : Dict[str, Union[int, float]]
+    lr_scheduler_scheduler_step_freq : int
+        The frequency at which to call the learning rate scheduler.
+    lr_scheduler_args : Dict[str, Union[int, float]]
         Arguments to pass to the learning rate scheduler.
     """
 
     lr: float = 1e-3
     lr_scheduler: str = ""
+    lr_scheduler_scheduler_step_freq: int = 1
     lr_scheduler_kwargs: Dict[str, Union[int, float]] = dataclasses.field(
         default_factory=dict
     )

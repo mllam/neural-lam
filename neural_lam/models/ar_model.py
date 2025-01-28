@@ -323,10 +323,17 @@ class ARModel(pl.LightningModule):
             sync_dist=True,
             batch_size=batch[0].shape[0],
         )
-        if scheduler := self.lr_schedulers():
-            scheduler.step()
 
         return batch_loss
+
+    def on_train_batch_end(self, outputs, batch, batch_idx):
+        if scheduler := self.lr_schedulers():
+            if (
+                batch_idx
+                % self.config.training.optimization.lr_scheduler_step_freq
+                == 0
+            ):
+                scheduler.step()
 
     def all_gather_cat(self, tensor_to_gather):
         """
