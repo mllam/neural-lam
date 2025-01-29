@@ -1,12 +1,18 @@
 # Standard library
 import os
 import shutil
+import warnings
 
 # Third-party
+import pytorch_lightning as pl
 import torch
+from pytorch_lightning.loggers import MLFlowLogger, WandbLogger
 from pytorch_lightning.utilities import rank_zero_only
 from torch import nn
 from tueplots import bundles, figsizes
+
+# Local
+from .custom_loggers import CustomMLFlowLogger
 
 
 class BufferList(nn.Module):
@@ -240,11 +246,64 @@ def rank_zero_print(*args, **kwargs):
     print(*args, **kwargs)
 
 
-def init_wandb_metrics(wandb_logger, val_steps):
+def init_training_logger_metrics(training_logger, val_steps):
     """
-    Set up wandb metrics to track
+    Set up logger metrics to track
     """
-    experiment = wandb_logger.experiment
-    experiment.define_metric("val_mean_loss", summary="min")
-    for step in val_steps:
-        experiment.define_metric(f"val_loss_unroll{step}", summary="min")
+    experiment = training_logger.experiment
+    if isinstance(training_logger, WandbLogger):
+        experiment.define_metric("val_mean_loss", summary="min")
+        for step in val_steps:
+            experiment.define_metric(f"val_loss_unroll{step}", summary="min")
+    elif isinstance(training_logger, MLFlowLogger):
+        pass
+    else:
+        warnings.warn(
+            "Only WandbLogger & MLFlowLogger is supported for tracking metrics.\
+             Experiment results will only go to stdout."
+        )
+
+
+@rank_zero_only
+def setup_training_logger(datastore, args, run_name):
+    """
+
+    Parameters
+    ----------
+    datastore : Datastore
+        Datastore object.
+
+    args : argparse.Namespace
+        Arguments from command line.
+
+    run_name : str
+        Name of the run.
+
+    Returns
+    -------
+    logger : pytorch_lightning.loggers.base
+        Logger object.
+    """
+
+    if args.logger == "wandb":
+        logger = pl.loggers.WandbLogger(
+            project=args.logger_project,
+            name=run_name,
+            config=dict(training=vars(args), datastore=datastore._config),
+        )
+    elif args.logger == "mlflow":
+        url = os.getenv("MLFLOW_TRACKING_URI")
+        if url is None:
+            raise ValueError(
+                "MLFlow logger requires setting MLFLOW_TRACKING_URI in env."
+            )
+        logger = CustomMLFlowLogger(
+            experiment_name=args.logger_project,
+            tracking_uri=url,
+            run_name=run_name,
+        )
+        logger.log_hyperparams(
+            dict(training=vars(args), datastore=datastore._config)
+        )
+
+    return logger
