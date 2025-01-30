@@ -161,6 +161,12 @@ def main(input_args=None):
         "--lr", type=float, default=1e-3, help="learning rate (default: 0.001)"
     )
     parser.add_argument(
+        "--min_lr",
+        type=float,
+        default=1e-4,
+        help="Minimum learning rate for cosine annealing (default: 1e-4)",
+    )
+    parser.add_argument(
         "--val_interval",
         type=int,
         default=1,

@@ -251,7 +251,19 @@ class ARModel(pl.LightningModule):
         opt = torch.optim.AdamW(
             self.parameters(), lr=self.args.lr, betas=(0.9, 0.95)
         )
-        return opt
+        scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
+            opt,
+            T_max=self.args.epochs,
+            eta_min=self.args.min_lr if hasattr(self.args, "min_lr") else 0.0,
+        )
+        return {
+            "optimizer": opt,
+            "lr_scheduler": {
+                "scheduler": scheduler,
+                "interval": "epoch",
+                "frequency": 1,
+            },
+        }
 
     @staticmethod
     def expand_to_batch(x, batch_size):
@@ -786,5 +798,8 @@ class ARModel(pl.LightningModule):
                 loaded_state_dict[new_key] = loaded_state_dict[old_key]
                 del loaded_state_dict[old_key]
         if not self.restore_opt:
-            opt = self.configure_optimizers()
-            checkpoint["optimizer_states"] = [opt.state_dict()]
+            # Remove both optimizer and scheduler states if not restoring
+            if "optimizer_states" in checkpoint:
+                del checkpoint["optimizer_states"]
+            if "lr_schedulers" in checkpoint:
+                del checkpoint["lr_schedulers"]
