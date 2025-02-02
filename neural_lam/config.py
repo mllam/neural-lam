@@ -1,7 +1,7 @@
 # Standard library
 import dataclasses
 from pathlib import Path
-from typing import Dict, Union
+from typing import Dict, List, Union
 
 # Third-party
 import dataclass_wizard
@@ -105,6 +105,10 @@ class TrainingConfig:
 
     output_clamping: OutputClamping = dataclasses.field(
         default_factory=OutputClamping
+    )
+    # List of pairs of timestamps as strings
+    excluded_intervals: List[List[str]] = dataclasses.field(
+        default_factory=list
     )
 
 

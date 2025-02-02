@@ -312,6 +312,7 @@ def main(input_args=None):
         boundary_subsample_step=args.boundary_subsample_step,
         batch_size=args.batch_size,
         num_workers=args.num_workers,
+        excluded_intervals=config.training.excluded_intervals,
     )
 
     # Instantiate model + trainer

@@ -86,6 +86,7 @@ class WeatherDataset(torch.utils.data.Dataset):
         interior_subsample_step=1,
         boundary_subsample_step=1,
         standardize=True,
+        time_slice=None,
     ):
         super().__init__()
 
@@ -148,6 +149,20 @@ class WeatherDataset(torch.utils.data.Dataset):
             )
         else:
             self.da_boundary_forcing = None
+
+        # Do not need to subset boundary forcing
+        # split arg is never used past this point
+        if time_slice is not None:
+            print(
+                "Created WeatherDataset for time interval "
+                f"{time_slice.start} - {time_slice.stop}"
+            )
+            # Subset state, forcing
+            # Do not need to subset boundary forcing, as that is handled below
+            # with crop_time_if_needed
+
+            self.da_state = self.da_state.sel(time=time_slice)
+            self.da_forcing = self.da_forcing.sel(time=time_slice)
 
         # check that with the provided data-arrays and ar_steps that we have a
         # non-zero amount of samples
@@ -959,6 +974,7 @@ class WeatherDataModule(pl.LightningDataModule):
         boundary_subsample_step=1,
         batch_size=4,
         num_workers=16,
+        excluded_intervals=None,
     ):
         super().__init__()
         self._datastore = datastore
@@ -986,21 +1002,82 @@ class WeatherDataModule(pl.LightningDataModule):
         else:
             self.multiprocessing_context = None
 
+        if excluded_intervals:
+            # Convert to np.datetime64
+            self.excluded_intervals = [
+                (np.datetime64(start_time), np.datetime64(end_time))
+                for (start_time, end_time) in excluded_intervals
+            ]
+            for time_interval in self.excluded_intervals:
+                assert time_interval[0] <= time_interval[1], (
+                    "Can not exclude a time interval from "
+                    f"{time_interval[0]} to {time_interval[1]}"
+                )
+        else:
+            self.excluded_intervals = []
+
+    def make_training_dataset(self, time_slice):
+        return WeatherDataset(
+            datastore=self._datastore,
+            datastore_boundary=self._datastore_boundary,
+            split="train",
+            ar_steps=self.ar_steps_train,
+            standardize=self.standardize,
+            num_past_forcing_steps=self.num_past_forcing_steps,
+            num_future_forcing_steps=self.num_future_forcing_steps,
+            num_past_boundary_steps=self.num_past_boundary_steps,
+            num_future_boundary_steps=self.num_future_boundary_steps,
+            interior_subsample_step=self.interior_subsample_step,
+            boundary_subsample_step=self.boundary_subsample_step,
+            time_slice=time_slice,
+        )
+
     def setup(self, stage=None):
         if stage == "fit" or stage is None:
-            self.train_dataset = WeatherDataset(
-                datastore=self._datastore,
-                datastore_boundary=self._datastore_boundary,
-                split="train",
-                ar_steps=self.ar_steps_train,
-                standardize=self.standardize,
-                num_past_forcing_steps=self.num_past_forcing_steps,
-                num_future_forcing_steps=self.num_future_forcing_steps,
-                num_past_boundary_steps=self.num_past_boundary_steps,
-                num_future_boundary_steps=self.num_future_boundary_steps,
-                interior_subsample_step=self.interior_subsample_step,
-                boundary_subsample_step=self.boundary_subsample_step,
-            )
+            if self.excluded_intervals:
+                # Swiss-cheese strategy
+                # Figure out which time-intervals to include
+                full_time_interval = self._datastore.get_dataarray(
+                    category="state", split="train"
+                ).time
+
+                # Iterate over times and exclude intervals
+                step_length = self._datastore.step_length
+                ds_intervals = []
+                # Start time of current interval
+                interval_start_time = full_time_interval[0].to_numpy()
+                for exc_start, exc_end in self.excluded_intervals:
+                    # Add interval up to current excluded
+                    ds_intervals.append(
+                        slice(interval_start_time, exc_start - step_length)
+                    )
+                    # Start next interval after end of excluded
+                    interval_start_time = exc_end + step_length
+
+                # Finish last interval
+                ds_intervals.append(
+                    slice(
+                        interval_start_time, full_time_interval[-1].to_numpy()
+                    )
+                )
+
+                # Check that all date slices are in correct order
+                for time_slice in ds_intervals:
+                    assert time_slice.start < time_slice.stop, (
+                        "Can not make training subset from "
+                        f"{time_slice.start} to {time_slice.stop}"
+                    )
+
+                # Create and concatenate all datasets
+                self.train_dataset = torch.utils.data.ConcatDataset(
+                    [
+                        self.make_training_dataset(time_slice=time_slice)
+                        for time_slice in ds_intervals
+                    ]
+                )
+            else:
+                self.train_dataset = self.make_training_dataset(time_slice=None)
+
             self.val_dataset = WeatherDataset(
                 datastore=self._datastore,
                 datastore_boundary=self._datastore_boundary,
