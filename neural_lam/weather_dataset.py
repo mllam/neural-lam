@@ -157,12 +157,12 @@ class WeatherDataset(torch.utils.data.Dataset):
                 "Created WeatherDataset for time interval "
                 f"{time_slice.start} - {time_slice.stop}"
             )
-            # Subset state, forcing
-            # Do not need to subset boundary forcing, as that is handled below
-            # with crop_time_if_needed
-
+            # Subset state, forcing, boundary_forcing
             self.da_state = self.da_state.sel(time=time_slice)
             self.da_forcing = self.da_forcing.sel(time=time_slice)
+            self.da_boundary_forcing = self.da_boundary_forcing.sel(
+                time=time_slice
+            )
 
         # check that with the provided data-arrays and ar_steps that we have a
         # non-zero amount of samples
