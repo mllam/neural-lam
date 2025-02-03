@@ -87,7 +87,7 @@ class Optimization:
         ]
         if self.lr_scheduler and self.lr_scheduler not in valid_schedulers:
             raise InvalidConfigError(
-                f"Invalid learning rate scheduler: {self.lr_scheduler}"
+                f"Invalid learning rate scheduler: {self.lr_scheduler}."
             )
 
 
