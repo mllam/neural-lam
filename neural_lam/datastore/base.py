@@ -186,9 +186,36 @@ class BaseDatastore(abc.ABC):
         """
         pass
 
+    def _standardize_datarray(
+        self, da: xr.DataArray, category: str
+    ) -> xr.DataArray:
+        """
+        Helper function to standardize a dataarray before returning it.
+
+        Parameters
+        ----------
+        da: xr.DataArray
+            The dataarray to standardize
+        category : str
+            The category of the dataarray (state/forcing/static), to load
+            standardization statistics for.
+
+        Returns
+        -------
+        xr.Dataarray
+            The standardized dataarray
+        """
+
+        standard_da = self.get_standardization_dataarray(category=category)
+
+        mean = standard_da[f"{category}_mean"]
+        std = standard_da[f"{category}_std"]
+
+        return (da - mean) / std
+
     @abc.abstractmethod
     def get_dataarray(
-        self, category: str, split: str
+        self, category: str, split: str, standardize: bool = False
     ) -> Union[xr.DataArray, None]:
         """
         Return the processed data (as a single `xr.DataArray`) for the given
@@ -219,6 +246,8 @@ class BaseDatastore(abc.ABC):
             The category of the dataset (state/forcing/static).
         split : str
             The time split to filter the dataset (train/val/test).
+        standardize: bool
+            If the dataarray should be returned standardized
 
         Returns
         -------

@@ -8,8 +8,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [unreleased](https://github.com/mllam/neural-lam/compare/v0.3.0...HEAD)
 
 ### Added
+
+- Add support for MLFlow logging and metrics tracking. [\#77](https://github.com/mllam/neural-lam/pull/77)
+  @khintz
+
 - Add support for multi-node training.
 [\#103](https://github.com/mllam/neural-lam/pull/103) @simonkamuk @sadamov
+
+- Add option to clamp output prediction using limits specified in config file [\#92](https://github.com/mllam/neural-lam/pull/92) @SimonKamuk
 
 ### Fixed
 - Only print on rank 0 to avoid duplicates of all print statements.
@@ -25,7 +31,7 @@ This release introduces Datastores to represent input data from different source
   [\#66](https://github.com/mllam/neural-lam/pull/66)
  @leifdenby @sadamov
 
-- Add option to clamp output prediction using limits specified in config file [\#92](https://github.com/mllam/neural-lam/pull/92) @SimonKamuk
+- Implement standardization of static features when loaded in ARModel [\#96](https://github.com/mllam/neural-lam/pull/96) @joeloskarsson
 
 ### Fixed
 

@@ -219,7 +219,9 @@ class MDPDatastore(BaseRegularGridDatastore):
         """
         return len(self.get_vars_names(category))
 
-    def get_dataarray(self, category: str, split: str) -> xr.DataArray:
+    def get_dataarray(
+        self, category: str, split: str, standardize: bool = False
+    ) -> xr.DataArray:
         """
         Return the processed data (as a single `xr.DataArray`) for the given
         category of data and test/train/val-split that covers all the data (in
@@ -247,6 +249,8 @@ class MDPDatastore(BaseRegularGridDatastore):
             The category of the dataset (state/forcing/static).
         split : str
             The time split to filter the dataset (train/val/test).
+        standardize: bool
+            If the dataarray should be returned standardized
 
         Returns
         -------
@@ -284,7 +288,12 @@ class MDPDatastore(BaseRegularGridDatastore):
             da_category = da_category.sel(time=slice(t_start, t_end))
 
         dim_order = self.expected_dim_order(category=category)
-        return da_category.transpose(*dim_order)
+        da_category = da_category.transpose(*dim_order)
+
+        if standardize:
+            return self._standardize_datarray(da_category, category=category)
+
+        return da_category
 
     def get_standardization_dataarray(self, category: str) -> xr.Dataset:
         """
