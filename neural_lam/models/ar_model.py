@@ -215,7 +215,6 @@ class ARModel(pl.LightningModule):
                 optimizer,
                 **self.config.training.optimization.lr_scheduler_kwargs,
             )
-            #  return [optimizer], [lr_scheduler]
             result["lr_scheduler"] = lr_scheduler
 
         return result
