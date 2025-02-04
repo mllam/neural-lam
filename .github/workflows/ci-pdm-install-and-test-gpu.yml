@@ -44,10 +44,10 @@ jobs:
       - name: Load cache data
         uses: actions/cache/restore@v4
         with:
-          path: tests/datastore_examples/npyfilesmeps/meps_example_reduced.zip
-          key: ${{ runner.os }}-meps-reduced-example-data-v0.2.0
+          path: tests/datastore_examples/npyfilesmeps/meps_example_reduced.tar.gz
+          key: ${{ runner.os }}-meps-reduced-example-data-v0.3.0
           restore-keys: |
-            ${{ runner.os }}-meps-reduced-example-data-v0.2.0
+            ${{ runner.os }}-meps-reduced-example-data-v0.3.0
 
       - name: Run tests
         run: |
@@ -56,5 +56,5 @@ jobs:
       - name: Save cache data
         uses: actions/cache/save@v4
         with:
-          path: tests/datastore_examples/npyfilesmeps/meps_example_reduced.zip
-          key: ${{ runner.os }}-meps-reduced-example-data-v0.2.0
+          path: tests/datastore_examples/npyfilesmeps/meps_example_reduced.tar.gz
+          key: ${{ runner.os }}-meps-reduced-example-data-v0.3.0
