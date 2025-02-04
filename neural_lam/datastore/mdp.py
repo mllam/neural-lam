@@ -3,7 +3,7 @@ import copy
 import warnings
 from functools import cached_property
 from pathlib import Path
-from typing import List
+from typing import List, Optional, Union
 
 # Third-party
 import cartopy.crs as ccrs
@@ -220,8 +220,11 @@ class MDPDatastore(BaseRegularGridDatastore):
         return len(self.get_vars_names(category))
 
     def get_dataarray(
-        self, category: str, split: str, standardize: bool = False
-    ) -> xr.DataArray:
+        self,
+        category: str,
+        split: Optional[str],
+        standardize: bool = False,
+    ) -> Union[xr.DataArray, None]:
         """
         Return the processed data (as a single `xr.DataArray`) for the given
         category of data and test/train/val-split that covers all the data (in

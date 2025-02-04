@@ -1,6 +1,7 @@
 # Standard library
 import os
 from argparse import ArgumentParser
+from typing import Optional
 
 # Third-party
 import matplotlib
@@ -157,9 +158,9 @@ def prepend_node_index(graph, new_index):
 def create_graph(
     graph_dir_path: str,
     xy: np.ndarray,
-    n_max_levels: int,
-    hierarchical: bool,
-    create_plot: bool,
+    n_max_levels: Optional[int] = None,
+    hierarchical: Optional[bool] = False,
+    create_plot: Optional[bool] = False,
 ):
     """
     Create graph components from `xy` grid coordinates and store in
@@ -538,7 +539,7 @@ def create_graph(
 def create_graph_from_datastore(
     datastore: BaseRegularGridDatastore,
     output_root_path: str,
-    n_max_levels: int = None,
+    n_max_levels: Optional[int] = None,
     hierarchical: bool = False,
     create_plot: bool = False,
 ):
