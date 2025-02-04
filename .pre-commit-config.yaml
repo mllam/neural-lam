@@ -40,5 +40,5 @@ repos:
     rev: v1.14.1
     hooks:
     -   id: mypy
-        additional_dependencies: [types-PyYAML]
+        additional_dependencies: [types-PyYAML, types-Pillow, types-tqdm]
         description: Check for type errors
