@@ -29,7 +29,10 @@ def test_lr_scheduler_reduces_lr(model_args, datastore):
     model = ARModelWithParams(
         args=model_args, datastore=datastore, config=config
     )
-    [optimizer], [lr_scheduler] = model.configure_optimizers()
+    result = model.configure_optimizers()
+
+    optimizer = result["optimizer"]
+    lr_scheduler = result["lr_scheduler"]
 
     assert optimizer.param_groups[0]["lr"] == 1
     lr_scheduler.step()

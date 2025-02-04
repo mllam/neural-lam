@@ -204,6 +204,8 @@ class ARModel(pl.LightningModule):
             betas=(0.9, 0.95),
         )
 
+        result = {"optimizer": optimizer}
+
         if self.config.training.optimization.lr_scheduler:
             lr_scheduler_class = getattr(
                 torch.optim.lr_scheduler,
@@ -213,9 +215,10 @@ class ARModel(pl.LightningModule):
                 optimizer,
                 **self.config.training.optimization.lr_scheduler_kwargs,
             )
-            return [optimizer], [lr_scheduler]
+            #  return [optimizer], [lr_scheduler]
+            result["lr_scheduler"] = lr_scheduler
 
-        return optimizer
+        return result
 
     @property
     def interior_mask_bool(self):
@@ -796,6 +799,12 @@ class ARModel(pl.LightningModule):
                 )
                 loaded_state_dict[new_key] = loaded_state_dict[old_key]
                 del loaded_state_dict[old_key]
+
         if not self.restore_opt:
             opt = self.configure_optimizers()
-            checkpoint["optimizer_states"] = [opt.state_dict()]
+            checkpoint["optimizer_states"] = [opt["optimizer"].state_dict()]
+
+            if "lr_scheduler" in opt:
+                checkpoint["lr_scheduler_states"] = [
+                    opt["lr_scheduler"].state_dict()
+                ]
