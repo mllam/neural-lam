@@ -47,7 +47,7 @@ jobs:
 
       - name: Determine PyTorch version
         run: |
-          TORCH_VERSION=$(${{ matrix.package_manager == 'pdm' && 'pdm run python -m pip' || 'python -m pip' }} install --dry-run "." | grep "Would install" | grep -o 'torch-[0-9.]*' | awk -F'-' '{print $2}'
+          TORCH_VERSION=$(${{ matrix.package_manager == 'pdm' && 'pdm run python -m pip' || 'python -m pip' }} install --dry-run "." | grep "Would install" | grep -o 'torch-[0-9.]*' | awk -F'-' '{print $2}')
           echo "TORCH_VERSION=$TORCH_VERSION" >> $GITHUB_ENV
 
       - name: Install PyTorch
