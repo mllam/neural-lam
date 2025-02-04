@@ -47,7 +47,10 @@ class GraphLAM(BaseGraphModel):
 
         # Define sub-models
         # Feature embedders for mesh
-        self.mesh_embedder = utils.make_mlp([mesh_dim] + self.mlp_blueprint_end)
+        # Bottom mesh level is first embedded to hidden dim of grid
+        self.mesh_embedder = utils.make_mlp(
+            [mesh_dim] + self.grid_mlp_blueprint_end
+        )
         self.m2m_embedder = utils.make_mlp([m2m_dim] + self.mlp_blueprint_end)
 
         # GNNs

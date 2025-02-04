@@ -100,7 +100,16 @@ def main(input_args=None):
         "--hidden_dim",
         type=int,
         default=64,
-        help="Dimensionality of all hidden representations (default: 64)",
+        help="Dimensionality of hidden representations (default: 64)",
+    )
+    parser.add_argument(
+        "--hidden_dim_grid",
+        type=int,
+        help=(
+            "Dimensionality of hidden representations related to grid nodes "
+            "(grid encodings and in grid-level MLPs)"
+            "(default: None, use same as hidden_dim)"
+        ),
     )
     parser.add_argument(
         "--hidden_layers",

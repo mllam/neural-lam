@@ -63,9 +63,11 @@ class BaseHiGraphModel(BaseGraphModel):
 
         # Separate mesh node embedders for each level
         self.mesh_embedders = nn.ModuleList(
-            [
+            # Bottom mesh level is first embedded to hidden dim of grid
+            [utils.make_mlp([mesh_dim] + self.grid_mlp_blueprint_end)]
+            + [
                 utils.make_mlp([mesh_dim] + self.mlp_blueprint_end)
-                for _ in range(self.num_levels)
+                for _ in range(self.num_levels - 1)
             ]
         )
         self.mesh_same_embedders = nn.ModuleList(
