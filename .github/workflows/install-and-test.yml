@@ -1,3 +1,23 @@
+# Configuration to test both CPU and GPU installations with both PDM and pip
+#
+# We don't use lock files in neural-lam, because that would tie us to a
+# particular variant of pytorch (gpu/cpu), and want it to be possible for
+# people choose which variant to install. Because we don't use lock files the
+# specific package versions to install is resolved on every install. This means
+# that has upstream packages evolve the specific version installed might change
+# (if we don't pin it). Currently, we do not pin pytorch in pyproject.toml
+#
+# To test both CPU and GPU installations with both PDM and pip we use two sets
+# of hosts to run the training on:
+# - ubuntu-latest for CPU: these are on github
+# - cirun-aws-runner--${{ github.run_id }} for GPU: these are on AWS,
+#   orchestrated by cirun.io
+#
+# To enable installing different pytorch variants we use an approach where we
+# first install a specific torch version (and variant), and then install neural-lam.
+# To ensure that the version of torch installed is compatible with neural-lam we
+# first use `pip install --dry-run .` to determine the version of torch that would
+# be installed.
 name: Test Matrix
 
 on: [push, pull_request]
@@ -46,7 +66,7 @@ jobs:
           pdm venv create --with-pip
           pdm use --venv in-project
 
-      - name: Determine PyTorch version
+      - name: Determine PyTorch version for neural-lam
         run: |
           TORCH_VERSION=$(${{ matrix.package_manager == 'pdm' && 'pdm run python -m pip' || 'python -m pip' }} install --dry-run "." | grep "Would install" | grep -o 'torch-[0-9.]*' | awk -F'-' '{print $2}' | tail -n 1)
           echo "TORCH_VERSION=$TORCH_VERSION" >> $GITHUB_ENV
