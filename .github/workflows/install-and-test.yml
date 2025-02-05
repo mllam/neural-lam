@@ -56,7 +56,7 @@ jobs:
 
       - name: Install package (including dev dependencies)
         run: |
-          ${{ matrix.package_manager == 'pdm' && 'pdm install --group :all' || 'python -m pip install "[dev]"' }}
+          ${{ matrix.package_manager == 'pdm' && 'pdm install --group :all' || 'python -m pip install ".[dev]"' }}
 
       - name: Print and check torch version
         run: |
