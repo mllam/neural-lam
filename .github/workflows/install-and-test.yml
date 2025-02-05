@@ -58,10 +58,19 @@ jobs:
         run: |
           ${{ matrix.package_manager == 'pdm' && 'pdm install --group :all' || 'python -m pip install ".[dev]"' }}
 
-      - name: Print and check torch version
+      - name: Print torch version
         run: |
           ${{ matrix.package_manager == 'pdm' && 'pdm run' || '' }} python -c "import torch; print(torch.__version__)"
-          ${{ matrix.package_manager == 'pdm' && 'pdm run' || '' }} python -c "import torch; assert ('+cpu' in torch.__version__) == (matrix.device == 'cpu')"
+
+      - name: Check torch version and variant is cpu
+        if: matrix.device == 'cpu'
+        run: |
+          ${{ matrix.package_manager == 'pdm' && 'pdm run' || '' }} python -c "import torch; assert torch.__version__.endswith('+cpu')"
+
+      - name: Check torch version and variant is gpu
+        if: matrix.device == 'gpu'
+        run: |
+          ${{ matrix.package_manager == 'pdm' && 'pdm run' || '' }} python -c "import torch; assert not torch.__version__.endswith('+cpu')"
 
       - name: Load cache data
         uses: actions/cache/restore@v4
