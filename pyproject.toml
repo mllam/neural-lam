@@ -1,6 +1,6 @@
 [project]
 name = "neural-lam"
-version = "0.3.0"
+dynamic = ["version"]
 description = "LAM-based data-driven forecasting"
 authors = [
     { name = "Joel Oskarsson", email = "joel.oskarsson@liu.se" },
@@ -107,7 +107,9 @@ allow-any-import-level = "neural_lam"
 min-similarity-lines = 10
 
 
-[tool.pdm]
+[tool.pdm.version]
+source = "scm"
+
 [build-system]
 requires = ["pdm-backend"]
 build-backend = "pdm.backend"
