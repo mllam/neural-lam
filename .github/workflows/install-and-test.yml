@@ -33,11 +33,12 @@ jobs:
           python -m pip install pdm
 
       - name: Configure and create PDM virtual environment (GPU)
+        # on the AWS GPU runner we have to use the mounted nvme drive, otherwise we run out of space
         if: matrix.package_manager == 'pdm' && matrix.device == 'gpu'
         run: |
           pdm config venv.in_project False
           pdm config venv.location /opt/dlami/nvme/venv
-          pdm venv create --with-pip --venv /opt/dlami/nvme/venv
+          pdm venv create --with-pip
 
       - name: Create virtual environment (PDM CPU)
         if: matrix.package_manager == 'pdm' && matrix.device == 'cpu'
