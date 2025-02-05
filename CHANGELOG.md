@@ -20,10 +20,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 [\#103](https://github.com/mllam/neural-lam/pull/103) @simonkamuk @sadamov
 
 ### Maintenance
-- update npyfiles MEPS and MDP DANRA example dataset to use small overlapping
-  domain (~100x100 grid points) with overlapping time-range (first two weeks of
-  April 2022) [\#110](https://github.com/mllam/neural-lam/pull/110), @leifdenby
-
 - update ci/cd testing setup to install torch version compatible with neural-lam
   dependencies [\#115](https://github.com/mllam/neural-lam/pull/115), @leifdenby
 
