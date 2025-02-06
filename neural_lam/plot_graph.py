@@ -36,6 +36,17 @@ def main():
         action="store_true",
         help="If the axis should be displayed (default: False)",
     )
+    parser.add_argument(
+        "--corner_filter_radius",
+        type=float,
+        help="Filter plotted objects to within given radius of interior corner",
+    )
+    parser.add_argument(
+        "--graph_level_distance",
+        type=float,
+        default=0.05,
+        help="Distance between graph levels, given as fraction of size of grid",
+    )
 
     args = parser.parse_args()
 
@@ -76,8 +87,8 @@ def main():
     )
 
     # Compute z-coordinate height of mesh nodes
-    mesh_base_height = 0.05 * grid_scale
-    mesh_level_height_diff = 0.1 * grid_scale
+    mesh_base_height = args.graph_level_distance * grid_scale
+    mesh_level_height_diff = args.graph_level_distance * grid_scale
 
     # List of edges to plot, (edge_index, from_pos, to_pos, color,
     # line_width, label)
@@ -200,6 +211,18 @@ def main():
 
         all_mesh_pos = mesh_pos
 
+    filter_plot_objects = args.corner_filter_radius is not None
+    if filter_plot_objects:
+        # Prep for filtering
+        interior_xy = datastore.get_xy(category="state")
+        corner = interior_xy.min(axis=0)  # (2,)
+
+        def corner_filter(pos):
+            # pos is (N, 2)
+            return (pos[:, 0] - corner[0]) ** 2 + (
+                pos[:, 1] - corner[1]
+            ) ** 2 <= args.corner_filter_radius**2
+
     # Add edges
     data_objs = []
     for (
@@ -212,6 +235,14 @@ def main():
     ) in edge_plot_list:
         edge_start = from_pos[ei[0]]  # (M, 2)
         edge_end = to_pos[ei[1]]  # (M, 2)
+
+        if filter_plot_objects:
+            # Filter edges, only keep if both start and end within circle
+            edge_mask = np.logical_and(
+                corner_filter(edge_start), corner_filter(edge_end)
+            )
+            edge_start = edge_start[edge_mask]
+            edge_end = edge_end[edge_mask]
         n_edges = edge_start.shape[0]
 
         x_edges = np.stack(
@@ -235,6 +266,10 @@ def main():
         data_objs.append(scatter_obj)
 
     # Add node objects
+    if filter_plot_objects:
+        # Filter nodes
+        grid_pos = grid_pos[corner_filter(grid_pos)]
+        all_mesh_pos = all_mesh_pos[corner_filter(all_mesh_pos)]
 
     data_objs.append(
         go.Scatter3d(
