@@ -22,7 +22,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Fix MLFlow exception import introduced in [\#77](https://github.com/mllam/neural-lam/pull/77).
   [\#111](https://github.com/mllam/neural-lam/pull/111)
   @observingClouds
-  
+
 - Fix duplicate tensor copy to CPU [\#106](https://github.com/mllam/neural-lam/pull/106) @observingClouds
 
 ### Maintenance
