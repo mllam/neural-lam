@@ -17,8 +17,9 @@ from neural_lam.weather_dataset import WeatherDataModule
 from tests.conftest import init_datastore_example
 
 
+@pytest.mark.dependency()
 @pytest.mark.parametrize("datastore_name", DATASTORES.keys())
-def test_training(datastore_name):
+def test_training(datastore_name, request):
     datastore = init_datastore_example(datastore_name)
 
     if not isinstance(datastore, BaseRegularGridDatastore):
@@ -101,3 +102,10 @@ def test_training(datastore_name):
     )
     wandb.init()
     trainer.fit(model=model, datamodule=data_module)
+
+    # save the path to the model checkpoint in to the request object so we can
+    # use in the inference test
+    request.config.cache.set(
+        "model_checkpoint_path",
+        model.trainer.checkpoint_callback.best_model_path,
+    )
