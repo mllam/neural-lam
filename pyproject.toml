@@ -1,11 +1,14 @@
 [project]
 name = "neural-lam"
-version = "0.2.0"
+version = "0.3.0"
 description = "LAM-based data-driven forecasting"
 authors = [
     { name = "Joel Oskarsson", email = "joel.oskarsson@liu.se" },
     { name = "Simon Adamov", email = "Simon.Adamov@meteoswiss.ch" },
     { name = "Leif Denby", email = "lcd@dmi.dk" },
+    { name = "Simon Kamuk Christiansen", email = "skc@dmi.dk" },
+    { name = "Kasper Hintz", email = "kah@dmi.dk" },
+    { name = "Erik Larsson", email = "erik.larsson@liu.se" },
 ]
 
 # PEP 621 project metadata
@@ -27,6 +30,9 @@ dependencies = [
     "parse>=1.20.2",
     "dataclass-wizard<0.31.0",
     "mllam-data-prep>=0.5.0",
+    "mlflow>=2.16.2",
+    "boto3>=1.35.32",
+    "pynvml>=12.0.0",
 ]
 requires-python = ">=3.9"
 

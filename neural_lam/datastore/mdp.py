@@ -13,6 +13,7 @@ from loguru import logger
 from numpy import ndarray
 
 # Local
+from ..utils import rank_zero_print
 from .base import BaseRegularGridDatastore, CartesianGridShape
 
 
@@ -72,11 +73,11 @@ class MDPDatastore(BaseRegularGridDatastore):
             self._ds.to_zarr(fp_ds)
         self._n_boundary_points = n_boundary_points
 
-        print("The loaded datastore contains the following features:")
+        rank_zero_print("The loaded datastore contains the following features:")
         for category in ["state", "forcing", "static"]:
             if len(self.get_vars_names(category)) > 0:
                 var_names = self.get_vars_names(category)
-                print(f" {category:<8s}: {' '.join(var_names)}")
+                rank_zero_print(f" {category:<8s}: {' '.join(var_names)}")
 
         # check that all three train/val/test splits are available
         required_splits = ["train", "val", "test"]
@@ -87,12 +88,12 @@ class MDPDatastore(BaseRegularGridDatastore):
                 f"splits: {available_splits}"
             )
 
-        print("With the following splits (over time):")
+        rank_zero_print("With the following splits (over time):")
         for split in required_splits:
             da_split = self._ds.splits.sel(split_name=split)
             da_split_start = da_split.sel(split_part="start").load().item()
             da_split_end = da_split.sel(split_part="end").load().item()
-            print(f" {split:<8s}: {da_split_start} to {da_split_end}")
+            rank_zero_print(f" {split:<8s}: {da_split_start} to {da_split_end}")
 
         # find out the dimension order for the stacking to grid-index
         dim_order = None
@@ -218,7 +219,9 @@ class MDPDatastore(BaseRegularGridDatastore):
         """
         return len(self.get_vars_names(category))
 
-    def get_dataarray(self, category: str, split: str) -> xr.DataArray:
+    def get_dataarray(
+        self, category: str, split: str, standardize: bool = False
+    ) -> xr.DataArray:
         """
         Return the processed data (as a single `xr.DataArray`) for the given
         category of data and test/train/val-split that covers all the data (in
@@ -246,6 +249,8 @@ class MDPDatastore(BaseRegularGridDatastore):
             The category of the dataset (state/forcing/static).
         split : str
             The time split to filter the dataset (train/val/test).
+        standardize: bool
+            If the dataarray should be returned standardized
 
         Returns
         -------
@@ -283,7 +288,12 @@ class MDPDatastore(BaseRegularGridDatastore):
             da_category = da_category.sel(time=slice(t_start, t_end))
 
         dim_order = self.expected_dim_order(category=category)
-        return da_category.transpose(*dim_order)
+        da_category = da_category.transpose(*dim_order)
+
+        if standardize:
+            return self._standardize_datarray(da_category, category=category)
+
+        return da_category
 
     def get_standardization_dataarray(self, category: str) -> xr.Dataset:
         """

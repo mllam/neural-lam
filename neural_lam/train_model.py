@@ -5,6 +5,7 @@ import time
 from argparse import ArgumentParser
 
 # Third-party
+# for logging the model:
 import pytorch_lightning as pl
 import torch
 from lightning_fabric.utilities import seed
@@ -48,6 +49,22 @@ def main(input_args=None):
         type=int,
         default=4,
         help="Number of workers in data loader (default: 4)",
+    )
+    parser.add_argument(
+        "--num_nodes",
+        type=int,
+        default=1,
+        help="Number of nodes to use in DDP (default: 1)",
+    )
+    parser.add_argument(
+        "--devices",
+        nargs="+",
+        type=str,
+        default=["auto"],
+        help="Devices to use for training. Can be the string 'auto' or a list "
+        "of integer id's corresponding to the desired devices, e.g. "
+        "'--devices 0 1'. Note that this cannot be used with SLURM, instead "
+        "set 'ntasks-per-node' in the slurm setup (default: auto)",
     )
     parser.add_argument(
         "--epochs",
@@ -171,10 +188,17 @@ def main(input_args=None):
 
     # Logger Settings
     parser.add_argument(
-        "--wandb_project",
+        "--logger",
+        type=str,
+        default="wandb",
+        choices=["wandb", "mlflow"],
+        help="Logger to use for training (wandb/mlflow) (default: wandb)",
+    )
+    parser.add_argument(
+        "--logger-project",
         type=str,
         default="neural_lam",
-        help="Wandb project name (default: neural_lam)",
+        help="Logger project name, for eg. Wandb (default: neural_lam)",
     )
     parser.add_argument(
         "--val_steps_to_log",
@@ -254,6 +278,15 @@ def main(input_args=None):
     else:
         device_name = "cpu"
 
+    # Set devices to use
+    if args.devices == ["auto"]:
+        devices = "auto"
+    else:
+        try:
+            devices = [int(i) for i in args.devices]
+        except ValueError:
+            raise ValueError("devices should be 'auto' or a list of integers")
+
     # Load model parameters Use new args for model
     ModelClass = MODELS[args.model]
     model = ModelClass(args, config=config, datastore=datastore)
@@ -266,6 +299,11 @@ def main(input_args=None):
         f"{prefix}{args.model}-{args.processor_layers}x{args.hidden_dim}-"
         f"{time.strftime('%m_%d_%H')}-{random_run_id:04d}"
     )
+
+    training_logger = utils.setup_training_logger(
+        datastore=datastore, args=args, run_name=run_name
+    )
+
     checkpoint_callback = pl.callbacks.ModelCheckpoint(
         dirpath=f"saved_models/{run_name}",
         filename="min_val_loss",
@@ -273,17 +311,14 @@ def main(input_args=None):
         mode="min",
         save_last=True,
     )
-    logger = pl.loggers.WandbLogger(
-        project=args.wandb_project,
-        name=run_name,
-        config=dict(training=vars(args), datastore=datastore._config),
-    )
     trainer = pl.Trainer(
         max_epochs=args.epochs,
         deterministic=True,
         strategy="ddp",
         accelerator=device_name,
-        logger=logger,
+        num_nodes=args.num_nodes,
+        devices=devices,
+        logger=training_logger,
         log_every_n_steps=1,
         callbacks=[checkpoint_callback],
         check_val_every_n_epoch=args.val_interval,
@@ -292,11 +327,15 @@ def main(input_args=None):
 
     # Only init once, on rank 0 only
     if trainer.global_rank == 0:
-        utils.init_wandb_metrics(
-            logger, val_steps=args.val_steps_to_log
-        )  # Do after wandb.init
+        utils.init_training_logger_metrics(
+            training_logger, val_steps=args.val_steps_to_log
+        )  # Do after initializing logger
     if args.eval:
-        trainer.test(model=model, datamodule=data_module, ckpt_path=args.load)
+        trainer.test(
+            model=model,
+            datamodule=data_module,
+            ckpt_path=args.load,
+        )
     else:
         trainer.fit(model=model, datamodule=data_module, ckpt_path=args.load)
 
