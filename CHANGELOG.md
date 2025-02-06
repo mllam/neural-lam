@@ -20,6 +20,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 [\#103](https://github.com/mllam/neural-lam/pull/103) @simonkamuk @sadamov
 - Fix duplicate tensor copy to CPU [\#106](https://github.com/mllam/neural-lam/pull/106) @observingClouds
 
+### Maintenance
+- update ci/cd testing setup to install torch version compatible with neural-lam
+  dependencies [\#115](https://github.com/mllam/neural-lam/pull/115), @leifdenby
+
+
 ## [v0.3.0](https://github.com/mllam/neural-lam/releases/tag/v0.3.0)
 
 This release introduces Datastores to represent input data from different sources (including zarr and numpy) while keeping graph generation within neural-lam.
