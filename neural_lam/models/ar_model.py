@@ -181,7 +181,7 @@ class ARModel(pl.LightningModule):
         weather_dataset = WeatherDataset(datastore=self._datastore, split=split)
         time = np.array(time.cpu(), dtype="datetime64[ns]")
         da = weather_dataset.create_dataarray_from_tensor(
-            tensor=tensor.cpu().numpy(), time=time, category=category
+            tensor=tensor, time=time, category=category
         )
         return da
 
