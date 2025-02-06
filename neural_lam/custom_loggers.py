@@ -49,7 +49,7 @@ class CustomMLFlowLogger(pl.loggers.MLFlowLogger):
             Step to log the image under. If None, logs under the key directly
         """
         # Third-party
-        import botocore
+        from botocore.exceptions import NoCredentialsError
         from PIL import Image
 
         if step is not None:
@@ -63,6 +63,6 @@ class CustomMLFlowLogger(pl.loggers.MLFlowLogger):
         img = Image.open(temporary_image)
         try:
             mlflow.log_image(img, f"{key}.png")
-        except botocore.exceptions.NoCredentialsError:
+        except NoCredentialsError:
             logger.error("Error logging image\nSet AWS credentials")
             sys.exit(1)

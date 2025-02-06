@@ -18,6 +18,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 - Only print on rank 0 to avoid duplicates of all print statements.
 [\#103](https://github.com/mllam/neural-lam/pull/103) @simonkamuk @sadamov
+
+- Fix MLFlow exception import introduced in [\#77](https://github.com/mllam/neural-lam/pull/77).
+  [\#111](https://github.com/mllam/neural-lam/pull/111)
+  @observingClouds
+
 - Fix duplicate tensor copy to CPU [\#106](https://github.com/mllam/neural-lam/pull/106) @observingClouds
 
 ### Maintenance
