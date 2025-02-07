@@ -55,7 +55,7 @@ inputs:
         dims: [x, y]
     target_output_variable: state
 
-  danra_surface:
+  danra_surface_forcing:
     path: https://object-store.os-api.cci1.ecmwf.int/mllam-testdata/danra_cropped/v0.2.0/single_levels.zarr
     dims: [time, x, y]
     variables:
@@ -72,6 +72,24 @@ inputs:
         method: stack_variables_by_var_name
         name_format: "{var_name}"
     target_output_variable: forcing
+
+  danra_surface:
+    path: https://object-store.os-api.cci1.ecmwf.int/mllam-testdata/danra_cropped/v0.2.0/single_levels.zarr
+    dims: [time, x, y]
+    variables:
+      - r2m
+      - t2m
+    dim_mapping:
+      time:
+        method: rename
+        dim: time
+      grid_index:
+        method: stack
+        dims: [x, y]
+      state_feature:
+        method: stack_variables_by_var_name
+        name_format: "{var_name}"
+    target_output_variable: state
 
   danra_static:
     path: https://object-store.os-api.cci1.ecmwf.int/mllam-testdata/danra_cropped/v0.2.0/single_levels.zarr
