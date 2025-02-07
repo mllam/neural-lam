@@ -1,5 +1,6 @@
 # Standard library
 import datetime
+import os
 import tempfile
 from functools import cached_property
 from pathlib import Path
@@ -52,9 +53,13 @@ class DummyDatastore(BaseRegularGridDatastore):
         n_timesteps : int
             The number of timesteps in the dataset.
         """
-        assert (
-            config_path is None
-        ), "No config file is needed for the dummy datastore"
+        if config_path:
+            self._root_path = Path(os.path.dirname(config_path))
+        else:
+            self._tempdir = tempfile.TemporaryDirectory()
+            self._root_path = Path(self._tempdir.name)
+
+        self._num_grid_points = n_grid_points
 
         # Ensure n_grid_points is a perfect square
         n_points_1d = int(np.sqrt(n_grid_points))
@@ -156,11 +161,6 @@ class DummyDatastore(BaseRegularGridDatastore):
 
         # Stack the spatial dimensions into grid_index
         self.ds = self.ds.stack(grid_index=self.CARTESIAN_COORDS)
-
-        # Create temporary directory for storing derived files
-        self._tempdir = tempfile.TemporaryDirectory()
-        self._root_path = Path(self._tempdir.name)
-        self._num_grid_points = n_grid_points
 
     @property
     def root_path(self) -> Path:
