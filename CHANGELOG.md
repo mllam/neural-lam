@@ -24,6 +24,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - update ci/cd testing setup to install torch version compatible with neural-lam
   dependencies [\#115](https://github.com/mllam/neural-lam/pull/115), @leifdenby
 
+- switch to new npyfiles MEPS and mdp DANRA test datasets which are coincident
+  in time and space (on cropped ~100x100 grid-point domain)
+  [\#100](https://github.com/mllam/neural-lam/pull/110), @leifdenby
+
 
 ## [v0.3.0](https://github.com/mllam/neural-lam/releases/tag/v0.3.0)
 
