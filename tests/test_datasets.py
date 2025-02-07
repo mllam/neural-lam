@@ -213,7 +213,10 @@ def test_single_batch(datastore_name, split):
 
     dataset = WeatherDataset(datastore=datastore, split=split, ar_steps=2)
 
-    model = GraphLAM(args=args, datastore=datastore, config=config)  # noqa
+    model = GraphLAM(
+        args=args,
+        config=config,
+    )  # noqa
 
     model_device = model.to(device_name)
     data_loader = DataLoader(dataset, batch_size=2)

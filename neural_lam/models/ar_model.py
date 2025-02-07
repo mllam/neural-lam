@@ -31,7 +31,6 @@ class ARModel(pl.LightningModule):
         self,
         args,
         config: NeuralLAMConfig,
-        datastore: BaseDatastore,
     ):
         super().__init__()
         self.save_hyperparameters(ignore=["datastore"])

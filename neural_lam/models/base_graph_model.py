@@ -15,8 +15,8 @@ class BaseGraphModel(ARModel):
     the encode-process-decode idea.
     """
 
-    def __init__(self, args, config: NeuralLAMConfig, datastore: BaseDatastore):
-        super().__init__(args, config=config, datastore=datastore)
+    def __init__(self, args, config: NeuralLAMConfig):
+        super().__init__(args, config=config)
 
         # Load graph with static features
         # NOTE: (IMPORTANT!) mesh nodes MUST have the first

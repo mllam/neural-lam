@@ -97,7 +97,6 @@ def test_training(datastore_name):
 
     model = GraphLAM(  # noqa
         args=model_args,
-        datastore=datastore,
         config=config,
     )
     wandb.init()
