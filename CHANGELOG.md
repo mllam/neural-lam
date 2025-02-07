@@ -26,7 +26,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - switch to new npyfiles MEPS and mdp DANRA test datasets which are coincident
   in time and space (on cropped ~100x100 grid-point domain)
-  [\#100](https://github.com/mllam/neural-lam/pull/110), @leifdenby
+  [\#110](https://github.com/mllam/neural-lam/pull/110), @leifdenby
 
 
 ## [v0.3.0](https://github.com/mllam/neural-lam/releases/tag/v0.3.0)
