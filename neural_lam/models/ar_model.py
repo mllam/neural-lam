@@ -13,7 +13,7 @@ import xarray as xr
 # Local
 from .. import metrics, vis
 from ..config import NeuralLAMConfig
-from ..datastore import BaseDatastore
+from ..datastore import BaseDatastore, init_datastore
 from ..loss_weighting import get_state_feature_weighting
 from ..weather_dataset import WeatherDataset
 
@@ -36,6 +36,9 @@ class ARModel(pl.LightningModule):
         super().__init__()
         self.save_hyperparameters(ignore=["datastore"])
         self.args = args
+        datastore = init_datastore(
+            config.datastore.kind, config.datastore.config_path
+        )
         self._datastore = datastore
         num_state_vars = datastore.get_num_data_vars(category="state")
         num_forcing_vars = datastore.get_num_data_vars(category="forcing")
