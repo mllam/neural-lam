@@ -800,9 +800,39 @@ class ARModel(pl.LightningModule):
                 )
                 loaded_state_dict[new_key] = loaded_state_dict[old_key]
                 del loaded_state_dict[old_key]
+
         if not self.restore_opt:
-            # Remove both optimizer and scheduler states if not restoring
+            # Reset training state completely
+            if "epoch" in checkpoint:
+                checkpoint["epoch"] = 0
+            if "global_step" in checkpoint:
+                checkpoint["global_step"] = 0
+
+            # Reset optimizer states
             if "optimizer_states" in checkpoint:
-                del checkpoint["optimizer_states"]
+                for optimizer_state in checkpoint["optimizer_states"]:
+                    # Clear momentum and other state
+                    optimizer_state["state"] = {}
+                    # Reset step count and other metadata
+                    optimizer_state.update(
+                        {
+                            "step": 0,
+                            "epoch": 0,
+                        }
+                    )
+
+            # Reset scheduler states
             if "lr_schedulers" in checkpoint:
-                del checkpoint["lr_schedulers"]
+                for scheduler_state in checkpoint["lr_schedulers"]:
+                    scheduler_state.update(
+                        {
+                            "_step_count": 0,
+                            "_last_lr": [self.args.lr],
+                            "base_lrs": [self.args.lr],
+                            "last_epoch": 0,
+                        }
+                    )
+
+            # Reset any other training state
+            checkpoint.pop("loops", None)
+            checkpoint.pop("callbacks", None)
