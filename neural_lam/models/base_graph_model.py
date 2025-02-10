@@ -144,23 +144,25 @@ class BaseGraphModel(ARModel):
         )  # No layer norm on this one
 
         # Compute constants for use in time_delta encoding
-        step_length_ratio = (
-            datastore_boundary.step_length / datastore.step_length
-        )
-        min_time_delta = -(args.num_past_boundary_steps + 1) * step_length_ratio
-        max_time_delta = args.num_future_boundary_steps * step_length_ratio
-        time_delta_magnitude = max(max_time_delta, abs(min_time_delta))
-
-        freq_indices = 1.0 + torch.arange(
-            self.time_delta_enc_dim // 2,
-            dtype=torch.float,
-        )
-        self.register_buffer(
-            "enc_freq_denom",
-            (2 * time_delta_magnitude)
-            ** (2 * freq_indices / self.time_delta_enc_dim),
-            persistent=False,
-        )
+        if self.boundary_forced:
+            step_length_ratio = (
+                datastore_boundary.step_length / datastore.step_length
+            )
+            min_time_delta = (
+                -(args.num_past_boundary_steps + 1) * step_length_ratio
+            )
+            max_time_delta = args.num_future_boundary_steps * step_length_ratio
+            time_delta_magnitude = max(max_time_delta, abs(min_time_delta))
+            freq_indices = 1.0 + torch.arange(
+                self.time_delta_enc_dim // 2,
+                dtype=torch.float,
+            )
+            self.register_buffer(
+                "enc_freq_denom",
+                (2 * time_delta_magnitude)
+                ** (2 * freq_indices / self.time_delta_enc_dim),
+                persistent=False,
+            )
 
         # Compute indices and define clamping functions
         self.prepare_clamping_params(config, datastore)
