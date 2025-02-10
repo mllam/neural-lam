@@ -209,10 +209,12 @@ def plot_spatial_error(
     )
 
     error_grid = (
-        error.reshape([
-            datastore.grid_shape_state.x,
-            datastore.grid_shape_state.y,
-        ])
+        error.reshape(
+            [
+                datastore.grid_shape_state.x,
+                datastore.grid_shape_state.y,
+            ]
+        )
         .cpu()
         .numpy()
     )
