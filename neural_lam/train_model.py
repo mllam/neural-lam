@@ -242,25 +242,26 @@ def main(input_args=None):
         "--num_past_forcing_steps",
         type=int,
         default=1,
-        help="Number of past time steps to use as input for forcing data",
+        help="Number of past time steps to use as forcing input (default: 1)",
     )
     parser.add_argument(
         "--num_future_forcing_steps",
         type=int,
         default=1,
-        help="Number of future time steps to use as input for forcing data",
+        help="Number of future time steps to use as forcing input (default: 1)",
     )
     parser.add_argument(
         "--num_past_boundary_steps",
         type=int,
         default=1,
-        help="Number of past time steps to use as input for boundary data",
+        help="Number of past time steps to use as boundary input (default: 1)",
     )
     parser.add_argument(
         "--num_future_boundary_steps",
         type=int,
         default=1,
-        help="Number of future time steps to use as input for boundary data",
+        help="Number of future time steps to use as boundary input "
+        "(default: 1)",
     )
     parser.add_argument(
         "--interior_subsample_step",
