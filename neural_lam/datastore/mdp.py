@@ -322,6 +322,8 @@ class MDPDatastore(BaseRegularGridDatastore):
         stats_variables = {
             f"{category}__{split}__{op}": f"{category}_{op}" for op in ops
         }
+
+        # Add state diff stats
         if category == "state":
             stats_variables.update(
                 {f"state__{split}__diff_{op}": f"state_diff_{op}" for op in ops}
@@ -329,14 +331,14 @@ class MDPDatastore(BaseRegularGridDatastore):
 
         ds_stats = self._ds[stats_variables.keys()].rename(stats_variables)
 
+        # Add standardized state diff stats
         if category == "state":
-            standardized_state_diff = {
-                op: ds_stats[f"state_diff_{op}"] / ds_stats["state_std"]
-                for op in ops
-            }
             ds_stats = ds_stats.assign(
                 **{
-                    f"state_diff_{op}_standardized": standardized_state_diff[op]
+                    f"state_diff_{op}_standardized": ds_stats[
+                        f"state_diff_{op}"
+                    ]
+                    / ds_stats["state_std"]
                     for op in ops
                 }
             )
