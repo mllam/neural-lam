@@ -292,7 +292,7 @@ class DummyDatastore(BaseRegularGridDatastore):
 
         ops = ["mean", "std"]
         if category == "state":
-            ops += ["diff_mean", "diff_std"]
+            ops += ["diff_mean_standardized", "diff_std_standardized"]
 
         for op in ops:
             da_op = xr.ones_like(self.ds[f"{category}_feature"]).astype(float)
