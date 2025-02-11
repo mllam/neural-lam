@@ -769,8 +769,14 @@ class NpyFilesDatastoreMEPS(BaseRegularGridDatastore):
         }
 
         if mean_diff_values is not None and std_diff_values is not None:
-            variables["state_diff_mean"] = (feature_dim_name, mean_diff_values)
-            variables["state_diff_std"] = (feature_dim_name, std_diff_values)
+            variables["state_diff_mean_standardized"] = (
+                feature_dim_name,
+                mean_diff_values,
+            )
+            variables["state_diff_std_standardized"] = (
+                feature_dim_name,
+                std_diff_values,
+            )
 
         ds_norm = xr.Dataset(
             variables,

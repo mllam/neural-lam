@@ -301,7 +301,8 @@ class MDPDatastore(BaseRegularGridDatastore):
         should contain a `{category}_mean` and `{category}_std` variable for
         each variable in the category. For `category=="state"`, the dataarray
         should also contain a `state_diff_mean` and `state_diff_std` variable
-        for the one- step differences of the state variables.
+        for the one- step differences of the state variables along with their
+        standardized versions appended with `_standardized`.
 
         Parameters
         ----------
@@ -327,6 +328,19 @@ class MDPDatastore(BaseRegularGridDatastore):
             )
 
         ds_stats = self._ds[stats_variables.keys()].rename(stats_variables)
+
+        if category == "state":
+            standardized_state_diff = {
+                op: ds_stats[f"state_diff_{op}"] / ds_stats["state_std"]
+                for op in ops
+            }
+            ds_stats = ds_stats.assign(
+                **{
+                    f"state_diff_{op}_standardized": standardized_state_diff[op]
+                    for op in ops
+                }
+            )
+
         return ds_stats
 
     @cached_property
