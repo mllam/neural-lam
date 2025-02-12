@@ -101,6 +101,10 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-meps-reduced-example-data-v0.3.0
 
+      - name: Check disk space
+        run: |
+          df -h
+
       - name: Run tests
         run: |
           ${{ matrix.package_manager == 'pdm' && 'pdm run' || '' }} pytest -vv -s
