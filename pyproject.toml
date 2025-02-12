@@ -109,6 +109,7 @@ min-similarity-lines = 10
 
 [tool.pdm.version]
 source = "scm"
+fallback_version = "0.0.0"
 
 [build-system]
 requires = ["pdm-backend"]
