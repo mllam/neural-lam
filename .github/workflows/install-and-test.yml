@@ -47,10 +47,6 @@ jobs:
         with:
           python-version: 3.9
 
-      - name: Check disk space
-        run: |
-          df -h
-
       - name: Install PDM (if applicable)
         if: matrix.package_manager == 'pdm'
         run: |
@@ -104,10 +100,6 @@ jobs:
           key: ${{ runner.os }}-meps-reduced-example-data-v0.3.0
           restore-keys: |
             ${{ runner.os }}-meps-reduced-example-data-v0.3.0
-
-      - name: Check disk space
-        run: |
-          df -h
 
       - name: Run tests
         run: |
