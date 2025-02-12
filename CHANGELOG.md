@@ -27,6 +27,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Fix duplicate tensor copy to CPU [\#106](https://github.com/mllam/neural-lam/pull/106) @observingClouds
 
+- Fix bug where the inverse_softplus used in clamping caused nans in the gradients [\#123](https://github.com/mllam/neural-lam/pull/123) @SimonKamuk
+
 ### Maintenance
 - update ci/cd testing setup to install torch version compatible with neural-lam
   dependencies [\#115](https://github.com/mllam/neural-lam/pull/115), @leifdenby
