@@ -44,6 +44,9 @@ def test_training(datastore_name):
         # because it expects to aggregate over multiple devices
         devices=2,
         log_every_n_steps=1,
+        # use `detect_anomaly` to ensure that we don't have NaNs popping up
+        # during training
+        detect_anomaly=True,
     )
 
     graph_name = "1level"
