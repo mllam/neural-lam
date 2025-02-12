@@ -299,10 +299,10 @@ class MDPDatastore(BaseRegularGridDatastore):
         """
         Return the standardization dataarray for the given category. This
         should contain a `{category}_mean` and `{category}_std` variable for
-        each variable in the category. For `category=="state"`, the dataarray
-        should also contain a `state_diff_mean` and `state_diff_std` variable
-        for the one- step differences of the state variables along with their
-        standardized versions appended with `_standardized`.
+        each variable in the category.
+        For `category=="state"`, the dataarray should also contain a
+        `state_diff_mean_standardized` and `state_diff_std_standardized`
+        variable for the one-step differences of the state variables.
 
         Parameters
         ----------
@@ -323,20 +323,14 @@ class MDPDatastore(BaseRegularGridDatastore):
             f"{category}__{split}__{op}": f"{category}_{op}" for op in ops
         }
 
-        # Add state diff stats
-        if category == "state":
-            stats_variables.update(
-                {f"state__{split}__diff_{op}": f"state_diff_{op}" for op in ops}
-            )
-
         ds_stats = self._ds[stats_variables.keys()].rename(stats_variables)
 
         # Add standardized state diff stats
         if category == "state":
             ds_stats = ds_stats.assign(
                 **{
-                    f"state_diff_{op}_standardized": ds_stats[
-                        f"state_diff_{op}"
+                    f"state_diff_{op}_standardized": self._ds[
+                        f"state__{split}__diff_{op}"
                     ]
                     / ds_stats["state_std"]
                     for op in ops

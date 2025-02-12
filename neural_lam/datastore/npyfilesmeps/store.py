@@ -706,10 +706,10 @@ class NpyFilesDatastoreMEPS(BaseRegularGridDatastore):
     def get_standardization_dataarray(self, category: str) -> xr.Dataset:
         """Return the standardization dataarray for the given category. This
         should contain a `{category}_mean` and `{category}_std` variable for
-        each variable in the category. For `category=="state"`, the dataarray
-        should also contain a `state_diff_mean_standardized` and
-        `state_diff_std_standardized` variable for the one- step differences
-        of the state variables.
+        each variable in the category.
+        For `category=="state"`, the dataarray should also contain a
+        `state_diff_mean_standardized` and `state_diff_std_standardized`
+        variable for the one-step differences of the state variables.
 
         Parameters
         ----------
