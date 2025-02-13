@@ -135,7 +135,7 @@ def test_load_datastore_works_for_datastore_path():
 def test_load_datastore_works_for_config_path():
     args = mock.MagicMock()
     args.config_path = (
-        "tests/datastore_examples/mdp/danra_100m_winds/danra.datastore.yaml"
+        "tests/datastore_examples/mdp/danra_100m_winds/config.yaml"
     )
 
     datastore = load_datastore(args)
