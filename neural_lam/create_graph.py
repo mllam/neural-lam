@@ -14,7 +14,8 @@ from torch_geometric.utils.convert import from_networkx
 
 # First-party
 from neural_lam.config import load_config_and_datastore
-from neural_lam.datastore.base import BaseRegularGridDatastore, MDPDatastore
+from neural_lam.datastore import DATASTORES
+from neural_lam.datastore.base import BaseRegularGridDatastore
 
 
 def plot_graph(graph, title=None):
@@ -593,6 +594,12 @@ def cli(input_args=None):
         type=str,
         help="Path to datastore",
     )
+    parser.add_argument(
+        "--datastore_type",
+        type=str,
+        default="mdp",
+        help="Type of datastore (default: mdp)",
+    )
 
     args = parser.parse_args(input_args)
 
@@ -616,7 +623,8 @@ def load_datastore(args):
     if args.config_path:
         _, datastore = load_config_and_datastore(config_path=args.config_path)
     else:
-        datastore = MDPDatastore.from_path(args.datastore)
+        assert args.datastore_type in DATASTORES
+        DATASTORES[args.datastore_type](args.datastore)
 
     return datastore
 
