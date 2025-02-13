@@ -624,7 +624,7 @@ def load_datastore(args):
         _, datastore = load_config_and_datastore(config_path=args.config_path)
     else:
         assert args.datastore_type in DATASTORES
-        DATASTORES[args.datastore_type](config_path=args.datastore)
+        datastore = DATASTORES[args.datastore_type](config_path=args.datastore)
 
     return datastore
 
