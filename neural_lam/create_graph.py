@@ -12,9 +12,9 @@ import torch
 import torch_geometric as pyg
 from torch_geometric.utils.convert import from_networkx
 
-# Local
-from .config import load_config_and_datastore
-from .datastore.base import BaseRegularGridDatastore
+# First-party
+from neural_lam.config import load_config_and_datastore
+from neural_lam.datastore.base import BaseRegularGridDatastore, MDPDatastore
 
 
 def plot_graph(graph, title=None):
