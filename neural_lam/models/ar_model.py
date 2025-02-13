@@ -1,5 +1,6 @@
 # Standard library
 import os
+import pickle
 from typing import List, Union
 
 # Third-party
@@ -204,6 +205,9 @@ class ARModel(pl.LightningModule):
             )
         else:
             self.unroll_ckpt_func = lambda f, *args: f(*args)
+
+        # Store step length (h), taking subsampling into account
+        self.step_length = datastore.step_length * args.interior_subsample_step
 
     def _create_dataarray_from_tensor(
         self,
@@ -605,7 +609,7 @@ class ARModel(pl.LightningModule):
                     vis.plot_prediction(
                         datastore=self._datastore,
                         title=f"{var_name} ({var_unit}), "
-                        f"t={t_i} ({self._datastore.step_length * t_i} h)",
+                        f"t={t_i} ({self.step_length * t_i} h)",
                         vrange=var_vrange,
                         da_prediction=da_prediction.isel(
                             state_feature=var_i, time=t_i - 1
@@ -675,12 +679,6 @@ class ARModel(pl.LightningModule):
             metric_fig.savefig(
                 os.path.join(wandb.run.dir, f"{full_log_name}.pdf")
             )
-            # Save errors also as csv
-            np.savetxt(
-                os.path.join(wandb.run.dir, f"{full_log_name}.csv"),
-                metric_tensor.cpu().numpy(),
-                delimiter=",",
-            )
 
         # Check if metrics are watched, log exact values for specific vars
         var_names = self._datastore.get_vars_names(category="state")
@@ -702,6 +700,7 @@ class ARModel(pl.LightningModule):
         prefix: string, prefix to use for logging
         """
         log_dict = {}
+        xr_data_vars = {}
         for metric_name, metric_val_list in metrics_dict.items():
             metric_tensor = self.all_gather_cat(
                 torch.cat(metric_val_list, dim=0)
@@ -719,15 +718,61 @@ class ARModel(pl.LightningModule):
                 # NOTE: we here assume rescaling for all metrics is linear
                 metric_rescaled = metric_tensor_averaged * self.state_std
                 # (pred_steps, d_f)
+
+                # Add to log dict
                 log_dict.update(
                     self.create_metric_log_dict(
                         metric_rescaled, prefix, metric_name
                     )
                 )
 
-        if self.trainer.is_global_zero and not self.trainer.sanity_checking:
+                # Add to xr.da dict
+                xr_data_vars[metric_name] = (
+                    ["variable", "lead_time"],
+                    metric_rescaled.cpu().numpy().T,
+                )
+
+        if (
+            self.trainer.is_global_zero
+            and not self.trainer.sanity_checking
+            and metrics_dict
+        ):
             wandb.log(log_dict)  # Log all
             plt.close("all")  # Close all figs
+
+            # Create and save xr.ds
+            num_steps = metric_rescaled.shape[0]
+            lead_time_i = np.arange(num_steps) + 1  # Lead time in index
+            lead_time_h = (
+                (self.step_length * lead_time_i)
+                .astype("timedelta64[h]")
+                .astype("timedelta64[ns]")
+            )  # Lead time in hours -> in ns for xr
+            metric_ds = xr.Dataset(
+                data_vars=xr_data_vars,
+                coords={
+                    "variable": self._datastore.get_vars_names(
+                        category="state"
+                    ),
+                    "variable_units": (
+                        "variable",
+                        self._datastore.get_vars_units(category="state"),
+                    ),
+                    "variable_long_name": (
+                        "variable",
+                        self._datastore.get_vars_long_names(category="state"),
+                    ),
+                    "lead_time": lead_time_h,
+                },
+                attrs={
+                    "wandb_run_name": wandb.run.name,
+                    "wandb_run_id": wandb.run.id,
+                },
+            )
+            # Save as pickle
+            output_path = os.path.join(wandb.run.dir, f"{prefix}_metrics.pkl")
+            with open(output_path, "wb") as f:
+                pickle.dump(metric_ds, f)
 
     def on_test_epoch_end(self):
         """
@@ -751,7 +796,7 @@ class ARModel(pl.LightningModule):
                     error=loss_map,
                     datastore=self._datastore,
                     title=f"Test loss, t={t_i} "
-                    f"({self._datastore.step_length * t_i} h)",
+                    f"({self.step_length * t_i} h)",
                 )
                 for t_i, loss_map in zip(
                     self.args.val_steps_to_log, mean_spatial_loss
