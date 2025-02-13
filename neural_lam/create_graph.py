@@ -588,14 +588,20 @@ def cli(input_args=None):
         action="store_true",
         help="Generate hierarchical mesh graph (default: False)",
     )
+    parser.add_argument(
+        "--datastore",
+        type=str,
+        help="Path to datastore",
+    )
+
     args = parser.parse_args(input_args)
 
     assert (
-        args.config_path is not None
-    ), "Specify your config with --config_path"
+        args.config_path or args.datastore
+    ), "Specify your config with --config_path or datastore with --datastore"
 
     # Load neural-lam configuration and datastore to use
-    _, datastore = load_config_and_datastore(config_path=args.config_path)
+    datastore = load_datastore(args)
 
     create_graph_from_datastore(
         datastore=datastore,
@@ -604,6 +610,15 @@ def cli(input_args=None):
         hierarchical=args.hierarchical,
         create_plot=args.plot,
     )
+
+
+def load_datastore(args):
+    if args.config_path:
+        _, datastore = load_config_and_datastore(config_path=args.config_path)
+    else:
+        datastore = MDPDatastore.from_path(args.datastore)
+
+    return datastore
 
 
 if __name__ == "__main__":
