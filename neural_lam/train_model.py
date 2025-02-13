@@ -322,6 +322,8 @@ def main(input_args=None):
         boundary_subsample_step=args.boundary_subsample_step,
         batch_size=args.batch_size,
         num_workers=args.num_workers,
+        # Make sure that dataset provided for eval contains correct split
+        eval_split=args.eval if args.eval is not None else "test",
         excluded_intervals=config.training.excluded_intervals,
     )
 
