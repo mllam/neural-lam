@@ -1,5 +1,6 @@
 # Standard library
 import os
+import tempfile
 from pathlib import Path
 
 # Third-party
@@ -91,7 +92,7 @@ DATASTORES_EXAMPLES = dict(
         / "danra.datastore.yaml"
     ),
     npyfilesmeps=download_meps_example_reduced_dataset(),
-    dummydata=None,
+    dummydata=tempfile.TemporaryDirectory().name,
 )
 
 DATASTORES[DummyDatastore.SHORT_NAME] = DummyDatastore
