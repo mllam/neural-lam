@@ -67,8 +67,8 @@ def plot_error_map(errors, datastore: BaseRegularGridDatastore, title=None):
 @matplotlib.rc_context(utils.fractional_plot_bundle(1))
 def plot_prediction(
     datastore: BaseRegularGridDatastore,
-    da_prediction: xr.DataArray = None,
-    da_target: xr.DataArray = None,
+    da_prediction: xr.DataArray,
+    da_target: xr.DataArray,
     title=None,
     vrange=None,
 ):
@@ -82,7 +82,7 @@ def plot_prediction(
     if vrange is None:
         vmin = min(da_prediction.min(), da_target.min())
         vmax = max(da_prediction.max(), da_target.max())
-    else:
+    elif vrange is not None:
         vmin, vmax = vrange
 
     extent = datastore.get_xy_extent("state")
