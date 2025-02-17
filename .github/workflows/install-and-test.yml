@@ -18,7 +18,7 @@
 # To ensure that the version of torch installed is compatible with neural-lam we
 # first use `pip install --dry-run .` to determine the version of torch that would
 # be installed.
-name: Test Matrix
+name: CPU+GPU testing
 
 on: [push, pull_request]
 
