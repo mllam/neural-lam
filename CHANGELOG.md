@@ -43,6 +43,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   in time and space (on cropped ~100x100 grid-point domain)
   [\#110](https://github.com/mllam/neural-lam/pull/110), @leifdenby
 
+- use dynamic versioning based on git tags and commit hashes
+  [\#118](https://github.com/mllam/neural-lam/pull/118), @observingClouds
+
  - add detect_anomaly=True to pl.Trainer in test_training.py [\#124](https://github.com/mllam/neural-lam/pull/124), @SimonKamuk
 
 ## [v0.3.0](https://github.com/mllam/neural-lam/releases/tag/v0.3.0)
