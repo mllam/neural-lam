@@ -72,7 +72,7 @@ def main(input_args=None):
     parser.add_argument(
         "--restore_opt",
         action="store_true",
-        help="If optimizer state should be restored with model "
+        help="If full training state should be restored with model "
         "(default: false)",
     )
     parser.add_argument(
@@ -295,6 +295,9 @@ def main(input_args=None):
             f"Can not log validation step {step} when validation is "
             f"only unrolled {args.ar_steps_eval} steps."
         )
+    assert (
+        args.load or not args.restore_opt
+    ), "Can not restore opt state when not loading a checkpoint"
 
     # Get an (actual) random run id as a unique identifier
     random_run_id = random.randint(0, 9999)
@@ -338,12 +341,22 @@ def main(input_args=None):
 
     # Load model parameters Use new args for model
     ModelClass = MODELS[args.model]
-    model = ModelClass(
-        args,
-        config=config,
-        datastore=datastore,
-        datastore_boundary=datastore_boundary,
-    )
+    if args.load and not args.restore_opt:
+        # Restore only model weights, not opt setup
+        model = ModelClass.load_from_checkpoint(
+            args.load,
+            args=args,
+            config=config,
+            datastore=datastore,
+            datastore_boundary=datastore_boundary,
+        )
+    else:
+        model = ModelClass(
+            args,
+            config=config,
+            datastore=datastore,
+            datastore_boundary=datastore_boundary,
+        )
 
     if args.eval:
         prefix = f"eval-{args.eval}-"
@@ -411,7 +424,9 @@ def main(input_args=None):
     if args.eval:
         trainer.test(model=model, datamodule=data_module, ckpt_path=args.load)
     else:
-        trainer.fit(model=model, datamodule=data_module, ckpt_path=args.load)
+        # Only feed fit method with checkpoint path if restore_opt
+        ckpt_for_fit = args.load if args.restore_opt else None
+        trainer.fit(model=model, datamodule=data_module, ckpt_path=ckpt_for_fit)
 
 
 if __name__ == "__main__":
