@@ -313,18 +313,21 @@ def inverse_softplus(x, beta=1, threshold=20):
     """
     Inverse of torch.nn.functional.softplus
 
-    For x*beta above threshold, returns linear function for numerical
-    stability.
+    Input is clamped to approximately positive values of x, and the function is
+    linear for inputs above x*beta for numerical stability.
 
-    Input is clamped to x > ln(1+1e-6)/beta which is approximately positive
-    values of x.
-    Note that this torch.clamp_min will make gradients 0, but this is not a
+    Note that this torch.clamp will make gradients 0, but this is not a
     problem as values of x that are this close to 0 have gradients of 0 anyhow.
     """
-    non_linear_part = (
-        torch.log(torch.clamp_min(torch.expm1(x * beta), 1e-6)) / beta
+    x_clamped = torch.clamp(
+        x, min=torch.log(torch.tensor(1e-6 + 1)) / beta, max=threshold / beta
     )
-    x = torch.where(x * beta <= threshold, non_linear_part, x)
+
+    non_linear_part = torch.log(torch.expm1(x_clamped * beta)) / beta
+
+    below_threshold = x * beta <= threshold
+
+    x = torch.where(condition=below_threshold, input=non_linear_part, other=x)
 
     return x
 
