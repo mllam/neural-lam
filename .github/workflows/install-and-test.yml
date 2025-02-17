@@ -66,6 +66,13 @@ jobs:
           pdm venv create --with-pip
           pdm use --venv in-project
 
+      - name: Create virtual environment (pip GPU)
+        if: matrix.package_manager == 'pip' && matrix.device == 'gpu'
+        run: |
+          # venv must be made on nvme drive, otherwise we run out of space
+          python -m venv /opt/dlami/nvme/venv
+          source /opt/dlami/nvme/venv/bin/activate
+
       - name: Determine PyTorch version for neural-lam
         run: |
           TORCH_VERSION=$(${{ matrix.package_manager == 'pdm' && 'pdm run python -m pip' || 'python -m pip' }} install --dry-run "." | grep "Would install" | grep -o 'torch-[0-9.]*' | awk -F'-' '{print $2}' | tail -n 1)
