@@ -31,6 +31,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Add standardization to state diff stats from mdp datastore [\#122](https://github.com/mllam/neural-lam/pull/122) @SimonKamuk
 
+- Set ci/cd badges to refer to the new test matrix [\#130](https://github.com/mllam/neural-lam/pull/130) @SimonKamuk
+
 ### Maintenance
 - update ci/cd testing setup to install torch version compatible with neural-lam
   dependencies [\#115](https://github.com/mllam/neural-lam/pull/115), @leifdenby
