@@ -158,7 +158,7 @@ def test_dataset_item_create_dataarray_from_tensor(datastore_name):
 
 @pytest.mark.parametrize("split", ["train", "val", "test"])
 @pytest.mark.parametrize("datastore_name", DATASTORES.keys())
-def test_single_batch(datastore_name, split):
+def test_single_batch(datastore_name, split, model_args):
     """Check that the `datastore.get_dataarray` method is implemented.
 
     And that it returns an xarray DataArray with the correct dimensions.
@@ -171,21 +171,6 @@ def test_single_batch(datastore_name, split):
     )  # noqa
 
     graph_name = "1level"
-
-    class ModelArgs:
-        output_std = False
-        loss = "mse"
-        restore_opt = False
-        n_example_pred = 1
-        graph = graph_name
-        hidden_dim = 4
-        hidden_layers = 1
-        processor_layers = 2
-        mesh_aggr = "sum"
-        num_past_forcing_steps = 1
-        num_future_forcing_steps = 1
-
-    args = ModelArgs()
 
     graph_dir_path = Path(datastore.root_path) / "graph" / graph_name
 
@@ -212,7 +197,9 @@ def test_single_batch(datastore_name, split):
 
     dataset = WeatherDataset(datastore=datastore, split=split, ar_steps=2)
 
-    model = GraphLAM(args=args, datastore=datastore, config=config)  # noqa
+    model = GraphLAM(
+        args=model_args, datastore=datastore, config=config
+    )  # noqa
 
     model_device = model.to(device_name)
     data_loader = DataLoader(dataset, batch_size=2)
