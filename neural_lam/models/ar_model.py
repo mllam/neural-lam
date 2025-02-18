@@ -10,11 +10,13 @@ import pytorch_lightning as pl
 import torch
 import wandb
 import xarray as xr
+from loguru import logger
 
 # Local
 from .. import metrics, vis
 from ..config import NeuralLAMConfig
 from ..datastore import BaseDatastore
+from ..datastore.base import BaseRegularGridDatastore
 from ..loss_weighting import get_state_feature_weighting
 from ..weather_dataset import WeatherDataset
 
@@ -206,6 +208,20 @@ class ARModel(pl.LightningModule):
         # Store step length (h), taking subsampling into account
         self.step_length = datastore.step_length * args.interior_subsample_step
 
+        # Make WeatherDataset:s for being able to make tensor into xr.DA
+        # Note: Unclear if it is actually necessary to make one per split?
+        # TODO: creating an instance of WeatherDataset here on is
+        # not how this should be done but whether WeatherDataset should be
+        # provided to ARModel or where to put plotting still needs discussion
+        self.wds_for_da = {
+            split: WeatherDataset(
+                datastore=self._datastore,
+                datastore_boundary=None,
+                split=split,
+            )
+            for split in ("train", "val", "test")
+        }
+
     def _create_dataarray_from_tensor(
         self,
         tensor: torch.Tensor,
@@ -234,20 +250,12 @@ class ARModel(pl.LightningModule):
         category : str
             The category of the data, either 'state' or 'forcing'
         """
-        # TODO: creating an instance of WeatherDataset here on every call is
-        # not how this should be done but whether WeatherDataset should be
-        # provided to ARModel or where to put plotting still needs discussion
-        weather_dataset = WeatherDataset(
-            datastore=self._datastore,
-            datastore_boundary=None,
-            split=split,
-        )
-
         # Move to CPU if on GPU
         time = time.detach().cpu()
         time = np.array(time, dtype="datetime64[ns]")
 
         tensor = tensor.detach().cpu()
+        weather_dataset = self.wds_for_da[split]
         da = weather_dataset.create_dataarray_from_tensor(
             tensor=tensor, time=time, category=category
         )
@@ -459,6 +467,89 @@ class ARModel(pl.LightningModule):
         for metric_list in self.val_metrics.values():
             metric_list.clear()
 
+    def _save_predictions_to_zarr(
+        self,
+        batch_times: torch.Tensor,
+        batch_predictions: torch.Tensor,
+        batch_idx: int,
+        zarr_output_path: str,
+    ):
+        """
+        Save state predictions for single batch to zarr dataset. Will append to
+        existing dataset for batch_idx > 0. Resulting dataset will contain a
+        variable named `state` with coordinates (start_time,
+        elapsed_forecast_duration, grid_index, state_feature).
+        Parameters
+        ----------
+        batch_times : torch.Tensor[int]
+            The times for the batch, given as epoch time in nanoseconds. Shape
+            is (B, args.pred_steps) where B is the batch size and
+            args.pred_steps is the number of prediction steps.
+        batch_predictions : torch.Tensor[float]
+            The predictions for the batch, given as (B, args.pred_steps,
+            num_grid_nodes, d_f) where B is the batch size, args.pred_steps is
+            the number of prediction steps, num_grid_nodes is the number of
+            grid nodes, and d_f is the number of state features.
+        batch_idx : int
+            The index of the batch in the current epoch.
+        """
+        # Scale predictions back to original data scale
+        batch_predictions_rescaled = (
+            batch_predictions * self.state_std + self.state_mean
+        )
+
+        # Convert predictions to DataArray using _create_dataarray_from_tensor
+        das_pred = []
+        for i in range(len(batch_times)):
+            da_pred = self._create_dataarray_from_tensor(
+                tensor=batch_predictions_rescaled[i],
+                time=batch_times[i],
+                split="test",
+                category="state",
+            )
+            # Unstack grid coords if necessary, this also avoids the need to
+            # try to store a MultiIndex zarr dataset which is not supported by
+            # xarray
+            if isinstance(self._datastore, BaseRegularGridDatastore):
+                da_pred = self._datastore.unstack_grid_coords(da_pred)
+
+            # First entry in da_pred.coords["time"] is time of first prediction,
+            # so init time of forecast is one time step before
+            t0 = da_pred.coords["time"].values[0] - np.array(
+                self.step_length, dtype="timedelta64[h]"
+            )
+            da_pred.coords["start_time"] = t0
+            da_pred.coords["elapsed_forecast_duration"] = da_pred.time - t0
+            da_pred = da_pred.swap_dims({"time": "elapsed_forecast_duration"})
+            da_pred.name = "state"
+            das_pred.append(da_pred)
+
+        da_pred_batch = xr.concat(das_pred, dim="start_time")
+
+        # Apply chunking start_time and elapsed_forecast_duration, but leave
+        # whole state in one chunk
+        da_pred_batch = da_pred_batch.chunk(
+            {"start_time": 1, "elapsed_forecast_duration": 1}
+        )
+
+        if batch_idx == 0:
+            logger.info(f"Saving predictions to {zarr_output_path}")
+            da_pred_batch.to_zarr(
+                zarr_output_path,
+                mode="w",
+                consolidated=True,
+                encoding={
+                    "start_time": {
+                        "units": "Seconds since 1970-01-01 00:00:00",
+                        "dtype": "int64",
+                    },
+                },
+            )
+        else:
+            da_pred_batch.to_zarr(
+                zarr_output_path, mode="a", append_dim="start_time"
+            )
+
     # pylint: disable-next=unused-argument
     def test_step(self, batch, batch_idx):
         """
@@ -521,6 +612,14 @@ class ARModel(pl.LightningModule):
         ]
         self.spatial_loss_maps.append(log_spatial_losses)
         # (B, N_log, num_interior_nodes)
+
+        if self.args.save_eval_to_zarr_path:
+            self._save_predictions_to_zarr(
+                batch_times=batch_times,
+                batch_predictions=prediction,
+                batch_idx=batch_idx,
+                zarr_output_path=self.args.save_eval_to_zarr_path,
+            )
 
         # Plot example predictions (on rank 0 only)
         if (

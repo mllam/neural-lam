@@ -219,7 +219,10 @@ class WeatherDataset(torch.utils.data.Dataset):
             )
         else:
             state_times = self.da_state.time
-        self.time_step_state = get_time_step(state_times)
+        self.orig_time_step_state = get_time_step(state_times)
+        self.time_step_state = (
+            self.interior_subsample_step * self.orig_time_step_state
+        )
         # FORCING
         if self.da_forcing is not None:
             if self.datastore.is_forecast:
@@ -229,16 +232,21 @@ class WeatherDataset(torch.utils.data.Dataset):
                 )
             else:
                 forcing_times = self.da_forcing.time
-            self.time_step_forcing = get_time_step(forcing_times.values)
+            self.time_step_forcing = (
+                self.boundary_subsample_step
+                * get_time_step(forcing_times.values)
+            )
         # inform user about the original and the subsampled time step
         if self.interior_subsample_step != 1:
             print(
                 f"Subsampling interior data with step size "
                 f"{self.interior_subsample_step} from original time step "
-                f"{self.time_step_state}"
+                f"{self.orig_time_step_state}"
             )
         else:
-            print(f"Using original time step {self.time_step_state} for data")
+            print(
+                f"Using original time step {self.orig_time_step_state} for data"
+            )
 
         # BOUNDARY FORCING
         if self.da_boundary_forcing is not None:
@@ -956,6 +964,94 @@ class WeatherDataset(torch.utils.data.Dataset):
         return da
 
 
+class EvalSubsetWrapper(torch.utils.data.Dataset):
+    """
+    A PyTorch Dataset wrapper that selects only samples with specific
+    initialization times.
+
+    Args:
+        dataset: The base dataset to wrap
+        eval_init_times: initialization times to include
+    """
+
+    def __init__(self, dataset, eval_init_times):
+        self.dataset = dataset
+        self.eval_init_times = eval_init_times
+
+        # TODO generalize class beyond 00/12 UTC
+        assert self.eval_init_times == [
+            0,
+            12,
+        ], "Only eval_init_times 00, 12 implemented"
+        valid_init_diff = 12
+
+        # Figure out which indices to use
+        first_batch = dataset[0]
+        first_init_time = self.get_utc_init_of_batch(first_batch)
+
+        # Note that we have to consider orig_time_step-state, as that is the
+        # time difference between init times in self.dataset
+        time_step_state_hour = self.dataset.orig_time_step_state.astype(
+            "timedelta64[h]"
+        ).astype(int)
+        assert (
+            valid_init_diff % time_step_state_hour == 0
+        ), "Invalid time step for eval_init_times"
+
+        # Find how many indices to skip in each step
+        self.valid_idx_interval = valid_init_diff // time_step_state_hour
+
+        # Find first valid index
+        first_valid_idx = None
+        for idx, step_offset in enumerate(range(0, 24, time_step_state_hour)):
+            # Init time in h UTC
+            potential_init_time = (first_init_time + step_offset) % 24
+            if potential_init_time in eval_init_times:
+                first_valid_idx = idx
+                break
+
+        assert first_valid_idx is not None, "Found no valid init time"
+        self.first_valid_idx = first_valid_idx
+
+    def get_utc_init_of_batch(self, batch):
+        """Get init time for batch in UTC, as int"""
+        target_times_np = batch[-1].numpy().astype("datetime64[ns]")
+        init_time = target_times_np[0] - self.dataset.orig_time_step_state
+        init_time_hour = init_time.astype("datetime64[h]").astype(int) % 24
+        return init_time_hour
+
+    def __len__(self) -> int:
+        """
+        Returns the length of the filtered dataset.
+        """
+        orig_len = len(self.dataset)
+        return np.ceil(
+            (orig_len - self.first_valid_idx) / self.valid_idx_interval
+        ).astype(int)
+
+    def __getitem__(self, idx: int):
+        """
+        Get an item from the filtered dataset.
+
+        Args:
+            idx: Index into the filtered dataset
+
+        Returns:
+            The dataset item corresponding to the filtered index
+        """
+        new_idx = self.first_valid_idx + idx * self.valid_idx_interval
+        batch = self.dataset[new_idx]
+
+        # Assert that we only do forecasts from 00 and 12 UTC
+        analysis_time_hour = self.get_utc_init_of_batch(batch)
+        assert analysis_time_hour in self.eval_init_times, (
+            "Tried to evaluate on sample with "
+            f"analysis time {analysis_time_hour}"
+        )
+
+        return batch
+
+
 class WeatherDataModule(pl.LightningDataModule):
     """DataModule for weather data."""
 
@@ -975,6 +1071,7 @@ class WeatherDataModule(pl.LightningDataModule):
         batch_size=4,
         num_workers=16,
         eval_split="test",
+        eval_init_times=[],
         excluded_intervals=None,
     ):
         super().__init__()
@@ -995,6 +1092,8 @@ class WeatherDataModule(pl.LightningDataModule):
         self.val_dataset = None
         self.test_dataset = None
         self.eval_split = eval_split
+        self.eval_init_times = eval_init_times
+
         if num_workers > 0:
             # BUG: There also seem to be issues with "spawn" and `gloo`, to be
             # investigated. Defaults to spawn for now, as the default on linux
@@ -1093,6 +1192,10 @@ class WeatherDataModule(pl.LightningDataModule):
                 interior_subsample_step=self.interior_subsample_step,
                 boundary_subsample_step=self.boundary_subsample_step,
             )
+            if self.eval_init_times:
+                self.val_dataset = EvalSubsetWrapper(
+                    self.val_dataset, self.eval_init_times
+                )
 
         if stage == "test" or stage is None:
             self.test_dataset = WeatherDataset(
@@ -1108,6 +1211,10 @@ class WeatherDataModule(pl.LightningDataModule):
                 interior_subsample_step=self.interior_subsample_step,
                 boundary_subsample_step=self.boundary_subsample_step,
             )
+            if self.eval_init_times:
+                self.test_dataset = EvalSubsetWrapper(
+                    self.test_dataset, self.eval_init_times
+                )
 
     def train_dataloader(self):
         """Load train dataset."""
