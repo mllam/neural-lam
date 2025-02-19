@@ -222,6 +222,13 @@ class ARModel(pl.LightningModule):
             for split in ("train", "val", "test")
         }
 
+        # Which variables to plot during eval
+        self.plot_vars = args.plot_vars
+        for var in self.plot_vars:
+            assert var in self._datastore.get_vars_names(
+                "state"
+            ), f"Can not plot variable {var}: not in datastore"
+
     def _create_dataarray_from_tensor(
         self,
         tensor: torch.Tensor,
@@ -700,9 +707,9 @@ class ARModel(pl.LightningModule):
 
             # Iterate over prediction horizon time steps
             for t_i, _ in enumerate(zip(pred_slice, target_slice), start=1):
-                # Create one figure per variable at this time step
-                var_figs = [
-                    vis.plot_prediction(
+                # Create one figure per plot variable at this time step
+                var_figs = {
+                    var_name: vis.plot_prediction(
                         datastore=self._datastore,
                         title=f"{var_name} ({var_unit}), "
                         f"t={t_i} ({self.step_length * t_i} h)",
@@ -721,16 +728,15 @@ class ARModel(pl.LightningModule):
                             var_vranges,
                         )
                     )
-                ]
+                    if var_name in self.plot_vars
+                }
 
                 example_i = self.plotted_examples
 
                 wandb.log(
                     {
                         f"{var_name}_example_{example_i}": wandb.Image(fig)
-                        for var_name, fig in zip(
-                            self._datastore.get_vars_names("state"), var_figs
-                        )
+                        for var_name, fig in var_figs.items()
                     }
                 )
                 plt.close(

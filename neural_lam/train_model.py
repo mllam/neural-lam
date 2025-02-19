@@ -222,6 +222,13 @@ def main(input_args=None):
         type=str,
         help="Save evaluation results to zarr dataset at given path ",
     )
+    parser.add_argument(
+        "--plot_vars",
+        nargs="+",
+        type=str,
+        default=["t2m"],
+        help="List of variables to plot during eval (default: t2m)",
+    )
 
     # Logger Settings
     parser.add_argument(
