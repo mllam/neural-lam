@@ -743,20 +743,6 @@ class ARModel(pl.LightningModule):
                     "all"
                 )  # Close all figs for this time step, saves memory
 
-            # Save pred and target as .pt files
-            torch.save(
-                pred_slice.cpu(),
-                os.path.join(
-                    wandb.run.dir, f"example_pred_{self.plotted_examples}.pt"
-                ),
-            )
-            torch.save(
-                target_slice.cpu(),
-                os.path.join(
-                    wandb.run.dir, f"example_target_{self.plotted_examples}.pt"
-                ),
-            )
-
     def create_metric_log_dict(self, metric_tensor, prefix, metric_name):
         """
         Put together a dict with everything to log for one metric. Also saves
