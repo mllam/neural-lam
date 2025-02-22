@@ -420,17 +420,24 @@ def check_time_overlap(
 
     if da2_is_forecast:
         times_da2 = da2.analysis_time
-        _ = get_time_step(da2.elapsed_forecast_duration)
+        time_min_da2 = times_da2.min().values
+        time_max_da2 = times_da2.max().values
+
+        time_step_da2 = get_time_step(times_da2.values)
+        time_step_da1 = get_time_step(times_da1.values)
+
+        analysis_offset = max(time_step_da1, num_past_steps * time_step_da2)
+        da2_required_time_min = time_min_da1 - analysis_offset
+        da2_required_time_max = time_max_da1 - analysis_offset
     else:
         times_da2 = da2.time
+        time_min_da2 = times_da2.min().values
+        time_max_da2 = times_da2.max().values
         time_step_da2 = get_time_step(times_da2.values)
 
-    time_min_da2 = times_da2.min().values
-    time_max_da2 = times_da2.max().values
-
-    # Calculate required bounds for da2 using its time step
-    da2_required_time_min = time_min_da1 - num_past_steps * time_step_da2
-    da2_required_time_max = time_max_da1 + num_future_steps * time_step_da2
+        # Calculate required bounds for da2 using its time step
+        da2_required_time_min = time_min_da1 - num_past_steps * time_step_da2
+        da2_required_time_max = time_max_da1 + num_future_steps * time_step_da2
 
     if time_min_da2 > da2_required_time_min:
         raise ValueError(
@@ -481,6 +488,8 @@ def crop_time_if_needed(
         The cropped first DataArray and print a warning if any steps are
         removed.
     """
+    # NOTE: Now this does not consider the ar_step at the end,
+    # or the 2 init steps
     if da1 is None or da2 is None:
         return da1
 
@@ -507,24 +516,32 @@ def crop_time_if_needed(
             da2_tvals = da2.time.values
 
         # Calculate how many steps we would have to remove
+        da2_dt = get_time_step(da2_tvals)
         if da2_is_forecast:
-            # The windowing for forecast type data happens in the
-            # elapsed_forecast_duration dimension, so we can omit it here.
-            required_min = da2_tvals[0]
-            required_max = da2_tvals[-1]
+            da1_dt = get_time_step(da1_tvals)
+            # analysis time of boundary forecast must start this much earlier
+            # than da1 timestep
+            analysis_offset = max(da1_dt, num_past_steps * da2_dt)
+            required_min = da2_tvals[0] + analysis_offset
+            required_max = da2_tvals[-1] + analysis_offset
         else:
-            dt = get_time_step(da2_tvals)
-            required_min = da2_tvals[0] + num_past_steps * dt
-            required_max = da2_tvals[-1] - num_future_steps * dt
+            required_min = da2_tvals[0] + num_past_steps * da2_dt
+            required_max = da2_tvals[-1] - num_future_steps * da2_dt
 
         # Calculate how many steps to remove at beginning and end
         first_valid_idx = (da1_tvals >= required_min).argmax()
         n_removed_begin = first_valid_idx
-        last_valid_idx_plus_one = (
-            da1_tvals > required_max
-        ).argmax()  # To use for slice
-        n_removed_begin = first_valid_idx
-        n_removed_end = len(da1_tvals) - last_valid_idx_plus_one
+        if da1_tvals[-1] > required_max:
+            # Do cropping at the end
+            last_valid_idx_plus_one = (
+                da1_tvals > required_max
+            ).argmax()  # To use for slice
+            n_removed_end = len(da1_tvals) - last_valid_idx_plus_one
+        else:
+            # da1 ends before required_max
+            last_valid_idx_plus_one = None  # slice without endpoint
+            n_removed_end = 0
+
         if n_removed_begin > 0 or n_removed_end > 0:
             print(
                 f"Warning: cropping da1 (e.g. 'state') to align with da2 "

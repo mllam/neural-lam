@@ -41,6 +41,7 @@ class DatastoreSelection:
 
     kind: DatastoreKindStr
     config_path: str
+    overload_stats_path: Union[str, None] = None
 
 
 @dataclasses.dataclass
@@ -193,17 +194,35 @@ def load_config_and_datastores(
     datastore_config_path = (
         Path(config_path).parent / config.datastore.config_path
     )
+
+    if config.datastore.overload_stats_path is None:
+        overload_stats_path = None
+    else:
+        overload_stats_path = (
+            Path(config_path).parent / config.datastore.overload_stats_path
+        )
     datastore = init_datastore(
-        datastore_kind=config.datastore.kind, config_path=datastore_config_path
+        datastore_kind=config.datastore.kind,
+        config_path=datastore_config_path,
+        overload_stats_path=overload_stats_path,
     )
 
     if config.datastore_boundary is not None:
         datastore_boundary_config_path = (
             Path(config_path).parent / config.datastore_boundary.config_path
         )
+
+        if config.datastore_boundary.overload_stats_path is None:
+            boundary_overload_stats_path = None
+        else:
+            boundary_overload_stats_path = (
+                Path(config_path).parent
+                / config.datastore_boundary.overload_stats_path
+            )
         datastore_boundary = init_datastore(
             datastore_kind=config.datastore_boundary.kind,
             config_path=datastore_boundary_config_path,
+            overload_stats_path=boundary_overload_stats_path,
         )
     else:
         datastore_boundary = None

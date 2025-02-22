@@ -299,6 +299,18 @@ class WeatherDataset(torch.utils.data.Dataset):
                 num_future_steps=self.num_future_boundary_steps,
             )
 
+        # check that also after cropping we have a non-zero amount of samples
+        if self.__len__() <= 0:
+            raise ValueError(
+                "The provided datastore (after cropping) only provides "
+                f"{len(self.da_state.time)} total time steps, which is too few "
+                "to create a single sample for the WeatherDataset "
+                f"configuration used in the `{split}` split. You could try "
+                "either reducing the number of autoregressive steps "
+                "(`ar_steps`) and/or the forcing window size "
+                "(`num_past_forcing_steps` and `num_future_forcing_steps`)"
+            )
+
         # Set up for standardization
         # TODO: This will become part of ar_model.py soon!
         self.standardize = standardize
@@ -502,32 +514,109 @@ class WeatherDataset(torch.utils.data.Dataset):
         # might be dealing with a datastore_boundary
         if "analysis_time" in da_forcing.dims:
             # For forecast data with analysis_time and elapsed_forecast_duration
-            # Select the closest analysis_time in the past in the
-            # forcing/boundary data
-            offset = max(0, num_past_steps - init_steps)
-            state_time = state_times[init_steps].values
+            # Select the closest analysis_time in the past (strictly) in the
+            # boundary data
+            model_init_time = state_times[init_steps - 1].values
+            # Find first index before
             forcing_analysis_time_idx = da_forcing.analysis_time.get_index(
                 "analysis_time"
-            ).get_indexer([state_time], method="pad")[0]
+            ).get_indexer([model_init_time], method="pad")[0]
+            forcing_analysis_time = da_forcing.analysis_time[
+                forcing_analysis_time_idx
+            ]
+            if model_init_time == forcing_analysis_time:
+                # Can not use boundary forcing initialized at same time,
+                # take one before
+                forcing_analysis_time_idx = forcing_analysis_time_idx - 1
+                forcing_analysis_time = da_forcing.analysis_time[
+                    forcing_analysis_time_idx
+                ]
+
+            # With current forcing_analysis_time_idx, how much space is there
+            # for including previous time steps
+            cur_prev_steps_in_forcing = (
+                np.floor(
+                    (model_init_time - forcing_analysis_time)
+                    / self.forecast_step_boundary
+                )
+            ).astype(int)
+
+            # There will always be space for 1 past_forcing step,
+            # but more might require using an earlier forecast
+            # We will gain 1 to possible past windowing by each index we offset
+            past_analysis_offset = num_past_steps - cur_prev_steps_in_forcing
+            if past_analysis_offset > 0:
+                forcing_analysis_time_idx = (
+                    forcing_analysis_time_idx - past_analysis_offset
+                )
+                forcing_analysis_time = da_forcing.analysis_time[
+                    forcing_analysis_time_idx
+                ]
+
+            # Index of elapsed_forecast_duration that matches model_init_time
+            forcing_lead_i_init = (
+                np.floor(
+                    (model_init_time - forcing_analysis_time)
+                    / self.forecast_step_boundary
+                )
+            ).astype(int)
+
+            forcing_first_valid_time = (
+                forcing_analysis_time
+                + da_forcing.elapsed_forecast_duration[forcing_lead_i_init]
+            )
+            # How far "behind" the init time do forcing times start from
+            start_time_delay_fraction = (
+                model_init_time - forcing_first_valid_time
+            ) / self.forecast_step_boundary
 
             # Adjust window indices for subsampled steps
-            for step_idx in range(init_steps, len(state_times)):
+            for step_idx in range(len(state_times) - init_steps):
+                # Figure out how many steps to offset window,
+                # if time steps don't align this is not step_idx steps
+
+                step_window_offset = np.floor(
+                    start_time_delay_fraction
+                    + step_idx
+                    * self.time_step_state
+                    / self.forecast_step_boundary
+                ).astype(int)
                 window_start = (
-                    offset
-                    + step_idx * subsample_step
+                    forcing_lead_i_init
+                    + step_window_offset
                     - num_past_steps * subsample_step
-                )
+                ).values
                 window_end = (
-                    offset
-                    + step_idx * subsample_step
+                    forcing_lead_i_init
+                    + step_window_offset
                     + (num_future_steps + 1) * subsample_step
+                ).values
+
+                # Time at which boundary forcing is valid
+                current_time = (
+                    forcing_analysis_time
+                    + da_forcing.elapsed_forecast_duration[
+                        forcing_lead_i_init + step_window_offset
+                    ]
                 )
 
-                current_time = (
-                    forcing_analysis_time_idx
-                    + da_forcing.elapsed_forecast_duration[
-                        step_idx * subsample_step
-                    ]
+                # Check that boundary and state times align
+                # They do not have to be the same, but boundary time should
+                # not be less than a boundary time step before state time
+                cur_state_time = state_times[1 + step_idx]
+
+                assert current_time <= cur_state_time, (
+                    "Mismatch in boundary (forecast) and interior state times:"
+                    f"boundary forcing at time {current_time.values}"
+                    f"matched to state time {cur_state_time.values}"
+                )
+                boundary_state_time_diff = cur_state_time - current_time
+                assert (current_time <= cur_state_time) and (
+                    boundary_state_time_diff < self.forecast_step_boundary
+                ), (
+                    "Mismatch in boundary (forecast) and interior state times:"
+                    f"boundary forcing at time {current_time.values}"
+                    f"matched to state time {cur_state_time.values}"
                 )
 
                 da_sliced = da_forcing.isel(
@@ -545,14 +634,17 @@ class WeatherDataset(torch.utils.data.Dataset):
                     window=np.arange(-num_past_steps, num_future_steps + 1)
                 )
                 # Calculate window time deltas for forecast data
-                window_time_deltas = (
-                    da_forcing.elapsed_forecast_duration[
+                window_times = (
+                    forcing_analysis_time
+                    + da_forcing.elapsed_forecast_duration[
                         window_start:window_end:subsample_step
-                    ].values
-                    - da_forcing.elapsed_forecast_duration[
-                        step_idx * subsample_step
-                    ].values
+                    ]
                 )
+                step_model_time = (
+                    model_init_time + step_idx * self.time_step_state
+                )
+                window_time_deltas = (window_times - step_model_time).values
+
                 # Assign window time delta coordinate
                 da_sliced["window_time_deltas"] = ("window", window_time_deltas)
 

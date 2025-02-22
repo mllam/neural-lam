@@ -28,7 +28,9 @@ class MDPDatastore(BaseRegularGridDatastore):
 
     SHORT_NAME = "mdp"
 
-    def __init__(self, config_path, reuse_existing=True):
+    def __init__(
+        self, config_path, overload_stats_path=None, reuse_existing=True
+    ):
         """
         Construct a new MDPDatastore from the configuration file at
         `config_path`. If `reuse_existing` is True, the dataset is loaded
@@ -42,6 +44,10 @@ class MDPDatastore(BaseRegularGridDatastore):
             The path to the configuration file, this will be fed to the
             `mllam_data_prep.Config.from_yaml_file` method to then call
             `mllam_data_prep.create_dataset` to create the dataset.
+        overload_stats_path : str
+            Path to a config file for an mdp datastore. Data statistics will be
+            read from the zarr corresponding to this path rather than from the
+            zarr corresponding to config_path.
         reuse_existing : bool
             Whether to reuse an existing dataset zarr file if it exists and its
             creation date is newer than the configuration file.
@@ -93,6 +99,19 @@ class MDPDatastore(BaseRegularGridDatastore):
             da_split_end = da_split.sel(split_part="end").load().item()
             print(f" {split:<8s}: {da_split_start} to {da_split_end}")
 
+        self.is_forecast = "elapsed_forecast_duration" in self._ds.dims
+        if self.is_forecast:
+            print("Datastore contains forecasts")
+
+        if overload_stats_path is not None:
+            print(
+                "Using data  statistics from other datastore "
+                f"at path: {overload_stats_path}"
+            )
+            self.stats_datastore = MDPDatastore(config_path=overload_stats_path)
+        else:
+            self.stats_datastore = None
+
         # find out the dimension order for the stacking to grid-index
         dim_order = None
         for input_dataset in self._config.inputs.values():
@@ -140,7 +159,8 @@ class MDPDatastore(BaseRegularGridDatastore):
             The length of the time steps in hours.
 
         """
-        da_dt = self._ds["time"].diff("time")
+        diff_dim = "elapsed_forecast_duration" if self.is_forecast else "time"
+        da_dt = self._ds[diff_dim].diff(diff_dim)
         return (da_dt.dt.seconds[0] // 3600).item()
 
     def get_vars_units(self, category: str) -> List[str]:
@@ -264,13 +284,15 @@ class MDPDatastore(BaseRegularGridDatastore):
         # set multi-index for grid-index
         da_category = da_category.set_index(grid_index=self.CARTESIAN_COORDS)
 
-        if "time" in da_category.dims:
+        temporal_dim = "analysis_time" if self.is_forecast else "time"
+
+        if temporal_dim in da_category.dims:
             da_split = self._ds.splits.sel(split_name=split)
             if "grid_index" in da_split.coords:
                 da_split = da_split.isel(grid_index=0)
             t_start = da_split.sel(split_part="start").load().item()
             t_end = da_split.sel(split_part="end").load().item()
-            da_category = da_category.sel(time=slice(t_start, t_end))
+            da_category = da_category.sel({temporal_dim: slice(t_start, t_end)})
 
         dim_order = self.expected_dim_order(category=category)
         da_category = da_category.transpose(*dim_order)
@@ -301,6 +323,12 @@ class MDPDatastore(BaseRegularGridDatastore):
             differences for state variables).
 
         """
+        if self.stats_datastore is not None:
+            # Get stats from self.stats_datastore instead
+            return self.stats_datastore.get_standardization_dataarray(
+                category=category
+            )
+
         ops = ["mean", "std"]
         split = "train"
         stats_variables = {

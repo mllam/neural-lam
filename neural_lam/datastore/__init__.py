@@ -13,7 +13,7 @@ DATASTORES = {
 }
 
 
-def init_datastore(datastore_kind, config_path):
+def init_datastore(datastore_kind, config_path, overload_stats_path=None):
     DatastoreClass = DATASTORES.get(datastore_kind)
 
     if DatastoreClass is None:
@@ -21,6 +21,8 @@ def init_datastore(datastore_kind, config_path):
             f"Datastore kind {datastore_kind} is not implemented"
         )
 
-    datastore = DatastoreClass(config_path=config_path)
+    datastore = DatastoreClass(
+        config_path=config_path, overload_stats_path=overload_stats_path
+    )
 
     return datastore
