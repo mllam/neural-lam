@@ -1,6 +1,8 @@
+# Standard library
 import pickle
 from pathlib import Path
 
+# Third-party
 import matplotlib.pyplot as plt
 
 # Configuration
@@ -25,7 +27,7 @@ COLORS = {
     "blue": "#56B4E9",  # Sky blue
     "orange": "#E69F00",  # Orange
     "green": "#009E73",  # Bluish green
-    "red": "#D55E00",  # Vermillion
+    "red": "#D55E00",  # Vermilion
     "purple": "#CC79A7",  # Reddish purple
     "yellow": "#F0E442",  # Yellow
     "grey": "#999999",  # Grey
@@ -62,6 +64,13 @@ MARKERS = [
     "h",  # Hexagon
 ]
 
+UNIT_LOOKUP = {
+    "m s**-1": "m / s",
+    "W m**-2": "W / m^2",
+    "m**-2": "W / m^2",
+    "m**2 s**-2": "m^2 / s^2",
+}
+
 
 def create_style_dict(metrics_dict):
     """Create style dictionary for experiments using distinct visual elements"""
@@ -78,14 +87,13 @@ def create_style_dict(metrics_dict):
 # Update plot_kwargs in plot_metrics function
 def get_plot_kwargs(style, model_name, time_step):
     """Get consistent plot kwargs for all plots"""
-    print(f"markerevery: {12 / time_step}")
     return {
         "label": model_name,
         "color": style["color"],
         "linestyle": style["linestyle"],
         "marker": style["marker"],
         "markersize": 6,
-        "markevery": int(12 / time_step), # Every 12 h
+        "markevery": int(12 / time_step),  # Every 12 h
         "markerfacecolor": "white",
         "markeredgewidth": 1.5,
         "linewidth": 2,
@@ -110,7 +118,11 @@ def save_plot(fig, name, time=None, output_dir=None):
 
 
 def plot_metrics(
-    metrics_files, metric_name="rmse", variables=None, combined=False, output_dir=None
+    metrics_files,
+    metric_name="rmse",
+    variables=None,
+    combined=False,
+    output_dir=None,
 ):
     """Unified plotting function with consistent styling"""
     plt.style.use("default")
@@ -140,7 +152,11 @@ def plot_metrics(
         for model_name, metrics in metrics_dict.items():
             lead_time_hrs = metrics.lead_time.dt.total_seconds() / 3600
             # Time step in h
-            time_step = metrics.lead_time.diff("lead_time")[0].values.astype("timedelta64[h]").astype(int)
+            time_step = (
+                metrics.lead_time.diff("lead_time")[0]
+                .values.astype("timedelta64[h]")
+                .astype(int)
+            )
             style = PLOT_STYLES[model_name]
             plot_kwargs = get_plot_kwargs(style, model_name, time_step)
 
@@ -150,15 +166,23 @@ def plot_metrics(
                 **plot_kwargs,
             )
 
+        # use metrics from last iteration above
+        var_unit = str(metrics["variable_units"].sel(variable=var).values)
+        if var_unit in UNIT_LOOKUP:
+            var_unit = UNIT_LOOKUP[var_unit]
+
         # Common styling
         ax.set_xlabel("Lead Time (hours)", fontsize=10 if combined else 12)
-        ax.set_ylabel(f"{metric_name.upper()}", fontsize=10 if combined else 12)
+        ax.set_ylabel(
+            f"{metric_name.upper()} (${var_unit}$)",
+            fontsize=10 if combined else 12,
+        )
         #  ax.set_title(
-            #  f"{var}"
-            #  if combined
-            #  else f"{var} {metric_name.upper()} vs Forecast Lead Time",
-            #  fontsize=12,
-            #  fontweight="bold",
+        #  f"{var}"
+        #  if combined
+        #  else f"{var} {metric_name.upper()} vs Forecast Lead Time",
+        #  fontsize=12,
+        #  fontweight="bold",
         #  )
         ax.grid(True, linestyle="--", alpha=0.3)
         ax.tick_params(
