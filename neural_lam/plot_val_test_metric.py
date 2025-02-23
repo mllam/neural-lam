@@ -76,23 +76,20 @@ def create_style_dict(metrics_dict):
 
 
 # Update plot_kwargs in plot_metrics function
-def get_plot_kwargs(style, model_name):
+def get_plot_kwargs(style, model_name, time_step):
     """Get consistent plot kwargs for all plots"""
+    print(f"markerevery: {12 / time_step}")
     return {
         "label": model_name,
         "color": style["color"],
         "linestyle": style["linestyle"],
         "marker": style["marker"],
         "markersize": 6,
-        "markevery": 12,
+        "markevery": int(12 / time_step), # Every 12 h
         "markerfacecolor": "white",
         "markeredgewidth": 1.5,
         "linewidth": 2,
     }
-
-
-OUTPUT_DIR = Path("plots")
-OUTPUT_DIR.mkdir(exist_ok=True)
 
 
 def load_metrics(file_path):
@@ -101,19 +98,30 @@ def load_metrics(file_path):
         return pickle.load(f)
 
 
-def save_plot(fig, name, time=None):
+def save_plot(fig, name, time=None, output_dir=None):
     """Save plots to consistent location."""
     if time is not None:
         name = f"{name}_{time.dt.strftime('%Y%m%d_%H').values}"
-    fig.savefig(OUTPUT_DIR / f"{name}.pdf", bbox_inches="tight", dpi=300)
+    if output_dir is None:
+        output_dir = "plots"
+
+    fig.savefig(Path(output_dir) / f"{name}.pdf", bbox_inches="tight", dpi=300)
     plt.close()
 
 
 def plot_metrics(
-    metrics_dict, metric_name="rmse", variables=None, combined=False
+    metrics_files, metric_name="rmse", variables=None, combined=False, output_dir=None
 ):
     """Unified plotting function with consistent styling"""
     plt.style.use("default")
+
+    metrics_dict = {
+        model_name: load_metrics(file_path)
+        for model_name, file_path in metrics_files.items()
+    }
+
+    if output_dir is not None:
+        Path(output_dir).mkdir(exist_ok=True)
 
     # Create style dictionary based on number of experiments
     PLOT_STYLES = create_style_dict(metrics_dict)
@@ -131,8 +139,10 @@ def plot_metrics(
 
         for model_name, metrics in metrics_dict.items():
             lead_time_hrs = metrics.lead_time.dt.total_seconds() / 3600
+            # Time step in h
+            time_step = metrics.lead_time.diff("lead_time")[0].values.astype("timedelta64[h]").astype(int)
             style = PLOT_STYLES[model_name]
-            plot_kwargs = get_plot_kwargs(style, model_name)
+            plot_kwargs = get_plot_kwargs(style, model_name, time_step)
 
             ax.plot(
                 lead_time_hrs,
@@ -143,13 +153,13 @@ def plot_metrics(
         # Common styling
         ax.set_xlabel("Lead Time (hours)", fontsize=10 if combined else 12)
         ax.set_ylabel(f"{metric_name.upper()}", fontsize=10 if combined else 12)
-        ax.set_title(
-            f"{var}"
-            if combined
-            else f"{var} {metric_name.upper()} vs Forecast Lead Time",
-            fontsize=12,
-            fontweight="bold",
-        )
+        #  ax.set_title(
+            #  f"{var}"
+            #  if combined
+            #  else f"{var} {metric_name.upper()} vs Forecast Lead Time",
+            #  fontsize=12,
+            #  fontweight="bold",
+        #  )
         ax.grid(True, linestyle="--", alpha=0.3)
         ax.tick_params(
             axis="both", which="major", labelsize=9 if combined else 10
@@ -162,26 +172,21 @@ def plot_metrics(
 
         if not combined:
             plt.tight_layout()
-            save_plot(plt, f"{var}_{metric_name}")
+            save_plot(plt, f"{var}_{metric_name}", output_dir=output_dir)
 
     if combined:
         plt.tight_layout()
-        save_plot(plt, f"combined_{metric_name}")
+        save_plot(plt, f"combined_{metric_name}", output_dir=output_dir)
 
 
 def main():
-    metrics_dict = {
-        model_name: load_metrics(file_path)
-        for model_name, file_path in METRICS_FILES.items()
-    }
-
     variables = list(VARIABLES.keys())
     print("Plotting metrics...")
     plot_metrics(
-        metrics_dict, metric_name="rmse", variables=variables, combined=False
+        METRICS_FILES, metric_name="rmse", variables=variables, combined=False
     )
     plot_metrics(
-        metrics_dict, metric_name="rmse", variables=variables, combined=True
+        METRICS_FILES, metric_name="rmse", variables=variables, combined=True
     )
     # MAE is also available in the metrics file
 
