@@ -4,6 +4,7 @@ from pathlib import Path
 
 # Third-party
 import matplotlib.pyplot as plt
+import numpy as np
 
 # Configuration
 METRICS_FILES = {
@@ -92,11 +93,11 @@ def get_plot_kwargs(style, model_name, time_step):
         "color": style["color"],
         "linestyle": style["linestyle"],
         "marker": style["marker"],
-        "markersize": 6,
+        "markersize": 4,
         "markevery": int(12 / time_step),  # Every 12 h
         "markerfacecolor": "white",
-        "markeredgewidth": 1.5,
-        "linewidth": 2,
+        "markeredgewidth": 1.0,
+        "linewidth": 1.5,
     }
 
 
@@ -123,9 +124,23 @@ def plot_metrics(
     variables=None,
     combined=False,
     output_dir=None,
+    wind_pair_vars=None,
 ):
-    """Unified plotting function with consistent styling"""
+    """
+    Unified plotting function with consistent styling
+
+    wind_pair_vars is map from a variable name to two wind variables to
+    derive it from, e.g. {"wv10m": ("u10m", "v10m")}.
+    """
     plt.style.use("default")
+
+    if wind_pair_vars is None:
+        wind_pair_vars = {}
+    else:
+        # Make sure all of wind pair variables are also in variables list
+        for wp_var in wind_pair_vars.keys():
+            if wp_var not in variables:
+                variables.append(wp_var)
 
     metrics_dict = {
         model_name: load_metrics(file_path)
@@ -147,7 +162,7 @@ def plot_metrics(
         if combined:
             ax = plt.subplot(n_rows, n_cols, idx)
         else:
-            _, ax = plt.subplots(figsize=(10, 6), dpi=100)
+            _, ax = plt.subplots(figsize=(5, 3), dpi=100)
 
         for model_name, metrics in metrics_dict.items():
             lead_time_hrs = metrics.lead_time.dt.total_seconds() / 3600
@@ -157,19 +172,36 @@ def plot_metrics(
                 .values.astype("timedelta64[h]")
                 .astype(int)
             )
+
+            if var in wind_pair_vars:
+                # Derive this metric value from pair of wind fields
+                field1, field2 = wind_pair_vars[var]
+                metric_values = np.sqrt(
+                    metrics[metric_name].sel(variable=field1) ** 2
+                    + metrics[metric_name].sel(variable=field2) ** 2
+                )
+
+                # Same unit as one of the fields above
+                var_unit = str(
+                    metrics["variable_units"].sel(variable=field1).values
+                )
+            else:
+                metric_values = metrics[metric_name].sel(variable=var)
+                var_unit = str(
+                    metrics["variable_units"].sel(variable=var).values
+                )
+
+            if var_unit in UNIT_LOOKUP:
+                var_unit = UNIT_LOOKUP[var_unit]
+
             style = PLOT_STYLES[model_name]
             plot_kwargs = get_plot_kwargs(style, model_name, time_step)
 
             ax.plot(
                 lead_time_hrs,
-                metrics[metric_name].sel(variable=var),
+                metric_values,
                 **plot_kwargs,
             )
-
-        # use metrics from last iteration above
-        var_unit = str(metrics["variable_units"].sel(variable=var).values)
-        if var_unit in UNIT_LOOKUP:
-            var_unit = UNIT_LOOKUP[var_unit]
 
         # Common styling
         ax.set_xlabel("Lead Time (hours)", fontsize=10 if combined else 12)
@@ -189,7 +221,7 @@ def plot_metrics(
             axis="both", which="major", labelsize=9 if combined else 10
         )
 
-        if not combined or idx == 1:
+        if idx == 1:
             ax.legend(
                 frameon=True, facecolor="white", edgecolor="black", fontsize=10
             )
