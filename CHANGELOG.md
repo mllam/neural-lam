@@ -5,7 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [unreleased](https://github.com/mllam/neural-lam/compare/v0.3.0...HEAD)
+## [DMI Gefion development changes](https://github.com/mllam/neural-lam/compare/main...dmidk:neural-lam:dev/gefion)
+
+*Below is a list of changes since the DMI Gefion development fork was branched from the [main neural-lam repo](https://github.com/mllam/neural-lam)*
+
+### Added
+
+- Add option to provide user-defined run name via CLI. [\#1](https://github.com/dmidk/neural-lam/pull/1)
+
+- Log evaluation images to `save_dir` and create folder if needed. [\#2](https://github.com/dmidk/neural-lam/pull/2)
+
+
+*Below follows changelog from the main neural-lam repository:*
+
+## [unreleased](https://github.com/mllam/neural-lam/compare/v0.3.0...ada9c1644beb56de832127cba46971b1be1bdd98)
 
 ### Added
 
