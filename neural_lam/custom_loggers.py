@@ -48,6 +48,9 @@ class CustomMLFlowLogger(pl.loggers.MLFlowLogger):
         step: Union[int, None]
             Step to log the image under. If None, logs under the key directly
         """
+        # Standard library
+        import os
+
         # Third-party
         from botocore.exceptions import NoCredentialsError
         from PIL import Image
@@ -57,12 +60,14 @@ class CustomMLFlowLogger(pl.loggers.MLFlowLogger):
 
         # Need to save the image to a temporary file, then log that file
         # mlflow.log_image, should do this automatically, but is buggy
-        temporary_image = f"{key}.png"
-        images[0].savefig(temporary_image)
+        if not os.path.exists(self.save_dir):
+            os.makedirs(self.save_dir)
+        path = f"{self.save_dir}/{key}.png"
+        images[0].savefig(path)
 
-        img = Image.open(temporary_image)
+        img = Image.open(path)
         try:
-            mlflow.log_image(img, f"{key}.png")
+            mlflow.log_image(img, path)
         except NoCredentialsError:
             logger.error("Error logging image\nSet AWS credentials")
             sys.exit(1)
