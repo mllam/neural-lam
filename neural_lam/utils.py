@@ -6,6 +6,7 @@ import warnings
 # Third-party
 import pytorch_lightning as pl
 import torch
+import urllib3
 from pytorch_lightning.loggers import MLFlowLogger, WandbLogger
 from pytorch_lightning.utilities import rank_zero_only
 from torch import nn
@@ -297,6 +298,11 @@ def setup_training_logger(datastore, args, run_name):
             raise ValueError(
                 "MLFlow logger requires setting MLFLOW_TRACKING_URI in env."
             )
+
+        # suppress warnings about insecure requests so that we avoid warnings in
+        # the logs when tracking on the MLflow tracking server
+        urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+
         logger = CustomMLFlowLogger(
             experiment_name=args.logger_project,
             tracking_uri=url,
