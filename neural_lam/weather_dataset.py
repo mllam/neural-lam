@@ -645,12 +645,7 @@ class WeatherDataset(torch.utils.data.Dataset):
                         model_init_time + step_idx * self.time_step_state
                     )
                 else:
-                    window_comp_time = (
-                        forcing_analysis_time
-                        + da_forcing.elapsed_forecast_duration[
-                            forcing_lead_i_init
-                        ]
-                    )
+                    window_comp_time = current_time
 
                 window_times = (
                     forcing_analysis_time
