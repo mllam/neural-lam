@@ -524,6 +524,7 @@ class BaseGraphModel(ARModel):
         # Extract time delta dimensions
         time_deltas = boundary_forcing[..., -self.boundary_time_delta_dims :]
         # (B, num_boundary_nodes, num_time_deltas)
+        print(f"time_deltas: {time_deltas[:,0,:]}")
 
         # Compute sinusoidal encodings
         frequencies = time_deltas.unsqueeze(-1) / self.enc_freq_denom
