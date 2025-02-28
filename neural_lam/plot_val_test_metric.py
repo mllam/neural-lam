@@ -125,12 +125,16 @@ def plot_metrics(
     combined=False,
     output_dir=None,
     wind_pair_vars=None,
+    max_lead_time=None,
+    legend_placement="best",
 ):
     """
     Unified plotting function with consistent styling
 
     wind_pair_vars is map from a variable name to two wind variables to
     derive it from, e.g. {"wv10m": ("u10m", "v10m")}.
+
+    max_lead_time should be None (keep all lead times) or a np.timedelta64
     """
     plt.style.use("default")
 
@@ -143,7 +147,9 @@ def plot_metrics(
                 variables.append(wp_var)
 
     metrics_dict = {
-        model_name: load_metrics(file_path)
+        model_name: load_metrics(file_path).sel(
+            lead_time=slice(None, max_lead_time)
+        )
         for model_name, file_path in metrics_files.items()
     }
 
@@ -223,7 +229,11 @@ def plot_metrics(
 
         if idx == 1:
             ax.legend(
-                frameon=True, facecolor="white", edgecolor="black", fontsize=10
+                frameon=True,
+                facecolor="white",
+                edgecolor="black",
+                fontsize=10,
+                loc=legend_placement,
             )
 
         if not combined:
