@@ -151,6 +151,12 @@ def main(input_args=None):
         " forcing. If None, same as hidden_dim. If given, must be even "
         "(default: None)",
     )
+    parser.add_argument(
+        "--dynamic_time_deltas",
+        action="store_true",
+        help="If models should use dynamically computed time-deltas between"
+        "interior and boundary time steps (default: False (no))",
+    )
 
     # Training options
     parser.add_argument(
@@ -347,6 +353,7 @@ def main(input_args=None):
         # Make sure that dataset provided for eval contains correct split
         eval_split=args.eval if args.eval is not None else "test",
         eval_init_times=args.eval_init_times,
+        dynamic_time_deltas=args.dynamic_time_deltas,
         excluded_intervals=config.training.excluded_intervals,
     )
 

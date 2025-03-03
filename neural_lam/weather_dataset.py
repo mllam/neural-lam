@@ -67,6 +67,9 @@ class WeatherDataset(torch.utils.data.Dataset):
         hours. Default is 1 (use every timestep).
     standardize : bool, optional
         Whether to standardize the data. Default is True.
+    dynamic_time_deltas : bool, optional
+        If time-deltas of boundary time steps should be dynamically computed as
+        time between interior and boundary.
     """
 
     # The current implementation requires at least 2 time steps for the
@@ -86,6 +89,7 @@ class WeatherDataset(torch.utils.data.Dataset):
         interior_subsample_step=1,
         boundary_subsample_step=1,
         standardize=True,
+        dynamic_time_deltas=False,
         time_slice=None,
     ):
         super().__init__()
@@ -100,6 +104,7 @@ class WeatherDataset(torch.utils.data.Dataset):
         self.num_future_boundary_steps = num_future_boundary_steps
         self.interior_subsample_step = interior_subsample_step
         self.boundary_subsample_step = boundary_subsample_step
+        self.dynamic_time_deltas = dynamic_time_deltas
         # Scale forcing steps based on subsampling
         self.effective_past_forcing_steps = (
             num_past_forcing_steps * interior_subsample_step
@@ -634,16 +639,21 @@ class WeatherDataset(torch.utils.data.Dataset):
                     window=np.arange(-num_past_steps, num_future_steps + 1)
                 )
                 # Calculate window time deltas for forecast data
+                if self.dynamic_time_deltas:
+                    # Deltas compared to interior state time
+                    window_comp_time = (
+                        model_init_time + step_idx * self.time_step_state
+                    )
+                else:
+                    window_comp_time = current_time
+
                 window_times = (
                     forcing_analysis_time
                     + da_forcing.elapsed_forecast_duration[
                         window_start:window_end:subsample_step
                     ]
                 )
-                step_model_time = (
-                    model_init_time + step_idx * self.time_step_state
-                )
-                window_time_deltas = (window_times - step_model_time).values
+                window_time_deltas = (window_times - window_comp_time).values
 
                 # Assign window time delta coordinate
                 da_sliced["window_time_deltas"] = ("window", window_time_deltas)
@@ -684,11 +694,17 @@ class WeatherDataset(torch.utils.data.Dataset):
                 )
 
                 # Calculate window time deltas for analysis data
+                if self.dynamic_time_deltas:
+                    # Deltas compared to interior state time
+                    window_comp_time = state_time
+                else:
+                    window_comp_time = da_forcing.time[forcing_time_idx].values
+
                 window_time_deltas = (
                     da_forcing.time[
                         window_start:window_end:subsample_step
                     ].values
-                    - da_forcing.time[forcing_time_idx].values
+                    - window_comp_time
                 )
                 da_window["window_time_deltas"] = ("window", window_time_deltas)
 
@@ -1164,6 +1180,7 @@ class WeatherDataModule(pl.LightningDataModule):
         num_workers=16,
         eval_split="test",
         eval_init_times=[],
+        dynamic_time_deltas=False,
         excluded_intervals=None,
     ):
         super().__init__()
@@ -1185,6 +1202,7 @@ class WeatherDataModule(pl.LightningDataModule):
         self.test_dataset = None
         self.eval_split = eval_split
         self.eval_init_times = eval_init_times
+        self.dynamic_time_deltas = dynamic_time_deltas
 
         if num_workers > 0:
             # BUG: There also seem to be issues with "spawn" and `gloo`, to be
@@ -1222,6 +1240,7 @@ class WeatherDataModule(pl.LightningDataModule):
             num_future_boundary_steps=self.num_future_boundary_steps,
             interior_subsample_step=self.interior_subsample_step,
             boundary_subsample_step=self.boundary_subsample_step,
+            dynamic_time_deltas=self.dynamic_time_deltas,
             time_slice=time_slice,
         )
 
@@ -1283,6 +1302,7 @@ class WeatherDataModule(pl.LightningDataModule):
                 num_future_boundary_steps=self.num_future_boundary_steps,
                 interior_subsample_step=self.interior_subsample_step,
                 boundary_subsample_step=self.boundary_subsample_step,
+                dynamic_time_deltas=self.dynamic_time_deltas,
             )
             if self.eval_init_times:
                 self.val_dataset = EvalSubsetWrapper(
@@ -1302,6 +1322,7 @@ class WeatherDataModule(pl.LightningDataModule):
                 num_future_boundary_steps=self.num_future_boundary_steps,
                 interior_subsample_step=self.interior_subsample_step,
                 boundary_subsample_step=self.boundary_subsample_step,
+                dynamic_time_deltas=self.dynamic_time_deltas,
             )
             if self.eval_init_times:
                 self.test_dataset = EvalSubsetWrapper(
