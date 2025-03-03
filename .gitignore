@@ -10,6 +10,8 @@ sweeps
 *.html
 *.zarr
 *slurm*
+docs/notebooks/plots
+docs/notebooks/tables
 
 ### Python ###
 # Byte-compiled / optimized / DLL files
