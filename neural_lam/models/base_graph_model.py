@@ -36,7 +36,8 @@ class BaseGraphModel(ARModel):
         # Load graph with static features
         graph_dir_path = datastore.root_path / "graphs" / args.graph_name
         self.hierarchical, graph_ldict = utils.load_graph(
-            graph_dir_path=graph_dir_path
+            graph_dir_path=graph_dir_path,
+            datastore=datastore,
         )
         for name, attr_value in graph_ldict.items():
             # NOTE: It would be good to rescale mesh node position features in

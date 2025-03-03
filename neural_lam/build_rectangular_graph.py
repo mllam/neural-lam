@@ -4,7 +4,6 @@ import os
 
 # Third-party
 import cartopy.crs as ccrs
-import numpy as np
 import weather_model_graphs as wmg
 
 # Local
@@ -163,15 +162,7 @@ def _build_wmg_graph(
         decode_mask = None
     else:
         # Construct mask to decode only to interior
-        num_interior = datastore.num_grid_points
-        num_boundary = datastore_boundary.num_grid_points
-        decode_mask = np.concatenate(
-            (
-                np.ones(num_interior, dtype=bool),
-                np.zeros(num_boundary, dtype=bool),
-            ),
-            axis=0,
-        )
+        decode_mask = utils.get_interior_mask(datastore, datastore_boundary)
 
     # Set up all kwargs
     create_kwargs = {
