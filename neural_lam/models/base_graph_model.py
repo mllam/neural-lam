@@ -4,7 +4,6 @@ import torch
 # Local
 from .. import utils
 from ..config import NeuralLAMConfig
-from ..datastore import BaseDatastore
 from ..interaction_net import InteractionNet
 from .ar_model import ARModel
 

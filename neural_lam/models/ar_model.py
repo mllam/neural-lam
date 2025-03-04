@@ -13,7 +13,7 @@ import xarray as xr
 # Local
 from .. import metrics, vis
 from ..config import NeuralLAMConfig
-from ..datastore import BaseDatastore, init_datastore
+from ..datastore import init_datastore
 from ..loss_weighting import get_state_feature_weighting
 from ..weather_dataset import WeatherDataset
 

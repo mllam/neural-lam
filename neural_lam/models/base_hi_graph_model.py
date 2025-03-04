@@ -4,7 +4,6 @@ from torch import nn
 # Local
 from .. import utils
 from ..config import NeuralLAMConfig
-from ..datastore import BaseDatastore
 from ..interaction_net import InteractionNet
 from .base_graph_model import BaseGraphModel
 
