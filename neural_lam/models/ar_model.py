@@ -41,7 +41,7 @@ class ARModel(pl.LightningModule):
         self._datastore = datastore
         num_state_vars = datastore.get_num_data_vars(category="state")
         num_forcing_vars = datastore.get_num_data_vars(category="forcing")
-        # Load static features standardized
+
         da_static_features = datastore.get_dataarray(
             category="static", split=None, standardize=True
         )
