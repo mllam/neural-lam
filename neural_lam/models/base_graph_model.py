@@ -25,7 +25,6 @@ class BaseGraphModel(ARModel):
             graph_dir_path=graph_dir_path
         )
         for name, attr_value in graph_ldict.items():
-            # Make BufferLists module members and register tensors as buffers
             if isinstance(attr_value, torch.Tensor):
                 self.register_buffer(name, attr_value, persistent=False)
             else:
