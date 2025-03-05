@@ -15,10 +15,10 @@ def model():
 
 @pytest.fixture
 def optimizer(model):
-    return torch.optim.Adam(model.parameters())  # Real optimizer
+    return torch.optim.Adam(model.parameters())
 
 
-def test_warmup_cosine_annealing_can_instantiate(optimizer):
+def test_warmup_cosine_annealing_produces_expected_schedule(optimizer):
     min_factor = 0.01
     max_factor = 1
     warmup_steps = 10
