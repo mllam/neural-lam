@@ -47,6 +47,8 @@ def test_warmup_cosine_annealing_produces_expected_schedule(optimizer):
     assert np.allclose(warmup_lr, expected_warmup_lr)
 
     annealing_lr = lrs[warmup_steps : warmup_steps + annealing_steps]
+
+    # Formula for the cosine annealing
     expected_annealing_lr = min_factor * initial_lr + 0.5 * (
         max_factor * initial_lr - min_factor * initial_lr
     ) * (1 + np.cos(np.pi * np.arange(annealing_steps) / annealing_steps))
