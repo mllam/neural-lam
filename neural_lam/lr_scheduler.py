@@ -6,8 +6,8 @@ class WarmupCosineAnnealingLR(torch.optim.lr_scheduler.LRScheduler):
     def __init__(
         self,
         optimizer,
-        warmup_steps=10,
-        annealing_steps=90,
+        warmup_steps=1000,
+        annealing_steps=100000,
         max_factor=1.0,
         min_factor=0.001,
     ):
@@ -31,9 +31,9 @@ class WarmupCosineAnnealingLR(torch.optim.lr_scheduler.LRScheduler):
         super().__init__(optimizer)
 
     def get_lr(self):
-        if self.last_epoch <= self.warmup_steps:
+        if self._step_count <= self.warmup_steps:
             return self.warmup_scheduler.get_last_lr()
-        elif self.last_epoch <= self.warmup_steps + self.annealing_steps:
+        elif self._step_count <= self.warmup_steps + self.annealing_steps:
             self.annealing_scheduler.step()
 
         return True
@@ -49,6 +49,7 @@ class WarmupCosineAnnealingLR(torch.optim.lr_scheduler.LRScheduler):
 
 
 if __name__ == "__main__":
+    # Run this code to visualize the learning rate schedule
     # Third-party
     import matplotlib.pyplot as plt
 
