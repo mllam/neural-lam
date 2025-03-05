@@ -19,13 +19,13 @@ def optimizer(model):
 
 
 def test_warmup_cosine_annealing_can_instantiate(optimizer):
-    min_factor = 0.001
+    min_factor = 0.01
     max_factor = 1
     warmup_steps = 10
     annealing_steps = 10
     initial_lr = optimizer.param_groups[0]["lr"]
 
-    linear = lr_scheduler.WarmupCosineAnnealingLR(
+    scheduler = lr_scheduler.WarmupCosineAnnealingLR(
         optimizer,
         min_factor=min_factor,
         max_factor=max_factor,
@@ -36,7 +36,7 @@ def test_warmup_cosine_annealing_can_instantiate(optimizer):
     lrs = []
     for _ in range(25):
         lrs.append(optimizer.param_groups[0]["lr"])
-        linear.step()
+        scheduler.step()
 
     expected_warmup_lr = np.linspace(
         min_factor * initial_lr,
