@@ -311,12 +311,20 @@ class ARModel(pl.LightningModule):
             sync_dist=True,
             batch_size=batch[0].shape[0],
         )
+
+        self.scheduler_step()
+
         return batch_loss
 
-    def training_step_end(self):
-        scheduler = self.trainer.lr_schedulers[0]
-        if scheduler is not None:
-            scheduler.step()
+    def scheduler_step(self):
+        schedulers = self.lr_schedulers()
+
+        if isinstance(schedulers, list):
+            for scheduler in schedulers:
+                scheduler.step()
+
+        if isinstance(schedulers, torch.optim.lr_scheduler.LRScheduler):
+            schedulers.step()
 
     def all_gather_cat(self, tensor_to_gather):
         """
