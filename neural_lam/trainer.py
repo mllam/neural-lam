@@ -28,7 +28,7 @@ class Trainer(pl.Trainer):
         )
         super().fit(model, *args, **kwargs)
 
-    def configure_optimizers_factory(self):
+    def get_configure_optimizers_callback(self):
 
         # TODO configure optimizer and scheduler from member config files
 
