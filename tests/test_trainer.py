@@ -1,3 +1,6 @@
+# Standard library
+from unittest.mock import MagicMock, patch
+
 # Third-party
 import torch
 
@@ -13,6 +16,21 @@ def test_configure_optimizer_factory(model):
     trainer = neural_lam.trainer.Trainer()
     configure_optimizers = trainer.get_configure_optimizers_callback()
     [optimizer], [scheduler] = configure_optimizers(model)
+
+    assert isinstance(optimizer, torch.optim.Adam)
+    assert isinstance(
+        scheduler, neural_lam.lr_scheduler.WarmupCosineAnnealingLR
+    )
+
+
+def test_model_can_configure_optimizers(model):
+    trainer = neural_lam.trainer.Trainer()
+    with patch.object(
+        neural_lam.trainer.Trainer.__bases__[0], "fit", MagicMock()
+    ):
+        trainer.fit(model)
+
+    [optimizer], [scheduler] = model.configure_optimizers()
 
     assert isinstance(optimizer, torch.optim.Adam)
     assert isinstance(
