@@ -15,6 +15,7 @@ class Trainer(pl.Trainer):
     ):
         self.scheduler_config = scheduler_config
         self.optimizer_config = optimizer_config
+
         super().__init__(*args, **kwargs)
 
     def fit(
@@ -34,9 +35,16 @@ class Trainer(pl.Trainer):
 
         def configure_optimizers(pl_module):
             optimizer = torch.optim.Adam(pl_module.parameters())
-            scheduler = neural_lam.lr_scheduler.WarmupCosineAnnealingLR(
-                optimizer
-            )
-            return [optimizer], [scheduler]
+            if self.scheduler_config == "graphcast":
+                scheduler = neural_lam.lr_scheduler.WarmupCosineAnnealingLR(
+                    optimizer,
+                )
+                return [optimizer], [scheduler]
+            return optimizer
 
         return configure_optimizers
+
+
+def get_scheduler(optimizer, scheduler_config):
+    scheduler = getattr(torch.optim.lr_scheduler, scheduler_config["scheduler"])
+    return scheduler(optimizer, **scheduler_config["kwargs"])
