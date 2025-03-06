@@ -1,15 +1,8 @@
 # Third-party
 import numpy as np
-import pytest
-import torch
 
 # First-party
 from neural_lam import lr_scheduler
-
-
-@pytest.fixture
-def optimizer(model):
-    return torch.optim.Adam(model.parameters())
 
 
 def test_warmup_cosine_annealing_produces_expected_schedule(optimizer):
