@@ -236,6 +236,12 @@ def main(input_args=None):
         default=1,
         help="Number of future time steps to use as input for forcing data",
     )
+    parser.add_argument(
+        "--scheduler_config",
+        type=str,
+        default="None",
+        help="Scheduler configuration for learning rate scheduler",
+    )
     args = parser.parse_args(input_args)
     args.var_leads_metrics_watch = {
         int(k): v for k, v in json.loads(args.var_leads_metrics_watch).items()
@@ -328,6 +334,7 @@ def main(input_args=None):
         callbacks=[checkpoint_callback],
         check_val_every_n_epoch=args.val_interval,
         precision=args.precision,
+        scheduler_config=args.scheduler_config,
     )
 
     # Only init once, on rank 0 only
