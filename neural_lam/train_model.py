@@ -11,6 +11,9 @@ import torch
 from lightning_fabric.utilities import seed
 from loguru import logger
 
+# First-party
+from neural_lam.trainer import Trainer
+
 # Local
 from . import utils
 from .config import load_config_and_datastore
@@ -312,7 +315,7 @@ def main(input_args=None):
         mode="min",
         save_last=True,
     )
-    trainer = pl.Trainer(
+    trainer = Trainer(
         max_epochs=args.epochs,
         max_steps=args.steps,
         deterministic=True,
