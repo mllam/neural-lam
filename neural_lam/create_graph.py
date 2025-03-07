@@ -607,7 +607,6 @@ def cli(input_args=None):
         args.config_path or args.datastore
     ), "Specify your config with --config_path or datastore with --datastore"
 
-    # Load neural-lam configuration and datastore to use
     datastore = load_datastore(args)
 
     create_graph_from_datastore(
