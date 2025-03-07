@@ -65,6 +65,12 @@ def main():
         help="If the graph should be global, not cropped based on grid nodes",
     )
     parser.add_argument(
+        "--rotate_ico",
+        action="store_true",
+        help="If the original icosahedron should be rotated to better line "
+        "up with the grid data",
+    )
+    parser.add_argument(
         "--g2m_radius",
         type=float,
         help="Radius (relative to longest mesh edge) to connect grid and "
@@ -77,6 +83,12 @@ def main():
         help="Radius (relative to longest mesh edge) to connect boundary "
         "grid nodes and mesh nodes in g2m, when config has boundary forcing.",
         default=1.8,
+    )
+    parser.add_argument(
+        "--allow_disconnected",
+        action="store_true",
+        help="Allow disconnected nodes in g2m. This is generally a bad idea and"
+        "should only be used for testing purposes.",
     )
     args = parser.parse_args()
 
@@ -100,6 +112,7 @@ def main():
     # Make all longitudes be in [0, 360]
     grid_lat_lon[:, 0] = (grid_lat_lon[:, 0] + 360.0) % 360.0
 
+    grid_xyz = gutils.node_lat_lon_to_cart(grid_lat_lon)
     grid_lat_lon_torch = torch.tensor(grid_lat_lon, dtype=torch.float32)
     torch.save(
         grid_lat_lon_torch, os.path.join(save_dir_path, "grid_lat_lon.pt")
@@ -127,9 +140,18 @@ def main():
     if not global_graph:
         # Crop mesh graph to convex hull of grid points
         # Compute convex hull
-        grid_xyz = gutils.node_lat_lon_to_cart(grid_lat_lon)
         print("Cropping for LAM model. Computing convex hull...")
         grid_chull = SphericalPolygon.convex_hull(grid_xyz)
+
+    if args.rotate_ico:
+        # Compute a point to line up icosahedron with for later
+        # Use mean of grid coords, projected to surface
+        # Not strictly optimal point, but perfectly good in standard setups
+
+        grid_xyz_mean = np.mean(grid_xyz, axis=0)
+        rot_point = grid_xyz_mean / np.linalg.norm(grid_xyz_mean)
+    else:
+        rot_point = None
 
     # === Create mesh graph ===
     if args.hierarchical:
@@ -141,7 +163,7 @@ def main():
             mesh_up_features_list,
             mesh_down_features_list,
         ) = gcreate.create_hierarchical_mesh(
-            args.splits, args.levels, grid_chull
+            args.splits, args.levels, grid_chull, rotate_to_point=rot_point
         )
         print("Created hierarchical graph with levels:")
         for level_i, mesh in enumerate(m2m_graphs):
@@ -167,7 +189,7 @@ def main():
         max_mesh_edge_len = gc_gc._get_max_edge_distance(m2m_graphs[0])
     else:
         merged_mesh, mesh_list = gcreate.create_multiscale_mesh(
-            args.splits, args.levels
+            args.splits, args.levels, rotate_to_point=rot_point
         )
         max_mesh_edge_len = gc_gc._get_max_edge_distance(mesh_list[-1])
 
@@ -277,11 +299,16 @@ def main():
         num_disc_grid = torch.sum(g2m_degrees_grid == 0).item()
     elif g2m_degrees_mesh.min() == 0:
         num_disc_mesh = torch.sum(g2m_degrees_mesh == 0).item()
-    assert num_disc_grid == 0 and num_disc_mesh == 0, (
-        "Disconnected nodes in G2M: "
-        f"{num_disc_grid} disconnected grid nodes, "
-        f"{num_disc_mesh} disconnected mesh nodes"
-    )
+    if not (num_disc_grid == 0 and num_disc_mesh == 0):
+        print(
+            (
+                "Disconnected nodes in G2M: "
+                f"{num_disc_grid} disconnected grid nodes, "
+                f"{num_disc_mesh} disconnected mesh nodes"
+            )
+        )
+        if not args.allow_disconnected:
+            assert False, "Disconnected g2m nodes."
 
     # Get edge features for g2m
     g2m_edge_features = gcreate.create_edge_features(

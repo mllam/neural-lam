@@ -226,3 +226,53 @@ def subset_mesh_to_chull(spherical_chull, mesh_graph):
         vertices=new_nodes,
         faces=new_faces,
     )
+
+
+def rotation_between_vectors(v1, v2):
+    """
+    Calculates the rotation matrix that aligns v1 to v2.
+
+    Args:
+        v1: NumPy array, first vector (3D).
+        v2: NumPy array, second vector (3D).
+
+    Returns:
+        NumPy array, 3x3 rotation matrix.
+    """
+    v1 = v1 / np.linalg.norm(v1)  # Normalize, if not already
+    v2 = v2 / np.linalg.norm(v2)  # Normalize, if not already
+
+    rotation_vector = np.cross(v1, v2)
+
+    if np.allclose(
+        rotation_vector, 0
+    ):  # if vectors are parallel or anti parallel.
+        if np.dot(v1, v2) > 0:  # parallel
+            return np.eye(3)  # no rotation needed.
+        else:  # anti parallel.
+            # Find a vector orthogonal to v1.
+            orthogonal_vector = np.zeros(3)
+            if v1[0] != 0 or v1[1] != 0:
+                orthogonal_vector[2] = 1
+                orthogonal_vector[1] = -v1[2] / v1[1] if v1[1] != 0 else 0
+                orthogonal_vector[0] = -v1[2] / v1[0] if v1[0] != 0 else 0
+            else:
+                orthogonal_vector[0] = 1
+            orthogonal_vector = orthogonal_vector / np.linalg.norm(
+                orthogonal_vector
+            )
+            axis = orthogonal_vector
+            angle = np.pi
+            return scipy.spatial.transform.Rotation.from_rotvec(
+                angle * axis
+            ).as_matrix()
+
+    angle = np.arccos(np.dot(v1, v2))
+
+    rotation_vector = rotation_vector / np.linalg.norm(
+        rotation_vector
+    )  # normalize rotation vector.
+
+    return scipy.spatial.transform.Rotation.from_rotvec(
+        angle * rotation_vector
+    ).as_matrix()

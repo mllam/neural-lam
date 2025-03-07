@@ -2,6 +2,7 @@
 import numpy as np
 import scipy
 import torch
+import trimesh
 from graphcast import graphcast as gc_gc
 from graphcast import icosahedral_mesh as gc_im
 from graphcast import model_utils as gc_mu
@@ -58,7 +59,7 @@ def inter_mesh_connection(from_mesh, to_mesh):
     return edge_index
 
 
-def _create_mesh_levels(splits, levels=None):
+def _create_mesh_levels(splits, levels=None, rotate_to_point=None):
     """Create a sequence of mesh graph levels by splitting a global icosahedron.
 
     Parameters
@@ -68,6 +69,9 @@ def _create_mesh_levels(splits, levels=None):
     levels : int, optional
         Number of levels to keep (from finest resolution and up).
         If None, keep all levels.
+    rotate_to_point : np.array or None
+        If given, rotate the original icosahedron to line up a face with given
+        point. Should be a 3d unit vector.
 
     Returns
     -------
@@ -76,6 +80,27 @@ def _create_mesh_levels(splits, levels=None):
     """
     # Mesh, index 0 is initial graph, with longest edges
     mesh_list = gc_im.get_hierarchy_of_triangular_meshes_for_sphere(splits)
+    if rotate_to_point is not None:
+        # Rotate graphs to line up
+        icosahedron = mesh_list[0]
+        # Find center point of one icosahedron face
+        ico_face = icosahedron.faces[0]  # Use first
+        corner_mean = np.mean(icosahedron.vertices[ico_face], axis=0)
+        # Project back to sphere
+        face_center = corner_mean / np.linalg.norm(corner_mean)
+
+        # Get rotation matrix
+        rot_mat = gutils.rotation_between_vectors(face_center, rotate_to_point)
+
+        def rotate_mesh(mesh, rot_mat):
+            # Only need to change vertices, face is just list of vertice indices
+            # and rotation does not change conncectivity
+            rot_vertices = np.dot(mesh.vertices, rot_mat.T)
+            return trimesh.Trimesh(vertices=rot_vertices, faces=mesh.faces)
+
+        # Rotate all meshes
+        mesh_list = [rotate_mesh(mesh, rot_mat) for mesh in mesh_list]
+
     if levels is not None:
         assert (
             levels <= splits + 1
@@ -85,7 +110,7 @@ def _create_mesh_levels(splits, levels=None):
     return mesh_list
 
 
-def create_multiscale_mesh(splits, levels):
+def create_multiscale_mesh(splits, levels, rotate_to_point=None):
     """Create a multiscale triangular mesh graph.
 
     Parameters
@@ -94,6 +119,9 @@ def create_multiscale_mesh(splits, levels):
         Number of times to split icosahedron.
     levels : int
         Number of levels to keep (from finest resolution and up).
+    rotate_to_point : np.array or None
+        If given, rotate the original icosahedron to line up a face with given
+        point. Should be a 3d unit vector.
 
     Returns
     -------
@@ -102,7 +130,9 @@ def create_multiscale_mesh(splits, levels):
     list : List[trimesh.Trimesh]
         List of individual mesh levels.
     """
-    mesh_list = _create_mesh_levels(splits, levels)
+    mesh_list = _create_mesh_levels(
+        splits, levels, rotate_to_point=rotate_to_point
+    )
 
     # Merge meshes
     # Modified gc code, as it uses some python 3.10 things
@@ -120,7 +150,9 @@ def create_multiscale_mesh(splits, levels):
     return merged_mesh, mesh_list
 
 
-def create_hierarchical_mesh(splits, levels, crop_chull=None):
+def create_hierarchical_mesh(
+    splits, levels, crop_chull=None, rotate_to_point=None
+):
     """Create a hierarchical triangular mesh graph.
 
     Parameters
@@ -131,6 +163,9 @@ def create_hierarchical_mesh(splits, levels, crop_chull=None):
         Number of levels to keep (from finest resolution and up).
     crop_chull : spherical_geometry.SphericalPolygon, optional
         A convex hull to crop graphs to within. If None no cropping is done.
+    rotate_to_point : np.array or None
+        If given, rotate the original icosahedron to line up a face with given
+        point. Should be a 3d unit vector.
 
     Returns
     -------
@@ -149,7 +184,9 @@ def create_hierarchical_mesh(splits, levels, crop_chull=None):
         List of edge features for down edges,
         each of shape (num_down_edges, d_edge_features).
     """
-    mesh_list = _create_mesh_levels(splits, levels)
+    mesh_list = _create_mesh_levels(
+        splits, levels, rotate_to_point=rotate_to_point
+    )
 
     m2m_graphs = list(reversed(mesh_list))  # 0 is finest graph now
 
