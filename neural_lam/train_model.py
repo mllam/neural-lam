@@ -233,8 +233,14 @@ def main(input_args=None):
     parser.add_argument(
         "--scheduler_config",
         type=str,
-        default="None",
+        default=None,
         help="Scheduler configuration for learning rate scheduler",
+    )
+    parser.add_argument(
+        "--optimizer_config",
+        type=str,
+        default=None,
+        help="Optimizer configuration for learning rate scheduler",
     )
     args = parser.parse_args(input_args)
     args.var_leads_metrics_watch = {
