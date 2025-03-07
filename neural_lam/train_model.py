@@ -334,6 +334,7 @@ def main(input_args=None):
         check_val_every_n_epoch=args.val_interval,
         precision=args.precision,
         scheduler_config=args.scheduler_config,
+        optimizer_config=args.optimizer_config,
     )
 
     # Only init once, on rank 0 only
