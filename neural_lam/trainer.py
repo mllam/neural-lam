@@ -5,9 +5,6 @@ from types import MethodType
 import pytorch_lightning as pl
 import torch
 
-# First-party
-import neural_lam
-
 
 class Trainer(pl.Trainer):
     def __init__(
