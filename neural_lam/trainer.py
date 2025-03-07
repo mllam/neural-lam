@@ -33,7 +33,7 @@ class Trainer(pl.Trainer):
 
         def configure_optimizers(pl_module):
             if self.optimizer_config is None:
-                optimizer = default_configure_optimizers(pl_module)
+                optimizer = get_default_optimizer(pl_module)
 
             if self.scheduler_config is not None:
                 scheduler = get_scheduler(self.scheduler_config, optimizer)
