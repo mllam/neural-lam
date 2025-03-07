@@ -48,8 +48,11 @@ def get_optimizer(optimizer_config, pl_module):
     if optimizer_config is None:
         return get_default_optimizer(pl_module)
 
-    optimizer_cls = getattr(torch.optim, optimizer_config["optimizer"])
-    return optimizer_cls(pl_module.parameters(), **optimizer_config["kwargs"])
+    # TODO use this code when optimizer_config can be passed as a dict
+    # optimizer_cls = getattr(torch.optim, optimizer_config["optimizer"])
+    # return optimizer_cls(pl_module.parameters(), **optimizer_config["kwargs"])
+    optimizer_cls = getattr(torch.optim, optimizer_config)
+    return optimizer_cls(pl_module.parameters())
 
 
 def get_default_optimizer(pl_module):
@@ -66,8 +69,11 @@ def get_scheduler(optimizer, scheduler_config):
     # else:
     #     scheduler_cls = getattr(torch.optim.lr_scheduler, scheduler_name)
 
-    scheduler_cls = getattr(
-        torch.optim.lr_scheduler, scheduler_config["scheduler"]
-    )
+    # TODO use this code when scheduler_config can be passed as a dict
+    #  scheduler_cls = getattr(
+    #      torch.optim.lr_scheduler, scheduler_config["scheduler"]
+    #  )
+    #  return scheduler_cls(optimizer, **scheduler_config["kwargs"])
 
-    return scheduler_cls(optimizer, **scheduler_config["kwargs"])
+    scheduler_cls = getattr(torch.optim.lr_scheduler, scheduler_config)
+    return scheduler_cls(optimizer)
