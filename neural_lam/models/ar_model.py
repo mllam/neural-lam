@@ -292,10 +292,7 @@ class ARModel(pl.LightningModule):
             )
         )  # mean over unrolled times and batch
 
-        log_dict = {
-            "train_loss": batch_loss,
-            "lr": self.trainer.optimizers[0].param_groups[0]["lr"],
-        }
+        log_dict = {"train_loss": batch_loss}
         self.log_dict(
             log_dict,
             prog_bar=True,
