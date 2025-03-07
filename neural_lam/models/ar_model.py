@@ -189,12 +189,6 @@ class ARModel(pl.LightningModule):
         )
         return da
 
-    def configure_optimizers(self):
-        opt = torch.optim.AdamW(
-            self.parameters(), lr=self.args.lr, betas=(0.9, 0.95)
-        )
-        return opt
-
     @property
     def interior_mask_bool(self):
         """
