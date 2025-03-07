@@ -1,5 +1,6 @@
 # Standard library
 import os
+import warnings
 from argparse import ArgumentParser
 
 # Third-party
@@ -12,9 +13,10 @@ import torch
 import torch_geometric as pyg
 from torch_geometric.utils.convert import from_networkx
 
-# Local
-from .config import load_config_and_datastore
-from .datastore.base import BaseRegularGridDatastore
+# First-party
+from neural_lam.config import load_config_and_datastore
+from neural_lam.datastore import DATASTORES
+from neural_lam.datastore.base import BaseRegularGridDatastore
 
 
 def plot_graph(graph, title=None):
@@ -588,14 +590,25 @@ def cli(input_args=None):
         action="store_true",
         help="Generate hierarchical mesh graph (default: False)",
     )
+    parser.add_argument(
+        "--datastore",
+        type=str,
+        help="Path to datastore",
+    )
+    parser.add_argument(
+        "--datastore_type",
+        type=str,
+        default="mdp",
+        help="Type of datastore (default: mdp)",
+    )
+
     args = parser.parse_args(input_args)
 
     assert (
-        args.config_path is not None
-    ), "Specify your config with --config_path"
+        args.config_path or args.datastore
+    ), "Specify your config with --config_path or datastore with --datastore"
 
-    # Load neural-lam configuration and datastore to use
-    _, datastore = load_config_and_datastore(config_path=args.config_path)
+    datastore = load_datastore(args)
 
     create_graph_from_datastore(
         datastore=datastore,
@@ -604,6 +617,22 @@ def cli(input_args=None):
         hierarchical=args.hierarchical,
         create_plot=args.plot,
     )
+
+
+def load_datastore(args):
+    if args.config_path:
+        _, datastore = load_config_and_datastore(config_path=args.config_path)
+        warnings.warn(
+            """Using config_path is deprecated, use datastore instead,
+            instead use --datastore and --datastore_type (default: to mdp)""",
+            DeprecationWarning,
+        )
+
+    else:
+        assert args.datastore_type in DATASTORES
+        datastore = DATASTORES[args.datastore_type](config_path=args.datastore)
+
+    return datastore
 
 
 if __name__ == "__main__":
