@@ -31,20 +31,33 @@ class Trainer(pl.Trainer):
 
     def get_configure_optimizers_callback(self):
 
-        # TODO configure optimizer and scheduler from member config files
-
         def configure_optimizers(pl_module):
-            optimizer = torch.optim.Adam(pl_module.parameters())
-            if self.scheduler_config == "graphcast":
-                scheduler = neural_lam.lr_scheduler.WarmupCosineAnnealingLR(
-                    optimizer,
-                )
+            optimizer = get_optimizer(self.optimizer_config, pl_module)
+
+            if self.scheduler_config is not None:
+                scheduler = get_scheduler(self.scheduler_config, optimizer)
                 return [optimizer], [scheduler]
+
             return optimizer
 
         return configure_optimizers
 
 
+def get_optimizer(optimizer_config, model):
+    optimizer_cls = getattr(torch.optim, optimizer_config["optimizer"])
+    return optimizer_cls(model.parameters(), **optimizer_config["kwargs"])
+
+
 def get_scheduler(optimizer, scheduler_config):
-    scheduler = getattr(torch.optim.lr_scheduler, scheduler_config["scheduler"])
-    return scheduler(optimizer, **scheduler_config["kwargs"])
+    # TODO use this code when WarmupCosineAnnealingLR is implemented
+    # scheduler_name = scheduler_config["scheduler"]
+    # if scheduler_name == "WarmupCosineAnnealingLR":
+    #     scheduler_cls = neural_lam.lr_scheduler.WarmupCosineAnnealingLR
+    # else:
+    #     scheduler_cls = getattr(torch.optim.lr_scheduler, scheduler_name)
+
+    scheduler_cls = getattr(
+        torch.optim.lr_scheduler, scheduler_config["scheduler"]
+    )
+
+    return scheduler_cls(optimizer, **scheduler_config["kwargs"])
