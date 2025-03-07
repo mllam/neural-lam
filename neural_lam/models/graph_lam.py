@@ -1,3 +1,6 @@
+# Standard library
+from typing import Union
+
 # Third-party
 import torch_geometric as pyg
 
@@ -17,14 +20,24 @@ class GraphLAM(BaseGraphModel):
     Oskarsson et al. (2023).
     """
 
-    def __init__(self, args, config: NeuralLAMConfig, datastore: BaseDatastore):
-        super().__init__(args, config=config, datastore=datastore)
+    def __init__(
+        self,
+        args,
+        config: NeuralLAMConfig,
+        datastore: BaseDatastore,
+        datastore_boundary: Union[BaseDatastore, None],
+    ):
+        super().__init__(
+            args,
+            config=config,
+            datastore=datastore,
+            datastore_boundary=datastore_boundary,
+        )
 
         assert (
             not self.hierarchical
         ), "GraphLAM does not use a hierarchical mesh graph"
 
-        # grid_dim from data + static + batch_static
         mesh_dim = self.mesh_static_features.shape[1]
         m2m_edges, m2m_dim = self.m2m_features.shape
         print(
@@ -34,7 +47,10 @@ class GraphLAM(BaseGraphModel):
 
         # Define sub-models
         # Feature embedders for mesh
-        self.mesh_embedder = utils.make_mlp([mesh_dim] + self.mlp_blueprint_end)
+        # Bottom mesh level is first embedded to hidden dim of grid
+        self.mesh_embedder = utils.make_mlp(
+            [mesh_dim] + self.grid_mlp_blueprint_end
+        )
         self.m2m_embedder = utils.make_mlp([m2m_dim] + self.mlp_blueprint_end)
 
         # GNNs
@@ -56,12 +72,20 @@ class GraphLAM(BaseGraphModel):
             ],
         )
 
-    def get_num_mesh(self):
+    @property
+    def num_mesh_nodes(self):
         """
-        Compute number of mesh nodes from loaded features,
-        and number of mesh nodes that should be ignored in encoding/decoding
+        Get the total number of mesh nodes in the used mesh graph
         """
-        return self.mesh_static_features.shape[0], 0
+        return self.mesh_static_features.shape[0]
+
+    @property
+    def num_grid_connected_mesh_nodes(self):
+        """
+        Get the total number of mesh nodes that have a connection to
+        the grid (e.g. bottom level in a hierarchy)
+        """
+        return self.num_mesh_nodes  # All nodes
 
     def embedd_mesh_nodes(self):
         """

@@ -18,8 +18,6 @@
       dataarray for the given category.
 - `get_dataarray` (method): Return the processed data (as a single
       `xr.DataArray`) for the given category and test/train/val-split.
-- `boundary_mask` (property): Return the boundary mask for the dataset,
-      with spatial dimensions stacked.
 - `config` (property): Return the configuration of the datastore.
 
 In addition BaseRegularGridDatastore must have the following methods and
@@ -214,25 +212,6 @@ def test_get_dataarray(datastore_name):
 
 
 @pytest.mark.parametrize("datastore_name", DATASTORES.keys())
-def test_boundary_mask(datastore_name):
-    """Check that the `datastore.boundary_mask` property is implemented and
-    that the returned object is an xarray DataArray with the correct shape."""
-    datastore = init_datastore_example(datastore_name)
-    da_mask = datastore.boundary_mask
-
-    assert isinstance(da_mask, xr.DataArray)
-    assert set(da_mask.dims) == {"grid_index"}
-    assert da_mask.dtype == "int"
-    assert set(da_mask.values) == {0, 1}
-    assert da_mask.sum() > 0
-    assert da_mask.sum() < da_mask.size
-
-    if isinstance(datastore, BaseRegularGridDatastore):
-        grid_shape = datastore.grid_shape_state
-        assert datastore.boundary_mask.size == grid_shape.x * grid_shape.y
-
-
-@pytest.mark.parametrize("datastore_name", DATASTORES.keys())
 def test_get_xy_extent(datastore_name):
     """Check that the `datastore.get_xy_extent` method is implemented and that
     the returned object is a tuple of the correct length."""
@@ -382,3 +361,24 @@ def test_plot_example_from_datastore(datastore_name):
 
     assert fig is not None
     assert fig.get_axes()
+
+
+@pytest.mark.parametrize("datastore_name", DATASTORES.keys())
+@pytest.mark.parametrize("category", ("state", "static"))
+def test_get_standardized_da(datastore_name, category):
+    """Check that dataarray is actually standardized when calling
+    get_dataarray with standardize=True"""
+    datastore = init_datastore_example(datastore_name)
+    ds_stats = datastore.get_standardization_dataarray(category=category)
+
+    mean = ds_stats[f"{category}_mean"]
+    std = ds_stats[f"{category}_std"]
+
+    non_standard_da = datastore.get_dataarray(
+        category=category, split="train", standardize=False
+    )
+    standard_da = datastore.get_dataarray(
+        category=category, split="train", standardize=True
+    )
+
+    assert np.allclose(standard_da, (non_standard_da - mean) / std, atol=1e-6)

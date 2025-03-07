@@ -3,13 +3,15 @@ wandb
 saved_models
 lightning_logs
 data
-graphs
+./graphs
 *.sif
 sweeps
 .vscode
 *.html
 *.zarr
 *slurm*
+docs/notebooks/plots
+docs/notebooks/tables
 
 ### Python ###
 # Byte-compiled / optimized / DLL files

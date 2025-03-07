@@ -1,3 +1,6 @@
+# Standard library
+from typing import Union
+
 # Third-party
 from torch import nn
 
@@ -14,8 +17,19 @@ class BaseHiGraphModel(BaseGraphModel):
     Base class for hierarchical graph models.
     """
 
-    def __init__(self, args, config: NeuralLAMConfig, datastore: BaseDatastore):
-        super().__init__(args, config=config, datastore=datastore)
+    def __init__(
+        self,
+        args,
+        config: NeuralLAMConfig,
+        datastore: BaseDatastore,
+        datastore_boundary: Union[BaseDatastore, None],
+    ):
+        super().__init__(
+            args,
+            config=config,
+            datastore=datastore,
+            datastore_boundary=datastore_boundary,
+        )
 
         # Track number of nodes, edges on each level
         # Flatten lists for efficient embedding
@@ -49,9 +63,11 @@ class BaseHiGraphModel(BaseGraphModel):
 
         # Separate mesh node embedders for each level
         self.mesh_embedders = nn.ModuleList(
-            [
+            # Bottom mesh level is first embedded to hidden dim of grid
+            [utils.make_mlp([mesh_dim] + self.grid_mlp_blueprint_end)]
+            + [
                 utils.make_mlp([mesh_dim] + self.mlp_blueprint_end)
-                for _ in range(self.num_levels)
+                for _ in range(self.num_levels - 1)
             ]
         )
         self.mesh_same_embedders = nn.ModuleList(
@@ -99,18 +115,23 @@ class BaseHiGraphModel(BaseGraphModel):
             ]
         )
 
-    def get_num_mesh(self):
+    @property
+    def num_mesh_nodes(self):
         """
-        Compute number of mesh nodes from loaded features,
-        and number of mesh nodes that should be ignored in encoding/decoding
+        Get the total number of mesh nodes in the used mesh graph
         """
         num_mesh_nodes = sum(
             node_feat.shape[0] for node_feat in self.mesh_static_features
         )
-        num_mesh_nodes_ignore = (
-            num_mesh_nodes - self.mesh_static_features[0].shape[0]
-        )
-        return num_mesh_nodes, num_mesh_nodes_ignore
+        return num_mesh_nodes
+
+    @property
+    def num_grid_connected_mesh_nodes(self):
+        """
+        Get the total number of mesh nodes that have a connection to
+        the grid (e.g. bottom level in a hierarchy)
+        """
+        return self.mesh_static_features[0].shape[0]  # Bottom level
 
     def embedd_mesh_nodes(self):
         """

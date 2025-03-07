@@ -4,116 +4,166 @@ from pathlib import Path
 
 # Third-party
 import pytest
-import torch
 
 # First-party
-from neural_lam.create_graph import create_graph_from_datastore
+from neural_lam.build_rectangular_graph import (
+    build_graph,
+    build_graph_from_archetype,
+)
 from neural_lam.datastore import DATASTORES
-from neural_lam.datastore.base import BaseRegularGridDatastore
-from tests.conftest import init_datastore_example
+from tests.conftest import (
+    DATASTORES_BOUNDARY_EXAMPLES,
+    check_saved_graph,
+    get_test_mesh_dist,
+    init_datastore_boundary_example,
+    init_datastore_example,
+)
 
 
-@pytest.mark.parametrize("graph_name", ["1level", "multiscale", "hierarchical"])
 @pytest.mark.parametrize("datastore_name", DATASTORES.keys())
-def test_graph_creation(datastore_name, graph_name):
-    """Check that the `create_ graph_from_datastore` function is implemented.
+@pytest.mark.parametrize(
+    "datastore_boundary_name",
+    list(DATASTORES_BOUNDARY_EXAMPLES.keys()) + [None],
+)
+@pytest.mark.parametrize("archetype", ["keisler", "graphcast", "hierarchical"])
+def test_build_archetype(datastore_name, datastore_boundary_name, archetype):
+    """Check that the `build_graph_from_archetype` function is implemented.
+    And that the graph is created in the correct location.
+    """
+    datastore = init_datastore_example(datastore_name)
 
+    if datastore_boundary_name is None:
+        # LAM scale
+        datastore_boundary = None
+    else:
+        # Global scale, ERA5 coords flattened with proj
+        datastore_boundary = init_datastore_boundary_example(
+            datastore_boundary_name
+        )
+
+    create_kwargs = {
+        "mesh_node_distance": get_test_mesh_dist(datastore, datastore_boundary),
+    }
+
+    if archetype == "keisler":
+        num_levels = 1
+    else:
+        # Add additional multi-level kwargs
+        num_levels = 2
+        create_kwargs.update(
+            {
+                "level_refinement_factor": 3,
+                "max_num_levels": num_levels,
+            }
+        )
+
+    # Name graph
+    graph_name = f"{datastore_name}_{datastore_boundary_name}_{archetype}"
+
+    # Saved in temporary dir
+    with tempfile.TemporaryDirectory() as tmpdir:
+        graph_saving_path = Path(tmpdir) / "graphs"
+        graph_dir_path = graph_saving_path / graph_name
+
+        build_graph_from_archetype(
+            datastore,
+            datastore_boundary,
+            graph_name,
+            archetype,
+            dir_save_path=graph_saving_path,
+            **create_kwargs,
+        )
+
+        hierarchical = archetype == "hierarchical"
+        check_saved_graph(graph_dir_path, hierarchical, num_levels)
+
+
+@pytest.mark.parametrize("datastore_name", DATASTORES.keys())
+@pytest.mark.parametrize(
+    "datastore_boundary_name",
+    list(DATASTORES_BOUNDARY_EXAMPLES.keys()) + [None],
+)
+@pytest.mark.parametrize(
+    "config_i, graph_kwargs",
+    enumerate(
+        [
+            # Assortment of options
+            {
+                "m2m_connectivity": "flat",
+                "m2g_connectivity": "nearest_neighbour",
+                "g2m_connectivity": "nearest_neighbour",
+                "m2m_connectivity_kwargs": {},
+            },
+            {
+                "m2m_connectivity": "flat_multiscale",
+                "m2g_connectivity": "nearest_neighbours",
+                "g2m_connectivity": "within_radius",
+                "m2m_connectivity_kwargs": {
+                    "level_refinement_factor": 3,
+                    "max_num_levels": None,
+                },
+                "m2g_connectivity_kwargs": {
+                    "max_num_neighbours": 4,
+                },
+                "g2m_connectivity_kwargs": {
+                    "rel_max_dist": 0.3,
+                },
+            },
+            {
+                "m2m_connectivity": "hierarchical",
+                "m2g_connectivity": "containing_rectangle",
+                "g2m_connectivity": "within_radius",
+                "m2m_connectivity_kwargs": {
+                    "level_refinement_factor": 2,
+                    "max_num_levels": 2,
+                },
+                "m2g_connectivity_kwargs": {},
+                "g2m_connectivity_kwargs": {
+                    "rel_max_dist": 0.51,
+                },
+            },
+        ]
+    ),
+)
+def test_build_from_options(
+    datastore_name, datastore_boundary_name, config_i, graph_kwargs
+):
+    """Check that the `build_graph_from_archetype` function is implemented.
     And that the graph is created in the correct location.
 
     """
     datastore = init_datastore_example(datastore_name)
 
-    if not isinstance(datastore, BaseRegularGridDatastore):
-        pytest.skip(
-            f"Skipping test for {datastore_name} as it is not a regular "
-            "grid datastore."
-        )
-
-    if graph_name == "hierarchical":
-        hierarchical = True
-        n_max_levels = 3
-    elif graph_name == "multiscale":
-        hierarchical = False
-        n_max_levels = 3
-    elif graph_name == "1level":
-        hierarchical = False
-        n_max_levels = 1
+    if datastore_boundary_name is None:
+        # LAM scale
+        datastore_boundary = None
     else:
-        raise ValueError(f"Unknown graph_name: {graph_name}")
-
-    required_graph_files = [
-        "m2m_edge_index.pt",
-        "g2m_edge_index.pt",
-        "m2g_edge_index.pt",
-        "m2m_features.pt",
-        "g2m_features.pt",
-        "m2g_features.pt",
-        "mesh_features.pt",
-    ]
-    if hierarchical:
-        required_graph_files.extend(
-            [
-                "mesh_up_edge_index.pt",
-                "mesh_down_edge_index.pt",
-                "mesh_up_features.pt",
-                "mesh_down_features.pt",
-            ]
+        # Global scale, ERA5 coords flattened with proj
+        datastore_boundary = init_datastore_boundary_example(
+            datastore_boundary_name
         )
 
-    # TODO: check that the number of edges is consistent over the files, for
-    # now we just check the number of features
-    d_features = 3
-    d_mesh_static = 2
+    # Insert mesh distance
+    graph_kwargs["m2m_connectivity_kwargs"][
+        "mesh_node_distance"
+    ] = get_test_mesh_dist(datastore, datastore_boundary)
 
+    # Name graph
+    graph_name = f"{datastore_name}_{datastore_boundary_name}_config{config_i}"
+
+    # Save in temporary dir
     with tempfile.TemporaryDirectory() as tmpdir:
-        graph_dir_path = Path(tmpdir) / "graph" / graph_name
+        graph_saving_path = Path(tmpdir) / "graphs"
+        graph_dir_path = graph_saving_path / graph_name
 
-        create_graph_from_datastore(
-            datastore=datastore,
-            output_root_path=str(graph_dir_path),
-            hierarchical=hierarchical,
-            n_max_levels=n_max_levels,
+        build_graph(
+            datastore,
+            datastore_boundary,
+            graph_name,
+            dir_save_path=graph_saving_path,
+            **graph_kwargs,
         )
 
-        assert graph_dir_path.exists()
-
-        # check that all the required files are present
-        for file_name in required_graph_files:
-            assert (graph_dir_path / file_name).exists()
-
-        # try to load each and ensure they have the right shape
-        for file_name in required_graph_files:
-            file_id = Path(file_name).stem  # remove the extension
-            result = torch.load(graph_dir_path / file_name)
-
-            if file_id.startswith("g2m") or file_id.startswith("m2g"):
-                assert isinstance(result, torch.Tensor)
-
-                if file_id.endswith("_index"):
-                    assert (
-                        result.shape[0] == 2
-                    )  # adjacency matrix uses two rows
-                elif file_id.endswith("_features"):
-                    assert result.shape[1] == d_features
-
-            elif file_id.startswith("m2m") or file_id.startswith("mesh"):
-                assert isinstance(result, list)
-                if not hierarchical:
-                    assert len(result) == 1
-                else:
-                    if file_id.startswith("mesh_up") or file_id.startswith(
-                        "mesh_down"
-                    ):
-                        assert len(result) == n_max_levels - 1
-                    else:
-                        assert len(result) == n_max_levels
-
-                for r in result:
-                    assert isinstance(r, torch.Tensor)
-
-                    if file_id == "mesh_features":
-                        assert r.shape[1] == d_mesh_static
-                    elif file_id.endswith("_index"):
-                        assert r.shape[0] == 2  # adjacency matrix uses two rows
-                    elif file_id.endswith("_features"):
-                        assert r.shape[1] == d_features
+        hierarchical = graph_kwargs["m2m_connectivity"] == "hierarchical"
+        num_levels = 2 if hierarchical else 1
+        check_saved_graph(graph_dir_path, hierarchical, num_levels)

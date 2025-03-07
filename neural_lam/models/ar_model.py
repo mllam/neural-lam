@@ -1,5 +1,6 @@
 # Standard library
 import os
+import pickle
 from typing import List, Union
 
 # Third-party
@@ -9,11 +10,13 @@ import pytorch_lightning as pl
 import torch
 import wandb
 import xarray as xr
+from loguru import logger
 
 # Local
 from .. import metrics, vis
 from ..config import NeuralLAMConfig
 from ..datastore import BaseDatastore
+from ..datastore.base import BaseRegularGridDatastore
 from ..loss_weighting import get_state_feature_weighting
 from ..weather_dataset import WeatherDataset
 
@@ -32,6 +35,7 @@ class ARModel(pl.LightningModule):
         args,
         config: NeuralLAMConfig,
         datastore: BaseDatastore,
+        datastore_boundary: Union[BaseDatastore, None],
     ):
         super().__init__()
         self.save_hyperparameters(ignore=["datastore"])
@@ -39,27 +43,24 @@ class ARModel(pl.LightningModule):
         self._datastore = datastore
         num_state_vars = datastore.get_num_data_vars(category="state")
         num_forcing_vars = datastore.get_num_data_vars(category="forcing")
-        da_static_features = datastore.get_dataarray(
-            category="static", split=None
-        )
-        da_state_stats = datastore.get_standardization_dataarray(
-            category="state"
-        )
-        da_boundary_mask = datastore.boundary_mask
+
         num_past_forcing_steps = args.num_past_forcing_steps
         num_future_forcing_steps = args.num_future_forcing_steps
 
-        # Load static features for grid/data, NB: self.predict_step assumes
-        # dimension order to be (grid_index, static_feature)
-        arr_static = da_static_features.transpose(
-            "grid_index", "static_feature"
-        ).values
+        # Load static features for interior
+        da_static_features = datastore.get_dataarray(
+            category="static", split=None, standardize=True
+        )
         self.register_buffer(
-            "grid_static_features",
-            torch.tensor(arr_static, dtype=torch.float32),
+            "interior_static_features",
+            torch.tensor(da_static_features.values, dtype=torch.float32),
             persistent=False,
         )
 
+        # Load stats for rescaling and weights
+        da_state_stats = datastore.get_standardization_dataarray(
+            category="state"
+        )
         state_stats = {
             "state_mean": torch.tensor(
                 da_state_stats.state_mean.values, dtype=torch.float32
@@ -67,11 +68,16 @@ class ARModel(pl.LightningModule):
             "state_std": torch.tensor(
                 da_state_stats.state_std.values, dtype=torch.float32
             ),
+            # Change stats below to be for diff of standardized variables
             "diff_mean": torch.tensor(
-                da_state_stats.state_diff_mean.values, dtype=torch.float32
+                da_state_stats.state_diff_mean.values
+                / da_state_stats.state_std.values,
+                dtype=torch.float32,
             ),
             "diff_std": torch.tensor(
-                da_state_stats.state_diff_std.values, dtype=torch.float32
+                da_state_stats.state_diff_std.values
+                / da_state_stats.state_std.values,
+                dtype=torch.float32,
             ),
         }
 
@@ -102,33 +108,74 @@ class ARModel(pl.LightningModule):
                 persistent=False,
             )
 
-        # grid_dim from data + static
+        # interior from data + static
         (
-            self.num_grid_nodes,
-            grid_static_dim,
-        ) = self.grid_static_features.shape
-
-        self.grid_dim = (
+            self.num_interior_nodes,
+            interior_static_dim,
+        ) = self.interior_static_features.shape
+        self.num_total_grid_nodes = self.num_interior_nodes
+        self.interior_dim = (
             2 * self.grid_output_dim
-            + grid_static_dim
+            + interior_static_dim
             + num_forcing_vars
             * (num_past_forcing_steps + num_future_forcing_steps + 1)
         )
 
+        # If datastore_boundary is given, the model is forced from the boundary
+        self.boundary_forced = datastore_boundary is not None
+
+        if self.boundary_forced:
+            # Load static features for boundary
+            da_boundary_static_features = datastore_boundary.get_dataarray(
+                category="static", split=None, standardize=True
+            )
+            self.register_buffer(
+                "boundary_static_features",
+                torch.tensor(
+                    da_boundary_static_features.values, dtype=torch.float32
+                ),
+                persistent=False,
+            )
+
+            # Compute dimensionalities (e.g. to instantiate MLPs)
+            (
+                self.num_boundary_nodes,
+                boundary_static_dim,
+            ) = self.boundary_static_features.shape
+
+            # Compute boundary input dim separately
+            num_boundary_forcing_vars = datastore_boundary.get_num_data_vars(
+                category="forcing"
+            )
+
+            # Dimensionality of encoded time deltas
+            self.time_delta_enc_dim = (
+                args.hidden_dim
+                if args.time_delta_enc_dim is None
+                else args.time_delta_enc_dim
+            )
+            assert self.time_delta_enc_dim % 2 == 0, (
+                "Number of dimensions to use for time delta encoding must be "
+                "even (sin and cos)"
+            )
+
+            num_past_boundary_steps = args.num_past_boundary_steps
+            num_future_boundary_steps = args.num_future_boundary_steps
+            self.boundary_dim = (
+                boundary_static_dim
+                # Time delta counts as one additional forcing_feature
+                + (num_boundary_forcing_vars + self.time_delta_enc_dim)
+                * (num_past_boundary_steps + num_future_boundary_steps + 1)
+            )
+            # How many of the last boundary forcing dims contain time-deltas
+            self.boundary_time_delta_dims = (
+                num_past_boundary_steps + num_future_boundary_steps + 1
+            )
+
+            self.num_total_grid_nodes += self.num_boundary_nodes
+
         # Instantiate loss function
         self.loss = metrics.get_metric(args.loss)
-
-        boundary_mask = torch.tensor(
-            da_boundary_mask.values, dtype=torch.float32
-        ).unsqueeze(
-            1
-        )  # add feature dim
-
-        self.register_buffer("boundary_mask", boundary_mask, persistent=False)
-        # Pre-compute interior mask for use in loss function
-        self.register_buffer(
-            "interior_mask", 1.0 - self.boundary_mask, persistent=False
-        )  # (num_grid_nodes, 1), 1 for non-border
 
         self.val_metrics = {
             "mse": [],
@@ -140,15 +187,47 @@ class ARModel(pl.LightningModule):
         if self.output_std:
             self.test_metrics["output_std"] = []  # Treat as metric
 
-        # For making restoring of optimizer state optional
-        self.restore_opt = args.restore_opt
-
         # For example plotting
         self.n_example_pred = args.n_example_pred
         self.plotted_examples = 0
 
         # For storing spatial loss maps during evaluation
         self.spatial_loss_maps = []
+
+        # Set if grad checkpointing function should be used during rollout
+        if args.grad_checkpointing:
+            # Perform gradient checkpointing at each unrolling step
+            self.unroll_ckpt_func = (
+                lambda f, *args: torch.utils.checkpoint.checkpoint(
+                    f, *args, use_reentrant=False
+                )
+            )
+        else:
+            self.unroll_ckpt_func = lambda f, *args: f(*args)
+
+        # Store step length (h), taking subsampling into account
+        self.step_length = datastore.step_length * args.interior_subsample_step
+
+        # Make WeatherDataset:s for being able to make tensor into xr.DA
+        # Note: Unclear if it is actually necessary to make one per split?
+        # TODO: creating an instance of WeatherDataset here on is
+        # not how this should be done but whether WeatherDataset should be
+        # provided to ARModel or where to put plotting still needs discussion
+        self.wds_for_da = {
+            split: WeatherDataset(
+                datastore=self._datastore,
+                datastore_boundary=None,
+                split=split,
+            )
+            for split in ("train", "val", "test")
+        }
+
+        # Which variables to plot during eval
+        self.plot_vars = args.plot_vars
+        for var in self.plot_vars:
+            assert var in self._datastore.get_vars_names(
+                "state"
+            ), f"Can not plot variable {var}: not in datastore"
 
     def _create_dataarray_from_tensor(
         self,
@@ -178,13 +257,14 @@ class ARModel(pl.LightningModule):
         category : str
             The category of the data, either 'state' or 'forcing'
         """
-        # TODO: creating an instance of WeatherDataset here on every call is
-        # not how this should be done but whether WeatherDataset should be
-        # provided to ARModel or where to put plotting still needs discussion
-        weather_dataset = WeatherDataset(datastore=self._datastore, split=split)
-        time = np.array(time.cpu(), dtype="datetime64[ns]")
+        # Move to CPU if on GPU
+        time = time.detach().cpu()
+        time = np.array(time, dtype="datetime64[ns]")
+
+        tensor = tensor.detach().cpu()
+        weather_dataset = self.wds_for_da[split]
         da = weather_dataset.create_dataarray_from_tensor(
-            tensor=tensor.cpu().numpy(), time=time, category=category
+            tensor=tensor, time=time, category=category
         )
         return da
 
@@ -192,14 +272,19 @@ class ARModel(pl.LightningModule):
         opt = torch.optim.AdamW(
             self.parameters(), lr=self.args.lr, betas=(0.9, 0.95)
         )
-        return opt
-
-    @property
-    def interior_mask_bool(self):
-        """
-        Get the interior mask as a boolean (N,) mask.
-        """
-        return self.interior_mask[:, 0].to(torch.bool)
+        scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
+            opt,
+            T_max=self.args.epochs,
+            eta_min=self.args.min_lr if hasattr(self.args, "min_lr") else 0.0,
+        )
+        return {
+            "optimizer": opt,
+            "lr_scheduler": {
+                "scheduler": scheduler,
+                "interval": "epoch",
+                "frequency": 1,
+            },
+        }
 
     @staticmethod
     def expand_to_batch(x, batch_size):
@@ -208,59 +293,65 @@ class ARModel(pl.LightningModule):
         """
         return x.unsqueeze(0).expand(batch_size, -1, -1)
 
-    def predict_step(self, prev_state, prev_prev_state, forcing):
+    def predict_step(
+        self, prev_state, prev_prev_state, forcing, boundary_forcing
+    ):
         """
         Step state one step ahead using prediction model, X_{t-1}, X_t -> X_t+1
-        prev_state: (B, num_grid_nodes, feature_dim), X_t prev_prev_state: (B,
-        num_grid_nodes, feature_dim), X_{t-1} forcing: (B, num_grid_nodes,
-        forcing_dim)
+        prev_state: (B, num_interior_nodes, feature_dim), X_t
+        prev_prev_state: (B, num_interior_nodes, feature_dim), X_{t-1}
+        forcing: (B, num_interior_nodes, forcing_dim)
+        boundary_forcing: (B, num_boundary_nodes, boundary_forcing_dim)
         """
         raise NotImplementedError("No prediction step implemented")
 
-    def unroll_prediction(self, init_states, forcing_features, true_states):
+    def unroll_prediction(self, init_states, forcing, boundary_forcing):
         """
         Roll out prediction taking multiple autoregressive steps with model
-        init_states: (B, 2, num_grid_nodes, d_f) forcing_features: (B,
-        pred_steps, num_grid_nodes, d_static_f) true_states: (B, pred_steps,
-        num_grid_nodes, d_f)
+        init_states: (B, 2, num_interior_nodes, d_f)
+        forcing: (B, pred_steps, num_interior_nodes, d_static_f)
+        boundary_forcing: (B, pred_steps, num_boundary_nodes, d_boundary_f)
         """
         prev_prev_state = init_states[:, 0]
         prev_state = init_states[:, 1]
         prediction_list = []
         pred_std_list = []
-        pred_steps = forcing_features.shape[1]
+        pred_steps = forcing.shape[1]
 
         for i in range(pred_steps):
-            forcing = forcing_features[:, i]
-            border_state = true_states[:, i]
+            forcing_step = forcing[:, i]
 
-            pred_state, pred_std = self.predict_step(
-                prev_state, prev_prev_state, forcing
+            if self.boundary_forced:
+                boundary_forcing_step = boundary_forcing[:, i]
+            else:
+                boundary_forcing_step = None
+
+            pred_state, pred_std = self.unroll_ckpt_func(
+                self.predict_step,
+                prev_state,
+                prev_prev_state,
+                forcing_step,
+                boundary_forcing_step,
             )
-            # state: (B, num_grid_nodes, d_f) pred_std: (B, num_grid_nodes,
-            # d_f) or None
+            # state: (B, num_interior_nodes, d_f)
+            # pred_std: (B, num_interior_nodes, d_f) or None
 
-            # Overwrite border with true state
-            new_state = (
-                self.boundary_mask * border_state
-                + self.interior_mask * pred_state
-            )
+            prediction_list.append(pred_state)
 
-            prediction_list.append(new_state)
             if self.output_std:
                 pred_std_list.append(pred_std)
 
             # Update conditioning states
             prev_prev_state = prev_state
-            prev_state = new_state
+            prev_state = pred_state
 
         prediction = torch.stack(
             prediction_list, dim=1
-        )  # (B, pred_steps, num_grid_nodes, d_f)
+        )  # (B, pred_steps, num_interior_nodes, d_f)
         if self.output_std:
             pred_std = torch.stack(
                 pred_std_list, dim=1
-            )  # (B, pred_steps, num_grid_nodes, d_f)
+            )  # (B, pred_steps, num_interior_nodes, d_f)
         else:
             pred_std = self.per_var_std  # (d_f,)
 
@@ -268,19 +359,28 @@ class ARModel(pl.LightningModule):
 
     def common_step(self, batch):
         """
-        Predict on single batch batch consists of: init_states: (B, 2,
-        num_grid_nodes, d_features) target_states: (B, pred_steps,
-        num_grid_nodes, d_features) forcing_features: (B, pred_steps,
-        num_grid_nodes, d_forcing),
+        Predict on single batch
+        batch consists of:
+        init_states: (B, 2, num_interior_nodes, d_features)
+        target_states: (B, pred_steps, num_interior_nodes, d_features)
+        forcing: (B, pred_steps, num_interior_nodes, d_forcing),
+        boundary_forcing:
+            (B, pred_steps, num_boundary_nodes, d_boundary_forcing),
             where index 0 corresponds to index 1 of init_states
         """
-        (init_states, target_states, forcing_features, batch_times) = batch
+        (
+            init_states,
+            target_states,
+            forcing,
+            boundary_forcing,
+            batch_times,
+        ) = batch
 
         prediction, pred_std = self.unroll_prediction(
-            init_states, forcing_features, target_states
-        )  # (B, pred_steps, num_grid_nodes, d_f)
-        # prediction: (B, pred_steps, num_grid_nodes, d_f) pred_std: (B,
-        # pred_steps, num_grid_nodes, d_f) or (d_f,)
+            init_states, forcing, boundary_forcing
+        )  # (B, pred_steps, num_interior_nodes, d_f)
+        # prediction: (B, pred_steps, num_interior_nodes, d_f) pred_std: (B,
+        # pred_steps, num_interior_nodes, d_f) or (d_f,)
 
         return prediction, target_states, pred_std, batch_times
 
@@ -290,12 +390,14 @@ class ARModel(pl.LightningModule):
         """
         prediction, target, pred_std, _ = self.common_step(batch)
 
-        # Compute loss
+        # Compute loss - mean over unrolled times and batch
         batch_loss = torch.mean(
             self.loss(
-                prediction, target, pred_std, mask=self.interior_mask_bool
+                prediction,
+                target,
+                pred_std,
             )
-        )  # mean over unrolled times and batch
+        )
 
         log_dict = {"train_loss": batch_loss}
         self.log_dict(
@@ -329,7 +431,9 @@ class ARModel(pl.LightningModule):
 
         time_step_loss = torch.mean(
             self.loss(
-                prediction, target, pred_std, mask=self.interior_mask_bool
+                prediction,
+                target,
+                pred_std,
             ),
             dim=0,
         )  # (time_steps-1)
@@ -355,7 +459,6 @@ class ARModel(pl.LightningModule):
             prediction,
             target,
             pred_std,
-            mask=self.interior_mask_bool,
             sum_vars=False,
         )  # (B, pred_steps, d_f)
         self.val_metrics["mse"].append(entry_mses)
@@ -371,6 +474,89 @@ class ARModel(pl.LightningModule):
         for metric_list in self.val_metrics.values():
             metric_list.clear()
 
+    def _save_predictions_to_zarr(
+        self,
+        batch_times: torch.Tensor,
+        batch_predictions: torch.Tensor,
+        batch_idx: int,
+        zarr_output_path: str,
+    ):
+        """
+        Save state predictions for single batch to zarr dataset. Will append to
+        existing dataset for batch_idx > 0. Resulting dataset will contain a
+        variable named `state` with coordinates (start_time,
+        elapsed_forecast_duration, grid_index, state_feature).
+        Parameters
+        ----------
+        batch_times : torch.Tensor[int]
+            The times for the batch, given as epoch time in nanoseconds. Shape
+            is (B, args.pred_steps) where B is the batch size and
+            args.pred_steps is the number of prediction steps.
+        batch_predictions : torch.Tensor[float]
+            The predictions for the batch, given as (B, args.pred_steps,
+            num_grid_nodes, d_f) where B is the batch size, args.pred_steps is
+            the number of prediction steps, num_grid_nodes is the number of
+            grid nodes, and d_f is the number of state features.
+        batch_idx : int
+            The index of the batch in the current epoch.
+        """
+        # Scale predictions back to original data scale
+        batch_predictions_rescaled = (
+            batch_predictions * self.state_std + self.state_mean
+        )
+
+        # Convert predictions to DataArray using _create_dataarray_from_tensor
+        das_pred = []
+        for i in range(len(batch_times)):
+            da_pred = self._create_dataarray_from_tensor(
+                tensor=batch_predictions_rescaled[i],
+                time=batch_times[i],
+                split="test",
+                category="state",
+            )
+            # Unstack grid coords if necessary, this also avoids the need to
+            # try to store a MultiIndex zarr dataset which is not supported by
+            # xarray
+            if isinstance(self._datastore, BaseRegularGridDatastore):
+                da_pred = self._datastore.unstack_grid_coords(da_pred)
+
+            # First entry in da_pred.coords["time"] is time of first prediction,
+            # so init time of forecast is one time step before
+            t0 = da_pred.coords["time"].values[0] - np.array(
+                self.step_length, dtype="timedelta64[h]"
+            )
+            da_pred.coords["start_time"] = t0
+            da_pred.coords["elapsed_forecast_duration"] = da_pred.time - t0
+            da_pred = da_pred.swap_dims({"time": "elapsed_forecast_duration"})
+            da_pred.name = "state"
+            das_pred.append(da_pred)
+
+        da_pred_batch = xr.concat(das_pred, dim="start_time")
+
+        # Apply chunking start_time and elapsed_forecast_duration, but leave
+        # whole state in one chunk
+        da_pred_batch = da_pred_batch.chunk(
+            {"start_time": 1, "elapsed_forecast_duration": 1}
+        )
+
+        if batch_idx == 0:
+            logger.info(f"Saving predictions to {zarr_output_path}")
+            da_pred_batch.to_zarr(
+                zarr_output_path,
+                mode="w",
+                consolidated=True,
+                encoding={
+                    "start_time": {
+                        "units": "Seconds since 1970-01-01 00:00:00",
+                        "dtype": "int64",
+                    },
+                },
+            )
+        else:
+            da_pred_batch.to_zarr(
+                zarr_output_path, mode="a", append_dim="start_time"
+            )
+
     # pylint: disable-next=unused-argument
     def test_step(self, batch, batch_idx):
         """
@@ -378,12 +564,14 @@ class ARModel(pl.LightningModule):
         """
         # TODO Here batch_times can be used for plotting routines
         prediction, target, pred_std, batch_times = self.common_step(batch)
-        # prediction: (B, pred_steps, num_grid_nodes, d_f) pred_std: (B,
-        # pred_steps, num_grid_nodes, d_f) or (d_f,)
+        # prediction: (B, pred_steps, num_interior_nodes, d_f) pred_std: (B,
+        # pred_steps, num_interior_nodes, d_f) or (d_f,)
 
         time_step_loss = torch.mean(
             self.loss(
-                prediction, target, pred_std, mask=self.interior_mask_bool
+                prediction,
+                target,
+                pred_std,
             ),
             dim=0,
         )  # (time_steps-1,)
@@ -413,27 +601,32 @@ class ARModel(pl.LightningModule):
                 prediction,
                 target,
                 pred_std,
-                mask=self.interior_mask_bool,
                 sum_vars=False,
             )  # (B, pred_steps, d_f)
             self.test_metrics[metric_name].append(batch_metric_vals)
 
         if self.output_std:
             # Store output std. per variable, spatially averaged
-            mean_pred_std = torch.mean(
-                pred_std[..., self.interior_mask_bool, :], dim=-2
-            )  # (B, pred_steps, d_f)
+            mean_pred_std = torch.mean(pred_std, dim=-2)  # (B, pred_steps, d_f)
             self.test_metrics["output_std"].append(mean_pred_std)
 
         # Save per-sample spatial loss for specific times
         spatial_loss = self.loss(
             prediction, target, pred_std, average_grid=False
-        )  # (B, pred_steps, num_grid_nodes)
+        )  # (B, pred_steps, num_interior_nodes)
         log_spatial_losses = spatial_loss[
             :, [step - 1 for step in self.args.val_steps_to_log]
         ]
         self.spatial_loss_maps.append(log_spatial_losses)
-        # (B, N_log, num_grid_nodes)
+        # (B, N_log, num_interior_nodes)
+
+        if self.args.save_eval_to_zarr_path:
+            self._save_predictions_to_zarr(
+                batch_times=batch_times,
+                batch_predictions=prediction,
+                batch_idx=batch_idx,
+                zarr_output_path=self.args.save_eval_to_zarr_path,
+            )
 
         # Plot example predictions (on rank 0 only)
         if (
@@ -457,16 +650,16 @@ class ARModel(pl.LightningModule):
         """
         Plot the first n_examples forecasts from batch
 
-        batch: batch with data to plot corresponding forecasts for n_examples:
-        number of forecasts to plot prediction: (B, pred_steps, num_grid_nodes,
-        d_f), existing prediction.
-            Generate if None.
+        batch: batch with data to plot corresponding forecasts for
+        n_examples: number of forecasts to plot
+        prediction: (B, pred_steps, num_interior_nodes, d_f),
+            existing prediction. Generate if None.
         """
         if prediction is None:
             prediction, target, _, _ = self.common_step(batch)
 
         target = batch[1]
-        time = batch[3]
+        time = batch[-1]
 
         # Rescale to original data scale
         prediction_rescaled = prediction * self.state_std + self.state_mean
@@ -478,7 +671,7 @@ class ARModel(pl.LightningModule):
             target_rescaled[:n_examples],
             time[:n_examples],
         ):
-            # Each slice is (pred_steps, num_grid_nodes, d_f)
+            # Each slice is (pred_steps, num_interior_nodes, d_f)
             self.plotted_examples += 1  # Increment already here
 
             da_prediction = self._create_dataarray_from_tensor(
@@ -514,12 +707,12 @@ class ARModel(pl.LightningModule):
 
             # Iterate over prediction horizon time steps
             for t_i, _ in enumerate(zip(pred_slice, target_slice), start=1):
-                # Create one figure per variable at this time step
-                var_figs = [
-                    vis.plot_prediction(
+                # Create one figure per plot variable at this time step
+                var_figs = {
+                    var_name: vis.plot_prediction(
                         datastore=self._datastore,
                         title=f"{var_name} ({var_unit}), "
-                        f"t={t_i} ({self._datastore.step_length * t_i} h)",
+                        f"t={t_i} ({self.step_length * t_i} h)",
                         vrange=var_vrange,
                         da_prediction=da_prediction.isel(
                             state_feature=var_i, time=t_i - 1
@@ -535,35 +728,20 @@ class ARModel(pl.LightningModule):
                             var_vranges,
                         )
                     )
-                ]
+                    if var_name in self.plot_vars
+                }
 
                 example_i = self.plotted_examples
 
                 wandb.log(
                     {
                         f"{var_name}_example_{example_i}": wandb.Image(fig)
-                        for var_name, fig in zip(
-                            self._datastore.get_vars_names("state"), var_figs
-                        )
+                        for var_name, fig in var_figs.items()
                     }
                 )
                 plt.close(
                     "all"
                 )  # Close all figs for this time step, saves memory
-
-            # Save pred and target as .pt files
-            torch.save(
-                pred_slice.cpu(),
-                os.path.join(
-                    wandb.run.dir, f"example_pred_{self.plotted_examples}.pt"
-                ),
-            )
-            torch.save(
-                target_slice.cpu(),
-                os.path.join(
-                    wandb.run.dir, f"example_target_{self.plotted_examples}.pt"
-                ),
-            )
 
     def create_metric_log_dict(self, metric_tensor, prefix, metric_name):
         """
@@ -589,12 +767,6 @@ class ARModel(pl.LightningModule):
             metric_fig.savefig(
                 os.path.join(wandb.run.dir, f"{full_log_name}.pdf")
             )
-            # Save errors also as csv
-            np.savetxt(
-                os.path.join(wandb.run.dir, f"{full_log_name}.csv"),
-                metric_tensor.cpu().numpy(),
-                delimiter=",",
-            )
 
         # Check if metrics are watched, log exact values for specific vars
         var_names = self._datastore.get_vars_names(category="state")
@@ -616,6 +788,7 @@ class ARModel(pl.LightningModule):
         prefix: string, prefix to use for logging
         """
         log_dict = {}
+        xr_data_vars = {}
         for metric_name, metric_val_list in metrics_dict.items():
             metric_tensor = self.all_gather_cat(
                 torch.cat(metric_val_list, dim=0)
@@ -633,15 +806,61 @@ class ARModel(pl.LightningModule):
                 # NOTE: we here assume rescaling for all metrics is linear
                 metric_rescaled = metric_tensor_averaged * self.state_std
                 # (pred_steps, d_f)
+
+                # Add to log dict
                 log_dict.update(
                     self.create_metric_log_dict(
                         metric_rescaled, prefix, metric_name
                     )
                 )
 
-        if self.trainer.is_global_zero and not self.trainer.sanity_checking:
+                # Add to xr.da dict
+                xr_data_vars[metric_name] = (
+                    ["variable", "lead_time"],
+                    metric_rescaled.cpu().numpy().T,
+                )
+
+        if (
+            self.trainer.is_global_zero
+            and not self.trainer.sanity_checking
+            and metrics_dict
+        ):
             wandb.log(log_dict)  # Log all
             plt.close("all")  # Close all figs
+
+            # Create and save xr.ds
+            num_steps = metric_rescaled.shape[0]
+            lead_time_i = np.arange(num_steps) + 1  # Lead time in index
+            lead_time_h = (
+                (self.step_length * lead_time_i)
+                .astype("timedelta64[h]")
+                .astype("timedelta64[ns]")
+            )  # Lead time in hours -> in ns for xr
+            metric_ds = xr.Dataset(
+                data_vars=xr_data_vars,
+                coords={
+                    "variable": self._datastore.get_vars_names(
+                        category="state"
+                    ),
+                    "variable_units": (
+                        "variable",
+                        self._datastore.get_vars_units(category="state"),
+                    ),
+                    "variable_long_name": (
+                        "variable",
+                        self._datastore.get_vars_long_names(category="state"),
+                    ),
+                    "lead_time": lead_time_h,
+                },
+                attrs={
+                    "wandb_run_name": wandb.run.name,
+                    "wandb_run_id": wandb.run.id,
+                },
+            )
+            # Save as pickle
+            output_path = os.path.join(wandb.run.dir, f"{prefix}_metrics.pkl")
+            with open(output_path, "wb") as f:
+                pickle.dump(metric_ds, f)
 
     def on_test_epoch_end(self):
         """
@@ -654,18 +873,18 @@ class ARModel(pl.LightningModule):
         # Plot spatial loss maps
         spatial_loss_tensor = self.all_gather_cat(
             torch.cat(self.spatial_loss_maps, dim=0)
-        )  # (N_test, N_log, num_grid_nodes)
+        )  # (N_test, N_log, num_interior_nodes)
         if self.trainer.is_global_zero:
             mean_spatial_loss = torch.mean(
                 spatial_loss_tensor, dim=0
-            )  # (N_log, num_grid_nodes)
+            )  # (N_log, num_interior_nodes)
 
             loss_map_figs = [
                 vis.plot_spatial_error(
                     error=loss_map,
                     datastore=self._datastore,
                     title=f"Test loss, t={t_i} "
-                    f"({self._datastore.step_length * t_i} h)",
+                    f"({self.step_length * t_i} h)",
                 )
                 for t_i, loss_map in zip(
                     self.args.val_steps_to_log, mean_spatial_loss
@@ -716,6 +935,3 @@ class ARModel(pl.LightningModule):
                 )
                 loaded_state_dict[new_key] = loaded_state_dict[old_key]
                 del loaded_state_dict[old_key]
-        if not self.restore_opt:
-            opt = self.configure_optimizers()
-            checkpoint["optimizer_states"] = [opt.state_dict()]

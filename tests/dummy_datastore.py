@@ -28,7 +28,7 @@ class DummyDatastore(BaseRegularGridDatastore):
     """
 
     SHORT_NAME = "dummydata"
-    T0 = isodate.parse_datetime("2021-01-01T00:00:00")
+    T0 = isodate.parse_datetime("1990-09-02T00:00:00")
     N_FEATURES = dict(state=5, forcing=2, static=1)
     CARTESIAN_COORDS = ["x", "y"]
 
@@ -37,7 +37,7 @@ class DummyDatastore(BaseRegularGridDatastore):
     bbox_size_km = [500, 500]  # km
 
     def __init__(
-        self, config_path=None, n_grid_points=10000, n_timesteps=10
+        self, config_path=None, n_grid_points=10000, n_timesteps=15
     ) -> None:
         """
         Create a dummy datastore with random data.
@@ -147,12 +147,6 @@ class DummyDatastore(BaseRegularGridDatastore):
                 dt = datetime.timedelta(hours=self.step_length)
                 times = [self.T0 + dt * i for i in range(n_timesteps)]
                 self.ds.coords["time"] = times
-
-        # Add boundary mask
-        self.ds["boundary_mask"] = xr.DataArray(
-            np.random.choice([0, 1], size=(n_points_1d, n_points_1d)),
-            dims=["x", "y"],
-        )
 
         # Stack the spatial dimensions into grid_index
         self.ds = self.ds.stack(grid_index=self.CARTESIAN_COORDS)
@@ -301,16 +295,14 @@ class DummyDatastore(BaseRegularGridDatastore):
         return ds_standardization
 
     def get_dataarray(
-        self, category: str, split: str
+        self, category: str, split: str, standardize: bool = False
     ) -> Union[xr.DataArray, None]:
         """
         Return the processed data (as a single `xr.DataArray`) for the given
         category of data and test/train/val-split that covers all the data (in
-        space and time) of a given category (state/forcing/static). A
-        datastore must be able to return for the "state" category, but
-        "forcing" and "static" are optional (in which case the method should
-        return `None`). For the "static" category the `split` is allowed to be
-        `None` because the static data is the same for all splits.
+        space and time) of a given category (state/forcing/static). For the
+        "static" category the `split` is allowed to be `None` because the static
+        data is the same for all splits.
 
         The returned dataarray is expected to at minimum have dimensions of
         `(grid_index, {category}_feature)` so that any spatial dimensions have
@@ -332,6 +324,8 @@ class DummyDatastore(BaseRegularGridDatastore):
             The category of the dataset (state/forcing/static).
         split : str
             The time split to filter the dataset (train/val/test).
+        standardize: bool
+            If the dataarray should be returned standardized
 
         Returns
         -------
@@ -340,25 +334,15 @@ class DummyDatastore(BaseRegularGridDatastore):
 
         """
         dim_order = self.expected_dim_order(category=category)
-        return self.ds[category].transpose(*dim_order)
 
-    @cached_property
-    def boundary_mask(self) -> xr.DataArray:
-        """
-        Return the boundary mask for the dataset, with spatial dimensions
-        stacked. Where the value is 1, the grid point is a boundary point, and
-        where the value is 0, the grid point is not a boundary point.
+        da_category = self.ds[category].transpose(*dim_order)
 
-        Returns
-        -------
-        xr.DataArray
-            The boundary mask for the dataset, with dimensions
-            `('grid_index',)`.
+        if standardize:
+            return self._standardize_datarray(da_category, category=category)
 
-        """
-        return self.ds["boundary_mask"]
+        return da_category
 
-    def get_xy(self, category: str, stacked: bool) -> ndarray:
+    def get_xy(self, category: str, stacked: bool = True) -> ndarray:
         """Return the x, y coordinates of the dataset.
 
         Parameters

@@ -1,7 +1,7 @@
 # Standard library
 import dataclasses
 from pathlib import Path
-from typing import Dict, Union
+from typing import Dict, List, Union
 
 # Third-party
 import dataclass_wizard
@@ -41,6 +41,7 @@ class DatastoreSelection:
 
     kind: DatastoreKindStr
     config_path: str
+    overload_stats_path: Union[str, None] = None
 
 
 @dataclasses.dataclass
@@ -69,6 +70,23 @@ class UniformFeatureWeighting:
 
 
 @dataclasses.dataclass
+class OutputClamping:
+    """
+    Configuration for clamping the output of the model.
+
+    Attributes
+    ----------
+    lower : Dict[str, float]
+        The minimum value to clamp each output feature to.
+    upper : Dict[str, float]
+        The maximum value to clamp each output feature to.
+    """
+
+    lower: Dict[str, float] = dataclasses.field(default_factory=dict)
+    upper: Dict[str, float] = dataclasses.field(default_factory=dict)
+
+
+@dataclasses.dataclass
 class TrainingConfig:
     """
     Configuration related to training neural-lam
@@ -86,6 +104,14 @@ class TrainingConfig:
         ManualStateFeatureWeighting, UniformFeatureWeighting
     ] = dataclasses.field(default_factory=UniformFeatureWeighting)
 
+    output_clamping: OutputClamping = dataclasses.field(
+        default_factory=OutputClamping
+    )
+    # List of pairs of timestamps as strings
+    excluded_intervals: List[List[str]] = dataclasses.field(
+        default_factory=list
+    )
+
 
 @dataclasses.dataclass
 class NeuralLAMConfig(dataclass_wizard.JSONWizard, dataclass_wizard.YAMLWizard):
@@ -97,11 +123,15 @@ class NeuralLAMConfig(dataclass_wizard.JSONWizard, dataclass_wizard.YAMLWizard):
     ----------
     datastore : DatastoreSelection
         The configuration for the datastore to use.
+    datastore_boundary : Union[DatastoreSelection, None]
+        The configuration for the boundary datastore to use, if any. If None,
+        no boundary datastore is used.
     training : TrainingConfig
         The configuration for training the model.
     """
 
     datastore: DatastoreSelection
+    datastore_boundary: Union[DatastoreSelection, None] = None
     training: TrainingConfig = dataclasses.field(default_factory=TrainingConfig)
 
     class _(dataclass_wizard.JSONWizard.Meta):
@@ -136,11 +166,11 @@ class InvalidConfigError(Exception):
     pass
 
 
-def load_config_and_datastore(
+def load_config_and_datastores(
     config_path: str,
 ) -> tuple[NeuralLAMConfig, Union[MDPDatastore, NpyFilesDatastoreMEPS]]:
     """
-    Load the neural-lam configuration and the datastore specified in the
+    Load the neural-lam configuration and the datastores specified in the
     configuration.
 
     Parameters
@@ -151,7 +181,7 @@ def load_config_and_datastore(
     Returns
     -------
     tuple[NeuralLAMConfig, Union[MDPDatastore, NpyFilesDatastoreMEPS]]
-        The Neural-LAM configuration and the loaded datastore.
+        The Neural-LAM configuration and the loaded datastores.
     """
     try:
         config = NeuralLAMConfig.from_yaml_file(config_path)
@@ -164,8 +194,37 @@ def load_config_and_datastore(
     datastore_config_path = (
         Path(config_path).parent / config.datastore.config_path
     )
+
+    if config.datastore.overload_stats_path is None:
+        overload_stats_path = None
+    else:
+        overload_stats_path = (
+            Path(config_path).parent / config.datastore.overload_stats_path
+        )
     datastore = init_datastore(
-        datastore_kind=config.datastore.kind, config_path=datastore_config_path
+        datastore_kind=config.datastore.kind,
+        config_path=datastore_config_path,
+        overload_stats_path=overload_stats_path,
     )
 
-    return config, datastore
+    if config.datastore_boundary is not None:
+        datastore_boundary_config_path = (
+            Path(config_path).parent / config.datastore_boundary.config_path
+        )
+
+        if config.datastore_boundary.overload_stats_path is None:
+            boundary_overload_stats_path = None
+        else:
+            boundary_overload_stats_path = (
+                Path(config_path).parent
+                / config.datastore_boundary.overload_stats_path
+            )
+        datastore_boundary = init_datastore(
+            datastore_kind=config.datastore_boundary.kind,
+            config_path=datastore_boundary_config_path,
+            overload_stats_path=boundary_overload_stats_path,
+        )
+    else:
+        datastore_boundary = None
+
+    return config, datastore, datastore_boundary
