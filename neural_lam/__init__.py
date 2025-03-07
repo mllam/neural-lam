@@ -3,7 +3,6 @@ import importlib.metadata
 
 # First-party
 import neural_lam.interaction_net
-import neural_lam.lr_scheduler
 import neural_lam.metrics
 import neural_lam.models
 import neural_lam.trainer
