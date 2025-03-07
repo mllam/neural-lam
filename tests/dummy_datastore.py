@@ -268,12 +268,13 @@ class DummyDatastore(BaseRegularGridDatastore):
         Return the standardization (i.e. scaling to mean of 0.0 and standard
         deviation of 1.0) dataarray for the given category. This should contain
         a `{category}_mean` and `{category}_std` variable for each variable in
-        the category. For `category=="state"`, the dataarray should also
-        contain a `state_diff_mean` and `state_diff_std` variable for the one-
-        step differences of the state variables. The returned dataarray should
-        at least have dimensions of `({category}_feature)`, but can also
-        include for example `grid_index` (if the standardization is done per
-        grid point for example).
+        the category.
+        For `category=="state"`, the dataarray should also contain a
+        `state_diff_mean_standardized` and `state_diff_std_standardized`
+        variable for the one-step differences of the state variables.
+        The returned dataarray should at least have dimensions of
+        `({category}_feature)`, but can also include for example `grid_index`
+        (if the standardization is done per grid point for example).
 
         Parameters
         ----------
@@ -292,7 +293,7 @@ class DummyDatastore(BaseRegularGridDatastore):
 
         ops = ["mean", "std"]
         if category == "state":
-            ops += ["diff_mean", "diff_std"]
+            ops += ["diff_mean_standardized", "diff_std_standardized"]
 
         for op in ops:
             da_op = xr.ones_like(self.ds[f"{category}_feature"]).astype(float)

@@ -18,7 +18,7 @@
 # To ensure that the version of torch installed is compatible with neural-lam we
 # first use `pip install --dry-run .` to determine the version of torch that would
 # be installed.
-name: Test Matrix
+name: CPU+GPU testing
 
 on: [push, pull_request]
 
@@ -65,6 +65,13 @@ jobs:
         run: |
           pdm venv create --with-pip
           pdm use --venv in-project
+
+      - name: Create virtual environment (pip GPU)
+        if: matrix.package_manager == 'pip' && matrix.device == 'gpu'
+        run: |
+          # venv must be made on nvme drive, otherwise we run out of space
+          python -m venv /opt/dlami/nvme/venv
+          source /opt/dlami/nvme/venv/bin/activate
 
       - name: Determine PyTorch version for neural-lam
         run: |

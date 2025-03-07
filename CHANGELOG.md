@@ -27,7 +27,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Fix duplicate tensor copy to CPU [\#106](https://github.com/mllam/neural-lam/pull/106) @observingClouds
 
+- Fix bug where the inverse_softplus used in clamping caused nans in the gradients [\#123](https://github.com/mllam/neural-lam/pull/123) @SimonKamuk
+
+- Add standardization to state diff stats from mdp datastore [\#122](https://github.com/mllam/neural-lam/pull/122) @SimonKamuk
+
+- Set ci/cd badges to refer to the new test matrix [\#130](https://github.com/mllam/neural-lam/pull/130) @SimonKamuk
+
 ### Maintenance
+- update AWS GPU ci/cd to use ami with larger (200GB) root volume and ensure
+  nvme drive is used for pip venvn
+  [\#126](https://github.com/mllam/neural-lam/pull/126), @leifdenby
+
 - update ci/cd testing setup to install torch version compatible with neural-lam
   dependencies [\#115](https://github.com/mllam/neural-lam/pull/115), @leifdenby
 
@@ -35,6 +45,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   in time and space (on cropped ~100x100 grid-point domain)
   [\#110](https://github.com/mllam/neural-lam/pull/110), @leifdenby
 
+- use dynamic versioning based on git tags and commit hashes
+  [\#118](https://github.com/mllam/neural-lam/pull/118), @observingClouds
+
+ - add detect_anomaly=True to pl.Trainer in test_training.py [\#124](https://github.com/mllam/neural-lam/pull/124), @SimonKamuk
 
 ## [v0.3.0](https://github.com/mllam/neural-lam/releases/tag/v0.3.0)
 
