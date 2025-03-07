@@ -1,5 +1,6 @@
 # Standard library
 import os
+import warnings
 from argparse import ArgumentParser
 
 # Third-party
@@ -621,6 +622,11 @@ def cli(input_args=None):
 def load_datastore(args):
     if args.config_path:
         _, datastore = load_config_and_datastore(config_path=args.config_path)
+        warnings.warn(
+            "Using config_path is deprecated, use datastore instead, instead use --datastore and --datastore_type (default: to mdp)",
+            DeprecationWarning,
+        )
+
     else:
         assert args.datastore_type in DATASTORES
         datastore = DATASTORES[args.datastore_type](config_path=args.datastore)
