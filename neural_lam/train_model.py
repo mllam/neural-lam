@@ -234,13 +234,13 @@ def main(input_args=None):
         "--scheduler_config",
         type=str,
         default=None,
-        help="Scheduler configuration for learning rate scheduler",
+        help="Configuration for learning rate scheduler. Eg. {'scheduler': 'StepLR', 'kwargs': {'step_size': 10, 'gamma': 0.1}}",
     )
     parser.add_argument(
         "--optimizer_config",
         type=str,
         default=None,
-        help="Optimizer configuration for learning rate scheduler",
+        help="Configuration for optimizer. Eg. {'optimizer': 'Adam', 'kwargs': {'lr': 0.01}}",
     )
     args = parser.parse_args(input_args)
     args.var_leads_metrics_watch = {
