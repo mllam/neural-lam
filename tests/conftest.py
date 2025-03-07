@@ -4,6 +4,8 @@ from pathlib import Path
 
 # Third-party
 import pooch
+import pytest
+import torch
 import yaml
 
 # First-party
@@ -104,3 +106,13 @@ def init_datastore_example(datastore_kind):
     )
 
     return datastore
+
+
+@pytest.fixture
+def model():
+    return torch.nn.Linear(1, 1)
+
+
+@pytest.fixture
+def optimizer(model):
+    return torch.optim.Adam(model.parameters())
