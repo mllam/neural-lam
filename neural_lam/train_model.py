@@ -76,12 +76,6 @@ def main(input_args=None):
         help="upper epoch limit (default: 200)",
     )
     parser.add_argument(
-        "--steps",
-        type=int,
-        default=-1,
-        help="upper step limit (default: None)",
-    )
-    parser.add_argument(
         "--batch_size", type=int, default=4, help="batch size (default: 4)"
     )
     parser.add_argument(
@@ -323,7 +317,6 @@ def main(input_args=None):
     )
     trainer = Trainer(
         max_epochs=args.epochs,
-        max_steps=args.steps,
         deterministic=True,
         strategy="ddp",
         accelerator=device_name,
