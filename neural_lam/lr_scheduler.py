@@ -13,11 +13,13 @@ class WarmupCosineAnnealingLR(torch.optim.lr_scheduler.LRScheduler):
     ):
         self.warmup_steps = warmup_steps
         self.annealing_steps = annealing_steps
+
+        # TODO generalize this to support multiple parameter groups
         assert (
             len(optimizer.param_groups) == 1
         ), "WarmupCosineAnnealingLR only supports training with one parameter group"
-
-        initial_learning_rate = optimizer.param_groups[0]["lr"]
+        [param_group] = optimizer.param_groups
+        initial_learning_rate = param_group["lr"]
 
         self.warmup_scheduler = torch.optim.lr_scheduler.LinearLR(
             optimizer,
