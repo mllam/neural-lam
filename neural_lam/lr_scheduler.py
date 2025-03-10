@@ -34,7 +34,7 @@ class WarmupCosineAnnealingLR(torch.optim.lr_scheduler.LRScheduler):
         if self._step_count <= self.warmup_steps:
             return self.warmup_scheduler.get_last_lr()
         elif self._step_count <= self.warmup_steps + self.annealing_steps:
-            self.annealing_scheduler.step()
+            return self.annealing_scheduler.get_last_lr()
 
         return True
 
