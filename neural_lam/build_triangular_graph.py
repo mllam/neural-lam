@@ -187,22 +187,33 @@ def main():
             os.path.join(save_dir_path, "mesh_down_features.pt"),
         )
         max_mesh_edge_len = gc_gc._get_max_edge_distance(m2m_graphs[0])
+        grid_con_mesh = m2m_graphs[0]  # Mesh that should be connected to grid
     else:
         merged_mesh, mesh_list = gcreate.create_multiscale_mesh(
             args.splits, args.levels, rotate_to_point=rot_point
         )
         max_mesh_edge_len = gc_gc._get_max_edge_distance(mesh_list[-1])
 
+        # Must use final mesh from mesh list here, as we don't want larger
+        # faces (triangles) present when constructing g2m and m2g
+        grid_con_mesh = mesh_list[-1]  # Mesh that should be connected to grid
+
         if not global_graph:
             print("Subsetting mesh graph...")
             merged_mesh = gutils.subset_mesh_to_chull(grid_chull, merged_mesh)
+            # Subset also grid_con_mesh. Works since it shares the nodes with
+            # merged_mesh (although not faces).
+            # Note: Could be sped up, as we are now doing the exact same
+            # subsetting twice
+            grid_con_mesh = gutils.subset_mesh_to_chull(
+                grid_chull, grid_con_mesh
+            )
 
         print(
             "Created multiscale graph with "
             f"{merged_mesh.vertices.shape[0]} nodes"
         )
         m2m_graphs = [merged_mesh]
-
     mesh_graph_features = [
         gcreate.create_mesh_graph_features(mesh_graph)
         for mesh_graph in m2m_graphs
@@ -236,7 +247,6 @@ def main():
 
     # === Grid2Mesh ===
     # Grid2Mesh: Radius-based
-    grid_con_mesh = m2m_graphs[0]  # Mesh that should be connected to grid
     grid_con_lat_lon = mesh_graph_features[0][-1]
     num_mesh_nodes = grid_con_lat_lon.shape[0]
 
