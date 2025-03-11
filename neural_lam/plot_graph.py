@@ -217,6 +217,11 @@ def main():
         help="Width of edges",
     )
     parser.add_argument(
+        "--mesh_edge_width",
+        type=float,
+        help="Width of mesh edges, if different than --edge_width",
+    )
+    parser.add_argument(
         "--grid_node_size",
         type=float,
         default=1.0,
@@ -336,6 +341,12 @@ def main():
     else:
         corner_filter_func = None
 
+    mesh_edge_width = (
+        args.edge_width
+        if args.mesh_edge_width is None
+        else args.mesh_edge_width
+    )
+
     # Add plotting objects to this list
     data_objs = []
 
@@ -422,7 +433,7 @@ def main():
                     bot_pos,
                     f"Mesh level {bot_level_i} edges",
                     color=args.mesh_color,
-                    width=args.edge_width,
+                    width=mesh_edge_width,
                     from_radius=bot_radius,
                     to_radius=bot_radius,
                     pos_filter_func=corner_filter_func,
@@ -444,7 +455,7 @@ def main():
                         top_pos,
                         f"Mesh up {bot_level_i}->{top_level_i} edges",
                         color=args.mesh_color,
-                        width=args.edge_width,
+                        width=mesh_edge_width,
                         from_radius=bot_radius,
                         to_radius=top_radius,
                         pos_filter_func=corner_filter_func,
@@ -458,7 +469,7 @@ def main():
                         bot_pos,
                         f"Mesh down {top_level_i}->{bot_level_i} edges",
                         color=args.mesh_color,
-                        width=args.edge_width,
+                        width=mesh_edge_width,
                         from_radius=top_radius,
                         to_radius=bot_radius,
                         pos_filter_func=corner_filter_func,
@@ -495,7 +506,7 @@ def main():
                 from_radius=mesh_radius,
                 to_radius=mesh_radius,
                 color=args.mesh_color,
-                width=args.edge_width,
+                width=mesh_edge_width,
                 pos_filter_func=corner_filter_func,
             )
         )
