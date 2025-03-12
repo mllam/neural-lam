@@ -5,6 +5,7 @@ from typing import List, Union
 
 # Third-party
 import matplotlib.pyplot as plt
+import numcodecs
 import numpy as np
 import pytorch_lightning as pl
 import torch
@@ -541,6 +542,9 @@ class ARModel(pl.LightningModule):
 
         if batch_idx == 0:
             logger.info(f"Saving predictions to {zarr_output_path}")
+            compressor = numcodecs.Blosc(
+                cname="zstd", clevel=9, shuffle=numcodecs.Blosc.SHUFFLE
+            )
             da_pred_batch.to_zarr(
                 zarr_output_path,
                 mode="w",
@@ -550,6 +554,7 @@ class ARModel(pl.LightningModule):
                         "units": "Seconds since 1970-01-01 00:00:00",
                         "dtype": "int64",
                     },
+                    "state": {"compressor": compressor},
                 },
             )
         else:
