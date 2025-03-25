@@ -3,7 +3,7 @@ import datetime
 import tempfile
 from functools import cached_property
 from pathlib import Path
-from typing import List, Union
+from typing import List, Optional, Tuple, Union
 
 # Third-party
 import isodate
@@ -125,6 +125,7 @@ class DummyDatastore(BaseRegularGridDatastore):
 
             # Define dimensions and create random data
             dims = ["grid_index", f"{category}_feature"]
+            shape: Tuple[int, ...]
             if category != "static":
                 dims.append("time")
                 shape = (n_grid_points, n, n_timesteps)
@@ -302,7 +303,7 @@ class DummyDatastore(BaseRegularGridDatastore):
         return ds_standardization
 
     def get_dataarray(
-        self, category: str, split: str, standardize: bool = False
+        self, category: str, split: Optional[str], standardize: bool = False
     ) -> Union[xr.DataArray, None]:
         """
         Return the processed data (as a single `xr.DataArray`) for the given
