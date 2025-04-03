@@ -211,8 +211,12 @@ def plot_metrics(
 
         # Common styling
         ax.set_xlabel("Lead Time (hours)", fontsize=10 if combined else 12)
+        if var_unit:
+            ylabel = f"{metric_name.upper()} (${var_unit}$)"
+        else:
+            ylabel = f"{metric_name.upper()}"
         ax.set_ylabel(
-            f"{metric_name.upper()} (${var_unit}$)",
+            ylabel,
             fontsize=10 if combined else 12,
         )
         #  ax.set_title(
