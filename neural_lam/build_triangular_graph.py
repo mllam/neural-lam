@@ -85,6 +85,12 @@ def main():
         default=1.8,
     )
     parser.add_argument(
+        "--two_dim_features",
+        action="store_true",
+        help="Compute graph features in the 2D CRS of the datastore projection,"
+        "instead of using 3D cartestian coordinates.",
+    )
+    parser.add_argument(
         "--allow_disconnected",
         action="store_true",
         help="Allow disconnected nodes in g2m. This is generally a bad idea and"
@@ -163,7 +169,12 @@ def main():
             mesh_up_features_list,
             mesh_down_features_list,
         ) = gcreate.create_hierarchical_mesh(
-            args.splits, args.levels, grid_chull, rotate_to_point=rot_point
+            args.splits,
+            args.levels,
+            datastore,
+            grid_chull,
+            rotate_to_point=rot_point,
+            two_dim_features=args.two_dim_features,
         )
         print("Created hierarchical graph with levels:")
         for level_i, mesh in enumerate(m2m_graphs):
@@ -215,7 +226,9 @@ def main():
         )
         m2m_graphs = [merged_mesh]
     mesh_graph_features = [
-        gcreate.create_mesh_graph_features(mesh_graph)
+        gcreate.create_mesh_graph_features(
+            mesh_graph, datastore, two_dim_features=args.two_dim_features
+        )
         for mesh_graph in m2m_graphs
     ]
     # Ordering: edge_index, node_features, edge_features, lat_lon
@@ -322,7 +335,11 @@ def main():
 
     # Get edge features for g2m
     g2m_edge_features = gcreate.create_edge_features(
-        g2m_edge_index, sender_coords=grid_lat_lon, receiver_mesh=grid_con_mesh
+        g2m_edge_index,
+        datastore,
+        sender_coords=grid_lat_lon,
+        receiver_mesh=grid_con_mesh,
+        two_dim_features=args.two_dim_features,
     )
 
     # Save g2m
@@ -345,8 +362,10 @@ def main():
     # Get edge features for m2g
     m2g_edge_features = gcreate.create_edge_features(
         m2g_edge_index,
+        datastore,
         receiver_coords=grid_decode_lat_lon,
         sender_mesh=grid_con_mesh,
+        two_dim_features=args.two_dim_features,
     )
 
     if args.plot:

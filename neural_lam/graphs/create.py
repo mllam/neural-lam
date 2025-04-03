@@ -9,6 +9,7 @@ from graphcast import model_utils as gc_mu
 
 # First-party
 import neural_lam.graphs.graph_utils as gutils
+from neural_lam import utils
 
 # Keyword arguments to use when calling graphcast functions
 # for creating graph features
@@ -151,7 +152,12 @@ def create_multiscale_mesh(splits, levels, rotate_to_point=None):
 
 
 def create_hierarchical_mesh(
-    splits, levels, crop_chull=None, rotate_to_point=None
+    splits,
+    levels,
+    datastore,
+    crop_chull=None,
+    rotate_to_point=None,
+    two_dim_features=False,
 ):
     """Create a hierarchical triangular mesh graph.
 
@@ -161,11 +167,15 @@ def create_hierarchical_mesh(
         Number of times to split icosahedron.
     levels : int
         Number of levels to keep (from finest resolution and up).
+    datastore : BaseDatastore
+        Datastore that grid data comes from.
     crop_chull : spherical_geometry.SphericalPolygon, optional
         A convex hull to crop graphs to within. If None no cropping is done.
     rotate_to_point : np.array or None
         If given, rotate the original icosahedron to line up a face with given
         point. Should be a 3d unit vector.
+    two_dim_features : bool
+        If graph features should be computed in 2D CRS defined by datastore.
 
     Returns
     -------
@@ -213,10 +223,18 @@ def create_hierarchical_mesh(
 
         # Compute features for inter-mesh edges
         mesh_up_features = create_edge_features(
-            mesh_up_ei, sender_mesh=from_mesh, receiver_mesh=to_mesh
+            mesh_up_ei,
+            datastore,
+            sender_mesh=from_mesh,
+            receiver_mesh=to_mesh,
+            two_dim_features=two_dim_features,
         )
         mesh_down_features = create_edge_features(
-            mesh_down_ei, sender_mesh=to_mesh, receiver_mesh=from_mesh
+            mesh_down_ei,
+            datastore,
+            sender_mesh=to_mesh,
+            receiver_mesh=from_mesh,
+            two_dim_features=two_dim_features,
         )
         mesh_up_features_list.append(mesh_up_features)
         mesh_down_features_list.append(mesh_down_features)
@@ -290,7 +308,9 @@ def connect_to_grid_containing_tri(grid_pos, mesh: gc_im.TriangularMesh):
     return edge_index_torch
 
 
-def create_mesh_graph_features(mesh_graph: gc_im.TriangularMesh):
+def create_mesh_graph_features(
+    mesh_graph: gc_im.TriangularMesh, datastore, two_dim_features
+):
     """Create torch tensors for edge_index and features
     from single TriangularMesh.
 
@@ -298,6 +318,10 @@ def create_mesh_graph_features(mesh_graph: gc_im.TriangularMesh):
     ----------
     mesh_graph : trimesh.Trimesh
         The triangular mesh graph to extract features from.
+    datastore : BaseDatastore
+        Datastore that grid data comes from.
+    two_dim_features : bool
+        If graph features should be computed in 2D CRS defined by datastore.
 
     Returns
     -------
@@ -314,28 +338,52 @@ def create_mesh_graph_features(mesh_graph: gc_im.TriangularMesh):
 
     # Compute features
     mesh_lat_lon = gutils.node_cart_to_lat_lon(mesh_graph.vertices)  # (N, 2)
-    mesh_node_features, mesh_edge_features = gc_mu.get_graph_spatial_features(
-        node_lat=mesh_lat_lon[:, 1],
-        node_lon=mesh_lat_lon[:, 0],
-        senders=mesh_edge_index[0, :],
-        receivers=mesh_edge_index[1, :],
-        **GC_SPATIAL_FEATURES_KWARGS,
-    )
+
+    if two_dim_features:
+        # Node features, just equal to coords
+        mesh_node_features = utils.project_lat_lons(
+            mesh_lat_lon, datastore
+        )  # (N, 2)
+
+        # Edge features
+        edge_features_torch = create_edge_features(
+            edge_index=mesh_edge_index,
+            datastore=datastore,
+            sender_coords=mesh_lat_lon,
+            receiver_coords=mesh_lat_lon,
+            two_dim_features=two_dim_features,
+        )
+    else:
+        (
+            mesh_node_features,
+            mesh_edge_features,
+        ) = gc_mu.get_graph_spatial_features(
+            node_lat=mesh_lat_lon[:, 1],
+            node_lon=mesh_lat_lon[:, 0],
+            senders=mesh_edge_index[0, :],
+            receivers=mesh_edge_index[1, :],
+            **GC_SPATIAL_FEATURES_KWARGS,
+        )
+        edge_features_torch = torch.tensor(
+            mesh_edge_features, dtype=torch.float32
+        )
 
     return (
         torch.tensor(mesh_edge_index, dtype=torch.long),
         torch.tensor(mesh_node_features, dtype=torch.float32),
-        torch.tensor(mesh_edge_features, dtype=torch.float32),
+        edge_features_torch,
         torch.tensor(mesh_lat_lon, dtype=torch.float32),
     )
 
 
 def create_edge_features(
     edge_index,
+    datastore,
     sender_coords=None,
     receiver_coords=None,
     sender_mesh=None,
     receiver_mesh=None,
+    two_dim_features=False,
 ):
     """Create torch tensors with edge features for given edge_index.
     For sender and receiver, either coords or a mesh has to be given.
@@ -344,6 +392,8 @@ def create_edge_features(
     ----------
     edge_index : np.array
         Edge index array of shape (2, num_edges).
+    datastore : BaseDatastore
+        Datastore that grid data comes from.
     sender_coords : np.array, optional
         Coordinates of sender nodes, shape (num_sender_nodes, 2).
     receiver_coords : np.array, optional
@@ -352,6 +402,8 @@ def create_edge_features(
         Mesh containing sender nodes.
     receiver_mesh : trimesh.Trimesh, optional
         Mesh containing receiver nodes.
+    two_dim_features : bool
+        If graph features should be computed in 2D CRS defined by datastore.
 
     Returns
     -------
@@ -385,13 +437,36 @@ def create_edge_features(
     sender_coords = sender_coords.astype(np.float32)
     receiver_coords = receiver_coords.astype(np.float32)
 
-    _, _, edge_features = gc_mu.get_bipartite_graph_spatial_features(
-        senders_node_lat=sender_coords[:, 0],
-        senders_node_lon=sender_coords[:, 1],
-        senders=edge_index[0, :],
-        receivers_node_lat=receiver_coords[:, 0],
-        receivers_node_lon=receiver_coords[:, 1],
-        receivers=edge_index[1, :],
-        **GC_SPATIAL_FEATURES_KWARGS,
-    )
+    if two_dim_features:
+        # Project endpoint coords
+        sender_coords_proj = utils.project_lat_lons(sender_coords, datastore)
+        receiver_coords_proj = utils.project_lat_lons(
+            receiver_coords, datastore
+        )
+
+        sender_edge_coords = sender_coords_proj[
+            edge_index[0, :]
+        ]  # (n_edges, 2)
+        receiver_edge_coords = receiver_coords_proj[
+            edge_index[1, :]
+        ]  # (n_edges, 2)
+
+        # Edge features are vector len and diff
+        vector_diff = receiver_edge_coords - sender_edge_coords  # (n_edges, 2)
+        vector_len = np.linalg.norm(
+            vector_diff, axis=1, keepdims=True
+        )  # (n_edges, 1)
+
+        edge_features = np.concatenate((vector_len, vector_diff), axis=1)
+    else:
+        _, _, edge_features = gc_mu.get_bipartite_graph_spatial_features(
+            senders_node_lat=sender_coords[:, 0],
+            senders_node_lon=sender_coords[:, 1],
+            senders=edge_index[0, :],
+            receivers_node_lat=receiver_coords[:, 0],
+            receivers_node_lon=receiver_coords[:, 1],
+            receivers=edge_index[1, :],
+            **GC_SPATIAL_FEATURES_KWARGS,
+        )
+
     return torch.tensor(edge_features, dtype=torch.float32)
