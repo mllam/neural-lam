@@ -1,0 +1,165 @@
+schema_version: v0.5.0
+dataset_version: v0.1.0
+
+output:
+  variables:
+    static: [grid_index, static_feature]
+    state: [time, grid_index, state_feature]
+    forcing: [time, grid_index, forcing_feature]
+  coord_ranges:
+    time:
+      start: 2000-01-01T00:00
+      end: 2020-10-29T00:00
+      step: PT3H
+  chunking:
+    time: 1
+    state_feature: 20
+  splitting:
+    dim: time
+    splits:
+      train:
+        start: 2000-01-01T00:00
+        end: 2018-10-29T00:00
+        compute_statistics:
+          ops: [mean, std, diff_mean, diff_std]
+          dims: [grid_index, time]
+      val:
+        start: 2018-11-05T00:00
+        end: 2019-10-22T00:00
+      test:
+        start: 2019-10-29T00:00
+        end: 2020-10-29T00:00
+
+inputs:
+  danra_sl_state:
+    path: danra_single_levels.zarr
+    dims: [time, x, y]
+    variables:
+      - pres_seasurface
+      - t2m
+      - u10m
+      - v10m
+      - pres0m
+      - lwavr0m
+      - swavr0m
+    dim_mapping:
+      time:
+        method: rename
+        dim: time
+      grid_index:
+        method: stack
+        dims: [x, y]
+      state_feature:
+        method: stack_variables_by_var_name
+        name_format: "{var_name}"
+    target_output_variable: state
+
+  danra_pl_state:
+    path: danra_pressure_levels.zarr
+    dims: [time, x, y, pressure]
+    variables:
+      z:
+        pressure:
+          values: [100, 200, 400, 600, 700, 850, 925, 1000,]
+          units: hPa
+      t:
+        pressure:
+          values: [100, 200, 400, 600, 700, 850, 925, 1000,]
+          units: hPa
+      r:
+        pressure:
+          values: [100, 200, 400, 600, 700, 850, 925, 1000,]
+          units: hPa
+      u:
+        pressure:
+          values: [100, 200, 400, 600, 700, 850, 925, 1000,]
+          units: hPa
+      v:
+        pressure:
+          values: [100, 200, 400, 600, 700, 850, 925, 1000,]
+          units: hPa
+      tw:
+        pressure:
+          values: [100, 200, 400, 600, 700, 850, 925, 1000,]
+          units: hPa
+    dim_mapping:
+      time:
+        method: rename
+        dim: time
+      state_feature:
+        method: stack_variables_by_var_name
+        dims: [pressure]
+        name_format: "{var_name}{pressure}"
+      grid_index:
+        method: stack
+        dims: [x, y]
+    target_output_variable: state
+
+  danra_static:
+    path: danra_v0.5.0_static_fields.zarr
+    dims: [x, y]
+    variables:
+      - lsm
+      - orography
+    dim_mapping:
+      grid_index:
+        method: stack
+        dims: [x, y]
+      static_feature:
+        method: stack_variables_by_var_name
+        name_format: "{var_name}"
+    target_output_variable: static
+
+  danra_forcing:
+    path: danra_single_levels.zarr
+    dims: [time, x, y]
+    derived_variables:
+      # derive variables to be used as forcings
+      toa_radiation:
+        kwargs:
+          time: ds_input.time
+          lat: ds_input.lat
+          lon: ds_input.lon
+        function: mllam_data_prep.ops.derive_variable.physical_field.calculate_toa_radiation
+      hour_of_day_sin:
+        kwargs:
+          time: ds_input.time
+          component: sin
+        function: mllam_data_prep.ops.derive_variable.time_components.calculate_hour_of_day
+      hour_of_day_cos:
+        kwargs:
+          time: ds_input.time
+          component: cos
+        function: mllam_data_prep.ops.derive_variable.time_components.calculate_hour_of_day
+      day_of_year_sin:
+        kwargs:
+          time: ds_input.time
+          component: sin
+        function: mllam_data_prep.ops.derive_variable.time_components.calculate_day_of_year
+      day_of_year_cos:
+        kwargs:
+          time: ds_input.time
+          component: cos
+        function: mllam_data_prep.ops.derive_variable.time_components.calculate_day_of_year
+    dim_mapping:
+      time:
+        method: rename
+        dim: time
+      grid_index:
+        method: stack
+        dims: [x, y]
+      forcing_feature:
+        method: stack_variables_by_var_name
+        name_format: "{var_name}"
+    target_output_variable: forcing
+
+extra:
+  projection:
+    class_name: LambertConformal
+    kwargs:
+      central_longitude: 25.0
+      central_latitude: 56.7
+      standard_parallels: [56.7, 56.7]
+      globe:
+        semimajor_axis: 6367470.0
+        semiminor_axis: 6367470.0

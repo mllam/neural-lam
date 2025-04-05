@@ -1,0 +1,144 @@
+schema_version: v0.5.0
+dataset_version: v0.1.0
+
+output:
+  variables:
+    static: [grid_index, static_feature]
+    forcing: [time, grid_index, forcing_feature]
+  coord_ranges:
+    time:
+      start: 2000-01-01T00:00
+      end: 2020-10-29T00:00
+      step: PT6H
+  chunking:
+    time: 1
+  splitting:
+    dim: time
+    splits:
+      train:
+        start: 2000-01-01T00:00
+        end: 2018-10-29T00:00
+        compute_statistics:
+          ops: [mean, std, diff_mean, diff_std]
+          dims: [grid_index, time]
+      val:
+        start: 2018-11-05T00:00
+        end: 2019-10-22T00:00
+      test:
+        start: 2019-10-29T00:00
+        end: 2020-10-29T00:00
+  domain_cropping:
+    margin_width_degrees: 7.19
+    interior_dataset_config_path: danra_interior_config.yaml
+
+inputs:
+  era5_sl:
+    path: era5.zarr
+    dims: [time, longitude, latitude]
+    variables:
+      - mean_sea_level_pressure
+      - 2m_temperature
+      - 10m_u_component_of_wind
+      - 10m_v_component_of_wind
+      - surface_pressure
+    derived_variables:
+      # derive variables to be used as forcings
+      toa_radiation:
+        kwargs:
+          time: ds_input.time
+          lat: ds_input.latitude
+          lon: ds_input.longitude
+        function: mllam_data_prep.ops.derive_variable.physical_field.calculate_toa_radiation
+      hour_of_day_sin:
+        kwargs:
+          time: ds_input.time
+          component: sin
+        function: mllam_data_prep.ops.derive_variable.time_components.calculate_hour_of_day
+      hour_of_day_cos:
+        kwargs:
+          time: ds_input.time
+          component: cos
+        function: mllam_data_prep.ops.derive_variable.time_components.calculate_hour_of_day
+      day_of_year_sin:
+        kwargs:
+          time: ds_input.time
+          component: sin
+        function: mllam_data_prep.ops.derive_variable.time_components.calculate_day_of_year
+      day_of_year_cos:
+        kwargs:
+          time: ds_input.time
+          component: cos
+        function: mllam_data_prep.ops.derive_variable.time_components.calculate_day_of_year
+    dim_mapping:
+      time:
+        method: rename
+        dim: time
+      forcing_feature:
+        method: stack_variables_by_var_name
+        name_format: "{var_name}"
+      grid_index:
+        method: stack
+        dims: [longitude, latitude]
+    target_output_variable: forcing
+
+  era5_pl:
+    path: era5.zarr
+    dims: [time, longitude, latitude, level]
+    variables:
+      geopotential:
+        level:
+          values: [100, 200, 400, 600, 700, 850, 925, 1000,]
+          units: hPa
+      temperature:
+        level:
+          values: [100, 200, 400, 600, 700, 850, 925, 1000,]
+          units: hPa
+      specific_humidity:
+        level:
+          values: [100, 200, 400, 600, 700, 850, 925, 1000,]
+          units: hPa
+      u_component_of_wind:
+        level:
+          values: [100, 200, 400, 600, 700, 850, 925, 1000,]
+          units: hPa
+      v_component_of_wind:
+        level:
+          values: [100, 200, 400, 600, 700, 850, 925, 1000,]
+          units: hPa
+      vertical_velocity:
+        level:
+          values: [100, 200, 400, 600, 700, 850, 925, 1000,]
+          units: hPa
+    dim_mapping:
+      time:
+        method: rename
+        dim: time
+      forcing_feature:
+        method: stack_variables_by_var_name
+        dims: [level]
+        name_format: "{var_name}{level}"
+      grid_index:
+        method: stack
+        dims: [longitude, latitude]
+    target_output_variable: forcing
+
+  era5_static:
+    path: era5.zarr
+    dims: [time, longitude, latitude, level]
+    variables:
+      - land_sea_mask
+      - geopotential_at_surface
+    dim_mapping:
+      static_feature:
+        method: stack_variables_by_var_name
+        name_format: "{var_name}"
+      grid_index:
+        method: stack
+        dims: [longitude, latitude]
+    target_output_variable: static
+
+extra:
+  projection:
+    class_name: PlateCarree
+    kwargs:
+      central_longitude: 0.0
