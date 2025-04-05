@@ -1,8 +1,48 @@
-[![slack](https://img.shields.io/badge/slack-join-brightgreen.svg?logo=slack)](https://join.slack.com/t/ml-lam/shared_invite/zt-2t112zvm8-Vt6aBvhX7nYa6Kbj_LkCBQ)
-![Linting](https://github.com/mllam/neural-lam/actions/workflows/pre-commit.yml/badge.svg?branch=main)
-[![test (pdm install, gpu)](https://github.com/mllam/neural-lam/actions/workflows/ci-pdm-install-and-test-gpu.yml/badge.svg)](https://github.com/mllam/neural-lam/actions/workflows/ci-pdm-install-and-test-gpu.yml)
-[![test (pdm install, cpu)](https://github.com/mllam/neural-lam/actions/workflows/ci-pdm-install-and-test-cpu.yml/badge.svg)](https://github.com/mllam/neural-lam/actions/workflows/ci-pdm-install-and-test-cpu.yml)
+# Building ML LAMs: Neural-LAM Code
+This is the main codebase used in the paper *Building Machine Learning Limited Area Models: Kilometer-Scale Weather Forecasting in Realistic Settings*, together with accompanying tagged releases of [weather-model-graphs](https://github.com/joeloskarsson/weather-model-graphs/releases/tag/building-ml-lams) and [mllam-data-prep](https://github.com/sadamov/mllam-data-prep/releases/tag/building-ml-lams).
 
+## Quickstart
+These are some instructions to get started with the codebase. More extensive documentation is given below.
+
+To reproduce experiments from the paper, you might first want to download some data and/or trained model checkpoints. These can be found at:
+
+* [Checkpoints]()
+* [DANRA data]()
+* [COSMO data](https://www.research-collection.ethz.ch/handle/20.500.11850/720460) (2 month example)
+* [ERA5 boundary data](https://console.cloud.google.com/storage/browser/weatherbench2/datasets/era5/1959-2022-6h-1440x721.zarr)
+* [IFS boundary data](https://console.cloud.google.com/storage/browser/weatherbench2/datasets/hres/2016-2022-0012-1440x721.zarr)
+
+The `scripts` directory contains examples of configuration files and scripts, matching our final models from the paper.
+Note that the paths and filenames in these might have to be somewhat tailored, depending on where you save the actual data.
+The overall steps to get to a running model are:
+
+1. Install this `neural-lam` package. See [full installation instructions](#installing-neural-lam) below.
+2. Process any data you want to work with to a training-optimized format using `mllam-data-prep`. For example, to process the DANRA data run:
+    ```
+    python -m mllam_data_prep scripts/danra_interior_config.yaml
+    ```
+    Such config files for DANRA, COSMO, ERA5 and IFS data are all available in the `scripts` repository.
+3. Build the graph for the model using
+    ```
+    python -m neural_lam.build_rectangular_graph
+    ```
+    or
+    ```
+    python -m neural_lam.build_triangular_graph
+    ```
+    See the scripts `scripts/danra_build_graphs.sh` and `scripts/cosmo_build_graphs.sh` for commands used to build the graphs from the paper.
+4. Train or evaluate the model. For both eval and training use
+    ```
+    python -m neural_lam.train_model
+    ```
+    with different options. Use
+    ```
+    python -m neural_lam.train_model --help
+    ```
+    for a full list of options available.
+    The scripts `scripts/danra_eval.sh` and `scripts/cosmo_eval.sh` contain full configs with options that allow for loading the final model checkpoints from the paper.
+
+## Neural-LAM
 <p align="middle">
     <img src="figures/neural_lam_header.png" width="700">
 </p>
@@ -17,38 +57,6 @@ The repository contains LAM versions of:
 * The graph-based model from [Keisler (2022)](https://arxiv.org/abs/2202.07575).
 * GraphCast, by [Lam et al. (2023)](https://arxiv.org/abs/2212.12794).
 * The hierarchical model from [Oskarsson et al. (2023)](https://arxiv.org/abs/2309.17370).
-
-# Publications
-For a more in-depth scientific introduction to machine learning for LAM weather forecasting see the publications listed here.
-As the code in the repository is continuously evolving, the latest version might feature some small differences to what was used for these publications.
-We retain some paper-specific branches for reproducibility purposes.
-
-
-*If you use Neural-LAM in your work, please cite the relevant paper(s)*.
-
-#### [Graph-based Neural Weather Prediction for Limited Area Modeling](https://arxiv.org/abs/2309.17370)
-```
-@inproceedings{oskarsson2023graphbased,
-    title={Graph-based Neural Weather Prediction for Limited Area Modeling},
-    author={Oskarsson, Joel and Landelius, Tomas and Lindsten, Fredrik},
-    booktitle={NeurIPS 2023 Workshop on Tackling Climate Change with Machine Learning},
-    year={2023}
-}
-```
-See the branch [`ccai_paper_2023`](https://github.com/joeloskarsson/neural-lam/tree/ccai_paper_2023) for a revision of the code that reproduces this workshop paper.
-
-#### [Probabilistic Weather Forecasting with Hierarchical Graph Neural Networks](https://arxiv.org/abs/2406.04759)
-```
-@inproceedings{oskarsson2024probabilistic,
-  title = {Probabilistic Weather Forecasting with Hierarchical Graph Neural Networks},
-  author = {Oskarsson, Joel and Landelius, Tomas and Deisenroth, Marc Peter and Lindsten, Fredrik},
-  booktitle = {Advances in Neural Information Processing Systems},
-  volume = {37},
-  year = {2024},
-}
-```
-See the branches [`prob_model_lam`](https://github.com/mllam/neural-lam/tree/prob_model_lam) and [`prob_model_global`](https://github.com/mllam/neural-lam/tree/prob_model_global) for revisions of the code that reproduces this paper.
-The global and probabilistic models from this paper are not yet fully merged with `main` (see issues [62](https://github.com/mllam/neural-lam/issues/62) and [63](https://github.com/mllam/neural-lam/issues/63)).
 
 # Modularity
 The Neural-LAM code is designed to modularize the different components involved in training and evaluating neural weather prediction models.
@@ -268,136 +276,10 @@ For example:
 python -m mllam_data_prep --config data/danra.datastore.yaml --dask-distributed-local-core-fraction 0.5
 ```
 
-### NpyFiles MEPS Datastore - `NpyFilesDatastoreMEPS`
-
-Version `v0.1.0` of Neural-LAM was built to train from numpy-files from the
-MEPS weather forecasts dataset.
-To enable this functionality to live on in later versions of neural-lam we have
-built a datastore called `NpyFilesDatastoreMEPS` which implements functionality
-to read from these exact same numpy-files. At this stage this datastore class
-is very much tied to the MEPS dataset, but the code is written in a way where
-it quite easily could be adapted to work with numpy-based weather
-forecast/analysis files in future.
-
-The full MEPS dataset can be shared with other researchers on request, contact us for this.
-A tiny subset of the data (named `meps_example`) is available in
-`example_data.zip`, which can be downloaded from
-[here](https://liuonline-my.sharepoint.com/:f:/g/personal/joeos82_liu_se/EuiUuiGzFIFHruPWpfxfUmYBSjhqMUjNExlJi9W6ULMZ1w?e=97pnGX).
-
-Download the file and unzip in the neural-lam directory.
-Graphs used in the initial paper are also available for download at the same link (but can as easily be re-generated using `python -m neural_lam.create_graph`).
-Note that this is far too little data to train any useful models, but all pre-processing and training steps can be run with it.
-It should thus be useful to make sure that your python environment is set up correctly and that all the code can be ran without any issues.
-
-The following datastore configuration works with the MEPS dataset:
-
-```yaml
-# meps.datastore.yaml
-dataset:
-  name: meps_example
-  num_forcing_features: 16
-  var_longnames:
-  - pres_heightAboveGround_0_instant
-  - pres_heightAboveSea_0_instant
-  - nlwrs_heightAboveGround_0_accum
-  - nswrs_heightAboveGround_0_accum
-  - r_heightAboveGround_2_instant
-  - r_hybrid_65_instant
-  - t_heightAboveGround_2_instant
-  - t_hybrid_65_instant
-  - t_isobaricInhPa_500_instant
-  - t_isobaricInhPa_850_instant
-  - u_hybrid_65_instant
-  - u_isobaricInhPa_850_instant
-  - v_hybrid_65_instant
-  - v_isobaricInhPa_850_instant
-  - wvint_entireAtmosphere_0_instant
-  - z_isobaricInhPa_1000_instant
-  - z_isobaricInhPa_500_instant
-  var_names:
-  - pres_0g
-  - pres_0s
-  - nlwrs_0
-  - nswrs_0
-  - r_2
-  - r_65
-  - t_2
-  - t_65
-  - t_500
-  - t_850
-  - u_65
-  - u_850
-  - v_65
-  - v_850
-  - wvint_0
-  - z_1000
-  - z_500
-  var_units:
-  - Pa
-  - Pa
-  - W/m\textsuperscript{2}
-  - W/m\textsuperscript{2}
-  - "-"
-  - "-"
-  - K
-  - K
-  - K
-  - K
-  - m/s
-  - m/s
-  - m/s
-  - m/s
-  - kg/m\textsuperscript{2}
-  - m\textsuperscript{2}/s\textsuperscript{2}
-  - m\textsuperscript{2}/s\textsuperscript{2}
-  num_timesteps: 65
-  num_ensemble_members: 2
-  step_length: 3
-  remove_state_features_with_index: [15]
-grid_shape_state:
-- 268
-- 238
-projection:
-  class_name: LambertConformal
-  kwargs:
-    central_latitude: 63.3
-    central_longitude: 15.0
-    standard_parallels:
-    - 63.3
-    - 63.3
-```
-
-Which you can then use in a neural-lam configuration file like this:
-
-```yaml
-# config.yaml
-datastore:
-  kind: npyfilesmeps
-  config_path: meps.datastore.yaml
-training:
-  state_feature_weighting:
-    __config_class__: ManualStateFeatureWeighting
-    values:
-      u100m: 1.0
-      v100m: 1.0
-```
-
-For npy-file based datastores you must separately run the command that creates the variables used for standardization:
-
-```bash
-python -m neural_lam.datastore.npyfilesmeps.compute_standardization_stats <path-to-datastore-config>
-```
-
 ### Graph creation
 
-Run `python -m neural_lam.create_mesh` with suitable options to generate the graph you want to use (see `python neural_lam.create_mesh --help` for a list of options).
-The graphs used for the different models in the [paper](#graph-based-neural-weather-prediction-for-limited-area-modeling) can be created as:
-
-* **GC-LAM**: `python -m neural_lam.create_graph --config_path <neural-lam-config-path> --name multiscale`
-* **Hi-LAM**: `python -m neural_lam.create_graph --config_path <neural-lam-config-path> --name hierarchical --hierarchical` (also works for Hi-LAM-Parallel)
-* **L1-LAM**: `python -m neural_lam.create_graph --config_path <neural-lam-config-path> --name 1level --levels 1`
-
-The graph-related files are stored in a directory called `graphs`.
+Run `python -m neural_lam.build_rectangular_graph` or `python -m neural_lam.build_triangular_graph` with suitable options to generate the graph you want to use (see e.g. `python neural_lam.build_rectangular_graph --help` for a list of options).
+In `scripts.danra_build_graphs.sh` and `scripts.cosmo_build_graphs.sh` you can find the command line options for some examples of graph configurations from the Building ML LAMs paper.
 
 ## Weights & Biases Integration
 The project is fully integrated with [Weights & Biases](https://www.wandb.ai/) (W&B) for logging and visualization, but can just as easily be used without it.
@@ -422,9 +304,9 @@ A few of the key ones are outlined below:
 
 * `--config_path`: Path to the configuration for neural-lam (for example in `data/myexperiment/config.yaml`).
 * `--model`: Which model to train
-* `--graph`: Which graph to use with the model
+* `--graph_name`: Which graph to use with the model
 * `--epochs`: Number of epochs to train for
-* `--processor_layers`: Number of GNN layers to use in the processing part of the model
+* `--processor_layers`: Number of GNN layers to use in the processing part of the model. Note that setting `--processor_layers 1` corresponds to 1 full sweep up and down the mesh hierarchy, so really 2 processor steps in terms of node representation updates.
 * `--ar_steps_train`: Number of time steps to unroll for when making predictions and computing the loss
 * `--ar_steps_eval`: Number of time steps to unroll for during validation steps
 
@@ -434,36 +316,21 @@ The implemented models are:
 ### Graph-LAM
 This is the basic graph-based LAM model.
 The encode-process-decode framework is used with a mesh graph in order to make one-step pedictions.
-This model class is used both for the L1-LAM and GC-LAM models from the [paper](#graph-based-neural-weather-prediction-for-limited-area-modeling), only with different graphs.
+This model class is used both for the multi-scale graphs in the Building ML LAMs paper.
 
-To train 1L-LAM use
-```
-python -m neural_lam.train_model --model graph_lam --graph 1level ...
-```
-
-To train GC-LAM use
+Example use:
 ```
 python -m neural_lam.train_model --model graph_lam --graph multiscale ...
 ```
 
 ### Hi-LAM
 A version of Graph-LAM that uses a hierarchical mesh graph and performs sequential message passing through the hierarchy during processing.
+This model class is used both for the hierarchical graphs in the Building ML LAMs paper.
 
 To train Hi-LAM use
 ```
 python -m neural_lam.train_model --model hi_lam --graph hierarchical ...
 ```
-
-### Hi-LAM-Parallel
-A version of Hi-LAM where all message passing in the hierarchical mesh (up, down, inter-level) is ran in parallel.
-Not included in the paper as initial experiments showed worse results than Hi-LAM, but could be interesting to try in more settings.
-
-To train Hi-LAM-Parallel use
-```
-python -m neural_lam.train_model --model hi_lam_parallel --graph hierarchical ...
-```
-
-Checkpoint files for our models trained on the MEPS data are available upon request.
 
 ## Evaluate Models
 Evaluation is also done using `python -m neural_lam.train_model --config_path <config-path>`, but using the `--eval` option.
@@ -474,6 +341,7 @@ Some options specifically important for evaluation are:
 * `--load`: Path to model checkpoint file (`.ckpt`) to load parameters from
 * `--n_example_pred`: Number of example predictions to plot during evaluation.
 * `--ar_steps_eval`: Number of time steps to unroll for during evaluation
+* `--save_eval_to_zarr_path`: Also save eval forecasts to a Zarr-archive at given path. Useful for further verification.
 
 **Note:** While it is technically possible to use multiple GPUs for running evaluation, this is strongly discouraged. If using multiple devices the `DistributedSampler` will replicate some samples to make sure all devices have the same batch size, meaning that evaluation metrics will be unreliable.
 A possible workaround is to just use batch size 1 during evaluation.
@@ -496,7 +364,7 @@ graphs
 │   ├── m2m_features.pt                     - Static features of mesh edges (neural_lam.create_mesh)
 │   ├── g2m_features.pt                     - Static features of grid to mesh edges (neural_lam.create_mesh)
 │   ├── m2g_features.pt                     - Static features of mesh to grid edges (neural_lam.create_mesh)
-│   └── mesh_features.pt                    - Static features of mesh nodes (neural_lam.create_mesh)
+│   └── m2m_node_features.pt                - Static features of mesh nodes (neural_lam.create_mesh)
 ├── graph2
 ├── ...
 └── graphN
@@ -508,7 +376,7 @@ In particular, the files
 ```
 │   ├── m2m_edge_index.pt                   - Edges in mesh graph (neural_lam.create_mesh)
 │   ├── m2m_features.pt                     - Static features of mesh edges (neural_lam.create_mesh)
-│   ├── mesh_features.pt                    - Static features of mesh nodes (neural_lam.create_mesh)
+│   ├── m2m_node_features.pt                - Static features of mesh nodes (neural_lam.create_mesh)
 ```
 all contain lists of length `L`, for a hierarchical mesh graph with `L` layers.
 For non-hierarchical graphs `L == 1` and these are all just singly-entry lists.
