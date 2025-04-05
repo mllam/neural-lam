@@ -228,7 +228,9 @@ def load_graph(graph_dir_path, datastore, device="cpu"):
                     datastore.coords_projection,
                     mesh_coords[:, 0].numpy(),
                     mesh_coords[:, 1].numpy(),
-                ),
+                )[
+                    :, :2
+                ],  # Keep only 2d
                 dtype=torch.float32,
             )
             for mesh_coords in mesh_static_features
