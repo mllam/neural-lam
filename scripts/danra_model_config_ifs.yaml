@@ -1,0 +1,89 @@
+datastore:
+  kind: mdp
+  config_path: danra_interior_config.yaml
+datastore_boundary:
+  kind: mdp
+  config_path: danra_ifs_config.yaml
+  overload_stats_path: danra_era5_config.yaml
+training:
+  state_feature_weighting:
+    __config_class__: ManualStateFeatureWeighting
+    weights:
+      pres_seasurface: 1.0
+      t2m: 1.0
+      u10m: 1.0
+      v10m: 1.0
+      pres0m: 1.0
+      lwavr0m: 1.0
+      swavr0m: 1.0
+      z100: 0.125
+      z200: 0.125
+      z400: 0.125
+      z600: 0.125
+      z700: 0.125
+      z850: 0.125
+      z925: 0.125
+      z1000: 0.125
+      t100: 0.125
+      t200: 0.125
+      t400: 0.125
+      t600: 0.125
+      t700: 0.125
+      t850: 0.125
+      t925: 0.125
+      t1000: 0.125
+      r100: 0.125
+      r200: 0.125
+      r400: 0.125
+      r600: 0.125
+      r700: 0.125
+      r850: 0.125
+      r925: 0.125
+      r1000: 0.125
+      u100: 0.125
+      u200: 0.125
+      u400: 0.125
+      u600: 0.125
+      u700: 0.125
+      u850: 0.125
+      u925: 0.125
+      u1000: 0.125
+      v100: 0.125
+      v200: 0.125
+      v400: 0.125
+      v600: 0.125
+      v700: 0.125
+      v850: 0.125
+      v925: 0.125
+      v1000: 0.125
+      tw100: 0.125
+      tw200: 0.125
+      tw400: 0.125
+      tw600: 0.125
+      tw700: 0.125
+      tw850: 0.125
+      tw925: 0.125
+      tw1000: 0.125
+  output_clamping:
+    lower:
+      r100: 0
+      r200: 0
+      r400: 0
+      r600: 0
+      r700: 0
+      r850: 0
+      r925: 0
+      r1000: 0
+    upper:
+      r100: 1
+      r200: 1
+      r400: 1
+      r600: 1
+      r700: 1
+      r850: 1
+      r925: 1
+      r1000: 1
+  excluded_intervals:
+    - ["2002-11-19T00", "2002-11-19T06"]
+    - ["2007-08-26T00", "2007-08-26T21"]
+    - ["2017-11-25T15", "2017-11-25T15"]
