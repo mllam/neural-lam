@@ -207,7 +207,7 @@ class ARModel(pl.LightningModule):
             self.unroll_ckpt_func = lambda f, *args: f(*args)
 
         # Store step length (h), taking subsampling into account
-        self.step_length = datastore.step_length * args.interior_subsample_step
+        self.step_length = datastore.step_length
 
         # Make WeatherDataset:s for being able to make tensor into xr.DA
         # Note: Unclear if it is actually necessary to make one per split?
