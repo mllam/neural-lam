@@ -24,6 +24,9 @@ dependencies = [
     "torch-geometric==2.3.1",
     "parse>=1.20.2",
     "dataclass-wizard<0.31.0",
+    "numpy<2.0.0",
+    "dask~=2025.3.0",
+    "xarray~=2025.3.1",
     "mllam-data-prep[latlon-domain-crop] @ git+https://github.com/sadamov/mllam-data-prep.git@building-ml-lams",
     "weather-model-graphs @ git+https://github.com/joeloskarsson/weather-model-graphs.git@building-ml-lams"
 ]
