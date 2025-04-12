@@ -6,9 +6,9 @@ These are some instructions to get started with the codebase. More extensive doc
 
 To reproduce experiments from the paper, you might first want to download some data and/or trained model checkpoints. These can be found at:
 
-* [Checkpoints]()
-* [DANRA data]()
-* [COSMO data](https://www.research-collection.ethz.ch/handle/20.500.11850/720460) (2 month example)
+* [Checkpoints](https://zenodo.org/records/15131838)
+* DANRA data (see paper)
+* COSMO data (see paper)
 * [ERA5 boundary data](https://console.cloud.google.com/storage/browser/weatherbench2/datasets/era5/1959-2022-6h-1440x721.zarr)
 * [IFS boundary data](https://console.cloud.google.com/storage/browser/weatherbench2/datasets/hres/2016-2022-0012-1440x721.zarr)
 
@@ -410,4 +410,4 @@ Furthermore, all tests in the ```tests``` directory will be run upon pushing cha
 
 # Contact
 If you are interested in machine learning models for LAM, have questions about the implementation or ideas for extending it, feel free to get in touch.
-There is an open [mllam slack channel](https://join.slack.com/t/ml-lam/shared_invite/zt-2t112zvm8-Vt6aBvhX7nYa6Kbj_LkCBQ) that anyone can join. You can also open a github issue on this page, or (if more suitable) send an email to [joel.oskarsson@liu.se](mailto:joel.oskarsson@liu.se).
+There is an open [mllam slack channel](https://join.slack.com/t/ml-lam/shared_invite/zt-2t112zvm8-Vt6aBvhX7nYa6Kbj_LkCBQ) that anyone can join. You can also open a github issue on this page, or (if more suitable) send an email to [joel.oskarsson@outlook.com](mailto:joel.oskarsson@outlook.com).
