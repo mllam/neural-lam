@@ -34,12 +34,14 @@ def main(input_args=None):
         "--config_path",
         type=str,
         help="Path to the configuration for neural-lam",
+        required=True,
     )
     parser.add_argument(
         "--model",
         type=str,
         default="graph_lam",
         help="Model architecture to train/evaluate (default: graph_lam)",
+        choices=MODELS.keys(),
     )
     parser.add_argument(
         "--seed", type=int, default=42, help="random seed (default: 42)"
@@ -165,6 +167,7 @@ def main(input_args=None):
         type=str,
         help="Eval model on given data split (val/test) "
         "(default: None (train model))",
+        choices=["val", "test"],
     )
     parser.add_argument(
         "--ar_steps_eval",
@@ -232,17 +235,6 @@ def main(input_args=None):
         int(k): v for k, v in json.loads(args.var_leads_metrics_watch).items()
     }
 
-    # Asserts for arguments
-    assert (
-        args.config_path is not None
-    ), "Specify your config with --config_path"
-    assert args.model in MODELS, f"Unknown model: {args.model}"
-    assert args.eval in (
-        None,
-        "val",
-        "test",
-    ), f"Unknown eval setting: {args.eval}"
-
     # Get an (actual) random run id as a unique identifier
     random_run_id = random.randint(0, 9999)
 
@@ -262,6 +254,7 @@ def main(input_args=None):
         num_future_forcing_steps=args.num_future_forcing_steps,
         batch_size=args.batch_size,
         num_workers=args.num_workers,
+        eval_split=args.eval or "test",
     )
 
     # Instantiate model + trainer
