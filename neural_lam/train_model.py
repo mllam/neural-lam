@@ -5,13 +5,17 @@ import time
 from argparse import ArgumentParser
 
 # Third-party
+# for logging the model:
 import pytorch_lightning as pl
 import torch
 from lightning_fabric.utilities import seed
+from loguru import logger
 
 # Local
-from . import WeatherDataset, config, utils
+from . import utils
+from .config import load_config_and_datastore
 from .models import GraphLAM, HiLAM, HiLAMParallel
+from .weather_dataset import WeatherDataModule
 
 MODELS = {
     "graph_lam": GraphLAM,
@@ -20,18 +24,16 @@ MODELS = {
 }
 
 
+@logger.catch
 def main(input_args=None):
-    """
-    Main function for training and evaluating models
-    """
+    """Main function for training and evaluating models."""
     parser = ArgumentParser(
         description="Train or evaluate NeurWP models for LAM"
     )
     parser.add_argument(
-        "--data_config",
+        "--config_path",
         type=str,
-        default="neural_lam/data_config.yaml",
-        help="Path to data config file (default: neural_lam/data_config.yaml)",
+        help="Path to the configuration for neural-lam",
     )
     parser.add_argument(
         "--model",
@@ -40,20 +42,29 @@ def main(input_args=None):
         help="Model architecture to train/evaluate (default: graph_lam)",
     )
     parser.add_argument(
-        "--subset_ds",
-        type=int,
-        default=0,
-        help="Use only a small subset of the dataset, for debugging"
-        "(default: 0=false)",
-    )
-    parser.add_argument(
         "--seed", type=int, default=42, help="random seed (default: 42)"
     )
     parser.add_argument(
-        "--n_workers",
+        "--num_workers",
         type=int,
         default=4,
         help="Number of workers in data loader (default: 4)",
+    )
+    parser.add_argument(
+        "--num_nodes",
+        type=int,
+        default=1,
+        help="Number of nodes to use in DDP (default: 1)",
+    )
+    parser.add_argument(
+        "--devices",
+        nargs="+",
+        type=str,
+        default=["auto"],
+        help="Devices to use for training. Can be the string 'auto' or a list "
+        "of integer id's corresponding to the desired devices, e.g. "
+        "'--devices 0 1'. Note that this cannot be used with SLURM, instead "
+        "set 'ntasks-per-node' in the slurm setup (default: auto)",
     )
     parser.add_argument(
         "--epochs",
@@ -71,10 +82,9 @@ def main(input_args=None):
     )
     parser.add_argument(
         "--restore_opt",
-        type=int,
-        default=0,
+        action="store_true",
         help="If optimizer state should be restored with model "
-        "(default: 0 (false))",
+        "(default: false)",
     )
     parser.add_argument(
         "--precision",
@@ -118,40 +128,25 @@ def main(input_args=None):
     )
     parser.add_argument(
         "--output_std",
-        type=int,
-        default=0,
+        action="store_true",
         help="If models should additionally output std.-dev. per "
         "output dimensions "
-        "(default: 0 (no))",
+        "(default: False (no))",
     )
 
     # Training options
     parser.add_argument(
-        "--ar_steps",
+        "--ar_steps_train",
         type=int,
         default=1,
-        help="Number of steps to unroll prediction for in loss (1-19) "
+        help="Number of steps to unroll prediction for in loss function "
         "(default: 1)",
-    )
-    parser.add_argument(
-        "--control_only",
-        type=int,
-        default=0,
-        help="Train only on control member of ensemble data "
-        "(default: 0 (False))",
     )
     parser.add_argument(
         "--loss",
         type=str,
         default="wmse",
         help="Loss function to use, see metric.py (default: wmse)",
-    )
-    parser.add_argument(
-        "--step_length",
-        type=int,
-        default=3,
-        help="Step length in hours to consider single time step 1-3 "
-        "(default: 3)",
     )
     parser.add_argument(
         "--lr", type=float, default=1e-3, help="learning rate (default: 0.001)"
@@ -172,6 +167,13 @@ def main(input_args=None):
         "(default: None (train model))",
     )
     parser.add_argument(
+        "--ar_steps_eval",
+        type=int,
+        default=10,
+        help="Number of steps to unroll prediction for during evaluation "
+        "(default: 10)",
+    )
+    parser.add_argument(
         "--n_example_pred",
         type=int,
         default=1,
@@ -181,16 +183,24 @@ def main(input_args=None):
 
     # Logger Settings
     parser.add_argument(
-        "--wandb_project",
+        "--logger",
+        type=str,
+        default="wandb",
+        choices=["wandb", "mlflow"],
+        help="Logger to use for training (wandb/mlflow) (default: wandb)",
+    )
+    parser.add_argument(
+        "--logger-project",
         type=str,
         default="neural_lam",
-        help="Wandb project name (default: neural_lam)",
+        help="Logger project name, for eg. Wandb (default: neural_lam)",
     )
     parser.add_argument(
         "--val_steps_to_log",
-        type=list,
+        nargs="+",
+        type=int,
         default=[1, 2, 3, 5, 10, 15, 19],
-        help="Steps to log val loss for (default: [1, 2, 3, 5, 10, 15, 19])",
+        help="Steps to log val loss for (default: 1 2 3 5 10 15 19)",
     )
     parser.add_argument(
         "--metrics_watch",
@@ -205,15 +215,28 @@ def main(input_args=None):
         help="""JSON string with variable-IDs and lead times to log watched
              metrics (e.g. '{"1": [1, 2], "3": [3, 4]}')""",
     )
+    parser.add_argument(
+        "--num_past_forcing_steps",
+        type=int,
+        default=1,
+        help="Number of past time steps to use as input for forcing data",
+    )
+    parser.add_argument(
+        "--num_future_forcing_steps",
+        type=int,
+        default=1,
+        help="Number of future time steps to use as input for forcing data",
+    )
     args = parser.parse_args(input_args)
     args.var_leads_metrics_watch = {
         int(k): v for k, v in json.loads(args.var_leads_metrics_watch).items()
     }
-    config_loader = config.Config.from_file(args.data_config)
 
     # Asserts for arguments
+    assert (
+        args.config_path is not None
+    ), "Specify your config with --config_path"
     assert args.model in MODELS, f"Unknown model: {args.model}"
-    assert args.step_length <= 3, "Too high step length"
     assert args.eval in (
         None,
         "val",
@@ -226,33 +249,19 @@ def main(input_args=None):
     # Set seed
     seed.seed_everything(args.seed)
 
-    # Load data
-    train_loader = torch.utils.data.DataLoader(
-        WeatherDataset(
-            config_loader.dataset.name,
-            pred_length=args.ar_steps,
-            split="train",
-            subsample_step=args.step_length,
-            subset=bool(args.subset_ds),
-            control_only=args.control_only,
-        ),
-        args.batch_size,
-        shuffle=True,
-        num_workers=args.n_workers,
-    )
-    max_pred_length = (65 // args.step_length) - 2  # 19
-    val_loader = torch.utils.data.DataLoader(
-        WeatherDataset(
-            config_loader.dataset.name,
-            pred_length=max_pred_length,
-            split="val",
-            subsample_step=args.step_length,
-            subset=bool(args.subset_ds),
-            control_only=args.control_only,
-        ),
-        args.batch_size,
-        shuffle=False,
-        num_workers=args.n_workers,
+    # Load neural-lam configuration and datastore to use
+    config, datastore = load_config_and_datastore(config_path=args.config_path)
+
+    # Create datamodule
+    data_module = WeatherDataModule(
+        datastore=datastore,
+        ar_steps_train=args.ar_steps_train,
+        ar_steps_eval=args.ar_steps_eval,
+        standardize=True,
+        num_past_forcing_steps=args.num_past_forcing_steps,
+        num_future_forcing_steps=args.num_future_forcing_steps,
+        batch_size=args.batch_size,
+        num_workers=args.num_workers,
     )
 
     # Instantiate model + trainer
@@ -264,17 +273,32 @@ def main(input_args=None):
     else:
         device_name = "cpu"
 
-    # Load model parameters Use new args for model
-    model_class = MODELS[args.model]
-    model = model_class(args)
+    # Set devices to use
+    if args.devices == ["auto"]:
+        devices = "auto"
+    else:
+        try:
+            devices = [int(i) for i in args.devices]
+        except ValueError:
+            raise ValueError("devices should be 'auto' or a list of integers")
 
-    prefix = "subset-" if args.subset_ds else ""
+    # Load model parameters Use new args for model
+    ModelClass = MODELS[args.model]
+    model = ModelClass(args, config=config, datastore=datastore)
+
     if args.eval:
-        prefix = prefix + f"eval-{args.eval}-"
+        prefix = f"eval-{args.eval}-"
+    else:
+        prefix = "train-"
     run_name = (
         f"{prefix}{args.model}-{args.processor_layers}x{args.hidden_dim}-"
         f"{time.strftime('%m_%d_%H')}-{random_run_id:04d}"
     )
+
+    training_logger = utils.setup_training_logger(
+        datastore=datastore, args=args, run_name=run_name
+    )
+
     checkpoint_callback = pl.callbacks.ModelCheckpoint(
         dirpath=f"saved_models/{run_name}",
         filename="min_val_loss",
@@ -282,15 +306,14 @@ def main(input_args=None):
         mode="min",
         save_last=True,
     )
-    logger = pl.loggers.WandbLogger(
-        project=args.wandb_project, name=run_name, config=args
-    )
     trainer = pl.Trainer(
         max_epochs=args.epochs,
         deterministic=True,
         strategy="ddp",
         accelerator=device_name,
-        logger=logger,
+        num_nodes=args.num_nodes,
+        devices=devices,
+        logger=training_logger,
         log_every_n_steps=1,
         callbacks=[checkpoint_callback],
         check_val_every_n_epoch=args.val_interval,
@@ -299,37 +322,17 @@ def main(input_args=None):
 
     # Only init once, on rank 0 only
     if trainer.global_rank == 0:
-        utils.init_wandb_metrics(
-            logger, args.val_steps_to_log
-        )  # Do after wandb.init
-
+        utils.init_training_logger_metrics(
+            training_logger, val_steps=args.val_steps_to_log
+        )  # Do after initializing logger
     if args.eval:
-        if args.eval == "val":
-            eval_loader = val_loader
-        else:  # Test
-            eval_loader = torch.utils.data.DataLoader(
-                WeatherDataset(
-                    config_loader.dataset.name,
-                    pred_length=max_pred_length,
-                    split="test",
-                    subsample_step=args.step_length,
-                    subset=bool(args.subset_ds),
-                ),
-                args.batch_size,
-                shuffle=False,
-                num_workers=args.n_workers,
-            )
-
-        print(f"Running evaluation on {args.eval}")
-        trainer.test(model=model, dataloaders=eval_loader, ckpt_path=args.load)
-    else:
-        # Train model
-        trainer.fit(
+        trainer.test(
             model=model,
-            train_dataloaders=train_loader,
-            val_dataloaders=val_loader,
+            datamodule=data_module,
             ckpt_path=args.load,
         )
+    else:
+        trainer.fit(model=model, datamodule=data_module, ckpt_path=args.load)
 
 
 if __name__ == "__main__":

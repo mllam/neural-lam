@@ -1,0 +1,118 @@
+schema_version: v0.5.0
+dataset_version: v0.1.0
+
+output:
+  variables:
+    static: [grid_index, static_feature]
+    state: [time, grid_index, state_feature]
+    forcing: [time, grid_index, forcing_feature]
+  coord_ranges:
+    time:
+      start: 2022-04-01T00:00
+      end: 2022-04-10T00:00
+      step: PT3H
+  chunking:
+    time: 1
+  splitting:
+    dim: time
+    splits:
+      train:
+        start: 2022-04-01T00:00
+        end: 2022-04-04T00:00
+        compute_statistics:
+          ops: [mean, std, diff_mean, diff_std]
+          dims: [grid_index, time]
+      val:
+        start: 2022-04-04T00:00
+        end: 2022-04-07T00:00
+      test:
+        start: 2022-04-07T00:00
+        end: 2022-04-10T00:00
+
+inputs:
+  danra_height_levels:
+    path: https://object-store.os-api.cci1.ecmwf.int/mllam-testdata/danra_cropped/v0.2.0/height_levels.zarr
+    dims: [time, x, y, altitude]
+    variables:
+      u:
+        altitude:
+          values: [100,]
+          units: m
+      v:
+        altitude:
+          values: [100, ]
+          units: m
+    dim_mapping:
+      time:
+        method: rename
+        dim: time
+      state_feature:
+        method: stack_variables_by_var_name
+        dims: [altitude]
+        name_format: "{var_name}{altitude}m"
+      grid_index:
+        method: stack
+        dims: [x, y]
+    target_output_variable: state
+
+  danra_surface_forcing:
+    path: https://object-store.os-api.cci1.ecmwf.int/mllam-testdata/danra_cropped/v0.2.0/single_levels.zarr
+    dims: [time, x, y]
+    variables:
+      # use surface incoming shortwave radiation as forcing
+      - swavr0m
+    dim_mapping:
+      time:
+        method: rename
+        dim: time
+      grid_index:
+        method: stack
+        dims: [x, y]
+      forcing_feature:
+        method: stack_variables_by_var_name
+        name_format: "{var_name}"
+    target_output_variable: forcing
+
+  danra_surface:
+    path: https://object-store.os-api.cci1.ecmwf.int/mllam-testdata/danra_cropped/v0.2.0/single_levels.zarr
+    dims: [time, x, y]
+    variables:
+      - r2m
+      - t2m
+    dim_mapping:
+      time:
+        method: rename
+        dim: time
+      grid_index:
+        method: stack
+        dims: [x, y]
+      state_feature:
+        method: stack_variables_by_var_name
+        name_format: "{var_name}"
+    target_output_variable: state
+
+  danra_static:
+    path: https://object-store.os-api.cci1.ecmwf.int/mllam-testdata/danra_cropped/v0.2.0/single_levels.zarr
+    dims: [x, y]
+    variables:
+      - lsm
+      - orography
+    dim_mapping:
+      grid_index:
+        method: stack
+        dims: [x, y]
+      static_feature:
+        method: stack_variables_by_var_name
+        name_format: "{var_name}"
+    target_output_variable: static
+
+extra:
+  projection:
+    class_name: LambertConformal
+    kwargs:
+      central_longitude: 25.0
+      central_latitude: 56.7
+      standard_parallels: [56.7, 56.7]
+      globe:
+        semimajor_axis: 6367470.0
+        semiminor_axis: 6367470.0

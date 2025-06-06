@@ -3,6 +3,8 @@ import torch_geometric as pyg
 
 # Local
 from .. import utils
+from ..config import NeuralLAMConfig
+from ..datastore import BaseDatastore
 from ..interaction_net import InteractionNet
 from .base_graph_model import BaseGraphModel
 
@@ -15,8 +17,8 @@ class GraphLAM(BaseGraphModel):
     Oskarsson et al. (2023).
     """
 
-    def __init__(self, args):
-        super().__init__(args)
+    def __init__(self, args, config: NeuralLAMConfig, datastore: BaseDatastore):
+        super().__init__(args, config=config, datastore=datastore)
 
         assert (
             not self.hierarchical
@@ -25,7 +27,7 @@ class GraphLAM(BaseGraphModel):
         # grid_dim from data + static + batch_static
         mesh_dim = self.mesh_static_features.shape[1]
         m2m_edges, m2m_dim = self.m2m_features.shape
-        print(
+        utils.rank_zero_print(
             f"Edges in subgraphs: m2m={m2m_edges}, g2m={self.g2m_edges}, "
             f"m2g={self.m2g_edges}"
         )

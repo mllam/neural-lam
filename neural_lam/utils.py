@@ -1,86 +1,18 @@
 # Standard library
 import os
 import shutil
+import warnings
 
 # Third-party
-import numpy as np
+import pytorch_lightning as pl
 import torch
+from pytorch_lightning.loggers import MLFlowLogger, WandbLogger
+from pytorch_lightning.utilities import rank_zero_only
 from torch import nn
 from tueplots import bundles, figsizes
 
-
-def load_dataset_stats(dataset_name, device="cpu"):
-    """
-    Load arrays with stored dataset statistics from pre-processing
-    """
-    static_dir_path = os.path.join("data", dataset_name, "static")
-
-    def loads_file(fn):
-        return torch.load(
-            os.path.join(static_dir_path, fn), map_location=device
-        )
-
-    data_mean = loads_file("parameter_mean.pt")  # (d_features,)
-    data_std = loads_file("parameter_std.pt")  # (d_features,)
-
-    flux_stats = loads_file("flux_stats.pt")  # (2,)
-    flux_mean, flux_std = flux_stats
-
-    return {
-        "data_mean": data_mean,
-        "data_std": data_std,
-        "flux_mean": flux_mean,
-        "flux_std": flux_std,
-    }
-
-
-def load_static_data(dataset_name, device="cpu"):
-    """
-    Load static files related to dataset
-    """
-    static_dir_path = os.path.join("data", dataset_name, "static")
-
-    def loads_file(fn):
-        return torch.load(
-            os.path.join(static_dir_path, fn), map_location=device
-        )
-
-    # Load border mask, 1. if node is part of border, else 0.
-    border_mask_np = np.load(os.path.join(static_dir_path, "border_mask.npy"))
-    border_mask = (
-        torch.tensor(border_mask_np, dtype=torch.float32, device=device)
-        .flatten(0, 1)
-        .unsqueeze(1)
-    )  # (N_grid, 1)
-
-    grid_static_features = loads_file(
-        "grid_features.pt"
-    )  # (N_grid, d_grid_static)
-
-    # Load step diff stats
-    step_diff_mean = loads_file("diff_mean.pt")  # (d_f,)
-    step_diff_std = loads_file("diff_std.pt")  # (d_f,)
-
-    # Load parameter std for computing validation errors in original data scale
-    data_mean = loads_file("parameter_mean.pt")  # (d_features,)
-    data_std = loads_file("parameter_std.pt")  # (d_features,)
-
-    # Load loss weighting vectors
-    param_weights = torch.tensor(
-        np.load(os.path.join(static_dir_path, "parameter_weights.npy")),
-        dtype=torch.float32,
-        device=device,
-    )  # (d_f,)
-
-    return {
-        "border_mask": border_mask,
-        "grid_static_features": grid_static_features,
-        "step_diff_mean": step_diff_mean,
-        "step_diff_std": step_diff_std,
-        "data_mean": data_mean,
-        "data_std": data_std,
-        "param_weights": param_weights,
-    }
+# Local
+from .custom_loggers import CustomMLFlowLogger
 
 
 class BufferList(nn.Module):
@@ -108,15 +40,57 @@ class BufferList(nn.Module):
         return (self[i] for i in range(len(self)))
 
 
-def load_graph(graph_name, device="cpu"):
+def load_graph(graph_dir_path, device="cpu"):
+    """Load all tensors representing the graph from `graph_dir_path`.
+
+    Needs the following files for all graphs:
+    - m2m_edge_index.pt
+    - g2m_edge_index.pt
+    - m2g_edge_index.pt
+    - m2m_features.pt
+    - g2m_features.pt
+    - m2g_features.pt
+    - mesh_features.pt
+
+    And in addition for hierarchical graphs:
+    - mesh_up_edge_index.pt
+    - mesh_down_edge_index.pt
+    - mesh_up_features.pt
+    - mesh_down_features.pt
+
+    Parameters
+    ----------
+    graph_dir_path : str
+        Path to directory containing the graph files.
+    device : str
+        Device to load tensors to.
+
+    Returns
+    -------
+    hierarchical : bool
+        Whether the graph is hierarchical.
+    graph : dict
+        Dictionary containing the graph tensors, with keys as follows:
+        - g2m_edge_index
+        - m2g_edge_index
+        - m2m_edge_index
+        - mesh_up_edge_index
+        - mesh_down_edge_index
+        - g2m_features
+        - m2g_features
+        - m2m_features
+        - mesh_up_features
+        - mesh_down_features
+        - mesh_static_features
+
     """
-    Load all tensors representing the graph
-    """
-    # Define helper lambda function
-    graph_dir_path = os.path.join("graphs", graph_name)
 
     def loads_file(fn):
-        return torch.load(os.path.join(graph_dir_path, fn), map_location=device)
+        return torch.load(
+            os.path.join(graph_dir_path, fn),
+            map_location=device,
+            weights_only=True,
+        )
 
     # Load edges (edge_index)
     m2m_edge_index = BufferList(
@@ -129,7 +103,8 @@ def load_graph(graph_name, device="cpu"):
     hierarchical = n_levels > 1  # Nor just single level mesh graph
 
     # Load static edge features
-    m2m_features = loads_file("m2m_features.pt")  # List of (M_m2m[l], d_edge_f)
+    # List of (M_m2m[l], d_edge_f)
+    m2m_features = loads_file("m2m_features.pt")
     g2m_features = loads_file("g2m_features.pt")  # (M_g2m, d_edge_f)
     m2g_features = loads_file("m2g_features.pt")  # (M_m2g, d_edge_f)
 
@@ -251,9 +226,9 @@ def fractional_plot_bundle(fraction):
     Get the tueplots bundle, but with figure width as a fraction of
     the page width.
     """
-    # If latex is not available, some visualizations might not render correctly,
-    # but will at least not raise an error.
-    # Alternatively, use unicode raised numbers.
+    # If latex is not available, some visualizations might not render
+    # correctly, but will at least not raise an error. Alternatively, use
+    # unicode raised numbers.
     usetex = True if shutil.which("latex") else False
     bundle = bundles.neurips2023(usetex=usetex, family="serif")
     bundle.update(figsizes.neurips2023())
@@ -265,11 +240,106 @@ def fractional_plot_bundle(fraction):
     return bundle
 
 
-def init_wandb_metrics(wandb_logger, val_steps):
+@rank_zero_only
+def rank_zero_print(*args, **kwargs):
+    """Print only from rank 0 process"""
+    print(*args, **kwargs)
+
+
+def init_training_logger_metrics(training_logger, val_steps):
     """
-    Set up wandb metrics to track
+    Set up logger metrics to track
     """
-    experiment = wandb_logger.experiment
-    experiment.define_metric("val_mean_loss", summary="min")
-    for step in val_steps:
-        experiment.define_metric(f"val_loss_unroll{step}", summary="min")
+    experiment = training_logger.experiment
+    if isinstance(training_logger, WandbLogger):
+        experiment.define_metric("val_mean_loss", summary="min")
+        for step in val_steps:
+            experiment.define_metric(f"val_loss_unroll{step}", summary="min")
+    elif isinstance(training_logger, MLFlowLogger):
+        pass
+    else:
+        warnings.warn(
+            "Only WandbLogger & MLFlowLogger is supported for tracking metrics.\
+             Experiment results will only go to stdout."
+        )
+
+
+@rank_zero_only
+def setup_training_logger(datastore, args, run_name):
+    """
+
+    Parameters
+    ----------
+    datastore : Datastore
+        Datastore object.
+
+    args : argparse.Namespace
+        Arguments from command line.
+
+    run_name : str
+        Name of the run.
+
+    Returns
+    -------
+    logger : pytorch_lightning.loggers.base
+        Logger object.
+    """
+
+    if args.logger == "wandb":
+        logger = pl.loggers.WandbLogger(
+            project=args.logger_project,
+            name=run_name,
+            config=dict(training=vars(args), datastore=datastore._config),
+        )
+    elif args.logger == "mlflow":
+        url = os.getenv("MLFLOW_TRACKING_URI")
+        if url is None:
+            raise ValueError(
+                "MLFlow logger requires setting MLFLOW_TRACKING_URI in env."
+            )
+        logger = CustomMLFlowLogger(
+            experiment_name=args.logger_project,
+            tracking_uri=url,
+            run_name=run_name,
+        )
+        logger.log_hyperparams(
+            dict(training=vars(args), datastore=datastore._config)
+        )
+
+    return logger
+
+
+def inverse_softplus(x, beta=1, threshold=20):
+    """
+    Inverse of torch.nn.functional.softplus
+
+    Input is clamped to approximately positive values of x, and the function is
+    linear for inputs above x*beta for numerical stability.
+
+    Note that this torch.clamp will make gradients 0, but this is not a
+    problem as values of x that are this close to 0 have gradients of 0 anyhow.
+    """
+    x_clamped = torch.clamp(
+        x, min=torch.log(torch.tensor(1e-6 + 1)) / beta, max=threshold / beta
+    )
+
+    non_linear_part = torch.log(torch.expm1(x_clamped * beta)) / beta
+
+    below_threshold = x * beta <= threshold
+
+    x = torch.where(condition=below_threshold, input=non_linear_part, other=x)
+
+    return x
+
+
+def inverse_sigmoid(x):
+    """
+    Inverse of torch.sigmoid
+
+    Sigmoid output takes values in [0,1], this makes sure input is just within
+    this interval.
+    Note that this torch.clamp will make gradients 0, but this is not a problem
+    as values of x that are this close to 0 or 1 have gradients of 0 anyhow.
+    """
+    x_clamped = torch.clamp(x, min=1e-6, max=1 - 1e-6)
+    return torch.log(x_clamped / (1 - x_clamped))

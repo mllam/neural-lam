@@ -1,0 +1,119 @@
+# Configuration to test both CPU and GPU installations with both PDM and pip
+#
+# We don't use lock files in neural-lam, because that would tie us to a
+# particular variant of pytorch (gpu/cpu), and want it to be possible for
+# people choose which variant to install. Because we don't use lock files the
+# specific package versions to install is resolved on every install. This means
+# that has upstream packages evolve the specific version installed might change
+# (if we don't pin it). Currently, we do not pin pytorch in pyproject.toml
+#
+# To test both CPU and GPU installations with both PDM and pip we use two sets
+# of hosts to run the training on:
+# - ubuntu-latest for CPU: these are on github
+# - cirun-aws-runner--${{ github.run_id }} for GPU: these are on AWS,
+#   orchestrated by cirun.io
+#
+# To enable installing different pytorch variants we use an approach where we
+# first install a specific torch version (and variant), and then install neural-lam.
+# To ensure that the version of torch installed is compatible with neural-lam we
+# first use `pip install --dry-run .` to determine the version of torch that would
+# be installed.
+name: CPU+GPU testing
+
+on: [push, pull_request]
+
+jobs:
+  tests:
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      matrix:
+        package_manager: [pdm, pip]
+        device: [cpu, gpu]
+        include:
+          - device: cpu
+            runner: ubuntu-latest
+            torch_index: https://download.pytorch.org/whl/cpu
+          - device: gpu
+            runner: "cirun-aws-runner--${{ github.run_id }}"
+            torch_index: https://download.pytorch.org/whl/cu124
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.9
+        if: matrix.device == 'gpu'
+        uses: actions/setup-python@v5
+        with:
+          python-version: 3.9
+
+      - name: Install PDM (if applicable)
+        if: matrix.package_manager == 'pdm'
+        run: |
+          python -m pip install pdm
+
+      - name: Configure and create PDM virtual environment (GPU)
+        # on the AWS GPU runner we have to use the mounted nvme drive, otherwise we run out of space
+        if: matrix.package_manager == 'pdm' && matrix.device == 'gpu'
+        run: |
+          pdm config venv.in_project False
+          pdm config venv.location /opt/dlami/nvme/venv
+          pdm venv create --with-pip
+
+      - name: Create virtual environment (PDM CPU)
+        if: matrix.package_manager == 'pdm' && matrix.device == 'cpu'
+        run: |
+          pdm venv create --with-pip
+          pdm use --venv in-project
+
+      - name: Create virtual environment (pip GPU)
+        if: matrix.package_manager == 'pip' && matrix.device == 'gpu'
+        run: |
+          # venv must be made on nvme drive, otherwise we run out of space
+          python -m venv /opt/dlami/nvme/venv
+          source /opt/dlami/nvme/venv/bin/activate
+
+      - name: Determine PyTorch version for neural-lam
+        run: |
+          TORCH_VERSION=$(${{ matrix.package_manager == 'pdm' && 'pdm run python -m pip' || 'python -m pip' }} install --dry-run "." | grep "Would install" | grep -o 'torch-[0-9.]*' | awk -F'-' '{print $2}' | tail -n 1)
+          echo "TORCH_VERSION=$TORCH_VERSION" >> $GITHUB_ENV
+
+      - name: Install PyTorch
+        run: |
+          ${{ matrix.package_manager == 'pdm' && 'pdm run python -m pip' || 'python -m pip' }} install "torch==$TORCH_VERSION" --index-url ${{ matrix.torch_index }}
+
+      - name: Install package (including dev dependencies)
+        run: |
+          ${{ matrix.package_manager == 'pdm' && 'pdm install --group :all' || 'python -m pip install ".[dev]"' }}
+
+      - name: Print torch version
+        run: |
+          ${{ matrix.package_manager == 'pdm' && 'pdm run' || '' }} python -c "import torch; print(torch.__version__)"
+
+      - name: Check torch version and variant is cpu
+        if: matrix.device == 'cpu'
+        run: |
+          ${{ matrix.package_manager == 'pdm' && 'pdm run' || '' }} python -c "import torch; assert torch.__version__.endswith('+cpu')"
+
+      - name: Check torch version and variant is gpu
+        if: matrix.device == 'gpu'
+        run: |
+          ${{ matrix.package_manager == 'pdm' && 'pdm run' || '' }} python -c "import torch; assert not torch.__version__.endswith('+cpu')"
+
+      - name: Load cache data
+        uses: actions/cache/restore@v4
+        with:
+          path: tests/datastore_examples/npyfilesmeps/meps_example_reduced.tar.gz
+          key: ${{ runner.os }}-meps-reduced-example-data-v0.3.0
+          restore-keys: |
+            ${{ runner.os }}-meps-reduced-example-data-v0.3.0
+
+      - name: Run tests
+        run: |
+          ${{ matrix.package_manager == 'pdm' && 'pdm run' || '' }} pytest -vv -s
+
+      - name: Save cache data
+        uses: actions/cache/save@v4
+        with:
+          path: tests/datastore_examples/npyfilesmeps/meps_example_reduced.tar.gz
+          key: ${{ runner.os }}-meps-reduced-example-data-v0.3.0
