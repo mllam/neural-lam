@@ -36,6 +36,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Set ci/cd badges to refer to the new test matrix [\#130](https://github.com/mllam/neural-lam/pull/130) @SimonKamuk
 
 ### Maintenance
+- update ci/cd testing to use cuda 12.8 [\#140](https://github.com/mllam/neural-lam/pull/140) @SimonKamuk
+
+- update ci/cd testing to use pre-commit v3.0.1 [\#140](https://github.com/mllam/neural-lam/pull/140) @SimonKamuk
+
 - update AWS GPU ci/cd to use ami with larger (200GB) root volume and ensure
   nvme drive is used for pip venvn
   [\#126](https://github.com/mllam/neural-lam/pull/126), @leifdenby
