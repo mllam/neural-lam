@@ -35,7 +35,7 @@ jobs:
             torch_index: https://download.pytorch.org/whl/cpu
           - device: gpu
             runner: "cirun-aws-runner--${{ github.run_id }}"
-            torch_index: https://download.pytorch.org/whl/cu124
+            torch_index: https://download.pytorch.org/whl/cu128
 
     steps:
       - name: Checkout repository
