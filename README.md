@@ -79,7 +79,15 @@ expects the most recent version of CUDA on your system.
 We cover all the installation options in our [github actions ci/cd
 setup](.github/workflows/) which you can use as a reference.
 
-## Using `pdm`
+### From pypi.org
+
+```
+python -m pip install neural_lam
+```
+
+### From source
+
+#### Using `pdm`
 
 1. Clone this repository and navigate to the root directory.
 2. Install `pdm` if you don't have it installed on your system (either with `pip install pdm` or [following the install instructions](https://pdm-project.org/latest/#installation)).
@@ -88,7 +96,7 @@ setup](.github/workflows/) which you can use as a reference.
 4. Install a specific version of `torch` with `pdm run python -m pip install torch --index-url https://download.pytorch.org/whl/cpu` for a CPU-only version or `pdm run python -m pip install torch --index-url https://download.pytorch.org/whl/cu111` for CUDA 11.1 support (you can find the correct URL for the variant you want on [PyTorch webpage](https://pytorch.org/get-started/locally/)).
 5. Install the dependencies with `pdm install` (by default this in include the). If you will be developing `neural-lam` we recommend to install the development dependencies with `pdm install --group dev`. By default `pdm` installs the `neural-lam` package in editable mode, so you can make changes to the code and see the effects immediately.
 
-## Using `pip`
+#### Using `pip`
 
 1. Clone this repository and navigate to the root directory.
 > If you are happy using the latest version of `torch` with GPU support (expecting the latest version of CUDA is installed on your system) you can skip to step 3.
