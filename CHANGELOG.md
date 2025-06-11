@@ -33,6 +33,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Set ci/cd badges to refer to the new test matrix [\#130](https://github.com/mllam/neural-lam/pull/130) @SimonKamuk
 
+- use correct split of data with the `--eval val` or `--eval test` cli arguments [\#139](https://github.com/mllam/neural-lam/pull/139) @SimonKamuk
+
 ### Maintenance
 - update AWS GPU ci/cd to use ami with larger (200GB) root volume and ensure
   nvme drive is used for pip venvn
