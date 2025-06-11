@@ -37,6 +37,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - use correct split of data with the `--eval val` or `--eval test` cli arguments [\#139](https://github.com/mllam/neural-lam/pull/139) @SimonKamuk
 
+- Fix step length calculation when dt >= 24h [\#141](https://github.com/mllam/neural-lam/pull/141) @deinal
+
 ### Maintenance
 - update ci/cd testing to use cuda 12.8 [\#140](https://github.com/mllam/neural-lam/pull/140) @SimonKamuk
 
