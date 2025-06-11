@@ -14,7 +14,7 @@ from neural_lam.datastore import DATASTORES
 from neural_lam.datastore.base import BaseRegularGridDatastore
 from neural_lam.models.graph_lam import GraphLAM
 from neural_lam.weather_dataset import WeatherDataset
-from tests.conftest import init_datastore_example
+from tests.conftest import DATASTORES_EXAMPLES, init_datastore_example
 from tests.dummy_datastore import DummyDatastore
 
 
@@ -165,6 +165,7 @@ def test_single_batch(datastore_name, split):
 
     """
     datastore = init_datastore_example(datastore_name)
+    datastore_path = DATASTORES_EXAMPLES[datastore_name]
 
     device_name = (
         torch.device("cuda") if torch.cuda.is_available() else "cpu"
@@ -206,13 +207,16 @@ def test_single_batch(datastore_name, split):
 
     config = nlconfig.NeuralLAMConfig(
         datastore=nlconfig.DatastoreSelection(
-            kind=datastore.SHORT_NAME, config_path=datastore.root_path
+            kind=datastore.SHORT_NAME, config_path=datastore_path
         )
     )
 
     dataset = WeatherDataset(datastore=datastore, split=split, ar_steps=2)
 
-    model = GraphLAM(args=args, datastore=datastore, config=config)  # noqa
+    model = GraphLAM(
+        args=args,
+        config=config,
+    )  # noqa
 
     model_device = model.to(device_name)
     data_loader = DataLoader(dataset, batch_size=2)

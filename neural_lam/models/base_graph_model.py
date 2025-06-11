@@ -4,7 +4,6 @@ import torch
 # Local
 from .. import utils
 from ..config import NeuralLAMConfig
-from ..datastore import BaseDatastore
 from ..interaction_net import InteractionNet
 from .ar_model import ARModel
 
@@ -15,18 +14,17 @@ class BaseGraphModel(ARModel):
     the encode-process-decode idea.
     """
 
-    def __init__(self, args, config: NeuralLAMConfig, datastore: BaseDatastore):
-        super().__init__(args, config=config, datastore=datastore)
+    def __init__(self, args, config: NeuralLAMConfig):
+        super().__init__(args, config=config)
 
         # Load graph with static features
         # NOTE: (IMPORTANT!) mesh nodes MUST have the first
         # num_mesh_nodes indices,
-        graph_dir_path = datastore.root_path / "graph" / args.graph
+        graph_dir_path = self._datastore.root_path / "graph" / args.graph
         self.hierarchical, graph_ldict = utils.load_graph(
             graph_dir_path=graph_dir_path
         )
         for name, attr_value in graph_ldict.items():
-            # Make BufferLists module members and register tensors as buffers
             if isinstance(attr_value, torch.Tensor):
                 self.register_buffer(name, attr_value, persistent=False)
             else:

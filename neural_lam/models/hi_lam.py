@@ -3,7 +3,6 @@ from torch import nn
 
 # Local
 from ..config import NeuralLAMConfig
-from ..datastore import BaseDatastore
 from ..interaction_net import InteractionNet
 from .base_hi_graph_model import BaseHiGraphModel
 
@@ -15,8 +14,8 @@ class HiLAM(BaseHiGraphModel):
     The Hi-LAM model from Oskarsson et al. (2023)
     """
 
-    def __init__(self, args, config: NeuralLAMConfig, datastore: BaseDatastore):
-        super().__init__(args, config=config, datastore=datastore)
+    def __init__(self, args, config: NeuralLAMConfig):
+        super().__init__(args, config=config)
 
         # Make down GNNs, both for down edges and same level
         self.mesh_down_gnns = nn.ModuleList(

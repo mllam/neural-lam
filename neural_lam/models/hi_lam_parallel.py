@@ -4,7 +4,6 @@ import torch_geometric as pyg
 
 # Local
 from ..config import NeuralLAMConfig
-from ..datastore import BaseDatastore
 from ..interaction_net import InteractionNet
 from .base_hi_graph_model import BaseHiGraphModel
 
@@ -18,8 +17,8 @@ class HiLAMParallel(BaseHiGraphModel):
     of Hi-LAM.
     """
 
-    def __init__(self, args, config: NeuralLAMConfig, datastore: BaseDatastore):
-        super().__init__(args, config=config, datastore=datastore)
+    def __init__(self, args, config: NeuralLAMConfig):
+        super().__init__(args, config=config)
 
         # Processor GNNs
         # Create the complete edge_index combining all edges for processing
