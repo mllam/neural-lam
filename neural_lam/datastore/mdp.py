@@ -143,7 +143,7 @@ class MDPDatastore(BaseRegularGridDatastore):
 
         """
         da_dt = self._ds["time"].diff("time")
-        total_sec = da_dt.dt.total_seconds().isel(time=0)
+        total_sec = da_dt.dt.total_seconds().isel(time=0).astype(int)
         return (total_sec // 3600).item()
 
     def get_vars_units(self, category: str) -> List[str]:
