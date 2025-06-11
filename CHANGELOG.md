@@ -17,6 +17,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Add option to clamp output prediction using limits specified in config file [\#92](https://github.com/mllam/neural-lam/pull/92) @SimonKamuk
 
+- Add publication of releases to pypi.org. [\#71](https://github.com/mllam/neural-lam/pull/71) @leifdenby, @observingClouds
+
 ### Fixed
 - Only print on rank 0 to avoid duplicates of all print statements.
 [\#103](https://github.com/mllam/neural-lam/pull/103) @simonkamuk @sadamov
@@ -32,6 +34,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Add standardization to state diff stats from mdp datastore [\#122](https://github.com/mllam/neural-lam/pull/122) @SimonKamuk
 
 - Set ci/cd badges to refer to the new test matrix [\#130](https://github.com/mllam/neural-lam/pull/130) @SimonKamuk
+
+- use correct split of data with the `--eval val` or `--eval test` cli arguments [\#139](https://github.com/mllam/neural-lam/pull/139) @SimonKamuk
 
 - Fix step length calculation when dt >= 24h [\#141](https://github.com/mllam/neural-lam/pull/141) @deinal
 
