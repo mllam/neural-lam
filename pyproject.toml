@@ -3,12 +3,14 @@ name = "neural-lam"
 dynamic = ["version"]
 description = "LAM-based data-driven forecasting"
 authors = [
-    { name = "Joel Oskarsson", email = "joel.oskarsson@liu.se" },
+    { name = "Joel Oskarsson", email = "joel.oskarsson@outlook.com" },
     { name = "Simon Adamov", email = "Simon.Adamov@meteoswiss.ch" },
     { name = "Leif Denby", email = "lcd@dmi.dk" },
     { name = "Simon Kamuk Christiansen", email = "skc@dmi.dk" },
     { name = "Kasper Hintz", email = "kah@dmi.dk" },
     { name = "Erik Larsson", email = "erik.larsson@liu.se" },
+    { name = "Hauke Schulz", email = "has@dmi.dk" },
+    { name = "Daniel Holmberg", email = "daniel.holmberg@helsinki.fi" },
 ]
 readme = "README.md"
 
