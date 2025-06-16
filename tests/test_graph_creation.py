@@ -1,13 +1,14 @@
 # Standard library
 import tempfile
 from pathlib import Path
+from unittest import mock
 
 # Third-party
 import pytest
 import torch
 
 # First-party
-from neural_lam.create_graph import create_graph_from_datastore
+from neural_lam.create_graph import create_graph_from_datastore, load_datastore
 from neural_lam.datastore import DATASTORES
 from neural_lam.datastore.base import BaseRegularGridDatastore
 from tests.conftest import init_datastore_example
@@ -117,3 +118,25 @@ def test_graph_creation(datastore_name, graph_name):
                         assert r.shape[0] == 2  # adjacency matrix uses two rows
                     elif file_id.endswith("_features"):
                         assert r.shape[1] == d_features
+
+
+def test_load_datastore_works_for_datastore_path():
+    args = mock.MagicMock()
+    args.config_path = None
+    args.datastore_type = "mdp"
+    args.datastore = (
+        "tests/datastore_examples/mdp/danra_100m_winds/danra.datastore.yaml"
+    )
+
+    datastore = load_datastore(args)
+    assert isinstance(datastore, DATASTORES[args.datastore_type])
+
+
+def test_load_datastore_works_for_config_path():
+    args = mock.MagicMock()
+    args.config_path = (
+        "tests/datastore_examples/mdp/danra_100m_winds/config.yaml"
+    )
+
+    datastore = load_datastore(args)
+    assert isinstance(datastore, DATASTORES["mdp"])
