@@ -18,7 +18,7 @@ from tests.conftest import init_datastore_example
 
 
 @pytest.mark.parametrize("datastore_name", DATASTORES.keys())
-def test_training(datastore_name):
+def test_training(datastore_name, model_args):
     datastore = init_datastore_example(datastore_name)
 
     if not isinstance(datastore, BaseRegularGridDatastore):
@@ -70,26 +70,6 @@ def test_training(datastore_name):
         num_past_forcing_steps=1,
         num_future_forcing_steps=1,
     )
-
-    class ModelArgs:
-        output_std = False
-        loss = "mse"
-        restore_opt = False
-        n_example_pred = 1
-        # XXX: this should be superfluous when we have already defined the
-        # model object no?
-        graph = graph_name
-        hidden_dim = 4
-        hidden_layers = 1
-        processor_layers = 2
-        mesh_aggr = "sum"
-        lr = 1.0e-3
-        val_steps_to_log = [1, 3]
-        metrics_watch = []
-        num_past_forcing_steps = 1
-        num_future_forcing_steps = 1
-
-    model_args = ModelArgs()
 
     config = nlconfig.NeuralLAMConfig(
         datastore=nlconfig.DatastoreSelection(

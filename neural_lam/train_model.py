@@ -151,9 +151,6 @@ def main(input_args=None):
         help="Loss function to use, see metric.py (default: wmse)",
     )
     parser.add_argument(
-        "--lr", type=float, default=1e-3, help="learning rate (default: 0.001)"
-    )
-    parser.add_argument(
         "--val_interval",
         type=int,
         default=1,

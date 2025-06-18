@@ -27,6 +27,15 @@ class ARModel(pl.LightningModule):
     # pylint: disable=arguments-differ
     # Disable to override args/kwargs from superclass
 
+    @property
+    def lr(self):
+        """
+        Get learning rate of optimizer
+        """
+        if self._trainer:
+            return self.trainer.optimizers[0].param_groups[0]["lr"]
+        return self.config.training.optimization.lr
+
     def __init__(
         self,
         args,
@@ -37,6 +46,8 @@ class ARModel(pl.LightningModule):
         self.save_hyperparameters(ignore=["datastore"])
         self.args = args
         self._datastore = datastore
+        self.config = config
+
         num_state_vars = datastore.get_num_data_vars(category="state")
         num_forcing_vars = datastore.get_num_data_vars(category="forcing")
         # Load static features standardized
@@ -187,13 +198,30 @@ class ARModel(pl.LightningModule):
         da = weather_dataset.create_dataarray_from_tensor(
             tensor=tensor, time=time, category=category
         )
+
         return da
 
     def configure_optimizers(self):
-        opt = torch.optim.AdamW(
-            self.parameters(), lr=self.args.lr, betas=(0.9, 0.95)
+        optimizer = torch.optim.AdamW(
+            self.parameters(),
+            lr=self.config.training.optimization.lr,
+            betas=(0.9, 0.95),
         )
-        return opt
+
+        result = {"optimizer": optimizer}
+
+        if self.config.training.optimization.lr_scheduler:
+            lr_scheduler_class = getattr(
+                torch.optim.lr_scheduler,
+                self.config.training.optimization.lr_scheduler,
+            )
+            lr_scheduler = lr_scheduler_class(
+                optimizer,
+                **self.config.training.optimization.lr_scheduler_kwargs,
+            )
+            result["lr_scheduler"] = lr_scheduler
+
+        return result
 
     @property
     def interior_mask_bool(self):
@@ -298,7 +326,10 @@ class ARModel(pl.LightningModule):
             )
         )  # mean over unrolled times and batch
 
-        log_dict = {"train_loss": batch_loss}
+        log_dict = {
+            "train_loss": batch_loss,
+            "lr": self.lr,
+        }
         self.log_dict(
             log_dict,
             prog_bar=True,
@@ -307,7 +338,22 @@ class ARModel(pl.LightningModule):
             sync_dist=True,
             batch_size=batch[0].shape[0],
         )
+
         return batch_loss
+
+    def get_lr(self):
+        if hasattr(self, "trainer"):
+            return self.trainer.optimizers[0].param_groups[0]["lr"]
+        return None
+
+    def on_train_batch_end(self, outputs, batch, batch_idx):
+        if scheduler := self.lr_schedulers():
+            if (
+                batch_idx
+                % self.config.training.optimization.lr_scheduler_step_freq
+                == 0
+            ):
+                scheduler.step()
 
     def all_gather_cat(self, tensor_to_gather):
         """
@@ -756,6 +802,12 @@ class ARModel(pl.LightningModule):
                 )
                 loaded_state_dict[new_key] = loaded_state_dict[old_key]
                 del loaded_state_dict[old_key]
+
         if not self.restore_opt:
             opt = self.configure_optimizers()
-            checkpoint["optimizer_states"] = [opt.state_dict()]
+            checkpoint["optimizer_states"] = [opt["optimizer"].state_dict()]
+
+            if "lr_scheduler" in opt:
+                checkpoint["lr_scheduler_states"] = [
+                    opt["lr_scheduler"].state_dict()
+                ]

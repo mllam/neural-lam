@@ -4,13 +4,17 @@ from pathlib import Path
 
 # Third-party
 import pooch
+import pytest
 import yaml
+from torch.utils.data import DataLoader
 
 # First-party
+from neural_lam.create_graph import create_graph_from_datastore
 from neural_lam.datastore import DATASTORES, init_datastore
 from neural_lam.datastore.npyfilesmeps import (
     compute_standardization_stats as compute_standardization_stats_meps,
 )
+from neural_lam.weather_dataset import WeatherDataset
 
 # Local
 from .dummy_datastore import DummyDatastore
@@ -104,3 +108,48 @@ def init_datastore_example(datastore_kind):
     )
 
     return datastore
+
+
+graph_name = "1level"
+
+
+@pytest.fixture
+def model_args():
+    class ModelArgs:
+        output_std = False
+        loss = "mse"
+        restore_opt = False
+        n_example_pred = 1
+        graph = graph_name
+        hidden_dim = 4
+        hidden_layers = 1
+        processor_layers = 2
+        mesh_aggr = "sum"
+        num_past_forcing_steps = 1
+        num_future_forcing_steps = 1
+        val_steps_to_log = [1, 3]
+        metrics_watch = []
+
+    return ModelArgs()
+
+
+@pytest.fixture
+def datastore():
+    datastore = init_datastore_example("dummydata")
+    graph_dir_path = Path(datastore.root_path) / "graph" / graph_name
+    if not graph_dir_path.exists():
+        create_graph_from_datastore(
+            datastore=datastore,
+            output_root_path=str(graph_dir_path),
+            n_max_levels=1,
+        )
+
+    return datastore
+
+
+@pytest.fixture
+def batch(datastore):
+    dataset = WeatherDataset(datastore=datastore)
+    data_loader = DataLoader(dataset, batch_size=1)
+    batch = next(iter(data_loader))
+    return batch
