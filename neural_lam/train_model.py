@@ -202,7 +202,7 @@ def main(input_args=None):
         "--val_steps_to_log",
         nargs="+",
         type=int,
-        default=[1, 2, 3, 5, 10, 15, 19],
+        default=[1, 2, 3, 5, 10],
         help="Steps to log val loss for (default: 1 2 3 5 10 15 19)",
     )
     parser.add_argument(
@@ -234,6 +234,23 @@ def main(input_args=None):
     args.var_leads_metrics_watch = {
         int(k): v for k, v in json.loads(args.var_leads_metrics_watch).items()
     }
+
+    # Check that config only specifies logging for lead times that exist
+    # Check --val_steps_to_log
+    for step in args.val_steps_to_log:
+        assert 0 < step <= args.ar_steps_eval, (
+            f"Can not log validation step {step} when validation is "
+            f"only unrolled {args.ar_steps_eval} steps. Adjust "
+            "--val_steps_to_log."
+        )
+    # Check --var_leads_metric_watch
+    for var_i, leads in args.var_leads_metrics_watch.items():
+        for step in leads:
+            assert 0 < step <= args.ar_steps_eval, (
+                f"Can not log validation step {step} for variable {var_i} when "
+                f"validation is only unrolled {args.ar_steps_eval} steps. "
+                "Adjust --var_leads_metric_watch."
+            )
 
     # Get an (actual) random run id as a unique identifier
     random_run_id = random.randint(0, 9999)
