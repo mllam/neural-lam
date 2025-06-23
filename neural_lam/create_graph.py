@@ -1,6 +1,6 @@
 # Standard library
 import os
-from argparse import ArgumentParser
+from argparse import ArgumentDefaultsHelpFormatter, ArgumentParser
 
 # Third-party
 import matplotlib
@@ -559,7 +559,10 @@ def create_graph_from_datastore(
 
 
 def cli(input_args=None):
-    parser = ArgumentParser(description="Graph generation arguments")
+    parser = ArgumentParser(
+        description="Graph generation for neural-lam",
+        formatter_class=ArgumentDefaultsHelpFormatter,
+    )
     parser.add_argument(
         "--config_path",
         type=str,
@@ -569,24 +572,23 @@ def cli(input_args=None):
         "--name",
         type=str,
         default="multiscale",
-        help="Name to save graph as (default: multiscale)",
+        help="Name to save graph as",
     )
     parser.add_argument(
         "--plot",
         action="store_true",
-        help="If graphs should be plotted during generation "
-        "(default: False)",
+        help="If graphs should be plotted during generation",
     )
     parser.add_argument(
         "--levels",
         type=int,
         help="Limit multi-scale mesh to given number of levels, "
-        "from bottom up (default: None (no limit))",
+        "from bottom up. If None, no limit.",
     )
     parser.add_argument(
         "--hierarchical",
         action="store_true",
-        help="Generate hierarchical mesh graph (default: False)",
+        help="Generate hierarchical mesh graph. Otherwise multi-scale.",
     )
     args = parser.parse_args(input_args)
 

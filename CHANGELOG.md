@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [unreleased](https://github.com/mllam/neural-lam/compare/v0.4.0...HEAD)
 
+### Fixed
+
+- Change default logging argument to prevent crash when running eval
+[\#145](https://github.com/mllam/neural-lam/pull/77) @joeloskarsson
+
+### Maintenance
+
+- Change all argparse instances to use ArgumentDefaultsHelpFormatter for easier maintaining defaults.
+[\#145](https://github.com/mllam/neural-lam/pull/77) @joeloskarsson
+
 ## [v0.4.0](https://github.com/mllam/neural-lam/releases/tag/v0.4.0)
 
 This release introduces a number of improvements to logging, multi-node training and variable rescaling, without making any major changes to the neural-lam structure.

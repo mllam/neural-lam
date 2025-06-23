@@ -2,7 +2,7 @@
 import json
 import random
 import time
-from argparse import ArgumentParser
+from argparse import ArgumentDefaultsHelpFormatter, ArgumentParser
 
 # Third-party
 # for logging the model:
@@ -28,7 +28,8 @@ MODELS = {
 def main(input_args=None):
     """Main function for training and evaluating models."""
     parser = ArgumentParser(
-        description="Train or evaluate NeurWP models for LAM"
+        description="Train or evaluate MLWP models for LAM",
+        formatter_class=ArgumentDefaultsHelpFormatter,
     )
     parser.add_argument(
         "--config_path",
@@ -40,23 +41,21 @@ def main(input_args=None):
         "--model",
         type=str,
         default="graph_lam",
-        help="Model architecture to train/evaluate (default: graph_lam)",
+        help="Model architecture to train/evaluate",
         choices=MODELS.keys(),
     )
-    parser.add_argument(
-        "--seed", type=int, default=42, help="random seed (default: 42)"
-    )
+    parser.add_argument("--seed", type=int, default=42, help="random seed")
     parser.add_argument(
         "--num_workers",
         type=int,
         default=4,
-        help="Number of workers in data loader (default: 4)",
+        help="Number of workers in data loader",
     )
     parser.add_argument(
         "--num_nodes",
         type=int,
         default=1,
-        help="Number of nodes to use in DDP (default: 1)",
+        help="Number of nodes to use in DDP",
     )
     parser.add_argument(
         "--devices",
@@ -66,33 +65,30 @@ def main(input_args=None):
         help="Devices to use for training. Can be the string 'auto' or a list "
         "of integer id's corresponding to the desired devices, e.g. "
         "'--devices 0 1'. Note that this cannot be used with SLURM, instead "
-        "set 'ntasks-per-node' in the slurm setup (default: auto)",
+        "set 'ntasks-per-node' in the slurm setup",
     )
     parser.add_argument(
         "--epochs",
         type=int,
         default=200,
-        help="upper epoch limit (default: 200)",
+        help="upper epoch limit",
     )
-    parser.add_argument(
-        "--batch_size", type=int, default=4, help="batch size (default: 4)"
-    )
+    parser.add_argument("--batch_size", type=int, default=4, help="batch size")
     parser.add_argument(
         "--load",
         type=str,
-        help="Path to load model parameters from (default: None)",
+        help="Path to load model parameters from",
     )
     parser.add_argument(
         "--restore_opt",
         action="store_true",
-        help="If optimizer state should be restored with model "
-        "(default: false)",
+        help="If optimizer state should be restored with model",
     )
     parser.add_argument(
         "--precision",
         type=str,
         default=32,
-        help="Numerical precision to use for model (32/16/bf16) (default: 32)",
+        help="Numerical precision to use for model (32/16/bf16)",
     )
 
     # Model architecture
@@ -100,40 +96,37 @@ def main(input_args=None):
         "--graph",
         type=str,
         default="multiscale",
-        help="Graph to load and use in graph-based model "
-        "(default: multiscale)",
+        help="Graph to load and use in graph-based model",
     )
     parser.add_argument(
         "--hidden_dim",
         type=int,
         default=64,
-        help="Dimensionality of all hidden representations (default: 64)",
+        help="Dimensionality of all hidden representations",
     )
     parser.add_argument(
         "--hidden_layers",
         type=int,
         default=1,
-        help="Number of hidden layers in all MLPs (default: 1)",
+        help="Number of hidden layers in all MLPs",
     )
     parser.add_argument(
         "--processor_layers",
         type=int,
         default=4,
-        help="Number of GNN layers in processor GNN (default: 4)",
+        help="Number of GNN layers in processor GNN",
     )
     parser.add_argument(
         "--mesh_aggr",
         type=str,
         default="sum",
-        help="Aggregation to use for m2m processor GNN layers (sum/mean) "
-        "(default: sum)",
+        help="Aggregation to use for m2m processor GNN layers (sum/mean)",
     )
     parser.add_argument(
         "--output_std",
         action="store_true",
         help="If models should additionally output std.-dev. per "
-        "output dimensions "
-        "(default: False (no))",
+        "output dimensions",
     )
 
     # Training options
@@ -141,47 +134,41 @@ def main(input_args=None):
         "--ar_steps_train",
         type=int,
         default=1,
-        help="Number of steps to unroll prediction for in loss function "
-        "(default: 1)",
+        help="Number of steps to unroll prediction for in loss function",
     )
     parser.add_argument(
         "--loss",
         type=str,
         default="wmse",
-        help="Loss function to use, see metric.py (default: wmse)",
+        help="Loss function to use, see metric.py",
     )
-    parser.add_argument(
-        "--lr", type=float, default=1e-3, help="learning rate (default: 0.001)"
-    )
+    parser.add_argument("--lr", type=float, default=1e-3, help="learning rate")
     parser.add_argument(
         "--val_interval",
         type=int,
         default=1,
-        help="Number of epochs training between each validation run "
-        "(default: 1)",
+        help="Number of epochs training between each validation run",
     )
 
     # Evaluation options
     parser.add_argument(
         "--eval",
         type=str,
-        help="Eval model on given data split (val/test) "
-        "(default: None (train model))",
+        help="Eval model on given data split (val/test). If not given, "
+        "train model.",
         choices=["val", "test"],
     )
     parser.add_argument(
         "--ar_steps_eval",
         type=int,
         default=10,
-        help="Number of steps to unroll prediction for during evaluation "
-        "(default: 10)",
+        help="Number of steps to unroll prediction for during evaluation",
     )
     parser.add_argument(
         "--n_example_pred",
         type=int,
         default=1,
-        help="Number of example predictions to plot during evaluation "
-        "(default: 1)",
+        help="Number of example predictions to plot during evaluation",
     )
 
     # Logger Settings
@@ -190,20 +177,20 @@ def main(input_args=None):
         type=str,
         default="wandb",
         choices=["wandb", "mlflow"],
-        help="Logger to use for training (wandb/mlflow) (default: wandb)",
+        help="Logger to use for training (wandb/mlflow)",
     )
     parser.add_argument(
         "--logger-project",
         type=str,
         default="neural_lam",
-        help="Logger project name, for eg. Wandb (default: neural_lam)",
+        help="Logger project name, for eg. Wandb",
     )
     parser.add_argument(
         "--val_steps_to_log",
         nargs="+",
         type=int,
-        default=[1, 2, 3, 5, 10, 15, 19],
-        help="Steps to log val loss for (default: 1 2 3 5 10 15 19)",
+        default=[1, 2, 3, 5, 10],
+        help="Steps to log val loss for",
     )
     parser.add_argument(
         "--metrics_watch",
@@ -234,6 +221,23 @@ def main(input_args=None):
     args.var_leads_metrics_watch = {
         int(k): v for k, v in json.loads(args.var_leads_metrics_watch).items()
     }
+
+    # Check that config only specifies logging for lead times that exist
+    # Check --val_steps_to_log
+    for step in args.val_steps_to_log:
+        assert 0 < step <= args.ar_steps_eval, (
+            f"Can not log validation step {step} when validation is "
+            f"only unrolled {args.ar_steps_eval} steps. Adjust "
+            "--val_steps_to_log."
+        )
+    # Check --var_leads_metric_watch
+    for var_i, leads in args.var_leads_metrics_watch.items():
+        for step in leads:
+            assert 0 < step <= args.ar_steps_eval, (
+                f"Can not log validation step {step} for variable {var_i} when "
+                f"validation is only unrolled {args.ar_steps_eval} steps. "
+                "Adjust --var_leads_metric_watch."
+            )
 
     # Get an (actual) random run id as a unique identifier
     random_run_id = random.randint(0, 9999)
