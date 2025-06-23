@@ -1,6 +1,6 @@
 # Standard library
 import os
-from argparse import ArgumentParser
+from argparse import ArgumentDefaultsHelpFormatter, ArgumentParser
 
 # Third-party
 import numpy as np
@@ -18,7 +18,10 @@ GRID_HEIGHT = 0
 
 def main():
     """Plot graph structure in 3D using plotly."""
-    parser = ArgumentParser(description="Plot graph")
+    parser = ArgumentParser(
+        description="Plot graph",
+        formatter_class=ArgumentDefaultsHelpFormatter,
+    )
     parser.add_argument(
         "--datastore_config_path",
         type=str,
@@ -29,17 +32,17 @@ def main():
         "--graph",
         type=str,
         default="multiscale",
-        help="Graph to plot (default: multiscale)",
+        help="Graph to plot",
     )
     parser.add_argument(
         "--save",
         type=str,
-        help="Name of .html file to save interactive plot to (default: None)",
+        help="Name of .html file to save interactive plot to",
     )
     parser.add_argument(
         "--show_axis",
         action="store_true",
-        help="If the axis should be displayed (default: False)",
+        help="If the axis should be displayed",
     )
 
     args = parser.parse_args()
