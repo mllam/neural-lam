@@ -110,7 +110,7 @@ class ARModel(pl.LightningModule):
         ) = self.grid_static_features.shape
 
         self.grid_dim = (
-            2 * self.grid_output_dim
+            2 * num_state_vars
             + grid_static_dim
             + num_forcing_vars
             * (num_past_forcing_steps + num_future_forcing_steps + 1)
