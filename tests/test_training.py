@@ -18,6 +18,17 @@ from tests.conftest import init_datastore_example
 
 
 def run_simple_training(datastore, set_output_std):
+    """
+    Run one epoch of a simple model training setup using the given datastore.
+
+    Parameters
+    ----------
+    datastore : BaseRegularGridDatastore
+        Datastore to load data from for trainind
+    set_output_std : bool
+        If --output_std should be set during training
+    """
+
     if torch.cuda.is_available():
         device_name = "cuda"
         torch.set_float32_matmul_precision(
