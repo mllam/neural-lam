@@ -10,12 +10,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - Change default logging argument to prevent crash when running eval
-[\#145](https://github.com/mllam/neural-lam/pull/77) @joeloskarsson
+[\#145](https://github.com/mllam/neural-lam/pull/145) @joeloskarsson
+
+- Fix wrong grid dimensionality when running with --output_std, resulting in crash
+[\#147](https://github.com/mllam/neural-lam/pull/147) @joeloskarsson
 
 ### Maintenance
 
 - Change all argparse instances to use ArgumentDefaultsHelpFormatter for easier maintaining defaults.
-[\#145](https://github.com/mllam/neural-lam/pull/77) @joeloskarsson
+[\#145](https://github.com/mllam/neural-lam/pull/145) @joeloskarsson
 
 ## [v0.4.0](https://github.com/mllam/neural-lam/releases/tag/v0.4.0)
 
