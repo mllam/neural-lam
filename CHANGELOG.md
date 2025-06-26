@@ -15,6 +15,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Fix wrong grid dimensionality when running with --output_std, resulting in crash
 [\#147](https://github.com/mllam/neural-lam/pull/147) @joeloskarsson
 
+- Fix the order in create_graph.py which caused wrong G2M and M2G
+[\#150](https://github.com/mllam/neural-lam/pull/150) @YUTAIPAN
+
+
 ### Maintenance
 
 - Change all argparse instances to use ArgumentDefaultsHelpFormatter for easier maintaining defaults.
