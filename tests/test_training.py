@@ -24,7 +24,7 @@ def run_simple_training(datastore, set_output_std):
     Parameters
     ----------
     datastore : BaseRegularGridDatastore
-        Datastore to load data from for trainind
+        Datastore to load data from for training
     set_output_std : bool
         If --output_std should be set during training
     """
