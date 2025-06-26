@@ -434,14 +434,14 @@ def create_graph(
     # grid nodes
     Nx, Ny = xy.shape[:2]
 
-    G_grid = networkx.grid_2d_graph(Ny, Nx)
+    G_grid = networkx.grid_2d_graph(Nx, Ny)
     G_grid.clear_edges()
 
     # vg features (only pos introduced here)
     for node in G_grid.nodes:
         # pos is in feature but here explicit for convenience
         G_grid.nodes[node]["pos"] = xy[
-            node[1], node[0]
+            node[0], node[1]
         ]  # xy is already (Nx,Ny,2)
 
     # add 1000 to node key to separate grid nodes (1000,i,j) from mesh nodes
@@ -452,7 +452,7 @@ def create_graph(
     # order in vg_list should be same as in vg_xy
     vg_list = list(G_grid.nodes)
     vg_xy = np.array(
-        [xy[node[2], node[1]] for node in vg_list]
+        [xy[node[1], node[2]] for node in vg_list]
     )  # xy is already (Nx,Ny,2)
     kdt_g = scipy.spatial.KDTree(vg_xy)
 
