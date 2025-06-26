@@ -17,15 +17,17 @@ from neural_lam.weather_dataset import WeatherDataModule
 from tests.conftest import init_datastore_example
 
 
-@pytest.mark.parametrize("datastore_name", DATASTORES.keys())
-def test_training(datastore_name):
-    datastore = init_datastore_example(datastore_name)
+def run_simple_training(datastore, set_output_std):
+    """
+    Run one epoch of a simple model training setup using the given datastore.
 
-    if not isinstance(datastore, BaseRegularGridDatastore):
-        pytest.skip(
-            f"Skipping test for {datastore_name} as it is not a regular "
-            "grid datastore."
-        )
+    Parameters
+    ----------
+    datastore : BaseRegularGridDatastore
+        Datastore to load data from for training
+    set_output_std : bool
+        If --output_std should be set during training
+    """
 
     if torch.cuda.is_available():
         device_name = "cuda"
@@ -72,7 +74,7 @@ def test_training(datastore_name):
     )
 
     class ModelArgs:
-        output_std = False
+        output_std = set_output_std
         loss = "mse"
         restore_opt = False
         n_example_pred = 1
@@ -104,3 +106,21 @@ def test_training(datastore_name):
     )
     wandb.init()
     trainer.fit(model=model, datamodule=data_module)
+
+
+@pytest.mark.parametrize("datastore_name", DATASTORES.keys())
+def test_training(datastore_name):
+    datastore = init_datastore_example(datastore_name)
+
+    if not isinstance(datastore, BaseRegularGridDatastore):
+        pytest.skip(
+            f"Skipping test for {datastore_name} as it is not a regular "
+            "grid datastore."
+        )
+
+    run_simple_training(datastore, set_output_std=False)
+
+
+def test_training_output_std():
+    datastore = init_datastore_example("mdp")  # Test only with mdp datastore
+    run_simple_training(datastore, set_output_std=True)
