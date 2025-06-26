@@ -17,7 +17,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Fix the order in create_graph.py which caused wrong G2M and M2G
 [\#150](https://github.com/mllam/neural-lam/pull/150) @YUTAIPAN
-  
+
 
 ### Maintenance
 
