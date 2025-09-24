@@ -435,7 +435,7 @@ class ARModel(pl.LightningModule):
         # can be correctly parsed/constructed
         for attr in ["long_name", "units"]:
             var_name = f"state_feature_{attr}"
-            da_pred.coords[var_name] = self._datastore._ds[var_name]
+            da_pred_batch.coords[var_name] = self._datastore._ds[var_name]
 
         if batch_idx == 0:
             logger.info(f"Saving predictions to {zarr_output_path}")
