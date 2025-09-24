@@ -423,18 +423,6 @@ class ARModel(pl.LightningModule):
         # separate chunk
         da_pred_batch = da_pred_batch.chunk({"start_time": batch_size})
 
-        # we need to ensure that if `grid_index` is a MultiIndex, it is
-        # serialised so that it can be written to netcdf/zarr. We use
-        # `cf_xarray` for this (see
-        # https://cf-xarray.readthedocs.io/en/latest/coding.html) since they
-        # have implemented a cf-compliant way to safely roundtrip this
-        for idx_name in list(da_pred_batch.indexes):
-            idx = da_pred_batch.indexes[idx_name]
-            if isinstance(idx, pd.MultiIndex):
-                da_pred_batch = cfxr.encode_multi_index_as_compress(
-                    da_pred_batch, idxnames=[idx_name]
-                )
-
         # copy variables that contain the units and long_name attributes
         # from the source datastore
         # XXX: currently it is hardcoded in mllam-data-prep that these are
@@ -445,11 +433,27 @@ class ARModel(pl.LightningModule):
             var_name = f"state_feature_{attr}"
             da_pred_batch.coords[var_name] = self._datastore._ds[var_name]
 
+        # to handle MultiIndexes (see below) we need to have an xr.Dataset, so
+        # we make that here. For now we are only making predictions for "state"
+        ds_pred_batch = da_pred_batch.to_dataset(name="state")
+
+        # we need to ensure that if `grid_index` is a MultiIndex, it is
+        # serialised so that it can be written to netcdf/zarr. We use
+        # `cf_xarray` for this (see
+        # https://cf-xarray.readthedocs.io/en/latest/coding.html) since they
+        # have implemented a cf-compliant way to safely roundtrip this
+        for idx_name in list(ds_pred_batch.indexes):
+            idx = ds_pred_batch.indexes[idx_name]
+            if isinstance(idx, pd.MultiIndex):
+                ds_pred_batch = cfxr.encode_multi_index_as_compress(
+                    ds_pred_batch, idxnames=[idx_name]
+                )
+
         if batch_idx == 0:
             logger.info(f"Saving predictions to {zarr_output_path}")
-            da_pred_batch.to_zarr(zarr_output_path, mode="w", consolidated=True)
+            ds_pred_batch.to_zarr(zarr_output_path, mode="w", consolidated=True)
         else:
-            da_pred_batch.to_zarr(
+            ds_pred_batch.to_zarr(
                 zarr_output_path, mode="a", append_dim="start_time"
             )
 
