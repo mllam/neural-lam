@@ -418,6 +418,7 @@ class ARModel(pl.LightningModule):
             da_pred.coords["elapsed_forecast_duration"] = da_pred.time - t0
             da_pred = da_pred.swap_dims({"time": "elapsed_forecast_duration"})
             da_pred.name = "state"
+
             das_pred.append(da_pred)
 
         da_pred_batch = xr.concat(das_pred, dim="start_time")
@@ -425,6 +426,16 @@ class ARModel(pl.LightningModule):
         # Apply chunking along analysis_time so that each batch is saved as a
         # separate chunk
         da_pred_batch = da_pred_batch.chunk({"start_time": batch_size})
+
+        # copy variables that contain the units and long_name attributes
+        # from the source datastore
+        # XXX: currently it is hardcoded in mllam-data-prep that these are
+        # called {data_category}_feature_{long_name,units}, this should
+        # probably be made a format string in mllam-data-prep so that these
+        # can be correctly parsed/constructed
+        for attr in ["long_name", "units"]:
+            var_name = f"state_feature_{attr}"
+            da_pred.coords[var_name] = self._datastore._ds[var_name]
 
         if batch_idx == 0:
             logger.info(f"Saving predictions to {zarr_output_path}")
