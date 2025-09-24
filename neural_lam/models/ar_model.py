@@ -15,7 +15,6 @@ from loguru import logger
 from .. import metrics, vis
 from ..config import NeuralLAMConfig
 from ..datastore import BaseDatastore
-from ..datastore.base import BaseRegularGridDatastore
 from ..loss_weighting import get_state_feature_weighting
 from ..weather_dataset import WeatherDataset
 
@@ -407,11 +406,6 @@ class ARModel(pl.LightningModule):
                 split="test",
                 category="state",
             )
-            # Unstack grid coords if necessary, this also avoids the need to
-            # try to store a MultiIndex zarr dataset which is not supported by
-            # xarray
-            if isinstance(self._datastore, BaseRegularGridDatastore):
-                da_pred = self._datastore.unstack_grid_coords(da_pred)
 
             t0 = da_pred.coords["time"].values[0]
             da_pred.coords["analysis_time"] = t0
