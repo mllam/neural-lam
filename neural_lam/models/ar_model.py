@@ -4,8 +4,10 @@ import warnings
 from typing import List, Union
 
 # Third-party
+import cf_xarray as cfxr
 import matplotlib.pyplot as plt
 import numpy as np
+import pandas as pd
 import pytorch_lightning as pl
 import torch
 import xarray as xr
@@ -420,6 +422,18 @@ class ARModel(pl.LightningModule):
         # Apply chunking along analysis_time so that each batch is saved as a
         # separate chunk
         da_pred_batch = da_pred_batch.chunk({"start_time": batch_size})
+
+        # we need to ensure that if `grid_index` is a MultiIndex, it is
+        # serialised so that it can be written to netcdf/zarr. We use
+        # `cf_xarray` for this (see
+        # https://cf-xarray.readthedocs.io/en/latest/coding.html) since they
+        # have implemented a cf-compliant way to safely roundtrip this
+        for idx_name in list(da_pred_batch.indexes):
+            idx = da_pred_batch.indexes[idx_name]
+            if isinstance(idx, pd.MultiIndex):
+                da_pred_batch = cfxr.encode_multi_index_as_compress(
+                    da_pred_batch, idxnames=[idx_name]
+                )
 
         # copy variables that contain the units and long_name attributes
         # from the source datastore

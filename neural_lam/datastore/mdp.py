@@ -7,6 +7,7 @@ from typing import List
 
 # Third-party
 import cartopy.crs as ccrs
+import cf_xarray as cfxr
 import mllam_data_prep as mdp
 import xarray as xr
 from loguru import logger
@@ -67,6 +68,11 @@ class MDPDatastore(BaseRegularGridDatastore):
                     "To generate new zarr-archive, move the old one first."
                 )
             self._ds = xr.open_zarr(fp_ds, consolidated=True)
+
+        # XXX: make decoding of MultiIndex be based on the mdp version
+        self._ds = cfxr.decode_compress_to_multi_index(
+            self._ds, idxnames="grid_index"
+        )
 
         if self._ds is None:
             self._ds = mdp.create_dataset(config=self._config)
