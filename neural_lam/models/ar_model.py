@@ -414,7 +414,7 @@ class ARModel(pl.LightningModule):
                 da_pred = self._datastore.unstack_grid_coords(da_pred)
 
             t0 = da_pred.coords["time"].values[0]
-            da_pred.coords["start_time"] = t0
+            da_pred.coords["analysis_time"] = t0
             da_pred.coords["elapsed_forecast_duration"] = da_pred.time - t0
             da_pred = da_pred.swap_dims({"time": "elapsed_forecast_duration"})
             da_pred.name = "state"
