@@ -1,7 +1,6 @@
 [![slack](https://img.shields.io/badge/slack-join-brightgreen.svg?logo=slack)](https://join.slack.com/t/ml-lam/shared_invite/zt-2t112zvm8-Vt6aBvhX7nYa6Kbj_LkCBQ)
-![Linting](https://github.com/mllam/neural-lam/actions/workflows/pre-commit.yml/badge.svg?branch=main)
-[![test (pdm install, gpu)](https://github.com/mllam/neural-lam/actions/workflows/ci-pdm-install-and-test-gpu.yml/badge.svg)](https://github.com/mllam/neural-lam/actions/workflows/ci-pdm-install-and-test-gpu.yml)
-[![test (pdm install, cpu)](https://github.com/mllam/neural-lam/actions/workflows/ci-pdm-install-and-test-cpu.yml/badge.svg)](https://github.com/mllam/neural-lam/actions/workflows/ci-pdm-install-and-test-cpu.yml)
+[![Linting](https://github.com/mllam/neural-lam/actions/workflows/pre-commit.yml/badge.svg?branch=main)](https://github.com/mllam/neural-lam/actions/workflows/pre-commit.yml)
+[![CPU+GPU testing](https://github.com/mllam/neural-lam/actions/workflows/install-and-test.yml/badge.svg?branch=main)](https://github.com/mllam/neural-lam/actions/workflows/install-and-test.yml)
 
 <p align="middle">
     <img src="figures/neural_lam_header.png" width="700">
@@ -148,12 +147,23 @@ training:
     weights:
       u100m: 1.0
       v100m: 1.0
+      t2m: 1.0
+      r2m: 1.0
+  output_clamping:
+    lower:
+      t2m: 0.0
+      r2m: 0
+    upper:
+      r2m: 1.0
 ```
 
-For now the neural-lam config only defines two things: 1) the kind of data
-store and the path to its config, and 2) the weighting of different features in
-the loss function. If you don't define the state feature weighting it will default
-to weighting all features equally.
+For now the neural-lam config only defines few things:
+
+1. The kind of datastore and the path to its config
+2. The weighting of different features in
+the loss function. If you don't define the state feature weighting it will default to
+weighting all features equally.
+3. Valid numerical range for output of each feature.The numerical range of all features default to $]-\infty, \infty[$.
 
 (This example is taken from the `tests/datastore_examples/mdp` directory.)
 

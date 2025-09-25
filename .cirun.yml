@@ -5,8 +5,8 @@ runners:
     cloud: "aws"
     # https://aws.amazon.com/ec2/instance-types/g4/
     instance_type: "g4ad.xlarge"
-    # Deep Learning Base OSS Nvidia Driver GPU AMI (Ubuntu 22.04), Frankfurt region
-    machine_image: "ami-0ba41b554b28d24a4"
+    # Deep Learning Base OSS Nvidia Driver GPU AMI (Ubuntu 22.04), Frankfurt region with 200GB root volume
+    machine_image: "ami-0266e0ac094b2f8b9"
     # use Frankfurt region
     region: "eu-central-1"
     preemptible: false
