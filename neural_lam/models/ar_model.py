@@ -412,6 +412,14 @@ class ARModel(pl.LightningModule):
             t0 = da_pred.coords["time"].values[0]
             da_pred.coords["analysis_time"] = t0
             da_pred.coords["elapsed_forecast_duration"] = da_pred.time - t0
+            # set CF-standard names for forecast data in anticipation of
+            # input/output to neural-lam eventually all being cf-compliant
+            da_pred.analysis_time.attrs[
+                "standard_name"
+            ] = "forecast_reference_time"
+            da_pred.elapsed_forecast_duration.attrs[
+                "standard_name"
+            ] = "forecast_period"
             da_pred = da_pred.swap_dims({"time": "elapsed_forecast_duration"})
             da_pred.name = "state"
 
