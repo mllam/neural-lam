@@ -307,3 +307,39 @@ def setup_training_logger(datastore, args, run_name):
         )
 
     return logger
+
+
+def inverse_softplus(x, beta=1, threshold=20):
+    """
+    Inverse of torch.nn.functional.softplus
+
+    Input is clamped to approximately positive values of x, and the function is
+    linear for inputs above x*beta for numerical stability.
+
+    Note that this torch.clamp will make gradients 0, but this is not a
+    problem as values of x that are this close to 0 have gradients of 0 anyhow.
+    """
+    x_clamped = torch.clamp(
+        x, min=torch.log(torch.tensor(1e-6 + 1)) / beta, max=threshold / beta
+    )
+
+    non_linear_part = torch.log(torch.expm1(x_clamped * beta)) / beta
+
+    below_threshold = x * beta <= threshold
+
+    x = torch.where(condition=below_threshold, input=non_linear_part, other=x)
+
+    return x
+
+
+def inverse_sigmoid(x):
+    """
+    Inverse of torch.sigmoid
+
+    Sigmoid output takes values in [0,1], this makes sure input is just within
+    this interval.
+    Note that this torch.clamp will make gradients 0, but this is not a problem
+    as values of x that are this close to 0 or 1 have gradients of 0 anyhow.
+    """
+    x_clamped = torch.clamp(x, min=1e-6, max=1 - 1e-6)
+    return torch.log(x_clamped / (1 - x_clamped))

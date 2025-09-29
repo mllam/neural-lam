@@ -132,7 +132,7 @@ def test_get_vars(datastore_name):
 
 @pytest.mark.parametrize("datastore_name", DATASTORES.keys())
 def test_get_normalization_dataarray(datastore_name):
-    """Check that the `datastore.get_normalization_dataa rray` method is
+    """Check that the `datastore.get_normalization_dataarray` method is
     implemented."""
     datastore = init_datastore_example(datastore_name)
 
@@ -144,7 +144,12 @@ def test_get_normalization_dataarray(datastore_name):
         assert isinstance(ds_stats, xr.Dataset)
 
         if category == "state":
-            ops = ["mean", "std", "diff_mean", "diff_std"]
+            ops = [
+                "mean",
+                "std",
+                "diff_mean_standardized",
+                "diff_std_standardized",
+            ]
         elif category == "forcing":
             ops = ["mean", "std"]
         elif category == "static":
