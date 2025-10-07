@@ -24,6 +24,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Change all argparse instances to use ArgumentDefaultsHelpFormatter for easier maintaining defaults.
 [\#145](https://github.com/mllam/neural-lam/pull/145) @joeloskarsson
 
+- Fix `torch` version detection during CI when testing on CPU with pdm [\#154](https://github.com/mllam/neural-lam/pull/154) @leifdenby
+
 ## [v0.4.0](https://github.com/mllam/neural-lam/releases/tag/v0.4.0)
 
 This release introduces a number of improvements to logging, multi-node training and variable rescaling, without making any major changes to the neural-lam structure.
