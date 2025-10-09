@@ -79,7 +79,7 @@ See the [repository format section](#format-of-data-directory) for details on th
 
 The full MEPS dataset is available for download [here](https://nextcloud.liu.se/s/meps). See instructions in the file `README.txt` for how to download and extract the full dataset.
 
-A tiny subset of the MEPS data (named `meps_example`) is also available in `example_data.zip`, which can be downloaded from [here](https://liuonline-my.sharepoint.com/:u:/g/personal/joeos82_liu_se/EaUUq6h9og1EsLwJmKAltWwB7zP2gmObe-K8pL6qGYYiGg?e=yQbFuV).
+A tiny subset of the MEPS data (named `meps_example`) is also available in `example_data.zip`, which can be downloaded from [here](https://drive.google.com/drive/folders/1N6ZT_mkfbdVloVsNs9T5YOrMtxd3jG-j?usp=sharing).
 Download the files and unzip in the neural-lam directory.
 After downloading this data, the graphs used in the paper can be generated as described below.
 Note that this subset is far too small to train any useful models, but all scripts can be ran with it.
@@ -111,7 +111,7 @@ The main option to set for these is just which dataset to use.
 
 ## Loading Pre-Trained Models
 
-Checkpoints for the pre-trained models from the paper can be downloaded from [here](https://liuonline-my.sharepoint.com/:f:/g/personal/joeos82_liu_se/EkZGlkjMJLhPkaPso_fM3lUB3LGwS_CniSIjWPcFGGOJYA?e=bpHSou). 
+Checkpoints for the pre-trained models from the paper can be downloaded from [here](https://drive.google.com/drive/folders/16uNq2N0itPT6os-GMddQkkgabHzjzHA8?usp=sharing). 
 The directory `eval_scripts` in this repository contains example scripts that load these checkpoints and run evaluation.
 For these scripts to work the downloaded checkpoints should be placed in a directory called `paper_checkpoints` and the graphs named as described above.
 
@@ -284,4 +284,4 @@ Entries 0 in these lists describe edges between the lowest levels 1 and 2.
 
 # Contact
 For questions about our implementation or ideas for extending it, feel free to get in touch.
-You can open a github issue on this page, or (if more suitable) send an email to [joel.oskarsson@liu.se](mailto:joel.oskarsson@liu.se).
+You can open a github issue on this page, or (if more suitable) send an email to [joel.oskarsson@outlook.com](mailto:joel.oskarsson@outlook.com).
