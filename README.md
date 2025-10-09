@@ -108,7 +108,7 @@ To create the remaining static files run the scripts `create_global_grid_feature
 
 ## Loading Pre-Trained Models
 
-Checkpoints for the pre-trained models from the paper can be downloaded from [here](https://liuonline-my.sharepoint.com/:f:/g/personal/joeos82_liu_se/Eux3kNp8ZitPuuMSa_XyV8EBdFhHxxuaP7OVPFAW2Tb0xg?e=oI7ac7). 
+Checkpoints for the pre-trained models from the paper can be downloaded from [here](https://drive.google.com/drive/folders/1jkxpvrqiTgK9cw5-y2j5FZhLw6493el3?usp=sharing). 
 The directory `eval_scripts` in this repository contains example scripts that load these checkpoints and run evaluation.
 For these scripts to work the downloaded checkpoints should be placed in a directory called `paper_checkpoints` and the graphs named as described above.
 
@@ -265,4 +265,4 @@ Entries 0 in these lists describe edges between the lowest levels 1 and 2.
 
 # Contact
 For questions about our implementation or ideas for extending it, feel free to get in touch.
-You can open a github issue on this page, or (if more suitable) send an email to [joel.oskarsson@liu.se](mailto:joel.oskarsson@liu.se).
+You can open a github issue on this page, or (if more suitable) send an email to [joel.oskarsson@outlook.com](mailto:joel.oskarsson@outlook.com).
