@@ -26,6 +26,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Fix `torch` version detection during CI when testing on CPU with pdm [\#154](https://github.com/mllam/neural-lam/pull/154) @leifdenby
 
+- Update link to MEPS example data [\#155](https://github.com/mllam/neural-lam/pull/155) @joeloskarsson
+
 ## [v0.4.0](https://github.com/mllam/neural-lam/releases/tag/v0.4.0)
 
 This release introduces a number of improvements to logging, multi-node training and variable rescaling, without making any major changes to the neural-lam structure.
