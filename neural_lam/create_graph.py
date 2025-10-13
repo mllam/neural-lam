@@ -1,6 +1,6 @@
 # Standard library
 import os
-from argparse import ArgumentParser
+from argparse import ArgumentDefaultsHelpFormatter, ArgumentParser
 
 # Third-party
 import matplotlib
@@ -434,14 +434,14 @@ def create_graph(
     # grid nodes
     Nx, Ny = xy.shape[:2]
 
-    G_grid = networkx.grid_2d_graph(Ny, Nx)
+    G_grid = networkx.grid_2d_graph(Nx, Ny)
     G_grid.clear_edges()
 
     # vg features (only pos introduced here)
     for node in G_grid.nodes:
         # pos is in feature but here explicit for convenience
         G_grid.nodes[node]["pos"] = xy[
-            node[1], node[0]
+            node[0], node[1]
         ]  # xy is already (Nx,Ny,2)
 
     # add 1000 to node key to separate grid nodes (1000,i,j) from mesh nodes
@@ -452,7 +452,7 @@ def create_graph(
     # order in vg_list should be same as in vg_xy
     vg_list = list(G_grid.nodes)
     vg_xy = np.array(
-        [xy[node[2], node[1]] for node in vg_list]
+        [xy[node[1], node[2]] for node in vg_list]
     )  # xy is already (Nx,Ny,2)
     kdt_g = scipy.spatial.KDTree(vg_xy)
 
@@ -559,7 +559,10 @@ def create_graph_from_datastore(
 
 
 def cli(input_args=None):
-    parser = ArgumentParser(description="Graph generation arguments")
+    parser = ArgumentParser(
+        description="Graph generation for neural-lam",
+        formatter_class=ArgumentDefaultsHelpFormatter,
+    )
     parser.add_argument(
         "--config_path",
         type=str,
@@ -569,24 +572,23 @@ def cli(input_args=None):
         "--name",
         type=str,
         default="multiscale",
-        help="Name to save graph as (default: multiscale)",
+        help="Name to save graph as",
     )
     parser.add_argument(
         "--plot",
         action="store_true",
-        help="If graphs should be plotted during generation "
-        "(default: False)",
+        help="If graphs should be plotted during generation",
     )
     parser.add_argument(
         "--levels",
         type=int,
         help="Limit multi-scale mesh to given number of levels, "
-        "from bottom up (default: None (no limit))",
+        "from bottom up. If None, no limit.",
     )
     parser.add_argument(
         "--hierarchical",
         action="store_true",
-        help="Generate hierarchical mesh graph (default: False)",
+        help="Generate hierarchical mesh graph. Otherwise multi-scale.",
     )
     args = parser.parse_args(input_args)
 

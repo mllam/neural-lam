@@ -143,7 +143,8 @@ class MDPDatastore(BaseRegularGridDatastore):
 
         """
         da_dt = self._ds["time"].diff("time")
-        return (da_dt.dt.seconds[0] // 3600).item()
+        total_sec = da_dt.dt.total_seconds().isel(time=0).astype(int)
+        return (total_sec // 3600).item()
 
     def get_vars_units(self, category: str) -> List[str]:
         """Return the units of the variables in the given category.
@@ -299,9 +300,10 @@ class MDPDatastore(BaseRegularGridDatastore):
         """
         Return the standardization dataarray for the given category. This
         should contain a `{category}_mean` and `{category}_std` variable for
-        each variable in the category. For `category=="state"`, the dataarray
-        should also contain a `state_diff_mean` and `state_diff_std` variable
-        for the one- step differences of the state variables.
+        each variable in the category.
+        For `category=="state"`, the dataarray should also contain a
+        `state_diff_mean_standardized` and `state_diff_std_standardized`
+        variable for the one-step differences of the state variables.
 
         Parameters
         ----------
@@ -321,12 +323,21 @@ class MDPDatastore(BaseRegularGridDatastore):
         stats_variables = {
             f"{category}__{split}__{op}": f"{category}_{op}" for op in ops
         }
-        if category == "state":
-            stats_variables.update(
-                {f"state__{split}__diff_{op}": f"state_diff_{op}" for op in ops}
-            )
 
         ds_stats = self._ds[stats_variables.keys()].rename(stats_variables)
+
+        # Add standardized state diff stats
+        if category == "state":
+            ds_stats = ds_stats.assign(
+                **{
+                    f"state_diff_{op}_standardized": self._ds[
+                        f"state__{split}__diff_{op}"
+                    ]
+                    / ds_stats["state_std"]
+                    for op in ops
+                }
+            )
+
         return ds_stats
 
     @cached_property

@@ -64,11 +64,15 @@ class ARModel(pl.LightningModule):
             "state_std": torch.tensor(
                 da_state_stats.state_std.values, dtype=torch.float32
             ),
+            # Note that the one-step-diff stats (diff_mean and diff_std) are
+            # for differences computed on standardized data
             "diff_mean": torch.tensor(
-                da_state_stats.state_diff_mean.values, dtype=torch.float32
+                da_state_stats.state_diff_mean_standardized.values,
+                dtype=torch.float32,
             ),
             "diff_std": torch.tensor(
-                da_state_stats.state_diff_std.values, dtype=torch.float32
+                da_state_stats.state_diff_std_standardized.values,
+                dtype=torch.float32,
             ),
         }
 
@@ -106,7 +110,7 @@ class ARModel(pl.LightningModule):
         ) = self.grid_static_features.shape
 
         self.grid_dim = (
-            2 * self.grid_output_dim
+            2 * num_state_vars
             + grid_static_dim
             + num_forcing_vars
             * (num_past_forcing_steps + num_future_forcing_steps + 1)

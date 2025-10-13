@@ -18,7 +18,7 @@
 # To ensure that the version of torch installed is compatible with neural-lam we
 # first use `pip install --dry-run .` to determine the version of torch that would
 # be installed.
-name: Test Matrix
+name: CPU+GPU testing
 
 on: [push, pull_request]
 
@@ -35,7 +35,7 @@ jobs:
             torch_index: https://download.pytorch.org/whl/cpu
           - device: gpu
             runner: "cirun-aws-runner--${{ github.run_id }}"
-            torch_index: https://download.pytorch.org/whl/cu124
+            torch_index: https://download.pytorch.org/whl/cu128
 
     steps:
       - name: Checkout repository
@@ -66,9 +66,25 @@ jobs:
           pdm venv create --with-pip
           pdm use --venv in-project
 
-      - name: Determine PyTorch version for neural-lam
+      - name: Create virtual environment (pip GPU)
+        if: matrix.package_manager == 'pip' && matrix.device == 'gpu'
         run: |
-          TORCH_VERSION=$(${{ matrix.package_manager == 'pdm' && 'pdm run python -m pip' || 'python -m pip' }} install --dry-run "." | grep "Would install" | grep -o 'torch-[0-9.]*' | awk -F'-' '{print $2}' | tail -n 1)
+          # venv must be made on nvme drive, otherwise we run out of space
+          python -m venv /opt/dlami/nvme/venv
+          source /opt/dlami/nvme/venv/bin/activate
+
+      - name: Determine PyTorch version for neural-lam (using pip dry-run)
+        if: matrix.package_manager == 'pip'
+        run: |
+          TORCH_VERSION=$(python -m pip install --dry-run "." | grep "Would install" | grep -o 'torch-[0-9.]*' | awk -F'-' '{print $2}' | tail -n 1)
+          echo "Torch version detected: $TORCH_VERSION"
+          echo "TORCH_VERSION=$TORCH_VERSION" >> $GITHUB_ENV
+
+      - name: Determined PyTorch version for neural-lam (using pdm install dry-run)
+        if: matrix.package_manager == 'pdm'
+        run: |
+          TORCH_VERSION=$(pdm install --dry-run | grep -Eo 'torch [0-9]+\.[0-9]+\.[0-9]+' | awk '{print $2}')
+          echo "Torch version detected: $TORCH_VERSION"
           echo "TORCH_VERSION=$TORCH_VERSION" >> $GITHUB_ENV
 
       - name: Install PyTorch
