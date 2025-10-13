@@ -21,8 +21,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Maintenance
 
+- Introducing `mypy` for static type checking and fixing type hints accordingly [\#113](https://github.com/mllam/neural-lam/pull/113) @observingClouds
+
 - Change all argparse instances to use ArgumentDefaultsHelpFormatter for easier maintaining defaults.
 [\#145](https://github.com/mllam/neural-lam/pull/145) @joeloskarsson
+
+- Fix `torch` version detection during CI when testing on CPU with pdm [\#154](https://github.com/mllam/neural-lam/pull/154) @leifdenby
+
+- Update link to MEPS example data [\#155](https://github.com/mllam/neural-lam/pull/155) @joeloskarsson
 
 ## [v0.4.0](https://github.com/mllam/neural-lam/releases/tag/v0.4.0)
 

@@ -75,9 +75,18 @@ jobs:
           python -m venv /opt/dlami/nvme/venv
           source /opt/dlami/nvme/venv/bin/activate
 
-      - name: Determine PyTorch version for neural-lam
+      - name: Determine PyTorch version for neural-lam (using pip dry-run)
+        if: matrix.package_manager == 'pip'
         run: |
-          TORCH_VERSION=$(${{ matrix.package_manager == 'pdm' && 'pdm run python -m pip' || 'python -m pip' }} install --dry-run "." | grep "Would install" | grep -o 'torch-[0-9.]*' | awk -F'-' '{print $2}' | tail -n 1)
+          TORCH_VERSION=$(python -m pip install --dry-run "." | grep "Would install" | grep -o 'torch-[0-9.]*' | awk -F'-' '{print $2}' | tail -n 1)
+          echo "Torch version detected: $TORCH_VERSION"
+          echo "TORCH_VERSION=$TORCH_VERSION" >> $GITHUB_ENV
+
+      - name: Determined PyTorch version for neural-lam (using pdm install dry-run)
+        if: matrix.package_manager == 'pdm'
+        run: |
+          TORCH_VERSION=$(pdm install --dry-run | grep -Eo 'torch [0-9]+\.[0-9]+\.[0-9]+' | awk '{print $2}')
+          echo "Torch version detected: $TORCH_VERSION"
           echo "TORCH_VERSION=$TORCH_VERSION" >> $GITHUB_ENV
 
       - name: Install PyTorch
