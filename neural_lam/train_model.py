@@ -189,7 +189,8 @@ def main(input_args=None):
         "--logger_run_name",
         type=str,
         default=None,
-        help="Logger run name, for e.g. MLFlow (with default value `None` neural-lam default format string is used)",
+        help="""Logger run name, for e.g. MLFlow (with default value `None`
+          neural-lam's default format string is used)""",
     )
     parser.add_argument(
         "--val_steps_to_log",
