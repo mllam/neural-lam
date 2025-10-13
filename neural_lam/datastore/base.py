@@ -488,9 +488,7 @@ class BaseRegularGridDatastore(BaseDatastore):
         category : str
             The category of the dataset (state/forcing/static).
         stacked : bool
-            Whether to stack the x, y coordinates. Defaults to `True` to match
-            the behaviour of `BaseDatastore.get_xy()` which always returns the
-            coordinates stacked.
+            Whether to stack the x, y coordinates.
 
         Returns
         -------
