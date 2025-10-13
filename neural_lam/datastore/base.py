@@ -5,7 +5,7 @@ import dataclasses
 import functools
 from functools import cached_property
 from pathlib import Path
-from typing import List, Union
+from typing import List, Optional, Union
 
 # Third-party
 import cartopy.crs as ccrs
@@ -216,7 +216,10 @@ class BaseDatastore(abc.ABC):
 
     @abc.abstractmethod
     def get_dataarray(
-        self, category: str, split: str, standardize: bool = False
+        self,
+        category: str,
+        split: Optional[str],
+        standardize: bool = False,
     ) -> Union[xr.DataArray, None]:
         """
         Return the processed data (as a single `xr.DataArray`) for the given
@@ -276,7 +279,7 @@ class BaseDatastore(abc.ABC):
         pass
 
     @abc.abstractmethod
-    def get_xy(self, category: str) -> np.ndarray:
+    def get_xy(self, category: str, stacked: bool) -> np.ndarray:
         """
         Return the x, y coordinates of the dataset as a numpy arrays for a
         given category of data.
@@ -285,6 +288,9 @@ class BaseDatastore(abc.ABC):
         ----------
         category : str
             The category of the dataset (state/forcing/static).
+        stacked : bool
+            Whether to stack the x, y coordinates. `stacked=False` is only
+            meaningful for grid points on a regular-grid.
 
         Returns
         -------
@@ -365,7 +371,9 @@ class BaseDatastore(abc.ABC):
         pass
 
     @functools.lru_cache
-    def expected_dim_order(self, category: str = None) -> tuple[str]:
+    def expected_dim_order(
+        self, category: Optional[str] = None
+    ) -> tuple[str, ...]:
         """
         Return the expected dimension order for the dataarray or dataset
         returned by `get_dataarray` for the given category of data. The
@@ -472,7 +480,7 @@ class BaseRegularGridDatastore(BaseDatastore):
         pass
 
     @abc.abstractmethod
-    def get_xy(self, category: str, stacked: bool = True) -> np.ndarray:
+    def get_xy(self, category: str, stacked: bool) -> np.ndarray:
         """Return the x, y coordinates of the dataset.
 
         Parameters
@@ -480,11 +488,7 @@ class BaseRegularGridDatastore(BaseDatastore):
         category : str
             The category of the dataset (state/forcing/static).
         stacked : bool
-            Whether to stack the x, y coordinates. The parameter `stacked` has
-            been introduced in this class. Parent class `BaseDatastore` has the
-            same method signature but without the `stacked` parameter. Defaults
-            to `True` to match the behaviour of `BaseDatastore.get_xy()` which
-            always returns the coordinates stacked.
+            Whether to stack the x, y coordinates.
 
         Returns
         -------
@@ -575,7 +579,6 @@ class BaseRegularGridDatastore(BaseDatastore):
         return da_or_ds_stacked.transpose(*dim_order)
 
     @property
-    @functools.lru_cache
     def num_grid_points(self) -> int:
         """Return the number of grid points in the dataset.
 

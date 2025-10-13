@@ -21,6 +21,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Maintenance
 
+- Introducing `mypy` for static type checking and fixing type hints accordingly [\#113](https://github.com/mllam/neural-lam/pull/113) @observingClouds
+
 - Change all argparse instances to use ArgumentDefaultsHelpFormatter for easier maintaining defaults.
 [\#145](https://github.com/mllam/neural-lam/pull/145) @joeloskarsson
 
