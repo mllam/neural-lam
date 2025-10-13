@@ -283,7 +283,7 @@ forecast/analysis files in future.
 The full MEPS dataset can be shared with other researchers on request, contact us for this.
 A tiny subset of the data (named `meps_example`) is available in
 `example_data.zip`, which can be downloaded from
-[here](https://liuonline-my.sharepoint.com/:f:/g/personal/joeos82_liu_se/EuiUuiGzFIFHruPWpfxfUmYBSjhqMUjNExlJi9W6ULMZ1w?e=97pnGX).
+[here](https://drive.google.com/drive/folders/1N6ZT_mkfbdVloVsNs9T5YOrMtxd3jG-j?usp=sharing).
 
 Download the file and unzip in the neural-lam directory.
 Graphs used in the initial paper are also available for download at the same link (but can as easily be re-generated using `python -m neural_lam.create_graph`).
@@ -583,4 +583,4 @@ Furthermore, all tests in the ```tests``` directory will be run upon pushing cha
 # Contact
 If you are interested in machine learning models for LAM, have questions about the implementation or ideas for extending it, feel free to get in touch.
 There is an open [mllam slack channel](https://join.slack.com/t/ml-lam/shared_invite/zt-2t112zvm8-Vt6aBvhX7nYa6Kbj_LkCBQ) that anyone can join (after following the link you have to request to join, this is to avoid spam bots).
-You can also open a github issue on this page, or (if more suitable) send an email to [joel.oskarsson@liu.se](mailto:joel.oskarsson@liu.se).
+You can also open a github issue on this page.
