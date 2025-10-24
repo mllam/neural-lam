@@ -13,7 +13,7 @@ from neural_lam.create_graph import create_graph_from_datastore
 from neural_lam.datastore import DATASTORES
 from neural_lam.datastore.base import BaseRegularGridDatastore
 from neural_lam.models.graph_lam import GraphLAM
-from neural_lam.weather_dataset import WeatherDataModule
+from neural_lam.weather_dataset import WeatherDataModule, WeatherDatasetWithGraph
 from tests.conftest import init_datastore_example
 
 
@@ -62,6 +62,8 @@ def run_simple_training(datastore, set_output_std):
             n_max_levels=1,
         )
 
+    _, graph_sizes = WeatherDatasetWithGraph.load_graph(graph_dir_path)
+
     data_module = WeatherDataModule(
         datastore=datastore,
         ar_steps_train=3,
@@ -71,6 +73,7 @@ def run_simple_training(datastore, set_output_std):
         num_workers=1,
         num_past_forcing_steps=1,
         num_future_forcing_steps=1,
+        graph_name=graph_name,
     )
 
     class ModelArgs:
@@ -103,6 +106,7 @@ def run_simple_training(datastore, set_output_std):
         args=model_args,
         datastore=datastore,
         config=config,
+        graph_sizes=graph_sizes,
     )
     wandb.init()
     trainer.fit(model=model, datamodule=data_module)

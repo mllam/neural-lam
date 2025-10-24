@@ -9,6 +9,7 @@ from neural_lam import config as nlconfig
 from neural_lam.create_graph import create_graph_from_datastore
 from neural_lam.datastore.mdp import MDPDatastore
 from neural_lam.models.graph_lam import GraphLAM
+from neural_lam.weather_dataset import WeatherDatasetWithGraph
 from tests.conftest import init_datastore_example
 
 
@@ -56,10 +57,13 @@ def test_clamping():
         ),
     )
 
+    _, graph_sizes = WeatherDatasetWithGraph.load_graph(graph_dir_path)
+
     model = GraphLAM(
         args=model_args,
         datastore=datastore,
         config=config,
+        graph_sizes=graph_sizes,
     )
 
     features = datastore.get_vars_names(category="state")

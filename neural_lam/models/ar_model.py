@@ -275,7 +275,25 @@ class ARModel(pl.LightningModule):
         num_grid_nodes, d_forcing),
             where index 0 corresponds to index 1 of init_states
         """
-        (init_states, target_states, forcing_features, batch_times) = batch
+        if len(batch) == 5:
+            (
+                init_states,
+                target_states,
+                forcing_features,
+                batch_times,
+                graph,
+            ) = batch
+        else:
+            (
+                init_states,
+                target_states,
+                forcing_features,
+                batch_times,
+            ) = batch
+            graph = None
+
+        if graph is not None and hasattr(self, "set_graph"):
+            self.set_graph(graph)
 
         prediction, pred_std = self.unroll_prediction(
             init_states, forcing_features, target_states

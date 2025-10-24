@@ -18,7 +18,6 @@ class InteractionNet(pyg.nn.MessagePassing):
 
     def __init__(
         self,
-        edge_index,
         input_dim,
         update_edges=True,
         hidden_layers=1,
@@ -30,7 +29,6 @@ class InteractionNet(pyg.nn.MessagePassing):
         """
         Create a new InteractionNet
 
-        edge_index: (2,M), Edges in pyg format
         input_dim: Dimensionality of input representations,
             for both nodes and edges
         update_edges: If new edge representations should be computed
@@ -52,15 +50,6 @@ class InteractionNet(pyg.nn.MessagePassing):
             # Default to input dim if not explicitly given
             hidden_dim = input_dim
 
-        # Make both sender and receiver indices of edge_index start at 0
-        edge_index = edge_index - edge_index.min(dim=1, keepdim=True)[0]
-        # Store number of receiver nodes according to edge_index
-        self.num_rec = edge_index[1].max() + 1
-        edge_index[0] = (
-            edge_index[0] + self.num_rec
-        )  # Make sender indices after rec
-        self.register_buffer("edge_index", edge_index, persistent=False)
-
         # Create MLPs
         edge_mlp_recipe = [3 * input_dim] + [hidden_dim] * (hidden_layers + 1)
         aggr_mlp_recipe = [2 * input_dim] + [hidden_dim] * (hidden_layers + 1)
@@ -79,11 +68,12 @@ class InteractionNet(pyg.nn.MessagePassing):
             self.aggr_mlp = SplitMLPs(
                 [utils.make_mlp(aggr_mlp_recipe) for _ in aggr_chunk_sizes],
                 aggr_chunk_sizes,
-            )
+        )
 
         self.update_edges = update_edges
+        self._num_rec = None
 
-    def forward(self, send_rep, rec_rep, edge_rep):
+    def forward(self, send_rep, rec_rep, edge_rep, edge_index):
         """
         Apply interaction network to update the representations of receiver
         nodes, and optionally the edge representations.
@@ -91,17 +81,21 @@ class InteractionNet(pyg.nn.MessagePassing):
         send_rep: (N_send, d_h), vector representations of sender nodes
         rec_rep: (N_rec, d_h), vector representations of receiver nodes
         edge_rep: (M, d_h), vector representations of edges used
+        edge_index: (2, M), edges in pyg COO format
 
         Returns:
         rec_rep: (N_rec, d_h), updated vector representations of receiver nodes
         (optionally) edge_rep: (M, d_h), updated vector representations
             of edges
         """
+        processed_edge_index, num_rec = self._prepare_edge_index(edge_index)
+        self._num_rec = num_rec
+
         # Always concatenate to [rec_nodes, send_nodes] for propagation,
         # but only aggregate to rec_nodes
         node_reps = torch.cat((rec_rep, send_rep), dim=-2)
         edge_rep_aggr, edge_diff = self.propagate(
-            self.edge_index, x=node_reps, edge_attr=edge_rep
+            processed_edge_index, x=node_reps, edge_attr=edge_rep
         )
         rec_diff = self.aggr_mlp(torch.cat((rec_rep, edge_rep_aggr), dim=-1))
 
@@ -127,8 +121,19 @@ class InteractionNet(pyg.nn.MessagePassing):
         * return both aggregated and original messages,
         * only aggregate to number of receiver nodes.
         """
-        aggr = super().aggregate(inputs, index, ptr, self.num_rec)
+        aggr = super().aggregate(inputs, index, ptr, self._num_rec)
         return aggr, inputs
+
+    @staticmethod
+    def _prepare_edge_index(edge_index):
+        """
+        Shift indices so receiver nodes come first and return count of receivers.
+        """
+        edge_index = edge_index.clone()
+        edge_index = edge_index - edge_index.min(dim=1, keepdim=True)[0]
+        num_rec = int((edge_index[1].max() + 1).item())
+        edge_index[0] = edge_index[0] + num_rec
+        return edge_index, num_rec
 
 
 class SplitMLPs(nn.Module):

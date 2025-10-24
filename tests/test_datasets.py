@@ -13,7 +13,7 @@ from neural_lam.create_graph import create_graph_from_datastore
 from neural_lam.datastore import DATASTORES
 from neural_lam.datastore.base import BaseRegularGridDatastore
 from neural_lam.models.graph_lam import GraphLAM
-from neural_lam.weather_dataset import WeatherDataset
+from neural_lam.weather_dataset import WeatherDataset, WeatherDatasetWithGraph
 from tests.conftest import init_datastore_example
 from tests.dummy_datastore import DummyDatastore
 
@@ -211,13 +211,42 @@ def test_single_batch(datastore_name, split):
     )
 
     dataset = WeatherDataset(datastore=datastore, split=split, ar_steps=2)
+    dataset = WeatherDatasetWithGraph(dataset, graph_name=graph_name)
 
-    model = GraphLAM(args=args, datastore=datastore, config=config)  # noqa
+    model = GraphLAM(
+        args=args,
+        datastore=datastore,
+        config=config,
+        graph_sizes=dataset.graph_sizes,
+    )  # noqa
 
     model_device = model.to(device_name)
-    data_loader = DataLoader(dataset, batch_size=2)
+
+    data_loader = DataLoader(
+        dataset,
+        batch_size=2,
+        collate_fn=WeatherDatasetWithGraph.collate_fn,
+    )
     batch = next(iter(data_loader))
-    batch_device = [part.to(device_name) for part in batch]
+
+    def move_graph_to_device(graph, device):
+        result = {}
+        for key, value in graph.items():
+            if isinstance(value, torch.Tensor):
+                result[key] = value.to(device)
+            elif isinstance(value, list):
+                result[key] = [
+                    tensor.to(device) if isinstance(tensor, torch.Tensor) else tensor
+                    for tensor in value
+                ]
+            else:
+                result[key] = value
+        return result
+
+    batch_device = [part.to(device_name) for part in batch[:-1]]
+    batch_device.append(move_graph_to_device(batch[-1], device_name))
+    batch_device = tuple(batch_device)
+
     model_device.common_step(batch_device)
     model_device.training_step(batch_device)
 
