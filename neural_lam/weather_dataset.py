@@ -14,7 +14,12 @@ from torch.utils.data._utils.collate import default_collate
 
 # First-party
 from neural_lam.datastore.base import BaseDatastore
-from neural_lam.graph_meta import GraphEdgesAndFeatures, GraphSizes
+from neural_lam.graph_data import (
+    GraphEdgesAndFeatures,
+    GraphSizes,
+    build_graph_sizes,
+    load_graph,
+)
 
 
 class WeatherDataset(torch.utils.data.Dataset):
@@ -635,11 +640,11 @@ class WeatherDatasetWithGraph(torch.utils.data.Dataset):
             Path(self.datastore.root_path) / "graph" / self.graph_name
         )
 
-        graph_edges_and_features = self.load_graph(
+        graph_edges_and_features = load_graph(
             graph_dir_path=self.graph_dir_path, device=self.device
         )
         self.graph_edges_and_features = graph_edges_and_features
-        self.graph_sizes = self.build_graph_sizes(graph_edges_and_features)
+        self.graph_sizes = build_graph_sizes(graph_edges_and_features)
         self.graph_payload = graph_edges_and_features.as_batch_dict()
         self.hierarchical = self.graph_sizes.hierarchical
 
@@ -663,182 +668,6 @@ class WeatherDatasetWithGraph(torch.utils.data.Dataset):
         collated_data = default_collate(data_part)
         graph = graph_part[0]
         return (*collated_data, graph)
-
-    @classmethod
-    def load_graph(
-        cls,
-        graph_dir_path: Union[str, Path],
-        device: str = "cpu",
-    ) -> Tuple[GraphEdgesAndFeatures, GraphSizes]:
-        """
-        Load tensors and metadata representing the graph from ``graph_dir_path``.
-
-        Returns
-        -------
-        graph_edges_and_features : GraphEdgesAndFeatures
-            Adjacency lists and feature tensors describing the graph.
-        graph_sizes : GraphSizes
-            Validated dimensional metadata corresponding to ``graph_edges_and_features``.
-        """
-        graph_dir = Path(graph_dir_path)
-        if not graph_dir.exists():
-            raise FileNotFoundError(
-                f"Graph directory {graph_dir} could not be found."
-            )
-
-        def loads_file(fn: str):
-            return torch.load(
-                graph_dir / fn,
-                map_location=device,
-                weights_only=True,
-            )
-
-        # Load edges (edge_index)
-        m2m_edge_index_list = [
-            tensor.clone()
-            for tensor in loads_file("m2m_edge_index.pt")
-        ]  # List of (2, M_m2m[l])
-        g2m_edge_index = loads_file("g2m_edge_index.pt")  # (2, M_g2m)
-        m2g_edge_index = loads_file("m2g_edge_index.pt")  # (2, M_m2g)
-
-        n_levels = len(m2m_edge_index_list)
-        hierarchical = n_levels > 1  # Nor just single level mesh graph
-
-        # Load static edge features
-        # List of (M_m2m[l], d_edge_f)
-        m2m_features_list = [
-            tensor.clone() for tensor in loads_file("m2m_features.pt")
-        ]
-        g2m_features = loads_file("g2m_features.pt")  # (M_g2m, d_edge_f)
-        m2g_features = loads_file("m2g_features.pt")  # (M_m2g, d_edge_f)
-
-        # Normalize by dividing with longest edge (found in m2m)
-        longest_edge = max(
-            torch.max(level_features[:, 0])
-            for level_features in m2m_features_list
-        )  # Col. 0 is length
-        m2m_features_list = [
-            level_features / longest_edge for level_features in m2m_features_list
-        ]
-        g2m_features = g2m_features / longest_edge
-        m2g_features = m2g_features / longest_edge
-
-        # Load static node features
-        mesh_static_features_list = loads_file(
-            "mesh_features.pt"
-        )  # List of (N_mesh[l], d_mesh_static)
-
-        # Some checks for consistency
-        assert (
-            len(m2m_features_list) == n_levels
-        ), "Inconsistent number of levels in mesh"
-        assert (
-            len(mesh_static_features_list) == n_levels
-        ), "Inconsistent number of levels in mesh"
-
-        hierarchical_kwargs = {}
-        if hierarchical:
-            mesh_up_edge_index_list = [
-                tensor.clone()
-                for tensor in loads_file("mesh_up_edge_index.pt")
-            ]  # List of (2, M_up[l])
-            mesh_down_edge_index_list = [
-                tensor.clone()
-                for tensor in loads_file("mesh_down_edge_index.pt")
-            ]  # List of (2, M_down[l])
-
-            mesh_up_features_list = [
-                tensor.clone()
-                for tensor in loads_file("mesh_up_features.pt")
-            ]  # List of (M_up[l], d_edge_f)
-            mesh_down_features_list = [
-                tensor.clone()
-                for tensor in loads_file("mesh_down_features.pt")
-            ]  # List of (M_down[l], d_edge_f)
-
-            # Rescale
-            mesh_up_features_list = [
-                edge_features / longest_edge for edge_features in mesh_up_features_list
-            ]
-            mesh_down_features_list = [
-                edge_features / longest_edge
-                for edge_features in mesh_down_features_list
-            ]
-
-            hierarchical_kwargs = {
-                "mesh_up_edge_index": tuple(mesh_up_edge_index_list),
-                "mesh_down_edge_index": tuple(mesh_down_edge_index_list),
-                "mesh_up_features": tuple(mesh_up_features_list),
-                "mesh_down_features": tuple(mesh_down_features_list),
-            }
-
-        base_kwargs = {
-            "hierarchical": hierarchical,
-            "g2m_edge_index": g2m_edge_index,
-            "m2g_edge_index": m2g_edge_index,
-            "m2m_edge_index": tuple(m2m_edge_index_list),
-            "g2m_features": g2m_features,
-            "m2g_features": m2g_features,
-            "m2m_features": tuple(m2m_features_list),
-            "mesh_static_features": tuple(mesh_static_features_list),
-        }
-
-        graph_edges_and_features = GraphEdgesAndFeatures(**base_kwargs, **hierarchical_kwargs)
-
-        return graph_edges_and_features
-
-    @staticmethod
-    def build_graph_sizes(graph_edges_and_features: GraphEdgesAndFeatures) -> GraphSizes:
-        """
-        Build graph size metadata from a :class:`GraphEdgesAndFeatures` instance.
-        """
-
-        mesh_level_sizes = [
-            tensor.shape[0] for tensor in graph_edges_and_features.mesh_static_features
-        ]
-        mesh_feature_dims = [
-            tensor.shape[1] for tensor in graph_edges_and_features.mesh_static_features
-        ]
-        m2m_feature_dims = [
-            tensor.shape[1] for tensor in graph_edges_and_features.m2m_features
-        ]
-        m2m_edge_counts = [
-            tensor.shape[1] for tensor in graph_edges_and_features.m2m_edge_index
-        ]
-
-        base_kwargs = {
-            "hierarchical": graph_edges_and_features.hierarchical,
-            "num_mesh_nodes": sum(mesh_level_sizes),
-            "g2m_dim": graph_edges_and_features.g2m_features.shape[1],
-            "m2g_dim": graph_edges_and_features.m2g_features.shape[1],
-            "mesh_level_sizes": tuple(mesh_level_sizes),
-            "mesh_feature_dims": tuple(mesh_feature_dims),
-            "m2m_feature_dims": tuple(m2m_feature_dims),
-            "m2m_edge_counts": tuple(m2m_edge_counts),
-        }
-
-        hierarchical_kwargs = {}
-        if graph_edges_and_features.hierarchical:
-            hierarchical_kwargs = {
-                "mesh_up_feature_dims": tuple(
-                    tensor.shape[1]
-                    for tensor in graph_edges_and_features.mesh_up_features
-                ),
-                "mesh_up_edge_counts": tuple(
-                    tensor.shape[1]
-                    for tensor in graph_edges_and_features.mesh_up_edge_index
-                ),
-                "mesh_down_feature_dims": tuple(
-                    tensor.shape[1]
-                    for tensor in graph_edges_and_features.mesh_down_features
-                ),
-                "mesh_down_edge_counts": tuple(
-                    tensor.shape[1]
-                    for tensor in graph_edges_and_features.mesh_down_edge_index
-                ),
-            }
-
-        return GraphSizes(**base_kwargs, **hierarchical_kwargs)
 
 
 class WeatherDataModule(pl.LightningDataModule):
@@ -874,7 +703,9 @@ class WeatherDataModule(pl.LightningDataModule):
         self.graph_name = graph_name
         self.graph_device = graph_device
         self._collate_fn = (
-            WeatherDatasetWithGraph.collate_fn if graph_name is not None else None
+            WeatherDatasetWithGraph.collate_fn
+            if graph_name is not None
+            else None
         )
         if num_workers > 0:
             # default to spawn for now, as the default on linux "fork" hangs

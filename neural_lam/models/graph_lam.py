@@ -5,7 +5,7 @@ from torch import nn
 from .. import utils
 from ..config import NeuralLAMConfig
 from ..datastore import BaseDatastore
-from ..graph_meta import GraphSizes
+from ..graph_data import GraphSizes
 from ..interaction_net import InteractionNet
 from .base_graph_model import BaseGraphModel
 
@@ -33,7 +33,9 @@ class GraphLAM(BaseGraphModel):
             this should include the mesh and m2m feature dimensions in addition to
             the common scalar entries.
         """
-        super().__init__(args, config=config, datastore=datastore, graph_sizes=graph_sizes)
+        super().__init__(
+            args, config=config, datastore=datastore, graph_sizes=graph_sizes
+        )
 
         assert (
             not self.hierarchical
@@ -77,7 +79,9 @@ class GraphLAM(BaseGraphModel):
         Returns tensor of shape (N_mesh, d_h)
         """
         if self.current_graph is None:
-            raise RuntimeError("Graph data not set before embedding mesh nodes.")
+            raise RuntimeError(
+                "Graph data not set before embedding mesh nodes."
+            )
         return self.mesh_embedder(
             self.current_graph["mesh_static_features"]
         )  # (N_mesh, d_h)

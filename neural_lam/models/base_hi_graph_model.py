@@ -5,7 +5,7 @@ from torch import nn
 from .. import utils
 from ..config import NeuralLAMConfig
 from ..datastore import BaseDatastore
-from ..graph_meta import GraphSizes
+from ..graph_data import GraphSizes
 from ..interaction_net import InteractionNet
 from .base_graph_model import BaseGraphModel
 
@@ -26,11 +26,12 @@ class BaseHiGraphModel(BaseGraphModel):
         Parameters
         ----------
         graph_sizes : GraphSizes
-            Graph metadata as described in ``BaseGraphModel`` including per-level
-            mesh sizes, feature dimensions, and edge counts for same-, up-, and
-            down-level connections (``mesh_level_sizes``, ``mesh_feature_dims``,
-            ``m2m_feature_dims``, ``mesh_up_edge_counts``, ``mesh_down_edge_counts``
-            with corresponding feature dimensions).
+            Graph metadata as described in ``BaseGraphModel`` including
+            per-level mesh sizes, feature dimensions, and edge counts for
+            same-, up-, and down-level connections (``mesh_level_sizes``,
+            ``mesh_feature_dims``, ``m2m_feature_dims``,
+            ``mesh_up_edge_counts``, ``mesh_down_edge_counts`` with
+            corresponding feature dimensions).
         """
         super().__init__(
             args, config=config, datastore=datastore, graph_sizes=graph_sizes
@@ -47,7 +48,9 @@ class BaseHiGraphModel(BaseGraphModel):
 
         # Print some useful info
         utils.rank_zero_print("Loaded hierarchical graph with structure:")
-        for level_index, level_mesh_size in enumerate(self.graph_sizes.mesh_level_sizes):
+        for level_index, level_mesh_size in enumerate(
+            self.graph_sizes.mesh_level_sizes
+        ):
             same_level_edges = m2m_edge_counts[level_index]
             utils.rank_zero_print(
                 f"level {level_index} - {level_mesh_size} nodes, "
@@ -65,7 +68,9 @@ class BaseHiGraphModel(BaseGraphModel):
         # Assume all levels have same static feature dimensionality
         mesh_dim = mesh_feature_dims[0]
         mesh_same_dim = m2m_feature_dims[0]
-        mesh_up_dim = mesh_up_feature_dims[0] if mesh_up_feature_dims else mesh_dim
+        mesh_up_dim = (
+            mesh_up_feature_dims[0] if mesh_up_feature_dims else mesh_dim
+        )
         mesh_down_dim = (
             mesh_down_feature_dims[0] if mesh_down_feature_dims else mesh_dim
         )
@@ -126,7 +131,9 @@ class BaseHiGraphModel(BaseGraphModel):
         and number of mesh nodes that should be ignored in encoding/decoding
         """
         num_mesh_nodes = self.graph_sizes.num_mesh_nodes
-        num_mesh_nodes_ignore = num_mesh_nodes - self.graph_sizes.mesh_level_sizes[0]
+        num_mesh_nodes_ignore = (
+            num_mesh_nodes - self.graph_sizes.mesh_level_sizes[0]
+        )
         return num_mesh_nodes, num_mesh_nodes_ignore
 
     def embedd_mesh_nodes(self):
@@ -137,7 +144,9 @@ class BaseHiGraphModel(BaseGraphModel):
         Returns tensor of shape (num_mesh_nodes[0], d_h)
         """
         if self.current_graph is None:
-            raise RuntimeError("Graph data not set before embedding mesh nodes.")
+            raise RuntimeError(
+                "Graph data not set before embedding mesh nodes."
+            )
         return self.mesh_embedders[0](
             self.current_graph["mesh_static_features"][0]
         )
@@ -182,9 +191,7 @@ class BaseHiGraphModel(BaseGraphModel):
         ]
         mesh_up_rep = [
             self.expand_to_batch(emb(edge_feat), batch_size)
-            for emb, edge_feat in zip(
-                self.mesh_up_embedders, mesh_up_features
-            )
+            for emb, edge_feat in zip(self.mesh_up_embedders, mesh_up_features)
         ]
         mesh_down_rep = [
             self.expand_to_batch(emb(edge_feat), batch_size)
@@ -227,7 +234,8 @@ class BaseHiGraphModel(BaseGraphModel):
         # - MESH READ OUT. -
         # Let level_l go from L-1 to 0
         for level_l, gnn in zip(
-            range(self.graph_sizes.num_levels - 2, -1, -1), reversed(self.mesh_read_gnns)
+            range(self.graph_sizes.num_levels - 2, -1, -1),
+            reversed(self.mesh_read_gnns),
         ):
             # Extract representations
             send_node_rep = mesh_rep_levels[

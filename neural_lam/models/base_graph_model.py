@@ -8,7 +8,7 @@ import torch
 from .. import utils
 from ..config import NeuralLAMConfig
 from ..datastore import BaseDatastore
-from ..graph_meta import GraphSizes
+from ..graph_data import GraphSizes
 from ..interaction_net import InteractionNet
 from .ar_model import ARModel
 
@@ -36,10 +36,8 @@ class BaseGraphModel(ARModel):
         datastore : BaseDatastore
             Datastore that provides weather data.
         graph_sizes : GraphSizes
-            Metadata describing static graph dimensions. The dataclass validates
-            required values such as ``num_mesh_nodes``, ``g2m_dim`` and
-            ``m2g_dim`` and, for hierarchical graphs, per-level sizes, feature
-            dimensions, and cross-level edge counts.
+            Static graph metadata from ``neural_lam.graph_data.build_graph_sizes``
+            with node counts, feature dimensions, and edge counts for the mesh.
         """
         super().__init__(args, config=config, datastore=datastore)
 

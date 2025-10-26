@@ -384,7 +384,7 @@ class ARModel(pl.LightningModule):
         Compute val metrics at the end of val epoch
         """
         # Create error maps for all test metrics
-        self.aggregate_and_plot_metrics(self.val_metrics, prefix="val")
+        # self.aggregate_and_plot_metrics(self.val_metrics, prefix="val")
 
         # Clear lists with validation metrics values
         for metric_list in self.val_metrics.values():

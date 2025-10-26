@@ -4,7 +4,7 @@ from torch import nn
 # Local
 from ..config import NeuralLAMConfig
 from ..datastore import BaseDatastore
-from ..graph_meta import GraphSizes
+from ..graph_data import GraphSizes
 from ..interaction_net import InteractionNet
 from .base_hi_graph_model import BaseHiGraphModel
 
@@ -109,7 +109,9 @@ class HiLAM(BaseHiGraphModel):
         processing using down edges and same-level edges.
         """
         if self.current_graph is None:
-            raise RuntimeError("Graph data not set before executing mesh_down_step.")
+            raise RuntimeError(
+                "Graph data not set before executing mesh_down_step."
+            )
         mesh_same_edge_index = self.current_graph["m2m_edge_index"]
         mesh_down_edge_index = self.current_graph["mesh_down_edge_index"]
 
@@ -164,7 +166,9 @@ class HiLAM(BaseHiGraphModel):
         """
 
         if self.current_graph is None:
-            raise RuntimeError("Graph data not set before executing mesh_up_step.")
+            raise RuntimeError(
+                "Graph data not set before executing mesh_up_step."
+            )
         mesh_same_edge_index = self.current_graph["m2m_edge_index"]
         mesh_up_edge_index = self.current_graph["mesh_up_edge_index"]
 
