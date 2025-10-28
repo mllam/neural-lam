@@ -36,8 +36,9 @@ class BaseGraphModel(ARModel):
         datastore : BaseDatastore
             Datastore that provides weather data.
         graph_sizes : GraphSizes
-            Static graph metadata from ``neural_lam.graph_data.build_graph_sizes``
-            with node counts, feature dimensions, and edge counts for the mesh.
+            Static graph metadata from
+            ``neural_lam.graph_data.build_graph_sizes`` with node counts,
+            feature dimensions, and edge counts for the mesh.
         """
         super().__init__(args, config=config, datastore=datastore)
 

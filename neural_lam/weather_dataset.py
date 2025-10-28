@@ -3,7 +3,7 @@ import copy
 import datetime
 import warnings
 from pathlib import Path
-from typing import Any, Dict, Iterable, Tuple, Union
+from typing import Dict, Iterable, Tuple, Union
 
 # Third-party
 import numpy as np
@@ -14,12 +14,7 @@ from torch.utils.data._utils.collate import default_collate
 
 # First-party
 from neural_lam.datastore.base import BaseDatastore
-from neural_lam.graph_data import (
-    GraphEdgesAndFeatures,
-    GraphSizes,
-    build_graph_sizes,
-    load_graph,
-)
+from neural_lam.graph_data import build_graph_sizes, load_graph
 
 
 class WeatherDataset(torch.utils.data.Dataset):
@@ -621,7 +616,8 @@ class WeatherDatasetWithGraph(torch.utils.data.Dataset):
     graph_sizes : GraphSizes
         Dimensional metadata describing the graph.
     graph_payload : dict
-        Dictionary view of ``graph_edges_and_features`` used when returning batches.
+        Dictionary view of ``graph_edges_and_features`` used when returning
+        batches.
     """
 
     def __init__(

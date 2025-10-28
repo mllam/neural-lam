@@ -31,8 +31,8 @@ class HiLAMParallel(BaseHiGraphModel):
         ----------
         graph_sizes : GraphSizes
             Graph metadata adhering to the ``BaseGraphModel`` specification,
-            containing mesh level sizes, feature dimensions, and edge counts used
-            to construct the parallel processor GNNs.
+            containing mesh level sizes, feature dimensions, and edge counts
+            used to construct the parallel processor GNNs.
         """
         super().__init__(
             args,

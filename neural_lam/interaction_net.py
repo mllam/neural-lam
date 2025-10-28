@@ -68,7 +68,7 @@ class InteractionNet(pyg.nn.MessagePassing):
             self.aggr_mlp = SplitMLPs(
                 [utils.make_mlp(aggr_mlp_recipe) for _ in aggr_chunk_sizes],
                 aggr_chunk_sizes,
-        )
+            )
 
         self.update_edges = update_edges
         self._num_rec = None
@@ -78,15 +78,26 @@ class InteractionNet(pyg.nn.MessagePassing):
         Apply interaction network to update the representations of receiver
         nodes, and optionally the edge representations.
 
-        send_rep: (N_send, d_h), vector representations of sender nodes
-        rec_rep: (N_rec, d_h), vector representations of receiver nodes
-        edge_rep: (M, d_h), vector representations of edges used
-        edge_index: (2, M), edges in pyg COO format
+        Parameters
+        ----------
+        send_rep : torch.Tensor, shape (N_send, d_h)
+            vector representations of sender nodes
+        rec_rep : torch.Tensor, shape (N_rec, d_h)
+            vector representations of receiver nodes
+        edge_rep : torch.Tensor, shape (M, d_h)
+            vector representations of edges used
+        edge_index : torch.Tensor, shape (2, M)
+            adjacency list describing edges from senders to receivers, i.e.
+            edge_index[0][0] is the index of the sender node for edge 0, and
+            edge_index[1][0] is the index of the receiver node for edge 0
 
-        Returns:
-        rec_rep: (N_rec, d_h), updated vector representations of receiver nodes
-        (optionally) edge_rep: (M, d_h), updated vector representations
-            of edges
+        Returns
+        -------
+        rec_rep : torch.Tensor, shape (N_rec, d_h)
+            updated vector representations of receiver nodes
+        edge_rep : torch.Tensor, optional, shape (M, d_h)
+            updated vector representations of edges, only returned if
+            self.update_edges is True
         """
         processed_edge_index, num_rec = self._prepare_edge_index(edge_index)
         self._num_rec = num_rec
@@ -127,7 +138,8 @@ class InteractionNet(pyg.nn.MessagePassing):
     @staticmethod
     def _prepare_edge_index(edge_index):
         """
-        Shift indices so receiver nodes come first and return count of receivers.
+        Shift indices so receiver nodes come first and return count of
+        receivers.
         """
         edge_index = edge_index.clone()
         edge_index = edge_index - edge_index.min(dim=1, keepdim=True)[0]

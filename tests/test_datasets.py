@@ -236,7 +236,9 @@ def test_single_batch(datastore_name, split):
                 result[key] = value.to(device)
             elif isinstance(value, list):
                 result[key] = [
-                    tensor.to(device) if isinstance(tensor, torch.Tensor) else tensor
+                    tensor.to(device)
+                    if isinstance(tensor, torch.Tensor)
+                    else tensor
                     for tensor in value
                 ]
             else:

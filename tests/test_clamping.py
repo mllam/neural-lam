@@ -10,7 +10,6 @@ from neural_lam.create_graph import create_graph_from_datastore
 from neural_lam.datastore.mdp import MDPDatastore
 from neural_lam.graph_data import build_graph_sizes, load_graph
 from neural_lam.models.graph_lam import GraphLAM
-from neural_lam.weather_dataset import WeatherDatasetWithGraph
 from tests.conftest import init_datastore_example
 
 

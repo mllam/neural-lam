@@ -14,10 +14,7 @@ from neural_lam.datastore import DATASTORES
 from neural_lam.datastore.base import BaseRegularGridDatastore
 from neural_lam.graph_data import build_graph_sizes, load_graph
 from neural_lam.models.graph_lam import GraphLAM
-from neural_lam.weather_dataset import (
-    WeatherDataModule,
-    WeatherDatasetWithGraph,
-)
+from neural_lam.weather_dataset import WeatherDataModule
 from tests.conftest import init_datastore_example
 
 

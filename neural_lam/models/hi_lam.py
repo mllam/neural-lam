@@ -28,8 +28,8 @@ class HiLAM(BaseHiGraphModel):
         ----------
         graph_sizes : GraphSizes
             Graph metadata following the ``BaseGraphModel`` contract, including
-            per-level mesh sizes, feature dimensions, and edge counts used by the
-            hierarchical message-passing stack.
+            per-level mesh sizes, feature dimensions, and edge counts used by
+            the hierarchical message-passing stack.
         """
         super().__init__(
             args,

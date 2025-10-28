@@ -25,18 +25,20 @@ class GraphEdgesAndFeatures:
     """
     Static adjacency and feature tensors describing the graph structure.
 
+
     Attributes
     ----------
-    Always present
+    Always present:
     -   hierarchical : bool
         -   Whether the graph contains multiple mesh levels.
     -   g2m_edge_index : torch.Tensor
-        -   COO indices describing grid-to-mesh edges (shape ``[2, E_g2m]``).
+        -   Adjecency list for grid-to-mesh edges (shape ``[2, E_g2m]``).
     -   m2g_edge_index : torch.Tensor
-        -   COO indices describing mesh-to-grid edges (shape ``[2, E_m2g]``).
+        -   Adjacency list for mesh-to-grid edges (shape ``[2, E_m2g]``).
     -   m2m_edge_index : tuple[torch.Tensor, ...]
-        -   Intra-level mesh-to-mesh edges per level (hierarchical) or a single
-            tensor when non-hierarchical.
+        -   Adjecency list(s) for intra-level mesh-to-mesh edges per level
+            (hierarchical), only a single tensor when non-hierarchical, (shapes
+            for each level ``[2, E_m2m_level]``).
     -   g2m_features : torch.Tensor
         -   Feature matrix for grid-to-mesh edges (shape ``[E_g2m, F_g2m]``).
     -   m2g_features : torch.Tensor
@@ -45,7 +47,8 @@ class GraphEdgesAndFeatures:
         -   Feature matrices for intra-level mesh edges.
     -   mesh_static_features : tuple[torch.Tensor, ...]
         -   Static mesh node features per level.
-    Only for hierarchical graphs
+
+    Only for hierarchical graphs:
     -   mesh_up_edge_index : tuple[torch.Tensor, ...]
         -   Edge indices connecting level ``l`` to ``l+1``.
     -   mesh_down_edge_index : tuple[torch.Tensor, ...]
@@ -54,6 +57,18 @@ class GraphEdgesAndFeatures:
         -   Feature matrices associated with upward inter-level edges.
     -   mesh_down_features : tuple[torch.Tensor, ...]
         -   Feature matrices associated with downward inter-level edges.
+
+    With sizes given as:
+    -   E_g2m : int
+        -   Number of grid-to-mesh edges.
+    -   E_m2g : int
+        -   Number of mesh-to-grid edges.
+    -   F_g2m : int
+        -   Dimensionality of features on grid-to-mesh edges.
+    -   F_m2g : int
+        -   Dimensionality of features on mesh-to-grid edges.
+    -   E_m2m_level : int
+        -   Number of same-level mesh-to-mesh edges at a given level.
     """
 
     hierarchical: bool
@@ -214,7 +229,7 @@ class GraphSizes:
 
     Attributes
     ----------
-    
+
     Required for all graphs:
     -   hierarchical : bool
         -   Whether the graph contains multiple mesh levels.

@@ -29,9 +29,9 @@ class GraphLAM(BaseGraphModel):
         Parameters
         ----------
         graph_sizes : GraphSizes
-            Graph size metadata per ``BaseGraphModel``; for non-hierarchical graphs
-            this should include the mesh and m2m feature dimensions in addition to
-            the common scalar entries.
+            Graph size metadata per ``BaseGraphModel``; for non-hierarchical
+            graphs this should include the mesh and m2m feature dimensions in
+            addition to the common scalar entries.
         """
         super().__init__(
             args, config=config, datastore=datastore, graph_sizes=graph_sizes
