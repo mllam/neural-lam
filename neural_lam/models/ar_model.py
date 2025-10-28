@@ -271,30 +271,33 @@ class ARModel(pl.LightningModule):
 
     def common_step(self, batch):
         """
-        Predict on single batch batch consists of: init_states: (B, 2,
-        num_grid_nodes, d_features) target_states: (B, pred_steps,
-        num_grid_nodes, d_features) forcing_features: (B, pred_steps,
-        num_grid_nodes, d_forcing),
-            where index 0 corresponds to index 1 of init_states
+        Predict on single batch batch which is a tuple of 5 elements,
+        containing:
+        - init_states: (B, 2, num_grid_nodes, d_features)
+        - target_states: (B, pred_steps, num_grid_nodes, d_features)
+        - forcing_features: (B, pred_steps, num_grid_nodes, d_forcing)
+        - batch_times: (B, pred_steps), times corresponding to each target step
+        - graph: graph data (for all subgraphs, g2m, m2m and m2g) comprised of
+          adjacency lists, static edge features, static node features
         """
-        if len(batch) == 5:
-            (
-                init_states,
-                target_states,
-                forcing_features,
-                batch_times,
-                graph,
-            ) = batch
-        else:
-            (
-                init_states,
-                target_states,
-                forcing_features,
-                batch_times,
-            ) = batch
-            graph = None
+        if len(batch) != 5:
+            raise ValueError(
+                "ARModel batches must include graph data; expected 5 items "
+                f"but received {len(batch)}."
+            )
 
-        if graph is not None and hasattr(self, "set_graph"):
+        (
+            init_states,
+            target_states,
+            forcing_features,
+            batch_times,
+            graph,
+        ) = batch
+
+        if graph is None:
+            raise ValueError("Graph data is required for ARModel batches.")
+
+        if hasattr(self, "set_graph"):
             self.set_graph(graph)
 
         prediction, pred_std = self.unroll_prediction(
