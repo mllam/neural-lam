@@ -47,11 +47,11 @@ class WeatherDataset(torch.utils.data.Dataset):
     def __init__(
         self,
         datastore: BaseDatastore,
-        split="train",
-        ar_steps=3,
-        num_past_forcing_steps=1,
-        num_future_forcing_steps=1,
-        standardize=True,
+        split: str = "train",
+        ar_steps: int = 3,
+        num_past_forcing_steps: int = 1,
+        num_future_forcing_steps: int = 1,
+        standardize: bool = True,
     ):
         super().__init__()
 
@@ -70,7 +70,7 @@ class WeatherDataset(torch.utils.data.Dataset):
 
         # check that with the provided data-arrays and ar_steps that we have a
         # non-zero amount of samples
-        if self.__len__() <= 0:
+        if self.__len__() <= 0 and self.da_state is not None:
             raise ValueError(
                 "The provided datastore only provides "
                 f"{len(self.da_state.time)} total time steps, which is too few "
@@ -90,13 +90,14 @@ class WeatherDataset(torch.utils.data.Dataset):
             expected_dim_order = self.datastore.expected_dim_order(
                 category=part
             )
-            if da.dims != expected_dim_order:
-                raise ValueError(
-                    f"The dimension order of the `{part}` data ({da.dims}) "
-                    f"does not match the expected dimension order "
-                    f"({expected_dim_order}). Maybe you forgot to transpose "
-                    "the data in `BaseDatastore.get_dataarray`?"
-                )
+            if da is not None:
+                if da.dims != expected_dim_order:
+                    raise ValueError(
+                        f"The dimension order of the `{part}` data ({da.dims}) "
+                        f"does not match the expected dimension order "
+                        f"({expected_dim_order}). Maybe you forgot to "
+                        "transpose the data in `BaseDatastore.get_dataarray`?"
+                    )
 
         # Set up for standardization
         # TODO: This will become part of ar_model.py soon!
@@ -557,7 +558,7 @@ class WeatherDataset(torch.utils.data.Dataset):
                 raise ValueError(
                     "Expected a single time for a 2D tensor with assumed "
                     "dimensions (grid_index, {category}_feature), but got "
-                    f"{len(time)} times"
+                    f"{len(time)} times"  # type: ignore
                 )
         elif len(tensor.shape) == 3:
             add_time_as_dim = True
@@ -672,14 +673,14 @@ class WeatherDataModule(pl.LightningDataModule):
     def __init__(
         self,
         datastore: BaseDatastore,
-        ar_steps_train=3,
-        ar_steps_eval=25,
-        standardize=True,
-        num_past_forcing_steps=1,
-        num_future_forcing_steps=1,
-        batch_size=4,
-        num_workers=16,
-        eval_split="test",
+        ar_steps_train: int = 3,
+        ar_steps_eval: int = 25,
+        standardize: bool = True,
+        num_past_forcing_steps: int = 1,
+        num_future_forcing_steps: int = 1,
+        batch_size: int = 4,
+        num_workers: int = 16,
+        eval_split: str = "test",
         graph_name: Union[str, None] = None,
         graph_device: str = "cpu",
     ):
@@ -691,10 +692,11 @@ class WeatherDataModule(pl.LightningDataModule):
         self.ar_steps_eval = ar_steps_eval
         self.standardize = standardize
         self.batch_size = batch_size
-        self.num_workers = num_workers
+        self.num_workers: int = num_workers
         self.train_dataset = None
         self.val_dataset = None
         self.test_dataset = None
+        self.multiprocessing_context: Union[str, None] = None
         self.eval_split = eval_split
         self.graph_name = graph_name
         self.graph_device = graph_device
@@ -707,8 +709,6 @@ class WeatherDataModule(pl.LightningDataModule):
             # default to spawn for now, as the default on linux "fork" hangs
             # when using dask (which the npyfilesmeps datastore uses)
             self.multiprocessing_context = "spawn"
-        else:
-            self.multiprocessing_context = None
 
     def setup(self, stage=None):
         if stage == "fit" or stage is None:

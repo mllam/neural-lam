@@ -1,5 +1,5 @@
 # Standard library
-from typing import Any, Dict
+from typing import Any, Dict, Union
 
 # Third-party
 import torch
@@ -44,7 +44,7 @@ class BaseGraphModel(ARModel):
 
         self.graph_sizes = graph_sizes
         self.hierarchical = graph_sizes.hierarchical
-        self.current_graph = None
+        self.current_graph: Union[dict[str, Any], None] = None
 
         self.num_mesh_nodes = graph_sizes.num_mesh_nodes
         utils.rank_zero_print(

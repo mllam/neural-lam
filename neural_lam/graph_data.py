@@ -474,7 +474,9 @@ def load_graph(
         "mesh_static_features": tuple(mesh_static_features_list),
     }
 
-    return GraphEdgesAndFeatures(**base_kwargs, **hierarchical_kwargs)
+    return GraphEdgesAndFeatures(
+        **base_kwargs, **hierarchical_kwargs  # type: ignore
+    )
 
 
 def build_graph_sizes(
@@ -531,4 +533,4 @@ def build_graph_sizes(
             ),
         }
 
-    return GraphSizes(**base_kwargs, **hierarchical_kwargs)
+    return GraphSizes(**base_kwargs, **hierarchical_kwargs)  # type: ignore
