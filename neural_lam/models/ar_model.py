@@ -499,8 +499,8 @@ class ARModel(pl.LightningModule):
         if prediction is None:
             prediction, target, _, _ = self.common_step(batch)
 
-        target = batch[1]
-        time = batch[3]
+        target = batch["target_states"]
+        time = batch["batch_times"]
 
         # Rescale to original data scale
         prediction_rescaled = prediction * self.state_std + self.state_mean
