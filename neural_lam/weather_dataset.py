@@ -3,7 +3,7 @@ import copy
 import datetime
 import warnings
 from pathlib import Path
-from typing import Dict, Iterable, Tuple, Union
+from typing import Any, Dict, Iterable, Union
 
 # Third-party
 import numpy as np
@@ -448,7 +448,7 @@ class WeatherDataset(torch.utils.data.Dataset):
     def __getitem__(self, idx):
         """
         Return a single training sample, which consists of the initial states,
-        target states, forcing and batch times.
+        target states, forcing features, and batch times.
 
         The implementation currently uses xarray.DataArray objects for the
         standardization (scaling to mean 0.0 and standard deviation of 1.0) so
@@ -466,11 +466,10 @@ class WeatherDataset(torch.utils.data.Dataset):
 
         Returns
         -------
-        init_states : TrainingSample
-            A training sample object containing the initial states, target
-            states, forcing and batch times. The batch times are the times of
-            the target steps.
-
+        Dict[str, torch.Tensor]
+            Dictionary with keys ``init_states``, ``target_states``,
+            ``forcing_features`` and ``batch_times`` describing the training
+            sample tensors.
         """
         (
             da_init_states,
@@ -498,7 +497,12 @@ class WeatherDataset(torch.utils.data.Dataset):
         # forcing: (ar_steps, N_grid, d_windowed_forcing)
         # target_times: (ar_steps,)
 
-        return init_states, target_states, forcing, target_times
+        return {
+            "init_states": init_states,
+            "target_states": target_states,
+            "forcing_features": forcing,
+            "batch_times": target_times,
+        }
 
     def __iter__(self):
         """
@@ -649,22 +653,28 @@ class WeatherDatasetWithGraph(torch.utils.data.Dataset):
         return len(self.weather_dataset)
 
     def __getitem__(self, idx):
-        sample = self.weather_dataset[idx]
-        return (*sample, copy.deepcopy(self.graph_payload))
+        sample = self.weather_dataset[idx].copy()
+        sample["graph"] = copy.deepcopy(self.graph_payload)
+        return sample
 
     @staticmethod
-    def collate_fn(
-        batch: Iterable[
-            Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, Dict]
-        ]
-    ):
+    def collate_fn(batch: Iterable[Dict[str, Any]]):
         """Collate function that keeps a single copy of the static graph."""
         batch = list(batch)
-        data_part = [entry[:-1] for entry in batch]
-        graph_part = [entry[-1] for entry in batch]
-        collated_data = default_collate(data_part)
-        graph = graph_part[0]
-        return (*collated_data, graph)
+        if not batch:
+            raise ValueError("Empty batch provided to collate_fn.")
+
+        graphs = [entry.get("graph") for entry in batch]
+        if any(graph is None for graph in graphs):
+            raise ValueError("Graph entry missing from batch sample.")
+
+        data_without_graph = [
+            {key: value for key, value in entry.items() if key != "graph"}
+            for entry in batch
+        ]
+        collated_data = default_collate(data_without_graph)
+        collated_data["graph"] = graphs[0]
+        return collated_data
 
 
 class WeatherDataModule(pl.LightningDataModule):
