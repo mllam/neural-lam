@@ -26,6 +26,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Change all argparse instances to use ArgumentDefaultsHelpFormatter for easier maintaining defaults.
 [\#145](https://github.com/mllam/neural-lam/pull/145) @joeloskarsson
 
+- Allow triggering CI manually to e.g. test for recent software incompatibilities. [\152](https://github.com/mllam/neural-lam/pull/152) @observingClouds
+
 - Fix `torch` version detection during CI when testing on CPU with pdm [\#154](https://github.com/mllam/neural-lam/pull/154) @leifdenby
 
 - Update link to MEPS example data [\#155](https://github.com/mllam/neural-lam/pull/155) @joeloskarsson
