@@ -1,7 +1,11 @@
 # Standard library
 import os
 import shutil
+import subprocess
+import tempfile
 import warnings
+from functools import cache
+from pathlib import Path
 
 # Third-party
 import pytorch_lightning as pl
@@ -226,7 +230,7 @@ def has_working_latex():
     """
     Check if LaTeX is available or its toolchain
     """
-    # If latex is not available or its toolchain, some visualizations might not render
+    # If latex/toolchain is not available, some visualizations might not render
     # correctly, but will at least not raise an error. Alternatively, use
     # unicode raised numbers.
 
@@ -234,12 +238,16 @@ def has_working_latex():
         return False
     if not shutil.which("dvipng"):
         return False
-    if not (shutil.which("gs") or shutil.which("gswin64c") or shutil.which("gswin32c")):
+    if not (
+        shutil.which("gs")
+        or shutil.which("gswin64c")
+        or shutil.which("gswin32c")
+    ):
         return False
-        
+
     tex_src = r"""
 \documentclass{article}
-\usepackage{fix-cm} % remplace type1cm (évite l'erreur "type1cm.sty")
+\usepackage{fix-cm}
 \usepackage[T1]{fontenc}
 \usepackage{lmodern}
 \usepackage{amsmath}
@@ -252,20 +260,40 @@ $E=mc^2$ \LaTeX\ ok
         with tempfile.TemporaryDirectory() as td:
             td = Path(td)
             (td / "test.tex").write_text(tex_src, encoding="utf-8")
-            cmd = ["latex", "-interaction=nonstopmode", "-halt-on-error", "test.tex"]
-            subprocess.run(cmd, cwd=td, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=20, check=True)
+            cmd = [
+                "latex",
+                "-interaction=nonstopmode",
+                "-halt-on-error",
+                "test.tex",
+            ]
+            subprocess.run(
+                cmd,
+                cwd=td,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                timeout=20,
+                check=True,
+            )
             cmd_dvipng = ["dvipng", "-D", "100", "-o", "test.png", "test.dvi"]
-            subprocess.run(cmd_dvipng, cwd=td, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=20, check=True)
+            subprocess.run(
+                cmd_dvipng,
+                cwd=td,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                timeout=20,
+                check=True,
+            )
         return True
     except Exception:
         return False
+
 
 def fractional_plot_bundle(fraction):
     """
     Get the tueplots bundle, but with figure width as a fraction of
     the page width.
     """
-    
+
     usetex = has_working_latex()
     bundle = bundles.neurips2023(usetex=usetex, family="serif")
     bundle.update(figsizes.neurips2023())
