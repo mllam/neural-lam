@@ -221,6 +221,7 @@ def make_mlp(blueprint, layer_norm=True):
     return nn.Sequential(*layers)
 
 
+@cache
 def has_working_latex():
     """
     Check if LaTeX is available or its toolchain
