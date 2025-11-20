@@ -24,7 +24,7 @@ def plot_on_axis(
     crop_to_interior=False,
 ):
     """Plot weather state on given axis using datastore metadata.
-    
+
     Parameters
     ----------
     ax : matplotlib.axes.Axes
@@ -44,7 +44,7 @@ def plot_on_axis(
     boundary_alpha : float, optional
         If provided, overlay boundary mask with given alpha transparency.
     crop_to_interior : bool, optional
-        If True, crop the plot to the interior region defined by the boundary mask. 
+        If True, crop the plot to the interior region.
 
     Returns
     -------
