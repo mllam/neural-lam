@@ -23,7 +23,35 @@ def plot_on_axis(
     boundary_alpha=None,
     crop_to_interior=False,
 ):
-    """Plot weather state on given axis using datastore metadata."""
+    """Plot weather state on given axis using datastore metadata.
+    
+    Parameters
+    ----------
+    ax : matplotlib.axes.Axes
+        The axis to plot on. Should have a cartopy projection.
+    da : xarray.DataArray or np.ndarray
+        The data to plot. Should have shape (N_grid,).
+    datastore : BaseRegularGridDatastore
+        The datastore containing metadata about the grid.
+    vmin : float, optional
+        Minimum value for color scale.
+    vmax : float, optional
+        Maximum value for color scale.
+    ax_title : str, optional
+        Title for the axis.
+    cmap : str or matplotlib.colors.Colormap, optional
+        Colormap to use for plotting.
+    boundary_alpha : float, optional
+        If provided, overlay boundary mask with given alpha transparency.
+    crop_to_interior : bool, optional
+        If True, crop the plot to the interior region defined by the boundary mask. 
+
+    Returns
+    -------
+    matplotlib.collections.QuadMesh
+        The mesh object created by pcolormesh.
+
+    """
 
     ax.coastlines(resolution="50m")
     ax.add_feature(cfeature.BORDERS, linestyle="-", alpha=0.5)
@@ -44,6 +72,10 @@ def plot_on_axis(
     )
     lons = lats_lons[:, 0].reshape(grid_shape)
     lats = lats_lons[:, 1].reshape(grid_shape)
+
+    if isinstance(da, xr.DataArray) and "x" in da.dims and "y" in da.dims:
+        da = da.transpose("x", "y")
+
     values = np.asarray(getattr(da, "values", da)).reshape(grid_shape)
 
     mesh = ax.pcolormesh(
