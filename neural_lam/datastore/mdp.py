@@ -440,12 +440,15 @@ class MDPDatastore(BaseRegularGridDatastore):
 
         """
         ds_state = self.unstack_grid_coords(self._ds["state"])
-        da_x, da_y = ds_state.x, ds_state.y
+        xdim, ydim = self.CARTESIAN_COORDS
+        da_x, da_y = ds_state[xdim], ds_state[ydim]
         assert da_x.ndim == da_y.ndim == 1
         return CartesianGridShape(x=da_x.size, y=da_y.size)
 
     def get_xy(self, category: str, stacked: bool) -> ndarray:
-        """Return the x, y coordinates of the dataset.
+        """
+        Return the x, y coordinates of the dataset (i.e. the Cartesian
+        coordinates of the regular gridded dataset).
 
         Parameters
         ----------
@@ -467,10 +470,14 @@ class MDPDatastore(BaseRegularGridDatastore):
         # assume variables are stored in dimensions [grid_index, ...]
         ds_category = self.unstack_grid_coords(da_or_ds=self._ds[category])
 
-        da_xs = ds_category.x
-        da_ys = ds_category.y
+        xdim, ydim = self.CARTESIAN_COORDS
 
-        assert da_xs.ndim == da_ys.ndim == 1, "x and y coordinates must be 1D"
+        da_xs = ds_category[xdim]
+        da_ys = ds_category[ydim]
+
+        assert (
+            da_xs.ndim == da_ys.ndim == 1
+        ), f"{xdim} and {ydim} coordinates must be 1D"
 
         da_x, da_y = xr.broadcast(da_xs, da_ys)
         da_xy = xr.concat([da_x, da_y], dim="grid_coord")
@@ -482,8 +489,8 @@ class MDPDatastore(BaseRegularGridDatastore):
             )
         else:
             dims = [
-                "x",
-                "y",
+                xdim,
+                ydim,
                 "grid_coord",
             ]
             da_xy = da_xy.transpose(*dims)
