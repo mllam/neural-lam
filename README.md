@@ -1,4 +1,4 @@
-[![slack](https://img.shields.io/badge/slack-join-brightgreen.svg?logo=slack)](https://join.slack.com/t/ml-lam/shared_invite/zt-2t112zvm8-Vt6aBvhX7nYa6Kbj_LkCBQ)
+[![slack](https://img.shields.io/badge/slack-join-brightgreen.svg?logo=slack)](https://join.slack.com/t/ml-lam/shared_invite/zt-3jyw20n4g-ESRxMPPSijiZ2ZA6Nh8XhA)
 [![Linting](https://github.com/mllam/neural-lam/actions/workflows/pre-commit.yml/badge.svg?branch=main)](https://github.com/mllam/neural-lam/actions/workflows/pre-commit.yml)
 [![CPU+GPU testing](https://github.com/mllam/neural-lam/actions/workflows/install-and-test.yml/badge.svg?branch=main)](https://github.com/mllam/neural-lam/actions/workflows/install-and-test.yml)
 
