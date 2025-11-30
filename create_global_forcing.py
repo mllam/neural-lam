@@ -1,6 +1,7 @@
 # Standard library
 import os
 from argparse import ArgumentParser
+from collections import OrderedDict
 
 # Third-party
 import graphcast.data_utils as gc_du
@@ -105,6 +106,12 @@ def main():
     )
     forcing_fields_dict["cos_day_progress"] = np.broadcast_to(
         day_prog_cos[:, :, np.newaxis], forcing_field_shape
+    )
+
+    # Sort forcing fields dict to have consistent ordering
+    # This is also neccesary to retain compatibility with existing checkpoints
+    forcing_fields_dict = OrderedDict(
+        sorted(forcing_fields_dict.items())
     )
 
     # Save as xarray stored with zarr
