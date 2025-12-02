@@ -1,6 +1,7 @@
 # Standard library
 import datetime
 import tempfile
+from datetime import timedelta
 from functools import cached_property
 from pathlib import Path
 from typing import List, Optional, Tuple, Union
@@ -145,8 +146,9 @@ class DummyDatastore(BaseRegularGridDatastore):
             )
 
             if category != "static":
-                dt = datetime.timedelta(hours=self.step_length)
-                times = [self.T0 + dt * i for i in range(n_timesteps)]
+                times = [
+                    self.T0 + self.step_length * i for i in range(n_timesteps)
+                ]
                 self.ds.coords["time"] = times
 
         # Add boundary mask
@@ -191,14 +193,14 @@ class DummyDatastore(BaseRegularGridDatastore):
         return {}
 
     @property
-    def step_length(self) -> int:
-        """The step length of the dataset in hours.
+    def step_length(self) -> timedelta:
+        """The step length of the dataset as a time interval.
 
         Returns:
-            int: The step length in hours.
+            timedelta: The step length as a datetime.timedelta object.
 
         """
-        return 1
+        return timedelta(hours=1)
 
     def get_vars_names(self, category: str) -> list[str]:
         """Get the names of the variables in the given category.

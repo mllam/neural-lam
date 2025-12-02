@@ -36,6 +36,7 @@ attributes:
 # Standard library
 import collections
 import dataclasses
+from datetime import timedelta
 from pathlib import Path
 
 # Third-party
@@ -75,8 +76,8 @@ def test_step_length(datastore_name):
     """Check that the `datastore.step_length` property is implemented."""
     datastore = init_datastore_example(datastore_name)
     step_length = datastore.step_length
-    assert isinstance(step_length, int)
-    assert step_length > 0
+    assert isinstance(step_length, timedelta)
+    assert step_length.total_seconds() > 0
 
 
 @pytest.mark.parametrize("datastore_name", DATASTORES.keys())
