@@ -6,6 +6,7 @@ import tempfile
 import warnings
 from functools import cache
 from pathlib import Path
+from typing import Optional
 
 # Third-party
 import pytorch_lightning as pl
@@ -410,7 +411,7 @@ def inverse_sigmoid(x):
     return torch.log(x_clamped / (1 - x_clamped))
 
 
-def get_integer_time(tdelta) -> tuple[int, str] | None:
+def get_integer_time(tdelta) -> Optional[tuple[int, str]]:
     """
     Get the largest time unit that can represent the given timedelta as an
     integer.
