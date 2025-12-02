@@ -1,4 +1,5 @@
 # Standard library
+from datetime import timedelta
 from pathlib import Path
 
 # Third-party
@@ -12,7 +13,7 @@ from neural_lam.weather_dataset import WeatherDataset
 
 
 class SinglePointDummyDatastore(BaseDatastore):
-    step_length = 1
+    step_length = timedelta(hours=1)
     config = {}
     coords_projection = None
     num_grid_points = 1
