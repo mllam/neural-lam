@@ -14,6 +14,7 @@ from tqdm import tqdm
 # First-party
 from neural_lam import WeatherDataset
 from neural_lam.datastore import init_datastore
+from neural_lam.utils import get_integer_time
 
 
 class PaddedWeatherDataset(torch.utils.data.Dataset):
@@ -45,9 +46,9 @@ class PaddedWeatherDataset(torch.utils.data.Dataset):
         return self.original_indices
 
     def get_original_window_indices(self, step_length):
+        step_int, _ = get_integer_time(step_length.total_seconds())
         return [
-            i // step_length
-            for i in range(len(self.original_indices) * step_length)
+            i // step_int for i in range(len(self.original_indices) * step_int)
         ]
 
 
@@ -144,8 +145,8 @@ def main(
         Path to datastore config file
     batch_size : int
         Batch size when iterating over the dataset
-    step_length : int
-        Step length in hours to consider single time step
+    step_length : datetime.timedelta
+        Step length to consider single time step
     n_workers : int
         Number of workers in data loader
     distributed : bool
