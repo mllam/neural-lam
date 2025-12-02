@@ -431,8 +431,8 @@ def get_integer_time(tdelta) -> Optional[tuple[int, str]]:
         (5, 'hours')
         >>> get_integer_time(timedelta(milliseconds=1000))
         (1, 'seconds')
-        >>> get_integer_time(timedelta(days=0.001))
-        None
+        >>> get_integer_time(timedelta(days=0.001)) is None
+        True
     """
     total_seconds = tdelta.total_seconds()
 
