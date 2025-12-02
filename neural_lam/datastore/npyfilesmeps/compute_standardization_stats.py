@@ -2,7 +2,6 @@
 import os
 import subprocess
 from argparse import ArgumentParser
-from datetime import timedelta
 from pathlib import Path
 
 # Third-party
@@ -301,7 +300,8 @@ def main(
         num_workers=n_workers,
         sampler=sampler_standard,
     )
-    used_subsample_len = (65 // step_length) * step_length
+    time_step_int, _ = get_integer_time(step_length)
+    used_subsample_len = (65 // time_step_int) * time_step_int
 
     diff_means, diff_squares = [], []
 
@@ -317,8 +317,8 @@ def main(
         # Note: batch contains only 1h-steps
         stepped_batch = torch.cat(
             [
-                batch[:, ss_i:used_subsample_len:step_length]
-                for ss_i in range(step_length)
+                batch[:, ss_i:used_subsample_len:time_step_int]
+                for ss_i in range(time_step_int)
             ],
             dim=0,
         )
