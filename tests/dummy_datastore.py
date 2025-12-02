@@ -1,5 +1,4 @@
 # Standard library
-import datetime
 import tempfile
 from datetime import timedelta
 from functools import cached_property
