@@ -2,6 +2,7 @@
 # For LAM model project
 # by Simon Adamov, simon.adamov@meteoswiss.ch
 
+# Standard library
 import argparse
 import io
 import os
@@ -68,17 +69,19 @@ def generate_land_sea_mask(lat, lon, tempdir, projection, high_res_factor=10):
     )
 
     # Maintain y, x order in reshaping
-    aggregated_out_image = high_res_out_image.reshape((
-        ny,
-        high_res_factor,
-        nx,
-        high_res_factor,
-    )).mean(axis=(1, 3))
+    aggregated_out_image = high_res_out_image.reshape(
+        (
+            ny,
+            high_res_factor,
+            nx,
+            high_res_factor,
+        )
+    ).mean(axis=(1, 3))
 
     # Create DataArray with consistent y, x dimensions
     return xr.DataArray(
         aggregated_out_image.T,
-        name="land_sea_mask",
+        name="lsm",
         dims=("x", "y"),
         coords={"lat": (("x", "y"), lat.T), "lon": (("x", "y"), lon.T)},
         attrs={
@@ -93,9 +96,7 @@ def plot_land_sea_mask(zarr_path, output_filename):
     """Plot the land-sea mask from a Zarr archive."""
     # Load the land-sea mask
     ds = xr.open_zarr(zarr_path)
-    land_sea_mask = ds["land_sea_mask"]
-    lat = ds["lat"].values
-    lon = ds["lon"].values
+    lsm = ds["lsm"]
 
     # Define the RotatedPole projection
     lambert_proj = ccrs.RotatedPole(
@@ -107,7 +108,7 @@ def plot_land_sea_mask(zarr_path, output_filename):
     fig, ax = plt.subplots(
         subplot_kw={"projection": lambert_proj}, figsize=(10, 6)
     )
-    land_sea_mask.plot(
+    lsm.plot(
         x="lon", y="lat", ax=ax, transform=ccrs.PlateCarree(), cmap="viridis"
     )
     ax.add_feature(cfeature.BORDERS, linestyle="-", alpha=0.5)
@@ -121,14 +122,23 @@ def plot_land_sea_mask(zarr_path, output_filename):
 
 
 def main():
-    """Create and save land-sea mask."""
+    """Create and save land-sea mask.
 
-    # Parse command-line arguments
+    CLI:
+        --source_zarr <path> (path to COSMO zarr; default: cosmo_ml_data.zarr)
+        --output_zarr <path> (output zarr; default: cosmo_land_sea_mask.zarr)
+    """
+
     parser = argparse.ArgumentParser(description="Generate land-sea mask")
     parser.add_argument(
-        "--cosmo_path",
-        help="Path to cosmo_ml_data.zarr",
+        "--source_zarr",
+        help="Path to COSMO sample zarr",
         default="cosmo_ml_data.zarr",
+    )
+    parser.add_argument(
+        "--output_zarr",
+        help="Output zarr file (default: cosmo_land_sea_mask.zarr)",
+        default="cosmo_land_sea_mask.zarr",
     )
     args = parser.parse_args()
 
@@ -141,7 +151,7 @@ def main():
         print(f"PROJ_LIB set to {proj_lib}")
 
     tempdir = "./shps"
-    zarr_path = "land_sea_mask.zarr"
+    zarr_path = args.output_zarr
     os.makedirs(tempdir, exist_ok=True)
 
     # Lambert projection parameters for Northern Europe
@@ -151,16 +161,18 @@ def main():
     )
 
     # Load coordinates from zarr archive
-    ds = xr.open_zarr(args.cosmo_path)
+    ds = xr.open_zarr(args.source_zarr)
     lat = ds.lat.values
     lon = ds.lon.values
 
     land_sea_mask = generate_land_sea_mask(lat, lon, tempdir, lambert_proj)
-    land_sea_mask.to_zarr(zarr_path, mode="w")
-    print(f"Land-sea mask saved to {zarr_path}")
+    land_sea_mask.to_zarr(zarr_path, mode="w", zarr_format=2)
+    print(f"Land-sea mask saved to {zarr_path} (var='lsm')")
 
     # Use the new plotting function
-    plot_land_sea_mask(zarr_path, "land_sea_mask.png")
+    plot_land_sea_mask(
+        zarr_path, Path(zarr_path).parent / "cosmo_land_sea_mask_plot.png"
+    )
 
 
 if __name__ == "__main__":

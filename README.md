@@ -1,7 +1,9 @@
 # Building ML LAMs: Neural-LAM Code
+
 This is the main codebase used in the paper *Building Machine Learning Limited Area Models: Kilometer-Scale Weather Forecasting in Realistic Settings*, together with accompanying tagged releases of [weather-model-graphs](https://github.com/joeloskarsson/weather-model-graphs/releases/tag/building-ml-lams) and [mllam-data-prep](https://github.com/sadamov/mllam-data-prep/releases/tag/building-ml-lams).
 
 ## Quickstart
+
 These are some instructions to get started with the codebase. More extensive documentation is given below.
 
 To reproduce experiments from the paper, you might first want to download some data and/or trained model checkpoints. These can be found at:
@@ -18,31 +20,46 @@ The overall steps to get to a running model are:
 
 1. Install this `neural-lam` package. See [full installation instructions](#installing-neural-lam) below.
 2. Process any data you want to work with to a training-optimized format using `mllam-data-prep`. For example, to process the DANRA data run:
+
     ```
     python -m mllam_data_prep scripts/danra_interior_config.yaml
     ```
+
     Such config files for DANRA, COSMO, ERA5 and IFS data are all available in the `scripts` repository.
 3. Build the graph for the model using
+
     ```
     python -m neural_lam.build_rectangular_graph
     ```
+
     or
+
     ```
     python -m neural_lam.build_triangular_graph
     ```
+
     See the scripts `scripts/danra_build_graphs.sh` and `scripts/cosmo_build_graphs.sh` for commands used to build the graphs from the paper.
 4. Train or evaluate the model. For both eval and training use
+
     ```
     python -m neural_lam.train_model
     ```
+
     with different options. Use
+
     ```
     python -m neural_lam.train_model --help
     ```
+
     for a full list of options available.
     The scripts `scripts/danra_eval.sh` and `scripts/cosmo_eval.sh` contain full configs with options that allow for loading the final model checkpoints from the paper.
 
+### Reproduce COSMO Example (Step‑by‑Step)
+
+  For a practical, end‑to‑end walkthrough (download → preprocess → graph → train/eval), see the concise guide in `docs/reproduce_paper_sample.md` with reduced data and resources. For a full reproduction of the study with all 7TB of data see `docs/reproduce_paper.md`.
+
 ## Neural-LAM
+
 <p align="middle">
     <img src="figures/neural_lam_header.png" width="700">
 </p>
@@ -59,6 +76,7 @@ The repository contains LAM versions of:
 * The hierarchical model from [Oskarsson et al. (2023)](https://arxiv.org/abs/2309.17370).
 
 # Modularity
+
 The Neural-LAM code is designed to modularize the different components involved in training and evaluating neural weather prediction models.
 Models, graphs and data are stored separately and it should be possible to swap out individual components.
 Still, some restrictions are inevitable:
@@ -69,7 +87,6 @@ Still, some restrictions are inevitable:
 <p align="middle">
   <img src="figures/neural_lam_setup.png" width="600"/>
 </p>
-
 
 # Installing Neural-LAM
 
@@ -92,7 +109,9 @@ setup](.github/workflows/) which you can use as a reference.
 
 1. Clone this repository and navigate to the root directory.
 2. Install `pdm` if you don't have it installed on your system (either with `pip install pdm` or [following the install instructions](https://pdm-project.org/latest/#installation)).
+
 > If you are happy using the latest version of `torch` with GPU support (expecting the latest version of CUDA is installed on your system) you can skip to step 5.
+
 3. Create a virtual environment for pdm to use with `pdm venv create --with-pip`.
 4. Install a specific version of `torch` with `pdm run python -m pip install torch --index-url https://download.pytorch.org/whl/cpu` for a CPU-only version or `pdm run python -m pip install torch --index-url https://download.pytorch.org/whl/cu111` for CUDA 11.1 support (you can find the correct URL for the variant you want on [PyTorch webpage](https://pytorch.org/get-started/locally/)).
 5. Install the dependencies with `pdm install` (by default this in include the). If you will be developing `neural-lam` we recommend to install the development dependencies with `pdm install --group dev`. By default `pdm` installs the `neural-lam` package in editable mode, so you can make changes to the code and see the effects immediately.
@@ -100,10 +119,11 @@ setup](.github/workflows/) which you can use as a reference.
 ## Using `pip`
 
 1. Clone this repository and navigate to the root directory.
+
 > If you are happy using the latest version of `torch` with GPU support (expecting the latest version of CUDA is installed on your system) you can skip to step 3.
+
 2. Install a specific version of `torch` with `python -m pip install torch --index-url https://download.pytorch.org/whl/cpu` for a CPU-only version or `python -m pip install torch --index-url https://download.pytorch.org/whl/cu111` for CUDA 11.1 support (you can find the correct URL for the variant you want on [PyTorch webpage](https://pytorch.org/get-started/locally/)).
 3. Install the dependencies with `python -m pip install .`. If you will be developing `neural-lam` we recommend to install in editable mode and install the development dependencies with `python -m pip install -e ".[dev]"` so you can make changes to the code and see the effects immediately.
-
 
 # Using Neural-LAM
 
@@ -149,6 +169,7 @@ data/
 ```
 
 And the content of `config.yaml` could in this case look like:
+
 ```yaml
 datastore:
   kind: mdp
@@ -181,7 +202,6 @@ weighting all features equally.
 3. Valid numerical range for output of each feature.The numerical range of all features default to $]-\infty, \infty[$.
 
 (This example is taken from the `tests/datastore_examples/mdp` directory.)
-
 
 Below follows instructions on how to use Neural-LAM to train and evaluate
 models, with details first given for each kind of datastore implemented
@@ -237,7 +257,6 @@ subclassing the `neural_lam.datastore.BaseDataStore` class or
 `neural_lam.datastore.BaseRegularGridDatastore` class (if your data is stored on
 a regular grid) and implementing the abstract methods.
 
-
 ### MDP (mllam-data-prep) Datastore - `MDPDatastore`
 
 With `MDPDatastore` (the mllam-data-prep datastore) all the selection,
@@ -282,6 +301,7 @@ Run `python -m neural_lam.build_rectangular_graph` or `python -m neural_lam.buil
 In `scripts.danra_build_graphs.sh` and `scripts.cosmo_build_graphs.sh` you can find the command line options for some examples of graph configurations from the Building ML LAMs paper.
 
 ## Weights & Biases Integration
+
 The project is fully integrated with [Weights & Biases](https://www.wandb.ai/) (W&B) for logging and visualization, but can just as easily be used without it.
 When W&B is used, training configuration, training/test statistics and plots are sent to the W&B servers and made available in an interactive web interface.
 If W&B is turned off, logging instead saves everything locally to a directory like `wandb/dryrun...`.
@@ -289,15 +309,19 @@ The W&B project name is set to `neural-lam`, but this can be changed in the flag
 See the [W&B documentation](https://docs.wandb.ai/) for details.
 
 If you would like to login and use W&B, run:
+
 ```
 wandb login
 ```
+
 If you would like to turn off W&B and just log things locally, run:
+
 ```
 wandb off
 ```
 
 ## Train Models
+
 Models can be trained using `python -m neural_lam.train_model --config_path <config_path>`.
 Run `python neural_lam.train_model --help` for a full list of training options.
 A few of the key ones are outlined below:
@@ -314,25 +338,30 @@ Checkpoints of trained models are stored in the `saved_models` directory.
 The implemented models are:
 
 ### Graph-LAM
+
 This is the basic graph-based LAM model.
 The encode-process-decode framework is used with a mesh graph in order to make one-step pedictions.
 This model class is used both for the multi-scale graphs in the Building ML LAMs paper.
 
 Example use:
+
 ```
 python -m neural_lam.train_model --model graph_lam --graph multiscale ...
 ```
 
 ### Hi-LAM
+
 A version of Graph-LAM that uses a hierarchical mesh graph and performs sequential message passing through the hierarchy during processing.
 This model class is used both for the hierarchical graphs in the Building ML LAMs paper.
 
 To train Hi-LAM use
+
 ```
 python -m neural_lam.train_model --model hi_lam --graph hierarchical ...
 ```
 
 ## Evaluate Models
+
 Evaluation is also done using `python -m neural_lam.train_model --config_path <config-path>`, but using the `--eval` option.
 Use `--eval val` to evaluate the model on the validation set and `--eval test` to evaluate on test data.
 Most of the training options are also relevant for evaluation.
@@ -348,13 +377,16 @@ A possible workaround is to just use batch size 1 during evaluation.
 This issue stems from PyTorch Lightning. See for example [this PR](https://github.com/Lightning-AI/torchmetrics/pull/1886) for more discussion.
 
 # Repository Structure
+
 Except for training and pre-processing scripts all the source code can be found in the `neural_lam` directory.
 Model classes, including abstract base classes, are located in `neural_lam/models`.
 Notebooks for visualization and analysis are located in `docs`.
 
 ## Format of graph directory
+
 The `graphs` directory contains generated graph structures that can be used by different graph-based models.
 The structure is shown with examples below:
+
 ```
 graphs
 ├── graph1                                  - Directory with a graph definition
@@ -371,19 +403,23 @@ graphs
 ```
 
 ### Mesh hierarchy format
+
 To keep track of levels in the mesh graph, a list format is used for the files with mesh graph information.
 In particular, the files
+
 ```
 │   ├── m2m_edge_index.pt                   - Edges in mesh graph (neural_lam.create_mesh)
 │   ├── m2m_features.pt                     - Static features of mesh edges (neural_lam.create_mesh)
 │   ├── m2m_node_features.pt                - Static features of mesh nodes (neural_lam.create_mesh)
 ```
+
 all contain lists of length `L`, for a hierarchical mesh graph with `L` layers.
 For non-hierarchical graphs `L == 1` and these are all just singly-entry lists.
 Each entry in the list contains the corresponding edge set or features of that level.
 Note that the first level (index 0 in these lists) corresponds to the lowest level in the hierarchy.
 
 In addition, hierarchical mesh graphs (`L > 1`) feature a few additional files with static data:
+
 ```
 ├── graph1
 │   ├── ...
@@ -393,21 +429,26 @@ In addition, hierarchical mesh graphs (`L > 1`) feature a few additional files w
 │   ├── mesh_up_features.pt                 - Static features of upward mesh edges (neural_lam.create_mesh)
 │   ├── ...
 ```
+
 These files have the same list format as the ones above, but each list has length `L-1` (as these edges describe connections between levels).
 Entries 0 in these lists describe edges between the lowest levels 1 and 2.
 
 # Development and Contributing
+
 Any push or Pull-Request to the main branch will trigger a selection of pre-commit hooks.
 These hooks will run a series of checks on the code, like formatting and linting.
 If any of these checks fail the push or PR will be rejected.
 To test whether your code passes these checks before pushing, run
+
 ``` bash
 pre-commit run --all-files
 ```
+
 from the root directory of the repository.
 
 Furthermore, all tests in the ```tests``` directory will be run upon pushing changes by a github action. Failure in any of the tests will also reject the push/PR.
 
 # Contact
+
 If you are interested in machine learning models for LAM, have questions about the implementation or ideas for extending it, feel free to get in touch.
 There is an open [mllam slack channel](https://join.slack.com/t/ml-lam/shared_invite/zt-2t112zvm8-Vt6aBvhX7nYa6Kbj_LkCBQ) that anyone can join. You can also open a github issue on this page, or (if more suitable) send an email to [joel.oskarsson@outlook.com](mailto:joel.oskarsson@outlook.com).

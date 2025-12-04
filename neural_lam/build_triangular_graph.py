@@ -267,7 +267,7 @@ def main():
     # pylint: disable-next=protected-access
     print(
         f"Edge length at bottom mesh level: {max_mesh_edge_len} "
-        f"(~{max_mesh_edge_len*6378} km)"
+        f"(~{max_mesh_edge_len * 6378} km)"
     )
 
     if boundary_region:
@@ -391,7 +391,7 @@ def main():
         f"Created graph with {num_grid_nodes} grid nodes "
         f"connected to {num_mesh_nodes} mesh nodes"
     )
-    print(f"#grid / #mesh = {num_grid_nodes/num_mesh_nodes :.2f}")
+    print(f"#grid / #mesh = {num_grid_nodes / num_mesh_nodes :.2f}")
 
 
 if __name__ == "__main__":

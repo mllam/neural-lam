@@ -35,7 +35,7 @@ output:
 
 inputs:
   era_surface:
-    path: 'ifs.zarr'
+    path: 'cosmo_ifs.zarr'
     dims: [time, prediction_timedelta, longitude, latitude]
     variables:
       - mean_sea_level_pressure
@@ -92,7 +92,7 @@ inputs:
     target_output_variable: forcing
 
   era_height_levels:
-    path: 'ifs.zarr'
+    path: 'cosmo_ifs.zarr'
     dims: [time, prediction_timedelta, longitude, latitude, level]
     variables:
       u_component_of_wind:
@@ -136,7 +136,7 @@ inputs:
     target_output_variable: forcing
 
   era_static:
-    path: 'era5.zarr'
+    path: 'cosmo_era5.zarr'
     dims: [time, longitude, latitude, level]
     variables:
       - land_sea_mask

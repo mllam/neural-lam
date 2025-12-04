@@ -8,8 +8,16 @@ import numpy as np
 
 # Configuration
 METRICS_FILES = {
-    "finetune 7.19 ERA margin with interior": "/iopsstor/scratch/cscs/sadamov/pyprojects_data/neural-lam/wandb/run-20250223_094539-ve7jxmni/files/test_metrics.pkl",
-    "finetune 7.19 IFS margin with interior": "/iopsstor/scratch/cscs/sadamov/pyprojects_data/neural-lam/wandb/run-20250223_082532-333z7dp7/files/test_metrics.pkl",
+    "finetune 7.19 ERA margin with interior": (
+        "/iopsstor/scratch/cscs/sadamov/pyprojects_data/"
+        "neural-lam/wandb/run-20250223_094539-ve7jxmni/files/"
+        "test_metrics.pkl"
+    ),
+    "finetune 7.19 IFS margin with interior": (
+        "/iopsstor/scratch/cscs/sadamov/pyprojects_data/"
+        "neural-lam/wandb/run-20250223_082532-333z7dp7/files/"
+        "test_metrics.pkl"
+    ),
 }
 
 VARIABLES = {

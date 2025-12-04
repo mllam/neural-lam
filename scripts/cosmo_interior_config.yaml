@@ -31,7 +31,7 @@ output:
 
 inputs:
   cosmo_height_levels:
-    path: cosmo.zarr
+    path: cosmo_ml_data.zarr
     dims: [time, x, y, z]
     variables:
       U:
@@ -72,7 +72,7 @@ inputs:
     target_output_variable: state
 
   cosmo_surface:
-    path: cosmo.zarr
+    path: cosmo_ml_data.zarr
     dims: [time, x, y]
     variables:
       - T_2M
@@ -97,7 +97,7 @@ inputs:
     target_output_variable: state
 
   cosmo_forcing:
-    path: cosmo.zarr
+    path: cosmo_ml_data.zarr
     dims: [time, x, y]
     derived_variables:
       toa_radiation:
@@ -139,7 +139,7 @@ inputs:
     target_output_variable: forcing
 
   cosmo_orography:
-    path: cosmo.zarr
+    path: cosmo_ml_data.zarr
     dims: [x, y]
     variables:
       - HSURF

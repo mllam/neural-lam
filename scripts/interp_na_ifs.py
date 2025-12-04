@@ -2,9 +2,11 @@
 # For LAM model project
 # by Joel Oskarsson, joel.oskarsson@outlook.com
 
+# Standard library
 import argparse
 import os
 
+# Third-party
 import numpy as np
 import pandas as pd
 import xarray as xr
@@ -60,7 +62,8 @@ def interpolate_zarr_at_timestamps(zarr_path):
     ):
         timestamp = pd.to_datetime(timestamp_str)
         print(
-            f"Processing {i + 1}/{len(timestamp_pred_level_tuples)}: Time {timestamp}, Pred {pred_num}, Level {level}"
+            f"Processing {i + 1}/{len(timestamp_pred_level_tuples)}: "
+            f"Time {timestamp}, Pred {pred_num}, Level {level}"
         )
 
         # Get the data for this timestamp combination
@@ -103,7 +106,7 @@ def interpolate_zarr_at_timestamps(zarr_path):
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Interpolate NaN values in a zarr dataset at specific timestamps"
+        description="Interpolate NaN values in dataset at specific timestamps"
     )
     parser.add_argument("zarr_path", type=str, help="Path to the zarr dataset")
     args = parser.parse_args()

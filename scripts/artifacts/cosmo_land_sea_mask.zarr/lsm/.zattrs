@@ -1,0 +1,10 @@
+{
+  "long_name": "Land-sea mask",
+  "description": "Binary mask where 1: land and 0: sea",
+  "units": "1",
+  "coordinates": "lat lon",
+  "_ARRAY_DIMENSIONS": [
+    "x",
+    "y"
+  ]
+}

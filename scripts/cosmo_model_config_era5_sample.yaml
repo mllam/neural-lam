@@ -1,0 +1,88 @@
+datastore:
+  kind: mdp
+  config_path: cosmo_interior_config_sample.yaml
+datastore_boundary:
+  kind: mdp
+  config_path: cosmo_era5_config_sample.yaml
+
+training:
+  state_feature_weighting:
+    __config_class__: ManualStateFeatureWeighting
+    weights:
+      U_10M: 1.0
+      T_2M: 1.0
+      V_10M: 1.0
+      PMSL: 1.0
+      PS: 1.0
+      TOT_PREC: 1.0
+      ASHFL_S: 1.0
+      ASOB_S: 1.0
+      ATHB_S: 1.0
+      U_lev_6: 0.125
+      U_lev_12: 0.125
+      U_lev_20: 0.125
+      U_lev_27: 0.125
+      U_lev_31: 0.125
+      U_lev_39: 0.125
+      U_lev_45: 0.125
+      U_lev_60: 0.125
+      V_lev_6: 0.125
+      V_lev_12: 0.125
+      V_lev_20: 0.125
+      V_lev_27: 0.125
+      V_lev_31: 0.125
+      V_lev_39: 0.125
+      V_lev_45: 0.125
+      V_lev_60: 0.125
+      PP_lev_6: 0.125
+      PP_lev_12: 0.125
+      PP_lev_20: 0.125
+      PP_lev_27: 0.125
+      PP_lev_31: 0.125
+      PP_lev_39: 0.125
+      PP_lev_45: 0.125
+      PP_lev_60: 0.125
+      T_lev_6: 0.125
+      T_lev_12: 0.125
+      T_lev_20: 0.125
+      T_lev_27: 0.125
+      T_lev_31: 0.125
+      T_lev_39: 0.125
+      T_lev_45: 0.125
+      T_lev_60: 0.125
+      RELHUM_lev_6: 0.125
+      RELHUM_lev_12: 0.125
+      RELHUM_lev_20: 0.125
+      RELHUM_lev_27: 0.125
+      RELHUM_lev_31: 0.125
+      RELHUM_lev_39: 0.125
+      RELHUM_lev_45: 0.125
+      RELHUM_lev_60: 0.125
+      W_lev_6: 0.125
+      W_lev_12: 0.125
+      W_lev_20: 0.125
+      W_lev_27: 0.125
+      W_lev_31: 0.125
+      W_lev_39: 0.125
+      W_lev_45: 0.125
+      W_lev_60: 0.125
+  output_clamping:
+    lower:
+      TOT_PREC: 0.0
+      RELHUM_lev_6: 0.0
+      RELHUM_lev_12: 0.0
+      RELHUM_lev_20: 0.0
+      RELHUM_lev_27: 0.0
+      RELHUM_lev_31: 0.0
+      RELHUM_lev_39: 0.0
+      RELHUM_lev_45: 0.0
+      RELHUM_lev_60: 0.0
+    upper:
+      RELHUM_lev_6: 100.0
+      RELHUM_lev_12: 100.0
+      RELHUM_lev_20: 100.0
+      RELHUM_lev_27: 100.0
+      RELHUM_lev_31: 100.0
+      RELHUM_lev_39: 100.0
+      RELHUM_lev_45: 100.0
+      RELHUM_lev_60: 100.0
