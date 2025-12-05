@@ -2,6 +2,7 @@
 import os
 import subprocess
 from argparse import ArgumentParser
+from datetime import timedelta
 from pathlib import Path
 
 # Third-party
@@ -407,7 +408,7 @@ def cli():
     main(
         datastore_config_path=args.datastore_config_path,
         batch_size=args.batch_size,
-        step_length=args.step_length,
+        step_length=timedelta(hours=args.step_length),
         n_workers=args.n_workers,
         distributed=distributed,
     )
