@@ -41,11 +41,11 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Set up Python 3.14
+      - name: Set up Python 3.13
         if: matrix.device == 'gpu'
         uses: actions/setup-python@v5
         with:
-          python-version: 3.14
+          python-version: 3.13
 
       - name: Install PDM (if applicable)
         if: matrix.package_manager == 'pdm'
