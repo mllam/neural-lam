@@ -6,7 +6,6 @@ import tempfile
 import warnings
 from functools import cache
 from pathlib import Path
-from typing import Optional
 
 # Third-party
 import pytorch_lightning as pl
@@ -411,17 +410,17 @@ def inverse_sigmoid(x):
     return torch.log(x_clamped / (1 - x_clamped))
 
 
-def get_integer_time(tdelta) -> Optional[tuple[int, str]]:
+def get_integer_time(tdelta) -> tuple[int, str]:
     """
     Get the largest time unit that can represent the given timedelta as an
     integer.
 
     Returns:
         int: The integer value of the timedelta in the largest time unit, or
-                None if no such unit exists.
-        str or None: The time unit as a string
-                    ('weeks', 'days', 'hours', 'minutes', 'seconds',
-                    'milliseconds', 'microseconds')
+                1 if no such unit exists.
+        str: The time unit as a string ('weeks', 'days', 'hours', 'minutes',
+                'seconds', 'milliseconds', 'microseconds'). If no unit can
+                represent the timedelta as an integer, returns 'unknown'.
 
     Examples:
         >>> from datetime import timedelta
@@ -431,8 +430,8 @@ def get_integer_time(tdelta) -> Optional[tuple[int, str]]:
         (5, 'hours')
         >>> get_integer_time(timedelta(milliseconds=1000))
         (1, 'seconds')
-        >>> get_integer_time(timedelta(days=0.001)) is None
-        True
+        >>> get_integer_time(timedelta(days=0.001))
+        (1, 'unknown')
     """
     total_seconds = tdelta.total_seconds()
 
@@ -450,4 +449,4 @@ def get_integer_time(tdelta) -> Optional[tuple[int, str]]:
         if total_seconds % unit_in_seconds == 0:
             return int(total_seconds / unit_in_seconds), unit
 
-    return None
+    return 1, "unknown"

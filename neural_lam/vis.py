@@ -24,11 +24,7 @@ def plot_error_map(errors, datastore: BaseRegularGridDatastore, title=None):
     max_errors = errors_np.max(axis=1)  # d_f
     errors_norm = errors_np / np.expand_dims(max_errors, axis=1)
 
-    time_step = utils.get_integer_time(step_length)
-    if time_step is None:
-        time_step_int, time_step_unit = 1, "unknown"
-    else:
-        time_step_int, time_step_unit = time_step
+    time_step_int, time_step_unit = utils.get_integer_time(step_length)
 
     fig, ax = plt.subplots(figsize=(15, 10))
 

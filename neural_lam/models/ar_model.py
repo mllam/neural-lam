@@ -156,11 +156,9 @@ class ARModel(pl.LightningModule):
         # For storing spatial loss maps during evaluation
         self.spatial_loss_maps: List[Any] = []
 
-        _time_info = get_integer_time(self._datastore.step_length)
-        if _time_info is None:
-            self.time_step_int, self.time_step_int_unit = 1, "unknown"
-        else:
-            self.time_step_int, self.time_step_int_unit = _time_info
+        self.time_step_int, self.time_step_unit = get_integer_time(
+            self._datastore.step_length
+        )
 
     def _create_dataarray_from_tensor(
         self,
