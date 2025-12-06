@@ -26,7 +26,7 @@ class SinglePointDummyDatastore(BaseDatastore):
         is_forecast,
         step_length=timedelta(hours=1),
     ):
-        self.step_length = step_length
+        self._step_length = step_length
         self._time_values = np.array(time_values)
         self._state_data = np.array(state_data)
         self._forcing_data = np.array(forcing_data)
@@ -36,6 +36,10 @@ class SinglePointDummyDatastore(BaseDatastore):
             assert self._state_data.ndim == 2
         else:
             assert self._state_data.ndim == 1
+
+    @property
+    def step_length(self):
+        return self._step_length
 
     def get_num_data_vars(self, category):
         return 1
