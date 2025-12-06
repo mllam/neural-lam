@@ -20,6 +20,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Adding a more robust LaTeX availability check function [\#162](https://github.com/mllam/neural-lam/pull/162) @lorenzo30salgado
 
+- Move development dependencies to dependency-group [#\174](](https://github.com/mllam/neural-lam/pull/174) @observingClouds
+
 
 ### Maintenance
 
