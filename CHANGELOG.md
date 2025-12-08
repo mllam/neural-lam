@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [unreleased](https://github.com/mllam/neural-lam/compare/v0.4.0...HEAD)
 
+### Added
+
+- Add support for any forecast step size(`step_length`) [\#172](https://github.com/mllam/neural-lam/pull/172) @observingClouds
+
 ### Fixed
 
 - Change default logging argument to prevent crash when running eval

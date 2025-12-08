@@ -7,6 +7,7 @@ neural-lam v0.1.0.
 import functools
 import re
 import warnings
+from datetime import timedelta
 from functools import cached_property
 from pathlib import Path
 from typing import List, Optional
@@ -454,11 +455,7 @@ class NpyFilesDatastoreMEPS(BaseRegularGridDatastore):
         y = ys[0, :]  # Unique y-coordinates (changes along the second axis)
         for d in dims:
             if d == "elapsed_forecast_duration":
-                coord_values = (
-                    self.step_length
-                    * np.arange(self._num_timesteps)
-                    * np.timedelta64(1, "h")
-                )
+                coord_values = self.step_length * np.arange(self._num_timesteps)
             elif d == "analysis_time":
                 coord_values = self._get_analysis_times(split=split)
             elif d == "y":
@@ -659,13 +656,13 @@ class NpyFilesDatastoreMEPS(BaseRegularGridDatastore):
             return arr
 
     @property
-    def step_length(self) -> int:
-        """The length of each time step in hours.
+    def step_length(self) -> timedelta:
+        """The length of each time step as a time interval.
 
         Returns
         -------
-        int
-            The length of each time step in hours.
+        timedelta
+            The length of each time step as a datetime.timedelta object.
 
         """
         return self._step_length

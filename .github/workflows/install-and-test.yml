@@ -119,7 +119,7 @@ jobs:
 
       - name: Run tests
         run: |
-          ${{ matrix.package_manager == 'pdm' && 'pdm run' || '' }} pytest -vv -s
+          ${{ matrix.package_manager == 'pdm' && 'pdm run' || '' }} pytest -vv -s --doctest-modules
 
       - name: Save cache data
         uses: actions/cache/save@v4
