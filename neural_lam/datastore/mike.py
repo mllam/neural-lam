@@ -116,6 +116,8 @@ class MIKEDatastore(BaseDatastore):
             da_split_end = da_split.sel(split_part="end").load().item()
             print(f" {split:<8s}: {da_split_start} to {da_split_end}")
 
+        self.stats_datastore = None
+
     @property
     def root_path(self) -> Path:
         """
@@ -242,16 +244,11 @@ class MIKEDatastore(BaseDatastore):
 
     def get_standardization_dataarray(self, category: str) -> xr.Dataset:
         """
-        Return the standardization (i.e. scaling to mean of 0.0 and standard
-        deviation of 1.0) dataarray for the given category. This should contain
-        a `{category}_mean` and `{category}_std` variable for each variable in
-        the category.
-        For `category=="state"`, the dataarray should also contain a
-        `state_diff_mean_standardized` and `state_diff_std_standardized`
-        variable for the one-step differences of the state variables.
-        The returned dataarray should at least have dimensions of
-        `({category}_feature)`, but can also include for example `grid_index`
-        (if the standardization is done per grid point for example).
+        Return the standardization dataarray for the given category. This
+        should contain a `{category}_mean` and `{category}_std` variable for
+        each variable in the category. For `category=="state"`, the dataarray
+        should also contain a `state_diff_mean` and `state_diff_std` variable
+        for the one- step differences of the state variables.
 
         Parameters
         ----------
@@ -261,26 +258,30 @@ class MIKEDatastore(BaseDatastore):
         Returns
         -------
         xr.Dataset
-            The standardization dataarray for the given category, with variables
-            for the mean and standard deviation of the variables (and
+            The standardization dataarray for the given category, with
+            variables for the mean and standard deviation of the variables (and
             differences for state variables).
 
         """
-        ops = ["mean", "std"]
-        split = "train"
-        stats_variables = {f"{category}__{split}__{op}": f"{category}_{op}" for op in ops}
-
-        ds_stats = self._ds[stats_variables.keys()].rename(stats_variables)
-
-        # Add standardized state diff stats
-        if category == "state":
-            ds_stats = ds_stats.assign(
-                **{
-                    f"state_diff_{op}_standardized": self._ds[f"state__{split}__diff_{op}"] / ds_stats["state_std"]
-                    for op in ops
-                }
+        if self.stats_datastore is not None:
+            # Get stats from self.stats_datastore instead
+            return self.stats_datastore.get_standardization_dataarray(
+                category=category
             )
 
+        ops = ["mean", "std"]
+        split = "train"
+        stats_variables = {
+            f"{category}__{split}__{op}": f"{category}_{op}" for op in ops
+        }
+        if category == "state":
+            stats_variables.update(
+                {f"state__{split}__diff_{op}": f"state_diff_{op}" for op in ops}
+            )
+
+        ds_stats = self._ds[stats_variables.keys()].rename(stats_variables)
+        if "grid_index" in ds_stats.coords:
+            ds_stats = ds_stats.isel(grid_index=0)
         return ds_stats
 
     def _standardize_datarray(self, da: xr.DataArray, category: str) -> xr.DataArray:

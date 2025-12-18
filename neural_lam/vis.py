@@ -9,10 +9,11 @@ import xarray as xr
 # Local
 from . import utils
 from .datastore.base import BaseRegularGridDatastore
+from .datastore.mike import MIKEDatastore
 
 
 @matplotlib.rc_context(utils.fractional_plot_bundle(1))
-def plot_error_map(errors, datastore: BaseRegularGridDatastore, title=None):
+def plot_error_map(errors, datastore: BaseRegularGridDatastore | MIKEDatastore, title=None):
     """
     Plot a heatmap of errors of different variables at different
     predictions horizons
@@ -108,23 +109,44 @@ def plot_on_axis(
     gl.right_labels = False
 
     lats_lons = datastore.get_lat_lon("state")
-    grid_shape = (
-        datastore.grid_shape_state.x,
-        datastore.grid_shape_state.y,
-    )
-    lons = lats_lons[:, 0].reshape(grid_shape)
-    lats = lats_lons[:, 1].reshape(grid_shape)
-
-    im = ax.pcolormesh(
-        lons,
-        lats,
-        da.values.reshape(grid_shape),
-        transform=ccrs.PlateCarree(),
-        vmin=vmin,
-        vmax=vmax,
-        cmap=cmap,
-        shading="auto",
-    )
+    # If datastore provides a regular grid shape, use pcolormesh.
+    # Otherwise (e.g. MIKEDatastore) fall back to an unstructured scatter plot.
+    if hasattr(datastore, "grid_shape_state") and getattr(datastore, "grid_shape_state") is not None:
+        grid_shape = (
+            datastore.grid_shape_state.x,
+            datastore.grid_shape_state.y,
+        )
+        lons = lats_lons[:, 0].reshape(grid_shape)
+        lats = lats_lons[:, 1].reshape(grid_shape)
+        data_to_plot = da.values.reshape(grid_shape)
+        im = ax.pcolormesh(
+            lons,
+            lats,
+            data_to_plot,
+            transform=ccrs.PlateCarree(),
+            vmin=vmin,
+            vmax=vmax,
+            cmap=cmap,
+            shading="auto",
+        )
+    else:
+        # Unstructured datastore (MIKE): use scatter plot
+        lons = lats_lons[:, 0]
+        lats = lats_lons[:, 1]
+        data_vals = da.values.flatten()
+        im = ax.scatter(
+            lons,
+            lats,
+            c=data_vals,
+            cmap=cmap,
+            vmin=vmin,
+            vmax=vmax,
+            transform=ccrs.PlateCarree(),
+            s=10,
+            marker="s",
+            linewidths=0,
+            alpha=0.9,
+        )
 
     if ax_title:
         ax.set_title(ax_title, size=15)
@@ -134,7 +156,7 @@ def plot_on_axis(
 
 @matplotlib.rc_context(utils.fractional_plot_bundle(1))
 def plot_prediction(
-    datastore: BaseRegularGridDatastore,
+    datastore: BaseRegularGridDatastore | MIKEDatastore,
     da_prediction: xr.DataArray = None,
     da_target: xr.DataArray = None,
     title=None,
@@ -182,7 +204,7 @@ def plot_prediction(
 
 @matplotlib.rc_context(utils.fractional_plot_bundle(1))
 def plot_spatial_error(
-    error, datastore: BaseRegularGridDatastore, title=None, vrange=None
+    error, datastore: BaseRegularGridDatastore | MIKEDatastore, title=None, vrange=None
 ):
     """
     Plot errors over spatial map
@@ -208,20 +230,26 @@ def plot_spatial_error(
         subplot_kw={"projection": datastore.coords_projection},
     )
 
-    error_grid = (
-        error.reshape(
-            [
-                datastore.grid_shape_state.x,
-                datastore.grid_shape_state.y,
-            ]
+    # For regular grids, reshape into 2D grid; otherwise pass 1D values
+    if hasattr(datastore, "grid_shape_state") and getattr(
+        datastore, "grid_shape_state"
+    ) is not None:
+        error_grid = (
+            error.reshape(
+                [
+                    datastore.grid_shape_state.x,
+                    datastore.grid_shape_state.y,
+                ]
+            )
+            .cpu()
+            .numpy()
         )
-        .cpu()
-        .numpy()
-    )
+        da_to_plot = xr.DataArray(error_grid)
+    else:
+        # Unstructured: flatten values and let plot_on_axis scatter them
+        da_to_plot = xr.DataArray(error.cpu().numpy().flatten())
 
-    im = plot_on_axis(
-        ax, xr.DataArray(error_grid), datastore, vmin, vmax, cmap="OrRd"
-    )
+    im = plot_on_axis(ax, da_to_plot, datastore, vmin, vmax, cmap="OrRd")
 
     cbar = fig.colorbar(im, aspect=30)
     cbar.ax.tick_params(labelsize=10)

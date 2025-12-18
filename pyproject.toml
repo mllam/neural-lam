@@ -11,7 +11,6 @@ authors = [
 # PEP 621 project metadata
 # See https://www.python.org/dev/peps/pep-0621/
 dependencies = [
-    "numpy>=1.24.2",
     "wandb>=0.13.10",
     "scipy>=1.10.0",
     "pytorch-lightning>=2.0.3",
@@ -20,6 +19,7 @@ dependencies = [
     "pyproj>=3.4.1",
     "tueplots>=0.0.8",
     "matplotlib>=3.7.0",
+    "plotly>=5.15.0",
     "torch>=2.3.0",
     "torch-geometric==2.3.1",
     "parse>=1.20.2",
@@ -27,7 +27,7 @@ dependencies = [
     "numpy<2.0.0",
     "dask~=2025.3.0",
     "xarray~=2025.3.1",
-    "mllam-data-prep[latlon-domain-crop] @ git+https://github.com/sadamov/mllam-data-prep.git@building-ml-lams",
+    "mllam-data-prep @ git+https://github.com/zweihuehner/mllam-data-prep.git",
     "weather-model-graphs @ git+https://github.com/joeloskarsson/weather-model-graphs.git@building-ml-lams"
 ]
 requires-python = ">=3.10"

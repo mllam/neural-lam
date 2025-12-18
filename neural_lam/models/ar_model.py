@@ -7,6 +7,7 @@ from typing import List, Union
 import matplotlib.pyplot as plt
 import numcodecs
 import numpy as np
+import pandas as pd
 import pytorch_lightning as pl
 import torch
 import wandb
@@ -540,6 +541,14 @@ class ARModel(pl.LightningModule):
             {"start_time": 1, "elapsed_forecast_duration": 1}
         )
 
+        # Ensure `grid_index` is not a pandas.MultiIndex before serializing to
+        # Zarr. xarray currently can't serialize MultiIndex coordinate
+        # variables directly. Convert MultiIndex levels into separate
+        # coordinate variables using `reset_index` which moves levels to coords.
+        if "grid_index" in da_pred_batch.coords:
+            idx = da_pred_batch.coords["grid_index"].to_index()
+            if isinstance(idx, pd.MultiIndex):
+                da_pred_batch = da_pred_batch.reset_index("grid_index")
         if batch_idx == 0:
             logger.info(f"Saving predictions to {zarr_output_path}")
             compressor = numcodecs.Blosc(
@@ -625,13 +634,13 @@ class ARModel(pl.LightningModule):
         self.spatial_loss_maps.append(log_spatial_losses)
         # (B, N_log, num_interior_nodes)
 
-        if self.args.save_eval_to_zarr_path:
-            self._save_predictions_to_zarr(
-                batch_times=batch_times,
-                batch_predictions=prediction,
-                batch_idx=batch_idx,
-                zarr_output_path=self.args.save_eval_to_zarr_path,
-            )
+        # if self.args.save_eval_to_zarr_path:
+        #     self._save_predictions_to_zarr(
+        #         batch_times=batch_times,
+        #         batch_predictions=prediction,
+        #         batch_idx=batch_idx,
+        #         zarr_output_path=self.args.save_eval_to_zarr_path,
+        #     )
 
         # Plot example predictions (on rank 0 only)
         if (
@@ -684,13 +693,17 @@ class ARModel(pl.LightningModule):
                 time=time_slice,
                 split=split,
                 category="state",
-            ).unstack("grid_index")
+            )
+            if hasattr(self._datastore, 'grid_shape_state'):
+                da_prediction = da_prediction.unstack("grid_index")
             da_target = self._create_dataarray_from_tensor(
                 tensor=target_slice,
                 time=time_slice,
                 split=split,
                 category="state",
-            ).unstack("grid_index")
+            )
+            if hasattr(self._datastore, 'grid_shape_state'):
+                da_target = da_target.unstack("grid_index")
 
             var_vmin = (
                 torch.minimum(
@@ -747,6 +760,23 @@ class ARModel(pl.LightningModule):
                 plt.close(
                     "all"
                 )  # Close all figs for this time step, saves memory
+
+            # Save pred and target as .pt files
+            if self.args.save_eval_to_pt_path:
+                torch.save(
+                    pred_slice.cpu(),
+                    os.path.join(
+                        self.args.save_eval_to_pt_path,
+                        f"example_pred_{self.plotted_examples}.pt",
+                    ),
+                )
+                torch.save(
+                    target_slice.cpu(),
+                    os.path.join(
+                        self.args.save_eval_to_pt_path,
+                        f"example_target_{self.plotted_examples}.pt",
+                    ),
+                )
 
     def create_metric_log_dict(self, metric_tensor, prefix, metric_name):
         """
