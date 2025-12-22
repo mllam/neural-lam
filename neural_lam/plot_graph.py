@@ -365,7 +365,7 @@ def main():
         )
         data_objs.append(
             create_node_plot(
-                datastore_boundary.get_lat_lon(category="forced"),
+                datastore_boundary.get_lat_lon(category="forcing"),
                 "Boundary grid Nodes",
                 color=args.boundary_grid_color,
                 radius=GRID_RADIUS,
