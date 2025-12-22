@@ -183,8 +183,8 @@ class MIKEDatastore(BaseDatastore):
             The units of the variables.
 
         """
-        if category not in self._ds and category == "forcing":
-            warnings.warn("no forcing data found in datastore")
+        if category not in self._ds:
+            warnings.warn(f"no {category} data found in datastore")
             return []
         return self._ds[f"{category}_feature_units"].values.tolist()
 
@@ -202,8 +202,8 @@ class MIKEDatastore(BaseDatastore):
             The names of the variables.
 
         """
-        if category not in self._ds and category == "forcing":
-            warnings.warn("no forcing data found in datastore")
+        if category not in self._ds:
+            warnings.warn(f"no {category} data found in datastore")
             return []
         return self._ds[f"{category}_feature"].values.tolist()
 
@@ -221,8 +221,8 @@ class MIKEDatastore(BaseDatastore):
             The long names of the variables.
 
         """
-        if category not in self._ds and category == "forcing":
-            warnings.warn("no forcing data found in datastore")
+        if category not in self._ds:
+            warnings.warn(f"no {category} data found in datastore")
             return []
         return self._ds[f"{category}_feature"].values.tolist()
 
