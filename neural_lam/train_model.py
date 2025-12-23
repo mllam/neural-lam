@@ -224,6 +224,11 @@ def main(input_args=None):
         "forecasts should be started from (default: 0, 12)",
     )
     parser.add_argument(
+        "--save_eval_to_zarr_path",
+        type=str,
+        help="Save evaluation results to zarr dataset at given path ",
+    )
+    parser.add_argument(
         "--save_eval_to_pt_path",
         type=str,
         help="Save evaluation results to pt dataset at given path ",

@@ -13,6 +13,7 @@ import torch
 import wandb
 import xarray as xr
 from loguru import logger
+from zarr.codecs import BloscCodec
 
 # Local
 from .. import metrics, vis
@@ -551,9 +552,10 @@ class ARModel(pl.LightningModule):
                 da_pred_batch = da_pred_batch.reset_index("grid_index")
         if batch_idx == 0:
             logger.info(f"Saving predictions to {zarr_output_path}")
-            compressor = numcodecs.Blosc(
-                cname="zstd", clevel=9, shuffle=numcodecs.Blosc.SHUFFLE
-            )
+            # compressor = numcodecs.Blosc(
+            #     cname="zstd", clevel=9, shuffle=numcodecs.Blosc.SHUFFLE
+            # )
+            compressor = BloscCodec(cname="zstd", clevel=9, shuffle="shuffle")
             da_pred_batch.to_zarr(
                 zarr_output_path,
                 mode="w",
@@ -634,13 +636,13 @@ class ARModel(pl.LightningModule):
         self.spatial_loss_maps.append(log_spatial_losses)
         # (B, N_log, num_interior_nodes)
 
-        # if self.args.save_eval_to_zarr_path:
-        #     self._save_predictions_to_zarr(
-        #         batch_times=batch_times,
-        #         batch_predictions=prediction,
-        #         batch_idx=batch_idx,
-        #         zarr_output_path=self.args.save_eval_to_zarr_path,
-        #     )
+        if self.args.save_eval_to_zarr_path:
+            self._save_predictions_to_zarr(
+                batch_times=batch_times,
+                batch_predictions=prediction,
+                batch_idx=batch_idx,
+                zarr_output_path=self.args.save_eval_to_zarr_path,
+            )
 
         # Plot example predictions (on rank 0 only)
         if (
