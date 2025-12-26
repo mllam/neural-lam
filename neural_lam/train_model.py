@@ -237,8 +237,8 @@ def main(input_args=None):
         "--plot_vars",
         nargs="+",
         type=str,
-        default=["t2m"],
-        help="List of variables to plot during eval (default: t2m)",
+        default=["Surface elevation", "U velocity", "V velocity"],
+        help="List of variables to plot during eval (default: Surface elevation, U velocity, V velocity)",
     )
 
     # Logger Settings
@@ -317,6 +317,11 @@ def main(input_args=None):
         args.load or not args.restore_opt
     ), "Can not restore opt state when not loading a checkpoint"
 
+    # Infer Run mode
+    eval_only = args.eval is not None and args.load is not None and not args.restore_opt
+    train_and_eval = args.eval is not None and not eval_only
+    train_only = args.eval is None
+
     # Get an (actual) random run id as a unique identifier
     random_run_id = random.randint(0, 9999)
 
@@ -376,25 +381,36 @@ def main(input_args=None):
             datastore_boundary=datastore_boundary,
         )
 
-    if args.eval:
-        prefix = f"eval-{args.eval}-"
+    if eval_only:
+        run_mode = f"eva-{args.eval}"
+    elif train_and_eval:
+        run_mode = f"train+eval-{args.eval}"
     else:
-        prefix = "train-"
+        run_mode = "train"
+
     run_name = (
-        f"{prefix}{args.model}-{args.processor_layers}x{args.hidden_dim}-"
+        f"{run_mode}-"
+        f"{args.model}-{args.processor_layers}x{args.hidden_dim}-"
         f"{time.strftime('%m_%d_%H')}-{random_run_id:04d}"
     )
+
+    checkpoint_root = "saved_models"
+    if eval_only:
+        checkpoint_dir = f"{checkpoint_root}/eval_only/{run_name}"
+    else:
+        checkpoint_dir = f"{checkpoint_root}/{run_name}"
+
     callbacks = []
-    # Checkpoint for minimum val_mean_loss + last
     callbacks.append(
         pl.callbacks.ModelCheckpoint(
-            dirpath=f"saved_models/{run_name}",
+            dirpath=checkpoint_dir,
             filename="min_val_mean_loss",
             monitor="val_mean_loss",
             mode="min",
             save_last=True,
         )
     )
+
     # Checkpoint for min val loss at step ar_steps_train
     possible_monitor_steps = [
         step for step in args.val_steps_to_log if step <= args.ar_steps_train
@@ -407,7 +423,7 @@ def main(input_args=None):
     monitored_unroll_step = max(possible_monitor_steps)
     callbacks.append(
         pl.callbacks.ModelCheckpoint(
-            dirpath=f"saved_models/{run_name}",
+            dirpath=checkpoint_dir,
             filename=f"min_val_loss_unroll{monitored_unroll_step}",
             monitor=f"val_loss_unroll{monitored_unroll_step}",
             mode="min",
@@ -439,12 +455,33 @@ def main(input_args=None):
         utils.init_wandb_metrics(
             logger, val_steps=args.val_steps_to_log
         )  # Do after wandb.init
+
+    eval_only = args.eval is not None and args.load is not None and not args.restore_opt
+
+    # Resume training if restore_opt is set
+    ckpt_for_fit = args.load if args.restore_opt else None
+
+    if not eval_only:
+        # 1) Train (fresh or resumed)
+        trainer.fit(
+            model=model,
+            datamodule=data_module,
+            ckpt_path=ckpt_for_fit,
+        )
+
+    # 2) Evaluate
     if args.eval:
-        trainer.test(model=model, datamodule=data_module, ckpt_path=args.load)
-    else:
-        # Only feed fit method with checkpoint path if restore_opt
-        ckpt_for_fit = args.load if args.restore_opt else None
-        trainer.fit(model=model, datamodule=data_module, ckpt_path=ckpt_for_fit)
+        # Evaluation checkpoint logic
+        if eval_only:
+            ckpt_path = args.load
+        else:
+            ckpt_path = "best"
+
+        trainer.test(
+            model=model,
+            datamodule=data_module,
+            ckpt_path=ckpt_path,
+        )
 
 
 if __name__ == "__main__":
