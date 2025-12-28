@@ -106,7 +106,7 @@ jobs:
         run: |
           uv venv --no-project
           source .venv/bin/activate
-          uv pip install torch --torch-backend=auto
+          uv pip install torch --index-url ${{ matrix.torch_index }}
           uv pip install -e ".[dev]"
           uv pip list
           echo "VIRTUAL_ENV=$PWD/.venv" >> $GITHUB_ENV
