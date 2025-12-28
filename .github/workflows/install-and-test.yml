@@ -27,7 +27,7 @@ jobs:
     runs-on: ${{ matrix.runner }}
     strategy:
       matrix:
-        package_manager: [pdm, pip]
+        package_manager: [pdm, pip, uv]
         device: [cpu, gpu]
         include:
           - device: cpu
@@ -51,6 +51,10 @@ jobs:
         if: matrix.package_manager == 'pdm'
         run: |
           python -m pip install pdm
+
+      - name : Install uv (if applicable)
+        if: matrix.package_manager == 'uv'
+        uses: astral-sh/setup-uv@v7
 
       - name: Configure and create PDM virtual environment (GPU)
         # on the AWS GPU runner we have to use the mounted nvme drive, otherwise we run out of space
@@ -88,12 +92,25 @@ jobs:
           echo "TORCH_VERSION=$TORCH_VERSION" >> $GITHUB_ENV
 
       - name: Install PyTorch
+        if : matrix.package_manager != 'uv'
         run: |
           ${{ matrix.package_manager == 'pdm' && 'pdm run python -m pip' || 'python -m pip' }} install "torch==$TORCH_VERSION" --index-url ${{ matrix.torch_index }}
 
       - name: Install package (including dev dependencies)
+        if : matrix.package_manager != 'uv'
         run: |
           ${{ matrix.package_manager == 'pdm' && 'pdm install --group :all' || 'python -m pip install ".[dev]"' }}
+
+      - name: Setup environment with uv (if applicable)
+        if: matrix.package_manager == 'uv'
+        run: |
+          uv venv --no-project
+          source .venv/bin/activate
+          uv pip install torch --torch-backend=auto
+          uv pip install -e ".[dev]"
+          uv pip list
+          echo "VIRTUAL_ENV=$PWD/.venv" >> $GITHUB_ENV
+          echo "$PWD/.venv/bin" >> $GITHUB_PATH
 
       - name: Print torch version
         run: |
