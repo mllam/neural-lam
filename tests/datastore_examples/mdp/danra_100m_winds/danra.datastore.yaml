@@ -8,8 +8,8 @@ output:
     forcing: [time, grid_index, forcing_feature]
   coord_ranges:
     time:
-      start: 1990-09-03T00:00
-      end: 1990-09-09T00:00
+      start: 2022-04-01T00:00
+      end: 2022-04-10T00:00
       step: PT3H
   chunking:
     time: 1
@@ -17,21 +17,21 @@ output:
     dim: time
     splits:
       train:
-        start: 1990-09-03T00:00
-        end: 1990-09-06T00:00
+        start: 2022-04-01T00:00
+        end: 2022-04-04T00:00
         compute_statistics:
           ops: [mean, std, diff_mean, diff_std]
           dims: [grid_index, time]
       val:
-        start: 1990-09-06T00:00
-        end: 1990-09-07T00:00
+        start: 2022-04-04T00:00
+        end: 2022-04-07T00:00
       test:
-        start: 1990-09-07T00:00
-        end: 1990-09-09T00:00
+        start: 2022-04-07T00:00
+        end: 2022-04-10T00:00
 
 inputs:
   danra_height_levels:
-    path: https://mllam-test-data.s3.eu-north-1.amazonaws.com/height_levels.zarr
+    path: https://object-store.os-api.cci1.ecmwf.int/mllam-testdata/danra_cropped/v0.2.0/height_levels.zarr
     dims: [time, x, y, altitude]
     variables:
       u:
@@ -55,8 +55,8 @@ inputs:
         dims: [x, y]
     target_output_variable: state
 
-  danra_surface:
-    path: https://mllam-test-data.s3.eu-north-1.amazonaws.com/single_levels.zarr
+  danra_surface_forcing:
+    path: https://object-store.os-api.cci1.ecmwf.int/mllam-testdata/danra_cropped/v0.2.0/single_levels.zarr
     dims: [time, x, y]
     variables:
       # use surface incoming shortwave radiation as forcing
@@ -73,11 +73,30 @@ inputs:
         name_format: "{var_name}"
     target_output_variable: forcing
 
-  danra_lsm:
-    path: https://mllam-test-data.s3.eu-north-1.amazonaws.com/lsm.zarr
+  danra_surface:
+    path: https://object-store.os-api.cci1.ecmwf.int/mllam-testdata/danra_cropped/v0.2.0/single_levels.zarr
+    dims: [time, x, y]
+    variables:
+      - r2m
+      - t2m
+    dim_mapping:
+      time:
+        method: rename
+        dim: time
+      grid_index:
+        method: stack
+        dims: [x, y]
+      state_feature:
+        method: stack_variables_by_var_name
+        name_format: "{var_name}"
+    target_output_variable: state
+
+  danra_static:
+    path: https://object-store.os-api.cci1.ecmwf.int/mllam-testdata/danra_cropped/v0.2.0/single_levels.zarr
     dims: [x, y]
     variables:
       - lsm
+      - orography
     dim_mapping:
       grid_index:
         method: stack

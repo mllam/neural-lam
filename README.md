@@ -1,7 +1,6 @@
-[![slack](https://img.shields.io/badge/slack-join-brightgreen.svg?logo=slack)](https://join.slack.com/t/ml-lam/shared_invite/zt-2t112zvm8-Vt6aBvhX7nYa6Kbj_LkCBQ)
-![Linting](https://github.com/mllam/neural-lam/actions/workflows/pre-commit.yml/badge.svg?branch=main)
-[![test (pdm install, gpu)](https://github.com/mllam/neural-lam/actions/workflows/ci-pdm-install-and-test-gpu.yml/badge.svg)](https://github.com/mllam/neural-lam/actions/workflows/ci-pdm-install-and-test-gpu.yml)
-[![test (pdm install, cpu)](https://github.com/mllam/neural-lam/actions/workflows/ci-pdm-install-and-test-cpu.yml/badge.svg)](https://github.com/mllam/neural-lam/actions/workflows/ci-pdm-install-and-test-cpu.yml)
+[![slack](https://img.shields.io/badge/slack-join-brightgreen.svg?logo=slack)](https://kutt.it/mllam)
+[![Linting](https://github.com/mllam/neural-lam/actions/workflows/pre-commit.yml/badge.svg?branch=main)](https://github.com/mllam/neural-lam/actions/workflows/pre-commit.yml)
+[![CPU+GPU testing](https://github.com/mllam/neural-lam/actions/workflows/install-and-test.yml/badge.svg?branch=main)](https://github.com/mllam/neural-lam/actions/workflows/install-and-test.yml)
 
 <p align="middle">
     <img src="figures/neural_lam_header.png" width="700">
@@ -80,7 +79,15 @@ expects the most recent version of CUDA on your system.
 We cover all the installation options in our [github actions ci/cd
 setup](.github/workflows/) which you can use as a reference.
 
-## Using `pdm`
+### From pypi.org
+
+```
+python -m pip install neural_lam
+```
+
+### From source
+
+#### Using `pdm`
 
 1. Clone this repository and navigate to the root directory.
 2. Install `pdm` if you don't have it installed on your system (either with `pip install pdm` or [following the install instructions](https://pdm-project.org/latest/#installation)).
@@ -89,7 +96,7 @@ setup](.github/workflows/) which you can use as a reference.
 4. Install a specific version of `torch` with `pdm run python -m pip install torch --index-url https://download.pytorch.org/whl/cpu` for a CPU-only version or `pdm run python -m pip install torch --index-url https://download.pytorch.org/whl/cu111` for CUDA 11.1 support (you can find the correct URL for the variant you want on [PyTorch webpage](https://pytorch.org/get-started/locally/)).
 5. Install the dependencies with `pdm install` (by default this in include the). If you will be developing `neural-lam` we recommend to install the development dependencies with `pdm install --group dev`. By default `pdm` installs the `neural-lam` package in editable mode, so you can make changes to the code and see the effects immediately.
 
-## Using `pip`
+#### Using `pip`
 
 1. Clone this repository and navigate to the root directory.
 > If you are happy using the latest version of `torch` with GPU support (expecting the latest version of CUDA is installed on your system) you can skip to step 3.
@@ -148,12 +155,23 @@ training:
     weights:
       u100m: 1.0
       v100m: 1.0
+      t2m: 1.0
+      r2m: 1.0
+  output_clamping:
+    lower:
+      t2m: 0.0
+      r2m: 0
+    upper:
+      r2m: 1.0
 ```
 
-For now the neural-lam config only defines two things: 1) the kind of data
-store and the path to its config, and 2) the weighting of different features in
-the loss function. If you don't define the state feature weighting it will default
-to weighting all features equally.
+For now the neural-lam config only defines few things:
+
+1. The kind of datastore and the path to its config
+2. The weighting of different features in
+the loss function. If you don't define the state feature weighting it will default to
+weighting all features equally.
+3. Valid numerical range for output of each feature.The numerical range of all features default to $]-\infty, \infty[$.
 
 (This example is taken from the `tests/datastore_examples/mdp` directory.)
 
@@ -264,7 +282,7 @@ forecast/analysis files in future.
 
 The full MEPS dataset is available for download [here](https://nextcloud.liu.se/s/meps). See instructions in the file `README.txt` for how to download and extract the full dataset.
 
-A tiny subset of the MEPS data (named `meps_example`) is also available in `example_data.zip`, which can be downloaded from [here](https://liuonline-my.sharepoint.com/:u:/g/personal/joeos82_liu_se/EaUUq6h9og1EsLwJmKAltWwB7zP2gmObe-K8pL6qGYYiGg?e=yQbFuV).
+A tiny subset of the MEPS data (named `meps_example`) is also available in `example_data.zip`, which can be downloaded from [here](https://drive.google.com/drive/folders/1N6ZT_mkfbdVloVsNs9T5YOrMtxd3jG-j?usp=sharing).
 Download the files and unzip in the neural-lam directory.
 Graphs used in the initial paper are also available for download at the same link (but can as easily be re-generated using `python -m neural_lam.create_graph`).
 Note that this subset is far too small to train any useful models, but all scripts can be run with it.
@@ -380,7 +398,9 @@ The graphs used for the different models in the [paper](#graph-based-neural-weat
 
 The graph-related files are stored in a directory called `graphs`.
 
-## Weights & Biases Integration
+## Logging your experiments
+
+### Weights & Biases Integration
 The project is fully integrated with [Weights & Biases](https://www.wandb.ai/) (W&B) for logging and visualization, but can just as easily be used without it.
 When W&B is used, training configuration, training/test statistics and plots are sent to the W&B servers and made available in an interactive web interface.
 If W&B is turned off, logging instead saves everything locally to a directory like `wandb/dryrun...`.
@@ -395,6 +415,13 @@ If you would like to turn off W&B and just log things locally, run:
 ```
 wandb off
 ```
+
+### MLFlow Integration
+The project is also integrated with [MLFlow](https://mlflow.org/) for logging and storing artefacts.
+
+MLFlow is not used by default, but can be switched to by setting `--logger mlflow` in the training command. With MLFlow enabled, training configuration, training/test statistics and plots are logged to the MLFlow server. MLFlow is self-hosted and can be run locally or on a server. See the [MLFlow documentation](https://mlflow.org/docs/latest/index.html) for details.
+
+Use the environment variable `MLFLOW_TRACKING_URI` to set the URI of the MLFlow server. If not set the logging can not be used. An example of setting the URI to a server is and running a training command is `MLFLOW_TRACKING_URI=http://localhost:5000 python -m neural_lam.train_model --config_path <config_path> --logger mlflow`.
 
 ## Train Models
 Models can be trained using `python -m neural_lam.train_model --config_path <config_path>`.
@@ -445,6 +472,36 @@ python -m neural_lam.train_model --model hi_lam_parallel --graph hierarchical ..
 ```
 
 Checkpoint files for our models trained on the MEPS data are available upon request.
+
+### High Performance Computing
+
+The training script can be run on a cluster with multiple GPU-nodes. Neural LAM is set up to use PyTorch Lightning's `DDP` backend for distributed training.
+The code can be used on systems both with and without slurm. If the cluster has multiple nodes, set the `--num_nodes` argument accordingly.
+
+Using SLURM, the job can be started with `sbatch slurm_job.sh` with a shell script like the following.
+```
+#!/bin/bash -l
+#SBATCH --job-name=Neural-LAM
+#SBATCH --time=24:00:00
+#SBATCH --nodes=2
+#SBATCH --ntasks-per-node=4
+#SBATCH --gres:gpu=4
+#SBATCH --partition=normal
+#SBATCH --mem=444G
+#SBATCH --no-requeue
+#SBATCH --exclusive
+#SBATCH --output=lightning_logs/neurallam_out_%j.log
+#SBATCH --error=lightning_logs/neurallam_err_%j.log
+
+# Load necessary modules or activate environment, for example:
+conda activate neural-lam
+
+srun -ul python -m neural_lam.train_model \
+    --config_path /path/to/config.yaml \
+    --num_nodes $SLURM_JOB_NUM_NODES
+```
+
+When using on a system without SLURM, where all GPU's are visible, it is possible to select a subset of GPU's to use for training with the `devices` cli argument, e.g. `--devices 0 1` to use the first 2 GPU's.
 
 ## Evaluate Models
 Evaluation is also done using `python -m neural_lam.train_model --config_path <config-path>`, but using the `--eval` option.
@@ -524,4 +581,4 @@ Furthermore, all tests in the ```tests``` directory will be run upon pushing cha
 # Contact
 If you are interested in machine learning models for LAM, have questions about the implementation or ideas for extending it, feel free to get in touch.
 There is an open [mllam slack channel](https://join.slack.com/t/ml-lam/shared_invite/zt-2t112zvm8-Vt6aBvhX7nYa6Kbj_LkCBQ) that anyone can join (after following the link you have to request to join, this is to avoid spam bots).
-You can also open a github issue on this page, or (if more suitable) send an email to [joel.oskarsson@liu.se](mailto:joel.oskarsson@liu.se).
+You can also open a github issue on this page.

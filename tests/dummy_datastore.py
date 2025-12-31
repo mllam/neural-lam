@@ -3,7 +3,7 @@ import datetime
 import tempfile
 from functools import cached_property
 from pathlib import Path
-from typing import List, Union
+from typing import List, Optional, Tuple, Union
 
 # Third-party
 import isodate
@@ -125,6 +125,7 @@ class DummyDatastore(BaseRegularGridDatastore):
 
             # Define dimensions and create random data
             dims = ["grid_index", f"{category}_feature"]
+            shape: Tuple[int, ...]
             if category != "static":
                 dims.append("time")
                 shape = (n_grid_points, n, n_timesteps)
@@ -268,12 +269,13 @@ class DummyDatastore(BaseRegularGridDatastore):
         Return the standardization (i.e. scaling to mean of 0.0 and standard
         deviation of 1.0) dataarray for the given category. This should contain
         a `{category}_mean` and `{category}_std` variable for each variable in
-        the category. For `category=="state"`, the dataarray should also
-        contain a `state_diff_mean` and `state_diff_std` variable for the one-
-        step differences of the state variables. The returned dataarray should
-        at least have dimensions of `({category}_feature)`, but can also
-        include for example `grid_index` (if the standardization is done per
-        grid point for example).
+        the category.
+        For `category=="state"`, the dataarray should also contain a
+        `state_diff_mean_standardized` and `state_diff_std_standardized`
+        variable for the one-step differences of the state variables.
+        The returned dataarray should at least have dimensions of
+        `({category}_feature)`, but can also include for example `grid_index`
+        (if the standardization is done per grid point for example).
 
         Parameters
         ----------
@@ -292,7 +294,7 @@ class DummyDatastore(BaseRegularGridDatastore):
 
         ops = ["mean", "std"]
         if category == "state":
-            ops += ["diff_mean", "diff_std"]
+            ops += ["diff_mean_standardized", "diff_std_standardized"]
 
         for op in ops:
             da_op = xr.ones_like(self.ds[f"{category}_feature"]).astype(float)
@@ -301,7 +303,7 @@ class DummyDatastore(BaseRegularGridDatastore):
         return ds_standardization
 
     def get_dataarray(
-        self, category: str, split: str
+        self, category: str, split: Optional[str], standardize: bool = False
     ) -> Union[xr.DataArray, None]:
         """
         Return the processed data (as a single `xr.DataArray`) for the given
@@ -332,6 +334,8 @@ class DummyDatastore(BaseRegularGridDatastore):
             The category of the dataset (state/forcing/static).
         split : str
             The time split to filter the dataset (train/val/test).
+        standardize: bool
+            If the dataarray should be returned standardized
 
         Returns
         -------
@@ -340,7 +344,13 @@ class DummyDatastore(BaseRegularGridDatastore):
 
         """
         dim_order = self.expected_dim_order(category=category)
-        return self.ds[category].transpose(*dim_order)
+
+        da_category = self.ds[category].transpose(*dim_order)
+
+        if standardize:
+            return self._standardize_datarray(da_category, category=category)
+
+        return da_category
 
     @cached_property
     def boundary_mask(self) -> xr.DataArray:

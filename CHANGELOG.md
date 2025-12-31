@@ -5,7 +5,93 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [unreleased](https://github.com/joeloskarsson/neural-lam/compare/v0.2.0...HEAD)
+## [unreleased](https://github.com/mllam/neural-lam/compare/v0.4.0...HEAD)
+
+### Fixed
+
+- Change default logging argument to prevent crash when running eval
+[\#145](https://github.com/mllam/neural-lam/pull/145) @joeloskarsson
+
+- Fix wrong grid dimensionality when running with --output_std, resulting in crash
+[\#147](https://github.com/mllam/neural-lam/pull/147) @joeloskarsson
+
+- Fix the order in create_graph.py which caused wrong G2M and M2G
+[\#150](https://github.com/mllam/neural-lam/pull/150) @YUTAIPAN
+
+- Adding a more robust LaTeX availability check function [\#162](https://github.com/mllam/neural-lam/pull/162) @lorenzo30salgado
+
+
+### Maintenance
+
+- Introducing `mypy` for static type checking and fixing type hints accordingly [\#113](https://github.com/mllam/neural-lam/pull/113) @observingClouds
+
+- Change all argparse instances to use ArgumentDefaultsHelpFormatter for easier maintaining defaults.
+[\#145](https://github.com/mllam/neural-lam/pull/145) @joeloskarsson
+
+- Fix `torch` version detection during CI when testing on CPU with pdm [\#154](https://github.com/mllam/neural-lam/pull/154) @leifdenby
+
+- Update link to MEPS example data [\#155](https://github.com/mllam/neural-lam/pull/155) @joeloskarsson
+
+## [v0.4.0](https://github.com/mllam/neural-lam/releases/tag/v0.4.0)
+
+This release introduces a number of improvements to logging, multi-node training and variable rescaling, without making any major changes to the neural-lam structure.
+
+### Added
+
+- Add support for MLFlow logging and metrics tracking. [\#77](https://github.com/mllam/neural-lam/pull/77)
+  @khintz
+
+- Add support for multi-node training.
+[\#103](https://github.com/mllam/neural-lam/pull/103) @simonkamuk @sadamov
+
+- Add option to clamp output prediction using limits specified in config file [\#92](https://github.com/mllam/neural-lam/pull/92) @SimonKamuk
+
+- Add publication of releases to pypi.org. [\#71](https://github.com/mllam/neural-lam/pull/71) @leifdenby, @observingClouds
+
+### Fixed
+- Only print on rank 0 to avoid duplicates of all print statements.
+[\#103](https://github.com/mllam/neural-lam/pull/103) @simonkamuk @sadamov
+
+- Fix MLFlow exception import introduced in [\#77](https://github.com/mllam/neural-lam/pull/77).
+  [\#111](https://github.com/mllam/neural-lam/pull/111)
+  @observingClouds
+
+- Fix duplicate tensor copy to CPU [\#106](https://github.com/mllam/neural-lam/pull/106) @observingClouds
+
+- Fix bug where the inverse_softplus used in clamping caused nans in the gradients [\#123](https://github.com/mllam/neural-lam/pull/123) @SimonKamuk
+
+- Add standardization to state diff stats from mdp datastore [\#122](https://github.com/mllam/neural-lam/pull/122) @SimonKamuk
+
+- Set ci/cd badges to refer to the new test matrix [\#130](https://github.com/mllam/neural-lam/pull/130) @SimonKamuk
+
+- use correct split of data with the `--eval val` or `--eval test` cli arguments [\#139](https://github.com/mllam/neural-lam/pull/139) @SimonKamuk
+
+- Fix step length calculation when dt >= 24h [\#141](https://github.com/mllam/neural-lam/pull/141) @deinal
+
+### Maintenance
+- update ci/cd testing to use cuda 12.8 [\#140](https://github.com/mllam/neural-lam/pull/140) @SimonKamuk
+
+- update ci/cd testing to use pre-commit v3.0.1 [\#140](https://github.com/mllam/neural-lam/pull/140) @SimonKamuk
+
+- update AWS GPU ci/cd to use ami with larger (200GB) root volume and ensure
+  nvme drive is used for pip venvn
+  [\#126](https://github.com/mllam/neural-lam/pull/126), @leifdenby
+
+- update ci/cd testing setup to install torch version compatible with neural-lam
+  dependencies [\#115](https://github.com/mllam/neural-lam/pull/115), @leifdenby
+
+- switch to new npyfiles MEPS and mdp DANRA test datasets which are coincident
+  in time and space (on cropped ~100x100 grid-point domain)
+  [\#110](https://github.com/mllam/neural-lam/pull/110), @leifdenby
+
+- use dynamic versioning based on git tags and commit hashes
+  [\#118](https://github.com/mllam/neural-lam/pull/118), @observingClouds
+
+ - add detect_anomaly=True to pl.Trainer in test_training.py [\#124](https://github.com/mllam/neural-lam/pull/124), @SimonKamuk
+
+## [v0.3.0](https://github.com/mllam/neural-lam/releases/tag/v0.3.0)
+
+This release introduces Datastores to represent input data from different sources (including zarr and numpy) while keeping graph generation within neural-lam.
 
 ### Added
 
@@ -13,13 +99,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   [\#66](https://github.com/mllam/neural-lam/pull/66)
  @leifdenby @sadamov
 
+- Implement standardization of static features when loaded in ARModel [\#96](https://github.com/mllam/neural-lam/pull/96) @joeloskarsson
+
 ### Fixed
 
 - Fix wandb environment variable disabling wandb during tests. Now correctly uses WANDB_MODE=disabled. [\#94](https://github.com/mllam/neural-lam/pull/94) @joeloskarsson
 
 - Fix bugs introduced with datastores functionality relating visualation plots [\#91](https://github.com/mllam/neural-lam/pull/91) @leifdenby
 
-## [v0.2.0](https://github.com/joeloskarsson/neural-lam/releases/tag/v0.2.0)
+## [v0.2.0](https://github.com/mllam/neural-lam/releases/tag/v0.2.0)
 
 ### Added
 - Added tests for loading dataset, creating graph, and training model based on reduced MEPS dataset stored on AWS S3, along with automatic running of tests on push/PR to GitHub, including push to main branch. Added caching of test data to speed up running tests.
@@ -27,19 +115,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   @SimonKamuk
 
 - Replaced `constants.py` with `data_config.yaml` for data configuration management
-  [\#31](https://github.com/joeloskarsson/neural-lam/pull/31)
+  [\#31](https://github.com/mllam/neural-lam/pull/31)
   @sadamov
 
 - new metrics (`nll` and `crps_gauss`) and `metrics` submodule, stddiv output option
-  [c14b6b4](https://github.com/joeloskarsson/neural-lam/commit/c14b6b4323e6b56f1f18632b6ca8b0d65c3ce36a)
+  [c14b6b4](https://github.com/mllam/neural-lam/commit/c14b6b4323e6b56f1f18632b6ca8b0d65c3ce36a)
   @joeloskarsson
 
 - ability to "watch" metrics and log
-  [c14b6b4](https://github.com/joeloskarsson/neural-lam/commit/c14b6b4323e6b56f1f18632b6ca8b0d65c3ce36a)
+  [c14b6b4](https://github.com/mllam/neural-lam/commit/c14b6b4323e6b56f1f18632b6ca8b0d65c3ce36a)
   @joeloskarsson
 
 - pre-commit setup for linting and formatting
-  [\#6](https://github.com/joeloskarsson/neural-lam/pull/6), [\#8](https://github.com/joeloskarsson/neural-lam/pull/8)
+  [\#6](https://github.com/mllam/neural-lam/pull/6), [\#8](https://github.com/mllam/neural-lam/pull/8)
   @sadamov, @joeloskarsson
 
 - added github pull-request template to ease contribution and review process
@@ -66,23 +154,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   @sadamov
 
 - Updated scripts and modules to use `data_config.yaml` instead of `constants.py`
-  [\#31](https://github.com/joeloskarsson/neural-lam/pull/31)
+  [\#31](https://github.com/mllam/neural-lam/pull/31)
   @sadamov
 
 - Added new flags in `train_model.py` for configuration previously in `constants.py`
-  [\#31](https://github.com/joeloskarsson/neural-lam/pull/31)
+  [\#31](https://github.com/mllam/neural-lam/pull/31)
   @sadamov
 
 - moved batch-static features ("water cover") into forcing component return by `WeatherDataset`
-  [\#13](https://github.com/joeloskarsson/neural-lam/pull/13)
+  [\#13](https://github.com/mllam/neural-lam/pull/13)
   @joeloskarsson
 
 - change validation metric from `mae` to `rmse`
-  [c14b6b4](https://github.com/joeloskarsson/neural-lam/commit/c14b6b4323e6b56f1f18632b6ca8b0d65c3ce36a)
+  [c14b6b4](https://github.com/mllam/neural-lam/commit/c14b6b4323e6b56f1f18632b6ca8b0d65c3ce36a)
   @joeloskarsson
 
 - change RMSE definition to compute sqrt after all averaging
-  [\#10](https://github.com/joeloskarsson/neural-lam/pull/10)
+  [\#10](https://github.com/mllam/neural-lam/pull/10)
   @joeloskarsson
 
 ### Removed
@@ -90,7 +178,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `WeatherDataset(torch.Dataset)` no longer returns "batch-static" component of
   training item (only `prev_state`, `target_state` and `forcing`), the batch static features are
   instead included in forcing
-  [\#13](https://github.com/joeloskarsson/neural-lam/pull/13)
+  [\#13](https://github.com/mllam/neural-lam/pull/13)
   @joeloskarsson
 
 ### Maintenance
@@ -134,7 +222,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   [\#78](https://github.com/mllam/neural-lam/pull/78)
   @joeloskarsson
 
-## [v0.1.0](https://github.com/joeloskarsson/neural-lam/releases/tag/v0.1.0)
+## [v0.1.0](https://github.com/mllam/neural-lam/releases/tag/v0.1.0)
 
 First tagged release of `neural-lam`, matching Oskarsson et al 2023 publication
 (<https://arxiv.org/abs/2309.17370>)

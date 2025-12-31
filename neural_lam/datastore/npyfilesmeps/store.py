@@ -9,7 +9,7 @@ import re
 import warnings
 from functools import cached_property
 from pathlib import Path
-from typing import List
+from typing import List, Optional
 
 # Third-party
 import cartopy.crs as ccrs
@@ -199,7 +199,9 @@ class NpyFilesDatastoreMEPS(BaseRegularGridDatastore):
         """
         return self._config
 
-    def get_dataarray(self, category: str, split: str) -> DataArray:
+    def get_dataarray(
+        self, category: str, split: Optional[str], standardize: bool = False
+    ) -> DataArray:
         """
         Get the data array for the given category and split of data. If the
         category is 'state', the data array will be a concatenation of the data
@@ -214,6 +216,8 @@ class NpyFilesDatastoreMEPS(BaseRegularGridDatastore):
         split : str
             The dataset split to load the data for. One of 'train', 'val', or
             'test'.
+        standardize: bool
+            If the dataarray should be returned standardized
 
         Returns
         -------
@@ -303,10 +307,16 @@ class NpyFilesDatastoreMEPS(BaseRegularGridDatastore):
         dim_order = self.expected_dim_order(category=category)
         da = da.transpose(*dim_order)
 
+        if standardize:
+            return self._standardize_datarray(da, category=category)
+
         return da
 
     def _get_single_timeseries_dataarray(
-        self, features: List[str], split: str, member: int = None
+        self,
+        features: List[str],
+        split: Optional[str] = None,
+        member: Optional[int] = None,
     ) -> DataArray:
         """
         Get the data array spanning the complete time series for a given set of
@@ -369,7 +379,10 @@ class NpyFilesDatastoreMEPS(BaseRegularGridDatastore):
         add_feature_dim = False
         features_vary_with_analysis_time = True
         feature_dim_mask = None
-        if features == self.get_vars_names(category="state"):
+        if (
+            features == self.get_vars_names(category="state")
+            and split is not None
+        ):
             filename_format = STATE_FILENAME_FORMAT
             file_dims = ["elapsed_forecast_duration", "y", "x", "feature"]
             # only select one member for now
@@ -381,12 +394,14 @@ class NpyFilesDatastoreMEPS(BaseRegularGridDatastore):
                     len(features) + n_to_drop, dtype=bool
                 )
                 feature_dim_mask[self._remove_state_features_with_index] = False
-        elif features == ["toa_downwelling_shortwave_flux"]:
+        elif (
+            features == ["toa_downwelling_shortwave_flux"] and split is not None
+        ):
             filename_format = TOA_SW_DOWN_FLUX_FILENAME_FORMAT
             file_dims = ["elapsed_forecast_duration", "y", "x", "feature"]
             add_feature_dim = True
             fp_samples = self.root_path / "samples" / split
-        elif features == ["open_water_fraction"]:
+        elif features == ["open_water_fraction"] and split is not None:
             filename_format = OPEN_WATER_FILENAME_FORMAT
             file_dims = ["y", "x", "feature"]
             add_feature_dim = True
@@ -699,9 +714,10 @@ class NpyFilesDatastoreMEPS(BaseRegularGridDatastore):
     def get_standardization_dataarray(self, category: str) -> xr.Dataset:
         """Return the standardization dataarray for the given category. This
         should contain a `{category}_mean` and `{category}_std` variable for
-        each variable in the category. For `category=="state"`, the dataarray
-        should also contain a `state_diff_mean` and `state_diff_std` variable
-        for the one- step differences of the state variables.
+        each variable in the category.
+        For `category=="state"`, the dataarray should also contain a
+        `state_diff_mean_standardized` and `state_diff_std_standardized`
+        variable for the one-step differences of the state variables.
 
         Parameters
         ----------
@@ -762,8 +778,14 @@ class NpyFilesDatastoreMEPS(BaseRegularGridDatastore):
         }
 
         if mean_diff_values is not None and std_diff_values is not None:
-            variables["state_diff_mean"] = (feature_dim_name, mean_diff_values)
-            variables["state_diff_std"] = (feature_dim_name, std_diff_values)
+            variables["state_diff_mean_standardized"] = (
+                feature_dim_name,
+                mean_diff_values,
+            )
+            variables["state_diff_std_standardized"] = (
+                feature_dim_name,
+                std_diff_values,
+            )
 
         ds_norm = xr.Dataset(
             variables,

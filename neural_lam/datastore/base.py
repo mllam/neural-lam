@@ -5,7 +5,7 @@ import dataclasses
 import functools
 from functools import cached_property
 from pathlib import Path
-from typing import List, Union
+from typing import List, Optional, Union
 
 # Third-party
 import cartopy.crs as ccrs
@@ -164,12 +164,13 @@ class BaseDatastore(abc.ABC):
         Return the standardization (i.e. scaling to mean of 0.0 and standard
         deviation of 1.0) dataarray for the given category. This should contain
         a `{category}_mean` and `{category}_std` variable for each variable in
-        the category. For `category=="state"`, the dataarray should also
-        contain a `state_diff_mean` and `state_diff_std` variable for the one-
-        step differences of the state variables. The returned dataarray should
-        at least have dimensions of `({category}_feature)`, but can also
-        include for example `grid_index` (if the standardization is done per
-        grid point for example).
+        the category.
+        For `category=="state"`, the dataarray should also contain a
+        `state_diff_mean_standardized` and `state_diff_std_standardized`
+        variable for the one-step differences of the state variables.
+        The returned dataarray should at least have dimensions of
+        `({category}_feature)`, but can also include for example `grid_index`
+        (if the standardization is done per grid point for example).
 
         Parameters
         ----------
@@ -186,9 +187,39 @@ class BaseDatastore(abc.ABC):
         """
         pass
 
+    def _standardize_datarray(
+        self, da: xr.DataArray, category: str
+    ) -> xr.DataArray:
+        """
+        Helper function to standardize a dataarray before returning it.
+
+        Parameters
+        ----------
+        da: xr.DataArray
+            The dataarray to standardize
+        category : str
+            The category of the dataarray (state/forcing/static), to load
+            standardization statistics for.
+
+        Returns
+        -------
+        xr.Dataarray
+            The standardized dataarray
+        """
+
+        standard_da = self.get_standardization_dataarray(category=category)
+
+        mean = standard_da[f"{category}_mean"]
+        std = standard_da[f"{category}_std"]
+
+        return (da - mean) / std
+
     @abc.abstractmethod
     def get_dataarray(
-        self, category: str, split: str
+        self,
+        category: str,
+        split: Optional[str],
+        standardize: bool = False,
     ) -> Union[xr.DataArray, None]:
         """
         Return the processed data (as a single `xr.DataArray`) for the given
@@ -219,6 +250,8 @@ class BaseDatastore(abc.ABC):
             The category of the dataset (state/forcing/static).
         split : str
             The time split to filter the dataset (train/val/test).
+        standardize: bool
+            If the dataarray should be returned standardized
 
         Returns
         -------
@@ -246,7 +279,7 @@ class BaseDatastore(abc.ABC):
         pass
 
     @abc.abstractmethod
-    def get_xy(self, category: str) -> np.ndarray:
+    def get_xy(self, category: str, stacked: bool) -> np.ndarray:
         """
         Return the x, y coordinates of the dataset as a numpy arrays for a
         given category of data.
@@ -255,6 +288,9 @@ class BaseDatastore(abc.ABC):
         ----------
         category : str
             The category of the dataset (state/forcing/static).
+        stacked : bool
+            Whether to stack the x, y coordinates. `stacked=False` is only
+            meaningful for grid points on a regular-grid.
 
         Returns
         -------
@@ -335,7 +371,9 @@ class BaseDatastore(abc.ABC):
         pass
 
     @functools.lru_cache
-    def expected_dim_order(self, category: str = None) -> tuple[str]:
+    def expected_dim_order(
+        self, category: Optional[str] = None
+    ) -> tuple[str, ...]:
         """
         Return the expected dimension order for the dataarray or dataset
         returned by `get_dataarray` for the given category of data. The
@@ -442,7 +480,7 @@ class BaseRegularGridDatastore(BaseDatastore):
         pass
 
     @abc.abstractmethod
-    def get_xy(self, category: str, stacked: bool = True) -> np.ndarray:
+    def get_xy(self, category: str, stacked: bool) -> np.ndarray:
         """Return the x, y coordinates of the dataset.
 
         Parameters
@@ -450,11 +488,7 @@ class BaseRegularGridDatastore(BaseDatastore):
         category : str
             The category of the dataset (state/forcing/static).
         stacked : bool
-            Whether to stack the x, y coordinates. The parameter `stacked` has
-            been introduced in this class. Parent class `BaseDatastore` has the
-            same method signature but without the `stacked` parameter. Defaults
-            to `True` to match the behaviour of `BaseDatastore.get_xy()` which
-            always returns the coordinates stacked.
+            Whether to stack the x, y coordinates.
 
         Returns
         -------
@@ -545,7 +579,6 @@ class BaseRegularGridDatastore(BaseDatastore):
         return da_or_ds_stacked.transpose(*dim_order)
 
     @property
-    @functools.lru_cache
     def num_grid_points(self) -> int:
         """Return the number of grid points in the dataset.
 

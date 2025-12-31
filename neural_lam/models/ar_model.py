@@ -1,13 +1,13 @@
 # Standard library
 import os
-from typing import List, Union
+import warnings
+from typing import Any, Dict, List
 
 # Third-party
 import matplotlib.pyplot as plt
 import numpy as np
 import pytorch_lightning as pl
 import torch
-import wandb
 import xarray as xr
 
 # Local
@@ -39,9 +39,12 @@ class ARModel(pl.LightningModule):
         self._datastore = datastore
         num_state_vars = datastore.get_num_data_vars(category="state")
         num_forcing_vars = datastore.get_num_data_vars(category="forcing")
+        # Load static features standardized
         da_static_features = datastore.get_dataarray(
-            category="static", split=None
+            category="static", split=None, standardize=True
         )
+        if da_static_features is None:
+            raise ValueError("Static features are required for ARModel")
         da_state_stats = datastore.get_standardization_dataarray(
             category="state"
         )
@@ -49,14 +52,10 @@ class ARModel(pl.LightningModule):
         num_past_forcing_steps = args.num_past_forcing_steps
         num_future_forcing_steps = args.num_future_forcing_steps
 
-        # Load static features for grid/data, NB: self.predict_step assumes
-        # dimension order to be (grid_index, static_feature)
-        arr_static = da_static_features.transpose(
-            "grid_index", "static_feature"
-        ).values
+        # Load static features for grid/data,
         self.register_buffer(
             "grid_static_features",
-            torch.tensor(arr_static, dtype=torch.float32),
+            torch.tensor(da_static_features.values, dtype=torch.float32),
             persistent=False,
         )
 
@@ -67,11 +66,15 @@ class ARModel(pl.LightningModule):
             "state_std": torch.tensor(
                 da_state_stats.state_std.values, dtype=torch.float32
             ),
+            # Note that the one-step-diff stats (diff_mean and diff_std) are
+            # for differences computed on standardized data
             "diff_mean": torch.tensor(
-                da_state_stats.state_diff_mean.values, dtype=torch.float32
+                da_state_stats.state_diff_mean_standardized.values,
+                dtype=torch.float32,
             ),
             "diff_std": torch.tensor(
-                da_state_stats.state_diff_std.values, dtype=torch.float32
+                da_state_stats.state_diff_std_standardized.values,
+                dtype=torch.float32,
             ),
         }
 
@@ -109,7 +112,7 @@ class ARModel(pl.LightningModule):
         ) = self.grid_static_features.shape
 
         self.grid_dim = (
-            2 * self.grid_output_dim
+            2 * num_state_vars
             + grid_static_dim
             + num_forcing_vars
             * (num_past_forcing_steps + num_future_forcing_steps + 1)
@@ -130,10 +133,10 @@ class ARModel(pl.LightningModule):
             "interior_mask", 1.0 - self.boundary_mask, persistent=False
         )  # (num_grid_nodes, 1), 1 for non-border
 
-        self.val_metrics = {
+        self.val_metrics: Dict[str, List] = {
             "mse": [],
         }
-        self.test_metrics = {
+        self.test_metrics: Dict[str, List] = {
             "mse": [],
             "mae": [],
         }
@@ -148,12 +151,12 @@ class ARModel(pl.LightningModule):
         self.plotted_examples = 0
 
         # For storing spatial loss maps during evaluation
-        self.spatial_loss_maps = []
+        self.spatial_loss_maps: List[Any] = []
 
     def _create_dataarray_from_tensor(
         self,
         tensor: torch.Tensor,
-        time: Union[int, List[int]],
+        time: torch.Tensor,
         split: str,
         category: str,
     ) -> xr.DataArray:
@@ -169,9 +172,9 @@ class ARModel(pl.LightningModule):
             The tensor to convert to a `xr.DataArray` with dimensions [time,
             grid_index, feature]. The tensor will be copied to the CPU if it is
             not already there.
-        time : Union[int,List[int]]
-            The time index or indices for the data, given as integers or a list
-            of integers representing epoch time in nanoseconds. The ints will be
+        time : torch.Tensor
+            The time index or indices for the data, given as tensor representing
+            epoch time in nanoseconds. The tensor will be
             copied to the CPU memory if they are not already there.
         split : str
             The split of the data, either 'train', 'val', or 'test'
@@ -184,7 +187,7 @@ class ARModel(pl.LightningModule):
         weather_dataset = WeatherDataset(datastore=self._datastore, split=split)
         time = np.array(time.cpu(), dtype="datetime64[ns]")
         da = weather_dataset.create_dataarray_from_tensor(
-            tensor=tensor.cpu().numpy(), time=time, category=category
+            tensor=tensor, time=time, category=category
         )
         return da
 
@@ -539,14 +542,26 @@ class ARModel(pl.LightningModule):
 
                 example_i = self.plotted_examples
 
-                wandb.log(
-                    {
-                        f"{var_name}_example_{example_i}": wandb.Image(fig)
-                        for var_name, fig in zip(
-                            self._datastore.get_vars_names("state"), var_figs
+                for var_name, fig in zip(
+                    self._datastore.get_vars_names("state"), var_figs
+                ):
+
+                    # We need treat logging images differently for different
+                    # loggers. WANDB can log multiple images to the same key,
+                    # while other loggers, as MLFlow, need unique keys for
+                    # each image.
+                    if isinstance(self.logger, pl.loggers.WandbLogger):
+                        key = f"{var_name}_example_{example_i}"
+                    else:
+                        key = f"{var_name}_example"
+
+                    if hasattr(self.logger, "log_image"):
+                        self.logger.log_image(key=key, images=[fig], step=t_i)
+                    else:
+                        warnings.warn(
+                            f"{self.logger} does not support image logging."
                         )
-                    }
-                )
+
                 plt.close(
                     "all"
                 )  # Close all figs for this time step, saves memory
@@ -555,13 +570,15 @@ class ARModel(pl.LightningModule):
             torch.save(
                 pred_slice.cpu(),
                 os.path.join(
-                    wandb.run.dir, f"example_pred_{self.plotted_examples}.pt"
+                    self.logger.save_dir,
+                    f"example_pred_{self.plotted_examples}.pt",
                 ),
             )
             torch.save(
                 target_slice.cpu(),
                 os.path.join(
-                    wandb.run.dir, f"example_target_{self.plotted_examples}.pt"
+                    self.logger.save_dir,
+                    f"example_target_{self.plotted_examples}.pt",
                 ),
             )
 
@@ -582,16 +599,16 @@ class ARModel(pl.LightningModule):
             datastore=self._datastore,
         )
         full_log_name = f"{prefix}_{metric_name}"
-        log_dict[full_log_name] = wandb.Image(metric_fig)
+        log_dict[full_log_name] = metric_fig
 
         if prefix == "test":
             # Save pdf
             metric_fig.savefig(
-                os.path.join(wandb.run.dir, f"{full_log_name}.pdf")
+                os.path.join(self.logger.save_dir, f"{full_log_name}.pdf")
             )
             # Save errors also as csv
             np.savetxt(
-                os.path.join(wandb.run.dir, f"{full_log_name}.csv"),
+                os.path.join(self.logger.save_dir, f"{full_log_name}.csv"),
                 metric_tensor.cpu().numpy(),
                 delimiter=",",
             )
@@ -639,8 +656,27 @@ class ARModel(pl.LightningModule):
                     )
                 )
 
+        # Ensure that log_dict has structure for
+        # logging as dict(str, plt.Figure)
+        assert all(
+            isinstance(key, str) and isinstance(value, plt.Figure)
+            for key, value in log_dict.items()
+        )
+
         if self.trainer.is_global_zero and not self.trainer.sanity_checking:
-            wandb.log(log_dict)  # Log all
+
+            current_epoch = self.trainer.current_epoch
+
+            for key, figure in log_dict.items():
+                # For other loggers than wandb, add epoch to key.
+                # Wandb can log multiple images to the same key, while other
+                # loggers, such as MLFlow need unique keys for each image.
+                if not isinstance(self.logger, pl.loggers.WandbLogger):
+                    key = f"{key}-{current_epoch}"
+
+                if hasattr(self.logger, "log_image"):
+                    self.logger.log_image(key=key, images=[figure])
+
             plt.close("all")  # Close all figs
 
     def on_test_epoch_end(self):
@@ -672,9 +708,13 @@ class ARModel(pl.LightningModule):
                 )
             ]
 
-            # log all to same wandb key, sequentially
-            for fig in loss_map_figs:
-                wandb.log({"test_loss": wandb.Image(fig)})
+            # log all to same key, sequentially
+            for i, fig in enumerate(loss_map_figs):
+                key = "test_loss"
+                if not isinstance(self.logger, pl.loggers.WandbLogger):
+                    key = f"{key}_{i}"
+                if hasattr(self.logger, "log_image"):
+                    self.logger.log_image(key=key, images=[fig])
 
             # also make without title and save as pdf
             pdf_loss_map_figs = [
@@ -683,14 +723,16 @@ class ARModel(pl.LightningModule):
                 )
                 for loss_map in mean_spatial_loss
             ]
-            pdf_loss_maps_dir = os.path.join(wandb.run.dir, "spatial_loss_maps")
+            pdf_loss_maps_dir = os.path.join(
+                self.logger.save_dir, "spatial_loss_maps"
+            )
             os.makedirs(pdf_loss_maps_dir, exist_ok=True)
             for t_i, fig in zip(self.args.val_steps_to_log, pdf_loss_map_figs):
                 fig.savefig(os.path.join(pdf_loss_maps_dir, f"loss_t{t_i}.pdf"))
             # save mean spatial loss as .pt file also
             torch.save(
                 mean_spatial_loss.cpu(),
-                os.path.join(wandb.run.dir, "mean_spatial_loss.pt"),
+                os.path.join(self.logger.save_dir, "mean_spatial_loss.pt"),
             )
 
         self.spatial_loss_maps.clear()
