@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [unreleased](https://github.com/mllam/neural-lam/compare/v0.4.0...HEAD)
 
+### Added
+
+- Expose run name as optional command line argument `--logger_run_name` to allow user-defined names
+[\#156](https://github.com/mllam/neural-lam/pull/156) @observingClouds
+
 ### Fixed
 
 - Change default logging argument to prevent crash when running eval
@@ -22,10 +27,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Maintenance
 
+- Add link to full MEPS data [\#102](https://github.com/mllam/neural-lam/pull/102) @joeloskarsson
+
 - Introducing `mypy` for static type checking and fixing type hints accordingly [\#113](https://github.com/mllam/neural-lam/pull/113) @observingClouds
 
 - Change all argparse instances to use ArgumentDefaultsHelpFormatter for easier maintaining defaults.
 [\#145](https://github.com/mllam/neural-lam/pull/145) @joeloskarsson
+
+- Allow triggering CI manually to e.g. test for recent software incompatibilities. [\152](https://github.com/mllam/neural-lam/pull/152) @observingClouds
 
 - Fix `torch` version detection during CI when testing on CPU with pdm [\#154](https://github.com/mllam/neural-lam/pull/154) @leifdenby
 
