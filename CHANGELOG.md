@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [unreleased](https://github.com/mllam/neural-lam/compare/v0.4.0...HEAD)
 
+### Added
+
+- Expose run name as optional command line argument `--logger_run_name` to allow user-defined names
+[\#156](https://github.com/mllam/neural-lam/pull/156) @observingClouds
+
 ### Fixed
 
 - Change default logging argument to prevent crash when running eval
@@ -17,6 +22,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Fix the order in create_graph.py which caused wrong G2M and M2G
 [\#150](https://github.com/mllam/neural-lam/pull/150) @YUTAIPAN
+
+- Adding a more robust LaTeX availability check function [\#162](https://github.com/mllam/neural-lam/pull/162) @lorenzo30salgado
 
 
 ### Maintenance
@@ -31,6 +38,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Fix `torch` version detection during CI when testing on CPU with pdm [\#154](https://github.com/mllam/neural-lam/pull/154) @leifdenby
 
 - Update link to MEPS example data [\#155](https://github.com/mllam/neural-lam/pull/155) @joeloskarsson
+
+- Add link to full MEPS data [\#102](https://github.com/mllam/neural-lam/pull/102) @joeloskarsson
 
 ## [v0.4.0](https://github.com/mllam/neural-lam/releases/tag/v0.4.0)
 
