@@ -271,13 +271,44 @@ class ARModel(pl.LightningModule):
 
     def common_step(self, batch):
         """
-        Predict on single batch batch consists of: init_states: (B, 2,
-        num_grid_nodes, d_features) target_states: (B, pred_steps,
-        num_grid_nodes, d_features) forcing_features: (B, pred_steps,
-        num_grid_nodes, d_forcing),
-            where index 0 corresponds to index 1 of init_states
+        Predict on a single batch represented as a dictionary containing:
+        - init_states: (B, 2, num_grid_nodes, d_features)
+        - target_states: (B, pred_steps, num_grid_nodes, d_features)
+        - forcing_features: (B, pred_steps, num_grid_nodes, d_forcing)
+        - batch_times: (B, pred_steps), times corresponding to each target step
+        - graph: graph data (for all subgraphs, g2m, m2m and m2g) comprised of
+          adjacency lists, static edge features, static node features
         """
-        (init_states, target_states, forcing_features, batch_times) = batch
+        if not isinstance(batch, dict):
+            raise TypeError(
+                "ARModel expected batches collated as dictionaries but "
+                f"received {type(batch)}."
+            )
+
+        required_keys = [
+            "init_states",
+            "target_states",
+            "forcing_features",
+            "batch_times",
+            "graph",
+        ]
+        missing_keys = [key for key in required_keys if key not in batch]
+        if missing_keys:
+            raise KeyError(
+                f"ARModel batches missing required keys: {missing_keys}"
+            )
+
+        graph = batch["graph"]
+        if graph is None:
+            raise ValueError("Graph data is required for ARModel batches.")
+
+        if hasattr(self, "set_graph"):
+            self.set_graph(graph)
+
+        init_states = batch["init_states"]
+        target_states = batch["target_states"]
+        forcing_features = batch["forcing_features"]
+        batch_times = batch["batch_times"]
 
         prediction, pred_std = self.unroll_prediction(
             init_states, forcing_features, target_states
@@ -307,7 +338,7 @@ class ARModel(pl.LightningModule):
             on_step=True,
             on_epoch=True,
             sync_dist=True,
-            batch_size=batch[0].shape[0],
+            batch_size=batch["init_states"].shape[0],
         )
         return batch_loss
 
@@ -350,7 +381,7 @@ class ARModel(pl.LightningModule):
             on_step=False,
             on_epoch=True,
             sync_dist=True,
-            batch_size=batch[0].shape[0],
+            batch_size=batch["init_states"].shape[0],
         )
 
         # Store MSEs
@@ -368,7 +399,7 @@ class ARModel(pl.LightningModule):
         Compute val metrics at the end of val epoch
         """
         # Create error maps for all test metrics
-        self.aggregate_and_plot_metrics(self.val_metrics, prefix="val")
+        # self.aggregate_and_plot_metrics(self.val_metrics, prefix="val")
 
         # Clear lists with validation metrics values
         for metric_list in self.val_metrics.values():
@@ -404,7 +435,7 @@ class ARModel(pl.LightningModule):
             on_step=False,
             on_epoch=True,
             sync_dist=True,
-            batch_size=batch[0].shape[0],
+            batch_size=batch["init_states"].shape[0],
         )
 
         # Compute all evaluation metrics for error maps Note: explicitly list
@@ -468,8 +499,8 @@ class ARModel(pl.LightningModule):
         if prediction is None:
             prediction, target, _, _ = self.common_step(batch)
 
-        target = batch[1]
-        time = batch[3]
+        target = batch["target_states"]
+        time = batch["batch_times"]
 
         # Rescale to original data scale
         prediction_rescaled = prediction * self.state_std + self.state_mean

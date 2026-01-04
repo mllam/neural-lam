@@ -4,6 +4,7 @@ from torch import nn
 # Local
 from ..config import NeuralLAMConfig
 from ..datastore import BaseDatastore
+from ..graph_data import GraphSizes
 from ..interaction_net import InteractionNet
 from .base_hi_graph_model import BaseHiGraphModel
 
@@ -15,8 +16,27 @@ class HiLAM(BaseHiGraphModel):
     The Hi-LAM model from Oskarsson et al. (2023)
     """
 
-    def __init__(self, args, config: NeuralLAMConfig, datastore: BaseDatastore):
-        super().__init__(args, config=config, datastore=datastore)
+    def __init__(
+        self,
+        args,
+        config: NeuralLAMConfig,
+        datastore: BaseDatastore,
+        graph_sizes: GraphSizes,
+    ):
+        """
+        Parameters
+        ----------
+        graph_sizes : GraphSizes
+            Graph metadata following the ``BaseGraphModel`` contract, including
+            per-level mesh sizes, feature dimensions, and edge counts used by
+            the hierarchical message-passing stack.
+        """
+        super().__init__(
+            args,
+            config=config,
+            datastore=datastore,
+            graph_sizes=graph_sizes,
+        )
 
         # Make down GNNs, both for down edges and same level
         self.mesh_down_gnns = nn.ModuleList(
@@ -41,11 +61,10 @@ class HiLAM(BaseHiGraphModel):
         return nn.ModuleList(
             [
                 InteractionNet(
-                    edge_index,
                     args.hidden_dim,
                     hidden_layers=args.hidden_layers,
                 )
-                for edge_index in self.m2m_edge_index
+                for _ in range(self.num_levels)
             ]
         )
 
@@ -56,11 +75,10 @@ class HiLAM(BaseHiGraphModel):
         return nn.ModuleList(
             [
                 InteractionNet(
-                    edge_index,
                     args.hidden_dim,
                     hidden_layers=args.hidden_layers,
                 )
-                for edge_index in self.mesh_up_edge_index
+                for _ in range(self.num_levels - 1)
             ]
         )
 
@@ -71,11 +89,10 @@ class HiLAM(BaseHiGraphModel):
         return nn.ModuleList(
             [
                 InteractionNet(
-                    edge_index,
                     args.hidden_dim,
                     hidden_layers=args.hidden_layers,
                 )
-                for edge_index in self.mesh_down_edge_index
+                for _ in range(self.num_levels - 1)
             ]
         )
 
@@ -91,9 +108,20 @@ class HiLAM(BaseHiGraphModel):
         Run down-part of vertical processing, sequentially alternating between
         processing using down edges and same-level edges.
         """
+        if self.current_graph is None:
+            raise RuntimeError(
+                "Graph data not set before executing mesh_down_step."
+            )
+        mesh_same_edge_index = self.current_graph["m2m_edge_index"]
+        mesh_down_edge_index = self.current_graph["mesh_down_edge_index"]
+
         # Run same level processing on level L
+        top_level = self.num_levels - 1
         mesh_rep_levels[-1], mesh_same_rep[-1] = same_gnns[-1](
-            mesh_rep_levels[-1], mesh_rep_levels[-1], mesh_same_rep[-1]
+            mesh_rep_levels[-1],
+            mesh_rep_levels[-1],
+            mesh_same_rep[-1],
+            mesh_same_edge_index[top_level],
         )
 
         # Let level_l go from L-1 to 0
@@ -112,12 +140,18 @@ class HiLAM(BaseHiGraphModel):
 
             # Apply down GNN
             new_node_rep, mesh_down_rep[level_l] = down_gnn(
-                send_node_rep, rec_node_rep, down_edge_rep
+                send_node_rep,
+                rec_node_rep,
+                down_edge_rep,
+                mesh_down_edge_index[level_l],
             )
 
             # Run same level processing on level l
             mesh_rep_levels[level_l], mesh_same_rep[level_l] = same_gnn(
-                new_node_rep, new_node_rep, same_edge_rep
+                new_node_rep,
+                new_node_rep,
+                same_edge_rep,
+                mesh_same_edge_index[level_l],
             )
             # (B, N_mesh[l], d_h) and (B, M_same[l], d_h)
 
@@ -131,9 +165,19 @@ class HiLAM(BaseHiGraphModel):
         processing using up edges and same-level edges.
         """
 
+        if self.current_graph is None:
+            raise RuntimeError(
+                "Graph data not set before executing mesh_up_step."
+            )
+        mesh_same_edge_index = self.current_graph["m2m_edge_index"]
+        mesh_up_edge_index = self.current_graph["mesh_up_edge_index"]
+
         # Run same level processing on level 0
         mesh_rep_levels[0], mesh_same_rep[0] = same_gnns[0](
-            mesh_rep_levels[0], mesh_rep_levels[0], mesh_same_rep[0]
+            mesh_rep_levels[0],
+            mesh_rep_levels[0],
+            mesh_same_rep[0],
+            mesh_same_edge_index[0],
         )
 
         # Let level_l go from 1 to L
@@ -150,13 +194,19 @@ class HiLAM(BaseHiGraphModel):
 
             # Apply up GNN
             new_node_rep, mesh_up_rep[level_l - 1] = up_gnn(
-                send_node_rep, rec_node_rep, up_edge_rep
+                send_node_rep,
+                rec_node_rep,
+                up_edge_rep,
+                mesh_up_edge_index[level_l - 1],
             )
             # (B, N_mesh[l], d_h) and (B, M_up[l-1], d_h)
 
             # Run same level processing on level l
             mesh_rep_levels[level_l], mesh_same_rep[level_l] = same_gnn(
-                new_node_rep, new_node_rep, same_edge_rep
+                new_node_rep,
+                new_node_rep,
+                same_edge_rep,
+                mesh_same_edge_index[level_l],
             )
             # (B, N_mesh[l], d_h) and (B, M_same[l], d_h)
 

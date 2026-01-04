@@ -8,6 +8,7 @@ import torch
 from neural_lam import config as nlconfig
 from neural_lam.create_graph import create_graph_from_datastore
 from neural_lam.datastore.mdp import MDPDatastore
+from neural_lam.graph_data import build_graph_sizes, load_graph
 from neural_lam.models.graph_lam import GraphLAM
 from tests.conftest import init_datastore_example
 
@@ -56,10 +57,14 @@ def test_clamping():
         ),
     )
 
+    graph_features_and_edges = load_graph(graph_dir_path)
+    graph_sizes = build_graph_sizes(graph_features_and_edges)
+
     model = GraphLAM(
         args=model_args,
         datastore=datastore,
         config=config,
+        graph_sizes=graph_sizes,
     )
 
     features = datastore.get_vars_names(category="state")

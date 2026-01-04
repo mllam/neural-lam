@@ -117,3 +117,9 @@ fallback_version = "0.0.0"
 [build-system]
 requires = ["pdm-backend"]
 build-backend = "pdm.backend"
+
+[dependency-groups]
+dev = [
+    "ipdb>=0.13.13",
+    "ipython>=8.18.1",
+]

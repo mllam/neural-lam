@@ -13,7 +13,7 @@ from neural_lam.create_graph import create_graph_from_datastore
 from neural_lam.datastore import DATASTORES
 from neural_lam.datastore.base import BaseRegularGridDatastore
 from neural_lam.models.graph_lam import GraphLAM
-from neural_lam.weather_dataset import WeatherDataset
+from neural_lam.weather_dataset import WeatherDataset, WeatherDatasetWithGraph
 from tests.conftest import init_datastore_example
 from tests.dummy_datastore import DummyDatastore
 
@@ -27,7 +27,8 @@ def test_dataset_item_shapes(datastore_name):
 
     init_states: (2, N_grid, d_features)
     target_states: (ar_steps, N_grid, d_features)
-    forcing: (ar_steps, N_grid, d_windowed_forcing) # batch_times: (ar_steps,)
+    forcing_features: (ar_steps, N_grid, d_windowed_forcing)
+    batch_times: (ar_steps,)
 
     """
     datastore = init_datastore_example(datastore_name)
@@ -45,10 +46,10 @@ def test_dataset_item_shapes(datastore_name):
     )
 
     item = dataset[0]
-
-    # unpack the item, this is the current return signature for
-    # WeatherDataset.__getitem__
-    init_states, target_states, forcing, target_times = item
+    init_states = item["init_states"]
+    target_states = item["target_states"]
+    forcing = item["forcing_features"]
+    batch_times = item["batch_times"]
 
     # initial states
     assert init_states.ndim == 3
@@ -71,8 +72,8 @@ def test_dataset_item_shapes(datastore_name):
     )
 
     # batch times
-    assert target_times.ndim == 1
-    assert target_times.shape[0] == N_pred_steps
+    assert batch_times.ndim == 1
+    assert batch_times.shape[0] == N_pred_steps
 
     # try to get the last item of the dataset to ensure slicing and stacking
     # operations are working as expected and are consistent with the dataset
@@ -97,9 +98,9 @@ def test_dataset_item_create_dataarray_from_tensor(datastore_name):
 
     idx = 0
 
-    # unpack the item, this is the current return signature for
-    # WeatherDataset.__getitem__
-    _, target_states, _, target_times_arr = dataset[idx]
+    item = dataset[idx]
+    target_states = item["target_states"]
+    target_times_arr = item["batch_times"]
     _, da_target_true, _, da_target_times_true = dataset._build_item_dataarrays(
         idx=idx
     )
@@ -211,13 +212,49 @@ def test_single_batch(datastore_name, split):
     )
 
     dataset = WeatherDataset(datastore=datastore, split=split, ar_steps=2)
+    dataset = WeatherDatasetWithGraph(dataset, graph_name=graph_name)
 
-    model = GraphLAM(args=args, datastore=datastore, config=config)  # noqa
+    model = GraphLAM(
+        args=args,
+        datastore=datastore,
+        config=config,
+        graph_sizes=dataset.graph_sizes,
+    )  # noqa
 
     model_device = model.to(device_name)
-    data_loader = DataLoader(dataset, batch_size=2)
+
+    data_loader = DataLoader(
+        dataset,
+        batch_size=2,
+        collate_fn=WeatherDatasetWithGraph.collate_fn,
+    )
     batch = next(iter(data_loader))
-    batch_device = [part.to(device_name) for part in batch]
+
+    def move_graph_to_device(graph, device):
+        result = {}
+        for key, value in graph.items():
+            if isinstance(value, torch.Tensor):
+                result[key] = value.to(device)
+            elif isinstance(value, list):
+                result[key] = [
+                    tensor.to(device)
+                    if isinstance(tensor, torch.Tensor)
+                    else tensor
+                    for tensor in value
+                ]
+            else:
+                result[key] = value
+        return result
+
+    batch_device = {}
+    for key, value in batch.items():
+        if isinstance(value, torch.Tensor):
+            batch_device[key] = value.to(device_name)
+        elif key == "graph":
+            batch_device[key] = move_graph_to_device(value, device_name)
+        else:
+            batch_device[key] = value
+
     model_device.common_step(batch_device)
     model_device.training_step(batch_device)
 

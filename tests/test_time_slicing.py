@@ -104,9 +104,9 @@ def test_time_slicing_analysis(
 
     sample = dataset[0]
 
-    init_states, target_states, forcing, _ = [
-        tensor.numpy() for tensor in sample
-    ]
+    init_states = sample["init_states"].numpy()
+    target_states = sample["target_states"].numpy()
+    forcing = sample["forcing_features"].numpy()
 
     expected_init_states = [0, 1]
     if ar_steps == 3:
