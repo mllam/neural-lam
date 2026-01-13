@@ -446,7 +446,9 @@ class BaseRegularGridDatastore(BaseDatastore):
     `BaseDatastore`) for regular-gridded source data each `grid_index`
     coordinate value is assumed to be associated with `x` and `y`-values that
     allow the processed data-arrays can be reshaped back into into 2D
-    xy-gridded arrays.
+    xy-gridded arrays (to change the name of the spatial coordinates the
+    `spatial_coordinates` value should be changed from its default value of
+    `("x", "y")`).
 
     The following methods and attributes must be implemented for datastore that
     represents regular-gridded data:
@@ -463,7 +465,7 @@ class BaseRegularGridDatastore(BaseDatastore):
     `stack_grid_coords` and `unstack_grid_coords` respectively).
     """
 
-    CARTESIAN_COORDS = ["x", "y"]
+    spatial_coordinates = ("x", "y")
 
     @cached_property
     @abc.abstractmethod
@@ -525,15 +527,15 @@ class BaseRegularGridDatastore(BaseDatastore):
 
         # Check whether `grid_index` is a multi-index
         if not isinstance(da_or_ds.indexes.get("grid_index"), MultiIndex):
-            da_or_ds = da_or_ds.set_index(grid_index=self.CARTESIAN_COORDS)
+            da_or_ds = da_or_ds.set_index(grid_index=self.spatial_coordinates)
 
         da_or_ds_unstacked = da_or_ds.unstack("grid_index")
 
         # Ensure that the x, y dimensions are in the correct order
         dims = da_or_ds_unstacked.dims
-        xy_dim_order = [d for d in dims if d in self.CARTESIAN_COORDS]
+        xy_dim_order = [d for d in dims if d in self.spatial_coordinates]
 
-        if xy_dim_order != self.CARTESIAN_COORDS:
+        if xy_dim_order != self.spatial_coordinates:
             da_or_ds_unstacked = da_or_ds_unstacked.transpose("x", "y")
 
         return da_or_ds_unstacked
@@ -560,7 +562,7 @@ class BaseRegularGridDatastore(BaseDatastore):
         if "grid_index" in da_or_ds.dims:
             return da_or_ds
 
-        da_or_ds_stacked = da_or_ds.stack(grid_index=self.CARTESIAN_COORDS)
+        da_or_ds_stacked = da_or_ds.stack(grid_index=self.spatial_coordinates)
 
         # infer what category of data the array represents by finding the
         # dimension named in the format `{category}_feature`
