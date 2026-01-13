@@ -382,7 +382,7 @@ def main(input_args=None):
         )
 
     if eval_only:
-        run_mode = f"eva-{args.eval}"
+        run_mode = f"eval-{args.eval}"
     elif train_and_eval:
         run_mode = f"train+eval-{args.eval}"
     else:
