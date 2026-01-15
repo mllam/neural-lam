@@ -74,7 +74,14 @@ class MIKEDatastore(BaseDatastore):
         # Check for preload_to_memory in extra section
         preload_to_memory = self._config.extra.get("preload_to_memory", preload_to_memory)
 
-        fp_ds = self._config_path.parent / self._config_path.name.replace(".yaml", ".zarr")
+        # output path
+        self._root_path = (
+            Path(self._config.output.root_path)
+            if self._config.output.root_path
+            else self._config_path.parent
+        )
+
+        fp_ds = self._root_path / self._config_path.name.replace(".yaml", ".zarr")
 
         self._ds = None
         if reuse_existing and fp_ds.exists():
