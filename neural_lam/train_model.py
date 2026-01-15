@@ -231,7 +231,7 @@ def main(input_args=None):
     parser.add_argument(
         "--save_eval_to_pt_path",
         type=str,
-        help="Save evaluation results to pt dataset at given path ",
+        help="Save results of 'n_example_pred' to pt dataset at given path ",
     )
     parser.add_argument(
         "--plot_vars",
