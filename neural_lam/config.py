@@ -10,8 +10,8 @@ import dataclass_wizard
 from .datastore import (
     DATASTORES,
     MDPDatastore,
-    NpyFilesDatastoreMEPS,
     MIKEDatastore,
+    NpyFilesDatastoreMEPS,
     init_datastore,
 )
 
@@ -169,7 +169,9 @@ class InvalidConfigError(Exception):
 
 def load_config_and_datastores(
     config_path: str,
-) -> tuple[NeuralLAMConfig, Union[MDPDatastore, NpyFilesDatastoreMEPS, MIKEDatastore]]:
+) -> tuple[
+    NeuralLAMConfig, Union[MDPDatastore, NpyFilesDatastoreMEPS, MIKEDatastore]
+]:
     """
     Load the neural-lam configuration and the datastores specified in the
     configuration.

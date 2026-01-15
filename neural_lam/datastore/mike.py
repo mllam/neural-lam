@@ -1,26 +1,22 @@
 # Standard library
-import abc
 import collections
 import copy
-import dataclasses
 import functools
+import warnings
 from functools import cached_property
 from pathlib import Path
 from typing import List, Optional, Union
-import mikeio
-import warnings
-import geopandas as gpd
-
-from shapely import Point
 
 # Third-party
 import cartopy.crs as ccrs
+import geopandas as gpd
+import mllam_data_prep as mdp
 import numpy as np
 import xarray as xr
-from pandas.core.indexes.multi import MultiIndex
 from loguru import logger
+from shapely import Point
 
-import mllam_data_prep as mdp
+# Local
 from ..datastore.base import BaseDatastore
 
 
@@ -65,14 +61,20 @@ class MIKEDatastore(BaseDatastore):
     SHORT_NAME = "mike"
 
     def __init__(
-        self, config_path: Path, reuse_existing: bool = True, preload_to_memory: bool = False, overload_stats_path=None
+        self,
+        config_path: Path,
+        reuse_existing: bool = True,
+        preload_to_memory: bool = False,
+        overload_stats_path=None,
     ):
 
         self._config_path = Path(config_path)
         self._config = mdp.Config.from_yaml_file(self._config_path)
 
         # Check for preload_to_memory in extra section
-        preload_to_memory = self._config.extra.get("preload_to_memory", preload_to_memory)
+        preload_to_memory = self._config.extra.get(
+            "preload_to_memory", preload_to_memory
+        )
 
         # output path
         self._root_path = (
@@ -81,7 +83,9 @@ class MIKEDatastore(BaseDatastore):
             else self._config_path.parent
         )
 
-        fp_ds = self._root_path / self._config_path.name.replace(".yaml", ".zarr")
+        fp_ds = self._root_path / self._config_path.name.replace(
+            ".yaml", ".zarr"
+        )
 
         self._ds = None
         if reuse_existing and fp_ds.exists():
@@ -98,7 +102,8 @@ class MIKEDatastore(BaseDatastore):
             self._ds = mdp.create_dataset(config=self._config)
             self._ds.to_zarr(fp_ds)
 
-        # Pre-load entire dataset into memory to eliminate disk I/O during training for small datasets
+        # Pre-load entire dataset into memory to eliminate disk I/O during
+        # training for small datasets
         if preload_to_memory:
             print("Pre-loading dataset into memory...")
             self._ds = self._ds.load()
@@ -114,7 +119,10 @@ class MIKEDatastore(BaseDatastore):
         required_splits = ["train", "val", "test"]
         available_splits = list(self._ds.splits.split_name.values)
         if not all(split in available_splits for split in required_splits):
-            raise ValueError(f"Missing required splits: {required_splits} in available " f"splits: {available_splits}")
+            raise ValueError(
+                f"Missing required splits: {required_splits} in available "
+                f"splits: {available_splits}"
+            )
 
         print("With the following splits (over time):")
         for split in required_splits:
@@ -291,7 +299,9 @@ class MIKEDatastore(BaseDatastore):
             ds_stats = ds_stats.isel(grid_index=0)
         return ds_stats
 
-    def _standardize_datarray(self, da: xr.DataArray, category: str) -> xr.DataArray:
+    def _standardize_datarray(
+        self, da: xr.DataArray, category: str
+    ) -> xr.DataArray:
         """
         Helper function to standardize a dataarray before returning it.
 
@@ -375,8 +385,18 @@ class MIKEDatastore(BaseDatastore):
         da_category = da_category.set_index(grid_index=self.CARTESIAN_COORDS)
 
         if "time" in da_category.dims:
-            t_start = self._ds.splits.sel(split_name=split).sel(split_part="start").load().item()
-            t_end = self._ds.splits.sel(split_name=split).sel(split_part="end").load().item()
+            t_start = (
+                self._ds.splits.sel(split_name=split)
+                .sel(split_part="start")
+                .load()
+                .item()
+            )
+            t_end = (
+                self._ds.splits.sel(split_name=split)
+                .sel(split_part="end")
+                .load()
+                .item()
+            )
             da_category = da_category.sel(time=slice(t_start, t_end))
 
         dim_order = self.expected_dim_order(category=category)
@@ -406,11 +426,18 @@ class MIKEDatastore(BaseDatastore):
             path = polygon_config["kwargs"]["polygon_path"]
             boundary_polygon = gpd.read_file(path).geometry.iloc[0]
             xy = self.get_xy(category="state", stacked=True)
-            mask = np.array([boundary_polygon.contains(Point(x, y)) for x, y in xy], dtype=int)
+            mask = np.array(
+                [boundary_polygon.contains(Point(x, y)) for x, y in xy],
+                dtype=int,
+            )
         else:
-            raise ValueError(f"Boundary method {polygon_config['method']} not implememted")
+            raise ValueError(
+                f"Boundary method {polygon_config['method']} not implemented"
+            )
 
-        return xr.DataArray(data=mask, dims=("grid_index",), name="boundary_mask")
+        return xr.DataArray(
+            data=mask, dims=("grid_index",), name="boundary_mask"
+        )
 
     def get_xy(self, category: str, stacked: bool = True) -> np.ndarray:
         """
@@ -435,7 +462,10 @@ class MIKEDatastore(BaseDatastore):
             ValueError("An unstructured mesh needs stacked x and y coordinates")
 
         else:
-            return np.stack([self._ds[category].x.values, self._ds[category].y.values], axis=-1)
+            return np.stack(
+                [self._ds[category].x.values, self._ds[category].y.values],
+                axis=-1,
+            )
 
     @property
     def coords_projection(self) -> ccrs.Projection:
@@ -533,10 +563,12 @@ class MIKEDatastore(BaseDatastore):
         Returns:
             List[float]: The weights for each state feature.
         """
-        raise NotImplementedError("Currently not implemented, it seems to be an abstact method that is not called")
+        raise NotImplementedError("Currently not implemented")
 
     @functools.lru_cache
-    def expected_dim_order(self, category: Optional[str] = None) -> tuple[str, ...]:
+    def expected_dim_order(
+        self, category: Optional[str] = None
+    ) -> tuple[str, ...]:
         """
         Return the expected dimension order for the dataarray or dataset
         returned by `get_dataarray` for the given category of data. The
@@ -574,7 +606,9 @@ class MIKEDatastore(BaseDatastore):
             if category != "static":
                 # static data does not vary in time
                 if self.is_forecast:
-                    dim_order.extend(["analysis_time", "elapsed_forecast_duration"])
+                    dim_order.extend(
+                        ["analysis_time", "elapsed_forecast_duration"]
+                    )
                 elif not self.is_forecast:
                     dim_order.append("time")
 

@@ -5,7 +5,6 @@ from typing import List, Union
 
 # Third-party
 import matplotlib.pyplot as plt
-import numcodecs
 import numpy as np
 import pandas as pd
 import pytorch_lightning as pl
@@ -696,7 +695,7 @@ class ARModel(pl.LightningModule):
                 split=split,
                 category="state",
             )
-            if hasattr(self._datastore, 'grid_shape_state'):
+            if hasattr(self._datastore, "grid_shape_state"):
                 da_prediction = da_prediction.unstack("grid_index")
             da_target = self._create_dataarray_from_tensor(
                 tensor=target_slice,
@@ -704,7 +703,7 @@ class ARModel(pl.LightningModule):
                 split=split,
                 category="state",
             )
-            if hasattr(self._datastore, 'grid_shape_state'):
+            if hasattr(self._datastore, "grid_shape_state"):
                 da_target = da_target.unstack("grid_index")
 
             var_vmin = (

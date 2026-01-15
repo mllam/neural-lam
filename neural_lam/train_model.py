@@ -238,7 +238,8 @@ def main(input_args=None):
         nargs="+",
         type=str,
         default=["Surface elevation", "U velocity", "V velocity"],
-        help="List of variables to plot during eval (default: Surface elevation, U velocity, V velocity)",
+        help="""List of variables to plot during eval
+        (default: Surface elevation, U velocity, V velocity)""",
     )
 
     # Logger Settings
@@ -318,9 +319,8 @@ def main(input_args=None):
     ), "Can not restore opt state when not loading a checkpoint"
 
     # Infer Run mode
-    eval_only = args.eval is not None and args.load is not None and not args.restore_opt
-    train_and_eval = args.eval is not None and not eval_only
-    train_only = args.eval is None
+    eval_only = args.eval and args.load and not args.restore_opt
+    train_and_eval = args.eval and not eval_only
 
     # Get an (actual) random run id as a unique identifier
     random_run_id = random.randint(0, 9999)
@@ -456,7 +456,9 @@ def main(input_args=None):
             logger, val_steps=args.val_steps_to_log
         )  # Do after wandb.init
 
-    eval_only = args.eval is not None and args.load is not None and not args.restore_opt
+    eval_only = (
+        args.eval is not None and args.load is not None and not args.restore_opt
+    )
 
     # Resume training if restore_opt is set
     ckpt_for_fit = args.load if args.restore_opt else None

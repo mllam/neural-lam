@@ -1,8 +1,8 @@
 # Local
 from .base import BaseDatastore  # noqa
 from .mdp import MDPDatastore  # noqa
-from .npyfilesmeps import NpyFilesDatastoreMEPS  # noqa
 from .mike import MIKEDatastore
+from .npyfilesmeps import NpyFilesDatastoreMEPS  # noqa
 
 DATASTORE_CLASSES = [
     MDPDatastore,

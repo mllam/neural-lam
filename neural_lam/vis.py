@@ -13,7 +13,9 @@ from .datastore.mike import MIKEDatastore
 
 
 @matplotlib.rc_context(utils.fractional_plot_bundle(1))
-def plot_error_map(errors, datastore: BaseRegularGridDatastore | MIKEDatastore, title=None):
+def plot_error_map(
+    errors, datastore: BaseRegularGridDatastore | MIKEDatastore, title=None
+):
     """
     Plot a heatmap of errors of different variables at different
     predictions horizons
@@ -111,7 +113,10 @@ def plot_on_axis(
     lats_lons = datastore.get_lat_lon("state")
     # If datastore provides a regular grid shape, use pcolormesh.
     # Otherwise (e.g. MIKEDatastore) fall back to an unstructured scatter plot.
-    if hasattr(datastore, "grid_shape_state") and getattr(datastore, "grid_shape_state") is not None:
+    if (
+        hasattr(datastore, "grid_shape_state")
+        and getattr(datastore, "grid_shape_state") is not None
+    ):
         grid_shape = (
             datastore.grid_shape_state.x,
             datastore.grid_shape_state.y,
@@ -204,7 +209,10 @@ def plot_prediction(
 
 @matplotlib.rc_context(utils.fractional_plot_bundle(1))
 def plot_spatial_error(
-    error, datastore: BaseRegularGridDatastore | MIKEDatastore, title=None, vrange=None
+    error,
+    datastore: BaseRegularGridDatastore | MIKEDatastore,
+    title=None,
+    vrange=None,
 ):
     """
     Plot errors over spatial map
@@ -231,9 +239,10 @@ def plot_spatial_error(
     )
 
     # For regular grids, reshape into 2D grid; otherwise pass 1D values
-    if hasattr(datastore, "grid_shape_state") and getattr(
-        datastore, "grid_shape_state"
-    ) is not None:
+    if (
+        hasattr(datastore, "grid_shape_state")
+        and getattr(datastore, "grid_shape_state") is not None
+    ):
         error_grid = (
             error.reshape(
                 [
