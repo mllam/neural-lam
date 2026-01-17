@@ -35,7 +35,7 @@ dependencies = [
     "mllam-data-prep>=0.5.0",
     "mlflow>=2.16.2",
     "boto3>=1.35.32",
-    "pynvml>=12.0.0",
+    "nvidia-ml-py>=13.580.82",
 ]
 requires-python = ">=3.9"
 
