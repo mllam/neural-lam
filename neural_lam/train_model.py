@@ -15,7 +15,8 @@ from loguru import logger
 from . import utils
 from .config import load_config_and_datastore
 from .models import GraphLAM, HiLAM, HiLAMParallel
-from .weather_dataset import WeatherDataModule
+from .models.base_graph_model import BaseGraphModel
+from .weather_dataset import WeatherDataModule, WeatherDatasetWithGraph
 
 MODELS = {
     "graph_lam": GraphLAM,
@@ -255,6 +256,18 @@ def main(input_args=None):
     # Load neural-lam configuration and datastore to use
     config, datastore = load_config_and_datastore(config_path=args.config_path)
 
+    # Select model class
+    ModelClass = MODELS[args.model]
+
+    # Prepare graph metadata for graph-based models
+    graph_sizes = None
+    graph_name = args.graph if issubclass(ModelClass, BaseGraphModel) else None
+    if graph_name is not None:
+        graph_dir_path = datastore.root_path / "graph" / graph_name
+        _, graph_sizes = WeatherDatasetWithGraph.load_graph(
+            graph_dir_path=graph_dir_path
+        )
+
     # Create datamodule
     data_module = WeatherDataModule(
         datastore=datastore,
@@ -266,6 +279,7 @@ def main(input_args=None):
         batch_size=args.batch_size,
         num_workers=args.num_workers,
         eval_split=args.eval or "test",
+        graph_name=graph_name,
     )
 
     # Instantiate model + trainer
@@ -287,8 +301,15 @@ def main(input_args=None):
             raise ValueError("devices should be 'auto' or a list of integers")
 
     # Load model parameters Use new args for model
-    ModelClass = MODELS[args.model]
-    model = ModelClass(args, config=config, datastore=datastore)
+    if graph_name is not None:
+        model = ModelClass(
+            args,
+            config=config,
+            datastore=datastore,
+            graph_sizes=graph_sizes,
+        )
+    else:
+        model = ModelClass(args, config=config, datastore=datastore)
 
     if args.eval:
         prefix = f"eval-{args.eval}-"

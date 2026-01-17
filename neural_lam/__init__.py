@@ -9,7 +9,7 @@ import neural_lam.utils
 import neural_lam.vis
 
 # Local
-from .weather_dataset import WeatherDataset
+from .weather_dataset import WeatherDataset, WeatherDatasetWithGraph
 
 try:
     __version__ = importlib.metadata.version(__name__)

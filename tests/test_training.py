@@ -12,6 +12,7 @@ from neural_lam import config as nlconfig
 from neural_lam.create_graph import create_graph_from_datastore
 from neural_lam.datastore import DATASTORES
 from neural_lam.datastore.base import BaseRegularGridDatastore
+from neural_lam.graph_data import build_graph_sizes, load_graph
 from neural_lam.models.graph_lam import GraphLAM
 from neural_lam.weather_dataset import WeatherDataModule
 from tests.conftest import init_datastore_example
@@ -44,7 +45,7 @@ def run_simple_training(datastore, set_output_std):
         # XXX: `devices` has to be set to 2 otherwise
         # neural_lam.models.ar_model.ARModel.aggregate_and_plot_metrics fails
         # because it expects to aggregate over multiple devices
-        devices=2,
+        devices=1,
         log_every_n_steps=1,
         # use `detect_anomaly` to ensure that we don't have NaNs popping up
         # during training
@@ -71,7 +72,10 @@ def run_simple_training(datastore, set_output_std):
         num_workers=1,
         num_past_forcing_steps=1,
         num_future_forcing_steps=1,
+        graph_name=graph_name,
     )
+    graph_features_and_edges = load_graph(graph_dir_path)
+    graph_sizes = build_graph_sizes(graph_features_and_edges)
 
     class ModelArgs:
         output_std = set_output_std
@@ -103,6 +107,7 @@ def run_simple_training(datastore, set_output_std):
         args=model_args,
         datastore=datastore,
         config=config,
+        graph_sizes=graph_sizes,
     )
     wandb.init()
     trainer.fit(model=model, datamodule=data_module)
