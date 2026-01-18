@@ -301,7 +301,10 @@ def main(
         num_workers=n_workers,
         sampler=sampler_standard,
     )
-    time_step_int, _ = get_integer_time(step_length)
+    time_step_int, time_step_unit = get_integer_time(step_length)
+    assert (
+        time_step_unit == "hours"
+    ), "Only 'hours' time unit is supported by meps datastore."
     used_subsample_len = (65 // time_step_int) * time_step_int
 
     diff_means, diff_squares = [], []
