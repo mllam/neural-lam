@@ -478,7 +478,7 @@ class ARModel(pl.LightningModule):
         target = batch[1]
         time = batch[3]
 
-        time_unit = self.time_step_int_unit
+        time_unit = self.time_step_unit
         time_step = self.time_step_int
 
         # Rescale to original data scale
