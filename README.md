@@ -1,4 +1,4 @@
-[![slack](https://img.shields.io/badge/slack-join-brightgreen.svg?logo=slack)](https://join.slack.com/t/ml-lam/shared_invite/zt-3jyw20n4g-ESRxMPPSijiZ2ZA6Nh8XhA)
+[![slack](https://img.shields.io/badge/slack-join-brightgreen.svg?logo=slack)](https://kutt.it/mllam)
 [![Linting](https://github.com/mllam/neural-lam/actions/workflows/pre-commit.yml/badge.svg?branch=main)](https://github.com/mllam/neural-lam/actions/workflows/pre-commit.yml)
 [![CPU+GPU testing](https://github.com/mllam/neural-lam/actions/workflows/install-and-test.yml/badge.svg?branch=main)](https://github.com/mllam/neural-lam/actions/workflows/install-and-test.yml)
 
@@ -280,15 +280,15 @@ is very much tied to the MEPS dataset, but the code is written in a way where
 it quite easily could be adapted to work with numpy-based weather
 forecast/analysis files in future.
 
-The full MEPS dataset can be shared with other researchers on request, contact us for this.
-A tiny subset of the data (named `meps_example`) is available in
-`example_data.zip`, which can be downloaded from
-[here](https://drive.google.com/drive/folders/1N6ZT_mkfbdVloVsNs9T5YOrMtxd3jG-j?usp=sharing).
+The full MEPS dataset is available for download [here](https://nextcloud.liu.se/s/meps). See instructions in the file `README.txt` for how to download and extract the full dataset.
+Note that while this data works with the `NpyFilesDatastoreMEPS` datastore, the exact data loading in this setup differs somewhat from that used in earlier published papers using the dataset.
+For research reproducibility, see the exact corresponding branch for each publication (under [Publications](#publications) in this Readme).
 
-Download the file and unzip in the neural-lam directory.
+A tiny subset of the MEPS data (named `meps_example`) is also available in `example_data.zip`, which can be downloaded from [here](https://drive.google.com/drive/folders/1N6ZT_mkfbdVloVsNs9T5YOrMtxd3jG-j?usp=sharing).
+Download the files and unzip in the neural-lam directory.
 Graphs used in the initial paper are also available for download at the same link (but can as easily be re-generated using `python -m neural_lam.create_graph`).
-Note that this is far too little data to train any useful models, but all pre-processing and training steps can be run with it.
-It should thus be useful to make sure that your python environment is set up correctly and that all the code can be ran without any issues.
+Note that this subset is far too small to train any useful models, but all scripts can be run with it.
+It should thus be useful to make sure that your python environment is set up correctly and that all the code can be run without any issues.
 
 The following datastore configuration works with the MEPS dataset:
 

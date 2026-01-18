@@ -34,9 +34,11 @@ class PaddedWeatherDataset(torch.utils.data.Dataset):
 
     def __getitem__(self, idx):
         return self.base_dataset[
-            self.original_indices[-1]
-            if idx >= self.total_samples
-            else idx % len(self.base_dataset)
+            (
+                self.original_indices[-1]
+                if idx >= self.total_samples
+                else idx % len(self.base_dataset)
+            )
         ]
 
     def __len__(self):

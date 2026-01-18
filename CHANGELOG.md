@@ -5,7 +5,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [unreleased](https://github.com/mllam/neural-lam/compare/v0.4.0...HEAD)
+## [unreleased](https://github.com/mllam/neural-lam/compare/v0.5.0...HEAD)
+
+### Maintenance
+
+- Update CI/CD to use python 3.13 for testing and full range of current python versions for linting (3.10 - 3.14) [\#173](https://github.com/mllam/neural-lam/pull/173)
+
+- Move development dependencies to dependency-group [#\174](](https://github.com/mllam/neural-lam/pull/174) @observingClouds
+
+## [v0.5.0](https://github.com/mllam/neural-lam/releases/tag/v0.5.0)
+
+This release contains maintenance and fixes, preventing some unexpected crashes and improving CICD and testing.
+
+### Added
+
+- Expose run name as optional command line argument `--logger_run_name` to allow user-defined names
+[\#156](https://github.com/mllam/neural-lam/pull/156) @observingClouds
 
 ### Added
 
@@ -24,17 +39,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Adding a more robust LaTeX availability check function [\#162](https://github.com/mllam/neural-lam/pull/162) @lorenzo30salgado
 
-
 ### Maintenance
+
+- Add link to full MEPS data [\#102](https://github.com/mllam/neural-lam/pull/102) @joeloskarsson
 
 - Introducing `mypy` for static type checking and fixing type hints accordingly [\#113](https://github.com/mllam/neural-lam/pull/113) @observingClouds
 
 - Change all argparse instances to use ArgumentDefaultsHelpFormatter for easier maintaining defaults.
 [\#145](https://github.com/mllam/neural-lam/pull/145) @joeloskarsson
 
+- Allow triggering CI manually to e.g. test for recent software incompatibilities. [\152](https://github.com/mllam/neural-lam/pull/152) @observingClouds
+
 - Fix `torch` version detection during CI when testing on CPU with pdm [\#154](https://github.com/mllam/neural-lam/pull/154) @leifdenby
 
 - Update link to MEPS example data [\#155](https://github.com/mllam/neural-lam/pull/155) @joeloskarsson
+
+- Change deprecated `pynvml` dependency to `nvidia-ml-py` [\#176](https://github.com/mllam/neural-lam/pull/176) @observingClouds
 
 ## [v0.4.0](https://github.com/mllam/neural-lam/releases/tag/v0.4.0)
 
