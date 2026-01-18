@@ -478,9 +478,6 @@ class ARModel(pl.LightningModule):
         target = batch[1]
         time = batch[3]
 
-        time_unit = self.time_step_unit
-        time_step = self.time_step_int
-
         # Rescale to original data scale
         prediction_rescaled = prediction * self.state_std + self.state_mean
         target_rescaled = target * self.state_std + self.state_mean
@@ -532,7 +529,8 @@ class ARModel(pl.LightningModule):
                     vis.plot_prediction(
                         datastore=self._datastore,
                         title=f"{var_name} ({var_unit}), "
-                        f"t={t_i} ({(time_step * t_i)} {time_unit})",
+                        f"t={t_i} ({(self.time_step_int * t_i)}"
+                        f"{self.time_step_unit})",
                         vrange=var_vrange,
                         da_prediction=da_prediction.isel(
                             state_feature=var_i, time=t_i - 1
