@@ -24,6 +24,8 @@ def plot_error_map(errors, datastore: BaseRegularGridDatastore, title=None):
     max_errors = errors_np.max(axis=1)  # d_f
     errors_norm = errors_np / np.expand_dims(max_errors, axis=1)
 
+    time_step_int, time_step_unit = utils.get_integer_time(step_length)
+
     fig, ax = plt.subplots(figsize=(15, 10))
 
     ax.imshow(
@@ -45,10 +47,10 @@ def plot_error_map(errors, datastore: BaseRegularGridDatastore, title=None):
     # Ticks and labels
     label_size = 15
     ax.set_xticks(np.arange(pred_steps))
-    pred_hor_i = np.arange(pred_steps) + 1  # Prediction horiz. in index
-    pred_hor_h = step_length * pred_hor_i  # Prediction horiz. in hours
+    pred_hor_i = np.arange(pred_steps) + 1
+    pred_hor_h = time_step_int * pred_hor_i
     ax.set_xticklabels(pred_hor_h, size=label_size)
-    ax.set_xlabel("Lead time (h)", size=label_size)
+    ax.set_xlabel(f"Lead time ({time_step_unit[0]})", size=label_size)
 
     ax.set_yticks(np.arange(d_f))
     var_names = datastore.get_vars_names(category="state")

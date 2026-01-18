@@ -1,4 +1,5 @@
 # Standard library
+from datetime import timedelta
 from pathlib import Path
 
 # Third-party
@@ -12,13 +13,20 @@ from neural_lam.weather_dataset import WeatherDataset
 
 
 class SinglePointDummyDatastore(BaseDatastore):
-    step_length = 1
     config = {}
     coords_projection = None
     num_grid_points = 1
     root_path = Path("dummy")
 
-    def __init__(self, time_values, state_data, forcing_data, is_forecast):
+    def __init__(
+        self,
+        time_values,
+        state_data,
+        forcing_data,
+        is_forecast,
+        step_length=timedelta(hours=1),
+    ):
+        self._step_length = step_length
         self._time_values = np.array(time_values)
         self._state_data = np.array(state_data)
         self._forcing_data = np.array(forcing_data)
@@ -28,6 +36,10 @@ class SinglePointDummyDatastore(BaseDatastore):
             assert self._state_data.ndim == 2
         else:
             assert self._state_data.ndim == 1
+
+    @property
+    def step_length(self):
+        return self._step_length
 
     def get_num_data_vars(self, category):
         return 1
@@ -147,3 +159,37 @@ def test_time_slicing_analysis(
         1 + num_past_forcing_steps + num_future_forcing_steps,
     )
     np.testing.assert_equal(forcing[:, 0, :], np.array(expected_forcing_values))
+
+
+@pytest.mark.parametrize(
+    "step_length",
+    [timedelta(hours=1), timedelta(hours=3), timedelta(minutes=30)],
+)
+def test_step_length_timedeltas(step_length):
+    """Test that datastores work with different step_length timedeltas."""
+    time_values = np.datetime64("2020-01-01") + np.arange(
+        len(ANALYSIS_STATE_VALUES)
+    )
+    datastore = SinglePointDummyDatastore(
+        state_data=ANALYSIS_STATE_VALUES,
+        forcing_data=FORCING_VALUES,
+        time_values=time_values,
+        is_forecast=False,
+        step_length=step_length,
+    )
+
+    # Test that the step_length property returns the correct timedelta
+    assert datastore.step_length == step_length
+
+    # Test that WeatherDataset can be created with this datastore
+    dataset = WeatherDataset(
+        datastore=datastore,
+        ar_steps=3,
+        num_future_forcing_steps=0,
+        num_past_forcing_steps=0,
+        standardize=False,
+    )
+
+    # Test that we can get a sample
+    sample = dataset[0]
+    assert len(sample) == 4  # init_states, target_states, forcing, target_times

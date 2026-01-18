@@ -120,7 +120,16 @@ jobs:
 
       - name: Run tests
         run: |
-          ${{ matrix.package_manager == 'pdm' && 'pdm run' || '' }} pytest -vv -s
+          ${{ matrix.package_manager == 'pdm' && 'pdm run' || '' }} pytest -vv -s --doctest-modules
+
+      - name: Upload test figures
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-figures-${{ matrix.device }}-${{ matrix.package_manager }}
+          path: tests/test_outputs/
+          if-no-files-found: warn
+          retention-days: 30
 
       - name: Save cache data
         uses: actions/cache/save@v4
