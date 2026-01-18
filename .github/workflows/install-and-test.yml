@@ -43,10 +43,10 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Set up Python 3.9
+      - name: Set up Python 3.13
         uses: actions/setup-python@v6
         with:
-          python-version: 3.9
+          python-version: 3.13
 
       - name: Install PDM (if applicable)
         if: matrix.package_manager == 'pdm'

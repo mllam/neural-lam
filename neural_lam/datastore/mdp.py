@@ -229,7 +229,7 @@ class MDPDatastore(BaseRegularGridDatastore):
         """
         Return the processed data (as a single `xr.DataArray`) for the given
         category of data and test/train/val-split that covers all the data (in
-        space and time) of a given category (state/forcin g/static). "state" is
+        space and time) of a given category (state/forcing/static). "state" is
         the only required category, for other categories, the method will
         return `None` if the category is not found in the datastore.
 
