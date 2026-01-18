@@ -67,10 +67,6 @@ def model_and_batch(tmp_path):
         datastore=datastore,
     )
 
-    # Set time_step_int_unit (appears to be a typo in ar_model.py line 481)
-    # Should probably be time_step_unit based on line 159
-    model.time_step_int_unit = model.time_step_unit
-
     # Create dataset to get a sample batch
     dataset = WeatherDataset(
         datastore=datastore,
@@ -108,7 +104,7 @@ def test_plot_examples_integration_saves_figure(
 
     # Override time step information to test different scenarios
     model.time_step_int = time_step
-    model.time_step_int_unit = time_unit
+    model.time_step_unit = time_unit
 
     # Generate prediction
     prediction, target, _, _ = model.common_step(batch)
