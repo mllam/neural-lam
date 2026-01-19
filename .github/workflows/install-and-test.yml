@@ -110,6 +110,11 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-meps-reduced-example-data-v0.3.0
 
+      - name: Run smoke test
+        if: matrix.package_manager != 'uv'
+        run: |
+          python -c "import neural_lam; print('neural-lam imported successfully')"
+
       - name: Run tests
         if: matrix.package_manager == 'uv'
         run: |
