@@ -102,6 +102,7 @@ jobs:
           python -c "import torch; assert not torch.__version__.endswith('+cpu')"
 
       - name: Load cache data
+        if: matrix.package_manager == 'uv'
         uses: actions/cache/restore@v4
         with:
           path: tests/datastore_examples/npyfilesmeps/meps_example_reduced.tar.gz
@@ -110,10 +111,12 @@ jobs:
             ${{ runner.os }}-meps-reduced-example-data-v0.3.0
 
       - name: Run tests
+        if: matrix.package_manager == 'uv'
         run: |
           pytest -vv -s
 
       - name: Save cache data
+        if: matrix.package_manager == 'uv'
         uses: actions/cache/save@v4
         with:
           path: tests/datastore_examples/npyfilesmeps/meps_example_reduced.tar.gz
