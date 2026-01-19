@@ -225,6 +225,29 @@ def crps_gauss(
         entry_crps, mask=mask, average_grid=average_grid, sum_vars=sum_vars
     )
 
+def wbias(pred, target, pred_std, mask=None, average_grid=True, sum_vars=True):
+    """
+    Weighted Bias (Mean Error)
+
+    (...,) is any number of batch dimensions, potentially different
+        but broadcastable
+    pred: (..., N, d_state), prediction
+    target: (..., N, d_state), target
+    pred_std: (..., N, d_state) or (d_state,), predicted std.-dev.
+    mask: (N,), boolean mask describing which grid nodes to use in metric
+    average_grid: boolean, if grid dimension -2 should be reduced (mean over N)
+    sum_vars: boolean, if variable dimension -1 should be reduced (sum
+        over d_state)
+
+    Returns:
+    metric_val: One of (...,), (..., d_state), (..., N), (..., N, d_state),
+    depending on reduction arguments.
+    """
+    entry_bias = (pred - target) / pred_std  # (..., N, d_state)
+
+    return mask_and_reduce_metric(
+        entry_bias, mask=mask, average_grid=average_grid, sum_vars=sum_vars
+    )
 
 def bias(pred, target, pred_std, mask=None, average_grid=True, sum_vars=True):
     """
@@ -244,11 +267,10 @@ def bias(pred, target, pred_std, mask=None, average_grid=True, sum_vars=True):
     metric_val: One of (...,), (..., d_state), (..., N), (..., N, d_state),
     depending on reduction arguments.
     """
-    entry_bias = pred - target  # (..., N, d_state)
-
-    return mask_and_reduce_metric(
-        entry_bias, mask=mask, average_grid=average_grid, sum_vars=sum_vars
-    )
+    # Replace pred_std with constant ones
+    return wbias(pred=pred, target=target, mask=mask, 
+                 pred_std=torch.ones_like(pred_std), 
+                 average_grid=average_grid, sum_vars=sum_vars)
 
 
 DEFINED_METRICS = {
@@ -258,5 +280,6 @@ DEFINED_METRICS = {
     "wmae": wmae,
     "nll": nll,
     "crps_gauss": crps_gauss,
+    "wbias": wbias,
     "bias": bias,
 }
