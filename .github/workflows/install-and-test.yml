@@ -73,7 +73,7 @@ jobs:
       - name: Install package (including dev dependencies)
         if : matrix.package_manager != 'uv'
         run: |
-          python -m pip install ".[dev]"
+          python -m pip install --group dev .
 
       - name: Setup environment with uv (if applicable)
         if: matrix.package_manager == 'uv'
@@ -81,7 +81,7 @@ jobs:
           uv venv --no-project
           source .venv/bin/activate
           uv pip install torch --index-url ${{ matrix.torch_index }}
-          uv pip install -e ".[dev]"
+          uv pip install --group dev -e .
           uv pip list
           echo "VIRTUAL_ENV=$PWD/.venv" >> $GITHUB_ENV
           echo "$PWD/.venv/bin" >> $GITHUB_PATH
