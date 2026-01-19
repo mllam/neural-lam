@@ -174,7 +174,7 @@ def test_plot_examples_integration_saves_figure(
         da_target=da_target.isel(state_feature=0, time=t_i - 1).squeeze(),
     )
 
-    # Save for inspection with informative filename
+    # Save for inspection
     output_path = (
         TEST_OUTPUT_DIR
         / f"ar_model_integration_t{t_i}_{time_step}{time_unit}.png"
