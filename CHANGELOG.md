@@ -11,7 +11,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Update CI/CD to use python 3.13 for testing and full range of current python versions for linting (3.10 - 3.14) [\#173](https://github.com/mllam/neural-lam/pull/173)
 
-- Move development dependencies to dependency-group [#\174](](https://github.com/mllam/neural-lam/pull/174) @observingClouds
+- Move development dependencies to dependency-group [#\174](https://github.com/mllam/neural-lam/pull/174) @observingClouds
+
+- Update CI/CD to use only uv for full test suite and drop pdm [\#178](https://github.com/mllam/neural-lam/pull/178) @observingClouds
 
 ## [v0.5.0](https://github.com/mllam/neural-lam/releases/tag/v0.5.0)
 
