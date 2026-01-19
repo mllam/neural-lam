@@ -408,3 +408,45 @@ def inverse_sigmoid(x):
     """
     x_clamped = torch.clamp(x, min=1e-6, max=1 - 1e-6)
     return torch.log(x_clamped / (1 - x_clamped))
+
+
+def get_integer_time(tdelta) -> tuple[int, str]:
+    """
+    Get the largest time unit that can represent the given timedelta as an
+    integer.
+
+    Returns:
+        int: The integer value of the timedelta in the largest time unit, or
+                1 if no such unit exists.
+        str: The time unit as a string ('weeks', 'days', 'hours', 'minutes',
+                'seconds', 'milliseconds', 'microseconds'). If no unit can
+                represent the timedelta as an integer, returns 'unknown'.
+
+    Examples:
+        >>> from datetime import timedelta
+        >>> get_integer_time(timedelta(days=14))
+        (2, 'weeks')
+        >>> get_integer_time(timedelta(hours=5))
+        (5, 'hours')
+        >>> get_integer_time(timedelta(milliseconds=1000))
+        (1, 'seconds')
+        >>> get_integer_time(timedelta(days=0.001))
+        (1, 'unknown')
+    """
+    total_seconds = tdelta.total_seconds()
+
+    units = {
+        "weeks": 604800,
+        "days": 86400,
+        "hours": 3600,
+        "minutes": 60,
+        "seconds": 1,
+        "milliseconds": 0.001,
+        "microseconds": 0.000001,
+    }
+
+    for unit, unit_in_seconds in units.items():
+        if total_seconds % unit_in_seconds == 0:
+            return int(total_seconds / unit_in_seconds), unit
+
+    return 1, "unknown"
