@@ -20,7 +20,9 @@
 # be installed.
 name: CPU+GPU testing
 
-on: [push, pull_request]
+on: [push, pull_request, workflow_dispatch]
+
+
 
 jobs:
   tests:
@@ -41,11 +43,10 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Set up Python 3.9
-        if: matrix.device == 'gpu'
-        uses: actions/setup-python@v5
+      - name: Set up Python 3.13
+        uses: actions/setup-python@v6
         with:
-          python-version: 3.9
+          python-version: 3.13
 
       - name : Install uv (if applicable)
         if: matrix.package_manager == 'uv'
