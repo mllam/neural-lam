@@ -1,4 +1,5 @@
 # Standard library
+from datetime import timedelta
 from pathlib import Path
 
 # Third-party
@@ -13,7 +14,7 @@ from neural_lam import vis
 from neural_lam.create_graph import create_graph_from_datastore
 from neural_lam.models.graph_lam import GraphLAM
 from neural_lam.weather_dataset import WeatherDataset
-from tests.conftest import init_datastore_example
+from tests.dummy_datastore import DummyDatastore
 
 # Create output directory for test figures
 TEST_OUTPUT_DIR = Path(__file__).parent / "test_outputs" / "plotting"
@@ -21,10 +22,14 @@ TEST_OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
 
 @pytest.fixture
-def model_and_batch(tmp_path):
+def model_and_batch(tmp_path, time_step, time_unit):
     """Setup a model and dataset for testing plot_examples"""
-    datastore_name = "dummydata"
-    datastore = init_datastore_example(datastore_name)
+    # Create timedelta with specified step length
+    step_length_kwargs = {time_unit: time_step}
+    step_length = timedelta(**step_length_kwargs)
+
+    # Create datastore with specified step_length
+    datastore = DummyDatastore(step_length=step_length)
 
     # Create minimal model args
     class ModelArgs:
@@ -86,10 +91,10 @@ def model_and_batch(tmp_path):
 @pytest.mark.parametrize(
     "time_step,time_unit",
     [
-        (1, "h"),
-        (3, "h"),
-        (6, "h"),
-        (1, "min"),
+        (1, "hours"),
+        (3, "hours"),
+        (6, "hours"),
+        (1, "minutes"),
     ],
 )
 @pytest.mark.parametrize("t_i", [1, 2])
@@ -102,9 +107,13 @@ def test_plot_examples_integration_saves_figure(
     # Reset plotted examples counter
     model.plotted_examples = 0
 
-    # Override time step information to test different scenarios
-    model.time_step_int = time_step
-    model.time_step_unit = time_unit
+    # Verify that the model correctly inferred time step from datastore
+    assert (
+        model.time_step_int == time_step
+    ), f"Expected time_step_int={time_step}, got {model.time_step_int}"
+    assert (
+        model.time_step_unit == time_unit
+    ), f"Expected time_step_unit={time_unit}, got {model.time_step_unit}"
 
     # Generate prediction
     prediction, target, _, _ = model.common_step(batch)

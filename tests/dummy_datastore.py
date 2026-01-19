@@ -37,7 +37,11 @@ class DummyDatastore(BaseRegularGridDatastore):
     bbox_size_km = [500, 500]  # km
 
     def __init__(
-        self, config_path=None, n_grid_points=10000, n_timesteps=10
+        self,
+        config_path=None,
+        n_grid_points=10000,
+        n_timesteps=10,
+        step_length=None,
     ) -> None:
         """
         Create a dummy datastore with random data.
@@ -51,10 +55,14 @@ class DummyDatastore(BaseRegularGridDatastore):
             The number of grid points in the dataset. Must be a perfect square.
         n_timesteps : int
             The number of timesteps in the dataset.
+        step_length : timedelta, optional
+            The step length between timesteps. Defaults to timedelta(hours=1).
         """
         assert (
             config_path is None
         ), "No config file is needed for the dummy datastore"
+
+        self._step_length = step_length or timedelta(hours=1)
 
         # Ensure n_grid_points is a perfect square
         n_points_1d = int(np.sqrt(n_grid_points))
@@ -199,7 +207,7 @@ class DummyDatastore(BaseRegularGridDatastore):
             timedelta: The step length as a datetime.timedelta object.
 
         """
-        return timedelta(hours=1)
+        return self._step_length
 
     def get_vars_names(self, category: str) -> list[str]:
         """Get the names of the variables in the given category.
