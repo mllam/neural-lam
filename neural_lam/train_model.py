@@ -22,7 +22,6 @@ MODELS = {
     "hi_lam_parallel": HiLAMParallel,
 }
 
-
 @logger.catch
 def main(input_args=None):
     """Main function for training and evaluating models."""
@@ -259,8 +258,14 @@ def main(input_args=None):
     parser.add_argument(
         "--metrics_watch",
         nargs="+",
-        default=[],
-        help="List of metrics to watch, including any prefix (e.g. val_rmse)",
+        default=["test_rmse", "val_rmse"],
+        help="List of metrics for error watch, including any prefix (e.g. val_rmse)",
+    )
+    parser.add_argument(
+        "--variable_watch",
+        nargs="+",
+        default=["Surface elevation", "U velocity", "V velocity"],
+        help="List of variables for error watch.",
     )
     parser.add_argument(
         "--var_leads_metrics_watch",

@@ -15,10 +15,10 @@ import numpy as np
 import xarray as xr
 from loguru import logger
 from shapely import Point
+import mikeio
 
 # Local
 from ..datastore.base import BaseDatastore
-
 
 class MIKEDatastore(BaseDatastore):
     """
@@ -132,6 +132,18 @@ class MIKEDatastore(BaseDatastore):
             print(f" {split:<8s}: {da_split_start} to {da_split_end}")
 
         self.stats_datastore = None
+
+        # check for path for mike_dataset in datastore (only interior) which is needed for plotting
+        has_state = "state_fields" in self._config.inputs # currently only exists for interior datastore
+
+        mike_dataset_cfg = self._config.extra.get("mike_dataset")
+        if has_state:
+            if not mike_dataset_cfg:
+                raise ValueError("extra.mike_dataset must be set for interior (state) datastore.")
+            if not Path(mike_dataset_cfg).exists():
+                raise FileNotFoundError(f"Configured mike_dataset not found at {Path(mike_dataset_cfg)}")
+            self.mike_dataset = mikeio.open(Path(mike_dataset_cfg))
+
 
     @property
     def root_path(self) -> Path:

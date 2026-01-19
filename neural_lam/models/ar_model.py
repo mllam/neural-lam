@@ -195,6 +195,7 @@ class ARModel(pl.LightningModule):
 
         # For storing spatial loss maps during evaluation
         self.spatial_loss_maps = []
+        self.spatial_metric_maps_var = [] # for individual variables
 
         # Set if grad checkpointing function should be used during rollout
         if args.grad_checkpointing:
@@ -632,8 +633,20 @@ class ARModel(pl.LightningModule):
         log_spatial_losses = spatial_loss[
             :, [step - 1 for step in self.args.val_steps_to_log]
         ]
+
+        # Save per-variable spatial bias for specific times
+        spatial_bias_var = metrics.bias(
+            prediction, target, pred_std, average_grid=False,
+            sum_vars=False
+        )  # (B, pred_steps, num_interior_nodes, d_f)
+        log_spatial_bias_var = spatial_bias_var[
+            :, [step - 1 for step in self.args.val_steps_to_log]
+        ]  # (B, N_log, num_interior_nodes, d_f)
+
         self.spatial_loss_maps.append(log_spatial_losses)
         # (B, N_log, num_interior_nodes)
+        self.spatial_metric_maps_var.append(log_spatial_bias_var)
+        # (B, N_log, num_interior_nodes, d_f)
 
         if self.args.save_eval_to_zarr_path:
             self._save_predictions_to_zarr(
@@ -707,12 +720,12 @@ class ARModel(pl.LightningModule):
                 da_target = da_target.unstack("grid_index")
 
             var_vmin = (
-                torch.minimum(
-                    pred_slice.flatten(0, 1).min(dim=0)[0],
-                    target_slice.flatten(0, 1).min(dim=0)[0],
-                )
-                .cpu()
-                .numpy()
+            torch.minimum(
+                pred_slice.flatten(0, 1).min(dim=0)[0],
+                target_slice.flatten(0, 1).min(dim=0)[0],
+            )
+            .cpu()
+            .numpy()
             )  # (d_f,)
             var_vmax = (
                 torch.maximum(
@@ -724,15 +737,23 @@ class ARModel(pl.LightningModule):
             )  # (d_f,)
             var_vranges = list(zip(var_vmin, var_vmax))
 
+            # Calculate vranges for absolute error
+            error = pred_slice - target_slice
+            err_min = error.flatten(0, 1).min(dim=0)[0].cpu().numpy()  # (d_f,)
+            err_max = error.flatten(0, 1).max(dim=0)[0].cpu().numpy()  # (d_f,)
+            err_absmax = np.maximum(np.abs(err_min), np.abs(err_max))  # (d_f,)
+            var_vranges_error = [(-v, v) for v in err_absmax]
+
             # Iterate over prediction horizon time steps
             for t_i, _ in enumerate(zip(pred_slice, target_slice), start=1):
                 # Create one figure per plot variable at this time step
                 var_figs = {
                     var_name: vis.plot_prediction(
                         datastore=self._datastore,
-                        title=f"{var_name} ({var_unit}), "
+                        title=f"{var_name} ({unit}), "
                         f"t={t_i} ({self.step_length * t_i} h)",
-                        vrange=var_vrange,
+                        vrange=vrange,
+                        vrange_error = vrange_err,
                         da_prediction=da_prediction.isel(
                             state_feature=var_i, time=t_i - 1
                         ).squeeze(),
@@ -740,11 +761,12 @@ class ARModel(pl.LightningModule):
                             state_feature=var_i, time=t_i - 1
                         ).squeeze(),
                     )
-                    for var_i, (var_name, var_unit, var_vrange) in enumerate(
+                    for var_i, (var_name, unit, vrange, vrange_err) in enumerate(
                         zip(
                             self._datastore.get_vars_names("state"),
                             self._datastore.get_vars_units("state"),
                             var_vranges,
+                            var_vranges_error,
                         )
                     )
                     if var_name in self.plot_vars
@@ -791,11 +813,15 @@ class ARModel(pl.LightningModule):
         Return: log_dict: dict with everything to log for given metric
         """
         log_dict = {}
+        full_log_name = f"{prefix}_{metric_name}"
+        var_names = self._datastore.get_vars_names(category="state")
+        var_units = self._datastore.get_vars_units(category="state")
+        
+        # create error map
         metric_fig = vis.plot_error_map(
             errors=metric_tensor,
             datastore=self._datastore,
         )
-        full_log_name = f"{prefix}_{metric_name}"
         log_dict[full_log_name] = wandb.Image(metric_fig)
 
         if prefix == "test":
@@ -804,8 +830,37 @@ class ARModel(pl.LightningModule):
                 os.path.join(wandb.run.dir, f"{full_log_name}.pdf")
             )
 
+        # create error lines
+        if full_log_name in self.args.metrics_watch:    
+            for var_name in self.args.variable_watch:
+                
+                var_i = var_names.index(var_name)
+                var_unit = var_units[var_i]
+                lead_time_str = "Lead Time"
+                metric_str = f"{metric_name.upper()} ({var_unit})"
+                key = f"{full_log_name}-{var_name}"
+
+                # Get all lead times for this variable
+                lead_times = list(range(1, metric_tensor.shape[0] + 1))
+                metric_variable = metric_tensor.cpu().numpy()[:,var_i]
+
+                data = [[x, float(y)] for x, y in zip(lead_times, metric_variable)]
+
+                table = wandb.Table(
+                    data=data,
+                    columns=[lead_time_str, metric_str],
+                )
+
+                plot = wandb.plot.line(
+                    table,
+                    lead_time_str,
+                    metric_str,
+                    title=key,
+                )
+
+                log_dict[key] = plot
+
         # Check if metrics are watched, log exact values for specific vars
-        var_names = self._datastore.get_vars_names(category="state")
         if full_log_name in self.args.metrics_watch:
             for var_i, timesteps in self.args.var_leads_metrics_watch.items():
                 var_name = var_names[var_i]
@@ -897,6 +952,7 @@ class ARModel(pl.LightningModule):
             output_path = os.path.join(wandb.run.dir, f"{prefix}_metrics.pkl")
             with open(output_path, "wb") as f:
                 pickle.dump(metric_ds, f)
+            wandb.save(output_path)    
 
     def on_test_epoch_end(self):
         """
@@ -948,7 +1004,60 @@ class ARModel(pl.LightningModule):
                 os.path.join(wandb.run.dir, "mean_spatial_loss.pt"),
             )
 
+        # Plot per-variable spatial bias maps (rescaled)
+        spatial_bias_var_tensor = self.all_gather_cat(
+            torch.cat(self.spatial_metric_maps_var, dim=0)
+        )  # (N_test, N_log, num_interior_nodes, d_f)
+
+        if self.trainer.is_global_zero:
+            mean_spatial_bias_var = torch.mean(
+                spatial_bias_var_tensor, dim=0
+            )  # (N_log, num_interior_nodes, d_f)
+
+            # Rescale Bias
+            mean_spatial_bias_var_rescaled = mean_spatial_bias_var * self.state_std
+            # (N_log, num_interior_nodes, d_f)
+
+            var_names = self._datastore.get_vars_names(category="state")
+            var_units = self._datastore.get_vars_units(category="state")
+
+            # Iterate over variables in plot_vars and time steps
+            for var_i, (var_name, var_unit) in enumerate(
+                zip(var_names, var_units)
+            ):
+                if var_name not in self.plot_vars:
+                    continue
+                    
+                # Extract Bias for this variable: (N_log, num_interior_nodes)
+                var_bias = mean_spatial_bias_var_rescaled[:, :, var_i]
+                
+                # Calculate symmetric vrange across all time steps for this variable
+                vmin = var_bias.min().cpu().item()
+                vmax = var_bias.max().cpu().item()
+                vmax_abs = max(abs(vmin), abs(vmax))
+                vrange_bias = (-vmax_abs, vmax_abs)
+                
+                bias_map_var_figs = [
+                    vis.plot_spatial_error(
+                        error=bias_map,
+                        datastore=self._datastore,
+                        title=f"{var_name} Bias ({var_unit}), t={t_i} "
+                        f"({self.step_length * t_i} h)",
+                        symmetric=True,
+                        vrange=vrange_bias,
+                    )
+                    for t_i, bias_map in zip(
+                        self.args.val_steps_to_log, var_bias
+                    )
+                ]
+
+                # Log to wandb with variable-specific key
+                for fig in bias_map_var_figs:
+                    wandb.log({f"test_bias_{var_name}": wandb.Image(fig)})
+                    plt.close(fig)  # Close immediately after logging
+
         self.spatial_loss_maps.clear()
+        self.spatial_metric_maps_var.clear()
 
     def on_load_checkpoint(self, checkpoint):
         """
