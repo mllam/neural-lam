@@ -30,7 +30,8 @@ class InteractionNet(pyg.nn.MessagePassing):
         """
         Create a new InteractionNet
 
-        edge_index: (2,M), Edges in pyg format
+        edge_index: (2,M), Edges in pyg format, with both sender and receiver
+            node indices starting at 0
         input_dim: Dimensionality of input representations,
             for both nodes and edges
         update_edges: If new edge representations should be computed
@@ -52,13 +53,16 @@ class InteractionNet(pyg.nn.MessagePassing):
             # Default to input dim if not explicitly given
             hidden_dim = input_dim
 
-        # Make both sender and receiver indices of edge_index start at 0
-        edge_index = edge_index - edge_index.min(dim=1, keepdim=True)[0]
-        # Store number of receiver nodes according to edge_index
         self.num_rec = edge_index[1].max() + 1
-        edge_index[0] = (
-            edge_index[0] + self.num_rec
-        )  # Make sender indices after rec
+        # Input edge_index must be zero-based for both dimensions:
+        #   - edge_index[0]: sender node indices (local, zero-based)
+        #   - edge_index[1]: receiver node indices (local, zero-based)
+        # Global node ordering:
+        #   - receivers: [0 .. num_rec-1]
+        #   - senders:   [num_rec ..]
+        # Hence, sender indices are shifted by num_rec to map local sender indices to the global index.
+        edge_index = torch.stack((edge_index[0] + self.num_rec, edge_index[1]), dim=0) 
+      
         self.register_buffer("edge_index", edge_index, persistent=False)
 
         # Create MLPs
