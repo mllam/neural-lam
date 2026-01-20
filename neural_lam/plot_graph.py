@@ -58,8 +58,8 @@ def main():
     graph_dir_path = os.path.join(datastore.root_path, "graph", args.graph)
     hierarchical, graph_ldict = utils.load_graph(graph_dir_path=graph_dir_path, datastore=datastore)
     (
-        g2m_edge_index, 
-        m2g_edge_index, 
+        g2m_edge_index,
+        m2g_edge_index,
         m2m_edge_index,
     ) = (
         graph_ldict["g2m_edge_index"],
