@@ -56,7 +56,7 @@ def main():
 
     # Load graph data
     graph_dir_path = os.path.join(datastore.root_path, "graph", args.graph)
-    hierarchical, graph_ldict = utils.load_graph(graph_dir_path=graph_dir_path)
+    hierarchical, graph_ldict = utils.load_graph(graph_dir_path=graph_dir_path, datastore=datastore)
     (
         g2m_edge_index,
         m2g_edge_index,
@@ -71,6 +71,7 @@ def main():
         graph_ldict["mesh_down_edge_index"],
     )
     mesh_static_features = graph_ldict["mesh_static_features"]
+    mesh_static_features /= pos_max
 
     # Add in z-dimension
     z_grid = GRID_HEIGHT * np.ones((grid_pos.shape[0],))
