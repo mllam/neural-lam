@@ -186,6 +186,13 @@ def main(input_args=None):
         help="Logger project name, for eg. Wandb",
     )
     parser.add_argument(
+        "--logger_run_name",
+        type=str,
+        default=None,
+        help="""Logger run name, for e.g. MLFlow (with default value `None`
+          neural-lam's default format string is used)""",
+    )
+    parser.add_argument(
         "--val_steps_to_log",
         nargs="+",
         type=int,
@@ -287,10 +294,14 @@ def main(input_args=None):
         prefix = f"eval-{args.eval}-"
     else:
         prefix = "train-"
-    run_name = (
-        f"{prefix}{args.model}-{args.processor_layers}x{args.hidden_dim}-"
-        f"{time.strftime('%m_%d_%H')}-{random_run_id:04d}"
-    )
+
+    if args.logger_run_name:
+        run_name = args.logger_run_name
+    else:
+        run_name = (
+            f"{prefix}{args.model}-{args.processor_layers}x{args.hidden_dim}-"
+            f"{time.strftime('%m_%d_%H')}-{random_run_id:04d}"
+        )
 
     training_logger = utils.setup_training_logger(
         datastore=datastore, args=args, run_name=run_name
