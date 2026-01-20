@@ -23,7 +23,7 @@ def main():
         formatter_class=ArgumentDefaultsHelpFormatter,
     )
     parser.add_argument(
-        "--config_path",
+        "--datastore_config_path",
         type=str,
         default="tests/datastore_examples/mdp/config.yaml",
         help="Path for the datastore config",
@@ -47,7 +47,7 @@ def main():
 
     args = parser.parse_args()
     _, datastore = load_config_and_datastore(
-        config_path=args.config_path
+        config_path=args.datastore_config_path
     )
 
     xy = datastore.get_xy("state", stacked=True)  # (N_grid, 2)
