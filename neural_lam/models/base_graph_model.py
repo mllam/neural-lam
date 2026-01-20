@@ -23,13 +23,13 @@ class BaseGraphModel(ARModel):
         # num_mesh_nodes indices,
         graph_dir_path = datastore.root_path / "graph" / args.graph
         self.hierarchical, graph_ldict = utils.load_graph(
-            graph_dir_path=graph_dir_path
+            graph_dir_path=graph_dir_path, datastore=datastore
         )
         for name, attr_value in graph_ldict.items():
             # NOTE: It would be good to rescale mesh node position features in
             # exactly the same way as grid node position static features.
             if name == "mesh_static_features":
-                max_coord = datastore.get_xy("state", stacked = True).max()
+                max_coord = datastore.get_xy("state", stacked=True).max()
                 # Rescale by dividing by maximum coordinate in interior
                 attr_value /= max_coord
 

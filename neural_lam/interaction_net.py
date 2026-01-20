@@ -54,15 +54,17 @@ class InteractionNet(pyg.nn.MessagePassing):
             hidden_dim = input_dim
 
         self.num_rec = edge_index[1].max() + 1
-        # Input edge_index must be zero-based for both dimensions:
-        #   - edge_index[0]: sender node indices (local, zero-based)
-        #   - edge_index[1]: receiver node indices (local, zero-based)
-        # Global node ordering:
-        #   - receivers: [0 .. num_rec-1]
-        #   - senders:   [num_rec ..]
-        # Hence, sender indices are shifted by num_rec to map local sender indices to the global index.
-        edge_index = torch.stack((edge_index[0] + self.num_rec, edge_index[1]), dim=0) 
-      
+        # edge_index is expected to be zero-based and local:
+        #   edge_index[0]: sender indices in [0 .. num_snd-1]
+        #   edge_index[1]: receiver indices in [0 .. num_rec-1]
+        # Global node indexing is defined as:
+        #   receivers → [0 .. num_rec-1]
+        #   senders   → [num_rec .. num_rec+num_snd-1]
+        # Hence, sender indices are offset by num_rec to obtain global indices.
+        edge_index = torch.stack(
+            (edge_index[0] + self.num_rec, edge_index[1]), dim=0
+        )
+
         self.register_buffer("edge_index", edge_index, persistent=False)
 
         # Create MLPs

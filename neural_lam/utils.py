@@ -8,15 +8,13 @@ from functools import cache
 from pathlib import Path
 
 # Third-party
-import numpy as np
+import cartopy.crs as ccrs
 import pytorch_lightning as pl
 import torch
 from pytorch_lightning.loggers import MLFlowLogger, WandbLogger
 from pytorch_lightning.utilities import rank_zero_only
 from torch import nn
 from tueplots import bundles, figsizes
-import cartopy.crs as ccrs
-
 
 # Local
 from .custom_loggers import CustomMLFlowLogger
@@ -57,11 +55,13 @@ class BufferList(nn.Module):
 
         return self
 
+
 def zero_index_edge_index(edge_index):
     """
     Make both sender and receiver indices of edge_index start at 0
     """
     return edge_index - edge_index.min(dim=1, keepdim=True)[0]
+
 
 def load_graph(graph_dir_path, datastore, device="cpu"):
     """Load all tensors representing the graph from `graph_dir_path`.
@@ -303,6 +303,7 @@ def load_graph(graph_dir_path, datastore, device="cpu"):
         "mesh_static_features": mesh_static_features,
         "mesh_lat_lon": mesh_lat_lon,
     }
+
 
 def make_mlp(blueprint, layer_norm=True):
     """
