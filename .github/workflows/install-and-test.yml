@@ -84,7 +84,6 @@ jobs:
           uv pip install torch --index-url ${{ matrix.torch_index }}
           uv pip install --group dev -e .
           uv pip list
-          echo "VIRTUAL_ENV=$PWD/.venv" >> $GITHUB_ENV
           echo "$PWD/.venv/bin" >> $GITHUB_PATH
 
       - name: Print torch version
