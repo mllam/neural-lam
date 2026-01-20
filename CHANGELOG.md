@@ -24,6 +24,10 @@ This release contains maintenance and fixes, preventing some unexpected crashes 
 - Expose run name as optional command line argument `--logger_run_name` to allow user-defined names
 [\#156](https://github.com/mllam/neural-lam/pull/156) @observingClouds
 
+### Added
+
+- Add support for any forecast step size(`step_length`) [\#172](https://github.com/mllam/neural-lam/pull/172) @observingClouds
+
 ### Fixed
 
 - Change default logging argument to prevent crash when running eval
