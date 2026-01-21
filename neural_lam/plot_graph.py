@@ -71,7 +71,6 @@ def main():
         graph_ldict["mesh_down_edge_index"],
     )
     mesh_static_features = graph_ldict["mesh_static_features"]
-    mesh_static_features /= pos_max
 
     # Add in z-dimension
     z_grid = GRID_HEIGHT * np.ones((grid_pos.shape[0],))
