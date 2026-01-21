@@ -43,6 +43,24 @@ class BufferList(nn.Module):
     def __iter__(self):
         return (self[i] for i in range(len(self)))
 
+    def __itruediv__(self, other):
+        """Divide each element in list with other"""
+        return self.__imul__(1.0 / other)
+
+    def __imul__(self, other):
+        """Multiply each element in list with other"""
+        for buffer_tensor in self:
+            buffer_tensor *= other
+
+        return self
+
+
+def zero_index_edge_index(edge_index):
+    """
+    Make both sender and receiver indices of edge_index start at 0
+    """
+    return edge_index - edge_index.min(dim=1, keepdim=True)[0]
+
 
 def load_graph(graph_dir_path, device="cpu"):
     """Load all tensors representing the graph from `graph_dir_path`.
@@ -54,7 +72,7 @@ def load_graph(graph_dir_path, device="cpu"):
     - m2m_features.pt
     - g2m_features.pt
     - m2g_features.pt
-    - mesh_features.pt
+    - m2m_node_features.pt
 
     And in addition for hierarchical graphs:
     - mesh_up_edge_index.pt
@@ -82,7 +100,7 @@ def load_graph(graph_dir_path, device="cpu"):
         - mesh_down_edge_index
         - g2m_features
         - m2g_features
-        - m2m_features
+        - m2m_node_features
         - mesh_up_features
         - mesh_down_features
         - mesh_static_features
@@ -96,12 +114,73 @@ def load_graph(graph_dir_path, device="cpu"):
             weights_only=True,
         )
 
+    # Need to reindex some edge index to start from 0
+    reindex_func = zero_index_edge_index
+
+    # Load static node features
+    mesh_static_features = loads_file(
+        "m2m_node_features.pt"
+    )  # List of (N_mesh[l], d_mesh_static)
+
+    # Determine 2d or 3d features
+    node_feature_dims = mesh_static_features[0].shape[-1]
+    three_dim_features = node_feature_dims > 2
+
     # Load edges (edge_index)
     m2m_edge_index = BufferList(
-        loads_file("m2m_edge_index.pt"), persistent=False
+        [reindex_func(ei) for ei in loads_file("m2m_edge_index.pt")],
+        persistent=False,
     )  # List of (2, M_m2m[l])
     g2m_edge_index = loads_file("g2m_edge_index.pt")  # (2, M_g2m)
     m2g_edge_index = loads_file("m2g_edge_index.pt")  # (2, M_m2g)
+
+    # Change first indices to 0
+    # m2g and g2m has to be handled specially as not all mesh nodes
+    # might be indexed
+    m2g_min_indices = m2g_edge_index.min(dim=1, keepdim=True)[0]
+
+    # Rect graph, need to zero-index g2m and m2g edge_index
+    if m2g_min_indices[0] < m2g_min_indices[1]:
+        # mesh has the first indices
+        # Number of mesh nodes at level that connects to grid
+        num_mesh_nodes = mesh_static_features[0].shape[0]
+
+        m2g_edge_index = torch.stack(
+            (
+                m2g_edge_index[0],
+                m2g_edge_index[1] - num_mesh_nodes,
+            ),
+            dim=0,
+        )
+        g2m_edge_index = torch.stack(
+            (
+                g2m_edge_index[0] - num_mesh_nodes,
+                g2m_edge_index[1],
+            ),
+            dim=0,
+        )
+    else:
+        # grid (interior) has the first indices
+        # NOTE: Below works, but would be good with a better way to get this
+        num_interior_nodes = m2g_edge_index[1].max() + 1
+        num_grid_nodes = g2m_edge_index[0].max() + 1
+
+        m2g_edge_index = torch.stack(
+            (
+                m2g_edge_index[0] - num_interior_nodes,
+                m2g_edge_index[1],
+            ),
+            dim=0,
+        )
+        g2m_edge_index = torch.stack(
+            (
+                g2m_edge_index[0],
+                g2m_edge_index[1] - num_grid_nodes,
+            ),
+            dim=0,
+        )
+    assert m2g_edge_index.min() >= 0, "Negative node index in m2g"
+    assert g2m_edge_index.min() >= 0, "Negative node index in g2m"
 
     n_levels = len(m2m_edge_index)
     hierarchical = n_levels > 1  # Nor just single level mesh graph
@@ -112,21 +191,20 @@ def load_graph(graph_dir_path, device="cpu"):
     g2m_features = loads_file("g2m_features.pt")  # (M_g2m, d_edge_f)
     m2g_features = loads_file("m2g_features.pt")  # (M_m2g, d_edge_f)
 
-    # Normalize by dividing with longest edge (found in m2m)
-    longest_edge = max(
-        torch.max(level_features[:, 0]) for level_features in m2m_features
-    )  # Col. 0 is length
-    m2m_features = BufferList(
-        [level_features / longest_edge for level_features in m2m_features],
-        persistent=False,
-    )
+    if three_dim_features:
+        # For trigraphs the edge features are already rescaled when created
+        # Set to 1. to not rescale here
+        longest_edge = 1.0
+    else:
+        # Normalize by dividing with longest edge (found in m2m)
+        longest_edge = max(
+            torch.max(level_features[:, 0]) for level_features in m2m_features
+        )  # Col. 0 is length
+
+    m2m_features = BufferList(m2m_features, persistent=False)
+    m2m_features /= longest_edge
     g2m_features = g2m_features / longest_edge
     m2g_features = m2g_features / longest_edge
-
-    # Load static node features
-    mesh_static_features = loads_file(
-        "mesh_features.pt"
-    )  # List of (N_mesh[l], d_mesh_static)
 
     # Some checks for consistency
     assert (
@@ -139,10 +217,12 @@ def load_graph(graph_dir_path, device="cpu"):
     if hierarchical:
         # Load up and down edges and features
         mesh_up_edge_index = BufferList(
-            loads_file("mesh_up_edge_index.pt"), persistent=False
+            [reindex_func(ei) for ei in loads_file("mesh_up_edge_index.pt")],
+            persistent=False,
         )  # List of (2, M_up[l])
         mesh_down_edge_index = BufferList(
-            loads_file("mesh_down_edge_index.pt"), persistent=False
+            [reindex_func(ei) for ei in loads_file("mesh_down_edge_index.pt")],
+            persistent=False,
         )  # List of (2, M_down[l])
 
         mesh_up_features = loads_file(
@@ -153,20 +233,10 @@ def load_graph(graph_dir_path, device="cpu"):
         )  # List of (M_down[l], d_edge_f)
 
         # Rescale
-        mesh_up_features = BufferList(
-            [
-                edge_features / longest_edge
-                for edge_features in mesh_up_features
-            ],
-            persistent=False,
-        )
-        mesh_down_features = BufferList(
-            [
-                edge_features / longest_edge
-                for edge_features in mesh_down_features
-            ],
-            persistent=False,
-        )
+        mesh_up_features = BufferList(mesh_up_features, persistent=False)
+        mesh_up_features /= longest_edge
+        mesh_down_features = BufferList(mesh_down_features, persistent=False)
+        mesh_down_features /= longest_edge
 
         mesh_static_features = BufferList(
             mesh_static_features, persistent=False
