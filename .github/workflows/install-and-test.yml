@@ -120,7 +120,7 @@ jobs:
           pytest -vv -s --doctest-modules
 
       - name: Upload test figures
-        if: always()
+        if: matrix.package_manager == 'uv'
         uses: actions/upload-artifact@v4
         with:
           name: test-figures-${{ matrix.device }}-${{ matrix.package_manager }}
