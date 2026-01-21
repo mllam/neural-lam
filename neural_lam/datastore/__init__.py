@@ -2,10 +2,12 @@
 from .base import BaseDatastore  # noqa
 from .mdp import MDPDatastore  # noqa
 from .npyfilesmeps import NpyFilesDatastoreMEPS  # noqa
+from .mike import MIKEDatastore
 
 DATASTORE_CLASSES = [
     MDPDatastore,
     NpyFilesDatastoreMEPS,
+    MIKEDatastore
 ]
 
 DATASTORES = {
