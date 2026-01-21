@@ -8,7 +8,6 @@ from functools import cache
 from pathlib import Path
 
 # Third-party
-import cartopy.crs as ccrs
 import pytorch_lightning as pl
 import torch
 from pytorch_lightning.loggers import MLFlowLogger, WandbLogger
