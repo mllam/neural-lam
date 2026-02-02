@@ -257,9 +257,8 @@ def main(input_args=None):
     graph_name = args.graph if issubclass(ModelClass, BaseGraphModel) else None
     if graph_name is not None:
         graph_dir_path = datastore.root_path / "graph" / graph_name
-        _, graph_sizes = WeatherDatasetWithGraph.load_graph(
-            graph_dir_path=graph_dir_path
-        )
+        graph_features_and_edges = load_graph(graph_dir_path)
+        graph_sizes = build_graph_sizes(graph_features_and_edges)
 
     # Create datamodule
     data_module = WeatherDataModule(
