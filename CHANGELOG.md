@@ -5,12 +5,26 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [unreleased](https://github.com/mllam/neural-lam/compare/v0.4.0...HEAD)
+## [unreleased](https://github.com/mllam/neural-lam/compare/v0.5.0...HEAD)
+
+### Maintenance
+
+- Update CI/CD to use python 3.13 for testing and full range of current python versions for linting (3.10 - 3.14) [\#173](https://github.com/mllam/neural-lam/pull/173)
+
+- Move development dependencies to dependency-group [#\174](](https://github.com/mllam/neural-lam/pull/174) @observingClouds
+
+## [v0.5.0](https://github.com/mllam/neural-lam/releases/tag/v0.5.0)
+
+This release contains maintenance and fixes, preventing some unexpected crashes and improving CICD and testing.
 
 ### Added
 
 - Expose run name as optional command line argument `--logger_run_name` to allow user-defined names
 [\#156](https://github.com/mllam/neural-lam/pull/156) @observingClouds
+
+### Added
+
+- Add support for any forecast step size(`step_length`) [\#172](https://github.com/mllam/neural-lam/pull/172) @observingClouds
 
 ### Fixed
 

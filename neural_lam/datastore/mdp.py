@@ -1,6 +1,7 @@
 # Standard library
 import copy
 import warnings
+from datetime import timedelta
 from functools import cached_property
 from pathlib import Path
 from typing import List, Optional, Union
@@ -133,18 +134,18 @@ class MDPDatastore(BaseRegularGridDatastore):
         return self._config
 
     @property
-    def step_length(self) -> int:
-        """The length of the time steps in hours.
+    def step_length(self) -> timedelta:
+        """The length of the time steps as a time interval.
 
         Returns
         -------
-        int
-            The length of the time steps in hours.
+        timedelta
+            The length of the time steps as a datetime.timedelta object.
 
         """
         da_dt = self._ds["time"].diff("time")
         total_sec = da_dt.dt.total_seconds().isel(time=0).astype(int)
-        return (total_sec // 3600).item()
+        return timedelta(seconds=int(total_sec.item()))
 
     def get_vars_units(self, category: str) -> List[str]:
         """Return the units of the variables in the given category.
@@ -229,7 +230,7 @@ class MDPDatastore(BaseRegularGridDatastore):
         """
         Return the processed data (as a single `xr.DataArray`) for the given
         category of data and test/train/val-split that covers all the data (in
-        space and time) of a given category (state/forcin g/static). "state" is
+        space and time) of a given category (state/forcing/static). "state" is
         the only required category, for other categories, the method will
         return `None` if the category is not found in the datastore.
 

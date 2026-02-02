@@ -1,5 +1,6 @@
 # Standard library
 from dataclasses import dataclass, field
+from datetime import timedelta
 from typing import Any, Dict, List
 
 # Third-party
@@ -44,7 +45,7 @@ class Dataset:
     var_longnames: List[str]
     num_forcing_features: int
     num_timesteps: int
-    step_length: int
+    step_length: timedelta
     num_ensemble_members: int
     remove_state_features_with_index: List[int] = field(default_factory=list)
 

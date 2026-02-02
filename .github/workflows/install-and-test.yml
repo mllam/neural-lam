@@ -43,11 +43,10 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Set up Python 3.9
-        if: matrix.device == 'gpu'
-        uses: actions/setup-python@v5
+      - name: Set up Python 3.13
+        uses: actions/setup-python@v6
         with:
-          python-version: 3.9
+          python-version: 3.13
 
       - name: Install PDM (if applicable)
         if: matrix.package_manager == 'pdm'
@@ -95,7 +94,7 @@ jobs:
 
       - name: Install package (including dev dependencies)
         run: |
-          ${{ matrix.package_manager == 'pdm' && 'pdm install --group :all' || 'python -m pip install ".[dev]"' }}
+          ${{ matrix.package_manager == 'pdm' && 'pdm install --group :all' || 'python -m pip install --group dev .' }}
 
       - name: Print torch version
         run: |
@@ -121,7 +120,16 @@ jobs:
 
       - name: Run tests
         run: |
-          ${{ matrix.package_manager == 'pdm' && 'pdm run' || '' }} pytest -vv -s
+          ${{ matrix.package_manager == 'pdm' && 'pdm run' || '' }} pytest -vv -s --doctest-modules
+
+      - name: Upload test figures
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-figures-${{ matrix.device }}-${{ matrix.package_manager }}
+          path: tests/test_outputs/
+          if-no-files-found: warn
+          retention-days: 30
 
       - name: Save cache data
         uses: actions/cache/save@v4

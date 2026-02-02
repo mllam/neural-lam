@@ -37,9 +37,9 @@ dependencies = [
     "boto3>=1.35.32",
     "nvidia-ml-py>=13.580.82",
 ]
-requires-python = ">=3.9"
+requires-python = ">=3.10"
 
-[project.optional-dependencies]
+[dependency-groups]
 dev = ["pre-commit>=3.8.0", "pytest>=8.3.2", "pooch>=1.8.2"]
 
 [tool.setuptools]
@@ -49,7 +49,7 @@ py-modules = ["neural_lam"]
 line-length = 80
 
 [tool.isort]
-default_section = "THIRDPARTY"
+default_section = "THIRDPARTY" # codespell:ignore
 profile = "black"
 # Headings
 import_heading_stdlib = "Standard library"

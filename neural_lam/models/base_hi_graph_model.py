@@ -183,9 +183,9 @@ class BaseHiGraphModel(BaseGraphModel):
             )
 
             # Update node and edge vectors in lists
-            mesh_rep_levels[
-                level_l
-            ] = new_node_rep  # (B, num_mesh_nodes[l], d_h)
+            mesh_rep_levels[level_l] = (
+                new_node_rep  # (B, num_mesh_nodes[l], d_h)
+            )
             mesh_up_rep[level_l - 1] = new_edge_rep  # (B, M_up[l-1], d_h)
 
         # - PROCESSOR -
@@ -211,9 +211,9 @@ class BaseHiGraphModel(BaseGraphModel):
             new_node_rep = gnn(send_node_rep, rec_node_rep, edge_rep)
 
             # Update node and edge vectors in lists
-            mesh_rep_levels[
-                level_l
-            ] = new_node_rep  # (B, num_mesh_nodes[l], d_h)
+            mesh_rep_levels[level_l] = (
+                new_node_rep  # (B, num_mesh_nodes[l], d_h)
+            )
 
         # Return only bottom level representation
         return mesh_rep_levels[0]  # (B, num_mesh_nodes[0], d_h)
