@@ -46,7 +46,6 @@ class BaseGraphModel(ARModel):
         self.hierarchical = graph_sizes.hierarchical
         self.current_graph: Union[dict[str, Any], None] = None
 
-        self.num_mesh_nodes = graph_sizes.num_mesh_nodes
         utils.rank_zero_print(
             f"Loaded graph with {self.num_grid_nodes + self.num_mesh_nodes} "
             f"nodes ({self.num_grid_nodes} grid, {self.num_mesh_nodes} mesh)"
