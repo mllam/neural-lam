@@ -509,8 +509,9 @@ class BaseRegularGridDatastore(BaseDatastore):
     ) -> Union[xr.DataArray, xr.Dataset]:
         """
         Unstack the spatial grid coordinates from `grid_index` into separate `x`
-        and `y` dimensions to create a 2D grid. Only performs unstacking if the
-        data is currently stacked (has grid_index dimension).
+        and `y` dimensions to create a 2D grid (if the spatial coordinates have
+        different names, those are used instead). Only performs unstacking if
+        the data is currently stacked (has grid_index dimension).
 
         Parameters
         ----------
@@ -537,7 +538,24 @@ class BaseRegularGridDatastore(BaseDatastore):
         xy_dim_order = [d for d in dims if d in self.spatial_coordinates]
 
         if xy_dim_order != self.spatial_coordinates:
-            da_or_ds_unstacked = da_or_ds_unstacked.transpose("x", "y")
+            # work out where the first spatial coordinate is located
+            # so that we can insert the second spatial coordinate next to it in
+            # the correct order. Although this looks verbose, it ensures that
+            # we don't change the order of any other dimensions.
+            first_xy_dim_index = min(
+                dims.index(self.spatial_coordinates[0]),
+                dims.index(self.spatial_coordinates[1]),
+            )
+            new_dim_order = list(dims)
+            new_dim_order.remove(self.spatial_coordinates[0])
+            new_dim_order.remove(self.spatial_coordinates[1])
+            new_dim_order.insert(
+                first_xy_dim_index, self.spatial_coordinates[0]
+            )
+            new_dim_order.insert(
+                first_xy_dim_index + 1, self.spatial_coordinates[1]
+            )
+            da_or_ds_unstacked = da_or_ds_unstacked.transpose(*new_dim_order)
 
         return da_or_ds_unstacked
 
