@@ -60,7 +60,7 @@ class InteractionNet(pyg.nn.MessagePassing):
         # The edge indices used in this GNN layer are defined as:
         #   receivers → [0 .. num_rec-1]
         #   senders   → [num_rec .. num_rec+num_snd-1]
-        # Hence, sender indices from the input edge_index are offset 
+        # Hence, sender indices from the input edge_index are offset
         # by num_rec to obtain the indices used in this layer.
         edge_index = torch.stack(
             (edge_index[0] + self.num_rec, edge_index[1]), dim=0

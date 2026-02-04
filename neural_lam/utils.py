@@ -61,7 +61,10 @@ def zero_index_edge_index(edge_index):
     """
     return edge_index - edge_index.min(dim=1, keepdim=True)[0]
 
-def zero_index_m2g(m2g_edge_index, mesh_static_features, mesh_first: bool, reverse=False):
+
+def zero_index_m2g(
+    m2g_edge_index, mesh_static_features, mesh_first: bool, reverse=False
+):
     """
     Zero-index the m2g (mesh-to-grid) edge index, or reverse the operation.
 
@@ -93,7 +96,10 @@ def zero_index_m2g(m2g_edge_index, mesh_static_features, mesh_first: bool, rever
             dim=0,
         )
 
-def zero_index_g2m(g2m_edge_index, mesh_static_features, mesh_first: bool, reverse=False):
+
+def zero_index_g2m(
+    g2m_edge_index, mesh_static_features, mesh_first: bool, reverse=False
+):
     """
     Zero-index the g2m (grid-to-mesh) edge index, or reverse the operation.
 
@@ -123,6 +129,7 @@ def zero_index_g2m(g2m_edge_index, mesh_static_features, mesh_first: bool, rever
             ),
             dim=0,
         )
+
 
 def load_graph(graph_dir_path, device="cpu"):
     """Load all tensors representing the graph from `graph_dir_path`.
@@ -194,9 +201,13 @@ def load_graph(graph_dir_path, device="cpu"):
     # might be indexed
     m2g_min_indices = m2g_edge_index.min(dim=1, keepdim=True)[0]
     mesh_first = m2g_min_indices[0] < m2g_min_indices[1]
-    g2m_edge_index = zero_index_g2m(g2m_edge_index, mesh_static_features, mesh_first=mesh_first)
-    m2g_edge_index = zero_index_m2g(m2g_edge_index, mesh_static_features, mesh_first=mesh_first)
-    
+    g2m_edge_index = zero_index_g2m(
+        g2m_edge_index, mesh_static_features, mesh_first=mesh_first
+    )
+    m2g_edge_index = zero_index_m2g(
+        m2g_edge_index, mesh_static_features, mesh_first=mesh_first
+    )
+
     assert m2g_edge_index.min() >= 0, "Negative node index in m2g"
     assert g2m_edge_index.min() >= 0, "Negative node index in g2m"
 
@@ -230,11 +241,17 @@ def load_graph(graph_dir_path, device="cpu"):
     if hierarchical:
         # Load up and down edges and features
         mesh_up_edge_index = BufferList(
-            [zero_index_edge_index(ei) for ei in loads_file("mesh_up_edge_index.pt")],
+            [
+                zero_index_edge_index(ei)
+                for ei in loads_file("mesh_up_edge_index.pt")
+            ],
             persistent=False,
         )  # List of (2, M_up[l])
         mesh_down_edge_index = BufferList(
-            [zero_index_edge_index(ei) for ei in loads_file("mesh_down_edge_index.pt")],
+            [
+                zero_index_edge_index(ei)
+                for ei in loads_file("mesh_down_edge_index.pt")
+            ],
             persistent=False,
         )  # List of (2, M_down[l])
 

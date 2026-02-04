@@ -78,17 +78,15 @@ def main():
         (grid_pos, np.expand_dims(z_grid, axis=1)), axis=1
     )
 
-    # The plotting requires the edges to be non-zero-indexed 
+    # The plotting requires the edges to be non-zero-indexed
     # with grid indices following mesh indices
-    m2g_edge_index = utils.zero_index_m2g(m2g_edge_index, 
-                                          [mesh_static_features], 
-                                          mesh_first=True,
-                                          reverse=True)
+    m2g_edge_index = utils.zero_index_m2g(
+        m2g_edge_index, [mesh_static_features], mesh_first=True, reverse=True
+    )
 
-    g2m_edge_index = utils.zero_index_g2m(g2m_edge_index,
-                                           [mesh_static_features], 
-                                           mesh_first=True,
-                                           reverse=True)
+    g2m_edge_index = utils.zero_index_g2m(
+        g2m_edge_index, [mesh_static_features], mesh_first=True, reverse=True
+    )
 
     # List of edges to plot, (edge_index, color, line_width, label)
     edge_plot_list = [
