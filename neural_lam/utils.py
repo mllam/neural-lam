@@ -61,6 +61,68 @@ def zero_index_edge_index(edge_index):
     """
     return edge_index - edge_index.min(dim=1, keepdim=True)[0]
 
+def zero_index_m2g(m2g_edge_index, mesh_static_features, mesh_first: bool, reverse=False):
+    """
+    Zero-index the m2g (mesh-to-grid) edge index, or reverse the operation.
+
+    This needs special handling as not all mesh nodes might be indexed,
+    so we can't simply subtract the minimum. If the mesh indices come first
+
+    """
+
+    sign = 1 if reverse else -1
+
+    if mesh_first:
+        # Mesh has the first indices, adjust grid indices (row 1)
+        num_mesh_nodes = mesh_static_features[0].shape[0]
+        return torch.stack(
+            (
+                m2g_edge_index[0],
+                m2g_edge_index[1] + sign * num_mesh_nodes,
+            ),
+            dim=0,
+        )
+    else:
+        # Grid (interior) has the first indices, adjust mesh indices (row 0)
+        num_interior_nodes = m2g_edge_index[1].max() + 1
+        return torch.stack(
+            (
+                m2g_edge_index[0] + sign * num_interior_nodes,
+                m2g_edge_index[1],
+            ),
+            dim=0,
+        )
+
+def zero_index_g2m(g2m_edge_index, mesh_static_features, mesh_first: bool, reverse=False):
+    """
+    Zero-index the g2m (grid-to-mesh) edge index, or reverse the operation.
+
+    This needs special handling as not all mesh nodes might be indexed,
+    so we can't simply subtract the minimum.
+    """
+
+    sign = 1 if reverse else -1
+
+    if mesh_first:
+        # Mesh has the first indices, adjust grid indices (row 0)
+        num_mesh_nodes = mesh_static_features[0].shape[0]
+        return torch.stack(
+            (
+                g2m_edge_index[0] + sign * num_mesh_nodes,
+                g2m_edge_index[1],
+            ),
+            dim=0,
+        )
+    else:
+        # Grid has the first indices, adjust mesh indices (row 1)
+        num_grid_nodes = g2m_edge_index[0].max() + 1
+        return torch.stack(
+            (
+                g2m_edge_index[0],
+                g2m_edge_index[1] + sign * num_grid_nodes,
+            ),
+            dim=0,
+        )
 
 def load_graph(graph_dir_path, device="cpu"):
     """Load all tensors representing the graph from `graph_dir_path`.
@@ -72,7 +134,7 @@ def load_graph(graph_dir_path, device="cpu"):
     - m2m_features.pt
     - g2m_features.pt
     - m2g_features.pt
-    - m2m_node_features.pt
+    - mesh_features.pt
 
     And in addition for hierarchical graphs:
     - mesh_up_edge_index.pt
@@ -100,7 +162,7 @@ def load_graph(graph_dir_path, device="cpu"):
         - mesh_down_edge_index
         - g2m_features
         - m2g_features
-        - m2m_node_features
+        - m2m_features
         - mesh_up_features
         - mesh_down_features
         - mesh_static_features
@@ -114,21 +176,14 @@ def load_graph(graph_dir_path, device="cpu"):
             weights_only=True,
         )
 
-    # Need to reindex some edge index to start from 0
-    reindex_func = zero_index_edge_index
-
     # Load static node features
     mesh_static_features = loads_file(
-        "m2m_node_features.pt"
+        "mesh_features.pt"
     )  # List of (N_mesh[l], d_mesh_static)
-
-    # Determine 2d or 3d features
-    node_feature_dims = mesh_static_features[0].shape[-1]
-    three_dim_features = node_feature_dims > 2
 
     # Load edges (edge_index)
     m2m_edge_index = BufferList(
-        [reindex_func(ei) for ei in loads_file("m2m_edge_index.pt")],
+        [zero_index_edge_index(ei) for ei in loads_file("m2m_edge_index.pt")],
         persistent=False,
     )  # List of (2, M_m2m[l])
     g2m_edge_index = loads_file("g2m_edge_index.pt")  # (2, M_g2m)
@@ -138,47 +193,10 @@ def load_graph(graph_dir_path, device="cpu"):
     # m2g and g2m has to be handled specially as not all mesh nodes
     # might be indexed
     m2g_min_indices = m2g_edge_index.min(dim=1, keepdim=True)[0]
-
-    # Rect graph, need to zero-index g2m and m2g edge_index
-    if m2g_min_indices[0] < m2g_min_indices[1]:
-        # mesh has the first indices
-        # Number of mesh nodes at level that connects to grid
-        num_mesh_nodes = mesh_static_features[0].shape[0]
-
-        m2g_edge_index = torch.stack(
-            (
-                m2g_edge_index[0],
-                m2g_edge_index[1] - num_mesh_nodes,
-            ),
-            dim=0,
-        )
-        g2m_edge_index = torch.stack(
-            (
-                g2m_edge_index[0] - num_mesh_nodes,
-                g2m_edge_index[1],
-            ),
-            dim=0,
-        )
-    else:
-        # grid (interior) has the first indices
-        # NOTE: Below works, but would be good with a better way to get this
-        num_interior_nodes = m2g_edge_index[1].max() + 1
-        num_grid_nodes = g2m_edge_index[0].max() + 1
-
-        m2g_edge_index = torch.stack(
-            (
-                m2g_edge_index[0] - num_interior_nodes,
-                m2g_edge_index[1],
-            ),
-            dim=0,
-        )
-        g2m_edge_index = torch.stack(
-            (
-                g2m_edge_index[0],
-                g2m_edge_index[1] - num_grid_nodes,
-            ),
-            dim=0,
-        )
+    mesh_first = m2g_min_indices[0] < m2g_min_indices[1]
+    g2m_edge_index = zero_index_g2m(g2m_edge_index, mesh_static_features, mesh_first=mesh_first)
+    m2g_edge_index = zero_index_m2g(m2g_edge_index, mesh_static_features, mesh_first=mesh_first)
+    
     assert m2g_edge_index.min() >= 0, "Negative node index in m2g"
     assert g2m_edge_index.min() >= 0, "Negative node index in g2m"
 
@@ -191,15 +209,10 @@ def load_graph(graph_dir_path, device="cpu"):
     g2m_features = loads_file("g2m_features.pt")  # (M_g2m, d_edge_f)
     m2g_features = loads_file("m2g_features.pt")  # (M_m2g, d_edge_f)
 
-    if three_dim_features:
-        # For trigraphs the edge features are already rescaled when created
-        # Set to 1. to not rescale here
-        longest_edge = 1.0
-    else:
-        # Normalize by dividing with longest edge (found in m2m)
-        longest_edge = max(
-            torch.max(level_features[:, 0]) for level_features in m2m_features
-        )  # Col. 0 is length
+    # Normalize by dividing with longest edge (found in m2m)
+    longest_edge = max(
+        torch.max(level_features[:, 0]) for level_features in m2m_features
+    )  # Col. 0 is length
 
     m2m_features = BufferList(m2m_features, persistent=False)
     m2m_features /= longest_edge
@@ -217,11 +230,11 @@ def load_graph(graph_dir_path, device="cpu"):
     if hierarchical:
         # Load up and down edges and features
         mesh_up_edge_index = BufferList(
-            [reindex_func(ei) for ei in loads_file("mesh_up_edge_index.pt")],
+            [zero_index_edge_index(ei) for ei in loads_file("mesh_up_edge_index.pt")],
             persistent=False,
         )  # List of (2, M_up[l])
         mesh_down_edge_index = BufferList(
-            [reindex_func(ei) for ei in loads_file("mesh_down_edge_index.pt")],
+            [zero_index_edge_index(ei) for ei in loads_file("mesh_down_edge_index.pt")],
             persistent=False,
         )  # List of (2, M_down[l])
 
