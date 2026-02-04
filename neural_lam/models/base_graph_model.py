@@ -26,13 +26,6 @@ class BaseGraphModel(ARModel):
             graph_dir_path=graph_dir_path
         )
         for name, attr_value in graph_ldict.items():
-            # NOTE: It would be good to rescale mesh node position features in
-            # exactly the same way as grid node position static features.
-            if name == "mesh_static_features":
-                max_coord = datastore.get_xy("state", stacked=True).max()
-                # Rescale by dividing by maximum coordinate in interior
-                attr_value /= max_coord
-
             # Make BufferLists module members and register tensors as buffers
             if isinstance(attr_value, torch.Tensor):
                 self.register_buffer(name, attr_value, persistent=False)
