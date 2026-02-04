@@ -30,7 +30,7 @@ class DummyDatastore(BaseRegularGridDatastore):
     SHORT_NAME = "dummydata"
     T0 = isodate.parse_datetime("2021-01-01T00:00:00")
     N_FEATURES = dict(state=5, forcing=2, static=1)
-    CARTESIAN_COORDS = ["x", "y"]
+    spatial_coordinates = ("x", "y")
 
     # center the domain on Denmark
     latlon_center = [56, 10]  # latitude, longitude
@@ -165,7 +165,7 @@ class DummyDatastore(BaseRegularGridDatastore):
         )
 
         # Stack the spatial dimensions into grid_index
-        self.ds = self.ds.stack(grid_index=self.CARTESIAN_COORDS)
+        self.ds = self.ds.stack(grid_index=self.spatial_coordinates)
 
         # Create temporary directory for storing derived files
         self._tempdir = tempfile.TemporaryDirectory()
@@ -409,7 +409,7 @@ class DummyDatastore(BaseRegularGridDatastore):
         da_xy = xr.concat([da_x, da_y], dim="grid_coord")
 
         if stacked:
-            da_xy = da_xy.stack(grid_index=self.CARTESIAN_COORDS).transpose(
+            da_xy = da_xy.stack(grid_index=self.spatial_coordinates).transpose(
                 "grid_index",
                 "grid_coord",
             )
