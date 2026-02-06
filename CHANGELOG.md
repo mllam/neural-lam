@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [unreleased](https://github.com/mllam/neural-lam/compare/v0.5.0...HEAD)
 
+### Fixed
+
+- Infer spatial coordinate names for MDPDatastore (rather than assuming names `x` and `y`), allows for e.g. lat/lon regular grids [\#169](https://github.com/mllam/neural-lam/pull/169) @leifdenby
+
 ### Maintenance
 
 - Update CI/CD to use python 3.13 for testing and full range of current python versions for linting (3.10 - 3.14) [\#173](https://github.com/mllam/neural-lam/pull/173)
