@@ -63,17 +63,34 @@ def zero_index_edge_index(edge_index):
 
 
 def zero_index_m2g(
-    m2g_edge_index, mesh_static_features, mesh_first: bool, reverse=False
-):
+    m2g_edge_index: torch.Tensor,
+    mesh_static_features: list[torch.Tensor],
+    mesh_first: bool,
+    restore: bool = False,
+) -> torch.Tensor:
     """
-    Zero-index the m2g (mesh-to-grid) edge index, or reverse the operation.
+    Zero-index the m2g (mesh-to-grid) edge index, or undo this operation.
 
-    This needs special handling as not all mesh nodes might be indexed,
-    so we can't simply subtract the minimum. If the mesh indices come first
+    Special handling is needed since not all mesh nodes may be present.
 
+    Parameters
+    ----------
+    m2g_edge_index : torch.Tensor
+        Edge index tensor of shape (2, N_edges).
+    mesh_static_features : list of torch.Tensor
+        Mesh node feature tensors.
+    mesh_first : bool
+        If True, mesh nodes are indexed before grid nodes.
+    restore : bool
+        If True, undo zero-indexing (restore original indices).
+
+    Returns
+    -------
+    torch.Tensor
+        Edge index tensor with zero-based or restored indices.
     """
 
-    sign = 1 if reverse else -1
+    sign = 1 if restore else -1
 
     if mesh_first:
         # Mesh has the first indices, adjust grid indices (row 1)
@@ -98,16 +115,34 @@ def zero_index_m2g(
 
 
 def zero_index_g2m(
-    g2m_edge_index, mesh_static_features, mesh_first: bool, reverse=False
-):
+    g2m_edge_index: torch.Tensor,
+    mesh_static_features: list[torch.Tensor],
+    mesh_first: bool,
+    restore: bool = False,
+) -> torch.Tensor:
     """
-    Zero-index the g2m (grid-to-mesh) edge index, or reverse the operation.
+    Zero-index the g2m (grid-to-mesh) edge index, or undo this operation.
 
-    This needs special handling as not all mesh nodes might be indexed,
-    so we can't simply subtract the minimum.
+    Special handling is needed since not all mesh nodes may be present.
+
+    Parameters
+    ----------
+    g2m_edge_index : torch.Tensor
+        Edge index tensor of shape (2, N_edges).
+    mesh_static_features : list of torch.Tensor
+        Mesh node feature tensors.
+    mesh_first : bool
+        If True, mesh nodes are indexed before grid nodes.
+    restore : bool
+        If True, undo zero-indexing (restore original indices).
+
+    Returns
+    -------
+    torch.Tensor
+        Edge index tensor with zero-based or restored indices.
     """
 
-    sign = 1 if reverse else -1
+    sign = 1 if restore else -1
 
     if mesh_first:
         # Mesh has the first indices, adjust grid indices (row 0)
