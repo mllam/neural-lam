@@ -17,6 +17,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Update CI/CD to use only uv for full test suite and drop pdm [\#178](https://github.com/mllam/neural-lam/pull/178) @observingClouds
 
+- Fix caching of MEPS example data in CI/CD [\#181](https://github.com/mllam/neural-lam/pull/181) @observingClouds
+
 ## [v0.5.0](https://github.com/mllam/neural-lam/releases/tag/v0.5.0)
 
 This release contains maintenance and fixes, preventing some unexpected crashes and improving CICD and testing.

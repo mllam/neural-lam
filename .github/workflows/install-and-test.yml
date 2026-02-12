@@ -104,7 +104,7 @@ jobs:
         if: matrix.package_manager == 'uv'
         uses: actions/cache/restore@v4
         with:
-          path: tests/datastore_examples/npyfilesmeps/meps_example_reduced.tar.gz
+          path: tests/datastore_examples/npyfilesmeps/meps_example_reduced.v0.3.0.tar.gz
           key: ${{ runner.os }}-meps-reduced-example-data-v0.3.0
           restore-keys: |
             ${{ runner.os }}-meps-reduced-example-data-v0.3.0
@@ -132,5 +132,5 @@ jobs:
         if: matrix.package_manager == 'uv'
         uses: actions/cache/save@v4
         with:
-          path: tests/datastore_examples/npyfilesmeps/meps_example_reduced.tar.gz
+          path: tests/datastore_examples/npyfilesmeps/meps_example_reduced.v0.3.0.tar.gz
           key: ${{ runner.os }}-meps-reduced-example-data-v0.3.0
