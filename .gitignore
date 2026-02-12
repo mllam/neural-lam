@@ -87,3 +87,4 @@ __MACOSX
 
 # exclude pdm.lock file so that both cpu and gpu versions of torch will be accepted by pdm
 pdm.lock
+tests/test_outputs/

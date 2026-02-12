@@ -10,6 +10,9 @@ import pytorch_lightning as pl
 import torch
 import xarray as xr
 
+# First-party
+from neural_lam.utils import get_integer_time
+
 # Local
 from .. import metrics, vis
 from ..config import NeuralLAMConfig
@@ -152,6 +155,10 @@ class ARModel(pl.LightningModule):
 
         # For storing spatial loss maps during evaluation
         self.spatial_loss_maps: List[Any] = []
+
+        self.time_step_int, self.time_step_unit = get_integer_time(
+            self._datastore.step_length
+        )
 
     def _create_dataarray_from_tensor(
         self,
@@ -522,7 +529,8 @@ class ARModel(pl.LightningModule):
                     vis.plot_prediction(
                         datastore=self._datastore,
                         title=f"{var_name} ({var_unit}), "
-                        f"t={t_i} ({self._datastore.step_length * t_i} h)",
+                        f"t={t_i} ({(self.time_step_int * t_i)}"
+                        f"{self.time_step_unit})",
                         vrange=var_vrange,
                         da_prediction=da_prediction.isel(
                             state_feature=var_i, time=t_i - 1
@@ -701,7 +709,7 @@ class ARModel(pl.LightningModule):
                     error=loss_map,
                     datastore=self._datastore,
                     title=f"Test loss, t={t_i} "
-                    f"({self._datastore.step_length * t_i} h)",
+                    f"({(self.time_step_int * t_i)} {self.time_step_int_unit})",
                 )
                 for t_i, loss_map in zip(
                     self.args.val_steps_to_log, mean_spatial_loss

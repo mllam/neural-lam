@@ -1,4 +1,4 @@
-# Configuration to test both CPU and GPU installations with both PDM and pip
+# Configuration to test both CPU and GPU installations with both UV and pip
 #
 # We don't use lock files in neural-lam, because that would tie us to a
 # particular variant of pytorch (gpu/cpu), and want it to be possible for
@@ -7,7 +7,7 @@
 # that has upstream packages evolve the specific version installed might change
 # (if we don't pin it). Currently, we do not pin pytorch in pyproject.toml
 #
-# To test both CPU and GPU installations with both PDM and pip we use two sets
+# To test both CPU and GPU installations with both UV and pip we use two sets
 # of hosts to run the training on:
 # - ubuntu-latest for CPU: these are on github
 # - cirun-aws-runner--${{ github.run_id }} for GPU: these are on AWS,
@@ -29,7 +29,7 @@ jobs:
     runs-on: ${{ matrix.runner }}
     strategy:
       matrix:
-        package_manager: [pdm, pip]
+        package_manager: [pip, uv]
         device: [cpu, gpu]
         include:
           - device: cpu
@@ -48,24 +48,9 @@ jobs:
         with:
           python-version: 3.13
 
-      - name: Install PDM (if applicable)
-        if: matrix.package_manager == 'pdm'
-        run: |
-          python -m pip install pdm
-
-      - name: Configure and create PDM virtual environment (GPU)
-        # on the AWS GPU runner we have to use the mounted nvme drive, otherwise we run out of space
-        if: matrix.package_manager == 'pdm' && matrix.device == 'gpu'
-        run: |
-          pdm config venv.in_project False
-          pdm config venv.location /opt/dlami/nvme/venv
-          pdm venv create --with-pip
-
-      - name: Create virtual environment (PDM CPU)
-        if: matrix.package_manager == 'pdm' && matrix.device == 'cpu'
-        run: |
-          pdm venv create --with-pip
-          pdm use --venv in-project
+      - name : Install uv (if applicable)
+        if: matrix.package_manager == 'uv'
+        uses: astral-sh/setup-uv@v7
 
       - name: Create virtual environment (pip GPU)
         if: matrix.package_manager == 'pip' && matrix.device == 'gpu'
@@ -81,36 +66,42 @@ jobs:
           echo "Torch version detected: $TORCH_VERSION"
           echo "TORCH_VERSION=$TORCH_VERSION" >> $GITHUB_ENV
 
-      - name: Determined PyTorch version for neural-lam (using pdm install dry-run)
-        if: matrix.package_manager == 'pdm'
-        run: |
-          TORCH_VERSION=$(pdm install --dry-run | grep -Eo 'torch [0-9]+\.[0-9]+\.[0-9]+' | awk '{print $2}')
-          echo "Torch version detected: $TORCH_VERSION"
-          echo "TORCH_VERSION=$TORCH_VERSION" >> $GITHUB_ENV
-
       - name: Install PyTorch
+        if : matrix.package_manager != 'uv'
         run: |
-          ${{ matrix.package_manager == 'pdm' && 'pdm run python -m pip' || 'python -m pip' }} install "torch==$TORCH_VERSION" --index-url ${{ matrix.torch_index }}
+          python -m pip install "torch==$TORCH_VERSION" --index-url ${{ matrix.torch_index }}
 
       - name: Install package (including dev dependencies)
+        if : matrix.package_manager != 'uv'
         run: |
-          ${{ matrix.package_manager == 'pdm' && 'pdm install --group :all' || 'python -m pip install --group dev .' }}
+          python -m pip install --group dev .
+
+      - name: Setup environment with uv (if applicable)
+        if: matrix.package_manager == 'uv'
+        run: |
+          uv venv --no-project
+          source .venv/bin/activate
+          uv pip install torch --index-url ${{ matrix.torch_index }}
+          uv pip install --group dev -e .
+          uv pip list
+          echo "$PWD/.venv/bin" >> $GITHUB_PATH
 
       - name: Print torch version
         run: |
-          ${{ matrix.package_manager == 'pdm' && 'pdm run' || '' }} python -c "import torch; print(torch.__version__)"
+          python -c "import torch; print(torch.__version__)"
 
       - name: Check torch version and variant is cpu
         if: matrix.device == 'cpu'
         run: |
-          ${{ matrix.package_manager == 'pdm' && 'pdm run' || '' }} python -c "import torch; assert torch.__version__.endswith('+cpu')"
+          python -c "import torch; assert torch.__version__.endswith('+cpu')"
 
       - name: Check torch version and variant is gpu
         if: matrix.device == 'gpu'
         run: |
-          ${{ matrix.package_manager == 'pdm' && 'pdm run' || '' }} python -c "import torch; assert not torch.__version__.endswith('+cpu')"
+          python -c "import torch; assert not torch.__version__.endswith('+cpu')"
 
       - name: Load cache data
+        if: matrix.package_manager == 'uv'
         uses: actions/cache/restore@v4
         with:
           path: tests/datastore_examples/npyfilesmeps/meps_example_reduced.v0.3.0.tar.gz
@@ -118,11 +109,27 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-meps-reduced-example-data-v0.3.0
 
-      - name: Run tests
+      - name: Run smoke test
+        if: matrix.package_manager != 'uv'
         run: |
-          ${{ matrix.package_manager == 'pdm' && 'pdm run' || '' }} pytest -vv -s
+          python -c "import neural_lam; print('neural-lam imported successfully')"
+
+      - name: Run tests
+        if: matrix.package_manager == 'uv'
+        run: |
+          pytest -vv -s --doctest-modules
+
+      - name: Upload test figures
+        if: matrix.package_manager == 'uv'
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-figures-${{ matrix.device }}-${{ matrix.package_manager }}
+          path: tests/test_outputs/
+          if-no-files-found: warn
+          retention-days: 30
 
       - name: Save cache data
+        if: matrix.package_manager == 'uv'
         uses: actions/cache/save@v4
         with:
           path: tests/datastore_examples/npyfilesmeps/meps_example_reduced.v0.3.0.tar.gz

@@ -1,5 +1,6 @@
 # Standard library
 import os
+from datetime import timedelta
 from pathlib import Path
 
 # Third-party
@@ -75,7 +76,7 @@ def download_meps_example_reduced_dataset():
         compute_standardization_stats_meps.main(
             datastore_config_path=config_path,
             batch_size=8,
-            step_length=3,
+            step_length=timedelta(hours=3),
             n_workers=0,
             distributed=False,
         )

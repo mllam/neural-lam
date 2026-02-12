@@ -9,9 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Maintenance
 
-- Update CI/CD to use python 3.13 for testing and full range of current python versions for linting (3.10 - 3.14) [\#173](https://github.com/mllam/neural-lam/pull/173)
+- Update PR template to clarify milestone/roadmap requirement and maintenance changes [\#186](https://github.com/mllam/neural-lam/pull/186) @joeloskarsson
 
-- Move development dependencies to dependency-group [#\174](](https://github.com/mllam/neural-lam/pull/174) @observingClouds
+- Update CI/CD to use python 3.13 for testing and full range of current python versions for linting (3.10 - 3.14) [\#173](https://github.com/mllam/neural-lam/pull/173) @observingClouds
+
+- Move development dependencies to dependency-group [#\174](https://github.com/mllam/neural-lam/pull/174) @observingClouds
+
+- Update CI/CD to use only uv for full test suite and drop pdm [\#178](https://github.com/mllam/neural-lam/pull/178) @observingClouds
 
 - Fix caching of MEPS example data in CI/CD [\#181](https://github.com/mllam/neural-lam/pull/181) @observingClouds
 
@@ -23,6 +27,8 @@ This release contains maintenance and fixes, preventing some unexpected crashes 
 
 - Expose run name as optional command line argument `--logger_run_name` to allow user-defined names
 [\#156](https://github.com/mllam/neural-lam/pull/156) @observingClouds
+
+- Add support for any forecast step size(`step_length`) [\#172](https://github.com/mllam/neural-lam/pull/172) @observingClouds
 
 ### Fixed
 
