@@ -1,5 +1,6 @@
 # Standard library
 import copy
+import functools
 import warnings
 from datetime import timedelta
 from functools import cached_property
@@ -9,6 +10,7 @@ from typing import List, Optional, Union
 # Third-party
 import cartopy.crs as ccrs
 import mllam_data_prep as mdp
+import numpy as np
 import xarray as xr
 from loguru import logger
 from numpy import ndarray
@@ -490,3 +492,36 @@ class MDPDatastore(BaseRegularGridDatastore):
             da_xy = da_xy.transpose(*dims)
 
         return da_xy.values
+
+    @functools.lru_cache
+    def get_lat_lon(self, category: str) -> np.ndarray:
+        """
+        Return the longitude, latitude coordinates of the dataset as numpy
+        array for a given category of data.
+        Override in MDP to use lat/lons directly from xr.Dataset, if available.
+
+        Parameters
+        ----------
+        category : str
+            The category of the dataset (state/forcing/static).
+
+        Returns
+        -------
+        np.ndarray
+            The longitude, latitude coordinates of the dataset
+            with shape `[n_grid_points, 2]`.
+        """
+        # Check first if lat/lon saved in ds
+        lookup_ds = self._ds
+        if "latitude" in lookup_ds.coords and "longitude" in lookup_ds.coords:
+            lon = lookup_ds.longitude
+            lat = lookup_ds.latitude
+        elif "lat" in lookup_ds.coords and "lon" in lookup_ds.coords:
+            lon = lookup_ds.lon
+            lat = lookup_ds.lat
+        else:
+            # Not saved, use method from BaseDatastore to derive from x/y
+            return super().get_lat_lon(category)
+
+        coords = np.stack((lon.values, lat.values), axis=1)
+        return coords
