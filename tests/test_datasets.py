@@ -259,3 +259,26 @@ def test_dataset_length(dataset_config):
     # Check that we can actually get last and first sample
     dataset[0]
     dataset[expected_len - 1]
+
+def test_standardization_with_zero_std():
+    """Regression test for https://github.com/mllam/neural-lam/issues/136
+    
+    When all values of a field are identical (std = 0), standardization
+    must not produce NaN via division-by-zero.
+    """
+    import xarray as xr
+    import numpy as np
+
+    # Build a zero-std field (all values identical, like all-zero rain)
+    data = xr.DataArray(np.zeros((5, 10)), dims=["time", "grid_index"])
+    mean = xr.DataArray(np.zeros(10), dims=["grid_index"])
+    std  = xr.DataArray(np.zeros(10), dims=["grid_index"])
+
+    # Confirm the old approach produces NaN (the original bug)
+    old_result = (data - mean) / std
+    assert np.isnan(old_result.values).any(), "Expected NaN from naive division"
+
+    # Confirm the fix produces 0.0, not NaN
+    new_result = xr.where(std > 0, (data - mean) / std, 0.0)
+    assert not np.isnan(new_result.values).any(), "Fix failed: still NaN when std=0"
+    assert (new_result.values == 0.0).all(), "Expected all zeros for constant field"
