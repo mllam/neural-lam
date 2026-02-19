@@ -398,21 +398,24 @@ class WeatherDataset(torch.utils.data.Dataset):
         da_target_times = da_target_states.time
 
         if self.standardize:
-            da_init_states = (
-                da_init_states - self.da_state_mean
-            ) / self.da_state_std
-            da_target_states = (
-                da_target_states - self.da_state_mean
-            ) / self.da_state_std
+            da_init_states = xr.where(
+                self.da_state_std > 0,
+                (da_init_states - self.da_state_mean) / self.da_state_std,
+                0.0,
+            )
+            da_target_states = xr.where(
+                self.da_state_std > 0,
+                (da_target_states - self.da_state_mean) / self.da_state_std,
+                0.0,
+            )
 
             if da_forcing is not None:
-                # XXX: Here we implicitly assume that the last dimension of the
-                # forcing data is the forcing feature dimension. To standardize
-                # on `.device` we need a different implementation. (e.g. a
-                # tensor with repeated means and stds for each "windowed" time.)
-                da_forcing_windowed = (
-                    da_forcing_windowed - self.da_forcing_mean
-                ) / self.da_forcing_std
+                da_forcing_windowed = xr.where(
+                    self.da_forcing_std > 0,
+                    (da_forcing_windowed - self.da_forcing_mean)
+                    / self.da_forcing_std,
+                    0.0,
+                )
 
         if da_forcing is not None:
             # stack the `forcing_feature` and `window_sample` dimensions into a
