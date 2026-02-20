@@ -7,6 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [unreleased](https://github.com/mllam/neural-lam/compare/v0.5.0...HEAD)
 
+<<<<<<< HEAD
 ### Fixed
 
 - Fix README image paths to use absolute GitHub URLs so images display correctly on PyPI [\#188](https://github.com/mllam/neural-lam/pull/188) @bk-simon
@@ -19,6 +20,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 \#222](https://github.com/mllam/neural-lam/pull/222) @santhil-cyber
 
 - Fix Slack domain link [\#288](https://github.com/mllam/neural-lam/pull/288) @sadamov
+=======
+### Added
+
+- Warn when running in evaluation mode (`--eval`) without loading a checkpoint (`--load`) ([#105](https://github.com/mllam/neural-lam/issues/105))
+
+>>>>>>> 2b0b16b (feat: warn when running eval mode without loading a checkpoint (#105))
 
 ### Maintenance
 
