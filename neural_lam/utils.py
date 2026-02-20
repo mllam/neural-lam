@@ -4,8 +4,10 @@ import shutil
 import subprocess
 import tempfile
 import warnings
+import logging
 from functools import cache
 from pathlib import Path
+
 
 # Third-party
 import pytorch_lightning as pl
@@ -17,7 +19,7 @@ from tueplots import bundles, figsizes
 
 # Local
 from .custom_loggers import CustomMLFlowLogger
-
+from loguru import logger
 
 class BufferList(nn.Module):
     """
@@ -307,8 +309,8 @@ def fractional_plot_bundle(fraction):
 
 @rank_zero_only
 def rank_zero_print(*args, **kwargs):
-    """Print only from rank 0 process"""
-    print(*args, **kwargs)
+    """Log a message only from rank 0 process (at the info level)."""
+    logger.info(" ".join(str(a) for a in args))
 
 
 def init_training_logger_metrics(training_logger, val_steps):
