@@ -8,7 +8,6 @@ import logging
 from functools import cache
 from pathlib import Path
 
-
 # Third-party
 import pytorch_lightning as pl
 import torch
@@ -20,6 +19,7 @@ from tueplots import bundles, figsizes
 # Local
 from .custom_loggers import CustomMLFlowLogger
 from loguru import logger
+
 
 class BufferList(nn.Module):
     """
