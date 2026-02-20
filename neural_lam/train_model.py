@@ -2,6 +2,7 @@
 import json
 import random
 import time
+import warnings
 from argparse import ArgumentDefaultsHelpFormatter, ArgumentParser
 
 # Third-party
@@ -245,6 +246,17 @@ def main(input_args=None):
                 f"validation is only unrolled {args.ar_steps_eval} steps. "
                 "Adjust --var_leads_metric_watch."
             )
+    # Warn if running in eval mode without a checkpoint evaluating
+    # randomly initialised weights almost certainly produces meaningless results
+    if args.eval and not args.load:
+        warnings.warn(
+            "Running in evaluation mode (--eval) without loading a checkpoint "
+            "(--load). The model weights are randomly initialised, so results "
+            "will not be meaningful. "
+            "Did you forget to pass --load <path_to_checkpoint>?",
+            UserWarning,
+            stacklevel=2,
+        )
 
     # Get an (actual) random run id as a unique identifier
     random_run_id = random.randint(0, 9999)
