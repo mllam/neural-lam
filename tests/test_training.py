@@ -41,10 +41,8 @@ def run_simple_training(datastore, set_output_std):
         max_epochs=1,
         deterministic=True,
         accelerator=device_name,
-        # XXX: `devices` has to be set to 2 otherwise
-        # neural_lam.models.ar_model.ARModel.aggregate_and_plot_metrics fails
-        # because it expects to aggregate over multiple devices
-        devices=2,
+        # Dynamically allocate devices to support single-GPU developer machinesices
+        devices=2 if torch.cuda.device_count() >= 2 else 1,
         log_every_n_steps=1,
         # use `detect_anomaly` to ensure that we don't have NaNs popping up
         # during training
