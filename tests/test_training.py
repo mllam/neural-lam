@@ -41,7 +41,8 @@ def run_simple_training(datastore, set_output_std):
         max_epochs=1,
         deterministic=True,
         accelerator=device_name,
-        # Dynamically allocate devices to support single-GPU developer machinesices
+        # Dynamically allocate devices
+        # to support single-GPU developer machinesices
         devices=2 if torch.cuda.device_count() >= 2 else 1,
         log_every_n_steps=1,
         # use `detect_anomaly` to ensure that we don't have NaNs popping up
