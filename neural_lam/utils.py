@@ -353,8 +353,11 @@ def setup_training_logger(datastore, args, run_name):
     if args.logger == "wandb":
         logger = pl.loggers.WandbLogger(
             project=args.logger_project,
-            name=run_name,
+            # When resuming by id, don't override the run's existing name
+            name=None if args.wandb_id else run_name,
             config=dict(training=vars(args), datastore=datastore._config),
+            resume=args.wandb_resume,
+            id=args.wandb_id,
         )
     elif args.logger == "mlflow":
         url = os.getenv("MLFLOW_TRACKING_URI")

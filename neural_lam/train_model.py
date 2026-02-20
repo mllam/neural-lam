@@ -192,6 +192,27 @@ def main(input_args=None):
         help="""Logger run name, for e.g. MLFlow (with default value `None`
           neural-lam's default format string is used)""",
     )
+
+    # Wandb-specific settings
+    parser.add_argument(
+        "--wandb_resume",
+        type=str,
+        default=None,
+        choices=["allow", "must", "never", "auto"],
+        help="Controls wandb run resuming. Passed directly to wandb.init as "
+        "the `resume` argument. Options: 'allow' (resume if run exists, "
+        "else start new), 'must' (must resume existing run), 'never' (always "
+        "start new run, error if run id exists), 'auto' (auto-resume on "
+        "failure). Use together with --wandb_id to target a specific run.",
+    )
+    parser.add_argument(
+        "--wandb_id",
+        type=str,
+        default=None,
+        help="Wandb run ID to resume. Use together with --wandb_resume to "
+        "continue a specific existing run, e.g. on HPC systems that have "
+        "limited job runtimes or may crash.",
+    )
     parser.add_argument(
         "--val_steps_to_log",
         nargs="+",
