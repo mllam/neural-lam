@@ -17,6 +17,8 @@ def plot_error_map(errors, datastore: BaseRegularGridDatastore, title=None):
     errors: (pred_steps, d_f)
     """
     errors_np = errors.T.cpu().numpy()  # (d_f, pred_steps)
+    if errors_np.ndim == 1:
+        errors_np = errors_np[:, None]
     d_f, pred_steps = errors_np.shape
     step_length = datastore.step_length
 
