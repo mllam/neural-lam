@@ -4,6 +4,7 @@ import warnings
 from typing import Union
 
 # Third-party
+from loguru import logger
 import numpy as np
 import pytorch_lightning as pl
 import torch
@@ -398,20 +399,34 @@ class WeatherDataset(torch.utils.data.Dataset):
         da_target_times = da_target_states.time
 
         if self.standardize:
+            # Warn about any near-zero std fields (std <= 1e-8)
+            if (self.da_state_std <= 1e-8).any().item():
+                logger.warning(
+                    "Some state features have near-zero std (<=1e-8) and "
+                    "will be set to 0.0 after standardization."
+                )
+            if (
+                self.da_forcing_std is not None
+                and (self.da_forcing_std <= 1e-8).any().item()
+            ):
+                logger.warning(
+                    "Some forcing features have near-zero std (<=1e-8) "
+                    "and will be set to 0.0 after standardization."
+                )
             da_init_states = xr.where(
-                self.da_state_std > 0,
+                self.da_state_std > 1e-8,
                 (da_init_states - self.da_state_mean) / self.da_state_std,
                 0.0,
             )
             da_target_states = xr.where(
-                self.da_state_std > 0,
+                self.da_state_std > 1e-8,
                 (da_target_states - self.da_state_mean) / self.da_state_std,
                 0.0,
             )
 
             if da_forcing is not None:
                 da_forcing_windowed = xr.where(
-                    self.da_forcing_std > 0,
+                    self.da_forcing_std > 1e-8,
                     (da_forcing_windowed - self.da_forcing_mean)
                     / self.da_forcing_std,
                     0.0,

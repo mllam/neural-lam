@@ -213,7 +213,8 @@ class BaseDatastore(abc.ABC):
         mean = standard_da[f"{category}_mean"]
         std = standard_da[f"{category}_std"]
 
-        return (da - mean) / std
+        standardized = xr.where(std > 1e-8, (da - mean) / std, 0.0)
+        return standardized.transpose(*da.dims)
 
     @abc.abstractmethod
     def get_dataarray(
