@@ -12,7 +12,7 @@ import torch
 from neural_lam import config as nlconfig
 from neural_lam import vis
 from neural_lam.create_graph import create_graph_from_datastore
-from neural_lam.models.graph_lam import GraphLAM
+from neural_lam.models.forecaster_module import ForecasterModule
 from neural_lam.weather_dataset import WeatherDataset
 from tests.dummy_datastore import DummyDatastore
 
@@ -66,7 +66,8 @@ def model_and_batch(tmp_path, time_step, time_unit):
     )
 
     # Create model
-    model = GraphLAM(
+    model = ForecasterModule(
+        model_name="graph_lam",
         args=ModelArgs(),
         config=config,
         datastore=datastore,
@@ -119,8 +120,14 @@ def test_plot_examples_integration_saves_figure(
     prediction, target, _, _ = model.common_step(batch)
 
     # Rescale to original data scale
-    prediction_rescaled = prediction * model.state_std + model.state_mean
-    target_rescaled = target * model.state_std + model.state_mean
+    prediction_rescaled = (
+        prediction * model.forecaster.predictor.state_std
+        + model.forecaster.predictor.state_mean
+    )
+    target_rescaled = (
+        target * model.forecaster.predictor.state_std
+        + model.forecaster.predictor.state_mean
+    )
 
     # Get first example
     pred_slice = prediction_rescaled[0].detach()  # Detach from graph

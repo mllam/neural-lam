@@ -100,7 +100,7 @@ class ForecasterModule(pl.LightningModule):
 
     @property
     def interior_mask_bool(self):
-        return self.forecaster.predictor.interior_mask[:, 0].to(torch.bool)
+        return self.forecaster.predictor.interior_mask[0, :, 0].to(torch.bool)
 
     def common_step(self, batch):
         (init_states, target_states, forcing_features, batch_times) = batch
@@ -131,7 +131,12 @@ class ForecasterModule(pl.LightningModule):
         return batch_loss
 
     def all_gather_cat(self, tensor_to_gather):
-        return self.all_gather(tensor_to_gather).flatten(0, 1)
+        gathered = self.all_gather(tensor_to_gather)
+        # all_gather adds dim 0 only on multi-device; on single
+        # device it returns the same tensor unchanged.
+        if gathered.dim() > tensor_to_gather.dim():
+            gathered = gathered.flatten(0, 1)
+        return gathered
 
     # pylint: disable-next=unused-argument
     def validation_step(self, batch, batch_idx):
