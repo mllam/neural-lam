@@ -1,9 +1,11 @@
 # Standard library
+import glob
 import os
 import warnings
 from typing import Any, Dict, List
 
 # Third-party
+import imageio.v2 as imageio
 import matplotlib.pyplot as plt
 import numpy as np
 import pytorch_lightning as pl
@@ -522,6 +524,14 @@ class ARModel(pl.LightningModule):
             )  # (d_f,)
             var_vranges = list(zip(var_vmin, var_vmax))
 
+            example_i = self.plotted_examples
+
+            plot_dir_path = os.path.join(
+                self.logger.save_dir,
+                f"example_plots_{example_i}",
+            )
+            os.makedirs(plot_dir_path, exist_ok=True)
+
             # Iterate over prediction horizon time steps
             for t_i, _ in enumerate(zip(pred_slice, target_slice), start=1):
                 # Create one figure per variable at this time step
@@ -548,8 +558,6 @@ class ARModel(pl.LightningModule):
                     )
                 ]
 
-                example_i = self.plotted_examples
-
                 for var_name, fig in zip(
                     self._datastore.get_vars_names("state"), var_figs
                 ):
@@ -570,9 +578,41 @@ class ARModel(pl.LightningModule):
                             f"{self.logger} does not support image logging."
                         )
 
+                    # Save PNG frame for GIF animation
+                    png_path = os.path.join(
+                        plot_dir_path,
+                        f"{var_name}_example_{example_i}"
+                        f"_prediction_t_{t_i:02d}.png",
+                    )
+                    fig.savefig(png_path, dpi=100, bbox_inches="tight")
+
                 plt.close(
                     "all"
                 )  # Close all figs for this time step, saves memory
+
+            # Generate GIF animations from the saved PNG frames,
+            # one GIF per variable combining all prediction time steps
+            for var_name in self._datastore.get_vars_names("state"):
+                png_frames = sorted(
+                    glob.glob(
+                        os.path.join(
+                            plot_dir_path,
+                            f"{var_name}_example_{example_i}"
+                            f"_prediction_t_*.png",
+                        )
+                    )
+                )
+                if png_frames:
+                    gif_path = os.path.join(
+                        plot_dir_path,
+                        f"{var_name}_example_{example_i}_prediction.gif",
+                    )
+                    with imageio.get_writer(
+                        gif_path, mode="I", duration=1000
+                    ) as writer:
+                        for filename in png_frames:
+                            image = imageio.imread(filename)
+                            writer.append_data(image)
 
             # Save pred and target as .pt files
             torch.save(
