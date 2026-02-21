@@ -246,14 +246,10 @@ def main(input_args=None):
                 f"validation is only unrolled {args.ar_steps_eval} steps. "
                 "Adjust --var_leads_metric_watch."
             )
-    # Warn if running in eval mode without a checkpoint evaluating
-    # randomly initialised weights almost certainly produces meaningless results
+
     if args.eval and not args.load:
         warnings.warn(
-            "Running in evaluation mode (--eval) without loading a checkpoint "
-            "(--load). The model weights are randomly initialised, so results "
-            "will not be meaningful. "
-            "Did you forget to pass --load <path_to_checkpoint>?",
+            "Evaluation (--eval) without --load: no checkpoint will be loaded.",
             UserWarning,
             stacklevel=2,
         )
