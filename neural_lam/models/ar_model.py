@@ -124,17 +124,26 @@ class ARModel(pl.LightningModule):
         # Instantiate loss function
         self.loss = metrics.get_metric(args.loss)
 
-        boundary_mask = torch.tensor(
-            da_boundary_mask.values, dtype=torch.float32
-        ).unsqueeze(
-            1
-        )  # add feature dim
+        if da_boundary_mask is not None:
+            boundary_mask = torch.tensor(
+                da_boundary_mask.values, dtype=torch.float32
+            ).unsqueeze(1)
 
-        self.register_buffer("boundary_mask", boundary_mask, persistent=False)
-        # Pre-compute interior mask for use in loss function
-        self.register_buffer(
-            "interior_mask", 1.0 - self.boundary_mask, persistent=False
-        )  # (num_grid_nodes, 1), 1 for non-border
+            self.register_buffer(
+                "boundary_mask", boundary_mask, persistent=False
+            )
+            self.register_buffer(
+                "interior_mask", 1.0 - boundary_mask, persistent=False
+            )
+            self.use_boundary_forcing = True
+        else:
+            self.boundary_mask = None
+            self.register_buffer(
+                "interior_mask",
+                torch.ones(self.num_grid_nodes, 1),
+                persistent=False,
+            )
+            self.use_boundary_forcing = False
 
         self.val_metrics: Dict[str, List] = {
             "mse": [],
@@ -229,50 +238,55 @@ class ARModel(pl.LightningModule):
 
     def unroll_prediction(self, init_states, forcing_features, true_states):
         """
-        Roll out prediction taking multiple autoregressive steps with model
-        init_states: (B, 2, num_grid_nodes, d_f) forcing_features: (B,
-        pred_steps, num_grid_nodes, d_static_f) true_states: (B, pred_steps,
-        num_grid_nodes, d_f)
+        Roll out prediction taking multiple autoregressive steps with model.
+
+        init_states: (B, 2, num_grid_nodes, d_f)
+        forcing_features: (B, pred_steps, num_grid_nodes, d_static_f)
+        true_states: (B, pred_steps, num_grid_nodes, d_f)
         """
         prev_prev_state = init_states[:, 0]
         prev_state = init_states[:, 1]
+
         prediction_list = []
         pred_std_list = []
+
         pred_steps = forcing_features.shape[1]
 
         for i in range(pred_steps):
             forcing = forcing_features[:, i]
-            border_state = true_states[:, i]
 
+            # Predict next state
             pred_state, pred_std = self.predict_step(
-                prev_state, prev_prev_state, forcing
+                prev_state,
+                prev_prev_state,
+                forcing,
             )
-            # state: (B, num_grid_nodes, d_f) pred_std: (B, num_grid_nodes,
-            # d_f) or None
 
-            # Overwrite border with true state
-            new_state = (
-                self.boundary_mask * border_state
-                + self.interior_mask * pred_state
-            )
+            # Apply boundary forcing only if boundary exists
+            if self.use_boundary_forcing:
+                border_state = true_states[:, i]
+                new_state = (
+                    self.boundary_mask * border_state
+                    + self.interior_mask * pred_state
+                )
+            else:
+                new_state = pred_state
 
             prediction_list.append(new_state)
+
             if self.output_std:
                 pred_std_list.append(pred_std)
 
-            # Update conditioning states
+            # Update autoregressive states
             prev_prev_state = prev_state
             prev_state = new_state
 
-        prediction = torch.stack(
-            prediction_list, dim=1
-        )  # (B, pred_steps, num_grid_nodes, d_f)
+        prediction = torch.stack(prediction_list, dim=1)
+
         if self.output_std:
-            pred_std = torch.stack(
-                pred_std_list, dim=1
-            )  # (B, pred_steps, num_grid_nodes, d_f)
+            pred_std = torch.stack(pred_std_list, dim=1)
         else:
-            pred_std = self.per_var_std  # (d_f,)
+            pred_std = self.per_var_std
 
         return prediction, pred_std
 
@@ -709,7 +723,7 @@ class ARModel(pl.LightningModule):
                     error=loss_map,
                     datastore=self._datastore,
                     title=f"Test loss, t={t_i} "
-                    f"({(self.time_step_int * t_i)} {self.time_step_int_unit})",
+                    f"({(self.time_step_int * t_i)} {self.time_step_unit})",
                 )
                 for t_i, loss_map in zip(
                     self.args.val_steps_to_log, mean_spatial_loss
