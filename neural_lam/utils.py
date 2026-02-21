@@ -10,6 +10,7 @@ from pathlib import Path
 # Third-party
 import pytorch_lightning as pl
 import torch
+from loguru import logger as loguru_logger
 from pytorch_lightning.loggers import MLFlowLogger, WandbLogger
 from pytorch_lightning.utilities import rank_zero_only
 from torch import nn
@@ -351,12 +352,20 @@ def setup_training_logger(datastore, args, run_name):
     """
 
     if args.logger == "wandb":
-        logger = pl.loggers.WandbLogger(
+        # If a run id is given, use resume="allow": resumes the run if it
+        # already exists, otherwise creates a new run with that id.
+        # This makes it safe to reuse the same job script across the initial
+        # submission and all resubmissions on.
+        wandb_resume = "allow" if args.wandb_id else None
+        loguru_logger.info(
+            f"Wandb resume mode: {wandb_resume!r} (id: {args.wandb_id!r})"
+        )
+        return pl.loggers.WandbLogger(
             project=args.logger_project,
             # When resuming by id, don't override the run's existing name
             name=None if args.wandb_id else run_name,
             config=dict(training=vars(args), datastore=datastore._config),
-            resume=args.wandb_resume,
+            resume=wandb_resume,
             id=args.wandb_id,
         )
     elif args.logger == "mlflow":

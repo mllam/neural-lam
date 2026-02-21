@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [unreleased](https://github.com/mllam/neural-lam/compare/v0.5.0...HEAD)
 
+### Added
+
+- Expose `--wandb_id` CLI argument to allow resuming an existing W&B run by
+  ID. When provided, `resume="allow"` is set automatically so the same job
+  script works for both the initial submission and all resubmissions, making
+  it suitable for HPC systems with limited job runtimes or that may crash.
+  [\#197](https://github.com/mllam/neural-lam/pull/197) @Mani212005
+
+
 ### Maintenance
 
 - Update PR template to clarify milestone/roadmap requirement and maintenance changes [\#186](https://github.com/mllam/neural-lam/pull/186) @joeloskarsson
