@@ -110,10 +110,9 @@ allow-any-import-level = "neural_lam"
 min-similarity-lines = 10
 
 
-[tool.pdm.version]
-source = "scm"
+[tool.setuptools_scm]
 fallback_version = "0.0.0"
 
 [build-system]
-requires = ["pdm-backend"]
-build-backend = "pdm.backend"
+requires = ["setuptools>=80", "setuptools-scm>=8"]
+build-backend = "setuptools.build_meta"
