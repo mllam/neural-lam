@@ -1,17 +1,18 @@
+# Standard library
+import os
+import warnings
+
 # Third-party
 import matplotlib
 import matplotlib.pyplot as plt
 import numpy as np
+import pytorch_lightning as pl
+import torch
 import xarray as xr
 
 # Local
 from . import utils
 from .datastore.base import BaseRegularGridDatastore
-
-import os
-import warnings
-import torch
-import pytorch_lightning as pl
 from .weather_dataset import WeatherDataset
 
 
@@ -189,19 +190,34 @@ def plot_spatial_error(
 
     return fig
 
+
 def plot_examples(
-    datastore,
-    state_std,
-    state_mean,
-    logger,
-    batch,
-    n_examples,
-    split,
-    prediction,
-    plotted_examples=0,
-):
+    datastore: BaseRegularGridDatastore,
+    state_std: torch.Tensor,
+    state_mean: torch.Tensor,
+    logger: pl.loggers.Logger,
+    batch: tuple,
+    n_examples: int,
+    split: str,
+    prediction: torch.Tensor,
+    plotted_examples: int = 0,
+) -> int:
     """
-    Plot the first n_examples forecasts from batch (Stateless version)
+    Plot the first n_examples forecasts from a batch.
+
+    Args:
+        datastore: The object containing dataset metadata.
+        state_std: Standard deviation of state variables for rescaling.
+        state_mean: Mean of state variables for rescaling.
+        logger: The logger instance used to save the images.
+        batch: Tuple containing the current batch of data.
+        n_examples: Number of examples to plot from the batch.
+        split: The dataset split (e.g., 'train', 'val', 'test').
+        prediction: Output tensors predicted from the model.
+        plotted_examples: Counter for plotted examples so far.
+
+    Returns:
+        The updated total number of plotted examples.
     """
     target = batch[1]
     time_batch = batch[3]
@@ -213,6 +229,9 @@ def plot_examples(
         datastore.step_length
     )
 
+    # Instantiating dataset outside the loop
+    weather_dataset = WeatherDataset(datastore=datastore, split=split)
+
     for pred_slice, target_slice, time_slice in zip(
         prediction_rescaled[:n_examples],
         target_rescaled[:n_examples],
@@ -220,13 +239,16 @@ def plot_examples(
     ):
         plotted_examples += 1
 
-        weather_dataset = WeatherDataset(datastore=datastore, split=split)
+        # Detach tensors to safely separate from autograd graph
+        pred_slice = pred_slice.detach()
+        target_slice = target_slice.detach()
+
         time_arr = np.array(time_slice.cpu(), dtype="datetime64[ns]")
-        
+
         da_prediction = weather_dataset.create_dataarray_from_tensor(
             tensor=pred_slice, time=time_arr, category="state"
         ).unstack("grid_index")
-        
+
         da_target = weather_dataset.create_dataarray_from_tensor(
             tensor=target_slice, time=time_arr, category="state"
         ).unstack("grid_index")
@@ -235,13 +257,17 @@ def plot_examples(
             torch.minimum(
                 pred_slice.flatten(0, 1).min(dim=0)[0],
                 target_slice.flatten(0, 1).min(dim=0)[0],
-            ).cpu().numpy()
+            )
+            .cpu()
+            .numpy()
         )
         var_vmax = (
             torch.maximum(
                 pred_slice.flatten(0, 1).max(dim=0)[0],
                 target_slice.flatten(0, 1).max(dim=0)[0],
-            ).cpu().numpy()
+            )
+            .cpu()
+            .numpy()
         )
         var_vranges = list(zip(var_vmin, var_vmax))
 
@@ -286,14 +312,16 @@ def plot_examples(
 
             plt.close("all")
 
+        pred_filename = f"example_pred_{plotted_examples}.pt"
         torch.save(
             pred_slice.cpu(),
-            os.path.join(logger.save_dir, f"example_pred_{plotted_examples}.pt"),
+            os.path.join(logger.save_dir, pred_filename),
         )
+
+        target_filename = f"example_target_{plotted_examples}.pt"
         torch.save(
             target_slice.cpu(),
-            os.path.join(logger.save_dir, f"example_target_{plotted_examples}.pt"),
+            os.path.join(logger.save_dir, target_filename),
         )
-        
-    return plotted_examples
 
+    return plotted_examples

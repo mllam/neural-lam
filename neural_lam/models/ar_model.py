@@ -1,6 +1,5 @@
 # Standard library
 import os
-import warnings
 from typing import Any, Dict, List
 
 # Third-party
@@ -8,7 +7,6 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pytorch_lightning as pl
 import torch
-import xarray as xr
 
 # First-party
 from neural_lam.utils import get_integer_time
@@ -18,7 +16,6 @@ from .. import metrics, vis
 from ..config import NeuralLAMConfig
 from ..datastore import BaseDatastore
 from ..loss_weighting import get_state_feature_weighting
-from ..weather_dataset import WeatherDataset
 
 
 class ARModel(pl.LightningModule):
@@ -160,7 +157,6 @@ class ARModel(pl.LightningModule):
             self._datastore.step_length
         )
 
-    
     def configure_optimizers(self):
         opt = torch.optim.AdamW(
             self.parameters(), lr=self.args.lr, betas=(0.9, 0.95)
@@ -419,7 +415,6 @@ class ARModel(pl.LightningModule):
                 self.n_example_pred - self.plotted_examples,
             )
 
-            
             self.plotted_examples = vis.plot_examples(
                 datastore=self._datastore,
                 state_std=self.state_std,
@@ -432,7 +427,6 @@ class ARModel(pl.LightningModule):
                 plotted_examples=self.plotted_examples,
             )
 
-    
     def create_metric_log_dict(self, metric_tensor, prefix, metric_name):
         """
         Put together a dict with everything to log for one metric. Also saves
