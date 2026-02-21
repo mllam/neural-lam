@@ -160,44 +160,7 @@ class ARModel(pl.LightningModule):
             self._datastore.step_length
         )
 
-    def _create_dataarray_from_tensor(
-        self,
-        tensor: torch.Tensor,
-        time: torch.Tensor,
-        split: str,
-        category: str,
-    ) -> xr.DataArray:
-        """
-        Create an `xr.DataArray` from a tensor, with the correct dimensions and
-        coordinates to match the datastore used by the model. This function in
-        in effect is the inverse of what is returned by
-        `WeatherDataset.__getitem__`.
-
-        Parameters
-        ----------
-        tensor : torch.Tensor
-            The tensor to convert to a `xr.DataArray` with dimensions [time,
-            grid_index, feature]. The tensor will be copied to the CPU if it is
-            not already there.
-        time : torch.Tensor
-            The time index or indices for the data, given as tensor representing
-            epoch time in nanoseconds. The tensor will be
-            copied to the CPU memory if they are not already there.
-        split : str
-            The split of the data, either 'train', 'val', or 'test'
-        category : str
-            The category of the data, either 'state' or 'forcing'
-        """
-        # TODO: creating an instance of WeatherDataset here on every call is
-        # not how this should be done but whether WeatherDataset should be
-        # provided to ARModel or where to put plotting still needs discussion
-        weather_dataset = WeatherDataset(datastore=self._datastore, split=split)
-        time = np.array(time.cpu(), dtype="datetime64[ns]")
-        da = weather_dataset.create_dataarray_from_tensor(
-            tensor=tensor, time=time, category=category
-        )
-        return da
-
+    
     def configure_optimizers(self):
         opt = torch.optim.AdamW(
             self.parameters(), lr=self.args.lr, betas=(0.9, 0.95)
@@ -456,140 +419,20 @@ class ARModel(pl.LightningModule):
                 self.n_example_pred - self.plotted_examples,
             )
 
-            self.plot_examples(
-                batch,
-                n_additional_examples,
-                prediction=prediction,
+            
+            self.plotted_examples = vis.plot_examples(
+                datastore=self._datastore,
+                state_std=self.state_std,
+                state_mean=self.state_mean,
+                logger=self.logger,
+                batch=batch,
+                n_examples=n_additional_examples,
                 split="test",
+                prediction=prediction,
+                plotted_examples=self.plotted_examples,
             )
 
-    def plot_examples(self, batch, n_examples, split, prediction=None):
-        """
-        Plot the first n_examples forecasts from batch
-
-        batch: batch with data to plot corresponding forecasts for n_examples:
-        number of forecasts to plot prediction: (B, pred_steps, num_grid_nodes,
-        d_f), existing prediction.
-            Generate if None.
-        """
-        if prediction is None:
-            prediction, target, _, _ = self.common_step(batch)
-
-        target = batch[1]
-        time = batch[3]
-
-        # Rescale to original data scale
-        prediction_rescaled = prediction * self.state_std + self.state_mean
-        target_rescaled = target * self.state_std + self.state_mean
-
-        # Iterate over the examples
-        for pred_slice, target_slice, time_slice in zip(
-            prediction_rescaled[:n_examples],
-            target_rescaled[:n_examples],
-            time[:n_examples],
-        ):
-            # Each slice is (pred_steps, num_grid_nodes, d_f)
-            self.plotted_examples += 1  # Increment already here
-
-            da_prediction = self._create_dataarray_from_tensor(
-                tensor=pred_slice,
-                time=time_slice,
-                split=split,
-                category="state",
-            ).unstack("grid_index")
-            da_target = self._create_dataarray_from_tensor(
-                tensor=target_slice,
-                time=time_slice,
-                split=split,
-                category="state",
-            ).unstack("grid_index")
-
-            var_vmin = (
-                torch.minimum(
-                    pred_slice.flatten(0, 1).min(dim=0)[0],
-                    target_slice.flatten(0, 1).min(dim=0)[0],
-                )
-                .cpu()
-                .numpy()
-            )  # (d_f,)
-            var_vmax = (
-                torch.maximum(
-                    pred_slice.flatten(0, 1).max(dim=0)[0],
-                    target_slice.flatten(0, 1).max(dim=0)[0],
-                )
-                .cpu()
-                .numpy()
-            )  # (d_f,)
-            var_vranges = list(zip(var_vmin, var_vmax))
-
-            # Iterate over prediction horizon time steps
-            for t_i, _ in enumerate(zip(pred_slice, target_slice), start=1):
-                # Create one figure per variable at this time step
-                var_figs = [
-                    vis.plot_prediction(
-                        datastore=self._datastore,
-                        title=f"{var_name} ({var_unit}), "
-                        f"t={t_i} ({(self.time_step_int * t_i)}"
-                        f"{self.time_step_unit})",
-                        vrange=var_vrange,
-                        da_prediction=da_prediction.isel(
-                            state_feature=var_i, time=t_i - 1
-                        ).squeeze(),
-                        da_target=da_target.isel(
-                            state_feature=var_i, time=t_i - 1
-                        ).squeeze(),
-                    )
-                    for var_i, (var_name, var_unit, var_vrange) in enumerate(
-                        zip(
-                            self._datastore.get_vars_names("state"),
-                            self._datastore.get_vars_units("state"),
-                            var_vranges,
-                        )
-                    )
-                ]
-
-                example_i = self.plotted_examples
-
-                for var_name, fig in zip(
-                    self._datastore.get_vars_names("state"), var_figs
-                ):
-
-                    # We need treat logging images differently for different
-                    # loggers. WANDB can log multiple images to the same key,
-                    # while other loggers, as MLFlow, need unique keys for
-                    # each image.
-                    if isinstance(self.logger, pl.loggers.WandbLogger):
-                        key = f"{var_name}_example_{example_i}"
-                    else:
-                        key = f"{var_name}_example"
-
-                    if hasattr(self.logger, "log_image"):
-                        self.logger.log_image(key=key, images=[fig], step=t_i)
-                    else:
-                        warnings.warn(
-                            f"{self.logger} does not support image logging."
-                        )
-
-                plt.close(
-                    "all"
-                )  # Close all figs for this time step, saves memory
-
-            # Save pred and target as .pt files
-            torch.save(
-                pred_slice.cpu(),
-                os.path.join(
-                    self.logger.save_dir,
-                    f"example_pred_{self.plotted_examples}.pt",
-                ),
-            )
-            torch.save(
-                target_slice.cpu(),
-                os.path.join(
-                    self.logger.save_dir,
-                    f"example_target_{self.plotted_examples}.pt",
-                ),
-            )
-
+    
     def create_metric_log_dict(self, metric_tensor, prefix, metric_name):
         """
         Put together a dict with everything to log for one metric. Also saves
