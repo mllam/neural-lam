@@ -503,45 +503,33 @@ def setup_training_logger(datastore, args, run_name):
     The run name is set to ``None`` when resuming to preserve the existing name.
     """
 
-    if args.wandb_id and args.logger != "wandb":
-        logger.warning(
-            f"--wandb_id is set but logger is {args.logger!r}; "
-            "the wandb_id will have no effect."
-        )
-
     if args.logger == "wandb":
-        wandb_resume = "allow" if args.wandb_id else None
-        logger.info(
-            f"Wandb resume mode: {wandb_resume!r} (id: {args.wandb_id!r})"
-        )
-        return pl.loggers.WandbLogger(
+        logger = pl.loggers.WandbLogger(
             project=args.logger_project,
-            name=None if args.wandb_id else run_name,
+            name=run_name,
             config=dict(training=vars(args), datastore=datastore._config),
-            resume=wandb_resume,
-            id=args.wandb_id,
         )
     elif args.logger == "mlflow":
-        if args.wandb_id is not None:
-            warnings.warn(
-                "--wandb_id is only used with --logger=wandb and will be "
-                "ignored."
-            )
         url = os.getenv("MLFLOW_TRACKING_URI")
         if url is None:
             raise ValueError(
                 "MLFlow logger requires setting MLFLOW_TRACKING_URI in env."
             )
-        training_logger = CustomMLFlowLogger(
+        logger = CustomMLFlowLogger(
             experiment_name=args.logger_project,
             tracking_uri=url,
             run_name=run_name,
         )
-        training_logger.log_hyperparams(
+        logger.log_hyperparams(
             dict(training=vars(args), datastore=datastore._config)
         )
+    else:
+        raise NotImplementedError(
+            f"Unsupported logger type: '{args.logger}'. "
+            "Supported loggers are: 'wandb', 'mlflow'."
+        )
 
-    return training_logger
+    return logger
 
 
 def inverse_softplus(x, beta=1, threshold=20):
