@@ -42,9 +42,6 @@ requires-python = ">=3.10"
 [dependency-groups]
 dev = ["pre-commit>=3.8.0", "pytest>=8.3.2", "pooch>=1.8.2"]
 
-[tool.setuptools]
-py-modules = ["neural_lam"]
-
 [tool.black]
 line-length = 80
 
@@ -109,10 +106,10 @@ allow-any-import-level = "neural_lam"
 [tool.pylint.SIMILARITIES]
 min-similarity-lines = 10
 
-
-[tool.setuptools_scm]
-fallback_version = "0.0.0"
-
 [build-system]
-requires = ["setuptools>=80", "setuptools-scm>=8"]
-build-backend = "setuptools.build_meta"
+requires = ["hatchling", "hatch-vcs"]
+build-backend = "hatchling.build"
+
+[tool.hatch.version]
+source = "vcs"
+fallback-version = "0.0.0"
