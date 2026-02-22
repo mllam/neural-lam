@@ -1,4 +1,5 @@
 # Standard library
+import warnings
 from pathlib import Path
 
 # Third-party
@@ -34,6 +35,14 @@ def run_simple_training(datastore, set_output_std):
         torch.set_float32_matmul_precision(
             "high"
         )  # Allows using Tensor Cores on A100s
+
+        if torch.cuda.device_count() < 2:
+            warnings.warn(
+                "Running test suite on a single CUDA device. "
+                "Multi-device testing still required.",
+                UserWarning,
+            )
+
     else:
         device_name = "cpu"
 
