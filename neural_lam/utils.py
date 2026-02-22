@@ -300,7 +300,7 @@ def fractional_plot_bundle(fraction):
     original_figsize = bundle["figure.figsize"]
     bundle["figure.figsize"] = (
         original_figsize[0] * fraction,
-        original_figsize[1],
+        original_figsize[1] * fraction,
     )
     return bundle
 

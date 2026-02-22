@@ -47,6 +47,9 @@ This release contains maintenance and fixes, preventing some unexpected crashes 
 
 - Adding a more robust LaTeX availability check function [\#162](https://github.com/mllam/neural-lam/pull/162) @lorenzo30salgado
 
+- `fractional_plot_bundle` now correctly multiplies by fraction instead of dividing [
+\#222](https://github.com/mllam/neural-lam/pull/222) @santhil-cyber
+
 ### Maintenance
 
 - Add link to full MEPS data [\#102](https://github.com/mllam/neural-lam/pull/102) @joeloskarsson
