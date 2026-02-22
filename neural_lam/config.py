@@ -103,6 +103,9 @@ class TrainingConfig:
         default_factory=OutputClamping
     )
 
+    output_mode: str = "deterministic"
+    ensemble_size: int = 1
+
 
 @dataclasses.dataclass
 class NeuralLAMConfig(dataclass_wizard.JSONWizard, dataclass_wizard.YAMLWizard):
