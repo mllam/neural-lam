@@ -24,9 +24,8 @@ MODELS = {
 }
 
 
-@logger.catch
-def main(input_args=None):
-    """Main function for training and evaluating models."""
+def _build_arg_parser():
+    """Build and return the argument parser for train_model."""
     parser = ArgumentParser(
         description="Train or evaluate MLWP models for LAM",
         formatter_class=ArgumentDefaultsHelpFormatter,
@@ -236,6 +235,13 @@ def main(input_args=None):
         default=1,
         help="Number of future time steps to use as input for forcing data",
     )
+    return parser
+
+
+@logger.catch
+def main(input_args=None):
+    """Main function for training and evaluating models."""
+    parser = _build_arg_parser()
     args = parser.parse_args(input_args)
     args.var_leads_metrics_watch = {
         int(k): v for k, v in json.loads(args.var_leads_metrics_watch).items()
