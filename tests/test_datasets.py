@@ -267,8 +267,9 @@ def test_standardization_with_zero_std():
     When all values of a field are identical (std = 0), standardization
     must not produce NaN via division-by-zero.
     """
-    import xarray as xr
+    # Third-party
     import numpy as np
+    import xarray as xr
 
     # Build a zero-std field (all values identical, like all-zero rain)
     data = xr.DataArray(np.zeros((5, 10)), dims=["time", "grid_index"])

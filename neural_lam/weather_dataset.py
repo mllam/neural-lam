@@ -4,11 +4,11 @@ import warnings
 from typing import Union
 
 # Third-party
-from loguru import logger
 import numpy as np
 import pytorch_lightning as pl
 import torch
 import xarray as xr
+from loguru import logger
 
 # First-party
 from neural_lam.datastore.base import BaseDatastore
@@ -400,37 +400,42 @@ class WeatherDataset(torch.utils.data.Dataset):
 
         if self.standardize:
             # Warn about any near-zero std fields (std <= 1e-8)
-            if (self.da_state_std <= 1e-8).any().item():
+            if bool((self.da_state_std <= 1e-8).any()):
                 logger.warning(
                     "Some state features have near-zero std (<=1e-8) and "
                     "will be set to 0.0 after standardization."
                 )
-            if (
-                self.da_forcing_std is not None
-                and (self.da_forcing_std <= 1e-8).any().item()
+            if self.da_forcing_std is not None and bool(
+                (self.da_forcing_std <= 1e-8).any()
             ):
                 logger.warning(
                     "Some forcing features have near-zero std (<=1e-8) "
                     "and will be set to 0.0 after standardization."
                 )
-            da_init_states = xr.where(
-                self.da_state_std > 1e-8,
-                (da_init_states - self.da_state_mean) / self.da_state_std,
-                0.0,
+            # Apply threshold on the 1-D std array to avoid dim reordering
+            # in xr.where when applied to multi-dimensional arrays
+            state_std_safe = self.da_state_std.where(
+                self.da_state_std > 1e-8, other=1.0
             )
-            da_target_states = xr.where(
-                self.da_state_std > 1e-8,
-                (da_target_states - self.da_state_mean) / self.da_state_std,
-                0.0,
-            )
+            da_init_states = (
+                da_init_states - self.da_state_mean
+            ) / state_std_safe
+            da_target_states = (
+                da_target_states - self.da_state_mean
+            ) / state_std_safe
 
             if da_forcing is not None:
-                da_forcing_windowed = xr.where(
-                    self.da_forcing_std > 1e-8,
-                    (da_forcing_windowed - self.da_forcing_mean)
-                    / self.da_forcing_std,
-                    0.0,
+                # XXX: Here we implicitly assume that the last dimension of the
+                # forcing data is the forcing feature dimension. To standardize
+                # on `.device` we need a different implementation. (e.g. a
+                # tensor with repeated means and stds for each "windowed" time.)
+
+                forcing_std_safe = self.da_forcing_std.where(
+                    self.da_forcing_std > 1e-8, other=1.0
                 )
+                da_forcing_windowed = (
+                    da_forcing_windowed - self.da_forcing_mean
+                ) / forcing_std_safe
 
         if da_forcing is not None:
             # stack the `forcing_feature` and `window_sample` dimensions into a

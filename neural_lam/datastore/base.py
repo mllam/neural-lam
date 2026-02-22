@@ -213,8 +213,9 @@ class BaseDatastore(abc.ABC):
         mean = standard_da[f"{category}_mean"]
         std = standard_da[f"{category}_std"]
 
-        standardized = xr.where(std > 1e-8, (da - mean) / std, 0.0)
-        return standardized.transpose(*da.dims)
+        # Apply threshold on the 1-D std array to avoid dim reordering
+        std_safe = std.where(std > 1e-8, other=1.0)
+        return (da - mean) / std_safe
 
     @abc.abstractmethod
     def get_dataarray(
