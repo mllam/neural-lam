@@ -11,8 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Expose `--wandb_id` CLI argument to allow resuming an existing W&B run by
   ID. When provided, `resume="allow"` is set automatically so the same job
-  script works for both the initial submission and all resubmissions, making
-  it suitable for HPC systems with limited job runtimes or that may crash.
+  script works for both the initial submission and all resubmissions,.
   [\#197](https://github.com/mllam/neural-lam/pull/197) @Mani212005
 
 

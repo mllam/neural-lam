@@ -199,9 +199,7 @@ def _build_arg_parser():
         default=None,
         help="Wandb run ID to use. If the run ID already exists in the "
         "project, W&B resumes that run. If it does not exist, W&B creates "
-        "a new run with that ID. Useful on HPC systems with limited job "
-        "runtimes or that may crash, allowing training to be continued "
-        "across multiple job submissions.",
+        "a new run with that ID. If the run ID is None a new job with random ID is submitted. This argument is ignored for any --logger that is not wandb.",
     )
     parser.add_argument(
         "--val_steps_to_log",
