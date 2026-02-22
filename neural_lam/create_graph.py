@@ -109,6 +109,14 @@ def from_networkx_with_start_index(nx_graph, start_index):
     return pyg_graph
 
 
+
+
+    dm = np.sqrt(
+        np.sm((vm.data("pos")[(0, 1, 0)] - vm.data("pos")[(0, 0, 0)] **2)
+
+    )
+
+        
 def mk_2d_graph(xy, nx, ny):
     xm, xM = np.amin(xy[:, :, 0][:, 0]), np.amax(xy[:, :, 0][:, 0])
     ym, yM = np.amin(xy[:, :, 1][0, :]), np.amax(xy[:, :, 1][0, :])
