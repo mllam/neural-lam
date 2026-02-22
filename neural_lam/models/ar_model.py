@@ -38,8 +38,39 @@ class ARModel(pl.LightningModule):
     ):
         super().__init__()
         self.save_hyperparameters(ignore=["datastore"])
+        self.output_mode = getattr(config.training, "output_mode", "deterministic")
+        self.ensemble_size = getattr(config.training, "ensemble_size", 1)
+        if self.output_mode not in ["deterministic", "ensemble"]:
+            raise ValueError(
+                f"Unsupported output_mode: {self.output_mode}"
+            )
         self.args = args
         self._datastore = datastore
+
+    @property
+    def is_ensemble(self):
+        return self.output_mode == "ensemble" and self.ensemble_size > 1
+
+    def forward(self, x, *args, **kwargs):
+        preds = self._deterministic_forward(x, *args, **kwargs)
+        if self.is_ensemble:
+            preds = self._sample_ensemble(preds)
+        return preds
+
+    def _deterministic_forward(self, x, *args, **kwargs):
+        # Placeholder for deterministic forward pass
+        return x
+
+    def _sample_ensemble(self, preds):
+        noise = torch.randn(
+            self.ensemble_size,
+            *preds.shape,
+            device=preds.device,
+            dtype=preds.dtype,
+        ) * 0.01
+        preds = preds.unsqueeze(0).repeat(self.ensemble_size, *[1]*(preds.ndim))
+        preds = preds + noise
+        return preds
         num_state_vars = datastore.get_num_data_vars(category="state")
         num_forcing_vars = datastore.get_num_data_vars(category="forcing")
         # Load static features standardized
