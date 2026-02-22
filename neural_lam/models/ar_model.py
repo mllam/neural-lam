@@ -5,8 +5,8 @@ import warnings
 from typing import Any, Dict, List
 
 # Third-party
-import imageio.v2 as imageio
 import matplotlib.pyplot as plt
+from PIL import Image
 import numpy as np
 import pytorch_lightning as pl
 import torch
@@ -592,27 +592,30 @@ class ARModel(pl.LightningModule):
 
             # Generate GIF animations from the saved PNG frames,
             # one GIF per variable combining all prediction time steps
-            for var_name in self._datastore.get_vars_names("state"):
-                png_frames = sorted(
-                    glob.glob(
-                        os.path.join(
-                            plot_dir_path,
-                            f"{var_name}_example_{example_i}"
-                            f"_prediction_t_*.png",
+            if self.args.create_gif:
+                for var_name in self._datastore.get_vars_names("state"):
+                    png_frames = sorted(
+                        glob.glob(
+                            os.path.join(
+                                plot_dir_path,
+                                f"{var_name}_example_{example_i}"
+                                f"_prediction_t_*.png",
+                            )
                         )
                     )
-                )
-                if png_frames:
-                    gif_path = os.path.join(
-                        plot_dir_path,
-                        f"{var_name}_example_{example_i}_prediction.gif",
-                    )
-                    with imageio.get_writer(
-                        gif_path, mode="I", duration=1000
-                    ) as writer:
-                        for filename in png_frames:
-                            image = imageio.imread(filename)
-                            writer.append_data(image)
+                    if png_frames:
+                        gif_path = os.path.join(
+                            plot_dir_path,
+                            f"{var_name}_example_{example_i}_prediction.gif",
+                        )
+                        frames = [Image.open(f) for f in png_frames]
+                        frames[0].save(
+                            gif_path,
+                            save_all=True,
+                            append_images=frames[1:],
+                            loop=0,
+                            duration=1000,
+                        )
 
             # Save pred and target as .pt files
             torch.save(
