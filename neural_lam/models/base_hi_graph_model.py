@@ -27,10 +27,10 @@ class BaseHiGraphModel(BaseGraphModel):
         ]  # Needs as python list for later
 
         # Print some useful info
-        utils.rank_zero_print("Loaded hierarchical graph with structure:")
+        utils.log_on_rank_zero("Loaded hierarchical graph with structure:")
         for level_index, level_mesh_size in enumerate(self.level_mesh_sizes):
             same_level_edges = self.m2m_features[level_index].shape[0]
-            utils.rank_zero_print(
+            utils.log_on_rank_zero(
                 f"level {level_index} - {level_mesh_size} nodes, "
                 f"{same_level_edges} same-level edges"
             )
@@ -38,8 +38,8 @@ class BaseHiGraphModel(BaseGraphModel):
             if level_index < (self.num_levels - 1):
                 up_edges = self.mesh_up_features[level_index].shape[0]
                 down_edges = self.mesh_down_features[level_index].shape[0]
-                utils.rank_zero_print(f"  {level_index}<->{level_index + 1}")
-                utils.rank_zero_print(
+                utils.log_on_rank_zero(f"  {level_index}<->{level_index + 1}")
+                utils.log_on_rank_zero(
                     f" - {up_edges} up edges, {down_edges} down edges"
                 )
         # Embedders
