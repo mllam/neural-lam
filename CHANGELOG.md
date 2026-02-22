@@ -93,6 +93,8 @@ This release contains maintenance and fixes, preventing some unexpected crashes 
 
 - Adding a more robust LaTeX availability check function [\#162](https://github.com/mllam/neural-lam/pull/162) @lorenzo30salgado
 
+- Add missing bounds check in `test_step` to prevent `IndexError` when `val_steps_to_log` exceeds prediction steps [\#219](https://github.com/mllam/neural-lam/pull/219) @santhil-cyber
+
 ### Maintenance
 
 - Add link to full MEPS data [\#102](https://github.com/mllam/neural-lam/pull/102) @joeloskarsson
