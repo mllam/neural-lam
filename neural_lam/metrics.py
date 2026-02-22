@@ -227,6 +227,8 @@ def crps_gauss(
     )
 
 
+from neural_lam.metrics.crps import crps_ensemble
+
 DEFINED_METRICS = {
     "mse": mse,
     "mae": mae,
@@ -234,4 +236,5 @@ DEFINED_METRICS = {
     "wmae": wmae,
     "nll": nll,
     "crps_gauss": crps_gauss,
+    "crps": crps_ensemble,
 }
