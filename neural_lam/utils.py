@@ -299,7 +299,7 @@ def fractional_plot_bundle(fraction):
     bundle.update(figsizes.neurips2023())
     original_figsize = bundle["figure.figsize"]
     bundle["figure.figsize"] = (
-        original_figsize[0] / fraction,
+        original_figsize[0] * fraction,
         original_figsize[1],
     )
     return bundle
