@@ -47,3 +47,24 @@ def test_eval_with_load_no_warning():
                 # Check that no UserWarning was emitted
                 user_warnings = [warning for warning in w if issubclass(warning.category, UserWarning)]
                 assert len(user_warnings) == 0
+
+
+def test_no_eval_no_warning():
+    """Test that no warning is raised in normal training mode (no --eval)."""
+    mock_args = MagicMock()
+    mock_args.eval = None
+    mock_args.load = None
+    mock_args.config_path = "dummy.yaml"
+    mock_args.val_steps_to_log = []
+    mock_args.var_leads_metrics_watch = "{}"
+    mock_args.ar_steps_eval = 10
+
+    with patch("neural_lam.train_model.ArgumentParser.parse_args", return_value=mock_args):
+        with patch("neural_lam.train_model.load_config_and_datastore", side_effect=SystemExit(0)):
+            with warnings.catch_warnings(record=True) as w:
+                warnings.simplefilter("always")
+                with pytest.raises(SystemExit):
+                    main()
+            # Check that no UserWarning was emitted
+            user_warnings = [warning for warning in w if issubclass(warning.category, UserWarning)]
+            assert len(user_warnings) == 0
