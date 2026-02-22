@@ -81,8 +81,14 @@ tags
 .DS_Store
 __MACOSX
 
-# virtual environments
+# Virtual environments
 .venv
 venv
+activate
+
+# Build artifacts
+dist/
+build/
+*.egg-info/
 
 tests/test_outputs/
