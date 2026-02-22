@@ -4,13 +4,13 @@ import shutil
 import subprocess
 import tempfile
 import warnings
-import logging
 from functools import cache
 from pathlib import Path
 
 # Third-party
 import pytorch_lightning as pl
 import torch
+from loguru import logger
 from pytorch_lightning.loggers import MLFlowLogger, WandbLogger
 from pytorch_lightning.utilities import rank_zero_only
 from torch import nn
@@ -18,7 +18,6 @@ from tueplots import bundles, figsizes
 
 # Local
 from .custom_loggers import CustomMLFlowLogger
-from loguru import logger
 
 
 class BufferList(nn.Module):
