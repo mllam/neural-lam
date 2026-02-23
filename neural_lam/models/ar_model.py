@@ -553,11 +553,13 @@ class ARModel(pl.LightningModule):
                 for var_name, fig in zip(
                     self._datastore.get_vars_names("state"), var_figs
                 ):
-
-                    # Always include example number in key for all loggers
-                    # This prevents overwriting and ensures unique filenames
-                    key = f"{var_name}_example_{example_i}"
-
+                # Use consistent key for WandB (supports multiple images per key)
+                # Include example index for other loggers (e.g., MLflow) to prevent overwriting
+                    if isinstance(self.logger, pl.loggers.WandbLogger):
+                        key= f"{var_name}_example"
+                    else:
+                        key = f"{var_name}_example_{example_i}"
+                        
                     if hasattr(self.logger, "log_image"):
                         self.logger.log_image(key=key, images=[fig], step=t_i)
                     else:
