@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [unreleased](https://github.com/mllam/neural-lam/compare/v0.5.0...HEAD)
+### Fixed
+
+- Add missing MEPS datastore config yaml to datastore_examples [\#225](https://github.com/mllam/neural-lam/pull/225) @shauryam2807
+
 
 ### Maintenance
 
