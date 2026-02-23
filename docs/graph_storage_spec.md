@@ -3,9 +3,17 @@
 This document specifies the on-disk graph format expected by
 `neural_lam.utils.load_graph` and the graph-based models.
 
-## Directory Layout
+## File and Directory Structure
+
+### Directory Structure
 
 Each graph lives in a directory (typically `<datastore-root>/graph/<name>`).
+
+### Graph Filenames
+
+Each graph is represented by multiple files in its graph directory.
+Together, these files define connectivity and static features for edges and
+mesh nodes.
 
 Required files for all graphs:
 
@@ -24,25 +32,52 @@ Additional required files for hierarchical graphs (`L > 1` mesh levels):
 - `mesh_up_features.pt`
 - `mesh_down_features.pt`
 
+The separate files represent the different "components" of the graph, where each of the sequential message passing steps, `encode`, `process`, and `decode` uses a separate component, so that `g2m` is used in `encode`, `m2m` is used in `process`, and `m2g` is used in `decode`. For hierarchical graphs, the `m2m` component is further split into separate inter-level and intra-level message-passing steps.
+
+Each graph component is represented by two files: one for edge connectivity and one for edge features. The components are (which also define the expected file prefixes):
+
+- `g2m`: grid-to-mesh edges (sender on grid, receiver on mesh).
+- `m2m`: mesh-to-mesh edges (both sender and receiver on mesh).
+- `m2g`: mesh-to-grid edges (sender on mesh, receiver on grid).
+- `mesh_up`: inter-level mesh edges from lower level to upper level.
+- `mesh_down`: inter-level mesh edges from upper level to lower level.
+
+Suffixes indicate content type:
+
+- `_edge_index.pt`: edge connectivity
+- `_features.pt`: static features associated with each edge
+- `mesh_features.pt`: static mesh node features
+
 All files are serialized with `torch.save(...)`.
 
-## Tensor Contracts
+> **NOTE**: Rather than the inter-level tensors files being prefixed with `m2m`, they are prefixed with `mesh`, even though they are part of the mesh-to-mesh message passing.
 
-## Edge indices
+## Tensor content requirements
 
-- `*_edge_index` tensors represent directed edges in PyG format:
-  shape `[2, E]`.
+### Edges
+
+#### Edge indices
+
+`*_edge_index.pt` files are each a single tensor containing edge connectivity information for a particular graph component. The tensor must satisfy the following requirements:
+
+- The shape must be `[2, E]`, where `E` is the number of edges in that component.
 - Row `0` is sender node index, row `1` is receiver node index.
 - Dtype must be integer.
 
-## Edge features
+#### Edge features
 
-- `*_features` tensors have shape `[E, 3]`, dtype floating-point.
-- Column `0`: edge length.
+`*_features.pt` files are each a single tensor containing static features for the edges in a particular graph component. The tensor must satisfy the following requirements:
+
+- The shape must be `[E, 3]`, where `E` is the number of edges in that component (must match the corresponding edge index file).
 - Columns `1:3`: `vdiff = sender_pos - receiver_pos` in x/y.
-- Therefore, `edge_length ~= ||vdiff||_2`.
+- Column `0`: edge length, where `edge_length = ||vdiff||_2`.
+- Dtype floating-point.
 
-## Mesh node features
+### Nodes
+
+#### Mesh node features
+
+`mesh_features.pt` files must be lists of length `L` (number of mesh levels), where each entry is a tensor containing static features for the mesh nodes at that level. Each tensor must satisfy the following requirements:
 
 - `mesh_features` entries have shape `[N_level, 2]`, dtype floating-point.
 - Columns are x/y coordinates.
