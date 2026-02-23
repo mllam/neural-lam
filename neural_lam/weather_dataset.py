@@ -386,8 +386,6 @@ class WeatherDataset(torch.utils.data.Dataset):
         da_target_states = da_state.isel(time=slice(2, None))
         da_target_times = da_target_states.time
 
-        # Old normalization code removed - now done on GPU in the model
-
         if da_forcing is not None:
             # stack the `forcing_feature` and `window_sample` dimensions into a
             # single `forcing_feature` dimension
@@ -417,9 +415,28 @@ class WeatherDataset(torch.utils.data.Dataset):
 
     def __getitem__(self, idx):
         """
-        Get one training sample (raw data, not normalized).
-        
-        Normalization happens later on GPU in the model.
+        Return a single training sample, which consists of the initial states,
+        target states, forcing and batch times.
+
+        Note: Normalization now happens on GPU in the model's 
+        on_after_batch_transfer() hook, not here in the Dataset.
+
+        Parameters
+        ----------
+        idx : int
+            The index of the sample to return, this will refer to the time of
+            the initial state.
+
+        Returns
+        -------
+        init_states : torch.Tensor
+            Initial states with shape (2, num_grid_nodes, d_features)
+        target_states : torch.Tensor
+            Target states with shape (ar_steps, num_grid_nodes, d_features)
+        forcing : torch.Tensor
+            Forcing data with shape (ar_steps, num_grid_nodes, d_forcing)
+        target_times : torch.Tensor
+            Target times with shape (ar_steps,)
         """
         (
             da_init_states,
