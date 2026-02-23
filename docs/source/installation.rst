@@ -4,6 +4,8 @@ Installation
 Basic Installation
 ------------------
 
+Neural-LAM uses PDM for dependency management.
+
 Clone the repository:
 
 .. code-block:: bash
@@ -11,13 +13,11 @@ Clone the repository:
    git clone https://github.com/mllam/neural-lam.git
    cd neural-lam
 
-Create a virtual environment and install in editable mode:
+Install dependencies:
 
 .. code-block:: bash
 
-   python -m venv .venv
-   source .venv/bin/activate  # On Windows: .venv\Scripts\activate
-   pip install -e .
+   pdm install
 
 Note
 ----
@@ -32,15 +32,13 @@ Refer to ``pyproject.toml`` for the full dependency list.
 Building the Documentation
 --------------------------
 
-To build the documentation locally:
+To build the documentation locally, ensure the required documentation tools are installed (e.g., Sphinx, Furo, myst-parser).
+
+Then run:
 
 .. code-block:: bash
 
-   cd docs
-   python -m venv .venv
-   source .venv/bin/activate  # On Windows: .venv\Scripts\activate
-   pip install -r requirements.txt
-   make html
+   sphinx-build -b html docs/source docs/build
 
 The generated HTML files will be available in:
 
