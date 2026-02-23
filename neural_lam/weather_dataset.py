@@ -95,7 +95,6 @@ class WeatherDataset(torch.utils.data.Dataset):
                         "transpose the data in `BaseDatastore.get_dataarray`?"
                     )
 
-        # Note: Normalization moved to GPU (see ARModel.on_after_batch_transfer)
         # This parameter kept for backward compatibility only
         if not standardize:
             warnings.warn(
@@ -418,7 +417,6 @@ class WeatherDataset(torch.utils.data.Dataset):
         Return a single training sample, which consists of the initial states,
         target states, forcing and batch times.
 
-        Note: Normalization now happens on GPU in the model's 
         on_after_batch_transfer() hook, not here in the Dataset.
 
         Parameters
