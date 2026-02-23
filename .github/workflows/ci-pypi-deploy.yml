@@ -24,5 +24,4 @@ jobs:
       - uses: casperdcl/deploy-pypi@v2
         with:
           password: ${{ secrets.PYPI_TOKEN }}
-          pip: wheel -w dist/ --no-deps .
           upload: ${{ github.event_name == 'release' && github.event.action == 'published' }}
