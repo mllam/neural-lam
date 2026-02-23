@@ -673,6 +673,7 @@ class WeatherDataModule(pl.LightningDataModule):
             shuffle=True,
             multiprocessing_context=self.multiprocessing_context,
             persistent_workers=True,
+            pin_memory=torch.cuda.is_available(),
         )
 
     def val_dataloader(self):
@@ -684,6 +685,7 @@ class WeatherDataModule(pl.LightningDataModule):
             shuffle=False,
             multiprocessing_context=self.multiprocessing_context,
             persistent_workers=True,
+            pin_memory=torch.cuda.is_available(),
         )
 
     def test_dataloader(self):
@@ -695,4 +697,5 @@ class WeatherDataModule(pl.LightningDataModule):
             shuffle=False,
             multiprocessing_context=self.multiprocessing_context,
             persistent_workers=True,
+            pin_memory=torch.cuda.is_available(),
         )
