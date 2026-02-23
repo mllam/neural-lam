@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [unreleased](https://github.com/mllam/neural-lam/compare/v0.5.0...HEAD)
 
+### Changed
+
+- Proper checkpoint restore: use `load_from_checkpoint` for weights-only loading and `ckpt_path` for full training state restore, removing the `on_load_checkpoint` optimizer hack [\#240](https://github.com/mllam/neural-lam/pull/240) @Mani212005
+
 ### Maintenance
 
 - Update PR template to clarify milestone/roadmap requirement and maintenance changes [\#186](https://github.com/mllam/neural-lam/pull/186) @joeloskarsson

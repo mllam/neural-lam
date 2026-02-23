@@ -76,7 +76,6 @@ def run_simple_training(datastore, set_output_std):
     class ModelArgs:
         output_std = set_output_std
         loss = "mse"
-        restore_opt = False
         n_example_pred = 1
         # XXX: this should be superfluous when we have already defined the
         # model object no?

@@ -29,7 +29,6 @@ def test_clamping():
     class ModelArgs:
         output_std = False
         loss = "mse"
-        restore_opt = False
         n_example_pred = 1
         graph = graph_name
         hidden_dim = 4

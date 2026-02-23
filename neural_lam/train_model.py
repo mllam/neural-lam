@@ -82,7 +82,8 @@ def main(input_args=None):
     parser.add_argument(
         "--restore_opt",
         action="store_true",
-        help="If optimizer state should be restored with model",
+        help="If full training state should be restored with model "
+        "(default: false)",
     )
     parser.add_argument(
         "--precision",
@@ -246,6 +247,10 @@ def main(input_args=None):
                 "Adjust --var_leads_metric_watch."
             )
 
+    assert (
+        args.load or not args.restore_opt
+    ), "Can not restore training state when not loading a checkpoint"
+
     # Get an (actual) random run id as a unique identifier
     random_run_id = random.randint(0, 9999)
 
@@ -288,7 +293,20 @@ def main(input_args=None):
 
     # Load model parameters Use new args for model
     ModelClass = MODELS[args.model]
-    model = ModelClass(args, config=config, datastore=datastore)
+    if args.load and not args.restore_opt:
+        # Restore only model weights, not training state
+        model = ModelClass.load_from_checkpoint(
+            args.load,
+            args=args,
+            config=config,
+            datastore=datastore,
+        )
+    else:
+        model = ModelClass(
+            args,
+            config=config,
+            datastore=datastore,
+        )
 
     if args.eval:
         prefix = f"eval-{args.eval}-"
@@ -340,7 +358,13 @@ def main(input_args=None):
             ckpt_path=args.load,
         )
     else:
-        trainer.fit(model=model, datamodule=data_module, ckpt_path=args.load)
+        # Only pass ckpt_path when restoring full training state
+        ckpt_for_fit = args.load if args.restore_opt else None
+        trainer.fit(
+            model=model,
+            datamodule=data_module,
+            ckpt_path=ckpt_for_fit,
+        )
 
 
 if __name__ == "__main__":
