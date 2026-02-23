@@ -49,15 +49,14 @@ class MDPDatastore(BaseRegularGridDatastore):
         reuse_existing : bool
             Whether to reuse an existing dataset zarr file if it exists and its
             creation date is newer than the configuration file.
-
         """
         self._config_path = Path(config_path)
         self._root_path = self._config_path.parent
         self._config = mdp.Config.from_yaml_file(self._config_path)
+
         fp_ds = self._root_path / self._config_path.name.replace(
             ".yaml", ".zarr"
         )
-
         self._ds = None
         if reuse_existing and fp_ds.exists():
             # check that the zarr directory is newer than the config file
@@ -72,6 +71,7 @@ class MDPDatastore(BaseRegularGridDatastore):
         if self._ds is None:
             self._ds = mdp.create_dataset(config=self._config)
             self._ds.to_zarr(fp_ds)
+
         self._n_boundary_points = n_boundary_points
 
         rank_zero_print("The loaded datastore contains the following features:")
@@ -106,7 +106,6 @@ class MDPDatastore(BaseRegularGridDatastore):
                 assert (
                     dim_order == dim_order_
                 ), "all inputs must have the same dimension order"
-
         self.CARTESIAN_COORDS = dim_order
 
     @property
@@ -117,7 +116,6 @@ class MDPDatastore(BaseRegularGridDatastore):
         -------
         Path
             The root path of the dataset.
-
         """
         return self._root_path
 
@@ -129,7 +127,6 @@ class MDPDatastore(BaseRegularGridDatastore):
         -------
         mdp.Config
             The configuration of the dataset.
-
         """
         return self._config
 
@@ -141,7 +138,6 @@ class MDPDatastore(BaseRegularGridDatastore):
         -------
         timedelta
             The length of the time steps as a datetime.timedelta object.
-
         """
         da_dt = self._ds["time"].diff("time")
         total_sec = da_dt.dt.total_seconds().isel(time=0).astype(int)
@@ -159,10 +155,9 @@ class MDPDatastore(BaseRegularGridDatastore):
         -------
         List[str]
             The units of the variables in the given category.
-
         """
-        if category not in self._ds and category == "forcing":
-            warnings.warn("no forcing data found in datastore")
+        if category not in self._ds and category in ["forcing", "static"]:
+            warnings.warn(f"no {category} data found in datastore")
             return []
         return self._ds[f"{category}_feature_units"].values.tolist()
 
@@ -178,10 +173,9 @@ class MDPDatastore(BaseRegularGridDatastore):
         -------
         List[str]
             The names of the variables in the given category.
-
         """
-        if category not in self._ds and category == "forcing":
-            warnings.warn("no forcing data found in datastore")
+        if category not in self._ds and category in ["forcing", "static"]:
+            warnings.warn(f"no {category} data found in datastore")
             return []
         return self._ds[f"{category}_feature"].values.tolist()
 
@@ -198,10 +192,9 @@ class MDPDatastore(BaseRegularGridDatastore):
         -------
         List[str]
             The long names of the variables in the given category.
-
         """
-        if category not in self._ds and category == "forcing":
-            warnings.warn("no forcing data found in datastore")
+        if category not in self._ds and category in ["forcing", "static"]:
+            warnings.warn(f"no {category} data found in datastore")
             return []
         return self._ds[f"{category}_feature_long_name"].values.tolist()
 
@@ -217,7 +210,6 @@ class MDPDatastore(BaseRegularGridDatastore):
         -------
         int
             The number of variables in the given category.
-
         """
         return len(self.get_vars_names(category))
 
@@ -230,22 +222,22 @@ class MDPDatastore(BaseRegularGridDatastore):
         """
         Return the processed data (as a single `xr.DataArray`) for the given
         category of data and test/train/val-split that covers all the data (in
-        space and time) of a given category (state/forcing/static). "state" is
-        the only required category, for other categories, the method will
-        return `None` if the category is not found in the datastore.
+        space and time) of a given category (state/forcing/static).
 
-        The returned dataarray will at minimum have dimensions of `(grid_index,
-        {category}_feature)` so that any spatial dimensions have been stacked
-        into a single dimension and all variables and levels have been stacked
-        into a single feature dimension named by the `category` of data being
-        loaded.
+        "state" is the only required category, for other categories, the method
+        will return `None` if the category is not found in the datastore.
+
+        The returned dataarray will at minimum have dimensions of
+        `(grid_index, {category}_feature)` so that any spatial dimensions have
+        been stacked into a single dimension and all variables and levels have
+        been stacked into a single feature dimension named by the `category` of
+        data being loaded.
 
         For categories of data that have a time dimension (i.e. not static
-        data), the dataarray will additionally have `(analysis_time,
-        elapsed_forecast_duration)` dimensions if `is_forecast` is True, or
-        `(time)` if `is_forecast` is False.
-
-        If the data is ensemble data, the dataarray will have an additional
+        data), the dataarray will additionally have
+        `(analysis_time, elapsed_forecast_duration)` dimensions if
+        `is_forecast` is True, or `(time)` if `is_forecast` is False. If the
+        data is ensemble data, the dataarray will have an additional
         `ensemble_member` dimension.
 
         Parameters
@@ -261,12 +253,10 @@ class MDPDatastore(BaseRegularGridDatastore):
         -------
         xr.DataArray or None
             The xarray DataArray object with processed dataset.
-
         """
-        if category not in self._ds and category == "forcing":
-            warnings.warn("no forcing data found in datastore")
+        if category not in self._ds and category in ["forcing", "static"]:
+            warnings.warn(f"no {category} data found in datastore")
             return None
-
         da_category = self._ds[category]
 
         # set units on x y coordinates if missing
@@ -304,10 +294,10 @@ class MDPDatastore(BaseRegularGridDatastore):
         """
         Return the standardization dataarray for the given category. This
         should contain a `{category}_mean` and `{category}_std` variable for
-        each variable in the category.
-        For `category=="state"`, the dataarray should also contain a
-        `state_diff_mean_standardized` and `state_diff_std_standardized`
-        variable for the one-step differences of the state variables.
+        each variable in the category. For `category=="state"`, the dataarray
+        should also contain a `state_diff_mean_standardized` and
+        `state_diff_std_standardized` variable for the one-step differences of
+        the state variables.
 
         Parameters
         ----------
@@ -318,16 +308,14 @@ class MDPDatastore(BaseRegularGridDatastore):
         -------
         xr.Dataset
             The standardization dataarray for the given category, with
-            variables for the mean and standard deviation of the variables (and
-            differences for state variables).
-
+            variables for the mean and standard deviation of the variables
+            (and differences for state variables).
         """
         ops = ["mean", "std"]
         split = "train"
         stats_variables = {
             f"{category}__{split}__{op}": f"{category}_{op}" for op in ops
         }
-
         ds_stats = self._ds[stats_variables.keys()].rename(stats_variables)
 
         # Add standardized state diff stats
@@ -341,25 +329,23 @@ class MDPDatastore(BaseRegularGridDatastore):
                     for op in ops
                 }
             )
-
         return ds_stats
 
     @cached_property
     def boundary_mask(self) -> xr.DataArray:
         """
         Produce a 0/1 mask for the boundary points of the dataset, these will
-        sit at the edges of the domain (in x/y extent) and will be used to mask
-        out the boundary points from the loss function and to overwrite the
-        boundary points from the prediction. For now this is created when the
-        mask is requested, but in the future this could be saved to the zarr
-        file.
+        sit at the edges of the domain (in x/y extent) and will be used to
+        mask out the boundary points from the loss function and to overwrite
+        the boundary points from the prediction. For now this is created when
+        the mask is requested, but in the future this could be saved to the
+        zarr file.
 
         Returns
         -------
         xr.DataArray
             A 0/1 mask for the boundary points of the dataset, where 1 is a
             boundary point and 0 is not.
-
         """
         ds_unstacked = self.unstack_grid_coords(da_or_ds=self._ds)
         da_state_variable = (
@@ -383,17 +369,16 @@ class MDPDatastore(BaseRegularGridDatastore):
         NOTE: currently this expects the projection information to be in the
         `extra` section of the configuration file, with a `projection` key
         containing a `class_name` and `kwargs` for constructing the
-        `cartopy.crs.Projection` object. This is a temporary solution until
-        the projection information can be parsed in the produced dataset
-        itself. `mllam-data-prep` ignores the contents of the `extra` section
-        of the config file which is why we need to check that the necessary
-        parts are there.
+        `cartopy.crs.Projection` object. This is a temporary solution until the
+        projection information can be parsed in the produced dataset itself.
+        `mllam-data-prep` ignores the contents of the `extra` section of the
+        config file which is why we need to check that the necessary parts are
+        there.
 
         Returns
         -------
         ccrs.Projection
             The projection of the coordinates.
-
         """
         if "projection" not in self._config.extra:
             raise ValueError(
@@ -411,6 +396,7 @@ class MDPDatastore(BaseRegularGridDatastore):
                 "add the class name of the projection to the `projection` key "
                 "in the `extra` section of the config."
             )
+
         if "kwargs" not in projection_info:
             raise ValueError(
                 "kwargs not found in the projection information. Please add "
@@ -420,10 +406,10 @@ class MDPDatastore(BaseRegularGridDatastore):
 
         class_name = projection_info["class_name"]
         ProjectionClass = getattr(ccrs, class_name)
+
         # need to copy otherwise we modify the dict stored in the dataclass
         # in-place
         kwargs = copy.deepcopy(projection_info["kwargs"])
-
         globe_kwargs = kwargs.pop("globe", {})
         if len(globe_kwargs) > 0:
             kwargs["globe"] = ccrs.Globe(**globe_kwargs)
@@ -438,7 +424,6 @@ class MDPDatastore(BaseRegularGridDatastore):
         -------
         CartesianGridShape
             The shape of the cartesian grid for the state variables.
-
         """
         ds_state = self.unstack_grid_coords(self._ds["state"])
         da_x, da_y = ds_state.x, ds_state.y
@@ -461,16 +446,13 @@ class MDPDatastore(BaseRegularGridDatastore):
             The x, y coordinates of the dataset, returned differently based on
             the value of `stacked`:
             - `stacked==True`: shape `(n_grid_points, 2)` where
-                               n_grid_points=N_x*N_y.
+              n_grid_points=N_x*N_y.
             - `stacked==False`: shape `(N_x, N_y, 2)`
-
         """
         # assume variables are stored in dimensions [grid_index, ...]
         ds_category = self.unstack_grid_coords(da_or_ds=self._ds[category])
-
         da_xs = ds_category.x
         da_ys = ds_category.y
-
         assert da_xs.ndim == da_ys.ndim == 1, "x and y coordinates must be 1D"
 
         da_x, da_y = xr.broadcast(da_xs, da_ys)
@@ -478,8 +460,7 @@ class MDPDatastore(BaseRegularGridDatastore):
 
         if stacked:
             da_xy = da_xy.stack(grid_index=self.CARTESIAN_COORDS).transpose(
-                "grid_index",
-                "grid_coord",
+                "grid_index", "grid_coord",
             )
         else:
             dims = [
