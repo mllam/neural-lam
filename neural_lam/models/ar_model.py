@@ -84,20 +84,26 @@ class ARModel(pl.LightningModule):
         for key, val in state_stats.items():
             self.register_buffer(key, val, persistent=False)
 
-        # Load forcing normalization stats (mean and std) if we have forcing data
+        # Load forcing normalization stats (mean and std) if we have
+        # forcing data
         if num_forcing_vars > 0:
             da_forcing_stats = datastore.get_standardization_dataarray(
                 category="forcing"
             )
-            # Save forcing mean and std as buffers (they move to GPU with model)
+            # Save forcing mean and std as buffers
+            # (they move to GPU with model)
             self.register_buffer(
                 "forcing_mean",
-                torch.tensor(da_forcing_stats.forcing_mean.values, dtype=torch.float32),
+                torch.tensor(
+                    da_forcing_stats.forcing_mean.values, dtype=torch.float32
+                ),
                 persistent=False,
             )
             self.register_buffer(
                 "forcing_std",
-                torch.tensor(da_forcing_stats.forcing_std.values, dtype=torch.float32),
+                torch.tensor(
+                    da_forcing_stats.forcing_std.values, dtype=torch.float32
+                ),
                 persistent=False,
             )
         else:
@@ -228,22 +234,22 @@ class ARModel(pl.LightningModule):
     def on_after_batch_transfer(self, batch, dataloader_idx):
         """
         Normalize data on GPU after batch is moved from CPU to GPU.
-        
+
         This is called automatically by PyTorch Lightning's Trainer.
         It happens AFTER data is on GPU but BEFORE training starts.
         """
         # Unpack the batch
         init_states, target_states, forcing, target_times = batch
-        
+
         # Normalize state data: (data - mean) / std
         # self.state_mean and self.state_std are already on GPU
         init_states = (init_states - self.state_mean) / self.state_std
         target_states = (target_states - self.state_mean) / self.state_std
-        
+
         # Normalize forcing data if we have it
         if self.forcing_mean is not None and forcing.shape[-1] > 0:
             forcing = (forcing - self.forcing_mean) / self.forcing_std
-        
+
         # Return normalized batch
         return init_states, target_states, forcing, target_times
 

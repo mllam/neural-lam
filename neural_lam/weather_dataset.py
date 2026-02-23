@@ -98,7 +98,8 @@ class WeatherDataset(torch.utils.data.Dataset):
         # This parameter kept for backward compatibility only
         if not standardize:
             warnings.warn(
-                "standardize=False is deprecated. Normalization now happens on GPU.",
+                "standardize=False is deprecated. "
+                "Normalization now happens on GPU.",
                 DeprecationWarning,
                 stacklevel=2,
             )
@@ -417,7 +418,7 @@ class WeatherDataset(torch.utils.data.Dataset):
         Return a single training sample, which consists of the initial states,
         target states, forcing and batch times.
 
-        Note: Normalization now happens on GPU in the model's 
+        Note: Normalization now happens on GPU in the model's
         on_after_batch_transfer() hook, not here in the Dataset.
 
         Parameters
