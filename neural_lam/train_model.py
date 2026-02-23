@@ -2,6 +2,7 @@
 import json
 import random
 import time
+import warnings
 from argparse import ArgumentDefaultsHelpFormatter, ArgumentParser
 
 # Third-party
@@ -245,6 +246,13 @@ def main(input_args=None):
                 f"validation is only unrolled {args.ar_steps_eval} steps. "
                 "Adjust --var_leads_metric_watch."
             )
+
+    if args.eval and not args.load:
+        warnings.warn(
+            "Evaluation (--eval) without --load: no checkpoint will be loaded.",
+            UserWarning,
+            stacklevel=2,
+        )
 
     # Get an (actual) random run id as a unique identifier
     random_run_id = random.randint(0, 9999)
