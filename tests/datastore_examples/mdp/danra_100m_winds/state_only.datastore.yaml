@@ -91,21 +91,6 @@ inputs:
         name_format: "{var_name}"
     target_output_variable: state
 
-  # danra_static:
-  #   path: https://object-store.os-api.cci1.ecmwf.int/mllam-testdata/danra_cropped/v0.2.0/single_levels.zarr
-  #   dims: [x, y]
-  #   variables:
-  #     - lsm
-  #     - orography
-  #   dim_mapping:
-  #     grid_index:
-  #       method: stack
-  #       dims: [x, y]
-  #     static_feature:
-  #       method: stack_variables_by_var_name
-  #       name_format: "{var_name}"
-  #   target_output_variable: static
-
 extra:
   projection:
     class_name: LambertConformal
