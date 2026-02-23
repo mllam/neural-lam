@@ -95,25 +95,14 @@ class WeatherDataset(torch.utils.data.Dataset):
                         "transpose the data in `BaseDatastore.get_dataarray`?"
                     )
 
-        # Set up for standardization
-        # TODO: This will become part of ar_model.py soon!
-        self.standardize = standardize
-        if standardize:
-            self.ds_state_stats = self.datastore.get_standardization_dataarray(
-                category="state"
+        # Note: Normalization moved to GPU (see ARModel.on_after_batch_transfer)
+        # This parameter kept for backward compatibility only
+        if not standardize:
+            warnings.warn(
+                "standardize=False is deprecated. Normalization now happens on GPU.",
+                DeprecationWarning,
+                stacklevel=2,
             )
-
-            self.da_state_mean = self.ds_state_stats.state_mean
-            self.da_state_std = self.ds_state_stats.state_std
-
-            if self.da_forcing is not None:
-                self.ds_forcing_stats = (
-                    self.datastore.get_standardization_dataarray(
-                        category="forcing"
-                    )
-                )
-                self.da_forcing_mean = self.ds_forcing_stats.forcing_mean
-                self.da_forcing_std = self.ds_forcing_stats.forcing_std
 
     def __len__(self):
         if self.datastore.is_forecast:
@@ -397,22 +386,7 @@ class WeatherDataset(torch.utils.data.Dataset):
         da_target_states = da_state.isel(time=slice(2, None))
         da_target_times = da_target_states.time
 
-        if self.standardize:
-            da_init_states = (
-                da_init_states - self.da_state_mean
-            ) / self.da_state_std
-            da_target_states = (
-                da_target_states - self.da_state_mean
-            ) / self.da_state_std
-
-            if da_forcing is not None:
-                # XXX: Here we implicitly assume that the last dimension of the
-                # forcing data is the forcing feature dimension. To standardize
-                # on `.device` we need a different implementation. (e.g. a
-                # tensor with repeated means and stds for each "windowed" time.)
-                da_forcing_windowed = (
-                    da_forcing_windowed - self.da_forcing_mean
-                ) / self.da_forcing_std
+        # Old normalization code removed - now done on GPU in the model
 
         if da_forcing is not None:
             # stack the `forcing_feature` and `window_sample` dimensions into a
@@ -443,30 +417,9 @@ class WeatherDataset(torch.utils.data.Dataset):
 
     def __getitem__(self, idx):
         """
-        Return a single training sample, which consists of the initial states,
-        target states, forcing and batch times.
-
-        The implementation currently uses xarray.DataArray objects for the
-        standardization (scaling to mean 0.0 and standard deviation of 1.0) so
-        that we can make us of xarray's broadcasting capabilities. This makes
-        it possible to standardization with both global means, but also for
-        example where a grid-point mean has been computed. This code will have
-        to be replace if standardization is to be done on the GPU to handle
-        different shapes of the standardization.
-
-        Parameters
-        ----------
-        idx : int
-            The index of the sample to return, this will refer to the time of
-            the initial state.
-
-        Returns
-        -------
-        init_states : TrainingSample
-            A training sample object containing the initial states, target
-            states, forcing and batch times. The batch times are the times of
-            the target steps.
-
+        Get one training sample (raw data, not normalized).
+        
+        Normalization happens later on GPU in the model.
         """
         (
             da_init_states,
