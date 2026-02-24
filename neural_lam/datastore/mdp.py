@@ -460,7 +460,8 @@ class MDPDatastore(BaseRegularGridDatastore):
 
         if stacked:
             da_xy = da_xy.stack(grid_index=self.CARTESIAN_COORDS).transpose(
-                "grid_index", "grid_coord",
+                "grid_index",
+                "grid_coord",
             )
         else:
             dims = [
