@@ -1,14 +1,11 @@
 # Standard library
 import os
-import warnings
 from typing import Any, Dict, List
 
 # Third-party
 import matplotlib.pyplot as plt
-import numpy as np
 import pytorch_lightning as pl
 import torch
-import xarray as xr
 
 # First-party
 from neural_lam.utils import get_integer_time
@@ -18,7 +15,6 @@ from .. import metrics, vis
 from ..config import NeuralLAMConfig
 from ..datastore import BaseDatastore
 from ..loss_weighting import get_state_feature_weighting
-from ..weather_dataset import WeatherDataset
 
 
 class ARModel(pl.LightningModule):
@@ -159,44 +155,6 @@ class ARModel(pl.LightningModule):
         self.time_step_int, self.time_step_unit = get_integer_time(
             self._datastore.step_length
         )
-
-    def _create_dataarray_from_tensor(
-        self,
-        tensor: torch.Tensor,
-        time: torch.Tensor,
-        split: str,
-        category: str,
-    ) -> xr.DataArray:
-        """
-        Create an `xr.DataArray` from a tensor, with the correct dimensions and
-        coordinates to match the datastore used by the model. This function in
-        in effect is the inverse of what is returned by
-        `WeatherDataset.__getitem__`.
-
-        Parameters
-        ----------
-        tensor : torch.Tensor
-            The tensor to convert to a `xr.DataArray` with dimensions [time,
-            grid_index, feature]. The tensor will be copied to the CPU if it is
-            not already there.
-        time : torch.Tensor
-            The time index or indices for the data, given as tensor representing
-            epoch time in nanoseconds. The tensor will be
-            copied to the CPU memory if they are not already there.
-        split : str
-            The split of the data, either 'train', 'val', or 'test'
-        category : str
-            The category of the data, either 'state' or 'forcing'
-        """
-        # TODO: creating an instance of WeatherDataset here on every call is
-        # not how this should be done but whether WeatherDataset should be
-        # provided to ARModel or where to put plotting still needs discussion
-        weather_dataset = WeatherDataset(datastore=self._datastore, split=split)
-        time = np.array(time.cpu(), dtype="datetime64[ns]")
-        da = weather_dataset.create_dataarray_from_tensor(
-            tensor=tensor, time=time, category=category
-        )
-        return da
 
     def configure_optimizers(self):
         opt = torch.optim.AdamW(
@@ -456,181 +414,22 @@ class ARModel(pl.LightningModule):
                 self.n_example_pred - self.plotted_examples,
             )
 
-            self.plot_examples(
-                batch,
-                n_additional_examples,
+            # Local
+            from ..evaluation import plot_examples
+
+            self.plotted_examples = plot_examples(
+                datastore=self._datastore,
                 prediction=prediction,
+                target=target,
+                time=batch[3],
+                n_examples=n_additional_examples,
                 split="test",
+                plotted_examples=self.plotted_examples,
+                state_std=self.state_std,
+                state_mean=self.state_mean,
+                save_dir=self.logger.save_dir if self.logger else "",
+                logger=self.logger,
             )
-
-    def plot_examples(self, batch, n_examples, split, prediction=None):
-        """
-        Plot the first n_examples forecasts from batch
-
-        batch: batch with data to plot corresponding forecasts for n_examples:
-        number of forecasts to plot prediction: (B, pred_steps, num_grid_nodes,
-        d_f), existing prediction.
-            Generate if None.
-        """
-        if prediction is None:
-            prediction, target, _, _ = self.common_step(batch)
-
-        target = batch[1]
-        time = batch[3]
-
-        # Rescale to original data scale
-        prediction_rescaled = prediction * self.state_std + self.state_mean
-        target_rescaled = target * self.state_std + self.state_mean
-
-        # Iterate over the examples
-        for pred_slice, target_slice, time_slice in zip(
-            prediction_rescaled[:n_examples],
-            target_rescaled[:n_examples],
-            time[:n_examples],
-        ):
-            # Each slice is (pred_steps, num_grid_nodes, d_f)
-            self.plotted_examples += 1  # Increment already here
-
-            da_prediction = self._create_dataarray_from_tensor(
-                tensor=pred_slice,
-                time=time_slice,
-                split=split,
-                category="state",
-            ).unstack("grid_index")
-            da_target = self._create_dataarray_from_tensor(
-                tensor=target_slice,
-                time=time_slice,
-                split=split,
-                category="state",
-            ).unstack("grid_index")
-
-            var_vmin = (
-                torch.minimum(
-                    pred_slice.flatten(0, 1).min(dim=0)[0],
-                    target_slice.flatten(0, 1).min(dim=0)[0],
-                )
-                .cpu()
-                .numpy()
-            )  # (d_f,)
-            var_vmax = (
-                torch.maximum(
-                    pred_slice.flatten(0, 1).max(dim=0)[0],
-                    target_slice.flatten(0, 1).max(dim=0)[0],
-                )
-                .cpu()
-                .numpy()
-            )  # (d_f,)
-            var_vranges = list(zip(var_vmin, var_vmax))
-
-            # Iterate over prediction horizon time steps
-            for t_i, _ in enumerate(zip(pred_slice, target_slice), start=1):
-                # Create one figure per variable at this time step
-                var_figs = [
-                    vis.plot_prediction(
-                        datastore=self._datastore,
-                        title=f"{var_name} ({var_unit}), "
-                        f"t={t_i} ({(self.time_step_int * t_i)}"
-                        f"{self.time_step_unit})",
-                        vrange=var_vrange,
-                        da_prediction=da_prediction.isel(
-                            state_feature=var_i, time=t_i - 1
-                        ).squeeze(),
-                        da_target=da_target.isel(
-                            state_feature=var_i, time=t_i - 1
-                        ).squeeze(),
-                    )
-                    for var_i, (var_name, var_unit, var_vrange) in enumerate(
-                        zip(
-                            self._datastore.get_vars_names("state"),
-                            self._datastore.get_vars_units("state"),
-                            var_vranges,
-                        )
-                    )
-                ]
-
-                example_i = self.plotted_examples
-
-                for var_name, fig in zip(
-                    self._datastore.get_vars_names("state"), var_figs
-                ):
-
-                    # We need treat logging images differently for different
-                    # loggers. WANDB can log multiple images to the same key,
-                    # while other loggers, as MLFlow, need unique keys for
-                    # each image.
-                    if isinstance(self.logger, pl.loggers.WandbLogger):
-                        key = f"{var_name}_example_{example_i}"
-                    else:
-                        key = f"{var_name}_example"
-
-                    if hasattr(self.logger, "log_image"):
-                        self.logger.log_image(key=key, images=[fig], step=t_i)
-                    else:
-                        warnings.warn(
-                            f"{self.logger} does not support image logging."
-                        )
-
-                plt.close(
-                    "all"
-                )  # Close all figs for this time step, saves memory
-
-            # Save pred and target as .pt files
-            torch.save(
-                pred_slice.cpu(),
-                os.path.join(
-                    self.logger.save_dir,
-                    f"example_pred_{self.plotted_examples}.pt",
-                ),
-            )
-            torch.save(
-                target_slice.cpu(),
-                os.path.join(
-                    self.logger.save_dir,
-                    f"example_target_{self.plotted_examples}.pt",
-                ),
-            )
-
-    def create_metric_log_dict(self, metric_tensor, prefix, metric_name):
-        """
-        Put together a dict with everything to log for one metric. Also saves
-        plots as pdf and csv if using test prefix.
-
-        metric_tensor: (pred_steps, d_f), metric values per time and variable
-        prefix: string, prefix to use for logging metric_name: string, name of
-        the metric
-
-        Return: log_dict: dict with everything to log for given metric
-        """
-        log_dict = {}
-        metric_fig = vis.plot_error_map(
-            errors=metric_tensor,
-            datastore=self._datastore,
-        )
-        full_log_name = f"{prefix}_{metric_name}"
-        log_dict[full_log_name] = metric_fig
-
-        if prefix == "test":
-            # Save pdf
-            metric_fig.savefig(
-                os.path.join(self.logger.save_dir, f"{full_log_name}.pdf")
-            )
-            # Save errors also as csv
-            np.savetxt(
-                os.path.join(self.logger.save_dir, f"{full_log_name}.csv"),
-                metric_tensor.cpu().numpy(),
-                delimiter=",",
-            )
-
-        # Check if metrics are watched, log exact values for specific vars
-        var_names = self._datastore.get_vars_names(category="state")
-        if full_log_name in self.args.metrics_watch:
-            for var_i, timesteps in self.args.var_leads_metrics_watch.items():
-                var_name = var_names[var_i]
-                for step in timesteps:
-                    key = f"{full_log_name}_{var_name}_step_{step}"
-                    log_dict[key] = metric_tensor[step - 1, var_i]
-
-        return log_dict
 
     def aggregate_and_plot_metrics(self, metrics_dict, prefix):
         """
@@ -640,50 +439,34 @@ class ARModel(pl.LightningModule):
             with step-evals.
         prefix: string, prefix to use for logging
         """
-        log_dict = {}
-        for metric_name, metric_val_list in metrics_dict.items():
-            metric_tensor = self.all_gather_cat(
-                torch.cat(metric_val_list, dim=0)
-            )  # (N_eval, pred_steps, d_f)
+        # Local
+        from ..evaluation import evaluate_metrics
 
-            if self.trainer.is_global_zero:
-                metric_tensor_averaged = torch.mean(metric_tensor, dim=0)
-                # (pred_steps, d_f)
-
-                # Take square root after all averaging to change MSE to RMSE
-                if "mse" in metric_name:
-                    metric_tensor_averaged = torch.sqrt(metric_tensor_averaged)
-                    metric_name = metric_name.replace("mse", "rmse")
-
-                # NOTE: we here assume rescaling for all metrics is linear
-                metric_rescaled = metric_tensor_averaged * self.state_std
-                # (pred_steps, d_f)
-                log_dict.update(
-                    self.create_metric_log_dict(
-                        metric_rescaled, prefix, metric_name
-                    )
-                )
-
-        # Ensure that log_dict has structure for
-        # logging as dict(str, plt.Figure)
-        assert all(
-            isinstance(key, str) and isinstance(value, plt.Figure)
-            for key, value in log_dict.items()
+        log_dict = evaluate_metrics(
+            metrics_dict=metrics_dict,
+            prefix=prefix,
+            state_std=self.state_std,
+            datastore=self._datastore,
+            save_dir=self.logger.save_dir if self.logger else "",
+            metrics_watch=self.args.metrics_watch,
+            var_leads_metrics_watch=self.args.var_leads_metrics_watch,
+            all_gather_cat_fn=self.all_gather_cat,
+            is_global_zero=self.trainer.is_global_zero,
         )
 
         if self.trainer.is_global_zero and not self.trainer.sanity_checking:
 
             current_epoch = self.trainer.current_epoch
 
-            for key, figure in log_dict.items():
-                # For other loggers than wandb, add epoch to key.
-                # Wandb can log multiple images to the same key, while other
-                # loggers, such as MLFlow need unique keys for each image.
-                if not isinstance(self.logger, pl.loggers.WandbLogger):
-                    key = f"{key}-{current_epoch}"
+            for key, val in log_dict.items():
+                if isinstance(val, plt.Figure):
+                    if not isinstance(self.logger, pl.loggers.WandbLogger):
+                        key = f"{key}-{current_epoch}"
 
-                if hasattr(self.logger, "log_image"):
-                    self.logger.log_image(key=key, images=[figure])
+                    if hasattr(self.logger, "log_image"):
+                        self.logger.log_image(key=key, images=[val])
+                else:
+                    self.log(key, val, sync_dist=False)
 
             plt.close("all")  # Close all figs
 
