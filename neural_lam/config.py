@@ -107,15 +107,20 @@ class TrainingConfig:
 @dataclasses.dataclass
 class NeuralLAMConfig(dataclass_wizard.JSONWizard, dataclass_wizard.YAMLWizard):
     """
-    Dataclass for Neural-LAM configuration. This class is used to load and
-    store the configuration for using Neural-LAM.
+    Configuration for the Neural-LAM model and training pipeline.
+
+    Loads and stores all settings needed to run Neural-LAM, including
+    datastore selection and training hyperparameters. Serialisation and
+    deserialisation from YAML/JSON is handled via ``dataclass_wizard``.
 
     Attributes
     ----------
     datastore : DatastoreSelection
-        The configuration for the datastore to use.
+        Configuration specifying which datastore backend to use and its
+        associated settings.
     training : TrainingConfig
-        The configuration for training the model.
+        Configuration for training the model, including loss function and
+        feature-weighting strategy. Defaults to ``TrainingConfig()``.
     """
 
     datastore: DatastoreSelection
@@ -150,6 +155,7 @@ class NeuralLAMConfig(dataclass_wizard.JSONWizard, dataclass_wizard.YAMLWizard):
 
 
 class InvalidConfigError(Exception):
+    """Raised when the Neural-LAM configuration file is invalid or malformed."""
     pass
 
 

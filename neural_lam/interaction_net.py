@@ -27,23 +27,37 @@ class InteractionNet(pyg.nn.MessagePassing):
         aggr_chunk_sizes=None,
         aggr="sum",
     ):
-        """
-        Create a new InteractionNet
 
-        edge_index: (2,M), Edges in pyg format
-        input_dim: Dimensionality of input representations,
-            for both nodes and edges
-        update_edges: If new edge representations should be computed
-            and returned
-        hidden_layers: Number of hidden layers in MLPs
-        hidden_dim: Dimensionality of hidden layers, if None then same
-            as input_dim
-        edge_chunk_sizes: List of chunks sizes to split edge representation
-            into and use separate MLPs for (None = no chunking, same MLP)
-        aggr_chunk_sizes: List of chunks sizes to split aggregated node
-            representation into and use separate MLPs for
-            (None = no chunking, same MLP)
-        aggr: Message aggregation method (sum/mean)
+        """
+        Initialise an InteractionNet message-passing layer.
+
+        Parameters
+        ----------
+        edge_index : torch.Tensor
+            Edge connectivity tensor of shape ``(2, M)`` in PyG format,
+            where ``M`` is the number of edges.
+        input_dim : int
+            Dimensionality of both node and edge input representations.
+        update_edges : bool, optional
+            If ``True``, compute and return updated edge representations in
+            addition to node representations. Default is ``True``.
+        hidden_layers : int, optional
+            Number of hidden layers in each MLP. Default is ``1``.
+        hidden_dim : int or None, optional
+            Width of hidden layers. If ``None``, defaults to ``input_dim``.
+        edge_chunk_sizes : list of int or None, optional
+            Chunk sizes for splitting edge representations across separate
+            MLPs. ``None`` uses a single shared MLP.
+        aggr_chunk_sizes : list of int or None, optional
+            Chunk sizes for splitting aggregated node representations across
+            separate MLPs. ``None`` uses a single shared MLP.
+        aggr : {'sum', 'mean'}, optional
+            Message aggregation method. Default is ``'sum'``.
+
+        Raises
+        ------
+        AssertionError
+            If ``aggr`` is not one of ``'sum'`` or ``'mean'``.
         """
         assert aggr in ("sum", "mean"), f"Unknown aggregation method: {aggr}"
         super().__init__(aggr=aggr)

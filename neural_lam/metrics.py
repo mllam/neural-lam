@@ -20,19 +20,30 @@ def get_metric(metric_name):
 
 def mask_and_reduce_metric(metric_entry_vals, mask, average_grid, sum_vars):
     """
-    Masks and (optionally) reduces entry-wise metric values
+    Apply a spatial mask and optionally reduce a per-entry metric tensor.
 
-    (...,) is any number of batch dimensions, potentially different
-        but broadcastable
-    metric_entry_vals: (..., N, d_state), prediction
-    mask: (N,), boolean mask describing which grid nodes to use in metric
-    average_grid: boolean, if grid dimension -2 should be reduced (mean over N)
-    sum_vars: boolean, if variable dimension -1 should be reduced (sum
-        over d_state)
+    Parameters
+    ----------
+    metric_entry_vals : torch.Tensor
+        Entry-wise metric values of shape ``(..., N, d_state)``, where
+        ``...`` denotes any number of broadcastable batch dimensions.
+    mask : torch.Tensor or None
+        Boolean mask of shape ``(N,)`` selecting which grid nodes to include.
+        Pass ``None`` to use all nodes.
+    average_grid : bool
+        If ``True``, reduce the grid dimension ``N`` by taking the mean,
+        producing shape ``(..., d_state)``.
+    sum_vars : bool
+        If ``True``, reduce the variable dimension ``d_state`` by summing,
+        producing shape ``(..., N)`` or ``(...,)`` depending on
+        ``average_grid``.
 
-    Returns:
-    metric_val: One of (...,), (..., d_state), (..., N), (..., N, d_state),
-    depending on reduction arguments.
+    Returns
+    -------
+    torch.Tensor
+        Reduced metric tensor. Shape is one of ``(...,)``,
+        ``(..., d_state)``, ``(..., N)``, or ``(..., N, d_state)``
+        depending on the reduction arguments.
     """
     # Only keep grid nodes in mask
     if mask is not None:
@@ -55,21 +66,34 @@ def mask_and_reduce_metric(metric_entry_vals, mask, average_grid, sum_vars):
 
 def wmse(pred, target, pred_std, mask=None, average_grid=True, sum_vars=True):
     """
-    Weighted Mean Squared Error
+    Compute the Weighted Mean Squared Error (wMSE).
 
-    (...,) is any number of batch dimensions, potentially different
-        but broadcastable
-    pred: (..., N, d_state), prediction
-    target: (..., N, d_state), target
-    pred_std: (..., N, d_state) or (d_state,), predicted std.-dev.
-    mask: (N,), boolean mask describing which grid nodes to use in metric
-    average_grid: boolean, if grid dimension -2 should be reduced (mean over N)
-    sum_vars: boolean, if variable dimension -1 should be reduced (sum
-        over d_state)
+    Scales the squared error at each grid node and variable by the inverse
+    variance ``1 / pred_std**2``, then applies masking and reduction via
+    :func:`mask_and_reduce_metric`.
 
-    Returns:
-    metric_val: One of (...,), (..., d_state), (..., N), (..., N, d_state),
-    depending on reduction arguments.
+    Parameters
+    ----------
+    pred : torch.Tensor
+        Model predictions of shape ``(..., N, d_state)``.
+    target : torch.Tensor
+        Ground-truth values of shape ``(..., N, d_state)``.
+    pred_std : torch.Tensor
+        Predicted standard deviation of shape ``(..., N, d_state)`` or
+        ``(d_state,)`` used as the per-entry weighting.
+    mask : torch.Tensor or None, optional
+        Boolean mask of shape ``(N,)`` selecting grid nodes. Default is
+        ``None`` (all nodes used).
+    average_grid : bool, optional
+        If ``True``, average over the grid dimension. Default is ``True``.
+    sum_vars : bool, optional
+        If ``True``, sum over the variable dimension. Default is ``True``.
+
+    Returns
+    -------
+    torch.Tensor
+        Weighted MSE, with shape determined by ``average_grid`` and
+        ``sum_vars`` (see :func:`mask_and_reduce_metric`).
     """
     entry_mse = torch.nn.functional.mse_loss(
         pred, target, reduction="none"
