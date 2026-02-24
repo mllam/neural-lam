@@ -8,6 +8,7 @@
 
 import os
 import sys
+
 sys.path.insert(0, os.path.abspath("../../"))
 
 # Mock heavy scientific and ML dependencies so documentation
@@ -43,10 +44,10 @@ MOCK_MODULES = [
     "parse",
 ]
 
-project = 'Neural-LAM'
-copyright = '2026, MLLAM Contributors'
-author = 'MLLAM Contributors'
-release = '0.0.0'
+project = "Neural-LAM"
+copyright = "2026, MLLAM Contributors"
+author = "MLLAM Contributors"
+release = "0.0.0"
 
 # -- General configuration ---------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#general-configuration
@@ -72,11 +73,11 @@ autodoc_default_options = {
     "show-inheritance": True,
 }
 
-templates_path = ['_templates']
-exclude_patterns = []
+templates_path = ["_templates"]
+exclude_patterns: list[str] = []
 
 # -- Options for HTML output -------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#options-for-html-output
 
-html_theme = 'furo'
-html_static_path = ['_static']
+html_theme = "furo"
+html_static_path = ["_static"]

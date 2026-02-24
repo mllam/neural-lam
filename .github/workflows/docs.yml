@@ -16,7 +16,8 @@ jobs:
               uses: astral-sh/setup-uv@v5
 
             - name: Install docs dependencies
-              run: uv pip install --system -e ".[docs]"
+              run: uv sync --group docs
 
             - name: Build docs
               run: sphinx-build -b html docs/source docs/build/html
+            
