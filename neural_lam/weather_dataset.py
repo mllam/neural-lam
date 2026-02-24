@@ -1,7 +1,8 @@
 # Standard library
 import datetime
+import random
 import warnings
-from typing import Union
+from typing import NamedTuple, Union
 
 # Third-party
 import numpy as np
@@ -11,6 +12,11 @@ import xarray as xr
 
 # First-party
 from neural_lam.datastore.base import BaseDatastore
+
+# Set random seeds for reproducibility
+torch.manual_seed(42)
+np.random.seed(42)
+random.seed(42)
 
 
 class WeatherDataset(torch.utils.data.Dataset):
@@ -331,6 +337,13 @@ class WeatherDataset(torch.utils.data.Dataset):
 
         return da_concat
 
+class ItemDataArrays(NamedTuple):
+    """Container for item dataarrays."""
+    init_states: xr.DataArray
+    target_states: xr.DataArray
+    forcing_windowed: xr.DataArray
+    target_times: xr.DataArray
+
     def _build_item_dataarrays(self, idx):
         """
         Create the dataarrays for the initial states, target states and forcing
@@ -343,14 +356,9 @@ class WeatherDataset(torch.utils.data.Dataset):
 
         Returns
         -------
-        da_init_states : xr.DataArray
-            The dataarray for the initial states.
-        da_target_states : xr.DataArray
-            The dataarray for the target states.
-        da_forcing_windowed : xr.DataArray
-            The dataarray for the forcing data, windowed for the sample.
-        da_target_times : xr.DataArray
-            The dataarray for the target times.
+        ItemDataArrays
+            A named tuple containing init_states, target_states,
+            forcing_windowed, and target_times.
         """
         # handling ensemble data
         if self.datastore.is_ensemble:
@@ -434,11 +442,11 @@ class WeatherDataset(torch.utils.data.Dataset):
                 },
             )
 
-        return (
-            da_init_states,
-            da_target_states,
-            da_forcing_windowed,
-            da_target_times,
+        return ItemDataArrays(
+            init_states=da_init_states,
+            target_states=da_target_states,
+            forcing_windowed=da_forcing_windowed,
+            target_times=da_target_times,
         )
 
     def __getitem__(self, idx):
@@ -468,12 +476,11 @@ class WeatherDataset(torch.utils.data.Dataset):
             the target steps.
 
         """
-        (
-            da_init_states,
-            da_target_states,
-            da_forcing_windowed,
-            da_target_times,
-        ) = self._build_item_dataarrays(idx=idx)
+        result = self._build_item_dataarrays(idx=idx)
+        da_init_states = result.init_states
+        da_target_states = result.target_states
+        da_forcing_windowed = result.forcing_windowed
+        da_target_times = result.target_times
 
         tensor_dtype = torch.float32
 
