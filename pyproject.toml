@@ -13,8 +13,7 @@ authors = [
     { name = "Daniel Holmberg", email = "daniel.holmberg@helsinki.fi" },
 ]
 readme = "README.md"
-license = "MIT"
-license-files = ["LICENSE.txt"]
+license = { text = "MIT" }
 
 # PEP 621 project metadata
 # See https://www.python.org/dev/peps/pep-0621/
@@ -112,6 +111,22 @@ min-similarity-lines = 10
 requires = ["hatchling>=1.27.0", "hatch-vcs"]
 build-backend = "hatchling.build"
 
+[tool.hatch.metadata]
+core-metadata-version = "2.4"
+
 [tool.hatch.version]
 source = "vcs"
 fallback-version = "0.0.0"
+
+[tool.hatch.build.targets.sdist]
+exclude = [
+  "fail-env/",
+  ".venv/",
+  "venv/",
+]
+
+[tool.hatch.build.targets.wheel]
+exclude = [
+  ".venv/",
+  "venv/",
+]

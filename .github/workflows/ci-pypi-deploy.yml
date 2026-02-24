@@ -16,11 +16,13 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Fetch all history for hatch-vcs
       - uses: actions/setup-python@v5
       - name: Install uv
         uses: astral-sh/setup-uv@v7
-      - name: Pre-install build dependencies
-        run: uv pip install --system "hatchling>=1.27.0" hatch-vcs
+        with:
+          enable-cache: false
       - name: Build with uv
         run: uv build
       - uses: casperdcl/deploy-pypi@v2
