@@ -41,6 +41,7 @@ requires-python = ">=3.10"
 
 [dependency-groups]
 dev = ["pre-commit>=3.8.0", "pytest>=8.3.2", "pooch>=1.8.2"]
+docs = ["sphinx>=7.0", "furo>=2024.1.29", "myst-parser>=3.0"]
 
 [tool.setuptools]
 py-modules = ["neural_lam"]

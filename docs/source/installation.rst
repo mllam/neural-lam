@@ -1,10 +1,19 @@
 Installation
 ============
 
-Basic Installation
+Install from PyPI
 ------------------
 
-Neural-LAM uses PDM for dependency management.
+For standard use:
+
+.. code-block:: bash
+
+   pip install neural_lam
+
+Basic Installation (Development)
+--------------------------------
+
+Neural-LAM uses `uv <https://github.com/astral-sh/uv>`_ for dependency management.
 
 Clone the repository:
 
@@ -17,7 +26,7 @@ Install dependencies:
 
 .. code-block:: bash
 
-   pdm install
+   uv sync
 
 Note
 ----
