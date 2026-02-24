@@ -20,4 +20,3 @@ jobs:
 
             - name: Build docs
               run: sphinx-build -b html docs/source docs/build/html
-            

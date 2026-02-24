@@ -19,4 +19,3 @@ Contents
    introduction
    installation
    api
-   
