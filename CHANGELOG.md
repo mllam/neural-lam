@@ -19,6 +19,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Fix caching of MEPS example data in CI/CD [\#181](https://github.com/mllam/neural-lam/pull/181) @observingClouds
 
+### Fixed
+
+- Prevent image overwriting in `plot_examples()` by updating logging key logic [#205](https://github.com/mllam/neural-lam/pull/205) @Shristi-Goel
+
 ## [v0.5.0](https://github.com/mllam/neural-lam/releases/tag/v0.5.0)
 
 This release contains maintenance and fixes, preventing some unexpected crashes and improving CICD and testing.
