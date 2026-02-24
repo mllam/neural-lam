@@ -1,5 +1,4 @@
-# Third-party
-import pytorch_lightning as pl
+# Standard library
 import sys
 from unittest.mock import MagicMock, patch
 
