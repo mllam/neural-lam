@@ -3,7 +3,7 @@
 [![CPU+GPU testing](https://github.com/mllam/neural-lam/actions/workflows/install-and-test.yml/badge.svg?branch=main)](https://github.com/mllam/neural-lam/actions/workflows/install-and-test.yml)
 
 <p align="middle">
-    <img src="figures/neural_lam_header.png" width="700">
+    <img src="https://raw.githubusercontent.com/mllam/neural-lam/main/figures/neural_lam_header.png" width="700">
 </p>
 
 Neural-LAM is a repository of graph-based neural weather prediction models for Limited Area Modeling (LAM).
@@ -58,7 +58,7 @@ Still, some restrictions are inevitable:
 * The graph and data are specific to the limited area under consideration. This is of course true for the data, but also the graph should be created with the exact geometry of the area in mind.
 
 <p align="middle">
-  <img src="figures/neural_lam_setup.png" width="600"/>
+  <img src="https://raw.githubusercontent.com/mllam/neural-lam/main/figures/neural_lam_setup.png" width="600"/>
 </p>
 
 
