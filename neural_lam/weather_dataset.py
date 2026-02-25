@@ -1,5 +1,6 @@
 # Standard library
 import datetime
+import random
 import warnings
 from typing import Union
 
@@ -11,6 +12,18 @@ import xarray as xr
 
 # First-party
 from neural_lam.datastore.base import BaseDatastore
+
+
+def _worker_init_fn(worker_id):
+    """Seed each DataLoader worker independently for reproducibility.
+
+    Without this, workers spawned with num_workers > 0 can end up with
+    correlated random states across runs. See:
+    https://pytorch.org/docs/stable/data.html#randomness-in-multi-process-data-loading
+    """
+    worker_seed = torch.initial_seed() % 2**32
+    np.random.seed(worker_seed)
+    random.seed(worker_seed)
 
 
 class WeatherDataset(torch.utils.data.Dataset):
@@ -673,6 +686,7 @@ class WeatherDataModule(pl.LightningDataModule):
             shuffle=True,
             multiprocessing_context=self.multiprocessing_context,
             persistent_workers=True,
+            worker_init_fn=_worker_init_fn,
         )
 
     def val_dataloader(self):
@@ -684,6 +698,7 @@ class WeatherDataModule(pl.LightningDataModule):
             shuffle=False,
             multiprocessing_context=self.multiprocessing_context,
             persistent_workers=True,
+            worker_init_fn=_worker_init_fn,
         )
 
     def test_dataloader(self):
@@ -695,4 +710,5 @@ class WeatherDataModule(pl.LightningDataModule):
             shuffle=False,
             multiprocessing_context=self.multiprocessing_context,
             persistent_workers=True,
+            worker_init_fn=_worker_init_fn,
         )
