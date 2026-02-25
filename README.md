@@ -569,6 +569,35 @@ These files have the same list format as the ones above, but each list has lengt
 Entries 0 in these lists describe edges between the lowest levels 1 and 2.
 
 # Development and Contributing
+
+## Development Environment Setup
+
+For development and testing, we recommend creating a clean virtual environment and installing neural-lam in editable mode:
+
+```bash
+python -m venv .venv
+
+# On Linux/macOS:
+source .venv/bin/activate
+
+# On Windows (Command Prompt):
+.venv\Scripts\activate
+
+# On Windows (PowerShell):
+.venv\Scripts\Activate.ps1
+
+pip install --group dev -e .
+```
+
+To verify that the environment is working correctly, run:
+
+```bash
+pytest
+```
+
+A successful setup should run the full test suite without failures.
+
+## Code Quality
 Any push or Pull-Request to the main branch will trigger a selection of pre-commit hooks.
 These hooks will run a series of checks on the code, like formatting and linting.
 If any of these checks fail the push or PR will be rejected.
