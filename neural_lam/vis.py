@@ -73,6 +73,45 @@ def plot_error_map(errors, datastore: BaseRegularGridDatastore, title=None):
     return fig
 
 
+def plot_on_axis(
+    ax,
+    datastore: BaseRegularGridDatastore,
+    data,
+    alpha=None,
+    vmin=None,
+    vmax=None,
+    ax_title=None,
+):
+    """
+    Plot weather state on a specific axis using datastore metadata.
+    Ensures memory safety by explicitly detaching the tensor.
+    """
+    ax.coastlines()
+
+    # transpose (.T) to match the (x, y) orientation required by imshow
+    data_grid = (
+        data.detach()
+        .reshape([datastore.grid_shape_state.x, datastore.grid_shape_state.y])
+        .T.cpu()
+        .numpy()
+    )
+
+    im = ax.imshow(
+        data_grid,
+        origin="lower",
+        extent=datastore.get_xy_extent("state"),
+        alpha=alpha,
+        vmin=vmin,
+        vmax=vmax,
+        cmap="plasma",
+        transform=datastore.coords_projection,
+    )
+
+    if ax_title:
+        ax.set_title(ax_title, size=15)
+    return im
+
+
 @matplotlib.rc_context(utils.fractional_plot_bundle(1))
 def plot_prediction(
     datastore: BaseRegularGridDatastore,
@@ -87,7 +126,6 @@ def plot_prediction(
     Each has shape (N_grid,)
 
     """
-    # Get common scale for values
     if vrange is None:
         vmin = min(da_prediction.min(), da_target.min())
         vmax = max(da_prediction.max(), da_target.max())
@@ -99,7 +137,7 @@ def plot_prediction(
     # Set up masking of border region
     da_mask = datastore.unstack_grid_coords(datastore.boundary_mask)
     mask_values = np.invert(da_mask.values.astype(bool)).astype(float)
-    pixel_alpha = mask_values.clip(0.7, 1)  # Faded border region
+    pixel_alpha = mask_values.clip(0.7, 1)
 
     fig, axes = plt.subplots(
         1,
@@ -110,7 +148,7 @@ def plot_prediction(
 
     # Plot pred and target
     for ax, da in zip(axes, (da_target, da_prediction)):
-        ax.coastlines()  # Add coastline outlines
+        ax.coastlines()
         da.plot.imshow(
             ax=ax,
             origin="lower",
@@ -123,13 +161,97 @@ def plot_prediction(
             transform=datastore.coords_projection,
         )
 
-    # Ticks and labels
     axes[0].set_title("Ground Truth", size=15)
     axes[1].set_title("Prediction", size=15)
 
     if title:
         fig.suptitle(title, size=20)
 
+    return fig
+
+
+@matplotlib.rc_context(utils.fractional_plot_bundle(1))
+def plot_ensemble_prediction(
+    datastore: BaseRegularGridDatastore,
+    samples,
+    target,
+    ens_mean,
+    ens_std,
+    title=None,
+    vrange=None,
+):
+    """
+    Plot example predictions, ground truth, mean and standard deviatio.
+    from ensemble forecast using datastore metadata.
+    """
+    # Get common scale from detached tensors
+    if vrange is None:
+        vmin = min(vals.min().cpu().item() for vals in (samples, target))
+        vmax = max(vals.max().cpu().item() for vals in (samples, target))
+    else:
+        vmin, vmax = vrange
+
+    da_mask = datastore.unstack_grid_coords(datastore.boundary_mask)
+    pixel_alpha = (
+        np.invert(da_mask.values.astype(bool)).astype(float).clip(0.7, 1).T
+    )
+
+    fig, axes = plt.subplots(
+        3,
+        3,
+        figsize=(15, 15),
+        subplot_kw={"projection": datastore.coords_projection},
+    )
+    axes = axes.flatten()
+
+    # Plot statistical summaries
+    gt_im = plot_on_axis(
+        axes[0],
+        datastore,
+        target,
+        alpha=pixel_alpha,
+        vmin=vmin,
+        vmax=vmax,
+        ax_title="Ground Truth",
+    )
+    plot_on_axis(
+        axes[1],
+        datastore,
+        ens_mean,
+        alpha=pixel_alpha,
+        vmin=vmin,
+        vmax=vmax,
+        ax_title="Ens. Mean",
+    )
+    std_im = plot_on_axis(
+        axes[2], datastore, ens_std, alpha=pixel_alpha, ax_title="Ens. Std."
+    )
+
+    for member_i, (ax, member) in enumerate(
+        zip(axes[3:], samples[:6]), start=1
+    ):
+        plot_on_axis(
+            ax,
+            datastore,
+            member,
+            alpha=pixel_alpha,
+            vmin=vmin,
+            vmax=vmax,
+            ax_title=f"Member {member_i}",
+        )
+
+    for ax in axes[(3 + samples.shape[0]) :]:
+        ax.axis("off")
+
+    fig.colorbar(
+        gt_im, ax=axes[:2], aspect=60, location="bottom", shrink=0.9
+    ).ax.tick_params(labelsize=10)
+    fig.colorbar(
+        std_im, aspect=30, location="bottom", shrink=0.9
+    ).ax.tick_params(labelsize=10)
+
+    if title:
+        fig.suptitle(title, size=20)
     return fig
 
 
@@ -141,7 +263,7 @@ def plot_spatial_error(
     Plot errors over spatial map
     Error and obs_mask has shape (N_grid,)
     """
-    # Get common scale for values
+    # Get common scale for values (Safely using .cpu().item()!)
     if vrange is None:
         vmin = error.min().cpu().item()
         vmax = error.max().cpu().item()
@@ -161,10 +283,10 @@ def plot_spatial_error(
     )
 
     ax.coastlines()  # Add coastline outlines
+
     error_grid = (
-        error.reshape(
-            [datastore.grid_shape_state.x, datastore.grid_shape_state.y]
-        )
+        error.detach()
+        .reshape([datastore.grid_shape_state.x, datastore.grid_shape_state.y])
         .T.cpu()
         .numpy()
     )
@@ -173,7 +295,7 @@ def plot_spatial_error(
         error_grid,
         origin="lower",
         extent=extent,
-        alpha=pixel_alpha,
+        alpha=pixel_alpha.T,
         vmin=vmin,
         vmax=vmax,
         cmap="OrRd",
@@ -325,3 +447,63 @@ def plot_examples(
         )
 
     return plotted_examples
+
+
+@matplotlib.rc_context(utils.fractional_plot_bundle(1))
+def plot_latent_samples(prior_samples, vi_samples, title=None):
+    """
+    Plot samples of latent variables drawn from prior and
+    variational distribution.
+    """
+    num_samples, num_mesh_nodes, latent_dim = prior_samples.shape
+    plot_dims = min(latent_dim, 3)
+    img_side_size = int(np.sqrt(num_mesh_nodes))
+
+    vmin = min(
+        vals[..., :plot_dims].min().cpu().item()
+        for vals in (prior_samples, vi_samples)
+    )
+    vmax = max(
+        vals[..., :plot_dims].max().cpu().item()
+        for vals in (prior_samples, vi_samples)
+    )
+
+    fig, axes = plt.subplots(num_samples, 2 * plot_dims, figsize=(20, 16))
+
+    for row_i, (axes_row, prior_sample, vi_sample) in enumerate(
+        zip(axes, prior_samples, vi_samples)
+    ):
+        for dim_i in range(plot_dims):
+            # Prior and Variational samples for comparison
+            p_data = (
+                prior_sample[:, dim_i]
+                .reshape(img_side_size, img_side_size)
+                .detach()
+                .cpu()
+                .numpy()
+            )
+            v_data = (
+                vi_sample[:, dim_i]
+                .reshape(img_side_size, img_side_size)
+                .detach()
+                .cpu()
+                .numpy()
+            )
+
+            axes_row[2 * dim_i].imshow(p_data, vmin=vmin, vmax=vmax)
+            vi_im = axes_row[2 * dim_i + 1].imshow(v_data, vmin=vmin, vmax=vmax)
+
+            if row_i == 0:
+                axes_row[2 * dim_i].set_title(f"d{dim_i} (prior)", size=15)
+                axes_row[2 * dim_i + 1].set_title(f"d{dim_i} (vi)", size=15)
+
+    for ax in axes.flatten():
+        ax.set_xticks([])
+        ax.set_yticks([])
+
+    fig.colorbar(vi_im, ax=axes, aspect=60, location="bottom").ax.tick_params(
+        labelsize=15
+    )
+    if title:
+        fig.suptitle(title, size=20)
+    return fig
