@@ -104,7 +104,7 @@ class ARModel(pl.LightningModule):
             # in wMSE/wMAE
             self.register_buffer(
                 "per_var_std",
-                self.diff_std / torch.sqrt(self.feature_weights),
+                self.diff_std / torch.sqrt(self.feature_weights + 1e-8),
                 persistent=False,
             )
 
