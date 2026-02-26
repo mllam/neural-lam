@@ -8,7 +8,7 @@ import xarray as xr
 
 # First-party
 from neural_lam import vis
-from conftest import init_datastore_example
+from tests.conftest import init_datastore_example
 
 
 @pytest.fixture(autouse=True)
