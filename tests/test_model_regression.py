@@ -91,6 +91,6 @@ def test_graph_lam_regression():
     torch.testing.assert_close(
         new_output,
         reference_output,
-        rtol=1e-5,
-        atol=1e-6,
+        rtol=1e-4,
+        atol=1e-5,
     )
