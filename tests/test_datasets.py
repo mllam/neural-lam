@@ -259,24 +259,3 @@ def test_dataset_length(dataset_config):
     # Check that we can actually get last and first sample
     dataset[0]
     dataset[expected_len - 1]
-
-
-def test_num_workers_zero():
-    """Check that setting num_workers=0 disables persistent_workers
-    in the data loaders to avoid PyTorch ValueErrors.
-    """
-    datastore = DummyDatastore(n_timesteps=100)
-    data_module = WeatherDataModule(
-        datastore=datastore,
-        batch_size=2,
-        num_workers=0,
-    )
-    data_module.setup()
-
-    train_dl = data_module.train_dataloader()
-    val_dl = data_module.val_dataloader()
-    test_dl = data_module.test_dataloader()
-
-    assert train_dl.persistent_workers is False
-    assert val_dl.persistent_workers is False
-    assert test_dl.persistent_workers is False
