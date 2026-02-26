@@ -9,11 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-<<<<<<< HEAD
 - Fix README image paths to use absolute GitHub URLs so images display correctly on PyPI [\#188](https://github.com/mllam/neural-lam/pull/188) @bk-simon
-=======
+
 - Changed the hardcoded True to a conditional check "persistent_workers=self.num_workers > 0" [\#234](https://github.com/mllam/neural-lam/pull/234) @santhil-cyber
->>>>>>> 0e029ad (fix: disable persistent_workers when num_workers is 0)
 
 ### Maintenance
 
@@ -50,8 +48,6 @@ This release contains maintenance and fixes, preventing some unexpected crashes 
 [\#150](https://github.com/mllam/neural-lam/pull/150) @YUTAIPAN
 
 - Adding a more robust LaTeX availability check function [\#162](https://github.com/mllam/neural-lam/pull/162) @lorenzo30salgado
-
-- Changed the hardcoded True to a conditional check "persistent_workers=self.num_workers > 0" [\#234](https://github.com/mllam/neural-lam/pull/234) @santhil-cyber
 
 ### Maintenance
 
