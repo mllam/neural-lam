@@ -363,7 +363,7 @@ class ARModel(pl.LightningModule):
                     "These steps will be skipped.",
                     UserWarning,
                 )
-                self._warned_val_steps = True
+            self._warned_val_steps = True
 
         val_log_dict = {
             f"val_loss_unroll{step}": time_step_loss[step - 1]
@@ -432,7 +432,7 @@ class ARModel(pl.LightningModule):
                     "These steps will be skipped.",
                     UserWarning,
                 )
-                self._warned_val_steps = True
+            self._warned_val_steps = True
 
         test_log_dict = {
             f"test_loss_unroll{step}": time_step_loss[step - 1]
@@ -750,12 +750,7 @@ class ARModel(pl.LightningModule):
                     f"({(self.time_step_int * t_i)} {self.time_step_unit})",
                 )
                 for t_i, loss_map in zip(
-                    [
-                        s
-                        for s in self.args.val_steps_to_log
-                        if s <= mean_spatial_loss.shape[0]
-                    ],
-                    mean_spatial_loss,
+                    self.args.val_steps_to_log, mean_spatial_loss
                 )
             ]
 
@@ -778,12 +773,7 @@ class ARModel(pl.LightningModule):
                 self.logger.save_dir, "spatial_loss_maps"
             )
             os.makedirs(pdf_loss_maps_dir, exist_ok=True)
-            filtered_steps = [
-                s
-                for s in self.args.val_steps_to_log
-                if s <= len(pdf_loss_map_figs)
-            ]
-            for t_i, fig in zip(filtered_steps, pdf_loss_map_figs):
+            for t_i, fig in zip(self.args.val_steps_to_log, pdf_loss_map_figs):
                 fig.savefig(os.path.join(pdf_loss_maps_dir, f"loss_t{t_i}.pdf"))
             # save mean spatial loss as .pt file also
             torch.save(

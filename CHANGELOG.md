@@ -55,6 +55,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Infer spatial coordinate names for MDPDatastore (rather than assuming names `x` and `y`), allows for e.g. lat/lon regular grids [\#169](https://github.com/mllam/neural-lam/pull/169) @leifdenby
 
+- Add missing bounds check in `test_step` to prevent `IndexError` when `val_steps_to_log` exceeds prediction steps [\#219](https://github.com/mllam/neural-lam/pull/219) @santhil-cyber
+
 ### Maintenance
 
 - Update PR template to clarify milestone/roadmap requirement and maintenance changes [\#186](https://github.com/mllam/neural-lam/pull/186) @joeloskarsson
@@ -92,8 +94,6 @@ This release contains maintenance and fixes, preventing some unexpected crashes 
 [\#150](https://github.com/mllam/neural-lam/pull/150) @YUTAIPAN
 
 - Adding a more robust LaTeX availability check function [\#162](https://github.com/mllam/neural-lam/pull/162) @lorenzo30salgado
-
-- Add missing bounds check in `test_step` to prevent `IndexError` when `val_steps_to_log` exceeds prediction steps [\#219](https://github.com/mllam/neural-lam/pull/219) @santhil-cyber
 
 ### Maintenance
 
