@@ -1,15 +1,17 @@
-import torch
+# Standard library
 import json
-from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter
+from argparse import ArgumentDefaultsHelpFormatter, ArgumentParser
 
-from neural_lam.train_model import MODELS
+# Third-party
+import torch
+
+# First-party
 from neural_lam.config import load_config_and_datastore
+from neural_lam.train_model import MODELS
 
 
 def build_args():
-    parser = ArgumentParser(
-        formatter_class=ArgumentDefaultsHelpFormatter
-    )
+    parser = ArgumentParser(formatter_class=ArgumentDefaultsHelpFormatter)
 
     # FULL minimal training-compatible args
     parser.add_argument("--config_path", type=str, required=True)
@@ -45,12 +47,14 @@ def build_args():
     parser.add_argument("--num_past_forcing_steps", type=int, default=1)
     parser.add_argument("--num_future_forcing_steps", type=int, default=1)
 
-    args = parser.parse_args([
-        "--config_path",
-        "tests/datastore_examples/mdp/danra_100m_winds/config.yaml",
-        "--graph",
-        "1level",
-    ])
+    args = parser.parse_args(
+        [
+            "--config_path",
+            "tests/datastore_examples/mdp/danra_100m_winds/config.yaml",
+            "--graph",
+            "1level",
+        ]
+    )
 
     args.var_leads_metrics_watch = {
         int(k): v for k, v in json.loads(args.var_leads_metrics_watch).items()
@@ -65,8 +69,13 @@ def test_graph_lam_regression():
     torch.use_deterministic_algorithms(True)
 
     # Load frozen artifacts
-    batch_input = torch.load("tests/regression/reference_input.pt")
-    reference_output = torch.load("tests/regression/reference_output.pt")
+    # Standard library
+    from pathlib import Path
+
+    BASE_DIR = Path(__file__).parent / "regression"
+
+    batch_input = torch.load(BASE_DIR / "reference_input.pt")
+    reference_output = torch.load(BASE_DIR / "reference_output.pt")
 
     # Rebuild model exactly like freeze script
     args = build_args()
