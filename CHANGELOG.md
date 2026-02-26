@@ -11,7 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Fix README image paths to use absolute GitHub URLs so images display correctly on PyPI [\#188](https://github.com/mllam/neural-lam/pull/188) @bk-simon
 
-- Changed the hardcoded True to a conditional check "persistent_workers=self.num_workers > 0" [\#234](https://github.com/mllam/neural-lam/pull/234) @santhil-cyber
+- Changed the hardcoded True to a conditional check "persistent_workers=self.num_workers > 0" [\#235](https://github.com/mllam/neural-lam/pull/235) @santhil-cyber
 
 ### Maintenance
 
