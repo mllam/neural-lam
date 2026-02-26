@@ -107,9 +107,6 @@ def test_plot_error_map() -> None:
 def test_plot_spatial_error_crop_to_interior_changes_extent() -> None:
     datastore = init_datastore_example("dummydata")
     
-    # We must construct a properly shaped fake boundary mask and lat/lon
-    # The dummydata generator uses 20x20 points when `len(datastore.grid_shape) == 2`?
-    # Let's dynamically get grid shape.
     shape = getattr(datastore, "grid_shape", (10, 10))
     nx, ny = shape[0], shape[1]
     
@@ -144,8 +141,6 @@ def test_plot_spatial_error_crop_to_interior_changes_extent() -> None:
         
         crs_arg = call_args[1].get("crs") if "crs" in call_args[1] else (call_args[0][2] if len(call_args[0]) > 2 else None)
         assert isinstance(crs_arg, ccrs.PlateCarree)
-        
-        # Check actual extents
         assert extents[0] == pytest.approx(expected_lon_min)
         assert extents[1] == pytest.approx(expected_lon_max)
         assert extents[2] == pytest.approx(expected_lat_min)
@@ -161,7 +156,6 @@ def test_plot_error_map_check_figures_equal(fig_test: matplotlib.figure.Figure, 
 
     errors = torch.arange(1, pred_steps * d_f + 1, dtype=torch.float32).reshape(pred_steps, d_f)
 
-    # test figure execution
     with patch("neural_lam.vis.plt.subplots") as mock_subplots:
         ax_test = fig_test.subplots()
         mock_subplots.return_value = (fig_test, ax_test)
@@ -171,8 +165,6 @@ def test_plot_error_map_check_figures_equal(fig_test: matplotlib.figure.Figure, 
             datastore=datastore,
             title="Visual Compare",
         )
-
-    # reference figure construction
     errors_np = errors.T.cpu().numpy()
     row_maxes = np.max(errors_np, axis=1, keepdims=True)
     errors_norm = np.where(row_maxes > 0, errors_np / row_maxes, 0)
