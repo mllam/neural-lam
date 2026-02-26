@@ -13,6 +13,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Changed the hardcoded True to a conditional check "persistent_workers=self.num_workers > 0" [\#235](https://github.com/mllam/neural-lam/pull/235) @santhil-cyber
 
+- `fractional_plot_bundle` now correctly multiplies by fraction instead of dividing [
+\#222](https://github.com/mllam/neural-lam/pull/222) @santhil-cyber
+
 ### Maintenance
 
 - Update PR template to clarify milestone/roadmap requirement and maintenance changes [\#186](https://github.com/mllam/neural-lam/pull/186) @joeloskarsson
@@ -48,9 +51,6 @@ This release contains maintenance and fixes, preventing some unexpected crashes 
 [\#150](https://github.com/mllam/neural-lam/pull/150) @YUTAIPAN
 
 - Adding a more robust LaTeX availability check function [\#162](https://github.com/mllam/neural-lam/pull/162) @lorenzo30salgado
-
-- `fractional_plot_bundle` now correctly multiplies by fraction instead of dividing [
-\#222](https://github.com/mllam/neural-lam/pull/222) @santhil-cyber
 
 ### Maintenance
 
