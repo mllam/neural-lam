@@ -685,7 +685,7 @@ class WeatherDataModule(pl.LightningDataModule):
             num_workers=self.num_workers,
             shuffle=True,
             multiprocessing_context=self.multiprocessing_context,
-            persistent_workers=True,
+            persistent_workers=self.num_workers > 0,
             worker_init_fn=_worker_init_fn,
         )
 
@@ -697,7 +697,7 @@ class WeatherDataModule(pl.LightningDataModule):
             num_workers=self.num_workers,
             shuffle=False,
             multiprocessing_context=self.multiprocessing_context,
-            persistent_workers=True,
+            persistent_workers=self.num_workers > 0,
             worker_init_fn=_worker_init_fn,
         )
 
@@ -709,6 +709,6 @@ class WeatherDataModule(pl.LightningDataModule):
             num_workers=self.num_workers,
             shuffle=False,
             multiprocessing_context=self.multiprocessing_context,
-            persistent_workers=True,
+            persistent_workers=self.num_workers > 0,
             worker_init_fn=_worker_init_fn,
         )
