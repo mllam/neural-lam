@@ -144,6 +144,23 @@ def main(input_args=None):
     )
     parser.add_argument("--lr", type=float, default=1e-3, help="learning rate")
     parser.add_argument(
+        "--gradient_clip_val",
+        type=float,
+        default=1.0,
+        help="Max norm for gradient clipping (0 = disabled). "
+        "Prevents exploding gradients during multi-step "
+        "autoregressive unrolling.",
+    )
+    parser.add_argument(
+        "--gradient_clip_algorithm",
+        type=str,
+        default="norm",
+        choices=["norm", "value"],
+        help="Gradient clipping algorithm: 'norm' clips by total gradient "
+        "norm (torch.nn.utils.clip_grad_norm_), 'value' clips each "
+        "gradient element (torch.nn.utils.clip_grad_value_).",
+    )
+    parser.add_argument(
         "--val_interval",
         type=int,
         default=1,
@@ -326,6 +343,10 @@ def main(input_args=None):
         callbacks=[checkpoint_callback],
         check_val_every_n_epoch=args.val_interval,
         precision=args.precision,
+        gradient_clip_val=(
+            args.gradient_clip_val if args.gradient_clip_val > 0 else None
+        ),
+        gradient_clip_algorithm=args.gradient_clip_algorithm,
     )
 
     # Only init once, on rank 0 only
