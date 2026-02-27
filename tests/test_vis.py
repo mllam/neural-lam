@@ -41,10 +41,11 @@ def close_all_figures_after_test() -> Iterator[None]:
 @pytest.fixture(scope="module", autouse=True)
 def cleanup_matplotlib_result_images() -> Iterator[None]:
     """Remove matplotlib image-comparison artifacts for this test module."""
-    yield
     result_images_dir = (
         Path(__file__).resolve().parents[1] / "result_images" / "test_vis"
     )
+    result_images_dir.mkdir(parents=True, exist_ok=True)
+    yield
     shutil.rmtree(result_images_dir, ignore_errors=True)
 
 
