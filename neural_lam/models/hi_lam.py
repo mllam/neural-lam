@@ -1,3 +1,5 @@
+"""Sequential up/down hierarchical Neural-LAM model (Hi-LAM)."""
+
 # Third-party
 from torch import nn
 
@@ -16,6 +18,7 @@ class HiLAM(BaseHiGraphModel):
     """
 
     def __init__(self, args, config: NeuralLAMConfig, datastore: BaseDatastore):
+        """Initialize the sequential up/down hierarchical processor."""
         super().__init__(args, config=config, datastore=datastore)
 
         # Make down GNNs, both for down edges and same level
@@ -88,8 +91,31 @@ class HiLAM(BaseHiGraphModel):
         same_gnns,
     ):
         """
-        Run down-part of vertical processing, sequentially alternating between
-        processing using down edges and same-level edges.
+        Run the downward half of the hierarchical processing sweep.
+
+        Parameters
+        ----------
+        mesh_rep_levels : list[torch.Tensor]
+            Mesh representations for each level.
+
+            * **Shape**: ``(B, N_mesh[l], d_h)``
+        mesh_same_rep : list[torch.Tensor]
+            Same-level edge representations.
+
+            * **Shape**: ``(B, M_same[l], d_h)``
+        mesh_down_rep : list[torch.Tensor]
+            Downward edge representations.
+
+            * **Shape**: ``(B, M_down[l], d_h)``
+        down_gnns : Sequence[InteractionNet]
+            Message-passing networks applied to downward edges.
+        same_gnns : Sequence[InteractionNet]
+            Message-passing networks for same-level processing.
+
+        Returns
+        -------
+        tuple[list[torch.Tensor], list[torch.Tensor], list[torch.Tensor]]
+            Updated ``(mesh_rep_levels, mesh_same_rep, mesh_down_rep)``.
         """
         # Run same level processing on level L
         mesh_rep_levels[-1], mesh_same_rep[-1] = same_gnns[-1](
@@ -127,8 +153,31 @@ class HiLAM(BaseHiGraphModel):
         self, mesh_rep_levels, mesh_same_rep, mesh_up_rep, up_gnns, same_gnns
     ):
         """
-        Run up-part of vertical processing, sequentially alternating between
-        processing using up edges and same-level edges.
+        Run the upward half of the hierarchical processing sweep.
+
+        Parameters
+        ----------
+        mesh_rep_levels : list[torch.Tensor]
+            Mesh representations for each level.
+
+            * **Shape**: ``(B, N_mesh[l], d_h)``
+        mesh_same_rep : list[torch.Tensor]
+            Same-level edge representations.
+
+            * **Shape**: ``(B, M_same[l], d_h)``
+        mesh_up_rep : list[torch.Tensor]
+            Upward edge representations.
+
+            * **Shape**: ``(B, M_up[l], d_h)``
+        up_gnns : Sequence[InteractionNet]
+            Message-passing networks applied to upward edges.
+        same_gnns : Sequence[InteractionNet]
+            Message-passing networks for same-level processing.
+
+        Returns
+        -------
+        tuple[list[torch.Tensor], list[torch.Tensor], list[torch.Tensor]]
+            Updated ``(mesh_rep_levels, mesh_same_rep, mesh_up_rep)``.
         """
 
         # Run same level processing on level 0
@@ -166,17 +215,35 @@ class HiLAM(BaseHiGraphModel):
         self, mesh_rep_levels, mesh_same_rep, mesh_up_rep, mesh_down_rep
     ):
         """
-        Internal processor step of hierarchical graph models.
-        Between mesh init and read out.
+        Execute one full processor iteration (down + up sweeps).
 
-        Each input is list with representations, each with shape
+        Parameters
+        ----------
+        mesh_rep_levels : list[torch.Tensor]
+            Mesh representations for each level.
 
-        mesh_rep_levels: (B, N_mesh[l], d_h)
-        mesh_same_rep: (B, M_same[l], d_h)
-        mesh_up_rep: (B, M_up[l -> l+1], d_h)
-        mesh_down_rep: (B, M_down[l <- l+1], d_h)
+            * **Shape**: ``(B, N_mesh[l], d_h)``
+        mesh_same_rep : list[torch.Tensor]
+            Same-level edge representations.
 
-        Returns same lists
+            * **Shape**: ``(B, M_same[l], d_h)``
+        mesh_up_rep : list[torch.Tensor]
+            Upward edge representations.
+
+            * **Shape**: ``(B, M_up[l], d_h)``
+        mesh_down_rep : list[torch.Tensor]
+            Downward edge representations.
+
+            * **Shape**: ``(B, M_down[l], d_h)``
+
+        Returns
+        -------
+        tuple[
+            list[torch.Tensor], list[torch.Tensor], list[torch.Tensor],
+            list[torch.Tensor]
+        ]
+            Updated representations ``(mesh_rep_levels, mesh_same_rep,
+            mesh_up_rep, mesh_down_rep)`` after both sweeps.
         """
         for down_gnns, down_same_gnns, up_gnns, up_same_gnns in zip(
             self.mesh_down_gnns,

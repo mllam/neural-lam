@@ -1,3 +1,5 @@
+"""Auto-regressive LightningModule implementations for Neural-LAM."""
+
 # Standard library
 import os
 import warnings
@@ -36,6 +38,16 @@ class ARModel(pl.LightningModule):
         config: NeuralLAMConfig,
         datastore: BaseDatastore,
     ):
+        """
+        Parameters
+        ----------
+        args : argparse.Namespace
+            Parsed training arguments controlling rollout length, loss, etc.
+        config : NeuralLAMConfig
+            Experiment configuration containing datastore/training settings.
+        datastore : BaseDatastore
+            Datastore supplying state/forcing/static arrays.
+        """
         super().__init__()
         self.save_hyperparameters(ignore=["datastore"])
         self.args = args
@@ -176,9 +188,9 @@ class ARModel(pl.LightningModule):
         Parameters
         ----------
         tensor : torch.Tensor
-            The tensor to convert to a `xr.DataArray` with dimensions [time,
-            grid_index, feature]. The tensor will be copied to the CPU if it is
-            not already there.
+            Tensor to convert back to an ``xr.DataArray``.
+
+            * **Shape**: ``(time, grid_index, feature)``
         time : torch.Tensor
             The time index or indices for the data, given as tensor representing
             epoch time in nanoseconds. The tensor will be
@@ -199,6 +211,7 @@ class ARModel(pl.LightningModule):
         return da
 
     def configure_optimizers(self):
+        """Construct the :class:`torch.optim.AdamW` optimizer for training."""
         opt = torch.optim.AdamW(
             self.parameters(), lr=self.args.lr, betas=(0.9, 0.95)
         )
@@ -207,32 +220,90 @@ class ARModel(pl.LightningModule):
     @property
     def interior_mask_bool(self):
         """
-        Get the interior mask as a boolean (N,) mask.
+        Boolean interior mask identifying non-boundary grid nodes.
+
+        Returns
+        -------
+        torch.Tensor
+            Boolean mask.
+
+            * **Shape**: ``(N,)``
         """
         return self.interior_mask[:, 0].to(torch.bool)
 
     @staticmethod
     def expand_to_batch(x, batch_size):
         """
-        Expand tensor with initial batch dimension
+        Broadcast a tensor by prepending a batch dimension.
+
+        Parameters
+        ----------
+        x : torch.Tensor
+            Tensor to expand.
+        batch_size : int
+            Batch size to broadcast to.
+
+        Returns
+        -------
+        torch.Tensor
+            Tensor with a leading batch dimension added via ``expand``.
         """
         return x.unsqueeze(0).expand(batch_size, -1, -1)
 
     def predict_step(self, prev_state, prev_prev_state, forcing):
         """
-        Step state one step ahead using prediction model, X_{t-1}, X_t -> X_t+1
-        prev_state: (B, num_grid_nodes, feature_dim), X_t prev_prev_state: (B,
-        num_grid_nodes, feature_dim), X_{t-1} forcing: (B, num_grid_nodes,
-        forcing_dim)
+        Advance the state by one step using the prediction model.
+
+        Parameters
+        ----------
+        prev_state : torch.Tensor
+            Current state ``X_t``.
+
+            * **Shape**: ``(B, num_grid_nodes, feature_dim)``
+        prev_prev_state : torch.Tensor
+            Previous state ``X_{t-1}``.
+
+            * **Shape**: ``(B, num_grid_nodes, feature_dim)``
+        forcing : torch.Tensor
+            Forcing inputs applied at the prediction step.
+
+            * **Shape**: ``(B, num_grid_nodes, forcing_dim)``
+
+        Returns
+        -------
+        tuple[torch.Tensor, torch.Tensor | None]
+            Tuple ``(new_state, pred_std)`` describing the next state and
+            optional uncertainty estimate.
         """
         raise NotImplementedError("No prediction step implemented")
 
     def unroll_prediction(self, init_states, forcing_features, true_states):
         """
-        Roll out prediction taking multiple autoregressive steps with model
-        init_states: (B, 2, num_grid_nodes, d_f) forcing_features: (B,
-        pred_steps, num_grid_nodes, d_static_f) true_states: (B, pred_steps,
-        num_grid_nodes, d_f)
+        Roll out predictions autoregressively over multiple time steps.
+
+        Parameters
+        ----------
+        init_states : torch.Tensor
+            Initial states providing ``X_{t-1}`` and ``X_t``.
+
+            * **Shape**: ``(B, 2, num_grid_nodes, d_f)``
+        forcing_features : torch.Tensor
+            Forcing inputs aligned with each rollout step.
+
+            * **Shape**: ``(B, pred_steps, num_grid_nodes, d_static_f)``
+        true_states : torch.Tensor
+            Ground-truth states used for boundary replacement.
+
+            * **Shape**: ``(B, pred_steps, num_grid_nodes, d_f)``
+
+        Returns
+        -------
+        tuple[torch.Tensor, torch.Tensor]
+            Tuple ``(prediction, pred_std)``.
+
+            * **prediction**: ``(B, pred_steps, num_grid_nodes, d_f)``
+            * **pred_std**: ``(B, pred_steps, num_grid_nodes, d_f)`` or
+              ``(d_f,)`` when a constant per-feature value is used
         """
         prev_prev_state = init_states[:, 0]
         prev_state = init_states[:, 1]
@@ -278,11 +349,30 @@ class ARModel(pl.LightningModule):
 
     def common_step(self, batch):
         """
-        Predict on single batch batch consists of: init_states: (B, 2,
-        num_grid_nodes, d_features) target_states: (B, pred_steps,
-        num_grid_nodes, d_features) forcing_features: (B, pred_steps,
-        num_grid_nodes, d_forcing),
-            where index 0 corresponds to index 1 of init_states
+        Run a forward pass shared by train/val/test steps.
+
+        Parameters
+        ----------
+        batch : tuple
+            Tuple of ``(init_states, target_states, forcing_features,
+            batch_times)`` produced by :class:`WeatherDataset`.
+
+            * **init_states**: ``(B, 2, num_grid_nodes, d_features)``
+            * **target_states**: ``(B, pred_steps, num_grid_nodes, d_features)``
+            * **forcing_features**: ``(B, pred_steps, num_grid_nodes,
+              d_forcing)``
+            * **batch_times**: ``(B, pred_steps)`` timestamps
+
+        Returns
+        -------
+        tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]
+            ``(prediction, target_states, pred_std, batch_times)``.
+
+            * **prediction**: ``(B, pred_steps, num_grid_nodes, d_f)``
+            * **target_states**: ``(B, pred_steps, num_grid_nodes, d_f)``
+            * **pred_std**: ``(B, pred_steps, num_grid_nodes, d_f)`` or
+              ``(d_f,)``
+            * **batch_times**: ``(B, pred_steps)``
         """
         (init_states, target_states, forcing_features, batch_times) = batch
 
@@ -295,8 +385,12 @@ class ARModel(pl.LightningModule):
         return prediction, target_states, pred_std, batch_times
 
     def training_step(self, batch):
-        """
-        Train on single batch
+        """Execute a single optimization step on ``batch``.
+
+        Parameters
+        ----------
+        batch : tuple
+            Batch sampled from the training dataloader.
         """
         prediction, target, pred_std, _ = self.common_step(batch)
 
@@ -320,20 +414,35 @@ class ARModel(pl.LightningModule):
 
     def all_gather_cat(self, tensor_to_gather):
         """
-        Gather tensors across all ranks, and concatenate across dim. 0 (instead
-        of stacking in new dim. 0)
+        Gather tensors across ranks and concatenate along dim-0.
 
-        tensor_to_gather: (d1, d2, ...), distributed over K ranks
+        Parameters
+        ----------
+        tensor_to_gather : torch.Tensor
+            Tensor distributed across ``K`` ranks.
 
-        returns: (K*d1, d2, ...)
+            * **Shape**: ``(d1, d2, ...)`` per rank
+
+        Returns
+        -------
+        torch.Tensor
+            Concatenated tensor gathered from all ranks.
+
+            * **Shape**: ``(K * d1, d2, ...)``
         """
         return self.all_gather(tensor_to_gather).flatten(0, 1)
 
     # newer lightning versions requires batch_idx argument, even if unused
     # pylint: disable-next=unused-argument
     def validation_step(self, batch, batch_idx):
-        """
-        Run validation on single batch
+        """Evaluate ``batch`` during validation.
+
+        Parameters
+        ----------
+        batch : tuple
+            Batch sampled from the validation dataloader.
+        batch_idx : int
+            Index of the current batch.
         """
         prediction, target, pred_std, _ = self.common_step(batch)
 
@@ -383,8 +492,14 @@ class ARModel(pl.LightningModule):
 
     # pylint: disable-next=unused-argument
     def test_step(self, batch, batch_idx):
-        """
-        Run test on single batch
+        """Evaluate ``batch`` during testing and log diagnostics.
+
+        Parameters
+        ----------
+        batch : tuple
+            Batch sampled from the test dataloader.
+        batch_idx : int
+            Index of the current batch.
         """
         # TODO Here batch_times can be used for plotting routines
         prediction, target, pred_std, batch_times = self.common_step(batch)
@@ -465,12 +580,21 @@ class ARModel(pl.LightningModule):
 
     def plot_examples(self, batch, n_examples, split, prediction=None):
         """
-        Plot the first n_examples forecasts from batch
+        Plot the first ``n_examples`` forecasts from ``batch``.
 
-        batch: batch with data to plot corresponding forecasts for n_examples:
-        number of forecasts to plot prediction: (B, pred_steps, num_grid_nodes,
-        d_f), existing prediction.
-            Generate if None.
+        Parameters
+        ----------
+        batch : tuple
+            Batch tuple produced by the dataloader.
+        n_examples : int
+            Number of forecasts to visualise.
+        split : str
+            Dataset split name used for metadata lookups.
+        prediction : torch.Tensor or None, optional
+            Pre-computed predictions to plot. If ``None`` the method runs
+            :meth:`common_step` to obtain predictions.
+
+            * **Shape**: ``(B, pred_steps, num_grid_nodes, d_f)``
         """
         if prediction is None:
             prediction, target, _, _ = self.common_step(batch)
@@ -592,14 +716,23 @@ class ARModel(pl.LightningModule):
 
     def create_metric_log_dict(self, metric_tensor, prefix, metric_name):
         """
-        Put together a dict with everything to log for one metric. Also saves
-        plots as pdf and csv if using test prefix.
+        Assemble logging artefacts for a single metric tensor.
 
-        metric_tensor: (pred_steps, d_f), metric values per time and variable
-        prefix: string, prefix to use for logging metric_name: string, name of
-        the metric
+        Parameters
+        ----------
+        metric_tensor : torch.Tensor
+            Metric values per time step and variable.
 
-        Return: log_dict: dict with everything to log for given metric
+            * **Shape**: ``(pred_steps, d_f)``
+        prefix : str
+            Prefix used for logger keys (e.g., ``"val"`` or ``"test"``).
+        metric_name : str
+            Human-readable metric name.
+
+        Returns
+        -------
+        dict[str, object]
+            Mapping from log keys to figures or scalar tensors.
         """
         log_dict = {}
         metric_fig = vis.plot_error_map(
@@ -634,11 +767,14 @@ class ARModel(pl.LightningModule):
 
     def aggregate_and_plot_metrics(self, metrics_dict, prefix):
         """
-        Aggregate and create error map plots for all metrics in metrics_dict
+        Aggregate metric tensors and create error-map visualisations.
 
-        metrics_dict: dictionary with metric_names and list of tensors
-            with step-evals.
-        prefix: string, prefix to use for logging
+        Parameters
+        ----------
+        metrics_dict : dict[str, list[torch.Tensor]]
+            Mapping from metric name to per-batch tensors of evaluations.
+        prefix : str
+            Prefix to use for logger keys.
         """
         log_dict = {}
         for metric_name, metric_val_list in metrics_dict.items():
