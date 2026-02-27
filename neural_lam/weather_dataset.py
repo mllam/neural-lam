@@ -1,3 +1,5 @@
+"""Dataset helpers wrapping Neural-LAM datastores for PyTorch Lightning."""
+
 # Standard library
 import datetime
 import warnings
@@ -49,6 +51,26 @@ class WeatherDataset(torch.utils.data.Dataset):
         num_future_forcing_steps: int = 1,
         standardize: bool = True,
     ):
+        """
+        Parameters
+        ----------
+        datastore : BaseDatastore
+            Datastore providing access to state/forcing/static arrays.
+        split : str, optional
+            Data split (``"train"``, ``"val"``, or ``"test"``).
+            Default ``"train"``.
+        ar_steps : int, optional
+            Number of autoregressive steps per training sample. Default ``3``.
+        num_past_forcing_steps : int, optional
+            Past forcing window length ``i`` so that ``[t-i, ..., t]`` forcings
+            are concatenated. Default ``1``.
+        num_future_forcing_steps : int, optional
+            Future forcing window length ``j`` so that ``[t, ..., t+j]``
+            forcings are available. Default ``1``.
+        standardize : bool, optional
+            If ``True``, normalize state/forcing arrays via datastore stats.
+        """
+
         super().__init__()
 
         self.split = split
@@ -116,6 +138,14 @@ class WeatherDataset(torch.utils.data.Dataset):
                 self.da_forcing_std = self.ds_forcing_stats.forcing_std
 
     def __len__(self):
+        """
+        Return the number of autoregressive training samples available.
+
+        Returns
+        -------
+        int
+            Number of (init, target) pairs derivable from the datastore.
+        """
         if self.datastore.is_forecast:
             # for now we simply create a single sample for each analysis time
             # and then take the first (2 + ar_steps) forecast times. In
@@ -544,7 +574,7 @@ class WeatherDataset(torch.utils.data.Dataset):
         """
 
         def _is_listlike(obj):
-            # match list, tuple, numpy array
+            """Return ``True`` for list/tuple/ndarray-like containers."""
             return hasattr(obj, "__iter__") and not isinstance(obj, str)
 
         add_time_as_dim = False
@@ -616,6 +646,28 @@ class WeatherDataModule(pl.LightningDataModule):
         num_workers: int = 16,
         eval_split: str = "test",
     ):
+        """
+        Parameters
+        ----------
+        datastore : BaseDatastore
+            Datastore used for all splits.
+        ar_steps_train : int, optional
+            Number of AR steps for training batches. Default ``3``.
+        ar_steps_eval : int, optional
+            Number of AR steps for validation/test batches. Default ``25``.
+        standardize : bool, optional
+            If ``True``, datasets are returned standardized. Default ``True``.
+        num_past_forcing_steps : int, optional
+            Number of past forcing steps to include. Default ``1``.
+        num_future_forcing_steps : int, optional
+            Number of future forcing steps to include. Default ``1``.
+        batch_size : int, optional
+            Mini-batch size for dataloaders. Default ``4``.
+        num_workers : int, optional
+            Number of background workers per dataloader. Default ``16``.
+        eval_split : str, optional
+            Dataset split to use for ``test_dataloader``. Default ``"test"``.
+        """
         super().__init__()
         self._datastore = datastore
         self.num_past_forcing_steps = num_past_forcing_steps
@@ -636,6 +688,15 @@ class WeatherDataModule(pl.LightningDataModule):
             self.multiprocessing_context = "spawn"
 
     def setup(self, stage=None):
+        """
+        Instantiate datasets for the requested trainer stage.
+
+        Parameters
+        ----------
+        stage : str or None, optional
+            Trainer stage identifier (``"fit"``/``"test"``/``None``). When
+            ``None``, both train and evaluation datasets are created.
+        """
         if stage == "fit" or stage is None:
             self.train_dataset = WeatherDataset(
                 datastore=self._datastore,

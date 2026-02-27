@@ -1,3 +1,5 @@
+"""Custom logging utilities (e.g., MLFlow wrappers) used in Neural-LAM."""
+
 # Standard library
 import sys
 
@@ -16,6 +18,18 @@ class CustomMLFlowLogger(pl.loggers.MLFlowLogger):
     """
 
     def __init__(self, experiment_name, tracking_uri, run_name):
+        """
+        Initialize the logger and start an MLflow run.
+
+        Parameters
+        ----------
+        experiment_name : str
+            Target MLflow experiment.
+        tracking_uri : str
+            MLflow tracking server URI.
+        run_name : str
+            Human-readable run name stored as ``mlflow.runName``.
+        """
         super().__init__(
             experiment_name=experiment_name, tracking_uri=tracking_uri
         )
@@ -39,14 +53,21 @@ class CustomMLFlowLogger(pl.loggers.MLFlowLogger):
 
     def log_image(self, key, images, step=None):
         """
-        Log a matplotlib figure as an image to MLFlow
+        Log one or more Matplotlib figures as images in MLflow.
 
-        key: str
-            Key to log the image under
-        images: list
-            List of matplotlib figures to log
-        step: Union[int, None]
-            Step to log the image under. If None, logs under the key directly
+        Parameters
+        ----------
+        key : str
+            Identifier under which to log the image.
+        images : Sequence[matplotlib.figure.Figure]
+            Figures to export; only the first element is logged.
+        step : int or None, optional
+            Optional training step index appended to ``key``.
+
+        Raises
+        ------
+        SystemExit
+            If AWS credentials for the MLflow artifact store are missing.
         """
         # Third-party
         from botocore.exceptions import NoCredentialsError

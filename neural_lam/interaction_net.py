@@ -1,3 +1,5 @@
+"""Interaction Network layers and helper modules used by Neural-LAM."""
+
 # Third-party
 import torch
 import torch_geometric as pyg
@@ -27,15 +29,15 @@ class InteractionNet(pyg.nn.MessagePassing):
         aggr_chunk_sizes=None,
         aggr="sum",
     ):
-
         """
         Initialise an InteractionNet message-passing layer.
 
         Parameters
         ----------
         edge_index : torch.Tensor
-            Edge connectivity tensor of shape ``(2, M)`` in PyG format,
-            where ``M`` is the number of edges.
+            Edge connectivity tensor in PyG format.
+
+            * **Shape**: ``(2, M)`` where ``M`` is the number of edges.
         input_dim : int
             Dimensionality of both node and edge input representations.
         update_edges : bool, optional
@@ -45,19 +47,19 @@ class InteractionNet(pyg.nn.MessagePassing):
             Number of hidden layers in each MLP. Default is ``1``.
         hidden_dim : int or None, optional
             Width of hidden layers. If ``None``, defaults to ``input_dim``.
-        edge_chunk_sizes : list of int or None, optional
+        edge_chunk_sizes : list[int] or None, optional
             Chunk sizes for splitting edge representations across separate
             MLPs. ``None`` uses a single shared MLP.
-        aggr_chunk_sizes : list of int or None, optional
+        aggr_chunk_sizes : list[int] or None, optional
             Chunk sizes for splitting aggregated node representations across
             separate MLPs. ``None`` uses a single shared MLP.
-        aggr : {'sum', 'mean'}, optional
-            Message aggregation method. Default is ``'sum'``.
+        aggr : {"sum", "mean"}, optional
+            Message aggregation method. Default is ``"sum"``.
 
         Raises
         ------
         AssertionError
-            If ``aggr`` is not one of ``'sum'`` or ``'mean'``.
+            If ``aggr`` is not one of ``"sum"`` or ``"mean"``.
         """
         assert aggr in ("sum", "mean"), f"Unknown aggregation method: {aggr}"
         super().__init__(aggr=aggr)
@@ -99,17 +101,33 @@ class InteractionNet(pyg.nn.MessagePassing):
 
     def forward(self, send_rep, rec_rep, edge_rep):
         """
-        Apply interaction network to update the representations of receiver
-        nodes, and optionally the edge representations.
+        Update receiver (and optionally edge) representations via message
+        passing.
 
-        send_rep: (N_send, d_h), vector representations of sender nodes
-        rec_rep: (N_rec, d_h), vector representations of receiver nodes
-        edge_rep: (M, d_h), vector representations of edges used
+        Parameters
+        ----------
+        send_rep : torch.Tensor
+            Vector representations of sender nodes.
 
-        Returns:
-        rec_rep: (N_rec, d_h), updated vector representations of receiver nodes
-        (optionally) edge_rep: (M, d_h), updated vector representations
-            of edges
+            * **Shape**: ``(N_send, d_h)``
+        rec_rep : torch.Tensor
+            Vector representations of receiver nodes.
+
+            * **Shape**: ``(N_rec, d_h)``
+        edge_rep : torch.Tensor
+            Edge representations used during message passing.
+
+            * **Shape**: ``(M, d_h)``
+
+        Returns
+        -------
+        torch.Tensor or tuple[torch.Tensor, torch.Tensor]
+            Updated receiver representations. If ``self.update_edges`` is
+            ``True``, the tuple ``(rec_rep, edge_rep)`` containing the updated
+            receiver and edge representations is returned.
+
+            * **Shape**: ``(N_rec, d_h)`` for receivers and ``(M, d_h)`` for
+              edges.
         """
         # Always concatenate to [rec_nodes, send_nodes] for propagation,
         # but only aggregate to rec_nodes
@@ -129,18 +147,12 @@ class InteractionNet(pyg.nn.MessagePassing):
         return rec_rep
 
     def message(self, x_j, x_i, edge_attr):
-        """
-        Compute messages from node j to node i.
-        """
+        """Compute messages from node ``j`` to ``i`` using edge features."""
         return self.edge_mlp(torch.cat((edge_attr, x_j, x_i), dim=-1))
 
     # pylint: disable-next=signature-differs
     def aggregate(self, inputs, index, ptr, dim_size):
-        """
-        Overridden aggregation function to:
-        * return both aggregated and original messages,
-        * only aggregate to number of receiver nodes.
-        """
+        """Aggregate messages while also returning the per-edge values."""
         aggr = super().aggregate(inputs, index, ptr, self.num_rec)
         return aggr, inputs
 
@@ -153,6 +165,21 @@ class SplitMLPs(nn.Module):
     """
 
     def __init__(self, mlps, chunk_sizes):
+        """
+        Create a module that dispatches chunks of the input to separate MLPs.
+
+        Parameters
+        ----------
+        mlps : Iterable[nn.Module]
+            Sequence of MLPs to apply to each chunk.
+        chunk_sizes : Sequence[int]
+            Sizes used when splitting the input along ``dim=-2``.
+
+        Raises
+        ------
+        AssertionError
+            If the number of ``mlps`` and ``chunk_sizes`` differ.
+        """
         super().__init__()
         assert len(mlps) == len(
             chunk_sizes
@@ -163,12 +190,21 @@ class SplitMLPs(nn.Module):
 
     def forward(self, x):
         """
-        Chunk up input and feed through MLPs
+        Chunk up input tensor and feed each slice through its MLP.
 
-        x: (..., N, d), where N = sum(chunk_sizes)
+        Parameters
+        ----------
+        x : torch.Tensor
+            Input tensor to split and process.
 
-        Returns:
-        joined_output: (..., N, d), concatenated results from the MLPs
+            * **Shape**: ``(..., N, d)`` where ``N = sum(chunk_sizes)``.
+
+        Returns
+        -------
+        torch.Tensor
+            Concatenated MLP outputs assembled along the chunk dimension.
+
+            * **Shape**: ``(..., N, d)``
         """
         chunks = torch.split(x, self.chunk_sizes, dim=-2)
         chunk_outputs = [
