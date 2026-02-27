@@ -2,7 +2,6 @@
 import json
 import random
 import time
-import warnings
 from argparse import ArgumentDefaultsHelpFormatter, ArgumentParser
 
 # Third-party
@@ -248,10 +247,8 @@ def main(input_args=None):
             )
 
     if args.eval and not args.load:
-        warnings.warn(
+        logger.warning(
             "Evaluation (--eval) without --load: no checkpoint will be loaded.",
-            UserWarning,
-            stacklevel=2,
         )
 
     # Get an (actual) random run id as a unique identifier

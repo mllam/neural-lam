@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- Warn when running in evaluation mode (`--eval`) without loading a checkpoint (`--load`) ([#105](https://github.com/mllam/neural-lam/issues/105))
+- Warn when running in evaluation mode (`--eval`) without loading a checkpoint (`--load`) ([#190](https://github.com/mllam/neural-lam/pull/190)) @varunsiravuri
 
 ### Fixed
 
