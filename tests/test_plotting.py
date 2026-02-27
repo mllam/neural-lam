@@ -7,7 +7,6 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pytest
 import torch
-from PIL import Image
 
 # First-party
 from neural_lam import config as nlconfig
@@ -192,37 +191,50 @@ def test_plot_examples_integration_saves_figure(
     assert output_path.exists()
 
 
-def test_gif_creation_from_png_frames(tmp_path):
-    """
-    Test GIF assembly using the same PIL logic as plot_examples.
+@pytest.mark.parametrize(
+    "time_step,time_unit",
+    [(1, "hours")],
+)
+def test_plot_examples_gif_integration(
+    model_and_batch, monkeypatch
+):
+    model, batch, datastore, tmp_path = model_and_batch
 
-    Creates a few minimal PNG frames with matplotlib, assembles them into a
-    GIF via PIL (matching the code in ar_model.plot_examples), and verifies
-    the output file is a valid GIF — no trainer, logger, or devices required.
-    """
-    n_frames = 3
-    png_paths = []
-    for i in range(n_frames):
-        fig, ax = plt.subplots(figsize=(2, 2))
-        # Draw a simple colored square that changes each frame
-        ax.imshow(np.full((4, 4), i / n_frames, dtype=float), vmin=0, vmax=1)
-        ax.set_title(f"frame {i}")
-        png_path = tmp_path / f"frame_{i:02d}.png"
-        fig.savefig(png_path, dpi=50, bbox_inches="tight")
-        plt.close(fig)
-        png_paths.append(png_path)
+    # Enable the GIF path and reset the example counter
+    model.args.create_gif = True
+    model.plotted_examples = 0
 
-    # Replicate the exact PIL assembly from ar_model.plot_examples
-    gif_path = tmp_path / "test_prediction.gif"
-    frames = [Image.open(f) for f in sorted(png_paths)]
-    frames[0].save(
-        gif_path,
-        save_all=True,
-        append_images=frames[1:],
-        loop=0,
-        duration=1000,
-    )
+    # Minimal logger: plot_examples only reads save_dir and optionally calls
+    # log_image
+    class _SimpleLogger:
+        save_dir = str(tmp_path)
 
-    assert gif_path.exists(), "GIF file was not created"
-    # GIF files start with b"GIF"
-    assert gif_path.read_bytes()[:3] == b"GIF", "Output is not a valid GIF"
+    simple_logger = _SimpleLogger()
+    monkeypatch.setattr(type(model), "logger", property(lambda self: simple_logger))
+
+    with torch.no_grad():
+        prediction, _, _, _ = model.common_step(batch)
+        model.plot_examples(
+            batch, n_examples=1, prediction=prediction, split="train"
+        )
+
+    var_names = datastore.get_vars_names("state")
+    pred_steps = batch[1].shape[1]
+    example_i = 1 
+    plot_dir = tmp_path / f"example_plots_{example_i}"
+
+    assert plot_dir.is_dir(), "Plot directory was not created"
+
+    for var_name in var_names:
+        # Every time-step must have a PNG frame
+        for t_i in range(1, pred_steps + 1):
+            png = (
+                plot_dir
+                / f"{var_name}_example_{example_i}_prediction_t_{t_i:02d}.png"
+            )
+            assert png.exists(), f"Missing PNG frame: {png.name}"
+
+        # One GIF per variable must exist and be a valid GIF file
+        gif = plot_dir / f"{var_name}_example_{example_i}_prediction.gif"
+        assert gif.exists(), f"Missing GIF: {gif.name}"
+        assert gif.read_bytes()[:3] == b"GIF", f"{gif.name} is not a valid GIF"
