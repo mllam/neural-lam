@@ -314,7 +314,7 @@ def main(input_args=None):
         mode="min",
         save_top_k=1,
     )
-    
+
     latest_checkpoint = pl.callbacks.ModelCheckpoint(
         dirpath=f"saved_models/{run_name}",
         filename="last",
