@@ -1,3 +1,5 @@
+import matplotlib
+matplotlib.use("Agg")
 # Standard library
 import json
 import random
