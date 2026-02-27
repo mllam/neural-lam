@@ -144,6 +144,28 @@ def main(input_args=None):
     )
     parser.add_argument("--lr", type=float, default=1e-3, help="learning rate")
     parser.add_argument(
+        "--lr_scheduler",
+        type=str,
+        default="constant",
+        choices=["constant", "cosine"],
+        help="Learning rate scheduler "
+        "(constant = no scheduling, "
+        "cosine = CosineAnnealingLR with optional warmup)",
+    )
+    parser.add_argument(
+        "--lr_warmup_epochs",
+        type=int,
+        default=0,
+        help="Number of epochs for linear LR warmup (0 = no warmup). "
+        "Only used when --lr_scheduler is not 'constant'.",
+    )
+    parser.add_argument(
+        "--lr_min",
+        type=float,
+        default=1e-6,
+        help="Minimum learning rate for cosine annealing (eta_min)",
+    )
+    parser.add_argument(
         "--val_interval",
         type=int,
         default=1,
