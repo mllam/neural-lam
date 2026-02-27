@@ -16,6 +16,21 @@ class BaseGraphModel(ARModel):
     """
 
     def __init__(self, args, config: NeuralLAMConfig, datastore: BaseDatastore):
+        """
+        Initializes the BaseGraphModel for graph-based weather forecasting.
+
+        This constructor loads the graph structure, registers static features as buffers,
+        initializes MLP embedders for grid and mesh nodes, and sets up the 
+        Encoder-Processor-Decoder GNN architecture.
+
+        Args:
+            args (Namespace): Command-line arguments containing hyperparameters like 
+                hidden_dim and hidden_layers.
+            config (NeuralLAMConfig): Configuration object containing training and 
+                model settings.
+            datastore (BaseDatastore): Datastore instance to handle data loading 
+                and graph paths.
+        """
         super().__init__(args, config=config, datastore=datastore)
 
         # Load graph with static features
