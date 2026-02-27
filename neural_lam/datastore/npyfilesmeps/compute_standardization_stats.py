@@ -1,3 +1,5 @@
+"""Utilities for computing MEPS datastore standardization statistics."""
+
 # Standard library
 import os
 import subprocess
@@ -18,7 +20,19 @@ from neural_lam.utils import get_integer_time
 
 
 class PaddedWeatherDataset(torch.utils.data.Dataset):
+    """Wrap :class:`WeatherDataset` to pad samples for distributed runners."""
+
     def __init__(self, base_dataset, world_size, batch_size):
+        """
+        Parameters
+        ----------
+        base_dataset : WeatherDataset
+            Dataset to pad.
+        world_size : int
+            Total number of distributed ranks participating.
+        batch_size : int
+            Per-rank batch size.
+        """
         super().__init__()
         self.base_dataset = base_dataset
         self.world_size = world_size
@@ -33,6 +47,7 @@ class PaddedWeatherDataset(torch.utils.data.Dataset):
         )
 
     def __getitem__(self, idx):
+        """Return an item, repeating the final sample for padded indices."""
         return self.base_dataset[
             (
                 self.original_indices[-1]
@@ -42,12 +57,15 @@ class PaddedWeatherDataset(torch.utils.data.Dataset):
         ]
 
     def __len__(self):
+        """Return the padded dataset length."""
         return self.total_samples + self.padded_samples
 
     def get_original_indices(self):
+        """Return indices of the non-padded samples."""
         return self.original_indices
 
     def get_original_window_indices(self, step_length):
+        """Return index mapping for sub-sampled windows at ``step_length``."""
         step_int, _ = get_integer_time(step_length.total_seconds())
         return [
             i // step_int for i in range(len(self.original_indices) * step_int)
@@ -55,10 +73,12 @@ class PaddedWeatherDataset(torch.utils.data.Dataset):
 
 
 def get_rank():
+    """Return the rank inferred from SLURM or default to 0."""
     return int(os.environ.get("SLURM_PROCID", 0))
 
 
 def get_world_size():
+    """Return the world size inferred from SLURM or default to 1."""
     return int(os.environ.get("SLURM_NTASKS", 1))
 
 
@@ -97,6 +117,24 @@ def setup(rank, world_size):  # pylint: disable=redefined-outer-name
 def save_stats(
     static_dir_path, means, squares, flux_means, flux_squares, filename_prefix
 ):
+    """
+    Aggregate running statistics and persist them to ``static_dir_path``.
+
+    Parameters
+    ----------
+    static_dir_path : str or pathlib.Path
+        Directory where ``*.pt`` files should be written.
+    means : Sequence[torch.Tensor]
+        Batch-wise means with shape ``(N_batch, d_features)``.
+    squares : Sequence[torch.Tensor]
+        Batch-wise second moments with shape ``(N_batch, d_features)``.
+    flux_means : Sequence[torch.Tensor]
+        Optional flux means of shape ``(N_batch,)``.
+    flux_squares : Sequence[torch.Tensor]
+        Optional flux second moments of shape ``(N_batch,)``.
+    filename_prefix : str
+        Prefix (e.g., ``"parameter"`` or ``"diff"``) for saved tensors.
+    """
     means = (
         torch.stack(means) if len(means) > 1 else means[0]
     )  # (N_batch, d_features,)
@@ -139,20 +177,20 @@ def main(
     datastore_config_path, batch_size, step_length, n_workers, distributed
 ):
     """
-    Pre-compute parameter weights to be used in loss function
+    Pre-compute and persist standardization statistics from the datastore.
 
-    Arguments
-    ---------
-    datastore_config_path : str
-        Path to datastore config file
+    Parameters
+    ----------
+    datastore_config_path : str or pathlib.Path
+        Path to the MEPS datastore configuration file.
     batch_size : int
-        Batch size when iterating over the dataset
+        Batch size used while iterating through the dataset.
     step_length : datetime.timedelta
-        Step length to consider single time step
+        Temporal sampling interval for the difference statistics.
     n_workers : int
-        Number of workers in data loader
+        Number of dataloader workers.
     distributed : bool
-        Run the script in distributed
+        If ``True``, run using torch.distributed with SLURM settings.
     """
 
     rank = get_rank()
@@ -378,6 +416,7 @@ def main(
 
 
 def cli():
+    """Parse CLI arguments and trigger :func:`main`."""
     parser = ArgumentParser(description="Training arguments")
     parser.add_argument(
         "--datastore_config_path",
