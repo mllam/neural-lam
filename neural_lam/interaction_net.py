@@ -45,7 +45,8 @@ class InteractionNet(pyg.nn.MessagePassing):
             (None = no chunking, same MLP)
         aggr: Message aggregation method (sum/mean)
         """
-        assert aggr in ("sum", "mean"), f"Unknown aggregation method: {aggr}"
+        if aggr not in ("sum", "mean"):
+            raise ValueError(f"Unknown aggregation method: {aggr}")
         super().__init__(aggr=aggr)
 
         if hidden_dim is None:
@@ -140,9 +141,8 @@ class SplitMLPs(nn.Module):
 
     def __init__(self, mlps, chunk_sizes):
         super().__init__()
-        assert len(mlps) == len(
-            chunk_sizes
-        ), "Number of MLPs must match the number of chunks"
+        if len(mlps) != len(chunk_sizes):
+            raise ValueError("Number of MLPs must match the number of chunks")
 
         self.mlps = nn.ModuleList(mlps)
         self.chunk_sizes = chunk_sizes
