@@ -1,0 +1,7 @@
+# Documentation build dependencies
+# Install with: pip install -r docs/requirements.txt
+sphinx>=7.0
+pydata-sphinx-theme>=0.15
+sphinx-autoapi>=3.0
+numpydoc>=1.6
+sphinx-copybutton>=0.5
