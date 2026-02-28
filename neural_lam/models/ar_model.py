@@ -403,6 +403,7 @@ class ARModel(pl.LightningModule):
         test_log_dict = {
             f"test_loss_unroll{step}": time_step_loss[step - 1]
             for step in self.args.val_steps_to_log
+            if step <= len(time_step_loss)
         }
         test_log_dict["test_mean_loss"] = mean_loss
 
@@ -439,9 +440,12 @@ class ARModel(pl.LightningModule):
         spatial_loss = self.loss(
             prediction, target, pred_std, average_grid=False
         )  # (B, pred_steps, num_grid_nodes)
-        log_spatial_losses = spatial_loss[
-            :, [step - 1 for step in self.args.val_steps_to_log]
+        valid_spatial_steps = [
+            step - 1
+            for step in self.args.val_steps_to_log
+            if step <= spatial_loss.shape[1]
         ]
+        log_spatial_losses = spatial_loss[:, valid_spatial_steps]
         self.spatial_loss_maps.append(log_spatial_losses)
         # (B, N_log, num_grid_nodes)
 
