@@ -1,5 +1,8 @@
+# Third-party
 import torch
-from neural_lam.metrics.crps import crps_ensemble
+
+# First-party
+from neural_lam.metrics import crps_ensemble
 
 def test_crps_shapes():
     preds = torch.randn(3, 2, 5, 10, 4)

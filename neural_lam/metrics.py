@@ -2,20 +2,6 @@
 import torch
 
 
-def get_metric(metric_name):
-    """
-    Get a defined metric with given name
-
-    metric_name: str, name of the metric
-
-    Returns:
-    metric: function implementing the metric
-    """
-    metric_name_lower = metric_name.lower()
-    assert (
-        metric_name_lower in DEFINED_METRICS
-    ), f"Unknown metric: {metric_name}"
-    return DEFINED_METRICS[metric_name_lower]
 
 
 def mask_and_reduce_metric(metric_entry_vals, mask, average_grid, sum_vars):
@@ -227,7 +213,37 @@ def crps_gauss(
     )
 
 
-from neural_lam.metrics.crps import crps_ensemble
+def crps_ensemble(predictions, target):
+    """
+    Continuous Ranked Probability Score (CRPS) for ensemble forecasts.
+
+    Computes the energy-form CRPS, which measures the quality of probabilistic
+    predictions using an ensemble of members.
+
+    Parameters
+    ----------
+    predictions : torch.Tensor
+        Ensemble predictions of shape (E, B, T, N, F), where E is ensemble
+        size, B is batch, T is time steps, N is grid nodes, F is features.
+    target : torch.Tensor
+        Ground truth tensor of shape (B, T, N, F).
+
+    Returns
+    -------
+    torch.Tensor
+        CRPS tensor of shape (B, T, N, F). Lower is better.
+    """
+    # term1: mean absolute error between each ensemble member and target
+    term1 = torch.mean(torch.abs(predictions - target.unsqueeze(0)), dim=0)
+
+    # term2: mean pairwise spread across ensemble members
+    pairwise_diff = torch.abs(
+        predictions.unsqueeze(0) - predictions.unsqueeze(1)
+    )
+    term2 = torch.mean(pairwise_diff, dim=(0, 1)) / 2
+
+    return term1 - term2
+
 
 DEFINED_METRICS = {
     "mse": mse,

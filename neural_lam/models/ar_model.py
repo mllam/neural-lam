@@ -40,37 +40,32 @@ class ARModel(pl.LightningModule):
         self.save_hyperparameters(ignore=["datastore"])
         self.output_mode = getattr(config.training, "output_mode", "deterministic")
         self.ensemble_size = getattr(config.training, "ensemble_size", 1)
+        self.perturbation_scale = getattr(
+            config.training, "perturbation_scale", 1.0
+        )
+        # Ensemble generation mode: 'sar' (per-step noise), 'lagged_ic'
+        # (perturbed initial conditions), or 'hybrid' (lagged_ic + sar).
+        self.ensemble_mode = getattr(config.training, "ensemble_mode", "sar")
+        self.ic_perturbation_scale = getattr(
+            config.training, "ic_perturbation_scale", 0.5
+        )
         if self.output_mode not in ["deterministic", "ensemble"]:
             raise ValueError(
-                f"Unsupported output_mode: {self.output_mode}"
+                f"Unsupported output_mode: {self.output_mode}. "
+                "Must be one of: 'deterministic', 'ensemble'."
+            )
+        if self.perturbation_scale < 0:
+            raise ValueError(
+                f"perturbation_scale must be non-negative, "
+                f"got {self.perturbation_scale}"
+            )
+        if self.ensemble_mode not in ("sar", "lagged_ic", "hybrid"):
+            raise ValueError(
+                f"Unsupported ensemble_mode: {self.ensemble_mode}. "
+                "Must be one of: 'sar','lagged_ic','hybrid'."
             )
         self.args = args
         self._datastore = datastore
-
-    @property
-    def is_ensemble(self):
-        return self.output_mode == "ensemble" and self.ensemble_size > 1
-
-    def forward(self, x, *args, **kwargs):
-        preds = self._deterministic_forward(x, *args, **kwargs)
-        if self.is_ensemble:
-            preds = self._sample_ensemble(preds)
-        return preds
-
-    def _deterministic_forward(self, x, *args, **kwargs):
-        # Placeholder for deterministic forward pass
-        return x
-
-    def _sample_ensemble(self, preds):
-        noise = torch.randn(
-            self.ensemble_size,
-            *preds.shape,
-            device=preds.device,
-            dtype=preds.dtype,
-        ) * 0.01
-        preds = preds.unsqueeze(0).repeat(self.ensemble_size, *[1]*(preds.ndim))
-        preds = preds + noise
-        return preds
         num_state_vars = datastore.get_num_data_vars(category="state")
         num_forcing_vars = datastore.get_num_data_vars(category="forcing")
         # Load static features standardized
@@ -191,6 +186,104 @@ class ARModel(pl.LightningModule):
             self._datastore.step_length
         )
 
+    @property
+    def is_ensemble(self):
+        """
+        Returns True if the model is configured for ensemble output.
+        """
+        return self.output_mode == "ensemble" and self.ensemble_size > 1
+
+    def generate_ensemble(
+        self, init_states: torch.Tensor, forcing_features: torch.Tensor,
+        true_states: torch.Tensor
+    ) -> torch.Tensor:
+        """
+        Generate a probabilistic ensemble via Stochastic Autoregressive
+        Rollout (SAR). Each ensemble member is produced by an independent
+        forward pass in which zero-mean Gaussian noise — scaled by the
+        per-variable one-step standard deviation estimated from training
+        data (``diff_std``) and the configurable ``perturbation_scale`` —
+        is injected at every interior grid node after each AR step.
+
+        This approach is inspired by established ensemble NWP perturbation
+        strategies (e.g. stochastic kinetic-energy backscatter, SPPT) and
+        ensures:
+
+        * Trajectory divergence grows naturally through the AR feedback loop.
+        * Boundary conditions remain unperturbed (perturbations applied to
+          interior nodes only, consistent with the boundary mask).
+        * Perturbation magnitude is physically motivated by the training-data
+          one-step spread rather than an arbitrary constant.
+
+        Parameters
+        ----------
+        init_states : torch.Tensor
+            Shape (B, 2, num_grid_nodes, d_f) — two initial conditioning
+            states required by the two-step AR formulation.
+        forcing_features : torch.Tensor
+            Shape (B, pred_steps, num_grid_nodes, d_forcing).
+        true_states : torch.Tensor
+            Shape (B, pred_steps, num_grid_nodes, d_f) — ground-truth states
+            used for boundary overwriting at each step.
+
+        Returns
+        -------
+        torch.Tensor
+            Ensemble of shape
+            (ensemble_size, B, pred_steps, num_grid_nodes, d_f).
+            Members are stacked along dimension 0 and are compatible with
+            ``metrics.crps_ensemble`` for probabilistic evaluation.
+        """
+        members = []
+        if self.ensemble_mode == "sar":
+            for _ in range(self.ensemble_size):
+                prediction, _ = self.unroll_prediction(
+                    init_states, forcing_features, true_states, stochastic=True
+                )
+                members.append(prediction)
+        elif self.ensemble_mode == "lagged_ic":
+            # Perturb initial conditions along recent tendency (prev - prev_prev)
+            prev_prev = init_states[:, 0]  # (B, N, d_f)
+            prev = init_states[:, 1]  # (B, N, d_f)
+            tendency = prev - prev_prev  # (B, N, d_f)
+            # Create deterministic factor spread across ensemble members
+            factors = torch.linspace(
+                -1.0, 1.0, steps=self.ensemble_size, device=init_states.device
+            )
+            factors = factors.unsqueeze(1).unsqueeze(2).unsqueeze(3)
+            # Apply scaled tendency perturbations to initial states
+            for f in factors:
+                # shift prev_prev slightly opposite and prev slightly along tendency
+                prev_prev_m = prev_prev + (-0.5 * f) * self.ic_perturbation_scale * tendency
+                prev_m = prev + (0.5 * f) * self.ic_perturbation_scale * tendency
+                member_init = torch.stack([prev_prev_m, prev_m], dim=1)
+                prediction, _ = self.unroll_prediction(
+                    member_init, forcing_features, true_states, stochastic=False
+                )
+                members.append(prediction)
+        elif self.ensemble_mode == "hybrid":
+            # Combine lagged IC spread with per-step SAR noise
+            prev_prev = init_states[:, 0]
+            prev = init_states[:, 1]
+            tendency = prev - prev_prev
+            factors = torch.linspace(
+                -1.0, 1.0, steps=self.ensemble_size, device=init_states.device
+            )
+            factors = factors.unsqueeze(1).unsqueeze(2).unsqueeze(3)
+            for f in factors:
+                prev_prev_m = prev_prev + (-0.5 * f) * self.ic_perturbation_scale * tendency
+                prev_m = prev + (0.5 * f) * self.ic_perturbation_scale * tendency
+                member_init = torch.stack([prev_prev_m, prev_m], dim=1)
+                prediction, _ = self.unroll_prediction(
+                    member_init, forcing_features, true_states, stochastic=True
+                )
+                members.append(prediction)
+        else:
+            raise ValueError(f"Unsupported ensemble_mode: {self.ensemble_mode}")
+        # Stack along leading ensemble dimension:
+        # (ensemble_size, B, pred_steps, num_grid_nodes, d_f)
+        return torch.stack(members, dim=0)
+
     def _create_dataarray_from_tensor(
         self,
         tensor: torch.Tensor,
@@ -258,12 +351,24 @@ class ARModel(pl.LightningModule):
         """
         raise NotImplementedError("No prediction step implemented")
 
-    def unroll_prediction(self, init_states, forcing_features, true_states):
+    def unroll_prediction(
+        self, init_states, forcing_features, true_states, stochastic=False
+    ):
         """
-        Roll out prediction taking multiple autoregressive steps with model
-        init_states: (B, 2, num_grid_nodes, d_f) forcing_features: (B,
-        pred_steps, num_grid_nodes, d_static_f) true_states: (B, pred_steps,
-        num_grid_nodes, d_f)
+        Roll out prediction taking multiple autoregressive steps with model.
+
+        Parameters
+        ----------
+        init_states : torch.Tensor
+            Shape (B, 2, num_grid_nodes, d_f).
+        forcing_features : torch.Tensor
+            Shape (B, pred_steps, num_grid_nodes, d_forcing).
+        true_states : torch.Tensor
+            Shape (B, pred_steps, num_grid_nodes, d_f).
+        stochastic : bool
+            If True, adds per-step Gaussian noise to each predicted state
+            before the next AR step, enabling ensemble diversity.
+            Default is False (deterministic rollout).
         """
         prev_prev_state = init_states[:, 0]
         prev_state = init_states[:, 1]
@@ -280,6 +385,19 @@ class ARModel(pl.LightningModule):
             )
             # state: (B, num_grid_nodes, d_f) pred_std: (B, num_grid_nodes,
             # d_f) or None
+
+            # Stochastic Autoregressive Rollout (SAR): inject per-step noise
+            # scaled by per-variable diff_std and perturbation_scale.
+            # Applied ONLY to interior nodes via interior_mask so that
+            # boundary conditions are never contaminated by perturbations.
+            # This mirrors established ensemble NWP perturbation strategies
+            # (e.g. SPPT) where uncertainty is injected at each model step.
+            if stochastic:
+                noise = torch.randn_like(pred_state) * (
+                    self.diff_std * self.perturbation_scale
+                )  # (B, num_grid_nodes, d_f)
+                # Apply noise only to interior nodes
+                pred_state = pred_state + self.interior_mask * noise
 
             # Overwrite border with true state
             new_state = (

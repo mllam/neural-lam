@@ -105,6 +105,16 @@ class TrainingConfig:
 
     output_mode: str = "deterministic"
     ensemble_size: int = 1
+    perturbation_scale: float = 1.0
+    # Ensemble generation strategy: 'sar' (stochastic AR per-step),
+    # 'lagged_ic' (perturbed/lagged initial conditions), or 'hybrid'
+    # (lagged IC + SAR). Default 'sar' preserves prior behavior.
+    ensemble_mode: str = "sar"
+    # Scale applied to IC perturbations when using lagged_ic/hybrid modes.
+    ic_perturbation_scale: float = 0.5
+    # Scale factor applied to per-variable diff_std when perturbing ensemble
+    # members at each AR step. A value of 1.0 uses the full one-step spread
+    # as estimated from the training data. Reduce for tighter ensembles.
 
 
 @dataclasses.dataclass
