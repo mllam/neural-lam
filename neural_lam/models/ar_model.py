@@ -198,12 +198,6 @@ class ARModel(pl.LightningModule):
         )
         return da
 
-    def configure_optimizers(self):
-        opt = torch.optim.AdamW(
-            self.parameters(), lr=self.args.lr, betas=(0.9, 0.95)
-        )
-        return opt
-
     @property
     def interior_mask_bool(self):
         """
@@ -316,7 +310,20 @@ class ARModel(pl.LightningModule):
             sync_dist=True,
             batch_size=batch[0].shape[0],
         )
+
+        self.scheduler_step()
+
         return batch_loss
+
+    def scheduler_step(self):
+        schedulers = self.lr_schedulers()
+
+        if isinstance(schedulers, list):
+            for scheduler in schedulers:
+                scheduler.step()
+
+        if isinstance(schedulers, torch.optim.lr_scheduler.LRScheduler):
+            schedulers.step()
 
     def all_gather_cat(self, tensor_to_gather):
         """

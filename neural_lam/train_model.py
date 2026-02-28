@@ -11,6 +11,9 @@ import torch
 from lightning_fabric.utilities import seed
 from loguru import logger
 
+# First-party
+from neural_lam.trainer import Trainer
+
 # Local
 from . import utils
 from .config import load_config_and_datastore
@@ -224,6 +227,18 @@ def main(input_args=None):
         default=1,
         help="Number of future time steps to use as input for forcing data",
     )
+    parser.add_argument(
+        "--scheduler_config",
+        type=str,
+        default=None,
+        help="Configuration for learning rate scheduler. Eg. {'scheduler': 'StepLR', 'kwargs': {'step_size': 10, 'gamma': 0.1}}",
+    )
+    parser.add_argument(
+        "--optimizer_config",
+        type=str,
+        default=None,
+        help="Configuration for optimizer. Eg. {'optimizer': 'Adam', 'kwargs': {'lr': 0.01}}",
+    )
     args = parser.parse_args(input_args)
     args.var_leads_metrics_watch = {
         int(k): v for k, v in json.loads(args.var_leads_metrics_watch).items()
@@ -314,7 +329,7 @@ def main(input_args=None):
         mode="min",
         save_last=True,
     )
-    trainer = pl.Trainer(
+    trainer = Trainer(
         max_epochs=args.epochs,
         deterministic=True,
         strategy="ddp",
@@ -326,6 +341,8 @@ def main(input_args=None):
         callbacks=[checkpoint_callback],
         check_val_every_n_epoch=args.val_interval,
         precision=args.precision,
+        scheduler_config=args.scheduler_config,
+        optimizer_config=args.optimizer_config,
     )
 
     # Only init once, on rank 0 only
