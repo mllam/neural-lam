@@ -16,6 +16,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `fractional_plot_bundle` now correctly multiplies by fraction instead of dividing [
 \#222](https://github.com/mllam/neural-lam/pull/222) @santhil-cyber
 
+- Fix Slack domain link [\#288](https://github.com/mllam/neural-lam/pull/288) @sadamov
+
 ### Maintenance
 
 - Update PR template to clarify milestone/roadmap requirement and maintenance changes [\#186](https://github.com/mllam/neural-lam/pull/186) @joeloskarsson
