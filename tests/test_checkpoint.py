@@ -69,6 +69,8 @@ def test_datastore_not_in_checkpoint(tmp_path):
         logger=False,
         enable_checkpointing=False,
     )
+    # Manually attach model to trainer
+    trainer.strategy.connect(model)
     
     ckpt_path = tmp_path / "test.ckpt"
     trainer.save_checkpoint(ckpt_path, weights_only=False)
