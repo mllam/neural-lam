@@ -136,6 +136,8 @@ def test_plot_spatial_error_crop_to_interior_changes_extent() -> None:
     datastore.ds["boundary_mask"] = xr.DataArray(
         boundary_mask.reshape(n_grid), dims=["grid_index"]
     )
+    # Clear any cached boundary_mask property so it reflects the updated dataset.
+    datastore.__dict__.pop("boundary_mask", None)
 
     lats_lons = datastore.get_lat_lon("state")
     lons = lats_lons[:, 0].reshape(grid_shape)
