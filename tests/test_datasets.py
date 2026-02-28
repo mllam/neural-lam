@@ -12,7 +12,7 @@ from neural_lam import config as nlconfig
 from neural_lam.create_graph import create_graph_from_datastore
 from neural_lam.datastore import DATASTORES
 from neural_lam.datastore.base import BaseRegularGridDatastore
-from neural_lam.models.graph_lam import GraphLAM
+from neural_lam.models.forecaster_module import ForecasterModule
 from neural_lam.weather_dataset import WeatherDataset
 from tests.conftest import init_datastore_example
 from tests.dummy_datastore import DummyDatastore
@@ -182,6 +182,10 @@ def test_single_batch(datastore_name, split):
         hidden_layers = 1
         processor_layers = 2
         mesh_aggr = "sum"
+        lr = 1.0e-3
+        val_steps_to_log = [1]
+        metrics_watch = []
+        var_leads_metrics_watch = {}
         num_past_forcing_steps = 1
         num_future_forcing_steps = 1
 
@@ -212,7 +216,12 @@ def test_single_batch(datastore_name, split):
 
     dataset = WeatherDataset(datastore=datastore, split=split, ar_steps=2)
 
-    model = GraphLAM(args=args, datastore=datastore, config=config)  # noqa
+    model = ForecasterModule(
+        model_name="graph_lam",
+        args=args,
+        datastore=datastore,
+        config=config,
+    )
 
     model_device = model.to(device_name)
     data_loader = DataLoader(dataset, batch_size=2)

@@ -14,14 +14,8 @@ from loguru import logger
 # Local
 from . import utils
 from .config import load_config_and_datastore
-from .models import GraphLAM, HiLAM, HiLAMParallel
+from .models import MODELS, ForecasterModule
 from .weather_dataset import WeatherDataModule
-
-MODELS = {
-    "graph_lam": GraphLAM,
-    "hi_lam": HiLAM,
-    "hi_lam_parallel": HiLAMParallel,
-}
 
 
 @logger.catch
@@ -287,8 +281,9 @@ def main(input_args=None):
             raise ValueError("devices should be 'auto' or a list of integers")
 
     # Load model parameters Use new args for model
-    ModelClass = MODELS[args.model]
-    model = ModelClass(args, config=config, datastore=datastore)
+    model = ForecasterModule(
+        args.model, args, config=config, datastore=datastore
+    )
 
     if args.eval:
         prefix = f"eval-{args.eval}-"

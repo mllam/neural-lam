@@ -12,7 +12,7 @@ from neural_lam import config as nlconfig
 from neural_lam.create_graph import create_graph_from_datastore
 from neural_lam.datastore import DATASTORES
 from neural_lam.datastore.base import BaseRegularGridDatastore
-from neural_lam.models.graph_lam import GraphLAM
+from neural_lam.models.forecaster_module import ForecasterModule
 from neural_lam.weather_dataset import WeatherDataModule
 from tests.conftest import init_datastore_example
 
@@ -44,7 +44,11 @@ def run_simple_training(datastore, set_output_std):
         # XXX: `devices` has to be set to 2 otherwise
         # neural_lam.models.ar_model.ARModel.aggregate_and_plot_metrics fails
         # because it expects to aggregate over multiple devices
-        devices=2,
+        devices=(
+            min(2, torch.cuda.device_count())
+            if torch.cuda.is_available()
+            else 1
+        ),
         log_every_n_steps=1,
         # use `detect_anomaly` to ensure that we don't have NaNs popping up
         # during training
@@ -73,25 +77,26 @@ def run_simple_training(datastore, set_output_std):
         num_future_forcing_steps=1,
     )
 
-    class ModelArgs:
-        output_std = set_output_std
-        loss = "mse"
-        restore_opt = False
-        n_example_pred = 1
-        # XXX: this should be superfluous when we have already defined the
-        # model object no?
-        graph = graph_name
-        hidden_dim = 4
-        hidden_layers = 1
-        processor_layers = 2
-        mesh_aggr = "sum"
-        lr = 1.0e-3
-        val_steps_to_log = [1, 3]
-        metrics_watch = []
-        num_past_forcing_steps = 1
-        num_future_forcing_steps = 1
+    # Standard library
+    from argparse import Namespace
 
-    model_args = ModelArgs()
+    model_args = Namespace(
+        output_std=set_output_std,
+        loss="mse",
+        restore_opt=False,
+        n_example_pred=1,
+        graph=graph_name,
+        hidden_dim=4,
+        hidden_layers=1,
+        processor_layers=2,
+        mesh_aggr="sum",
+        lr=1.0e-3,
+        val_steps_to_log=[1, 3],
+        metrics_watch=[],
+        var_leads_metrics_watch={},
+        num_past_forcing_steps=1,
+        num_future_forcing_steps=1,
+    )
 
     config = nlconfig.NeuralLAMConfig(
         datastore=nlconfig.DatastoreSelection(
@@ -99,13 +104,17 @@ def run_simple_training(datastore, set_output_std):
         )
     )
 
-    model = GraphLAM(  # noqa
+    model = ForecasterModule(
+        model_name="graph_lam",
         args=model_args,
         datastore=datastore,
         config=config,
     )
     wandb.init()
-    trainer.fit(model=model, datamodule=data_module)
+    try:
+        trainer.fit(model=model, datamodule=data_module)
+    finally:
+        wandb.finish()
 
 
 @pytest.mark.parametrize("datastore_name", DATASTORES.keys())
