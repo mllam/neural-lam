@@ -358,6 +358,12 @@ def setup_training_logger(datastore, args, run_name):
     The run name is set to ``None`` when resuming to preserve the existing name.
     """
 
+    if args.wandb_id and args.logger != "wandb":
+        loguru_logger.warning(
+            f"--wandb_id is set but logger is {args.logger!r}; "
+            "the wandb_id will have no effect."
+        )
+
     if args.logger == "wandb":
         wandb_resume = "allow" if args.wandb_id else None
         loguru_logger.info(

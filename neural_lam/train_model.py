@@ -24,8 +24,9 @@ MODELS = {
 }
 
 
-def _build_arg_parser():
-    """Build and return the argument parser for train_model."""
+@logger.catch
+def main(input_args=None):
+    """Main function for training and evaluating models."""
     parser = ArgumentParser(
         description="Train or evaluate MLWP models for LAM",
         formatter_class=ArgumentDefaultsHelpFormatter,
@@ -199,7 +200,9 @@ def _build_arg_parser():
         default=None,
         help="Wandb run ID to use. If the run ID already exists in the "
         "project, W&B resumes that run. If it does not exist, W&B creates "
-        "a new run with that ID. If the run ID is None a new job with random ID is submitted. This argument is ignored for any --logger that is not wandb.",
+        "a new run with that ID. Useful on HPC systems with limited job "
+        "runtimes or that may crash, allowing training to be continued "
+        "across multiple job submissions.",
     )
     parser.add_argument(
         "--val_steps_to_log",
@@ -233,13 +236,7 @@ def _build_arg_parser():
         default=1,
         help="Number of future time steps to use as input for forcing data",
     )
-    return parser
 
-
-@logger.catch
-def main(input_args=None):
-    """Main function for training and evaluating models."""
-    parser = _build_arg_parser()
     args = parser.parse_args(input_args)
     args.var_leads_metrics_watch = {
         int(k): v for k, v in json.loads(args.var_leads_metrics_watch).items()

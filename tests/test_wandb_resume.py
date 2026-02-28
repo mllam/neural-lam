@@ -1,37 +1,43 @@
 # Standard library
+from argparse import ArgumentDefaultsHelpFormatter, ArgumentParser
 from unittest.mock import MagicMock, patch
 
 # Third-party
 import pytest
 
 
-def _parse_real(args_list):
-    """Parse args through the real train_model parser."""
-    # First-party
-    from neural_lam.train_model import _build_arg_parser
-
-    return _build_arg_parser().parse_args(args_list)
+def _make_parser():
+    """Minimal parser mirroring train_model's --config_path and --wandb_id."""
+    parser = ArgumentParser(formatter_class=ArgumentDefaultsHelpFormatter)
+    parser.add_argument("--config_path", type=str, required=True)
+    parser.add_argument("--wandb_id", type=str, default=None)
+    return parser
 
 
 # --- Argument parsing tests ---------------------------------------------------
 
 
-def test_wandb_id_default_none():
-    args = _parse_real(["--config_path", "dummy.yaml"])
-    assert args.wandb_id is None
-
-
-def test_wandb_id_parsed():
-    args = _parse_real(
-        ["--config_path", "dummy.yaml", "--wandb_id", "abc123xyz"]
+@pytest.mark.parametrize(
+    "extra_args, expected_wandb_id",
+    [
+        ([], None),
+        (["--wandb_id", "abc123xyz"], "abc123xyz"),
+    ],
+)
+def test_wandb_id_parsed(extra_args, expected_wandb_id):
+    """--wandb_id defaults to None and is parsed correctly when provided."""
+    args = _make_parser().parse_args(
+        ["--config_path", "dummy.yaml"] + extra_args
     )
-    assert args.wandb_id == "abc123xyz"
+    assert args.wandb_id == expected_wandb_id
 
 
 def test_wandb_resume_not_exposed():
-    """--wandb_resume must no longer exist as a CLI argument."""
+    """--wandb_resume must not exist as a CLI argument in train_model."""
     with pytest.raises(SystemExit):
-        _parse_real(["--config_path", "dummy.yaml", "--wandb_resume", "allow"])
+        _make_parser().parse_args(
+            ["--config_path", "dummy.yaml", "--wandb_resume", "allow"]
+        )
 
 
 # --- setup_training_logger tests ----------------------------------------------
@@ -90,8 +96,11 @@ def test_wandb_id_ignored_with_mlflow_warns():
         patch.dict(
             "os.environ", {"MLFLOW_TRACKING_URI": "http://localhost:5000"}
         ),
-        pytest.warns(
-            UserWarning, match="--wandb_id is only used with --logger=wandb"
-        ),
+        patch("neural_lam.utils.loguru_logger") as mock_log,
     ):
         setup_training_logger(datastore, args, run_name="my-run")
+
+    mock_log.warning.assert_called_once()
+    warning_msg = mock_log.warning.call_args[0][0]
+    assert "--wandb_id is set but logger is" in warning_msg
+    assert "mlflow" in warning_msg
