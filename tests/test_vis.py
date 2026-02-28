@@ -1,4 +1,4 @@
-﻿from pathlib import Path
+from pathlib import Path
 import shutil
 from typing import Any, Iterator
 from unittest.mock import patch
