@@ -409,23 +409,30 @@ class ARModel(pl.LightningModule):
             self.trainer.is_global_zero
             and self.plotted_examples < self.n_example_pred
         ):
-            # Need to plot more example predictions
             n_additional_examples = min(
                 prediction.shape[0],
                 self.n_example_pred - self.plotted_examples,
             )
 
-            self.plotted_examples = vis.plot_examples(
+            # Slice the tensors before passing them to the visualization
+            pred_slice = prediction[:n_additional_examples]
+            target_slice = batch[1][:n_additional_examples]
+            time_slice = batch[3][:n_additional_examples]
+
+            vis.plot_examples(
                 datastore=self._datastore,
                 state_std=self.state_std,
                 state_mean=self.state_mean,
                 logger=self.logger,
-                batch=batch,
-                n_examples=n_additional_examples,
                 split="test",
-                prediction=prediction,
-                plotted_examples=self.plotted_examples,
+                prediction=pred_slice,
+                target=target_slice,
+                time_batch=time_slice,
+                start_index=self.plotted_examples,
             )
+
+            # maintain its own counter
+            self.plotted_examples += n_additional_examples
 
     def create_metric_log_dict(self, metric_tensor, prefix, metric_name):
         """

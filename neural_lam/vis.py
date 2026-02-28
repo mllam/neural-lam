@@ -196,32 +196,26 @@ def plot_examples(
     state_std: torch.Tensor,
     state_mean: torch.Tensor,
     logger: pl.loggers.Logger,
-    batch: tuple,
-    n_examples: int,
     split: str,
     prediction: torch.Tensor,
-    plotted_examples: int = 0,
-) -> int:
+    target: torch.Tensor,
+    time_batch: torch.Tensor,
+    start_index: int = 0,
+) -> None:
     """
-    Plot the first n_examples forecasts from a batch.
+    Plot example forecasts from provided tensors.
 
     Args:
         datastore: The object containing dataset metadata.
         state_std: Standard deviation of state variables for rescaling.
         state_mean: Mean of state variables for rescaling.
         logger: The logger instance used to save the images.
-        batch: Tuple containing the current batch of data.
-        n_examples: Number of examples to plot from the batch.
-        split: The dataset split (e.g., 'train', 'val', 'test').
+        split: The dataset split .
         prediction: Output tensors predicted from the model.
-        plotted_examples: Counter for plotted examples so far.
-
-    Returns:
-        The updated total number of plotted examples.
+        target: Ground truth tensors.
+        time_batch: Time timestamps corresponding to the data.
+        start_index: The starting index number for naming saved files/logs.
     """
-    target = batch[1]
-    time_batch = batch[3]
-
     prediction_rescaled = prediction * state_std + state_mean
     target_rescaled = target * state_std + state_mean
 
@@ -232,12 +226,10 @@ def plot_examples(
     # Instantiating dataset outside the loop
     weather_dataset = WeatherDataset(datastore=datastore, split=split)
 
-    for pred_slice, target_slice, time_slice in zip(
-        prediction_rescaled[:n_examples],
-        target_rescaled[:n_examples],
-        time_batch[:n_examples],
+    for i, (pred_slice, target_slice, time_slice) in enumerate(
+        zip(prediction_rescaled, target_rescaled, time_batch)
     ):
-        plotted_examples += 1
+        example_i = start_index + i
 
         # Detach tensors to safely separate from autograd graph
         pred_slice = pred_slice.detach()
@@ -295,8 +287,6 @@ def plot_examples(
                 )
             ]
 
-            example_i = plotted_examples
-
             for var_name, fig in zip(
                 datastore.get_vars_names("state"), var_figs
             ):
@@ -312,16 +302,14 @@ def plot_examples(
 
             plt.close("all")
 
-        pred_filename = f"example_pred_{plotted_examples}.pt"
+        pred_filename = f"example_pred_{example_i}.pt"
         torch.save(
             pred_slice.cpu(),
             os.path.join(logger.save_dir, pred_filename),
         )
 
-        target_filename = f"example_target_{plotted_examples}.pt"
+        target_filename = f"example_target_{example_i}.pt"
         torch.save(
             target_slice.cpu(),
             os.path.join(logger.save_dir, target_filename),
         )
-
-    return plotted_examples
