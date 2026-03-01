@@ -84,14 +84,11 @@ class ARModel(pl.LightningModule):
         for key, val in state_stats.items():
             self.register_buffer(key, val, persistent=False)
 
-        # Load forcing normalization stats (mean and std) if we have
-        # forcing data
         if num_forcing_vars > 0:
             da_forcing_stats = datastore.get_standardization_dataarray(
                 category="forcing"
             )
-            # Save forcing mean and std as buffers
-            # (they move to GPU with model)
+            # saved forcing mean and std as buffers
             self.register_buffer(
                 "forcing_mean",
                 torch.tensor(

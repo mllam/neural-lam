@@ -18,11 +18,8 @@ from neural_lam.utils import get_integer_time
 
 
 class StandardizedDatastore:
-    """Wrapper to ensure datastore returns standardized data.
-    
-    This is needed for computing one-step difference statistics on 
-    standardized data. The WeatherDataset class always requests 
-    non-standardized data from the datastore by default.
+    """
+        Wrapper to ensure datastore returns standardized data.
     """
 
     def __init__(self, datastore):
