@@ -102,6 +102,24 @@ class ARModel(pl.LightningModule):
             # Store constant per-variable std.-dev. weighting
             # NOTE that this is the inverse of the multiplicative weighting
             # in wMSE/wMAE
+
+            # Warn if any feature weight is exactly 0, since that variable
+            # will be completely excluded from the loss, which is almost
+            # certainly unintentional. A small epsilon (1e-8) is added below
+            # to prevent division by zero in the sqrt.
+            zero_weight_mask = self.feature_weights == 0.0
+            if zero_weight_mask.any().item():
+                zero_indices = zero_weight_mask.nonzero(as_tuple=False).squeeze(-1)
+                warnings.warn(
+                    f"Feature weight(s) at indices {zero_indices.tolist()} "
+                    "are set to 0.0. This means these state variables will "
+                    "contribute nothing to the loss and effectively be "
+                    "ignored during training. If this is intentional, you "
+                    "can disregard this warning.",
+                    UserWarning,
+                    stacklevel=2,
+                )
+
             self.register_buffer(
                 "per_var_std",
                 self.diff_std / torch.sqrt(self.feature_weights + 1e-8),
