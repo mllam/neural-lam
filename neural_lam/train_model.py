@@ -80,7 +80,7 @@ def main(input_args=None):
         help="Path to load model parameters from",
     )
     parser.add_argument(
-        "--restore_opt",
+        "--load_training_state",
         action="store_true",
         help="If full training state should be restored with model "
         "(default: false)",
@@ -248,7 +248,7 @@ def main(input_args=None):
             )
 
     assert (
-        args.load or not args.restore_opt
+        args.load or not args.load_training_state
     ), "Can not restore training state when not loading a checkpoint"
 
     # Get an (actual) random run id as a unique identifier
@@ -293,7 +293,7 @@ def main(input_args=None):
 
     # Load model parameters Use new args for model
     ModelClass = MODELS[args.model]
-    if args.load and not args.restore_opt:
+    if args.load and not args.load_training_state:
         # Restore only model weights, not training state
         model = ModelClass.load_from_checkpoint(
             args.load,
@@ -359,7 +359,7 @@ def main(input_args=None):
         )
     else:
         # Only pass ckpt_path when restoring full training state
-        ckpt_for_fit = args.load if args.restore_opt else None
+        ckpt_for_fit = args.load if args.load_training_state else None
         trainer.fit(
             model=model,
             datamodule=data_module,

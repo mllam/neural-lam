@@ -5,18 +5,29 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 
-def test_restore_opt_without_load_raises():
+@patch("neural_lam.train_model.load_config_and_datastore")
+@patch("neural_lam.train_model.seed")
+def test_load_training_state_without_load_raises(mock_seed, mock_load_config):
     """
-    Using --restore_opt without --load should fail the assertion
+    Using --load_training_state without --load should fail the assertion
     that a checkpoint path is required for restoring training state.
     """
-    # Standard library
-    from argparse import Namespace
+    # Import main after setting up patches
+    from neural_lam.train_model import main
 
-    args = Namespace(load=None, restore_opt=True)
-    with pytest.raises(AssertionError, match="not loading a checkpoint"):
-        assert args.load or not args.restore_opt, (
-            "Can not restore training state " "when not loading a checkpoint"
+    # Bypass the @logger.catch decorator by calling the wrapped function directly
+    # The decorator stores the original function as __wrapped__
+    original_main = main.__wrapped__
+
+    with pytest.raises(
+        AssertionError, match="Can not restore training state"
+    ):
+        original_main(
+            [
+                "--config_path",
+                "dummy.yaml",
+                "--load_training_state",
+            ]
         )
 
 
@@ -28,7 +39,7 @@ def test_weights_only_uses_load_from_checkpoint(
     mock_utils, mock_load_config, mock_dm, mock_trainer_cls
 ):
     """
-    When --load is given without --restore_opt, load_from_checkpoint
+    When --load is given without --load_training_state, load_from_checkpoint
     should be called and ckpt_path should be None in trainer.fit.
     """
     mock_config = MagicMock()
@@ -80,11 +91,11 @@ def test_weights_only_uses_load_from_checkpoint(
 @patch("neural_lam.train_model.WeatherDataModule")
 @patch("neural_lam.train_model.load_config_and_datastore")
 @patch("neural_lam.train_model.utils")
-def test_restore_opt_passes_ckpt_path(
+def test_load_training_state_passes_ckpt_path(
     mock_utils, mock_load_config, mock_dm, mock_trainer_cls
 ):
     """
-    When --load and --restore_opt are both given, the model should be
+    When --load and --load_training_state are both given, the model should be
     created with the normal constructor and ckpt_path should be passed
     to trainer.fit.
     """
@@ -116,7 +127,7 @@ def test_restore_opt_passes_ckpt_path(
                 "fake_config.yaml",
                 "--load",
                 fake_ckpt,
-                "--restore_opt",
+                "--load_training_state",
             ]
         )
 
@@ -139,7 +150,7 @@ def test_eval_always_passes_ckpt_path(
 ):
     """
     When --eval is used with --load, ckpt_path should always be passed
-    to trainer.test regardless of --restore_opt.
+    to trainer.test regardless of --load_training_state.
     """
     mock_config = MagicMock()
     mock_datastore = MagicMock()
