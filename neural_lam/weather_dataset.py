@@ -36,8 +36,6 @@ class WeatherDataset(torch.utils.data.Dataset):
         forcing from times t, t+1, ..., t+j-1, t+j (and potentially times before
         t, given num_past_forcing_steps) are included as forcing inputs at time
         t. Default is 1.
-    standardize : bool, optional
-        Whether to standardize the data. Default is True.
     """
 
     def __init__(
@@ -47,7 +45,6 @@ class WeatherDataset(torch.utils.data.Dataset):
         ar_steps: int = 3,
         num_past_forcing_steps: int = 1,
         num_future_forcing_steps: int = 1,
-        standardize: bool = True,
     ):
         super().__init__()
 
@@ -94,15 +91,6 @@ class WeatherDataset(torch.utils.data.Dataset):
                         f"({expected_dim_order}). Maybe you forgot to "
                         "transpose the data in `BaseDatastore.get_dataarray`?"
                     )
-
-        # This parameter kept for backward compatibility only
-        if not standardize:
-            warnings.warn(
-                "standardize=False is deprecated. "
-                "Normalization now happens on GPU.",
-                DeprecationWarning,
-                stacklevel=2,
-            )
 
     def __len__(self):
         if self.datastore.is_forecast:
@@ -579,7 +567,6 @@ class WeatherDataModule(pl.LightningDataModule):
         datastore: BaseDatastore,
         ar_steps_train: int = 3,
         ar_steps_eval: int = 25,
-        standardize: bool = True,
         num_past_forcing_steps: int = 1,
         num_future_forcing_steps: int = 1,
         batch_size: int = 4,
@@ -592,7 +579,6 @@ class WeatherDataModule(pl.LightningDataModule):
         self.num_future_forcing_steps = num_future_forcing_steps
         self.ar_steps_train = ar_steps_train
         self.ar_steps_eval = ar_steps_eval
-        self.standardize = standardize
         self.batch_size = batch_size
         self.num_workers: int = num_workers
         self.train_dataset = None
@@ -611,7 +597,6 @@ class WeatherDataModule(pl.LightningDataModule):
                 datastore=self._datastore,
                 split="train",
                 ar_steps=self.ar_steps_train,
-                standardize=self.standardize,
                 num_past_forcing_steps=self.num_past_forcing_steps,
                 num_future_forcing_steps=self.num_future_forcing_steps,
             )
@@ -619,7 +604,6 @@ class WeatherDataModule(pl.LightningDataModule):
                 datastore=self._datastore,
                 split="val",
                 ar_steps=self.ar_steps_eval,
-                standardize=self.standardize,
                 num_past_forcing_steps=self.num_past_forcing_steps,
                 num_future_forcing_steps=self.num_future_forcing_steps,
             )
@@ -629,7 +613,6 @@ class WeatherDataModule(pl.LightningDataModule):
                 datastore=self._datastore,
                 split=self.eval_split,
                 ar_steps=self.ar_steps_eval,
-                standardize=self.standardize,
                 num_past_forcing_steps=self.num_past_forcing_steps,
                 num_future_forcing_steps=self.num_future_forcing_steps,
             )
