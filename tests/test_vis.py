@@ -57,11 +57,15 @@ def test_plot_prediction() -> None:
     da_pred = xr.DataArray(np.linspace(0.0, 1.0, n_grid))
     da_target = xr.DataArray(np.linspace(1.0, 2.0, n_grid))
 
+    expected_vmin = float(np.nanmin([da_pred.values, da_target.values]))
+    expected_vmax = float(np.nanmax([da_pred.values, da_target.values]))
+
     fig = vis.plot_prediction(
         datastore=datastore,
         da_prediction=da_pred,
         da_target=da_target,
         title="Test Prediction",
+        vrange=(expected_vmin, expected_vmax),
         boundary_alpha=None,
         crop_to_interior=False,
     )
@@ -77,8 +81,6 @@ def test_plot_prediction() -> None:
     assert len(ground_truth_ax.collections) == 1
     assert len(prediction_ax.collections) == 1
 
-    expected_vmin = float(min(da_pred.min(), da_target.min()))
-    expected_vmax = float(max(da_pred.max(), da_target.max()))
     assert ground_truth_ax.collections[0].norm.vmin == expected_vmin
     assert ground_truth_ax.collections[0].norm.vmax == expected_vmax
     assert prediction_ax.collections[0].norm.vmin == expected_vmin
