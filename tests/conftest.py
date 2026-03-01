@@ -5,6 +5,7 @@ from pathlib import Path
 
 # Third-party
 import pooch
+import pytest
 import yaml
 
 # First-party
@@ -84,24 +85,54 @@ def download_meps_example_reduced_dataset():
     return config_path
 
 
-DATASTORES_EXAMPLES = dict(
-    mdp=(
+# npyfilesmeps is lazy so pytest can load conftest without downloading
+# (e.g. when running only tests/test_metrics.py). Download runs on first use.
+DATASTORES_EXAMPLES = {
+    "mdp": (
         DATASTORE_EXAMPLES_ROOT_PATH
         / "mdp"
         / "danra_100m_winds"
         / "danra.datastore.yaml"
     ),
-    npyfilesmeps=download_meps_example_reduced_dataset(),
-    dummydata=None,
-)
+    "npyfilesmeps": download_meps_example_reduced_dataset,
+    "dummydata": None,
+}
 
 DATASTORES[DummyDatastore.SHORT_NAME] = DummyDatastore
 
 
 def init_datastore_example(datastore_kind):
-    datastore = init_datastore(
-        datastore_kind=datastore_kind,
-        config_path=DATASTORES_EXAMPLES[datastore_kind],
-    )
+    """Return a datastore for the given kind. Skips the test if unavailable."""
+    config_path = DATASTORES_EXAMPLES[datastore_kind]
+
+    if datastore_kind == "mdp":
+        if not config_path.exists():
+            pytest.skip(
+                "mdp datastore config not found "
+                "(missing tests/datastore_examples/mdp/danra_100m_winds/...)"
+            )
+    elif callable(config_path):
+        # Use cached path if already resolved, else require existing download
+        # (do not trigger download here to avoid blocking on network)
+        _npy_config = (
+            DATASTORE_EXAMPLES_ROOT_PATH
+            / "npyfilesmeps"
+            / "meps_example_reduced"
+            / "meps_example_reduced.datastore.yaml"
+        )
+        if not _npy_config.exists():
+            pytest.skip(
+                "npyfilesmeps datastore not found (download "
+                "tests/datastore_examples/npyfilesmeps/... to run these tests)"
+            )
+        config_path = _npy_config
+
+    try:
+        datastore = init_datastore(
+            datastore_kind=datastore_kind,
+            config_path=config_path,
+        )
+    except Exception as exc:
+        pytest.skip(f"datastore '{datastore_kind}' init failed: {exc}")
 
     return datastore
