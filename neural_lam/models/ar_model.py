@@ -230,24 +230,18 @@ class ARModel(pl.LightningModule):
 
     def on_after_batch_transfer(self, batch, dataloader_idx):
         """
-        Normalize data on GPU after batch is moved from CPU to GPU.
-
         This is called automatically by PyTorch Lightning's Trainer.
         It happens AFTER data is on GPU but BEFORE training starts.
         """
-        # Unpack the batch
         init_states, target_states, forcing, target_times = batch
 
         # Normalize state data: (data - mean) / std
-        # self.state_mean and self.state_std are already on GPU
         init_states = (init_states - self.state_mean) / self.state_std
         target_states = (target_states - self.state_mean) / self.state_std
 
-        # Normalize forcing data if we have it
         if self.forcing_mean is not None and forcing.shape[-1] > 0:
             forcing = (forcing - self.forcing_mean) / self.forcing_std
 
-        # Return normalized batch
         return init_states, target_states, forcing, target_times
 
     @property
