@@ -9,6 +9,8 @@ import neural_lam.utils
 import neural_lam.vis
 
 # Local
+from .forecaster import Forecaster
+from .step_predictor import StepPredictor
 from .weather_dataset import WeatherDataset
 
 try:
