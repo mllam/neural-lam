@@ -87,7 +87,7 @@ class ARModel(pl.LightningModule):
         state_feature_weights = get_state_feature_weighting(
             config=config, datastore=datastore
         )
-        self.feature_weights = torch.tensor(
+      self.register_buffer("feature_weights", torch.tensor(...))
             state_feature_weights, dtype=torch.float32
         )
 
