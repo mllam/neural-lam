@@ -207,8 +207,8 @@ def plot_prediction(
 
     """
     if vrange is None:
-        vmin = min(da_prediction.min(), da_target.min())
-        vmax = max(da_prediction.max(), da_target.max())
+        vmin = float(np.nanmin([da_prediction.values, da_target.values]))
+        vmax = float(np.nanmax([da_prediction.values, da_target.values]))
     else:
         vmin, vmax = vrange
 
