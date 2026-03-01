@@ -1,5 +1,4 @@
 name: Documentation
-
 on:
   push:
     branches: ["main", "Auto-doc"]
@@ -16,11 +15,9 @@ on:
       - "pyproject.toml"
       - ".github/workflows/docs.yml"
   workflow_dispatch:
-
 concurrency:
   group: "docs-${{ github.ref }}"
   cancel-in-progress: true
-
 jobs:
   build-docs:
     name: Build docs
@@ -31,40 +28,32 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
           cache: "pip"
-
-      - name: Install pdm + CPU torch + docs deps
+      - name: Install pdm + docs deps
         run: |
           python -m pip install --upgrade pip
           pip install pdm
           pdm venv create --with-pip
-          pdm run python -m pip install torch --index-url https://download.pytorch.org/whl/cpu
-          pdm install --group docs
-
+          pdm install --group docs --no-default
       - name: interrogate (fail-under 50)
         run: |
           pdm run interrogate neural_lam/ \
             --fail-under 50 --verbose --generate-badge docs/ \
             2>&1 | tee docs/interrogate_report.txt
-
       - name: pydocstyle (non-blocking)
         run: |
           pdm run pydocstyle neural_lam/ --convention=numpy --add-ignore=D100,D104,D105 || true
-
       - name: jupyter-book build
         run: pdm run jupyter-book build docs/
-
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: docs-html
           path: docs/_build/html/
           retention-days: 7
-
   deploy-docs:
     name: Deploy to GitHub Pages
     runs-on: ubuntu-latest
@@ -81,23 +70,18 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
           cache: "pip"
-
-      - name: Install pdm + CPU torch + docs deps
+      - name: Install pdm + docs deps
         run: |
           python -m pip install --upgrade pip
           pip install pdm
           pdm venv create --with-pip
-          pdm run python -m pip install torch --index-url https://download.pytorch.org/whl/cpu
-          pdm install --group docs
-
+          pdm install --group docs --no-default
       - name: jupyter-book build
         run: pdm run jupyter-book build docs/
-
       - uses: actions/configure-pages@v4
       - uses: actions/upload-pages-artifact@v3
         with:

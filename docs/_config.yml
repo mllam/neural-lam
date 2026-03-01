@@ -34,12 +34,15 @@ parse:
 
 sphinx:
   extra_extensions:
-    - "docs.scripts.autoapi_astroid_patch"
+    - "scripts.autoapi_astroid_patch"
     - "autoapi.extension"
     - "sphinx.ext.napoleon"
     - "sphinx.ext.viewcode"
     - "sphinx.ext.intersphinx"
     - "sphinx_copybutton"
+
+  local_extensions:
+    scripts.autoapi_astroid_patch: "."
 
   config:
     html_theme: "sphinx_book_theme"
