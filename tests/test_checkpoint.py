@@ -1,5 +1,6 @@
 # Standard library
 from pathlib import Path
+from types import SimpleNamespace
 
 # Third-party
 import pytorch_lightning as pl
@@ -19,23 +20,25 @@ def test_datastore_not_in_checkpoint(tmp_path):
     """
     datastore = DummyDatastore()
 
-    # Minimal model args
-    class ModelArgs:
-        output_std = False
-        loss = "mse"
-        restore_opt = False
-        n_example_pred = 2
-        graph = "1level"
-        hidden_dim = 4
-        hidden_layers = 1
-        processor_layers = 1
-        mesh_aggr = "sum"
-        lr = 1.0e-3
-        val_steps_to_log = [1]
-        metrics_watch = []
-        num_past_forcing_steps = 0
-        num_future_forcing_steps = 0
-        var_leads_metrics_watch = {}
+    # Minimal model args. Use pickle-safe namespace to avoid local-class
+    # serialization issues in checkpoint roundtrip.
+    model_args = SimpleNamespace(
+        output_std=False,
+        loss="mse",
+        restore_opt=False,
+        n_example_pred=2,
+        graph="1level",
+        hidden_dim=4,
+        hidden_layers=1,
+        processor_layers=1,
+        mesh_aggr="sum",
+        lr=1.0e-3,
+        val_steps_to_log=[1],
+        metrics_watch=[],
+        num_past_forcing_steps=0,
+        num_future_forcing_steps=0,
+        var_leads_metrics_watch={},
+    )
 
     # Create minimal graph
     graph_dir_path = Path(datastore.root_path) / "graph" / "1level"
@@ -56,7 +59,7 @@ def test_datastore_not_in_checkpoint(tmp_path):
 
     # Create model
     model = GraphLAM(
-        args=ModelArgs(),
+        args=model_args,
         config=config,
         datastore=datastore,
     )
