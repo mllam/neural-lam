@@ -1,5 +1,4 @@
 # Standard library
-import glob
 import os
 import warnings
 from typing import Any, Dict, List
@@ -526,11 +525,16 @@ class ARModel(pl.LightningModule):
 
             example_i = self.plotted_examples
 
-            plot_dir_path = os.path.join(
-                self.logger.save_dir,
-                f"example_plots_{example_i}",
-            )
-            os.makedirs(plot_dir_path, exist_ok=True)
+            if self.args.create_gif:
+                plot_dir_path = os.path.join(
+                    self.logger.save_dir,
+                    f"example_plots_{example_i}",
+                )
+                os.makedirs(plot_dir_path, exist_ok=True)
+                png_frames: Dict[str, List[str]] = {
+                    var_name: []
+                    for var_name in self._datastore.get_vars_names("state")
+                }
 
             # Iterate over prediction horizon time steps
             for t_i, _ in enumerate(zip(pred_slice, target_slice), start=1):
@@ -579,12 +583,14 @@ class ARModel(pl.LightningModule):
                         )
 
                     # Save PNG frame for GIF animation
-                    png_path = os.path.join(
-                        plot_dir_path,
-                        f"{var_name}_example_{example_i}"
-                        f"_prediction_t_{t_i:02d}.png",
-                    )
-                    fig.savefig(png_path, dpi=100, bbox_inches="tight")
+                    if self.args.create_gif:
+                        png_path = os.path.join(
+                            plot_dir_path,
+                            f"{var_name}_example_{example_i}"
+                            f"_prediction_t_{t_i:02d}.png",
+                        )
+                        fig.savefig(png_path, dpi=100, bbox_inches="tight")
+                        png_frames[var_name].append(png_path)
 
                 plt.close(
                     "all"
@@ -593,29 +599,25 @@ class ARModel(pl.LightningModule):
             # Generate GIF animations from the saved PNG frames,
             # one GIF per variable combining all prediction time steps
             if self.args.create_gif:
-                for var_name in self._datastore.get_vars_names("state"):
-                    png_frames = sorted(
-                        glob.glob(
-                            os.path.join(
-                                plot_dir_path,
-                                f"{var_name}_example_{example_i}"
-                                f"_prediction_t_*.png",
-                            )
-                        )
-                    )
-                    if png_frames:
+                for var_name, frames_for_var in png_frames.items():
+                    if frames_for_var:
                         gif_path = os.path.join(
                             plot_dir_path,
                             f"{var_name}_example_{example_i}_prediction.gif",
                         )
-                        frames = [Image.open(f) for f in png_frames]
-                        frames[0].save(
-                            gif_path,
-                            save_all=True,
-                            append_images=frames[1:],
-                            loop=0,
+                        frames = [Image.open(f) for f in frames_for_var]
+
+                        try:
+                            frames[0].save(
+                                gif_path,
+                                save_all=True,
+                                append_images=frames[1:],
+                                loop=0,
                             duration=1000,
                         )
+                        finally:
+                            for frame in frames:
+                                frame.close()
 
             # Save pred and target as .pt files
             torch.save(
@@ -752,7 +754,7 @@ class ARModel(pl.LightningModule):
                     error=loss_map,
                     datastore=self._datastore,
                     title=f"Test loss, t={t_i} "
-                    f"({(self.time_step_int * t_i)} {self.time_step_int_unit})",
+                    f"({(self.time_step_int * t_i)} {self.time_step_unit})",
                 )
                 for t_i, loss_map in zip(
                     self.args.val_steps_to_log, mean_spatial_loss
