@@ -209,6 +209,9 @@ def test_plot_examples_gif_integration(
     class _SimpleLogger:
         save_dir = str(tmp_path)
 
+        def log_image(self, key, images, step=None):
+            pass
+
     simple_logger = _SimpleLogger()
     monkeypatch.setattr(type(model), "logger", property(lambda self: simple_logger))
 
