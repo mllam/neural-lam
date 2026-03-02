@@ -53,9 +53,9 @@ def mask_and_reduce_metric(
         if grid_weights is not None:
             # Weighted mean over grid dimension
             w = grid_weights.unsqueeze(-1)  # (N', 1)
-            metric_entry_vals = (
-                metric_entry_vals * w
-            ).sum(dim=-2) / w.sum()  # (..., d_state)
+            metric_entry_vals = (metric_entry_vals * w).sum(
+                dim=-2
+            ) / w.sum()  # (..., d_state)
         else:
             metric_entry_vals = torch.mean(
                 metric_entry_vals, dim=-2

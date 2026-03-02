@@ -34,8 +34,11 @@ class TestMaskAndReduceMetric:
         """grid_weights=None should give identical result to before."""
         vals = torch.randn(BATCH, N_GRID, D_STATE)
         result_none = mask_and_reduce_metric(
-            vals, mask=None, average_grid=True, sum_vars=False,
-            grid_weights=None
+            vals,
+            mask=None,
+            average_grid=True,
+            sum_vars=False,
+            grid_weights=None,
         )
         result_mean = torch.mean(vals, dim=-2)
         assert torch.allclose(result_none, result_mean)
@@ -45,12 +48,18 @@ class TestMaskAndReduceMetric:
         vals = torch.randn(BATCH, N_GRID, D_STATE)
         uniform_weights = torch.ones(N_GRID)
         result_none = mask_and_reduce_metric(
-            vals, mask=None, average_grid=True, sum_vars=False,
-            grid_weights=None
+            vals,
+            mask=None,
+            average_grid=True,
+            sum_vars=False,
+            grid_weights=None,
         )
         result_uniform = mask_and_reduce_metric(
-            vals, mask=None, average_grid=True, sum_vars=False,
-            grid_weights=uniform_weights
+            vals,
+            mask=None,
+            average_grid=True,
+            sum_vars=False,
+            grid_weights=uniform_weights,
         )
         assert torch.allclose(result_none, result_uniform)
 
@@ -61,12 +70,18 @@ class TestMaskAndReduceMetric:
         weights = torch.ones(N_GRID)
         weights[0] = 10.0
         result_none = mask_and_reduce_metric(
-            vals, mask=None, average_grid=True, sum_vars=False,
-            grid_weights=None
+            vals,
+            mask=None,
+            average_grid=True,
+            sum_vars=False,
+            grid_weights=None,
         )
         result_weighted = mask_and_reduce_metric(
-            vals, mask=None, average_grid=True, sum_vars=False,
-            grid_weights=weights
+            vals,
+            mask=None,
+            average_grid=True,
+            sum_vars=False,
+            grid_weights=weights,
         )
         assert not torch.allclose(result_none, result_weighted)
 
@@ -79,13 +94,17 @@ class TestMaskAndReduceMetric:
         #               = (6 + 3) / 6 = 9/6 = 1.5
         expected = torch.tensor([[[1.5]]])
         result = mask_and_reduce_metric(
-            vals, mask=None, average_grid=True, sum_vars=False,
-            grid_weights=weights
+            vals,
+            mask=None,
+            average_grid=True,
+            sum_vars=False,
+            grid_weights=weights,
         )
         assert torch.allclose(result, expected)
 
     def test_cosine_latitude_weighting(self):
         """Cos-latitude weights should down-weight polar contributions."""
+        # Standard library
         import math
 
         # 4 nodes at different latitudes
@@ -97,12 +116,18 @@ class TestMaskAndReduceMetric:
         vals[0, 3, 0] = 1.0  # pole has error 1, rest are 0
 
         result_weighted = mask_and_reduce_metric(
-            vals, mask=None, average_grid=True, sum_vars=False,
-            grid_weights=cos_weights
+            vals,
+            mask=None,
+            average_grid=True,
+            sum_vars=False,
+            grid_weights=cos_weights,
         )
         result_unweighted = mask_and_reduce_metric(
-            vals, mask=None, average_grid=True, sum_vars=False,
-            grid_weights=None
+            vals,
+            mask=None,
+            average_grid=True,
+            sum_vars=False,
+            grid_weights=None,
         )
         # Weighted result should be LOWER because polar error (weight≈0)
         # is down-weighted compared to unweighted mean
@@ -116,8 +141,11 @@ class TestMaskAndReduceMetric:
         mask = torch.tensor([False, True, True, True])
 
         result = mask_and_reduce_metric(
-            vals, mask=mask, average_grid=True, sum_vars=False,
-            grid_weights=weights
+            vals,
+            mask=mask,
+            average_grid=True,
+            sum_vars=False,
+            grid_weights=weights,
         )
         # After masking: vals = [1, 1, 1], weights = [1, 1, 1]
         # Weighted mean = 1.0
@@ -129,12 +157,18 @@ class TestMaskAndReduceMetric:
         vals = torch.randn(BATCH, N_GRID, D_STATE)
         weights = torch.randn(N_GRID).abs() + 0.1
         result_none = mask_and_reduce_metric(
-            vals, mask=None, average_grid=False, sum_vars=False,
-            grid_weights=None
+            vals,
+            mask=None,
+            average_grid=False,
+            sum_vars=False,
+            grid_weights=None,
         )
         result_weighted = mask_and_reduce_metric(
-            vals, mask=None, average_grid=False, sum_vars=False,
-            grid_weights=weights
+            vals,
+            mask=None,
+            average_grid=False,
+            sum_vars=False,
+            grid_weights=weights,
         )
         assert torch.allclose(result_none, result_weighted)
 
@@ -143,14 +177,20 @@ class TestMaskAndReduceMetric:
         vals = torch.randn(BATCH, N_GRID, D_STATE)
         weights = torch.randn(N_GRID).abs() + 0.1
         result = mask_and_reduce_metric(
-            vals, mask=None, average_grid=True, sum_vars=True,
-            grid_weights=weights
+            vals,
+            mask=None,
+            average_grid=True,
+            sum_vars=True,
+            grid_weights=weights,
         )
         assert result.shape == (BATCH,)
 
         result_no_sum = mask_and_reduce_metric(
-            vals, mask=None, average_grid=True, sum_vars=False,
-            grid_weights=weights
+            vals,
+            mask=None,
+            average_grid=True,
+            sum_vars=False,
+            grid_weights=weights,
         )
         assert result_no_sum.shape == (BATCH, D_STATE)
 
