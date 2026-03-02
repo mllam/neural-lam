@@ -82,6 +82,7 @@ def test_datastore_not_in_checkpoint(tmp_path):
     trainer.save_checkpoint(ckpt_path, weights_only=False)
 
     # Load and verify
-    ckpt = torch.load(ckpt_path, map_location="cpu")
+    # This test reads a checkpoint created in-process and is therefore trusted.
+    ckpt = torch.load(ckpt_path, map_location="cpu", weights_only=False)
     assert "hyper_parameters" in ckpt
     assert "datastore" not in ckpt["hyper_parameters"]
