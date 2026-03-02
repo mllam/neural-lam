@@ -116,6 +116,31 @@ class WeatherDataset(torch.utils.data.Dataset):
                 self.da_forcing_mean = self.ds_forcing_stats.forcing_mean
                 self.da_forcing_std = self.ds_forcing_stats.forcing_std
 
+            # Compute std_safe ONCE at init std arrays never
+            # change during runtime
+            state_eps = np.finfo(self.da_state_std.dtype).eps
+            if bool((self.da_state_std <= state_eps).any()):
+                logger.warning(
+                    "Some state features have near-zero std and will be "
+                    "standardized using machine epsilon to avoid NaN."
+                )
+            self.state_std_safe = self.da_state_std.where(
+                self.da_state_std > state_eps, other=state_eps
+            )
+
+            if self.da_forcing_std is not None:
+                forcing_eps = np.finfo(self.da_forcing_std.dtype).eps
+                if bool((self.da_forcing_std <= forcing_eps).any()):
+                    logger.warning(
+                        "Some forcing features have near-zero std and will be "
+                        "standardized using machine epsilon to avoid NaN."
+                    )
+                self.forcing_std_safe = self.da_forcing_std.where(
+                    self.da_forcing_std > forcing_eps, other=forcing_eps
+                )
+            else:
+                self.forcing_std_safe = None
+
     def __len__(self):
         if self.datastore.is_forecast:
             # for now we simply create a single sample for each analysis time
@@ -399,43 +424,21 @@ class WeatherDataset(torch.utils.data.Dataset):
         da_target_times = da_target_states.time
 
         if self.standardize:
-            # Warn about any near-zero std fields (std <= 1e-8)
-            if bool((self.da_state_std <= 1e-8).any()):
-                logger.warning(
-                    "Some state features have near-zero std (<=1e-8) and "
-                    "will be set to 0.0 after standardization."
-                )
-            if self.da_forcing_std is not None and bool(
-                (self.da_forcing_std <= 1e-8).any()
-            ):
-                logger.warning(
-                    "Some forcing features have near-zero std (<=1e-8) "
-                    "and will be set to 0.0 after standardization."
-                )
-            # Apply threshold on the 1-D std array to avoid dim reordering
-            # in xr.where when applied to multi-dimensional arrays
-            state_std_safe = self.da_state_std.where(
-                self.da_state_std > 1e-8, other=1.0
-            )
             da_init_states = (
                 da_init_states - self.da_state_mean
-            ) / state_std_safe
+            ) / self.state_std_safe
             da_target_states = (
                 da_target_states - self.da_state_mean
-            ) / state_std_safe
+            ) / self.state_std_safe
 
             if da_forcing is not None:
                 # XXX: Here we implicitly assume that the last dimension of the
                 # forcing data is the forcing feature dimension. To standardize
                 # on `.device` we need a different implementation. (e.g. a
                 # tensor with repeated means and stds for each "windowed" time.)
-
-                forcing_std_safe = self.da_forcing_std.where(
-                    self.da_forcing_std > 1e-8, other=1.0
-                )
                 da_forcing_windowed = (
                     da_forcing_windowed - self.da_forcing_mean
-                ) / forcing_std_safe
+                ) / self.forcing_std_safe
 
         if da_forcing is not None:
             # stack the `forcing_feature` and `window_sample` dimensions into a

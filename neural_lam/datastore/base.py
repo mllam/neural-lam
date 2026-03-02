@@ -213,9 +213,11 @@ class BaseDatastore(abc.ABC):
         mean = standard_da[f"{category}_mean"]
         std = standard_da[f"{category}_std"]
 
-        # Apply threshold on the 1-D std array to avoid dim reordering
-        std_safe = std.where(std > 1e-8, other=1.0)
-        return (da - mean) / std_safe
+        # Clamp std to machine epsilon (dtype-aware) to avoid NaN from
+        # division-by-zero for constant fields, without affecting fields
+        # with small but meaningful variance.
+        eps = np.finfo(std.dtype).eps
+        return (da - mean) / std.where(std > eps, other=eps)
 
     @abc.abstractmethod
     def get_dataarray(
