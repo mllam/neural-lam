@@ -18,7 +18,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Changed the hardcoded True to a conditional check "persistent_workers=self.num_workers > 0" [\#235](https://github.com/mllam/neural-lam/pull/235) @santhil-cyber
 
 - `fractional_plot_bundle` now correctly multiplies by fraction instead of dividing [
-  \#222](https://github.com/mllam/neural-lam/pull/222) @santhil-cyber
+\#222](https://github.com/mllam/neural-lam/pull/222) @santhil-cyber
 
 ### Maintenance
 
@@ -39,20 +39,20 @@ This release contains maintenance and fixes, preventing some unexpected crashes 
 ### Added
 
 - Expose run name as optional command line argument `--logger_run_name` to allow user-defined names
-  [\#156](https://github.com/mllam/neural-lam/pull/156) @observingClouds
+[\#156](https://github.com/mllam/neural-lam/pull/156) @observingClouds
 
 - Add support for any forecast step size(`step_length`) [\#172](https://github.com/mllam/neural-lam/pull/172) @observingClouds
 
 ### Fixed
 
 - Change default logging argument to prevent crash when running eval
-  [\#145](https://github.com/mllam/neural-lam/pull/145) @joeloskarsson
+[\#145](https://github.com/mllam/neural-lam/pull/145) @joeloskarsson
 
 - Fix wrong grid dimensionality when running with --output_std, resulting in crash
-  [\#147](https://github.com/mllam/neural-lam/pull/147) @joeloskarsson
+[\#147](https://github.com/mllam/neural-lam/pull/147) @joeloskarsson
 
 - Fix the order in create_graph.py which caused wrong G2M and M2G
-  [\#150](https://github.com/mllam/neural-lam/pull/150) @YUTAIPAN
+[\#150](https://github.com/mllam/neural-lam/pull/150) @YUTAIPAN
 
 - Adding a more robust LaTeX availability check function [\#162](https://github.com/mllam/neural-lam/pull/162) @lorenzo30salgado
 
@@ -63,7 +63,7 @@ This release contains maintenance and fixes, preventing some unexpected crashes 
 - Introducing `mypy` for static type checking and fixing type hints accordingly [\#113](https://github.com/mllam/neural-lam/pull/113) @observingClouds
 
 - Change all argparse instances to use ArgumentDefaultsHelpFormatter for easier maintaining defaults.
-  [\#145](https://github.com/mllam/neural-lam/pull/145) @joeloskarsson
+[\#145](https://github.com/mllam/neural-lam/pull/145) @joeloskarsson
 
 - Allow triggering CI manually to e.g. test for recent software incompatibilities. [\152](https://github.com/mllam/neural-lam/pull/152) @observingClouds
 
@@ -83,16 +83,15 @@ This release introduces a number of improvements to logging, multi-node training
   @khintz
 
 - Add support for multi-node training.
-  [\#103](https://github.com/mllam/neural-lam/pull/103) @simonkamuk @sadamov
+[\#103](https://github.com/mllam/neural-lam/pull/103) @simonkamuk @sadamov
 
 - Add option to clamp output prediction using limits specified in config file [\#92](https://github.com/mllam/neural-lam/pull/92) @SimonKamuk
 
 - Add publication of releases to pypi.org. [\#71](https://github.com/mllam/neural-lam/pull/71) @leifdenby, @observingClouds
 
 ### Fixed
-
 - Only print on rank 0 to avoid duplicates of all print statements.
-  [\#103](https://github.com/mllam/neural-lam/pull/103) @simonkamuk @sadamov
+[\#103](https://github.com/mllam/neural-lam/pull/103) @simonkamuk @sadamov
 
 - Fix MLFlow exception import introduced in [\#77](https://github.com/mllam/neural-lam/pull/77).
   [\#111](https://github.com/mllam/neural-lam/pull/111)
@@ -111,7 +110,6 @@ This release introduces a number of improvements to logging, multi-node training
 - Fix step length calculation when dt >= 24h [\#141](https://github.com/mllam/neural-lam/pull/141) @deinal
 
 ### Maintenance
-
 - update ci/cd testing to use cuda 12.8 [\#140](https://github.com/mllam/neural-lam/pull/140) @SimonKamuk
 
 - update ci/cd testing to use pre-commit v3.0.1 [\#140](https://github.com/mllam/neural-lam/pull/140) @SimonKamuk
@@ -130,7 +128,7 @@ This release introduces a number of improvements to logging, multi-node training
 - use dynamic versioning based on git tags and commit hashes
   [\#118](https://github.com/mllam/neural-lam/pull/118), @observingClouds
 
-- add detect_anomaly=True to pl.Trainer in test_training.py [\#124](https://github.com/mllam/neural-lam/pull/124), @SimonKamuk
+ - add detect_anomaly=True to pl.Trainer in test_training.py [\#124](https://github.com/mllam/neural-lam/pull/124), @SimonKamuk
 
 ## [v0.3.0](https://github.com/mllam/neural-lam/releases/tag/v0.3.0)
 
@@ -140,7 +138,7 @@ This release introduces Datastores to represent input data from different source
 
 - Introduce Datastores to represent input data from different sources, including zarr and numpy.
   [\#66](https://github.com/mllam/neural-lam/pull/66)
-  @leifdenby @sadamov
+ @leifdenby @sadamov
 
 - Implement standardization of static features when loaded in ARModel [\#96](https://github.com/mllam/neural-lam/pull/96) @joeloskarsson
 
@@ -153,7 +151,6 @@ This release introduces Datastores to represent input data from different source
 ## [v0.2.0](https://github.com/mllam/neural-lam/releases/tag/v0.2.0)
 
 ### Added
-
 - Added tests for loading dataset, creating graph, and training model based on reduced MEPS dataset stored on AWS S3, along with automatic running of tests on push/PR to GitHub, including push to main branch. Added caching of test data to speed up running tests.
   [\#38](https://github.com/mllam/neural-lam/pull/38) [\#55](https://github.com/mllam/neural-lam/pull/55)
   @SimonKamuk
@@ -189,7 +186,7 @@ This release introduces Datastores to represent input data from different source
   (https://github.com/mllam/neural-lam/pull/72)
   @ErikLarssonDev
 
-- Optional multi-core/GPU support for statistics calculation in `create_parameter_weights.py`
+-  Optional multi-core/GPU support for statistics calculation in `create_parameter_weights.py`
   [\#22](https://github.com/mllam/neural-lam/pull/22)
   @sadamov
 
@@ -255,7 +252,7 @@ This release introduces Datastores to represent input data from different source
 - turn `neural-lam` into a python package by moving all `*.py`-files into the
   `neural_lam/` source directory and updating imports accordingly. This means
   all cli functions are now invoke through the package name, e.g. `python -m
-neural_lam.train_model` instead of `python train_model.py` (and can be done
+  neural_lam.train_model` instead of `python train_model.py` (and can be done
   anywhere once the package has been installed).
   [\#32](https://github.com/mllam/neural-lam/pull/32), @leifdenby
 
