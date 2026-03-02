@@ -3,9 +3,7 @@ dataset_version: v0.1.0
 
 output:
   variables:
-    # static: [grid_index, static_feature]
     state: [time, grid_index, state_feature]
-    forcing: [time, grid_index, forcing_feature]
   coord_ranges:
     time:
       start: 2022-04-01T00:00
@@ -54,24 +52,6 @@ inputs:
         method: stack
         dims: [x, y]
     target_output_variable: state
-
-  danra_surface_forcing:
-    path: https://object-store.os-api.cci1.ecmwf.int/mllam-testdata/danra_cropped/v0.2.0/single_levels.zarr
-    dims: [time, x, y]
-    variables:
-      # use surface incoming shortwave radiation as forcing
-      - swavr0m
-    dim_mapping:
-      time:
-        method: rename
-        dim: time
-      grid_index:
-        method: stack
-        dims: [x, y]
-      forcing_feature:
-        method: stack_variables_by_var_name
-        name_format: "{var_name}"
-    target_output_variable: forcing
 
   danra_surface:
     path: https://object-store.os-api.cci1.ecmwf.int/mllam-testdata/danra_cropped/v0.2.0/single_levels.zarr
