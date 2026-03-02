@@ -146,11 +146,17 @@ def test_dataset_item_create_dataarray_from_tensor(datastore_name):
         )
 
     if dataset.da_forcing is not None:
-        da_forcing_raw = dataset.da_forcing.isel(time=0)
+        da_forcing_raw = dataset.da_forcing
+        for dim in da_forcing_raw.dims:
+            if dim not in ("grid_index", "forcing_feature"):
+                da_forcing_raw = da_forcing_raw.isel({dim: 0})
+        da_forcing_raw = da_forcing_raw.transpose(
+            "grid_index", "forcing_feature"
+        )
         da_forcing = dataset.create_dataarray_from_tensor(
             tensor=torch.tensor(da_forcing_raw.values, dtype=torch.float32),
             category="forcing",
-            time=np.array(da_forcing_raw.time.values, dtype="datetime64[ns]"),
+            time=target_times[0],
         )
         np.testing.assert_equal(
             da_forcing.forcing_feature.values,
@@ -158,8 +164,11 @@ def test_dataset_item_create_dataarray_from_tensor(datastore_name):
         )
 
     if dataset.da_static is not None:
+        da_static_raw = dataset.da_static.transpose(
+            "grid_index", "static_feature"
+        )
         da_static = dataset.create_dataarray_from_tensor(
-            tensor=torch.tensor(dataset.da_static.values, dtype=torch.float32),
+            tensor=torch.tensor(da_static_raw.values, dtype=torch.float32),
             category="static",
             time=target_times[0],
         )
