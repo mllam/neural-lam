@@ -60,7 +60,8 @@ class TinyModule(pl.LightningModule):
 
 def test_last_checkpoint_saved_without_validation(tmp_path):
     """
-    Rescue checkpoint should be written at train epoch end even without validation.
+    Rescue checkpoint should be written at train epoch end,
+    even without validation.
     """
     train_data = TensorDataset(torch.randn(8, 1), torch.randn(8, 1))
     train_loader = DataLoader(train_data, batch_size=2)
