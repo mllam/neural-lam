@@ -225,6 +225,16 @@ def main(input_args=None):
         help="Number of future time steps to use as input for forcing data",
     )
     args = parser.parse_args(input_args)
+    args = parser.parse_args(input_args)
+    
+    # --- INSERT YOUR VALIDATION HERE ---
+    if args.eval and args.load is None:
+        parser.error("In evaluation mode, you must provide a path to a checkpoint using --load.")
+    # -----------------------------------
+
+    args.var_leads_metrics_watch = {
+        int(k): v for k, v in json.loads(args.var_leads_metrics_watch).items()
+    }
     args.var_leads_metrics_watch = {
         int(k): v for k, v in json.loads(args.var_leads_metrics_watch).items()
     }
