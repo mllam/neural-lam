@@ -133,9 +133,11 @@ class BaseGraphModel(ARModel):
             if feature in lower_lims and feature in upper_lims:
                 assert (
                     lower_lims[feature] < upper_lims[feature]
-                ), f'Invalid clamping limits for feature "{feature}",\
-                     lower: {lower_lims[feature]}, larger than\
-                     upper: {upper_lims[feature]}'
+                ), (
+                    f'Invalid clamping limits for feature "{feature}", '
+                    f'lower: {lower_lims[feature]}, larger than or equal to '
+                    f'upper: {upper_lims[feature]}'
+                )
                 sigmoid_lower_upper_idx.append(feature_idx)
                 sigmoid_lower_lims.append(
                     normalize_clamping_lim(lower_lims[feature], feature_idx)
