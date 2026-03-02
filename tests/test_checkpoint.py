@@ -1,7 +1,11 @@
+# Standard library
 from pathlib import Path
+
+# Third-party
 import pytorch_lightning as pl
 import torch
 
+# First-party
 from neural_lam import config as nlconfig
 from neural_lam.create_graph import create_graph_from_datastore
 from neural_lam.models.graph_lam import GraphLAM
