@@ -5,11 +5,11 @@ from typing import Any, Dict, List
 
 # Third-party
 import matplotlib.pyplot as plt
-from PIL import Image
 import numpy as np
 import pytorch_lightning as pl
 import torch
 import xarray as xr
+from PIL import Image
 
 # First-party
 from neural_lam.utils import get_integer_time
@@ -613,8 +613,8 @@ class ARModel(pl.LightningModule):
                                 save_all=True,
                                 append_images=frames[1:],
                                 loop=0,
-                            duration=1000,
-                        )
+                                duration=1000,
+                            )
                         finally:
                             for frame in frames:
                                 frame.close()
