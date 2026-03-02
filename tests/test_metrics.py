@@ -194,6 +194,38 @@ class TestMaskAndReduceMetric:
         )
         assert result_no_sum.shape == (BATCH, D_STATE)
 
+    def test_zero_weight_sum_raises(self):
+        """Weights that sum to zero after masking should raise ValueError."""
+        # Third-party
+        import pytest
+
+        vals = torch.randn(1, 4, 1)
+        # All weights are on nodes that get masked out
+        weights = torch.tensor([1.0, 0.0, 0.0, 0.0])
+        mask = torch.tensor([False, True, True, True])
+        with pytest.raises(ValueError, match="positive sum"):
+            mask_and_reduce_metric(
+                vals,
+                mask=mask,
+                average_grid=True,
+                sum_vars=False,
+                grid_weights=weights,
+            )
+
+    def test_dtype_casting(self):
+        """Float64 weights with float32 values should work via casting."""
+        vals = torch.randn(BATCH, N_GRID, D_STATE, dtype=torch.float32)
+        weights = torch.ones(N_GRID, dtype=torch.float64)
+        # Should not raise a dtype mismatch error
+        result = mask_and_reduce_metric(
+            vals,
+            mask=None,
+            average_grid=True,
+            sum_vars=False,
+            grid_weights=weights,
+        )
+        assert result.dtype == torch.float32
+
 
 class TestMetricFunctionsWithWeights:
     """Verify all 6 metric functions correctly pass grid_weights through."""

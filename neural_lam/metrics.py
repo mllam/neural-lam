@@ -40,6 +40,12 @@ def mask_and_reduce_metric(
     metric_val: One of (...,), (..., d_state), (..., N), (..., N, d_state),
     depending on reduction arguments.
     """
+    # Ensure grid_weights matches device and dtype of metric values
+    if grid_weights is not None:
+        grid_weights = grid_weights.to(
+            metric_entry_vals.device, dtype=metric_entry_vals.dtype
+        )
+
     # Only keep grid nodes in mask
     if mask is not None:
         metric_entry_vals = metric_entry_vals[
@@ -53,9 +59,14 @@ def mask_and_reduce_metric(
         if grid_weights is not None:
             # Weighted mean over grid dimension
             w = grid_weights.unsqueeze(-1)  # (N', 1)
+            w_sum = w.sum()
+            if w_sum <= 0:
+                raise ValueError(
+                    "grid_weights must have positive sum after masking"
+                )
             metric_entry_vals = (metric_entry_vals * w).sum(
                 dim=-2
-            ) / w.sum()  # (..., d_state)
+            ) / w_sum  # (..., d_state)
         else:
             metric_entry_vals = torch.mean(
                 metric_entry_vals, dim=-2
