@@ -9,8 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- Fix README image paths to use absolute GitHub URLs so images display correctly on PyPI [\#188](https://github.com/mllam/neural-lam/pull/188) @bk-simon
-- Avoid `NaN` predictions when standardizing fields with zero standard deviation ([#136](https://github.com/mllam/neural-lam/issues/136))
+### Fixed
+
+- Avoid NaN when standardizing fields with zero std by clamping std to machine epsilon ([#189](https://github.com/mllam/neural-lam/pull/189)) @varunsiravuri
 
 ### Maintenance
 
