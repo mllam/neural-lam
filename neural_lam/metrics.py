@@ -18,7 +18,9 @@ def get_metric(metric_name):
     return DEFINED_METRICS[metric_name_lower]
 
 
-def mask_and_reduce_metric(metric_entry_vals, mask, average_grid, sum_vars):
+def mask_and_reduce_metric(
+    metric_entry_vals, mask, average_grid, sum_vars, grid_weights=None
+):
     """
     Masks and (optionally) reduces entry-wise metric values
 
@@ -29,6 +31,10 @@ def mask_and_reduce_metric(metric_entry_vals, mask, average_grid, sum_vars):
     average_grid: boolean, if grid dimension -2 should be reduced (mean over N)
     sum_vars: boolean, if variable dimension -1 should be reduced (sum
         over d_state)
+    grid_weights: (N,) or None, optional weights for grid nodes when
+        computing spatial average. If None, a uniform (unweighted) mean is
+        used. Useful for area-weighted metrics on non-uniform grids
+        (e.g. cos-latitude weighting for regular lat-lon grids).
 
     Returns:
     metric_val: One of (...,), (..., d_state), (..., N), (..., N, d_state),
@@ -39,12 +45,21 @@ def mask_and_reduce_metric(metric_entry_vals, mask, average_grid, sum_vars):
         metric_entry_vals = metric_entry_vals[
             ..., mask, :
         ]  # (..., N', d_state)
+        if grid_weights is not None:
+            grid_weights = grid_weights[mask]
 
     # Optionally reduce last two dimensions
     if average_grid:  # Reduce grid first
-        metric_entry_vals = torch.mean(
-            metric_entry_vals, dim=-2
-        )  # (..., d_state)
+        if grid_weights is not None:
+            # Weighted mean over grid dimension
+            w = grid_weights.unsqueeze(-1)  # (N', 1)
+            metric_entry_vals = (
+                metric_entry_vals * w
+            ).sum(dim=-2) / w.sum()  # (..., d_state)
+        else:
+            metric_entry_vals = torch.mean(
+                metric_entry_vals, dim=-2
+            )  # (..., d_state)
     if sum_vars:  # Reduce vars second
         metric_entry_vals = torch.sum(
             metric_entry_vals, dim=-1
@@ -53,7 +68,15 @@ def mask_and_reduce_metric(metric_entry_vals, mask, average_grid, sum_vars):
     return metric_entry_vals
 
 
-def wmse(pred, target, pred_std, mask=None, average_grid=True, sum_vars=True):
+def wmse(
+    pred,
+    target,
+    pred_std,
+    mask=None,
+    average_grid=True,
+    sum_vars=True,
+    grid_weights=None,
+):
     """
     Weighted Mean Squared Error
 
@@ -66,6 +89,7 @@ def wmse(pred, target, pred_std, mask=None, average_grid=True, sum_vars=True):
     average_grid: boolean, if grid dimension -2 should be reduced (mean over N)
     sum_vars: boolean, if variable dimension -1 should be reduced (sum
         over d_state)
+    grid_weights: (N,) or None, optional area weights for grid nodes
 
     Returns:
     metric_val: One of (...,), (..., d_state), (..., N), (..., N, d_state),
@@ -81,10 +105,19 @@ def wmse(pred, target, pred_std, mask=None, average_grid=True, sum_vars=True):
         mask=mask,
         average_grid=average_grid,
         sum_vars=sum_vars,
+        grid_weights=grid_weights,
     )
 
 
-def mse(pred, target, pred_std, mask=None, average_grid=True, sum_vars=True):
+def mse(
+    pred,
+    target,
+    pred_std,
+    mask=None,
+    average_grid=True,
+    sum_vars=True,
+    grid_weights=None,
+):
     """
     (Unweighted) Mean Squared Error
 
@@ -97,6 +130,7 @@ def mse(pred, target, pred_std, mask=None, average_grid=True, sum_vars=True):
     average_grid: boolean, if grid dimension -2 should be reduced (mean over N)
     sum_vars: boolean, if variable dimension -1 should be reduced (sum
         over d_state)
+    grid_weights: (N,) or None, optional area weights for grid nodes
 
     Returns:
     metric_val: One of (...,), (..., d_state), (..., N), (..., N, d_state),
@@ -104,11 +138,25 @@ def mse(pred, target, pred_std, mask=None, average_grid=True, sum_vars=True):
     """
     # Replace pred_std with constant ones
     return wmse(
-        pred, target, torch.ones_like(pred_std), mask, average_grid, sum_vars
+        pred,
+        target,
+        torch.ones_like(pred_std),
+        mask,
+        average_grid,
+        sum_vars,
+        grid_weights=grid_weights,
     )
 
 
-def wmae(pred, target, pred_std, mask=None, average_grid=True, sum_vars=True):
+def wmae(
+    pred,
+    target,
+    pred_std,
+    mask=None,
+    average_grid=True,
+    sum_vars=True,
+    grid_weights=None,
+):
     """
     Weighted Mean Absolute Error
 
@@ -121,6 +169,7 @@ def wmae(pred, target, pred_std, mask=None, average_grid=True, sum_vars=True):
     average_grid: boolean, if grid dimension -2 should be reduced (mean over N)
     sum_vars: boolean, if variable dimension -1 should be reduced (sum
         over d_state)
+    grid_weights: (N,) or None, optional area weights for grid nodes
 
     Returns:
     metric_val: One of (...,), (..., d_state), (..., N), (..., N, d_state),
@@ -136,10 +185,19 @@ def wmae(pred, target, pred_std, mask=None, average_grid=True, sum_vars=True):
         mask=mask,
         average_grid=average_grid,
         sum_vars=sum_vars,
+        grid_weights=grid_weights,
     )
 
 
-def mae(pred, target, pred_std, mask=None, average_grid=True, sum_vars=True):
+def mae(
+    pred,
+    target,
+    pred_std,
+    mask=None,
+    average_grid=True,
+    sum_vars=True,
+    grid_weights=None,
+):
     """
     (Unweighted) Mean Absolute Error
 
@@ -152,6 +210,7 @@ def mae(pred, target, pred_std, mask=None, average_grid=True, sum_vars=True):
     average_grid: boolean, if grid dimension -2 should be reduced (mean over N)
     sum_vars: boolean, if variable dimension -1 should be reduced (sum
         over d_state)
+    grid_weights: (N,) or None, optional area weights for grid nodes
 
     Returns:
     metric_val: One of (...,), (..., d_state), (..., N), (..., N, d_state),
@@ -159,11 +218,25 @@ def mae(pred, target, pred_std, mask=None, average_grid=True, sum_vars=True):
     """
     # Replace pred_std with constant ones
     return wmae(
-        pred, target, torch.ones_like(pred_std), mask, average_grid, sum_vars
+        pred,
+        target,
+        torch.ones_like(pred_std),
+        mask,
+        average_grid,
+        sum_vars,
+        grid_weights=grid_weights,
     )
 
 
-def nll(pred, target, pred_std, mask=None, average_grid=True, sum_vars=True):
+def nll(
+    pred,
+    target,
+    pred_std,
+    mask=None,
+    average_grid=True,
+    sum_vars=True,
+    grid_weights=None,
+):
     """
     Negative Log Likelihood loss, for isotropic Gaussian likelihood
 
@@ -176,6 +249,7 @@ def nll(pred, target, pred_std, mask=None, average_grid=True, sum_vars=True):
     average_grid: boolean, if grid dimension -2 should be reduced (mean over N)
     sum_vars: boolean, if variable dimension -1 should be reduced (sum
         over d_state)
+    grid_weights: (N,) or None, optional area weights for grid nodes
 
     Returns:
     metric_val: One of (...,), (..., d_state), (..., N), (..., N, d_state),
@@ -186,12 +260,22 @@ def nll(pred, target, pred_std, mask=None, average_grid=True, sum_vars=True):
     entry_nll = -dist.log_prob(target)  # (..., N, d_state)
 
     return mask_and_reduce_metric(
-        entry_nll, mask=mask, average_grid=average_grid, sum_vars=sum_vars
+        entry_nll,
+        mask=mask,
+        average_grid=average_grid,
+        sum_vars=sum_vars,
+        grid_weights=grid_weights,
     )
 
 
 def crps_gauss(
-    pred, target, pred_std, mask=None, average_grid=True, sum_vars=True
+    pred,
+    target,
+    pred_std,
+    mask=None,
+    average_grid=True,
+    sum_vars=True,
+    grid_weights=None,
 ):
     """
     (Negative) Continuous Ranked Probability Score (CRPS)
@@ -206,6 +290,7 @@ def crps_gauss(
     average_grid: boolean, if grid dimension -2 should be reduced (mean over N)
     sum_vars: boolean, if variable dimension -1 should be reduced (sum
         over d_state)
+    grid_weights: (N,) or None, optional area weights for grid nodes
 
     Returns:
     metric_val: One of (...,), (..., d_state), (..., N), (..., N, d_state),
@@ -223,7 +308,11 @@ def crps_gauss(
     )  # (..., N, d_state)
 
     return mask_and_reduce_metric(
-        entry_crps, mask=mask, average_grid=average_grid, sum_vars=sum_vars
+        entry_crps,
+        mask=mask,
+        average_grid=average_grid,
+        sum_vars=sum_vars,
+        grid_weights=grid_weights,
     )
 
 
