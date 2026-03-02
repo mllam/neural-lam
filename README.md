@@ -505,6 +505,26 @@ srun -ul python -m neural_lam.train_model \
 
 When using on a system without SLURM, where all GPU's are visible, it is possible to select a subset of GPU's to use for training with the `devices` cli argument, e.g. `--devices 0 1` to use the first 2 GPU's.
 
+### DGX Spark Environment Notes
+On DGX Spark, training stability depends on the PyTorch/CUDA/container combo.
+From issue [#163](https://github.com/mllam/neural-lam/issues/163), this appears
+to be an upstream stack compatibility issue rather than a `neural-lam` model
+bug.
+
+Known failing combo:
+- `pytorch/pytorch:2.9.1-cuda12.8-cudnn9-runtime`
+- Symptom: `IndexError: Dimension out of range ...` during
+  `tests/test_training.py` (`torch_scatter` path).
+
+Known working combos:
+- `torch==2.10.0` with CUDA 13.0 wheels (`cu130`)
+- `nvcr.io/nvidia/pytorch:26.01-py3`
+
+Recommendation:
+- Prefer the known-working combos above for DGX Spark.
+- If you hit this error on older images, upgrade the container/PyTorch stack
+  before changing model code.
+
 ## Evaluate Models
 Evaluation is also done using `python -m neural_lam.train_model --config_path <config-path>`, but using the `--eval` option.
 Use `--eval val` to evaluate the model on the validation set and `--eval test` to evaluate on test data.
