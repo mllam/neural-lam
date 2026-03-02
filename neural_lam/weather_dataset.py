@@ -634,6 +634,14 @@ class WeatherDataModule(pl.LightningDataModule):
         self.eval_split = eval_split
         self.eval_sample_start = eval_sample_start
         self.eval_sample_end = eval_sample_end
+        if (
+            eval_sample_end is not None
+            and eval_sample_end <= eval_sample_start
+        ):
+            raise ValueError(
+                f"eval_sample_end ({eval_sample_end}) must be greater than "
+                f"eval_sample_start ({eval_sample_start})."
+            )
         if num_workers > 0:
             # default to spawn for now, as the default on linux "fork" hangs
             # when using dask (which the npyfilesmeps datastore uses)
