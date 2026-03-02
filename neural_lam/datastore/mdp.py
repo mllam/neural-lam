@@ -269,7 +269,7 @@ class MDPDatastore(BaseRegularGridDatastore):
 
         da_category = self._ds[category]
 
-        # set units on x y coordinates if missing
+        # set units on coordinate dimensions if missing
         for coord in ["x", "y"]:
             if "units" not in da_category[coord].attrs:
                 da_category[coord].attrs["units"] = "m"
@@ -348,7 +348,7 @@ class MDPDatastore(BaseRegularGridDatastore):
     def boundary_mask(self) -> xr.DataArray:
         """
         Produce a 0/1 mask for the boundary points of the dataset, these will
-        sit at the edges of the domain (in x/y extent) and will be used to mask
+        sit at the edges of the domain (in coordinate extent) and will be used to mask
         out the boundary points from the loss function and to overwrite the
         boundary points from the prediction. For now this is created when the
         mask is requested, but in the future this could be saved to the zarr
@@ -367,8 +367,8 @@ class MDPDatastore(BaseRegularGridDatastore):
         )
         da_domain_allzero = xr.zeros_like(da_state_variable)
         ds_unstacked["boundary_mask"] = da_domain_allzero.isel(
-            x=slice(self._n_boundary_points, -self._n_boundary_points),
-            y=slice(self._n_boundary_points, -self._n_boundary_points),
+            {self.CARTESIAN_COORDS[0]: slice(self._n_boundary_points, -self._n_boundary_points),
+            self.CARTESIAN_COORDS[1]: slice(self._n_boundary_points, -self._n_boundary_points)}
         )
         ds_unstacked["boundary_mask"] = ds_unstacked.boundary_mask.fillna(
             1
@@ -441,7 +441,7 @@ class MDPDatastore(BaseRegularGridDatastore):
 
         """
         ds_state = self.unstack_grid_coords(self._ds["state"])
-        da_x, da_y = ds_state.x, ds_state.y
+        da_x, da_y = ds_state[self.CARTESIAN_COORDS[0]], ds_state[self.CARTESIAN_COORDS[1]]
         assert da_x.ndim == da_y.ndim == 1
         return CartesianGridShape(x=da_x.size, y=da_y.size)
 
@@ -458,18 +458,18 @@ class MDPDatastore(BaseRegularGridDatastore):
         Returns
         -------
         np.ndarray
-            The x, y coordinates of the dataset, returned differently based on
+            The the coordinates of the dataset, returned differently based on
             the value of `stacked`:
             - `stacked==True`: shape `(n_grid_points, 2)` where
                                n_grid_points=N_x*N_y.
-            - `stacked==False`: shape `(N_x, N_y, 2)`
+            - `stacked==False`: shape `(N_coord0, N_coord1, 2)`
 
         """
         # assume variables are stored in dimensions [grid_index, ...]
         ds_category = self.unstack_grid_coords(da_or_ds=self._ds[category])
 
-        da_xs = ds_category.x
-        da_ys = ds_category.y
+        da_xs = ds_category[self.CARTESIAN_COORDS[0]]
+        da_ys = ds_category[self.CARTESIAN_COORDS[1]]
 
         assert da_xs.ndim == da_ys.ndim == 1, "x and y coordinates must be 1D"
 
@@ -483,8 +483,8 @@ class MDPDatastore(BaseRegularGridDatastore):
             )
         else:
             dims = [
-                "x",
-                "y",
+                self.CARTESIAN_COORDS[0],
+                self.CARTESIAN_COORDS[1],
                 "grid_coord",
             ]
             da_xy = da_xy.transpose(*dims)
