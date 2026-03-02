@@ -573,10 +573,14 @@ class WeatherDataset(torch.utils.data.Dataset):
 
         da_datastore_state = getattr(self, f"da_{category}")
         da_grid_index = da_datastore_state.grid_index
-        da_state_feature = da_datastore_state.state_feature
+        # Use the correct feature coordinate for the given category
+        # (e.g. "state_feature" for category="state",
+        #  "forcing_feature" for category="forcing", etc.)
+        feature_coord_name = f"{category}_feature"
+        da_category_feature = da_datastore_state[feature_coord_name]
 
         coords = {
-            f"{category}_feature": da_state_feature,
+            feature_coord_name: da_category_feature,
             "grid_index": da_grid_index,
         }
         if add_time_as_dim:
