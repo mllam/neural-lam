@@ -12,7 +12,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Warn when running in evaluation mode (`--eval`) without loading a checkpoint (`--load`) ([#190](https://github.com/mllam/neural-lam/pull/190)) @varunsiravuri
 
 ### Fixed
+- Fix typo in `ar_model.py` that causes `AttributeError` during evaluation [\#204](https://github.com/mllam/neural-lam/pull/204) @ritinikhil
 
+- Changed the hardcoded True to a conditional check "persistent_workers=self.num_workers > 0" [\#235](https://github.com/mllam/neural-lam/pull/235) @santhil-cyber
+
+
+- Fix Slack domain link [\#288](https://github.com/mllam/neural-lam/pull/288) @sadamov
 
 ### Maintenance
 
