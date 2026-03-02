@@ -159,6 +159,7 @@ class WeatherDataset(torch.utils.data.Dataset):
                 - self.ar_steps
                 - max(2, self.num_past_forcing_steps)
                 - self.num_future_forcing_steps
+                +1
             )
 
     def _slice_state_time(self, da_state, idx, n_steps: int):
@@ -468,6 +469,17 @@ class WeatherDataset(torch.utils.data.Dataset):
             the target steps.
 
         """
+        dataset_len = len(self)
+
+        # Match Python sequence semantics for negative indexing.
+        if idx < 0:
+            idx += dataset_len
+        if idx < 0 or idx >= dataset_len:
+            raise IndexError(
+                f"Index {idx} is out of bounds for dataset of size "
+                f"{dataset_len}"
+            )
+        
         (
             da_init_states,
             da_target_states,
