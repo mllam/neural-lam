@@ -1,5 +1,4 @@
 from pathlib import Path
-import pytest
 import pytorch_lightning as pl
 import torch
 
@@ -11,7 +10,7 @@ from tests.dummy_datastore import DummyDatastore
 
 def test_datastore_not_in_checkpoint(tmp_path):
     """
-    Test for issue #148: Ensure that the datastore object is not pickled 
+    Test for issue #148: Ensure that the datastore object is not pickled
     into the PyTorch Lightning checkpoint's hyperparameters.
     """
     datastore = DummyDatastore()
@@ -59,7 +58,7 @@ def test_datastore_not_in_checkpoint(tmp_path):
     )
 
     # 1. Assert it is ignored in Lightning's in-memory hparams
-    assert "datastore" not in model.hparams, "datastore should be ignored in save_hyperparameters"
+    assert "datastore" not in model.hparams
 
     # 2. Save an actual checkpoint to ensure it's not serialized
     trainer = pl.Trainer(
@@ -71,11 +70,11 @@ def test_datastore_not_in_checkpoint(tmp_path):
     )
     # Manually attach model to trainer
     trainer.strategy.connect(model)
-    
+
     ckpt_path = tmp_path / "test.ckpt"
     trainer.save_checkpoint(ckpt_path, weights_only=False)
 
     # Load and verify
     ckpt = torch.load(ckpt_path, map_location="cpu")
     assert "hyper_parameters" in ckpt
-    assert "datastore" not in ckpt["hyper_parameters"], "datastore was found in checkpoint hyperparameters"
+    assert "datastore" not in ckpt["hyper_parameters"]
