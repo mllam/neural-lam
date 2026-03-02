@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+<<<<<<< HEAD
 - Fix README image paths to use absolute GitHub URLs so images display correctly on PyPI [\#188](https://github.com/mllam/neural-lam/pull/188) @bk-simon
 
 - Fix typo in `ar_model.py` that causes `AttributeError` during evaluation [\#204](https://github.com/mllam/neural-lam/pull/204) @ritinikhil
@@ -29,6 +30,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Warn when running in evaluation mode (`--eval`) without loading a checkpoint (`--load`) ([#105](https://github.com/mllam/neural-lam/issues/105))
 
 >>>>>>> 2b0b16b (feat: warn when running eval mode without loading a checkpoint (#105))
+=======
+>>>>>>> edad8b4 (fix: remove unrelated CHANGELOG entries)
 
 ### Maintenance
 
