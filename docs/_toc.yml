@@ -1,0 +1,8 @@
+# docs/_toc.yml
+format: jb-book
+root: intro
+
+parts:
+  - caption: API Reference
+    chapters:
+      - file: autoapi/index
