@@ -12,9 +12,8 @@ def get_metric(metric_name):
     metric: function implementing the metric
     """
     metric_name_lower = metric_name.lower()
-    assert (
-        metric_name_lower in DEFINED_METRICS
-    ), f"Unknown metric: {metric_name}"
+    if metric_name_lower not in DEFINED_METRICS:
+        raise ValueError(f"Unknown metric: {metric_name}")
     return DEFINED_METRICS[metric_name_lower]
 
 

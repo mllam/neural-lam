@@ -210,7 +210,8 @@ def make_mlp(blueprint, layer_norm=True):
     the output (as used in GraphCast)
     """
     hidden_layers = len(blueprint) - 2
-    assert hidden_layers >= 0, "Invalid MLP blueprint"
+    if hidden_layers < 0:
+        raise ValueError("Invalid MLP blueprint")
 
     layers = []
     for layer_i, (dim1, dim2) in enumerate(zip(blueprint[:-1], blueprint[1:])):
