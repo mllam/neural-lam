@@ -15,13 +15,37 @@ class BaseGraphModel(StepPredictor):
     the encode-process-decode idea.
     """
 
-    def __init__(self, args, config: NeuralLAMConfig, datastore: BaseDatastore):
-        super().__init__(args, config=config, datastore=datastore)
+    def __init__(
+        self,
+        config: NeuralLAMConfig,
+        datastore: BaseDatastore,
+        graph: str = "multiscale",
+        hidden_dim: int = 64,
+        hidden_layers: int = 1,
+        processor_layers: int = 4,
+        mesh_aggr: str = "sum",
+        num_past_forcing_steps: int = 1,
+        num_future_forcing_steps: int = 1,
+        output_std: bool = False,
+    ):
+        super().__init__(
+            config=config,
+            datastore=datastore,
+            num_past_forcing_steps=num_past_forcing_steps,
+            num_future_forcing_steps=num_future_forcing_steps,
+            output_std=output_std,
+        )
+
+        # Store architecture hyperparameters for subclass use
+        self.hidden_dim = hidden_dim
+        self.hidden_layers = hidden_layers
+        self.processor_layers = processor_layers
+        self.mesh_aggr = mesh_aggr
 
         # Load graph with static features
         # NOTE: (IMPORTANT!) mesh nodes MUST have the first
         # num_mesh_nodes indices,
-        graph_dir_path = datastore.root_path / "graph" / args.graph
+        graph_dir_path = datastore.root_path / "graph" / graph
         self.hierarchical, graph_ldict = utils.load_graph(
             graph_dir_path=graph_dir_path
         )
@@ -45,7 +69,7 @@ class BaseGraphModel(StepPredictor):
 
         # Define sub-models
         # Feature embedders for grid
-        self.mlp_blueprint_end = [args.hidden_dim] * (args.hidden_layers + 1)
+        self.mlp_blueprint_end = [hidden_dim] * (hidden_layers + 1)
         self.grid_embedder = utils.make_mlp(
             [self.grid_dim] + self.mlp_blueprint_end
         )
@@ -56,25 +80,25 @@ class BaseGraphModel(StepPredictor):
         # encoder
         self.g2m_gnn = InteractionNet(
             self.g2m_edge_index,
-            args.hidden_dim,
-            hidden_layers=args.hidden_layers,
+            hidden_dim,
+            hidden_layers=hidden_layers,
             update_edges=False,
         )
         self.encoding_grid_mlp = utils.make_mlp(
-            [args.hidden_dim] + self.mlp_blueprint_end
+            [hidden_dim] + self.mlp_blueprint_end
         )
 
         # decoder
         self.m2g_gnn = InteractionNet(
             self.m2g_edge_index,
-            args.hidden_dim,
-            hidden_layers=args.hidden_layers,
+            hidden_dim,
+            hidden_layers=hidden_layers,
             update_edges=False,
         )
 
         # Output mapping (hidden_dim -> output_dim)
         self.output_map = utils.make_mlp(
-            [args.hidden_dim] * (args.hidden_layers + 1)
+            [hidden_dim] * (hidden_layers + 1)
             + [self.grid_output_dim],
             layer_norm=False,
         )  # No layer norm on this one

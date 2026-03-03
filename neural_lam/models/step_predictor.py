@@ -10,7 +10,6 @@ from torch import nn
 from .. import utils
 from ..config import NeuralLAMConfig
 from ..datastore import BaseDatastore
-from ..loss_weighting import get_state_feature_weighting
 
 
 class StepPredictor(nn.Module, ABC):
@@ -21,12 +20,13 @@ class StepPredictor(nn.Module, ABC):
 
     def __init__(
         self,
-        args,
         config: NeuralLAMConfig,
         datastore: BaseDatastore,
+        num_past_forcing_steps: int = 1,
+        num_future_forcing_steps: int = 1,
+        output_std: bool = False,
     ):
         super().__init__()
-        self.args = args
 
         num_state_vars = datastore.get_num_data_vars(category="state")
         num_forcing_vars = datastore.get_num_data_vars(category="forcing")
@@ -41,9 +41,6 @@ class StepPredictor(nn.Module, ABC):
         da_state_stats = datastore.get_standardization_dataarray(
             category="state"
         )
-        da_boundary_mask = datastore.boundary_mask
-        num_past_forcing_steps = args.num_past_forcing_steps
-        num_future_forcing_steps = args.num_future_forcing_steps
 
         self.register_buffer(
             "grid_static_features",
@@ -71,28 +68,11 @@ class StepPredictor(nn.Module, ABC):
         for key, val in state_stats.items():
             self.register_buffer(key, val, persistent=False)
 
-        state_feature_weights = get_state_feature_weighting(
-            config=config, datastore=datastore
-        )
-        self.register_buffer(
-            "feature_weights",
-            torch.tensor(state_feature_weights, dtype=torch.float32),
-            persistent=False,
-        )
-
-        self.output_std = bool(args.output_std)
+        self.output_std = bool(output_std)
         if self.output_std:
             self.grid_output_dim = 2 * num_state_vars
         else:
             self.grid_output_dim = num_state_vars
-            self.register_buffer(
-                "per_var_std",
-                state_stats["diff_std"]
-                / torch.sqrt(
-                    torch.tensor(state_feature_weights, dtype=torch.float32)
-                ),
-                persistent=False,
-            )
 
         (
             self.num_grid_nodes,
@@ -106,16 +86,30 @@ class StepPredictor(nn.Module, ABC):
             * (num_past_forcing_steps + num_future_forcing_steps + 1)
         )
 
-        boundary_mask = (
-            torch.tensor(da_boundary_mask.values, dtype=torch.float32)
-            .unsqueeze(0)
-            .unsqueeze(-1)
-        )
+    def expand_to_batch(self, x: torch.Tensor, batch_size: int) -> torch.Tensor:
+        """
+        Expand tensor with shape (N, d) to (B, N, d)
+        """
+        return x.unsqueeze(0).expand(batch_size, -1, -1)
 
-        self.register_buffer("boundary_mask", boundary_mask, persistent=False)
-        self.register_buffer(
-            "interior_mask", 1.0 - self.boundary_mask, persistent=False
-        )
+    @abstractmethod
+    def forward(
+        self,
+        prev_state: torch.Tensor,
+        prev_prev_state: torch.Tensor,
+        forcing: torch.Tensor,
+    ) -> tuple[torch.Tensor, Optional[torch.Tensor]]:
+        """
+        Step state one step ahead using prediction model, X_{t-1}, X_t -> X_t+1
+        prev_state: (B, num_grid_nodes, feature_dim), X_t
+        prev_prev_state: (B, num_grid_nodes, feature_dim), X_{t-1}
+        forcing: (B, num_grid_nodes, forcing_dim)
+
+        Returns:
+            pred_state: (B, num_grid_nodes, d_f)
+            pred_std: (B, num_grid_nodes, d_f) or None
+        """
+        pass
 
     def prepare_clamping_params(
         self, config: NeuralLAMConfig, datastore: BaseDatastore
@@ -252,12 +246,6 @@ class StepPredictor(nn.Module, ABC):
             + softplus_center
         )
 
-    def expand_to_batch(self, x: torch.Tensor, batch_size: int) -> torch.Tensor:
-        """
-        Expand tensor with shape (N, d) to (B, N, d)
-        """
-        return x.unsqueeze(0).expand(batch_size, -1, -1)
-
     def get_clamped_new_state(self, state_delta, prev_state):
         """
         Clamp prediction to valid range supplied in config
@@ -305,22 +293,3 @@ class StepPredictor(nn.Module, ABC):
             )
 
         return new_state
-
-    @abstractmethod
-    def forward(
-        self,
-        prev_state: torch.Tensor,
-        prev_prev_state: torch.Tensor,
-        forcing: torch.Tensor,
-    ) -> tuple[torch.Tensor, Optional[torch.Tensor]]:
-        """
-        Step state one step ahead using prediction model, X_{t-1}, X_t -> X_t+1
-        prev_state: (B, num_grid_nodes, feature_dim), X_t
-        prev_prev_state: (B, num_grid_nodes, feature_dim), X_{t-1}
-        forcing: (B, num_grid_nodes, forcing_dim)
-
-        Returns:
-            pred_state: (B, num_grid_nodes, d_f)
-            pred_std: (B, num_grid_nodes, d_f) or None
-        """
-        pass
