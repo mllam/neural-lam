@@ -18,12 +18,12 @@ class Forecaster(nn.Module, ABC):
         self,
         init_states: torch.Tensor,
         forcing_features: torch.Tensor,
-        border_states: torch.Tensor,
+        boundary_states: torch.Tensor,
     ) -> tuple[torch.Tensor, torch.Tensor]:
         """
         init_states: (B, 2, num_grid_nodes, d_f)
         forcing_features: (B, pred_steps, num_grid_nodes, d_static_f)
-        border_states: (B, pred_steps, num_grid_nodes, d_f)
+        boundary_states: (B, pred_steps, num_grid_nodes, d_f)
         Returns:
             prediction: (B, pred_steps, num_grid_nodes, d_f)
             pred_std: (B, pred_steps, num_grid_nodes, d_f) or (d_f,)

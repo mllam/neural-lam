@@ -1,7 +1,7 @@
 # Standard library
 import os
 import warnings
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 # Third-party
 import matplotlib.pyplot as plt
@@ -18,7 +18,7 @@ from .. import metrics, vis
 from ..config import NeuralLAMConfig
 from ..datastore import BaseDatastore
 from ..weather_dataset import WeatherDataset
-from .ar_forecaster import ARForecaster
+from .forecaster import Forecaster
 
 
 class ForecasterModule(pl.LightningModule):
@@ -31,28 +31,76 @@ class ForecasterModule(pl.LightningModule):
 
     def __init__(
         self,
-        model_name: str,
-        args,
+        forecaster: Forecaster,
         config: NeuralLAMConfig,
         datastore: BaseDatastore,
+        loss: str = "wmse",
+        lr: float = 1e-3,
+        restore_opt: bool = False,
+        n_example_pred: int = 1,
+        val_steps_to_log: Optional[List[int]] = None,
+        metrics_watch: Optional[List[str]] = None,
+        var_leads_metrics_watch: Optional[Dict[int, List[int]]] = None,
+        output_std: bool = False,
     ):
         super().__init__()
         # Note: datastore is excluded from saved hparams and must be provided
         # explicitly when calling load_from_checkpoint(path,
         # datastore=datastore)
-        self.save_hyperparameters(ignore=["datastore"])
+        self.save_hyperparameters(ignore=["datastore", "forecaster"])
         self._datastore = datastore
+        self.forecaster = forecaster
 
-        # Instantiate prediction hierarchy
-        # Local
-        from . import MODELS  # type: ignore
+        # Resolve mutable defaults
+        if val_steps_to_log is None:
+            val_steps_to_log = [1, 2, 3, 5, 10]
+        if metrics_watch is None:
+            metrics_watch = []
+        if var_leads_metrics_watch is None:
+            var_leads_metrics_watch = {}
 
-        predictor_class = MODELS[model_name]
-        predictor = predictor_class(args, config, datastore)
-        self.forecaster = ARForecaster(predictor)
+        # Compute interior_mask_bool directly from datastore (Item 4)
+        boundary_mask = (
+            torch.tensor(
+                datastore.boundary_mask.values, dtype=torch.float32
+            )
+            .unsqueeze(0)
+            .unsqueeze(-1)
+        )  # (1, num_grid_nodes, 1)
+        interior_mask = 1.0 - boundary_mask
+        self.register_buffer(
+            "interior_mask_bool",
+            interior_mask[0, :, 0].to(torch.bool),
+            persistent=False,
+        )
+
+        # Store per_var_std here if predictor does not output std (Item 5)
+        if not output_std:
+            da_state_stats = datastore.get_standardization_dataarray(
+                category="state"
+            )
+            from ..loss_weighting import get_state_feature_weighting
+
+            state_feature_weights = get_state_feature_weighting(
+                config=config, datastore=datastore
+            )
+            diff_std = torch.tensor(
+                da_state_stats.state_diff_std_standardized.values,
+                dtype=torch.float32,
+            )
+            feature_weights_t = torch.tensor(
+                state_feature_weights, dtype=torch.float32
+            )
+            self.register_buffer(
+                "per_var_std",
+                diff_std / torch.sqrt(feature_weights_t),
+                persistent=False,
+            )
+        else:
+            self.per_var_std = None
 
         # Instantiate loss function
-        self.loss = metrics.get_metric(args.loss)
+        self.loss = metrics.get_metric(loss)
 
         self.val_metrics: Dict[str, List] = {
             "mse": [],
@@ -61,14 +109,14 @@ class ForecasterModule(pl.LightningModule):
             "mse": [],
             "mae": [],
         }
-        if self.forecaster.predictor.output_std:
+        if output_std:
             self.test_metrics["output_std"] = []  # Treat as metric
 
         # For making restoring of optimizer state optional
-        self.restore_opt = args.restore_opt
+        self.restore_opt = restore_opt
 
         # For example plotting
-        self.n_example_pred = args.n_example_pred
+        self.n_example_pred = n_example_pred
         self.plotted_examples = 0
 
         # For storing spatial loss maps during evaluation
@@ -94,13 +142,9 @@ class ForecasterModule(pl.LightningModule):
 
     def configure_optimizers(self):
         opt = torch.optim.AdamW(
-            self.parameters(), lr=self.hparams.args.lr, betas=(0.9, 0.95)
+            self.parameters(), lr=self.hparams.lr, betas=(0.9, 0.95)
         )
         return opt
-
-    @property
-    def interior_mask_bool(self):
-        return self.forecaster.predictor.interior_mask[0, :, 0].to(torch.bool)
 
     def common_step(self, batch):
         (init_states, target_states, forcing_features, batch_times) = batch
@@ -108,6 +152,12 @@ class ForecasterModule(pl.LightningModule):
         prediction, pred_std = self.forecaster(
             init_states, forcing_features, target_states
         )
+
+        # If forecaster returns None for pred_std (no output_std), fall back
+        # to the constant per_var_std computed from the datastore (Item 5)
+        if pred_std is None:
+            pred_std = self.per_var_std
+
         return prediction, target_states, pred_std, batch_times
 
     def training_step(self, batch):
@@ -152,7 +202,7 @@ class ForecasterModule(pl.LightningModule):
 
         val_log_dict = {
             f"val_loss_unroll{step}": time_step_loss[step - 1]
-            for step in self.hparams.args.val_steps_to_log
+            for step in self.hparams.val_steps_to_log
             if step <= len(time_step_loss)
         }
         val_log_dict["val_mean_loss"] = mean_loss
@@ -192,7 +242,7 @@ class ForecasterModule(pl.LightningModule):
 
         test_log_dict = {
             f"test_loss_unroll{step}": time_step_loss[step - 1]
-            for step in self.hparams.args.val_steps_to_log
+            for step in self.hparams.val_steps_to_log
             if step <= len(time_step_loss)
         }
         test_log_dict["test_mean_loss"] = mean_loss
@@ -216,7 +266,7 @@ class ForecasterModule(pl.LightningModule):
             )
             self.test_metrics[metric_name].append(batch_metric_vals)
 
-        if self.forecaster.predictor.output_std:
+        if self.hparams.output_std:
             mean_pred_std = torch.mean(
                 pred_std[..., self.interior_mask_bool, :], dim=-2
             )
@@ -229,7 +279,7 @@ class ForecasterModule(pl.LightningModule):
             :,
             [
                 step - 1
-                for step in self.hparams.args.val_steps_to_log
+                for step in self.hparams.val_steps_to_log
                 if step <= spatial_loss.shape[1]
             ],
         ]
@@ -378,11 +428,11 @@ class ForecasterModule(pl.LightningModule):
             )
 
         var_names = self._datastore.get_vars_names(category="state")
-        if full_log_name in self.hparams.args.metrics_watch:
+        if full_log_name in self.hparams.metrics_watch:
             for (
                 var_i,
                 timesteps,
-            ) in self.hparams.args.var_leads_metrics_watch.items():
+            ) in self.hparams.var_leads_metrics_watch.items():
                 var_name = var_names[var_i]
                 for step in timesteps:
                     key = f"{full_log_name}_{var_name}_step_{step}"
@@ -453,7 +503,7 @@ class ForecasterModule(pl.LightningModule):
                     f"({(self.time_step_int * t_i)} {self.time_step_unit})",
                 )
                 for t_i, loss_map in zip(
-                    self.hparams.args.val_steps_to_log, mean_spatial_loss
+                    self.hparams.val_steps_to_log, mean_spatial_loss
                 )
             ]
 
@@ -475,9 +525,11 @@ class ForecasterModule(pl.LightningModule):
             )
             os.makedirs(pdf_loss_maps_dir, exist_ok=True)
             for t_i, fig in zip(
-                self.hparams.args.val_steps_to_log, pdf_loss_map_figs
+                self.hparams.val_steps_to_log, pdf_loss_map_figs
             ):
-                fig.savefig(os.path.join(pdf_loss_maps_dir, f"loss_t{t_i}.pdf"))
+                fig.savefig(
+                    os.path.join(pdf_loss_maps_dir, f"loss_t{t_i}.pdf")
+                )
 
             torch.save(
                 mean_spatial_loss.cpu(),
