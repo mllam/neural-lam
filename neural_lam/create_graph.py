@@ -371,6 +371,10 @@ def create_graph(
 
     else:
         # combine all levels to one graph
+        if not G:
+            raise ValueError(
+                "No mesh levels were generated. Check grid dimensions or mesh configuration."
+            )
         G_tot = G[0]
         for lev in range(1, len(G)):
             nodes = list(G[lev - 1].nodes)
