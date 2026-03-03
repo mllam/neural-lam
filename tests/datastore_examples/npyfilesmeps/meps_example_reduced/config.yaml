@@ -1,0 +1,11 @@
+datastore:
+  kind: npyfilesmeps
+  config_path: meps_example_reduced.datastore.yaml
+training:
+  state_feature_weighting:
+    __config_class__: ManualStateFeatureWeighting
+    weights:
+      t_2: 1.0
+      t_65: 1.0
+      pres_0g: 1.0
+      pres_0s: 1.0
