@@ -1,12 +1,19 @@
+# Standard library
+import os
+import warnings
+
 # Third-party
 import matplotlib
 import matplotlib.pyplot as plt
 import numpy as np
+import pytorch_lightning as pl
+import torch
 import xarray as xr
 
 # Local
 from . import utils
 from .datastore.base import BaseRegularGridDatastore
+from .weather_dataset import WeatherDataset
 
 
 @matplotlib.rc_context(utils.fractional_plot_bundle(1))
@@ -182,3 +189,127 @@ def plot_spatial_error(
         fig.suptitle(title, size=10)
 
     return fig
+
+
+def plot_examples(
+    datastore: BaseRegularGridDatastore,
+    state_std: torch.Tensor,
+    state_mean: torch.Tensor,
+    logger: pl.loggers.Logger,
+    split: str,
+    prediction: torch.Tensor,
+    target: torch.Tensor,
+    time_batch: torch.Tensor,
+    start_index: int = 0,
+) -> None:
+    """
+    Plot example forecasts from provided tensors.
+
+    Args:
+        datastore: The object containing dataset metadata.
+        state_std: Standard deviation of state variables for rescaling.
+        state_mean: Mean of state variables for rescaling.
+        logger: The logger instance used to save the images.
+        split: The dataset split .
+        prediction: Output tensors predicted from the model.
+        target: Ground truth tensors.
+        time_batch: Time timestamps corresponding to the data.
+        start_index: The starting index number for naming saved files/logs.
+    """
+    prediction_rescaled = prediction * state_std + state_mean
+    target_rescaled = target * state_std + state_mean
+
+    time_step_int, time_step_unit = utils.get_integer_time(
+        datastore.step_length
+    )
+
+    # Instantiating dataset outside the loop
+    weather_dataset = WeatherDataset(datastore=datastore, split=split)
+
+    for i, (pred_slice, target_slice, time_slice) in enumerate(
+        zip(prediction_rescaled, target_rescaled, time_batch)
+    ):
+        example_i = start_index + i
+
+        # Detach tensors to safely separate from autograd graph
+        pred_slice = pred_slice.detach()
+        target_slice = target_slice.detach()
+
+        time_arr = np.array(time_slice.cpu(), dtype="datetime64[ns]")
+
+        da_prediction = weather_dataset.create_dataarray_from_tensor(
+            tensor=pred_slice, time=time_arr, category="state"
+        ).unstack("grid_index")
+
+        da_target = weather_dataset.create_dataarray_from_tensor(
+            tensor=target_slice, time=time_arr, category="state"
+        ).unstack("grid_index")
+
+        var_vmin = (
+            torch.minimum(
+                pred_slice.flatten(0, 1).min(dim=0)[0],
+                target_slice.flatten(0, 1).min(dim=0)[0],
+            )
+            .cpu()
+            .numpy()
+        )
+        var_vmax = (
+            torch.maximum(
+                pred_slice.flatten(0, 1).max(dim=0)[0],
+                target_slice.flatten(0, 1).max(dim=0)[0],
+            )
+            .cpu()
+            .numpy()
+        )
+        var_vranges = list(zip(var_vmin, var_vmax))
+
+        for t_i, _ in enumerate(zip(pred_slice, target_slice), start=1):
+            var_figs = [
+                plot_prediction(
+                    datastore=datastore,
+                    title=f"{var_name} ({var_unit}), "
+                    f"t={t_i} ({(time_step_int * t_i)}"
+                    f"{time_step_unit})",
+                    vrange=var_vrange,
+                    da_prediction=da_prediction.isel(
+                        state_feature=var_i, time=t_i - 1
+                    ).squeeze(),
+                    da_target=da_target.isel(
+                        state_feature=var_i, time=t_i - 1
+                    ).squeeze(),
+                )
+                for var_i, (var_name, var_unit, var_vrange) in enumerate(
+                    zip(
+                        datastore.get_vars_names("state"),
+                        datastore.get_vars_units("state"),
+                        var_vranges,
+                    )
+                )
+            ]
+
+            for var_name, fig in zip(
+                datastore.get_vars_names("state"), var_figs
+            ):
+                if isinstance(logger, pl.loggers.WandbLogger):
+                    key = f"{var_name}_example_{example_i}"
+                else:
+                    key = f"{var_name}_example"
+
+                if hasattr(logger, "log_image"):
+                    logger.log_image(key=key, images=[fig], step=t_i)
+                else:
+                    warnings.warn(f"{logger} does not support image logging.")
+
+            plt.close("all")
+
+        pred_filename = f"example_pred_{example_i}.pt"
+        torch.save(
+            pred_slice.cpu(),
+            os.path.join(logger.save_dir, pred_filename),
+        )
+
+        target_filename = f"example_target_{example_i}.pt"
+        torch.save(
+            target_slice.cpu(),
+            os.path.join(logger.save_dir, target_filename),
+        )
