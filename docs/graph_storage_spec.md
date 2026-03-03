@@ -1,10 +1,24 @@
 # Neural-LAM Graph Storage Specification
 
-Version: 0.1.0
+Version: 0.1.0-draft
 
 ## 1. Introduction
 
-This document specifies the requirements for Graph disk format for neural-lam.
+This document specifies the requirements for Graph disk format for `neural-lam`.
+These graphs are used by the Neural-LAM Graph Neural Network architectures for
+machine-learning weather prediction (MLWP) forecasting. These model
+architectures follow the encode-process-decode paradigm of sequential message
+passing, where physical variables are represented as features on so-called
+*grid* nodes, are *encoded* to *mesh* nodes, are *processed* on the mesh, and
+then *decoded* back to grid nodes where output tendencies or updated state are
+produced.
+
+The format specified in this document was designed to support the three archetypes of GNN-based MLWP forecasting architectures:
+
+- flat, non-hierarhical graphs where the processing mesh only connects to nearest neighbors (Keisler et al. 2022)
+- flat-multiscale, non-hierarchical graphs where the processing mesh also includes longer-range connections (GraphCast, Lam et al. 2022)
+- hierarchical graphs where the processing mesh includes multiple levels of resolution (Oskarsson et al. 2023)
+
 The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL NOT",
 "SHOULD", "SHOULD NOT", "RECOMMENDED", "MAY", and "OPTIONAL" in this
 document are to be interpreted as described in RFC 2119.
@@ -78,43 +92,20 @@ the text below, so that for:
 - Hierarchical graphs `L > 1`.
 - Entry `0` MUST always be the bottom mesh level.
 
-### Edges
-
-#### Edge indices
-
-`g2m_edge_index.pt` and `m2g_edge_index.pt` MUST each contain a single tensor
-with shape `[2, E]`, where `E` is the number of edges in that component.
-
-`m2m_edge_index.pt` MUST contain a list of tensors of length `L`, i.e. one
-edge-index tensor per mesh level. Each entry MUST have shape `[2, E_level]`
-where `E_level` is the number of edges at that level.
-
-For hierarchical graphs, `mesh_up_edge_index.pt` and
-`mesh_down_edge_index.pt` MUST each contain a list of length `L - 1` of tensors,
-i.e. one per inter-level connection, so that  entry `i` connects level `i` and
-level `i+1`. Each entry MUST have shape `[2, E_interlevel]` where `E_interlevel` is the number of edges going either up
-(`mesh_up_edge_index.pt`) or down (`mesh_down_edge_index.pt`) between that
-level pair.
-
-For every edge-index tensor above:
-
-- Row `0` MUST be sender node index, row `1` MUST be receiver node index.
-- Dtype MUST be integer.
-
-#### Edge features
-
-`*_features.pt` files MUST each contain a single tensor with static features
-for the edges in a particular graph component. The tensor MUST satisfy the
-following requirements:
-
-- The shape MUST be `[E, 3]`, where `E` is the number of edges in that
-  component (and MUST match the corresponding edge index file).
-- The graph generation in [neural-lam v0.1.0]() creates `E==3` edge features with the following content:
-  - Columns `1:3` MUST be `vdiff = sender_pos - receiver_pos` in x/y.
-  - Column `0` MUST be edge length, where `edge_length = ||vdiff||_2`.
-- Dtype MUST be floating-point.
+Every tensors MUST stored in a manner ameanable to load with `torch.load(...)` (this can most easily be support by using `torch.save(...)` to store tensors to disk) and satisfy the requirements below.
 
 ### Nodes
+
+The `neural-lam` graph format on disk does not explicitly store node features for grid nodes, as these are expected to be dynamic and stored separately in the dataset. However, static features for mesh nodes MUST be stored in `mesh_features.pt` files (as described below).
+
+#### Node index space
+
+Node indices in edge tensors MUST be stored in a single global index space:
+
+- Mesh nodes MUST come first.
+- Grid nodes MUST follow after all mesh nodes.
+- For hierarchical graphs, each mesh level MUST occupy a contiguous mesh index
+  range in ascending level order.
 
 #### Mesh node features
 
@@ -128,58 +119,70 @@ that level. Each tensor MUST satisfy the following requirements:
   dividing by the maximum absolute grid coordinate.
 - Dtype MUST be floating-point.
 
-## 4. Level Encoding
+### Edges
 
-`m2m_edge_index.pt`, `m2m_features.pt`, and `mesh_features.pt` MUST store lists of
-length `L` (number of mesh levels).
+#### Edge indices
 
-- Non-hierarchical graphs: `L == 1`.
-- Hierarchical graphs: `L > 1`.
-- Entry `0` MUST always be the bottom mesh level.
+The following edge index files MUST be defined:
 
+- `g2m_edge_index.pt`
+- `m2g_edge_index.pt`
+- `m2m_edge_index.pt`
+- `mesh_up_edge_index.pt` (hierarchical graphs only, `L > 1`)
+- `mesh_down_edge_index.pt` (hierarchical graphs only, `L > 1`)
 
-## 5. Node Index Space
+`g2m_edge_index.pt` and `m2g_edge_index.pt` MUST each contain a single tensor
+with shape `[2, E]`, where `E` is the number of edges in that component.
 
-Node indices in edge tensors MUST be stored in a single global index space:
+`m2m_edge_index.pt` MUST contain a list of tensors of length `L`, i.e. one
+edge-index tensor per mesh level. Each entry MUST have shape `[2, E_level]`,
+where `E_level` is the number of edges at that level.
 
-- Mesh nodes MUST come first.
-- Grid nodes MUST follow after all mesh nodes.
-- For hierarchical graphs, each mesh level MUST occupy a contiguous mesh index
-  range in ascending level order.
+For hierarchical graphs, `mesh_up_edge_index.pt` and
+`mesh_down_edge_index.pt` MUST each contain a list of length `L - 1` of
+tensors, i.e. one per inter-level connection, so that entry `i` connects level
+`i` and level `i+1`. Each entry MUST have shape `[2, E_interlevel]`, where
+`E_interlevel` is the number of edges going either up
+(`mesh_up_edge_index.pt`) or down (`mesh_down_edge_index.pt`) between that
+level pair.
 
-Additional conventions used by `neural_lam.create_graph`:
+For every edge-index tensor above:
 
-- `g2m` receivers MUST be on the bottom mesh level.
-- `m2g` senders MUST be on the bottom mesh level.
+- Row `0` MUST be sender node index, row `1` MUST be receiver node index.
+- Dtype MUST be integer.
 
-## 6. Runtime Load Expectations
+#### Edge features
 
-`neural_lam.utils.load_graph` applies these assumptions (graph files MUST
-conform):
+The following edge feature files MUST be defined:
 
-- It expects the files listed above.
-- It infers `hierarchical = (len(m2m_edge_index) > 1)`.
-- For non-hierarchical graphs (`L == 1`), it unwraps single-entry lists into
-  plain tensors for `m2m_*` and `mesh_features`.
-- For hierarchical graphs (`L > 1`), it keeps per-level tensors in
-  `BufferList` containers.
-- It normalizes all edge features by the longest edge length found in
-  `m2m_features`.
+- `g2m_features.pt`
+- `m2g_features.pt`
+- `m2m_features.pt`
+- `mesh_up_features.pt` (hierarchical graphs only, `L > 1`)
+- `mesh_down_features.pt` (hierarchical graphs only, `L > 1`)
 
-## 7. Validation CLI
+`g2m_features.pt` and `m2g_features.pt` MUST each contain a single tensor with
+shape `[E, N_f]`, where `E` matches the number of edges in the corresponding
+`*_edge_index.pt` file.
 
-Use:
+`m2m_features.pt` MUST contain a list of length `L`, i.e. one feature tensor
+per mesh level. Entry `i` MUST have shape `[E_level, N_f]`, where `E_level`
+matches the edge count in entry `i` of `m2m_edge_index.pt`.
 
-```bash
-uv run docs/validate_graph.py --graph_dir <path-to-graph-dir>
-```
+For hierarchical graphs, `mesh_up_features.pt` and `mesh_down_features.pt`
+MUST each contain a list of length `L - 1`, i.e. one feature tensor per
+inter-level connection between level `i` and `i+1`. Entry `i` MUST have shape
+`[E_interlevel, N_f]`, where `E_interlevel` matches the edge count in entry `i`
+of the corresponding `mesh_*_edge_index.pt` file.
 
-The validator loads each component from disk and checks:
+For every edge feature tensor above:
 
-- required files and container types,
-- shape/dtype consistency,
-- cross-file edge-count consistency,
-- mesh-level consistency,
-- hierarchical up/down level connectivity ranges,
-- grid/mesh index partitioning conventions,
-- consistency with the runtime graph tensor conventions.
+- The shape MUST be `[E_component, N_f]`.
+- `N_f` MUST be consistent across all edge feature tensors in the graph.
+- Dtype MUST be floating-point.
+
+In graphs created by `neural_lam.create_graph`, `N_f == 3` by default with:
+
+- Column `0`: edge length, where `edge_length = ||sender_pos - receiver_pos||_2`.
+- Column `1`: x-component of `vdiff = sender_pos - receiver_pos`.
+- Column `2`: y-component of `vdiff = sender_pos - receiver_pos`.
