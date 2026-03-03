@@ -14,8 +14,31 @@ class BaseHiGraphModel(BaseGraphModel):
     Base class for hierarchical graph models.
     """
 
-    def __init__(self, args, config: NeuralLAMConfig, datastore: BaseDatastore):
-        super().__init__(args, config=config, datastore=datastore)
+    def __init__(
+        self,
+        config: NeuralLAMConfig,
+        datastore: BaseDatastore,
+        graph: str = "multiscale",
+        hidden_dim: int = 64,
+        hidden_layers: int = 1,
+        processor_layers: int = 4,
+        mesh_aggr: str = "sum",
+        num_past_forcing_steps: int = 1,
+        num_future_forcing_steps: int = 1,
+        output_std: bool = False,
+    ):
+        super().__init__(
+            config=config,
+            datastore=datastore,
+            graph=graph,
+            hidden_dim=hidden_dim,
+            hidden_layers=hidden_layers,
+            processor_layers=processor_layers,
+            mesh_aggr=mesh_aggr,
+            num_past_forcing_steps=num_past_forcing_steps,
+            num_future_forcing_steps=num_future_forcing_steps,
+            output_std=output_std,
+        )
 
         # Track number of nodes, edges on each level
         # Flatten lists for efficient embedding
@@ -81,8 +104,8 @@ class BaseHiGraphModel(BaseGraphModel):
             [
                 InteractionNet(
                     edge_index,
-                    args.hidden_dim,
-                    hidden_layers=args.hidden_layers,
+                    hidden_dim,
+                    hidden_layers=hidden_layers,
                 )
                 for edge_index in self.mesh_up_edge_index
             ]
@@ -93,8 +116,8 @@ class BaseHiGraphModel(BaseGraphModel):
             [
                 InteractionNet(
                     edge_index,
-                    args.hidden_dim,
-                    hidden_layers=args.hidden_layers,
+                    hidden_dim,
+                    hidden_layers=hidden_layers,
                     update_edges=False,
                 )
                 for edge_index in self.mesh_down_edge_index

@@ -14,14 +14,8 @@ from loguru import logger
 # Local
 from . import utils
 from .config import load_config_and_datastore
-from .models import GraphLAM, HiLAM, HiLAMParallel
+from .models import MODELS, ForecasterModule
 from .weather_dataset import WeatherDataModule
-
-MODELS = {
-    "graph_lam": GraphLAM,
-    "hi_lam": HiLAM,
-    "hi_lam_parallel": HiLAMParallel,
-}
 
 
 @logger.catch
@@ -286,9 +280,38 @@ def main(input_args=None):
         except ValueError:
             raise ValueError("devices should be 'auto' or a list of integers")
 
-    # Load model parameters Use new args for model
-    ModelClass = MODELS[args.model]
-    model = ModelClass(args, config=config, datastore=datastore)
+    # Build predictor and forecaster externally, then pass to ForecasterModule
+    # (Items 2 & 3: dependency injection + explicit params)
+    from .models.ar_forecaster import ARForecaster
+
+    predictor_class = MODELS[args.model]
+    predictor = predictor_class(
+        config=config,
+        datastore=datastore,
+        graph=args.graph,
+        hidden_dim=args.hidden_dim,
+        hidden_layers=args.hidden_layers,
+        processor_layers=args.processor_layers,
+        mesh_aggr=args.mesh_aggr,
+        num_past_forcing_steps=args.num_past_forcing_steps,
+        num_future_forcing_steps=args.num_future_forcing_steps,
+        output_std=args.output_std,
+    )
+    forecaster = ARForecaster(predictor, datastore)
+
+    model = ForecasterModule(
+        forecaster=forecaster,
+        config=config,
+        datastore=datastore,
+        loss=args.loss,
+        lr=args.lr,
+        restore_opt=args.restore_opt,
+        n_example_pred=args.n_example_pred,
+        val_steps_to_log=args.val_steps_to_log,
+        metrics_watch=args.metrics_watch,
+        var_leads_metrics_watch=args.var_leads_metrics_watch,
+        output_std=args.output_std,
+    )
 
     if args.eval:
         prefix = f"eval-{args.eval}-"

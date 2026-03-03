@@ -12,9 +12,18 @@ from neural_lam import config as nlconfig
 from neural_lam.create_graph import create_graph_from_datastore
 from neural_lam.datastore import DATASTORES
 from neural_lam.datastore.base import BaseRegularGridDatastore
-from neural_lam.models.graph_lam import GraphLAM
+from neural_lam.models.forecaster_module import ForecasterModule
 from neural_lam.weather_dataset import WeatherDataModule
 from tests.conftest import init_datastore_example
+
+# Model architecture defaults for tests
+GRAPH = "1level"
+HIDDEN_DIM = 4
+HIDDEN_LAYERS = 1
+PROCESSOR_LAYERS = 2
+MESH_AGGR = "sum"
+NUM_PAST_FORCING_STEPS = 1
+NUM_FUTURE_FORCING_STEPS = 1
 
 
 def run_simple_training(datastore, set_output_std):
@@ -41,10 +50,7 @@ def run_simple_training(datastore, set_output_std):
         max_epochs=1,
         deterministic=True,
         accelerator=device_name,
-        # XXX: `devices` has to be set to 2 otherwise
-        # neural_lam.models.ar_model.ARModel.aggregate_and_plot_metrics fails
-        # because it expects to aggregate over multiple devices
-        devices=2,
+        devices=1,
         log_every_n_steps=1,
         # use `detect_anomaly` to ensure that we don't have NaNs popping up
         # during training
@@ -73,39 +79,49 @@ def run_simple_training(datastore, set_output_std):
         num_future_forcing_steps=1,
     )
 
-    class ModelArgs:
-        output_std = set_output_std
-        loss = "mse"
-        restore_opt = False
-        n_example_pred = 1
-        # XXX: this should be superfluous when we have already defined the
-        # model object no?
-        graph = graph_name
-        hidden_dim = 4
-        hidden_layers = 1
-        processor_layers = 2
-        mesh_aggr = "sum"
-        lr = 1.0e-3
-        val_steps_to_log = [1, 3]
-        metrics_watch = []
-        num_past_forcing_steps = 1
-        num_future_forcing_steps = 1
-
-    model_args = ModelArgs()
-
     config = nlconfig.NeuralLAMConfig(
         datastore=nlconfig.DatastoreSelection(
             kind=datastore.SHORT_NAME, config_path=datastore.root_path
         )
     )
 
-    model = GraphLAM(  # noqa
-        args=model_args,
-        datastore=datastore,
+    # Build forecaster externally (Items 2 & 3)
+    from neural_lam.models.ar_forecaster import ARForecaster
+    from neural_lam.models import MODELS
+
+    predictor_class = MODELS["graph_lam"]
+    predictor = predictor_class(
         config=config,
+        datastore=datastore,
+        graph=graph_name,
+        hidden_dim=HIDDEN_DIM,
+        hidden_layers=HIDDEN_LAYERS,
+        processor_layers=PROCESSOR_LAYERS,
+        mesh_aggr=MESH_AGGR,
+        num_past_forcing_steps=NUM_PAST_FORCING_STEPS,
+        num_future_forcing_steps=NUM_FUTURE_FORCING_STEPS,
+        output_std=set_output_std,
+    )
+    forecaster = ARForecaster(predictor, datastore)
+
+    model = ForecasterModule(
+        forecaster=forecaster,
+        config=config,
+        datastore=datastore,
+        loss="mse",
+        lr=1.0e-3,
+        restore_opt=False,
+        n_example_pred=1,
+        val_steps_to_log=[1, 3],
+        metrics_watch=[],
+        var_leads_metrics_watch={},
+        output_std=set_output_std,
     )
     wandb.init()
-    trainer.fit(model=model, datamodule=data_module)
+    try:
+        trainer.fit(model=model, datamodule=data_module)
+    finally:
+        wandb.finish()
 
 
 @pytest.mark.parametrize("datastore_name", DATASTORES.keys())
