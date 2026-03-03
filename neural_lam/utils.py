@@ -370,7 +370,11 @@ def setup_training_logger(datastore, args, run_name):
         logger.log_hyperparams(
             dict(training=vars(args), datastore=datastore._config)
         )
-
+    else:
+        raise NotImplementedError(
+            f"Unsupported logger type: '{args.logger}'. "
+            "Supported loggers are: 'wandb', 'mlflow'."
+        )
     return logger
 
 
