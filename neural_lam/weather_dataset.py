@@ -131,16 +131,47 @@ class WeatherDataset(torch.utils.data.Dataset):
                     UserWarning,
                 )
 
-            # check that there are enough forecast steps available to create
-            # samples given the number of autoregressive steps requested
-            n_forecast_steps = self.da_state.elapsed_forecast_duration.size
-            if n_forecast_steps < 2 + self.ar_steps:
+            # Check that there are enough forecast steps available for state
+            # slicing. This includes two initial states and `ar_steps` targets,
+            # potentially offset by past forcing.
+            required_state_steps = (
+                max(2, self.num_past_forcing_steps) + self.ar_steps
+            )
+            n_state_forecast_steps = (
+                self.da_state.elapsed_forecast_duration.size
+            )
+            if n_state_forecast_steps < required_state_steps:
                 raise ValueError(
-                    "The number of forecast steps available "
-                    f"({n_forecast_steps}) is less than the required "
-                    f"2+ar_steps (2+{self.ar_steps}={2 + self.ar_steps}) for "
-                    "creating a sample with initial and target states."
+                    "The number of state forecast steps available "
+                    f"({n_state_forecast_steps}) is less than the required "
+                    f"{required_state_steps} "
+                    f"(max(2, num_past_forcing_steps={self.num_past_forcing_steps})"
+                    f" + ar_steps={self.ar_steps}) for creating a sample with "
+                    "initial and target states."
                 )
+
+            # If forcing data is present, also validate that the complete
+            # forcing window can be constructed for each autoregressive target
+            # step without truncation.
+            if self.da_forcing is not None:
+                required_forcing_steps = (
+                    max(2, self.num_past_forcing_steps)
+                    + self.ar_steps
+                    + self.num_future_forcing_steps
+                )
+                n_forcing_forecast_steps = (
+                    self.da_forcing.elapsed_forecast_duration.size
+                )
+                if n_forcing_forecast_steps < required_forcing_steps:
+                    raise ValueError(
+                        "The number of forcing forecast steps available "
+                        f"({n_forcing_forecast_steps}) is less than the "
+                        f"required {required_forcing_steps} "
+                        f"(max(2, num_past_forcing_steps={self.num_past_forcing_steps})"
+                        f" + ar_steps={self.ar_steps} + "
+                        f"num_future_forcing_steps={self.num_future_forcing_steps}) "
+                        "for constructing forcing windows."
+                    )
 
             return self.da_state.analysis_time.size
         else:
@@ -159,6 +190,7 @@ class WeatherDataset(torch.utils.data.Dataset):
                 - self.ar_steps
                 - max(2, self.num_past_forcing_steps)
                 - self.num_future_forcing_steps
+                + 1
             )
 
     def _slice_state_time(self, da_state, idx, n_steps: int):
@@ -468,6 +500,17 @@ class WeatherDataset(torch.utils.data.Dataset):
             the target steps.
 
         """
+        dataset_len = len(self)
+
+        # Match Python sequence semantics for negative indexing.
+        if idx < 0:
+            idx += dataset_len
+        if idx < 0 or idx >= dataset_len:
+            raise IndexError(
+                f"Index {idx} is out of bounds for dataset of size "
+                f"{dataset_len}"
+            )
+
         (
             da_init_states,
             da_target_states,
