@@ -9,13 +9,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Fix README image paths to use absolute GitHub URLs so images display correctly on PyPI [\#188](https://github.com/mllam/neural-lam/pull/188) @bk-simon
+
+- Fix typo in `ar_model.py` that causes `AttributeError` during evaluation [\#204](https://github.com/mllam/neural-lam/pull/204) @ritinikhil
+
+- Changed the hardcoded True to a conditional check "persistent_workers=self.num_workers > 0" [\#235](https://github.com/mllam/neural-lam/pull/235) @santhil-cyber
+
+- `fractional_plot_bundle` now correctly multiplies by fraction instead of dividing [
+\#222](https://github.com/mllam/neural-lam/pull/222) @santhil-cyber
+
+- Fix Slack domain link [\#288](https://github.com/mllam/neural-lam/pull/288) @sadamov
+
+### Fixed
+
 - Infer spatial coordinate names for MDPDatastore (rather than assuming names `x` and `y`), allows for e.g. lat/lon regular grids [\#169](https://github.com/mllam/neural-lam/pull/169) @leifdenby
 
 ### Maintenance
 
-- Update CI/CD to use python 3.13 for testing and full range of current python versions for linting (3.10 - 3.14) [\#173](https://github.com/mllam/neural-lam/pull/173)
+- Update PR template to clarify milestone/roadmap requirement and maintenance changes [\#186](https://github.com/mllam/neural-lam/pull/186) @joeloskarsson
 
-- Move development dependencies to dependency-group [#\174](](https://github.com/mllam/neural-lam/pull/174) @observingClouds
+- Update CI/CD to use python 3.13 for testing and full range of current python versions for linting (3.10 - 3.14) [\#173](https://github.com/mllam/neural-lam/pull/173) @observingClouds
+
+- Move development dependencies to dependency-group [#\174](https://github.com/mllam/neural-lam/pull/174) @observingClouds
+
+- Update CI/CD to use only uv for full test suite and drop pdm [\#178](https://github.com/mllam/neural-lam/pull/178) @observingClouds
+
+- Fix caching of MEPS example data in CI/CD [\#181](https://github.com/mllam/neural-lam/pull/181) @observingClouds
 
 ## [v0.5.0](https://github.com/mllam/neural-lam/releases/tag/v0.5.0)
 
@@ -25,8 +44,6 @@ This release contains maintenance and fixes, preventing some unexpected crashes 
 
 - Expose run name as optional command line argument `--logger_run_name` to allow user-defined names
 [\#156](https://github.com/mllam/neural-lam/pull/156) @observingClouds
-
-### Added
 
 - Add support for any forecast step size(`step_length`) [\#172](https://github.com/mllam/neural-lam/pull/172) @observingClouds
 

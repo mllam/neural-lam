@@ -1,9 +1,9 @@
-[![slack](https://img.shields.io/badge/slack-join-brightgreen.svg?logo=slack)](https://kutt.it/mllam)
+[![slack](https://img.shields.io/badge/slack-join-brightgreen.svg?logo=slack)](https://kutt.to/mllam)
 [![Linting](https://github.com/mllam/neural-lam/actions/workflows/pre-commit.yml/badge.svg?branch=main)](https://github.com/mllam/neural-lam/actions/workflows/pre-commit.yml)
 [![CPU+GPU testing](https://github.com/mllam/neural-lam/actions/workflows/install-and-test.yml/badge.svg?branch=main)](https://github.com/mllam/neural-lam/actions/workflows/install-and-test.yml)
 
 <p align="middle">
-    <img src="figures/neural_lam_header.png" width="700">
+    <img src="https://raw.githubusercontent.com/mllam/neural-lam/main/figures/neural_lam_header.png" width="700">
 </p>
 
 Neural-LAM is a repository of graph-based neural weather prediction models for Limited Area Modeling (LAM).
@@ -58,15 +58,15 @@ Still, some restrictions are inevitable:
 * The graph and data are specific to the limited area under consideration. This is of course true for the data, but also the graph should be created with the exact geometry of the area in mind.
 
 <p align="middle">
-  <img src="figures/neural_lam_setup.png" width="600"/>
+  <img src="https://raw.githubusercontent.com/mllam/neural-lam/main/figures/neural_lam_setup.png" width="600"/>
 </p>
 
 
 # Installing Neural-LAM
 
 When installing `neural-lam` you have a choice of either installing with
-directly `pip` or using the `pdm` package manager.
-We recommend using `pdm` as it makes it easy to add/remove packages while
+directly `pip` or using the `uv` package manager.
+We recommend using `uv` as it makes it easy to add/remove packages while
 keeping versions consistent (it automatically updates the `pyproject.toml`
 file), makes it easy to handle virtual environments and includes the
 development toolchain packages installation too.
@@ -87,21 +87,21 @@ python -m pip install neural_lam
 
 ### From source
 
-#### Using `pdm`
+#### Using `uv`
 
 1. Clone this repository and navigate to the root directory.
-2. Install `pdm` if you don't have it installed on your system (either with `pip install pdm` or [following the install instructions](https://pdm-project.org/latest/#installation)).
+2. Install `uv` if you don't have it installed on your system (either with `pip install uv` or [following the install instructions](https://docs.astral.sh/uv/getting-started/installation)).
 > If you are happy using the latest version of `torch` with GPU support (expecting the latest version of CUDA is installed on your system) you can skip to step 5.
-3. Create a virtual environment for pdm to use with `pdm venv create --with-pip`.
-4. Install a specific version of `torch` with `pdm run python -m pip install torch --index-url https://download.pytorch.org/whl/cpu` for a CPU-only version or `pdm run python -m pip install torch --index-url https://download.pytorch.org/whl/cu111` for CUDA 11.1 support (you can find the correct URL for the variant you want on [PyTorch webpage](https://pytorch.org/get-started/locally/)).
-5. Install the dependencies with `pdm install` (by default this in include the). If you will be developing `neural-lam` we recommend to install the development dependencies with `pdm install --group dev`. By default `pdm` installs the `neural-lam` package in editable mode, so you can make changes to the code and see the effects immediately.
+3. Create a virtual environment for uv to use with `uv venv --no-project`.
+4. Install a specific version of `torch` with `uv pip install torch --index-url https://download.pytorch.org/whl/cpu` for a CPU-only version or `uv pip install torch --index-url https://download.pytorch.org/whl/cu111` for CUDA 11.1 support (you can find the correct URL for the variant you want on [PyTorch webpage](https://pytorch.org/get-started/locally/)).
+5. Install the dependencies with `uv pip install .`. If you will be developing `neural-lam` we recommend to install the development dependencies with `uv pip install --group dev -e .`. This installs the `neural-lam` package in editable mode, so you can make changes to the code and see the effects immediately.
 
 #### Using `pip`
 
 1. Clone this repository and navigate to the root directory.
 > If you are happy using the latest version of `torch` with GPU support (expecting the latest version of CUDA is installed on your system) you can skip to step 3.
 2. Install a specific version of `torch` with `python -m pip install torch --index-url https://download.pytorch.org/whl/cpu` for a CPU-only version or `python -m pip install torch --index-url https://download.pytorch.org/whl/cu111` for CUDA 11.1 support (you can find the correct URL for the variant you want on [PyTorch webpage](https://pytorch.org/get-started/locally/)).
-3. Install the dependencies with `python -m pip install .`. If you will be developing `neural-lam` we recommend to install in editable mode and install the development dependencies with `python -m pip install -e ".[dev]"` so you can make changes to the code and see the effects immediately.
+3. Install the dependencies with `python -m pip install .`. If you will be developing `neural-lam` we recommend to install in editable mode and install the development dependencies with `python -m pip install --group dev -e .` so you can make changes to the code and see the effects immediately.
 
 
 # Using Neural-LAM

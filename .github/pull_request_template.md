@@ -8,7 +8,7 @@
 
 ## Issue Link
 
-< Link to the relevant issue or task. > (e.g. `closes #00` or `solves #00`)
+< Link to the relevant issue or task, if applicable > (e.g. `closes #00` or `solves #00`)
 
 ## Type of change
 
@@ -43,10 +43,12 @@ Each PR comes with its own improvements and flaws. The reviewer should check the
   - *added*: when you have added new functionality
   - *changed*: when default behaviour of the code has been changed
   - *fixes*: when your contribution fixes a bug
+  - *maintenance*: when your contribution is relates to repo maintenance, e.g. CI/CD or documentation
 
 ## Checklist for assignee
 
 - [ ] PR is up to date with the base branch
 - [ ] the tests pass
-- [ ] author has added an entry to the changelog (and designated the change as *added*, *changed* or *fixed*)
+- [ ] (if the PR is not just maintenance/bugfix) the PR is assigned to the next milestone. If it is not, propose it for a future milestone.
+- [ ] author has added an entry to the changelog (and designated the change as *added*, *changed*, *fixed* or *maintenance*)
 - Once the PR is ready to be merged, squash commits and merge the PR.
