@@ -1,3 +1,5 @@
+"""Neural-LAM: graph-based neural weather prediction models."""
+
 # Standard library
 import importlib.metadata
 

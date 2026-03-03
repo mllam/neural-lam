@@ -1,3 +1,5 @@
+"""Dataclasses describing the MEPS numpy-file datastore configuration."""
+
 # Standard library
 from dataclasses import dataclass, field
 from datetime import timedelta

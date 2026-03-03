@@ -1,3 +1,5 @@
+"""Base implementations for hierarchical (multi-level) graph models."""
+
 # Third-party
 from torch import nn
 
@@ -15,6 +17,7 @@ class BaseHiGraphModel(BaseGraphModel):
     """
 
     def __init__(self, args, config: NeuralLAMConfig, datastore: BaseDatastore):
+        """Extend :class:`BaseGraphModel` with hierarchical mesh structures."""
         super().__init__(args, config=config, datastore=datastore)
 
         # Track number of nodes, edges on each level
@@ -103,8 +106,13 @@ class BaseHiGraphModel(BaseGraphModel):
 
     def get_num_mesh(self):
         """
-        Compute number of mesh nodes from loaded features,
-        and number of mesh nodes that should be ignored in encoding/decoding
+        Compute mesh node counts used for encoding and decoding.
+
+        Returns
+        -------
+        tuple[int, int]
+            Total number of mesh nodes and the number to ignore during
+            encoding/decoding.
         """
         num_mesh_nodes = sum(
             node_feat.shape[0] for node_feat in self.mesh_static_features
@@ -116,20 +124,34 @@ class BaseHiGraphModel(BaseGraphModel):
 
     def embedd_mesh_nodes(self):
         """
-        Embed static mesh features
-        This embeds only bottom level, rest is done at beginning of
-        processing step
-        Returns tensor of shape (num_mesh_nodes[0], d_h)
+        Embed static mesh features for the bottom level of the hierarchy.
+
+        Returns
+        -------
+        torch.Tensor
+            Embedded representations for the base-level mesh nodes.
+
+            * **Shape**: ``(num_mesh_nodes[0], d_h)``
         """
         return self.mesh_embedders[0](self.mesh_static_features[0])
 
     def process_step(self, mesh_rep):
         """
-        Process step of embedd-process-decode framework
-        Processes the representation on the mesh, possible in multiple steps
+        Run the processor portion of the hierarchical encode-process-decode.
 
-        mesh_rep: has shape (B, num_mesh_nodes, d_h)
-        Returns mesh_rep: (B, num_mesh_nodes, d_h)
+        Parameters
+        ----------
+        mesh_rep : torch.Tensor
+            Base-level mesh representations prior to the processor.
+
+            * **Shape**: ``(B, num_mesh_nodes, d_h)``
+
+        Returns
+        -------
+        torch.Tensor
+            Updated base-level mesh representations.
+
+            * **Shape**: ``(B, num_mesh_nodes, d_h)``
         """
         batch_size = mesh_rep.shape[0]
 
@@ -222,16 +244,34 @@ class BaseHiGraphModel(BaseGraphModel):
         self, mesh_rep_levels, mesh_same_rep, mesh_up_rep, mesh_down_rep
     ):
         """
-        Internal processor step of hierarchical graph models.
-        Between mesh init and read out.
+        Internal processor step executed between mesh init and read-out.
 
-        Each input is list with representations, each with shape
+        Parameters
+        ----------
+        mesh_rep_levels : list[torch.Tensor]
+            Mesh representations for each level.
 
-        mesh_rep_levels: (B, num_mesh_nodes[l], d_h)
-        mesh_same_rep: (B, M_same[l], d_h)
-        mesh_up_rep: (B, M_up[l -> l+1], d_h)
-        mesh_down_rep: (B, M_down[l <- l+1], d_h)
+            * **Shape**: ``(B, num_mesh_nodes[l], d_h)``
+        mesh_same_rep : list[torch.Tensor]
+            Same-level edge representations per level.
 
-        Returns same lists
+            * **Shape**: ``(B, M_same[l], d_h)``
+        mesh_up_rep : list[torch.Tensor]
+            Edge representations from level ``l`` to ``l+1``.
+
+            * **Shape**: ``(B, M_up[l -> l+1], d_h)``
+        mesh_down_rep : list[torch.Tensor]
+            Edge representations from level ``l+1`` down to ``l``.
+
+            * **Shape**: ``(B, M_down[l <- l+1], d_h)``
+
+        Returns
+        -------
+        tuple[
+            list[torch.Tensor], list[torch.Tensor], list[torch.Tensor],
+            list[torch.Tensor]
+        ]
+            Updated representations for (mesh, same-level, up edges, down edges)
+            in that order.
         """
         raise NotImplementedError("hi_process_step not implemented")

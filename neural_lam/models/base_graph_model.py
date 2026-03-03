@@ -1,3 +1,5 @@
+"""Base classes for Neural-LAM graph models."""
+
 # Third-party
 import torch
 
@@ -16,6 +18,18 @@ class BaseGraphModel(ARModel):
     """
 
     def __init__(self, args, config: NeuralLAMConfig, datastore: BaseDatastore):
+        """
+        Initialize the graph-model scaffolding shared by concrete variants.
+
+        Parameters
+        ----------
+        args : argparse.Namespace
+            Training/runtime arguments describing graph paths and widths.
+        config : NeuralLAMConfig
+            Experiment configuration for clamping and weighting.
+        datastore : BaseDatastore
+            Datastore providing static features and metadata (e.g. graph path).
+        """
         super().__init__(args, config=config, datastore=datastore)
 
         # Load graph with static features
@@ -86,7 +100,14 @@ class BaseGraphModel(ARModel):
         self, config: NeuralLAMConfig, datastore: BaseDatastore
     ):
         """
-        Prepare parameters for clamping predicted values to valid range
+        Prepare per-feature parameters for clamping model outputs.
+
+        Parameters
+        ----------
+        config : NeuralLAMConfig
+            Model and training configuration containing clamping settings.
+        datastore : BaseDatastore
+            Datastore that provides the ordering of state variables.
         """
 
         # Read configs
@@ -219,18 +240,30 @@ class BaseGraphModel(ARModel):
 
     def get_clamped_new_state(self, state_delta, prev_state):
         """
-        Clamp prediction to valid range supplied in config
-        Returns the clamped new state after adding delta to original state
+        Clamp predicted deltas and add them to the previous state.
 
-        Instead of the new state being computed as
-        $X_{t+1} = X_t + \\delta = X_t + model(\\{X_t,X_{t-1},...\\}, forcing)$
-        The clamped values will be
-        $f(f^{-1}(X_t) + model(\\{X_t, X_{t-1},... \\}, forcing))$
-        Which means the model will learn to output values in the range of the
-        inverse clamping function
+        The clamped values follow
+        ``f(f^{-1}(X_t) + model({X_t, X_{t-1}, ...}, forcing))`` so that the
+        model learns to emit outputs in the range of the inverse clamping
+        function.
 
-        state_delta: (B, num_grid_nodes, feature_dim)
-        prev_state: (B, num_grid_nodes, feature_dim)
+        Parameters
+        ----------
+        state_delta : torch.Tensor
+            Predicted change to apply to the previous state.
+
+            * **Shape**: ``(B, num_grid_nodes, feature_dim)``
+        prev_state : torch.Tensor
+            Previous state ``X_t``.
+
+            * **Shape**: ``(B, num_grid_nodes, feature_dim)``
+
+        Returns
+        -------
+        torch.Tensor
+            Clamped next state ``X_{t+1}``.
+
+            * **Shape**: ``(B, num_grid_nodes, feature_dim)``
         """
 
         # Assign new state, but overwrite clamped values of each type later
@@ -267,34 +300,76 @@ class BaseGraphModel(ARModel):
 
     def get_num_mesh(self):
         """
-        Compute number of mesh nodes from loaded features,
-        and number of mesh nodes that should be ignored in encoding/decoding
+        Compute mesh node counts used for encoding and decoding.
+
+        Returns
+        -------
+        tuple[int, int]
+            Total number of mesh nodes and the number that should be ignored
+            during encoding/decoding.
         """
         raise NotImplementedError("get_num_mesh not implemented")
 
     def embedd_mesh_nodes(self):
         """
-        Embed static mesh features
-        Returns tensor of shape (num_mesh_nodes, d_h)
+        Embed static mesh features for downstream processing.
+
+        Returns
+        -------
+        torch.Tensor
+            Embedded mesh node representations.
+
+            * **Shape**: ``(num_mesh_nodes, d_h)``
         """
         raise NotImplementedError("embedd_mesh_nodes not implemented")
 
     def process_step(self, mesh_rep):
         """
-        Process step of embedd-process-decode framework
-        Processes the representation on the mesh, possible in multiple steps
+        Run the processor portion of the encode-process-decode framework.
 
-        mesh_rep: has shape (B, num_mesh_nodes, d_h)
-        Returns mesh_rep: (B, num_mesh_nodes, d_h)
+        Parameters
+        ----------
+        mesh_rep : torch.Tensor
+            Mesh node representations prior to the processor.
+
+            * **Shape**: ``(B, num_mesh_nodes, d_h)``
+
+        Returns
+        -------
+        torch.Tensor
+            Updated mesh representations after processing.
+
+            * **Shape**: ``(B, num_mesh_nodes, d_h)``
         """
         raise NotImplementedError("process_step not implemented")
 
     def predict_step(self, prev_state, prev_prev_state, forcing):
         """
-        Step state one step ahead using prediction model, X_{t-1}, X_t -> X_t+1
-        prev_state: (B, num_grid_nodes, feature_dim), X_t
-        prev_prev_state: (B, num_grid_nodes, feature_dim), X_{t-1}
-        forcing: (B, num_grid_nodes, forcing_dim)
+        Advance the state by one step using the prediction model.
+
+        Parameters
+        ----------
+        prev_state : torch.Tensor
+            Current state ``X_t``.
+
+            * **Shape**: ``(B, num_grid_nodes, feature_dim)``
+        prev_prev_state : torch.Tensor
+            Previous state ``X_{t-1}``.
+
+            * **Shape**: ``(B, num_grid_nodes, feature_dim)``
+        forcing : torch.Tensor
+            Forcing inputs applied at the prediction step.
+
+            * **Shape**: ``(B, num_grid_nodes, forcing_dim)``
+
+        Returns
+        -------
+        tuple[torch.Tensor, torch.Tensor | None]
+            Tuple ``(new_state, pred_std)`` where ``pred_std`` is ``None`` when
+            the model does not emit uncertainty estimates.
+
+            * **Shape**: ``(B, num_grid_nodes, feature_dim)`` for ``new_state``
+              and ``(B, num_grid_nodes, d_f)`` for ``pred_std`` when present.
         """
         batch_size = prev_state.shape[0]
 

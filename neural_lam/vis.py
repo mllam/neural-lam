@@ -1,3 +1,5 @@
+"""Visualization helpers for analysing Neural-LAM predictions and errors."""
+
 # Third-party
 import matplotlib
 import matplotlib.pyplot as plt
@@ -12,9 +14,23 @@ from .datastore.base import BaseRegularGridDatastore
 @matplotlib.rc_context(utils.fractional_plot_bundle(1))
 def plot_error_map(errors, datastore: BaseRegularGridDatastore, title=None):
     """
-    Plot a heatmap of errors of different variables at different
-    predictions horizons
-    errors: (pred_steps, d_f)
+    Plot a heatmap of per-variable errors across prediction horizons.
+
+    Parameters
+    ----------
+    errors : torch.Tensor
+        Error values for each horizon and feature.
+
+        * **Shape**: ``(pred_steps, d_f)``
+    datastore : BaseRegularGridDatastore
+        Datastore providing metadata for labels and units.
+    title : str or None, optional
+        Optional plot title.
+
+    Returns
+    -------
+    matplotlib.figure.Figure
+        Figure handle containing the rendered heatmap.
     """
     errors_np = errors.T.cpu().numpy()  # (d_f, pred_steps)
     d_f, pred_steps = errors_np.shape
@@ -75,10 +91,29 @@ def plot_prediction(
     vrange=None,
 ):
     """
-    Plot example prediction and grond truth.
+    Plot a prediction alongside the corresponding ground truth field.
 
-    Each has shape (N_grid,)
+    Parameters
+    ----------
+    datastore : BaseRegularGridDatastore
+        Datastore providing coordinate metadata and projection details.
+    da_prediction : xarray.DataArray
+        Predicted field flattened over the grid.
 
+        * **Shape**: ``(N_grid,)``
+    da_target : xarray.DataArray
+        Ground-truth field flattened over the grid.
+
+        * **Shape**: ``(N_grid,)``
+    title : str or None, optional
+        Optional figure title.
+    vrange : tuple[float, float] or None, optional
+        Explicit value range ``(vmin, vmax)`` for the color scale.
+
+    Returns
+    -------
+    matplotlib.figure.Figure
+        Figure handle containing the two subplots.
     """
     # Get common scale for values
     if vrange is None:
@@ -131,8 +166,25 @@ def plot_spatial_error(
     error, datastore: BaseRegularGridDatastore, title=None, vrange=None
 ):
     """
-    Plot errors over spatial map
-    Error and obs_mask has shape (N_grid,)
+    Plot spatial error magnitudes on the datastore grid.
+
+    Parameters
+    ----------
+    error : torch.Tensor
+        Error magnitudes on the flattened grid.
+
+        * **Shape**: ``(N_grid,)``
+    datastore : BaseRegularGridDatastore
+        Datastore providing coordinate metadata and boundary masks.
+    title : str or None, optional
+        Optional figure title.
+    vrange : tuple[float, float] or None, optional
+        Explicit value range ``(vmin, vmax)`` for the color scale.
+
+    Returns
+    -------
+    matplotlib.figure.Figure
+        Figure handle containing the plotted map.
     """
     # Get common scale for values
     if vrange is None:

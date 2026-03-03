@@ -1,3 +1,5 @@
+"""Datastore implementation wrapping ``mllam-data-prep`` outputs."""
+
 # Standard library
 import copy
 import warnings
