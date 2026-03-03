@@ -142,7 +142,7 @@ class SplitMLPs(nn.Module):
     def __init__(self, mlps, chunk_sizes):
         super().__init__()
         if len(mlps) != len(chunk_sizes):
-            raise ValueError("Number of MLPs must match the number of chunks")
+            assert len(mlps) == len(chunk_sizes), "Number of MLPs must match the number of chunks"
 
         self.mlps = nn.ModuleList(mlps)
         self.chunk_sizes = chunk_sizes

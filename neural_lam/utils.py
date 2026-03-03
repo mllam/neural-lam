@@ -130,9 +130,9 @@ def load_graph(graph_dir_path, device="cpu"):
 
     # Some checks for consistency
     if len(m2m_features) != n_levels:
-        raise ValueError("Inconsistent number of levels in mesh")
+        assert len(m2m_features) == n_levels, "Inconsistent number of levels in mesh"
     if len(mesh_static_features) != n_levels:
-        raise ValueError("Inconsistent number of levels in mesh")
+        assert len(mesh_static_features) == n_levels, "Inconsistent number of levels in mesh"
 
     if hierarchical:
         # Load up and down edges and features
@@ -209,7 +209,7 @@ def make_mlp(blueprint, layer_norm=True):
     """
     hidden_layers = len(blueprint) - 2
     if hidden_layers < 0:
-        raise ValueError("Invalid MLP blueprint")
+        assert hidden_layers >= 0, "Invalid MLP blueprint"
 
     layers = []
     for layer_i, (dim1, dim2) in enumerate(zip(blueprint[:-1], blueprint[1:])):
