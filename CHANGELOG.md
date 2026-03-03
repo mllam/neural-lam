@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - Enable `pin_memory` in DataLoaders when GPU is available for faster async CPU-to-GPU data transfers [\#236](https://github.com/mllam/neural-lam/pull/236) @abhaygoudannavar
+- Add `COSMO_example.ipynb` notebook to documentation for onboarding [\#69](https://github.com/mllam/neural-lam/issues/69) @info-gallary
 
 ### Changed
 
