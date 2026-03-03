@@ -1,0 +1,12 @@
+title: neural-lam Documentation
+author: mllam contributors
+
+execute:
+  execute_notebooks: off
+
+repository:
+  url: https://github.com/mllam/neural-lam
+
+html:
+  use_repository_button: true
+  use_issues_button: true
