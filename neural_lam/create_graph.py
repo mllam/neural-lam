@@ -570,6 +570,12 @@ def cli(input_args=None):
         help="Path to neural-lam configuration file",
     )
     parser.add_argument(
+        "--region_config",
+        type=str,
+        default=None,
+        help="Optional region-only configuration YAML.",
+    )
+    parser.add_argument(
         "--name",
         type=str,
         default="multiscale",
@@ -591,22 +597,57 @@ def cli(input_args=None):
         action="store_true",
         help="Generate hierarchical mesh graph. Otherwise multi-scale.",
     )
+    # new add
+    parser.add_argument(
+        "--output_path",
+        type=str,
+        default=None,
+        help="Optional output directory for graph. "
+        "Overrides datastore graph path.",
+    )
     args = parser.parse_args(input_args)
 
-    assert (
-        args.config_path is not None
-    ), "Specify your config with --config_path"
+    if args.region_config is not None:
+        # Local
+        from .region import RegionConfig, generate_xy_from_region
 
-    # Load neural-lam configuration and datastore to use
-    _, datastore = load_config_and_datastore(config_path=args.config_path)
+        if args.output_path is None:
+            raise ValueError(
+                "When using --region_config you must provide --output_path"
+            )
 
-    create_graph_from_datastore(
-        datastore=datastore,
-        output_root_path=os.path.join(datastore.root_path, "graph", args.name),
-        n_max_levels=args.levels,
-        hierarchical=args.hierarchical,
-        create_plot=args.plot,
-    )
+        region = RegionConfig.from_yaml(args.region_config)
+        xy = generate_xy_from_region(region)
+
+        create_graph(
+            graph_dir_path=args.output_path,
+            xy=xy,
+            n_max_levels=args.levels,
+            hierarchical=args.hierarchical,
+            create_plot=args.plot,
+        )
+
+    else:
+        assert (
+            args.config_path is not None
+        ), "Specify --config_path or --region_config"
+
+        _, datastore = load_config_and_datastore(config_path=args.config_path)
+
+        if args.output_path is not None:
+            output_root_path = args.output_path
+        else:
+            output_root_path = os.path.join(
+                datastore.root_path, "graph", args.name
+            )
+
+        create_graph_from_datastore(
+            datastore=datastore,
+            output_root_path=output_root_path,
+            n_max_levels=args.levels,
+            hierarchical=args.hierarchical,
+            create_plot=args.plot,
+        )
 
 
 if __name__ == "__main__":

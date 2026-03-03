@@ -1,0 +1,6 @@
+min_lat: 54.0
+max_lat: 58.0
+min_lon: 8.0
+max_lon: 12.0
+resolution: 0.1
+projection: latlon

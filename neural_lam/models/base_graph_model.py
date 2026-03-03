@@ -6,45 +6,65 @@ from .. import utils
 from ..config import NeuralLAMConfig
 from ..datastore import BaseDatastore
 from ..interaction_net import InteractionNet
+from ..utils import BufferList
 from .ar_model import ARModel
 
 
 class BaseGraphModel(ARModel):
-    """
-    Base (abstract) class for graph-based models building on
-    the encode-process-decode idea.
-    """
 
-    def __init__(self, args, config: NeuralLAMConfig, datastore: BaseDatastore):
+    def __init__(self, args, config, datastore):
         super().__init__(args, config=config, datastore=datastore)
 
-        # Load graph with static features
-        # NOTE: (IMPORTANT!) mesh nodes MUST have the first
-        # num_mesh_nodes indices,
-        graph_dir_path = datastore.root_path / "graph" / args.graph
+        # Standard library
+        from pathlib import Path
+
+        if args.graph_path is not None:
+            graph_dir_path = Path(args.graph_path)
+
+            if not graph_dir_path.exists():
+                raise ValueError(f"Graph path {graph_dir_path} does not exist")
+        else:
+            graph_dir_path = datastore.root_path / "graph" / args.graph
+
         self.hierarchical, graph_ldict = utils.load_graph(
             graph_dir_path=graph_dir_path
         )
+
+        if args.graph_path is not None:
+            expected_grid_nodes = datastore.num_grid_points
+
+            mesh_features = graph_ldict["mesh_static_features"]
+
+            if isinstance(mesh_features, BufferList):
+                loaded_mesh_nodes = mesh_features[0].shape[0]
+            else:
+                loaded_mesh_nodes = mesh_features.shape[0]
+
+            loaded_total_nodes = graph_ldict["g2m_edge_index"].max().item() + 1
+            loaded_grid_nodes = loaded_total_nodes - loaded_mesh_nodes
+
+            if loaded_grid_nodes != expected_grid_nodes:
+                raise ValueError(
+                    "Incompatible graph: expected "
+                    f"{expected_grid_nodes} grid nodes but "
+                    f"graph contains {loaded_grid_nodes}."
+                )
+
         for name, attr_value in graph_ldict.items():
-            # Make BufferLists module members and register tensors as buffers
             if isinstance(attr_value, torch.Tensor):
                 self.register_buffer(name, attr_value, persistent=False)
             else:
                 setattr(self, name, attr_value)
 
-        # Specify dimensions of data
         self.num_mesh_nodes, _ = self.get_num_mesh()
         utils.rank_zero_print(
             f"Loaded graph with {self.num_grid_nodes + self.num_mesh_nodes} "
             f"nodes ({self.num_grid_nodes} grid, {self.num_mesh_nodes} mesh)"
         )
 
-        # grid_dim from data + static
         self.g2m_edges, g2m_dim = self.g2m_features.shape
         self.m2g_edges, m2g_dim = self.m2g_features.shape
 
-        # Define sub-models
-        # Feature embedders for grid
         self.mlp_blueprint_end = [args.hidden_dim] * (args.hidden_layers + 1)
         self.grid_embedder = utils.make_mlp(
             [self.grid_dim] + self.mlp_blueprint_end
@@ -52,19 +72,17 @@ class BaseGraphModel(ARModel):
         self.g2m_embedder = utils.make_mlp([g2m_dim] + self.mlp_blueprint_end)
         self.m2g_embedder = utils.make_mlp([m2g_dim] + self.mlp_blueprint_end)
 
-        # GNNs
-        # encoder
         self.g2m_gnn = InteractionNet(
             self.g2m_edge_index,
             args.hidden_dim,
             hidden_layers=args.hidden_layers,
             update_edges=False,
         )
+
         self.encoding_grid_mlp = utils.make_mlp(
             [args.hidden_dim] + self.mlp_blueprint_end
         )
 
-        # decoder
         self.m2g_gnn = InteractionNet(
             self.m2g_edge_index,
             args.hidden_dim,
@@ -72,14 +90,12 @@ class BaseGraphModel(ARModel):
             update_edges=False,
         )
 
-        # Output mapping (hidden_dim -> output_dim)
         self.output_map = utils.make_mlp(
             [args.hidden_dim] * (args.hidden_layers + 1)
             + [self.grid_output_dim],
             layer_norm=False,
-        )  # No layer norm on this one
+        )
 
-        # Compute indices and define clamping functions
         self.prepare_clamping_params(config, datastore)
 
     def prepare_clamping_params(
@@ -131,11 +147,11 @@ class BaseGraphModel(ARModel):
 
         for feature_idx, feature in enumerate(state_feature_names):
             if feature in lower_lims and feature in upper_lims:
-                assert (
-                    lower_lims[feature] < upper_lims[feature]
-                ), f'Invalid clamping limits for feature "{feature}",\
-                     lower: {lower_lims[feature]}, larger than\
-                     upper: {upper_lims[feature]}'
+                assert lower_lims[feature] < upper_lims[feature], (
+                    f'Invalid clamping limits for feature "{feature}", '
+                    f"lower: {lower_lims[feature]}, "
+                    f"upper: {upper_lims[feature]}"
+                )
                 sigmoid_lower_upper_idx.append(feature_idx)
                 sigmoid_lower_lims.append(
                     normalize_clamping_lim(lower_lims[feature], feature_idx)
