@@ -1,15 +1,18 @@
 # Third-party
 import torch
 
-
 def get_metric(metric_name):
     """
-    Get a defined metric with given name
+    Retrieves a metric function by its name.
 
-    metric_name: str, name of the metric
+    Args:
+        metric_name (str): Name of the metric (e.g., 'mse', 'wmse', 'nll').
 
     Returns:
-    metric: function implementing the metric
+        function: The corresponding function implementing the requested metric.
+
+    Raises:
+        AssertionError: If the metric_name is not found in DEFINED_METRICS.
     """
     metric_name_lower = metric_name.lower()
     assert (
@@ -20,19 +23,19 @@ def get_metric(metric_name):
 
 def mask_and_reduce_metric(metric_entry_vals, mask, average_grid, sum_vars):
     """
-    Masks and (optionally) reduces entry-wise metric values
+    Applies spatial masking and reduces dimensions of the metric values.
 
-    (...,) is any number of batch dimensions, potentially different
-        but broadcastable
-    metric_entry_vals: (..., N, d_state), prediction
-    mask: (N,), boolean mask describing which grid nodes to use in metric
-    average_grid: boolean, if grid dimension -2 should be reduced (mean over N)
-    sum_vars: boolean, if variable dimension -1 should be reduced (sum
-        over d_state)
+    Args:
+        metric_entry_vals (torch.Tensor): Entry-wise values, shape (..., N, d_state).
+        mask (torch.Tensor, optional): Boolean mask for grid nodes, shape (N,).
+        average_grid (bool): If True, reduces the grid dimension (mean over N).
+        sum_vars (bool): If True, reduces the variable dimension (sum over d_state).
 
     Returns:
-    metric_val: One of (...,), (..., d_state), (..., N), (..., N, d_state),
-    depending on reduction arguments.
+        torch.Tensor: Reduced metric value. Shape depends on reduction flags:
+            - (...,) if both average_grid and sum_vars are True.
+            - (..., d_state) if only average_grid is True.
+            - (..., N) if only sum_vars is True.
     """
     # Only keep grid nodes in mask
     if mask is not None:
@@ -55,21 +58,20 @@ def mask_and_reduce_metric(metric_entry_vals, mask, average_grid, sum_vars):
 
 def wmse(pred, target, pred_std, mask=None, average_grid=True, sum_vars=True):
     """
-    Weighted Mean Squared Error
+    Computes the Weighted Mean Squared Error.
+    Useful when certain nodes or variables have different error scales.
 
-    (...,) is any number of batch dimensions, potentially different
-        but broadcastable
-    pred: (..., N, d_state), prediction
-    target: (..., N, d_state), target
-    pred_std: (..., N, d_state) or (d_state,), predicted std.-dev.
-    mask: (N,), boolean mask describing which grid nodes to use in metric
-    average_grid: boolean, if grid dimension -2 should be reduced (mean over N)
-    sum_vars: boolean, if variable dimension -1 should be reduced (sum
-        over d_state)
+    Args:
+        pred (torch.Tensor): Prediction tensor, shape (..., N, d_state).
+        target (torch.Tensor): Ground truth tensor, shape (..., N, d_state).
+        pred_std (torch.Tensor): Predicted standard deviation for weighting, 
+            shape (..., N, d_state) or (d_state,).
+        mask (torch.Tensor, optional): Spatial node mask, shape (N,).
+        average_grid (bool): Whether to average across the grid nodes.
+        sum_vars (bool): Whether to sum across the state variables.
 
     Returns:
-    metric_val: One of (...,), (..., d_state), (..., N), (..., N, d_state),
-    depending on reduction arguments.
+        torch.Tensor: The computed WMSE value.
     """
     entry_mse = torch.nn.functional.mse_loss(
         pred, target, reduction="none"
@@ -86,23 +88,15 @@ def wmse(pred, target, pred_std, mask=None, average_grid=True, sum_vars=True):
 
 def mse(pred, target, pred_std, mask=None, average_grid=True, sum_vars=True):
     """
-    (Unweighted) Mean Squared Error
+    Computes the standard Unweighted Mean Squared Error.
+    Internal call to wmse with unit weights.
 
-    (...,) is any number of batch dimensions, potentially different
-        but broadcastable
-    pred: (..., N, d_state), prediction
-    target: (..., N, d_state), target
-    pred_std: (..., N, d_state) or (d_state,), predicted std.-dev.
-    mask: (N,), boolean mask describing which grid nodes to use in metric
-    average_grid: boolean, if grid dimension -2 should be reduced (mean over N)
-    sum_vars: boolean, if variable dimension -1 should be reduced (sum
-        over d_state)
+    Args:
+        pred, target, pred_std, mask, average_grid, sum_vars: See wmse.
 
     Returns:
-    metric_val: One of (...,), (..., d_state), (..., N), (..., N, d_state),
-    depending on reduction arguments.
+        torch.Tensor: The computed MSE value.
     """
-    # Replace pred_std with constant ones
     return wmse(
         pred, target, torch.ones_like(pred_std), mask, average_grid, sum_vars
     )
@@ -110,21 +104,13 @@ def mse(pred, target, pred_std, mask=None, average_grid=True, sum_vars=True):
 
 def wmae(pred, target, pred_std, mask=None, average_grid=True, sum_vars=True):
     """
-    Weighted Mean Absolute Error
+    Computes the Weighted Mean Absolute Error.
 
-    (...,) is any number of batch dimensions, potentially different
-        but broadcastable
-    pred: (..., N, d_state), prediction
-    target: (..., N, d_state), target
-    pred_std: (..., N, d_state) or (d_state,), predicted std.-dev.
-    mask: (N,), boolean mask describing which grid nodes to use in metric
-    average_grid: boolean, if grid dimension -2 should be reduced (mean over N)
-    sum_vars: boolean, if variable dimension -1 should be reduced (sum
-        over d_state)
+    Args:
+        pred, target, pred_std, mask, average_grid, sum_vars: See wmse.
 
     Returns:
-    metric_val: One of (...,), (..., d_state), (..., N), (..., N, d_state),
-    depending on reduction arguments.
+        torch.Tensor: The computed WMAE value.
     """
     entry_mae = torch.nn.functional.l1_loss(
         pred, target, reduction="none"
@@ -141,23 +127,14 @@ def wmae(pred, target, pred_std, mask=None, average_grid=True, sum_vars=True):
 
 def mae(pred, target, pred_std, mask=None, average_grid=True, sum_vars=True):
     """
-    (Unweighted) Mean Absolute Error
+    Computes the standard Unweighted Mean Absolute Error.
 
-    (...,) is any number of batch dimensions, potentially different
-        but broadcastable
-    pred: (..., N, d_state), prediction
-    target: (..., N, d_state), target
-    pred_std: (..., N, d_state) or (d_state,), predicted std.-dev.
-    mask: (N,), boolean mask describing which grid nodes to use in metric
-    average_grid: boolean, if grid dimension -2 should be reduced (mean over N)
-    sum_vars: boolean, if variable dimension -1 should be reduced (sum
-        over d_state)
+    Args:
+        pred, target, pred_std, mask, average_grid, sum_vars: See wmse.
 
     Returns:
-    metric_val: One of (...,), (..., d_state), (..., N), (..., N, d_state),
-    depending on reduction arguments.
+        torch.Tensor: The computed MAE value.
     """
-    # Replace pred_std with constant ones
     return wmae(
         pred, target, torch.ones_like(pred_std), mask, average_grid, sum_vars
     )
@@ -165,23 +142,17 @@ def mae(pred, target, pred_std, mask=None, average_grid=True, sum_vars=True):
 
 def nll(pred, target, pred_std, mask=None, average_grid=True, sum_vars=True):
     """
-    Negative Log Likelihood loss, for isotropic Gaussian likelihood
+    Computes the Negative Log Likelihood loss for an isotropic Gaussian likelihood.
+    Useful for probabilistic forecasting models.
 
-    (...,) is any number of batch dimensions, potentially different
-        but broadcastable
-    pred: (..., N, d_state), prediction
-    target: (..., N, d_state), target
-    pred_std: (..., N, d_state) or (d_state,), predicted std.-dev.
-    mask: (N,), boolean mask describing which grid nodes to use in metric
-    average_grid: boolean, if grid dimension -2 should be reduced (mean over N)
-    sum_vars: boolean, if variable dimension -1 should be reduced (sum
-        over d_state)
+    Args:
+        pred (torch.Tensor): Mean of the Gaussian, shape (..., N, d_state).
+        target (torch.Tensor): Target values, shape (..., N, d_state).
+        pred_std (torch.Tensor): Std-dev of the Gaussian, shape (..., N, d_state).
 
     Returns:
-    metric_val: One of (...,), (..., d_state), (..., N), (..., N, d_state),
-    depending on reduction arguments.
+        torch.Tensor: Scalar NLL value after masking and reduction.
     """
-    # Broadcast pred_std if shaped (d_state,), done internally in Normal class
     dist = torch.distributions.Normal(pred, pred_std)  # (..., N, d_state)
     entry_nll = -dist.log_prob(target)  # (..., N, d_state)
 
@@ -194,22 +165,16 @@ def crps_gauss(
     pred, target, pred_std, mask=None, average_grid=True, sum_vars=True
 ):
     """
-    (Negative) Continuous Ranked Probability Score (CRPS)
-    Closed-form expression based on Gaussian predictive distribution
+    Computes the Negative Continuous Ranked Probability Score (CRPS).
+    Uses the closed-form expression for a Gaussian predictive distribution.
 
-    (...,) is any number of batch dimensions, potentially different
-            but broadcastable
-    pred: (..., N, d_state), prediction
-    target: (..., N, d_state), target
-    pred_std: (..., N, d_state) or (d_state,), predicted std.-dev.
-    mask: (N,), boolean mask describing which grid nodes to use in metric
-    average_grid: boolean, if grid dimension -2 should be reduced (mean over N)
-    sum_vars: boolean, if variable dimension -1 should be reduced (sum
-        over d_state)
+    Args:
+        pred (torch.Tensor): Predictive mean, shape (..., N, d_state).
+        target (torch.Tensor): Observation, shape (..., N, d_state).
+        pred_std (torch.Tensor): Predictive standard deviation.
 
     Returns:
-    metric_val: One of (...,), (..., d_state), (..., N), (..., N, d_state),
-    depending on reduction arguments.
+        torch.Tensor: The computed CRPS value.
     """
     std_normal = torch.distributions.Normal(
         torch.zeros((), device=pred.device), torch.ones((), device=pred.device)
@@ -225,7 +190,6 @@ def crps_gauss(
     return mask_and_reduce_metric(
         entry_crps, mask=mask, average_grid=average_grid, sum_vars=sum_vars
     )
-
 
 DEFINED_METRICS = {
     "mse": mse,
