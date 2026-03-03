@@ -308,13 +308,14 @@ def main(input_args=None):
     )
 
     checkpoint_callback = pl.callbacks.ModelCheckpoint(
-        dirpath=f"saved_models/{run_name}",
+        dirpath=f"runs/{run_name}/checkpoints",
         filename="min_val_loss",
         monitor="val_mean_loss",
         mode="min",
         save_last=True,
     )
     trainer = pl.Trainer(
+        default_root_dir=f"runs/{run_name}",
         max_epochs=args.epochs,
         deterministic=True,
         strategy="ddp",

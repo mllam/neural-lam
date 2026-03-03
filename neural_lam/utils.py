@@ -354,6 +354,7 @@ def setup_training_logger(datastore, args, run_name):
         logger = pl.loggers.WandbLogger(
             project=args.logger_project,
             name=run_name,
+            save_dir=f"runs/{run_name}",
             config=dict(training=vars(args), datastore=datastore._config),
         )
     elif args.logger == "mlflow":
@@ -366,6 +367,7 @@ def setup_training_logger(datastore, args, run_name):
             experiment_name=args.logger_project,
             tracking_uri=url,
             run_name=run_name,
+            save_dir=f"runs/{run_name}",
         )
         logger.log_hyperparams(
             dict(training=vars(args), datastore=datastore._config)

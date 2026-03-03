@@ -15,14 +15,14 @@ class CustomMLFlowLogger(pl.loggers.MLFlowLogger):
     of version `2.0.3` at least.
     """
 
-    def __init__(self, experiment_name, tracking_uri, run_name):
+    def __init__(self, experiment_name, tracking_uri, run_name, save_dir="runs"):
         super().__init__(
-            experiment_name=experiment_name, tracking_uri=tracking_uri
-        )
-
+        experiment_name=experiment_name, tracking_uri=tracking_uri
+    )
         mlflow.start_run(run_id=self.run_id, log_system_metrics=True)
         mlflow.set_tag("mlflow.runName", run_name)
         mlflow.log_param("run_id", self.run_id)
+        self._save_dir = save_dir
 
     @property
     def save_dir(self):
@@ -35,7 +35,7 @@ class CustomMLFlowLogger(pl.loggers.MLFlowLogger):
         str
             Path to the directory where the artifacts are saved.
         """
-        return "mlruns"
+        return self._save_dir
 
     def log_image(self, key, images, step=None):
         """
