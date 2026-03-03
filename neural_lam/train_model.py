@@ -304,11 +304,15 @@ def main(input_args=None):
         )
 
     training_logger = utils.setup_training_logger(
-        datastore=datastore, args=args, run_name=run_name
+        datastore=datastore,
+        args=args,
+        run_name=run_name,
+        run_dir=f"runs/{run_name}",
     )
 
+    run_dir = f"runs/{run_name}"
     checkpoint_callback = pl.callbacks.ModelCheckpoint(
-        dirpath=f"saved_models/{run_name}",
+        dirpath=f"{run_dir}/checkpoints",
         filename="min_val_loss",
         monitor="val_mean_loss",
         mode="min",
@@ -326,6 +330,7 @@ def main(input_args=None):
         callbacks=[checkpoint_callback],
         check_val_every_n_epoch=args.val_interval,
         precision=args.precision,
+        default_root_dir=run_dir,
     )
 
     # Only init once, on rank 0 only

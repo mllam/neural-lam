@@ -438,7 +438,7 @@ A few of the key ones are outlined below:
 * `--ar_steps_train`: Number of time steps to unroll for when making predictions and computing the loss
 * `--ar_steps_eval`: Number of time steps to unroll for during validation steps
 
-Checkpoints of trained models are stored in the `saved_models` directory.
+Checkpoints of trained models are stored under `runs/<run-name>/checkpoints/`. All run artifacts (checkpoints, logs, eval outputs) are grouped together under `runs/<run-name>/`.
 The implemented models are:
 
 ### Graph-LAM

@@ -330,7 +330,7 @@ def init_training_logger_metrics(training_logger, val_steps):
 
 
 @rank_zero_only
-def setup_training_logger(datastore, args, run_name):
+def setup_training_logger(datastore, args, run_name, run_dir=None):
     """
 
     Parameters
@@ -355,6 +355,7 @@ def setup_training_logger(datastore, args, run_name):
             project=args.logger_project,
             name=run_name,
             config=dict(training=vars(args), datastore=datastore._config),
+            save_dir=run_dir,
         )
     elif args.logger == "mlflow":
         url = os.getenv("MLFLOW_TRACKING_URI")
@@ -366,6 +367,7 @@ def setup_training_logger(datastore, args, run_name):
             experiment_name=args.logger_project,
             tracking_uri=url,
             run_name=run_name,
+            save_dir=run_dir,
         )
         logger.log_hyperparams(
             dict(training=vars(args), datastore=datastore._config)
