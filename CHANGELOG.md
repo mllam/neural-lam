@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- Added `HelloWorld.ipynb` notebook to provide a step-by-step onboarding guide using DANRA data. [\#69](https://github.com/mllam/neural-lam/issues/69)
+- Add `HelloWorld.ipynb` notebook to documentation for onboarding [\#69](https://github.com/mllam/neural-lam/issues/69) @info-gallary
 
 ### Fixed
 
