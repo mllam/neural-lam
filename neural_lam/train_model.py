@@ -1,8 +1,15 @@
 # Standard library
 import json
+import os
 import random
 import time
 from argparse import ArgumentDefaultsHelpFormatter, ArgumentParser
+
+# Ensure cuBLAS uses deterministic algorithms on GPU.
+# This complements PyTorch Lightning's deterministic=True flag, which
+# does not cover cuBLAS matrix multiplications by itself.
+# See: https://pytorch.org/docs/stable/notes/randomness.html
+os.environ.setdefault("CUBLAS_WORKSPACE_CONFIG", ":4096:8")
 
 # Third-party
 # for logging the model:
