@@ -170,6 +170,15 @@ def main(input_args=None):
         default=1,
         help="Number of example predictions to plot during evaluation",
     )
+    parser.add_argument(
+        "--save-eval-to-zarr-path",
+        type=str,
+        default=None,
+        dest="save_eval_to_zarr_path",
+        help="If set, save evaluation predictions (in original data scale) "
+        "to a Zarr store at this path. Multi-GPU safe: rank 0 writes the "
+        "metadata template, then all ranks write their slices in parallel.",
+    )
 
     # Logger Settings
     parser.add_argument(
@@ -307,13 +316,24 @@ def main(input_args=None):
         datastore=datastore, args=args, run_name=run_name
     )
 
-    checkpoint_callback = pl.callbacks.ModelCheckpoint(
+    val_checkpoint = pl.callbacks.ModelCheckpoint(
         dirpath=f"saved_models/{run_name}",
         filename="min_val_loss",
         monitor="val_mean_loss",
         mode="min",
-        save_last=True,
+        save_top_k=1,
     )
+    
+    latest_checkpoint = pl.callbacks.ModelCheckpoint(
+        dirpath=f"saved_models/{run_name}",
+        filename="last",
+        monitor=None,
+        save_top_k=1,
+        every_n_epochs=1,
+        save_on_train_epoch_end=True,
+        enable_version_counter=False,
+    )
+
     trainer = pl.Trainer(
         max_epochs=args.epochs,
         deterministic=True,
@@ -323,7 +343,7 @@ def main(input_args=None):
         devices=devices,
         logger=training_logger,
         log_every_n_steps=1,
-        callbacks=[checkpoint_callback],
+        callbacks=[val_checkpoint, latest_checkpoint],
         check_val_every_n_epoch=args.val_interval,
         precision=args.precision,
     )
