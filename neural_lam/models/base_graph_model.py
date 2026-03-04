@@ -17,9 +17,10 @@ class BaseGraphModel(ARModel):
 
         # Standard library
         from pathlib import Path
+        graph_path = getattr(args, "graph_path", None)
 
-        if args.graph_path is not None:
-            graph_dir_path = Path(args.graph_path)
+        if graph_path is not None:
+            graph_dir_path = Path(graph_path)
 
             if not graph_dir_path.exists():
                 raise ValueError(f"Graph path {graph_dir_path} does not exist")
@@ -30,7 +31,7 @@ class BaseGraphModel(ARModel):
             graph_dir_path=graph_dir_path
         )
 
-        if args.graph_path is not None:
+        if graph_path is not None:
             expected_grid_nodes = datastore.num_grid_points
 
             mesh_features = graph_ldict["mesh_static_features"]
