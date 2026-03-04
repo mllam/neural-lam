@@ -15,8 +15,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Changed the hardcoded True to a conditional check "persistent_workers=self.num_workers > 0" [\#235](https://github.com/mllam/neural-lam/pull/235) @santhil-cyber
 
-- `fractional_plot_bundle` now correctly multiplies by fraction instead of dividing [
-\#222](https://github.com/mllam/neural-lam/pull/222) @santhil-cyber
+- `fractional_plot_bundle` now correctly multiplies by fraction instead of dividing
+[\#222](https://github.com/mllam/neural-lam/pull/222) @santhil-cyber
+
+### Added
+
+- Expose `--wandb_id` CLI argument to allow resuming an existing W&B run by
+  ID. When provided, `resume="allow"` is set automatically so the same job
+  script works for both the initial submission and all resubmissions, making
+  it suitable for HPC systems with limited job runtimes or that may crash.
+  [\#197](https://github.com/mllam/neural-lam/pull/197) @Mani212005
+
+
 
 - Fix Slack domain link [\#288](https://github.com/mllam/neural-lam/pull/288) @sadamov
 
