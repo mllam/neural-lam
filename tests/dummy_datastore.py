@@ -14,6 +14,7 @@ from numpy import ndarray
 
 # First-party
 from neural_lam.datastore.base import (
+    BaseDatastore,
     BaseRegularGridDatastore,
     CartesianGridShape,
 )
@@ -466,3 +467,278 @@ class DummyDatastore(BaseRegularGridDatastore):
 
         n_points_1d = int(np.sqrt(self.num_grid_points))
         return CartesianGridShape(x=n_points_1d, y=n_points_1d)
+
+
+class EnsembleDummyDatastore(BaseDatastore):
+    """Small offline datastore for ensemble WeatherDataset tests.
+
+    Generates synthetic ensemble data (state + forcing) for both analysis
+    and forecast modes, with configurable ensemble-member count.  Values
+    are deterministic functions of the axis indices so that tests can
+    assert exact numeric expectations.
+    """
+
+    is_ensemble = True
+    T0 = np.datetime64("2021-01-01T00:00:00")
+
+    def __init__(
+        self,
+        *,
+        is_forecast: bool = False,
+        forcing_has_ensemble: bool = False,
+        n_ensemble_members: int = 3,
+        n_timesteps: int = 10,
+        n_analysis_times: int = 4,
+        n_forecast_steps: int = 6,
+    ):
+        self.is_forecast = is_forecast
+        self._forcing_has_ensemble = forcing_has_ensemble
+        self._step_length = timedelta(hours=1)
+        self._root_path = Path(".")
+
+        self._state_feature = np.array(["state_feat_0"], dtype=object)
+        self._forcing_feature = np.array(["forcing_feat_0"], dtype=object)
+        self._grid_index = np.array([0], dtype=int)
+        self._ensemble_member = np.arange(n_ensemble_members, dtype=int)
+
+        step_ns = np.timedelta64(
+            int(self._step_length.total_seconds()), "s"
+        )
+
+        if is_forecast:
+            self._init_forecast_data(
+                n_analysis_times, n_forecast_steps, n_ensemble_members,
+                step_ns, forcing_has_ensemble,
+            )
+        else:
+            self._init_analysis_data(
+                n_timesteps, n_ensemble_members,
+                step_ns, forcing_has_ensemble,
+            )
+
+    # ---- data initialisation helpers ----------------------------------------
+
+    def _init_forecast_data(
+        self, n_analysis_times, n_forecast_steps, n_ensemble_members,
+        step_ns, forcing_has_ensemble,
+    ):
+        analysis_time = (
+            self.T0 + np.arange(n_analysis_times) * step_ns
+        ).astype("datetime64[ns]")
+        elapsed = (
+            np.arange(n_forecast_steps) * step_ns
+        ).astype("timedelta64[ns]")
+
+        analysis_axis = np.arange(n_analysis_times).reshape(-1, 1, 1, 1, 1)
+        forecast_axis = np.arange(n_forecast_steps).reshape(1, -1, 1, 1, 1)
+        ensemble_axis = np.arange(n_ensemble_members).reshape(1, 1, -1, 1, 1)
+
+        state_values = (
+            analysis_axis * 1000 + forecast_axis * 10 + ensemble_axis
+        ).astype(np.float32)
+        self._da_state = xr.DataArray(
+            state_values,
+            dims=(
+                "analysis_time",
+                "elapsed_forecast_duration",
+                "ensemble_member",
+                "grid_index",
+                "state_feature",
+            ),
+            coords={
+                "analysis_time": analysis_time,
+                "elapsed_forecast_duration": elapsed,
+                "ensemble_member": self._ensemble_member,
+                "grid_index": self._grid_index,
+                "state_feature": self._state_feature,
+            },
+        )
+
+        if forcing_has_ensemble:
+            forcing_values = (
+                10000
+                + analysis_axis * 1000
+                + forecast_axis * 10
+                + ensemble_axis
+            ).astype(np.float32)
+            self._da_forcing = xr.DataArray(
+                forcing_values,
+                dims=(
+                    "analysis_time",
+                    "elapsed_forecast_duration",
+                    "ensemble_member",
+                    "grid_index",
+                    "forcing_feature",
+                ),
+                coords={
+                    "analysis_time": analysis_time,
+                    "elapsed_forecast_duration": elapsed,
+                    "ensemble_member": self._ensemble_member,
+                    "grid_index": self._grid_index,
+                    "forcing_feature": self._forcing_feature,
+                },
+            )
+        else:
+            analysis_axis_ne = np.arange(n_analysis_times).reshape(-1, 1, 1, 1)
+            forecast_axis_ne = np.arange(n_forecast_steps).reshape(1, -1, 1, 1)
+            forcing_values = (
+                20000 + analysis_axis_ne * 1000 + forecast_axis_ne * 10
+            ).astype(np.float32)
+            self._da_forcing = xr.DataArray(
+                forcing_values,
+                dims=(
+                    "analysis_time",
+                    "elapsed_forecast_duration",
+                    "grid_index",
+                    "forcing_feature",
+                ),
+                coords={
+                    "analysis_time": analysis_time,
+                    "elapsed_forecast_duration": elapsed,
+                    "grid_index": self._grid_index,
+                    "forcing_feature": self._forcing_feature,
+                },
+            )
+
+    def _init_analysis_data(
+        self, n_timesteps, n_ensemble_members, step_ns, forcing_has_ensemble,
+    ):
+        time = (self.T0 + np.arange(n_timesteps) * step_ns).astype(
+            "datetime64[ns]"
+        )
+        time_axis = np.arange(n_timesteps).reshape(-1, 1, 1, 1)
+        ensemble_axis = np.arange(n_ensemble_members).reshape(1, -1, 1, 1)
+
+        state_values = (time_axis * 100 + ensemble_axis).astype(np.float32)
+        self._da_state = xr.DataArray(
+            state_values,
+            dims=("time", "ensemble_member", "grid_index", "state_feature"),
+            coords={
+                "time": time,
+                "ensemble_member": self._ensemble_member,
+                "grid_index": self._grid_index,
+                "state_feature": self._state_feature,
+            },
+        )
+
+        if forcing_has_ensemble:
+            forcing_values = (
+                10000 + time_axis * 100 + ensemble_axis
+            ).astype(np.float32)
+            self._da_forcing = xr.DataArray(
+                forcing_values,
+                dims=(
+                    "time",
+                    "ensemble_member",
+                    "grid_index",
+                    "forcing_feature",
+                ),
+                coords={
+                    "time": time,
+                    "ensemble_member": self._ensemble_member,
+                    "grid_index": self._grid_index,
+                    "forcing_feature": self._forcing_feature,
+                },
+            )
+        else:
+            time_axis_ne = np.arange(n_timesteps).reshape(-1, 1, 1)
+            forcing_values = (20000 + time_axis_ne * 100).astype(np.float32)
+            self._da_forcing = xr.DataArray(
+                forcing_values,
+                dims=("time", "grid_index", "forcing_feature"),
+                coords={
+                    "time": time,
+                    "grid_index": self._grid_index,
+                    "forcing_feature": self._forcing_feature,
+                },
+            )
+
+    # ---- BaseDatastore interface --------------------------------------------
+
+    @property
+    def root_path(self) -> Path:
+        return self._root_path
+
+    @property
+    def config(self) -> dict:
+        return {}
+
+    @property
+    def step_length(self) -> timedelta:
+        return self._step_length
+
+    def get_vars_units(self, category: str) -> list[str]:
+        return ["-"]
+
+    def get_vars_names(self, category: str) -> list[str]:
+        if category == "state":
+            return self._state_feature.tolist()
+        if category == "forcing":
+            return self._forcing_feature.tolist()
+        if category == "static":
+            return ["static_feat_0"]
+        raise NotImplementedError(category)
+
+    def get_vars_long_names(self, category: str) -> list[str]:
+        return self.get_vars_names(category=category)
+
+    def get_num_data_vars(self, category: str) -> int:
+        return len(self.get_vars_names(category=category))
+
+    def get_standardization_dataarray(self, category: str) -> xr.Dataset:
+        ds = xr.Dataset()
+        feat_name = f"{category}_feature"
+        coords = {feat_name: self.get_vars_names(category=category)}
+        ds[f"{category}_mean"] = xr.DataArray(
+            [0.0], dims=[feat_name], coords=coords
+        )
+        ds[f"{category}_std"] = xr.DataArray(
+            [1.0], dims=[feat_name], coords=coords
+        )
+        if category == "state":
+            ds["state_diff_mean_standardized"] = xr.DataArray(
+                [0.0],
+                dims=["state_feature"],
+                coords={"state_feature": self._state_feature},
+            )
+            ds["state_diff_std_standardized"] = xr.DataArray(
+                [1.0],
+                dims=["state_feature"],
+                coords={"state_feature": self._state_feature},
+            )
+        return ds
+
+    def get_dataarray(
+        self, category: str, split: str, standardize: bool = False
+    ) -> Union[xr.DataArray, None]:
+        if category == "state":
+            da = self._da_state
+        elif category == "forcing":
+            da = self._da_forcing
+        else:
+            return None
+
+        if standardize:
+            return self._standardize_datarray(da=da, category=category)
+        return da
+
+    @property
+    def boundary_mask(self) -> xr.DataArray:
+        return xr.DataArray(
+            [0], dims=("grid_index",), coords={"grid_index": [0]}
+        )
+
+    def get_xy(self, category: str, stacked: bool) -> np.ndarray:
+        return np.array([[0.0, 0.0]])
+
+    @property
+    def coords_projection(self):
+        return None
+
+    @property
+    def num_grid_points(self) -> int:
+        return 1
+
+    @property
+    def state_feature_weights_values(self) -> list[float]:
+        return [1.0]
