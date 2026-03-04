@@ -36,6 +36,10 @@ class WeatherDataset(torch.utils.data.Dataset):
         forcing from times t, t+1, ..., t+j-1, t+j (and potentially times before
         t, given num_past_forcing_steps) are included as forcing inputs at time
         t. Default is 1.
+    use_all_ensemble_members : bool, optional
+        If `True` and `datastore.is_ensemble=True`, treat each ensemble member
+        as an independent sample. If `False`, only ensemble member 0 is used
+        (current/default behavior). Default is False.
     standardize : bool, optional
         Whether to standardize the data. Default is True.
     """
@@ -47,6 +51,7 @@ class WeatherDataset(torch.utils.data.Dataset):
         ar_steps: int = 3,
         num_past_forcing_steps: int = 1,
         num_future_forcing_steps: int = 1,
+        use_all_ensemble_members: bool = False,
         standardize: bool = True,
     ):
         super().__init__()
@@ -56,6 +61,8 @@ class WeatherDataset(torch.utils.data.Dataset):
         self.datastore = datastore
         self.num_past_forcing_steps = num_past_forcing_steps
         self.num_future_forcing_steps = num_future_forcing_steps
+        self.use_all_ensemble_members = use_all_ensemble_members 
+        self._warned_single_ensemble_member = False
 
         self.da_state = self.datastore.get_dataarray(
             category="state", split=self.split
@@ -87,11 +94,21 @@ class WeatherDataset(torch.utils.data.Dataset):
                 category=part
             )
             if da is not None:
-                if da.dims != expected_dim_order:
+                expected_dim_orders = [expected_dim_order]
+                if part == "forcing" and "ensemble_member" in da.dims:
+                    dim_order_with_ensemble = list(expected_dim_order)
+                    grid_index_pos = dim_order_with_ensemble.index(
+                        "grid_index"
+                    )
+                    dim_order_with_ensemble.insert(
+                        grid_index_pos, "ensemble_member"
+                    )
+                    expected_dim_orders.append(tuple(dim_order_with_ensemble))
+                if da.dims not in expected_dim_orders:
                     raise ValueError(
                         f"The dimension order of the `{part}` data ({da.dims}) "
-                        f"does not match the expected dimension order "
-                        f"({expected_dim_order}). Maybe you forgot to "
+                        f"does not match expected order(s): "
+                        f"{expected_dim_orders}. Maybe you forgot to "
                         "transpose the data in `BaseDatastore.get_dataarray`?"
                     )
 
@@ -123,13 +140,8 @@ class WeatherDataset(torch.utils.data.Dataset):
             # has been provided).
             # This means that for each analysis time we get a single sample
 
-            if self.datastore.is_ensemble:
-                warnings.warn(
-                    "only using first ensemble member, so dataset size is "
-                    " effectively reduced by the number of ensemble members "
-                    f"({self.da_state.ensemble_member.size})",
-                    UserWarning,
-                )
+            if self.datastore.is_ensemble and not self.use_all_ensemble_members:
+                self._warn_using_single_ensemble_member()
 
             # check that there are enough forecast steps available to create
             # samples given the number of autoregressive steps requested
@@ -142,7 +154,7 @@ class WeatherDataset(torch.utils.data.Dataset):
                     "creating a sample with initial and target states."
                 )
 
-            return self.da_state.analysis_time.size
+            base_len = self.da_state.analysis_time.size
         else:
             # Calculate the number of samples in the dataset n_samples = total
             # time steps - (autoregressive steps + past forcing + future
@@ -154,12 +166,26 @@ class WeatherDataset(torch.utils.data.Dataset):
             #   - past forcing: max(2, self.num_past_forcing_steps) (at least 2
             #     time steps are required for the initial state)
             #   - future forcing: self.num_future_forcing_steps
-            return (
+            base_len = (
                 len(self.da_state.time)
                 - self.ar_steps
                 - max(2, self.num_past_forcing_steps)
                 - self.num_future_forcing_steps
             )
+        if self.datastore.is_ensemble and self.use_all_ensemble_members:
+            return base_len * self.da_state.ensemble_member.size
+        return base_len
+
+    def _warn_using_single_ensemble_member(self):
+        if self._warned_single_ensemble_member:
+            return
+        warnings.warn(
+            "only using first ensemble member, so dataset size is "
+            "effectively reduced by the number of ensemble members "
+            f"({self.da_state.ensemble_member.size})",
+            UserWarning,
+        )
+        self._warned_single_ensemble_member = True
 
     def _slice_state_time(self, da_state, idx, n_steps: int):
         """
@@ -353,39 +379,35 @@ class WeatherDataset(torch.utils.data.Dataset):
             The dataarray for the target times.
         """
         # handling ensemble data
+        sample_idx = idx
+        i_ensemble = 0
+
         if self.datastore.is_ensemble:
-            # for the now the strategy is to only include the first ensemble
-            # member
-            # XXX: this could be changed to include all ensemble members by
-            # splitting `idx` into two parts, one for the analysis time and one
-            # for the ensemble member and then increasing self.__len__ to
-            # include all ensemble members
-            warnings.warn(
-                "only use of ensemble member 0 (the first member) is "
-                "implemented for ensemble data"
-            )
-            i_ensemble = 0
+            n_ensemble_members = self.da_state.ensemble_member.size
+            if self.use_all_ensemble_members:
+                sample_idx, i_ensemble = divmod(idx, n_ensemble_members)
+            else:
+                self._warn_using_single_ensemble_member()
             da_state = self.da_state.isel(ensemble_member=i_ensemble)
         else:
             da_state = self.da_state
 
         if self.da_forcing is not None:
             if "ensemble_member" in self.da_forcing.dims:
-                raise NotImplementedError(
-                    "Ensemble member not yet supported for forcing data"
-                )
-            da_forcing = self.da_forcing
+                da_forcing = self.da_forcing.isel(ensemble_member=i_ensemble)
+            else:
+                da_forcing = self.da_forcing
         else:
             da_forcing = None
 
         # handle time sampling in a way that is compatible with both analysis
         # and forecast data
         da_state = self._slice_state_time(
-            da_state=da_state, idx=idx, n_steps=self.ar_steps
+            da_state=da_state, idx=sample_idx, n_steps=self.ar_steps
         )
         if da_forcing is not None:
             da_forcing_windowed = self._slice_forcing_time(
-                da_forcing=da_forcing, idx=idx, n_steps=self.ar_steps
+                da_forcing=da_forcing, idx=sample_idx, n_steps=self.ar_steps
             )
 
         # load the data into memory
@@ -612,6 +634,7 @@ class WeatherDataModule(pl.LightningDataModule):
         standardize: bool = True,
         num_past_forcing_steps: int = 1,
         num_future_forcing_steps: int = 1,
+        use_all_ensemble_members: bool = False,
         batch_size: int = 4,
         num_workers: int = 16,
         eval_split: str = "test",
@@ -623,6 +646,7 @@ class WeatherDataModule(pl.LightningDataModule):
         self.ar_steps_train = ar_steps_train
         self.ar_steps_eval = ar_steps_eval
         self.standardize = standardize
+        self.use_all_ensemble_members = use_all_ensemble_members
         self.batch_size = batch_size
         self.num_workers: int = num_workers
         self.train_dataset = None
@@ -644,6 +668,7 @@ class WeatherDataModule(pl.LightningDataModule):
                 standardize=self.standardize,
                 num_past_forcing_steps=self.num_past_forcing_steps,
                 num_future_forcing_steps=self.num_future_forcing_steps,
+                use_all_ensemble_members=self.use_all_ensemble_members,
             )
             self.val_dataset = WeatherDataset(
                 datastore=self._datastore,
@@ -652,6 +677,7 @@ class WeatherDataModule(pl.LightningDataModule):
                 standardize=self.standardize,
                 num_past_forcing_steps=self.num_past_forcing_steps,
                 num_future_forcing_steps=self.num_future_forcing_steps,
+                use_all_ensemble_members=self.use_all_ensemble_members,
             )
 
         if stage == "test" or stage is None:
@@ -662,6 +688,7 @@ class WeatherDataModule(pl.LightningDataModule):
                 standardize=self.standardize,
                 num_past_forcing_steps=self.num_past_forcing_steps,
                 num_future_forcing_steps=self.num_future_forcing_steps,
+                use_all_ensemble_members=self.use_all_ensemble_members,
             )
 
     def train_dataloader(self):
