@@ -17,6 +17,7 @@ class BaseGraphModel(ARModel):
 
         # Standard library
         from pathlib import Path
+
         graph_path = getattr(args, "graph_path", None)
 
         if graph_path is not None:
