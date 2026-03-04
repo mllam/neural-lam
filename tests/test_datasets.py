@@ -15,7 +15,7 @@ from neural_lam.datastore.base import BaseRegularGridDatastore
 from neural_lam.models.graph_lam import GraphLAM
 from neural_lam.weather_dataset import WeatherDataset
 from tests.conftest import init_datastore_example
-from tests.dummy_datastore import DummyDatastore
+from tests.dummy_datastore import DummyDatastore, EnsembleDummyDatastore
 
 
 @pytest.mark.parametrize("datastore_name", DATASTORES.keys())
@@ -259,3 +259,141 @@ def test_dataset_length(dataset_config):
     # Check that we can actually get last and first sample
     dataset[0]
     dataset[expected_len - 1]
+
+
+def test_ensemble_len_scales_with_opt_in():
+    datastore = EnsembleDummyDatastore(
+        is_forecast=False,
+        forcing_has_ensemble=False,
+        n_ensemble_members=3,
+        n_timesteps=10,
+    )
+
+    dataset_default = WeatherDataset(
+        datastore=datastore,
+        split="train",
+        ar_steps=2,
+        num_past_forcing_steps=1,
+        num_future_forcing_steps=1,
+        use_all_ensemble_members=False,
+        standardize=False,
+    )
+
+    dataset_all = WeatherDataset(
+        datastore=datastore,
+        split="train",
+        ar_steps=2,
+        num_past_forcing_steps=1,
+        num_future_forcing_steps=1,
+        use_all_ensemble_members=True,
+        standardize=False,
+    )
+
+    assert len(dataset_all) == len(dataset_default) * 3
+
+
+def test_ensemble_index_mapping_is_time_major():
+    datastore = EnsembleDummyDatastore(
+        is_forecast=False,
+        forcing_has_ensemble=False,
+        n_ensemble_members=3,
+        n_timesteps=10,
+    )
+    dataset = WeatherDataset(
+        datastore=datastore,
+        split="train",
+        ar_steps=2,
+        num_past_forcing_steps=1,
+        num_future_forcing_steps=1,
+        use_all_ensemble_members=True,
+        standardize=False,
+    )
+
+    init_states_0, _, _, target_times_0 = dataset[0]
+    init_states_1, _, _, target_times_1 = dataset[1]
+
+    # Adjacent flat indices correspond to same sample_idx and different member.
+    assert torch.equal(target_times_0, target_times_1)
+    assert not torch.equal(init_states_0, init_states_1)
+
+
+def test_ensemble_forcing_uses_same_member_when_available():
+    datastore = EnsembleDummyDatastore(
+        is_forecast=False,
+        forcing_has_ensemble=True,
+        n_ensemble_members=3,
+        n_timesteps=10,
+    )
+    dataset = WeatherDataset(
+        datastore=datastore,
+        split="train",
+        ar_steps=2,
+        num_past_forcing_steps=1,
+        num_future_forcing_steps=1,
+        use_all_ensemble_members=True,
+        standardize=False,
+    )
+
+    _, _, forcing_0, target_times_0 = dataset[0]
+    _, _, forcing_1, target_times_1 = dataset[1]
+
+    assert torch.equal(target_times_0, target_times_1)
+    assert not torch.equal(forcing_0, forcing_1)
+
+
+def test_ensemble_forcing_without_member_dim_is_shared():
+    datastore = EnsembleDummyDatastore(
+        is_forecast=False,
+        forcing_has_ensemble=False,
+        n_ensemble_members=3,
+        n_timesteps=10,
+    )
+    dataset = WeatherDataset(
+        datastore=datastore,
+        split="train",
+        ar_steps=2,
+        num_past_forcing_steps=1,
+        num_future_forcing_steps=1,
+        use_all_ensemble_members=True,
+        standardize=False,
+    )
+
+    init_states_0, _, forcing_0, target_times_0 = dataset[0]
+    init_states_1, _, forcing_1, target_times_1 = dataset[1]
+
+    assert torch.equal(target_times_0, target_times_1)
+    assert not torch.equal(init_states_0, init_states_1)
+    assert torch.equal(forcing_0, forcing_1)
+
+
+def test_forecast_ensemble_len_scales_with_opt_in():
+    datastore = EnsembleDummyDatastore(
+        is_forecast=True,
+        forcing_has_ensemble=True,
+        n_ensemble_members=3,
+        n_analysis_times=4,
+        n_forecast_steps=6,
+    )
+
+    with pytest.warns(UserWarning, match="only using first ensemble member"):
+        dataset_default = WeatherDataset(
+            datastore=datastore,
+            split="train",
+            ar_steps=2,
+            num_past_forcing_steps=1,
+            num_future_forcing_steps=1,
+            use_all_ensemble_members=False,
+            standardize=False,
+        )
+
+    dataset_all = WeatherDataset(
+        datastore=datastore,
+        split="train",
+        ar_steps=2,
+        num_past_forcing_steps=1,
+        num_future_forcing_steps=1,
+        use_all_ensemble_members=True,
+        standardize=False,
+    )
+
+    assert len(dataset_all) == len(dataset_default) * 3
