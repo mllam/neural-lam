@@ -36,6 +36,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Fix caching of MEPS example data in CI/CD [\#181](https://github.com/mllam/neural-lam/pull/181) @observingClouds
 
+- Migrated build backend from PDM to Hatchling with hatch-vcs and added uv build in deploy CI
+
 ## [v0.5.0](https://github.com/mllam/neural-lam/releases/tag/v0.5.0)
 
 This release contains maintenance and fixes, preventing some unexpected crashes and improving CICD and testing.
