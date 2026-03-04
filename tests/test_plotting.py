@@ -37,6 +37,7 @@ def model_and_batch(tmp_path, time_step, time_unit):
         loss = "mse"
         restore_opt = False
         n_example_pred = 2
+        create_gif = False
         graph = "1level"
         hidden_dim = 4
         hidden_layers = 1
@@ -188,3 +189,55 @@ def test_plot_examples_integration_saves_figure(
     assert fig is not None
     assert isinstance(fig, plt.Figure)
     assert output_path.exists()
+
+
+@pytest.mark.parametrize(
+    "time_step,time_unit",
+    [(1, "hours")],
+)
+def test_plot_examples_gif_integration(model_and_batch, monkeypatch):
+    model, batch, datastore, tmp_path = model_and_batch
+
+    # Enable the GIF path and reset the example counter
+    model.args.create_gif = True
+    model.plotted_examples = 0
+
+    # Minimal logger: plot_examples only reads save_dir and optionally calls
+    # log_image
+    class _SimpleLogger:
+        save_dir = str(tmp_path)
+
+        def log_image(self, key, images, step=None):
+            pass
+
+    simple_logger = _SimpleLogger()
+    monkeypatch.setattr(
+        type(model), "logger", property(lambda self: simple_logger)
+    )
+
+    with torch.no_grad():
+        prediction, _, _, _ = model.common_step(batch)
+        model.plot_examples(
+            batch, n_examples=1, prediction=prediction, split="train"
+        )
+
+    var_names = datastore.get_vars_names("state")
+    pred_steps = batch[1].shape[1]
+    example_i = 1
+    plot_dir = tmp_path / f"example_plots_{example_i}"
+
+    assert plot_dir.is_dir(), "Plot directory was not created"
+
+    for var_name in var_names:
+        # Every time-step must have a PNG frame
+        for t_i in range(1, pred_steps + 1):
+            png = (
+                plot_dir
+                / f"{var_name}_example_{example_i}_prediction_t_{t_i:02d}.png"
+            )
+            assert png.exists(), f"Missing PNG frame: {png.name}"
+
+        # One GIF per variable must exist and be a valid GIF file
+        gif = plot_dir / f"{var_name}_example_{example_i}_prediction.gif"
+        assert gif.exists(), f"Missing GIF: {gif.name}"
+        assert gif.read_bytes()[:3] == b"GIF", f"{gif.name} is not a valid GIF"
