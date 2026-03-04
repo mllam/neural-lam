@@ -30,24 +30,14 @@ def run_simple_training(datastore, set_output_std):
     """
 
     if torch.cuda.is_available():
-        device_name = "cuda"
-        torch.set_float32_matmul_precision(
-            "high"
-        )  # Allows using Tensor Cores on A100s
-    else:
-        device_name = "cpu"
+        torch.set_float32_matmul_precision("high")
 
     trainer = pl.Trainer(
         max_epochs=1,
         deterministic=True,
-        accelerator=device_name,
-        # XXX: `devices` has to be set to 2 otherwise
-        # neural_lam.models.ar_model.ARModel.aggregate_and_plot_metrics fails
-        # because it expects to aggregate over multiple devices
-        devices=2,
+        accelerator="cuda" if torch.cuda.is_available() else "cpu",
+        devices=1,
         log_every_n_steps=1,
-        # use `detect_anomaly` to ensure that we don't have NaNs popping up
-        # during training
         detect_anomaly=True,
     )
 
