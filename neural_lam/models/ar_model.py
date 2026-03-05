@@ -709,7 +709,7 @@ class ARModel(pl.LightningModule):
                     error=loss_map,
                     datastore=self._datastore,
                     title=f"Test loss, t={t_i} "
-                    f"({(self.time_step_int * t_i)} {self.time_step_int_unit})",
+                    f"({(self.time_step_int * t_i)} {self.time_step_unit})",
                 )
                 for t_i, loss_map in zip(
                     self.args.val_steps_to_log, mean_spatial_loss
