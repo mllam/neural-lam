@@ -240,7 +240,13 @@ class ARModel(pl.LightningModule):
         target_states = (target_states - self.state_mean) / self.state_std
 
         if self.forcing_mean is not None and forcing.shape[-1] > 0:
-            forcing = (forcing - self.forcing_mean) / self.forcing_std
+            # forcing shape: (..., num_forcing_vars * window_size)
+            # forcing_mean shape: (num_forcing_vars,)
+            # Need to repeat each mean/std value window_size times
+            window_size = forcing.shape[-1] // self.forcing_mean.shape[-1]
+            forcing_mean_tiled = self.forcing_mean.repeat_interleave(window_size)
+            forcing_std_tiled = self.forcing_std.repeat_interleave(window_size)
+            forcing = (forcing - forcing_mean_tiled) / forcing_std_tiled
 
         return init_states, target_states, forcing, target_times
 
