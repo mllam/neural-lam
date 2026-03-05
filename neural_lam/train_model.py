@@ -170,6 +170,21 @@ def main(input_args=None):
         default=1,
         help="Number of example predictions to plot during evaluation",
     )
+    parser.add_argument(
+        "--eval_sample_start",
+        type=int,
+        default=0,
+        help="Start index (inclusive) of samples to evaluate. "
+        "Use with --eval_sample_end to process a subset for "
+        "resumable inference.",
+    )
+    parser.add_argument(
+        "--eval_sample_end",
+        type=int,
+        default=None,
+        help="End index (exclusive) of samples to evaluate. "
+        "If None, process all samples from --eval_sample_start onwards.",
+    )
 
     # Logger Settings
     parser.add_argument(
@@ -266,6 +281,8 @@ def main(input_args=None):
         batch_size=args.batch_size,
         num_workers=args.num_workers,
         eval_split=args.eval or "test",
+        eval_sample_start=args.eval_sample_start,
+        eval_sample_end=args.eval_sample_end,
     )
 
     # Instantiate model + trainer
