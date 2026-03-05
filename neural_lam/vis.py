@@ -22,7 +22,9 @@ def plot_error_map(errors, datastore: BaseRegularGridDatastore, title=None):
 
     # Normalize all errors to [0,1] for color map
     max_errors = errors_np.max(axis=1)  # d_f
-    errors_norm = errors_np / np.expand_dims(max_errors, axis=1)
+    # Guard against division by zero for variables with zero error
+    safe_max_errors = np.where(max_errors == 0, 1.0, max_errors)
+    errors_norm = errors_np / np.expand_dims(safe_max_errors, axis=1)
 
     time_step_int, time_step_unit = utils.get_integer_time(step_length)
 
