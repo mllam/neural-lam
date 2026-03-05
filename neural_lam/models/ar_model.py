@@ -649,18 +649,17 @@ class ARModel(pl.LightningModule):
             if self.trainer.is_global_zero:
                 metric_tensor_averaged = torch.mean(metric_tensor, dim=0)
                 # (pred_steps, d_f)
-
-                # Take square root after all averaging to change MSE to RMSE
-                if "mse" in metric_name:
-                    metric_tensor_averaged = torch.sqrt(metric_tensor_averaged)
-                    metric_name = metric_name.replace("mse", "rmse")
-
-                # NOTE: we here assume rescaling for all metrics is linear
-                metric_rescaled = metric_tensor_averaged * self.state_std
-                # (pred_steps, d_f)
+                (
+                    metric_logged,
+                    log_metric_name,
+                ) = metrics.prepare_metric_tensor_for_logging(
+                    metric_tensor=metric_tensor_averaged,
+                    metric_name=metric_name,
+                    state_std=self.state_std,
+                )
                 log_dict.update(
                     self.create_metric_log_dict(
-                        metric_rescaled, prefix, metric_name
+                        metric_logged, prefix, log_metric_name
                     )
                 )
 

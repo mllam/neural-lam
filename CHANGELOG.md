@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [unreleased](https://github.com/mllam/neural-lam/compare/v0.5.0...HEAD)
 
 ### Fixed
+- Make metric aggregation/logging use explicit per-metric post-processing semantics instead of universal linear rescaling
 
 - Fix README image paths to use absolute GitHub URLs so images display correctly on PyPI [\#188](https://github.com/mllam/neural-lam/pull/188) @bk-simon
 
