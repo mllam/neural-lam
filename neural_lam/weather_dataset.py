@@ -36,8 +36,6 @@ class WeatherDataset(torch.utils.data.Dataset):
         forcing from times t, t+1, ..., t+j-1, t+j (and potentially times before
         t, given num_past_forcing_steps) are included as forcing inputs at time
         t. Default is 1.
-    standardize : bool, optional
-        Whether to standardize the data. Default is True.
     """
 
     def __init__(
@@ -47,7 +45,6 @@ class WeatherDataset(torch.utils.data.Dataset):
         ar_steps: int = 3,
         num_past_forcing_steps: int = 1,
         num_future_forcing_steps: int = 1,
-        standardize: bool = True,
     ):
         super().__init__()
 
@@ -94,26 +91,6 @@ class WeatherDataset(torch.utils.data.Dataset):
                         f"({expected_dim_order}). Maybe you forgot to "
                         "transpose the data in `BaseDatastore.get_dataarray`?"
                     )
-
-        # Set up for standardization
-        # TODO: This will become part of ar_model.py soon!
-        self.standardize = standardize
-        if standardize:
-            self.ds_state_stats = self.datastore.get_standardization_dataarray(
-                category="state"
-            )
-
-            self.da_state_mean = self.ds_state_stats.state_mean
-            self.da_state_std = self.ds_state_stats.state_std
-
-            if self.da_forcing is not None:
-                self.ds_forcing_stats = (
-                    self.datastore.get_standardization_dataarray(
-                        category="forcing"
-                    )
-                )
-                self.da_forcing_mean = self.ds_forcing_stats.forcing_mean
-                self.da_forcing_std = self.ds_forcing_stats.forcing_std
 
     def __len__(self):
         if self.datastore.is_forecast:
@@ -397,23 +374,6 @@ class WeatherDataset(torch.utils.data.Dataset):
         da_target_states = da_state.isel(time=slice(2, None))
         da_target_times = da_target_states.time
 
-        if self.standardize:
-            da_init_states = (
-                da_init_states - self.da_state_mean
-            ) / self.da_state_std
-            da_target_states = (
-                da_target_states - self.da_state_mean
-            ) / self.da_state_std
-
-            if da_forcing is not None:
-                # XXX: Here we implicitly assume that the last dimension of the
-                # forcing data is the forcing feature dimension. To standardize
-                # on `.device` we need a different implementation. (e.g. a
-                # tensor with repeated means and stds for each "windowed" time.)
-                da_forcing_windowed = (
-                    da_forcing_windowed - self.da_forcing_mean
-                ) / self.da_forcing_std
-
         if da_forcing is not None:
             # stack the `forcing_feature` and `window_sample` dimensions into a
             # single `forcing_feature` dimension
@@ -446,13 +406,8 @@ class WeatherDataset(torch.utils.data.Dataset):
         Return a single training sample, which consists of the initial states,
         target states, forcing and batch times.
 
-        The implementation currently uses xarray.DataArray objects for the
-        standardization (scaling to mean 0.0 and standard deviation of 1.0) so
-        that we can make us of xarray's broadcasting capabilities. This makes
-        it possible to standardization with both global means, but also for
-        example where a grid-point mean has been computed. This code will have
-        to be replace if standardization is to be done on the GPU to handle
-        different shapes of the standardization.
+        Note: Normalization now happens on GPU in the model's
+        on_after_batch_transfer() hook, not here in the Dataset.
 
         Parameters
         ----------
@@ -462,11 +417,14 @@ class WeatherDataset(torch.utils.data.Dataset):
 
         Returns
         -------
-        init_states : TrainingSample
-            A training sample object containing the initial states, target
-            states, forcing and batch times. The batch times are the times of
-            the target steps.
-
+        init_states : torch.Tensor
+            Initial states with shape (2, num_grid_nodes, d_features)
+        target_states : torch.Tensor
+            Target states with shape (ar_steps, num_grid_nodes, d_features)
+        forcing : torch.Tensor
+            Forcing data with shape (ar_steps, num_grid_nodes, d_forcing)
+        target_times : torch.Tensor
+            Target times with shape (ar_steps,)
         """
         (
             da_init_states,
@@ -609,7 +567,6 @@ class WeatherDataModule(pl.LightningDataModule):
         datastore: BaseDatastore,
         ar_steps_train: int = 3,
         ar_steps_eval: int = 25,
-        standardize: bool = True,
         num_past_forcing_steps: int = 1,
         num_future_forcing_steps: int = 1,
         batch_size: int = 4,
@@ -622,7 +579,6 @@ class WeatherDataModule(pl.LightningDataModule):
         self.num_future_forcing_steps = num_future_forcing_steps
         self.ar_steps_train = ar_steps_train
         self.ar_steps_eval = ar_steps_eval
-        self.standardize = standardize
         self.batch_size = batch_size
         self.num_workers: int = num_workers
         self.train_dataset = None
@@ -641,7 +597,6 @@ class WeatherDataModule(pl.LightningDataModule):
                 datastore=self._datastore,
                 split="train",
                 ar_steps=self.ar_steps_train,
-                standardize=self.standardize,
                 num_past_forcing_steps=self.num_past_forcing_steps,
                 num_future_forcing_steps=self.num_future_forcing_steps,
             )
@@ -649,7 +604,6 @@ class WeatherDataModule(pl.LightningDataModule):
                 datastore=self._datastore,
                 split="val",
                 ar_steps=self.ar_steps_eval,
-                standardize=self.standardize,
                 num_past_forcing_steps=self.num_past_forcing_steps,
                 num_future_forcing_steps=self.num_future_forcing_steps,
             )
@@ -659,7 +613,6 @@ class WeatherDataModule(pl.LightningDataModule):
                 datastore=self._datastore,
                 split=self.eval_split,
                 ar_steps=self.ar_steps_eval,
-                standardize=self.standardize,
                 num_past_forcing_steps=self.num_past_forcing_steps,
                 num_future_forcing_steps=self.num_future_forcing_steps,
             )

@@ -17,6 +17,25 @@ from neural_lam.datastore import init_datastore
 from neural_lam.utils import get_integer_time
 
 
+class StandardizedDatastore:
+    """
+        Wrapper to ensure datastore returns standardized data.
+    """
+
+    def __init__(self, datastore):
+        self._datastore = datastore
+
+    def __getattr__(self, name):
+        # Delegate all attribute access to the wrapped datastore
+        return getattr(self._datastore, name)
+
+    def get_dataarray(self, category, split, standardize=False):
+        # Always return standardized data
+        return self._datastore.get_dataarray(
+            category=category, split=split, standardize=True
+        )
+
+
 class PaddedWeatherDataset(torch.utils.data.Dataset):
     def __init__(self, base_dataset, world_size, batch_size):
         super().__init__()
@@ -174,11 +193,11 @@ def main(
     # Setting this to the original value of the Oskarsson et al. paper (2023)
     # 65 forecast steps - 2 initial steps = 63
     ar_steps = 63
+    # WeatherDataset gets raw (non-standardized) data by default
     ds = WeatherDataset(
         datastore=datastore,
         split="train",
         ar_steps=ar_steps,
-        standardize=False,
         num_past_forcing_steps=0,
         num_future_forcing_steps=0,
     )
@@ -278,10 +297,9 @@ def main(
     if rank == 0:
         print("Computing mean and std.-dev. for one-step differences...")
     ds_standard = WeatherDataset(
-        datastore=datastore,
+        datastore=StandardizedDatastore(datastore),
         split="train",
         ar_steps=ar_steps,
-        standardize=True,
         num_past_forcing_steps=0,
         num_future_forcing_steps=0,
     )  # Re-load with standardization

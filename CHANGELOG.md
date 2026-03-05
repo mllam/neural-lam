@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [unreleased](https://github.com/mllam/neural-lam/compare/v0.5.0...HEAD)
 
+### Changed
+
+- Move data normalization from CPU (Dataset) to GPU (LightningModule) using `on_after_batch_transfer()` hook for improved performance and multi-GPU compatibility [\#239](https://github.com/mllam/neural-lam/pull/XXX) @Sharkyii
+
 ### Fixed
 
 - Fix README image paths to use absolute GitHub URLs so images display correctly on PyPI [\#188](https://github.com/mllam/neural-lam/pull/188) @bk-simon

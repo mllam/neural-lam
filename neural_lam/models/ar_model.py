@@ -84,6 +84,30 @@ class ARModel(pl.LightningModule):
         for key, val in state_stats.items():
             self.register_buffer(key, val, persistent=False)
 
+        if num_forcing_vars > 0:
+            da_forcing_stats = datastore.get_standardization_dataarray(
+                category="forcing"
+            )
+            # saved forcing mean and std as buffers
+            self.register_buffer(
+                "forcing_mean",
+                torch.tensor(
+                    da_forcing_stats.forcing_mean.values, dtype=torch.float32
+                ),
+                persistent=False,
+            )
+            self.register_buffer(
+                "forcing_std",
+                torch.tensor(
+                    da_forcing_stats.forcing_std.values, dtype=torch.float32
+                ),
+                persistent=False,
+            )
+        else:
+            # No forcing data, set to None
+            self.forcing_mean = None
+            self.forcing_std = None
+
         state_feature_weights = get_state_feature_weighting(
             config=config, datastore=datastore
         )
@@ -203,6 +227,28 @@ class ARModel(pl.LightningModule):
             self.parameters(), lr=self.args.lr, betas=(0.9, 0.95)
         )
         return opt
+
+    def on_after_batch_transfer(self, batch, dataloader_idx):
+        """
+        This is called automatically by PyTorch Lightning's Trainer.
+        It happens AFTER data is on GPU but BEFORE training starts.
+        """
+        init_states, target_states, forcing, target_times = batch
+
+        # Normalize state data: (data - mean) / std
+        init_states = (init_states - self.state_mean) / self.state_std
+        target_states = (target_states - self.state_mean) / self.state_std
+
+        if self.forcing_mean is not None and forcing.shape[-1] > 0:
+            # forcing shape: (..., num_forcing_vars * window_size)
+            # forcing_mean shape: (num_forcing_vars,)
+            # Need to repeat each mean/std value window_size times
+            window_size = forcing.shape[-1] // self.forcing_mean.shape[-1]
+            forcing_mean_tiled = self.forcing_mean.repeat_interleave(window_size)
+            forcing_std_tiled = self.forcing_std.repeat_interleave(window_size)
+            forcing = (forcing - forcing_mean_tiled) / forcing_std_tiled
+
+        return init_states, target_states, forcing, target_times
 
     @property
     def interior_mask_bool(self):
