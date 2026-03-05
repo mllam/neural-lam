@@ -1,6 +1,9 @@
 # Third-party
 import torch
 
+# Standard library
+import dataclasses
+
 
 def get_metric(metric_name):
     """
@@ -16,6 +19,86 @@ def get_metric(metric_name):
         metric_name_lower in DEFINED_METRICS
     ), f"Unknown metric: {metric_name}"
     return DEFINED_METRICS[metric_name_lower]
+
+
+@dataclasses.dataclass(frozen=True)
+class MetricLoggingSpec:
+    """
+    Describe how a metric should be transformed before logging.
+
+    Attributes
+    ----------
+    log_name : str
+        Metric name to use in logged artifacts.
+    sqrt_after_mean : bool
+        Whether to take the square root after averaging over samples.
+    rescale_method : str
+        How to convert the metric from standardized space back to logged
+        units. Supported values are ``"linear"`` and ``"none"``.
+    """
+
+    log_name: str
+    sqrt_after_mean: bool = False
+    rescale_method: str = "linear"
+
+
+def get_metric_logging_spec(metric_name):
+    """
+    Get the logging specification for a metric.
+
+    Parameters
+    ----------
+    metric_name : str
+        Name of the metric to look up.
+
+    Returns
+    -------
+    MetricLoggingSpec
+        Logging behavior for the metric.
+    """
+    metric_name_lower = metric_name.lower()
+    if metric_name_lower not in METRIC_LOGGING_SPECS:
+        raise ValueError(
+            "Missing metric logging specification for "
+            f"metric: {metric_name}"
+        )
+    return METRIC_LOGGING_SPECS[metric_name_lower]
+
+
+def prepare_metric_tensor_for_logging(metric_tensor, metric_name, state_std):
+    """
+    Transform an aggregated metric tensor for logging.
+
+    Parameters
+    ----------
+    metric_tensor : torch.Tensor
+        Aggregated metric tensor with shape ``(pred_steps, d_state)``.
+    metric_name : str
+        Name of the metric represented by ``metric_tensor``.
+    state_std : torch.Tensor
+        Per-variable state standard deviations used for linear rescaling from
+        standardized space.
+
+    Returns
+    -------
+    tuple[torch.Tensor, str]
+        The transformed metric tensor and the metric name to use for logging.
+    """
+    spec = get_metric_logging_spec(metric_name)
+    metric_logged = metric_tensor
+
+    if spec.sqrt_after_mean:
+        metric_logged = torch.sqrt(metric_logged)
+
+    if spec.rescale_method == "linear":
+        metric_logged = metric_logged * state_std
+    elif spec.rescale_method != "none":
+        raise ValueError(
+            "Unsupported metric rescaling method: "
+            f"{spec.rescale_method}"
+        )
+
+    return metric_logged, spec.log_name
 
 
 def mask_and_reduce_metric(metric_entry_vals, mask, average_grid, sum_vars):
@@ -234,4 +317,30 @@ DEFINED_METRICS = {
     "wmae": wmae,
     "nll": nll,
     "crps_gauss": crps_gauss,
+}
+
+METRIC_LOGGING_SPECS = {
+    "mse": MetricLoggingSpec(
+        log_name="rmse", sqrt_after_mean=True, rescale_method="linear"
+    ),
+    "mae": MetricLoggingSpec(log_name="mae", rescale_method="linear"),
+    "wmse": MetricLoggingSpec(
+        log_name="wrmse", sqrt_after_mean=True, rescale_method="none"
+    ),
+    "wmae": MetricLoggingSpec(log_name="wmae", rescale_method="none"),
+    "nll": MetricLoggingSpec(log_name="nll", rescale_method="none"),
+    "crps_gauss": MetricLoggingSpec(
+        log_name="crps_gauss", rescale_method="linear"
+    ),
+    # Probabilistic metrics from the ensemble branches should follow the same
+    # logging semantics when merged into main.
+    "crps_ens": MetricLoggingSpec(
+        log_name="crps_ens", rescale_method="linear"
+    ),
+    "spread_squared": MetricLoggingSpec(
+        log_name="spread", sqrt_after_mean=True, rescale_method="linear"
+    ),
+    "output_std": MetricLoggingSpec(
+        log_name="output_std", rescale_method="linear"
+    ),
 }
