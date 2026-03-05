@@ -1,0 +1,22 @@
+name: Docs
+
+on: [push, pull_request]
+
+jobs:
+    build-docs:
+        runs-on: ubuntu-latest
+        steps:
+            - uses: actions/checkout@v4
+
+            - uses: actions/setup-python@v5
+              with:
+                python-version: "3.12"
+
+            - name: Install uv
+              uses: astral-sh/setup-uv@v5
+
+            - name: Install docs dependencies
+              run: uv sync --group docs
+
+            - name: Build docs
+              run: uv run sphinx-build -b html docs/source docs/build/html
