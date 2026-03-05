@@ -201,13 +201,23 @@ def load_graph(graph_dir_path, device="cpu"):
 
 def make_mlp(blueprint, layer_norm=True):
     """
-    Create MLP from list blueprint, with
-    input dimensionality: blueprint[0]
-    output dimensionality: blueprint[-1] and
-    hidden layers of dimensions: blueprint[1], ..., blueprint[-2]
+    Create a multilayer perceptron (MLP) from a blueprint of layer sizes.
 
-    if layer_norm is True, includes a LayerNorm layer at
-    the output (as used in GraphCast)
+    Parameters
+    ----------
+    blueprint : list[int]
+        List specifying the layer dimensions. The first element is the
+        input dimension, the last element is the output dimension, and
+        intermediate elements define hidden layers.
+
+    layer_norm : bool, optional
+        If True, a LayerNorm layer is added after the final layer.
+        This is used in architectures such as GraphCast.
+
+    Returns
+    -------
+    torch.nn.Sequential
+        A sequential container representing the constructed MLP.
     """
     hidden_layers = len(blueprint) - 2
     assert hidden_layers >= 0, "Invalid MLP blueprint"
@@ -228,7 +238,16 @@ def make_mlp(blueprint, layer_norm=True):
 @cache
 def has_working_latex():
     """
-    Check if LaTeX is available or its toolchain
+    Check whether a working LaTeX toolchain is available.
+
+    This function verifies that required LaTeX utilities such as
+    `latex`, `dvipng`, and Ghostscript are installed and functional.
+
+    Returns
+    -------
+    bool
+        True if a LaTeX toolchain is available and functional,
+        otherwise False.
     """
     # If latex/toolchain is not available, some visualizations might not render
     # correctly, but will at least not raise an error. Alternatively, use
@@ -290,8 +309,17 @@ $E=mc^2$ \LaTeX\ ok
 
 def fractional_plot_bundle(fraction):
     """
-    Get the tueplots bundle, but with figure width as a fraction of
-    the page width.
+    Generate a Tueplots configuration bundle with scaled figure size.
+
+    Parameters
+    ----------
+    fraction : float
+        Fraction of the default page width used to scale the figure size.
+
+    Returns
+    -------
+    dict
+        A matplotlib configuration bundle adapted for the given figure size.
     """
 
     usetex = has_working_latex()
@@ -307,7 +335,12 @@ def fractional_plot_bundle(fraction):
 
 @rank_zero_only
 def rank_zero_print(*args, **kwargs):
-    """Print only from rank 0 process"""
+    """
+    Print a message only from the rank-0 process.
+
+    This is useful in distributed training setups to avoid duplicated
+    console output from multiple processes.
+    """
     print(*args, **kwargs)
 
 
