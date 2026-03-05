@@ -78,14 +78,20 @@ def main():
         (grid_pos, np.expand_dims(z_grid, axis=1)), axis=1
     )
 
+    # Normalize mesh_static_features to a list of tensors for zero_index
+    # functions: hierarchical -> BufferList, non-hierarchical -> single tensor
+    msf_as_list = (
+        list(mesh_static_features) if hierarchical else [mesh_static_features]
+    )
+
     # The plotting requires the edges to be non-zero-indexed
     # with grid indices following mesh indices
     m2g_edge_index = utils.zero_index_m2g(
-        m2g_edge_index, [mesh_static_features], mesh_first=True, restore=True
+        m2g_edge_index, msf_as_list, mesh_first=True, restore=True
     )
 
     g2m_edge_index = utils.zero_index_g2m(
-        g2m_edge_index, [mesh_static_features], mesh_first=True, restore=True
+        g2m_edge_index, msf_as_list, mesh_first=True, restore=True
     )
 
     # List of edges to plot, (edge_index, color, line_width, label)
@@ -113,22 +119,37 @@ def main():
         ]
         mesh_pos = np.concatenate(mesh_level_pos, axis=0)
 
-        # Add inter-level mesh edges
-        edge_plot_list += [
-            (level_ei.numpy(), "blue", 1, f"M2M Level {level}")
-            for level, level_ei in enumerate(m2m_edge_index)
-        ]
+        # Compute cumulative node offsets per level (in the concatenated
+        # mesh_pos array, level-l nodes start at level_offsets[l])
+        # This is needed as the zero-indexing is applied to each level in
+        # in load_graph()
+        level_sizes = [msf.shape[0] for msf in mesh_static_features]
+        level_offsets = np.cumsum([0] + level_sizes[:-1])
 
-        # Add intra-level mesh edges
-        up_edges_ei = np.concatenate(
-            [level_up_ei.numpy() for level_up_ei in mesh_up_edge_index], axis=1
-        )
-        down_edges_ei = np.concatenate(
-            [level_down_ei.numpy() for level_down_ei in mesh_down_edge_index],
-            axis=1,
-        )
-        edge_plot_list.append((up_edges_ei, "green", 1, "Mesh up"))
-        edge_plot_list.append((down_edges_ei, "green", 1, "Mesh down"))
+        # Add intra-level mesh edges (m2m per level)
+        # Edge indices are zero-indexed per level, so shift by level offset
+        for level, level_ei in enumerate(m2m_edge_index):
+            ei_shifted = level_ei.numpy() + level_offsets[level]
+            edge_plot_list.append((ei_shifted, "blue", 1, f"M2M Level {level}"))
+
+        # Add inter-level mesh edges (up/down connect adjacent levels)
+        for level, level_up_ei in enumerate(mesh_up_edge_index):
+            ei_up = level_up_ei.numpy().copy()
+            # Row 0: source in level l, Row 1: target in level l+1
+            ei_up[0] += level_offsets[level]
+            ei_up[1] += level_offsets[level + 1]
+            edge_plot_list.append(
+                (ei_up, "green", 1, f"Mesh up {level}->{level + 1}")
+            )
+
+        for level, level_down_ei in enumerate(mesh_down_edge_index):
+            ei_down = level_down_ei.numpy().copy()
+            # Row 0: source in level l+1, Row 1: target in level l
+            ei_down[0] += level_offsets[level + 1]
+            ei_down[1] += level_offsets[level]
+            edge_plot_list.append(
+                (ei_down, "green", 1, f"Mesh down {level + 1}->{level}")
+            )
 
         mesh_node_size = 2.5
     else:
