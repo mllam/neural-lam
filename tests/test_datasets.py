@@ -264,27 +264,26 @@ def test_dataset_length(dataset_config):
 def test_standardization_with_zero_std():
     """Regression test for https://github.com/mllam/neural-lam/issues/136
 
-    When all values of a field are identical (std = 0), standardization
-    must not produce NaN via division-by-zero.
+    When all values of a field are identical (std = 0), WeatherDataset
+    must not produce NaN via division-by-zero during standardization.
     """
     # Third-party
-    import numpy as np
     import xarray as xr
 
-    # Build a zero-std field (all values identical, like all-zero rain)
-    data = xr.DataArray(np.zeros((5, 10)), dims=["time", "grid_index"])
-    mean = xr.DataArray(np.zeros(10), dims=["grid_index"])
-    std = xr.DataArray(np.zeros(10), dims=["grid_index"])
+    std_da = xr.DataArray(
+        np.array([0.0, 1.0, 2.0], dtype=np.float32), dims=["feature"]
+    )
 
-    # Confirm the old approach produces NaN (the original bug)
-    old_result = (data - mean) / std
-    assert np.isnan(old_result.values).any(), "Expected NaN from naive division"
+    dataset = WeatherDataset.__new__(WeatherDataset)
+    result = dataset._compute_std_safe(std_da, "state")
 
-    # Confirm the fix produces 0.0, not NaN
-    new_result = xr.where(std > 0, (data - mean) / std, 0.0)
-    assert not np.isnan(
-        new_result.values
-    ).any(), "Fix failed: still NaN when std=0"
+    eps = np.finfo(std_da.dtype).eps
+
     assert (
-        new_result.values == 0.0
-    ).all(), "Expected all zeros for constant field"
+        float(result[0]) == eps
+    ), "Zero std was not clamped to machine epsilon"
+    assert float(result[1]) == 1.0
+    assert float(result[2]) == 2.0
+    assert not np.isnan(
+        result.values
+    ).any(), "NaN found after _compute_std_safe"

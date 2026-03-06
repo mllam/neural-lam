@@ -116,30 +116,25 @@ class WeatherDataset(torch.utils.data.Dataset):
                 self.da_forcing_mean = self.ds_forcing_stats.forcing_mean
                 self.da_forcing_std = self.ds_forcing_stats.forcing_std
 
-            # Compute std_safe ONCE at init std arrays never
-            # change during runtime
-            state_eps = np.finfo(self.da_state_std.dtype).eps
-            if bool((self.da_state_std <= state_eps).any()):
-                logger.warning(
-                    "Some state features have near-zero std and will be "
-                    "standardized using machine epsilon to avoid NaN."
-                )
-            self.state_std_safe = self.da_state_std.where(
-                self.da_state_std > state_eps, other=state_eps
+            self.state_std_safe = self._compute_std_safe(
+                self.da_state_std, "state"
             )
 
             if self.da_forcing_std is not None:
-                forcing_eps = np.finfo(self.da_forcing_std.dtype).eps
-                if bool((self.da_forcing_std <= forcing_eps).any()):
-                    logger.warning(
-                        "Some forcing features have near-zero std and will be "
-                        "standardized using machine epsilon to avoid NaN."
-                    )
-                self.forcing_std_safe = self.da_forcing_std.where(
-                    self.da_forcing_std > forcing_eps, other=forcing_eps
+                self.forcing_std_safe = self._compute_std_safe(
+                    self.da_forcing_std, "forcing"
                 )
             else:
                 self.forcing_std_safe = None
+
+    def _compute_std_safe(self, std_da, label: str):
+        eps = np.finfo(std_da.dtype).eps
+        if bool((std_da <= eps).any()):
+            logger.warning(
+                f"Some {label} features have near-zero std and will be "
+                "standardized using machine epsilon to avoid NaN."
+            )
+        return std_da.where(std_da > eps, other=eps)
 
     def __len__(self):
         if self.datastore.is_forecast:

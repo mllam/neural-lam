@@ -213,9 +213,6 @@ class BaseDatastore(abc.ABC):
         mean = standard_da[f"{category}_mean"]
         std = standard_da[f"{category}_std"]
 
-        # Clamp std to machine epsilon (dtype-aware) to avoid NaN from
-        # division-by-zero for constant fields, without affecting fields
-        # with small but meaningful variance.
         eps = np.finfo(std.dtype).eps
         return (da - mean) / std.where(std > eps, other=eps)
 
