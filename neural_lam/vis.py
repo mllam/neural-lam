@@ -8,6 +8,8 @@ import xarray as xr
 from . import utils
 from .datastore.base import BaseRegularGridDatastore
 
+matplotlib.use("Agg")
+
 
 @matplotlib.rc_context(utils.fractional_plot_bundle(1))
 def plot_error_map(errors, datastore: BaseRegularGridDatastore, title=None):
