@@ -13,11 +13,9 @@ passing, where physical variables are represented as features on so-called
 then *decoded* back to grid nodes where output tendencies or updated state are
 produced.
 
-The format specified in this document was designed to support the three archetypes of GNN-based MLWP forecasting architectures:
-
-- flat, non-hierarhical graphs where the processing mesh only connects to nearest neighbors (Keisler et al. 2022)
-- flat-multiscale, non-hierarchical graphs where the processing mesh also includes longer-range connections (GraphCast, Lam et al. 2022)
-- hierarchical graphs where the processing mesh includes multiple levels of resolution (Oskarsson et al. 2023)
+The format specified in this document was designed to support the definition of
+both flat (e.g. Keisler 2022, Lam et al 2022) and hierarchical (Oskarsson et al
+2023) graphs for GNN-based MLWP in neural-lam.
 
 The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL NOT",
 "SHOULD", "SHOULD NOT", "RECOMMENDED", "MAY", and "OPTIONAL" in this
