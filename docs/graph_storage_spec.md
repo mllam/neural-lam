@@ -27,8 +27,10 @@ document are to be interpreted as described in RFC 2119.
 
 ### Directory Structure
 
-Each graph MUST live in a directory (typically
-`<datastore-root>/graph/<name>`).
+Each graph MUST identified by a unique `name` and stored within the directory
+`graph/<name>/` that in turn MUST be placed within the same directory as the
+datastore configuration from which the graph was derived (i.e. the spatial
+coordinates defining the `grid` coordinates are provided by the datastore).
 
 ### Graph Filenames
 
