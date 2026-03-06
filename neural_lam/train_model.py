@@ -224,6 +224,14 @@ def main(input_args=None):
         default=1,
         help="Number of future time steps to use as input for forcing data",
     )
+    parser.add_argument(
+        "--use_only_one_ensemble_member",
+        action="store_true",
+        help=(
+            "If set, only use ensemble member 0 instead of treating all "
+            "ensemble members as independent samples."
+        ),
+    )
     args = parser.parse_args(input_args)
     args.var_leads_metrics_watch = {
         int(k): v for k, v in json.loads(args.var_leads_metrics_watch).items()
@@ -263,6 +271,7 @@ def main(input_args=None):
         standardize=True,
         num_past_forcing_steps=args.num_past_forcing_steps,
         num_future_forcing_steps=args.num_future_forcing_steps,
+        use_all_ensemble_members=not args.use_only_one_ensemble_member,
         batch_size=args.batch_size,
         num_workers=args.num_workers,
         eval_split=args.eval or "test",
