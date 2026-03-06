@@ -145,6 +145,36 @@ def test_dataset_item_create_dataarray_from_tensor(datastore_name):
             da_target_single[dim].values, da_target_true[0][dim].values
         )
 
+    da_forcing = dataset.da_forcing
+    da_forcing_raw = da_forcing
+    for dim in da_forcing_raw.dims:
+        if dim not in ("grid_index", "forcing_feature"):
+            da_forcing_raw = da_forcing_raw.isel({dim: 0})
+    da_forcing_raw = da_forcing_raw.transpose(
+        "grid_index", "forcing_feature"
+    )
+    da_forcing = dataset.create_dataarray_from_tensor(
+        tensor=torch.tensor(da_forcing_raw.values, dtype=torch.float32),
+        category="forcing",
+        time=target_times[0],
+    )
+    np.testing.assert_equal(
+        da_forcing.forcing_feature.values,
+        da_forcing_raw.forcing_feature.values,
+    )
+
+    da_static = dataset.da_static
+    da_static_raw = da_static.transpose("grid_index", "static_feature")
+    da_static = dataset.create_dataarray_from_tensor(
+        tensor=torch.tensor(da_static_raw.values, dtype=torch.float32),
+        category="static",
+        time=target_times[0],
+    )
+    np.testing.assert_equal(
+        da_static.static_feature.values,
+        da_static_raw.static_feature.values,
+    )
+
     if isinstance(datastore, BaseRegularGridDatastore):
         # test unstacking the grid coordinates
         da_target_single_unstacked = datastore.unstack_grid_coords(
