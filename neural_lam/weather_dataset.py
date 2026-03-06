@@ -8,6 +8,7 @@ import numpy as np
 import pytorch_lightning as pl
 import torch
 import xarray as xr
+from loguru import logger
 
 # First-party
 from neural_lam.datastore.base import BaseDatastore
@@ -114,6 +115,26 @@ class WeatherDataset(torch.utils.data.Dataset):
                 )
                 self.da_forcing_mean = self.ds_forcing_stats.forcing_mean
                 self.da_forcing_std = self.ds_forcing_stats.forcing_std
+
+            self.state_std_safe = self._compute_std_safe(
+                self.da_state_std, "state"
+            )
+
+            if self.da_forcing_std is not None:
+                self.forcing_std_safe = self._compute_std_safe(
+                    self.da_forcing_std, "forcing"
+                )
+            else:
+                self.forcing_std_safe = None
+
+    def _compute_std_safe(self, std_da, label: str):
+        eps = np.finfo(std_da.dtype).eps
+        if bool((std_da <= eps).any()):
+            logger.warning(
+                f"Some {label} features have near-zero std and will be "
+                "standardized using machine epsilon to avoid NaN."
+            )
+        return std_da.where(std_da > eps, other=eps)
 
     def __len__(self):
         if self.datastore.is_forecast:
@@ -400,10 +421,10 @@ class WeatherDataset(torch.utils.data.Dataset):
         if self.standardize:
             da_init_states = (
                 da_init_states - self.da_state_mean
-            ) / self.da_state_std
+            ) / self.state_std_safe
             da_target_states = (
                 da_target_states - self.da_state_mean
-            ) / self.da_state_std
+            ) / self.state_std_safe
 
             if da_forcing is not None:
                 # XXX: Here we implicitly assume that the last dimension of the
@@ -412,7 +433,7 @@ class WeatherDataset(torch.utils.data.Dataset):
                 # tensor with repeated means and stds for each "windowed" time.)
                 da_forcing_windowed = (
                     da_forcing_windowed - self.da_forcing_mean
-                ) / self.da_forcing_std
+                ) / self.forcing_std_safe
 
         if da_forcing is not None:
             # stack the `forcing_feature` and `window_sample` dimensions into a
