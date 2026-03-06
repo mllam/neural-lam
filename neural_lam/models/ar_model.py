@@ -592,22 +592,25 @@ class ARModel(pl.LightningModule):
 
     def create_metric_log_dict(self, metric_tensor, prefix, metric_name):
         """
-        Put together a dict with everything to log for one metric. Also saves
+        Put together dicts with everything to log for one metric. Also saves
         plots as pdf and csv if using test prefix.
 
         metric_tensor: (pred_steps, d_f), metric values per time and variable
         prefix: string, prefix to use for logging metric_name: string, name of
         the metric
 
-        Return: log_dict: dict with everything to log for given metric
+        Return:
+            figure_log_dict: dict(str, plt.Figure) with figure to log
+            scalar_log_dict: dict(str, scalar) with scalar values to log
         """
-        log_dict = {}
+        figure_log_dict = {}
+        scalar_log_dict = {}
         metric_fig = vis.plot_error_map(
             errors=metric_tensor,
             datastore=self._datastore,
         )
         full_log_name = f"{prefix}_{metric_name}"
-        log_dict[full_log_name] = metric_fig
+        figure_log_dict[full_log_name] = metric_fig
 
         if prefix == "test":
             # Save pdf
@@ -628,9 +631,9 @@ class ARModel(pl.LightningModule):
                 var_name = var_names[var_i]
                 for step in timesteps:
                     key = f"{full_log_name}_{var_name}_step_{step}"
-                    log_dict[key] = metric_tensor[step - 1, var_i]
+                    scalar_log_dict[key] = metric_tensor[step - 1, var_i]
 
-        return log_dict
+        return figure_log_dict, scalar_log_dict
 
     def aggregate_and_plot_metrics(self, metrics_dict, prefix):
         """
@@ -640,7 +643,8 @@ class ARModel(pl.LightningModule):
             with step-evals.
         prefix: string, prefix to use for logging
         """
-        log_dict = {}
+        figure_log_dict = {}
+        scalar_log_dict = {}
         for metric_name, metric_val_list in metrics_dict.items():
             metric_tensor = self.all_gather_cat(
                 torch.cat(metric_val_list, dim=0)
@@ -658,24 +662,17 @@ class ARModel(pl.LightningModule):
                 # NOTE: we here assume rescaling for all metrics is linear
                 metric_rescaled = metric_tensor_averaged * self.state_std
                 # (pred_steps, d_f)
-                log_dict.update(
-                    self.create_metric_log_dict(
-                        metric_rescaled, prefix, metric_name
-                    )
+                fig_dict, sc_dict = self.create_metric_log_dict(
+                    metric_rescaled, prefix, metric_name
                 )
-
-        # Ensure that log_dict has structure for
-        # logging as dict(str, plt.Figure)
-        assert all(
-            isinstance(key, str) and isinstance(value, plt.Figure)
-            for key, value in log_dict.items()
-        )
+                figure_log_dict.update(fig_dict)
+                scalar_log_dict.update(sc_dict)
 
         if self.trainer.is_global_zero and not self.trainer.sanity_checking:
 
             current_epoch = self.trainer.current_epoch
 
-            for key, figure in log_dict.items():
+            for key, figure in figure_log_dict.items():
                 # For other loggers than wandb, add epoch to key.
                 # Wandb can log multiple images to the same key, while other
                 # loggers, such as MLFlow need unique keys for each image.
@@ -684,6 +681,14 @@ class ARModel(pl.LightningModule):
 
                 if hasattr(self.logger, "log_image"):
                     self.logger.log_image(key=key, images=[figure])
+
+            if scalar_log_dict:
+                self.log_dict(
+                    scalar_log_dict,
+                    on_step=False,
+                    on_epoch=True,
+                    rank_zero_only=True,
+                )
 
             plt.close("all")  # Close all figs
 
