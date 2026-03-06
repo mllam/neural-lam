@@ -1,6 +1,5 @@
 # Third-party
 import matplotlib
-matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
 import xarray as xr
@@ -8,6 +7,8 @@ import xarray as xr
 # Local
 from . import utils
 from .datastore.base import BaseRegularGridDatastore
+
+matplotlib.use("Agg")
 
 
 @matplotlib.rc_context(utils.fractional_plot_bundle(1))
