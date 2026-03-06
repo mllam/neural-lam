@@ -27,8 +27,7 @@ def validate_graph_metadata(graph_ldict, expected_grid_nodes):
     else:
         mesh_nodes = mesh_features[0].shape[0]
 
-    total_nodes = graph_ldict["g2m_edge_index"].max().item() + 1
-    grid_nodes = total_nodes - mesh_nodes
+    grid_nodes = graph_ldict["grid_static_features"].shape[0]
 
     if grid_nodes != expected_grid_nodes:
         raise ValueError(
