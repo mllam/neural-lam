@@ -261,7 +261,7 @@ def test_dataset_length(dataset_config):
     dataset[expected_len - 1]
 
 
-def test_ensemble_len_scales_with_opt_in():
+def test_ensemble_len_scales_with_default_all_members():
     datastore = EnsembleDummyDatastore(
         is_forecast=False,
         forcing_has_ensemble=False,
@@ -269,7 +269,16 @@ def test_ensemble_len_scales_with_opt_in():
         n_timesteps=10,
     )
 
-    dataset_default = WeatherDataset(
+    dataset_all = WeatherDataset(
+        datastore=datastore,
+        split="train",
+        ar_steps=2,
+        num_past_forcing_steps=1,
+        num_future_forcing_steps=1,
+        standardize=False,
+    )
+
+    dataset_single = WeatherDataset(
         datastore=datastore,
         split="train",
         ar_steps=2,
@@ -279,17 +288,7 @@ def test_ensemble_len_scales_with_opt_in():
         standardize=False,
     )
 
-    dataset_all = WeatherDataset(
-        datastore=datastore,
-        split="train",
-        ar_steps=2,
-        num_past_forcing_steps=1,
-        num_future_forcing_steps=1,
-        use_all_ensemble_members=True,
-        standardize=False,
-    )
-
-    assert len(dataset_all) == len(dataset_default) * 3
+    assert len(dataset_all) == len(dataset_single) * 3
 
 
 def test_ensemble_index_mapping_is_time_major():
@@ -366,7 +365,7 @@ def test_ensemble_forcing_without_member_dim_is_shared():
     assert torch.equal(forcing_0, forcing_1)
 
 
-def test_forecast_ensemble_len_scales_with_opt_in():
+def test_forecast_ensemble_len_scales_with_default_all_members():
     datastore = EnsembleDummyDatastore(
         is_forecast=True,
         forcing_has_ensemble=True,
@@ -375,8 +374,17 @@ def test_forecast_ensemble_len_scales_with_opt_in():
         n_forecast_steps=6,
     )
 
+    dataset_all = WeatherDataset(
+        datastore=datastore,
+        split="train",
+        ar_steps=2,
+        num_past_forcing_steps=1,
+        num_future_forcing_steps=1,
+        standardize=False,
+    )
+
     with pytest.warns(UserWarning, match="only using first ensemble member"):
-        dataset_default = WeatherDataset(
+        dataset_single = WeatherDataset(
             datastore=datastore,
             split="train",
             ar_steps=2,
@@ -386,14 +394,4 @@ def test_forecast_ensemble_len_scales_with_opt_in():
             standardize=False,
         )
 
-    dataset_all = WeatherDataset(
-        datastore=datastore,
-        split="train",
-        ar_steps=2,
-        num_past_forcing_steps=1,
-        num_future_forcing_steps=1,
-        use_all_ensemble_members=True,
-        standardize=False,
-    )
-
-    assert len(dataset_all) == len(dataset_default) * 3
+    assert len(dataset_all) == len(dataset_single) * 3
