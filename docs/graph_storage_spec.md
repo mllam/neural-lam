@@ -117,7 +117,7 @@ that level. Each tensor MUST satisfy the following requirements:
 - Columns MUST be x/y coordinates.
 - In graphs created by `neural_lam.create_graph`, coordinates are normalized by
   dividing by the maximum absolute grid coordinate.
-- Dtype MUST be floating-point.
+- Dtype MUST be `torch.float32`.
 
 ### Edges
 
@@ -149,7 +149,7 @@ level pair.
 For every edge-index tensor above:
 
 - Row `0` MUST be sender node index, row `1` MUST be receiver node index.
-- Dtype MUST be integer.
+- Dtype MUST be `torch.int64`.
 
 #### Edge features
 
@@ -179,7 +179,7 @@ For every edge feature tensor above:
 
 - The shape MUST be `[E_component, N_f]`.
 - `N_f` MUST be consistent across all edge feature tensors in the graph.
-- Dtype MUST be floating-point.
+- Dtype MUST be `torch.float32`.
 
 In graphs created by `neural_lam.create_graph`, `N_f == 3` by default with:
 
