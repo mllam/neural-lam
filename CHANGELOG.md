@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- Add opt-in support for iterating all ensemble members as independent samples in `WeatherDataset` (including matching ensemble-member selection for forcing when available)
+- Add support for iterating all ensemble members as independent samples in `WeatherDataset` by default, with matching ensemble-member selection for forcing when available
 
 ### Fixed
 
