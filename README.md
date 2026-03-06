@@ -526,6 +526,7 @@ Notebooks for visualization and analysis are located in `docs`.
 
 ## Format of graph directory
 The `graphs` directory contains generated graph structures that can be used by different graph-based models.
+For a strict, machine-verifiable specification, see `docs/graph_storage_spec.md`.
 The structure is shown with examples below:
 ```
 graphs
