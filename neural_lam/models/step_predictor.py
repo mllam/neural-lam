@@ -36,7 +36,13 @@ class StepPredictor(nn.Module, ABC):
             category="static", split=None, standardize=True
         )
         if da_static_features is None:
-            raise ValueError("Static features are required for StepPredictor")
+            # Create empty static features of the correct shape
+            num_grid_nodes = len(datastore.boundary_mask)
+            grid_static_features = torch.empty((num_grid_nodes, 0), dtype=torch.float32)
+        else:
+            grid_static_features = torch.tensor(
+                da_static_features.values, dtype=torch.float32
+            )
 
         da_state_stats = datastore.get_standardization_dataarray(
             category="state"
@@ -44,7 +50,7 @@ class StepPredictor(nn.Module, ABC):
 
         self.register_buffer(
             "grid_static_features",
-            torch.tensor(da_static_features.values, dtype=torch.float32),
+            grid_static_features,
             persistent=False,
         )
 
