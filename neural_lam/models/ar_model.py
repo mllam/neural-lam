@@ -18,7 +18,7 @@ from .. import metrics, vis
 from ..config import NeuralLAMConfig
 from ..datastore import BaseDatastore
 from ..loss_weighting import get_state_feature_weighting
-from ..weather_dataset import WeatherDataset
+
 
 
 class ARModel(pl.LightningModule):
@@ -170,7 +170,7 @@ class ARModel(pl.LightningModule):
         """
         Create an `xr.DataArray` from a tensor, with the correct dimensions and
         coordinates to match the datastore used by the model. This function in
-        in effect is the inverse of what is returned by
+        effect is the inverse of what is returned by
         `WeatherDataset.__getitem__`.
 
         Parameters
@@ -188,14 +188,67 @@ class ARModel(pl.LightningModule):
         category : str
             The category of the data, either 'state' or 'forcing'
         """
-        # TODO: creating an instance of WeatherDataset here on every call is
-        # not how this should be done but whether WeatherDataset should be
-        # provided to ARModel or where to put plotting still needs discussion
-        weather_dataset = WeatherDataset(datastore=self._datastore, split=split)
         time = np.array(time.cpu(), dtype="datetime64[ns]")
-        da = weather_dataset.create_dataarray_from_tensor(
-            tensor=tensor, time=time, category=category
+
+        # Determine dimensions and validate time input based on tensor shape
+        def _is_listlike(obj):
+            return hasattr(obj, "__iter__") and not isinstance(obj, str)
+
+        add_time_as_dim = False
+        if len(tensor.shape) == 2:
+            dims = ["grid_index", f"{category}_feature"]
+            if _is_listlike(time):
+                raise ValueError(
+                    "Expected a single time for a 2D tensor with assumed "
+                    "dimensions (grid_index, {category}_feature), but got "
+                    f"{len(time)} times"
+                )
+        elif len(tensor.shape) == 3:
+            add_time_as_dim = True
+            dims = ["time", "grid_index", f"{category}_feature"]
+            if not _is_listlike(time):
+                raise ValueError(
+                    "Expected a list of times for a 3D tensor with assumed "
+                    "dimensions (time, grid_index, {category}_feature), but "
+                    "got a single time"
+                )
+        else:
+            raise ValueError(
+                "Expected tensor to have 2 or 3 dimensions, but got "
+                f"{len(tensor.shape)}"
+            )
+
+        # Get coordinate metadata directly from the datastore, avoiding the
+        # need to instantiate a full WeatherDataset just for formatting
+        da_datastore = self._datastore.get_dataarray(
+            category=category, split=split
         )
+        da_grid_index = da_datastore.grid_index
+        da_feature = da_datastore[f"{category}_feature"]
+
+        coords = {
+            f"{category}_feature": da_feature,
+            "grid_index": da_grid_index,
+        }
+        if add_time_as_dim:
+            coords["time"] = time
+
+        da = xr.DataArray(
+            tensor.cpu().numpy(),
+            dims=dims,
+            coords=coords,
+        )
+
+        for grid_coord in ["x", "y"]:
+            if (
+                grid_coord in da_datastore.coords
+                and grid_coord not in da.coords
+            ):
+                da.coords[grid_coord] = da_datastore[grid_coord]
+
+        if not add_time_as_dim:
+            da.coords["time"] = time
+
         return da
 
     def configure_optimizers(self):
