@@ -38,8 +38,8 @@ class WeatherDataset(torch.utils.data.Dataset):
         t. Default is 1.
     use_all_ensemble_members : bool, optional
         If `True` and `datastore.is_ensemble=True`, treat each ensemble member
-        as an independent sample. If `False`, only ensemble member 0 is used
-        (current/default behavior). Default is False.
+        as an independent sample. If `False`, only ensemble member 0 is used.
+        Default is True.
     standardize : bool, optional
         Whether to standardize the data. Default is True.
     """
@@ -51,7 +51,7 @@ class WeatherDataset(torch.utils.data.Dataset):
         ar_steps: int = 3,
         num_past_forcing_steps: int = 1,
         num_future_forcing_steps: int = 1,
-        use_all_ensemble_members: bool = False,
+        use_all_ensemble_members: bool = True,
         standardize: bool = True,
     ):
         super().__init__()
@@ -61,7 +61,7 @@ class WeatherDataset(torch.utils.data.Dataset):
         self.datastore = datastore
         self.num_past_forcing_steps = num_past_forcing_steps
         self.num_future_forcing_steps = num_future_forcing_steps
-        self.use_all_ensemble_members = use_all_ensemble_members 
+        self.use_all_ensemble_members = use_all_ensemble_members
         self._warned_single_ensemble_member = False
 
         self.da_state = self.datastore.get_dataarray(
@@ -634,7 +634,7 @@ class WeatherDataModule(pl.LightningDataModule):
         standardize: bool = True,
         num_past_forcing_steps: int = 1,
         num_future_forcing_steps: int = 1,
-        use_all_ensemble_members: bool = False,
+        use_all_ensemble_members: bool = True,
         batch_size: int = 4,
         num_workers: int = 16,
         eval_split: str = "test",
