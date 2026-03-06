@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- Sort `analysis_time` coordinates in `NpyFilesDatastoreMEPS` to prevent temporal drift in dataset slices due to OS-dependent `glob` ordering [\#328](https://github.com/mllam/neural-lam/issues/328) @AftAb-25
+- Sort `analysis_time` coordinates in `NpyFilesDatastoreMEPS` to prevent OS-dependent `glob` ordering [\#333](https://github.com/mllam/neural-lam/issues/333) @AftAb-25
 
 - Fix README image paths to use absolute GitHub URLs so images display correctly on PyPI [\#188](https://github.com/mllam/neural-lam/pull/188) @bk-simon
 
