@@ -1,6 +1,7 @@
 # Standard library
 from datetime import timedelta
 from pathlib import Path
+from unittest.mock import MagicMock, patch
 
 # Third-party
 import matplotlib.pyplot as plt
@@ -278,5 +279,113 @@ def test_create_metric_log_dict_with_metrics_watch(tmp_path):
         assert not isinstance(value, plt.Figure), (
             "scalar_log_dict should not contain plt.Figure objects"
         )
+
+    plt.close("all")
+
+
+def test_aggregate_and_plot_metrics_with_metrics_watch(tmp_path):
+    """
+    Integration test for issue #302: exercises the full watched-metrics path
+    through aggregate_and_plot_metrics(), which is the exact crash site of the
+    original AssertionError.
+
+    Previously, aggregate_and_plot_metrics asserted all values in the log dict
+    were plt.Figure objects, which failed when --metrics_watch added scalar
+    tensor values. This test ensures the full pipeline works without crashing.
+    """
+    datastore = DummyDatastore()
+    num_state_vars = datastore.get_num_data_vars(category="state")
+
+    # Configure metrics_watch to watch "val_rmse" for var 0 at step 1
+    class ModelArgs:
+        output_std = False
+        loss = "mse"
+        restore_opt = False
+        n_example_pred = 1
+        graph = "1level"
+        hidden_dim = 4
+        hidden_layers = 1
+        processor_layers = 1
+        mesh_aggr = "sum"
+        lr = 1.0e-3
+        val_steps_to_log = [1, 2]
+        metrics_watch = ["val_rmse"]
+        var_leads_metrics_watch = {0: [1]}
+        num_past_forcing_steps = 0
+        num_future_forcing_steps = 0
+
+    graph_dir_path = Path(datastore.root_path) / "graph" / "1level"
+    if not graph_dir_path.exists():
+        create_graph_from_datastore(
+            datastore=datastore,
+            output_root_path=str(graph_dir_path),
+            n_max_levels=1,
+        )
+
+    from neural_lam.models.graph_lam import GraphLAM
+
+    config = nlconfig.NeuralLAMConfig(
+        datastore=nlconfig.DatastoreSelection(
+            kind=datastore.SHORT_NAME,
+            config_path=datastore.root_path,
+        ),
+    )
+
+    model = GraphLAM(
+        args=ModelArgs(),
+        config=config,
+        datastore=datastore,
+    )
+
+    # Mock the trainer to simulate rank-0 single-process execution
+    mock_trainer = MagicMock()
+    mock_trainer.is_global_zero = True
+    mock_trainer.sanity_checking = False
+    mock_trainer.current_epoch = 0
+    model._trainer = mock_trainer
+
+    # Mock logger so log_image and log_dict calls don't fail
+    mock_logger = MagicMock()
+    mock_logger.log_image = MagicMock()
+    model._logger = mock_logger
+
+    # Patch all_gather_cat to be a no-op (single process)
+    model.all_gather_cat = lambda x: x
+
+    # Patch log_dict to capture what would be logged
+    logged_scalars = {}
+    original_log_dict = model.log_dict
+
+    def capture_log_dict(d, **kwargs):
+        logged_scalars.update(d)
+
+    model.log_dict = capture_log_dict
+
+    # Build a fake metrics_dict with MSE entries:
+    # shape (N_eval=2, pred_steps=2, d_f=num_state_vars)
+    metrics_dict = {
+        "mse": [torch.rand(1, 2, num_state_vars) for _ in range(2)]
+    }
+
+    # This is the exact crash site: should NOT raise AssertionError
+    model.aggregate_and_plot_metrics(metrics_dict, prefix="val")
+
+    # Verify that log_image was called (figures were logged)
+    assert mock_logger.log_image.called, (
+        "Expected log_image to be called for figure logging"
+    )
+
+    # Verify that scalar metrics were captured via log_dict
+    assert len(logged_scalars) > 0, (
+        "Expected scalar metrics to be logged via log_dict "
+        "when metrics_watch is configured"
+    )
+
+    # Verify the expected watched-metric key is present
+    expected_key = "val_rmse_state_feat_0_step_1"
+    assert expected_key in logged_scalars, (
+        f"Expected key '{expected_key}' in logged scalars, "
+        f"got keys: {list(logged_scalars.keys())}"
+    )
 
     plt.close("all")
