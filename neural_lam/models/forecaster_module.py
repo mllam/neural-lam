@@ -306,8 +306,17 @@ class ForecasterModule(pl.LightningModule):
         target = batch[1]
         time = batch[3]
 
-        state_std = self.forecaster.predictor.state_std
-        state_mean = self.forecaster.predictor.state_mean
+        da_state_stats = self._datastore.get_standardization_dataarray("state")
+        state_std = torch.tensor(
+            da_state_stats.state_std.values,
+            dtype=torch.float32,
+            device=prediction.device,
+        )
+        state_mean = torch.tensor(
+            da_state_stats.state_mean.values,
+            dtype=torch.float32,
+            device=prediction.device,
+        )
 
         prediction_rescaled = prediction * state_std + state_mean
         target_rescaled = target * state_std + state_mean
@@ -454,7 +463,12 @@ class ForecasterModule(pl.LightningModule):
                     metric_tensor_averaged = torch.sqrt(metric_tensor_averaged)
                     metric_name = metric_name.replace("mse", "rmse")
 
-                state_std = self.forecaster.predictor.state_std
+                da_state_stats = self._datastore.get_standardization_dataarray("state")
+                state_std = torch.tensor(
+                    da_state_stats.state_std.values,
+                    dtype=torch.float32,
+                    device=metric_tensor_averaged.device,
+                )
                 metric_rescaled = metric_tensor_averaged * state_std
 
                 log_dict.update(

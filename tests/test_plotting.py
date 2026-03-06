@@ -66,11 +66,37 @@ def model_and_batch(tmp_path, time_step, time_unit):
     )
 
     # Create model
-    model = ForecasterModule(
-        model_name="graph_lam",
-        args=ModelArgs(),
+    from neural_lam.models.ar_forecaster import ARForecaster
+    from neural_lam.models import MODELS
+
+    args = ModelArgs()
+    predictor_class = MODELS["graph_lam"]
+    predictor = predictor_class(
         config=config,
         datastore=datastore,
+        graph=args.graph,
+        hidden_dim=args.hidden_dim,
+        hidden_layers=args.hidden_layers,
+        processor_layers=args.processor_layers,
+        mesh_aggr=args.mesh_aggr,
+        num_past_forcing_steps=args.num_past_forcing_steps,
+        num_future_forcing_steps=args.num_future_forcing_steps,
+        output_std=args.output_std,
+    )
+    forecaster = ARForecaster(predictor, datastore=datastore)
+
+    model = ForecasterModule(
+        forecaster=forecaster,
+        config=config,
+        datastore=datastore,
+        loss=args.loss,
+        restore_opt=args.restore_opt,
+        n_example_pred=args.n_example_pred,
+        val_steps_to_log=args.val_steps_to_log,
+        metrics_watch=args.metrics_watch,
+        var_leads_metrics_watch=args.var_leads_metrics_watch,
+        output_std=args.output_std,
+        lr=args.lr,
     )
 
     # Create dataset to get a sample batch
@@ -120,14 +146,20 @@ def test_plot_examples_integration_saves_figure(
     prediction, target, _, _ = model.common_step(batch)
 
     # Rescale to original data scale
-    prediction_rescaled = (
-        prediction * model.forecaster.predictor.state_std
-        + model.forecaster.predictor.state_mean
+    da_state_stats = datastore.get_standardization_dataarray("state")
+    state_std = torch.tensor(
+        da_state_stats.state_std.values,
+        dtype=torch.float32,
+        device=prediction.device,
     )
-    target_rescaled = (
-        target * model.forecaster.predictor.state_std
-        + model.forecaster.predictor.state_mean
+    state_mean = torch.tensor(
+        da_state_stats.state_mean.values,
+        dtype=torch.float32,
+        device=prediction.device,
     )
+
+    prediction_rescaled = prediction * state_std + state_mean
+    target_rescaled = target * state_std + state_mean
 
     # Get first example
     pred_slice = prediction_rescaled[0].detach()  # Detach from graph

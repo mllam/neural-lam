@@ -216,11 +216,36 @@ def test_single_batch(datastore_name, split):
 
     dataset = WeatherDataset(datastore=datastore, split=split, ar_steps=2)
 
-    model = ForecasterModule(
-        model_name="graph_lam",
-        args=args,
-        datastore=datastore,
+    from neural_lam.models.ar_forecaster import ARForecaster
+    from neural_lam.models import MODELS
+
+    predictor_class = MODELS["graph_lam"]
+    predictor = predictor_class(
         config=config,
+        datastore=datastore,
+        graph=args.graph,
+        hidden_dim=args.hidden_dim,
+        hidden_layers=args.hidden_layers,
+        processor_layers=args.processor_layers,
+        mesh_aggr=args.mesh_aggr,
+        num_past_forcing_steps=args.num_past_forcing_steps,
+        num_future_forcing_steps=args.num_future_forcing_steps,
+        output_std=args.output_std,
+    )
+    forecaster = ARForecaster(predictor, datastore=datastore)
+
+    model = ForecasterModule(
+        forecaster=forecaster,
+        config=config,
+        datastore=datastore,
+        loss=args.loss,
+        restore_opt=args.restore_opt,
+        n_example_pred=args.n_example_pred,
+        val_steps_to_log=args.val_steps_to_log,
+        metrics_watch=args.metrics_watch,
+        var_leads_metrics_watch=args.var_leads_metrics_watch,
+        output_std=args.output_std,
+        lr=args.lr,
     )
 
     model_device = model.to(device_name)

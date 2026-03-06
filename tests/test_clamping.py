@@ -57,9 +57,16 @@ def test_clamping():
     )
 
     model = GraphLAM(
-        args=model_args,
-        datastore=datastore,
         config=config,
+        datastore=datastore,
+        graph=model_args.graph,
+        hidden_dim=model_args.hidden_dim,
+        hidden_layers=model_args.hidden_layers,
+        processor_layers=model_args.processor_layers,
+        mesh_aggr=model_args.mesh_aggr,
+        num_past_forcing_steps=model_args.num_past_forcing_steps,
+        num_future_forcing_steps=model_args.num_future_forcing_steps,
+        output_std=model_args.output_std,
     )
 
     features = datastore.get_vars_names(category="state")
