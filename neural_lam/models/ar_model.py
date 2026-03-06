@@ -687,7 +687,7 @@ class ARModel(pl.LightningModule):
                     scalar_log_dict,
                     on_step=False,
                     on_epoch=True,
-                    sync_dist=True,
+                    rank_zero_only=True,
                 )
 
             plt.close("all")  # Close all figs

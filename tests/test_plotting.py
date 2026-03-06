@@ -188,3 +188,95 @@ def test_plot_examples_integration_saves_figure(
     assert fig is not None
     assert isinstance(fig, plt.Figure)
     assert output_path.exists()
+
+
+def test_create_metric_log_dict_with_metrics_watch(tmp_path):
+    """
+    Regression test for issue #302: AssertionError when using --metrics_watch.
+
+    Previously, create_metric_log_dict put both plt.Figure and scalar tensor
+    values into a single dict, and aggregate_and_plot_metrics asserted all
+    values were plt.Figure. This test ensures the fix (returning separate
+    figure and scalar dicts) works correctly.
+    """
+    datastore = DummyDatastore()
+    num_state_vars = datastore.get_num_data_vars(category="state")
+
+    # Configure metrics_watch to watch "val_rmse" for var 0 at step 1
+    class ModelArgs:
+        output_std = False
+        loss = "mse"
+        restore_opt = False
+        n_example_pred = 1
+        graph = "1level"
+        hidden_dim = 4
+        hidden_layers = 1
+        processor_layers = 1
+        mesh_aggr = "sum"
+        lr = 1.0e-3
+        val_steps_to_log = [1, 2]
+        metrics_watch = ["val_rmse"]
+        var_leads_metrics_watch = {0: [1]}
+        num_past_forcing_steps = 0
+        num_future_forcing_steps = 0
+
+    graph_dir_path = Path(datastore.root_path) / "graph" / "1level"
+    if not graph_dir_path.exists():
+        create_graph_from_datastore(
+            datastore=datastore,
+            output_root_path=str(graph_dir_path),
+            n_max_levels=1,
+        )
+
+    from neural_lam.models.graph_lam import GraphLAM
+
+    config = nlconfig.NeuralLAMConfig(
+        datastore=nlconfig.DatastoreSelection(
+            kind=datastore.SHORT_NAME,
+            config_path=datastore.root_path,
+        ),
+    )
+
+    model = GraphLAM(
+        args=ModelArgs(),
+        config=config,
+        datastore=datastore,
+    )
+
+    # Create a dummy metric tensor: (pred_steps=2, d_f=num_state_vars)
+    metric_tensor = torch.rand(2, num_state_vars)
+
+    # This call should not raise an AssertionError (the original bug)
+    figure_log_dict, scalar_log_dict = model.create_metric_log_dict(
+        metric_tensor, prefix="val", metric_name="rmse"
+    )
+
+    # Verify figure dict contains plt.Figure objects
+    assert len(figure_log_dict) > 0, "figure_log_dict should not be empty"
+    for key, value in figure_log_dict.items():
+        assert isinstance(key, str)
+        assert isinstance(value, plt.Figure)
+
+    # Verify scalar dict contains the watched metric entries
+    assert len(scalar_log_dict) > 0, (
+        "scalar_log_dict should not be empty when metrics_watch is configured"
+    )
+    expected_key = "val_rmse_state_feat_0_step_1"
+    assert expected_key in scalar_log_dict, (
+        f"Expected key '{expected_key}' in scalar_log_dict, "
+        f"got keys: {list(scalar_log_dict.keys())}"
+    )
+
+    # Verify no scalar values leaked into the figure dict
+    for value in figure_log_dict.values():
+        assert isinstance(value, plt.Figure), (
+            "figure_log_dict should only contain plt.Figure objects"
+        )
+
+    # Verify no figure values leaked into the scalar dict
+    for value in scalar_log_dict.values():
+        assert not isinstance(value, plt.Figure), (
+            "scalar_log_dict should not contain plt.Figure objects"
+        )
+
+    plt.close("all")
