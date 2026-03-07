@@ -9,6 +9,31 @@ from ..interaction_net import InteractionNet
 from .ar_model import ARModel
 
 
+def validate_graph_metadata(graph_ldict, expected_grid_nodes):
+    required_keys = [
+        "g2m_edge_index",
+        "m2g_edge_index",
+        "mesh_static_features",
+    ]
+
+    for key in required_keys:
+        if key not in graph_ldict:
+            raise ValueError(
+                "Invalid graph: missing required tensor " f"'{key}'."
+            )
+
+    # Only validate grid nodes if grid_static_features exists
+    if "grid_static_features" in graph_ldict:
+        grid_nodes = graph_ldict["grid_static_features"].shape[0]
+
+        if grid_nodes != expected_grid_nodes:
+            raise ValueError(
+                "Incompatible graph: expected "
+                f"{expected_grid_nodes} grid nodes "
+                f"but graph contains {grid_nodes}."
+            )
+
+
 class BaseGraphModel(ARModel):
     """
     Base (abstract) class for graph-based models building on
@@ -25,6 +50,10 @@ class BaseGraphModel(ARModel):
         self.hierarchical, graph_ldict = utils.load_graph(
             graph_dir_path=graph_dir_path
         )
+
+        expected_grid_nodes = datastore.num_grid_points
+        validate_graph_metadata(graph_ldict, expected_grid_nodes)
+
         for name, attr_value in graph_ldict.items():
             # Make BufferLists module members and register tensors as buffers
             if isinstance(attr_value, torch.Tensor):
