@@ -307,7 +307,13 @@ def fractional_plot_bundle(fraction):
 
 @rank_zero_only
 def rank_zero_print(*args, **kwargs):
-    """Print only from rank 0 process"""
+    """
+    Print messages only from the rank-zero process in distributed runs.
+
+    This helper prevents duplicate log messages when training with
+    multiple processes or GPUs. Only the primary process (rank 0)
+    will output the message.
+    """
     print(*args, **kwargs)
 
 
