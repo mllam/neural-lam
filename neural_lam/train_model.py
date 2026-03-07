@@ -318,6 +318,7 @@ def main(input_args=None):
         max_epochs=args.epochs,
         deterministic=True,
         strategy="ddp",
+        num_sanity_val_steps=0,
         accelerator=device_name,
         num_nodes=args.num_nodes,
         devices=devices,
