@@ -44,13 +44,6 @@ class ForecasterModule(pl.LightningModule):
         output_std: bool = False,
     ):
         super().__init__()
-        # Note: datastore is excluded from saved hparams and must be provided
-        # explicitly when calling load_from_checkpoint(path,
-        # datastore=datastore)
-        self.save_hyperparameters(ignore=["datastore", "forecaster"])
-        self._datastore = datastore
-        self.forecaster = forecaster
-
         # Resolve mutable defaults
         if val_steps_to_log is None:
             val_steps_to_log = [1, 2, 3, 5, 10]
@@ -58,6 +51,13 @@ class ForecasterModule(pl.LightningModule):
             metrics_watch = []
         if var_leads_metrics_watch is None:
             var_leads_metrics_watch = {}
+
+        # Note: datastore is excluded from saved hparams and must be provided
+        # explicitly when calling load_from_checkpoint(path,
+        # datastore=datastore)
+        self.save_hyperparameters(ignore=["datastore", "forecaster"])
+        self._datastore = datastore
+        self.forecaster = forecaster
 
         # Compute interior_mask_bool directly from datastore (Item 4)
         boundary_mask = (
@@ -555,6 +555,21 @@ class ForecasterModule(pl.LightningModule):
     def on_load_checkpoint(self, checkpoint):
         loaded_state_dict = checkpoint["state_dict"]
 
+        # 1. Broad namespace remap: for pre-refactor checkpoints
+        # The old ARModel was a flat LightningModule. Everything that
+        # belonged to the predictor needs to be moved to 'forecaster.predictor.'
+        old_keys = list(loaded_state_dict.keys())
+        for key in old_keys:
+            if not key.startswith("forecaster.") and key not in (
+                "interior_mask_bool",
+                "per_var_std",
+            ):
+                new_key = f"forecaster.predictor.{key}"
+                loaded_state_dict[new_key] = loaded_state_dict.pop(key)
+
+        # 2. Specific rename from g2m_gnn.grid_mlp -> encoding_grid_mlp
+        # This will now be under forecaster.predictor due to the broad remap above,
+        # or it is already there if from a recent checkpoint before this rename.
         if (
             "forecaster.predictor.g2m_gnn.grid_mlp.0.weight"
             in loaded_state_dict
@@ -574,6 +589,7 @@ class ForecasterModule(pl.LightningModule):
                 )
                 loaded_state_dict[new_key] = loaded_state_dict[old_key]
                 del loaded_state_dict[old_key]
+
         if not self.restore_opt:
             opt = self.configure_optimizers()
             checkpoint["optimizer_states"] = [opt.state_dict()]
