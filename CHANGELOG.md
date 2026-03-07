@@ -20,6 +20,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Fix Slack domain link [\#288](https://github.com/mllam/neural-lam/pull/288) @sadamov
 
+
+
+
+### Fixed
+- Fix training crash on Windows due to incompatible DDP strategy (#351)
+- Fix visualization crash in `plot_error_map` with 1D errors tensor (#351)
+- Fix matplotlib tick label mismatch in `plot_error_map` with small datasets (#351)
+
 ### Fixed
 
 - Infer spatial coordinate names for MDPDatastore (rather than assuming names `x` and `y`), allows for e.g. lat/lon regular grids [\#169](https://github.com/mllam/neural-lam/pull/169) @leifdenby
