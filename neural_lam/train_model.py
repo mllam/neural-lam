@@ -3,7 +3,7 @@ import json
 import random
 import time
 from argparse import ArgumentDefaultsHelpFormatter, ArgumentParser
-
+import sys
 # Third-party
 # for logging the model:
 import pytorch_lightning as pl
@@ -317,7 +317,7 @@ def main(input_args=None):
     trainer = pl.Trainer(
         max_epochs=args.epochs,
         deterministic=True,
-        strategy="ddp",
+        strategy="ddp" if sys.platform != "win32" else "auto",                   #added a safety check for which one to run
         num_sanity_val_steps=0,
         accelerator=device_name,
         num_nodes=args.num_nodes,
