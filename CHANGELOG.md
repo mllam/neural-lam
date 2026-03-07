@@ -7,8 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [unreleased](https://github.com/mllam/neural-lam/compare/v0.5.0...HEAD)
 
-- Warn when running in evaluation mode (`--eval`) without loading a checkpoint (`--load`) ([#105](https://github.com/mllam/neural-lam/issues/105)) @varunsiravuri
+### Added
 
+- Warn when running in evaluation mode (`--eval`) without loading a checkpoint (`--load`) ([#105](https://github.com/mllam/neural-lam/issues/105)) @varunsiravuri
 
 ### Fixed
 
@@ -26,6 +27,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - Infer spatial coordinate names for MDPDatastore (rather than assuming names `x` and `y`), allows for e.g. lat/lon regular grids [\#169](https://github.com/mllam/neural-lam/pull/169) @leifdenby
+
 
 ### Maintenance
 
