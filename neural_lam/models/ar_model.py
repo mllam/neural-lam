@@ -352,7 +352,8 @@ class ARModel(pl.LightningModule):
         # Log loss per time step forward and mean
         if not self._warned_val_steps:
             skipped_steps = [
-                step for step in self.args.val_steps_to_log
+                step
+                for step in self.args.val_steps_to_log
                 if step > len(time_step_loss)
             ]
             if skipped_steps:
@@ -421,7 +422,8 @@ class ARModel(pl.LightningModule):
         # Log loss per time step forward and mean
         if not self._warned_val_steps:
             skipped_steps = [
-                step for step in self.args.val_steps_to_log
+                step
+                for step in self.args.val_steps_to_log
                 if step > len(time_step_loss)
             ]
             if skipped_steps:
@@ -475,7 +477,8 @@ class ARModel(pl.LightningModule):
             prediction, target, pred_std, average_grid=False
         )  # (B, pred_steps, num_grid_nodes)
         valid_step_indices = [
-            step - 1 for step in self.args.val_steps_to_log
+            step - 1
+            for step in self.args.val_steps_to_log
             if step <= spatial_loss.shape[1]
         ]
         log_spatial_losses = spatial_loss[:, valid_step_indices]
@@ -746,7 +749,7 @@ class ARModel(pl.LightningModule):
                     error=loss_map,
                     datastore=self._datastore,
                     title=f"Test loss, t={t_i} "
-                    f"({(self.time_step_int * t_i)} {self.time_step_int_unit})",
+                    f"({(self.time_step_int * t_i)} {self.time_step_unit})",
                 )
                 for t_i, loss_map in zip(
                     self.args.val_steps_to_log, mean_spatial_loss
