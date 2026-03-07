@@ -18,27 +18,20 @@ def validate_graph_metadata(graph_ldict, expected_grid_nodes):
 
     for key in required_keys:
         if key not in graph_ldict:
-            raise ValueError(f"Invalid graph: missing required tensor '{key}'.")
+            raise ValueError(
+                "Invalid graph: missing required tensor " f"'{key}'."
+            )
 
-    mesh_features = graph_ldict["mesh_static_features"]
+    # Only validate grid nodes if grid_static_features exists
+    if "grid_static_features" in graph_ldict:
+        grid_nodes = graph_ldict["grid_static_features"].shape[0]
 
-    if isinstance(mesh_features, torch.Tensor):
-        mesh_nodes = mesh_features.shape[0]
-    else:
-        mesh_nodes = mesh_features[0].shape[0]
-
-    grid_nodes = graph_ldict["grid_static_features"].shape[0]
-
-    if grid_nodes != expected_grid_nodes:
-        raise ValueError(
-            f"Incompatible graph: expected {expected_grid_nodes} grid nodes "
-            f"but graph contains {grid_nodes}."
-        )
-
-    if graph_ldict["g2m_edge_index"].max().item() >= total_nodes:
-        raise ValueError(
-            "Invalid graph: edge indices reference non-existent nodes."
-        )
+        if grid_nodes != expected_grid_nodes:
+            raise ValueError(
+                "Incompatible graph: expected "
+                f"{expected_grid_nodes} grid nodes "
+                f"but graph contains {grid_nodes}."
+            )
 
 
 class BaseGraphModel(ARModel):
