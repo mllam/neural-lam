@@ -18,6 +18,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `fractional_plot_bundle` now correctly multiplies by fraction instead of dividing [
 \#222](https://github.com/mllam/neural-lam/pull/222) @santhil-cyber
 
+- Add missing bounds check in `test_step` to prevent `IndexError` when `val_steps_to_log` exceeds prediction steps [\#219](https://github.com/mllam/neural-lam/pull/219) @santhil-cyber
+
 - Fix Slack domain link [\#288](https://github.com/mllam/neural-lam/pull/288) @sadamov
 
 ### Fixed
