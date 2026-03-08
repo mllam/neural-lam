@@ -76,7 +76,7 @@ def setup(rank, world_size):  # pylint: disable=redefined-outer-name
                 f"{repr(nodelist)} but 'scontrol show hostnames' returned no "
                 "hostnames. Please check your SLURM job configuration."
             )
-        master_node = hostname_lines[0]
+        master_node = hostname_lines[0].strip()
     else:
         print(
             "\033[91mCareful, you are running this script with --distributed "
