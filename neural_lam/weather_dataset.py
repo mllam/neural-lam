@@ -131,47 +131,32 @@ class WeatherDataset(torch.utils.data.Dataset):
                     UserWarning,
                 )
 
-            # Check that there are enough forecast steps available for state
-            # slicing. This includes two initial states and `ar_steps` targets,
-            # potentially offset by past forcing.
-            required_state_steps = (
-                max(2, self.num_past_forcing_steps) + self.ar_steps
-            )
-            n_state_forecast_steps = (
-                self.da_state.elapsed_forecast_duration.size
-            )
-            if n_state_forecast_steps < required_state_steps:
-                raise ValueError(
-                    "The number of state forecast steps available "
-                    f"({n_state_forecast_steps}) is less than the required "
-                    f"{required_state_steps} "
-                    f"(max(2, num_past_forcing_steps={self.num_past_forcing_steps})"
-                    f" + ar_steps={self.ar_steps}) for creating a sample with "
-                    "initial and target states."
-                )
-
-            # If forcing data is present, also validate that the complete
-            # forcing window can be constructed for each autoregressive target
-            # step without truncation.
+            n_forecast_steps = self.da_state.elapsed_forecast_duration.size
             if self.da_forcing is not None:
-                required_forcing_steps = (
+                # When forcing is present, the shared forecast horizon needs
+                # to be large enough for the full forcing window as well.
+                required_forecast_steps = (
                     max(2, self.num_past_forcing_steps)
                     + self.ar_steps
                     + self.num_future_forcing_steps
                 )
-                n_forcing_forecast_steps = (
-                    self.da_forcing.elapsed_forecast_duration.size
-                )
-                if n_forcing_forecast_steps < required_forcing_steps:
+                if n_forecast_steps < required_forecast_steps:
                     raise ValueError(
                         "The number of forcing forecast steps available "
-                        f"({n_forcing_forecast_steps}) is less than the "
-                        f"required {required_forcing_steps} "
+                        f"({n_forecast_steps}) is less than the required "
+                        f"{required_forecast_steps} "
                         f"(max(2, num_past_forcing_steps={self.num_past_forcing_steps})"
                         f" + ar_steps={self.ar_steps} + "
                         f"num_future_forcing_steps={self.num_future_forcing_steps}) "
                         "for constructing forcing windows."
                     )
+            elif n_forecast_steps < 2 + self.ar_steps:
+                raise ValueError(
+                    "The number of forecast steps available "
+                    f"({n_forecast_steps}) is less than the required "
+                    f"2+ar_steps (2+{self.ar_steps}={2 + self.ar_steps}) for "
+                    "creating a sample with initial and target states."
+                )
 
             return self.da_state.analysis_time.size
         else:
