@@ -409,29 +409,32 @@ class ARModel(pl.LightningModule):
             self.trainer.is_global_zero
             and self.plotted_examples < self.n_example_pred
         ):
+            # Need to plot more example predictions
             n_additional_examples = min(
                 prediction.shape[0],
                 self.n_example_pred - self.plotted_examples,
             )
 
-            # Slice the tensors before passing them to the visualization
-            pred_slice = prediction[:n_additional_examples]
-            target_slice = batch[1][:n_additional_examples]
+            # Rescale the tensors to original data scale before slicing
+            prediction_rescaled = prediction * self.state_std + self.state_mean
+            target_rescaled = batch[1] * self.state_std + self.state_mean
+
+            # Slice the already rescaled tensors
+            pred_slice = prediction_rescaled[:n_additional_examples]
+            target_slice = target_rescaled[:n_additional_examples]
             time_slice = batch[3][:n_additional_examples]
 
             vis.plot_examples(
                 datastore=self._datastore,
-                state_std=self.state_std,
-                state_mean=self.state_mean,
                 logger=self.logger,
                 split="test",
                 prediction=pred_slice,
                 target=target_slice,
                 time_batch=time_slice,
-                start_index=self.plotted_examples,
+                first_example_idx=self.plotted_examples,
             )
 
-            # maintain its own counter
+            # Let ARModel maintain its own counter
             self.plotted_examples += n_additional_examples
 
     def create_metric_log_dict(self, metric_tensor, prefix, metric_name):

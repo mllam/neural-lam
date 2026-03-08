@@ -193,32 +193,25 @@ def plot_spatial_error(
 
 def plot_examples(
     datastore: BaseRegularGridDatastore,
-    state_std: torch.Tensor,
-    state_mean: torch.Tensor,
     logger: pl.loggers.Logger,
     split: str,
     prediction: torch.Tensor,
     target: torch.Tensor,
     time_batch: torch.Tensor,
-    start_index: int = 0,
+    first_example_idx: int = 0,
 ) -> None:
     """
     Plot example forecasts from provided tensors.
 
     Args:
         datastore: The object containing dataset metadata.
-        state_std: Standard deviation of state variables for rescaling.
-        state_mean: Mean of state variables for rescaling.
         logger: The logger instance used to save the images.
-        split: The dataset split .
+        split: The dataset split (e.g., 'train', 'val', 'test').
         prediction: Output tensors predicted from the model.
         target: Ground truth tensors.
         time_batch: Time timestamps corresponding to the data.
-        start_index: The starting index number for naming saved files/logs.
+        first_example_idx: Starting index for naming saved files/logs.
     """
-    prediction_rescaled = prediction * state_std + state_mean
-    target_rescaled = target * state_std + state_mean
-
     time_step_int, time_step_unit = utils.get_integer_time(
         datastore.step_length
     )
@@ -227,9 +220,9 @@ def plot_examples(
     weather_dataset = WeatherDataset(datastore=datastore, split=split)
 
     for i, (pred_slice, target_slice, time_slice) in enumerate(
-        zip(prediction_rescaled, target_rescaled, time_batch)
+        zip(prediction, target, time_batch)
     ):
-        example_i = start_index + i
+        example_i = first_example_idx + i
 
         # Detach tensors to safely separate from autograd graph
         pred_slice = pred_slice.detach()
