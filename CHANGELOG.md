@@ -9,12 +9,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Allow training with state-only datastore (no forcing/static features) [#231](https://github.com/mllam/neural-lam/pull/231) @varunsiravuri
+
 - Fix README image paths to use absolute GitHub URLs so images display correctly on PyPI [\#188](https://github.com/mllam/neural-lam/pull/188) @bk-simon
+
+- Fix typo in `ar_model.py` that causes `AttributeError` during evaluation [\#204](https://github.com/mllam/neural-lam/pull/204) @ritinikhil
 
 - Changed the hardcoded True to a conditional check "persistent_workers=self.num_workers > 0" [\#235](https://github.com/mllam/neural-lam/pull/235) @santhil-cyber
 
 - `fractional_plot_bundle` now correctly multiplies by fraction instead of dividing [
 \#222](https://github.com/mllam/neural-lam/pull/222) @santhil-cyber
+
+- Fix Slack domain link [\#288](https://github.com/mllam/neural-lam/pull/288) @sadamov
+
+### Fixed
+
+- Infer spatial coordinate names for MDPDatastore (rather than assuming names `x` and `y`), allows for e.g. lat/lon regular grids [\#169](https://github.com/mllam/neural-lam/pull/169) @leifdenby
 
 ### Maintenance
 
