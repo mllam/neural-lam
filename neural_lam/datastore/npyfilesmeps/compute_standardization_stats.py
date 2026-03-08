@@ -69,7 +69,7 @@ def setup(rank, world_size):  # pylint: disable=redefined-outer-name
         hostnames = subprocess.check_output(
             ["scontrol", "show", "hostnames", nodelist],
         )
-        hostname_lines = hostnames.decode().splitlines()
+        hostname_lines = hostnames.decode("utf-8").splitlines()
         if not hostname_lines:
             raise RuntimeError(
                 "SLURM_JOB_NODELIST is set to "
