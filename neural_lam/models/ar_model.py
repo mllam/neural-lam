@@ -136,6 +136,15 @@ class ARModel(pl.LightningModule):
             "interior_mask", 1.0 - self.boundary_mask, persistent=False
         )  # (num_grid_nodes, 1), 1 for non-border
 
+        # Optionally compute area weights for grid-point averaging
+        if config.training.use_area_weights:
+            area_weights = metrics.compute_area_weights(datastore)
+            self.register_buffer(
+                "grid_weights", area_weights, persistent=False
+            )  # (num_grid_nodes,)
+        else:
+            self.grid_weights = None
+
         self.val_metrics: Dict[str, List] = {
             "mse": [],
         }
@@ -303,7 +312,11 @@ class ARModel(pl.LightningModule):
         # Compute loss
         batch_loss = torch.mean(
             self.loss(
-                prediction, target, pred_std, mask=self.interior_mask_bool
+                prediction,
+                target,
+                pred_std,
+                mask=self.interior_mask_bool,
+                grid_weights=self.grid_weights,
             )
         )  # mean over unrolled times and batch
 
@@ -339,7 +352,11 @@ class ARModel(pl.LightningModule):
 
         time_step_loss = torch.mean(
             self.loss(
-                prediction, target, pred_std, mask=self.interior_mask_bool
+                prediction,
+                target,
+                pred_std,
+                mask=self.interior_mask_bool,
+                grid_weights=self.grid_weights,
             ),
             dim=0,
         )  # (time_steps-1)
@@ -367,6 +384,7 @@ class ARModel(pl.LightningModule):
             pred_std,
             mask=self.interior_mask_bool,
             sum_vars=False,
+            grid_weights=self.grid_weights,
         )  # (B, pred_steps, d_f)
         self.val_metrics["mse"].append(entry_mses)
 
@@ -393,7 +411,11 @@ class ARModel(pl.LightningModule):
 
         time_step_loss = torch.mean(
             self.loss(
-                prediction, target, pred_std, mask=self.interior_mask_bool
+                prediction,
+                target,
+                pred_std,
+                mask=self.interior_mask_bool,
+                grid_weights=self.grid_weights,
             ),
             dim=0,
         )  # (time_steps-1,)
@@ -425,6 +447,7 @@ class ARModel(pl.LightningModule):
                 pred_std,
                 mask=self.interior_mask_bool,
                 sum_vars=False,
+                grid_weights=self.grid_weights,
             )  # (B, pred_steps, d_f)
             self.test_metrics[metric_name].append(batch_metric_vals)
 
@@ -437,7 +460,11 @@ class ARModel(pl.LightningModule):
 
         # Save per-sample spatial loss for specific times
         spatial_loss = self.loss(
-            prediction, target, pred_std, average_grid=False
+            prediction,
+            target,
+            pred_std,
+            average_grid=False,
+            grid_weights=self.grid_weights,
         )  # (B, pred_steps, num_grid_nodes)
         log_spatial_losses = spatial_loss[
             :, [step - 1 for step in self.args.val_steps_to_log]
