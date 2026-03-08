@@ -127,14 +127,14 @@ class WeatherDataset(torch.utils.data.Dataset):
             else:
                 self.forcing_std_safe = None
 
-    def _compute_std_safe(self, std_da, label: str):
-        eps = np.finfo(std_da.dtype).eps
-        if bool((std_da <= eps).any()):
+    def _compute_std_safe(self, std: xr.DataArray, feature: str):
+        eps = np.finfo(std.dtype).eps
+        if bool((std <= eps).any()):
             logger.warning(
-                f"Some {label} features have near-zero std and will be "
+                f"Some {feature} features have near-zero std and will be "
                 "standardized using machine epsilon to avoid NaN."
             )
-        return std_da.where(std_da > eps, other=eps)
+        return std.where(std > eps, other=eps)
 
     def __len__(self):
         if self.datastore.is_forecast:
