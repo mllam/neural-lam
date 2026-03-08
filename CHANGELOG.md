@@ -192,6 +192,10 @@ This release introduces new features including GIF animation support, wandb run 
 
 - Fix Slack domain link [\#288](https://github.com/mllam/neural-lam/pull/288) @sadamov
 
+### Refactored
+
+- Refactored `ARModel`: Extracted plotting logic into stateless functions in `vis.py` [\#209](https://github.com/mllam/neural-lam/pull/209) @oleeviyababu
+
 ### Maintenance
 
 - Update PR template to clarify milestone/roadmap requirement and maintenance changes [\#186](https://github.com/mllam/neural-lam/pull/186) @joeloskarsson
