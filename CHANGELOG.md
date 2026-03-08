@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [unreleased](https://github.com/mllam/neural-lam/compare/v0.5.0...HEAD)
 
+### Changed
+- Use all ensemble members by default for ensemble datastores in `WeatherDataset` / `WeatherDataModule`; single-member behavior now requires explicitly opting out.
+
 ### Added
 
 - Add support for iterating all ensemble members as independent samples in `WeatherDataset` by default, with matching ensemble-member selection for forcing when available
