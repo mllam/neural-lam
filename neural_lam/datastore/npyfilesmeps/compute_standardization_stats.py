@@ -72,9 +72,9 @@ def setup(rank, world_size):  # pylint: disable=redefined-outer-name
         hostname_lines = hostnames.decode("utf-8").splitlines()
         if not hostname_lines:
             raise RuntimeError(
-                "SLURM_JOB_NODELIST is set to "
-                f"{repr(nodelist)} but 'scontrol show hostnames' returned no "
-                "hostnames. Please check your SLURM job configuration."
+                f"SLURM_JOB_NODELIST is set to {repr(nodelist)}, but "
+                "'scontrol show hostnames' returned no hostnames. "
+                "Please check your SLURM job configuration."
             )
         master_node = hostname_lines[0].strip()
     else:
