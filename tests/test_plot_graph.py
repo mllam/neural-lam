@@ -15,8 +15,8 @@ from neural_lam.plot_graph import (
 from tests.dummy_datastore import DummyDatastore
 
 
-@pytest.fixture(params=["1level", "multiscale", "hierarchical"])
-def graph_fixture(request, tmp_path):
+@pytest.fixture(scope="module", params=["1level", "multiscale", "hierarchical"])
+def graph_fixture(request, tmp_path_factory):
     """Create a graph from a DummyDatastore and load it back.
 
     Parametrized over graph types: 1level (flat), multiscale (flat multi-level),
@@ -42,7 +42,7 @@ def graph_fixture(request, tmp_path):
     else:
         raise ValueError(f"Unknown graph_name: {graph_name}")
 
-    graph_dir_path = tmp_path / "graph" / graph_name
+    graph_dir_path = tmp_path_factory.mktemp("graph") / graph_name
     create_graph_from_datastore(
         datastore=datastore,
         output_root_path=str(graph_dir_path),
