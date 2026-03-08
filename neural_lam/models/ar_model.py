@@ -136,11 +136,14 @@ class ARModel(pl.LightningModule):
             "interior_mask", 1.0 - self.boundary_mask, persistent=False
         )  # (num_grid_nodes, 1), 1 for non-border
 
-        # Compute area weights for grid-point averaging in metrics
-        area_weights = metrics.compute_area_weights(datastore)
-        self.register_buffer(
-            "grid_weights", area_weights, persistent=False
-        )  # (num_grid_nodes,)
+        # Optionally compute area weights for grid-point averaging
+        if config.training.use_area_weights:
+            area_weights = metrics.compute_area_weights(datastore)
+            self.register_buffer(
+                "grid_weights", area_weights, persistent=False
+            )  # (num_grid_nodes,)
+        else:
+            self.grid_weights = None
 
         self.val_metrics: Dict[str, List] = {
             "mse": [],

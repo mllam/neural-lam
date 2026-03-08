@@ -97,10 +97,21 @@ def mask_and_reduce_metric(
     if average_grid:  # Reduce grid first
         if grid_weights is not None:
             # Weighted mean over grid dimension
-            # Reshape weights for broadcasting: (..., N', 1)
-            w = grid_weights.unsqueeze(-1)  # (N', 1)
+            # Reshape weights for broadcasting: (N', 1)
+            w = grid_weights.to(
+                device=metric_entry_vals.device,
+                dtype=metric_entry_vals.dtype,
+            ).unsqueeze(
+                -1
+            )  # (N', 1)
             # Normalize weights to sum to 1 over the (possibly masked) grid
-            w = w / w.sum(dim=-2, keepdim=True)
+            w_sum = w.sum(dim=-2, keepdim=True)
+            if w_sum.item() <= 0:
+                raise ValueError(
+                    "Sum of grid weights is non-positive after masking. "
+                    "All weighted grid points may have been masked out."
+                )
+            w = w / w_sum
             metric_entry_vals = torch.sum(
                 metric_entry_vals * w, dim=-2
             )  # (..., d_state)

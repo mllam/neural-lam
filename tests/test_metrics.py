@@ -52,45 +52,29 @@ def mask():
 
 
 # ============================================================
-# Test: backward compatibility (grid_weights=None)
+# Test: backward compatibility — None and uniform weights
+# both give the same result as no-weights call
 # ============================================================
 @pytest.mark.parametrize("metric_name", metrics.DEFINED_METRICS.keys())
-def test_no_weights_gives_same_result_as_before(metric_name, dummy_data):
+def test_no_or_uniform_weights_gives_same_result(
+    metric_name, dummy_data, uniform_weights
+):
     """
-    When grid_weights=None (default), all metrics should produce the same
-    result as the original unweighted implementation.
+    When grid_weights is None (default) or uniform (all ones), every metric
+    should produce the same result as the original unweighted call.
     """
     pred, target, pred_std = dummy_data
     metric_func = metrics.get_metric(metric_name)
 
     result_no_kwarg = metric_func(pred, target, pred_std)
     result_none = metric_func(pred, target, pred_std, grid_weights=None)
-
-    torch.testing.assert_close(result_no_kwarg, result_none)
-
-
-# ============================================================
-# Test: uniform weights == no weights
-# ============================================================
-@pytest.mark.parametrize("metric_name", metrics.DEFINED_METRICS.keys())
-def test_uniform_weights_equals_no_weights(
-    metric_name, dummy_data, uniform_weights
-):
-    """
-    Uniform weights (all ones) should produce the same result as no weights,
-    since the weighted mean with equal weights is the same as the arithmetic
-    mean.
-    """
-    pred, target, pred_std = dummy_data
-    metric_func = metrics.get_metric(metric_name)
-
-    result_no_weights = metric_func(pred, target, pred_std)
     result_uniform = metric_func(
         pred, target, pred_std, grid_weights=uniform_weights
     )
 
+    torch.testing.assert_close(result_no_kwarg, result_none)
     torch.testing.assert_close(
-        result_no_weights, result_uniform, atol=1e-5, rtol=1e-5
+        result_no_kwarg, result_uniform, atol=1e-5, rtol=1e-5
     )
 
 
@@ -249,35 +233,21 @@ class TestMaskAndReduceMetric:
 class TestComputeAreaWeights:
     """Tests for the compute_area_weights utility function."""
 
-    def test_weights_shape(self):
-        """Weights should have shape (N,) matching grid points."""
-        datastore = DummyDatastore()
-        weights = metrics.compute_area_weights(datastore)
-        assert weights.shape == (datastore.num_grid_points,)
-
-    def test_weights_positive(self):
-        """All area weights should be positive."""
-        datastore = DummyDatastore()
-        weights = metrics.compute_area_weights(datastore)
-        assert (weights > 0).all()
-
-    def test_weights_sum_to_n(self):
-        """Weights should be normalized to sum to N (mean = 1)."""
+    def test_weights_properties(self):
+        """Weights shape, dtype, positivity, and normalization."""
         datastore = DummyDatastore()
         weights = metrics.compute_area_weights(datastore)
         n = datastore.num_grid_points
+
+        assert weights.shape == (n,)
+        assert weights.dtype == torch.float32
+        assert (weights > 0).all()
         torch.testing.assert_close(
             weights.sum(),
             torch.tensor(float(n)),
             atol=1e-4,
             rtol=1e-4,
         )
-
-    def test_weights_dtype(self):
-        """Weights should be float32."""
-        datastore = DummyDatastore()
-        weights = metrics.compute_area_weights(datastore)
-        assert weights.dtype == torch.float32
 
 
 # ============================================================
