@@ -21,7 +21,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Fix Slack domain link [\#288](https://github.com/mllam/neural-lam/pull/288) @sadamov
 
 
+### Fixed
+- Fixed `plot_prediction` failing with MultiIndex error by unstacking
+  grid coords before plotting
+- Fixed `plot_prediction` failing with dask arrays by calling `.compute()`
+  before passing to matplotlib
 
+
+  
 
 ### Fixed
 - Fix training crash on Windows due to incompatible DDP strategy (#351)

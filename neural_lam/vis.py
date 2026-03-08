@@ -26,7 +26,9 @@ def plot_error_map(errors, datastore: BaseRegularGridDatastore, title=None):
 
     # Normalize all errors to [0,1] for color map
     max_errors = errors_np.max(axis=1)  # d_f
-    errors_norm = errors_np / np.expand_dims(max_errors, axis=1)
+    # Avoid division by zero when a variable has zero error
+    max_errors_safe = np.where(max_errors == 0, 1.0, max_errors)
+    errors_norm = errors_np / np.expand_dims(max_errors_safe, axis=1)
 
     time_step_int, time_step_unit = utils.get_integer_time(step_length)
 
@@ -86,9 +88,12 @@ def plot_prediction(
 
     """
     # Get common scale for values
+    da_prediction = da_prediction.compute()
+    da_target = da_target.compute() 
+
     if vrange is None:
-        vmin = min(da_prediction.min(), da_target.min())
-        vmax = max(da_prediction.max(), da_target.max())
+        vmin = float(min(da_prediction.min(), da_target.min()))
+        vmax = float(max(da_prediction.max(), da_target.max()))
     elif vrange is not None:
         vmin, vmax = vrange
 
@@ -109,6 +114,7 @@ def plot_prediction(
     # Plot pred and target
     for ax, da in zip(axes, (da_target, da_prediction)):
         ax.coastlines()  # Add coastline outlines
+        da = datastore.unstack_grid_coords(da)
         da.plot.imshow(
             ax=ax,
             origin="lower",
