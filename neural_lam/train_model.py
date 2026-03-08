@@ -232,7 +232,7 @@ def main(input_args=None):
     # Check that config only specifies logging for lead times that exist
     # Check --val_steps_to_log
     for step in args.val_steps_to_log:
-        if not (0 < step <= args.ar_steps_eval):
+        if step > args.ar_steps_eval:
             raise ValueError(
                 f"Can not log validation step {step} when validation is "
                 f"only unrolled {args.ar_steps_eval} steps. Adjust "
@@ -241,7 +241,7 @@ def main(input_args=None):
     # Check --var_leads_metric_watch
     for var_i, leads in args.var_leads_metrics_watch.items():
         for step in leads:
-            if not (0 < step <= args.ar_steps_eval):
+            if step > args.ar_steps_eval:
                 raise ValueError(
                     f"Can not log validation step {step} for variable "
                     f"{var_i} when validation is only unrolled "
