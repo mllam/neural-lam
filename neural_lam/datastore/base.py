@@ -476,9 +476,8 @@ class BaseRegularGridDatastore(BaseDatastore):
     - `get_xy` (method): Return the x, y coordinates of the dataset, with the
       option to not stack the coordinates (so that they are returned as a 2D
       grid).
-        - `get_lat_lon` (method): Return the latitude/longitude coordinates of
-          the
-            dataset for convenience when plotting.
+    - `get_lat_lon` (method): Return the latitude/longitude coordinates of
+      the dataset for convenience when plotting.
 
     The operation of going from (x,y)-indexed regular grid
     to `grid_index`-indexed data-array is called "stacking" and the reverse
