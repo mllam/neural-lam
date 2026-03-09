@@ -146,8 +146,8 @@ def main(input_args=None):
     parser.add_argument(
         "--gradient_clip_val",
         type=float,
-        default=1.0,
-        help="Max norm for gradient clipping (0 = disabled). "
+        default=None,
+        help="Max norm for gradient clipping (default: None = disabled). "
         "Prevents exploding gradients during multi-step "
         "autoregressive unrolling.",
     )
@@ -356,10 +356,12 @@ def main(input_args=None):
         callbacks=[checkpoint_callback],
         check_val_every_n_epoch=args.val_interval,
         precision=args.precision,
-        gradient_clip_val=(
-            args.gradient_clip_val if args.gradient_clip_val > 0 else None
+        gradient_clip_val=args.gradient_clip_val,
+        gradient_clip_algorithm=(
+            args.gradient_clip_algorithm
+            if args.gradient_clip_val is not None
+            else None
         ),
-        gradient_clip_algorithm=args.gradient_clip_algorithm,
     )
 
     # Only init once, on rank 0 only
