@@ -572,21 +572,12 @@ Entries 0 in these lists describe edges between the lowest levels 1 and 2.
 
 ## Development Environment Setup
 
-For development and testing, we recommend creating a clean virtual environment and installing neural-lam in editable mode:
+For development, we recommend using a virtual environment. See the [official Python venv documentation](https://docs.python.org/3/library/venv.html) for instructions on how to set one up.
+
+To install neural-lam in editable mode with development dependencies:
 
 ```bash
-python -m venv .venv
-
-# On Linux/macOS:
-source .venv/bin/activate
-
-# On Windows (Command Prompt):
-.venv\Scripts\activate
-
-# On Windows (PowerShell):
-.venv\Scripts\Activate.ps1
-
-pip install --group dev -e .
+python -m pip install --group dev -e .
 ```
 
 To verify that the environment is working correctly, run:
@@ -594,8 +585,6 @@ To verify that the environment is working correctly, run:
 ```bash
 pytest
 ```
-
-A successful setup should run the full test suite without failures.
 
 ## Code Quality
 Any push or Pull-Request to the main branch will trigger a selection of pre-commit hooks.
