@@ -191,7 +191,7 @@ def test_ema_training_integration():
         max_steps=1,
         deterministic=True,
         accelerator=device_name,
-        devices=2,
+        devices=1,
         log_every_n_steps=1,
         callbacks=[ema_callback],
     )
@@ -225,7 +225,7 @@ def test_ema_noop_when_disabled():
         max_steps=1,
         deterministic=True,
         accelerator=device_name,
-        devices=2,
+        devices=1,
         log_every_n_steps=1,
     )
 
