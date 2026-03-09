@@ -5,6 +5,7 @@ import matplotlib
 import matplotlib.colors
 import matplotlib.pyplot as plt
 import numpy as np
+import torch
 import xarray as xr
 
 # Local
@@ -29,7 +30,7 @@ def plot_on_axis(
     ----------
     ax : matplotlib.axes.Axes
         The axis to plot on. Should have a cartopy projection.
-    da : xarray.DataArray or np.ndarray
+    da : xarray.DataArray
         The data to plot. Should have shape (N_grid,).
     datastore : BaseRegularGridDatastore
         The datastore containing metadata about the grid.
@@ -76,7 +77,7 @@ def plot_on_axis(
     if isinstance(da, xr.DataArray) and "x" in da.dims and "y" in da.dims:
         da = da.transpose("x", "y")
 
-    values = np.asarray(getattr(da, "values", da)).reshape(grid_shape)
+    values = da.values.reshape(grid_shape)
 
     mesh = ax.pcolormesh(
         lons,
@@ -195,8 +196,8 @@ def plot_error_map(errors, datastore: BaseRegularGridDatastore, title=None):
 @matplotlib.rc_context(utils.fractional_plot_bundle(1))
 def plot_prediction(
     datastore: BaseRegularGridDatastore,
-    da_prediction: xr.DataArray = None,
-    da_target: xr.DataArray = None,
+    da_prediction: xr.DataArray,
+    da_target: xr.DataArray,
     title=None,
     vrange=None,
     boundary_alpha=0.7,
@@ -209,8 +210,8 @@ def plot_prediction(
 
     """
     if vrange is None:
-        vmin = float(np.nanmin([da_prediction.values, da_target.values]))
-        vmax = float(np.nanmax([da_prediction.values, da_target.values]))
+        vmin = float(min(da_prediction.min(), da_target.min()))
+        vmax = float(max(da_prediction.max(), da_target.max()))
     else:
         vmin, vmax = vrange
 
@@ -247,7 +248,7 @@ def plot_prediction(
 
 @matplotlib.rc_context(utils.fractional_plot_bundle(1))
 def plot_spatial_error(
-    error,
+    error: torch.Tensor,
     datastore: BaseRegularGridDatastore,
     title=None,
     vrange=None,
@@ -256,15 +257,7 @@ def plot_spatial_error(
 ):
     """Plot spatial error with projection-aware axes."""
 
-    grid_shape = [datastore.grid_shape_state.x, datastore.grid_shape_state.y]
-
-    value_source = error
-    if hasattr(value_source, "detach"):
-        value_source = value_source.detach()
-    if hasattr(value_source, "cpu"):
-        value_source = value_source.cpu()
-
-    error_np = np.asarray(value_source)
+    error_np = error.detach().cpu().numpy()
 
     if vrange is None:
         vmin = float(np.nanmin(error_np))
@@ -277,11 +270,9 @@ def plot_spatial_error(
         subplot_kw={"projection": datastore.coords_projection},
     )
 
-    error_grid = error_np.reshape(grid_shape)
-
     mesh = plot_on_axis(
         ax=ax,
-        da=xr.DataArray(error_grid),
+        da=xr.DataArray(error_np),
         datastore=datastore,
         vmin=vmin,
         vmax=vmax,
