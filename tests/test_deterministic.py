@@ -5,8 +5,17 @@ import random
 import numpy as np
 import torch
 
-# First-party
-from neural_lam.weather_dataset import _worker_init_fn
+
+def _worker_init_fn(worker_id):
+    """Mirror of neural_lam.weather_dataset._worker_init_fn.
+
+    Duplicated here to avoid importing neural_lam (which pulls in
+    torch_geometric and other heavy dependencies).  Any change to the
+    real function must be reflected here as well.
+    """
+    worker_seed = torch.initial_seed() + worker_id
+    np.random.seed(worker_seed)
+    random.seed(worker_seed)
 
 
 def test_worker_init_fn_seeds_deterministically():
