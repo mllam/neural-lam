@@ -21,7 +21,7 @@ def _worker_init_fn(worker_id):
     correlated random states across runs. See:
     https://pytorch.org/docs/stable/data.html#randomness-in-multi-process-data-loading
     """
-    worker_seed = torch.initial_seed() % 2**32
+    worker_seed = torch.initial_seed()
     np.random.seed(worker_seed)
     random.seed(worker_seed)
 
