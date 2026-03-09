@@ -1,10 +1,13 @@
 # Standard library
 import os
+from datetime import timedelta
 from pathlib import Path
 
 # Third-party
 import pooch
+import pytest
 import yaml
+from pytorch_lightning.utilities import rank_zero_only
 
 # First-party
 from neural_lam.datastore import DATASTORES, init_datastore
@@ -18,6 +21,14 @@ from .dummy_datastore import DummyDatastore
 # Disable weights and biases to avoid unnecessary logging
 # and to avoid having to deal with authentication
 os.environ["WANDB_MODE"] = "disabled"
+
+
+@pytest.fixture(autouse=True)
+def ensure_rank_zero(monkeypatch):
+    """Ensure rank_zero_only.rank == 0 so @rank_zero_only-decorated functions
+    execute their body regardless of state left by prior training tests."""
+    monkeypatch.setattr(rank_zero_only, "rank", 0, raising=False)
+
 
 DATASTORE_EXAMPLES_ROOT_PATH = Path("tests/datastore_examples")
 
@@ -75,7 +86,7 @@ def download_meps_example_reduced_dataset():
         compute_standardization_stats_meps.main(
             datastore_config_path=config_path,
             batch_size=8,
-            step_length=3,
+            step_length=timedelta(hours=3),
             n_workers=0,
             distributed=False,
         )

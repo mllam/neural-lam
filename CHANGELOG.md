@@ -5,7 +5,65 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [unreleased](https://github.com/mllam/neural-lam/compare/v0.4.0...HEAD)
+## [unreleased](https://github.com/mllam/neural-lam/compare/v0.5.0...HEAD)
+
+### Added
+
+- Enable `pin_memory` in DataLoaders when GPU is available for faster async CPU-to-GPU data transfers [\#236](https://github.com/mllam/neural-lam/pull/236) @abhaygoudannavar
+
+### Fixed
+
+- Avoid NaN when standardizing fields with zero std [#189](https://github.com/mllam/neural-lam/pull/189) @varunsiravuri
+
+- Fix README image paths to use absolute GitHub URLs so images display correctly on PyPI [\#188](https://github.com/mllam/neural-lam/pull/188) @bk-simon
+
+- Fix typo in `ar_model.py` that causes `AttributeError` during evaluation [\#204](https://github.com/mllam/neural-lam/pull/204) @ritinikhil
+
+- Changed the hardcoded True to a conditional check "persistent_workers=self.num_workers > 0" [\#235](https://github.com/mllam/neural-lam/pull/235) @santhil-cyber
+
+- `fractional_plot_bundle` now correctly multiplies by fraction instead of dividing
+[\#222](https://github.com/mllam/neural-lam/pull/222) @santhil-cyber
+
+### Added
+
+- Expose `--wandb_id` CLI argument to allow resuming an existing W&B run by
+  ID. When provided, `resume="allow"` is set automatically so the same job
+  script works for both the initial submission and all resubmissions, making
+  it suitable for HPC systems with limited job runtimes or that may crash.
+  [\#197](https://github.com/mllam/neural-lam/pull/197) @Mani212005
+
+
+
+- Fix Slack domain link [\#288](https://github.com/mllam/neural-lam/pull/288) @sadamov
+
+### Fixed
+
+- Infer spatial coordinate names for MDPDatastore (rather than assuming names `x` and `y`), allows for e.g. lat/lon regular grids [\#169](https://github.com/mllam/neural-lam/pull/169) @leifdenby
+
+### Maintenance
+
+- Update PR template to clarify milestone/roadmap requirement and maintenance changes [\#186](https://github.com/mllam/neural-lam/pull/186) @joeloskarsson
+
+- Update CI/CD to use python 3.13 for testing and full range of current python versions for linting (3.10 - 3.14) [\#173](https://github.com/mllam/neural-lam/pull/173) @observingClouds
+
+- Move development dependencies to dependency-group [#\174](https://github.com/mllam/neural-lam/pull/174) @observingClouds
+
+- Update CI/CD to use only uv for full test suite and drop pdm [\#178](https://github.com/mllam/neural-lam/pull/178) @observingClouds
+
+- Fix caching of MEPS example data in CI/CD [\#181](https://github.com/mllam/neural-lam/pull/181) @observingClouds
+
+- Migrated build backend from PDM to Hatchling with hatch-vcs and added uv build in deploy CI
+
+## [v0.5.0](https://github.com/mllam/neural-lam/releases/tag/v0.5.0)
+
+This release contains maintenance and fixes, preventing some unexpected crashes and improving CICD and testing.
+
+### Added
+
+- Expose run name as optional command line argument `--logger_run_name` to allow user-defined names
+[\#156](https://github.com/mllam/neural-lam/pull/156) @observingClouds
+
+- Add support for any forecast step size(`step_length`) [\#172](https://github.com/mllam/neural-lam/pull/172) @observingClouds
 
 ### Fixed
 
@@ -20,17 +78,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Adding a more robust LaTeX availability check function [\#162](https://github.com/mllam/neural-lam/pull/162) @lorenzo30salgado
 
-
 ### Maintenance
+
+- Add link to full MEPS data [\#102](https://github.com/mllam/neural-lam/pull/102) @joeloskarsson
 
 - Introducing `mypy` for static type checking and fixing type hints accordingly [\#113](https://github.com/mllam/neural-lam/pull/113) @observingClouds
 
 - Change all argparse instances to use ArgumentDefaultsHelpFormatter for easier maintaining defaults.
 [\#145](https://github.com/mllam/neural-lam/pull/145) @joeloskarsson
 
+- Allow triggering CI manually to e.g. test for recent software incompatibilities. [\152](https://github.com/mllam/neural-lam/pull/152) @observingClouds
+
 - Fix `torch` version detection during CI when testing on CPU with pdm [\#154](https://github.com/mllam/neural-lam/pull/154) @leifdenby
 
 - Update link to MEPS example data [\#155](https://github.com/mllam/neural-lam/pull/155) @joeloskarsson
+
+- Change deprecated `pynvml` dependency to `nvidia-ml-py` [\#176](https://github.com/mllam/neural-lam/pull/176) @observingClouds
 
 ## [v0.4.0](https://github.com/mllam/neural-lam/releases/tag/v0.4.0)
 

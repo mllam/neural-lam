@@ -2,6 +2,7 @@
 import os
 import subprocess
 from argparse import ArgumentParser
+from datetime import timedelta
 from pathlib import Path
 
 # Third-party
@@ -13,6 +14,7 @@ from tqdm import tqdm
 # First-party
 from neural_lam import WeatherDataset
 from neural_lam.datastore import init_datastore
+from neural_lam.utils import get_integer_time
 
 
 class PaddedWeatherDataset(torch.utils.data.Dataset):
@@ -32,9 +34,11 @@ class PaddedWeatherDataset(torch.utils.data.Dataset):
 
     def __getitem__(self, idx):
         return self.base_dataset[
-            self.original_indices[-1]
-            if idx >= self.total_samples
-            else idx % len(self.base_dataset)
+            (
+                self.original_indices[-1]
+                if idx >= self.total_samples
+                else idx % len(self.base_dataset)
+            )
         ]
 
     def __len__(self):
@@ -44,9 +48,9 @@ class PaddedWeatherDataset(torch.utils.data.Dataset):
         return self.original_indices
 
     def get_original_window_indices(self, step_length):
+        step_int, _ = get_integer_time(step_length.total_seconds())
         return [
-            i // step_length
-            for i in range(len(self.original_indices) * step_length)
+            i // step_int for i in range(len(self.original_indices) * step_int)
         ]
 
 
@@ -143,8 +147,8 @@ def main(
         Path to datastore config file
     batch_size : int
         Batch size when iterating over the dataset
-    step_length : int
-        Step length in hours to consider single time step
+    step_length : datetime.timedelta
+        Step length to consider single time step
     n_workers : int
         Number of workers in data loader
     distributed : bool
@@ -299,7 +303,11 @@ def main(
         num_workers=n_workers,
         sampler=sampler_standard,
     )
-    used_subsample_len = (65 // step_length) * step_length
+    time_step_int, time_step_unit = get_integer_time(step_length)
+    assert (
+        time_step_unit == "hours"
+    ), "Only 'hours' time unit is supported by meps datastore."
+    used_subsample_len = (65 // time_step_int) * time_step_int
 
     diff_means, diff_squares = [], []
 
@@ -315,8 +323,8 @@ def main(
         # Note: batch contains only 1h-steps
         stepped_batch = torch.cat(
             [
-                batch[:, ss_i:used_subsample_len:step_length]
-                for ss_i in range(step_length)
+                batch[:, ss_i:used_subsample_len:time_step_int]
+                for ss_i in range(time_step_int)
             ],
             dim=0,
         )
@@ -405,7 +413,7 @@ def cli():
     main(
         datastore_config_path=args.datastore_config_path,
         batch_size=args.batch_size,
-        step_length=args.step_length,
+        step_length=timedelta(hours=args.step_length),
         n_workers=args.n_workers,
         distributed=distributed,
     )

@@ -10,6 +10,7 @@ from pathlib import Path
 # Third-party
 import pytorch_lightning as pl
 import torch
+from loguru import logger as loguru_logger
 from pytorch_lightning.loggers import MLFlowLogger, WandbLogger
 from pytorch_lightning.utilities import rank_zero_only
 from torch import nn
@@ -299,8 +300,8 @@ def fractional_plot_bundle(fraction):
     bundle.update(figsizes.neurips2023())
     original_figsize = bundle["figure.figsize"]
     bundle["figure.figsize"] = (
-        original_figsize[0] / fraction,
-        original_figsize[1],
+        original_figsize[0] * fraction,
+        original_figsize[1] * fraction,
     )
     return bundle
 
@@ -331,7 +332,7 @@ def init_training_logger_metrics(training_logger, val_steps):
 
 @rank_zero_only
 def setup_training_logger(datastore, args, run_name):
-    """
+    """Set up the training logger (WandB or MLFlow).
 
     Parameters
     ----------
@@ -348,15 +349,39 @@ def setup_training_logger(datastore, args, run_name):
     -------
     logger : pytorch_lightning.loggers.base
         Logger object.
+
+    Notes
+    -----
+    When ``--wandb_id`` is given, ``resume="allow"`` is set automatically:
+    W&B resumes the run if it exists, or creates it with that ID otherwise.
+    This allows the same job script to be safely resubmitted on HPC systems.
+    The run name is set to ``None`` when resuming to preserve the existing name.
     """
 
+    if args.wandb_id and args.logger != "wandb":
+        loguru_logger.warning(
+            f"--wandb_id is set but logger is {args.logger!r}; "
+            "the wandb_id will have no effect."
+        )
+
     if args.logger == "wandb":
-        logger = pl.loggers.WandbLogger(
+        wandb_resume = "allow" if args.wandb_id else None
+        loguru_logger.info(
+            f"Wandb resume mode: {wandb_resume!r} (id: {args.wandb_id!r})"
+        )
+        return pl.loggers.WandbLogger(
             project=args.logger_project,
-            name=run_name,
+            name=None if args.wandb_id else run_name,
             config=dict(training=vars(args), datastore=datastore._config),
+            resume=wandb_resume,
+            id=args.wandb_id,
         )
     elif args.logger == "mlflow":
+        if args.wandb_id is not None:
+            warnings.warn(
+                "--wandb_id is only used with --logger=wandb and will be "
+                "ignored."
+            )
         url = os.getenv("MLFLOW_TRACKING_URI")
         if url is None:
             raise ValueError(
@@ -408,3 +433,45 @@ def inverse_sigmoid(x):
     """
     x_clamped = torch.clamp(x, min=1e-6, max=1 - 1e-6)
     return torch.log(x_clamped / (1 - x_clamped))
+
+
+def get_integer_time(tdelta) -> tuple[int, str]:
+    """
+    Get the largest time unit that can represent the given timedelta as an
+    integer.
+
+    Returns:
+        int: The integer value of the timedelta in the largest time unit, or
+                1 if no such unit exists.
+        str: The time unit as a string ('weeks', 'days', 'hours', 'minutes',
+                'seconds', 'milliseconds', 'microseconds'). If no unit can
+                represent the timedelta as an integer, returns 'unknown'.
+
+    Examples:
+        >>> from datetime import timedelta
+        >>> get_integer_time(timedelta(days=14))
+        (2, 'weeks')
+        >>> get_integer_time(timedelta(hours=5))
+        (5, 'hours')
+        >>> get_integer_time(timedelta(milliseconds=1000))
+        (1, 'seconds')
+        >>> get_integer_time(timedelta(days=0.001))
+        (1, 'unknown')
+    """
+    total_seconds = tdelta.total_seconds()
+
+    units = {
+        "weeks": 604800,
+        "days": 86400,
+        "hours": 3600,
+        "minutes": 60,
+        "seconds": 1,
+        "milliseconds": 0.001,
+        "microseconds": 0.000001,
+    }
+
+    for unit, unit_in_seconds in units.items():
+        if total_seconds % unit_in_seconds == 0:
+            return int(total_seconds / unit_in_seconds), unit
+
+    return 1, "unknown"

@@ -186,6 +186,25 @@ def main(input_args=None):
         help="Logger project name, for eg. Wandb",
     )
     parser.add_argument(
+        "--logger_run_name",
+        type=str,
+        default=None,
+        help="""Logger run name, for e.g. MLFlow (with default value `None`
+          neural-lam's default format string is used)""",
+    )
+
+    # Wandb-specific settings
+    parser.add_argument(
+        "--wandb_id",
+        type=str,
+        default=None,
+        help="Wandb run ID to use. If the run ID already exists in the "
+        "project, W&B resumes that run. If it does not exist, W&B creates "
+        "a new run with that ID. Useful on HPC systems with limited job "
+        "runtimes or that may crash, allowing training to be continued "
+        "across multiple job submissions.",
+    )
+    parser.add_argument(
         "--val_steps_to_log",
         nargs="+",
         type=int,
@@ -217,6 +236,7 @@ def main(input_args=None):
         default=1,
         help="Number of future time steps to use as input for forcing data",
     )
+
     args = parser.parse_args(input_args)
     args.var_leads_metrics_watch = {
         int(k): v for k, v in json.loads(args.var_leads_metrics_watch).items()
@@ -287,10 +307,14 @@ def main(input_args=None):
         prefix = f"eval-{args.eval}-"
     else:
         prefix = "train-"
-    run_name = (
-        f"{prefix}{args.model}-{args.processor_layers}x{args.hidden_dim}-"
-        f"{time.strftime('%m_%d_%H')}-{random_run_id:04d}"
-    )
+
+    if args.logger_run_name:
+        run_name = args.logger_run_name
+    else:
+        run_name = (
+            f"{prefix}{args.model}-{args.processor_layers}x{args.hidden_dim}-"
+            f"{time.strftime('%m_%d_%H')}-{random_run_id:04d}"
+        )
 
     training_logger = utils.setup_training_logger(
         datastore=datastore, args=args, run_name=run_name
