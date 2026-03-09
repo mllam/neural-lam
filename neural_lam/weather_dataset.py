@@ -571,12 +571,13 @@ class WeatherDataset(torch.utils.data.Dataset):
                 f"{len(tensor.shape)}"
             )
 
-        da_datastore_state = getattr(self, f"da_{category}")
-        da_grid_index = da_datastore_state.grid_index
-        da_state_feature = da_datastore_state.state_feature
+        da_datastore = getattr(self, f"da_{category}")
+        da_grid_index = da_datastore.grid_index
+        feature_coord_name = f"{category}_feature"
+        da_category_feature = da_datastore[feature_coord_name]
 
         coords = {
-            f"{category}_feature": da_state_feature,
+            feature_coord_name: da_category_feature,
             "grid_index": da_grid_index,
         }
         if add_time_as_dim:
@@ -590,10 +591,10 @@ class WeatherDataset(torch.utils.data.Dataset):
 
         for grid_coord in ["x", "y"]:
             if (
-                grid_coord in da_datastore_state.coords
+                grid_coord in da_datastore.coords
                 and grid_coord not in da.coords
             ):
-                da.coords[grid_coord] = da_datastore_state[grid_coord]
+                da.coords[grid_coord] = da_datastore[grid_coord]
 
         if not add_time_as_dim:
             da.coords["time"] = time
