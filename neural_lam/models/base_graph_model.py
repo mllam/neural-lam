@@ -6,7 +6,6 @@ from .. import utils
 from ..config import NeuralLAMConfig
 from ..datastore import BaseDatastore
 from ..interaction_net import InteractionNet
-from ..utils import BufferList
 from .ar_model import ARModel
 
 
@@ -14,6 +13,8 @@ class BaseGraphModel(ARModel):
 
     def __init__(self, args, config, datastore):
         super().__init__(args, config=config, datastore=datastore)
+
+        # Standard library
 
         # Standard library
         from pathlib import Path
@@ -31,26 +32,6 @@ class BaseGraphModel(ARModel):
         self.hierarchical, graph_ldict = utils.load_graph(
             graph_dir_path=graph_dir_path
         )
-
-        if graph_path is not None:
-            expected_grid_nodes = datastore.num_grid_points
-
-            mesh_features = graph_ldict["mesh_static_features"]
-
-            if isinstance(mesh_features, BufferList):
-                loaded_mesh_nodes = mesh_features[0].shape[0]
-            else:
-                loaded_mesh_nodes = mesh_features.shape[0]
-
-            loaded_total_nodes = graph_ldict["g2m_edge_index"].max().item() + 1
-            loaded_grid_nodes = loaded_total_nodes - loaded_mesh_nodes
-
-            if loaded_grid_nodes != expected_grid_nodes:
-                raise ValueError(
-                    "Incompatible graph: expected "
-                    f"{expected_grid_nodes} grid nodes but "
-                    f"graph contains {loaded_grid_nodes}."
-                )
 
         for name, attr_value in graph_ldict.items():
             if isinstance(attr_value, torch.Tensor):

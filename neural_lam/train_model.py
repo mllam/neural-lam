@@ -5,7 +5,6 @@ import time
 from argparse import ArgumentDefaultsHelpFormatter, ArgumentParser
 
 # Third-party
-import matplotlib
 import pytorch_lightning as pl
 import torch
 from lightning_fabric.utilities import seed
@@ -16,9 +15,6 @@ from . import utils
 from .config import load_config_and_datastore
 from .models import GraphLAM, HiLAM, HiLAMParallel
 from .weather_dataset import WeatherDataModule
-
-# After ALL imports
-matplotlib.use("Agg")
 
 MODELS = {
     "graph_lam": GraphLAM,
@@ -236,6 +232,8 @@ def main(input_args=None):
     )
 
     args = parser.parse_args(input_args)
+    if args.graph_path is not None and args.graph != "multiscale":
+        raise ValueError("Cannot specify both --graph and --graph_path.")
     args.var_leads_metrics_watch = {
         int(k): v for k, v in json.loads(args.var_leads_metrics_watch).items()
     }
