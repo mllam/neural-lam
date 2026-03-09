@@ -342,7 +342,7 @@ def init_training_logger_metrics(training_logger, val_steps):
 
 @rank_zero_only
 def setup_training_logger(datastore, args, run_name):
-    """
+    """Set up the training logger (WandB or MLFlow).
 
     Parameters
     ----------
@@ -357,32 +357,56 @@ def setup_training_logger(datastore, args, run_name):
 
     Returns
     -------
-    logger : pytorch_lightning.loggers.base
+    training_logger : pytorch_lightning.loggers.base
         Logger object.
+
+    Notes
+    -----
+    When ``--wandb_id`` is given, ``resume="allow"`` is set automatically:
+    W&B resumes the run if it exists, or creates it with that ID otherwise.
+    This allows the same job script to be safely resubmitted on HPC systems.
+    The run name is set to ``None`` when resuming to preserve the existing name.
     """
 
+    if args.wandb_id and args.logger != "wandb":
+        logger.warning(
+            f"--wandb_id is set but logger is {args.logger!r}; "
+            "the wandb_id will have no effect."
+        )
+
     if args.logger == "wandb":
-        logger = pl.loggers.WandbLogger(
+        wandb_resume = "allow" if args.wandb_id else None
+        logger.info(
+            f"Wandb resume mode: {wandb_resume!r} (id: {args.wandb_id!r})"
+        )
+        return pl.loggers.WandbLogger(
             project=args.logger_project,
-            name=run_name,
+            name=None if args.wandb_id else run_name,
             config=dict(training=vars(args), datastore=datastore._config),
+            resume=wandb_resume,
+            id=args.wandb_id,
         )
     elif args.logger == "mlflow":
+        if args.wandb_id is not None:
+            warnings.warn(
+                "--wandb_id is only used with --logger=wandb and will be "
+                "ignored."
+            )
         url = os.getenv("MLFLOW_TRACKING_URI")
         if url is None:
             raise ValueError(
                 "MLFlow logger requires setting MLFLOW_TRACKING_URI in env."
             )
-        logger = CustomMLFlowLogger(
+        training_logger = CustomMLFlowLogger(
             experiment_name=args.logger_project,
             tracking_uri=url,
             run_name=run_name,
         )
-        logger.log_hyperparams(
+        training_logger.log_hyperparams(
             dict(training=vars(args), datastore=datastore._config)
         )
 
-    return logger
+    return training_logger
 
 
 def inverse_softplus(x, beta=1, threshold=20):
