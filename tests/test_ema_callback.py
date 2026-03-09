@@ -130,16 +130,16 @@ def test_ema_weight_swap_during_validation():
     # Swap to EMA
     callback._swap_to_ema(model)
     for param, ema_w in zip(model.parameters(), callback.ema_weights):
-        assert torch.allclose(param.data, ema_w), (
-            "Model weights should match EMA weights during validation"
-        )
+        assert torch.allclose(
+            param.data, ema_w
+        ), "Model weights should match EMA weights during validation"
 
     # Swap back to original
     callback._swap_to_original(model)
     for param, orig in zip(model.parameters(), original_params):
-        assert torch.allclose(param.data, orig), (
-            "Model weights should be restored to original after validation"
-        )
+        assert torch.allclose(
+            param.data, orig
+        ), "Model weights should be restored to original after validation"
 
 
 def test_ema_checkpoint_save_load():
@@ -170,12 +170,8 @@ def test_ema_checkpoint_save_load():
         trainer=None, pl_module=FakeModule(), checkpoint=checkpoint
     )
     assert len(new_callback.ema_weights) == 2
-    assert torch.allclose(
-        new_callback.ema_weights[0], torch.tensor([1.0, 2.0])
-    )
-    assert torch.allclose(
-        new_callback.ema_weights[1], torch.tensor([3.0, 4.0])
-    )
+    assert torch.allclose(new_callback.ema_weights[0], torch.tensor([1.0, 2.0]))
+    assert torch.allclose(new_callback.ema_weights[1], torch.tensor([3.0, 4.0]))
 
 
 def test_ema_training_integration():
@@ -204,9 +200,9 @@ def test_ema_training_integration():
     trainer.fit(model=model, datamodule=data_module)
 
     # Verify EMA weights were initialized
-    assert len(ema_callback.ema_weights) > 0, (
-        "EMA weights should be initialized after training"
-    )
+    assert (
+        len(ema_callback.ema_weights) > 0
+    ), "EMA weights should be initialized after training"
 
     # Verify training completed without errors
     train_loss = trainer.callback_metrics.get("train_loss")
@@ -240,6 +236,6 @@ def test_ema_noop_when_disabled():
     ema_callbacks = [
         cb for cb in trainer.callbacks if isinstance(cb, EMACallback)
     ]
-    assert len(ema_callbacks) == 0, (
-        "No EMACallback should be present when EMA is disabled"
-    )
+    assert (
+        len(ema_callbacks) == 0
+    ), "No EMACallback should be present when EMA is disabled"

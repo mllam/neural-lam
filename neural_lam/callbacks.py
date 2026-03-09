@@ -24,9 +24,7 @@ class EMACallback(pl.Callback):
     def __init__(self, decay: float = 0.999):
         super().__init__()
         if not 0.0 <= decay < 1.0:
-            raise ValueError(
-                f"EMA decay must be in [0, 1), got {decay}"
-            )
+            raise ValueError(f"EMA decay must be in [0, 1), got {decay}")
         self.decay = decay
         self.ema_weights: list[torch.Tensor] = []
         self.original_weights: list[torch.Tensor] = []
@@ -37,9 +35,7 @@ class EMACallback(pl.Callback):
         """Clone current model parameters as the initial EMA weights."""
         if not self.ema_weights:
             # Only initialize if not already loaded from checkpoint
-            self.ema_weights = [
-                p.data.clone() for p in pl_module.parameters()
-            ]
+            self.ema_weights = [p.data.clone() for p in pl_module.parameters()]
 
     def on_train_batch_end(
         self,
@@ -63,17 +59,13 @@ class EMACallback(pl.Callback):
 
     def _swap_to_ema(self, pl_module: pl.LightningModule) -> None:
         """Swap model weights to EMA weights for evaluation."""
-        self.original_weights = [
-            p.data.clone() for p in pl_module.parameters()
-        ]
+        self.original_weights = [p.data.clone() for p in pl_module.parameters()]
         for param, ema_w in zip(pl_module.parameters(), self.ema_weights):
             param.data.copy_(ema_w)
 
     def _swap_to_original(self, pl_module: pl.LightningModule) -> None:
         """Restore original training weights after evaluation."""
-        for param, orig_w in zip(
-            pl_module.parameters(), self.original_weights
-        ):
+        for param, orig_w in zip(pl_module.parameters(), self.original_weights):
             param.data.copy_(orig_w)
         self.original_weights = []
 
@@ -127,6 +119,4 @@ class EMACallback(pl.Callback):
         """
         if "ema_weights" in checkpoint:
             device = next(pl_module.parameters()).device
-            self.ema_weights = [
-                w.to(device) for w in checkpoint["ema_weights"]
-            ]
+            self.ema_weights = [w.to(device) for w in checkpoint["ema_weights"]]
