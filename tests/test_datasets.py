@@ -315,8 +315,10 @@ def test_dataset_out_of_bounds_indexing_raises():
 
 
 def test_forecast_len_raises_when_forcing_horizon_too_short():
+    # Standard library
     from types import SimpleNamespace
 
+    # Third-party
     import xarray as xr
 
     dataset = WeatherDataset.__new__(WeatherDataset)
@@ -367,8 +369,10 @@ def test_forecast_len_raises_when_forcing_horizon_too_short():
 
 
 def test_forecast_len_accepts_exact_forcing_horizon():
+    # Standard library
     from types import SimpleNamespace
 
+    # Third-party
     import xarray as xr
 
     dataset = WeatherDataset.__new__(WeatherDataset)

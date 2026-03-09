@@ -166,9 +166,11 @@ class WeatherDataset(torch.utils.data.Dataset):
                         "The number of forcing forecast steps available "
                         f"({n_forecast_steps}) is less than the required "
                         f"{required_forecast_steps} "
-                        f"(max(2, num_past_forcing_steps={self.num_past_forcing_steps})"
+                        f"(max(2, num_past_forcing_steps="
+                        f"{self.num_past_forcing_steps})"
                         f" + ar_steps={self.ar_steps} + "
-                        f"num_future_forcing_steps={self.num_future_forcing_steps}) "
+                        f"num_future_forcing_steps="
+                        f"{self.num_future_forcing_steps}) "
                         "for constructing forcing windows."
                     )
             elif n_forecast_steps < 2 + self.ar_steps:
