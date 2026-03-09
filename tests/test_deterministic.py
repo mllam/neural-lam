@@ -13,7 +13,7 @@ def _worker_init_fn(worker_id):
     torch_geometric and other heavy dependencies).  Any change to the
     real function must be reflected here as well.
     """
-    worker_seed = torch.initial_seed() + worker_id
+    worker_seed = (torch.initial_seed() + worker_id) % 2**32
     np.random.seed(worker_seed)
     random.seed(worker_seed)
 
