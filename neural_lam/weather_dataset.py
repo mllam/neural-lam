@@ -134,12 +134,13 @@ class WeatherDataset(torch.utils.data.Dataset):
             # check that there are enough forecast steps available to create
             # samples given the number of autoregressive steps requested
             n_forecast_steps = self.da_state.elapsed_forecast_duration.size
-            if n_forecast_steps < 2 + self.ar_steps:
+            required_steps = self.ar_steps + max(2, self.num_past_forcing_steps) + self.num_future_forcing_steps
+            if n_forecast_steps < required_steps:
                 raise ValueError(
                     "The number of forecast steps available "
                     f"({n_forecast_steps}) is less than the required "
-                    f"2+ar_steps (2+{self.ar_steps}={2 + self.ar_steps}) for "
-                    "creating a sample with initial and target states."
+                    f"({required_steps}) for "
+                    "creating a sample with initial and target states and forcing windows."
                 )
 
             return self.da_state.analysis_time.size
