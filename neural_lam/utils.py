@@ -10,7 +10,7 @@ from pathlib import Path
 # Third-party
 import pytorch_lightning as pl
 import torch
-from loguru import logger as loguru_logger
+from loguru import logger
 from pytorch_lightning.loggers import MLFlowLogger, WandbLogger
 from pytorch_lightning.utilities import rank_zero_only
 from torch import nn
@@ -307,9 +307,19 @@ def fractional_plot_bundle(fraction):
 
 
 @rank_zero_only
-def rank_zero_print(*args, **kwargs):
-    """Print only from rank 0 process"""
-    print(*args, **kwargs)
+def log_on_rank_zero(msg: str, level: str = "info", *args, **kwargs):
+    """Log a message only on rank zero using loguru logger.
+
+    Parameters
+    ----------
+    msg : str
+        The message to log.
+    level : str, optional
+        The logging level (e.g. "info", "warning", "error"). Default is "info".
+    """
+    if rank_zero_only.rank == 0:
+        log_fn = getattr(logger, level, logger.info)
+        log_fn(msg, *args, **kwargs)
 
 
 def init_training_logger_metrics(training_logger, val_steps):
@@ -347,7 +357,7 @@ def setup_training_logger(datastore, args, run_name):
 
     Returns
     -------
-    logger : pytorch_lightning.loggers.base
+    training_logger : pytorch_lightning.loggers.base
         Logger object.
 
     Notes
@@ -359,14 +369,14 @@ def setup_training_logger(datastore, args, run_name):
     """
 
     if args.wandb_id and args.logger != "wandb":
-        loguru_logger.warning(
+        logger.warning(
             f"--wandb_id is set but logger is {args.logger!r}; "
             "the wandb_id will have no effect."
         )
 
     if args.logger == "wandb":
         wandb_resume = "allow" if args.wandb_id else None
-        loguru_logger.info(
+        logger.info(
             f"Wandb resume mode: {wandb_resume!r} (id: {args.wandb_id!r})"
         )
         return pl.loggers.WandbLogger(
@@ -387,16 +397,16 @@ def setup_training_logger(datastore, args, run_name):
             raise ValueError(
                 "MLFlow logger requires setting MLFLOW_TRACKING_URI in env."
             )
-        logger = CustomMLFlowLogger(
+        training_logger = CustomMLFlowLogger(
             experiment_name=args.logger_project,
             tracking_uri=url,
             run_name=run_name,
         )
-        logger.log_hyperparams(
+        training_logger.log_hyperparams(
             dict(training=vars(args), datastore=datastore._config)
         )
 
-    return logger
+    return training_logger
 
 
 def inverse_softplus(x, beta=1, threshold=20):
