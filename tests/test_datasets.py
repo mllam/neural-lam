@@ -155,6 +155,38 @@ def test_dataset_item_create_dataarray_from_tensor(datastore_name):
             for coord_name in ["x", "y"]
         )
 
+    # test forcing category - all datastores are expected to have da_forcing
+    # this ensures create_dataarray_from_tensor works for forcing_feature coords
+    da_forcing = dataset.da_forcing
+    da_forcing_raw = da_forcing
+    for dim in da_forcing_raw.dims:
+        if dim not in ("grid_index", "forcing_feature"):
+            da_forcing_raw = da_forcing_raw.isel({dim: 0})
+    da_forcing_raw = da_forcing_raw.transpose("grid_index", "forcing_feature")
+    da_forcing_result = dataset.create_dataarray_from_tensor(
+        tensor=torch.tensor(da_forcing_raw.values, dtype=torch.float32),
+        category="forcing",
+        time=target_times[0],
+    )
+    np.testing.assert_equal(
+        da_forcing_result.forcing_feature.values,
+        da_forcing_raw.forcing_feature.values,
+    )
+
+    # test static category - all datastores are expected to have da_static
+    # this ensures create_dataarray_from_tensor works for static_feature coords
+    da_static = dataset.da_static
+    da_static_raw = da_static.transpose("grid_index", "static_feature")
+    da_static_result = dataset.create_dataarray_from_tensor(
+        tensor=torch.tensor(da_static_raw.values, dtype=torch.float32),
+        category="static",
+        time=target_times[0],
+    )
+    np.testing.assert_equal(
+        da_static_result.static_feature.values,
+        da_static_raw.static_feature.values,
+    )
+
 
 @pytest.mark.parametrize("split", ["train", "val", "test"])
 @pytest.mark.parametrize("datastore_name", DATASTORES.keys())
