@@ -9,59 +9,127 @@ from . import utils
 from .datastore.base import BaseRegularGridDatastore
 
 
+def _compute_heatmap_layout(n_rows: int, n_cols: int) -> dict[str, float]:
+    """Choose figure and font sizes from the heatmap dimensions."""
+    max_dim = max(n_rows, n_cols)
+
+    return {
+        "fig_width": float(np.clip(4.5 + 0.8 * n_cols, 8.0, 18.0)),
+        "fig_height": float(np.clip(2.5 + 0.5 * n_rows, 4.5, 18.0)),
+        "tick_label_size": float(np.clip(15.0 - 0.18 * max_dim, 7.0, 14.0)),
+        "annotation_size": float(np.clip(13.0 - 0.22 * max_dim, 5.0, 12.0)),
+        "title_size": float(np.clip(16.0 - 0.15 * max_dim, 9.0, 15.0)),
+        "x_tick_rotation": 45.0 if n_cols > 12 else 0.0,
+    }
+
+
+def _get_heatmap_var_labels(
+    datastore: BaseRegularGridDatastore, n_vars: int
+) -> list[str]:
+    """Build state-variable labels, padding defensively if metadata is short."""
+    var_names = list(datastore.get_vars_names(category="state"))
+    var_units = list(datastore.get_vars_units(category="state"))
+
+    if len(var_names) < n_vars:
+        var_names.extend(
+            [f"state_feature_{i}" for i in range(len(var_names), n_vars)]
+        )
+    if len(var_units) < n_vars:
+        var_units.extend([""] * (n_vars - len(var_units)))
+
+    labels = []
+    for name, unit in zip(var_names[:n_vars], var_units[:n_vars]):
+        labels.append(f"{name} ({unit})" if unit else name)
+
+    return labels
+
+
 @matplotlib.rc_context(utils.fractional_plot_bundle(1))
-def plot_error_map(errors, datastore: BaseRegularGridDatastore, title=None):
+def plot_error_heatmap(
+    errors, datastore: BaseRegularGridDatastore, title=None
+):
     """
-    Plot a heatmap of errors of different variables at different
-    predictions horizons
-    errors: (pred_steps, d_f)
+    Plot a heatmap of errors for state variables across forecast lead times.
+
+    Parameters
+    ----------
+    errors : torch.Tensor
+        Error values with shape `(pred_steps, d_f)`.
+    datastore : BaseRegularGridDatastore
+        Datastore providing step length and variable metadata.
+    title : str, optional
+        Optional title for the figure.
     """
-    errors_np = errors.T.cpu().numpy()  # (d_f, pred_steps)
+    errors_np = errors.detach().cpu().numpy().T  # (d_f, pred_steps)
     d_f, pred_steps = errors_np.shape
     step_length = datastore.step_length
 
-    # Normalize all errors to [0,1] for color map
-    max_errors = errors_np.max(axis=1)  # d_f
-    errors_norm = errors_np / np.expand_dims(max_errors, axis=1)
-
     time_step_int, time_step_unit = utils.get_integer_time(step_length)
+    layout = _compute_heatmap_layout(n_rows=d_f, n_cols=pred_steps)
 
-    fig, ax = plt.subplots(figsize=(15, 10))
+    finite_errors = errors_np[np.isfinite(errors_np)]
+    if finite_errors.size == 0:
+        vmin, vmax = 0.0, 1.0
+    else:
+        vmin = float(finite_errors.min())
+        vmax = float(finite_errors.max())
+        if vmin >= 0.0:
+            vmin = 0.0
+        if np.isclose(vmin, vmax):
+            vmax = vmin + 1.0
 
-    ax.imshow(
-        errors_norm,
-        cmap="OrRd",
-        vmin=0,
-        vmax=1.0,
-        interpolation="none",
-        aspect="auto",
-        alpha=0.8,
+    fig, ax = plt.subplots(
+        figsize=(layout["fig_width"], layout["fig_height"]),
+        constrained_layout=True,
     )
 
-    # ax and labels
-    for (j, i), error in np.ndenumerate(errors_np):
-        # Numbers > 9999 will be too large to fit
-        formatted_error = f"{error:.3f}" if error < 9999 else f"{error:.2E}"
-        ax.text(i, j, formatted_error, ha="center", va="center", usetex=False)
+    im = ax.imshow(
+        errors_np,
+        cmap="viridis",
+        vmin=vmin,
+        vmax=vmax,
+        interpolation="none",
+        aspect="auto",
+    )
+    cbar = fig.colorbar(im, ax=ax, pad=0.02)
+    cbar.ax.tick_params(labelsize=layout["tick_label_size"])
+    cbar.ax.yaxis.get_offset_text().set_fontsize(layout["tick_label_size"])
 
-    # Ticks and labels
-    label_size = 15
+    for (j, i), error in np.ndenumerate(errors_np):
+        formatted_error = f"{error:.3g}" if abs(error) < 1.0e4 else f"{error:.2E}"
+        text_color = "white" if im.norm(error) < 0.45 else "black"
+        ax.text(
+            i,
+            j,
+            formatted_error,
+            ha="center",
+            va="center",
+            usetex=False,
+            fontsize=layout["annotation_size"],
+            color=text_color,
+        )
+
     ax.set_xticks(np.arange(pred_steps))
     pred_hor_i = np.arange(pred_steps) + 1
     pred_hor_h = time_step_int * pred_hor_i
-    ax.set_xticklabels(pred_hor_h, size=label_size)
-    ax.set_xlabel(f"Lead time ({time_step_unit[0]})", size=label_size)
+    ax.set_xticklabels(
+        pred_hor_h,
+        size=layout["tick_label_size"],
+        rotation=layout["x_tick_rotation"],
+        ha="right" if layout["x_tick_rotation"] else "center",
+    )
+    ax.set_xlabel(
+        f"Lead time ({time_step_unit[0]})", size=layout["tick_label_size"]
+    )
 
     ax.set_yticks(np.arange(d_f))
-    var_names = datastore.get_vars_names(category="state")
-    var_units = datastore.get_vars_units(category="state")
-    y_ticklabels = [
-        f"{name} ({unit})" for name, unit in zip(var_names, var_units)
-    ]
-    ax.set_yticklabels(y_ticklabels, rotation=30, size=label_size)
+    ax.set_yticklabels(
+        _get_heatmap_var_labels(datastore=datastore, n_vars=d_f),
+        size=layout["tick_label_size"],
+    )
 
     if title:
-        ax.set_title(title, size=15)
+        ax.set_title(title, size=layout["title_size"])
 
     return fig
 
