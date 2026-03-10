@@ -213,7 +213,8 @@ class BaseDatastore(abc.ABC):
         mean = standard_da[f"{category}_mean"]
         std = standard_da[f"{category}_std"]
 
-        return (da - mean) / std
+        eps = np.finfo(std.dtype).eps
+        return (da - mean) / std.where(std > eps, other=eps)
 
     @abc.abstractmethod
     def get_dataarray(
