@@ -3,6 +3,9 @@ from datetime import timedelta
 from pathlib import Path
 
 # Third-party
+import matplotlib
+# Use a non-interactive backend so plotting tests run in headless environments.
+matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
 import pytest
@@ -19,6 +22,22 @@ from tests.dummy_datastore import DummyDatastore
 # Create output directory for test figures
 TEST_OUTPUT_DIR = Path(__file__).parent / "test_outputs" / "plotting"
 TEST_OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+
+
+class HeatmapDatastore:
+    """Minimal datastore stub for error-heatmap plotting tests."""
+
+    def __init__(self, n_vars, step_length=timedelta(hours=1)):
+        self._n_vars = n_vars
+        self.step_length = step_length
+
+    def get_vars_names(self, category):
+        assert category == "state"
+        return [f"state_var_{i}" for i in range(self._n_vars)]
+
+    def get_vars_units(self, category):
+        assert category == "state"
+        return ["unit"] * self._n_vars
 
 
 @pytest.fixture
@@ -188,3 +207,54 @@ def test_plot_examples_integration_saves_figure(
     assert fig is not None
     assert isinstance(fig, plt.Figure)
     assert output_path.exists()
+
+
+def test_plot_error_heatmap_uses_global_color_scale():
+    """Heatmap colors should encode absolute values across all variables."""
+    errors = torch.tensor(
+        [
+            [1.0, 100.0, 10.0],
+            [2.0, 80.0, 5.0],
+            [3.0, 60.0, 2.5],
+        ]
+    )  # (pred_steps, d_f)
+    datastore = HeatmapDatastore(n_vars=errors.shape[1])
+
+    fig = vis.plot_error_heatmap(errors, datastore=datastore)
+    ax = fig.axes[0]
+    image = ax.images[0]
+
+    np.testing.assert_allclose(image.get_array(), errors.T.numpy())
+    assert image.norm.vmin == 0.0
+    assert image.norm.vmax == pytest.approx(errors.max().item())
+    assert len(fig.axes) == 2  # main axis + colorbar axis
+
+    plt.close(fig)
+
+
+def test_plot_error_heatmap_adapts_figure_and_font_sizes():
+    """Dense heatmaps should get more space and smaller text."""
+    small_errors = torch.ones((4, 5))
+    large_errors = torch.ones((20, 30))
+
+    small_fig = vis.plot_error_heatmap(
+        small_errors, datastore=HeatmapDatastore(n_vars=small_errors.shape[1])
+    )
+    large_fig = vis.plot_error_heatmap(
+        large_errors, datastore=HeatmapDatastore(n_vars=large_errors.shape[1])
+    )
+
+    small_ax = small_fig.axes[0]
+    large_ax = large_fig.axes[0]
+
+    assert large_fig.get_size_inches()[0] > small_fig.get_size_inches()[0]
+    assert large_fig.get_size_inches()[1] > small_fig.get_size_inches()[1]
+    assert (
+        large_ax.get_yticklabels()[0].get_fontsize()
+        < small_ax.get_yticklabels()[0].get_fontsize()
+    )
+    assert large_ax.texts[0].get_fontsize() < small_ax.texts[0].get_fontsize()
+    assert large_ax.get_xticklabels()[0].get_rotation() == 45.0
+
+    plt.close(small_fig)
+    plt.close(large_fig)
