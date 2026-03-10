@@ -414,10 +414,10 @@ class ARModel(pl.LightningModule):
             batch_size=batch[0].shape[0],
         )
 
-        # Compute all evaluation metrics for error heatmaps. Note: explicitly
-        # list
-        # metrics here, as test_metrics can contain additional ones, computed
-        # differently, but that should be aggregated on_test_epoch_end
+        # Compute all evaluation metrics for error heatmaps. Note:
+        # explicitly list metrics here, as test_metrics can contain
+        # additional ones, computed differently, but that should be
+        # aggregated on_test_epoch_end
         for metric_name in ("mse", "mae"):
             metric_func = metrics.get_metric(metric_name)
             batch_metric_vals = metric_func(
