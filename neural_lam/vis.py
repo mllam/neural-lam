@@ -13,6 +13,17 @@ from . import utils
 from .datastore.base import BaseRegularGridDatastore
 
 
+def _tex_safe(s: str) -> str:
+    """Escape TeX special characters in s if TeX rendering is currently active.
+
+    Needed because % is a TeX comment character; without escaping it would
+    silently truncate any text that follows it (e.g. the title for r2m (%)).
+    """
+    if plt.rcParams.get("text.usetex", False):
+        s = s.replace("%", r"\%")
+    return s
+
+
 def plot_on_axis(
     ax,
     da,
@@ -183,7 +194,8 @@ def plot_error_map(errors, datastore: BaseRegularGridDatastore, title=None):
     var_names = datastore.get_vars_names(category="state")
     var_units = datastore.get_vars_units(category="state")
     y_ticklabels = [
-        f"{name} ({unit})" for name, unit in zip(var_names, var_units)
+        _tex_safe(f"{name} ({unit})")
+        for name, unit in zip(var_names, var_units)
     ]
     ax.set_yticklabels(y_ticklabels, rotation=30, size=label_size)
 
