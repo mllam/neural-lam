@@ -17,11 +17,6 @@ _TITLE_SIZE = 13  # suptitle and per-axes titles
 _LABEL_SIZE = 11  # axis / colorbar labels
 _TICK_SIZE = 11  # tick labels
 
-# Shared geometry for geo-map figures
-_GEO_TOP = 0.95  # fraction of figure height for axes top
-_GEO_BOTTOM = 0.1  # fraction of figure height for axes bottom
-_GEO_LR = 0.02  # left / right margin fraction
-
 
 def _tex_safe(s: str) -> str:
     """Escape TeX special characters in s if TeX rendering is currently active.
@@ -245,13 +240,6 @@ def plot_prediction(
         figsize=(13, 6),
         subplot_kw={"projection": datastore.coords_projection},
     )
-    fig.subplots_adjust(
-        top=_GEO_TOP,
-        bottom=_GEO_BOTTOM,
-        left=_GEO_LR,
-        right=1 - _GEO_LR,
-        wspace=0.04,
-    )
 
     for ax, da, subtitle in zip(
         axes, (da_target, da_prediction), ("Ground Truth", "Prediction")
@@ -271,9 +259,13 @@ def plot_prediction(
     if title:
         fig.suptitle(title, size=_TITLE_SIZE)
 
-    cbar_ax = fig.add_axes([0.2, -0.04, 0.6, 0.04])
     cbar = fig.colorbar(
-        axes[0].collections[0], cax=cbar_ax, orientation="horizontal"
+        axes[0].collections[0],
+        ax=axes,
+        orientation="horizontal",
+        location="bottom",
+        shrink=0.6,
+        pad=0.02,
     )
     cbar.ax.tick_params(labelsize=_TICK_SIZE)
     if colorbar_label:
@@ -306,12 +298,6 @@ def plot_spatial_error(
         figsize=(6.5, 6),
         subplot_kw={"projection": datastore.coords_projection},
     )
-    fig.subplots_adjust(
-        top=_GEO_TOP,
-        bottom=_GEO_BOTTOM,
-        left=_GEO_LR,
-        right=1 - _GEO_LR,
-    )
 
     mesh = plot_on_axis(
         ax=ax,
@@ -324,8 +310,14 @@ def plot_spatial_error(
         crop_to_interior=crop_to_interior,
     )
 
-    cbar_ax = fig.add_axes([0.15, -0.04, 0.7, 0.04])
-    cbar = fig.colorbar(mesh, cax=cbar_ax, orientation="horizontal")
+    cbar = fig.colorbar(
+        mesh,
+        ax=ax,
+        orientation="horizontal",
+        location="bottom",
+        shrink=0.8,
+        pad=0.02,
+    )
     cbar.ax.tick_params(labelsize=_TICK_SIZE)
     cbar.formatter.set_powerlimits((-3, 3))
     if colorbar_label:
