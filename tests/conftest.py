@@ -101,7 +101,7 @@ DATASTORES_EXAMPLES = dict(
         / "danra_100m_winds"
         / "danra.datastore.yaml"
     ),
-    npyfilesmeps=download_meps_example_reduced_dataset(),
+    npyfilesmeps=None,
     dummydata=None,
 )
 
@@ -109,9 +109,23 @@ DATASTORES[DummyDatastore.SHORT_NAME] = DummyDatastore
 
 
 def init_datastore_example(datastore_kind):
+    if datastore_kind == "npyfilesmeps":
+        if os.getenv("NEURAL_LAM_SKIP_REMOTE_TESTDATA", "").lower() in {
+            "1",
+            "true",
+            "yes",
+        }:
+            pytest.skip(
+                "Skipping npyfilesmeps tests because "
+                "NEURAL_LAM_SKIP_REMOTE_TESTDATA is enabled"
+            )
+        config_path = download_meps_example_reduced_dataset()
+    else:
+        config_path = DATASTORES_EXAMPLES[datastore_kind]
+
     datastore = init_datastore(
         datastore_kind=datastore_kind,
-        config_path=DATASTORES_EXAMPLES[datastore_kind],
+        config_path=config_path,
     )
 
     return datastore

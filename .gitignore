@@ -83,8 +83,12 @@ __MACOSX
 
 # Virtual environments
 .venv
+.venv-wsl
 venv
 activate
+
+# Pre-commit cache (local)
+.pre-commit-cache/
 
 # Build artifacts
 dist/

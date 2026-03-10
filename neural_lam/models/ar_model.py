@@ -124,6 +124,25 @@ class ARModel(pl.LightningModule):
         # Instantiate loss function
         self.loss = metrics.get_metric(args.loss)
 
+        if config.training.area_weighting:
+            latitudes = datastore.get_latitudes(category="state")
+            grid_weights = np.cos(np.deg2rad(latitudes))
+            grid_weights = np.clip(grid_weights, a_min=0.0, a_max=None)
+            grid_weights_mean = float(np.mean(grid_weights))
+            if grid_weights_mean <= 0.0:
+                raise ValueError(
+                    "Area weighting produced non-positive mean grid weights"
+                )
+            grid_weights = grid_weights / grid_weights_mean
+        else:
+            grid_weights = np.ones(self.num_grid_nodes, dtype=np.float32)
+
+        self.register_buffer(
+            "grid_weights",
+            torch.tensor(grid_weights, dtype=torch.float32),
+            persistent=False,
+        )
+
         boundary_mask = torch.tensor(
             da_boundary_mask.values, dtype=torch.float32
         ).unsqueeze(
@@ -303,7 +322,11 @@ class ARModel(pl.LightningModule):
         # Compute loss
         batch_loss = torch.mean(
             self.loss(
-                prediction, target, pred_std, mask=self.interior_mask_bool
+                prediction,
+                target,
+                pred_std,
+                mask=self.interior_mask_bool,
+                grid_weights=self.grid_weights,
             )
         )  # mean over unrolled times and batch
 
@@ -327,7 +350,12 @@ class ARModel(pl.LightningModule):
 
         returns: (K*d1, d2, ...)
         """
-        return self.all_gather(tensor_to_gather).flatten(0, 1)
+        gathered = self.all_gather(tensor_to_gather)
+        # In single-device mode, all_gather returns the tensor unchanged
+        # (no world_size dimension prepended), so skip the flatten step.
+        if gathered.dim() > tensor_to_gather.dim():
+            gathered = gathered.flatten(0, 1)
+        return gathered
 
     # newer lightning versions requires batch_idx argument, even if unused
     # pylint: disable-next=unused-argument
@@ -339,7 +367,11 @@ class ARModel(pl.LightningModule):
 
         time_step_loss = torch.mean(
             self.loss(
-                prediction, target, pred_std, mask=self.interior_mask_bool
+                prediction,
+                target,
+                pred_std,
+                mask=self.interior_mask_bool,
+                grid_weights=self.grid_weights,
             ),
             dim=0,
         )  # (time_steps-1)
@@ -367,6 +399,7 @@ class ARModel(pl.LightningModule):
             pred_std,
             mask=self.interior_mask_bool,
             sum_vars=False,
+            grid_weights=self.grid_weights,
         )  # (B, pred_steps, d_f)
         self.val_metrics["mse"].append(entry_mses)
 
@@ -393,7 +426,11 @@ class ARModel(pl.LightningModule):
 
         time_step_loss = torch.mean(
             self.loss(
-                prediction, target, pred_std, mask=self.interior_mask_bool
+                prediction,
+                target,
+                pred_std,
+                mask=self.interior_mask_bool,
+                grid_weights=self.grid_weights,
             ),
             dim=0,
         )  # (time_steps-1,)
@@ -425,6 +462,7 @@ class ARModel(pl.LightningModule):
                 pred_std,
                 mask=self.interior_mask_bool,
                 sum_vars=False,
+                grid_weights=self.grid_weights,
             )  # (B, pred_steps, d_f)
             self.test_metrics[metric_name].append(batch_metric_vals)
 
@@ -437,7 +475,11 @@ class ARModel(pl.LightningModule):
 
         # Save per-sample spatial loss for specific times
         spatial_loss = self.loss(
-            prediction, target, pred_std, average_grid=False
+            prediction,
+            target,
+            pred_std,
+            average_grid=False,
+            grid_weights=self.grid_weights,
         )  # (B, pred_steps, num_grid_nodes)
         log_spatial_losses = spatial_loss[
             :, [step - 1 for step in self.args.val_steps_to_log]

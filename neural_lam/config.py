@@ -89,15 +89,23 @@ class TrainingConfig:
     Attributes
     ----------
     state_feature_weighting : Union[ManualStateFeatureWeighting,
-                                    UnformFeatureWeighting]
+                                    UniformFeatureWeighting]
         The method to use for weighting the state features in the loss
-        function. Defaults to uniform weighting (`UnformFeatureWeighting`, i.e.
+        function. Defaults to uniform weighting (`UniformFeatureWeighting`, i.e.
         all features are weighted equally).
+    area_weighting : bool
+        If True, weight each grid point's contribution to the loss/metrics by
+        cos(latitude), correcting for the unequal areas represented by grid
+        points at different latitudes (higher-latitude points represent smaller
+        areas). Weights are normalised so their mean equals 1. Defaults to
+        False (uniform grid weighting).
     """
 
     state_feature_weighting: Union[
         ManualStateFeatureWeighting, UniformFeatureWeighting
     ] = dataclasses.field(default_factory=UniformFeatureWeighting)
+
+    area_weighting: bool = False
 
     output_clamping: OutputClamping = dataclasses.field(
         default_factory=OutputClamping

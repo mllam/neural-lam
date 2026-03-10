@@ -171,7 +171,11 @@ For now the neural-lam config only defines few things:
 2. The weighting of different features in
 the loss function. If you don't define the state feature weighting it will default to
 weighting all features equally.
-3. Valid numerical range for output of each feature.The numerical range of all features default to $]-\infty, \infty[$.
+3. Valid numerical range for output of each feature. The numerical range of all features default to $]-\infty, \infty[$.
+4. Whether to apply latitude-based area weighting to the loss and evaluation metrics.
+   Set `area_weighting: true` in the `training` section to weight each grid point by
+   cos(latitude), which corrects for the fact that grid points near the poles represent
+   smaller areas than those near the equator. Defaults to `false` (uniform weighting).
 
 (This example is taken from the `tests/datastore_examples/mdp` directory.)
 

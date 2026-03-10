@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Add `area_weighting` option to `TrainingConfig` to weight loss and metrics by cos(latitude), correcting for unequal grid-cell area on global domains. Adds `BaseRegularGridDatastore.get_latitudes()` using existing `coords_projection()` [#63] @AR10129
+
 - Enable `pin_memory` in DataLoaders when GPU is available for faster async CPU-to-GPU data transfers [\#236](https://github.com/mllam/neural-lam/pull/236) @abhaygoudannavar
 
 ### Fixed

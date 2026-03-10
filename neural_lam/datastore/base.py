@@ -342,6 +342,29 @@ class BaseDatastore(abc.ABC):
         ]
         return [float(v) for v in extent]
 
+    @functools.lru_cache
+    def get_latitudes(self, category: str = "state") -> np.ndarray:
+        """
+        Recover latitudes in degrees north for a category grid.
+
+        Parameters
+        ----------
+        category : str
+            The category of the dataset (state/forcing/static).
+
+        Returns
+        -------
+        np.ndarray
+            Latitudes with shape ``(n_grid_points,)``.
+        """
+        xy = self.get_xy(category=category, stacked=True)
+        lonlat = ccrs.PlateCarree().transform_points(
+            src_crs=self.coords_projection,
+            x=xy[:, 0],
+            y=xy[:, 1],
+        )
+        return lonlat[:, 1]
+
     @property
     @abc.abstractmethod
     def num_grid_points(self) -> int:
