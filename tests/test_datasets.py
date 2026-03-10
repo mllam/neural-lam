@@ -173,18 +173,20 @@ def test_dataset_item_create_dataarray_from_tensor(datastore_name):
         da_forcing_raw.forcing_feature.values,
     )
 
-    # test static category - all datastores are expected to have da_static
+    # test static category - use datastore.get_dataarray since WeatherDataset
+    # does not expose a da_static attribute directly
     # this ensures create_dataarray_from_tensor works for static_feature coords
-    da_static = dataset.da_static
-    da_static_raw = da_static.transpose("grid_index", "static_feature")
+    da_static = datastore.get_dataarray("static", split=dataset.split)
+    da_static = da_static.stack(grid_index=datastore.CARTESIAN_COORDS)
+    da_static = da_static.transpose("grid_index", "static_feature")
     da_static_result = dataset.create_dataarray_from_tensor(
-        tensor=torch.tensor(da_static_raw.values, dtype=torch.float32),
+        tensor=torch.tensor(da_static.values, dtype=torch.float32),
         category="static",
         time=target_times[0],
     )
     np.testing.assert_equal(
         da_static_result.static_feature.values,
-        da_static_raw.static_feature.values,
+        da_static.static_feature.values,
     )
 
 
