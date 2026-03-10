@@ -12,6 +12,16 @@ import xarray as xr
 from . import utils
 from .datastore.base import BaseRegularGridDatastore
 
+# Font sizes shared across all plot functions for visual consistency.
+_TITLE_SIZE = 13  # suptitle and per-axes titles
+_LABEL_SIZE = 11  # axis / colorbar labels
+_TICK_SIZE = 11  # tick labels
+
+# Shared geometry for geo-map figures
+_GEO_TOP = 0.95  # fraction of figure height for axes top
+_GEO_BOTTOM = 0.1  # fraction of figure height for axes bottom
+_GEO_LR = 0.02  # left / right margin fraction
+
 
 def _tex_safe(s: str) -> str:
     """Escape TeX special characters in s if TeX rendering is currently active.
@@ -76,6 +86,8 @@ def plot_on_axis(
     )
     gl.top_labels = False
     gl.right_labels = False
+    gl.xlabel_style = {"size": _TICK_SIZE}
+    gl.ylabel_style = {"size": _TICK_SIZE}
 
     lats_lons = datastore.get_lat_lon("state")
     grid_shape = (
@@ -142,7 +154,7 @@ def plot_on_axis(
             )
 
     if ax_title:
-        ax.set_title(ax_title, size=15)
+        ax.set_title(ax_title, size=_TITLE_SIZE)
 
     return mesh
 
@@ -183,12 +195,11 @@ def plot_error_map(errors, datastore: BaseRegularGridDatastore, title=None):
         ax.text(i, j, formatted_error, ha="center", va="center", usetex=False)
 
     # Ticks and labels
-    label_size = 15
     ax.set_xticks(np.arange(pred_steps))
     pred_hor_i = np.arange(pred_steps) + 1
     pred_hor_h = time_step_int * pred_hor_i
-    ax.set_xticklabels(pred_hor_h, size=label_size)
-    ax.set_xlabel(f"Lead time ({time_step_unit[0]})", size=label_size)
+    ax.set_xticklabels(pred_hor_h, size=_TICK_SIZE)
+    ax.set_xlabel(f"Lead time ({time_step_unit[0]})", size=_LABEL_SIZE)
 
     ax.set_yticks(np.arange(d_f))
     var_names = datastore.get_vars_names(category="state")
@@ -197,10 +208,10 @@ def plot_error_map(errors, datastore: BaseRegularGridDatastore, title=None):
         _tex_safe(f"{name} ({unit})")
         for name, unit in zip(var_names, var_units)
     ]
-    ax.set_yticklabels(y_ticklabels, rotation=30, size=label_size)
+    ax.set_yticklabels(y_ticklabels, rotation=30, size=_TICK_SIZE)
 
     if title:
-        ax.set_title(title, size=15)
+        ax.set_title(title, size=_TITLE_SIZE)
 
     return fig
 
@@ -214,6 +225,7 @@ def plot_prediction(
     vrange=None,
     boundary_alpha=0.7,
     crop_to_interior=True,
+    colorbar_label: str = "",
 ):
     """
     Plot example prediction and grond truth.
@@ -230,8 +242,15 @@ def plot_prediction(
     fig, axes = plt.subplots(
         1,
         2,
-        figsize=(13, 7),
+        figsize=(13, 6),
         subplot_kw={"projection": datastore.coords_projection},
+    )
+    fig.subplots_adjust(
+        top=_GEO_TOP,
+        bottom=_GEO_BOTTOM,
+        left=_GEO_LR,
+        right=1 - _GEO_LR,
+        wspace=0.04,
     )
 
     for ax, da, subtitle in zip(
@@ -250,10 +269,15 @@ def plot_prediction(
         )
 
     if title:
-        fig.suptitle(title, size=20)
+        fig.suptitle(title, size=_TITLE_SIZE)
 
-    cbar_ax = fig.add_axes([0.2, 0.05, 0.6, 0.03])
-    fig.colorbar(axes[0].collections[0], cax=cbar_ax, orientation="horizontal")
+    cbar_ax = fig.add_axes([0.2, -0.04, 0.6, 0.04])
+    cbar = fig.colorbar(
+        axes[0].collections[0], cax=cbar_ax, orientation="horizontal"
+    )
+    cbar.ax.tick_params(labelsize=_TICK_SIZE)
+    if colorbar_label:
+        cbar.set_label(_tex_safe(colorbar_label), size=_LABEL_SIZE)
 
     return fig
 
@@ -266,6 +290,7 @@ def plot_spatial_error(
     vrange=None,
     boundary_alpha=0.7,
     crop_to_interior=True,
+    colorbar_label: str = "",
 ):
     """Plot spatial error with projection-aware axes."""
 
@@ -278,8 +303,14 @@ def plot_spatial_error(
         vmin, vmax = vrange
 
     fig, ax = plt.subplots(
-        figsize=(5, 4.8),
+        figsize=(6.5, 6),
         subplot_kw={"projection": datastore.coords_projection},
+    )
+    fig.subplots_adjust(
+        top=_GEO_TOP,
+        bottom=_GEO_BOTTOM,
+        left=_GEO_LR,
+        right=1 - _GEO_LR,
     )
 
     mesh = plot_on_axis(
@@ -293,12 +324,14 @@ def plot_spatial_error(
         crop_to_interior=crop_to_interior,
     )
 
-    cbar = fig.colorbar(mesh, ax=ax, aspect=30)
-    cbar.ax.tick_params(labelsize=10)
-    cbar.ax.yaxis.get_offset_text().set_fontsize(10)
+    cbar_ax = fig.add_axes([0.15, -0.04, 0.7, 0.04])
+    cbar = fig.colorbar(mesh, cax=cbar_ax, orientation="horizontal")
+    cbar.ax.tick_params(labelsize=_TICK_SIZE)
     cbar.formatter.set_powerlimits((-3, 3))
+    if colorbar_label:
+        cbar.set_label(_tex_safe(colorbar_label), size=_LABEL_SIZE)
 
     if title:
-        fig.suptitle(title, size=10)
+        fig.suptitle(title, size=_TITLE_SIZE)
 
     return fig
