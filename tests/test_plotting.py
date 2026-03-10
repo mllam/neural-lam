@@ -4,9 +4,10 @@ from pathlib import Path
 
 # Third-party
 import matplotlib
-# Use a non-interactive backend so plotting tests run in headless environments.
-matplotlib.use("Agg")
-import matplotlib.pyplot as plt
+
+matplotlib.use("Agg")  # non-interactive backend for headless test runs
+
+import matplotlib.pyplot as plt  # noqa: E402
 import numpy as np
 import pytest
 import torch
@@ -258,3 +259,31 @@ def test_plot_error_heatmap_adapts_figure_and_font_sizes():
 
     plt.close(small_fig)
     plt.close(large_fig)
+
+
+def test_plot_error_heatmap_skips_annotations_for_very_dense_grids():
+    """Very dense heatmaps should omit in-cell text to stay readable."""
+    dense_errors = torch.ones((40, 50))
+    fig = vis.plot_error_heatmap(
+        dense_errors, datastore=HeatmapDatastore(n_vars=dense_errors.shape[1])
+    )
+    ax = fig.axes[0]
+
+    # No text annotations should be drawn when cells are too small
+    assert len(ax.texts) == 0
+    # Figure should still grow beyond the old 18-inch cap
+    assert fig.get_size_inches()[0] > 18.0
+
+    plt.close(fig)
+
+
+def test_plot_error_map_deprecated_wrapper():
+    """The old plot_error_map name should still work but emit a warning."""
+    errors = torch.ones((3, 4))
+    datastore = HeatmapDatastore(n_vars=errors.shape[1])
+
+    with pytest.warns(DeprecationWarning, match="plot_error_heatmap"):
+        fig = vis.plot_error_map(errors, datastore=datastore)
+
+    assert isinstance(fig, plt.Figure)
+    plt.close(fig)
