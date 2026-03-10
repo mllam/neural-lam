@@ -374,7 +374,7 @@ class ARModel(pl.LightningModule):
         """
         Compute val metrics at the end of val epoch
         """
-        # Create error maps for all test metrics
+        # Create error heatmaps for all validation metrics
         self.aggregate_and_plot_metrics(self.val_metrics, prefix="val")
 
         # Clear lists with validation metrics values
@@ -414,7 +414,8 @@ class ARModel(pl.LightningModule):
             batch_size=batch[0].shape[0],
         )
 
-        # Compute all evaluation metrics for error maps Note: explicitly list
+        # Compute all evaluation metrics for error heatmaps. Note: explicitly
+        # list
         # metrics here, as test_metrics can contain additional ones, computed
         # differently, but that should be aggregated on_test_epoch_end
         for metric_name in ("mse", "mae"):
@@ -603,7 +604,7 @@ class ARModel(pl.LightningModule):
         Return: log_dict: dict with everything to log for given metric
         """
         log_dict = {}
-        metric_fig = vis.plot_error_map(
+        metric_fig = vis.plot_error_heatmap(
             errors=metric_tensor,
             datastore=self._datastore,
         )
@@ -635,7 +636,8 @@ class ARModel(pl.LightningModule):
 
     def aggregate_and_plot_metrics(self, metrics_dict, prefix):
         """
-        Aggregate and create error map plots for all metrics in metrics_dict
+        Aggregate and create error heatmap plots for all metrics in
+        metrics_dict
 
         metrics_dict: dictionary with metric_names and list of tensors
             with step-evals.
@@ -693,7 +695,7 @@ class ARModel(pl.LightningModule):
         Compute test metrics and make plots at the end of test epoch. Will
         gather stored tensors and perform plotting and logging on rank 0.
         """
-        # Create error maps for all test metrics
+        # Create error heatmaps for all test metrics
         self.aggregate_and_plot_metrics(self.test_metrics, prefix="test")
 
         # Plot spatial loss maps
