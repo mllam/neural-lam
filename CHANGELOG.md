@@ -17,6 +17,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Fix `create_dataarray_from_tensor` to support all dataset categories (state, forcing, static) by using dynamic feature coordinate names instead of hardcoded `state_feature` [\#364](https://github.com/mllam/neural-lam/pull/364) @Bharath-kumar-7
+
 - Replace `shell=True` subprocess call in `compute_standardization_stats.py` with a safe argument list and Python-side hostname parsing to prevent command injection via `SLURM_JOB_NODELIST` [\#264](https://github.com/mllam/neural-lam/pull/264) @ashum9
 - Avoid NaN when standardizing fields with zero std [#189](https://github.com/mllam/neural-lam/pull/189) @varunsiravuri
 
