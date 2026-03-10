@@ -3,11 +3,12 @@ import tempfile
 from pathlib import Path
 
 # Third-party
+import numpy as np
 import pytest
 import torch
 
 # First-party
-from neural_lam.create_graph import create_graph_from_datastore
+from neural_lam.create_graph import create_graph, create_graph_from_datastore
 from neural_lam.datastore import DATASTORES
 from neural_lam.datastore.base import BaseRegularGridDatastore
 from tests.conftest import init_datastore_example
@@ -117,3 +118,24 @@ def test_graph_creation(datastore_name, graph_name):
                         assert r.shape[0] == 2  # adjacency matrix uses two rows
                     elif file_id.endswith("_features"):
                         assert r.shape[1] == d_features
+
+
+def test_graph_creation_non_square_aspect_ratio():
+    """
+    Mesh at level 1 should reflect the domain's aspect ratio, not be square.
+    """
+    Nx, Ny = 100, 600
+    x = np.linspace(0, 1, Nx)
+    y = np.linspace(0, 6, Ny)
+    xx, yy = np.meshgrid(x, y, indexing="ij")
+    xy = np.stack([xx, yy], axis=-1)  # (100, 600, 2)
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        create_graph(graph_dir_path=tmpdir, xy=xy, n_max_levels=1)
+        mesh_features = torch.load(f"{tmpdir}/mesh_features.pt")
+        n_mesh_nodes = mesh_features[0].shape[0]
+
+    # With a square mesh, n_mesh_nodes would be n x n.
+    # With correct aspect ratio, n_y > n_x, so nodes < n_larger^2.
+    n_larger = int(3 ** int(np.log(max(Nx, Ny)) / np.log(3)) / 3)
+    assert n_mesh_nodes < n_larger**2
