@@ -58,7 +58,7 @@ class BaseGraphModel(StepPredictor):
 
         # Specify dimensions of data
         self.num_mesh_nodes, _ = self.get_num_mesh()
-        utils.rank_zero_print(
+        utils.log_on_rank_zero(
             f"Loaded graph with {self.num_grid_nodes + self.num_mesh_nodes} "
             f"nodes ({self.num_grid_nodes} grid, {self.num_mesh_nodes} mesh)"
         )
