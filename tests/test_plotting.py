@@ -9,21 +9,19 @@ import matplotlib
 
 matplotlib.use("Agg")  # non-interactive backend for headless test runs
 
+# Third-party
 import matplotlib.pyplot as plt  # noqa: E402
-import numpy as np
-import pytest
-import torch
-import xarray as xr
-from cartopy import crs as ccrs
+import numpy as np  # noqa: E402
+import pytest  # noqa: E402
+import torch  # noqa: E402
 
 # First-party
-from neural_lam import config as nlconfig
-from neural_lam import vis
-from neural_lam.create_graph import create_graph_from_datastore
-from neural_lam.models.graph_lam import GraphLAM
-from neural_lam.weather_dataset import WeatherDataset
-from tests.conftest import init_datastore_example
-from tests.dummy_datastore import DummyDatastore
+from neural_lam import config as nlconfig  # noqa: E402
+from neural_lam import vis  # noqa: E402
+from neural_lam.create_graph import create_graph_from_datastore  # noqa: E402
+from neural_lam.models.graph_lam import GraphLAM  # noqa: E402
+from neural_lam.weather_dataset import WeatherDataset  # noqa: E402
+from tests.dummy_datastore import DummyDatastore  # noqa: E402
 
 # Create output directory for test figures
 TEST_OUTPUT_DIR = Path(__file__).parent / "test_outputs" / "plotting"
@@ -292,3 +290,41 @@ def test_plot_error_map_deprecated_wrapper():
 
     assert isinstance(fig, plt.Figure)
     plt.close(fig)
+
+
+def test_plot_error_heatmap_respects_explicit_vmin_vmax():
+    errors = torch.tensor([[1.0, 10.0], [2.0, 5.0]])
+    datastore = HeatmapDatastore(n_vars=errors.shape[1])
+
+    fig = vis.plot_error_heatmap(
+        errors, datastore=datastore, vmin=0.0, vmax=200.0
+    )
+    ax = fig.axes[0]
+    image = ax.images[0]
+
+    assert image.norm.vmin == 0.0
+    assert image.norm.vmax == 200.0
+
+    plt.close(fig)
+
+
+def test_plot_error_heatmap_cross_run_same_scale():
+    errors1 = torch.tensor([[1.0, 5.0], [2.0, 10.0]])
+    errors2 = torch.tensor([[50.0, 100.0], [60.0, 120.0]])
+    datastore = HeatmapDatastore(n_vars=errors1.shape[1])
+
+    fig1 = vis.plot_error_heatmap(
+        errors1, datastore=datastore, vmin=0.0, vmax=150.0
+    )
+    fig2 = vis.plot_error_heatmap(
+        errors2, datastore=datastore, vmin=0.0, vmax=150.0
+    )
+
+    image1 = fig1.axes[0].images[0]
+    image2 = fig2.axes[0].images[0]
+
+    assert image1.norm.vmin == image2.norm.vmin == 0.0
+    assert image1.norm.vmax == image2.norm.vmax == 150.0
+
+    plt.close(fig1)
+    plt.close(fig2)
