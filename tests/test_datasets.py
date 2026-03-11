@@ -259,3 +259,31 @@ def test_dataset_length(dataset_config):
     # Check that we can actually get last and first sample
     dataset[0]
     dataset[expected_len - 1]
+
+
+def test_standardization_with_zero_std():
+    """Regression test for https://github.com/mllam/neural-lam/issues/136
+
+    When all values of a field are identical (std = 0), WeatherDataset
+    must not produce NaN via division-by-zero during standardization.
+    """
+    # Third-party
+    import xarray as xr
+
+    std_da = xr.DataArray(
+        np.array([0.0, 1.0, 2.0], dtype=np.float32), dims=["feature"]
+    )
+
+    dataset = WeatherDataset.__new__(WeatherDataset)
+    result = dataset._compute_std_safe(std_da, "state")
+
+    eps = np.finfo(std_da.dtype).eps
+
+    assert (
+        float(result[0]) == eps
+    ), "Zero std was not clamped to machine epsilon"
+    assert float(result[1]) == 1.0
+    assert float(result[2]) == 2.0
+    assert not np.isnan(
+        result.values
+    ).any(), "NaN found after _compute_std_safe"
