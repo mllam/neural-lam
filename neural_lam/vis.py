@@ -1,11 +1,11 @@
+# Standard library
+import warnings
+
 # Third-party
 import matplotlib
 import matplotlib.pyplot as plt
 import numpy as np
 import xarray as xr
-
-# Standard library
-import warnings
 
 # Local
 from . import utils
@@ -73,7 +73,11 @@ def _get_heatmap_var_labels(
 
 @matplotlib.rc_context(utils.fractional_plot_bundle(1))
 def plot_error_heatmap(
-    errors, datastore: BaseRegularGridDatastore, title=None
+    errors,
+    datastore: BaseRegularGridDatastore,
+    title=None,
+    vmin: float | None = None,
+    vmax: float | None = None,
 ):
     """
     Plot a heatmap of errors for state variables across forecast lead times.
@@ -86,6 +90,12 @@ def plot_error_heatmap(
         Datastore providing step length and variable metadata.
     title : str, optional
         Optional title for the figure.
+    vmin : float, optional
+        Minimum value for the colour scale. Defaults to 0 when all errors
+        are non-negative, otherwise the global minimum of the error array.
+    vmax : float, optional
+        Maximum value for the colour scale. Defaults to the global maximum
+        of the error array.
     """
     errors_np = errors.detach().cpu().numpy().T  # (d_f, pred_steps)
     d_f, pred_steps = errors_np.shape
@@ -96,14 +106,17 @@ def plot_error_heatmap(
 
     finite_errors = errors_np[np.isfinite(errors_np)]
     if finite_errors.size == 0:
-        vmin, vmax = 0.0, 1.0
+        computed_vmin, computed_vmax = 0.0, 1.0
     else:
-        vmin = float(finite_errors.min())
-        vmax = float(finite_errors.max())
-        if vmin >= 0.0:
-            vmin = 0.0
-        if np.isclose(vmin, vmax):
-            vmax = vmin + 1.0
+        computed_vmin = float(finite_errors.min())
+        computed_vmax = float(finite_errors.max())
+        if computed_vmin >= 0.0:
+            computed_vmin = 0.0
+        if np.isclose(computed_vmin, computed_vmax):
+            computed_vmax = computed_vmin + 1.0
+
+    final_vmin = vmin if vmin is not None else computed_vmin
+    final_vmax = vmax if vmax is not None else computed_vmax
 
     fig, ax = plt.subplots(
         figsize=(layout["fig_width"], layout["fig_height"]),
@@ -113,8 +126,8 @@ def plot_error_heatmap(
     im = ax.imshow(
         errors_np,
         cmap="viridis",
-        vmin=vmin,
-        vmax=vmax,
+        vmin=final_vmin,
+        vmax=final_vmax,
         interpolation="none",
         aspect="auto",
     )
@@ -129,9 +142,7 @@ def plot_error_heatmap(
             )
             normed = im.norm(error)
             text_color = (
-                "white"
-                if (np.isfinite(normed) and normed < 0.45)
-                else "black"
+                "white" if (np.isfinite(normed) and normed < 0.45) else "black"
             )
             ax.text(
                 i,
@@ -170,7 +181,11 @@ def plot_error_heatmap(
 
 
 def plot_error_map(
-    errors, datastore: BaseRegularGridDatastore, title=None
+    errors,
+    datastore: BaseRegularGridDatastore,
+    title=None,
+    vmin: float | None = None,
+    vmax: float | None = None,
 ):
     """Deprecated: use :func:`plot_error_heatmap` instead."""
     warnings.warn(
@@ -178,7 +193,9 @@ def plot_error_map(
         DeprecationWarning,
         stacklevel=2,
     )
-    return plot_error_heatmap(errors, datastore=datastore, title=title)
+    return plot_error_heatmap(
+        errors, datastore=datastore, title=title, vmin=vmin, vmax=vmax
+    )
 
 
 @matplotlib.rc_context(utils.fractional_plot_bundle(1))
