@@ -21,17 +21,17 @@ from .datastore.base import BaseRegularGridDatastore
 
 def plot_graph(graph, title=None):
     fig, axis = plt.subplots(figsize=(8, 8), dpi=200)  # W,H
-    edge_index = graph.edge_index.clone()
+    edge_index = graph.edge_index
     pos = graph.pos
 
     # Fix for re-indexed edge indices only containing mesh nodes at
     # higher levels in hierarchy
     edge_index = edge_index - edge_index.min()
 
-    is_undirected = pyg.utils.is_undirected(edge_index)
-    if is_undirected:
+    if pyg.utils.is_undirected(edge_index):
         # Keep only 1 direction of edge_index
         edge_index = edge_index[:, edge_index[0] < edge_index[1]]  # (2, M/2)
+    # TODO: indicate direction of directed edges
 
     # Move all to cpu and numpy, compute (in)-degrees
     degrees = (
@@ -40,35 +40,15 @@ def plot_graph(graph, title=None):
     edge_index = edge_index.cpu().numpy()
     pos = pos.cpu().numpy()
 
-    from_pos = pos[edge_index[0]]
-    to_pos = pos[edge_index[1]]
-
-    if is_undirected:
-        # Plot undirected edges as simple line collection
-        edge_lines = np.stack((from_pos, to_pos), axis=1)
-        axis.add_collection(
-            matplotlib.collections.LineCollection(
-                edge_lines, lw=0.4, colors="black", zorder=1
-            )
+    # Plot edges
+    from_pos = pos[edge_index[0]]  # (M/2, 2)
+    to_pos = pos[edge_index[1]]  # (M/2, 2)
+    edge_lines = np.stack((from_pos, to_pos), axis=1)
+    axis.add_collection(
+        matplotlib.collections.LineCollection(
+            edge_lines, lw=0.4, colors="black", zorder=1
         )
-    else:
-        # Plot directed edges with arrowheads
-        from matplotlib.patches import FancyArrowPatch
-
-        for start, end in zip(from_pos, to_pos):
-            # Skip degenerate edges
-            if np.allclose(start, end):
-                continue
-            arrow = FancyArrowPatch(
-                start,
-                end,
-                arrowstyle="->",
-                mutation_scale=4.0,
-                linewidth=0.4,
-                color="black",
-                zorder=1,
-            )
-            axis.add_patch(arrow)
+    )
 
     # Plot nodes
     node_scatter = axis.scatter(
