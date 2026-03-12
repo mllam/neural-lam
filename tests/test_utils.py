@@ -52,3 +52,14 @@ def test_get_integer_time_edge_cases(tdelta, expected):
     timedeltas."""
     assert get_integer_time(tdelta) == expected
 
+
+def test_get_integer_time_large_timedelta_no_overflow():
+    """Extremely large timedeltas should be handled without overflow and return
+    the correct unit (e.g. weeks)."""
+    # 1000 weeks
+    result = get_integer_time(timedelta(weeks=1000))
+    assert result == (1000, "weeks")
+    # Large days that fit in weeks (1400 days = 200 weeks)
+    result = get_integer_time(timedelta(days=1400))
+    assert result == (200, "weeks")
+
