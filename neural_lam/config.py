@@ -181,8 +181,9 @@ def load_config_and_datastore(
     datastore_config_path = (
         Path(config_path).parent / config.datastore.config_path
     )
-    datastore = init_datastore(
-        datastore_kind=config.datastore.kind, config_path=datastore_config_path
-    )
+   datastore_config_path = Path(config.datastore.config_path)
+
+if not datastore_config_path.is_absolute():
+    datastore_config_path = Path(config_path).parent / datastore_config_path
 
     return config, datastore
