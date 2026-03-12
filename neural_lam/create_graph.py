@@ -63,7 +63,7 @@ def plot_graph(graph, title=None):
                 start,
                 end,
                 arrowstyle="->",
-                mutation_scale=4.0,
+                mutation_scale=10.0,
                 linewidth=0.4,
                 color="black",
                 zorder=1,
