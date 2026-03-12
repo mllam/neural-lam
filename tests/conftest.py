@@ -6,6 +6,7 @@ from pathlib import Path
 # Third-party
 import pooch
 import pytest
+import requests
 import yaml
 from pytorch_lightning.utilities import rank_zero_only
 
@@ -94,6 +95,19 @@ def download_meps_example_reduced_dataset():
     return config_path
 
 
+@pytest.fixture(scope="session")
+def meps_dataset():
+    try:
+        config_path = download_meps_example_reduced_dataset()
+    except requests.exceptions.RequestException:
+        pytest.skip(
+            "Skipping MEPS dataset tests because dataset download failed"
+        )
+
+    DATASTORES_EXAMPLES["npyfilesmeps"] = config_path
+    return config_path
+
+
 DATASTORES_EXAMPLES = dict(
     mdp=(
         DATASTORE_EXAMPLES_ROOT_PATH
@@ -101,7 +115,7 @@ DATASTORES_EXAMPLES = dict(
         / "danra_100m_winds"
         / "danra.datastore.yaml"
     ),
-    npyfilesmeps=download_meps_example_reduced_dataset(),
+    npyfilesmeps=None,
     dummydata=None,
 )
 
@@ -109,6 +123,19 @@ DATASTORES[DummyDatastore.SHORT_NAME] = DummyDatastore
 
 
 def init_datastore_example(datastore_kind):
+    if (
+        datastore_kind == "npyfilesmeps"
+        and DATASTORES_EXAMPLES["npyfilesmeps"] is None
+    ):
+        try:
+            DATASTORES_EXAMPLES["npyfilesmeps"] = (
+                download_meps_example_reduced_dataset()
+            )
+        except requests.exceptions.RequestException:
+            pytest.skip(
+                "Skipping MEPS dataset tests because dataset download failed"
+            )
+
     datastore = init_datastore(
         datastore_kind=datastore_kind,
         config_path=DATASTORES_EXAMPLES[datastore_kind],
