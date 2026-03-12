@@ -33,7 +33,7 @@ class DatastoreSelection:
     kind: str
 
     def __post_init__(self):
-        if self.kind not in DATASTORES:
+        if not DATASTORES or self.kind not in DATASTORES:
             raise ValueError(f"Datastore kind {self.kind} is not implemented")
 
     config_path: str
