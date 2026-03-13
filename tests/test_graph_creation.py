@@ -139,3 +139,42 @@ def test_graph_creation_non_square_aspect_ratio():
     # With correct aspect ratio, n_y > n_x, so nodes < n_larger^2.
     n_larger = int(3 ** int(np.log(max(Nx, Ny)) / np.log(3)) / 3)
     assert n_mesh_nodes < n_larger**2
+
+
+def test_graph_creation_multiscale_non_square():
+    """
+    Multi-level rectangular mesh must not crash at reshape.
+    Mesh should also reflect the domain aspect ratio.
+    """
+    Nx, Ny = 100, 600
+    x = np.linspace(0, 1, Nx)
+    y = np.linspace(0, 6, Ny)
+    xx, yy = np.meshgrid(x, y, indexing="ij")
+    xy = np.stack([xx, yy], axis=-1)
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        create_graph(graph_dir_path=tmpdir, xy=xy, n_max_levels=2)
+        mesh_features = torch.load(f"{tmpdir}/mesh_features.pt")
+        n_mesh_nodes = mesh_features[0].shape[0]
+
+    n_larger = int(3 ** int(np.log(max(Nx, Ny)) / np.log(3)) / 3)
+    assert n_mesh_nodes < n_larger**2
+
+
+def test_graph_creation_square_g2m_edges_unchanged():
+    """
+    Square grid g2m edge count must be preserved.
+    Edge count must use the original square formula over rectangular domains.
+    """
+    Nx, Ny = 81, 81
+    x = np.linspace(0, 1, Nx)
+    y = np.linspace(0, 1, Ny)
+    xx, yy = np.meshgrid(x, y, indexing="ij")
+    xy = np.stack([xx, yy], axis=-1)
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        create_graph(graph_dir_path=tmpdir, xy=xy, n_max_levels=1)
+        g2m = torch.load(f"{tmpdir}/g2m_edge_index.pt")
+        assert (
+            g2m.shape[1] == 9009
+        ), f"Square grid g2m edges changed: expected 9009, got {g2m.shape[1]}"
