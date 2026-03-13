@@ -256,17 +256,24 @@ def create_graph(
 
     # multi resolution tree levels
     G = []
-    mesh_dims = []  # for tracking per-level dimensions, used for reshape and dm
+    # for tracking per-level dimensions, used for reshape and dm
+    mesh_dims: list[tuple[int, int]] = []
     for lev in range(1, mesh_levels + 1):
-        n_larger = int(nleaf / (nx**lev))
-        # scale n_x and n_y proportionally to physical domain aspect ratio,
-        # assigning n_larger to whichever direction has greater physical extent
-        if x_extent >= y_extent:
-            n_x = n_larger
-            n_y = max(1, round(n_larger * y_extent / x_extent))
+        if lev == 1:
+            n_larger = int(nleaf / (nx**lev))
+            # scale n_x and n_y proportionally to physical domain aspect ratio,
+            # assign n_larger to whichever direction has greater physical extent
+            if x_extent >= y_extent:
+                n_x = n_larger
+                n_y = max(1, round(n_larger * y_extent / x_extent))
+            else:
+                n_y = n_larger
+                n_x = max(1, round(n_larger * x_extent / y_extent))
         else:
-            n_y = n_larger
-            n_x = max(1, round(n_larger * x_extent / y_extent))
+            # derive from actual slice of previous level
+            n_x_prev, n_y_prev = mesh_dims[lev - 2]
+            n_x = len(range(1, n_x_prev, nx))
+            n_y = len(range(1, n_y_prev, nx))
 
         if (n_y < 3 or n_x < 3) and lev > 1:  # always allow level 1
             mesh_levels = lev - 1
@@ -448,7 +455,16 @@ def create_graph(
     # distance between mesh nodes
     dx = x_extent / mesh_dims[0][0]  # cell width at finest mesh level
     dy = y_extent / mesh_dims[0][1]  # cell height at finest mesh level
-    dm = np.sqrt(dx**2 + dy**2)  # diagonal of mesh cell (coverage radius basis)
+
+    # compare using mesh_dims because dx dy can cause rounding issue
+    if mesh_dims[0][0] == mesh_dims[0][1]:
+        dm = np.sqrt(
+            np.sum((vm.data("pos")[(0, 1, 0)] - vm.data("pos")[(0, 0, 0)]) ** 2)
+        )
+    else:
+        dm = np.sqrt(
+            dx**2 + dy**2
+        )  # diagonal of mesh cell (coverage radius basis)
 
     # grid nodes
     Nx, Ny = xy.shape[:2]
