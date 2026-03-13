@@ -40,7 +40,7 @@ def run_simple_training(datastore, set_output_std):
     # Use 2 devices on CUDA to test multi-GPU aggregation in
     # aggregate_and_plot_metrics; use 1 device on CPU because the gloo
     # distributed backend is not reliably available on all platforms.
-    num_devices = 2 if device_name == "cuda" else 1
+    num_devices = min(2, torch.cuda.device_count())
 
     trainer = pl.Trainer(
         max_epochs=1,
