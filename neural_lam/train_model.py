@@ -24,6 +24,38 @@ MODELS = {
 }
 
 
+def resolve_devices_and_strategy(args_devices, device_name):
+    """Resolve Trainer devices and strategy from CLI args.
+
+    On CPU, Lightning expects ``devices`` as an ``int`` (not a list), and
+    distributed strategies are unnecessary for single-process runs.
+    """
+    if args_devices == ["auto"]:
+        if device_name == "cpu":
+            return 1, "auto"
+        return "auto", "auto"
+
+    try:
+        parsed_devices = [int(i) for i in args_devices]
+    except ValueError as err:
+        raise ValueError(
+            "devices should be 'auto' or a list of integers"
+        ) from err
+
+    if device_name == "cpu":
+        if len(parsed_devices) != 1 or parsed_devices[0] <= 0:
+            raise ValueError(
+                "On CPU, --devices must be a single integer > 0 "
+                "(for example: --devices 1)."
+            )
+        return parsed_devices[0], "auto"
+
+    if len(parsed_devices) > 1:
+        return parsed_devices, "ddp"
+
+    return parsed_devices, "auto"
+
+
 @logger.catch
 def main(input_args=None):
     """Main function for training and evaluating models."""
@@ -290,14 +322,9 @@ def main(input_args=None):
     else:
         device_name = "cpu"
 
-    # Set devices to use
-    if args.devices == ["auto"]:
-        devices = "auto"
-    else:
-        try:
-            devices = [int(i) for i in args.devices]
-        except ValueError:
-            raise ValueError("devices should be 'auto' or a list of integers")
+    devices, strategy = resolve_devices_and_strategy(
+        args.devices, device_name
+    )
 
     # Load model parameters Use new args for model
     ModelClass = MODELS[args.model]
@@ -330,7 +357,7 @@ def main(input_args=None):
     trainer = pl.Trainer(
         max_epochs=args.epochs,
         deterministic=True,
-        strategy="ddp",
+        strategy=strategy,
         accelerator=device_name,
         num_nodes=args.num_nodes,
         devices=devices,

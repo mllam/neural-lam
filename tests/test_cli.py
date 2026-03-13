@@ -53,6 +53,40 @@ def test_wandb_resume_not_exposed():
         )
 
 
+@pytest.mark.parametrize(
+    "args_devices, device_name, expected_devices, expected_strategy",
+    [
+        (["auto"], "cpu", 1, "auto"),
+        (["auto"], "cuda", "auto", "auto"),
+        (["1"], "cpu", 1, "auto"),
+        (["0"], "cuda", [0], "auto"),
+        (["0", "1"], "cuda", [0, 1], "ddp"),
+    ],
+)
+def test_resolve_devices_and_strategy(
+    args_devices, device_name, expected_devices, expected_strategy
+):
+    devices, strategy = neural_lam.train_model.resolve_devices_and_strategy(
+        args_devices, device_name
+    )
+    assert devices == expected_devices
+    assert strategy == expected_strategy
+
+
+@pytest.mark.parametrize(
+    "args_devices",
+    [
+        ["0"],
+        ["1", "2"],
+    ],
+)
+def test_resolve_devices_and_strategy_cpu_rejects_invalid(args_devices):
+    with pytest.raises(ValueError, match="single integer > 0"):
+        neural_lam.train_model.resolve_devices_and_strategy(
+            args_devices, "cpu"
+        )
+
+
 # --- setup_training_logger tests ----------------------------------------------
 
 
