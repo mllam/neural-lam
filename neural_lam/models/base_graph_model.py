@@ -18,20 +18,18 @@ def validate_graph_metadata(graph_ldict, expected_grid_nodes):
 
     for key in required_keys:
         if key not in graph_ldict:
-            raise ValueError(
-                "Invalid graph: missing required tensor " f"'{key}'."
-            )
+            raise ValueError(f"Invalid graph: missing required tensor '{key}'.")
 
-    # Only validate grid nodes if grid_static_features exists
-    if "grid_static_features" in graph_ldict:
-        grid_nodes = graph_ldict["grid_static_features"].shape[0]
+    # Infer grid node count from edge indices
+    g2m_edge_index = graph_ldict["g2m_edge_index"]
+    grid_nodes = int(g2m_edge_index[0].max().item()) + 1
 
-        if grid_nodes != expected_grid_nodes:
-            raise ValueError(
-                "Incompatible graph: expected "
-                f"{expected_grid_nodes} grid nodes "
-                f"but graph contains {grid_nodes}."
-            )
+    if grid_nodes != expected_grid_nodes:
+        raise ValueError(
+            "Incompatible graph: expected "
+            f"{expected_grid_nodes} grid nodes "
+            f"but graph contains {grid_nodes}."
+        )
 
 
 class BaseGraphModel(ARModel):
