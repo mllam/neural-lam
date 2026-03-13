@@ -60,8 +60,6 @@ def test_graph_creation(datastore_name, graph_name):
             ]
         )
 
-    # TODO: check that the number of edges is consistent over the files, for
-    # now we just check the number of features
     d_features = 3
     d_mesh_static = 2
 
@@ -117,3 +115,35 @@ def test_graph_creation(datastore_name, graph_name):
                         assert r.shape[0] == 2  # adjacency matrix uses two rows
                     elif file_id.endswith("_features"):
                         assert r.shape[1] == d_features
+
+        # Ensure edge counts match between *_edge_index.pt and *_features.pt
+        g2m_ei = torch.load(graph_dir_path / "g2m_edge_index.pt")
+        g2m_f = torch.load(graph_dir_path / "g2m_features.pt")
+        assert g2m_ei.shape[1] == g2m_f.shape[0], "g2m edge count mismatch"
+
+        m2g_ei = torch.load(graph_dir_path / "m2g_edge_index.pt")
+        m2g_f = torch.load(graph_dir_path / "m2g_features.pt")
+        assert m2g_ei.shape[1] == m2g_f.shape[0], "m2g edge count mismatch"
+
+        m2m_ei = torch.load(graph_dir_path / "m2m_edge_index.pt")
+        m2m_f = torch.load(graph_dir_path / "m2m_features.pt")
+        assert len(m2m_ei) == len(m2m_f)
+        for i, (ei, f) in enumerate(zip(m2m_ei, m2m_f)):
+            assert ei.shape[1] == f.shape[0], f"m2m level {i} edge count mismatch"
+
+        if hierarchical:
+            up_ei = torch.load(graph_dir_path / "mesh_up_edge_index.pt")
+            up_f = torch.load(graph_dir_path / "mesh_up_features.pt")
+            assert len(up_ei) == len(up_f)
+            for i, (ei, f) in enumerate(zip(up_ei, up_f)):
+                assert ei.shape[1] == f.shape[0], (
+                    f"mesh_up level {i} edge count mismatch"
+                )
+
+            down_ei = torch.load(graph_dir_path / "mesh_down_edge_index.pt")
+            down_f = torch.load(graph_dir_path / "mesh_down_features.pt")
+            assert len(down_ei) == len(down_f)
+            for i, (ei, f) in enumerate(zip(down_ei, down_f)):
+                assert ei.shape[1] == f.shape[0], (
+                    f"mesh_down level {i} edge count mismatch"
+                )
