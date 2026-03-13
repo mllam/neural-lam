@@ -12,6 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Enable `pin_memory` in DataLoaders when GPU is available for faster async CPU-to-GPU data transfers [\#236](https://github.com/mllam/neural-lam/pull/236) @abhaygoudannavar
 
 ### Changed
+- Refactor graph loading: move zero-indexing out of the model and update plotting to prepare using the research-branch graph I/O [\#184](https://github.com/mllam/neural-lam/pull/184) @zweihuehner
 
 - Replace `print()`-based `rank_zero_print` with `loguru` `logger.info()` for structured log-level control ([#33](https://github.com/mllam/neural-lam/issues/33))
 
