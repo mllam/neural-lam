@@ -65,4 +65,4 @@ class CustomMLFlowLogger(pl.loggers.MLFlowLogger):
             mlflow.log_image(img, f"{key}.png")
         except NoCredentialsError:
             logger.error("Error logging image\nSet AWS credentials")
-            sys.exit(1)
+            raise RuntimeError("Error logging image\nSet AWS credentials")
