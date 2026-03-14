@@ -75,7 +75,7 @@ def plot_prediction(
     vrange=None,
 ):
     """
-    Plot example prediction and grond truth.
+    Plot example prediction and ground truth.
 
     Each has shape (N_grid,)
 
