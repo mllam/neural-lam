@@ -15,32 +15,32 @@ end
     Module --> BufferList
 
 subgraph Imports
-    tempfile["tempfile"]
-    pathlib["pathlib"]
-    os["os"]
-    pytorch_lightning["pytorch_lightning"]
+    tueplots["tueplots"]
     loguru["loguru"]
     torch["torch"]
-    subprocess["subprocess"]
-    tueplots["tueplots"]
     warnings["warnings"]
     shutil["shutil"]
-    custom_loggers["custom_loggers"]
+    os["os"]
+    pytorch_lightning["pytorch_lightning"]
     functools["functools"]
+    tempfile["tempfile"]
+    custom_loggers["custom_loggers"]
+    subprocess["subprocess"]
+    pathlib["pathlib"]
 end
 
-    tempfile --> module
-    pathlib --> module
-    os --> module
-    pytorch_lightning --> module
+    tueplots --> module
     loguru --> module
     torch --> module
-    subprocess --> module
-    tueplots --> module
     warnings --> module
     shutil --> module
-    custom_loggers --> module
+    os --> module
+    pytorch_lightning --> module
     functools --> module
+    tempfile --> module
+    custom_loggers --> module
+    subprocess --> module
+    pathlib --> module
     module --> BufferList
 
 subgraph Methods
@@ -60,7 +60,7 @@ classDef method fill:#2d043f,stroke:#7c3aed,stroke-width:1.5px,color:#ede9fe,fon
 classDef callNode fill:#064e3b,stroke:#10b981,stroke-width:1.5px,color:#d1fae5,font-size:16px
 class Module parent
 class BufferList base
-class tempfile,pathlib,os,pytorch_lightning,loguru,torch,subprocess,tueplots,warnings,shutil,custom_loggers,functools import
+class tueplots,loguru,torch,warnings,shutil,os,pytorch_lightning,functools,tempfile,custom_loggers,subprocess,pathlib import
 class BufferList___getitem__,BufferList___len__,BufferList___iter__ method
 
 ```

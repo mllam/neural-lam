@@ -15,20 +15,20 @@ end
     BaseHiGraphModel --> HiLAMParallel
 
 subgraph Imports
-    torch_geometric["torch_geometric"]
-    base_hi_graph_model["base_hi_graph_model"]
     torch["torch"]
-    datastore["datastore"]
-    interaction_net["interaction_net"]
     config["config"]
+    interaction_net["interaction_net"]
+    torch_geometric["torch_geometric"]
+    datastore["datastore"]
+    base_hi_graph_model["base_hi_graph_model"]
 end
 
-    torch_geometric --> module
-    base_hi_graph_model --> module
     torch --> module
-    datastore --> module
-    interaction_net --> module
     config --> module
+    interaction_net --> module
+    torch_geometric --> module
+    datastore --> module
+    base_hi_graph_model --> module
     module --> HiLAMParallel
 
 subgraph Methods
@@ -44,7 +44,7 @@ classDef method fill:#2d043f,stroke:#7c3aed,stroke-width:1.5px,color:#ede9fe,fon
 classDef callNode fill:#064e3b,stroke:#10b981,stroke-width:1.5px,color:#d1fae5,font-size:16px
 class BaseHiGraphModel parent
 class HiLAMParallel base
-class torch_geometric,base_hi_graph_model,torch,datastore,interaction_net,config import
+class torch,config,interaction_net,torch_geometric,datastore,base_hi_graph_model import
 class HiLAMParallel_hi_processor_step method
 
 ```

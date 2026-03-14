@@ -12,30 +12,30 @@ end
 
 
 subgraph Imports
-    lightning_fabric["lightning_fabric"]
     weather_dataset["weather_dataset"]
-    pytorch_lightning["pytorch_lightning"]
-    json["json"]
+    argparse["argparse"]
     loguru["loguru"]
+    models["models"]
     torch["torch"]
     random["random"]
-    time["time"]
     config["config"]
-    argparse["argparse"]
-    models["models"]
+    lightning_fabric["lightning_fabric"]
+    pytorch_lightning["pytorch_lightning"]
+    json["json"]
+    time["time"]
 end
 
-    lightning_fabric --> module
     weather_dataset --> module
-    pytorch_lightning --> module
-    json --> module
+    argparse --> module
     loguru --> module
+    models --> module
     torch --> module
     random --> module
-    time --> module
     config --> module
-    argparse --> module
-    models --> module
+    lightning_fabric --> module
+    pytorch_lightning --> module
+    json --> module
+    time --> module
 
 subgraph Methods
 end
@@ -46,6 +46,6 @@ classDef base fill:#78350f,stroke:#f59e0b,stroke-width:1px,color:#fde68a,font-si
 classDef import fill:#1f2937,stroke:#6b7280,stroke-width:1.5px,color:#e5e7eb,font-size:16px
 classDef method fill:#2d043f,stroke:#7c3aed,stroke-width:1.5px,color:#ede9fe,font-size:16px
 classDef callNode fill:#064e3b,stroke:#10b981,stroke-width:1.5px,color:#d1fae5,font-size:16px
-class lightning_fabric,weather_dataset,pytorch_lightning,json,loguru,torch,random,time,config,argparse,models import
+class weather_dataset,argparse,loguru,models,torch,random,config,lightning_fabric,pytorch_lightning,json,time import
 
 ```
