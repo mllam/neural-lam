@@ -34,6 +34,11 @@ def scan_codebase():
 
                         if isinstance(node, ast.ClassDef):
                             code_symbols.add(node.name)
+                            for base in node.bases:
+                                if isinstance(base, ast.Name):
+                                    code_symbols.add(base.id)
+                                elif isinstance(base, ast.Attribute):
+                                    code_symbols.add(base.attr)
 
                         if isinstance(node, ast.FunctionDef):
                             code_symbols.add(node.name)
