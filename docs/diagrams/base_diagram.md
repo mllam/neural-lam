@@ -19,30 +19,30 @@ end
     BaseDatastore --> BaseRegularGridDatastore
 
 subgraph Imports
-    functools["functools"]
-    collections["collections"]
-    typing["typing"]
     abc["abc"]
-    cartopy["cartopy"]
     pathlib["pathlib"]
-    pandas["pandas"]
-    datetime["datetime"]
     dataclasses["dataclasses"]
-    xarray["xarray"]
+    collections["collections"]
     numpy["numpy"]
+    pandas["pandas"]
+    xarray["xarray"]
+    datetime["datetime"]
+    typing["typing"]
+    functools["functools"]
+    cartopy["cartopy"]
 end
 
-    functools --> module
-    collections --> module
-    typing --> module
     abc --> module
-    cartopy --> module
     pathlib --> module
-    pandas --> module
-    datetime --> module
     dataclasses --> module
-    xarray --> module
+    collections --> module
     numpy --> module
+    pandas --> module
+    xarray --> module
+    datetime --> module
+    typing --> module
+    functools --> module
+    cartopy --> module
     module --> BaseDatastore
     module --> CartesianGridShape
     module --> BaseRegularGridDatastore
@@ -102,7 +102,7 @@ classDef method fill:#2d043f,stroke:#7c3aed,stroke-width:1.5px,color:#ede9fe,fon
 classDef callNode fill:#064e3b,stroke:#10b981,stroke-width:1.5px,color:#d1fae5,font-size:16px
 class BaseDatastore,ABC parent
 class BaseDatastore,CartesianGridShape,BaseRegularGridDatastore base
-class functools,collections,typing,abc,cartopy,pathlib,pandas,datetime,dataclasses,xarray,numpy import
+class abc,pathlib,dataclasses,collections,numpy,pandas,xarray,datetime,typing,functools,cartopy import
 class BaseDatastore_root_path,BaseDatastore_config,BaseDatastore_step_length,BaseDatastore_get_vars_units,BaseDatastore_get_vars_names,BaseDatastore_get_vars_long_names,BaseDatastore_get_num_data_vars,BaseDatastore_get_standardization_dataarray,BaseDatastore__standardize_datarray,BaseDatastore_get_dataarray,BaseDatastore_boundary_mask,BaseDatastore_get_xy,BaseDatastore_coords_projection,BaseDatastore_get_xy_extent,BaseDatastore_num_grid_points,BaseDatastore_state_feature_weights_values,BaseDatastore_expected_dim_order,BaseRegularGridDatastore_grid_shape_state,BaseRegularGridDatastore_get_xy,BaseRegularGridDatastore_unstack_grid_coords,BaseRegularGridDatastore_stack_grid_coords,BaseRegularGridDatastore_num_grid_points method
 
 ```

@@ -15,36 +15,36 @@ end
     BaseRegularGridDatastore --> NpyFilesDatastoreMEPS
 
 subgraph Imports
-    functools["functools"]
+    base["base"]
     re["re"]
-    torch["torch"]
-    typing["typing"]
-    config["config"]
-    numpy["numpy"]
-    warnings["warnings"]
     pathlib["pathlib"]
-    cartopy["cartopy"]
+    torch["torch"]
+    warnings["warnings"]
+    numpy["numpy"]
+    dask["dask"]
+    xarray["xarray"]
+    config["config"]
     parse["parse"]
     datetime["datetime"]
-    base["base"]
-    xarray["xarray"]
-    dask["dask"]
+    typing["typing"]
+    functools["functools"]
+    cartopy["cartopy"]
 end
 
-    functools --> module
+    base --> module
     re --> module
-    torch --> module
-    typing --> module
-    config --> module
-    numpy --> module
-    warnings --> module
     pathlib --> module
-    cartopy --> module
+    torch --> module
+    warnings --> module
+    numpy --> module
+    dask --> module
+    xarray --> module
+    config --> module
     parse --> module
     datetime --> module
-    base --> module
-    xarray --> module
-    dask --> module
+    typing --> module
+    functools --> module
+    cartopy --> module
     module --> NpyFilesDatastoreMEPS
 
 subgraph Methods
@@ -90,7 +90,7 @@ classDef method fill:#2d043f,stroke:#7c3aed,stroke-width:1.5px,color:#ede9fe,fon
 classDef callNode fill:#064e3b,stroke:#10b981,stroke-width:1.5px,color:#d1fae5,font-size:16px
 class BaseRegularGridDatastore parent
 class NpyFilesDatastoreMEPS base
-class functools,re,torch,typing,config,numpy,warnings,pathlib,cartopy,parse,datetime,base,xarray,dask import
+class base,re,pathlib,torch,warnings,numpy,dask,xarray,config,parse,datetime,typing,functools,cartopy import
 class NpyFilesDatastoreMEPS_root_path,NpyFilesDatastoreMEPS_config,NpyFilesDatastoreMEPS_get_dataarray,NpyFilesDatastoreMEPS__get_single_timeseries_dataarray,NpyFilesDatastoreMEPS__get_analysis_times,NpyFilesDatastoreMEPS__calc_datetime_forcing_features,NpyFilesDatastoreMEPS_get_vars_units,NpyFilesDatastoreMEPS_get_vars_names,NpyFilesDatastoreMEPS_get_vars_long_names,NpyFilesDatastoreMEPS_get_num_data_vars,NpyFilesDatastoreMEPS_get_xy,NpyFilesDatastoreMEPS_step_length,NpyFilesDatastoreMEPS_grid_shape_state,NpyFilesDatastoreMEPS_boundary_mask,NpyFilesDatastoreMEPS_get_standardization_dataarray,NpyFilesDatastoreMEPS_coords_projection method
 
 ```

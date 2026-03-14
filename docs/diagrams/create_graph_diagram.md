@@ -12,31 +12,31 @@ end
 
 
 subgraph Imports
-    torch["torch"]
-    typing["typing"]
     torch_geometric["torch_geometric"]
-    os["os"]
-    scipy["scipy"]
-    argparse["argparse"]
-    config["config"]
-    datastore["datastore"]
-    networkx["networkx"]
-    loguru["loguru"]
     matplotlib["matplotlib"]
+    os["os"]
+    loguru["loguru"]
+    torch["torch"]
+    datastore["datastore"]
+    config["config"]
+    argparse["argparse"]
+    networkx["networkx"]
+    typing["typing"]
+    scipy["scipy"]
     numpy["numpy"]
 end
 
-    torch --> module
-    typing --> module
     torch_geometric --> module
-    os --> module
-    scipy --> module
-    argparse --> module
-    config --> module
-    datastore --> module
-    networkx --> module
-    loguru --> module
     matplotlib --> module
+    os --> module
+    loguru --> module
+    torch --> module
+    datastore --> module
+    config --> module
+    argparse --> module
+    networkx --> module
+    typing --> module
+    scipy --> module
     numpy --> module
 
 subgraph Methods
@@ -48,6 +48,6 @@ classDef base fill:#78350f,stroke:#f59e0b,stroke-width:1px,color:#fde68a,font-si
 classDef import fill:#1f2937,stroke:#6b7280,stroke-width:1.5px,color:#e5e7eb,font-size:16px
 classDef method fill:#2d043f,stroke:#7c3aed,stroke-width:1.5px,color:#ede9fe,font-size:16px
 classDef callNode fill:#064e3b,stroke:#10b981,stroke-width:1.5px,color:#d1fae5,font-size:16px
-class torch,typing,torch_geometric,os,scipy,argparse,config,datastore,networkx,loguru,matplotlib,numpy import
+class torch_geometric,matplotlib,os,loguru,torch,datastore,config,argparse,networkx,typing,scipy,numpy import
 
 ```

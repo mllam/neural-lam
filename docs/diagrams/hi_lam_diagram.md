@@ -16,17 +16,17 @@ end
 
 subgraph Imports
     base_hi_graph_model["base_hi_graph_model"]
-    config["config"]
-    interaction_net["interaction_net"]
-    datastore["datastore"]
     torch["torch"]
+    datastore["datastore"]
+    interaction_net["interaction_net"]
+    config["config"]
 end
 
     base_hi_graph_model --> module
-    config --> module
-    interaction_net --> module
-    datastore --> module
     torch --> module
+    datastore --> module
+    interaction_net --> module
+    config --> module
     module --> HiLAM
 
 subgraph Methods
@@ -52,7 +52,7 @@ classDef method fill:#2d043f,stroke:#7c3aed,stroke-width:1.5px,color:#ede9fe,fon
 classDef callNode fill:#064e3b,stroke:#10b981,stroke-width:1.5px,color:#d1fae5,font-size:16px
 class BaseHiGraphModel parent
 class HiLAM base
-class base_hi_graph_model,config,interaction_net,datastore,torch import
+class base_hi_graph_model,torch,datastore,interaction_net,config import
 class HiLAM_make_same_gnns,HiLAM_make_up_gnns,HiLAM_make_down_gnns,HiLAM_mesh_down_step,HiLAM_mesh_up_step,HiLAM_hi_processor_step method
 
 ```

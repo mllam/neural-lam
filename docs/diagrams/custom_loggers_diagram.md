@@ -16,19 +16,19 @@ end
 
 subgraph Imports
     botocore["botocore"]
-    mlflow["mlflow"]
-    sys["sys"]
     PIL["PIL"]
-    loguru["loguru"]
     pytorch_lightning["pytorch_lightning"]
+    mlflow["mlflow"]
+    loguru["loguru"]
+    sys["sys"]
 end
 
     botocore --> module
-    mlflow --> module
-    sys --> module
     PIL --> module
-    loguru --> module
     pytorch_lightning --> module
+    mlflow --> module
+    loguru --> module
+    sys --> module
     module --> CustomMLFlowLogger
 
 subgraph Methods
@@ -46,7 +46,7 @@ classDef method fill:#2d043f,stroke:#7c3aed,stroke-width:1.5px,color:#ede9fe,fon
 classDef callNode fill:#064e3b,stroke:#10b981,stroke-width:1.5px,color:#d1fae5,font-size:16px
 class MLFlowLogger parent
 class CustomMLFlowLogger base
-class botocore,mlflow,sys,PIL,loguru,pytorch_lightning import
+class botocore,PIL,pytorch_lightning,mlflow,loguru,sys import
 class CustomMLFlowLogger_save_dir,CustomMLFlowLogger_log_image method
 
 ```
