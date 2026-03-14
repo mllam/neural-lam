@@ -1,29 +1,29 @@
+# Standard library
 import ast
 import os
 
-
 repo_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-folders_to_scan = [
-    os.path.join(repo_root, "neural_lam")
-]
+folders_to_scan = [os.path.join(repo_root, "neural_lam")]
 
 diagrams_folder = os.path.join(repo_root, "docs", "diagrams")
 os.makedirs(diagrams_folder, exist_ok=True)
 
 exclude_dirs = {"venv", "__pycache__", "tests", "utils"}
-exclude_files = {"dig_generator.py", "dig_validator.py","__init__.py"}
+exclude_files = {"dig_generator.py", "dig_validator.py", "__init__.py"}
+
 
 def diagram_changed(path, content):
     """Write diagram to file only if content has changed."""
     if os.path.exists(path):
         with open(path, "r", encoding="utf-8") as f:
             if f.read() == content:
-                return  
+                return
     with open(path, "w", encoding="utf-8") as f:
         f.write(content)
 
+
 def parse_file(filepath):
-    """Parse a single Python file and extract imports, classes, inheritance, methods, and encode/decode calls."""
+    """Parse a Python file and extract structure."""
     module_name = os.path.splitext(os.path.basename(filepath))[0]
 
     imports = set()
@@ -48,12 +48,10 @@ def parse_file(filepath):
             if node.module:
                 imports.add(node.module.split(".")[0])
 
-
         elif isinstance(node, ast.ClassDef):
             class_name = node.name
             classes.append(class_name)
             methods[class_name] = []
-
 
             for base in node.bases:
                 if isinstance(base, ast.Name):
@@ -61,12 +59,13 @@ def parse_file(filepath):
                 elif isinstance(base, ast.Attribute):
                     inheritance.append((class_name, base.attr))
 
-
             for item in node.body:
-                if isinstance(item, ast.FunctionDef) and item.name != "__init__":
+                if (
+                    isinstance(item, ast.FunctionDef)
+                    and item.name != "__init__"
+                ):
                     method_name = item.name
                     methods[class_name].append(method_name)
-
 
                     calls_key = f"{class_name}_{method_name}"
                     calls[calls_key] = []
@@ -81,9 +80,14 @@ def parse_file(filepath):
 
     return module_name, imports, classes, inheritance, methods, calls
 
-def generate_mermaid(module_name, imports, classes, inheritance, methods, calls):
+
+def generate_mermaid(
+    module_name, imports, classes, inheritance, methods, calls
+):
     """Generate Mermaid diagram code based on extracted data."""
-    diagram = "%%{init: {'flowchart': {'nodeSpacing': 60, 'rankSpacing': 80}}}%%\n"
+    diagram = (
+        "%%{init: {'flowchart': {'nodeSpacing': 60, 'rankSpacing': 80}}}%%\n"
+    )
     diagram += "flowchart TD\n\n"
 
     # Module node
@@ -140,24 +144,30 @@ def generate_mermaid(module_name, imports, classes, inheritance, methods, calls)
     all_calls = []
     for method_node, call_list in calls.items():
         for call_name in call_list:
-            safe_name = call_name.replace(".", "_").replace("(", "").replace(")", "")
+            safe_name = (
+                call_name.replace(".", "_").replace("(", "").replace(")", "")
+            )
             node_name = f"{method_node}_{safe_name}"
             diagram += f"    {method_node} --> {node_name}\n"
             all_calls.append(node_name)
-
 
     if all_calls:
         diagram += "class " + ",".join(all_calls) + " callNode\n"
 
     # Dark-mode styling
-    diagram += """
-classDef parent fill:#0f172a,stroke:#3b82f6,stroke-width:2px,color:#f1f5f9,font-size:16px
-classDef base fill:#78350f,stroke:#f59e0b,stroke-width:1px,color:#fde68a,font-size:16px
-classDef import fill:#1f2937,stroke:#6b7280,stroke-width:1.5px,color:#e5e7eb,font-size:16px
-classDef method fill:#2d043f,stroke:#7c3aed,stroke-width:1.5px,color:#ede9fe,font-size:16px
-classDef callNode fill:#064e3b,stroke:#10b981,stroke-width:1.5px,color:#d1fae5,font-size:16px
-"""
-
+    styles = [
+        "classDef parent fill:#0f172a,stroke:#3b82f6,"
+        "stroke-width:2px,color:#f1f5f9,font-size:16px",
+        "classDef base fill:#78350f,stroke:#f59e0b,"
+        "stroke-width:1px,color:#fde68a,font-size:16px",
+        "classDef import fill:#1f2937,stroke:#6b7280,"
+        "stroke-width:1.5px,color:#e5e7eb,font-size:16px",
+        "classDef method fill:#2d043f,stroke:#7c3aed,"
+        "stroke-width:1.5px,color:#ede9fe,font-size:16px",
+        "classDef callNode fill:#064e3b,stroke:#10b981,"
+        "stroke-width:1.5px,color:#d1fae5,font-size:16px",
+    ]
+    diagram += "\n" + "\n".join(styles) + "\n"
 
     if parents:
         diagram += "class " + ",".join(parents) + " parent\n"
@@ -186,10 +196,18 @@ for folder_to_scan in folders_to_scan:
                 found_files += 1
                 filepath = os.path.join(root, file)
                 print(f"Found Python file: {filepath}")
-                module_name, imports, classes, inheritance, methods, calls = parse_file(filepath)
-                mermaid = generate_mermaid(module_name, imports, classes, inheritance, methods, calls)
-                output_filename = os.path.join(diagrams_folder, f"{module_name}_diagram.md")
-                diagram_changed(output_filename, "```mermaid\n" + mermaid + "\n```")
+                module_name, imports, classes, inheritance, methods, calls = (
+                    parse_file(filepath)
+                )
+                mermaid = generate_mermaid(
+                    module_name, imports, classes, inheritance, methods, calls
+                )
+                output_filename = os.path.join(
+                    diagrams_folder, f"{module_name}_diagram.md"
+                )
+                diagram_changed(
+                    output_filename, "```mermaid\n" + mermaid + "\n```"
+                )
                 print(f"Diagram generated: {output_filename}")
 
 if found_files == 0:
