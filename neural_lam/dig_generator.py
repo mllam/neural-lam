@@ -206,7 +206,7 @@ for folder_to_scan in folders_to_scan:
                     diagrams_folder, f"{module_name}_diagram.md"
                 )
                 diagram_changed(
-                    output_filename, "```mermaid\n" + mermaid + "\n```"
+                    output_filename, "```mermaid\n" + mermaid + "\n```\n"
                 )
                 print(f"Diagram generated: {output_filename}")
 
