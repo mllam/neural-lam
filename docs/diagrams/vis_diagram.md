@@ -12,16 +12,16 @@ end
 
 
 subgraph Imports
-    datastore["datastore"]
-    matplotlib["matplotlib"]
     numpy["numpy"]
     xarray["xarray"]
+    datastore["datastore"]
+    matplotlib["matplotlib"]
 end
 
-    datastore --> module
-    matplotlib --> module
     numpy --> module
     xarray --> module
+    datastore --> module
+    matplotlib --> module
 
 subgraph Methods
 end
@@ -32,6 +32,6 @@ classDef base fill:#78350f,stroke:#f59e0b,stroke-width:1px,color:#fde68a,font-si
 classDef import fill:#1f2937,stroke:#6b7280,stroke-width:1.5px,color:#e5e7eb,font-size:16px
 classDef method fill:#2d043f,stroke:#7c3aed,stroke-width:1.5px,color:#ede9fe,font-size:16px
 classDef callNode fill:#064e3b,stroke:#10b981,stroke-width:1.5px,color:#d1fae5,font-size:16px
-class datastore,matplotlib,numpy,xarray import
+class numpy,xarray,datastore,matplotlib import
 
 ```

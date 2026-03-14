@@ -5,8 +5,8 @@ flowchart TD
 module["interaction_net"]
 
 subgraph Parent_Class
-    MessagePassing["MessagePassing"]
     Module["Module"]
+    MessagePassing["MessagePassing"]
 end
 
 subgraph Base_Class
@@ -44,7 +44,7 @@ classDef base fill:#78350f,stroke:#f59e0b,stroke-width:1px,color:#fde68a,font-si
 classDef import fill:#1f2937,stroke:#6b7280,stroke-width:1.5px,color:#e5e7eb,font-size:16px
 classDef method fill:#2d043f,stroke:#7c3aed,stroke-width:1.5px,color:#ede9fe,font-size:16px
 classDef callNode fill:#064e3b,stroke:#10b981,stroke-width:1.5px,color:#d1fae5,font-size:16px
-class MessagePassing,Module parent
+class Module,MessagePassing parent
 class InteractionNet,SplitMLPs base
 class torch,torch_geometric import
 class InteractionNet_forward,InteractionNet_message,InteractionNet_aggregate,SplitMLPs_forward method
