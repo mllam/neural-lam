@@ -533,7 +533,7 @@ class NpyFilesDatastoreMEPS(BaseRegularGridDatastore):
 
         """
         pattern = re.sub(r"{analysis_time:[^}]*}", "*", STATE_FILENAME_FORMAT)
-        pattern = re.sub(r"{member_id:[^}]*}", f"{0:03d}", pattern)
+        pattern = re.sub(r"{member_id:[^}]*}", "*", pattern)
 
         sample_dir = self.root_path / "samples" / split
         sample_files = sample_dir.glob(pattern)
@@ -547,7 +547,7 @@ class NpyFilesDatastoreMEPS(BaseRegularGridDatastore):
                 f"No files found in {sample_dir} with pattern {pattern}"
             )
 
-        return times
+        return sorted(set(times))
 
     def _calc_datetime_forcing_features(self, da_time: xr.DataArray):
         da_hour_angle = da_time.dt.hour / 12 * np.pi
