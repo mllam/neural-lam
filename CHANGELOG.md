@@ -19,6 +19,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - Initialize `da_forcing_mean` and `da_forcing_std` to `None` when forcing data is absent, fixing `AttributeError` in `WeatherDataset` with `standardize=True` [\#369](https://github.com/mllam/neural-lam/issues/369) @Sir-Sloth-The-Lazy
+- Fix duplicate analysis times in `NpyFilesDatastoreMEPS._get_analysis_times` by removing the redundant `set()` deduplication (duplicates are already prevented by the code) [\#386](https://github.com/mllam/neural-lam/pull/386) @Gopisokk
+
 - Replace `shell=True` subprocess call in `compute_standardization_stats.py` with a safe argument list and Python-side hostname parsing to prevent command injection via `SLURM_JOB_NODELIST` [\#264](https://github.com/mllam/neural-lam/pull/264) @ashum9
 - Avoid NaN when standardizing fields with zero std [#189](https://github.com/mllam/neural-lam/pull/189) @varunsiravuri
 
@@ -44,6 +46,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Fix Slack domain link [\#288](https://github.com/mllam/neural-lam/pull/288) @sadamov
 
 ### Fixed
+
+- Fix duplicate analysis times in `NpyFilesDatastoreMEPS._get_analysis_times` by removing the redundant `set()` deduplication (duplicates are already prevented by the code) [\#386](https://github.com/mllam/neural-lam/pull/386) @Gopisokk
 
 - Infer spatial coordinate names for MDPDatastore (rather than assuming names `x` and `y`), allows for e.g. lat/lon regular grids [\#169](https://github.com/mllam/neural-lam/pull/169) @leifdenby
 
@@ -73,6 +77,8 @@ This release contains maintenance and fixes, preventing some unexpected crashes 
 - Add support for any forecast step size(`step_length`) [\#172](https://github.com/mllam/neural-lam/pull/172) @observingClouds
 
 ### Fixed
+
+- Fix duplicate analysis times in `NpyFilesDatastoreMEPS._get_analysis_times` by removing the redundant `set()` deduplication (duplicates are already prevented by the code) [\#386](https://github.com/mllam/neural-lam/pull/386) @Gopisokk
 
 - Change default logging argument to prevent crash when running eval
 [\#145](https://github.com/mllam/neural-lam/pull/145) @joeloskarsson
@@ -172,6 +178,8 @@ This release introduces Datastores to represent input data from different source
 - Implement standardization of static features when loaded in ARModel [\#96](https://github.com/mllam/neural-lam/pull/96) @joeloskarsson
 
 ### Fixed
+
+- Fix duplicate analysis times in `NpyFilesDatastoreMEPS._get_analysis_times` by removing the redundant `set()` deduplication (duplicates are already prevented by the code) [\#386](https://github.com/mllam/neural-lam/pull/386) @Gopisokk
 
 - Fix wandb environment variable disabling wandb during tests. Now correctly uses WANDB_MODE=disabled. [\#94](https://github.com/mllam/neural-lam/pull/94) @joeloskarsson
 
