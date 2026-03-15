@@ -47,8 +47,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- Fix duplicate analysis times in `NpyFilesDatastoreMEPS._get_analysis_times` by removing the redundant `set()` deduplication (duplicates are already prevented by the code) [\#386](https://github.com/mllam/neural-lam/pull/386) @Gopisokk
-
 - Infer spatial coordinate names for MDPDatastore (rather than assuming names `x` and `y`), allows for e.g. lat/lon regular grids [\#169](https://github.com/mllam/neural-lam/pull/169) @leifdenby
 
 ### Maintenance
