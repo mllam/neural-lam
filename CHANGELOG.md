@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- Move data normalization from CPU (Dataset) to GPU (LightningModule) using `on_after_batch_transfer()` hook for improved performance and multi-GPU compatibility [\#239](https://github.com/mllam/neural-lam/pull/XXX) @Sharkyii
+- Move data normalization from CPU (Dataset) to GPU (LightningModule) using `on_after_batch_transfer()` hook for improved performance and multi-GPU compatibility [\#239](https://github.com/mllam/neural-lam/pull/239) @Sharkyii
 
 ### Added
 
