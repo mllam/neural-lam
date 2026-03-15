@@ -146,6 +146,15 @@ class ARModel(pl.LightningModule):
         if self.output_std:
             self.test_metrics["output_std"] = []  # Treat as metric
 
+        # Number of ensemble members to generate during test/inference.
+        # When > 1 the batch dimension is broadcast M times so that
+        # each autoregressive rollout produces a different sample
+        # (requires a stochastic predict_step, e.g. diffusion-based model).
+        self.ensemble_members = int(args.ensemble_members)
+        if self.ensemble_members > 1:
+            # Store ensemble CRPS per variable during evaluation
+            self.test_metrics["crps_ensemble"] = []
+
         # For making restoring of optimizer state optional
         self.restore_opt = args.restore_opt
 
@@ -229,11 +238,29 @@ class ARModel(pl.LightningModule):
 
     def unroll_prediction(self, init_states, forcing_features, true_states):
         """
-        Roll out prediction taking multiple autoregressive steps with model
-        init_states: (B, 2, num_grid_nodes, d_f) forcing_features: (B,
-        pred_steps, num_grid_nodes, d_static_f) true_states: (B, pred_steps,
-        num_grid_nodes, d_f)
+        Roll out prediction taking multiple autoregressive steps with model.
+        When self.ensemble_members > 1, the batch dimension B is broadcast to
+        B * M so each of the M rollouts can diverge (e.g. via stochastic
+        predict_step in a diffusion/flow model).  The M dimension is then
+        folded back into the returned tensors.
+
+        init_states:      (B, 2, num_grid_nodes, d_f)
+        forcing_features: (B, pred_steps, num_grid_nodes, d_static_f)
+        true_states:      (B, pred_steps, num_grid_nodes, d_f)
+
+        Returns:
+        prediction:  (B, pred_steps, num_grid_nodes, d_f) for M==1, or
+                     (B, M, pred_steps, num_grid_nodes, d_f) for M>1
+        pred_std:    same leading dims as prediction, or (d_f,)
         """
+        M = self.ensemble_members
+        if M > 1:
+            # Expand batch dimension: (B, ...) -> (B*M, ...)
+            B = init_states.shape[0]
+            init_states = init_states.repeat_interleave(M, dim=0)
+            forcing_features = forcing_features.repeat_interleave(M, dim=0)
+            true_states = true_states.repeat_interleave(M, dim=0)
+
         prev_prev_state = init_states[:, 0]
         prev_state = init_states[:, 1]
         prediction_list = []
@@ -247,8 +274,7 @@ class ARModel(pl.LightningModule):
             pred_state, pred_std = self.predict_step(
                 prev_state, prev_prev_state, forcing
             )
-            # state: (B, num_grid_nodes, d_f) pred_std: (B, num_grid_nodes,
-            # d_f) or None
+            # state: (B*M, num_grid_nodes, d_f)  pred_std: same or None
 
             # Overwrite border with true state
             new_state = (
@@ -266,13 +292,20 @@ class ARModel(pl.LightningModule):
 
         prediction = torch.stack(
             prediction_list, dim=1
-        )  # (B, pred_steps, num_grid_nodes, d_f)
+        )  # (B*M, pred_steps, num_grid_nodes, d_f)
         if self.output_std:
             pred_std = torch.stack(
                 pred_std_list, dim=1
-            )  # (B, pred_steps, num_grid_nodes, d_f)
+            )  # (B*M, pred_steps, num_grid_nodes, d_f)
         else:
             pred_std = self.per_var_std  # (d_f,)
+
+        if M > 1:
+            # Reshape (B*M, pred_steps, N, d_f) -> (B, M, pred_steps, N, d_f)
+            pred_shape = (B, M) + prediction.shape[1:]
+            prediction = prediction.view(pred_shape)
+            if self.output_std:
+                pred_std = pred_std.view(pred_shape)
 
         return prediction, pred_std
 
@@ -417,6 +450,29 @@ class ARModel(pl.LightningModule):
         # Compute all evaluation metrics for error maps Note: explicitly list
         # metrics here, as test_metrics can contain additional ones, computed
         # differently, but that should be aggregated on_test_epoch_end
+
+        if self.ensemble_members > 1:
+            # Ensemble mode: prediction has shape
+            # (B, M, pred_steps, num_grid_nodes, d_f).
+            # Compute ensemble CRPS and ensemble-mean deterministic metrics.
+            ensemble_prediction = prediction  # (B, M, pred_steps, N, d_f)
+
+            # Ensemble CRPS: metric expects (..., M, N, d_state) so we
+            # move pred_steps into the batch dims: (B, pred_steps, M, N, d_f)
+            ens_for_crps = ensemble_prediction.permute(
+                0, 2, 1, 3, 4
+            )  # (B, pred_steps, M, N, d_f)
+            batch_crps = metrics.crps_ensemble(
+                ens_for_crps,
+                target,
+                mask=self.interior_mask_bool,
+                sum_vars=False,
+            )  # (B, pred_steps, d_f)
+            self.test_metrics["crps_ensemble"].append(batch_crps)
+
+            # Use ensemble mean for deterministic metrics
+            prediction = ensemble_prediction.mean(dim=1)  # (B, pred_steps, N, d_f)
+
         for metric_name in ("mse", "mae"):
             metric_func = metrics.get_metric(metric_name)
             batch_metric_vals = metric_func(

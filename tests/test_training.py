@@ -90,6 +90,7 @@ def run_simple_training(datastore, set_output_std):
         metrics_watch = []
         num_past_forcing_steps = 1
         num_future_forcing_steps = 1
+        ensemble_members = 1
 
     model_args = ModelArgs()
 
