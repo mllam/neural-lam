@@ -76,8 +76,6 @@ This release contains maintenance and fixes, preventing some unexpected crashes 
 
 ### Fixed
 
-- Fix duplicate analysis times in `NpyFilesDatastoreMEPS._get_analysis_times` by removing the redundant `set()` deduplication (duplicates are already prevented by the code) [\#386](https://github.com/mllam/neural-lam/pull/386) @Gopisokk
-
 - Change default logging argument to prevent crash when running eval
 [\#145](https://github.com/mllam/neural-lam/pull/145) @joeloskarsson
 
@@ -176,8 +174,6 @@ This release introduces Datastores to represent input data from different source
 - Implement standardization of static features when loaded in ARModel [\#96](https://github.com/mllam/neural-lam/pull/96) @joeloskarsson
 
 ### Fixed
-
-- Fix duplicate analysis times in `NpyFilesDatastoreMEPS._get_analysis_times` by removing the redundant `set()` deduplication (duplicates are already prevented by the code) [\#386](https://github.com/mllam/neural-lam/pull/386) @Gopisokk
 
 - Fix wandb environment variable disabling wandb during tests. Now correctly uses WANDB_MODE=disabled. [\#94](https://github.com/mllam/neural-lam/pull/94) @joeloskarsson
 
