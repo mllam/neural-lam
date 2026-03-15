@@ -98,35 +98,38 @@ class WeatherDataset(torch.utils.data.Dataset):
         # TODO: This will become part of ar_model.py soon!
         self.standardize = standardize
         if self.standardize:
-            self.ds_state_stats = self.datastore.get_standardization_dataarray(
-                category="state"
-            )
+            try:
+                self.ds_state_stats = self.datastore.get_standardization_dataarray(
+                    category="state"
+                )
 
-            self.da_state_mean = self.ds_state_stats.state_mean
-            self.da_state_std = self.ds_state_stats.state_std
+                self.da_state_mean = self.ds_state_stats.state_mean
+                self.da_state_std = self.ds_state_stats.state_std
 
-            if self.da_forcing is not None:
-                self.ds_forcing_stats = (
-                    self.datastore.get_standardization_dataarray(
-                        category="forcing"
+                if self.da_forcing is not None:
+                    self.ds_forcing_stats = (
+                        self.datastore.get_standardization_dataarray(
+                            category="forcing"
+                        )
                     )
-                )
-                self.da_forcing_mean = self.ds_forcing_stats.forcing_mean
-                self.da_forcing_std = self.ds_forcing_stats.forcing_std
-            else:
-                self.da_forcing_mean = None
-                self.da_forcing_std = None
+                    self.da_forcing_mean = self.ds_forcing_stats.forcing_mean
+                    self.da_forcing_std = self.ds_forcing_stats.forcing_std
+                else:
+                    self.da_forcing_mean = None
+                    self.da_forcing_std = None
 
-            self.state_std_safe = self._compute_std_safe(
-                self.da_state_std, "state"
-            )
-
-            if self.da_forcing_std is not None:
-                self.forcing_std_safe = self._compute_std_safe(
-                    self.da_forcing_std, "forcing"
+                self.state_std_safe = self._compute_std_safe(
+                    self.da_state_std, "state"
                 )
-            else:
-                self.forcing_std_safe = None
+
+                if self.da_forcing_std is not None:
+                    self.forcing_std_safe = self._compute_std_safe(
+                        self.da_forcing_std, "forcing"
+                    )
+                else:
+                    self.forcing_std_safe = None
+            except NotImplementedError:
+                self.standardize = False
 
     def _compute_std_safe(self, std: xr.DataArray, feature: str):
         eps = np.finfo(std.dtype).eps
