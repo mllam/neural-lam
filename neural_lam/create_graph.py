@@ -21,7 +21,7 @@ from .datastore.base import BaseRegularGridDatastore
 
 def plot_graph(graph, title=None):
     fig, axis = plt.subplots(figsize=(8, 8), dpi=200)  # W,H
-    edge_index = graph.edge_index.clone()
+    edge_index = graph.edge_index
     pos = graph.pos
 
     # Fix for re-indexed edge indices only containing mesh nodes at
@@ -52,23 +52,24 @@ def plot_graph(graph, title=None):
             )
         )
     else:
-        # Plot directed edges with arrowheads
-        from matplotlib.patches import FancyArrowPatch
-
-        for start, end in zip(from_pos, to_pos):
-            # Skip degenerate edges
-            if np.allclose(start, end):
-                continue
-            arrow = FancyArrowPatch(
-                start,
-                end,
-                arrowstyle="->",
-                mutation_scale=10.0,
-                linewidth=0.4,
-                color="black",
-                zorder=1,
-            )
-            axis.add_patch(arrow)
+        # Plot directed edges as vectorised quiver arrows
+        dx = to_pos[:, 0] - from_pos[:, 0]
+        dy = to_pos[:, 1] - from_pos[:, 1]
+        valid = np.hypot(dx, dy) > 0
+        src = from_pos[valid]
+        dx, dy = dx[valid], dy[valid]
+        axis.quiver(
+            src[:, 0],
+            src[:, 1],
+            dx,
+            dy,
+            angles="xy",
+            scale_units="xy",
+            scale=1,
+            width=0.002,
+            color="black",
+            zorder=1,
+        )
 
     # Plot nodes
     node_scatter = axis.scatter(
