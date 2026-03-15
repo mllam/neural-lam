@@ -671,22 +671,6 @@ class ARModel(pl.LightningModule):
             for key, value in log_dict.items():
                 if isinstance(value, plt.Figure):
                     # For other loggers than wandb, add epoch to key.
-<<<<<<< HEAD
-                    # Wandb can log multiple images to the same key,
-                    # while other loggers, such as MLFlow, need unique
-                    # keys for each image.
-                    log_key = key
-                    if not isinstance(
-                        self.logger, pl.loggers.WandbLogger
-                    ):
-                        log_key = f"{key}-{current_epoch}"
-
-                    if hasattr(self.logger, "log_image"):
-                        self.logger.log_image(
-                            key=log_key, images=[value]
-                        )
-                elif isinstance(value, (int, float, torch.Tensor)):
-=======
                     # Wandb can log multiple images to the same key, while other
                     # loggers, such as MLFlow need unique keys for each image.
                     log_key = key
@@ -697,7 +681,6 @@ class ARModel(pl.LightningModule):
                         self.logger.log_image(key=log_key, images=[value])
                 elif isinstance(value, (int, float, torch.Tensor)):
                     # Log scalar metrics
->>>>>>> 15b3325 (fix: make scalar logging branch reachable in aggregate_and_plot_metrics)
                     self.log(key, value, on_step=False, on_epoch=True)
 
             plt.close("all")  # Close all figs
