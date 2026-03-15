@@ -34,12 +34,9 @@ def run_simple_training(datastore, set_output_std):
         torch.set_float32_matmul_precision(
             "high"
         )  # Allows using Tensor Cores on A100s
-        # Use multiple devices if available for testing multi-device aggregation
+        # Use multiple devices if available, otherwise use 1
         num_devices = torch.cuda.device_count()
-        if num_devices > 1:
-            devices = list(range(num_devices))
-        else:
-            devices = [0]
+        devices = num_devices if num_devices > 1 else 1
     else:
         device_name = "cpu"
         devices = 1
@@ -49,9 +46,7 @@ def run_simple_training(datastore, set_output_std):
         deterministic=True,
         accelerator=device_name,
         devices=devices,
-        strategy=(
-            "auto" if isinstance(devices, int) or len(devices) == 1 else "ddp"
-        ),
+        strategy="auto",
         log_every_n_steps=1,
         # use `detect_anomaly` to ensure that we don't have NaNs popping up
         # during training
