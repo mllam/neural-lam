@@ -49,7 +49,9 @@ def run_simple_training(datastore, set_output_std):
         deterministic=True,
         accelerator=device_name,
         devices=devices,
-        strategy="auto" if isinstance(devices, int) or len(devices) == 1 else "ddp",
+        strategy=(
+            "auto" if isinstance(devices, int) or len(devices) == 1 else "ddp"
+        ),
         log_every_n_steps=1,
         # use `detect_anomaly` to ensure that we don't have NaNs popping up
         # during training

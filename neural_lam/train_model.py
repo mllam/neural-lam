@@ -59,7 +59,9 @@ def resolve_devices_and_strategy(
     try:
         parsed_devices = [int(i) for i in args_devices]
     except ValueError as err:
-        raise ValueError("devices should be 'auto' or a list of integers") from err
+        raise ValueError(
+            "devices should be 'auto' or a list of integers"
+        ) from err
 
     if device_name == "cpu":
         if len(parsed_devices) != 1 or parsed_devices[0] <= 0:
