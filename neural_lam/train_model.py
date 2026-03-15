@@ -3,6 +3,7 @@ import json
 import random
 import time
 from argparse import ArgumentDefaultsHelpFormatter, ArgumentParser
+from typing import List, Tuple, Union
 
 # Third-party
 # for logging the model:
@@ -22,6 +23,55 @@ MODELS = {
     "hi_lam": HiLAM,
     "hi_lam_parallel": HiLAMParallel,
 }
+
+
+def resolve_devices_and_strategy(
+    args_devices: List[str], device_name: str
+) -> Tuple[Union[str, int, List[int]], str]:
+    """Resolve Trainer devices and strategy from CLI args.
+
+    On CPU, Lightning expects ``devices`` as an ``int`` (not a list), and
+    distributed strategies are unnecessary for single-process runs.
+
+    Parameters
+    ----------
+    args_devices : List[str]
+        Device specification from CLI (e.g., ["auto"], ["0"], ["0", "1"])
+    device_name : str
+        Detected device type ("cpu" or "cuda")
+
+    Returns
+    -------
+    Tuple[Union[str, int, List[int]], str]
+        Tuple of (resolved_devices, strategy) where resolved_devices is the
+        format expected by Lightning and strategy is "auto" or "ddp"
+
+    Raises
+    ------
+    ValueError
+        If device configuration is invalid
+    """
+    if args_devices == ["auto"]:
+        if device_name == "cpu":
+            return 1, "auto"
+        return "auto", "auto"
+
+    try:
+        parsed_devices = [int(i) for i in args_devices]
+    except ValueError as err:
+        raise ValueError("devices should be 'auto' or a list of integers") from err
+
+    if device_name == "cpu":
+        if len(parsed_devices) != 1 or parsed_devices[0] <= 0:
+            raise ValueError(
+                "On CPU, --devices must be a single integer > 0 "
+                "(for example: --devices 1)."
+            )
+        return parsed_devices[0], "auto"
+
+    if len(parsed_devices) > 1:
+        return parsed_devices, "ddp"
+    return parsed_devices, "auto"
 
 
 @logger.catch
@@ -289,14 +339,8 @@ def main(input_args=None):
     else:
         device_name = "cpu"
 
-    # Set devices to use
-    if args.devices == ["auto"]:
-        devices = "auto"
-    else:
-        try:
-            devices = [int(i) for i in args.devices]
-        except ValueError:
-            raise ValueError("devices should be 'auto' or a list of integers")
+    # Resolve devices and strategy
+    devices, strategy = resolve_devices_and_strategy(args.devices, device_name)
 
     # Load model parameters Use new args for model
     ModelClass = MODELS[args.model]
@@ -329,7 +373,7 @@ def main(input_args=None):
     trainer = pl.Trainer(
         max_epochs=args.epochs,
         deterministic=True,
-        strategy="ddp",
+        strategy=strategy,
         accelerator=device_name,
         num_nodes=args.num_nodes,
         devices=devices,

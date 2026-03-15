@@ -34,17 +34,22 @@ def run_simple_training(datastore, set_output_std):
         torch.set_float32_matmul_precision(
             "high"
         )  # Allows using Tensor Cores on A100s
+        # Use multiple devices if available for testing multi-device aggregation
+        num_devices = torch.cuda.device_count()
+        if num_devices > 1:
+            devices = list(range(num_devices))
+        else:
+            devices = [0]
     else:
         device_name = "cpu"
+        devices = 1
 
     trainer = pl.Trainer(
         max_epochs=1,
         deterministic=True,
         accelerator=device_name,
-        # XXX: `devices` has to be set to 2 otherwise
-        # neural_lam.models.ar_model.ARModel.aggregate_and_plot_metrics fails
-        # because it expects to aggregate over multiple devices
-        devices=2,
+        devices=devices,
+        strategy="auto" if isinstance(devices, int) or len(devices) == 1 else "ddp",
         log_every_n_steps=1,
         # use `detect_anomaly` to ensure that we don't have NaNs popping up
         # during training

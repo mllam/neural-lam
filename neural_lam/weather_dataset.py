@@ -46,6 +46,7 @@ class WeatherDataset(torch.utils.data.Dataset):
         ar_steps: int = 3,
         num_past_forcing_steps: int = 1,
         num_future_forcing_steps: int = 1,
+        standardize: bool = True,
     ):
         super().__init__()
 
@@ -95,7 +96,7 @@ class WeatherDataset(torch.utils.data.Dataset):
 
         # Set up for standardization
         # TODO: This will become part of ar_model.py soon!
-        self.standardize = True
+        self.standardize = standardize
         if self.standardize:
             self.ds_state_stats = self.datastore.get_standardization_dataarray(
                 category="state"
