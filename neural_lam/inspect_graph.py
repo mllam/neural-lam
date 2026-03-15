@@ -1,5 +1,6 @@
 from pathlib import Path
 import argparse
+from networkx import edges
 import torch
 
 
@@ -24,7 +25,12 @@ def inspect_graph(graph_dir: Path):
         path = graph_dir / edge_file
         if path.exists():
             edges = torch.load(path)
-            print(f"{edge_file}: {edges.shape[1]} edges")
+            num_edges = edges.shape[1]
+            num_nodes = edges.max().item() + 1
+
+            print(f"{edge_file}: {num_edges} edges")
+            print(f"estimated nodes: {num_nodes}")
+            
         else:
             print(f"{edge_file}: missing")
 
