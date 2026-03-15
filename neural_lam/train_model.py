@@ -128,6 +128,17 @@ def main(input_args=None):
         help="If models should additionally output std.-dev. per "
         "output dimensions",
     )
+    parser.add_argument(
+        "--ensemble_members",
+        type=int,
+        default=1,
+        help="Number of ensemble members to generate during evaluation. "
+        "When set to 1 (default) the model runs deterministically. "
+        "When > 1, the batch is broadcast M times so that each "
+        "autoregressive rollout can diverge (requires a stochastic "
+        "predict_step, e.g. in a diffusion-based model). Enables "
+        "crps_ensemble metric computation during test_step.",
+    )
 
     # Training options
     parser.add_argument(

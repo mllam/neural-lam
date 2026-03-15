@@ -71,14 +71,15 @@ def plot_prediction(
     datastore: BaseRegularGridDatastore,
     da_prediction: xr.DataArray,
     da_target: xr.DataArray,
+    da_ensemble_std: xr.DataArray = None,
     title=None,
     vrange=None,
 ):
     """
-    Plot example prediction and grond truth.
+    Plot example prediction and ground truth.
+    If da_ensemble_std is provided, a third panel showing the spread is added.
 
     Each has shape (N_grid,)
-
     """
     # Get common scale for values
     if vrange is None:
@@ -94,31 +95,36 @@ def plot_prediction(
     mask_values = np.invert(da_mask.values.astype(bool)).astype(float)
     pixel_alpha = mask_values.clip(0.7, 1)  # Faded border region
 
+    n_cols = 3 if da_ensemble_std is not None else 2
     fig, axes = plt.subplots(
         1,
-        2,
-        figsize=(13, 7),
+        n_cols,
+        figsize=(6 * n_cols + 1, 7),
         subplot_kw={"projection": datastore.coords_projection},
     )
 
-    # Plot pred and target
-    for ax, da in zip(axes, (da_target, da_prediction)):
+    plot_das = [da_target, da_prediction]
+    plot_titles = ["Ground Truth", "Prediction"]
+    if da_ensemble_std is not None:
+        plot_das.append(da_ensemble_std)
+        plot_titles.append("Ensemble Std")
+
+    # Plot pred, target and optionally ensemble std
+    for i, (ax, da, t) in enumerate(zip(axes, plot_das, plot_titles)):
         ax.coastlines()  # Add coastline outlines
+        is_std = t == "Ensemble Std"
         da.plot.imshow(
             ax=ax,
             origin="lower",
             x="x",
             extent=extent,
             alpha=pixel_alpha.T,
-            vmin=vmin,
-            vmax=vmax,
-            cmap="plasma",
+            vmin=0 if is_std else vmin,
+            vmax=da.max() if is_std else vmax,
+            cmap="OrRd" if is_std else "plasma",
             transform=datastore.coords_projection,
         )
-
-    # Ticks and labels
-    axes[0].set_title("Ground Truth", size=15)
-    axes[1].set_title("Prediction", size=15)
+        ax.set_title(t, size=15)
 
     if title:
         fig.suptitle(title, size=20)

@@ -227,6 +227,61 @@ def crps_gauss(
     )
 
 
+def crps_ensemble(
+    ensemble_pred,
+    target,
+    pred_std=None,
+    mask=None,
+    average_grid=True,
+    sum_vars=True,
+):
+    """
+    Empirical (Energy Score) Continuous Ranked Probability Score (CRPS)
+    for ensemble / generative model predictions.
+
+    Uses the energy-score decomposition:
+        CRPS(F, y) = E[|X - y|] - 0.5 * E[|X - X'|]
+    where X, X' are independent draws from the predictive distribution F.
+
+    (...,) is any number of batch dimensions (e.g. (B, pred_steps))
+    ensemble_pred: (..., M, N, d_state), M ensemble members
+    target:        (..., N, d_state), verification target
+    pred_std:      ignored (kept for API compatibility with other metrics)
+    mask:          (N,), boolean mask for interior grid nodes
+    average_grid:  bool, whether to average over grid dimension N
+    sum_vars:      bool, whether to sum over variable dimension d_state
+
+    Returns:
+    metric_val: One of (...,), (..., d_state), (..., N), (..., N, d_state)
+    depending on reduction arguments.
+    """
+    # ensemble_pred: (..., M, N, d_state)  target: (..., N, d_state)
+    M = ensemble_pred.shape[-3]
+
+    # E[|X - y|]  -- mean absolute error of each member against target
+    # Expand target to (..., M, N, d_state) for broadcasting
+    target_expanded = target.unsqueeze(-3).expand_as(ensemble_pred)
+    mae_term = torch.abs(ensemble_pred - target_expanded)  # (..., M, N, d_state)
+    mean_mae = mae_term.mean(dim=-3)  # (..., N, d_state)
+
+    # E[|X - X'|] -- mean pairwise spread between ensemble members
+    # Efficient computation: Var(X) = E[X^2] - E[X]^2 gives
+    # E[|X-X'|] ≈ 2*std for Gaussian, but here we compute it exactly via
+    # sum of |xi - xj| / M^2
+    # Shape trick: (xi - xj) for all pairs using broadcasting
+    # (..., M, 1, N, d_state) - (..., 1, M, N, d_state)
+    xi = ensemble_pred.unsqueeze(-4)   # (..., 1, M, N, d_state)
+    xj = ensemble_pred.unsqueeze(-3)   # (..., M, 1, N, d_state)
+    pairwise = torch.abs(xi - xj)     # (..., M, M, N, d_state)
+    mean_spread = pairwise.mean(dim=(-4, -3))  # (..., N, d_state)
+
+    entry_crps = mean_mae - 0.5 * mean_spread  # (..., N, d_state)
+
+    return mask_and_reduce_metric(
+        entry_crps, mask=mask, average_grid=average_grid, sum_vars=sum_vars
+    )
+
+
 DEFINED_METRICS = {
     "mse": mse,
     "mae": mae,
@@ -234,4 +289,5 @@ DEFINED_METRICS = {
     "wmae": wmae,
     "nll": nll,
     "crps_gauss": crps_gauss,
+    "crps_ensemble": crps_ensemble,
 }
