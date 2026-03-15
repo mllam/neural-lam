@@ -697,10 +697,12 @@ class ARModel(pl.LightningModule):
             if self.trainer.is_global_zero:
                 metric_tensor_averaged = torch.mean(metric_tensor, dim=0)
                 # (pred_steps, d_f)
-                
+
                 # Ensure metric_tensor_averaged is 2D (pred_steps, d_f)
                 if metric_tensor_averaged.ndim == 1:
-                    metric_tensor_averaged = metric_tensor_averaged.unsqueeze(-1)
+                    metric_tensor_averaged = metric_tensor_averaged.unsqueeze(
+                        -1
+                    )
 
                 # Take square root after all averaging to change MSE to RMSE
                 if "mse" in metric_name:
