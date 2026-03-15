@@ -154,6 +154,8 @@ class ARModel(pl.LightningModule):
         if self.ensemble_members > 1:
             # Store ensemble CRPS per variable during evaluation
             self.test_metrics["crps_ensemble"] = []
+            # Store ensemble spread (std) per variable during evaluation
+            self.test_metrics["ensemble_std"] = []
 
         # For making restoring of optimizer state optional
         self.restore_opt = args.restore_opt
@@ -473,6 +475,12 @@ class ARModel(pl.LightningModule):
             # Use ensemble mean for deterministic metrics
             prediction = ensemble_prediction.mean(dim=1)  # (B, pred_steps, N, d_f)
 
+            # Store ensemble spread for lead-time metrics and visualization
+            ensemble_std = ensemble_prediction.std(dim=1)  # (B, pred_steps, N, d_f)
+            self.test_metrics["ensemble_std"].append(
+                ensemble_std.mean(dim=-2)
+            )  # (B, pred_steps, d_f)
+
         for metric_name in ("mse", "mae"):
             metric_func = metrics.get_metric(metric_name)
             batch_metric_vals = metric_func(
@@ -535,14 +543,32 @@ class ARModel(pl.LightningModule):
         time = batch[3]
 
         # Rescale to original data scale
+        if prediction.ndim == 5:
+            # Ensemble prediction, compute mean and std for plotting
+            ensemble_std = prediction.std(dim=1)
+            prediction = prediction.mean(dim=1)
+        else:
+            ensemble_std = None
+
         prediction_rescaled = prediction * self.state_std + self.state_mean
         target_rescaled = target * self.state_std + self.state_mean
+        if ensemble_std is not None:
+            # Rescale spread (linear scaling as it is std-dev)
+            ensemble_std_rescaled = ensemble_std * self.state_std
+        else:
+            ensemble_std_rescaled = [None] * len(prediction_rescaled)
 
         # Iterate over the examples
-        for pred_slice, target_slice, time_slice in zip(
+        for (
+            pred_slice,
+            target_slice,
+            time_slice,
+            std_slice,
+        ) in zip(
             prediction_rescaled[:n_examples],
             target_rescaled[:n_examples],
             time[:n_examples],
+            ensemble_std_rescaled[:n_examples],
         ):
             # Each slice is (pred_steps, num_grid_nodes, d_f)
             self.plotted_examples += 1  # Increment already here
@@ -594,6 +620,17 @@ class ARModel(pl.LightningModule):
                         da_target=da_target.isel(
                             state_feature=var_i, time=t_i - 1
                         ).squeeze(),
+                        da_ensemble_std=self._create_dataarray_from_tensor(
+                            tensor=std_slice,
+                            time=time_slice,
+                            split=split,
+                            category="state",
+                        )
+                        .unstack("grid_index")
+                        .isel(state_feature=var_i, time=t_i - 1)
+                        .squeeze()
+                        if std_slice is not None
+                        else None,
                     )
                     for var_i, (var_name, var_unit, var_vrange) in enumerate(
                         zip(
