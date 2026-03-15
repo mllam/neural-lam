@@ -244,7 +244,9 @@ class ARModel(pl.LightningModule):
             # forcing_mean shape: (num_forcing_vars,)
             # Need to repeat each mean/std value window_size times
             window_size = forcing.shape[-1] // self.forcing_mean.shape[-1]
-            forcing_mean_tiled = self.forcing_mean.repeat_interleave(window_size)
+            forcing_mean_tiled = self.forcing_mean.repeat_interleave(
+                window_size
+            )
             forcing_std_tiled = self.forcing_std.repeat_interleave(window_size)
             forcing = (forcing - forcing_mean_tiled) / forcing_std_tiled
 

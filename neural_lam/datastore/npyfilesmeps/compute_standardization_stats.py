@@ -19,7 +19,7 @@ from neural_lam.utils import get_integer_time
 
 class StandardizedDatastore:
     """
-        Wrapper to ensure datastore returns standardized data.
+    Wrapper to ensure datastore returns standardized data.
     """
 
     def __init__(self, datastore):

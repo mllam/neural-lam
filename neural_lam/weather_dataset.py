@@ -95,8 +95,8 @@ class WeatherDataset(torch.utils.data.Dataset):
 
         # Set up for standardization
         # TODO: This will become part of ar_model.py soon!
-        self.standardize = standardize
-        if standardize:
+        self.standardize = True
+        if self.standardize:
             self.ds_state_stats = self.datastore.get_standardization_dataarray(
                 category="state"
             )
