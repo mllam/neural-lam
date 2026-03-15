@@ -336,8 +336,8 @@ def test_plot_examples_integration_saves_figure(
 
     fig = vis.plot_prediction(
         datastore=datastore,
-        title=f"{var_names[0]} ({var_units[0]}), "
-        f"t={t_i}({(time_step * t_i)} {time_unit})",
+        title=f"{var_names[0]}, t={t_i} ({time_step * t_i} {time_unit})",
+        colorbar_label=var_units[0],
         vrange=var_vranges[0],
         da_prediction=da_prediction.isel(
             state_feature=0, time=t_i - 1
