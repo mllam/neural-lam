@@ -99,8 +99,10 @@ class WeatherDataset(torch.utils.data.Dataset):
         self.standardize = standardize
         if self.standardize:
             try:
-                self.ds_state_stats = self.datastore.get_standardization_dataarray(
-                    category="state"
+                self.ds_state_stats = (
+                    self.datastore.get_standardization_dataarray(
+                        category="state"
+                    )
                 )
 
                 self.da_state_mean = self.ds_state_stats.state_mean
