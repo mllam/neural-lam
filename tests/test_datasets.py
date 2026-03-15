@@ -287,3 +287,45 @@ def test_standardization_with_zero_std():
     assert not np.isnan(
         result.values
     ).any(), "NaN found after _compute_std_safe"
+
+
+def test_weather_dataset_no_forcing_standardize():
+    """Regression test: WeatherDataset must not raise AttributeError when the
+    datastore has no forcing data and standardize=True (the default).
+
+    Before the fix, self.da_forcing_std was accessed at line 123 of
+    weather_dataset.py without ever being assigned when da_forcing is None,
+    causing:
+        AttributeError: 'WeatherDataset' object has no attribute
+        'da_forcing_std'
+    """
+
+    class NoForcingDatastore(DummyDatastore):
+        """DummyDatastore that returns None for the forcing category."""
+
+        def get_dataarray(self, category, split, **kwargs):
+            if category == "forcing":
+                return None
+            return super().get_dataarray(
+                category=category, split=split, **kwargs
+            )
+
+    datastore = NoForcingDatastore(n_grid_points=100, n_timesteps=20)
+
+    # Should not raise AttributeError
+    dataset = WeatherDataset(
+        datastore=datastore,
+        split="train",
+        ar_steps=3,
+        standardize=True,
+    )
+
+    assert dataset.forcing_std_safe is None
+    assert dataset.da_forcing_mean is None
+    assert dataset.da_forcing_std is None
+
+    # Ensure we can still retrieve a sample (forcing tensor should be empty)
+    init_states, target_states, forcing, target_times = dataset[0]
+    assert (
+        forcing.shape[-1] == 0
+    ), "Expected zero forcing features when forcing is None"
