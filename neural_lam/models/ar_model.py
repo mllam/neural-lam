@@ -144,7 +144,7 @@ class ARModel(pl.LightningModule):
             "mae": [],
         }
         if self.output_std:
-            self.test_metrics["output_std"] = []  # Treat as metric
+            self.test_metrics["output_std"] = []
 
         # For making restoring of optimizer state optional
         self.restore_opt = args.restore_opt
@@ -361,7 +361,7 @@ class ARModel(pl.LightningModule):
         )
 
         # Store MSEs
-        entry_mses = metrics.mse(
+        entry_mses = metrics.get_metric("mse")(
             prediction,
             target,
             pred_std,
@@ -635,7 +635,10 @@ class ARModel(pl.LightningModule):
 
     def aggregate_and_plot_metrics(self, metrics_dict, prefix):
         """
-        Aggregate and create error map plots for all metrics in metrics_dict
+        Aggregate and create error map plots for all metrics in metrics_dict.
+
+        Each metric object defines its own post-processing and rescaling
+        behavior, so no metric-specific logic is needed here.
 
         metrics_dict: dictionary with metric_names and list of tensors
             with step-evals.
@@ -651,17 +654,18 @@ class ARModel(pl.LightningModule):
                 metric_tensor_averaged = torch.mean(metric_tensor, dim=0)
                 # (pred_steps, d_f)
 
-                # Take square root after all averaging to change MSE to RMSE
-                if "mse" in metric_name:
-                    metric_tensor_averaged = torch.sqrt(metric_tensor_averaged)
-                    metric_name = metric_name.replace("mse", "rmse")
-
-                # NOTE: we here assume rescaling for all metrics is linear
-                metric_rescaled = metric_tensor_averaged * self.state_std
+                # Look up the metric object for post-processing and rescaling
+                metric_obj = metrics.get_metric(metric_name)
+                metric_tensor_averaged = metric_obj.post_process(
+                    metric_tensor_averaged
+                )
+                metric_rescaled = metric_obj.rescale(
+                    metric_tensor_averaged, self.state_std
+                )
                 # (pred_steps, d_f)
                 log_dict.update(
                     self.create_metric_log_dict(
-                        metric_rescaled, prefix, metric_name
+                        metric_rescaled, prefix, metric_obj.display_name
                     )
                 )
 
