@@ -192,6 +192,18 @@ def main(input_args=None):
         help="""Logger run name, for e.g. MLFlow (with default value `None`
           neural-lam's default format string is used)""",
     )
+
+    # Wandb-specific settings
+    parser.add_argument(
+        "--wandb_id",
+        type=str,
+        default=None,
+        help="Wandb run ID to use. If the run ID already exists in the "
+        "project, W&B resumes that run. If it does not exist, W&B creates "
+        "a new run with that ID. Useful on HPC systems with limited job "
+        "runtimes or that may crash, allowing training to be continued "
+        "across multiple job submissions.",
+    )
     parser.add_argument(
         "--val_steps_to_log",
         nargs="+",
@@ -354,3 +366,6 @@ def main(input_args=None):
 
 if __name__ == "__main__":
     main()
+
+
+

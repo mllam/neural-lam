@@ -529,7 +529,7 @@ class NpyFilesDatastoreMEPS(BaseRegularGridDatastore):
         Returns
         -------
         List[dt.datetime]
-            The analysis times for the given split.
+            The analysis times for the given split, sorted in ascending order.
 
         """
         pattern = re.sub(r"{analysis_time:[^}]*}", "*", STATE_FILENAME_FORMAT)
@@ -547,7 +547,7 @@ class NpyFilesDatastoreMEPS(BaseRegularGridDatastore):
                 f"No files found in {sample_dir} with pattern {pattern}"
             )
 
-        return times
+        return sorted(times)
 
     def _calc_datetime_forcing_features(self, da_time: xr.DataArray):
         da_hour_angle = da_time.dt.hour / 12 * np.pi
