@@ -104,8 +104,8 @@ class WeatherDataset(torch.utils.data.Dataset):
             if da is not None:
                 expected_dim_orders = [expected_dim_order]
                 if part == "forcing" and "ensemble_member" in da.dims:
-                    # Forcing data can optionally have an ensemble_member dimension
-                    # (unlike expected_dim_order default which doesn't include it).
+                    # We inject ensemble_member into the allowed dimension list because the underlying DataStore expected_dim_order doesn't know if this layout includes the ensemble dimension or not (but forcing data optionally can).
+                    
                     dim_order_with_ensemble = list(expected_dim_order)
                     grid_index_pos = dim_order_with_ensemble.index(
                         "grid_index"
