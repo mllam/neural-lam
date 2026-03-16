@@ -305,7 +305,10 @@ class NpyFilesDatastoreMEPS(BaseRegularGridDatastore):
                 f"Expected features {expected_features}, got {actual_features}"
             )
 
-        dim_order = self.expected_dim_order(category=category)
+        dim_order = self.expected_dim_order(
+            category=category,
+            has_ensemble_member="ensemble_member" in da.dims,
+        )
         da = da.transpose(*dim_order)
 
         if standardize:

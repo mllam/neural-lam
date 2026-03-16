@@ -353,9 +353,12 @@ class DummyDatastore(BaseRegularGridDatastore):
             The xarray DataArray object with processed dataset.
 
         """
-        dim_order = self.expected_dim_order(category=category)
-
-        da_category = self.ds[category].transpose(*dim_order)
+        da_category = self.ds[category]
+        dim_order = self.expected_dim_order(
+            category=category,
+            has_ensemble_member="ensemble_member" in da_category.dims,
+        )
+        da_category = da_category.transpose(*dim_order)
 
         if standardize:
             return self._standardize_datarray(da_category, category=category)
@@ -501,33 +504,40 @@ class EnsembleDummyDatastore(BaseDatastore):
         self._grid_index = np.array([0], dtype=int)
         self._ensemble_member = np.arange(n_ensemble_members, dtype=int)
 
-        step_ns = np.timedelta64(
-            int(self._step_length.total_seconds()), "s"
-        )
+        step_ns = np.timedelta64(int(self._step_length.total_seconds()), "s")
 
         if is_forecast:
             self._init_forecast_data(
-                n_analysis_times, n_forecast_steps, n_ensemble_members,
-                step_ns, forcing_has_ensemble,
+                n_analysis_times,
+                n_forecast_steps,
+                n_ensemble_members,
+                step_ns,
+                forcing_has_ensemble,
             )
         else:
             self._init_analysis_data(
-                n_timesteps, n_ensemble_members,
-                step_ns, forcing_has_ensemble,
+                n_timesteps,
+                n_ensemble_members,
+                step_ns,
+                forcing_has_ensemble,
             )
 
     # ---- data initialisation helpers ----------------------------------------
 
     def _init_forecast_data(
-        self, n_analysis_times, n_forecast_steps, n_ensemble_members,
-        step_ns, forcing_has_ensemble,
+        self,
+        n_analysis_times,
+        n_forecast_steps,
+        n_ensemble_members,
+        step_ns,
+        forcing_has_ensemble,
     ):
         analysis_time = (
             self.T0 + np.arange(n_analysis_times) * step_ns
         ).astype("datetime64[ns]")
-        elapsed = (
-            np.arange(n_forecast_steps) * step_ns
-        ).astype("timedelta64[ns]")
+        elapsed = (np.arange(n_forecast_steps) * step_ns).astype(
+            "timedelta64[ns]"
+        )
 
         analysis_axis = np.arange(n_analysis_times).reshape(-1, 1, 1, 1, 1)
         forecast_axis = np.arange(n_forecast_steps).reshape(1, -1, 1, 1, 1)
@@ -601,7 +611,11 @@ class EnsembleDummyDatastore(BaseDatastore):
             )
 
     def _init_analysis_data(
-        self, n_timesteps, n_ensemble_members, step_ns, forcing_has_ensemble,
+        self,
+        n_timesteps,
+        n_ensemble_members,
+        step_ns,
+        forcing_has_ensemble,
     ):
         time = (self.T0 + np.arange(n_timesteps) * step_ns).astype(
             "datetime64[ns]"
@@ -622,9 +636,9 @@ class EnsembleDummyDatastore(BaseDatastore):
         )
 
         if forcing_has_ensemble:
-            forcing_values = (
-                10000 + time_axis * 100 + ensemble_axis
-            ).astype(np.float32)
+            forcing_values = (10000 + time_axis * 100 + ensemble_axis).astype(
+                np.float32
+            )
             self._da_forcing = xr.DataArray(
                 forcing_values,
                 dims=(

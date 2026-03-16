@@ -70,13 +70,14 @@ class WeatherDataset(torch.utils.data.Dataset):
         self.da_forcing = self.datastore.get_dataarray(
             category="forcing", split=self.split
         )
-        
+
         if self.datastore.is_ensemble and self.load_single_member:
             warnings.warn(
                 "only using first ensemble member, so dataset size is "
                 "effectively reduced by the number of ensemble members "
                 f"({self.da_state.ensemble_member.size})",
                 UserWarning,
+                stacklevel=2,
             )
 
         # check that with the provided data-arrays and ar_steps that we have a
@@ -98,27 +99,16 @@ class WeatherDataset(torch.utils.data.Dataset):
             parts["forcing"] = self.da_forcing
 
         for part, da in parts.items():
-            expected_dim_order = self.datastore.expected_dim_order(
-                category=part
-            )
             if da is not None:
-                expected_dim_orders = [expected_dim_order]
-                if part == "forcing" and "ensemble_member" in da.dims:
-                    # We inject ensemble_member into the allowed dimension list because the underlying DataStore expected_dim_order doesn't know if this layout includes the ensemble dimension or not (but forcing data optionally can).
-                    
-                    dim_order_with_ensemble = list(expected_dim_order)
-                    grid_index_pos = dim_order_with_ensemble.index(
-                        "grid_index"
-                    )
-                    dim_order_with_ensemble.insert(
-                        grid_index_pos, "ensemble_member"
-                    )
-                    expected_dim_orders.append(tuple(dim_order_with_ensemble))
-                if da.dims not in expected_dim_orders:
+                expected_dim_order = self.datastore.expected_dim_order(
+                    category=part,
+                    has_ensemble_member="ensemble_member" in da.dims,
+                )
+                if da.dims != expected_dim_order:
                     raise ValueError(
                         f"The dimension order of the `{part}` data ({da.dims}) "
-                        f"does not match expected order(s): "
-                        f"{expected_dim_orders}. Maybe you forgot to "
+                        f"does not match the expected dimension order "
+                        f"({expected_dim_order}). Maybe you forgot to "
                         "transpose the data in `BaseDatastore.get_dataarray`?"
                     )
 
@@ -168,10 +158,10 @@ class WeatherDataset(torch.utils.data.Dataset):
     def __len__(self):
         if self.datastore.is_forecast:
             # for now we simply create a single sample for each analysis time
-            # and then take the first (2 + ar_steps) forecast times. In
-            # addition we only use the first ensemble member (if ensemble data
-            # has been provided).
-            # This means that for each analysis time we get a single sample
+            # and then take the first (2 + ar_steps) forecast times.
+            # If ensemble data is present and `load_single_member=False`,
+            # each ensemble member is exposed as an independent sample by
+            # scaling the base dataset length below.
 
             # check that there are enough forecast steps available to create
             # samples given the number of autoregressive steps requested

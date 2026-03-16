@@ -291,6 +291,24 @@ def test_ensemble_len_scales_with_default_all_members():
     assert len(dataset_all) == len(dataset_single) * 3
 
 
+def test_expected_dim_order_handles_optional_ensemble_forcing():
+    datastore = EnsembleDummyDatastore(
+        is_forecast=False,
+        forcing_has_ensemble=True,
+        n_ensemble_members=3,
+        n_timesteps=10,
+    )
+
+    assert datastore.expected_dim_order(
+        category="forcing",
+        has_ensemble_member=True,
+    ) == ("time", "ensemble_member", "grid_index", "forcing_feature")
+    assert datastore.expected_dim_order(
+        category="forcing",
+        has_ensemble_member=False,
+    ) == ("time", "grid_index", "forcing_feature")
+
+
 def test_ensemble_index_mapping_is_time_major():
     datastore = EnsembleDummyDatastore(
         is_forecast=False,
@@ -395,6 +413,8 @@ def test_forecast_ensemble_len_scales_with_default_all_members():
         )
 
     assert len(dataset_all) == len(dataset_single) * 3
+
+
 def test_standardization_with_zero_std():
     """Regression test for https://github.com/mllam/neural-lam/issues/136
 
@@ -463,5 +483,3 @@ def test_weather_dataset_no_forcing_standardize():
     assert (
         forcing.shape[-1] == 0
     ), "Expected zero forcing features when forcing is None"
-
-

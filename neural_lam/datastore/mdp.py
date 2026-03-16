@@ -298,7 +298,10 @@ class MDPDatastore(BaseRegularGridDatastore):
             )
             da_category = da_category.sel(time=slice(t_start, t_end))
 
-        dim_order = self.expected_dim_order(category=category)
+        dim_order = self.expected_dim_order(
+            category=category,
+            has_ensemble_member="ensemble_member" in da_category.dims,
+        )
         da_category = da_category.transpose(*dim_order)
 
         if standardize:

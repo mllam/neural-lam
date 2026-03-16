@@ -391,7 +391,9 @@ class BaseDatastore(abc.ABC):
 
     @functools.lru_cache
     def expected_dim_order(
-        self, category: Optional[str] = None
+        self,
+        category: Optional[str] = None,
+        has_ensemble_member: Optional[bool] = None,
     ) -> tuple[str, ...]:
         """
         Return the expected dimension order for the dataarray or dataset
@@ -417,6 +419,11 @@ class BaseDatastore(abc.ABC):
         ----------
         category : str
             The category of the dataset (state/forcing/static).
+        has_ensemble_member : bool, optional
+            Whether the expected dataarray should include an
+            `ensemble_member` dimension. If omitted, the historical default is
+            used: ensemble is assumed for `state` when `self.is_ensemble` is
+            true, and not assumed otherwise.
 
         Returns
         -------
@@ -424,6 +431,9 @@ class BaseDatastore(abc.ABC):
             The expected dimension order for the dataarray or dataset.
 
         """
+        if has_ensemble_member is None:
+            has_ensemble_member = self.is_ensemble and category == "state"
+
         dim_order = []
 
         if category is not None:
@@ -436,8 +446,7 @@ class BaseDatastore(abc.ABC):
                 elif not self.is_forecast:
                     dim_order.append("time")
 
-            if self.is_ensemble and category == "state":
-                # XXX: for now we only assume ensemble data for state variables
+            if has_ensemble_member:
                 dim_order.append("ensemble_member")
 
         dim_order.append("grid_index")
@@ -615,7 +624,10 @@ class BaseRegularGridDatastore(BaseDatastore):
                     )
                 category = dim.split("_")[0]
 
-        dim_order = self.expected_dim_order(category=category)
+        dim_order = self.expected_dim_order(
+            category=category,
+            has_ensemble_member="ensemble_member" in da_or_ds_stacked.dims,
+        )
 
         return da_or_ds_stacked.transpose(*dim_order)
 
