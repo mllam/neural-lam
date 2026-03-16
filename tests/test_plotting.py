@@ -11,6 +11,7 @@ import matplotlib.pyplot as plt  # noqa: E402
 import numpy as np
 import pytest
 import torch
+import xarray as xr
 
 # First-party
 from neural_lam import config as nlconfig
@@ -28,9 +29,25 @@ TEST_OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 class HeatmapDatastore:
     """Minimal datastore stub for error-heatmap plotting tests."""
 
-    def __init__(self, n_vars, step_length=timedelta(hours=1)):
+    def __init__(
+        self,
+        n_vars,
+        step_length=timedelta(hours=1),
+        state_std=None,
+        state_diff_std_standardized=None,
+    ):
         self._n_vars = n_vars
         self.step_length = step_length
+        self._state_std = (
+            np.asarray(state_std, dtype=float)
+            if state_std is not None
+            else np.ones(n_vars, dtype=float)
+        )
+        self._state_diff_std_standardized = (
+            np.asarray(state_diff_std_standardized, dtype=float)
+            if state_diff_std_standardized is not None
+            else np.ones(n_vars, dtype=float)
+        )
 
     def get_vars_names(self, category):
         assert category == "state"
@@ -39,6 +56,18 @@ class HeatmapDatastore:
     def get_vars_units(self, category):
         assert category == "state"
         return ["unit"] * self._n_vars
+
+    def get_standardization_dataarray(self, category):
+        assert category == "state"
+        return xr.Dataset(
+            {
+                "state_std": (("state_feature",), self._state_std),
+                "state_diff_std_standardized": (
+                    ("state_feature",),
+                    self._state_diff_std_standardized,
+                ),
+            }
+        )
 
 
 @pytest.fixture
@@ -210,8 +239,8 @@ def test_plot_examples_integration_saves_figure(
     assert output_path.exists()
 
 
-def test_plot_error_heatmap_uses_global_color_scale():
-    """Heatmap colors should encode absolute values across all variables."""
+def test_plot_error_heatmap_uses_relative_color_scale():
+    """Heatmap colors should compare relative magnitudes across variables."""
     errors = torch.tensor(
         [
             [1.0, 100.0, 10.0],
@@ -219,16 +248,41 @@ def test_plot_error_heatmap_uses_global_color_scale():
             [3.0, 60.0, 2.5],
         ]
     )  # (pred_steps, d_f)
-    datastore = HeatmapDatastore(n_vars=errors.shape[1])
+    datastore = HeatmapDatastore(
+        n_vars=errors.shape[1],
+        state_std=[1.0, 100.0, 10.0],
+        state_diff_std_standardized=[1.0, 2.0, 0.5],
+    )
 
     fig = vis.plot_error_heatmap(errors, datastore=datastore)
     ax = fig.axes[0]
     image = ax.images[0]
+    colorbar = fig.axes[1]
 
-    np.testing.assert_allclose(image.get_array(), errors.T.numpy())
+    expected_color_values = errors.T.numpy() / np.array([[1.0], [200.0], [5.0]])
+    np.testing.assert_allclose(image.get_array(), expected_color_values)
     assert image.norm.vmin == 0.0
-    assert image.norm.vmax == pytest.approx(errors.max().item())
+    assert image.norm.vmax == pytest.approx(expected_color_values.max())
     assert len(fig.axes) == 2  # main axis + colorbar axis
+    assert colorbar.get_ylabel() == "Relative scale (1-step diff stds)"
+
+    plt.close(fig)
+
+
+def test_plot_error_heatmap_uses_white_to_red_colormap():
+    """The heatmap should keep the intuitive light-to-red progression."""
+    errors = torch.tensor([[1.0, 2.0], [3.0, 4.0]])
+    datastore = HeatmapDatastore(n_vars=errors.shape[1])
+
+    fig = vis.plot_error_heatmap(errors, datastore=datastore)
+    image = fig.axes[0].images[0]
+
+    low_rgb = image.cmap(0.0)[:3]
+    high_rgb = image.cmap(1.0)[:3]
+
+    assert all(channel > 0.95 for channel in low_rgb)
+    assert high_rgb[0] > high_rgb[1]
+    assert high_rgb[0] > high_rgb[2]
 
     plt.close(fig)
 

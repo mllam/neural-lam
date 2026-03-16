@@ -15,6 +15,10 @@ from .datastore.base import BaseRegularGridDatastore
 # or when the total number of cells exceeds a readable count.
 _MIN_CELL_SIZE_FOR_ANNOTATIONS = 18
 _MAX_CELLS_FOR_ANNOTATIONS = 800
+_HEATMAP_CMAP = matplotlib.colors.LinearSegmentedColormap.from_list(
+    "error_heatmap_white_red",
+    ["#ffffff", "#fee5d9", "#fcae91", "#fb6a4a", "#cb181d"],
+)
 
 
 def _compute_heatmap_layout(n_rows: int, n_cols: int) -> dict[str, float]:
@@ -71,9 +75,96 @@ def _get_heatmap_var_labels(
     return labels
 
 
+def _to_heatmap_matrix(values) -> np.ndarray:
+    """Convert `(pred_steps, d_f)` values to a `(d_f, pred_steps)` matrix."""
+    if hasattr(values, "detach"):
+        values = values.detach().cpu().numpy()
+    return np.asarray(values, dtype=float).T
+
+
+def _get_feature_scale(
+    ds_stats: xr.Dataset, var_name: str, n_vars: int
+) -> np.ndarray | None:
+    """Extract a 1D per-feature scale, averaging over any extra dims."""
+    if var_name not in ds_stats:
+        return None
+
+    da_scale = ds_stats[var_name]
+    feature_dim = "state_feature"
+    if feature_dim not in da_scale.dims:
+        return None
+
+    reduce_dims = [dim for dim in da_scale.dims if dim != feature_dim]
+    if reduce_dims:
+        da_scale = da_scale.mean(dim=reduce_dims)
+
+    scale = np.asarray(da_scale.values, dtype=float).reshape(-1)
+    if scale.size < n_vars:
+        return None
+
+    return scale[:n_vars]
+
+
+def _get_heatmap_color_values(
+    errors_np: np.ndarray, datastore: BaseRegularGridDatastore
+) -> tuple[np.ndarray, str]:
+    """Normalize heatmap colors to a cross-variable relative scale.
+
+    The background colors should compare relative error magnitudes across
+    variables, while the text annotations keep the original values/units.
+    When one-step-difference statistics are available, normalize by the
+    corresponding physical-scale diff std so colors show error relative to
+    typical one-step changes of each variable.
+    """
+    try:
+        ds_state_stats = datastore.get_standardization_dataarray(
+            category="state"
+        )
+    except (AttributeError, KeyError, ValueError, TypeError):
+        return errors_np, "Relative scale"
+
+    n_vars = errors_np.shape[0]
+    state_std = _get_feature_scale(ds_state_stats, "state_std", n_vars)
+    if state_std is None:
+        return errors_np, "Relative scale"
+
+    scale = state_std
+    colorbar_label = "Relative scale (state stds)"
+
+    state_diff_std_standardized = _get_feature_scale(
+        ds_state_stats, "state_diff_std_standardized", n_vars
+    )
+    if state_diff_std_standardized is not None:
+        scale = scale * state_diff_std_standardized
+        colorbar_label = "Relative scale (1-step diff stds)"
+
+    safe_scale = np.where(
+        np.isfinite(scale) & (np.abs(scale) > np.finfo(float).eps),
+        scale,
+        1.0,
+    )
+    return errors_np / safe_scale[:, None], colorbar_label
+
+
+def _get_annotation_text_color(
+    value: float, image: matplotlib.image.AxesImage
+) -> str:
+    """Choose a readable annotation color from the rendered background."""
+    if not np.isfinite(value):
+        return "black"
+
+    rgba = image.cmap(image.norm(value))
+    luminance = 0.2126 * rgba[0] + 0.7152 * rgba[1] + 0.0722 * rgba[2]
+    return "white" if luminance < 0.5 else "black"
+
+
 @matplotlib.rc_context(utils.fractional_plot_bundle(1))
 def plot_error_heatmap(
-    errors, datastore: BaseRegularGridDatastore, title=None
+    errors,
+    datastore: BaseRegularGridDatastore,
+    title=None,
+    color_values=None,
+    colorbar_label=None,
 ):
     """
     Plot a heatmap of errors for state variables across forecast lead times.
@@ -86,20 +177,43 @@ def plot_error_heatmap(
         Datastore providing step length and variable metadata.
     title : str, optional
         Optional title for the figure.
+    color_values : torch.Tensor, optional
+        Optional values used only for the background colors. If omitted,
+        colors are normalized from ``errors`` using datastore state-variable
+        standardization statistics.
+    colorbar_label : str, optional
+        Optional label for the colorbar. If omitted, an automatic label is
+        chosen based on the color normalization used.
     """
-    errors_np = errors.detach().cpu().numpy().T  # (d_f, pred_steps)
+    errors_np = _to_heatmap_matrix(errors)  # (d_f, pred_steps)
     d_f, pred_steps = errors_np.shape
     step_length = datastore.step_length
 
     time_step_int, time_step_unit = utils.get_integer_time(step_length)
     layout = _compute_heatmap_layout(n_rows=d_f, n_cols=pred_steps)
 
-    finite_errors = errors_np[np.isfinite(errors_np)]
-    if finite_errors.size == 0:
+    if color_values is None:
+        color_values_np, default_colorbar_label = _get_heatmap_color_values(
+            errors_np, datastore
+        )
+    else:
+        color_values_np = _to_heatmap_matrix(color_values)
+        default_colorbar_label = "Relative scale"
+        if color_values_np.shape != errors_np.shape:
+            raise ValueError(
+                "color_values must have the same shape as errors: "
+                f"got {color_values_np.T.shape} and {errors_np.T.shape}"
+            )
+
+    if colorbar_label is None:
+        colorbar_label = default_colorbar_label
+
+    finite_color_values = color_values_np[np.isfinite(color_values_np)]
+    if finite_color_values.size == 0:
         vmin, vmax = 0.0, 1.0
     else:
-        vmin = float(finite_errors.min())
-        vmax = float(finite_errors.max())
+        vmin = float(finite_color_values.min())
+        vmax = float(finite_color_values.max())
         if vmin >= 0.0:
             vmin = 0.0
         if np.isclose(vmin, vmax):
@@ -111,28 +225,27 @@ def plot_error_heatmap(
     )
 
     im = ax.imshow(
-        errors_np,
-        cmap="viridis",
+        color_values_np,
+        cmap=_HEATMAP_CMAP,
         vmin=vmin,
         vmax=vmax,
         interpolation="none",
         aspect="auto",
     )
     cbar = fig.colorbar(im, ax=ax, pad=0.02)
+    cbar.set_label(colorbar_label, size=layout["tick_label_size"])
     cbar.ax.tick_params(labelsize=layout["tick_label_size"])
     cbar.ax.yaxis.get_offset_text().set_fontsize(layout["tick_label_size"])
 
     if layout["show_annotations"]:
         for (j, i), error in np.ndenumerate(errors_np):
-            formatted_error = (
-                f"{error:.3g}" if abs(error) < 1.0e4 else f"{error:.2E}"
-            )
-            normed = im.norm(error)
-            text_color = (
-                "white"
-                if (np.isfinite(normed) and normed < 0.45)
-                else "black"
-            )
+            if np.isfinite(error):
+                formatted_error = (
+                    f"{error:.3g}" if abs(error) < 1.0e4 else f"{error:.2E}"
+                )
+            else:
+                formatted_error = str(error)
+            text_color = _get_annotation_text_color(color_values_np[j, i], im)
             ax.text(
                 i,
                 j,
@@ -169,9 +282,7 @@ def plot_error_heatmap(
     return fig
 
 
-def plot_error_map(
-    errors, datastore: BaseRegularGridDatastore, title=None
-):
+def plot_error_map(errors, datastore: BaseRegularGridDatastore, title=None):
     """Deprecated: use :func:`plot_error_heatmap` instead."""
     warnings.warn(
         "plot_error_map is deprecated, use plot_error_heatmap instead",
