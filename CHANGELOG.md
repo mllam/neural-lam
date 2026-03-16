@@ -34,6 +34,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Changed the hardcoded True to a conditional check "persistent_workers=self.num_workers > 0" [\#235](https://github.com/mllam/neural-lam/pull/235) @santhil-cyber
 
+- Avoid eager download of the MEPS example dataset during pytest collection by lazily initializing it in `tests/conftest.py`, allowing tests to run without triggering a dataset download at import time. [#391](https://github.com/mllam/neural-lam/pull/391) @Saptami191
+
 - `fractional_plot_bundle` now correctly multiplies by fraction instead of dividing
 [\#222](https://github.com/mllam/neural-lam/pull/222) @santhil-cyber
 
