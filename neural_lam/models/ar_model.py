@@ -284,7 +284,7 @@ class ARModel(pl.LightningModule):
         num_grid_nodes, d_forcing),
             where index 0 corresponds to index 1 of init_states
         """
-        (init_states, target_states, forcing_features, batch_times) = batch
+        init_states, target_states, forcing_features, batch_times = batch
 
         prediction, pred_std = self.unroll_prediction(
             init_states, forcing_features, target_states
@@ -414,10 +414,10 @@ class ARModel(pl.LightningModule):
             batch_size=batch[0].shape[0],
         )
 
-        # Compute all evaluation metrics for error maps Note: explicitly list
-        # metrics here, as test_metrics can contain additional ones, computed
-        # differently, but that should be aggregated on_test_epoch_end
-        for metric_name in ("mse", "mae"):
+        # Compute all evaluation metrics for error maps. The metric objects
+        # own their own reduction semantics, so the model only asks each
+        # registered metric to produce per-batch values here.
+        for metric_name in self.test_metrics:
             metric_func = metrics.get_metric(metric_name)
             batch_metric_vals = metric_func(
                 prediction,
@@ -427,13 +427,6 @@ class ARModel(pl.LightningModule):
                 sum_vars=False,
             )  # (B, pred_steps, d_f)
             self.test_metrics[metric_name].append(batch_metric_vals)
-
-        if self.output_std:
-            # Store output std. per variable, spatially averaged
-            mean_pred_std = torch.mean(
-                pred_std[..., self.interior_mask_bool, :], dim=-2
-            )  # (B, pred_steps, d_f)
-            self.test_metrics["output_std"].append(mean_pred_std)
 
         # Save per-sample spatial loss for specific times
         spatial_loss = self.loss(
@@ -651,16 +644,11 @@ class ARModel(pl.LightningModule):
             )  # (N_eval, pred_steps, d_f)
 
             if self.trainer.is_global_zero:
-                metric_tensor_averaged = torch.mean(metric_tensor, dim=0)
-                # (pred_steps, d_f)
-
-                # Look up the metric object for post-processing and rescaling
+                # Look up the metric object for aggregation, post-processing,
+                # and rescaling.
                 metric_obj = metrics.get_metric(metric_name)
-                metric_tensor_averaged = metric_obj.post_process(
-                    metric_tensor_averaged
-                )
-                metric_rescaled = metric_obj.rescale(
-                    metric_tensor_averaged, self.state_std
+                metric_rescaled = metric_obj.prepare_for_logging(
+                    metric_tensor, self.state_std
                 )
                 # (pred_steps, d_f)
                 log_dict.update(

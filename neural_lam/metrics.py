@@ -5,7 +5,7 @@ import torch
 class BaseMetric:
     """
     Base class for all metrics. Each metric is a callable object that also
-    knows how to post-process and rescale its aggregated values for logging.
+    knows how to aggregate, post-process, and rescale its values for logging.
 
     This follows the principle that each metric should carry its own logging
     semantics, rather than relying on hardcoded rules in the aggregation code.
@@ -18,7 +18,12 @@ class BaseMetric:
     name: str = ""
 
     def __call__(
-        self, pred, target, pred_std, mask=None, average_grid=True,
+        self,
+        pred,
+        target,
+        pred_std,
+        mask=None,
+        average_grid=True,
         sum_vars=True,
     ):
         """
@@ -43,7 +48,9 @@ class BaseMetric:
             pred, target, pred_std
         )  # (..., N, d_state)
         return mask_and_reduce_metric(
-            entry_vals, mask=mask, average_grid=average_grid,
+            entry_vals,
+            mask=mask,
+            average_grid=average_grid,
             sum_vars=sum_vars,
         )
 
@@ -69,6 +76,15 @@ class BaseMetric:
         """
         return self.name
 
+    def aggregate(self, metric_tensor):
+        """
+        Aggregate a gathered metric tensor over the evaluation dimension.
+
+        metric_tensor: (N_eval, pred_steps, d_f)
+        Returns: (pred_steps, d_f)
+        """
+        return torch.mean(metric_tensor, dim=0)
+
     def post_process(self, averaged_tensor):
         """
         Post-processing applied to the batch-averaged metric tensor
@@ -92,6 +108,18 @@ class BaseMetric:
         Returns: (pred_steps, d_f)
         """
         return tensor * state_std
+
+    def prepare_for_logging(self, metric_tensor, state_std):
+        """
+        Convert a gathered metric tensor into the final tensor to log/plot.
+
+        metric_tensor: (N_eval, pred_steps, d_f)
+        state_std: (d_f,)
+        Returns: (pred_steps, d_f)
+        """
+        aggregated_tensor = self.aggregate(metric_tensor)
+        post_processed_tensor = self.post_process(aggregated_tensor)
+        return self.rescale(post_processed_tensor, state_std)
 
 
 class MSE(BaseMetric):
@@ -150,6 +178,13 @@ class WMSE(BaseMetric):
     def post_process(self, averaged_tensor):
         return torch.sqrt(averaged_tensor)
 
+    def rescale(self, tensor, state_std):
+        """
+        Weighted metrics are dimensionless in normalized space and should not
+        be rescaled to physical units.
+        """
+        return tensor
+
 
 class WMAE(BaseMetric):
     """
@@ -165,6 +200,13 @@ class WMAE(BaseMetric):
         )  # (..., N, d_state)
         return entry_mae / pred_std  # (..., N, d_state)
 
+    def rescale(self, tensor, state_std):
+        """
+        Weighted metrics are dimensionless in normalized space and should not
+        be rescaled to physical units.
+        """
+        return tensor
+
 
 class NLL(BaseMetric):
     """
@@ -177,9 +219,7 @@ class NLL(BaseMetric):
     def compute_entry_vals(self, pred, target, pred_std):
         # Broadcast pred_std if shaped (d_state,),
         # done internally in Normal class
-        dist = torch.distributions.Normal(
-            pred, pred_std
-        )  # (..., N, d_state)
+        dist = torch.distributions.Normal(pred, pred_std)  # (..., N, d_state)
         return -dist.log_prob(target)  # (..., N, d_state)
 
     def rescale(self, tensor, state_std):
@@ -207,8 +247,7 @@ class CRPSGauss(BaseMetric):
         entry_crps = -pred_std * (
             torch.pi ** (-0.5)
             - 2 * torch.exp(std_normal.log_prob(target_standard))
-            - target_standard
-            * (2 * std_normal.cdf(target_standard) - 1)
+            - target_standard * (2 * std_normal.cdf(target_standard) - 1)
         )  # (..., N, d_state)
 
         return entry_crps
@@ -219,14 +258,19 @@ class OutputStd(BaseMetric):
     Predicted standard deviation, treated as a metric for logging.
     Linear rescaling to physical units.
 
-    Note: This metric is special -- it is not computed from (pred, target)
-    like other metrics, but is instead the spatially-averaged pred_std.
-    Its update logic is handled directly in the model's test_step.
-    The post-processing and rescaling are still handled uniformly through
-    the metric object.
+    This metric uses the same callable interface as the other metrics:
+    `compute_entry_vals` returns the predicted standard deviation field,
+    after which masking/reduction, aggregation, and rescaling are handled
+    through the shared metric-object pipeline.
     """
 
     name = "output_std"
+
+    def compute_entry_vals(self, pred, target, pred_std):
+        if pred_std.ndim < pred.ndim:
+            expand_shape = (1,) * (pred.ndim - 1) + (-1,)
+            pred_std = pred_std.view(*expand_shape).expand_as(pred)
+        return pred_std
 
 
 def mask_and_reduce_metric(metric_entry_vals, mask, average_grid, sum_vars):

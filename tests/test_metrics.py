@@ -34,12 +34,14 @@ class TestBaseMetricInterface:
         ["mse", "mae", "wmse", "wmae", "nll", "crps_gauss", "output_std"],
     )
     def test_metric_has_required_attributes(self, metric_name):
-        """Each metric must have name, display_name, post_process, rescale."""
+        """Each metric must have the full logging-semantics interface."""
         metric = get_metric(metric_name)
         assert hasattr(metric, "name")
         assert hasattr(metric, "display_name")
+        assert hasattr(metric, "aggregate")
         assert hasattr(metric, "post_process")
         assert hasattr(metric, "rescale")
+        assert hasattr(metric, "prepare_for_logging")
         assert callable(metric)
 
     def test_unknown_metric_raises(self):
@@ -136,17 +138,36 @@ class TestMetricComputation:
         result = metric(pred, target, pred_std)
         assert result.shape == (2, 3)  # (B, pred_steps)
 
+    def test_output_std_callable(self, sample_data):
+        """OutputStd should reduce predicted std like any other metric."""
+        pred, target, _ = sample_data
+        pred_std = torch.full_like(pred, 2.5)
+        metric = OutputStd()
+        result = metric(
+            pred, target, pred_std, average_grid=True, sum_vars=False
+        )
+        expected = torch.full((2, 3, 5), 2.5)
+        torch.testing.assert_close(result, expected)
+
     def test_mask_reduces_grid(self, sample_data):
         """Masking should reduce the number of grid nodes used."""
         pred, target, pred_std = sample_data
         mask = torch.tensor([True, False, True, False])
         metric = MSE()
         result_masked = metric(
-            pred, target, pred_std, mask=mask, average_grid=True,
+            pred,
+            target,
+            pred_std,
+            mask=mask,
+            average_grid=True,
             sum_vars=False,
         )
         result_full = metric(
-            pred, target, pred_std, mask=None, average_grid=True,
+            pred,
+            target,
+            pred_std,
+            mask=None,
+            average_grid=True,
             sum_vars=False,
         )
         # Masked result uses fewer grid nodes -- values will differ
@@ -217,10 +238,22 @@ class TestPostProcessAndRescale:
         """WMSE display_name should be 'wrmse'."""
         assert WMSE().display_name == "wrmse"
 
+    def test_wmse_rescale_is_identity(self, averaged_tensor, state_std):
+        """WMSE should stay dimensionless when logged."""
+        metric = WMSE()
+        result = metric.rescale(averaged_tensor, state_std)
+        torch.testing.assert_close(result, averaged_tensor)
+
     def test_wmae_post_process_is_identity(self, averaged_tensor):
         """WMAE post_process should be identity."""
         metric = WMAE()
         result = metric.post_process(averaged_tensor)
+        torch.testing.assert_close(result, averaged_tensor)
+
+    def test_wmae_rescale_is_identity(self, averaged_tensor, state_std):
+        """WMAE should stay dimensionless when logged."""
+        metric = WMAE()
+        result = metric.rescale(averaged_tensor, state_std)
         torch.testing.assert_close(result, averaged_tensor)
 
     def test_nll_post_process_is_identity(self, averaged_tensor):
@@ -263,6 +296,29 @@ class TestPostProcessAndRescale:
         metric = OutputStd()
         result = metric.rescale(averaged_tensor, state_std)
         expected = averaged_tensor * state_std
+        torch.testing.assert_close(result, expected)
+
+    def test_prepare_for_logging_uses_metric_aggregation(self, state_std):
+        """The metric object should own the epoch-level aggregation step."""
+
+        class SumMetric(BaseMetric):
+            name = "sum_metric"
+
+            def compute_entry_vals(self, pred, target, pred_std):
+                return pred
+
+            def aggregate(self, metric_tensor):
+                return torch.sum(metric_tensor, dim=0)
+
+        metric = SumMetric()
+        metric_tensor = torch.tensor(
+            [
+                [[1.0, 2.0, 3.0]],
+                [[4.0, 5.0, 6.0]],
+            ]
+        )
+        result = metric.prepare_for_logging(metric_tensor, state_std)
+        expected = torch.tensor([[10.0, 21.0, 45.0]])
         torch.testing.assert_close(result, expected)
 
 
@@ -329,16 +385,18 @@ class TestBackwardCompatibility:
     @pytest.mark.parametrize(
         "metric_name", ["mse", "mae", "wmse", "wmae", "nll", "crps_gauss"]
     )
-    def test_metric_callable_with_old_signature(
-        self, metric_name, sample_data
-    ):
+    def test_metric_callable_with_old_signature(self, metric_name, sample_data):
         """Metric objects should work with the same call signature as the
         old functions."""
         pred, target, pred_std = sample_data
         metric = get_metric(metric_name)
         # Old-style call: metric_func(pred, target, pred_std, ...)
         result = metric(
-            pred, target, pred_std, mask=None, average_grid=True,
+            pred,
+            target,
+            pred_std,
+            mask=None,
+            average_grid=True,
             sum_vars=True,
         )
         assert result.shape == (2,)
@@ -352,7 +410,11 @@ class TestBackwardCompatibility:
         pred, target, pred_std = sample_data
         metric = get_metric(metric_name)
         result = metric(
-            pred, target, pred_std, mask=None, average_grid=True,
+            pred,
+            target,
+            pred_std,
+            mask=None,
+            average_grid=True,
             sum_vars=False,
         )
         assert result.shape == (2, 5)  # (B, d_state)
