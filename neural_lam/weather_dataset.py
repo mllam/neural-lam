@@ -115,6 +115,9 @@ class WeatherDataset(torch.utils.data.Dataset):
                 )
                 self.da_forcing_mean = self.ds_forcing_stats.forcing_mean
                 self.da_forcing_std = self.ds_forcing_stats.forcing_std
+            else:
+                self.da_forcing_mean = None
+                self.da_forcing_std = None
 
             self.state_std_safe = self._compute_std_safe(
                 self.da_state_std, "state"
