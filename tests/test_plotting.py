@@ -1,12 +1,17 @@
 # Standard library
 from datetime import timedelta
 from pathlib import Path
+from typing import Iterator
+from unittest.mock import patch
 
 # Third-party
+import matplotlib.figure
 import matplotlib.pyplot as plt
 import numpy as np
 import pytest
 import torch
+import xarray as xr
+from cartopy import crs as ccrs
 
 # First-party
 from neural_lam import config as nlconfig
@@ -14,11 +19,177 @@ from neural_lam import vis
 from neural_lam.create_graph import create_graph_from_datastore
 from neural_lam.models.graph_lam import GraphLAM
 from neural_lam.weather_dataset import WeatherDataset
+from tests.conftest import init_datastore_example
 from tests.dummy_datastore import DummyDatastore
 
 # Create output directory for test figures
 TEST_OUTPUT_DIR = Path(__file__).parent / "test_outputs" / "plotting"
 TEST_OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+
+
+@pytest.fixture(autouse=True)
+def mock_cartopy_downloads(monkeypatch: pytest.MonkeyPatch) -> None:
+    """
+    Prevent cartopy from downloading Natural Earth map data during tests.
+    Monkeypatches the GeoAxes methods used in vis.plot_on_axis.
+    """
+    # Third-party
+    from cartopy.mpl.geoaxes import GeoAxes
+
+    monkeypatch.setattr(GeoAxes, "coastlines", lambda *args, **kwargs: None)
+    monkeypatch.setattr(GeoAxes, "add_feature", lambda *args, **kwargs: None)
+
+
+@pytest.fixture(autouse=True)
+def close_all_figures_after_test() -> Iterator[None]:
+    """Ensure test-created matplotlib figures are always cleaned up."""
+    yield
+    plt.close("all")
+
+
+def test_plot_prediction() -> None:
+    """Check prediction plot structure, titles and shared color scaling."""
+    datastore = init_datastore_example("dummydata")
+    n_grid = datastore.num_grid_points
+
+    da_pred = xr.DataArray(np.linspace(0.0, 1.0, n_grid))
+    da_target = xr.DataArray(np.linspace(1.0, 2.0, n_grid))
+
+    expected_vmin = float(np.nanmin([da_pred.values, da_target.values]))
+    expected_vmax = float(np.nanmax([da_pred.values, da_target.values]))
+
+    fig = vis.plot_prediction(
+        datastore=datastore,
+        da_prediction=da_pred,
+        da_target=da_target,
+        title="Test Prediction",
+        vrange=(expected_vmin, expected_vmax),
+        boundary_alpha=None,
+        crop_to_interior=False,
+    )
+
+    assert isinstance(fig, matplotlib.figure.Figure)
+    assert len(fig.axes) == 3
+
+    ground_truth_ax, prediction_ax, _ = fig.axes
+    assert ground_truth_ax.get_title() == "Ground Truth"
+    assert prediction_ax.get_title() == "Prediction"
+    assert fig._suptitle.get_text() == "Test Prediction"
+
+    assert len(ground_truth_ax.collections) == 1
+    assert len(prediction_ax.collections) == 1
+
+    assert ground_truth_ax.collections[0].norm.vmin == expected_vmin
+    assert ground_truth_ax.collections[0].norm.vmax == expected_vmax
+    assert prediction_ax.collections[0].norm.vmin == expected_vmin
+    assert prediction_ax.collections[0].norm.vmax == expected_vmax
+
+
+def test_plot_error_map() -> None:
+    """Check error heatmap content, labels and annotations."""
+    datastore = init_datastore_example("dummydata")
+    d_f = len(datastore.get_vars_names(category="state"))
+    pred_steps = 4
+
+    errors = torch.arange(1, pred_steps * d_f + 1, dtype=torch.float32).reshape(
+        pred_steps, d_f
+    )
+
+    fig = vis.plot_error_map(
+        errors=errors,
+        datastore=datastore,
+        title="Test Error Map",
+    )
+
+    assert isinstance(fig, matplotlib.figure.Figure)
+    assert len(fig.axes) == 1
+
+    ax = fig.axes[0]
+    assert len(ax.images) == 1
+    assert ax.images[0].get_array().shape == (d_f, pred_steps)
+    assert ax.get_xlabel() == "Lead time (h)"
+    assert ax.get_title() == "Test Error Map"
+
+    expected_x_ticklabels = [str(step) for step in range(1, pred_steps + 1)]
+    actual_x_ticklabels = [tick.get_text() for tick in ax.get_xticklabels()]
+    assert actual_x_ticklabels == expected_x_ticklabels
+
+    var_names = datastore.get_vars_names(category="state")
+    var_units = datastore.get_vars_units(category="state")
+    expected_y_ticklabels = [
+        f"{name} ({unit})" for name, unit in zip(var_names, var_units)
+    ]
+    actual_y_ticklabels = [tick.get_text() for tick in ax.get_yticklabels()]
+    assert actual_y_ticklabels == expected_y_ticklabels
+
+    assert len(ax.texts) == pred_steps * d_f
+
+
+def test_plot_spatial_error() -> None:
+    """Check that plot_spatial_error runs without error and returns a Figure."""
+    datastore = init_datastore_example("dummydata")
+    n_grid = datastore.num_grid_points
+
+    error = torch.linspace(0.0, 1.0, n_grid)
+
+    fig = vis.plot_spatial_error(
+        error=error,
+        datastore=datastore,
+        title="Test Spatial Error",
+        boundary_alpha=None,
+        crop_to_interior=False,
+    )
+
+    assert isinstance(fig, matplotlib.figure.Figure)
+    # GeoAxes + colorbar axes
+    assert len(fig.axes) == 2
+    assert fig.texts[0].get_text() == "Test Spatial Error"
+
+
+def test_plot_spatial_error_crop_to_interior_changes_extent() -> None:
+    """Check interior cropping forwards interior lon/lat bounds to
+    set_extent."""
+    datastore = init_datastore_example("dummydata")
+    n_grid = datastore.num_grid_points
+    grid_shape = (datastore.grid_shape_state.x, datastore.grid_shape_state.y)
+
+    boundary_mask = np.ones(grid_shape, dtype=int)
+    boundary_mask[2:-2, 2:-2] = 0
+    datastore.ds["boundary_mask"] = xr.DataArray(
+        boundary_mask.reshape(n_grid), dims=["grid_index"]
+    )
+    datastore.__dict__.pop("boundary_mask", None)
+
+    lats_lons = datastore.get_lat_lon("state")
+    lons = lats_lons[:, 0].reshape(grid_shape)
+    lats = lats_lons[:, 1].reshape(grid_shape)
+    interior = boundary_mask == 0
+
+    expected_min_lon = float(lons[interior].min())
+    expected_max_lon = float(lons[interior].max())
+    expected_min_lat = float(lats[interior].min())
+    expected_max_lat = float(lats[interior].max())
+
+    error = torch.linspace(0.0, 1.0, n_grid)
+    with patch(
+        "cartopy.mpl.geoaxes.GeoAxes.set_extent", autospec=True
+    ) as set_extent_mock:
+        vis.plot_spatial_error(
+            error=error,
+            datastore=datastore,
+            boundary_alpha=None,
+            crop_to_interior=True,
+        )
+
+    assert set_extent_mock.call_count == 1
+    called_extent = set_extent_mock.call_args.args[1]
+    called_crs = set_extent_mock.call_args.kwargs["crs"]
+
+    assert called_extent[0] == pytest.approx(expected_min_lon)
+    assert called_extent[1] == pytest.approx(expected_max_lon)
+    assert called_extent[2] == pytest.approx(expected_min_lat)
+    assert called_extent[3] == pytest.approx(expected_max_lat)
+    assert isinstance(called_crs, ccrs.PlateCarree)
 
 
 @pytest.fixture
@@ -165,8 +336,8 @@ def test_plot_examples_integration_saves_figure(
 
     fig = vis.plot_prediction(
         datastore=datastore,
-        title=f"{var_names[0]} ({var_units[0]}), t={t_i}"
-        f"({(time_step * t_i)} {time_unit})",
+        title=f"{var_names[0]}, t={t_i} ({time_step * t_i} {time_unit})",
+        colorbar_label=var_units[0],
         vrange=var_vranges[0],
         da_prediction=da_prediction.isel(
             state_feature=0, time=t_i - 1

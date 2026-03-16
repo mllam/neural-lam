@@ -213,7 +213,8 @@ class BaseDatastore(abc.ABC):
         mean = standard_da[f"{category}_mean"]
         std = standard_da[f"{category}_std"]
 
-        return (da - mean) / std
+        eps = np.finfo(std.dtype).eps
+        return (da - mean) / std.where(std > eps, other=eps)
 
     @abc.abstractmethod
     def get_dataarray(
@@ -341,6 +342,23 @@ class BaseDatastore(abc.ABC):
         ]
         return [float(v) for v in extent]
 
+    @functools.lru_cache
+    def get_lat_lon(self, category: str) -> np.ndarray:
+        """
+        Return stacked longitude/latitude pairs for the requested category.
+        """
+
+        xy = self.get_xy(category=category, stacked=True)
+        if xy.size == 0:
+            return xy
+
+        lon_lat = ccrs.PlateCarree().transform_points(
+            self.coords_projection,
+            xy[:, 0],
+            xy[:, 1],
+        )[:, :2]
+        return lon_lat
+
     @property
     @abc.abstractmethod
     def num_grid_points(self) -> int:
@@ -458,6 +476,8 @@ class BaseRegularGridDatastore(BaseDatastore):
     - `get_xy` (method): Return the x, y coordinates of the dataset, with the
       option to not stack the coordinates (so that they are returned as a 2D
       grid).
+    - `get_lat_lon` (method): Return the latitude/longitude coordinates of
+      the dataset for convenience when plotting.
 
     The operation of going from (x,y)-indexed regular grid
     to `grid_index`-indexed data-array is called "stacking" and the reverse

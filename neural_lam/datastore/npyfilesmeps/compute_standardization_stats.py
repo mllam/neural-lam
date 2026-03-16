@@ -65,14 +65,18 @@ def get_world_size():
 def setup(rank, world_size):  # pylint: disable=redefined-outer-name
     """Initialize the distributed group."""
     if "SLURM_JOB_NODELIST" in os.environ:
-        master_node = (
-            subprocess.check_output(
-                "scontrol show hostnames $SLURM_JOB_NODELIST | head -n 1",
-                shell=True,
-            )
-            .strip()
-            .decode("utf-8")
+        nodelist = os.environ["SLURM_JOB_NODELIST"]
+        hostnames = subprocess.check_output(
+            ["scontrol", "show", "hostnames", nodelist],
         )
+        hostname_lines = hostnames.decode("utf-8").splitlines()
+        if not hostname_lines:
+            raise RuntimeError(
+                f"SLURM_JOB_NODELIST is set to {repr(nodelist)}, but "
+                "'scontrol show hostnames' returned no hostnames. "
+                "Please check your SLURM job configuration."
+            )
+        master_node = hostname_lines[0].strip()
     else:
         print(
             "\033[91mCareful, you are running this script with --distributed "
