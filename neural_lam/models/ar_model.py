@@ -278,11 +278,14 @@ class ARModel(pl.LightningModule):
 
     def common_step(self, batch):
         """
-        Predict on single batch batch consists of: init_states: (B, 2,
-        num_grid_nodes, d_features) target_states: (B, pred_steps,
-        num_grid_nodes, d_features) forcing_features: (B, pred_steps,
-        num_grid_nodes, d_forcing),
-            where index 0 corresponds to index 1 of init_states
+        Predict on single batch.
+        
+        Batch consists of:
+            init_states: (B, 2, num_grid_nodes, d_features)
+            target_states: (B, pred_steps, num_grid_nodes, d_features)
+            forcing_features: (B, pred_steps, num_grid_nodes, d_forcing)
+            
+        Note: index 0 corresponds to index 1 of init_states.
         """
         (init_states, target_states, forcing_features, batch_times) = batch
 
@@ -465,12 +468,14 @@ class ARModel(pl.LightningModule):
 
     def plot_examples(self, batch, n_examples, split, prediction=None):
         """
-        Plot the first n_examples forecasts from batch
+        Plot the first n_examples forecasts from batch.
 
-        batch: batch with data to plot corresponding forecasts for n_examples:
-        number of forecasts to plot prediction: (B, pred_steps, num_grid_nodes,
-        d_f), existing prediction.
-            Generate if None.
+        Args:
+            batch: batch with data to plot corresponding forecasts for.
+            n_examples: number of forecasts to plot.
+            split: the data split to evaluate.
+            prediction: (B, pred_steps, num_grid_nodes, d_f), existing prediction.
+                Generate if None.
         """
         if prediction is None:
             prediction, target, _, _ = self.common_step(batch)
@@ -635,11 +640,12 @@ class ARModel(pl.LightningModule):
 
     def aggregate_and_plot_metrics(self, metrics_dict, prefix):
         """
-        Aggregate and create error map plots for all metrics in metrics_dict
+        Aggregate and create error map plots for all metrics in metrics_dict.
 
-        metrics_dict: dictionary with metric_names and list of tensors
-            with step-evals.
-        prefix: string, prefix to use for logging
+        Args:
+            metrics_dict: dictionary with metric_names and list of tensors
+                with step-evals.
+            prefix: string, prefix to use for logging.
         """
         log_dict = {}
         for metric_name, metric_val_list in metrics_dict.items():
