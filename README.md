@@ -568,6 +568,23 @@ In addition, hierarchical mesh graphs (`L > 1`) feature a few additional files w
 These files have the same list format as the ones above, but each list has length `L-1` (as these edges describe connections between levels).
 Entries 0 in these lists describe edges between the lowest levels 1 and 2.
 
+## Dimension Glossary
+
+Canonical dimension names used in tensor shape annotations throughout the codebase:
+
+- `B` — batch size
+- `pred_steps` — number of autoregressive prediction steps
+- `num_grid_nodes` — number of nodes in the flattened spatial grid
+- `num_mesh_nodes` — number of mesh nodes; indexed as `num_mesh_nodes[l]` for hierarchical level `l`
+- `num_state_vars` — number of atmospheric state variables
+- `num_forcing_vars` — number of forcing input variables
+- `num_variables` — generic variable dimension used in metric functions
+- `hidden_dim` — internal hidden representation size in GNN layers and MLPs
+- `input_dim` — input feature dimensionality to a layer before transformation
+- `num_edges` — number of edges in a graph (g2m, m2g, same-level, up, down)
+- `num_send` — number of sender nodes in a message-passing step
+- `num_rec` — number of receiver nodes in a message-passing step
+
 # Development and Contributing
 Any push or Pull-Request to the main branch will trigger a selection of pre-commit hooks.
 These hooks will run a series of checks on the code, like formatting and linting.
