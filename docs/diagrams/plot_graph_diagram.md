@@ -12,20 +12,20 @@ end
 
 
 subgraph Imports
-    os["os"]
-    numpy["numpy"]
+    torch_geometric["torch_geometric"]
     argparse["argparse"]
     plotly["plotly"]
-    torch_geometric["torch_geometric"]
+    os["os"]
     config["config"]
+    numpy["numpy"]
 end
 
-    os --> module
-    numpy --> module
+    torch_geometric --> module
     argparse --> module
     plotly --> module
-    torch_geometric --> module
+    os --> module
     config --> module
+    numpy --> module
 
 subgraph Methods
 end
@@ -36,6 +36,6 @@ classDef base fill:#78350f,stroke:#f59e0b,stroke-width:1px,color:#fde68a,font-si
 classDef import fill:#1f2937,stroke:#6b7280,stroke-width:1.5px,color:#e5e7eb,font-size:16px
 classDef method fill:#2d043f,stroke:#7c3aed,stroke-width:1.5px,color:#ede9fe,font-size:16px
 classDef callNode fill:#064e3b,stroke:#10b981,stroke-width:1.5px,color:#d1fae5,font-size:16px
-class os,numpy,argparse,plotly,torch_geometric,config import
+class torch_geometric,argparse,plotly,os,config,numpy import
 
 ```

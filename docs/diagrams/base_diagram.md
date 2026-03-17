@@ -19,30 +19,30 @@ end
     BaseDatastore --> BaseRegularGridDatastore
 
 subgraph Imports
-    cartopy["cartopy"]
-    pathlib["pathlib"]
-    collections["collections"]
-    numpy["numpy"]
-    datetime["datetime"]
-    abc["abc"]
     typing["typing"]
-    pandas["pandas"]
-    xarray["xarray"]
+    pathlib["pathlib"]
     functools["functools"]
     dataclasses["dataclasses"]
+    xarray["xarray"]
+    pandas["pandas"]
+    datetime["datetime"]
+    abc["abc"]
+    collections["collections"]
+    numpy["numpy"]
+    cartopy["cartopy"]
 end
 
-    cartopy --> module
-    pathlib --> module
-    collections --> module
-    numpy --> module
-    datetime --> module
-    abc --> module
     typing --> module
-    pandas --> module
-    xarray --> module
+    pathlib --> module
     functools --> module
     dataclasses --> module
+    xarray --> module
+    pandas --> module
+    datetime --> module
+    abc --> module
+    collections --> module
+    numpy --> module
+    cartopy --> module
     module --> BaseDatastore
     module --> CartesianGridShape
     module --> BaseRegularGridDatastore
@@ -62,6 +62,7 @@ subgraph Methods
     BaseDatastore_get_xy["get_xy()"]
     BaseDatastore_coords_projection["coords_projection()"]
     BaseDatastore_get_xy_extent["get_xy_extent()"]
+    BaseDatastore_get_lat_lon["get_lat_lon()"]
     BaseDatastore_num_grid_points["num_grid_points()"]
     BaseDatastore_state_feature_weights_values["state_feature_weights_values()"]
     BaseDatastore_expected_dim_order["expected_dim_order()"]
@@ -86,6 +87,7 @@ end
     BaseDatastore --> BaseDatastore_get_xy
     BaseDatastore --> BaseDatastore_coords_projection
     BaseDatastore --> BaseDatastore_get_xy_extent
+    BaseDatastore --> BaseDatastore_get_lat_lon
     BaseDatastore --> BaseDatastore_num_grid_points
     BaseDatastore --> BaseDatastore_state_feature_weights_values
     BaseDatastore --> BaseDatastore_expected_dim_order
@@ -102,7 +104,7 @@ classDef method fill:#2d043f,stroke:#7c3aed,stroke-width:1.5px,color:#ede9fe,fon
 classDef callNode fill:#064e3b,stroke:#10b981,stroke-width:1.5px,color:#d1fae5,font-size:16px
 class ABC,BaseDatastore parent
 class BaseDatastore,CartesianGridShape,BaseRegularGridDatastore base
-class cartopy,pathlib,collections,numpy,datetime,abc,typing,pandas,xarray,functools,dataclasses import
-class BaseDatastore_root_path,BaseDatastore_config,BaseDatastore_step_length,BaseDatastore_get_vars_units,BaseDatastore_get_vars_names,BaseDatastore_get_vars_long_names,BaseDatastore_get_num_data_vars,BaseDatastore_get_standardization_dataarray,BaseDatastore__standardize_datarray,BaseDatastore_get_dataarray,BaseDatastore_boundary_mask,BaseDatastore_get_xy,BaseDatastore_coords_projection,BaseDatastore_get_xy_extent,BaseDatastore_num_grid_points,BaseDatastore_state_feature_weights_values,BaseDatastore_expected_dim_order,BaseRegularGridDatastore_grid_shape_state,BaseRegularGridDatastore_get_xy,BaseRegularGridDatastore_unstack_grid_coords,BaseRegularGridDatastore_stack_grid_coords,BaseRegularGridDatastore_num_grid_points method
+class typing,pathlib,functools,dataclasses,xarray,pandas,datetime,abc,collections,numpy,cartopy import
+class BaseDatastore_root_path,BaseDatastore_config,BaseDatastore_step_length,BaseDatastore_get_vars_units,BaseDatastore_get_vars_names,BaseDatastore_get_vars_long_names,BaseDatastore_get_num_data_vars,BaseDatastore_get_standardization_dataarray,BaseDatastore__standardize_datarray,BaseDatastore_get_dataarray,BaseDatastore_boundary_mask,BaseDatastore_get_xy,BaseDatastore_coords_projection,BaseDatastore_get_xy_extent,BaseDatastore_get_lat_lon,BaseDatastore_num_grid_points,BaseDatastore_state_feature_weights_values,BaseDatastore_expected_dim_order,BaseRegularGridDatastore_grid_shape_state,BaseRegularGridDatastore_get_xy,BaseRegularGridDatastore_unstack_grid_coords,BaseRegularGridDatastore_stack_grid_coords,BaseRegularGridDatastore_num_grid_points method
 
 ```

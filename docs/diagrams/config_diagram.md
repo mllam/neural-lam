@@ -18,15 +18,15 @@ end
 
 subgraph Imports
     typing["typing"]
-    dataclass_wizard["dataclass_wizard"]
-    datetime["datetime"]
     dataclasses["dataclasses"]
+    datetime["datetime"]
+    dataclass_wizard["dataclass_wizard"]
 end
 
     typing --> module
-    dataclass_wizard --> module
-    datetime --> module
     dataclasses --> module
+    datetime --> module
+    dataclass_wizard --> module
     module --> Projection
     module --> Dataset
     module --> NpyDatastoreConfig
@@ -42,6 +42,6 @@ classDef method fill:#2d043f,stroke:#7c3aed,stroke-width:1.5px,color:#ede9fe,fon
 classDef callNode fill:#064e3b,stroke:#10b981,stroke-width:1.5px,color:#d1fae5,font-size:16px
 class YAMLWizard parent
 class Projection,Dataset,NpyDatastoreConfig base
-class typing,dataclass_wizard,datetime,dataclasses import
+class typing,dataclasses,datetime,dataclass_wizard import
 
 ```

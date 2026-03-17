@@ -18,12 +18,12 @@ end
     Module --> SplitMLPs
 
 subgraph Imports
-    torch["torch"]
     torch_geometric["torch_geometric"]
+    torch["torch"]
 end
 
-    torch --> module
     torch_geometric --> module
+    torch --> module
     module --> InteractionNet
     module --> SplitMLPs
 
@@ -46,7 +46,7 @@ classDef method fill:#2d043f,stroke:#7c3aed,stroke-width:1.5px,color:#ede9fe,fon
 classDef callNode fill:#064e3b,stroke:#10b981,stroke-width:1.5px,color:#d1fae5,font-size:16px
 class Module,MessagePassing parent
 class InteractionNet,SplitMLPs base
-class torch,torch_geometric import
+class torch_geometric,torch import
 class InteractionNet_forward,InteractionNet_message,InteractionNet_aggregate,SplitMLPs_forward method
 
 ```

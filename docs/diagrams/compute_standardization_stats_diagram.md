@@ -16,23 +16,23 @@ end
 
 subgraph Imports
     pathlib["pathlib"]
+    argparse["argparse"]
     neural_lam["neural_lam"]
     os["os"]
+    torch["torch"]
+    subprocess["subprocess"]
     tqdm["tqdm"]
     datetime["datetime"]
-    subprocess["subprocess"]
-    argparse["argparse"]
-    torch["torch"]
 end
 
     pathlib --> module
+    argparse --> module
     neural_lam --> module
     os --> module
+    torch --> module
+    subprocess --> module
     tqdm --> module
     datetime --> module
-    subprocess --> module
-    argparse --> module
-    torch --> module
     module --> PaddedWeatherDataset
 
 subgraph Methods
@@ -54,7 +54,7 @@ classDef method fill:#2d043f,stroke:#7c3aed,stroke-width:1.5px,color:#ede9fe,fon
 classDef callNode fill:#064e3b,stroke:#10b981,stroke-width:1.5px,color:#d1fae5,font-size:16px
 class Dataset parent
 class PaddedWeatherDataset base
-class pathlib,neural_lam,os,tqdm,datetime,subprocess,argparse,torch import
+class pathlib,argparse,neural_lam,os,torch,subprocess,tqdm,datetime import
 class PaddedWeatherDataset___getitem__,PaddedWeatherDataset___len__,PaddedWeatherDataset_get_original_indices,PaddedWeatherDataset_get_original_window_indices method
 
 ```

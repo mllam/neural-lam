@@ -15,18 +15,18 @@ end
     ARModel --> BaseGraphModel
 
 subgraph Imports
+    ar_model["ar_model"]
     torch["torch"]
     config["config"]
-    ar_model["ar_model"]
-    datastore["datastore"]
     interaction_net["interaction_net"]
+    datastore["datastore"]
 end
 
+    ar_model --> module
     torch --> module
     config --> module
-    ar_model --> module
-    datastore --> module
     interaction_net --> module
+    datastore --> module
     module --> BaseGraphModel
 
 subgraph Methods
@@ -52,7 +52,7 @@ classDef method fill:#2d043f,stroke:#7c3aed,stroke-width:1.5px,color:#ede9fe,fon
 classDef callNode fill:#064e3b,stroke:#10b981,stroke-width:1.5px,color:#d1fae5,font-size:16px
 class ARModel parent
 class BaseGraphModel base
-class torch,config,ar_model,datastore,interaction_net import
+class ar_model,torch,config,interaction_net,datastore import
 class BaseGraphModel_prepare_clamping_params,BaseGraphModel_get_clamped_new_state,BaseGraphModel_get_num_mesh,BaseGraphModel_embedd_mesh_nodes,BaseGraphModel_process_step,BaseGraphModel_predict_step method
 
 ```

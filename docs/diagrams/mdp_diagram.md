@@ -15,34 +15,34 @@ end
     BaseRegularGridDatastore --> MDPDatastore
 
 subgraph Imports
-    cartopy["cartopy"]
-    pathlib["pathlib"]
-    mllam_data_prep["mllam_data_prep"]
-    utils["utils"]
-    numpy["numpy"]
-    datetime["datetime"]
     typing["typing"]
+    copy["copy"]
+    utils["utils"]
+    pathlib["pathlib"]
+    functools["functools"]
     base["base"]
     xarray["xarray"]
     loguru["loguru"]
     warnings["warnings"]
-    copy["copy"]
-    functools["functools"]
+    datetime["datetime"]
+    mllam_data_prep["mllam_data_prep"]
+    numpy["numpy"]
+    cartopy["cartopy"]
 end
 
-    cartopy --> module
-    pathlib --> module
-    mllam_data_prep --> module
-    utils --> module
-    numpy --> module
-    datetime --> module
     typing --> module
+    copy --> module
+    utils --> module
+    pathlib --> module
+    functools --> module
     base --> module
     xarray --> module
     loguru --> module
     warnings --> module
-    copy --> module
-    functools --> module
+    datetime --> module
+    mllam_data_prep --> module
+    numpy --> module
+    cartopy --> module
     module --> MDPDatastore
 
 subgraph Methods
@@ -59,6 +59,7 @@ subgraph Methods
     MDPDatastore_coords_projection["coords_projection()"]
     MDPDatastore_grid_shape_state["grid_shape_state()"]
     MDPDatastore_get_xy["get_xy()"]
+    MDPDatastore_get_lat_lon["get_lat_lon()"]
 end
 
     MDPDatastore --> MDPDatastore_root_path
@@ -74,6 +75,7 @@ end
     MDPDatastore --> MDPDatastore_coords_projection
     MDPDatastore --> MDPDatastore_grid_shape_state
     MDPDatastore --> MDPDatastore_get_xy
+    MDPDatastore --> MDPDatastore_get_lat_lon
 
 classDef parent fill:#0f172a,stroke:#3b82f6,stroke-width:2px,color:#f1f5f9,font-size:16px
 classDef base fill:#78350f,stroke:#f59e0b,stroke-width:1px,color:#fde68a,font-size:16px
@@ -82,7 +84,7 @@ classDef method fill:#2d043f,stroke:#7c3aed,stroke-width:1.5px,color:#ede9fe,fon
 classDef callNode fill:#064e3b,stroke:#10b981,stroke-width:1.5px,color:#d1fae5,font-size:16px
 class BaseRegularGridDatastore parent
 class MDPDatastore base
-class cartopy,pathlib,mllam_data_prep,utils,numpy,datetime,typing,base,xarray,loguru,warnings,copy,functools import
-class MDPDatastore_root_path,MDPDatastore_config,MDPDatastore_step_length,MDPDatastore_get_vars_units,MDPDatastore_get_vars_names,MDPDatastore_get_vars_long_names,MDPDatastore_get_num_data_vars,MDPDatastore_get_dataarray,MDPDatastore_get_standardization_dataarray,MDPDatastore_boundary_mask,MDPDatastore_coords_projection,MDPDatastore_grid_shape_state,MDPDatastore_get_xy method
+class typing,copy,utils,pathlib,functools,base,xarray,loguru,warnings,datetime,mllam_data_prep,numpy,cartopy import
+class MDPDatastore_root_path,MDPDatastore_config,MDPDatastore_step_length,MDPDatastore_get_vars_units,MDPDatastore_get_vars_names,MDPDatastore_get_vars_long_names,MDPDatastore_get_num_data_vars,MDPDatastore_get_dataarray,MDPDatastore_get_standardization_dataarray,MDPDatastore_boundary_mask,MDPDatastore_coords_projection,MDPDatastore_grid_shape_state,MDPDatastore_get_xy,MDPDatastore_get_lat_lon method
 
 ```
