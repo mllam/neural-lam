@@ -9,6 +9,7 @@ import pytest
 import neural_lam
 import neural_lam.create_graph
 import neural_lam.train_model
+from neural_lam.train_model import validate_loss_output_std_compatibility
 
 
 def test_import():
@@ -117,3 +118,14 @@ def test_wandb_id_ignored_with_mlflow_warns():
     warning_msg = mock_log.warning.call_args[0][0]
     assert "--wandb_id is set but logger is" in warning_msg
     assert "mlflow" in warning_msg
+
+
+@pytest.mark.parametrize("loss", ["mse", "mae", "wmse", "wmae"])
+def test_output_std_rejected_for_incompatible_losses(loss):
+    with pytest.raises(ValueError, match="--output_std requires a loss"):
+        validate_loss_output_std_compatibility(loss, True)
+
+
+@pytest.mark.parametrize("loss", ["nll", "crps_gauss"])
+def test_output_std_allowed_for_probabilistic_losses(loss):
+    validate_loss_output_std_compatibility(loss, True)

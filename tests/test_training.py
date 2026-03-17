@@ -1,5 +1,6 @@
 # Standard library
 from pathlib import Path
+from types import SimpleNamespace
 
 # Third-party
 import pytest
@@ -17,7 +18,9 @@ from neural_lam.weather_dataset import WeatherDataModule
 from tests.conftest import init_datastore_example
 
 
-def run_simple_training(datastore, set_output_std):
+def run_simple_training(
+    datastore, set_output_std, loss, devices=2, validate=True
+):
     """
     Run one epoch of a simple model training setup using the given datastore.
 
@@ -27,6 +30,8 @@ def run_simple_training(datastore, set_output_std):
         Datastore to load data from for training
     set_output_std : bool
         If --output_std should be set during training
+    loss : str
+        Loss function to use during training
     """
 
     if torch.cuda.is_available():
@@ -44,7 +49,9 @@ def run_simple_training(datastore, set_output_std):
         # XXX: `devices` has to be set to 2 otherwise
         # neural_lam.models.ar_model.ARModel.aggregate_and_plot_metrics fails
         # because it expects to aggregate over multiple devices
-        devices=2,
+        devices=devices,
+        limit_val_batches=1 if validate else 0,
+        num_sanity_val_steps=2 if validate else 0,
         log_every_n_steps=1,
         # use `detect_anomaly` to ensure that we don't have NaNs popping up
         # during training
@@ -73,25 +80,24 @@ def run_simple_training(datastore, set_output_std):
         num_future_forcing_steps=1,
     )
 
-    class ModelArgs:
-        output_std = set_output_std
-        loss = "mse"
-        restore_opt = False
-        n_example_pred = 1
+    model_args = SimpleNamespace(
+        output_std=set_output_std,
+        loss=loss,
+        restore_opt=False,
+        n_example_pred=1,
         # XXX: this should be superfluous when we have already defined the
         # model object no?
-        graph = graph_name
-        hidden_dim = 4
-        hidden_layers = 1
-        processor_layers = 2
-        mesh_aggr = "sum"
-        lr = 1.0e-3
-        val_steps_to_log = [1, 3]
-        metrics_watch = []
-        num_past_forcing_steps = 1
-        num_future_forcing_steps = 1
-
-    model_args = ModelArgs()
+        graph=graph_name,
+        hidden_dim=4,
+        hidden_layers=1,
+        processor_layers=2,
+        mesh_aggr="sum",
+        lr=1.0e-3,
+        val_steps_to_log=[1, 3],
+        metrics_watch=[],
+        num_past_forcing_steps=1,
+        num_future_forcing_steps=1,
+    )
 
     config = nlconfig.NeuralLAMConfig(
         datastore=nlconfig.DatastoreSelection(
@@ -118,9 +124,15 @@ def test_training(datastore_name):
             "grid datastore."
         )
 
-    run_simple_training(datastore, set_output_std=False)
+    run_simple_training(datastore, set_output_std=False, loss="mse")
 
 
 def test_training_output_std():
-    datastore = init_datastore_example("mdp")  # Test only with mdp datastore
-    run_simple_training(datastore, set_output_std=True)
+    datastore = init_datastore_example("dummydata")
+    run_simple_training(
+        datastore,
+        set_output_std=True,
+        loss="nll",
+        devices=1,
+        validate=False,
+    )

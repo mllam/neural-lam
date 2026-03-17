@@ -23,6 +23,23 @@ MODELS = {
     "hi_lam_parallel": HiLAMParallel,
 }
 
+OUTPUT_STD_COMPATIBLE_LOSSES = {"crps_gauss", "nll"}
+
+
+def validate_loss_output_std_compatibility(loss, output_std):
+    """Validate that the chosen loss can train a learned predictive std-dev."""
+    if not output_std:
+        return
+
+    loss_lower = loss.lower()
+    if loss_lower not in OUTPUT_STD_COMPATIBLE_LOSSES:
+        supported_losses = ", ".join(sorted(OUTPUT_STD_COMPATIBLE_LOSSES))
+        raise ValueError(
+            "--output_std requires a loss that can train the predictive "
+            f"std-dev head, but got loss='{loss}'. Supported losses: "
+            f"{supported_losses}."
+        )
+
 
 @logger.catch
 def main(input_args=None):
@@ -140,7 +157,11 @@ def main(input_args=None):
         "--loss",
         type=str,
         default="wmse",
-        help="Loss function to use, see metric.py",
+        help=(
+            "Loss function to use, see metric.py. When --output_std is set, "
+            "only probabilistic losses such as nll and crps_gauss are "
+            "supported."
+        ),
     )
     parser.add_argument("--lr", type=float, default=1e-3, help="learning rate")
     parser.add_argument(
@@ -241,6 +262,8 @@ def main(input_args=None):
     args.var_leads_metrics_watch = {
         int(k): v for k, v in json.loads(args.var_leads_metrics_watch).items()
     }
+
+    validate_loss_output_std_compatibility(args.loss, args.output_std)
 
     # Check that config only specifies logging for lead times that exist
     # Check --val_steps_to_log
