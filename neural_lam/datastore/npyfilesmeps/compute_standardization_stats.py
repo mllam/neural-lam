@@ -47,6 +47,12 @@ class PaddedWeatherDataset(torch.utils.data.Dataset):
     def get_original_indices(self):
         return self.original_indices
 
+    def get_original_window_indices(self, step_length):
+        step_int, _ = get_integer_time(step_length)
+        return [
+            i // step_int for i in range(len(self.original_indices) * step_int)
+        ]
+
 
 def get_rank():
     return int(os.environ.get("SLURM_PROCID", 0))
