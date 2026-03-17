@@ -37,7 +37,7 @@ class InteractionNet(pyg.nn.MessagePassing):
         edge_index : torch.Tensor
             Edge connectivity tensor in PyG format.
 
-            * **Shape**: ``(2, M)`` where ``M`` is the number of edges.
+            * **Shape**: ``(2, num_edges)``
         input_dim : int
             Dimensionality of both node and edge input representations.
         update_edges : bool, optional
@@ -109,15 +109,15 @@ class InteractionNet(pyg.nn.MessagePassing):
         send_rep : torch.Tensor
             Vector representations of sender nodes.
 
-            * **Shape**: ``(N_send, d_h)``
+            * **Shape**: ``(num_send, input_dim)``
         rec_rep : torch.Tensor
             Vector representations of receiver nodes.
 
-            * **Shape**: ``(N_rec, d_h)``
+            * **Shape**: ``(num_rec, input_dim)``
         edge_rep : torch.Tensor
             Edge representations used during message passing.
 
-            * **Shape**: ``(M, d_h)``
+            * **Shape**: ``(num_edges, input_dim)``
 
         Returns
         -------
@@ -126,8 +126,8 @@ class InteractionNet(pyg.nn.MessagePassing):
             ``True``, the tuple ``(rec_rep, edge_rep)`` containing the updated
             receiver and edge representations is returned.
 
-            * **Shape**: ``(N_rec, d_h)`` for receivers and ``(M, d_h)`` for
-              edges.
+            * **Shape**: ``(num_rec, hidden_dim)`` for receivers and
+              ``(num_edges, hidden_dim)`` for edges.
         """
         # Always concatenate to [rec_nodes, send_nodes] for propagation,
         # but only aggregate to rec_nodes
@@ -147,7 +147,7 @@ class InteractionNet(pyg.nn.MessagePassing):
         return rec_rep
 
     def message(self, x_j, x_i, edge_attr):
-        """Compute messages from node ``j`` to ``i`` using edge features."""
+        """Compute messages from node ``j`` to ``i``."""
         return self.edge_mlp(torch.cat((edge_attr, x_j, x_i), dim=-1))
 
     # pylint: disable-next=signature-differs

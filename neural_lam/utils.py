@@ -225,8 +225,9 @@ def make_mlp(blueprint, layer_norm=True):
     Parameters
     ----------
     blueprint : list[int]
-        Sequence of layer dimensions where ``blueprint[0]`` is the input size
-        and ``blueprint[-1]`` is the output size.
+        Sequence of layer dimensions where ``blueprint[0]`` is the input size,
+        ``blueprint[-1]`` is the output size, and the intermediate entries
+        specify the hidden widths.
     layer_norm : bool, optional
         If ``True``, append a ``LayerNorm`` to the output as in GraphCast.
 
@@ -422,7 +423,11 @@ def setup_training_logger(datastore, args, run_name):
 
 def inverse_softplus(x, beta=1, threshold=20):
     """
-    Approximate the inverse of :func:`torch.nn.functional.softplus`.
+    Inverse of :func:`torch.nn.functional.softplus`.
+
+    Input is clamped to approximately positive values of ``x`` for numerical
+    stability; everything above ``threshold / beta`` is treated as linear and
+    exactly matches the softplus inverse within numerical precision.
 
     Parameters
     ----------
@@ -437,6 +442,11 @@ def inverse_softplus(x, beta=1, threshold=20):
     -------
     torch.Tensor
         Tensor containing the inverse-softplus values.
+
+    Notes
+    -----
+    ``torch.clamp`` will zero the gradients near the bounds, but values this
+    close to zero or ``threshold / beta`` already have negligible gradients.
     """
     x_clamped = torch.clamp(
         x, min=torch.log(torch.tensor(1e-6 + 1)) / beta, max=threshold / beta
@@ -453,7 +463,10 @@ def inverse_softplus(x, beta=1, threshold=20):
 
 def inverse_sigmoid(x):
     """
-    Compute the logit (inverse sigmoid) while clamping to ``(0, 1)``.
+    Inverse of ``torch.sigmoid`` with clamping for numerical stability.
+
+    Sigmoid output takes values in ``[0, 1]``; we clamp the input slightly
+    within that open interval before applying ``log(x / (1 - x))``.
 
     Parameters
     ----------
@@ -465,6 +478,11 @@ def inverse_sigmoid(x):
     torch.Tensor
         Tensor containing ``log(x / (1 - x))`` after clamping away from the
         saturation limits.
+
+    Notes
+    -----
+    ``torch.clamp`` zeroes gradients for values at the bounds, but values this
+    close to 0 or 1 already have negligible gradients.
     """
     x_clamped = torch.clamp(x, min=1e-6, max=1 - 1e-6)
     return torch.log(x_clamped / (1 - x_clamped))
@@ -482,8 +500,10 @@ def get_integer_time(tdelta) -> tuple[int, str]:
     Returns
     -------
     tuple[int, str]
-        Integer value and the corresponding unit (e.g. ``"hours"``). If no
-        unit yields an integer count, ``(1, "unknown")`` is returned.
+        Integer value and the corresponding unit (``"weeks"``, ``"days"``,
+        ``"hours"``, ``"minutes"``, ``"seconds"``, ``"milliseconds"``, or
+        ``"microseconds"``). If no unit yields an integer count,
+        ``(1, "unknown")`` is returned.
 
     Examples
     --------

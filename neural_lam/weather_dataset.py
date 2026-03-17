@@ -19,27 +19,6 @@ class WeatherDataset(torch.utils.data.Dataset):
     """Dataset class for weather data.
 
     This class loads and processes weather data from a given datastore.
-
-    Parameters
-    ----------
-    datastore : BaseDatastore
-        The datastore to load the data from (e.g. mdp).
-    split : str, optional
-        The data split to use ("train", "val" or "test"). Default is "train".
-    ar_steps : int, optional
-        The number of autoregressive steps. Default is 3.
-    num_past_forcing_steps: int, optional
-        Number of past time steps to include in forcing input. If set to i,
-        forcing from times t-i, t-i+1, ..., t-1, t (and potentially beyond,
-        given num_future_forcing_steps) are included as forcing inputs at time t
-        Default is 1.
-    num_future_forcing_steps: int, optional
-        Number of future time steps to include in forcing input. If set to j,
-        forcing from times t, t+1, ..., t+j-1, t+j (and potentially times before
-        t, given num_past_forcing_steps) are included as forcing inputs at time
-        t. Default is 1.
-    standardize : bool, optional
-        Whether to standardize the data. Default is True.
     """
 
     def __init__(
@@ -652,9 +631,10 @@ class WeatherDataModule(pl.LightningDataModule):
         datastore : BaseDatastore
             Datastore used for all splits.
         ar_steps_train : int, optional
-            Number of AR steps for training batches. Default ``3``.
+            Number of autoregressive steps for training batches. Default ``3``.
         ar_steps_eval : int, optional
-            Number of AR steps for validation/test batches. Default ``25``.
+            Number of autoregressive steps for validation/test batches.
+            Default ``25``.
         standardize : bool, optional
             If ``True``, datasets are returned standardized. Default ``True``.
         num_past_forcing_steps : int, optional
@@ -695,7 +675,8 @@ class WeatherDataModule(pl.LightningDataModule):
         ----------
         stage : str or None, optional
             Trainer stage identifier (``"fit"``/``"test"``/``None``). When
-            ``None``, both train and evaluation datasets are created.
+            ``None``, both the training split and the validation/test
+            evaluation splits are prepared.
         """
         if stage == "fit" or stage is None:
             self.train_dataset = WeatherDataset(

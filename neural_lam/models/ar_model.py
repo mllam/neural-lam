@@ -46,7 +46,8 @@ class ARModel(pl.LightningModule):
         config : NeuralLAMConfig
             Experiment configuration containing datastore/training settings.
         datastore : BaseDatastore
-            Datastore supplying state/forcing/static arrays.
+            Datastore supplying data and information about dataset and forecast
+            region.
         """
         super().__init__()
         self.save_hyperparameters(ignore=["datastore"])
@@ -188,7 +189,8 @@ class ARModel(pl.LightningModule):
         Parameters
         ----------
         tensor : torch.Tensor
-            Tensor to convert back to an ``xr.DataArray``.
+            Tensor to convert back to an ``xr.DataArray``. The tensor will be
+            copied to CPU memory before conversion.
 
             * **Shape**: ``(time, grid_index, feature)``
         time : torch.Tensor
@@ -252,28 +254,33 @@ class ARModel(pl.LightningModule):
 
     def predict_step(self, prev_state, prev_prev_state, forcing):
         """
-        Advance the state by one step using the prediction model.
+        Advance the state by one step using the prediction model, as
+        ``X_{t-2}, X_{t-1} -> X_t``.
 
         Parameters
         ----------
         prev_state : torch.Tensor
             Current state ``X_t``.
 
-            * **Shape**: ``(B, num_grid_nodes, feature_dim)``
+            * **Shape**: ``(B, num_grid_nodes, num_state_vars)``
         prev_prev_state : torch.Tensor
             Previous state ``X_{t-1}``.
 
-            * **Shape**: ``(B, num_grid_nodes, feature_dim)``
+            * **Shape**: ``(B, num_grid_nodes, num_state_vars)``
         forcing : torch.Tensor
             Forcing inputs applied at the prediction step.
 
-            * **Shape**: ``(B, num_grid_nodes, forcing_dim)``
+            * **Shape**: ``(B, num_grid_nodes, num_forcing_vars)``
 
         Returns
         -------
         tuple[torch.Tensor, torch.Tensor | None]
             Tuple ``(new_state, pred_std)`` describing the next state and
             optional uncertainty estimate.
+
+            * **new_state**: ``(B, num_grid_nodes, num_state_vars)``
+            * **pred_std**: ``(B, num_grid_nodes, num_state_vars)`` or
+              ``(num_state_vars,)`` when using constant per-feature values
         """
         raise NotImplementedError("No prediction step implemented")
 
@@ -286,24 +293,26 @@ class ARModel(pl.LightningModule):
         init_states : torch.Tensor
             Initial states providing ``X_{t-1}`` and ``X_t``.
 
-            * **Shape**: ``(B, 2, num_grid_nodes, d_f)``
+            * **Shape**: ``(B, 2, num_grid_nodes, num_state_vars)``
         forcing_features : torch.Tensor
             Forcing inputs aligned with each rollout step.
 
-            * **Shape**: ``(B, pred_steps, num_grid_nodes, d_static_f)``
+            * **Shape**: ``(B, pred_steps, num_grid_nodes, num_forcing_vars)``
         true_states : torch.Tensor
             Ground-truth states used for boundary replacement.
 
-            * **Shape**: ``(B, pred_steps, num_grid_nodes, d_f)``
+            * **Shape**: ``(B, pred_steps, num_grid_nodes, num_state_vars)``
 
         Returns
         -------
         tuple[torch.Tensor, torch.Tensor]
             Tuple ``(prediction, pred_std)``.
 
-            * **prediction**: ``(B, pred_steps, num_grid_nodes, d_f)``
-            * **pred_std**: ``(B, pred_steps, num_grid_nodes, d_f)`` or
-              ``(d_f,)`` when a constant per-feature value is used
+            * **prediction**: ``(B, pred_steps, num_grid_nodes,
+              num_state_vars)``
+            * **pred_std**: ``(B, pred_steps, num_grid_nodes, num_state_vars)``
+              or ``(num_state_vars,)`` when a constant per-feature value is
+              used
         """
         prev_prev_state = init_states[:, 0]
         prev_state = init_states[:, 1]
@@ -318,8 +327,8 @@ class ARModel(pl.LightningModule):
             pred_state, pred_std = self.predict_step(
                 prev_state, prev_prev_state, forcing
             )
-            # state: (B, num_grid_nodes, d_f) pred_std: (B, num_grid_nodes,
-            # d_f) or None
+            # state: (B, num_grid_nodes, num_state_vars)
+            # pred_std: (B, num_grid_nodes, num_state_vars) or None
 
             # Overwrite border with true state
             new_state = (
@@ -337,13 +346,13 @@ class ARModel(pl.LightningModule):
 
         prediction = torch.stack(
             prediction_list, dim=1
-        )  # (B, pred_steps, num_grid_nodes, d_f)
+        )  # (B, pred_steps, num_grid_nodes, num_state_vars)
         if self.output_std:
             pred_std = torch.stack(
                 pred_std_list, dim=1
-            )  # (B, pred_steps, num_grid_nodes, d_f)
+            )  # (B, pred_steps, num_grid_nodes, num_state_vars)
         else:
-            pred_std = self.per_var_std  # (d_f,)
+            pred_std = self.per_var_std  # (num_state_vars,)
 
         return prediction, pred_std
 
@@ -357,10 +366,11 @@ class ARModel(pl.LightningModule):
             Tuple of ``(init_states, target_states, forcing_features,
             batch_times)`` produced by :class:`WeatherDataset`.
 
-            * **init_states**: ``(B, 2, num_grid_nodes, d_features)``
-            * **target_states**: ``(B, pred_steps, num_grid_nodes, d_features)``
+            * **init_states**: ``(B, 2, num_grid_nodes, num_state_vars)``
+            * **target_states**: ``(B, pred_steps, num_grid_nodes,
+              num_state_vars)``
             * **forcing_features**: ``(B, pred_steps, num_grid_nodes,
-              d_forcing)``
+              num_forcing_vars)``
             * **batch_times**: ``(B, pred_steps)`` timestamps
 
         Returns
@@ -368,19 +378,22 @@ class ARModel(pl.LightningModule):
         tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]
             ``(prediction, target_states, pred_std, batch_times)``.
 
-            * **prediction**: ``(B, pred_steps, num_grid_nodes, d_f)``
-            * **target_states**: ``(B, pred_steps, num_grid_nodes, d_f)``
-            * **pred_std**: ``(B, pred_steps, num_grid_nodes, d_f)`` or
-              ``(d_f,)``
+            * **prediction**: ``(B, pred_steps, num_grid_nodes,
+              num_state_vars)``
+            * **target_states**: ``(B, pred_steps, num_grid_nodes,
+              num_state_vars)``
+            * **pred_std**: ``(B, pred_steps, num_grid_nodes, num_state_vars)``
+              or ``(num_state_vars,)``
             * **batch_times**: ``(B, pred_steps)``
         """
         (init_states, target_states, forcing_features, batch_times) = batch
 
         prediction, pred_std = self.unroll_prediction(
             init_states, forcing_features, target_states
-        )  # (B, pred_steps, num_grid_nodes, d_f)
-        # prediction: (B, pred_steps, num_grid_nodes, d_f) pred_std: (B,
-        # pred_steps, num_grid_nodes, d_f) or (d_f,)
+        )  # (B, pred_steps, num_grid_nodes, num_state_vars)
+        # prediction: (B, pred_steps, num_grid_nodes, num_state_vars)
+        # pred_std: (B, pred_steps, num_grid_nodes, num_state_vars) or
+        # (num_state_vars,)
 
         return prediction, target_states, pred_std, batch_times
 
@@ -476,7 +489,7 @@ class ARModel(pl.LightningModule):
             pred_std,
             mask=self.interior_mask_bool,
             sum_vars=False,
-        )  # (B, pred_steps, d_f)
+        )  # (B, pred_steps, num_state_vars)
         self.val_metrics["mse"].append(entry_mses)
 
     def on_validation_epoch_end(self):
@@ -503,8 +516,9 @@ class ARModel(pl.LightningModule):
         """
         # TODO Here batch_times can be used for plotting routines
         prediction, target, pred_std, batch_times = self.common_step(batch)
-        # prediction: (B, pred_steps, num_grid_nodes, d_f) pred_std: (B,
-        # pred_steps, num_grid_nodes, d_f) or (d_f,)
+        # prediction: (B, pred_steps, num_grid_nodes, num_state_vars)
+        # pred_std: (B, pred_steps, num_grid_nodes, num_state_vars) or
+        # (num_state_vars,)
 
         time_step_loss = torch.mean(
             self.loss(
@@ -540,14 +554,14 @@ class ARModel(pl.LightningModule):
                 pred_std,
                 mask=self.interior_mask_bool,
                 sum_vars=False,
-            )  # (B, pred_steps, d_f)
+            )  # (B, pred_steps, num_state_vars)
             self.test_metrics[metric_name].append(batch_metric_vals)
 
         if self.output_std:
             # Store output std. per variable, spatially averaged
             mean_pred_std = torch.mean(
                 pred_std[..., self.interior_mask_bool, :], dim=-2
-            )  # (B, pred_steps, d_f)
+            )  # (B, pred_steps, num_state_vars)
             self.test_metrics["output_std"].append(mean_pred_std)
 
         # Save per-sample spatial loss for specific times
@@ -594,7 +608,7 @@ class ARModel(pl.LightningModule):
             Pre-computed predictions to plot. If ``None`` the method runs
             :meth:`common_step` to obtain predictions.
 
-            * **Shape**: ``(B, pred_steps, num_grid_nodes, d_f)``
+            * **Shape**: ``(B, pred_steps, num_grid_nodes, num_state_vars)``
         """
         if prediction is None:
             prediction, target, _, _ = self.common_step(batch)
@@ -612,7 +626,7 @@ class ARModel(pl.LightningModule):
             target_rescaled[:n_examples],
             time[:n_examples],
         ):
-            # Each slice is (pred_steps, num_grid_nodes, d_f)
+            # Each slice is (pred_steps, num_grid_nodes, num_state_vars)
             self.plotted_examples += 1  # Increment already here
 
             da_prediction = self._create_dataarray_from_tensor(
@@ -635,7 +649,7 @@ class ARModel(pl.LightningModule):
                 )
                 .cpu()
                 .numpy()
-            )  # (d_f,)
+            )  # (num_state_vars,)
             var_vmax = (
                 torch.maximum(
                     pred_slice.flatten(0, 1).max(dim=0)[0],
@@ -643,7 +657,7 @@ class ARModel(pl.LightningModule):
                 )
                 .cpu()
                 .numpy()
-            )  # (d_f,)
+            )  # (num_state_vars,)
             var_vranges = list(zip(var_vmin, var_vmax))
 
             # Iterate over prediction horizon time steps
@@ -723,7 +737,7 @@ class ARModel(pl.LightningModule):
         metric_tensor : torch.Tensor
             Metric values per time step and variable.
 
-            * **Shape**: ``(pred_steps, d_f)``
+            * **Shape**: ``(pred_steps, num_state_vars)``
         prefix : str
             Prefix used for logger keys (e.g., ``"val"`` or ``"test"``).
         metric_name : str
@@ -780,11 +794,11 @@ class ARModel(pl.LightningModule):
         for metric_name, metric_val_list in metrics_dict.items():
             metric_tensor = self.all_gather_cat(
                 torch.cat(metric_val_list, dim=0)
-            )  # (N_eval, pred_steps, d_f)
+            )  # (N_eval, pred_steps, num_state_vars)
 
             if self.trainer.is_global_zero:
                 metric_tensor_averaged = torch.mean(metric_tensor, dim=0)
-                # (pred_steps, d_f)
+                # (pred_steps, num_state_vars)
 
                 # Take square root after all averaging to change MSE to RMSE
                 if "mse" in metric_name:
@@ -793,7 +807,7 @@ class ARModel(pl.LightningModule):
 
                 # NOTE: we here assume rescaling for all metrics is linear
                 metric_rescaled = metric_tensor_averaged * self.state_std
-                # (pred_steps, d_f)
+                # (pred_steps, num_state_vars)
                 log_dict.update(
                     self.create_metric_log_dict(
                         metric_rescaled, prefix, metric_name

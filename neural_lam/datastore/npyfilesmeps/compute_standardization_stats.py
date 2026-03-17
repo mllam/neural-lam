@@ -129,9 +129,11 @@ def save_stats(
     squares : Sequence[torch.Tensor]
         Batch-wise second moments with shape ``(N_batch, d_features)``.
     flux_means : Sequence[torch.Tensor]
-        Optional flux means of shape ``(N_batch,)``.
+        Flux means of shape ``(N_batch,)``; pass an empty sequence to skip
+        saving.
     flux_squares : Sequence[torch.Tensor]
-        Optional flux second moments of shape ``(N_batch,)``.
+        Flux second moments of shape ``(N_batch,)``; pass an empty sequence to
+        skip saving.
     filename_prefix : str
         Prefix (e.g., ``"parameter"`` or ``"diff"``) for saved tensors.
     """

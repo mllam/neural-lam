@@ -39,43 +39,45 @@ def mask_and_reduce_metric(metric_entry_vals, mask, average_grid, sum_vars):
     metric_entry_vals : torch.Tensor
         Entry-wise metric values.
 
-        * **Shape**: ``(..., N, d_state)`` where ``...`` are broadcastable
-          leading dimensions.
+        * **Shape**: ``(..., num_grid_nodes, num_variables)`` where leading
+          dimensions are broadcastable.
     mask : torch.Tensor or None
         Boolean mask selecting which grid nodes to include. Pass ``None`` to
         use all nodes.
 
-        * **Shape**: ``(N,)``
+        * **Shape**: ``(num_grid_nodes,)``
     average_grid : bool
-        If ``True``, reduce the grid dimension ``N`` by taking the mean,
-        producing ``(..., d_state)``.
+        If ``True``, reduce ``num_grid_nodes`` by taking the mean,
+        producing ``(..., num_variables)``.
     sum_vars : bool
-        If ``True``, reduce the variable dimension ``d_state`` by summing,
-        producing ``(..., N)`` or ``(...,)`` depending on ``average_grid``.
+        If ``True``, reduce the variable dimension ``num_variables`` by
+        summing, producing ``(..., num_grid_nodes)`` or ``(...,)`` depending on
+        ``average_grid``.
 
     Returns
     -------
     torch.Tensor
         Reduced metric tensor.
 
-        * **Shape**: one of ``(...,)``, ``(..., d_state)``, ``(..., N)``, or
-          ``(..., N, d_state)`` depending on the reduction flags.
+        * **Shape**: one of ``(...,)``, ``(..., num_variables)``,
+          ``(..., num_grid_nodes)``, or ``(..., num_grid_nodes, num_variables)``
+          depending on the reduction flags.
     """
     # Only keep grid nodes in mask
     if mask is not None:
         metric_entry_vals = metric_entry_vals[
             ..., mask, :
-        ]  # (..., N', d_state)
+        ]  # (..., num_selected_nodes, num_variables)
 
     # Optionally reduce last two dimensions
     if average_grid:  # Reduce grid first
         metric_entry_vals = torch.mean(
             metric_entry_vals, dim=-2
-        )  # (..., d_state)
+        )  # (..., num_variables)
     if sum_vars:  # Reduce vars second
         metric_entry_vals = torch.sum(
             metric_entry_vals, dim=-1
-        )  # (..., N) or (...,)
+        )  # (..., num_grid_nodes) or (...,)
 
     return metric_entry_vals
 
@@ -93,19 +95,20 @@ def wmse(pred, target, pred_std, mask=None, average_grid=True, sum_vars=True):
     pred : torch.Tensor
         Model predictions.
 
-        * **Shape**: ``(..., N, d_state)``
+        * **Shape**: ``(..., num_grid_nodes, num_variables)``
     target : torch.Tensor
         Ground-truth values.
 
-        * **Shape**: ``(..., N, d_state)``
+        * **Shape**: ``(..., num_grid_nodes, num_variables)``
     pred_std : torch.Tensor
         Predicted standard deviation used as the per-entry weighting.
 
-        * **Shape**: ``(..., N, d_state)`` or ``(d_state,)``
+        * **Shape**: ``(..., num_grid_nodes, num_variables)`` or
+          ``(num_variables,)``
     mask : torch.Tensor or None, optional
         Boolean mask selecting grid nodes. Default is ``None`` (all nodes).
 
-        * **Shape**: ``(N,)``
+        * **Shape**: ``(num_grid_nodes,)``
     average_grid : bool, optional
         If ``True``, average over the grid dimension. Default is ``True``.
     sum_vars : bool, optional
@@ -121,8 +124,10 @@ def wmse(pred, target, pred_std, mask=None, average_grid=True, sum_vars=True):
     """
     entry_mse = torch.nn.functional.mse_loss(
         pred, target, reduction="none"
-    )  # (..., N, d_state)
-    entry_mse_weighted = entry_mse / (pred_std**2)  # (..., N, d_state)
+    )  # (..., num_grid_nodes, num_variables)
+    entry_mse_weighted = entry_mse / (
+        pred_std**2
+    )  # (..., num_grid_nodes, num_variables)
 
     return mask_and_reduce_metric(
         entry_mse_weighted,
@@ -141,19 +146,20 @@ def mse(pred, target, pred_std, mask=None, average_grid=True, sum_vars=True):
     pred : torch.Tensor
         Model predictions.
 
-        * **Shape**: ``(..., N, d_state)``
+        * **Shape**: ``(..., num_grid_nodes, num_variables)``
     target : torch.Tensor
         Ground-truth values.
 
-        * **Shape**: ``(..., N, d_state)``
+        * **Shape**: ``(..., num_grid_nodes, num_variables)``
     pred_std : torch.Tensor
         Unused argument for API parity with :func:`wmse`.
 
-        * **Shape**: ``(..., N, d_state)`` or ``(d_state,)``
+        * **Shape**: ``(..., num_grid_nodes, num_variables)`` or
+          ``(num_variables,)``
     mask : torch.Tensor or None, optional
         Boolean mask selecting grid nodes. Default is ``None`` (all nodes).
 
-        * **Shape**: ``(N,)``
+        * **Shape**: ``(num_grid_nodes,)``
     average_grid : bool, optional
         If ``True``, average over the grid dimension. Default is ``True``.
     sum_vars : bool, optional
@@ -162,7 +168,10 @@ def mse(pred, target, pred_std, mask=None, average_grid=True, sum_vars=True):
     Returns
     -------
     torch.Tensor
-        MSE with shape determined by ``average_grid`` and ``sum_vars``.
+        MSE after masking and reduction (see
+        :func:`mask_and_reduce_metric`).
+
+        * **Shape**: determined by ``average_grid`` and ``sum_vars``.
     """
     # Replace pred_std with constant ones
     return wmse(
@@ -174,24 +183,29 @@ def wmae(pred, target, pred_std, mask=None, average_grid=True, sum_vars=True):
     """
     Compute the Weighted Mean Absolute Error (wMAE).
 
+    Scales the absolute error at each grid node and variable by the inverse
+    standard deviation ``1 / pred_std``, then applies masking and reduction via
+    :func:`mask_and_reduce_metric`.
+
     Parameters
     ----------
     pred : torch.Tensor
         Model predictions.
 
-        * **Shape**: ``(..., N, d_state)``
+        * **Shape**: ``(..., num_grid_nodes, num_variables)``
     target : torch.Tensor
         Ground-truth values.
 
-        * **Shape**: ``(..., N, d_state)``
+        * **Shape**: ``(..., num_grid_nodes, num_variables)``
     pred_std : torch.Tensor
         Predicted standard deviation used as the per-entry weighting.
 
-        * **Shape**: ``(..., N, d_state)`` or ``(d_state,)``
+        * **Shape**: ``(..., num_grid_nodes, num_variables)`` or
+          ``(num_variables,)``
     mask : torch.Tensor or None, optional
         Boolean mask selecting grid nodes. Default is ``None`` (all nodes).
 
-        * **Shape**: ``(N,)``
+        * **Shape**: ``(num_grid_nodes,)``
     average_grid : bool, optional
         If ``True``, average over the grid dimension. Default is ``True``.
     sum_vars : bool, optional
@@ -200,13 +214,17 @@ def wmae(pred, target, pred_std, mask=None, average_grid=True, sum_vars=True):
     Returns
     -------
     torch.Tensor
-        Weighted MAE with shape determined by ``average_grid`` and
-        ``sum_vars``.
+        Weighted MAE after masking and reduction (see
+        :func:`mask_and_reduce_metric`).
+
+        * **Shape**: determined by ``average_grid`` and ``sum_vars``.
     """
     entry_mae = torch.nn.functional.l1_loss(
         pred, target, reduction="none"
-    )  # (..., N, d_state)
-    entry_mae_weighted = entry_mae / pred_std  # (..., N, d_state)
+    )  # (..., num_grid_nodes, num_variables)
+    entry_mae_weighted = (
+        entry_mae / pred_std
+    )  # (..., num_grid_nodes, num_variables)
 
     return mask_and_reduce_metric(
         entry_mae_weighted,
@@ -225,19 +243,20 @@ def mae(pred, target, pred_std, mask=None, average_grid=True, sum_vars=True):
     pred : torch.Tensor
         Model predictions.
 
-        * **Shape**: ``(..., N, d_state)``
+        * **Shape**: ``(..., num_grid_nodes, num_variables)``
     target : torch.Tensor
         Ground-truth values.
 
-        * **Shape**: ``(..., N, d_state)``
+        * **Shape**: ``(..., num_grid_nodes, num_variables)``
     pred_std : torch.Tensor
         Unused argument for compatibility with :func:`wmae`.
 
-        * **Shape**: ``(..., N, d_state)`` or ``(d_state,)``
+        * **Shape**: ``(..., num_grid_nodes, num_variables)`` or
+          ``(num_variables,)``
     mask : torch.Tensor or None, optional
         Boolean mask selecting grid nodes. Default is ``None`` (all nodes).
 
-        * **Shape**: ``(N,)``
+        * **Shape**: ``(num_grid_nodes,)``
     average_grid : bool, optional
         If ``True``, average over the grid dimension. Default is ``True``.
     sum_vars : bool, optional
@@ -246,7 +265,10 @@ def mae(pred, target, pred_std, mask=None, average_grid=True, sum_vars=True):
     Returns
     -------
     torch.Tensor
-        MAE with shape determined by ``average_grid`` and ``sum_vars``.
+        MAE after masking and reduction (see
+        :func:`mask_and_reduce_metric`).
+
+        * **Shape**: determined by ``average_grid`` and ``sum_vars``.
     """
     # Replace pred_std with constant ones
     return wmae(
@@ -263,19 +285,20 @@ def nll(pred, target, pred_std, mask=None, average_grid=True, sum_vars=True):
     pred : torch.Tensor
         Distribution mean predictions.
 
-        * **Shape**: ``(..., N, d_state)``
+        * **Shape**: ``(..., num_grid_nodes, num_variables)``
     target : torch.Tensor
         Ground-truth values.
 
-        * **Shape**: ``(..., N, d_state)``
+        * **Shape**: ``(..., num_grid_nodes, num_variables)``
     pred_std : torch.Tensor
         Predicted standard deviation parameter of the Gaussian.
 
-        * **Shape**: ``(..., N, d_state)`` or ``(d_state,)``
+        * **Shape**: ``(..., num_grid_nodes, num_variables)`` or
+          ``(num_variables,)``
     mask : torch.Tensor or None, optional
         Boolean mask selecting grid nodes. Default is ``None`` (all nodes).
 
-        * **Shape**: ``(N,)``
+        * **Shape**: ``(num_grid_nodes,)``
     average_grid : bool, optional
         If ``True``, average over the grid dimension. Default is ``True``.
     sum_vars : bool, optional
@@ -284,12 +307,16 @@ def nll(pred, target, pred_std, mask=None, average_grid=True, sum_vars=True):
     Returns
     -------
     torch.Tensor
-        Negative log-likelihood with shape determined by ``average_grid`` and
-        ``sum_vars``.
+        Negative log-likelihood after masking and reduction (see
+        :func:`mask_and_reduce_metric`).
+
+        * **Shape**: determined by ``average_grid`` and ``sum_vars``.
     """
-    # Broadcast pred_std if shaped (d_state,), done internally in Normal class
-    dist = torch.distributions.Normal(pred, pred_std)  # (..., N, d_state)
-    entry_nll = -dist.log_prob(target)  # (..., N, d_state)
+    # Broadcast pred_std if shaped (num_variables,) via distribution internals
+    dist = torch.distributions.Normal(
+        pred, pred_std
+    )  # (..., num_grid_nodes, num_variables)
+    entry_nll = -dist.log_prob(target)  # (..., num_grid_nodes, num_variables)
 
     return mask_and_reduce_metric(
         entry_nll, mask=mask, average_grid=average_grid, sum_vars=sum_vars
@@ -309,19 +336,20 @@ def crps_gauss(
     pred : torch.Tensor
         Distribution mean predictions.
 
-        * **Shape**: ``(..., N, d_state)``
+        * **Shape**: ``(..., num_grid_nodes, num_variables)``
     target : torch.Tensor
         Ground-truth values.
 
-        * **Shape**: ``(..., N, d_state)``
+        * **Shape**: ``(..., num_grid_nodes, num_variables)``
     pred_std : torch.Tensor
         Predicted standard deviation parameter of the Gaussian.
 
-        * **Shape**: ``(..., N, d_state)`` or ``(d_state,)``
+        * **Shape**: ``(..., num_grid_nodes, num_variables)`` or
+          ``(num_variables,)``
     mask : torch.Tensor or None, optional
         Boolean mask selecting grid nodes. Default is ``None`` (all nodes).
 
-        * **Shape**: ``(N,)``
+        * **Shape**: ``(num_grid_nodes,)``
     average_grid : bool, optional
         If ``True``, average over the grid dimension. Default is ``True``.
     sum_vars : bool, optional
@@ -330,19 +358,23 @@ def crps_gauss(
     Returns
     -------
     torch.Tensor
-        Negative CRPS values with shape determined by ``average_grid`` and
-        ``sum_vars``.
+        Negative CRPS values after masking and reduction (see
+        :func:`mask_and_reduce_metric`).
+
+        * **Shape**: determined by ``average_grid`` and ``sum_vars``.
     """
     std_normal = torch.distributions.Normal(
         torch.zeros((), device=pred.device), torch.ones((), device=pred.device)
     )
-    target_standard = (target - pred) / pred_std  # (..., N, d_state)
+    target_standard = (
+        target - pred
+    ) / pred_std  # (..., num_grid_nodes, num_variables)
 
     entry_crps = -pred_std * (
         torch.pi ** (-0.5)
         - 2 * torch.exp(std_normal.log_prob(target_standard))
         - target_standard * (2 * std_normal.cdf(target_standard) - 1)
-    )  # (..., N, d_state)
+    )  # (..., num_grid_nodes, num_variables)
 
     return mask_and_reduce_metric(
         entry_crps, mask=mask, average_grid=average_grid, sum_vars=sum_vars

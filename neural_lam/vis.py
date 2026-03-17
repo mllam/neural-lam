@@ -98,13 +98,13 @@ def plot_prediction(
     datastore : BaseRegularGridDatastore
         Datastore providing coordinate metadata and projection details.
     da_prediction : xarray.DataArray
-        Predicted field flattened over the grid.
+        Predicted field.
 
-        * **Shape**: ``(N_grid,)``
+        * **Shape**: ``(num_grid_nodes,)``
     da_target : xarray.DataArray
-        Ground-truth field flattened over the grid.
+        Ground-truth field.
 
-        * **Shape**: ``(N_grid,)``
+        * **Shape**: ``(num_grid_nodes,)``
     title : str or None, optional
         Optional figure title.
     vrange : tuple[float, float] or None, optional
