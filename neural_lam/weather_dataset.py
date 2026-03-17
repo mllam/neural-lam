@@ -153,18 +153,30 @@ class WeatherDataset(torch.utils.data.Dataset):
                 )
 
             n_forecast_steps = self.da_state.elapsed_forecast_duration.size
+            if n_forecast_steps < 2 + self.ar_steps:
+                raise ValueError(
+                    "The number of forecast steps available "
+                    f"({n_forecast_steps}) is less than the required "
+                    f"2+ar_steps (2+{self.ar_steps}={2 + self.ar_steps}) for "
+                    "creating a sample with initial and target states."
+                )
+
             if self.da_forcing is not None:
                 # When forcing is present, the shared forecast horizon needs
                 # to be large enough for the full forcing window as well.
+                n_forcing_forecast_steps = (
+                    self.da_forcing.elapsed_forecast_duration.size
+                )
                 required_forecast_steps = (
                     max(2, self.num_past_forcing_steps)
                     + self.ar_steps
                     + self.num_future_forcing_steps
                 )
-                if n_forecast_steps < required_forecast_steps:
+                if n_forcing_forecast_steps < required_forecast_steps:
                     raise ValueError(
                         "The number of forcing forecast steps available "
-                        f"({n_forecast_steps}) is less than the required "
+                        f"({n_forcing_forecast_steps}) is less than the "
+                        "required "
                         f"{required_forecast_steps} "
                         f"(max(2, num_past_forcing_steps="
                         f"{self.num_past_forcing_steps})"
@@ -173,13 +185,6 @@ class WeatherDataset(torch.utils.data.Dataset):
                         f"{self.num_future_forcing_steps}) "
                         "for constructing forcing windows."
                     )
-            elif n_forecast_steps < 2 + self.ar_steps:
-                raise ValueError(
-                    "The number of forecast steps available "
-                    f"({n_forecast_steps}) is less than the required "
-                    f"2+ar_steps (2+{self.ar_steps}={2 + self.ar_steps}) for "
-                    "creating a sample with initial and target states."
-                )
 
             return self.da_state.analysis_time.size
         else:
