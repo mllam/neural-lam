@@ -5,8 +5,8 @@ flowchart TD
 module["base"]
 
 subgraph Parent_Class
-    ABC["ABC"]
     BaseDatastore["BaseDatastore"]
+    ABC["ABC"]
 end
 
 subgraph Base_Class
@@ -19,30 +19,30 @@ end
     BaseDatastore --> BaseRegularGridDatastore
 
 subgraph Imports
-    typing["typing"]
     pathlib["pathlib"]
-    functools["functools"]
     dataclasses["dataclasses"]
-    xarray["xarray"]
-    pandas["pandas"]
-    datetime["datetime"]
     abc["abc"]
+    functools["functools"]
+    pandas["pandas"]
     collections["collections"]
-    numpy["numpy"]
+    datetime["datetime"]
     cartopy["cartopy"]
+    xarray["xarray"]
+    numpy["numpy"]
+    typing["typing"]
 end
 
-    typing --> module
     pathlib --> module
-    functools --> module
     dataclasses --> module
-    xarray --> module
-    pandas --> module
-    datetime --> module
     abc --> module
+    functools --> module
+    pandas --> module
     collections --> module
-    numpy --> module
+    datetime --> module
     cartopy --> module
+    xarray --> module
+    numpy --> module
+    typing --> module
     module --> BaseDatastore
     module --> CartesianGridShape
     module --> BaseRegularGridDatastore
@@ -102,9 +102,9 @@ classDef base fill:#78350f,stroke:#f59e0b,stroke-width:1px,color:#fde68a,font-si
 classDef import fill:#1f2937,stroke:#6b7280,stroke-width:1.5px,color:#e5e7eb,font-size:16px
 classDef method fill:#2d043f,stroke:#7c3aed,stroke-width:1.5px,color:#ede9fe,font-size:16px
 classDef callNode fill:#064e3b,stroke:#10b981,stroke-width:1.5px,color:#d1fae5,font-size:16px
-class ABC,BaseDatastore parent
+class BaseDatastore,ABC parent
 class BaseDatastore,CartesianGridShape,BaseRegularGridDatastore base
-class typing,pathlib,functools,dataclasses,xarray,pandas,datetime,abc,collections,numpy,cartopy import
+class pathlib,dataclasses,abc,functools,pandas,collections,datetime,cartopy,xarray,numpy,typing import
 class BaseDatastore_root_path,BaseDatastore_config,BaseDatastore_step_length,BaseDatastore_get_vars_units,BaseDatastore_get_vars_names,BaseDatastore_get_vars_long_names,BaseDatastore_get_num_data_vars,BaseDatastore_get_standardization_dataarray,BaseDatastore__standardize_datarray,BaseDatastore_get_dataarray,BaseDatastore_boundary_mask,BaseDatastore_get_xy,BaseDatastore_coords_projection,BaseDatastore_get_xy_extent,BaseDatastore_get_lat_lon,BaseDatastore_num_grid_points,BaseDatastore_state_feature_weights_values,BaseDatastore_expected_dim_order,BaseRegularGridDatastore_grid_shape_state,BaseRegularGridDatastore_get_xy,BaseRegularGridDatastore_unstack_grid_coords,BaseRegularGridDatastore_stack_grid_coords,BaseRegularGridDatastore_num_grid_points method
 
 ```

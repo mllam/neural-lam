@@ -12,20 +12,20 @@ end
 
 
 subgraph Imports
-    xarray["xarray"]
+    matplotlib["matplotlib"]
     torch["torch"]
     datastore["datastore"]
-    matplotlib["matplotlib"]
-    numpy["numpy"]
     cartopy["cartopy"]
+    xarray["xarray"]
+    numpy["numpy"]
 end
 
-    xarray --> module
+    matplotlib --> module
     torch --> module
     datastore --> module
-    matplotlib --> module
-    numpy --> module
     cartopy --> module
+    xarray --> module
+    numpy --> module
 
 subgraph Methods
 end
@@ -36,6 +36,6 @@ classDef base fill:#78350f,stroke:#f59e0b,stroke-width:1px,color:#fde68a,font-si
 classDef import fill:#1f2937,stroke:#6b7280,stroke-width:1.5px,color:#e5e7eb,font-size:16px
 classDef method fill:#2d043f,stroke:#7c3aed,stroke-width:1.5px,color:#ede9fe,font-size:16px
 classDef callNode fill:#064e3b,stroke:#10b981,stroke-width:1.5px,color:#d1fae5,font-size:16px
-class xarray,torch,datastore,matplotlib,numpy,cartopy import
+class matplotlib,torch,datastore,cartopy,xarray,numpy import
 
 ```

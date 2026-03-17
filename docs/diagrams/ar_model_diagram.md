@@ -15,34 +15,34 @@ end
     LightningModule --> ARModel
 
 subgraph Imports
+    matplotlib["matplotlib"]
     typing["typing"]
-    neural_lam["neural_lam"]
+    torch["torch"]
+    weather_dataset["weather_dataset"]
+    config["config"]
+    datastore["datastore"]
+    os["os"]
+    warnings["warnings"]
     loss_weighting["loss_weighting"]
     xarray["xarray"]
-    weather_dataset["weather_dataset"]
-    warnings["warnings"]
-    os["os"]
-    torch["torch"]
-    datastore["datastore"]
-    config["config"]
-    matplotlib["matplotlib"]
     pytorch_lightning["pytorch_lightning"]
     numpy["numpy"]
+    neural_lam["neural_lam"]
 end
 
+    matplotlib --> module
     typing --> module
-    neural_lam --> module
+    torch --> module
+    weather_dataset --> module
+    config --> module
+    datastore --> module
+    os --> module
+    warnings --> module
     loss_weighting --> module
     xarray --> module
-    weather_dataset --> module
-    warnings --> module
-    os --> module
-    torch --> module
-    datastore --> module
-    config --> module
-    matplotlib --> module
     pytorch_lightning --> module
     numpy --> module
+    neural_lam --> module
     module --> ARModel
 
 subgraph Methods
@@ -90,7 +90,7 @@ classDef method fill:#2d043f,stroke:#7c3aed,stroke-width:1.5px,color:#ede9fe,fon
 classDef callNode fill:#064e3b,stroke:#10b981,stroke-width:1.5px,color:#d1fae5,font-size:16px
 class LightningModule parent
 class ARModel base
-class typing,neural_lam,loss_weighting,xarray,weather_dataset,warnings,os,torch,datastore,config,matplotlib,pytorch_lightning,numpy import
+class matplotlib,typing,torch,weather_dataset,config,datastore,os,warnings,loss_weighting,xarray,pytorch_lightning,numpy,neural_lam import
 class ARModel__create_dataarray_from_tensor,ARModel_configure_optimizers,ARModel_interior_mask_bool,ARModel_expand_to_batch,ARModel_predict_step,ARModel_unroll_prediction,ARModel_common_step,ARModel_training_step,ARModel_all_gather_cat,ARModel_validation_step,ARModel_on_validation_epoch_end,ARModel_test_step,ARModel_plot_examples,ARModel_create_metric_log_dict,ARModel_aggregate_and_plot_metrics,ARModel_on_test_epoch_end,ARModel_on_load_checkpoint method
 
 ```

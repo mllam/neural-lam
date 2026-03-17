@@ -16,13 +16,13 @@ end
 
 subgraph Imports
     pathlib["pathlib"]
-    tempfile["tempfile"]
-    functools["functools"]
-    loguru["loguru"]
-    warnings["warnings"]
-    os["os"]
     torch["torch"]
     subprocess["subprocess"]
+    functools["functools"]
+    loguru["loguru"]
+    os["os"]
+    warnings["warnings"]
+    tempfile["tempfile"]
     tueplots["tueplots"]
     custom_loggers["custom_loggers"]
     pytorch_lightning["pytorch_lightning"]
@@ -30,13 +30,13 @@ subgraph Imports
 end
 
     pathlib --> module
-    tempfile --> module
-    functools --> module
-    loguru --> module
-    warnings --> module
-    os --> module
     torch --> module
     subprocess --> module
+    functools --> module
+    loguru --> module
+    os --> module
+    warnings --> module
+    tempfile --> module
     tueplots --> module
     custom_loggers --> module
     pytorch_lightning --> module
@@ -64,7 +64,7 @@ classDef method fill:#2d043f,stroke:#7c3aed,stroke-width:1.5px,color:#ede9fe,fon
 classDef callNode fill:#064e3b,stroke:#10b981,stroke-width:1.5px,color:#d1fae5,font-size:16px
 class Module parent
 class BufferList base
-class pathlib,tempfile,functools,loguru,warnings,os,torch,subprocess,tueplots,custom_loggers,pytorch_lightning,shutil import
+class pathlib,torch,subprocess,functools,loguru,os,warnings,tempfile,tueplots,custom_loggers,pytorch_lightning,shutil import
 class BufferList___getitem__,BufferList___len__,BufferList___iter__,BufferList___itruediv__,BufferList___imul__ method
 
 ```
