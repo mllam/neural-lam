@@ -3,6 +3,10 @@ import cartopy.crs as ccrs
 import cartopy.feature as cfeature
 import matplotlib
 import matplotlib.colors
+
+# Set backend BEFORE pyplot import
+matplotlib.use("Agg")
+
 import matplotlib.pyplot as plt
 import numpy as np
 import torch
@@ -12,9 +16,6 @@ import xarray as xr
 from . import utils
 from .datastore.base import BaseRegularGridDatastore
 
-<<<<<<< fix-matplotlib-backend
-matplotlib.use("Agg")
-=======
 # Font sizes shared across all plot functions for visual consistency.
 _TITLE_SIZE = 13  # suptitle and per-axes titles
 _LABEL_SIZE = 11  # axis / colorbar labels
@@ -155,7 +156,6 @@ def plot_on_axis(
         ax.set_title(ax_title, size=_TITLE_SIZE)
 
     return mesh
->>>>>>> main
 
 
 @matplotlib.rc_context(utils.fractional_plot_bundle(1))
