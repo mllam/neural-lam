@@ -3,10 +3,6 @@ import cartopy.crs as ccrs
 import cartopy.feature as cfeature
 import matplotlib
 import matplotlib.colors
-
-# Set backend BEFORE pyplot import
-matplotlib.use("Agg")
-
 import matplotlib.pyplot as plt
 import numpy as np
 import torch
@@ -15,6 +11,9 @@ import xarray as xr
 # Local
 from . import utils
 from .datastore.base import BaseRegularGridDatastore
+
+# Set backend AFTER ALL imports
+matplotlib.use("Agg")
 
 # Font sizes shared across all plot functions for visual consistency.
 _TITLE_SIZE = 13  # suptitle and per-axes titles
