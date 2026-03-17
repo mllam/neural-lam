@@ -82,17 +82,6 @@ class MDPDatastore(BaseRegularGridDatastore):
                 var_names = self.get_vars_names(category)
                 log_on_rank_zero(f" {category:<8s}: {' '.join(var_names)}")
 
-        if len(self.get_vars_names("static")) == 0:
-            # Standard library
-            import warnings
-
-            warnings.warn(
-                "No static features found in the datastore. "
-                "Training without static features.",
-                UserWarning,
-                stacklevel=2,
-            )
-
         # check that all three train/val/test splits are available
         required_splits = ["train", "val", "test"]
         available_splits = list(self._ds.splits.split_name.values)
@@ -198,6 +187,13 @@ class MDPDatastore(BaseRegularGridDatastore):
         if f"{category}_feature" not in self._ds:
             if category == "forcing":
                 warnings.warn("no forcing data found in datastore")
+            elif category == "static":
+                warnings.warn(
+                    "No static features found in the datastore. "
+                    "Training without static features.",
+                    UserWarning,
+                    stacklevel=2,
+                )
             return []
         return self._ds[f"{category}_feature"].values.tolist()
 
