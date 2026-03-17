@@ -329,3 +329,59 @@ def test_weather_dataset_no_forcing_standardize():
     assert (
         forcing.shape[-1] == 0
     ), "Expected zero forcing features when forcing is None"
+
+
+def test_create_dataarray_from_tensor_forcing_category():
+    """Regression test for Bug C: create_dataarray_from_tensor must work for
+    category='forcing', not just 'state'. Previously, the method hardcoded
+    ``da_datastore_state.state_feature`` for all categories, raising
+    AttributeError when category != 'state' because the forcing DataArray has
+    a 'forcing_feature' coordinate, not 'state_feature'.
+    """
+    # DummyDatastore has 2 forcing features
+    datastore = DummyDatastore(n_grid_points=100, n_timesteps=20)
+    n_grid = datastore.num_grid_points
+    n_forcing = len(datastore.get_vars_names("forcing"))
+
+    dataset = WeatherDataset(
+        datastore=datastore,
+        split="train",
+        ar_steps=3,
+    )
+
+    feature_names = datastore.get_vars_names("forcing")
+
+    # --- 2-D tensor: (grid_index, forcing_feature) ---
+    dummy_2d = torch.zeros(n_grid, n_forcing, dtype=torch.float32)
+    import datetime
+
+    t_single = DummyDatastore.T0
+    da_2d = dataset.create_dataarray_from_tensor(
+        tensor=dummy_2d,
+        time=t_single,
+        category="forcing",
+    )
+    assert da_2d.dims == (
+        "grid_index",
+        "forcing_feature",
+    ), f"Unexpected dims: {da_2d.dims}"
+    assert da_2d.shape == (n_grid, n_forcing)
+    np.testing.assert_array_equal(
+        da_2d["forcing_feature"].values, feature_names
+    )
+
+    # --- 3-D tensor: (time, grid_index, forcing_feature) ---
+    n_steps = 3
+    dummy_3d = torch.zeros(n_steps, n_grid, n_forcing, dtype=torch.float32)
+    times = [DummyDatastore.T0 + datetime.timedelta(hours=i) for i in range(n_steps)]
+    da_3d = dataset.create_dataarray_from_tensor(
+        tensor=dummy_3d,
+        time=times,
+        category="forcing",
+    )
+    assert da_3d.dims == (
+        "time",
+        "grid_index",
+        "forcing_feature",
+    ), f"Unexpected dims: {da_3d.dims}"
+    assert da_3d.shape == (n_steps, n_grid, n_forcing)

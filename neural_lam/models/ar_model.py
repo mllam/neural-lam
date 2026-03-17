@@ -155,6 +155,10 @@ class ARModel(pl.LightningModule):
 
         # For storing spatial loss maps during evaluation
         self.spatial_loss_maps: List[Any] = []
+        # The subset of val_steps_to_log that fall within the prediction
+        # horizon — computed on first test_step and used in on_test_epoch_end
+        # to correctly label spatial loss plots.
+        self.logged_spatial_steps: List[int] = []
 
         self.time_step_int, self.time_step_unit = get_integer_time(
             self._datastore.step_length
@@ -403,6 +407,7 @@ class ARModel(pl.LightningModule):
         test_log_dict = {
             f"test_loss_unroll{step}": time_step_loss[step - 1]
             for step in self.args.val_steps_to_log
+            if step <= len(time_step_loss)
         }
         test_log_dict["test_mean_loss"] = mean_loss
 
@@ -439,9 +444,17 @@ class ARModel(pl.LightningModule):
         spatial_loss = self.loss(
             prediction, target, pred_std, average_grid=False
         )  # (B, pred_steps, num_grid_nodes)
-        log_spatial_losses = spatial_loss[
-            :, [step - 1 for step in self.args.val_steps_to_log]
+        # Only keep steps that fit within the prediction horizon; store the
+        # filtered list so on_test_epoch_end can label plots correctly even
+        # when val_steps_to_log contains out-of-range values.
+        valid_steps = [
+            step
+            for step in self.args.val_steps_to_log
+            if step <= spatial_loss.shape[1]
         ]
+        if not self.logged_spatial_steps:
+            self.logged_spatial_steps = valid_steps
+        log_spatial_losses = spatial_loss[:, [s - 1 for s in valid_steps]]
         self.spatial_loss_maps.append(log_spatial_losses)
         # (B, N_log, num_grid_nodes)
 
@@ -665,26 +678,41 @@ class ARModel(pl.LightningModule):
                     )
                 )
 
-        # Ensure that log_dict has structure for
-        # logging as dict(str, plt.Figure)
-        assert all(
-            isinstance(key, str) and isinstance(value, plt.Figure)
-            for key, value in log_dict.items()
-        )
-
         if self.trainer.is_global_zero and not self.trainer.sanity_checking:
 
             current_epoch = self.trainer.current_epoch
+            scalar_log = {}
 
-            for key, figure in log_dict.items():
-                # For other loggers than wandb, add epoch to key.
-                # Wandb can log multiple images to the same key, while other
-                # loggers, such as MLFlow need unique keys for each image.
-                if not isinstance(self.logger, pl.loggers.WandbLogger):
-                    key = f"{key}-{current_epoch}"
+            for key, value in log_dict.items():
+                if isinstance(value, plt.Figure):
+                    # For other loggers than wandb, add epoch to key.
+                    # Wandb can log multiple images to the same key, while
+                    # other loggers, such as MLFlow need unique keys for each.
+                    log_key = (
+                        key
+                        if isinstance(self.logger, pl.loggers.WandbLogger)
+                        else f"{key}-{current_epoch}"
+                    )
+                    if hasattr(self.logger, "log_image"):
+                        self.logger.log_image(key=log_key, images=[value])
+                else:
+                    # Scalar metric from metrics_watch / var_leads_metrics_watch
+                    if isinstance(value, torch.Tensor):
+                        if value.ndim == 0:
+                            value_to_log = value.detach().cpu().item()
+                        else:
+                            warnings.warn(
+                                f"Skipping logging for non-scalar tensor "
+                                f"metric '{key}' with shape "
+                                f"{tuple(value.shape)}."
+                            )
+                            continue
+                    else:
+                        value_to_log = float(value)
+                    scalar_log[key] = value_to_log
 
-                if hasattr(self.logger, "log_image"):
-                    self.logger.log_image(key=key, images=[figure])
+            if scalar_log:
+                self.logger.log_metrics(scalar_log, step=current_epoch)
 
             plt.close("all")  # Close all figs
 
@@ -713,7 +741,7 @@ class ARModel(pl.LightningModule):
                     f"({(self.time_step_int * t_i)} {self.time_step_unit})",
                 )
                 for t_i, loss_map in zip(
-                    self.args.val_steps_to_log, mean_spatial_loss
+                    self.logged_spatial_steps, mean_spatial_loss
                 )
             ]
 
@@ -736,7 +764,7 @@ class ARModel(pl.LightningModule):
                 self.logger.save_dir, "spatial_loss_maps"
             )
             os.makedirs(pdf_loss_maps_dir, exist_ok=True)
-            for t_i, fig in zip(self.args.val_steps_to_log, pdf_loss_map_figs):
+            for t_i, fig in zip(self.logged_spatial_steps, pdf_loss_map_figs):
                 fig.savefig(os.path.join(pdf_loss_maps_dir, f"loss_t{t_i}.pdf"))
             # save mean spatial loss as .pt file also
             torch.save(
@@ -745,6 +773,7 @@ class ARModel(pl.LightningModule):
             )
 
         self.spatial_loss_maps.clear()
+        self.logged_spatial_steps.clear()
 
     def on_load_checkpoint(self, checkpoint):
         """

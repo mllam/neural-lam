@@ -18,6 +18,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Fix `AssertionError` crash in `aggregate_and_plot_metrics` when `--metrics_watch` is configured: scalar metric-watch values are now dispatched to `logger.log_metrics()` instead of being incorrectly asserted as `plt.Figure` objects. @RajdeepKushwaha5
+
+- Fix `IndexError` in `test_step` when `val_steps_to_log` contains steps beyond the prediction horizon: added the same bounds guard already present in `validation_step` to both the `test_log_dict` comprehension and the spatial-loss index list. @RajdeepKushwaha5
+
+- Fix `AttributeError` in `WeatherDataset.create_dataarray_from_tensor` for non-state categories (e.g. `forcing`): the method now uses the correct `{category}_feature` coordinate name instead of the hardcoded `state_feature`. @RajdeepKushwaha5
+
 - Initialize `da_forcing_mean` and `da_forcing_std` to `None` when forcing data is absent, fixing `AttributeError` in `WeatherDataset` with `standardize=True` [\#369](https://github.com/mllam/neural-lam/issues/369) @Sir-Sloth-The-Lazy
 
 - Ensure proper sorting of `analysis_time` in `NpyFilesDatastoreMEPS._get_analysis_times` independent of the order in which files are processed with glob [\#386](https://github.com/mllam/neural-lam/pull/386) @Gopisokk
