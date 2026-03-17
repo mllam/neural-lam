@@ -1,4 +1,5 @@
 # Standard library
+import warnings
 from pathlib import Path
 
 # Third-party
@@ -17,7 +18,7 @@ from neural_lam.weather_dataset import WeatherDataModule
 from tests.conftest import init_datastore_example
 
 
-def run_simple_training(datastore, set_output_std):
+def run_simple_training(datastore, set_output_std, metrics_watch=None):
     """
     Run one epoch of a simple model training setup using the given datastore.
 
@@ -87,11 +88,16 @@ def run_simple_training(datastore, set_output_std):
         mesh_aggr = "sum"
         lr = 1.0e-3
         val_steps_to_log = [1, 3]
-        metrics_watch = []
+        metrics_watch_list = metrics_watch or []
+        var_leads_metrics_watch = {0: [1]}  # Need to populate if matching
         num_past_forcing_steps = 1
         num_future_forcing_steps = 1
 
     model_args = ModelArgs()
+
+    if metrics_watch:
+        model_args.metrics_watch = metrics_watch
+        model_args.var_leads_metrics_watch = {0: [1]}
 
     config = nlconfig.NeuralLAMConfig(
         datastore=nlconfig.DatastoreSelection(
@@ -104,7 +110,7 @@ def run_simple_training(datastore, set_output_std):
         datastore=datastore,
         config=config,
     )
-    wandb.init()
+    wandb.init(mode="disabled")  # Disable wandb for offline test run
     trainer.fit(model=model, datamodule=data_module)
 
 
@@ -124,3 +130,29 @@ def test_training(datastore_name):
 def test_training_output_std():
     datastore = init_datastore_example("mdp")  # Test only with mdp datastore
     run_simple_training(datastore, set_output_std=True)
+
+
+def test_metrics_watch_warnings():
+    datastore = init_datastore_example("mdp")
+
+    # 1) Warning should be emitted for an invalid/unmatched metric
+    with pytest.warns(
+        UserWarning,
+        match="were not found during validation phase: \\['wrong_metric'\\]",
+    ):
+        run_simple_training(
+            datastore, set_output_std=False, metrics_watch=["wrong_metric"]
+        )
+
+    # 2) Warning should NOT be emitted for a correctly matched metric
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        try:
+            run_simple_training(
+                datastore, set_output_std=False, metrics_watch=["val_rmse"]
+            )
+        except UserWarning as e:
+            if "The following watched metrics were not" in str(e):
+                pytest.fail(
+                    f"Unexpected warning was emitted for valid metric: {e}"
+                )

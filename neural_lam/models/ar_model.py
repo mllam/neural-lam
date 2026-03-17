@@ -159,6 +159,7 @@ class ARModel(pl.LightningModule):
         self.time_step_int, self.time_step_unit = get_integer_time(
             self._datastore.step_length
         )
+        self.matched_metrics: set[str] = set()
 
     def _create_dataarray_from_tensor(
         self,
@@ -376,6 +377,21 @@ class ARModel(pl.LightningModule):
         """
         # Create error maps for all test metrics
         self.aggregate_and_plot_metrics(self.val_metrics, prefix="val")
+
+        if self.trainer.is_global_zero:
+            if getattr(self.args, "metrics_watch", None):
+                unmatched = set(self.args.metrics_watch) - getattr(
+                    self, "matched_metrics", set()
+                )
+                if unmatched:
+                    warnings.warn(
+                        "The following metrics in --metrics_watch "
+                        "were not found during validation phase: "
+                        f"{sorted(unmatched)}. Ensure the metric prefix "
+                        "matches the evaluation mode (expected 'val_')."
+                    )
+
+        self.matched_metrics = set()
 
         # Clear lists with validation metrics values
         for metric_list in self.val_metrics.values():
@@ -625,6 +641,7 @@ class ARModel(pl.LightningModule):
         # Check if metrics are watched, log exact values for specific vars
         var_names = self._datastore.get_vars_names(category="state")
         if full_log_name in self.args.metrics_watch:
+            self.matched_metrics.add(full_log_name)
             for var_i, timesteps in self.args.var_leads_metrics_watch.items():
                 var_name = var_names[var_i]
                 for step in timesteps:
@@ -744,6 +761,20 @@ class ARModel(pl.LightningModule):
                 os.path.join(self.logger.save_dir, "mean_spatial_loss.pt"),
             )
 
+            if self.trainer.is_global_zero:
+                if getattr(self.args, "metrics_watch", None):
+                    unmatched = set(self.args.metrics_watch) - getattr(
+                        self, "matched_metrics", set()
+                    )
+                    if unmatched:
+                        warnings.warn(
+                            "The following metrics in --metrics_watch "
+                            "were not found during test phase: "
+                            f"{sorted(unmatched)}. Ensure the metric prefix "
+                            "matches the evaluation mode (expected 'test_')."
+                        )
+
+        self.matched_metrics = set()
         self.spatial_loss_maps.clear()
 
     def on_load_checkpoint(self, checkpoint):
