@@ -60,14 +60,7 @@ def run_simple_training(
 
     graph_name = "1level"
 
-    graph_dir_path = Path(datastore.root_path) / "graph" / graph_name
-
-    if not graph_dir_path.exists():
-        create_graph_from_datastore(
-            datastore=datastore,
-            output_root_path=str(graph_dir_path),
-            n_max_levels=1,
-        )
+    ensure_graph_exists(datastore, graph_name)
 
     data_module = WeatherDataModule(
         datastore=datastore,
@@ -80,7 +73,40 @@ def run_simple_training(
         num_future_forcing_steps=1,
     )
 
-    model_args = SimpleNamespace(
+    model_args = build_model_args(
+        set_output_std=set_output_std,
+        loss=loss,
+        graph_name=graph_name,
+    )
+
+    config = nlconfig.NeuralLAMConfig(
+        datastore=nlconfig.DatastoreSelection(
+            kind=datastore.SHORT_NAME, config_path=datastore.root_path
+        )
+    )
+
+    model = GraphLAM(  # noqa
+        args=model_args,
+        datastore=datastore,
+        config=config,
+    )
+    wandb.init()
+    trainer.fit(model=model, datamodule=data_module)
+
+
+def ensure_graph_exists(datastore, graph_name):
+    graph_dir_path = Path(datastore.root_path) / "graph" / graph_name
+
+    if not graph_dir_path.exists():
+        create_graph_from_datastore(
+            datastore=datastore,
+            output_root_path=str(graph_dir_path),
+            n_max_levels=1,
+        )
+
+
+def build_model_args(set_output_std, loss, graph_name):
+    return SimpleNamespace(
         output_std=set_output_std,
         loss=loss,
         restore_opt=False,
@@ -98,20 +124,6 @@ def run_simple_training(
         num_past_forcing_steps=1,
         num_future_forcing_steps=1,
     )
-
-    config = nlconfig.NeuralLAMConfig(
-        datastore=nlconfig.DatastoreSelection(
-            kind=datastore.SHORT_NAME, config_path=datastore.root_path
-        )
-    )
-
-    model = GraphLAM(  # noqa
-        args=model_args,
-        datastore=datastore,
-        config=config,
-    )
-    wandb.init()
-    trainer.fit(model=model, datamodule=data_module)
 
 
 @pytest.mark.parametrize("datastore_name", DATASTORES.keys())
@@ -136,3 +148,23 @@ def test_training_output_std():
         devices=1,
         validate=False,
     )
+
+
+def test_model_rejects_output_std_with_incompatible_loss():
+    datastore = init_datastore_example("dummydata")
+    graph_name = "1level"
+    ensure_graph_exists(datastore, graph_name)
+    config = nlconfig.NeuralLAMConfig(
+        datastore=nlconfig.DatastoreSelection(
+            kind=datastore.SHORT_NAME, config_path=datastore.root_path
+        )
+    )
+
+    with pytest.raises(ValueError, match="--output_std requires a loss"):
+        GraphLAM(
+            args=build_model_args(
+                set_output_std=True, loss="mse", graph_name=graph_name
+            ),
+            datastore=datastore,
+            config=config,
+        )

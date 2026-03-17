@@ -123,6 +123,17 @@ class ARModel(pl.LightningModule):
 
         # Instantiate loss function
         self.loss = metrics.get_metric(args.loss)
+        if self.output_std and not metrics.metric_supports_output_std(
+            args.loss
+        ):
+            supported_losses = ", ".join(
+                metrics.get_output_std_compatible_metrics()
+            )
+            raise ValueError(
+                "--output_std requires a loss that can train the predictive "
+                f"std-dev head, but got loss='{args.loss}'. Supported "
+                f"losses: {supported_losses}."
+            )
 
         boundary_mask = torch.tensor(
             da_boundary_mask.values, dtype=torch.float32

@@ -12,7 +12,7 @@ from lightning_fabric.utilities import seed
 from loguru import logger
 
 # Local
-from . import utils
+from . import metrics, utils
 from .config import load_config_and_datastore
 from .models import GraphLAM, HiLAM, HiLAMParallel
 from .weather_dataset import WeatherDataModule
@@ -23,22 +23,24 @@ MODELS = {
     "hi_lam_parallel": HiLAMParallel,
 }
 
-OUTPUT_STD_COMPATIBLE_LOSSES = {"crps_gauss", "nll"}
 
-
-def validate_loss_output_std_compatibility(loss, output_std):
-    """Validate that the chosen loss can train a learned predictive std-dev."""
+def get_loss_output_std_compatibility_error(loss, output_std):
+    """Return an actionable config error for invalid output-std/loss combos."""
     if not output_std:
-        return
+        return None
 
-    loss_lower = loss.lower()
-    if loss_lower not in OUTPUT_STD_COMPATIBLE_LOSSES:
-        supported_losses = ", ".join(sorted(OUTPUT_STD_COMPATIBLE_LOSSES))
-        raise ValueError(
-            "--output_std requires a loss that can train the predictive "
-            f"std-dev head, but got loss='{loss}'. Supported losses: "
-            f"{supported_losses}."
-        )
+    if not metrics.is_defined_metric(loss):
+        return None
+
+    if metrics.metric_supports_output_std(loss):
+        return None
+
+    supported_losses = ", ".join(metrics.get_output_std_compatible_metrics())
+    return (
+        "--output_std requires a loss that can train the predictive std-dev "
+        f"head, but got --loss '{loss}'. Supported losses: {supported_losses}. "
+        "Either choose one of those losses or disable --output_std."
+    )
 
 
 @logger.catch
@@ -159,8 +161,7 @@ def main(input_args=None):
         default="wmse",
         help=(
             "Loss function to use, see metric.py. When --output_std is set, "
-            "only probabilistic losses such as nll and crps_gauss are "
-            "supported."
+            "only losses that support learned predictive std-dev are valid."
         ),
     )
     parser.add_argument("--lr", type=float, default=1e-3, help="learning rate")
@@ -263,7 +264,11 @@ def main(input_args=None):
         int(k): v for k, v in json.loads(args.var_leads_metrics_watch).items()
     }
 
-    validate_loss_output_std_compatibility(args.loss, args.output_std)
+    compatibility_error = get_loss_output_std_compatibility_error(
+        args.loss, args.output_std
+    )
+    if compatibility_error is not None:
+        parser.error(compatibility_error)
 
     # Check that config only specifies logging for lead times that exist
     # Check --val_steps_to_log

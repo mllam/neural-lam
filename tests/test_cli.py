@@ -9,7 +9,6 @@ import pytest
 import neural_lam
 import neural_lam.create_graph
 import neural_lam.train_model
-from neural_lam.train_model import validate_loss_output_std_compatibility
 
 
 def test_import():
@@ -122,10 +121,24 @@ def test_wandb_id_ignored_with_mlflow_warns():
 
 @pytest.mark.parametrize("loss", ["mse", "mae", "wmse", "wmae"])
 def test_output_std_rejected_for_incompatible_losses(loss):
-    with pytest.raises(ValueError, match="--output_std requires a loss"):
-        validate_loss_output_std_compatibility(loss, True)
+    with patch("neural_lam.train_model.load_config_and_datastore") as mock_load:
+        with pytest.raises(SystemExit, match="2"):
+            neural_lam.train_model.main.__wrapped__(
+                ["--config_path", "dummy.yaml", "--output_std", "--loss", loss]
+            )
+
+    mock_load.assert_not_called()
 
 
 @pytest.mark.parametrize("loss", ["nll", "crps_gauss"])
 def test_output_std_allowed_for_probabilistic_losses(loss):
-    validate_loss_output_std_compatibility(loss, True)
+    with patch(
+        "neural_lam.train_model.load_config_and_datastore",
+        side_effect=RuntimeError("load_config_called"),
+    ) as mock_load:
+        with pytest.raises(RuntimeError, match="load_config_called"):
+            neural_lam.train_model.main.__wrapped__(
+                ["--config_path", "dummy.yaml", "--output_std", "--loss", loss]
+            )
+
+    mock_load.assert_called_once()
