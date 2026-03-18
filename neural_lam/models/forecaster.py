@@ -13,6 +13,11 @@ class Forecaster(nn.Module, ABC):
     requested length.
     """
 
+    @property
+    @abstractmethod
+    def predicts_std(self) -> bool:
+        """Whether this forecaster outputs a predicted standard deviation."""
+
     @abstractmethod
     def forward(
         self,

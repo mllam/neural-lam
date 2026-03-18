@@ -15,6 +15,7 @@ from loguru import logger
 from . import utils
 from .config import load_config_and_datastore
 from .models import MODELS, ForecasterModule
+from .models.ar_forecaster import ARForecaster
 from .weather_dataset import WeatherDataModule
 
 
@@ -280,10 +281,8 @@ def main(input_args=None):
         except ValueError:
             raise ValueError("devices should be 'auto' or a list of integers")
 
-    # Build predictor and forecaster externally, then pass to ForecasterModule
-    # (Items 2 & 3: dependency injection + explicit params)
-    from .models.ar_forecaster import ARForecaster
-
+    # Build predictor and forecaster externally, then inject into
+    # ForecasterModule
     predictor_class = MODELS[args.model]
     predictor = predictor_class(
         config=config,
@@ -310,7 +309,6 @@ def main(input_args=None):
         val_steps_to_log=args.val_steps_to_log,
         metrics_watch=args.metrics_watch,
         var_leads_metrics_watch=args.var_leads_metrics_watch,
-        output_std=args.output_std,
     )
 
     if args.eval:

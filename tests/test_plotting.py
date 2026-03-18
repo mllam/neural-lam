@@ -66,8 +66,9 @@ def model_and_batch(tmp_path, time_step, time_unit):
     )
 
     # Create model
-    from neural_lam.models.ar_forecaster import ARForecaster
+    # First-party
     from neural_lam.models import MODELS
+    from neural_lam.models.ar_forecaster import ARForecaster
 
     args = ModelArgs()
     predictor_class = MODELS["graph_lam"]
@@ -95,7 +96,6 @@ def model_and_batch(tmp_path, time_step, time_unit):
         val_steps_to_log=args.val_steps_to_log,
         metrics_watch=args.metrics_watch,
         var_leads_metrics_watch=args.var_leads_metrics_watch,
-        output_std=args.output_std,
         lr=args.lr,
     )
 

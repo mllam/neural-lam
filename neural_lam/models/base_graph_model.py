@@ -19,7 +19,7 @@ class BaseGraphModel(StepPredictor):
         self,
         config: NeuralLAMConfig,
         datastore: BaseDatastore,
-        graph: str = "multiscale",
+        graph_name: str = "multiscale",
         hidden_dim: int = 64,
         hidden_layers: int = 1,
         processor_layers: int = 4,
@@ -31,8 +31,6 @@ class BaseGraphModel(StepPredictor):
         super().__init__(
             config=config,
             datastore=datastore,
-            num_past_forcing_steps=num_past_forcing_steps,
-            num_future_forcing_steps=num_future_forcing_steps,
             output_std=output_std,
         )
 
@@ -64,7 +62,7 @@ class BaseGraphModel(StepPredictor):
         # Load graph with static features
         # NOTE: (IMPORTANT!) mesh nodes MUST have the first
         # num_mesh_nodes indices,
-        graph_dir_path = datastore.root_path / "graph" / graph
+        graph_dir_path = datastore.root_path / "graph" / graph_name
         self.hierarchical, graph_ldict = utils.load_graph(
             graph_dir_path=graph_dir_path
         )
@@ -82,7 +80,17 @@ class BaseGraphModel(StepPredictor):
             f"nodes ({self.num_grid_nodes} grid, {self.num_mesh_nodes} mesh)"
         )
 
-        # grid_dim from data + static
+        # Compute grid_input_dim: total input dimensionality on the grid
+        num_state_vars = datastore.get_num_data_vars(category="state")
+        num_forcing_vars = datastore.get_num_data_vars(category="forcing")
+        grid_static_dim = self.grid_static_features.shape[1]
+        self.grid_input_dim = (
+            2 * num_state_vars
+            + grid_static_dim
+            + num_forcing_vars
+            * (num_past_forcing_steps + num_future_forcing_steps + 1)
+        )
+
         self.g2m_edges, g2m_dim = self.g2m_features.shape
         self.m2g_edges, m2g_dim = self.m2g_features.shape
 
@@ -90,7 +98,7 @@ class BaseGraphModel(StepPredictor):
         # Feature embedders for grid
         self.mlp_blueprint_end = [hidden_dim] * (hidden_layers + 1)
         self.grid_embedder = utils.make_mlp(
-            [self.grid_dim] + self.mlp_blueprint_end
+            [self.grid_input_dim] + self.mlp_blueprint_end
         )
         self.g2m_embedder = utils.make_mlp([g2m_dim] + self.mlp_blueprint_end)
         self.m2g_embedder = utils.make_mlp([m2g_dim] + self.mlp_blueprint_end)
@@ -117,8 +125,7 @@ class BaseGraphModel(StepPredictor):
 
         # Output mapping (hidden_dim -> output_dim)
         self.output_map = utils.make_mlp(
-            [hidden_dim] * (hidden_layers + 1)
-            + [self.grid_output_dim],
+            [hidden_dim] * (hidden_layers + 1) + [self.grid_output_dim],
             layer_norm=False,
         )  # No layer norm on this one
 

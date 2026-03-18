@@ -17,11 +17,9 @@ class ARForecaster(Forecaster):
         super().__init__()
         self.predictor = predictor
 
-        # Register boundary/interior masks here, not in StepPredictor (Item 7)
+        # Register boundary/interior masks on the forecaster, not the predictor
         boundary_mask = (
-            torch.tensor(
-                datastore.boundary_mask.values, dtype=torch.float32
-            )
+            torch.tensor(datastore.boundary_mask.values, dtype=torch.float32)
             .unsqueeze(0)
             .unsqueeze(-1)
         )
@@ -29,6 +27,10 @@ class ARForecaster(Forecaster):
         self.register_buffer(
             "interior_mask", 1.0 - self.boundary_mask, persistent=False
         )
+
+    @property
+    def predicts_std(self) -> bool:
+        return self.predictor.predicts_std
 
     def forward(
         self,
@@ -73,7 +75,7 @@ class ARForecaster(Forecaster):
 
         prediction = torch.stack(prediction_list, dim=1)
         # If predictor outputs std, stack it; otherwise return None so
-        # ForecasterModule can substitute the constant per_var_std (Item 5)
+        # ForecasterModule can substitute the constant per_var_std
         if pred_std_list:
             pred_std = torch.stack(pred_std_list, dim=1)
         else:

@@ -216,8 +216,9 @@ def test_single_batch(datastore_name, split):
 
     dataset = WeatherDataset(datastore=datastore, split=split, ar_steps=2)
 
-    from neural_lam.models.ar_forecaster import ARForecaster
+    # First-party
     from neural_lam.models import MODELS
+    from neural_lam.models.ar_forecaster import ARForecaster
 
     predictor_class = MODELS["graph_lam"]
     predictor = predictor_class(
@@ -244,7 +245,6 @@ def test_single_batch(datastore_name, split):
         val_steps_to_log=args.val_steps_to_log,
         metrics_watch=args.metrics_watch,
         var_leads_metrics_watch=args.var_leads_metrics_watch,
-        output_std=args.output_std,
         lr=args.lr,
     )
 

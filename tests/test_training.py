@@ -85,15 +85,17 @@ def run_simple_training(datastore, set_output_std):
         )
     )
 
-    # Build forecaster externally (Items 2 & 3)
-    from neural_lam.models.ar_forecaster import ARForecaster
+    # Build predictor and forecaster externally, then inject into
+    # ForecasterModule
+    # First-party
     from neural_lam.models import MODELS
+    from neural_lam.models.ar_forecaster import ARForecaster
 
     predictor_class = MODELS["graph_lam"]
     predictor = predictor_class(
         config=config,
         datastore=datastore,
-        graph=graph_name,
+        graph_name=graph_name,
         hidden_dim=HIDDEN_DIM,
         hidden_layers=HIDDEN_LAYERS,
         processor_layers=PROCESSOR_LAYERS,
@@ -115,7 +117,6 @@ def run_simple_training(datastore, set_output_std):
         val_steps_to_log=[1, 3],
         metrics_watch=[],
         var_leads_metrics_watch={},
-        output_std=set_output_std,
     )
     wandb.init()
     try:
