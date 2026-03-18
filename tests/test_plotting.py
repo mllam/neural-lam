@@ -1,8 +1,6 @@
 # Standard library
 from datetime import timedelta
 from pathlib import Path
-from typing import Iterator
-from unittest.mock import patch
 
 # Third-party
 import matplotlib

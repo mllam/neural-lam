@@ -2,7 +2,6 @@
 import warnings
 
 # Third-party
-import cartopy.crs as ccrs
 import cartopy.feature as cfeature
 import matplotlib
 import matplotlib.colors
@@ -14,6 +13,146 @@ import xarray as xr
 # Local
 from . import utils
 from .datastore.base import BaseRegularGridDatastore
+
+# Font sizes shared across map plot functions for visual consistency.
+_TITLE_SIZE = 13  # suptitle and per-axes titles
+_LABEL_SIZE = 11  # axis / colorbar labels
+_TICK_SIZE = 11  # tick labels
+
+
+def _tex_safe(s: str) -> str:
+    """Escape TeX special characters in s if TeX rendering is currently active.
+
+    Needed because % is a TeX comment character; without escaping it would
+    silently truncate any text that follows it (e.g. the title for r2m (%)).
+    """
+    if plt.rcParams.get("text.usetex", False):
+        s = s.replace("%", r"\%")
+    return s
+
+
+def plot_on_axis(
+    ax,
+    da,
+    datastore,
+    vmin=None,
+    vmax=None,
+    ax_title=None,
+    cmap="plasma",
+    boundary_alpha=None,
+    crop_to_interior=False,
+):
+    """Plot weather state on given axis using datastore metadata.
+
+    Parameters
+    ----------
+    ax : matplotlib.axes.Axes
+        The axis to plot on. Should have a cartopy projection.
+    da : xarray.DataArray
+        The data to plot. Should have shape (N_grid,).
+    datastore : BaseRegularGridDatastore
+        The datastore containing metadata about the grid.
+    vmin : float, optional
+        Minimum value for color scale.
+    vmax : float, optional
+        Maximum value for color scale.
+    ax_title : str, optional
+        Title for the axis.
+    cmap : str or matplotlib.colors.Colormap, optional
+        Colormap to use for plotting.
+    boundary_alpha : float, optional
+        If provided, overlay boundary mask with given alpha transparency.
+    crop_to_interior : bool, optional
+        If True, crop the plot to the interior region.
+
+    Returns
+    -------
+    matplotlib.collections.QuadMesh
+        The mesh object created by pcolormesh.
+    """
+    # Third-party
+    import cartopy.crs as ccrs
+
+    ax.coastlines(resolution="50m")
+    ax.add_feature(cfeature.BORDERS, linestyle="-", alpha=0.5)
+
+    gl = ax.gridlines(
+        draw_labels=True,
+        dms=True,
+        x_inline=False,
+        y_inline=False,
+    )
+    gl.top_labels = False
+    gl.right_labels = False
+    gl.xlabel_style = {"size": _TICK_SIZE}
+    gl.ylabel_style = {"size": _TICK_SIZE}
+
+    lats_lons = datastore.get_lat_lon("state")
+    grid_shape = (
+        datastore.grid_shape_state.x,
+        datastore.grid_shape_state.y,
+    )
+    lons = lats_lons[:, 0].reshape(grid_shape)
+    lats = lats_lons[:, 1].reshape(grid_shape)
+
+    if isinstance(da, xr.DataArray) and "x" in da.dims and "y" in da.dims:
+        da = da.transpose("x", "y")
+
+    values = da.values.reshape(grid_shape)
+
+    mesh = ax.pcolormesh(
+        lons,
+        lats,
+        values,
+        transform=ccrs.PlateCarree(),
+        vmin=vmin,
+        vmax=vmax,
+        cmap=cmap,
+        shading="auto",
+    )
+
+    if boundary_alpha is not None:
+        mask_da = datastore.boundary_mask
+        mask_values = mask_da.values
+        if mask_values.ndim == 2 and mask_values.shape[1] == 1:
+            mask_values = mask_values[:, 0]
+        mask_2d = mask_values.reshape(grid_shape)
+
+        overlay = np.where(mask_2d == 1, 1.0, np.nan)
+
+        ax.pcolormesh(
+            lons,
+            lats,
+            overlay,
+            transform=ccrs.PlateCarree(),
+            cmap=matplotlib.colors.ListedColormap([(1, 1, 1, boundary_alpha)]),
+            shading="auto",
+        )
+
+    if crop_to_interior:
+        mask_da = datastore.boundary_mask
+        mask_values = mask_da.values
+        if mask_values.ndim == 2 and mask_values.shape[1] == 1:
+            mask_values = mask_values[:, 0]
+        mask_2d = mask_values.reshape(grid_shape)
+
+        interior_points = mask_2d == 0
+        if np.any(interior_points):
+            interior_lons = lons[interior_points]
+            interior_lats = lats[interior_points]
+
+            min_lon, max_lon = interior_lons.min(), interior_lons.max()
+            min_lat, max_lat = interior_lats.min(), interior_lats.max()
+
+            ax.set_extent(
+                [min_lon, max_lon, min_lat, max_lat], crs=ccrs.PlateCarree()
+            )
+
+    if ax_title:
+        ax.set_title(ax_title, size=_TITLE_SIZE)
+
+    return mesh
+
 
 # Annotations become unreadable when cells are smaller than this (in points)
 # or when the total number of cells exceeds a readable count.

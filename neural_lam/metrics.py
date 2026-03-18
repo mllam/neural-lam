@@ -227,6 +227,65 @@ def crps_gauss(
     )
 
 
+def spread_squared(
+    pred, target, pred_std, mask=None, average_grid=True, sum_vars=True
+):
+    """
+    Ensemble variance (spread squared) metric.
+
+    Computes the unbiased sample variance of ensemble predictions across
+    the ensemble dimension (dim=-3). The entry-wise variance is then
+    passed through ``mask_and_reduce_metric`` for grid masking and
+    optional reduction — consistent with all other metrics.
+
+    This metric is used for spread-skill analysis: comparing ensemble
+    spread against forecast error (e.g. MSE) to assess probabilistic
+    calibration. For a well-calibrated ensemble, spread_squared should
+    approximate MSE.
+
+    (...,) is any number of batch dimensions
+    pred: (..., S, N, d_state), ensemble predictions where S is the
+        number of ensemble members at dim=-3
+    target: (..., N, d_state), target (unused, accepted for API
+        consistency with other metrics)
+    pred_std: (..., N, d_state) or (d_state,), predicted std.-dev.
+        (unused, accepted for API consistency)
+    mask: (N,), boolean mask describing which grid nodes to use
+    average_grid: boolean, if grid dimension -2 should be reduced
+        (mean over N)
+    sum_vars: boolean, if variable dimension -1 should be reduced
+        (sum over d_state)
+
+    Returns:
+    metric_val: One of (...,), (..., d_state), (..., N),
+        (..., N, d_state), depending on reduction arguments.
+    """
+    ens_dim = -3  # S dimension: pred is (..., S, N, d_state)
+    num_ens = pred.shape[ens_dim]
+    assert num_ens > 1, (
+        f"Ensemble variance requires more than 1 member, got S={num_ens}. "
+        "Single-member spread is undefined."
+    )
+
+    # Unbiased sample variance (Bessel's correction)
+    # var = (1/(S-1)) * sum((x_i - mean)^2)
+    # Implemented as: mean((x_i - mean)^2) * S/(S-1)
+    ens_mean = torch.mean(pred, dim=ens_dim)  # (..., N, d_state)
+    entry_spread = torch.mean(
+        (pred - ens_mean.unsqueeze(ens_dim)) ** 2,
+        dim=ens_dim,
+    ) * (
+        num_ens / (num_ens - 1)
+    )  # (..., N, d_state)
+
+    return mask_and_reduce_metric(
+        entry_spread,
+        mask=mask,
+        average_grid=average_grid,
+        sum_vars=sum_vars,
+    )
+
+
 DEFINED_METRICS = {
     "mse": mse,
     "mae": mae,
@@ -234,4 +293,5 @@ DEFINED_METRICS = {
     "wmae": wmae,
     "nll": nll,
     "crps_gauss": crps_gauss,
+    "spread_squared": spread_squared,
 }
