@@ -46,7 +46,7 @@ class ForecasterModule(pl.LightningModule):
         super().__init__()
         # Resolve mutable defaults
         if val_steps_to_log is None:
-            val_steps_to_log = [1, 2, 3, 5, 10]
+            val_steps_to_log = [1,]
         if metrics_watch is None:
             metrics_watch = []
         if var_leads_metrics_watch is None:
