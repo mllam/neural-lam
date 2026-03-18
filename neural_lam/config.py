@@ -34,7 +34,11 @@ class DatastoreSelection:
 
     def __post_init__(self):
         if self.kind not in DATASTORES:
-            raise ValueError(f"Datastore kind {self.kind} is not implemented")
+            available = ", ".join(DATASTORES.keys())
+            raise ValueError(
+                f"Unknown datastore kind '{self.kind}'. "
+                f"Available options are: {available}."
+            )
 
     config_path: str
 
@@ -89,9 +93,9 @@ class TrainingConfig:
     Attributes
     ----------
     state_feature_weighting : Union[ManualStateFeatureWeighting,
-                                    UnformFeatureWeighting]
+                                    UniformFeatureWeighting]
         The method to use for weighting the state features in the loss
-        function. Defaults to uniform weighting (`UnformFeatureWeighting`, i.e.
+        function. Defaults to uniform weighting (`UniformFeatureWeighting`, i.e.
         all features are weighted equally).
     """
 
@@ -124,29 +128,10 @@ class NeuralLAMConfig(dataclass_wizard.JSONWizard, dataclass_wizard.YAMLWizard):
     class _(dataclass_wizard.JSONWizard.Meta):
         """
         Define the configuration class as a JSON wizard class.
-
-        Together `tag_key` and `auto_assign_tags` enable that when a `Union` of
-        types are used for an attribute, the specific type to deserialize to
-        can be specified in the serialised data using the `tag_key` value. In
-        our case we call the tag key `__config_class__` to indicate to the
-        user that they should pick a dataclass describing configuration in
-        neural-lam. This Union-based selection allows us to support different
-        configuration attributes for different choices of methods for example
-        and is used when picking between different feature weighting methods in
-        the `TrainingConfig` class. `auto_assign_tags` is set to True to
-        automatically set that tag key (i.e. `__config_class__` in the config
-        file) should just be the class name of the dataclass to deserialize to.
         """
 
         tag_key = "__config_class__"
         auto_assign_tags = True
-        # ensure that all parts of the loaded configuration match the
-        # dataclasses used
-        # TODO: this should be enabled once
-        # https://github.com/rnag/dataclass-wizard/issues/137 is fixed, but
-        # currently cannot be used together with `auto_assign_tags` due to a
-        # bug it seems
-        # raise_on_unknown_json_key = True
 
 
 class InvalidConfigError(Exception):
@@ -177,12 +162,14 @@ def load_config_and_datastore(
             "There was an error loading the configuration file at "
             f"{config_path}. "
         ) from ex
-    # datastore config is assumed to be relative to the config file
+
     datastore_config_path = (
         Path(config_path).parent / config.datastore.config_path
     )
+
     datastore = init_datastore(
-        datastore_kind=config.datastore.kind, config_path=datastore_config_path
+        datastore_kind=config.datastore.kind,
+        config_path=datastore_config_path,
     )
 
     return config, datastore
