@@ -235,9 +235,13 @@ class ARModel(pl.LightningModule):
         """
         init_states, target_states, forcing, target_times = batch
 
+        # Clamp std to machine epsilon to avoid NaN/Inf from division by zero
+        eps = torch.finfo(self.state_std.dtype).eps
+        state_std_safe = torch.clamp(self.state_std, min=eps)
+
         # Normalize state data: (data - mean) / std
-        init_states = (init_states - self.state_mean) / self.state_std
-        target_states = (target_states - self.state_mean) / self.state_std
+        init_states = (init_states - self.state_mean) / state_std_safe
+        target_states = (target_states - self.state_mean) / state_std_safe
 
         if self.forcing_mean is not None and forcing.shape[-1] > 0:
             # forcing shape: (..., num_forcing_vars * window_size)
@@ -247,7 +251,11 @@ class ARModel(pl.LightningModule):
             forcing_mean_tiled = self.forcing_mean.repeat_interleave(
                 window_size
             )
-            forcing_std_tiled = self.forcing_std.repeat_interleave(window_size)
+
+            # Clamp forcing std to machine epsilon
+            forcing_std_safe = torch.clamp(self.forcing_std, min=eps)
+            forcing_std_tiled = forcing_std_safe.repeat_interleave(window_size)
+
             forcing = (forcing - forcing_mean_tiled) / forcing_std_tiled
 
         return init_states, target_states, forcing, target_times

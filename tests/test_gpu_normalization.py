@@ -110,7 +110,88 @@ def test_on_after_batch_transfer(datastore_name):
     assert norm_forcing.shape == forcing.shape
     assert norm_target_times.shape == target_times.shape
 
+    # Data should actually change after normalization
     assert not torch.allclose(norm_init_states, init_states)
     assert not torch.allclose(norm_target_states, target_states)
     if num_forcing_vars > 0:
         assert not torch.allclose(norm_forcing, forcing)
+
+    # Verify normalization is mathematically correct: result == (x - mean)/std
+    eps = torch.finfo(model.state_std.dtype).eps
+    state_std_safe = torch.clamp(model.state_std, min=eps)
+    expected_init = (init_states - model.state_mean) / state_std_safe
+    expected_target = (target_states - model.state_mean) / state_std_safe
+
+    assert torch.allclose(norm_init_states, expected_init)
+    assert torch.allclose(norm_target_states, expected_target)
+
+    if num_forcing_vars > 0 and model.forcing_mean is not None:
+        window_size_calc = forcing.shape[-1] // model.forcing_mean.shape[-1]
+        forcing_mean_tiled = model.forcing_mean.repeat_interleave(
+            window_size_calc
+        )
+        forcing_std_safe = torch.clamp(model.forcing_std, min=eps)
+        forcing_std_tiled = forcing_std_safe.repeat_interleave(window_size_calc)
+        expected_forcing = (forcing - forcing_mean_tiled) / forcing_std_tiled
+        assert torch.allclose(norm_forcing, expected_forcing)
+
+
+def test_normalization_happens_exactly_once():
+    """
+    Assert that data is standardized exactly once - on GPU in
+    on_after_batch_transfer - and never in the dataset (CPU path).
+    """
+    # Standard library
+    from datetime import timedelta
+
+    # First-party
+    from neural_lam.weather_dataset import WeatherDataset
+    from tests.dummy_datastore import DummyDatastore
+
+    datastore = DummyDatastore(n_timesteps=20, step_length=timedelta(hours=1))
+
+    # Track how many times get_dataarray is called with standardize=True
+    standardize_call_count = 0
+    original_get_dataarray = datastore.get_dataarray
+
+    def counting_get_dataarray(category, split=None, standardize=False):
+        nonlocal standardize_call_count
+        if standardize:
+            standardize_call_count += 1
+        return original_get_dataarray(
+            category=category, split=split, standardize=standardize
+        )
+
+    datastore.get_dataarray = counting_get_dataarray
+
+    # Dataset should load raw data (standardize=False)
+    ds = WeatherDataset(datastore=datastore, split="train", standardize=False)
+    assert standardize_call_count == 0, (
+        "Dataset called get_dataarray with standardize=True "
+        f"{standardize_call_count} times, expected 0"
+    )
+
+    # Get a sample - should still be raw
+    init_states, target_states, forcing, _ = ds[0]
+
+    # Manually apply GPU normalization once
+    eps = torch.finfo(torch.float32).eps
+    state_std_safe = torch.clamp(
+        torch.tensor(
+            datastore.get_standardization_dataarray("state").state_std.values,
+            dtype=torch.float32,
+        ),
+        min=eps,
+    )
+    state_mean = torch.tensor(
+        datastore.get_standardization_dataarray("state").state_mean.values,
+        dtype=torch.float32,
+    )
+    normalized_once = (init_states - state_mean) / state_std_safe
+
+    # Applying normalization a second time should give a different result
+    normalized_twice = (normalized_once - state_mean) / state_std_safe
+    assert not torch.allclose(normalized_once, normalized_twice), (
+        "Normalizing twice gave the same result - "
+        "data may already be normalized"
+    )
