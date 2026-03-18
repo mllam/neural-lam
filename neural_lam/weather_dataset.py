@@ -101,8 +101,7 @@ class WeatherDataset(torch.utils.data.Dataset):
         for part, da in parts.items():
             if da is not None:
                 expected_dim_order = self.datastore.expected_dim_order(
-                    category=part,
-                    has_ensemble_member="ensemble_member" in da.dims,
+                    category=part
                 )
                 if da.dims != expected_dim_order:
                     raise ValueError(

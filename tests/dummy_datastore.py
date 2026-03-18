@@ -167,6 +167,12 @@ class DummyDatastore(BaseRegularGridDatastore):
 
         # Stack the spatial dimensions into grid_index
         self.ds = self.ds.stack(grid_index=self.spatial_coordinates)
+        self.is_ensemble = "ensemble_member" in self.ds["state"].dims
+        self._has_ensemble_member_dim = {
+            category: "ensemble_member" in self.ds[category].dims
+            for category in self.N_FEATURES
+            if category != "state"
+        }
 
         # Create temporary directory for storing derived files
         self._tempdir = tempfile.TemporaryDirectory()
@@ -354,10 +360,7 @@ class DummyDatastore(BaseRegularGridDatastore):
 
         """
         da_category = self.ds[category]
-        dim_order = self.expected_dim_order(
-            category=category,
-            has_ensemble_member="ensemble_member" in da_category.dims,
-        )
+        dim_order = self.expected_dim_order(category=category)
         da_category = da_category.transpose(*dim_order)
 
         if standardize:
@@ -481,7 +484,6 @@ class EnsembleDummyDatastore(BaseDatastore):
     assert exact numeric expectations.
     """
 
-    is_ensemble = True
     T0 = np.datetime64("2021-01-01T00:00:00")
 
     def __init__(
@@ -521,6 +523,11 @@ class EnsembleDummyDatastore(BaseDatastore):
                 step_ns,
                 forcing_has_ensemble,
             )
+        self.is_ensemble = "ensemble_member" in self._da_state.dims
+        self._has_ensemble_member_dim = {
+            "forcing": "ensemble_member" in self._da_forcing.dims,
+            "static": False,
+        }
 
     # ---- data initialisation helpers ----------------------------------------
 

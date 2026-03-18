@@ -142,7 +142,6 @@ class NpyFilesDatastoreMEPS(BaseRegularGridDatastore):
     """
     SHORT_NAME = "npyfilesmeps"
 
-    is_ensemble = True
     is_forecast = True
 
     def __init__(
@@ -173,6 +172,11 @@ class NpyFilesDatastoreMEPS(BaseRegularGridDatastore):
         self._remove_state_features_with_index = (
             self.config.dataset.remove_state_features_with_index
         )
+        self.is_ensemble = self._num_ensemble_members > 1
+        self._has_ensemble_member_dim = {
+            "forcing": False,
+            "static": False,
+        }
 
     @property
     def root_path(self) -> Path:
@@ -305,10 +309,7 @@ class NpyFilesDatastoreMEPS(BaseRegularGridDatastore):
                 f"Expected features {expected_features}, got {actual_features}"
             )
 
-        dim_order = self.expected_dim_order(
-            category=category,
-            has_ensemble_member="ensemble_member" in da.dims,
-        )
+        dim_order = self.expected_dim_order(category=category)
         da = da.transpose(*dim_order)
 
         if standardize:

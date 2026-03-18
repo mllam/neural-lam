@@ -393,7 +393,6 @@ class BaseDatastore(abc.ABC):
     def expected_dim_order(
         self,
         category: Optional[str] = None,
-        has_ensemble_member: Optional[bool] = None,
     ) -> tuple[str, ...]:
         """
         Return the expected dimension order for the dataarray or dataset
@@ -419,21 +418,12 @@ class BaseDatastore(abc.ABC):
         ----------
         category : str
             The category of the dataset (state/forcing/static).
-        has_ensemble_member : bool, optional
-            Whether the expected dataarray should include an
-            `ensemble_member` dimension. If omitted, the historical default is
-            used: ensemble is assumed for `state` when `self.is_ensemble` is
-            true, and not assumed otherwise.
-
         Returns
         -------
         List[str]
             The expected dimension order for the dataarray or dataset.
 
         """
-        if has_ensemble_member is None:
-            has_ensemble_member = self.is_ensemble and category == "state"
-
         dim_order = []
 
         if category is not None:
@@ -446,7 +436,7 @@ class BaseDatastore(abc.ABC):
                 elif not self.is_forecast:
                     dim_order.append("time")
 
-            if has_ensemble_member:
+            if self._category_has_ensemble_member(category):
                 dim_order.append("ensemble_member")
 
         dim_order.append("grid_index")
@@ -455,6 +445,20 @@ class BaseDatastore(abc.ABC):
             dim_order.append(f"{category}_feature")
 
         return tuple(dim_order)
+
+    def _category_has_ensemble_member(
+        self, category: Optional[str] = None
+    ) -> bool:
+        """Return whether a datastore category includes `ensemble_member`."""
+        if category is None or category == "static":
+            return False
+        if category == "state":
+            return self.is_ensemble
+
+        has_ensemble_member_by_category = getattr(
+            self, "_has_ensemble_member_dim", {}
+        )
+        return bool(has_ensemble_member_by_category.get(category, False))
 
 
 @dataclasses.dataclass
@@ -624,10 +628,7 @@ class BaseRegularGridDatastore(BaseDatastore):
                     )
                 category = dim.split("_")[0]
 
-        dim_order = self.expected_dim_order(
-            category=category,
-            has_ensemble_member="ensemble_member" in da_or_ds_stacked.dims,
-        )
+        dim_order = self.expected_dim_order(category=category)
 
         return da_or_ds_stacked.transpose(*dim_order)
 

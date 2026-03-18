@@ -292,20 +292,25 @@ def test_ensemble_len_scales_with_default_all_members():
 
 
 def test_expected_dim_order_handles_optional_ensemble_forcing():
-    datastore = EnsembleDummyDatastore(
+    datastore_with_ensemble_forcing = EnsembleDummyDatastore(
         is_forecast=False,
         forcing_has_ensemble=True,
         n_ensemble_members=3,
         n_timesteps=10,
     )
 
-    assert datastore.expected_dim_order(
-        category="forcing",
-        has_ensemble_member=True,
+    datastore_without_ensemble_forcing = EnsembleDummyDatastore(
+        is_forecast=False,
+        forcing_has_ensemble=False,
+        n_ensemble_members=3,
+        n_timesteps=10,
+    )
+
+    assert datastore_with_ensemble_forcing.expected_dim_order(
+        category="forcing"
     ) == ("time", "ensemble_member", "grid_index", "forcing_feature")
-    assert datastore.expected_dim_order(
-        category="forcing",
-        has_ensemble_member=False,
+    assert datastore_without_ensemble_forcing.expected_dim_order(
+        category="forcing"
     ) == ("time", "grid_index", "forcing_feature")
 
 
