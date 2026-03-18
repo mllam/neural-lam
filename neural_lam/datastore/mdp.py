@@ -1,5 +1,6 @@
 # Standard library
 import copy
+import functools
 import warnings
 from datetime import timedelta
 from functools import cached_property
@@ -9,12 +10,13 @@ from typing import List, Optional, Union
 # Third-party
 import cartopy.crs as ccrs
 import mllam_data_prep as mdp
+import numpy as np
 import xarray as xr
 from loguru import logger
 from numpy import ndarray
 
 # Local
-from ..utils import rank_zero_print
+from ..utils import log_on_rank_zero
 from .base import BaseRegularGridDatastore, CartesianGridShape
 
 
@@ -74,11 +76,13 @@ class MDPDatastore(BaseRegularGridDatastore):
             self._ds.to_zarr(fp_ds)
         self._n_boundary_points = n_boundary_points
 
-        rank_zero_print("The loaded datastore contains the following features:")
+        log_on_rank_zero(
+            "The loaded datastore contains the following features:"
+        )
         for category in ["state", "forcing", "static"]:
             if len(self.get_vars_names(category)) > 0:
                 var_names = self.get_vars_names(category)
-                rank_zero_print(f" {category:<8s}: {' '.join(var_names)}")
+                log_on_rank_zero(f" {category:<8s}: {' '.join(var_names)}")
 
         # check that all three train/val/test splits are available
         required_splits = ["train", "val", "test"]
@@ -89,12 +93,14 @@ class MDPDatastore(BaseRegularGridDatastore):
                 f"splits: {available_splits}"
             )
 
-        rank_zero_print("With the following splits (over time):")
+        log_on_rank_zero("With the following splits (over time):")
         for split in required_splits:
             da_split = self._ds.splits.sel(split_name=split)
             da_split_start = da_split.sel(split_part="start").load().item()
             da_split_end = da_split.sel(split_part="end").load().item()
-            rank_zero_print(f" {split:<8s}: {da_split_start} to {da_split_end}")
+            log_on_rank_zero(
+                f" {split:<8s}: {da_split_start} to {da_split_end}"
+            )
 
         # find out the dimension order for the stacking to grid-index
         dim_order = None
@@ -107,7 +113,7 @@ class MDPDatastore(BaseRegularGridDatastore):
                     dim_order == dim_order_
                 ), "all inputs must have the same dimension order"
 
-        self.CARTESIAN_COORDS = dim_order
+        self.spatial_coordinates = dim_order
 
     @property
     def root_path(self) -> Path:
@@ -275,7 +281,7 @@ class MDPDatastore(BaseRegularGridDatastore):
                 da_category[coord].attrs["units"] = "m"
 
         # set multi-index for grid-index
-        da_category = da_category.set_index(grid_index=self.CARTESIAN_COORDS)
+        da_category = da_category.set_index(grid_index=self.spatial_coordinates)
 
         if "time" in da_category.dims:
             t_start = (
@@ -441,12 +447,15 @@ class MDPDatastore(BaseRegularGridDatastore):
 
         """
         ds_state = self.unstack_grid_coords(self._ds["state"])
-        da_x, da_y = ds_state.x, ds_state.y
+        xdim, ydim = self.spatial_coordinates
+        da_x, da_y = ds_state[xdim], ds_state[ydim]
         assert da_x.ndim == da_y.ndim == 1
         return CartesianGridShape(x=da_x.size, y=da_y.size)
 
     def get_xy(self, category: str, stacked: bool) -> ndarray:
-        """Return the x, y coordinates of the dataset.
+        """
+        Return the x, y coordinates of the dataset (i.e. the Cartesian
+        coordinates of the regular gridded dataset).
 
         Parameters
         ----------
@@ -468,25 +477,62 @@ class MDPDatastore(BaseRegularGridDatastore):
         # assume variables are stored in dimensions [grid_index, ...]
         ds_category = self.unstack_grid_coords(da_or_ds=self._ds[category])
 
-        da_xs = ds_category.x
-        da_ys = ds_category.y
+        xdim, ydim = self.spatial_coordinates
 
-        assert da_xs.ndim == da_ys.ndim == 1, "x and y coordinates must be 1D"
+        da_xs = ds_category[xdim]
+        da_ys = ds_category[ydim]
+
+        assert (
+            da_xs.ndim == da_ys.ndim == 1
+        ), f"{xdim} and {ydim} coordinates must be 1D"
 
         da_x, da_y = xr.broadcast(da_xs, da_ys)
         da_xy = xr.concat([da_x, da_y], dim="grid_coord")
 
         if stacked:
-            da_xy = da_xy.stack(grid_index=self.CARTESIAN_COORDS).transpose(
+            da_xy = da_xy.stack(grid_index=self.spatial_coordinates).transpose(
                 "grid_index",
                 "grid_coord",
             )
         else:
             dims = [
-                "x",
-                "y",
+                xdim,
+                ydim,
                 "grid_coord",
             ]
             da_xy = da_xy.transpose(*dims)
 
         return da_xy.values
+
+    @functools.lru_cache
+    def get_lat_lon(self, category: str) -> np.ndarray:
+        """
+        Return the longitude, latitude coordinates of the dataset as numpy
+        array for a given category of data.
+        Override in MDP to use lat/lons directly from xr.Dataset, if available.
+
+        Parameters
+        ----------
+        category : str
+            The category of the dataset (state/forcing/static).
+
+        Returns
+        -------
+        np.ndarray
+            The longitude, latitude coordinates of the dataset
+            with shape `[n_grid_points, 2]`.
+        """
+        # Check first if lat/lon saved in ds
+        lookup_ds = self._ds
+        if "latitude" in lookup_ds.coords and "longitude" in lookup_ds.coords:
+            lon = lookup_ds.longitude
+            lat = lookup_ds.latitude
+        elif "lat" in lookup_ds.coords and "lon" in lookup_ds.coords:
+            lon = lookup_ds.lon
+            lat = lookup_ds.lat
+        else:
+            # Not saved, use method from BaseDatastore to derive from x/y
+            return super().get_lat_lon(category)
+
+        coords = np.stack((lon.values, lat.values), axis=1)
+        return coords
