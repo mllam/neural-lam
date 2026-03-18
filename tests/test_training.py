@@ -34,12 +34,8 @@ def run_simple_training(datastore, set_output_std):
         torch.set_float32_matmul_precision(
             "high"
         )  # Allows using Tensor Cores on A100s
-        # Use multiple devices if available, otherwise use 1
-        num_devices = torch.cuda.device_count()
-        _ = num_devices if num_devices > 1 else 1
     else:
         device_name = "cpu"
-        devices = 1
 
     trainer = pl.Trainer(
         max_epochs=1,
