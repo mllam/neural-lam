@@ -17,9 +17,19 @@ from neural_lam.datastore.base import BaseDatastore
 
 
 class WeatherDataset(torch.utils.data.Dataset):
-    """Dataset class for weather data.
+    """Dataset for preparing weather data for autoregressive (AR) training.
 
-    This class loads and processes weather data from a given datastore.
+    Wraps a ``BaseDatastore`` and converts raw weather data into
+    training samples suitable for autoregressive models.
+
+    Handles:
+    - slicing temporal windows for state and forcing variables
+    - constructing autoregressive input-target pairs
+    - optional standardization using datastore statistics
+    - compatibility with both analysis and forecast data
+
+    Each sample consists of initial states, target states,
+    forcing inputs, and corresponding timestamps.
     """
 
     def __init__(
@@ -66,15 +76,15 @@ class WeatherDataset(torch.utils.data.Dataset):
             category="forcing", split=self.split
         )
 
-        # check that with the provided data-arrays and ar_steps that we have a
-        # non-zero amount of samples
+        # Ensure that at least one sample can be created with the
+        # current configuration
         if self.__len__() <= 0 and self.da_state is not None:
             raise ValueError(
                 "The provided datastore only provides "
                 f"{len(self.da_state.time)} total time steps, which is too few "
                 "to create a single sample for the WeatherDataset "
                 f"configuration used in the `{split}` split. You could try "
-                "either reducing the number of autoregressive steps "
+                "either reducing the number of autoregressive (AR) steps "
                 "(`ar_steps`) and/or the forcing window size "
                 "(`num_past_forcing_steps` and `num_future_forcing_steps`)"
             )
@@ -133,20 +143,22 @@ class WeatherDataset(torch.utils.data.Dataset):
 
     def _compute_std_safe(self, std: xr.DataArray, feature: str):
         """
-        Replace near-zero standard deviations with machine epsilon.
+        Ensure numerical stability for standard deviation values.
+
+        Near-zero values are replaced with machine epsilon to avoid
+        division by zero during standardization.
 
         Parameters
         ----------
         std : xr.DataArray
-            Standard deviation array for the given feature category.
+            Standard deviation values.
         feature : str
-        Feature category name used in the warning message.
+            Feature type (e.g. "state" or "forcing") used for logging.
 
         Returns
         -------
         xr.DataArray
-            Standard deviation array with near-zero values replaced by
-            machine epsilon to avoid division by zero during standardization.
+            Standard deviation with safe (non-zero) values.
         """
         eps = np.finfo(std.dtype).eps
         if bool((std <= eps).any()):
@@ -158,12 +170,17 @@ class WeatherDataset(torch.utils.data.Dataset):
 
     def __len__(self):
         """
-        Return the number of autoregressive training samples available.
+        Return the number of available training samples.
+
+        The number of samples depends on:
+        - total time steps in the dataset
+        - number of autoregressive steps
+        - past and future forcing window sizes
 
         Returns
         -------
         int
-            Number of (init, target) pairs derivable from the datastore.
+            Number of samples in the dataset.
         """
         if self.datastore.is_forecast:
             # for now we simply create a single sample for each analysis time
@@ -181,7 +198,7 @@ class WeatherDataset(torch.utils.data.Dataset):
                 )
 
             # check that there are enough forecast steps available to create
-            # samples given the number of autoregressive steps requested
+            # samples given the number of autoregressive (AR) steps requested
             n_forecast_steps = self.da_state.elapsed_forecast_duration.size
             if n_forecast_steps < 2 + self.ar_steps:
                 raise ValueError(
@@ -212,8 +229,8 @@ class WeatherDataset(torch.utils.data.Dataset):
 
     def _slice_state_time(self, da_state, idx, n_steps: int):
         """
-        Produce a time slice of the given dataarray `da_state` (state) starting
-        at `idx` and with `n_steps` steps. An `offset`is calculated based on the
+        Produce a time slice the given dataarray `da_state` starting
+        at `idx` and with `n_steps` steps.An `offset` is calculated based on the
         `num_past_forcing_steps` class attribute. `Offset` is used to offset the
         start of the sample, to assert that enough previous time steps are
         available for the 2 initial states and any corresponding forcings
@@ -301,9 +318,9 @@ class WeatherDataset(torch.utils.data.Dataset):
             'window', 'forcing_feature').
         """
         # The current implementation requires at least 2 time steps for the
-        # initial state (see GraphCast). The forcing data is windowed around the
-        # current autregressive time step. The two `init_steps` can also be used
-        # as past forcings.
+        # initial state(see GraphCast). The forcing data is windowed around the
+        # current autoregressive time step. The two `init_steps` can also be
+        # used as past forcings.
         init_steps = 2
         da_list = []
 
@@ -492,30 +509,25 @@ class WeatherDataset(torch.utils.data.Dataset):
 
     def __getitem__(self, idx):
         """
-        Return a single training sample, which consists of the initial states,
-        target states, forcing and batch times.
+        Return a single training sample consisting of:
+        - initial states (t-1, t)
+        - target states (future steps)
+        - forcing inputs
+        - corresponding timestamps
 
-        The implementation currently uses xarray.DataArray objects for the
-        standardization (scaling to mean 0.0 and standard deviation of 1.0) so
-        that we can make us of xarray's broadcasting capabilities. This makes
-        it possible to standardization with both global means, but also for
-        example where a grid-point mean has been computed. This code will have
-        to be replace if standardization is to be done on the GPU to handle
-        different shapes of the standardization.
+        The implementation uses xarray for standardization to leverage
+        broadcasting across grid dimensions. This may need to be adapted
+        for GPU-based standardization in the future.
 
         Parameters
         ----------
         idx : int
-            The index of the sample to return, this will refer to the time of
-            the initial state.
+            Index of the sample.
 
         Returns
         -------
-        init_states : TrainingSample
-            A training sample object containing the initial states, target
-            states, forcing and batch times. The batch times are the times of
-            the target steps.
-
+        tuple
+            (init_states, target_states, forcing, target_times)
         """
         (
             da_init_states,
@@ -568,7 +580,7 @@ class WeatherDataset(torch.utils.data.Dataset):
         and number of times provided and add the x/y coordinates from the
         datastore.
 
-        The number if times provided is expected to match the shape of the
+        The number of times provided is expected to match the shape of the
         tensor. For a 2D tensor, the dimensions are assumed to be (grid_index,
         {category}_feature) and only a single time should be provided. For a 3D
         tensor, the dimensions are assumed to be (time, grid_index,
@@ -651,7 +663,12 @@ class WeatherDataset(torch.utils.data.Dataset):
 
 
 class WeatherDataModule(pl.LightningDataModule):
-    """DataModule for weather data."""
+    """PyTorch Lightning DataModule for weather datasets.
+
+    This module manages dataset splits (train, validation, test) and
+    provides dataloaders for training and evaluation using
+    ``WeatherDataset``.
+    """
 
     def __init__(
         self,
@@ -710,13 +727,15 @@ class WeatherDataModule(pl.LightningDataModule):
     def setup(self, stage=None):
         """
         Instantiate datasets for the requested trainer stage.
-
+        Initialize datasets for the requested stage.
         Parameters
         ----------
         stage : str or None, optional
             Trainer stage identifier (``"fit"``/``"test"``/``None``). When
             ``None``, both the training split and the validation/test
             evaluation splits are prepared.
+            Trainer stage ("fit", "test", or None).
+            If None, both training and evaluation datasets are created.
         """
         if stage == "fit" or stage is None:
             self.train_dataset = WeatherDataset(
