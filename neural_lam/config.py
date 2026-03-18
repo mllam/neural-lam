@@ -18,16 +18,15 @@ from .datastore import (
 @dataclasses.dataclass
 class DatastoreSelection:
     """
-    Configuration for selecting a datastore to use with neural-lam.
+    Configuration for selecting a datastore to use with Neural-LAM.
 
     Attributes
     ----------
     kind : str
-        The kind of datastore to use, currently `mdp` or `npyfilesmeps` are
-        implemented.
+        Identifier of the datastore to use (e.g. "mdp", "npyfilesmeps").
     config_path : str
-        The path to the configuration file for the selected datastore, this is
-        assumed to be relative to the configuration file for neural-lam.
+        Path to the datastore-specific configuration file, relative to the
+        main Neural-LAM configuration file.
     """
 
     kind: str
@@ -84,15 +83,20 @@ class OutputClamping:
 @dataclasses.dataclass
 class TrainingConfig:
     """
-    Configuration related to training neural-lam
+    Configuration related to training Neural-LAM.
+
+    This includes:
+    - how state features are weighted in the loss function
+    - optional output clamping behaviour
 
     Attributes
     ----------
-    state_feature_weighting : Union[ManualStateFeatureWeighting,
-                                    UnformFeatureWeighting]
-        The method to use for weighting the state features in the loss
-        function. Defaults to uniform weighting (`UnformFeatureWeighting`, i.e.
-        all features are weighted equally).
+    state_feature_weighting : Union[ManualStateFeatureWeighting, UniformFeatureWeighting]
+        Strategy used to weight state features in the loss function.
+        Defaults to uniform weighting (all features contribute equally).
+
+    output_clamping : OutputClamping
+        Optional configuration to clamp model outputs within specified bounds.
     """
 
     state_feature_weighting: Union[
@@ -150,6 +154,8 @@ class NeuralLAMConfig(dataclass_wizard.JSONWizard, dataclass_wizard.YAMLWizard):
 
 
 class InvalidConfigError(Exception):
+    """Raised when the configuration file is invalid or cannot be parsed.
+    """
     pass
 
 
@@ -157,8 +163,12 @@ def load_config_and_datastore(
     config_path: str,
 ) -> tuple[NeuralLAMConfig, Union[MDPDatastore, NpyFilesDatastoreMEPS]]:
     """
-    Load the neural-lam configuration and the datastore specified in the
-    configuration.
+    Load the Neural-LAM configuration file and initialize the corresponding datastore.
+
+    This function:
+    - parses the configuration file into a ``NeuralLAMConfig`` object
+    - resolves the datastore configuration path relative to the config file
+    - initializes the datastore using the selected backend
 
     Parameters
     ----------
@@ -168,7 +178,12 @@ def load_config_and_datastore(
     Returns
     -------
     tuple[NeuralLAMConfig, Union[MDPDatastore, NpyFilesDatastoreMEPS]]
-        The Neural-LAM configuration and the loaded datastore.
+        Loaded configuration object and initialized datastore instance.
+
+    Raises
+    ------
+    InvalidConfigError
+        If the configuration file contains unknown or invalid fields.
     """
     try:
         config = NeuralLAMConfig.from_yaml_file(config_path)
