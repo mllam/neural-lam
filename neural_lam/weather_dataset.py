@@ -48,7 +48,7 @@ class WeatherDataset(torch.utils.data.Dataset):
         ar_steps: int = 3,
         num_past_forcing_steps: int = 1,
         num_future_forcing_steps: int = 1,
-        standardize: bool = True,
+        standardize: bool = False,
     ):
         super().__init__()
 
@@ -629,7 +629,7 @@ class WeatherDataModule(pl.LightningDataModule):
         datastore: BaseDatastore,
         ar_steps_train: int = 3,
         ar_steps_eval: int = 25,
-        standardize: bool = True,
+        standardize: bool = False,
         num_past_forcing_steps: int = 1,
         num_future_forcing_steps: int = 1,
         batch_size: int = 4,
