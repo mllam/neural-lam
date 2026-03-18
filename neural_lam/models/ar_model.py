@@ -622,14 +622,27 @@ class ARModel(pl.LightningModule):
                 delimiter=",",
             )
 
+        # --- FIX STARTS HERE ---
         # Check if metrics are watched, log exact values for specific vars
         var_names = self._datastore.get_vars_names(category="state")
-        if full_log_name in self.args.metrics_watch:
-            for var_i, timesteps in self.args.var_leads_metrics_watch.items():
+        
+        # Normalize watch list to handle 'val_' vs 'test_' interchangeably
+        watches_clean = [m.replace("val_", "").replace("test_", "") for m in self.args.metrics_watch]
+
+        # Use the smart match: check full name OR the cleaned base name
+        if full_log_name in self.args.metrics_watch or metric_name in watches_clean:
+            for var_i_str, timesteps in self.args.var_leads_metrics_watch.items():
+                var_i = int(var_i_str) # Ensure index is an integer
                 var_name = var_names[var_i]
                 for step in timesteps:
                     key = f"{full_log_name}_{var_name}_step_{step}"
-                    log_dict[key] = metric_tensor[step - 1, var_i]
+                    
+                    # Robustness: Handle 1D tensors (common in test/small runs) 
+                    # and 2D tensors (standard training/eval)
+                    if metric_tensor.ndim == 1:
+                        log_dict[key] = metric_tensor[var_i]
+                    else:
+                        log_dict[key] = metric_tensor[step - 1, var_i]
 
         return log_dict
 

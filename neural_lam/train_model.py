@@ -1,13 +1,24 @@
 # Standard library
 import json
 import random
+import torch
+import argparse
+import neural_lam.config as config
 import time
 from argparse import ArgumentDefaultsHelpFormatter, ArgumentParser
+
+torch.serialization.add_safe_globals([
+    argparse.Namespace, 
+    config.NeuralLAMConfig, 
+    config.DatastoreSelection, 
+    config.TrainingConfig,
+    config.ManualStateFeatureWeighting,
+    config.OutputClamping
+])
 
 # Third-party
 # for logging the model:
 import pytorch_lightning as pl
-import torch
 from lightning_fabric.utilities import seed
 from loguru import logger
 

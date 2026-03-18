@@ -94,7 +94,8 @@ def plot_on_axis(
 
     if isinstance(da, xr.DataArray) and "x" in da.dims and "y" in da.dims:
         da = da.transpose("x", "y")
-
+    if da.size != np.prod(grid_shape):
+        return None # Gracefully skip plots that don't match the grid
     values = da.values.reshape(grid_shape)
 
     mesh = ax.pcolormesh(
