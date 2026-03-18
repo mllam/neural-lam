@@ -111,7 +111,7 @@ def test_time_slicing_analysis(
         ar_steps=ar_steps,
         num_future_forcing_steps=num_future_forcing_steps,
         num_past_forcing_steps=num_past_forcing_steps,
-        standardize=False
+        standardize=False,
     )
 
     sample = dataset[0]
@@ -187,7 +187,7 @@ def test_step_length_timedeltas(step_length):
         ar_steps=3,
         num_future_forcing_steps=0,
         num_past_forcing_steps=0,
-        standardize=False
+        standardize=False,
     )
 
     # Test that we can get a sample
