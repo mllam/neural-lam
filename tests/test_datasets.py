@@ -514,8 +514,11 @@ def test_weather_dataset_no_forcing_standardize():
     """Regression test: WeatherDataset must not raise AttributeError when the
     datastore has no forcing data and standardize=True (the default).
 
-    Before the fix, self.da_forcing_std was accessed without ever being
-    assigned when da_forcing is None.
+    Before the fix, self.da_forcing_std was accessed at line 123 of
+    weather_dataset.py without ever being assigned when da_forcing is None,
+    causing:
+        AttributeError: 'WeatherDataset' object has no attribute
+        'da_forcing_std'
     """
 
     class NoForcingDatastore(DummyDatastore):
@@ -530,6 +533,7 @@ def test_weather_dataset_no_forcing_standardize():
 
     datastore = NoForcingDatastore(n_grid_points=100, n_timesteps=20)
 
+    # Should not raise AttributeError
     dataset = WeatherDataset(
         datastore=datastore,
         split="train",
