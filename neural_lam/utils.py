@@ -509,22 +509,26 @@ def setup_training_logger(datastore, args, run_name):
             name=run_name,
             config=dict(training=vars(args), datastore=datastore._config),
         )
+
     elif args.logger == "mlflow":
         url = os.getenv("MLFLOW_TRACKING_URI")
         if url is None:
             raise ValueError(
                 "MLFlow logger requires setting MLFLOW_TRACKING_URI in env."
             )
+
         logger = CustomMLFlowLogger(
             experiment_name=args.logger_project,
             tracking_uri=url,
             run_name=run_name,
         )
+
         logger.log_hyperparams(
             dict(training=vars(args), datastore=datastore._config)
         )
+
     else:
-        raise NotImplementedError(
+        raise ValueError(
             f"Unsupported logger type: '{args.logger}'. "
             "Supported loggers are: 'wandb', 'mlflow'."
         )
@@ -539,7 +543,7 @@ def inverse_softplus(x, beta=1, threshold=20):
     Input is clamped to approximately positive values of x, and the function is
     linear for inputs above x*beta for numerical stability.
 
-    Note that this torch.clamp will make gradients 0, but this is not a
+    Note that this torch.clamp will make gradients 0, but this is not .
     problem as values of x that are this close to 0 have gradients of 0 anyhow.
     """
     x_clamped = torch.clamp(
