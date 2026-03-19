@@ -227,112 +227,124 @@ def crps_gauss(
     )
 
 
-DEFINED_METRICS = {
-    "mse": mse,
-    "mae": mae,
-    "wmse": wmse,
-    "wmae": wmae,
-    "nll": nll,
-    "crps_gauss": crps_gauss,
-}
-
 def crps_ens(
     pred,
     target,
-    pred_std,  # pylint: disable=unused-argument
+    pred_std=None,
     mask=None,
     average_grid=True,
     sum_vars=True,
     ens_dim=1,
+    estimator="unbiased",
+    afc_alpha=None,
 ):
     """
     (Negative) Continuous Ranked Probability Score (CRPS)
-    Unbiased estimator from samples. See e.g. Weatherbench 2.
+    Estimator from ensemble samples.  See e.g. Weatherbench 2.
 
-    (..., M, ...,) is any number of batch dimensions, including ensemble
-        dimension M
-    pred: (..., M, ..., N, d_state), prediction
-    target: (..., N, d_state), target
-    pred_std: (..., M, ..., N, d_state) or (d_state,), predicted std.-dev.
-    mask: (N,), boolean mask describing which grid nodes to use in metric
-    average_grid: boolean, if grid dimension -2 should be reduced (mean over N)
-    sum_vars: boolean, if variable dimension -1 should be reduced
-        (sum over d_state)
-    ens_dim: batch dimension where ensemble members are laid out, to reduce over
+    Supports three estimator variants (see Ferro 2014,
+    https://arxiv.org/html/2412.15832v1):
+        - "biased"      : diff_factor = 1 / M
+        - "unbiased"    : diff_factor = 1 / (M - 1)          (fair)
+        - "almost-fair" : diff_factor = (M-1+α) / (M*(M-1))
+
+    Uses a rank-based O(M log M) implementation for the spread term
+    instead of the O(M²) pairwise formulation (see Zamo & Naveau, WB2).
+
+    pred:        (..., M, ..., N, d_state), ensemble predictions
+    target:      (..., N, d_state), observation / ground truth
+    pred_std:    unused (kept for API compatibility with other metrics)
+    mask:        (N,), boolean mask for grid nodes
+    average_grid: reduce grid dim -2 (mean over N)
+    sum_vars:    reduce var dim -1 (sum over d_state)
+    ens_dim:     dimension along which ensemble members are laid out
+    estimator:   one of "biased", "unbiased", "almost-fair"
+    afc_alpha:   alpha parameter, required when estimator="almost-fair"
 
     Returns:
-    metric_val: One of (...,), (..., d_state), (..., N), (..., N, d_state),
-    depending on reduction arguments.
+    metric_val: shape depends on reduction arguments.
     """
     num_ens = pred.shape[ens_dim]  # Number of ensemble members
+
+    # ------------------------------------------------------------------
+    # S = 1 : CRPS degenerates to MAE
+    # ------------------------------------------------------------------
     if num_ens == 1:
-        # With one sample CRPS reduces to MAE
         return mae(
             pred.squeeze(ens_dim),
             target,
-            None,
+            pred_std.squeeze(ens_dim)
+            if pred_std is not None
+            else torch.ones_like(target),
             mask=mask,
             average_grid=average_grid,
+            sum_vars=sum_vars,
         )
 
-    if num_ens == 2:
-        mean_mae = torch.mean(
-            torch.abs(pred - target.unsqueeze(ens_dim)), dim=ens_dim
+    assert (
+        num_ens > 1
+    ), "CRPS can only be estimated for ensemble with more than 1 member"
+
+    # ------------------------------------------------------------------
+    # MAE term:  E|X_i - y|
+    # ------------------------------------------------------------------
+    mean_mae = torch.mean(
+        torch.abs(pred - target.unsqueeze(ens_dim)), dim=ens_dim
+    )  # (..., N, d_state)
+
+    # ------------------------------------------------------------------
+    # Spread term factor depends on estimator choice
+    # ------------------------------------------------------------------
+    if estimator == "biased":
+        diff_factor = 1 / num_ens
+    elif estimator == "unbiased":
+        diff_factor = 1 / (num_ens - 1)
+    elif estimator == "almost-fair":
+        assert (
+            afc_alpha is not None
+        ), "afc_alpha must be provided for almost-fair CRPS estimator"
+        diff_factor = (num_ens - 1 + afc_alpha) / (
+            num_ens * (num_ens - 1)
+        )
+    else:
+        raise NotImplementedError(f"Unknown CRPS estimator: {estimator}")
+
+    # ------------------------------------------------------------------
+    # S = 2 : closed-form pair difference (no sorting needed)
+    # ------------------------------------------------------------------
+    if num_ens == 2 and estimator == "unbiased":
+        pair_diffs_term = (
+            -0.5
+            * diff_factor
+            * torch.abs(
+                pred.select(ens_dim, 0) - pred.select(ens_dim, 1)
+            )
         )  # (..., N, d_state)
+    else:
+        # --------------------------------------------------------------
+        # Rank-based O(M log M) spread term for general case
+        # Ranks start at 1; two argsorts compute entry ranks
+        # --------------------------------------------------------------
+        ranks = (
+            pred.argsort(dim=ens_dim).argsort(dim=ens_dim) + 1
+        )
 
-        # Use simpler estimator
-        pair_diffs_term = -0.5 * torch.abs(
-            pred.select(ens_dim, 0) - pred.select(ens_dim, 1)
-        )  # (..., N, d_state)
-
-        crps_estimator = mean_mae + pair_diffs_term  # (..., N, d_state)
-    elif num_ens < 10:
-        # This is the rank-based implementation with O(M*log(M)) compute and
-        # O(M) memory. See Zamo and Naveau and WB2 for explanation.
-        # For smaller ensemble we can compute all of this directly in memory.
-        mean_mae = torch.mean(
-            torch.abs(pred - target.unsqueeze(ens_dim)), dim=ens_dim
-        )  # (..., N, d_state)
-
-        # Ranks start at 1, two argsorts will compute entry ranks
-        ranks = pred.argsort(dim=ens_dim).argsort(ens_dim) + 1
-
-        pair_diffs_term = (1 / (num_ens - 1)) * torch.mean(
+        pair_diffs_term = diff_factor * torch.mean(
             (num_ens + 1 - 2 * ranks) * pred,
             dim=ens_dim,
         )  # (..., N, d_state)
 
-        crps_estimator = mean_mae + pair_diffs_term  # (..., N, d_state)
-    else:
-        # For large ensembles we batch this over the variable dimension
-        crps_res = []
-        for var_i in range(pred.shape[-1]):
-            pred_var = pred[..., var_i]
-            target_var = target[..., var_i]
+    crps_estimator = mean_mae + pair_diffs_term  # (..., N, d_state)
 
-            mean_mae = torch.mean(
-                torch.abs(pred_var - target_var.unsqueeze(ens_dim)), dim=ens_dim
-            )  # (..., N)
-
-            # Ranks start at 1, two argsorts will compute entry ranks
-            ranks = pred_var.argsort(dim=ens_dim).argsort(ens_dim) + 1
-            # (..., M, ..., N)
-
-            pair_diffs_term = (1 / (num_ens - 1)) * torch.mean(
-                (num_ens + 1 - 2 * ranks) * pred_var,
-                dim=ens_dim,
-            )  # (..., N)
-            crps_res.append(mean_mae + pair_diffs_term)
-
-        crps_estimator = torch.stack(crps_res, dim=-1)
-
-    return mask_and_reduce_metric(crps_estimator, mask, average_grid, sum_vars)
+    return mask_and_reduce_metric(
+        crps_estimator, mask, average_grid, sum_vars
+    )
 
 
 def spread_squared(
     pred,
     target,  # pylint: disable=unused-argument
-    pred_std,  # pylint: disable=unused-argument
+    pred_std=None,  # pylint: disable=unused-argument
     mask=None,
     average_grid=True,
     sum_vars=True,
@@ -343,20 +355,20 @@ def spread_squared(
     Similarly to RMSE, we want to take sqrt after spatial and sample averaging,
     so we need to average the squared spread.
 
-    (..., M, ...,) is any number of batch dimensions, including ensemble
-        dimension M
-    pred: (..., M, ..., N, d_state), prediction
-    target: (..., N, d_state), target
-    pred_std: (..., M, ..., N, d_state) or (d_state,), predicted std.-dev.
-    mask: (N,), boolean mask describing which grid nodes to use in metric
-    average_grid: boolean, if grid dimension -2 should be reduced (mean over N)
-    sum_vars: boolean, if variable dimension -1 should be reduced
-        (sum over d_state)
-    ens_dim: batch dimension where ensemble members are laid out, to reduce over
+    pred:        (..., M, ..., N, d_state), ensemble predictions
+    target:      (..., N, d_state), observation (unused)
+    pred_std:    unused (kept for API compatibility)
+    mask:        (N,), boolean mask for grid nodes
+    average_grid: reduce grid dim -2 (mean over N)
+    sum_vars:    reduce var dim -1 (sum over d_state)
+    ens_dim:     dimension along which ensemble members are laid out
 
     Returns:
-    metric_val: One of (...,), (..., d_state) depending on reduction arguments.
+    metric_val: depends on reduction arguments.
     """
+    assert (
+        pred.shape[ens_dim] > 1
+    ), "spread_squared requires more than 1 ensemble member"
     entry_var = torch.var(pred, dim=ens_dim)  # (..., N, d_state)
     return mask_and_reduce_metric(entry_var, mask, average_grid, sum_vars)
 
@@ -371,3 +383,4 @@ DEFINED_METRICS = {
     "crps_ens": crps_ens,
     "spread_squared": spread_squared,
 }
+
