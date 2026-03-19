@@ -36,10 +36,11 @@ class BaseDatastore(abc.ABC):
 
     # Ensemble vs deterministic data
     If state data is ensemble-valued, then the `is_ensemble` attribute should
-    be set to True and returned state data from `get_dataarray` is assumed to
-    have an `ensemble_member` dimension. If forcing data has a separate
-    ensemble-member dimension, that should be represented by the
-    `has_ensemble_forcing` attribute.
+    be set to True and returned state data from `get_dataarray` is expected to
+    have an `ensemble_member` dimension. If `has_ensemble_forcing` is True,
+    returned forcing data from `get_dataarray` is expected to have an
+    `ensemble_member` dimension; otherwise forcing data is expected not to have
+    one.
 
     # Grid index
     All methods that return data specific to a grid point (like
@@ -247,9 +248,10 @@ class BaseDatastore(abc.ABC):
         `(time)` if `is_forecast` is False.
 
         If state data is ensemble-valued, the returned state dataarray is
-        expected to have an additional `ensemble_member` dimension. Forcing
-        data may also have a separate `ensemble_member` dimension when the
-        datastore sets `has_ensemble_forcing=True`.
+        expected to have an additional `ensemble_member` dimension. If
+        `has_ensemble_forcing=True`, the returned forcing dataarray is expected
+        to have an additional `ensemble_member` dimension; otherwise it is
+        expected not to have one.
 
         Parameters
         ----------
