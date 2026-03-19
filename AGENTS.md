@@ -26,9 +26,11 @@ Config examples: `tests/datastore_examples/`
 
 ## Commands
 
+These commands need to be prepended with `uv run` or the virtual env activated with source `.venv/bin/activate` first:
+
 ```bash
 # Install (PyTorch must be installed first for CUDA variant)
-pip install --group dev -e .
+uv pip install --group dev -e .
 
 # Lint
 pre-commit run --all-files    # black, isort, flake8, mypy, codespell
@@ -64,6 +66,7 @@ W&B auto-disabled in tests. `DummyDatastore` used; example data downloaded from 
    delete or skip sections.
 4. **Read the full issue thread before writing code.** Rejected approaches and prior decisions are
    there. Ignoring them wastes everyone's time.
+5. **Run pre-commit hooks locally.** Linting needs to be done locally before each new commit with e.g. `uvx pre-commit run --all`
 
 ### Communication
 
