@@ -55,5 +55,5 @@ pytest -vv -s --doctest-modules
 
 ## Getting help
 
-- Join the [mllam Slack workspace](https://join.slack.com/t/ml-lam/shared_invite/zt-2t112zvm8-Vt6aBvhX7nYa6Kbj_LkCBQ)
+- Join the [mllam Slack workspace]( https://join.slack.com/t/ml-lam/shared_invite/zt-3jyw20n4g-ESRxMPPSijiZ2ZA6Nh8XhA)
 - [Open a GitHub issue](https://github.com/mllam/neural-lam/issues)
