@@ -1,11 +1,15 @@
 # Standard library
 import sys
+import os
+import tempfile
 
 # Third-party
 import mlflow
 import mlflow.pytorch
 import pytorch_lightning as pl
 from loguru import logger
+from botocore.exceptions import NoCredentialsError
+from PIL import Image
 
 
 class CustomMLFlowLogger(pl.loggers.MLFlowLogger):
@@ -39,30 +43,38 @@ class CustomMLFlowLogger(pl.loggers.MLFlowLogger):
 
     def log_image(self, key, images, step=None):
         """
-        Log a matplotlib figure as an image to MLFlow
+        Log matplotlib figures as images to MLflow.
 
-        key: str
+        Parameters
+        ----------
+        key : str
             Key to log the image under
-        images: list
+        images : list
             List of matplotlib figures to log
-        step: Union[int, None]
+        step : Union[int, None]
             Step to log the image under. If None, logs under the key directly
         """
-        # Third-party
-        from botocore.exceptions import NoCredentialsError
-        from PIL import Image
-
         if step is not None:
             key = f"{key}_{step}"
 
-        # Need to save the image to a temporary file, then log that file
-        # mlflow.log_image, should do this automatically, but is buggy
-        temporary_image = f"{key}.png"
-        images[0].savefig(temporary_image)
+        for i, fig in enumerate(images):
+            # Create a temporary file safely
+            with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as tmp:
+                temp_path = tmp.name
 
-        img = Image.open(temporary_image)
-        try:
-            mlflow.log_image(img, f"{key}.png")
-        except NoCredentialsError:
-            logger.error("Error logging image\nSet AWS credentials")
-            sys.exit(1)
+            try:
+                # Save figure to temp file
+                fig.savefig(temp_path)
+
+                # Open and log image safely
+                with Image.open(temp_path) as img:
+                    mlflow.log_image(img, f"{key}_{i}.png")
+
+            except NoCredentialsError:
+                logger.error("Error logging image\nSet AWS credentials")
+                raise RuntimeError("AWS credentials not set")
+
+            finally:
+                # Ensure cleanup of temporary file
+                if os.path.exists(temp_path):
+                    os.remove(temp_path)
