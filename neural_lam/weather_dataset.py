@@ -53,7 +53,7 @@ class WeatherDataset(torch.utils.data.Dataset):
             category="forcing", split=self.split
         )
 
-        # Check that the provided data arrays and ar_steps yield at least one sample that we have a
+        # Check that the provided data arrays and ar_steps yield at least one sample
         # non-zero amount of samples
         if self.__len__() <= 0 and self.da_state is not None:
             raise ValueError(
@@ -206,12 +206,14 @@ class WeatherDataset(torch.utils.data.Dataset):
 
     def _slice_state_time(self, da_state, idx, n_steps: int):
         """
-        Produce a time slice of the given dataarray `da_state` (state) starting
-        at `idx` and with `n_steps` steps. An `offset` is calculated based on the
-        `num_past_forcing_steps` class attribute. `Offset` is used to offset the
-        start of the sample, to assert that enough previous time steps are
-        available for the 2 initial states and any corresponding forcings
-        (calculated in `_slice_forcing_time`).
+        Produce a time slice of the given dataarray `da_state` (state)
+        starting at `idx` with `n_steps` steps.
+
+        An offset is calculated based on the
+        `num_past_forcing_steps` class attribute. This offset ensures
+        that enough previous time steps are available for the two
+        initial states and their corresponding forcing values
+        (computed in `_slice_forcing_time`).        
 
         Parameters
         ----------
@@ -294,7 +296,8 @@ class WeatherDataset(torch.utils.data.Dataset):
             The sliced dataarray with dims ('time', 'grid_index',
             'window', 'forcing_feature').
         """
-        # The current implementation requires at least 2 time steps for the
+        # current autoregressive time step. The two `init_steps`
+        # can also be used
         # initial state (see GraphCast). The forcing data is windowed around the
         # current autoregressive time step. The two `init_steps` can also be used
         # as past forcings.

@@ -91,7 +91,9 @@ class TrainingConfig:
 
     Attributes
     ----------
-    state_feature_weighting : Union[ManualStateFeatureWeighting, UniformFeatureWeighting]
+    state_feature_weighting : Union[
+    ManualStateFeatureWeighting, UniformFeatureWeighting
+    ]
         Strategy used to weight state features in the loss function.
         Defaults to uniform weighting (all features contribute equally).
 
@@ -161,7 +163,10 @@ class InvalidConfigError(Exception):
 
 def load_config_and_datastore(
     config_path: str,
-) -> tuple[NeuralLAMConfig, Union[MDPDatastore, NpyFilesDatastoreMEPS]]:
+) -> tuple[
+    NeuralLAMConfig,
+    Union[MDPDatastore, NpyFilesDatastoreMEPS],
+]:
     """
     Load the Neural-LAM configuration file and initialize the corresponding datastore.
 
