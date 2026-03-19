@@ -150,6 +150,14 @@ class ForecasterModule(pl.LightningModule):
         Unpacks the batch, runs the forecaster, and returns the raw pred_std
         (None if the forecaster does not output uncertainty estimates).
 
+        Any extra leading dims beyond the standard batch dim (e.g. an ensemble
+        sample dim S) are folded into the effective batch before calling the
+        forecaster. Prediction is returned still folded as (S*B, T, N, F) so
+        that all existing logging and aggregation paths in training_step,
+        validation_step, and test_step remain correct without modification.
+        Unfolding to (*leading, T, N, F) is the responsibility of
+        ensemble-specific subclasses (e.g. EnsForecasterModule).
+
         Parameters
         ----------
         batch : tuple
@@ -159,7 +167,7 @@ class ForecasterModule(pl.LightningModule):
         Returns
         -------
         prediction : torch.Tensor
-            Predicted states.
+            Predicted states, shape (S*B, T, num_grid_nodes, d_f).
         target_states : torch.Tensor
             Ground-truth target states.
         pred_std : torch.Tensor or None
@@ -167,8 +175,24 @@ class ForecasterModule(pl.LightningModule):
         """
         (init_states, target_states, forcing_features, _batch_times) = batch
 
+        # init_states: (*leading, 2, num_grid_nodes, d_f)
+        # leading is normally (B,); extra leading dims (e.g. S, B) are folded
+        # into an effective batch so ARForecaster and StepPredictor need no
+        # changes — their internal indexing is already rank-transparent.
+        leading_shape = init_states.shape[:-3]
+        n_leading = len(leading_shape)
+
+        if n_leading > 1:
+            init_states_in = init_states.flatten(0, n_leading - 1)
+            forcing_in = forcing_features.flatten(0, n_leading - 1)
+            target_in = target_states.flatten(0, n_leading - 1)
+        else:
+            init_states_in = init_states
+            forcing_in = forcing_features
+            target_in = target_states
+
         prediction, pred_std = self._forecaster(
-            init_states, forcing_features, target_states
+            init_states_in, forcing_in, target_in
         )
 
         return prediction, target_states, pred_std

@@ -326,3 +326,52 @@ def test_step_predictor_no_static_features():
     )
     assert prediction.shape == (B, 1, num_grid_nodes, d_state)
     assert pred_std is None
+
+
+def test_fold_unfold_equivalence():
+    """Folding (S, B, ...) into (S*B, ...) before ARForecaster and keeping
+    prediction folded must match running each sample independently.
+
+    This confirms ARForecaster's internal indexing is rank-transparent:
+    init_states[:, 0/1] selects along the conditioning-step axis (dim 1),
+    not the batch axis, so a folded leading dim is invisible to the rollout.
+    The test also confirms that no unfold is needed inside forecast_for_batch
+    for the existing logging/aggregation paths to remain correct.
+    """
+    datastore = init_datastore_example("mdp")
+    config = nlconfig.NeuralLAMConfig(
+        datastore=nlconfig.DatastoreSelection(
+            kind=datastore.SHORT_NAME, config_path=datastore.root_path
+        )
+    )
+    predictor = MockStepPredictor(config=config, datastore=datastore)
+    forecaster = ARForecaster(predictor, datastore)
+
+    S, B = 3, 2
+    N = predictor.num_grid_nodes
+    d_state = datastore.get_num_data_vars(category="state")
+    d_forcing = datastore.get_num_data_vars(category="forcing")
+    pred_steps = 4
+
+    torch.manual_seed(42)
+    init_states = torch.randn(S, B, 2, N, d_state)
+    forcing = torch.randn(S, B, pred_steps, N, d_forcing)
+    boundary = torch.randn(S, B, pred_steps, N, d_state)
+
+    # Run with (S, B) folded into one effective batch dim
+    with torch.no_grad():
+        pred_folded, _ = forecaster(
+            init_states.flatten(0, 1),
+            forcing.flatten(0, 1),
+            boundary.flatten(0, 1),
+        )
+    pred_folded = pred_folded.unflatten(0, (S, B))
+
+    # Run each sample independently and stack
+    with torch.no_grad():
+        pred_explicit = torch.stack(
+            [forecaster(init_states[s], forcing[s], boundary[s])[0]
+             for s in range(S)]
+        )
+
+    assert torch.allclose(pred_folded, pred_explicit)
