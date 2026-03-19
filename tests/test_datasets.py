@@ -224,7 +224,7 @@ def test_single_batch(datastore_name, split):
     predictor = predictor_class(
         config=config,
         datastore=datastore,
-        graph=args.graph,
+        graph_name=args.graph,
         hidden_dim=args.hidden_dim,
         hidden_layers=args.hidden_layers,
         processor_layers=args.processor_layers,
@@ -252,7 +252,6 @@ def test_single_batch(datastore_name, split):
     data_loader = DataLoader(dataset, batch_size=2)
     batch = next(iter(data_loader))
     batch_device = [part.to(device_name) for part in batch]
-    model_device.common_step(batch_device)
     model_device.training_step(batch_device)
 
 

@@ -59,7 +59,7 @@ def test_clamping():
     model = GraphLAM(
         config=config,
         datastore=datastore,
-        graph=model_args.graph,
+        graph_name=model_args.graph,
         hidden_dim=model_args.hidden_dim,
         hidden_layers=model_args.hidden_layers,
         processor_layers=model_args.processor_layers,
