@@ -550,13 +550,10 @@ class ARModel(pl.LightningModule):
                 ]
 
                 example_i = self.plotted_examples
-
-                for var_name, fig in zip(
-                    self._datastore.get_vars_names("state"), var_figs
-                ):
-                    # WandB supports multiple images per key
-                    # Other loggers need example index to avoid overwriting
-                    key = f"{var_name}_example_{example_i}"
+                    if isinstance(self.logger, pl.loggers.WandbLogger):
+                        key = f"{var_name}_example"
+                    else:
+                        key = f"{var_name}_example_{example_i}"
 
                     if hasattr(self.logger, "log_image"):
                         self.logger.log_image(key=key, images=[fig], step=t_i)
