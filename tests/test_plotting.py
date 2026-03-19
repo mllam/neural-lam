@@ -97,7 +97,22 @@ def model_and_batch(tmp_path, time_step, time_unit):
         (1, "minutes"),
     ],
 )
+@pytest.mark.parametrize("t_i", [1, 2])
+def test_plot_examples_integration_saves_figure(
+    model_and_batch, time_step, time_unit, t_i
+):
+    """Integration test that saves actual figure for manual inspection"""
+    model, batch, datastore, tmp_path = model_and_batch
 
+    # Reset plotted examples counter
+    model.plotted_examples = 0
+
+    # Verify that the model correctly inferred time step from datastore
+    assert (
+        model.time_step_int == time_step
+    ), f"Expected time_step_int={time_step}, got {model.time_step_int}"
+    assert (
+        model.time_step_unit == time_unit
     ), f"Expected time_step_unit={time_unit}, got {model.time_step_unit}"
 
     # Generate prediction
