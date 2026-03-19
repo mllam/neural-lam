@@ -478,3 +478,68 @@ def test_forecast_len_raises_when_forcing_shorter_than_state_horizon():
 
     with pytest.raises(ValueError, match="forcing forecast steps"):
         len(dataset)
+
+
+def test_analysis_len_limited_by_shorter_forcing_horizon():
+    """Analysis-mode datasets must not expose samples whose forcing windows
+    overrun the available forcing time axis."""
+
+    class ShortForcingDatastore(DummyDatastore):
+        def get_dataarray(self, category, split, **kwargs):
+            da = super().get_dataarray(category=category, split=split, **kwargs)
+            if category == "forcing":
+                return da.isel(time=slice(None, -1))
+            return da
+
+    datastore = ShortForcingDatastore(n_grid_points=4, n_timesteps=7)
+    dataset = WeatherDataset(
+        datastore=datastore,
+        split="train",
+        ar_steps=2,
+        num_past_forcing_steps=1,
+        num_future_forcing_steps=2,
+        standardize=False,
+    )
+
+    assert len(dataset) == 1
+
+    _, _, forcing, _ = dataset[0]
+    assert not torch.isnan(forcing).any()
+
+    with pytest.raises(IndexError):
+        dataset[1]
+
+
+def test_weather_dataset_no_forcing_standardize():
+    """Regression test: WeatherDataset must not raise AttributeError when the
+    datastore has no forcing data and standardize=True (the default).
+
+    Before the fix, self.da_forcing_std was accessed without ever being
+    assigned when da_forcing is None.
+    """
+
+    class NoForcingDatastore(DummyDatastore):
+        """DummyDatastore that returns None for the forcing category."""
+
+        def get_dataarray(self, category, split, **kwargs):
+            if category == "forcing":
+                return None
+            return super().get_dataarray(
+                category=category, split=split, **kwargs
+            )
+
+    datastore = NoForcingDatastore(n_grid_points=100, n_timesteps=20)
+
+    dataset = WeatherDataset(
+        datastore=datastore,
+        split="train",
+        ar_steps=3,
+        standardize=True,
+    )
+
+    assert dataset.forcing_std_safe is None
+    assert dataset.da_forcing_mean is None
+    assert dataset.da_forcing_std is None
+
+    _, _, forcing, _ = dataset[0]
+    assert forcing.shape[-1] == 0

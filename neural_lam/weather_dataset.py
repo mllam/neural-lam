@@ -115,6 +115,9 @@ class WeatherDataset(torch.utils.data.Dataset):
                 )
                 self.da_forcing_mean = self.ds_forcing_stats.forcing_mean
                 self.da_forcing_std = self.ds_forcing_stats.forcing_std
+            else:
+                self.da_forcing_mean = None
+                self.da_forcing_std = None
 
             self.state_std_safe = self._compute_std_safe(
                 self.da_state_std, "state"
@@ -198,13 +201,24 @@ class WeatherDataset(torch.utils.data.Dataset):
             #   - past forcing: max(2, self.num_past_forcing_steps) (at least 2
             #     time steps are required for the initial state)
             #   - future forcing: self.num_future_forcing_steps
-            return (
+            n_state_samples = (
                 len(self.da_state.time)
                 - self.ar_steps
                 - max(2, self.num_past_forcing_steps)
                 - self.num_future_forcing_steps
                 + 1
             )
+            if self.da_forcing is None:
+                return max(0, n_state_samples)
+
+            n_forcing_samples = (
+                len(self.da_forcing.time)
+                - self.ar_steps
+                - max(2, self.num_past_forcing_steps)
+                - self.num_future_forcing_steps
+                + 1
+            )
+            return max(0, min(n_state_samples, n_forcing_samples))
 
     def _slice_state_time(self, da_state, idx, n_steps: int):
         """
