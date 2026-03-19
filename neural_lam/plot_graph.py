@@ -232,7 +232,7 @@ def plot_graph(
 def main():
     """Plot graph structure in 3D using plotly."""
     parser = ArgumentParser(
-        description="Plot graph",
+        description="Visualize Neural-LAM graph structure in 3D using Plotly.",
         formatter_class=ArgumentDefaultsHelpFormatter,
     )
     parser.add_argument(
