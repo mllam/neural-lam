@@ -362,8 +362,9 @@ def make_mlp(blueprint, layer_norm=True):
     ----------
     blueprint : list[int]
         Sequence of layer dimensions where ``blueprint[0]`` is the input size,
-        ``blueprint[-1]`` is the output size, and the intermediate entries
-        specify the hidden widths.
+        ``blueprint[-1]`` is the output size, the intermediate entries specify
+        the hidden layer widths, and ``len(blueprint) - 2`` is the number of
+        hidden layers.
     layer_norm : bool, optional
         If ``True``, append a ``LayerNorm`` to the output as in GraphCast.
 
@@ -600,9 +601,12 @@ def inverse_softplus(x, beta=1, threshold=20):
     """
     Inverse of :func:`torch.nn.functional.softplus`.
 
-    Input is clamped to approximately positive values of ``x`` for numerical
-    stability; everything above ``threshold / beta`` is treated as linear and
-    exactly matches the softplus inverse within numerical precision.
+    For most inputs this function is exact up to numerical precision. The
+    input is clamped to ensure numerical stability: values above
+    ``threshold / beta`` are treated as linear (which is exact in that
+    regime), and values near zero are clamped to avoid ``log`` of
+    non-positive numbers. Only near the lower clamping bound does the
+    result deviate from the true inverse.
 
     Parameters
     ----------
@@ -611,7 +615,8 @@ def inverse_softplus(x, beta=1, threshold=20):
     beta : float, optional
         Softplus ``beta`` parameter that controls the sharpness. Default ``1``.
     threshold : float, optional
-        Threshold applied to the input for numerical stability. Default ``20``.
+        Threshold above which the function is treated as linear for numerical
+        stability. Default ``20``.
 
     Returns
     -------
@@ -642,6 +647,10 @@ def inverse_sigmoid(x):
 
     Sigmoid output takes values in ``[0, 1]``; we clamp the input slightly
     within that open interval before applying ``log(x / (1 - x))``.
+
+    Note that ``torch.clamp`` will make gradients 0 near the bounds, but
+    this is not a problem as values of x that are this close to 0 or 1
+    have gradients of 0 anyhow.
 
     Parameters
     ----------
