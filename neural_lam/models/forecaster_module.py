@@ -195,7 +195,7 @@ class ForecasterModule(pl.LightningModule):
             init_states_in, forcing_in, target_in
         )
 
-        return prediction, target_states, pred_std
+        return prediction, target_in, pred_std
 
     def training_step(self, batch):
         prediction, target, pred_std = self.forecast_for_batch(batch)
