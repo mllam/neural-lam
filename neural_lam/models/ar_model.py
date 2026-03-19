@@ -666,9 +666,10 @@ class ARModel(pl.LightningModule):
                 var_figs = [
                     vis.plot_prediction(
                         datastore=self._datastore,
-                        title=f"{var_name} ({var_unit}), "
-                        f"t={t_i} ({(self.time_step_int * t_i)}"
+                        title=f"{var_name}, t={t_i}"
+                        f" ({self.time_step_int * t_i}"
                         f"{self.time_step_unit})",
+                        colorbar_label=var_unit,
                         vrange=var_vrange,
                         da_prediction=da_prediction.isel(
                             state_feature=var_i, time=t_i - 1
@@ -859,7 +860,7 @@ class ARModel(pl.LightningModule):
                     error=loss_map,
                     datastore=self._datastore,
                     title=f"Test loss, t={t_i} "
-                    f"({(self.time_step_int * t_i)} {self.time_step_int_unit})",
+                    f"({(self.time_step_int * t_i)} {self.time_step_unit})",
                 )
                 for t_i, loss_map in zip(
                     self.args.val_steps_to_log, mean_spatial_loss
