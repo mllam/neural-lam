@@ -5,7 +5,9 @@ from pathlib import Path
 
 # Third-party
 import pooch
+import pytest
 import yaml
+from pytorch_lightning.utilities import rank_zero_only
 
 # First-party
 from neural_lam.datastore import DATASTORES, init_datastore
@@ -19,6 +21,14 @@ from .dummy_datastore import DummyDatastore
 # Disable weights and biases to avoid unnecessary logging
 # and to avoid having to deal with authentication
 os.environ["WANDB_MODE"] = "disabled"
+
+
+@pytest.fixture(autouse=True)
+def ensure_rank_zero(monkeypatch):
+    """Ensure rank_zero_only.rank == 0 so @rank_zero_only-decorated functions
+    execute their body regardless of state left by prior training tests."""
+    monkeypatch.setattr(rank_zero_only, "rank", 0, raising=False)
+
 
 DATASTORE_EXAMPLES_ROOT_PATH = Path("tests/datastore_examples")
 
@@ -91,7 +101,7 @@ DATASTORES_EXAMPLES = dict(
         / "danra_100m_winds"
         / "danra.datastore.yaml"
     ),
-    npyfilesmeps=download_meps_example_reduced_dataset(),
+    npyfilesmeps=None,
     dummydata=None,
 )
 
@@ -99,6 +109,14 @@ DATASTORES[DummyDatastore.SHORT_NAME] = DummyDatastore
 
 
 def init_datastore_example(datastore_kind):
+    if (
+        datastore_kind == "npyfilesmeps"
+        and DATASTORES_EXAMPLES["npyfilesmeps"] is None
+    ):
+        DATASTORES_EXAMPLES["npyfilesmeps"] = (
+            download_meps_example_reduced_dataset()
+        )
+
     datastore = init_datastore(
         datastore_kind=datastore_kind,
         config_path=DATASTORES_EXAMPLES[datastore_kind],
