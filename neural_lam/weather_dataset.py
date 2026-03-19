@@ -399,7 +399,7 @@ class WeatherDataset(torch.utils.data.Dataset):
             da_state = self.da_state
 
         if self.da_forcing is not None:
-            if "ensemble_member" in self.da_forcing.dims:
+            if self.datastore.has_ensemble_forcing:
                 da_forcing = self.da_forcing.isel(ensemble_member=i_ensemble)
             else:
                 da_forcing = self.da_forcing

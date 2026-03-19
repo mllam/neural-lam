@@ -76,11 +76,10 @@ class MDPDatastore(BaseRegularGridDatastore):
             self._ds.to_zarr(fp_ds)
         self._n_boundary_points = n_boundary_points
         self.is_ensemble = "ensemble_member" in self._ds["state"].dims
-        self._has_ensemble_member_dim = {
-            category: category in self._ds
-            and "ensemble_member" in self._ds[category].dims
-            for category in ["forcing", "static"]
-        }
+        self.has_ensemble_forcing = (
+            "forcing" in self._ds
+            and "ensemble_member" in self._ds["forcing"].dims
+        )
 
         log_on_rank_zero(
             "The loaded datastore contains the following features:"

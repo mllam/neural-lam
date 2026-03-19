@@ -168,11 +168,9 @@ class DummyDatastore(BaseRegularGridDatastore):
         # Stack the spatial dimensions into grid_index
         self.ds = self.ds.stack(grid_index=self.spatial_coordinates)
         self.is_ensemble = "ensemble_member" in self.ds["state"].dims
-        self._has_ensemble_member_dim = {
-            category: "ensemble_member" in self.ds[category].dims
-            for category in self.N_FEATURES
-            if category != "state"
-        }
+        self.has_ensemble_forcing = (
+            "ensemble_member" in self.ds["forcing"].dims
+        )
 
         # Create temporary directory for storing derived files
         self._tempdir = tempfile.TemporaryDirectory()
@@ -524,10 +522,9 @@ class EnsembleDummyDatastore(BaseDatastore):
                 forcing_has_ensemble,
             )
         self.is_ensemble = "ensemble_member" in self._da_state.dims
-        self._has_ensemble_member_dim = {
-            "forcing": "ensemble_member" in self._da_forcing.dims,
-            "static": False,
-        }
+        self.has_ensemble_forcing = (
+            "ensemble_member" in self._da_forcing.dims
+        )
 
     # ---- data initialisation helpers ----------------------------------------
 

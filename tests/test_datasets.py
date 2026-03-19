@@ -306,12 +306,20 @@ def test_expected_dim_order_handles_optional_ensemble_forcing():
         n_timesteps=10,
     )
 
+    assert datastore_with_ensemble_forcing.is_ensemble is True
+    assert datastore_with_ensemble_forcing.has_ensemble_forcing is True
+    assert datastore_without_ensemble_forcing.is_ensemble is True
+    assert datastore_without_ensemble_forcing.has_ensemble_forcing is False
+
     assert datastore_with_ensemble_forcing.expected_dim_order(
         category="forcing"
     ) == ("time", "ensemble_member", "grid_index", "forcing_feature")
     assert datastore_without_ensemble_forcing.expected_dim_order(
         category="forcing"
     ) == ("time", "grid_index", "forcing_feature")
+    assert datastore_with_ensemble_forcing.expected_dim_order(
+        category="static"
+    ) == ("grid_index", "static_feature")
 
 
 def test_ensemble_index_mapping_is_time_major():

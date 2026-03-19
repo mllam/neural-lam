@@ -173,10 +173,7 @@ class NpyFilesDatastoreMEPS(BaseRegularGridDatastore):
             self.config.dataset.remove_state_features_with_index
         )
         self.is_ensemble = self._num_ensemble_members > 1
-        self._has_ensemble_member_dim = {
-            "forcing": False,
-            "static": False,
-        }
+        self.has_ensemble_forcing = False
 
     @property
     def root_path(self) -> Path:

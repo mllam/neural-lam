@@ -35,9 +35,11 @@ class BaseDatastore(abc.ABC):
     dimensions (rather than just `time`).
 
     # Ensemble vs deterministic data
-    If the datastore is used to represent ensemble data, then the `is_ensemble`
-    attribute should be set to True, and returned data from `get_dataarray` is
-    assumed to have an `ensemble_member` dimension.
+    If state data is ensemble-valued, then the `is_ensemble` attribute should
+    be set to True and returned state data from `get_dataarray` is assumed to
+    have an `ensemble_member` dimension. If forcing data has a separate
+    ensemble-member dimension, that should be represented by the
+    `has_ensemble_forcing` attribute.
 
     # Grid index
     All methods that return data specific to a grid point (like
@@ -49,6 +51,7 @@ class BaseDatastore(abc.ABC):
     """
 
     is_ensemble: bool = False
+    has_ensemble_forcing: bool = False
     is_forecast: bool = False
 
     @property
@@ -243,8 +246,10 @@ class BaseDatastore(abc.ABC):
         elapsed_forecast_duration)` dimensions if `is_forecast` is True, or
         `(time)` if `is_forecast` is False.
 
-        If the data is ensemble data, the dataarray is expected to have an
-        additional `ensemble_member` dimension.
+        If state data is ensemble-valued, the returned state dataarray is
+        expected to have an additional `ensemble_member` dimension. Forcing
+        data may also have a separate `ensemble_member` dimension when the
+        datastore sets `has_ensemble_forcing=True`.
 
         Parameters
         ----------
@@ -436,7 +441,9 @@ class BaseDatastore(abc.ABC):
                 elif not self.is_forecast:
                     dim_order.append("time")
 
-            if self._category_has_ensemble_member(category):
+            if category == "state" and self.is_ensemble:
+                dim_order.append("ensemble_member")
+            elif category == "forcing" and self.has_ensemble_forcing:
                 dim_order.append("ensemble_member")
 
         dim_order.append("grid_index")
@@ -445,20 +452,6 @@ class BaseDatastore(abc.ABC):
             dim_order.append(f"{category}_feature")
 
         return tuple(dim_order)
-
-    def _category_has_ensemble_member(
-        self, category: Optional[str] = None
-    ) -> bool:
-        """Return whether a datastore category includes `ensemble_member`."""
-        if category is None or category == "static":
-            return False
-        if category == "state":
-            return self.is_ensemble
-
-        has_ensemble_member_by_category = getattr(
-            self, "_has_ensemble_member_dim", {}
-        )
-        return bool(has_ensemble_member_by_category.get(category, False))
 
 
 @dataclasses.dataclass
