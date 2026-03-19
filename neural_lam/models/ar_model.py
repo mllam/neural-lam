@@ -842,6 +842,9 @@ class ARModel(pl.LightningModule):
         self.matched_metrics = set()
         self.spatial_loss_maps.clear()
 
+        # Reset example plot counter for next test epoch
+        self.plotted_examples = 0
+
     def on_load_checkpoint(self, checkpoint):
         """
         Perform any changes to state dict before loading checkpoint
