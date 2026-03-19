@@ -53,7 +53,8 @@ class WeatherDataset(torch.utils.data.Dataset):
             category="forcing", split=self.split
         )
 
-        # Check that the provided data arrays and ar_steps yield at least one sample
+        # Check that the provided data arrays and ar_steps
+        # yield at least one sample
         # non-zero amount of samples
         if self.__len__() <= 0 and self.da_state is not None:
             raise ValueError(
@@ -213,7 +214,7 @@ class WeatherDataset(torch.utils.data.Dataset):
         `num_past_forcing_steps` class attribute. This offset ensures
         that enough previous time steps are available for the two
         initial states and their corresponding forcing values
-        (computed in `_slice_forcing_time`).        
+        (computed in `_slice_forcing_time`).
 
         Parameters
         ----------
@@ -298,8 +299,6 @@ class WeatherDataset(torch.utils.data.Dataset):
         """
         # current autoregressive time step. The two `init_steps`
         # can also be used
-        # initial state (see GraphCast). The forcing data is windowed around the
-        # current autoregressive time step. The two `init_steps` can also be used
         # as past forcings.
         init_steps = 2
         da_list = []

@@ -156,8 +156,8 @@ class NeuralLAMConfig(dataclass_wizard.JSONWizard, dataclass_wizard.YAMLWizard):
 
 
 class InvalidConfigError(Exception):
-    """Raised when the configuration file is invalid or cannot be parsed.
-    """
+    """Raised when the configuration file is invalid or cannot be parsed."""
+
     pass
 
 
@@ -168,7 +168,8 @@ def load_config_and_datastore(
     Union[MDPDatastore, NpyFilesDatastoreMEPS],
 ]:
     """
-    Load the Neural-LAM configuration file and initialize the corresponding datastore.
+    Load the Neural-LAM configuration file and initialize
+    the corresponding datastore.
 
     This function:
     - parses the configuration file into a ``NeuralLAMConfig`` object
