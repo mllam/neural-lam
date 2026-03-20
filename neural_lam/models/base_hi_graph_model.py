@@ -139,8 +139,8 @@ class BaseHiGraphModel(BaseGraphModel):
         mesh_rep_levels = [mesh_rep] + [
             self.expand_to_batch(emb(node_static_features), batch_size)
             for emb, node_static_features in zip(
-                list(self.mesh_embedders)[1:],
-                list(self.mesh_static_features)[1:],
+                self.mesh_embedders[1:],
+                self.mesh_static_features[1:],
             )
         ]
 

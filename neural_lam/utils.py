@@ -36,6 +36,10 @@ class BufferList(nn.Module):
             self.register_buffer(f"b{buffer_i}", tensor, persistent=persistent)
 
     def __getitem__(self, key):
+        if isinstance(key, slice):
+            return [self[i] for i in range(*key.indices(len(self)))]
+        if key < 0:
+            key += len(self)
         return getattr(self, f"b{key}")
 
     def __len__(self):
