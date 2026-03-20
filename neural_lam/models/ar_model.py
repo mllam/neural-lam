@@ -124,11 +124,17 @@ class ARModel(pl.LightningModule):
         # Instantiate loss function
         self.loss = metrics.get_metric(args.loss)
 
-        boundary_mask = torch.tensor(
-            da_boundary_mask.values, dtype=torch.float32
-        ).unsqueeze(
-            1
-        )  # add feature dim
+        if da_boundary_mask is not None:
+            boundary_mask = torch.tensor(
+                da_boundary_mask.values, dtype=torch.float32
+            ).unsqueeze(
+                1
+            )  # add feature dim
+        else:
+            # Global domain: no boundary points, all grid points are interior
+            boundary_mask = torch.zeros(
+                self.num_grid_nodes, 1, dtype=torch.float32
+            )
 
         self.register_buffer("boundary_mask", boundary_mask, persistent=False)
         # Pre-compute interior mask for use in loss function

@@ -189,3 +189,16 @@ def test_all_gather_cat_multi_device_simulation():
         "all_gather_cat produced incorrectly ordered/combined values "
         "on multi-device simulation"
     )
+
+
+def test_training_global():
+    """Test global-style datastore boundary behavior (no boundary mask).
+    Training with this datastore is already exercised via the parametrized
+    test_training, so this test only verifies the global boundary mask
+    property to avoid duplicate expensive training runs."""
+    datastore = init_datastore_example("dummydata_global")
+
+    # Verify the global property: boundary mask should be None
+    assert (
+        datastore.boundary_mask is None
+    ), "GlobalDummyDatastore boundary_mask should be None for global domains"
