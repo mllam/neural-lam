@@ -87,7 +87,7 @@ W&B auto-disabled in tests. `DummyDatastore` used; example data downloaded from 
 
 - Imperative form, matching existing `git log` style.
 - One concern per PR. No unrelated changes.
-- No AI attribution or tool names in commit messages.
+- AI attribution or tool names is mandatory but maximum one short sentence.
 
 ### Changelog
 
