@@ -18,6 +18,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Handle single-device runs in all_gather_cat by skipping all_gather and returning the concatenated input tensor directly. [\#452](https://github.com/mllam/neural-lam/pull/452) @sohampatil01-svg
+
 - Initialize `da_forcing_mean` and `da_forcing_std` to `None` when forcing data is absent, fixing `AttributeError` in `WeatherDataset` with `standardize=True` [\#369](https://github.com/mllam/neural-lam/issues/369) @Sir-Sloth-The-Lazy
 
 - Ensure proper sorting of `analysis_time` in `NpyFilesDatastoreMEPS._get_analysis_times` independent of the order in which files are processed with glob [\#386](https://github.com/mllam/neural-lam/pull/386) @Gopisokk
