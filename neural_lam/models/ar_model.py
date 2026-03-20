@@ -278,11 +278,14 @@ class ARModel(pl.LightningModule):
 
     def common_step(self, batch):
         """
-        Predict on single batch batch consists of: init_states: (B, 2,
-        num_grid_nodes, d_features) target_states: (B, pred_steps,
-        num_grid_nodes, d_features) forcing_features: (B, pred_steps,
-        num_grid_nodes, d_forcing),
-            where index 0 corresponds to index 1 of init_states
+        Predict on single batch.
+
+        Batch consists of:
+            init_states: (B, 2, num_grid_nodes, d_features)
+            target_states: (B, pred_steps, num_grid_nodes, d_features)
+            forcing_features: (B, pred_steps, num_grid_nodes, d_forcing)
+
+        Note: index 0 corresponds to index 1 of init_states.
         """
         (init_states, target_states, forcing_features, batch_times) = batch
 
