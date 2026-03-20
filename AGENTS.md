@@ -87,7 +87,7 @@ W&B auto-disabled in tests. `DummyDatastore` used; example data downloaded from 
 
 - Imperative form, matching existing `git log` style.
 - One concern per PR. No unrelated changes.
-- AI attribution or tool names is mandatory but maximum one short sentence.
+- AI attribution of tool names is mandatory if used and should be mentioned in the commit message trailer as `Co-authored-by <tool>`
 
 ### Changelog
 
