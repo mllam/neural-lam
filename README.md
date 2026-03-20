@@ -141,7 +141,7 @@ assume you placed `config.yaml` in a folder called `data`):
 data/
 ├── config.yaml           - Configuration file for neural-lam
 ├── danra.datastore.yaml  - Configuration file for the datastore, referred to from config.yaml
-└── graphs/               - Directory containing graphs for training
+└── graph/                - Directory containing graphs for training
 ```
 
 And the content of `config.yaml` could in this case look like:
@@ -398,7 +398,7 @@ The graphs used for the different models in the [paper](#graph-based-neural-weat
 * **Hi-LAM**: `python -m neural_lam.create_graph --config_path <neural-lam-config-path> --name hierarchical --hierarchical` (also works for Hi-LAM-Parallel)
 * **L1-LAM**: `python -m neural_lam.create_graph --config_path <neural-lam-config-path> --name 1level --levels 1`
 
-The graph-related files are stored in a directory called `graphs`.
+The graph-related files are stored in a directory called `graph`.
 
 ## Logging your experiments
 
@@ -525,10 +525,10 @@ Model classes, including abstract base classes, are located in `neural_lam/model
 Notebooks for visualization and analysis are located in `docs`.
 
 ## Format of graph directory
-The `graphs` directory contains generated graph structures that can be used by different graph-based models.
+The `graph` directory contains generated graph structures that can be used by different graph-based models.
 The structure is shown with examples below:
 ```
-graphs
+graph
 ├── graph1                                  - Directory with a graph definition
 │   ├── m2m_edge_index.pt                   - Edges in mesh graph (neural_lam.create_mesh)
 │   ├── g2m_edge_index.pt                   - Edges from grid to mesh (neural_lam.create_mesh)
