@@ -466,3 +466,18 @@ class DummyDatastore(BaseRegularGridDatastore):
 
         n_points_1d = int(np.sqrt(self.num_grid_points))
         return CartesianGridShape(x=n_points_1d, y=n_points_1d)
+
+
+class GlobalDummyDatastore(DummyDatastore):
+    """
+    Dummy datastore that represents a global domain (no lateral boundaries).
+    """
+
+    SHORT_NAME = "dummydata_global"
+
+    @cached_property
+    def boundary_mask(self) -> xr.DataArray:
+        """
+        Return an all-zero boundary mask.
+        """
+        return xr.zeros_like(self.ds["boundary_mask"])
