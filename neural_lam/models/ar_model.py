@@ -554,8 +554,7 @@ class ARModel(pl.LightningModule):
                 for var_name, fig in zip(
                     self._datastore.get_vars_names("state"), var_figs
                 ):
-                    # WandB supports multiple images per key
-                    # Other loggers need example index to avoid overwriting
+                    # Use example index in key to avoid overwriting images
                     key = f"{var_name}_example_{example_i}"
 
                     if hasattr(self.logger, "log_image"):
@@ -565,9 +564,8 @@ class ARModel(pl.LightningModule):
                             f"{self.logger} does not support image logging."
                         )
 
-                plt.close(
-                    "all"
-                )  # Close all figs for this time step, saves memory
+                plt.close("all")  
+                # Close all figs for this time step, saves memory
 
             # Save pred and target as .pt files
             torch.save(
