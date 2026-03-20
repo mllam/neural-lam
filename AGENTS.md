@@ -26,7 +26,7 @@ Config examples: `tests/datastore_examples/`
 
 ## Commands
 
-These commands need to be prepended with `uv run` or the virtual env activated with source `.venv/bin/activate` first:
+These commands need to be prepended with `uv run` or the virtual env activated with `source .venv/bin/activate` first:
 
 ```bash
 # Install (PyTorch must be installed first for CUDA variant)
