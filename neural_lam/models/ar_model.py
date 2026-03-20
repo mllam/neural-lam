@@ -327,7 +327,10 @@ class ARModel(pl.LightningModule):
 
         returns: (K*d1, d2, ...)
         """
-        return self.all_gather(tensor_to_gather).flatten(0, 1)
+        gathered = self.all_gather(tensor_to_gather)
+        if gathered.dim() > tensor_to_gather.dim():
+            return gathered.flatten(0, 1)
+        return gathered
 
     # newer lightning versions requires batch_idx argument, even if unused
     # pylint: disable-next=unused-argument
