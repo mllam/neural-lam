@@ -1,15 +1,24 @@
-# Third-party
-import matplotlib
-import matplotlib.pyplot as plt
-import numpy as np
-import xarray as xr
-
 # Standard library
 import warnings
+
+# Third-party
+import cartopy.crs as ccrs
+import cartopy.feature as cfeature
+import matplotlib
+import matplotlib.colors
+import matplotlib.pyplot as plt
+import numpy as np
+import torch
+import xarray as xr
 
 # Local
 from . import utils
 from .datastore.base import BaseRegularGridDatastore
+
+# Font sizes shared across projection-aware plot functions.
+_TITLE_SIZE = 13  # suptitle and per-axes titles
+_LABEL_SIZE = 11  # axis / colorbar labels
+_TICK_SIZE = 11  # tick labels
 
 # Annotations become unreadable when cells are smaller than this (in points)
 # or when the total number of cells exceeds a readable count.
@@ -21,13 +30,15 @@ _HEATMAP_CMAP = matplotlib.colors.LinearSegmentedColormap.from_list(
 )
 
 
-def _compute_heatmap_layout(n_rows: int, n_cols: int) -> dict[str, float]:
-    """Choose figure and font sizes from the heatmap dimensions.
+def _tex_safe(s: str) -> str:
+    """Escape TeX special characters in s if TeX rendering is active."""
+    if plt.rcParams.get("text.usetex", False):
+        s = s.replace("%", r"\%")
+    return s
 
-    Scaling coefficients were empirically tuned for readability on grids
-    ranging from ~5 to ~50 variables/lead-times.  The figure grows
-    proportionally so that cells never shrink below a readable size.
-    """
+
+def _compute_heatmap_layout(n_rows: int, n_cols: int) -> dict[str, float]:
+    """Choose figure and font sizes from the heatmap dimensions."""
     max_dim = max(n_rows, n_cols)
 
     # Size the figure so each cell gets ~0.8 x 0.5 inches; floor at 8 x 4.5.
@@ -70,7 +81,8 @@ def _get_heatmap_var_labels(
 
     labels = []
     for name, unit in zip(var_names[:n_vars], var_units[:n_vars]):
-        labels.append(f"{name} ({unit})" if unit else name)
+        label = f"{name} ({unit})" if unit else name
+        labels.append(_tex_safe(label))
 
     return labels
 
@@ -108,19 +120,12 @@ def _get_feature_scale(
 def _get_heatmap_color_values(
     errors_np: np.ndarray, datastore: BaseRegularGridDatastore
 ) -> tuple[np.ndarray, str]:
-    """Normalize heatmap colors to a cross-variable relative scale.
-
-    The background colors should compare relative error magnitudes across
-    variables, while the text annotations keep the original values/units.
-    When one-step-difference statistics are available, normalize by the
-    corresponding physical-scale diff std so colors show error relative to
-    typical one-step changes of each variable.
-    """
+    """Normalize heatmap colors to a cross-variable relative scale."""
     try:
         ds_state_stats = datastore.get_standardization_dataarray(
             category="state"
         )
-    except (AttributeError, KeyError, ValueError, TypeError):
+    except (AttributeError, KeyError, TypeError, ValueError):
         return errors_np, "Relative scale"
 
     n_vars = errors_np.shape[0]
@@ -158,6 +163,99 @@ def _get_annotation_text_color(
     return "white" if luminance < 0.5 else "black"
 
 
+def plot_on_axis(
+    ax,
+    da,
+    datastore,
+    vmin=None,
+    vmax=None,
+    ax_title=None,
+    cmap="plasma",
+    boundary_alpha=None,
+    crop_to_interior=False,
+):
+    """Plot weather state on a projection-aware axis using datastore metadata."""
+    ax.coastlines(resolution="50m")
+    ax.add_feature(cfeature.BORDERS, linestyle="-", alpha=0.5)
+
+    gl = ax.gridlines(
+        draw_labels=True,
+        dms=True,
+        x_inline=False,
+        y_inline=False,
+    )
+    gl.top_labels = False
+    gl.right_labels = False
+    gl.xlabel_style = {"size": _TICK_SIZE}
+    gl.ylabel_style = {"size": _TICK_SIZE}
+
+    lats_lons = datastore.get_lat_lon("state")
+    grid_shape = (
+        datastore.grid_shape_state.x,
+        datastore.grid_shape_state.y,
+    )
+    lons = lats_lons[:, 0].reshape(grid_shape)
+    lats = lats_lons[:, 1].reshape(grid_shape)
+
+    if isinstance(da, xr.DataArray) and "x" in da.dims and "y" in da.dims:
+        da = da.transpose("x", "y")
+
+    values = da.values.reshape(grid_shape)
+
+    mesh = ax.pcolormesh(
+        lons,
+        lats,
+        values,
+        transform=ccrs.PlateCarree(),
+        vmin=vmin,
+        vmax=vmax,
+        cmap=cmap,
+        shading="auto",
+    )
+
+    if boundary_alpha is not None:
+        mask_da = datastore.boundary_mask
+        mask_values = mask_da.values
+        if mask_values.ndim == 2 and mask_values.shape[1] == 1:
+            mask_values = mask_values[:, 0]
+        mask_2d = mask_values.reshape(grid_shape)
+
+        overlay = np.where(mask_2d == 1, 1.0, np.nan)
+
+        ax.pcolormesh(
+            lons,
+            lats,
+            overlay,
+            transform=ccrs.PlateCarree(),
+            cmap=matplotlib.colors.ListedColormap([(1, 1, 1, boundary_alpha)]),
+            shading="auto",
+        )
+
+    if crop_to_interior:
+        mask_da = datastore.boundary_mask
+        mask_values = mask_da.values
+        if mask_values.ndim == 2 and mask_values.shape[1] == 1:
+            mask_values = mask_values[:, 0]
+        mask_2d = mask_values.reshape(grid_shape)
+
+        interior_points = mask_2d == 0
+        if np.any(interior_points):
+            interior_lons = lons[interior_points]
+            interior_lats = lats[interior_points]
+
+            min_lon, max_lon = interior_lons.min(), interior_lons.max()
+            min_lat, max_lat = interior_lats.min(), interior_lats.max()
+
+            ax.set_extent(
+                [min_lon, max_lon, min_lat, max_lat], crs=ccrs.PlateCarree()
+            )
+
+    if ax_title:
+        ax.set_title(ax_title, size=_TITLE_SIZE)
+
+    return mesh
+
+
 @matplotlib.rc_context(utils.fractional_plot_bundle(1))
 def plot_error_heatmap(
     errors,
@@ -185,7 +283,7 @@ def plot_error_heatmap(
         Optional label for the colorbar. If omitted, an automatic label is
         chosen based on the color normalization used.
     """
-    errors_np = _to_heatmap_matrix(errors)  # (d_f, pred_steps)
+    errors_np = _to_heatmap_matrix(errors)
     d_f, pred_steps = errors_np.shape
     step_length = datastore.step_length
 
@@ -233,7 +331,7 @@ def plot_error_heatmap(
         aspect="auto",
     )
     cbar = fig.colorbar(im, ax=ax, pad=0.02)
-    cbar.set_label(colorbar_label, size=layout["tick_label_size"])
+    cbar.set_label(_tex_safe(colorbar_label), size=layout["tick_label_size"])
     cbar.ax.tick_params(labelsize=layout["tick_label_size"])
     cbar.ax.yaxis.get_offset_text().set_fontsize(layout["tick_label_size"])
 
@@ -299,6 +397,9 @@ def plot_prediction(
     da_target: xr.DataArray,
     title=None,
     vrange=None,
+    boundary_alpha=0.7,
+    crop_to_interior=True,
+    colorbar_label: str = "",
 ):
     """
     Plot example prediction and grond truth.
@@ -306,105 +407,101 @@ def plot_prediction(
     Each has shape (N_grid,)
 
     """
-    # Get common scale for values
     if vrange is None:
-        vmin = min(da_prediction.min(), da_target.min())
-        vmax = max(da_prediction.max(), da_target.max())
-    elif vrange is not None:
+        vmin = float(min(da_prediction.min(), da_target.min()))
+        vmax = float(max(da_prediction.max(), da_target.max()))
+    else:
         vmin, vmax = vrange
-
-    extent = datastore.get_xy_extent("state")
-
-    # Set up masking of border region
-    da_mask = datastore.unstack_grid_coords(datastore.boundary_mask)
-    mask_values = np.invert(da_mask.values.astype(bool)).astype(float)
-    pixel_alpha = mask_values.clip(0.7, 1)  # Faded border region
 
     fig, axes = plt.subplots(
         1,
         2,
-        figsize=(13, 7),
+        figsize=(13, 6),
         subplot_kw={"projection": datastore.coords_projection},
     )
 
-    # Plot pred and target
-    for ax, da in zip(axes, (da_target, da_prediction)):
-        ax.coastlines()  # Add coastline outlines
-        da.plot.imshow(
+    for ax, da, subtitle in zip(
+        axes, (da_target, da_prediction), ("Ground Truth", "Prediction")
+    ):
+        plot_on_axis(
             ax=ax,
-            origin="lower",
-            x="x",
-            extent=extent,
-            alpha=pixel_alpha.T,
+            da=da,
+            datastore=datastore,
             vmin=vmin,
             vmax=vmax,
-            cmap="plasma",
-            transform=datastore.coords_projection,
+            ax_title=subtitle,
+            cmap="viridis",
+            boundary_alpha=boundary_alpha,
+            crop_to_interior=crop_to_interior,
         )
 
-    # Ticks and labels
-    axes[0].set_title("Ground Truth", size=15)
-    axes[1].set_title("Prediction", size=15)
-
     if title:
-        fig.suptitle(title, size=20)
+        fig.suptitle(title, size=_TITLE_SIZE)
+
+    cbar = fig.colorbar(
+        axes[0].collections[0],
+        ax=axes,
+        orientation="horizontal",
+        location="bottom",
+        shrink=0.6,
+        pad=0.02,
+    )
+    cbar.ax.tick_params(labelsize=_TICK_SIZE)
+    if colorbar_label:
+        cbar.set_label(_tex_safe(colorbar_label), size=_LABEL_SIZE)
 
     return fig
 
 
 @matplotlib.rc_context(utils.fractional_plot_bundle(1))
 def plot_spatial_error(
-    error, datastore: BaseRegularGridDatastore, title=None, vrange=None
+    error: torch.Tensor,
+    datastore: BaseRegularGridDatastore,
+    title=None,
+    vrange=None,
+    boundary_alpha=0.7,
+    crop_to_interior=True,
+    colorbar_label: str = "",
 ):
-    """
-    Plot errors over spatial map
-    Error and obs_mask has shape (N_grid,)
-    """
-    # Get common scale for values
+    """Plot spatial error with projection-aware axes."""
+    error_np = error.detach().cpu().numpy()
+
     if vrange is None:
-        vmin = error.min().cpu().item()
-        vmax = error.max().cpu().item()
+        vmin = float(np.nanmin(error_np))
+        vmax = float(np.nanmax(error_np))
     else:
         vmin, vmax = vrange
 
-    extent = datastore.get_xy_extent("state")
-
-    # Set up masking of border region
-    da_mask = datastore.unstack_grid_coords(datastore.boundary_mask)
-    mask_reshaped = da_mask.values
-    pixel_alpha = mask_reshaped.clip(0.7, 1)  # Faded border region
-
     fig, ax = plt.subplots(
-        figsize=(5, 4.8),
+        figsize=(6.5, 6),
         subplot_kw={"projection": datastore.coords_projection},
     )
 
-    ax.coastlines()  # Add coastline outlines
-    error_grid = (
-        error.reshape(
-            [datastore.grid_shape_state.x, datastore.grid_shape_state.y]
-        )
-        .T.cpu()
-        .numpy()
-    )
-
-    im = ax.imshow(
-        error_grid,
-        origin="lower",
-        extent=extent,
-        alpha=pixel_alpha,
+    mesh = plot_on_axis(
+        ax=ax,
+        da=xr.DataArray(error_np),
+        datastore=datastore,
         vmin=vmin,
         vmax=vmax,
         cmap="OrRd",
+        boundary_alpha=boundary_alpha,
+        crop_to_interior=crop_to_interior,
     )
 
-    # Ticks and labels
-    cbar = fig.colorbar(im, aspect=30)
-    cbar.ax.tick_params(labelsize=10)
-    cbar.ax.yaxis.get_offset_text().set_fontsize(10)
+    cbar = fig.colorbar(
+        mesh,
+        ax=ax,
+        orientation="horizontal",
+        location="bottom",
+        shrink=0.8,
+        pad=0.02,
+    )
+    cbar.ax.tick_params(labelsize=_TICK_SIZE)
     cbar.formatter.set_powerlimits((-3, 3))
+    if colorbar_label:
+        cbar.set_label(_tex_safe(colorbar_label), size=_LABEL_SIZE)
 
     if title:
-        fig.suptitle(title, size=10)
+        fig.suptitle(title, size=_TITLE_SIZE)
 
     return fig
