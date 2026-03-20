@@ -1,0 +1,41 @@
+site_name: neural-lam
+site_description: Graph-based neural weather prediction for Limited Area Modeling
+site_url: https://mllam.github.io/neural-lam
+repo_url: https://github.com/mllam/neural-lam
+repo_name: mllam/neural-lam
+
+theme:
+  name: material
+  palette:
+    primary: blue
+    accent: cyan
+  features:
+    - navigation.tabs
+    - navigation.sections
+    - toc.integrate
+    - search.suggest
+
+plugins:
+  - search
+  - mkdocstrings:
+      handlers:
+        python:
+          options:
+            docstring_style: numpy
+            show_source: true
+            show_root_heading: true
+
+nav:
+  - Home: index.md
+  - Getting Started:
+    - Installation: getting_started/installation.md
+    - Quick Start: getting_started/quickstart.md
+  - API Reference:
+    - Metrics: api/metrics.md
+    - Models: api/models.md
+    - Datastore: api/datastore.md
+
+markdown_extensions:
+  - admonition
+  - pymdownx.highlight
+  - pymdownx.superfences
