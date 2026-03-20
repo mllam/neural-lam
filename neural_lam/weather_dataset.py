@@ -38,10 +38,10 @@ class WeatherDataset(torch.utils.data.Dataset):
         t, given num_past_forcing_steps) are included as forcing inputs at time
         t. Default is 1.
     load_single_member : bool, optional
-        If `False` and the datastore returns ensemble-valued state data,
-        treat each state ensemble member as an independent sample. If `True`,
-        only ensemble member 0 is used. Default is False, so all members are
-        used when available.
+        If `False` and the datastore returns an ensemble of state
+        realisations, treat each state ensemble member as an independent
+        sample. If `True`, only ensemble member 0 is used. Default is False,
+        so all members are used when available.
     standardize : bool, optional
         Whether to standardize the data. Default is True.
     """
@@ -71,6 +71,10 @@ class WeatherDataset(torch.utils.data.Dataset):
         self.da_forcing = self.datastore.get_dataarray(
             category="forcing", split=self.split
         )
+        if self.da_state is None:
+            raise ValueError(
+                "The datastore must provide state data for the WeatherDataset."
+            )
 
         if self.datastore.is_ensemble and self.load_single_member:
             warnings.warn(
@@ -159,7 +163,7 @@ class WeatherDataset(torch.utils.data.Dataset):
         if self.datastore.is_forecast:
             # for now we simply create a single sample for each analysis time
             # and then take the first (2 + ar_steps) forecast times.
-            # If ensemble-valued state data is present and
+            # If the datastore returns an ensemble of state realisations and
             # `load_single_member=False`, each ensemble member is exposed as an
             # independent sample by scaling the base dataset length below.
 

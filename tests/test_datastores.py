@@ -199,9 +199,8 @@ def test_get_dataarray(datastore_name):
 
             if datastore.is_ensemble and category == "state":
                 expected_dims.append("ensemble_member")
-            elif (
-                category == "forcing"
-                and getattr(datastore, "has_ensemble_forcing", False)
+            elif category == "forcing" and getattr(
+                datastore, "has_ensemble_forcing", False
             ):
                 expected_dims.append("ensemble_member")
 

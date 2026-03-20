@@ -256,8 +256,8 @@ class MDPDatastore(BaseRegularGridDatastore):
         elapsed_forecast_duration)` dimensions if `is_forecast` is True, or
         `(time)` if `is_forecast` is False.
 
-        If state data is ensemble-valued, the returned state dataarray will
-        have an additional `ensemble_member` dimension. If
+        If we have multiple ensemble members of state data, the returned state
+        dataarray will have an additional `ensemble_member` dimension. If
         `has_ensemble_forcing=True`, the returned forcing dataarray will also
         have an additional `ensemble_member` dimension.
 

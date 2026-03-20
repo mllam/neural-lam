@@ -168,9 +168,7 @@ class DummyDatastore(BaseRegularGridDatastore):
         # Stack the spatial dimensions into grid_index
         self.ds = self.ds.stack(grid_index=self.spatial_coordinates)
         self.is_ensemble = "ensemble_member" in self.ds["state"].dims
-        self.has_ensemble_forcing = (
-            "ensemble_member" in self.ds["forcing"].dims
-        )
+        self.has_ensemble_forcing = "ensemble_member" in self.ds["forcing"].dims
 
         # Create temporary directory for storing derived files
         self._tempdir = tempfile.TemporaryDirectory()
@@ -339,10 +337,11 @@ class DummyDatastore(BaseRegularGridDatastore):
         elapsed_forecast_duration)` dimensions if `is_forecast` is True, or
         `(time)` if `is_forecast` is False.
 
-        If state data is ensemble-valued, the returned state dataarray is
-        expected to have an additional `ensemble_member` dimension. If
-        `has_ensemble_forcing=True`, the returned forcing dataarray is
-        expected to have an additional `ensemble_member` dimension.
+        If we have multiple ensemble members of state data, the returned state
+        dataarray is expected to have an additional `ensemble_member`
+        dimension. If `has_ensemble_forcing=True`, the returned forcing
+        dataarray is expected to have an additional `ensemble_member`
+        dimension.
 
         Parameters
         ----------
@@ -359,9 +358,8 @@ class DummyDatastore(BaseRegularGridDatastore):
             The xarray DataArray object with processed dataset.
 
         """
-        da_category = self.ds[category]
         dim_order = self.expected_dim_order(category=category)
-        da_category = da_category.transpose(*dim_order)
+        da_category = self.ds[category].transpose(*dim_order)
 
         if standardize:
             return self._standardize_datarray(da_category, category=category)
@@ -524,9 +522,7 @@ class EnsembleDummyDatastore(BaseDatastore):
                 forcing_has_ensemble,
             )
         self.is_ensemble = "ensemble_member" in self._da_state.dims
-        self.has_ensemble_forcing = (
-            "ensemble_member" in self._da_forcing.dims
-        )
+        self.has_ensemble_forcing = "ensemble_member" in self._da_forcing.dims
 
     # ---- data initialisation helpers ----------------------------------------
 
@@ -729,7 +725,7 @@ class EnsembleDummyDatastore(BaseDatastore):
         return ds
 
     def get_dataarray(
-        self, category: str, split: str, standardize: bool = False
+        self, category: str, split: Optional[str], standardize: bool = False
     ) -> Union[xr.DataArray, None]:
         if category == "state":
             da = self._da_state

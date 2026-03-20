@@ -35,9 +35,11 @@ class BaseDatastore(abc.ABC):
     dimensions (rather than just `time`).
 
     # Ensemble vs deterministic data
-    If state data is ensemble-valued, then the `is_ensemble` attribute should
-    be set to True and returned state data from `get_dataarray` is expected to
-    have an `ensemble_member` dimension. If `has_ensemble_forcing` is True,
+    If the datastore is used to present an ensemble of state realisations, for
+    example for forecast ensembles, then the `is_ensemble` attribute should be
+    set to `True` and returned state data from `get_dataarray` is expected to
+    have an `ensemble_member` dimension. If each ensemble member has its own
+    forcing values, then `has_ensemble_forcing` should be set to `True`, and
     returned forcing data from `get_dataarray` is expected to have an
     `ensemble_member` dimension; otherwise forcing data is expected not to have
     one.
@@ -247,11 +249,11 @@ class BaseDatastore(abc.ABC):
         elapsed_forecast_duration)` dimensions if `is_forecast` is True, or
         `(time)` if `is_forecast` is False.
 
-        If state data is ensemble-valued, the returned state dataarray is
-        expected to have an additional `ensemble_member` dimension. If
-        `has_ensemble_forcing=True`, the returned forcing dataarray is expected
-        to have an additional `ensemble_member` dimension; otherwise it is
-        expected not to have one.
+        If we have multiple ensemble members of state data, the returned state
+        dataarray is expected to have an additional `ensemble_member`
+        dimension. If `has_ensemble_forcing=True`, the returned forcing
+        dataarray is expected to have an additional `ensemble_member`
+        dimension; otherwise it is expected not to have one.
 
         Parameters
         ----------
