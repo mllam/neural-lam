@@ -35,8 +35,10 @@ nav:
     - Models: api/models.md
     - Datastore: api/datastore.md
     - Configuration: api/config.md
+  - Changelog: changelog.md
 
 markdown_extensions:
   - admonition
   - pymdownx.highlight
   - pymdownx.superfences
+  - pymdownx.snippets
