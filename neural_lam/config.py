@@ -33,6 +33,14 @@ class DatastoreSelection:
     kind: str
 
     def __post_init__(self):
+        """
+        Validate the datastore selection after initialization.
+
+        Raises
+        ------
+        ValueError
+            If the selected datastore kind is not implemented.
+        """
         if self.kind not in DATASTORES:
             raise ValueError(f"Datastore kind {self.kind} is not implemented")
 
@@ -89,10 +97,12 @@ class TrainingConfig:
     Attributes
     ----------
     state_feature_weighting : Union[ManualStateFeatureWeighting,
-                                    UnformFeatureWeighting]
+                                    UniformFeatureWeighting]
         The method to use for weighting the state features in the loss
-        function. Defaults to uniform weighting (`UnformFeatureWeighting`, i.e.
+        function. Defaults to uniform weighting (`UniformFeatureWeighting`, i.e.
         all features are weighted equally).
+    output_clamping : OutputClamping
+        The configuration for clamping the output of the model.
     """
 
     state_feature_weighting: Union[
@@ -150,6 +160,10 @@ class NeuralLAMConfig(dataclass_wizard.JSONWizard, dataclass_wizard.YAMLWizard):
 
 
 class InvalidConfigError(Exception):
+    """
+    Exception raised for invalid neural-lam configuration.
+    """
+
     pass
 
 
@@ -169,6 +183,11 @@ def load_config_and_datastore(
     -------
     tuple[NeuralLAMConfig, Union[MDPDatastore, NpyFilesDatastoreMEPS]]
         The Neural-LAM configuration and the loaded datastore.
+
+    Raises
+    ------
+    InvalidConfigError
+        If there is an error loading the configuration file.
     """
     try:
         config = NeuralLAMConfig.from_yaml_file(config_path)
