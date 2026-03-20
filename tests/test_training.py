@@ -41,10 +41,7 @@ def run_simple_training(datastore, set_output_std):
         max_epochs=1,
         deterministic=True,
         accelerator=device_name,
-        # XXX: `devices` has to be set to 2 otherwise
-        # neural_lam.models.ar_model.ARModel.aggregate_and_plot_metrics fails
-        # because it expects to aggregate over multiple devices
-        devices=2,
+        devices=1,
         log_every_n_steps=1,
         # use `detect_anomaly` to ensure that we don't have NaNs popping up
         # during training
@@ -124,3 +121,11 @@ def test_training(datastore_name):
 def test_training_output_std():
     datastore = init_datastore_example("mdp")  # Test only with mdp datastore
     run_simple_training(datastore, set_output_std=True)
+
+
+def test_training_global():
+    """
+    Test training with a global datastore (no boundaries).
+    """
+    datastore = init_datastore_example("dummydata_global")
+    run_simple_training(datastore, set_output_std=False)
