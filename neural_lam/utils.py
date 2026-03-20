@@ -433,20 +433,22 @@ def get_integer_time(tdelta) -> tuple[int, str]:
         >>> get_integer_time(timedelta(days=0.001))
         (1, 'unknown')
     """
-    total_seconds = tdelta.total_seconds()
+    total_microseconds = int(tdelta.total_seconds() * 1_000_000)
 
+    if total_microseconds == 0:
+        return 0, "seconds"
     units = {
-        "weeks": 604800,
-        "days": 86400,
-        "hours": 3600,
-        "minutes": 60,
-        "seconds": 1,
-        "milliseconds": 0.001,
-        "microseconds": 0.000001,
+        "weeks": 604800_000000,
+        "days": 86400_000000,
+        "hours": 3600_000000,
+        "minutes": 60_000000,
+        "seconds": 1_000000,
+        "milliseconds": 1000,
+        "microseconds": 1,
     }
 
-    for unit, unit_in_seconds in units.items():
-        if total_seconds % unit_in_seconds == 0:
-            return int(total_seconds / unit_in_seconds), unit
+    for unit, unit_us in units.items():
+        if total_microseconds % unit_us == 0:
+            return total_microseconds // unit_us, unit
 
     return 1, "unknown"
