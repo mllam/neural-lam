@@ -64,6 +64,9 @@ class WeatherDataset(torch.utils.data.Dataset):
         self.da_forcing = self.datastore.get_dataarray(
             category="forcing", split=self.split
         )
+        self.da_static = self.datastore.get_dataarray(
+            category="static", split=self.split
+        )
 
         # check that with the provided data-arrays and ar_steps that we have a
         # non-zero amount of samples
@@ -597,10 +600,11 @@ class WeatherDataset(torch.utils.data.Dataset):
 
         da_datastore_state = getattr(self, f"da_{category}")
         da_grid_index = da_datastore_state.grid_index
-        da_state_feature = da_datastore_state.state_feature
+        feature_name = f"{category}_feature"
+        da_feature = da_datastore_state.coords[feature_name]
 
         coords = {
-            f"{category}_feature": da_state_feature,
+            feature_name: da_feature,
             "grid_index": da_grid_index,
         }
         if add_time_as_dim:
