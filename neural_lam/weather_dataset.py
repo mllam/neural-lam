@@ -155,16 +155,31 @@ class WeatherDataset(torch.utils.data.Dataset):
                     UserWarning,
                 )
 
+            required_state_forecast_steps = (
+                max(2, self.num_past_forcing_steps) + self.ar_steps
+            )
             n_forecast_steps = self.da_state.elapsed_forecast_duration.size
-            if n_forecast_steps < 2 + self.ar_steps:
+            if n_forecast_steps < required_state_forecast_steps:
                 raise ValueError(
                     "The number of forecast steps available "
                     f"({n_forecast_steps}) is less than the required "
-                    f"2+ar_steps (2+{self.ar_steps}={2 + self.ar_steps}) for "
-                    "creating a sample with initial and target states."
+                    f"{required_state_forecast_steps} "
+                    f"(max(2, num_past_forcing_steps="
+                    f"{self.num_past_forcing_steps}) + ar_steps="
+                    f"{self.ar_steps}) for creating a sample with initial "
+                    "and target states."
                 )
 
             if self.da_forcing is not None:
+                if not np.array_equal(
+                    self.da_state.analysis_time.values,
+                    self.da_forcing.analysis_time.values,
+                ):
+                    raise ValueError(
+                        "State and forcing analysis times must match for "
+                        "forecast-mode datasets."
+                    )
+
                 # When forcing is present, the shared forecast horizon needs
                 # to be large enough for the full forcing window as well.
                 n_forcing_forecast_steps = (
