@@ -1,4 +1,9 @@
 # Standard library
+import datetime
+
+# for neural_lam version
+import importlib.metadata
+import json
 import os
 from argparse import ArgumentDefaultsHelpFormatter, ArgumentParser
 from typing import Optional
@@ -162,6 +167,7 @@ def create_graph(
     n_max_levels: Optional[int] = None,
     hierarchical: Optional[bool] = False,
     create_plot: Optional[bool] = False,
+    graph_name: Optional[str] = None,
 ):
     """
     Create graph components from `xy` grid coordinates and store in
@@ -536,6 +542,43 @@ def create_graph(
     # m2g
     save_edges(pyg_m2g, "m2g", graph_dir_path)
 
+    # ✅ Issue #470: Save graph generation metadata
+    try:
+        nl_version = importlib.metadata.version("neural_lam")
+    except importlib.metadata.PackageNotFoundError:
+        nl_version = "unknown"
+
+    try:
+        # Standard library
+        import subprocess
+
+        git_commit = (
+            subprocess.check_output(
+                ["git", "rev-parse", "--short", "HEAD"],
+                stderr=subprocess.DEVNULL,
+            )
+            .decode("utf-8")
+            .strip()
+        )
+    except Exception:
+        git_commit = None
+
+    graph_config_metadata = {
+        "graph_name": graph_name,
+        "hierarchical": hierarchical,
+        "n_max_levels": n_max_levels,
+        "neural_lam_version": nl_version,
+        "created_at": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+        "git_commit": git_commit,
+    }
+
+    config_save_path = os.path.join(graph_dir_path, "graph_config.json")
+    with open(config_save_path, "w") as f:
+        json.dump(graph_config_metadata, f, indent=2)
+
+    logger.info(f"Graph config metadata saved to {config_save_path}")
+    # ✅ End of Issue #470
+
 
 def create_graph_from_datastore(
     datastore: BaseRegularGridDatastore,
@@ -543,6 +586,7 @@ def create_graph_from_datastore(
     n_max_levels: Optional[int] = None,
     hierarchical: bool = False,
     create_plot: bool = False,
+    graph_name: Optional[str] = None,  # ✅ add karo
 ):
     if isinstance(datastore, BaseRegularGridDatastore):
         xy = datastore.get_xy(category="state", stacked=False)
@@ -557,6 +601,7 @@ def create_graph_from_datastore(
         n_max_levels=n_max_levels,
         hierarchical=hierarchical,
         create_plot=create_plot,
+        graph_name=graph_name,  # ✅ pass karo
     )
 
 
@@ -607,6 +652,7 @@ def cli(input_args=None):
         n_max_levels=args.levels,
         hierarchical=args.hierarchical,
         create_plot=args.plot,
+        graph_name=args.name,
     )
 
 
