@@ -364,7 +364,10 @@ def test_forecast_len_raises_when_forcing_horizon_too_short():
         },
     )
 
-    with pytest.raises(ValueError, match="forcing forecast steps"):
+    with pytest.raises(
+        ValueError,
+        match="forecast lead times must match|forcing forecast steps",
+    ):
         len(dataset)
 
 
@@ -555,7 +558,10 @@ def test_forecast_len_raises_when_forcing_shorter_than_state_horizon():
         },
     )
 
-    with pytest.raises(ValueError, match="forcing forecast steps"):
+    with pytest.raises(
+        ValueError,
+        match="forecast lead times must match|forcing forecast steps",
+    ):
         len(dataset)
 
 
@@ -615,6 +621,111 @@ def test_forecast_len_raises_when_analysis_times_do_not_match():
 
     with pytest.raises(ValueError, match="analysis times must match"):
         len(dataset)
+
+
+def test_forecast_len_raises_when_forecast_lead_times_do_not_match():
+    # Standard library
+    from types import SimpleNamespace
+
+    # Third-party
+    import xarray as xr
+
+    dataset = WeatherDataset.__new__(WeatherDataset)
+    dataset.datastore = SimpleNamespace(is_forecast=True, is_ensemble=False)
+    dataset.ar_steps = 2
+    dataset.num_past_forcing_steps = 1
+    dataset.num_future_forcing_steps = 1
+
+    analysis_time = np.array(
+        ["2021-01-01T00:00:00", "2021-01-01T01:00:00"],
+        dtype="datetime64[ns]",
+    )
+    state_elapsed = np.arange(5, dtype="timedelta64[h]").astype(
+        "timedelta64[ns]"
+    )
+    forcing_elapsed = np.array(
+        [0, 2, 4, 6, 8], dtype="timedelta64[h]"
+    ).astype("timedelta64[ns]")
+
+    dataset.da_state = xr.DataArray(
+        np.zeros((2, 5, 1, 1), dtype=np.float32),
+        dims=(
+            "analysis_time",
+            "elapsed_forecast_duration",
+            "grid_index",
+            "state_feature",
+        ),
+        coords={
+            "analysis_time": analysis_time,
+            "elapsed_forecast_duration": state_elapsed,
+            "grid_index": [0],
+            "state_feature": ["state_feat_0"],
+        },
+    )
+    dataset.da_forcing = xr.DataArray(
+        np.zeros((2, 5, 1, 1), dtype=np.float32),
+        dims=(
+            "analysis_time",
+            "elapsed_forecast_duration",
+            "grid_index",
+            "forcing_feature",
+        ),
+        coords={
+            "analysis_time": analysis_time,
+            "elapsed_forecast_duration": forcing_elapsed,
+            "grid_index": [0],
+            "forcing_feature": ["forcing_feat_0"],
+        },
+    )
+
+    with pytest.raises(ValueError, match="forecast lead times must match"):
+        len(dataset)
+
+
+def test_weather_dataset_forecast_empty_split_raises_value_error():
+    """Empty forecast splits should raise the intended user-facing error."""
+    # Third-party
+    import xarray as xr
+
+    class EmptyForecastDatastore(DummyDatastore):
+        is_forecast = True
+
+        def get_dataarray(self, category, split, **kwargs):
+            if category == "state":
+                return xr.DataArray(
+                    np.zeros((0, 3, 1, 1), dtype=np.float32),
+                    dims=(
+                        "analysis_time",
+                        "elapsed_forecast_duration",
+                        "grid_index",
+                        "state_feature",
+                    ),
+                    coords={
+                        "analysis_time": np.array(
+                            [], dtype="datetime64[ns]"
+                        ),
+                        "elapsed_forecast_duration": np.arange(
+                            3, dtype="timedelta64[h]"
+                        ).astype("timedelta64[ns]"),
+                        "grid_index": [0],
+                        "state_feature": ["state_feat_0"],
+                    },
+                )
+            if category == "forcing":
+                return None
+            return super().get_dataarray(category=category, split=split, **kwargs)
+
+    datastore = EmptyForecastDatastore(n_grid_points=4, n_timesteps=10)
+
+    with pytest.raises(ValueError, match="0 total time steps"):
+        WeatherDataset(
+            datastore=datastore,
+            split="train",
+            ar_steps=1,
+            num_past_forcing_steps=1,
+            num_future_forcing_steps=0,
+            standardize=False,
+        )
 
 
 def test_analysis_len_limited_by_shorter_forcing_horizon():

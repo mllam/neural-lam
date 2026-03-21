@@ -68,9 +68,14 @@ class WeatherDataset(torch.utils.data.Dataset):
         # check that with the provided data-arrays and ar_steps that we have a
         # non-zero amount of samples
         if self.__len__() <= 0 and self.da_state is not None:
+            time_dim = (
+                self.da_state.analysis_time
+                if self.datastore.is_forecast
+                else self.da_state.time
+            )
             raise ValueError(
                 "The provided datastore only provides "
-                f"{len(self.da_state.time)} total time steps, which is too few "
+                f"{len(time_dim)} total time steps, which is too few "
                 "to create a single sample for the WeatherDataset "
                 f"configuration used in the `{split}` split. You could try "
                 "either reducing the number of autoregressive steps "
@@ -178,6 +183,14 @@ class WeatherDataset(torch.utils.data.Dataset):
                     raise ValueError(
                         "State and forcing analysis times must match for "
                         "forecast-mode datasets."
+                    )
+                if not np.array_equal(
+                    self.da_state.elapsed_forecast_duration.values,
+                    self.da_forcing.elapsed_forecast_duration.values,
+                ):
+                    raise ValueError(
+                        "State and forcing forecast lead times must match "
+                        "for forecast-mode datasets."
                     )
 
                 # When forcing is present, the shared forecast horizon needs
