@@ -1,7 +1,10 @@
+# Standard library
+from typing import List, Optional, Tuple
+
 # Third-party
 import torch
 import torch_geometric as pyg
-from torch import nn
+from torch import Tensor, nn
 
 # Local
 from . import utils
@@ -18,15 +21,15 @@ class InteractionNet(pyg.nn.MessagePassing):
 
     def __init__(
         self,
-        edge_index,
-        input_dim,
-        update_edges=True,
-        hidden_layers=1,
-        hidden_dim=None,
-        edge_chunk_sizes=None,
-        aggr_chunk_sizes=None,
-        aggr="sum",
-    ):
+        edge_index: Tensor,
+        input_dim: int,
+        update_edges: bool = True,
+        hidden_layers: int = 1,
+        hidden_dim: Optional[int] = None,
+        edge_chunk_sizes: Optional[List[int]] = None,
+        aggr_chunk_sizes: Optional[List[int]] = None,
+        aggr: str = "sum",
+    ) -> None:
         """
         Create a new InteractionNet
 
@@ -90,7 +93,9 @@ class InteractionNet(pyg.nn.MessagePassing):
 
         self.update_edges = update_edges
 
-    def forward(self, send_rep, rec_rep, edge_rep):
+    def forward(
+        self, send_rep: Tensor, rec_rep: Tensor, edge_rep: Tensor
+    ) -> Tuple[Tensor, Optional[Tensor]]:
         """
         Apply interaction network to update the representations of receiver
         nodes, and optionally the edge representations.
@@ -119,16 +124,22 @@ class InteractionNet(pyg.nn.MessagePassing):
             edge_rep = edge_rep + edge_diff
             return rec_rep, edge_rep
 
-        return rec_rep
+        return rec_rep, None
 
-    def message(self, x_j, x_i, edge_attr):
+    def message(self, x_j: Tensor, x_i: Tensor, edge_attr: Tensor) -> Tensor:
         """
         Compute messages from node j to node i.
         """
         return self.edge_mlp(torch.cat((edge_attr, x_j, x_i), dim=-1))
 
     # pylint: disable-next=signature-differs
-    def aggregate(self, inputs, index, ptr, dim_size):
+    def aggregate(
+        self,
+        inputs: Tensor,
+        index: Tensor,
+        ptr: Optional[Tensor],
+        dim_size: Optional[int],
+    ) -> Tuple[Tensor, Tensor]:
         """
         Overridden aggregation function to:
         * return both aggregated and original messages,
@@ -145,7 +156,7 @@ class SplitMLPs(nn.Module):
     each chunk through separate MLPs.
     """
 
-    def __init__(self, mlps, chunk_sizes):
+    def __init__(self, mlps: List[nn.Module], chunk_sizes: List[int]) -> None:
         super().__init__()
         assert len(mlps) == len(
             chunk_sizes
@@ -154,7 +165,7 @@ class SplitMLPs(nn.Module):
         self.mlps = nn.ModuleList(mlps)
         self.chunk_sizes = chunk_sizes
 
-    def forward(self, x):
+    def forward(self, x: Tensor) -> Tensor:
         """
         Chunk up input and feed through MLPs
 
