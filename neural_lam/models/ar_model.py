@@ -370,6 +370,12 @@ class ARModel(pl.LightningModule):
         )  # (B, pred_steps, d_f)
         self.val_metrics["mse"].append(entry_mses)
 
+    def on_validation_epoch_start(self):
+        """
+        Reset plotted examples counter at the start of validation epoch
+        """
+        self.plotted_examples = 0
+
     def on_validation_epoch_end(self):
         """
         Compute val metrics at the end of val epoch
@@ -743,6 +749,10 @@ class ARModel(pl.LightningModule):
                 mean_spatial_loss.cpu(),
                 os.path.join(self.logger.save_dir, "mean_spatial_loss.pt"),
             )
+
+        # Clear lists with test metrics values
+        for metric_list in self.test_metrics.values():
+            metric_list.clear()
 
         self.spatial_loss_maps.clear()
 

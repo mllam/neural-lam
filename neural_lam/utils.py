@@ -452,9 +452,13 @@ def log_on_rank_zero(msg: str, level: str = "info", *args, **kwargs):
     level : str, optional
         The logging level (e.g. "info", "warning", "error"). Default is "info".
     """
-    if rank_zero_only.rank == 0:
+
+    @rank_zero_only
+    def _log():
         log_fn = getattr(logger, level, logger.info)
         log_fn(msg, *args, **kwargs)
+
+    _log()
 
 
 def init_training_logger_metrics(training_logger, val_steps):

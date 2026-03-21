@@ -223,14 +223,14 @@ def plot_prediction(
     colorbar_label: str = "",
 ):
     """
-    Plot example prediction and grond truth.
+    Plot example prediction and ground truth.
 
     Each has shape (N_grid,)
 
     """
     if vrange is None:
-        vmin = float(min(da_prediction.min(), da_target.min()))
-        vmax = float(max(da_prediction.max(), da_target.max()))
+        vmin = float(xr.concat([da_prediction, da_target], dim="tmp").min())
+        vmax = float(xr.concat([da_prediction, da_target], dim="tmp").max())
     else:
         vmin, vmax = vrange
 
@@ -319,7 +319,8 @@ def plot_spatial_error(
         pad=0.02,
     )
     cbar.ax.tick_params(labelsize=_TICK_SIZE)
-    cbar.formatter.set_powerlimits((-3, 3))
+    if hasattr(cbar.formatter, "set_powerlimits"):
+        cbar.formatter.set_powerlimits((-3, 3))
     if colorbar_label:
         cbar.set_label(_tex_safe(colorbar_label), size=_LABEL_SIZE)
 
