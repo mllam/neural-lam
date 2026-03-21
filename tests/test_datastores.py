@@ -229,9 +229,15 @@ def test_boundary_mask(datastore_name):
     assert isinstance(da_mask, xr.DataArray)
     assert set(da_mask.dims) == {"grid_index"}
     assert da_mask.dtype == "int"
-    assert set(da_mask.values) == {0, 1}
-    assert da_mask.sum() > 0
-    assert da_mask.sum() < da_mask.size
+    assert set(da_mask.values).issubset({0, 1})
+
+    if "global" in datastore_name:
+        # global datastores have no lateral boundaries
+        assert da_mask.sum() == 0
+    else:
+        # LAM datastores must have a boundary
+        assert da_mask.sum() > 0
+        assert da_mask.sum() < da_mask.size
 
     if isinstance(datastore, BaseRegularGridDatastore):
         grid_shape = datastore.grid_shape_state
