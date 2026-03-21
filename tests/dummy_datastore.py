@@ -172,6 +172,13 @@ class DummyDatastore(BaseRegularGridDatastore):
         self._root_path = Path(self._tempdir.name)
         self._num_grid_points = n_grid_points
 
+    def __del__(self):
+        """
+        Cleanup temporary directory
+        """
+        if hasattr(self, "_tempdir"):
+            self._tempdir.cleanup()
+
     @property
     def root_path(self) -> Path:
         """
