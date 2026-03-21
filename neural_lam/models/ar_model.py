@@ -842,6 +842,10 @@ class ARModel(pl.LightningModule):
         self.matched_metrics = set()
         self.spatial_loss_maps.clear()
 
+        # Clear stored test metrics to avoid accumulation across test runs
+        for metric_list in self.test_metrics.values():
+            metric_list.clear()
+
         # Reset example plot counter for next test epoch
         self.plotted_examples = 0
 

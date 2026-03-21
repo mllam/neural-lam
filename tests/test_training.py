@@ -246,7 +246,9 @@ def test_plotted_examples_reset_after_test_epoch():
         processor_layers = 2
         mesh_aggr = "sum"
         lr = 1.0e-3
+        ar_steps_eval = 3
         val_steps_to_log = [1, 3]
+        create_gif = False
         metrics_watch = []
         num_past_forcing_steps = 1
         num_future_forcing_steps = 1
@@ -280,9 +282,10 @@ def test_plotted_examples_reset_after_test_epoch():
         def _identity_gather(self, tensor_to_gather):
             return tensor_to_gather
 
-        with patch.object(
-            type(model), "all_gather_cat", _identity_gather
-        ), warnings.catch_warnings():
+        with (
+            patch.object(type(model), "all_gather_cat", _identity_gather),
+            warnings.catch_warnings(),
+        ):
             # CSVLogger does not support log_image; suppress the
             # resulting warnings to keep CI output clean
             warnings.filterwarnings(
