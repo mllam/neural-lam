@@ -86,21 +86,30 @@ def wmse(pred, target, pred_std, mask=None, average_grid=True, sum_vars=True):
 
 def mse(pred, target, pred_std, mask=None, average_grid=True, sum_vars=True):
     """
-    (Unweighted) Mean Squared Error
+    (Unweighted) Mean Squared Error.
 
-    (...,) is any number of batch dimensions, potentially different
-        but broadcastable
-    pred: (..., N, d_state), prediction
-    target: (..., N, d_state), target
-    pred_std: (..., N, d_state) or (d_state,), predicted std.-dev.
-    mask: (N,), boolean mask describing which grid nodes to use in metric
-    average_grid: boolean, if grid dimension -2 should be reduced (mean over N)
-    sum_vars: boolean, if variable dimension -1 should be reduced (sum
-        over d_state)
+    Parameters
+    ----------
+    pred : torch.Tensor
+        Prediction tensor of shape (..., N, d_state).
+    target : torch.Tensor
+        Target tensor of shape (..., N, d_state).
+    pred_std : torch.Tensor
+        Predicted standard deviation of shape (..., N, d_state) or (d_state,).
+    mask : torch.Tensor, optional
+        Boolean mask of shape (N,) describing which grid nodes to use, 
+        by default None.
+    average_grid : bool, optional
+        Whether the grid dimension -2 should be reduced (mean over N), 
+        by default True.
+    sum_vars : bool, optional
+        Whether the variable dimension -1 should be reduced (sum over d_state), 
+        by default True.
 
-    Returns:
-    metric_val: One of (...,), (..., d_state), (..., N), (..., N, d_state),
-    depending on reduction arguments.
+    Returns
+    -------
+    torch.Tensor
+        Metric value(s) depending on reduction arguments.
     """
     # Replace pred_std with constant ones
     return wmse(
