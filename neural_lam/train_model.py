@@ -37,9 +37,9 @@ def get_loss_output_std_compatibility_error(loss, output_std):
 
     supported_losses = ", ".join(metrics.get_output_std_compatible_metrics())
     return (
-        "--output_std requires a loss that can train the predictive std-dev "
-        f"head, but got --loss '{loss}'. Supported losses: {supported_losses}. "
-        "Either choose one of those losses or disable --output_std."
+        "Training with --output_std requires a loss that incorporates "
+        f"predicted std-dev. The current choice of --loss '{loss}' does not. "
+        f"Supported losses: {supported_losses}."
     )
 
 

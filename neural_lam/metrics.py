@@ -236,14 +236,16 @@ def get_metric(metric_name):
     metric: function implementing the metric
     """
     metric_name_lower = metric_name.lower()
-    assert is_defined_metric(metric_name), f"Unknown metric: {metric_name}"
+    if not is_defined_metric(metric_name):
+        raise ValueError(f"Unknown metric: {metric_name}")
     return DEFINED_METRICS[metric_name_lower]["fn"]
 
 
 def metric_supports_output_std(metric_name):
     """Return whether the metric can train a learned predictive std-dev."""
     metric_name_lower = metric_name.lower()
-    assert is_defined_metric(metric_name), f"Unknown metric: {metric_name}"
+    if not is_defined_metric(metric_name):
+        raise ValueError(f"Unknown metric: {metric_name}")
     return DEFINED_METRICS[metric_name_lower]["supports_output_std"]
 
 
