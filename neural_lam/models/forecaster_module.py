@@ -58,8 +58,8 @@ class ForecasterModule(pl.LightningModule):
         # explicitly when calling load_from_checkpoint(path,
         # datastore=datastore)
         self.save_hyperparameters(ignore=["datastore", "forecaster"])
-        self._datastore = datastore
-        self._forecaster = forecaster
+        self.datastore = datastore
+        self.forecaster = forecaster
 
         # Compute interior_mask_bool directly from datastore
         boundary_mask = (
@@ -75,7 +75,7 @@ class ForecasterModule(pl.LightningModule):
         )
 
         # Store per_var_std here if predictor does not output std
-        if not self._forecaster.predicts_std:
+        if not self.forecaster.predicts_std:
             da_state_stats = datastore.get_standardization_dataarray(
                 category="state"
             )
@@ -107,7 +107,7 @@ class ForecasterModule(pl.LightningModule):
             "mse": [],
             "mae": [],
         }
-        if self._forecaster.predicts_std:
+        if self.forecaster.predicts_std:
             self.test_metrics["output_std"] = []  # Treat as metric
 
         # For making restoring of optimizer state optional
@@ -121,7 +121,7 @@ class ForecasterModule(pl.LightningModule):
         self.spatial_loss_maps: List[Any] = []
 
         self.time_step_int, self.time_step_unit = get_integer_time(
-            self._datastore.step_length
+            self.datastore.step_length
         )
 
     def _create_dataarray_from_tensor(
@@ -131,7 +131,7 @@ class ForecasterModule(pl.LightningModule):
         split: str,
         category: str,
     ) -> xr.DataArray:
-        weather_dataset = WeatherDataset(datastore=self._datastore, split=split)
+        weather_dataset = WeatherDataset(datastore=self.datastore, split=split)
         time = np.array(time.cpu(), dtype="datetime64[ns]")
         da = weather_dataset.create_dataarray_from_tensor(
             tensor=tensor, time=time, category=category
@@ -167,7 +167,7 @@ class ForecasterModule(pl.LightningModule):
         """
         (init_states, target_states, forcing_features, _batch_times) = batch
 
-        prediction, pred_std = self._forecaster(
+        prediction, pred_std = self.forecaster(
             init_states, forcing_features, target_states
         )
 
@@ -326,7 +326,7 @@ class ForecasterModule(pl.LightningModule):
         target = batch[1]
         time = batch[3]
 
-        da_state_stats = self._datastore.get_standardization_dataarray("state")
+        da_state_stats = self.datastore.get_standardization_dataarray("state")
         state_std = torch.tensor(
             da_state_stats.state_std.values,
             dtype=torch.float32,
@@ -382,7 +382,7 @@ class ForecasterModule(pl.LightningModule):
             for t_i, _ in enumerate(zip(pred_slice, target_slice), start=1):
                 var_figs = [
                     vis.plot_prediction(
-                        datastore=self._datastore,
+                        datastore=self.datastore,
                         title=f"{var_name} ({var_unit}), "
                         f"t={t_i} ({(self.time_step_int * t_i)}"
                         f"{self.time_step_unit})",
@@ -396,8 +396,8 @@ class ForecasterModule(pl.LightningModule):
                     )
                     for var_i, (var_name, var_unit, var_vrange) in enumerate(
                         zip(
-                            self._datastore.get_vars_names("state"),
-                            self._datastore.get_vars_units("state"),
+                            self.datastore.get_vars_names("state"),
+                            self.datastore.get_vars_units("state"),
                             var_vranges,
                         )
                     )
@@ -406,7 +406,7 @@ class ForecasterModule(pl.LightningModule):
                 example_i = self.plotted_examples
 
                 for var_name, fig in zip(
-                    self._datastore.get_vars_names("state"), var_figs
+                    self.datastore.get_vars_names("state"), var_figs
                 ):
                     if isinstance(self.logger, pl.loggers.WandbLogger):
                         key = f"{var_name}_example_{example_i}"
@@ -441,7 +441,7 @@ class ForecasterModule(pl.LightningModule):
         log_dict = {}
         metric_fig = vis.plot_error_map(
             errors=metric_tensor,
-            datastore=self._datastore,
+            datastore=self.datastore,
         )
         full_log_name = f"{prefix}_{metric_name}"
         log_dict[full_log_name] = metric_fig
@@ -456,7 +456,7 @@ class ForecasterModule(pl.LightningModule):
                 delimiter=",",
             )
 
-        var_names = self._datastore.get_vars_names(category="state")
+        var_names = self.datastore.get_vars_names(category="state")
         if full_log_name in self.hparams.metrics_watch:
             for (
                 var_i,
@@ -483,7 +483,7 @@ class ForecasterModule(pl.LightningModule):
                     metric_tensor_averaged = torch.sqrt(metric_tensor_averaged)
                     metric_name = metric_name.replace("mse", "rmse")
 
-                da_state_stats = self._datastore.get_standardization_dataarray(
+                da_state_stats = self.datastore.get_standardization_dataarray(
                     "state"
                 )
                 state_std = torch.tensor(
@@ -534,7 +534,7 @@ class ForecasterModule(pl.LightningModule):
             loss_map_figs = [
                 vis.plot_spatial_error(
                     error=loss_map,
-                    datastore=self._datastore,
+                    datastore=self.datastore,
                     title=f"Test loss, t={t_i} "
                     f"({(self.time_step_int * t_i)} {self.time_step_unit})",
                 )
@@ -552,7 +552,7 @@ class ForecasterModule(pl.LightningModule):
 
             pdf_loss_map_figs = [
                 vis.plot_spatial_error(
-                    error=loss_map, datastore=self._datastore
+                    error=loss_map, datastore=self.datastore
                 )
                 for loss_map in mean_spatial_loss
             ]
