@@ -75,7 +75,7 @@ def model_and_batch(tmp_path, time_step, time_unit):
     predictor = predictor_class(
         config=config,
         datastore=datastore,
-        graph=args.graph,
+        graph_name=args.graph,
         hidden_dim=args.hidden_dim,
         hidden_layers=args.hidden_layers,
         processor_layers=args.processor_layers,
@@ -143,7 +143,10 @@ def test_plot_examples_integration_saves_figure(
     ), f"Expected time_step_unit={time_unit}, got {model.time_step_unit}"
 
     # Generate prediction
-    prediction, target, _, _ = model.common_step(batch)
+    (init_states, target, forcing_features, _batch_times) = batch
+    prediction, _ = model.forecaster(
+        init_states, forcing_features, target
+    )
 
     # Rescale to original data scale
     da_state_stats = datastore.get_standardization_dataarray("state")
