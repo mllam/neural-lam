@@ -50,6 +50,14 @@ def test_graph_creation(datastore_name, graph_name):
         "m2g_features.pt",
         "mesh_features.pt",
     ]
+
+    # index-feature pair to check if edge is consistent across files
+    edge_index_feature_pairs = [
+        ("g2m_edge_index", "g2m_features"),
+        ("m2g_edge_index", "m2g_features"),
+        ("m2m_edge_index", "m2m_features"),
+    ]
+
     if hierarchical:
         required_graph_files.extend(
             [
@@ -59,11 +67,17 @@ def test_graph_creation(datastore_name, graph_name):
                 "mesh_down_features.pt",
             ]
         )
+        edge_index_feature_pairs.extend(
+            [
+                ("mesh_up_edge_index", "mesh_up_features"),
+                ("mesh_down_edge_index", "mesh_down_features"),
+            ]
+        )
 
-    # TODO: check that the number of edges is consistent over the files, for
-    # now we just check the number of features
+    # check that the number of edges is consistent over the files
     d_features = 3
     d_mesh_static = 2
+    edge_counts = {}
 
     with tempfile.TemporaryDirectory() as tmpdir:
         graph_dir_path = Path(tmpdir) / "graph" / graph_name
@@ -74,7 +88,6 @@ def test_graph_creation(datastore_name, graph_name):
             hierarchical=hierarchical,
             n_max_levels=n_max_levels,
         )
-
         assert graph_dir_path.exists()
 
         # check that all the required files are present
@@ -85,16 +98,16 @@ def test_graph_creation(datastore_name, graph_name):
         for file_name in required_graph_files:
             file_id = Path(file_name).stem  # remove the extension
             result = torch.load(graph_dir_path / file_name)
-
             if file_id.startswith("g2m") or file_id.startswith("m2g"):
                 assert isinstance(result, torch.Tensor)
-
                 if file_id.endswith("_index"):
                     assert (
                         result.shape[0] == 2
                     )  # adjacency matrix uses two rows
+                    edge_counts[file_id] = result.shape[1]
                 elif file_id.endswith("_features"):
                     assert result.shape[1] == d_features
+                    edge_counts[file_id] = result.shape[0]
 
             elif file_id.startswith("m2m") or file_id.startswith("mesh"):
                 assert isinstance(result, list)
@@ -117,3 +130,17 @@ def test_graph_creation(datastore_name, graph_name):
                         assert r.shape[0] == 2  # adjacency matrix uses two rows
                     elif file_id.endswith("_features"):
                         assert r.shape[1] == d_features
+
+                if file_id.endswith("_index"):
+                    edge_counts[file_id] = [r.shape[1] for r in result]
+                elif (
+                    file_id.endswith("_features") and file_id != "mesh_features"
+                ):
+                    edge_counts[file_id] = [r.shape[0] for r in result]
+
+    # loop through index-feature pair to check consistency
+    for index_id, features_id in edge_index_feature_pairs:
+        assert edge_counts[index_id] == edge_counts[features_id], (
+            f"Edge count mismatch: {index_id} has {edge_counts[index_id]} edges"
+            f" but {features_id} has {edge_counts[features_id]} rows"
+        )
