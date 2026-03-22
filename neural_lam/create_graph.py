@@ -5,6 +5,7 @@ from typing import Optional
 
 # Third-party
 import matplotlib
+import matplotlib.collections
 import matplotlib.pyplot as plt
 import networkx
 import numpy as np
@@ -17,9 +18,16 @@ from torch_geometric.utils.convert import from_networkx
 # Local
 from .config import load_config_and_datastore
 from .datastore.base import BaseRegularGridDatastore
+from .graph_generation_config import build_graph_config_record, write_graph_config
 
 
 def plot_graph(graph, title=None):
+    """Plot a PyG ``Data`` object in 2D (``pos``), edges from ``edge_index``.
+
+    Undirected graphs (per ``pyg.utils.is_undirected``) are drawn with line
+    segments. Directed graphs use a single vectorised ``quiver`` call. Node
+    colours encode degree (undirected: total degree; directed: in-degree).
+    """
     fig, axis = plt.subplots(figsize=(8, 8), dpi=200)  # W,H
     edge_index = graph.edge_index
     pos = graph.pos
@@ -28,41 +36,97 @@ def plot_graph(graph, title=None):
     # higher levels in hierarchy
     edge_index = edge_index - edge_index.min()
 
-    if pyg.utils.is_undirected(edge_index):
+    is_undirected = pyg.utils.is_undirected(edge_index)
+    if is_undirected:
         # Keep only 1 direction of edge_index
         edge_index = edge_index[:, edge_index[0] < edge_index[1]]  # (2, M/2)
-    # TODO: indicate direction of directed edges
 
-    # Move all to cpu and numpy, compute (in)-degrees
-    degrees = (
-        pyg.utils.degree(edge_index[1], num_nodes=pos.shape[0]).cpu().numpy()
-    )
+    # Degrees for node colouring (must match one-direction storage for undirected)
+    n_nodes_t = int(pos.shape[0])
+    if is_undirected:
+        degrees = (
+            pyg.utils.degree(edge_index[0], num_nodes=n_nodes_t)
+            + pyg.utils.degree(edge_index[1], num_nodes=n_nodes_t)
+        ).cpu().numpy()
+    else:
+        degrees = pyg.utils.degree(
+            edge_index[1], num_nodes=n_nodes_t
+        ).cpu().numpy()
     edge_index = edge_index.cpu().numpy()
     pos = pos.cpu().numpy()
 
-    # Plot edges
-    from_pos = pos[edge_index[0]]  # (M/2, 2)
-    to_pos = pos[edge_index[1]]  # (M/2, 2)
-    edge_lines = np.stack((from_pos, to_pos), axis=1)
-    axis.add_collection(
-        matplotlib.collections.LineCollection(
-            edge_lines, lw=0.4, colors="black", zorder=1
+    from_pos = pos[edge_index[0]]
+    to_pos = pos[edge_index[1]]
+
+    if is_undirected:
+        edge_lines = np.stack((from_pos, to_pos), axis=1)
+        axis.add_collection(
+            matplotlib.collections.LineCollection(
+                edge_lines, lw=0.4, colors="black", zorder=1
+            )
         )
-    )
+    else:
+        # Vectorised arrows; shorten shafts so heads are not buried under markers
+        n_nodes = pos.shape[0]
+        vec = to_pos - from_pos
+        dist = np.hypot(vec[:, 0], vec[:, 1])
+        valid = dist > 1e-12
+        # Shrink each edge from both ends (fraction of edge length, scales with N)
+        shrink = float(np.clip(1.8 / max(np.sqrt(n_nodes), 2.0), 0.04, 0.12))
+        src = np.empty_like(from_pos)
+        dst = np.empty_like(to_pos)
+        src[:] = from_pos
+        dst[:] = to_pos
+        u = vec[valid] / dist[valid, np.newaxis]
+        src[valid] = from_pos[valid] + shrink * dist[valid, np.newaxis] * u
+        dst[valid] = to_pos[valid] - shrink * dist[valid, np.newaxis] * u
+        dx = dst[:, 0] - src[:, 0]
+        dy = dst[:, 1] - src[:, 1]
+        ok = np.hypot(dx, dy) > 1e-12
+        src, dx, dy = src[ok], dx[ok], dy[ok]
+        # Arrow / line width scales with graph size (matplotlib fraction of axis width)
+        qwidth = float(np.clip(24.0 / max(n_nodes, 24), 0.004, 0.012))
+        head_w = float(np.clip(3.8 - n_nodes / 4000.0, 2.2, 4.0))
+        head_l = float(np.clip(4.5 - n_nodes / 4000.0, 3.0, 5.0))
+        if dx.size > 0:
+            axis.quiver(
+                src[:, 0],
+                src[:, 1],
+                dx,
+                dy,
+                angles="xy",
+                scale_units="xy",
+                scale=1,
+                width=qwidth,
+                headwidth=head_w,
+                headlength=head_l,
+                headaxislength=head_l * 0.9,
+                color="black",
+                zorder=1,
+                pivot="tail",
+            )
+
+    # Marker area (points^2): a bit larger on small graphs, smaller when N is huge
+    n_nodes = pos.shape[0]
+    node_area = float(np.clip(120.0 / max(np.sqrt(n_nodes), 1.0), 3.0, 45.0))
 
     # Plot nodes
     node_scatter = axis.scatter(
         pos[:, 0],
         pos[:, 1],
         c=degrees,
-        s=3,
+        s=node_area,
         marker="o",
         zorder=2,
         cmap="viridis",
         clim=None,
+        edgecolors="face",
+        linewidths=0.2,
     )
 
     plt.colorbar(node_scatter, aspect=50)
+
+    axis.set_aspect("equal", adjustable="datalim")
 
     if title is not None:
         axis.set_title(title)
@@ -208,6 +272,9 @@ def create_graph(
     where N_mesh_updown_edges_level is the number of edges in the graph from
     mesh-to-mesh between two consecutive levels (list index corresponds index
     of lower level)
+
+    Additionally writes ``graph_config.json`` with generation parameters and
+    optional provenance (timestamp, git commit) for reproducibility (#470).
 
 
     Parameters
@@ -535,6 +602,22 @@ def create_graph(
     save_edges(pyg_g2m, "g2m", graph_dir_path)
     # m2g
     save_edges(pyg_m2g, "m2g", graph_dir_path)
+
+    graph_cfg = build_graph_config_record(
+        hierarchical=bool(hierarchical),
+        n_max_levels=n_max_levels,
+        n_levels_on_disk=len(m2m_graphs),
+        mesh_levels_used=int(mesh_levels),
+        grid_nx=int(Nx),
+        grid_ny=int(Ny),
+        mesh_branching_children_per_axis=int(nx),
+        nlev_full_tree=int(nlev),
+        nleaf=int(nleaf),
+        g2m_dm_scale=float(DM_SCALE),
+        d_edge_features=3,
+        d_mesh_features=2,
+    )
+    write_graph_config(graph_dir_path, graph_cfg)
 
 
 def create_graph_from_datastore(

@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Write `graph_config.json` when generating graphs (parameters, mesh tree summary, `neural_lam` version, optional git commit / UTC timestamp) and optional checks in `validate_graph_dir` / `validate_graph` CLI [\#470](https://github.com/mllam/neural-lam/issues/470)
+
 - Enable `pin_memory` in DataLoaders when GPU is available for faster async CPU-to-GPU data transfers [\#236](https://github.com/mllam/neural-lam/pull/236) @abhaygoudannavar
 
 ### Changed

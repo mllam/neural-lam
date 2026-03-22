@@ -10,6 +10,7 @@ import torch
 from neural_lam.create_graph import create_graph_from_datastore
 from neural_lam.datastore import DATASTORES
 from neural_lam.datastore.base import BaseRegularGridDatastore
+from neural_lam.graph_validation import validate_graph_dir
 from tests.conftest import init_datastore_example
 
 
@@ -49,6 +50,7 @@ def test_graph_creation(datastore_name, graph_name):
         "g2m_features.pt",
         "m2g_features.pt",
         "mesh_features.pt",
+        "graph_config.json",
     ]
     if hierarchical:
         required_graph_files.extend(
@@ -60,8 +62,6 @@ def test_graph_creation(datastore_name, graph_name):
             ]
         )
 
-    # TODO: check that the number of edges is consistent over the files, for
-    # now we just check the number of features
     d_features = 3
     d_mesh_static = 2
 
@@ -77,43 +77,11 @@ def test_graph_creation(datastore_name, graph_name):
 
         assert graph_dir_path.exists()
 
-        # check that all the required files are present
-        for file_name in required_graph_files:
-            assert (graph_dir_path / file_name).exists()
-
-        # try to load each and ensure they have the right shape
-        for file_name in required_graph_files:
-            file_id = Path(file_name).stem  # remove the extension
-            result = torch.load(graph_dir_path / file_name)
-
-            if file_id.startswith("g2m") or file_id.startswith("m2g"):
-                assert isinstance(result, torch.Tensor)
-
-                if file_id.endswith("_index"):
-                    assert (
-                        result.shape[0] == 2
-                    )  # adjacency matrix uses two rows
-                elif file_id.endswith("_features"):
-                    assert result.shape[1] == d_features
-
-            elif file_id.startswith("m2m") or file_id.startswith("mesh"):
-                assert isinstance(result, list)
-                if not hierarchical:
-                    assert len(result) == 1
-                else:
-                    if file_id.startswith("mesh_up") or file_id.startswith(
-                        "mesh_down"
-                    ):
-                        assert len(result) == n_max_levels - 1
-                    else:
-                        assert len(result) == n_max_levels
-
-                for r in result:
-                    assert isinstance(r, torch.Tensor)
-
-                    if file_id == "mesh_features":
-                        assert r.shape[1] == d_mesh_static
-                    elif file_id.endswith("_index"):
-                        assert r.shape[0] == 2  # adjacency matrix uses two rows
-                    elif file_id.endswith("_features"):
-                        assert r.shape[1] == d_features
+        errors = validate_graph_dir(
+            graph_dir_path,
+            expected_hierarchical=hierarchical,
+            expected_n_levels=n_max_levels if hierarchical else 1,
+            expected_d_edge_features=d_features,
+            expected_d_mesh_features=d_mesh_static,
+        )
+        assert errors == [], "\n".join(e.format() for e in errors)
