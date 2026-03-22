@@ -67,6 +67,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Migrated build backend from PDM to Hatchling with hatch-vcs and added uv build in deploy CI
 
+- Updated `test_graph_creation` to add edge count consistency check [#301](https://github.com/mllam/neural-lam/pull/301) @osten-antonio
+
 ## [v0.5.0](https://github.com/mllam/neural-lam/releases/tag/v0.5.0)
 
 This release contains maintenance and fixes, preventing some unexpected crashes and improving CICD and testing.
