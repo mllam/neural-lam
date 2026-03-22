@@ -156,19 +156,40 @@ class InvalidConfigError(Exception):
 def load_config_and_datastore(
     config_path: str,
 ) -> tuple[NeuralLAMConfig, Union[MDPDatastore, NpyFilesDatastoreMEPS]]:
-    """
-    Load the neural-lam configuration and the datastore specified in the
+    """Load the neural-lam configuration and the datastore specified in the
     configuration.
 
     Parameters
     ----------
     config_path : str
-        Path to the Neural-LAM configuration file.
+        Path to the Neural-LAM configuration file (YAML format).
 
     Returns
     -------
     tuple[NeuralLAMConfig, Union[MDPDatastore, NpyFilesDatastoreMEPS]]
-        The Neural-LAM configuration and the loaded datastore.
+        The loaded Neural-LAM configuration object and the initialized datastore
+        instance (MDP or NpyFilesMEPS based on config).
+
+    Raises
+    ------
+    FileNotFoundError
+        If the configuration file does not exist at the given path.
+    dataclass_wizard.errors.UnknownJSONKey
+        If the YAML contains unknown keys not defined in the config dataclass.
+    InvalidConfigError
+        If the configuration is invalid or cannot be deserialized properly
+        (wrapped around underlying errors).
+    ValueError
+        If the datastore kind specified in config is not implemented.
+
+    Examples
+    --------
+    >>> from pathlib import Path
+    >>> config, datastore = load_config_and_datastore("data/config.yaml")
+    >>> print(config.datastore.kind)
+    'npyfilesmeps'
+    >>> # Use datastore to load data batches
+    >>> batch = datastore.load_batch(...)
     """
     try:
         config = NeuralLAMConfig.from_yaml_file(config_path)
