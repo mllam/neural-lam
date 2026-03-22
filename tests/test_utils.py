@@ -23,3 +23,7 @@ def test_milliseconds():
 
 def test_negative():
     assert get_integer_time(timedelta(days=-7)) == (-1, "weeks")
+
+
+def test_float_days():
+    assert get_integer_time(timedelta(days=0.001)) == (86400, "milliseconds")
