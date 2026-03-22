@@ -234,10 +234,22 @@ class ARModel(pl.LightningModule):
 
     def predict_step(self, prev_state, prev_prev_state, forcing):
         """
-        Step state one step ahead using prediction model, X_{t-1}, X_t -> X_t+1
-        prev_state: (B, num_grid_nodes, feature_dim), X_t prev_prev_state: (B,
-        num_grid_nodes, feature_dim), X_{t-1} forcing: (B, num_grid_nodes,
-        forcing_dim)
+        Step state one step ahead using the prediction model.
+        Computes X_{t+1} given X_t and X_{t-1}.
+
+        Parameters
+        ----------
+        prev_state : torch.Tensor
+            State at time t (X_t), shape (B, num_grid_nodes, feature_dim).
+        prev_prev_state : torch.Tensor
+            State at time t-1 (X_{t-1}), shape (B, num_grid_nodes, feature_dim).
+        forcing : torch.Tensor
+            Forcing features at time t, shape (B, num_grid_nodes, forcing_dim).
+
+        Raises
+        ------
+        NotImplementedError
+            This is an abstract method that must be implemented by subclasses.
         """
         raise NotImplementedError("No prediction step implemented")
 
