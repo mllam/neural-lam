@@ -15,25 +15,25 @@ end
     BaseGraphModel --> BaseHiGraphModel
 
 subgraph Imports
-    torch["torch"]
-    config["config"]
-    datastore["datastore"]
-    interaction_net["interaction_net"]
     base_graph_model["base_graph_model"]
+    datastore["datastore"]
+    torch["torch"]
+    interaction_net["interaction_net"]
+    config["config"]
 end
 
-    torch --> module
-    config --> module
-    datastore --> module
-    interaction_net --> module
     base_graph_model --> module
+    datastore --> module
+    torch --> module
+    interaction_net --> module
+    config --> module
     module --> BaseHiGraphModel
 
 subgraph Methods
-    BaseHiGraphModel_get_num_mesh["get_num_mesh()"]
-    BaseHiGraphModel_embedd_mesh_nodes["embedd_mesh_nodes()"]
-    BaseHiGraphModel_process_step["process_step()"]
-    BaseHiGraphModel_hi_processor_step["hi_processor_step()"]
+    BaseHiGraphModel_get_num_mesh["mesh()"]
+    BaseHiGraphModel_embedd_mesh_nodes["nodes()"]
+    BaseHiGraphModel_process_step["step()"]
+    BaseHiGraphModel_hi_processor_step["step()"]
 end
 
     BaseHiGraphModel --> BaseHiGraphModel_get_num_mesh
@@ -48,7 +48,6 @@ classDef method fill:#2d043f,stroke:#7c3aed,stroke-width:1.5px,color:#ede9fe,fon
 classDef callNode fill:#064e3b,stroke:#10b981,stroke-width:1.5px,color:#d1fae5,font-size:16px
 class BaseGraphModel parent
 class BaseHiGraphModel base
-class torch,config,datastore,interaction_net,base_graph_model import
+class base_graph_model,datastore,torch,interaction_net,config import
 class BaseHiGraphModel_get_num_mesh,BaseHiGraphModel_embedd_mesh_nodes,BaseHiGraphModel_process_step,BaseHiGraphModel_hi_processor_step method
-
 ```

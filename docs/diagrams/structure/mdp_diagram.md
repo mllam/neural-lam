@@ -15,51 +15,51 @@ end
     BaseRegularGridDatastore --> MDPDatastore
 
 subgraph Imports
-    pathlib["pathlib"]
-    mllam_data_prep["mllam_data_prep"]
-    copy["copy"]
-    base["base"]
-    functools["functools"]
-    loguru["loguru"]
-    warnings["warnings"]
-    datetime["datetime"]
     utils["utils"]
     cartopy["cartopy"]
     xarray["xarray"]
-    numpy["numpy"]
+    warnings["warnings"]
     typing["typing"]
+    mllam_data_prep["mllam_data_prep"]
+    base["base"]
+    datetime["datetime"]
+    loguru["loguru"]
+    copy["copy"]
+    numpy["numpy"]
+    pathlib["pathlib"]
+    functools["functools"]
 end
 
-    pathlib --> module
-    mllam_data_prep --> module
-    copy --> module
-    base --> module
-    functools --> module
-    loguru --> module
-    warnings --> module
-    datetime --> module
     utils --> module
     cartopy --> module
     xarray --> module
-    numpy --> module
+    warnings --> module
     typing --> module
+    mllam_data_prep --> module
+    base --> module
+    datetime --> module
+    loguru --> module
+    copy --> module
+    numpy --> module
+    pathlib --> module
+    functools --> module
     module --> MDPDatastore
 
 subgraph Methods
-    MDPDatastore_root_path["root_path()"]
+    MDPDatastore_root_path["path()"]
     MDPDatastore_config["config()"]
-    MDPDatastore_step_length["step_length()"]
-    MDPDatastore_get_vars_units["get_vars_units()"]
-    MDPDatastore_get_vars_names["get_vars_names()"]
-    MDPDatastore_get_vars_long_names["get_vars_long_names()"]
-    MDPDatastore_get_num_data_vars["get_num_data_vars()"]
-    MDPDatastore_get_dataarray["get_dataarray()"]
-    MDPDatastore_get_standardization_dataarray["get_standardization_dataarray()"]
-    MDPDatastore_boundary_mask["boundary_mask()"]
-    MDPDatastore_coords_projection["coords_projection()"]
-    MDPDatastore_grid_shape_state["grid_shape_state()"]
-    MDPDatastore_get_xy["get_xy()"]
-    MDPDatastore_get_lat_lon["get_lat_lon()"]
+    MDPDatastore_step_length["length()"]
+    MDPDatastore_get_vars_units["units()"]
+    MDPDatastore_get_vars_names["names()"]
+    MDPDatastore_get_vars_long_names["names()"]
+    MDPDatastore_get_num_data_vars["vars()"]
+    MDPDatastore_get_dataarray["dataarray()"]
+    MDPDatastore_get_standardization_dataarray["dataarray()"]
+    MDPDatastore_boundary_mask["mask()"]
+    MDPDatastore_coords_projection["projection()"]
+    MDPDatastore_grid_shape_state["state()"]
+    MDPDatastore_get_xy["xy()"]
+    MDPDatastore_get_lat_lon["lon()"]
 end
 
     MDPDatastore --> MDPDatastore_root_path
@@ -84,7 +84,6 @@ classDef method fill:#2d043f,stroke:#7c3aed,stroke-width:1.5px,color:#ede9fe,fon
 classDef callNode fill:#064e3b,stroke:#10b981,stroke-width:1.5px,color:#d1fae5,font-size:16px
 class BaseRegularGridDatastore parent
 class MDPDatastore base
-class pathlib,mllam_data_prep,copy,base,functools,loguru,warnings,datetime,utils,cartopy,xarray,numpy,typing import
+class utils,cartopy,xarray,warnings,typing,mllam_data_prep,base,datetime,loguru,copy,numpy,pathlib,functools import
 class MDPDatastore_root_path,MDPDatastore_config,MDPDatastore_step_length,MDPDatastore_get_vars_units,MDPDatastore_get_vars_names,MDPDatastore_get_vars_long_names,MDPDatastore_get_num_data_vars,MDPDatastore_get_dataarray,MDPDatastore_get_standardization_dataarray,MDPDatastore_boundary_mask,MDPDatastore_coords_projection,MDPDatastore_grid_shape_state,MDPDatastore_get_xy,MDPDatastore_get_lat_lon method
-
 ```

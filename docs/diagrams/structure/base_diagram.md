@@ -5,72 +5,72 @@ flowchart TD
 module["base"]
 
 subgraph Parent_Class
-    BaseDatastore["BaseDatastore"]
     ABC["ABC"]
+    BaseDatastore["BaseDatastore"]
 end
 
 subgraph Base_Class
+    BaseRegularGridDatastore["BaseRegularGridDatastore"]
     BaseDatastore["BaseDatastore"]
     CartesianGridShape["CartesianGridShape"]
-    BaseRegularGridDatastore["BaseRegularGridDatastore"]
 end
 
     ABC --> BaseDatastore
     BaseDatastore --> BaseRegularGridDatastore
 
 subgraph Imports
-    pathlib["pathlib"]
-    dataclasses["dataclasses"]
-    abc["abc"]
-    functools["functools"]
-    pandas["pandas"]
-    collections["collections"]
-    datetime["datetime"]
     cartopy["cartopy"]
     xarray["xarray"]
-    numpy["numpy"]
     typing["typing"]
+    abc["abc"]
+    datetime["datetime"]
+    collections["collections"]
+    dataclasses["dataclasses"]
+    numpy["numpy"]
+    pathlib["pathlib"]
+    pandas["pandas"]
+    functools["functools"]
 end
 
-    pathlib --> module
-    dataclasses --> module
-    abc --> module
-    functools --> module
-    pandas --> module
-    collections --> module
-    datetime --> module
     cartopy --> module
     xarray --> module
-    numpy --> module
     typing --> module
+    abc --> module
+    datetime --> module
+    collections --> module
+    dataclasses --> module
+    numpy --> module
+    pathlib --> module
+    pandas --> module
+    functools --> module
+    module --> BaseRegularGridDatastore
     module --> BaseDatastore
     module --> CartesianGridShape
-    module --> BaseRegularGridDatastore
 
 subgraph Methods
-    BaseDatastore_root_path["root_path()"]
+    BaseDatastore_root_path["path()"]
     BaseDatastore_config["config()"]
-    BaseDatastore_step_length["step_length()"]
-    BaseDatastore_get_vars_units["get_vars_units()"]
-    BaseDatastore_get_vars_names["get_vars_names()"]
-    BaseDatastore_get_vars_long_names["get_vars_long_names()"]
-    BaseDatastore_get_num_data_vars["get_num_data_vars()"]
-    BaseDatastore_get_standardization_dataarray["get_standardization_dataarray()"]
-    BaseDatastore__standardize_datarray["_standardize_datarray()"]
-    BaseDatastore_get_dataarray["get_dataarray()"]
-    BaseDatastore_boundary_mask["boundary_mask()"]
-    BaseDatastore_get_xy["get_xy()"]
-    BaseDatastore_coords_projection["coords_projection()"]
-    BaseDatastore_get_xy_extent["get_xy_extent()"]
-    BaseDatastore_get_lat_lon["get_lat_lon()"]
-    BaseDatastore_num_grid_points["num_grid_points()"]
-    BaseDatastore_state_feature_weights_values["state_feature_weights_values()"]
-    BaseDatastore_expected_dim_order["expected_dim_order()"]
-    BaseRegularGridDatastore_grid_shape_state["grid_shape_state()"]
-    BaseRegularGridDatastore_get_xy["get_xy()"]
-    BaseRegularGridDatastore_unstack_grid_coords["unstack_grid_coords()"]
-    BaseRegularGridDatastore_stack_grid_coords["stack_grid_coords()"]
-    BaseRegularGridDatastore_num_grid_points["num_grid_points()"]
+    BaseDatastore_step_length["length()"]
+    BaseDatastore_get_vars_units["units()"]
+    BaseDatastore_get_vars_names["names()"]
+    BaseDatastore_get_vars_long_names["names()"]
+    BaseDatastore_get_num_data_vars["vars()"]
+    BaseDatastore_get_standardization_dataarray["dataarray()"]
+    BaseDatastore__standardize_datarray["datarray()"]
+    BaseDatastore_get_dataarray["dataarray()"]
+    BaseDatastore_boundary_mask["mask()"]
+    BaseDatastore_get_xy["xy()"]
+    BaseDatastore_coords_projection["projection()"]
+    BaseDatastore_get_xy_extent["extent()"]
+    BaseDatastore_get_lat_lon["lon()"]
+    BaseDatastore_num_grid_points["points()"]
+    BaseDatastore_state_feature_weights_values["values()"]
+    BaseDatastore_expected_dim_order["order()"]
+    BaseRegularGridDatastore_grid_shape_state["state()"]
+    BaseRegularGridDatastore_get_xy["xy()"]
+    BaseRegularGridDatastore_unstack_grid_coords["coords()"]
+    BaseRegularGridDatastore_stack_grid_coords["coords()"]
+    BaseRegularGridDatastore_num_grid_points["points()"]
 end
 
     BaseDatastore --> BaseDatastore_root_path
@@ -102,9 +102,8 @@ classDef base fill:#78350f,stroke:#f59e0b,stroke-width:1px,color:#fde68a,font-si
 classDef import fill:#1f2937,stroke:#6b7280,stroke-width:1.5px,color:#e5e7eb,font-size:16px
 classDef method fill:#2d043f,stroke:#7c3aed,stroke-width:1.5px,color:#ede9fe,font-size:16px
 classDef callNode fill:#064e3b,stroke:#10b981,stroke-width:1.5px,color:#d1fae5,font-size:16px
-class BaseDatastore,ABC parent
-class BaseDatastore,CartesianGridShape,BaseRegularGridDatastore base
-class pathlib,dataclasses,abc,functools,pandas,collections,datetime,cartopy,xarray,numpy,typing import
+class ABC,BaseDatastore parent
+class BaseRegularGridDatastore,BaseDatastore,CartesianGridShape base
+class cartopy,xarray,typing,abc,datetime,collections,dataclasses,numpy,pathlib,pandas,functools import
 class BaseDatastore_root_path,BaseDatastore_config,BaseDatastore_step_length,BaseDatastore_get_vars_units,BaseDatastore_get_vars_names,BaseDatastore_get_vars_long_names,BaseDatastore_get_num_data_vars,BaseDatastore_get_standardization_dataarray,BaseDatastore__standardize_datarray,BaseDatastore_get_dataarray,BaseDatastore_boundary_mask,BaseDatastore_get_xy,BaseDatastore_coords_projection,BaseDatastore_get_xy_extent,BaseDatastore_get_lat_lon,BaseDatastore_num_grid_points,BaseDatastore_state_feature_weights_values,BaseDatastore_expected_dim_order,BaseRegularGridDatastore_grid_shape_state,BaseRegularGridDatastore_get_xy,BaseRegularGridDatastore_unstack_grid_coords,BaseRegularGridDatastore_stack_grid_coords,BaseRegularGridDatastore_num_grid_points method
-
 ```

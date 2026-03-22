@@ -15,27 +15,27 @@ end
     BaseHiGraphModel --> HiLAM
 
 subgraph Imports
-    torch["torch"]
-    config["config"]
     datastore["datastore"]
+    torch["torch"]
     interaction_net["interaction_net"]
+    config["config"]
     base_hi_graph_model["base_hi_graph_model"]
 end
 
-    torch --> module
-    config --> module
     datastore --> module
+    torch --> module
     interaction_net --> module
+    config --> module
     base_hi_graph_model --> module
     module --> HiLAM
 
 subgraph Methods
-    HiLAM_make_same_gnns["make_same_gnns()"]
-    HiLAM_make_up_gnns["make_up_gnns()"]
-    HiLAM_make_down_gnns["make_down_gnns()"]
-    HiLAM_mesh_down_step["mesh_down_step()"]
-    HiLAM_mesh_up_step["mesh_up_step()"]
-    HiLAM_hi_processor_step["hi_processor_step()"]
+    HiLAM_make_same_gnns["gnns()"]
+    HiLAM_make_up_gnns["gnns()"]
+    HiLAM_make_down_gnns["gnns()"]
+    HiLAM_mesh_down_step["step()"]
+    HiLAM_mesh_up_step["step()"]
+    HiLAM_hi_processor_step["step()"]
 end
 
     HiLAM --> HiLAM_make_same_gnns
@@ -52,7 +52,6 @@ classDef method fill:#2d043f,stroke:#7c3aed,stroke-width:1.5px,color:#ede9fe,fon
 classDef callNode fill:#064e3b,stroke:#10b981,stroke-width:1.5px,color:#d1fae5,font-size:16px
 class BaseHiGraphModel parent
 class HiLAM base
-class torch,config,datastore,interaction_net,base_hi_graph_model import
+class datastore,torch,interaction_net,config,base_hi_graph_model import
 class HiLAM_make_same_gnns,HiLAM_make_up_gnns,HiLAM_make_down_gnns,HiLAM_mesh_down_step,HiLAM_mesh_up_step,HiLAM_hi_processor_step method
-
 ```

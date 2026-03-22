@@ -48,5 +48,4 @@ class MessagePassing,Module parent
 class InteractionNet,SplitMLPs base
 class torch,torch_geometric import
 class InteractionNet_forward,InteractionNet_message,InteractionNet_aggregate,SplitMLPs_forward method
-
 ```

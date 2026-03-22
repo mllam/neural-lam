@@ -15,55 +15,55 @@ end
     BaseRegularGridDatastore --> NpyFilesDatastoreMEPS
 
 subgraph Imports
-    pathlib["pathlib"]
-    torch["torch"]
-    config["config"]
-    base["base"]
-    functools["functools"]
-    warnings["warnings"]
-    datetime["datetime"]
-    parse["parse"]
-    cartopy["cartopy"]
-    dask["dask"]
-    xarray["xarray"]
-    numpy["numpy"]
-    typing["typing"]
     re["re"]
+    cartopy["cartopy"]
+    xarray["xarray"]
+    warnings["warnings"]
+    typing["typing"]
+    torch["torch"]
+    base["base"]
+    datetime["datetime"]
+    config["config"]
+    numpy["numpy"]
+    pathlib["pathlib"]
+    parse["parse"]
+    functools["functools"]
+    dask["dask"]
 end
 
-    pathlib --> module
-    torch --> module
-    config --> module
-    base --> module
-    functools --> module
-    warnings --> module
-    datetime --> module
-    parse --> module
-    cartopy --> module
-    dask --> module
-    xarray --> module
-    numpy --> module
-    typing --> module
     re --> module
+    cartopy --> module
+    xarray --> module
+    warnings --> module
+    typing --> module
+    torch --> module
+    base --> module
+    datetime --> module
+    config --> module
+    numpy --> module
+    pathlib --> module
+    parse --> module
+    functools --> module
+    dask --> module
     module --> NpyFilesDatastoreMEPS
 
 subgraph Methods
-    NpyFilesDatastoreMEPS_root_path["root_path()"]
+    NpyFilesDatastoreMEPS_root_path["path()"]
     NpyFilesDatastoreMEPS_config["config()"]
-    NpyFilesDatastoreMEPS_get_dataarray["get_dataarray()"]
-    NpyFilesDatastoreMEPS__get_single_timeseries_dataarray["_get_single_timeseries_dataarray()"]
-    NpyFilesDatastoreMEPS__get_analysis_times["_get_analysis_times()"]
-    NpyFilesDatastoreMEPS__calc_datetime_forcing_features["_calc_datetime_forcing_features()"]
-    NpyFilesDatastoreMEPS_get_vars_units["get_vars_units()"]
-    NpyFilesDatastoreMEPS_get_vars_names["get_vars_names()"]
-    NpyFilesDatastoreMEPS_get_vars_long_names["get_vars_long_names()"]
-    NpyFilesDatastoreMEPS_get_num_data_vars["get_num_data_vars()"]
-    NpyFilesDatastoreMEPS_get_xy["get_xy()"]
-    NpyFilesDatastoreMEPS_step_length["step_length()"]
-    NpyFilesDatastoreMEPS_grid_shape_state["grid_shape_state()"]
-    NpyFilesDatastoreMEPS_boundary_mask["boundary_mask()"]
-    NpyFilesDatastoreMEPS_get_standardization_dataarray["get_standardization_dataarray()"]
-    NpyFilesDatastoreMEPS_coords_projection["coords_projection()"]
+    NpyFilesDatastoreMEPS_get_dataarray["dataarray()"]
+    NpyFilesDatastoreMEPS__get_single_timeseries_dataarray["dataarray()"]
+    NpyFilesDatastoreMEPS__get_analysis_times["times()"]
+    NpyFilesDatastoreMEPS__calc_datetime_forcing_features["features()"]
+    NpyFilesDatastoreMEPS_get_vars_units["units()"]
+    NpyFilesDatastoreMEPS_get_vars_names["names()"]
+    NpyFilesDatastoreMEPS_get_vars_long_names["names()"]
+    NpyFilesDatastoreMEPS_get_num_data_vars["vars()"]
+    NpyFilesDatastoreMEPS_get_xy["xy()"]
+    NpyFilesDatastoreMEPS_step_length["length()"]
+    NpyFilesDatastoreMEPS_grid_shape_state["state()"]
+    NpyFilesDatastoreMEPS_boundary_mask["mask()"]
+    NpyFilesDatastoreMEPS_get_standardization_dataarray["dataarray()"]
+    NpyFilesDatastoreMEPS_coords_projection["projection()"]
 end
 
     NpyFilesDatastoreMEPS --> NpyFilesDatastoreMEPS_root_path
@@ -90,7 +90,6 @@ classDef method fill:#2d043f,stroke:#7c3aed,stroke-width:1.5px,color:#ede9fe,fon
 classDef callNode fill:#064e3b,stroke:#10b981,stroke-width:1.5px,color:#d1fae5,font-size:16px
 class BaseRegularGridDatastore parent
 class NpyFilesDatastoreMEPS base
-class pathlib,torch,config,base,functools,warnings,datetime,parse,cartopy,dask,xarray,numpy,typing,re import
+class re,cartopy,xarray,warnings,typing,torch,base,datetime,config,numpy,pathlib,parse,functools,dask import
 class NpyFilesDatastoreMEPS_root_path,NpyFilesDatastoreMEPS_config,NpyFilesDatastoreMEPS_get_dataarray,NpyFilesDatastoreMEPS__get_single_timeseries_dataarray,NpyFilesDatastoreMEPS__get_analysis_times,NpyFilesDatastoreMEPS__calc_datetime_forcing_features,NpyFilesDatastoreMEPS_get_vars_units,NpyFilesDatastoreMEPS_get_vars_names,NpyFilesDatastoreMEPS_get_vars_long_names,NpyFilesDatastoreMEPS_get_num_data_vars,NpyFilesDatastoreMEPS_get_xy,NpyFilesDatastoreMEPS_step_length,NpyFilesDatastoreMEPS_grid_shape_state,NpyFilesDatastoreMEPS_boundary_mask,NpyFilesDatastoreMEPS_get_standardization_dataarray,NpyFilesDatastoreMEPS_coords_projection method
-
 ```

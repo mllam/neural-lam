@@ -16,53 +16,53 @@ end
 
 subgraph Imports
     matplotlib["matplotlib"]
+    datastore["datastore"]
+    xarray["xarray"]
+    warnings["warnings"]
     typing["typing"]
+    neural_lam["neural_lam"]
     torch["torch"]
     weather_dataset["weather_dataset"]
-    config["config"]
-    datastore["datastore"]
-    os["os"]
-    warnings["warnings"]
     loss_weighting["loss_weighting"]
-    xarray["xarray"]
-    pytorch_lightning["pytorch_lightning"]
+    config["config"]
     numpy["numpy"]
-    neural_lam["neural_lam"]
+    pytorch_lightning["pytorch_lightning"]
+    os["os"]
 end
 
     matplotlib --> module
+    datastore --> module
+    xarray --> module
+    warnings --> module
     typing --> module
+    neural_lam --> module
     torch --> module
     weather_dataset --> module
-    config --> module
-    datastore --> module
-    os --> module
-    warnings --> module
     loss_weighting --> module
-    xarray --> module
-    pytorch_lightning --> module
+    config --> module
     numpy --> module
-    neural_lam --> module
+    pytorch_lightning --> module
+    os --> module
     module --> ARModel
 
 subgraph Methods
-    ARModel__create_dataarray_from_tensor["_create_dataarray_from_tensor()"]
-    ARModel_configure_optimizers["configure_optimizers()"]
-    ARModel_interior_mask_bool["interior_mask_bool()"]
-    ARModel_expand_to_batch["expand_to_batch()"]
-    ARModel_predict_step["predict_step()"]
-    ARModel_unroll_prediction["unroll_prediction()"]
-    ARModel_common_step["common_step()"]
-    ARModel_training_step["training_step()"]
-    ARModel_all_gather_cat["all_gather_cat()"]
-    ARModel_validation_step["validation_step()"]
-    ARModel_on_validation_epoch_end["on_validation_epoch_end()"]
-    ARModel_test_step["test_step()"]
-    ARModel_plot_examples["plot_examples()"]
-    ARModel_create_metric_log_dict["create_metric_log_dict()"]
-    ARModel_aggregate_and_plot_metrics["aggregate_and_plot_metrics()"]
-    ARModel_on_test_epoch_end["on_test_epoch_end()"]
-    ARModel_on_load_checkpoint["on_load_checkpoint()"]
+    ARModel__create_dataarray_from_tensor["tensor()"]
+    ARModel_configure_optimizers["optimizers()"]
+    ARModel_interior_mask_bool["bool()"]
+    ARModel_expand_to_batch["batch()"]
+    ARModel_predict_step["step()"]
+    ARModel_unroll_prediction["prediction()"]
+    ARModel_common_step["step()"]
+    ARModel_training_step["step()"]
+    ARModel_all_gather_cat["cat()"]
+    ARModel_validation_step["step()"]
+    ARModel_on_validation_epoch_end["end()"]
+    ARModel_test_step["step()"]
+    ARModel_plot_examples["examples()"]
+    ARModel_create_metric_log_dict["dict()"]
+    ARModel_aggregate_and_plot_metrics["metrics()"]
+    ARModel_on_test_epoch_end["end()"]
+    ARModel_on_load_checkpoint["checkpoint()"]
 end
 
     ARModel --> ARModel__create_dataarray_from_tensor
@@ -90,7 +90,6 @@ classDef method fill:#2d043f,stroke:#7c3aed,stroke-width:1.5px,color:#ede9fe,fon
 classDef callNode fill:#064e3b,stroke:#10b981,stroke-width:1.5px,color:#d1fae5,font-size:16px
 class LightningModule parent
 class ARModel base
-class matplotlib,typing,torch,weather_dataset,config,datastore,os,warnings,loss_weighting,xarray,pytorch_lightning,numpy,neural_lam import
+class matplotlib,datastore,xarray,warnings,typing,neural_lam,torch,weather_dataset,loss_weighting,config,numpy,pytorch_lightning,os import
 class ARModel__create_dataarray_from_tensor,ARModel_configure_optimizers,ARModel_interior_mask_bool,ARModel_expand_to_batch,ARModel_predict_step,ARModel_unroll_prediction,ARModel_common_step,ARModel_training_step,ARModel_all_gather_cat,ARModel_validation_step,ARModel_on_validation_epoch_end,ARModel_test_step,ARModel_plot_examples,ARModel_create_metric_log_dict,ARModel_aggregate_and_plot_metrics,ARModel_on_test_epoch_end,ARModel_on_load_checkpoint method
-
 ```

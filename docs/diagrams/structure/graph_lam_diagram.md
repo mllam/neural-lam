@@ -2,49 +2,50 @@
 %%{init: {'flowchart': {'nodeSpacing': 60, 'rankSpacing': 80}}}%%
 flowchart TD
 
-module["hi_lam_parallel"]
+module["graph_lam"]
 
 subgraph Parent_Class
-    BaseHiGraphModel["BaseHiGraphModel"]
+    BaseGraphModel["BaseGraphModel"]
 end
 
 subgraph Base_Class
-    HiLAMParallel["HiLAMParallel"]
+    GraphLAM["GraphLAM"]
 end
 
-    BaseHiGraphModel --> HiLAMParallel
+    BaseGraphModel --> GraphLAM
 
 subgraph Imports
-    torch["torch"]
-    config["config"]
+    base_graph_model["base_graph_model"]
     datastore["datastore"]
-    torch_geometric["torch_geometric"]
     interaction_net["interaction_net"]
-    base_hi_graph_model["base_hi_graph_model"]
+    config["config"]
+    torch_geometric["torch_geometric"]
 end
 
-    torch --> module
-    config --> module
+    base_graph_model --> module
     datastore --> module
-    torch_geometric --> module
     interaction_net --> module
-    base_hi_graph_model --> module
-    module --> HiLAMParallel
+    config --> module
+    torch_geometric --> module
+    module --> GraphLAM
 
 subgraph Methods
-    HiLAMParallel_hi_processor_step["hi_processor_step()"]
+    GraphLAM_get_num_mesh["mesh()"]
+    GraphLAM_embedd_mesh_nodes["nodes()"]
+    GraphLAM_process_step["step()"]
 end
 
-    HiLAMParallel --> HiLAMParallel_hi_processor_step
+    GraphLAM --> GraphLAM_get_num_mesh
+    GraphLAM --> GraphLAM_embedd_mesh_nodes
+    GraphLAM --> GraphLAM_process_step
 
 classDef parent fill:#0f172a,stroke:#3b82f6,stroke-width:2px,color:#f1f5f9,font-size:16px
 classDef base fill:#78350f,stroke:#f59e0b,stroke-width:1px,color:#fde68a,font-size:16px
 classDef import fill:#1f2937,stroke:#6b7280,stroke-width:1.5px,color:#e5e7eb,font-size:16px
 classDef method fill:#2d043f,stroke:#7c3aed,stroke-width:1.5px,color:#ede9fe,font-size:16px
 classDef callNode fill:#064e3b,stroke:#10b981,stroke-width:1.5px,color:#d1fae5,font-size:16px
-class BaseHiGraphModel parent
-class HiLAMParallel base
-class torch,config,datastore,torch_geometric,interaction_net,base_hi_graph_model import
-class HiLAMParallel_hi_processor_step method
-
+class BaseGraphModel parent
+class GraphLAM base
+class base_graph_model,datastore,interaction_net,config,torch_geometric import
+class GraphLAM_get_num_mesh,GraphLAM_embedd_mesh_nodes,GraphLAM_process_step method
 ```

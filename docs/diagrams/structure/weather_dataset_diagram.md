@@ -18,42 +18,42 @@ end
     LightningDataModule --> WeatherDataModule
 
 subgraph Imports
-    typing["typing"]
-    torch["torch"]
-    loguru["loguru"]
-    warnings["warnings"]
-    datetime["datetime"]
     xarray["xarray"]
-    pytorch_lightning["pytorch_lightning"]
-    numpy["numpy"]
+    warnings["warnings"]
+    typing["typing"]
     neural_lam["neural_lam"]
+    torch["torch"]
+    datetime["datetime"]
+    loguru["loguru"]
+    numpy["numpy"]
+    pytorch_lightning["pytorch_lightning"]
 end
 
-    typing --> module
-    torch --> module
-    loguru --> module
-    warnings --> module
-    datetime --> module
     xarray --> module
-    pytorch_lightning --> module
-    numpy --> module
+    warnings --> module
+    typing --> module
     neural_lam --> module
+    torch --> module
+    datetime --> module
+    loguru --> module
+    numpy --> module
+    pytorch_lightning --> module
     module --> WeatherDataset
     module --> WeatherDataModule
 
 subgraph Methods
-    WeatherDataset__compute_std_safe["_compute_std_safe()"]
-    WeatherDataset___len__["__len__()"]
-    WeatherDataset__slice_state_time["_slice_state_time()"]
-    WeatherDataset__slice_forcing_time["_slice_forcing_time()"]
-    WeatherDataset__build_item_dataarrays["_build_item_dataarrays()"]
-    WeatherDataset___getitem__["__getitem__()"]
-    WeatherDataset___iter__["__iter__()"]
-    WeatherDataset_create_dataarray_from_tensor["create_dataarray_from_tensor()"]
+    WeatherDataset__compute_std_safe["safe()"]
+    WeatherDataset___len__["()"]
+    WeatherDataset__slice_state_time["time()"]
+    WeatherDataset__slice_forcing_time["time()"]
+    WeatherDataset__build_item_dataarrays["dataarrays()"]
+    WeatherDataset___getitem__["()"]
+    WeatherDataset___iter__["()"]
+    WeatherDataset_create_dataarray_from_tensor["tensor()"]
     WeatherDataModule_setup["setup()"]
-    WeatherDataModule_train_dataloader["train_dataloader()"]
-    WeatherDataModule_val_dataloader["val_dataloader()"]
-    WeatherDataModule_test_dataloader["test_dataloader()"]
+    WeatherDataModule_train_dataloader["dataloader()"]
+    WeatherDataModule_val_dataloader["dataloader()"]
+    WeatherDataModule_test_dataloader["dataloader()"]
 end
 
     WeatherDataset --> WeatherDataset__compute_std_safe
@@ -76,7 +76,6 @@ classDef method fill:#2d043f,stroke:#7c3aed,stroke-width:1.5px,color:#ede9fe,fon
 classDef callNode fill:#064e3b,stroke:#10b981,stroke-width:1.5px,color:#d1fae5,font-size:16px
 class Dataset,LightningDataModule parent
 class WeatherDataset,WeatherDataModule base
-class typing,torch,loguru,warnings,datetime,xarray,pytorch_lightning,numpy,neural_lam import
+class xarray,warnings,typing,neural_lam,torch,datetime,loguru,numpy,pytorch_lightning import
 class WeatherDataset__compute_std_safe,WeatherDataset___len__,WeatherDataset__slice_state_time,WeatherDataset__slice_forcing_time,WeatherDataset__build_item_dataarrays,WeatherDataset___getitem__,WeatherDataset___iter__,WeatherDataset_create_dataarray_from_tensor,WeatherDataModule_setup,WeatherDataModule_train_dataloader,WeatherDataModule_val_dataloader,WeatherDataModule_test_dataloader method
-
 ```

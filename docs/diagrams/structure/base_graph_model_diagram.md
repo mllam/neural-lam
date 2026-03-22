@@ -15,27 +15,27 @@ end
     ARModel --> BaseGraphModel
 
 subgraph Imports
-    torch["torch"]
-    ar_model["ar_model"]
-    config["config"]
     datastore["datastore"]
+    ar_model["ar_model"]
+    torch["torch"]
     interaction_net["interaction_net"]
+    config["config"]
 end
 
-    torch --> module
-    ar_model --> module
-    config --> module
     datastore --> module
+    ar_model --> module
+    torch --> module
     interaction_net --> module
+    config --> module
     module --> BaseGraphModel
 
 subgraph Methods
-    BaseGraphModel_prepare_clamping_params["prepare_clamping_params()"]
-    BaseGraphModel_get_clamped_new_state["get_clamped_new_state()"]
-    BaseGraphModel_get_num_mesh["get_num_mesh()"]
-    BaseGraphModel_embedd_mesh_nodes["embedd_mesh_nodes()"]
-    BaseGraphModel_process_step["process_step()"]
-    BaseGraphModel_predict_step["predict_step()"]
+    BaseGraphModel_prepare_clamping_params["params()"]
+    BaseGraphModel_get_clamped_new_state["state()"]
+    BaseGraphModel_get_num_mesh["mesh()"]
+    BaseGraphModel_embedd_mesh_nodes["nodes()"]
+    BaseGraphModel_process_step["step()"]
+    BaseGraphModel_predict_step["step()"]
 end
 
     BaseGraphModel --> BaseGraphModel_prepare_clamping_params
@@ -52,7 +52,6 @@ classDef method fill:#2d043f,stroke:#7c3aed,stroke-width:1.5px,color:#ede9fe,fon
 classDef callNode fill:#064e3b,stroke:#10b981,stroke-width:1.5px,color:#d1fae5,font-size:16px
 class ARModel parent
 class BaseGraphModel base
-class torch,ar_model,config,datastore,interaction_net import
+class datastore,ar_model,torch,interaction_net,config import
 class BaseGraphModel_prepare_clamping_params,BaseGraphModel_get_clamped_new_state,BaseGraphModel_get_num_mesh,BaseGraphModel_embedd_mesh_nodes,BaseGraphModel_process_step,BaseGraphModel_predict_step method
-
 ```
