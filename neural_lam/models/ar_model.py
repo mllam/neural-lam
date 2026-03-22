@@ -36,6 +36,20 @@ class ARModel(pl.LightningModule):
         config: NeuralLAMConfig,
         datastore: BaseDatastore,
     ):
+        """
+        Initialize the Auto-Regressive model.
+
+        Parameters
+        ----------
+        args : argparse.Namespace
+            Command-line arguments containing model hyperparameters and 
+            run configurations.
+        config : NeuralLAMConfig
+            Configuration object for the NeuralLAM project.
+        datastore : BaseDatastore
+            Datastore object used to retrieve weather data and 
+            standardization statistics.
+        """
         super().__init__()
         self.save_hyperparameters(ignore=["datastore"])
         self.args = args
