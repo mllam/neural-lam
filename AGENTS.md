@@ -91,5 +91,5 @@ W&B auto-disabled in tests. `DummyDatastore` used; example data downloaded from 
 
 ### Changelog
 
-Every non-maintenance PR must add a line to `CHANGELOG.md` (`added` / `changed` / `fixes` /
+Every PR must add a line to `CHANGELOG.md` in the section matching the change type (`Added` / `Changed` / `Fixed` / `Maintenance`).
 `maintenance`).
