@@ -32,7 +32,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Fix typo in `ar_model.py` that causes `AttributeError` during evaluation [\#204](https://github.com/mllam/neural-lam/pull/204) @ritinikhil
 
-- Fix `get_integer_time` to avoid floating-point precision issues and correctly handle zero timedelta [#469](https://github.com/mllam/neural-lam/pull/469) @Saptami191
+- Fix `get_integer_time` to avoid floating-point precision issues and correctly handle zero timedelta [#494](https://github.com/mllam/neural-lam/pull/494) @Saptami191
 
 - Changed the hardcoded True to a conditional check "persistent_workers=self.num_workers > 0" [\#235](https://github.com/mllam/neural-lam/pull/235) @santhil-cyber
 
