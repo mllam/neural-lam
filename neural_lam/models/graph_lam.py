@@ -29,6 +29,7 @@ class GraphLAM(BaseGraphModel):
         num_past_forcing_steps: int = 1,
         num_future_forcing_steps: int = 1,
         output_std: bool = False,
+        vertical_propnets: bool = False,
     ):
         super().__init__(
             config=config,
@@ -41,6 +42,7 @@ class GraphLAM(BaseGraphModel):
             num_past_forcing_steps=num_past_forcing_steps,
             num_future_forcing_steps=num_future_forcing_steps,
             output_std=output_std,
+            vertical_propnets=vertical_propnets,
         )
 
         assert (

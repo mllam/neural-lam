@@ -123,6 +123,12 @@ def main(input_args=None):
         help="If models should additionally output std.-dev. per "
         "output dimensions",
     )
+    parser.add_argument(
+        "--vertical_propnets",
+        action="store_true",
+        help="If PropagationNets should be used for all vertical "
+        "(grid-mesh and up/down) message passing",
+    )
 
     # Training options
     parser.add_argument(
@@ -295,6 +301,7 @@ def main(input_args=None):
         num_past_forcing_steps=args.num_past_forcing_steps,
         num_future_forcing_steps=args.num_future_forcing_steps,
         output_std=args.output_std,
+        vertical_propnets=args.vertical_propnets,
     )
     forecaster = ARForecaster(predictor, datastore)
 

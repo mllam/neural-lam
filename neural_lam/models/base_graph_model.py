@@ -5,7 +5,7 @@ import torch
 from .. import utils
 from ..config import NeuralLAMConfig
 from ..datastore import BaseDatastore
-from ..interaction_net import InteractionNet
+from ..interaction_net import InteractionNet, PropagationNet
 from .step_predictor import StepPredictor
 
 
@@ -27,12 +27,14 @@ class BaseGraphModel(StepPredictor):
         num_past_forcing_steps: int = 1,
         num_future_forcing_steps: int = 1,
         output_std: bool = False,
+        vertical_propnets: bool = False,
     ):
         super().__init__(
             config=config,
             datastore=datastore,
             output_std=output_std,
         )
+        self.vertical_propnets = vertical_propnets
 
         # Retrieve difference statistics for rescaling in forward pass
         da_state_stats = datastore.get_standardization_dataarray("state")
@@ -104,8 +106,11 @@ class BaseGraphModel(StepPredictor):
         self.m2g_embedder = utils.make_mlp([m2g_dim] + self.mlp_blueprint_end)
 
         # GNNs
+        gnn_class = (
+            PropagationNet if vertical_propnets else InteractionNet
+        )
         # encoder
-        self.g2m_gnn = InteractionNet(
+        self.g2m_gnn = gnn_class(
             self.g2m_edge_index,
             hidden_dim,
             hidden_layers=hidden_layers,
@@ -116,7 +121,7 @@ class BaseGraphModel(StepPredictor):
         )
 
         # decoder
-        self.m2g_gnn = InteractionNet(
+        self.m2g_gnn = gnn_class(
             self.m2g_edge_index,
             hidden_dim,
             hidden_layers=hidden_layers,

@@ -5,7 +5,7 @@ from torch import nn
 from .. import utils
 from ..config import NeuralLAMConfig
 from ..datastore import BaseDatastore
-from ..interaction_net import InteractionNet
+from ..interaction_net import InteractionNet, PropagationNet
 from .base_graph_model import BaseGraphModel
 
 
@@ -26,6 +26,7 @@ class BaseHiGraphModel(BaseGraphModel):
         num_past_forcing_steps: int = 1,
         num_future_forcing_steps: int = 1,
         output_std: bool = False,
+        vertical_propnets: bool = False,
     ):
         super().__init__(
             config=config,
@@ -38,6 +39,7 @@ class BaseHiGraphModel(BaseGraphModel):
             num_past_forcing_steps=num_past_forcing_steps,
             num_future_forcing_steps=num_future_forcing_steps,
             output_std=output_std,
+            vertical_propnets=vertical_propnets,
         )
 
         # Track number of nodes, edges on each level
@@ -100,9 +102,12 @@ class BaseHiGraphModel(BaseGraphModel):
 
         # Instantiate GNNs
         # Init GNNs
+        init_gnn_class = (
+            PropagationNet if self.vertical_propnets else InteractionNet
+        )
         self.mesh_init_gnns = nn.ModuleList(
             [
-                InteractionNet(
+                init_gnn_class(
                     edge_index,
                     hidden_dim,
                     hidden_layers=hidden_layers,

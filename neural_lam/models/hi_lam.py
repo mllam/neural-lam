@@ -4,7 +4,7 @@ from torch import nn
 # Local
 from ..config import NeuralLAMConfig
 from ..datastore import BaseDatastore
-from ..interaction_net import InteractionNet
+from ..interaction_net import InteractionNet, PropagationNet
 from .base_hi_graph_model import BaseHiGraphModel
 
 
@@ -27,6 +27,7 @@ class HiLAM(BaseHiGraphModel):
         num_past_forcing_steps: int = 1,
         num_future_forcing_steps: int = 1,
         output_std: bool = False,
+        vertical_propnets: bool = False,
     ):
         super().__init__(
             config=config,
@@ -39,6 +40,7 @@ class HiLAM(BaseHiGraphModel):
             num_past_forcing_steps=num_past_forcing_steps,
             num_future_forcing_steps=num_future_forcing_steps,
             output_std=output_std,
+            vertical_propnets=vertical_propnets,
         )
 
         # Make down GNNs, both for down edges and same level
@@ -76,9 +78,14 @@ class HiLAM(BaseHiGraphModel):
         """
         Make GNNs for processing steps up through the hierarchy.
         """
+        gnn_class = (
+            PropagationNet
+            if self.vertical_propnets
+            else InteractionNet
+        )
         return nn.ModuleList(
             [
-                InteractionNet(
+                gnn_class(
                     edge_index,
                     self.hidden_dim,
                     hidden_layers=self.hidden_layers,
