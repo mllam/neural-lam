@@ -621,7 +621,7 @@ def get_integer_time(tdelta) -> tuple[int, str]:
 
     return 1, "unknown"
 
-def expand_ensemble_batch(tensor: torch.Tensor, n_members: int) -> torch.Tensor:
+def expand_ensemble_batch(tensor: torch.Tensor, n_members: int, has_ensemble_dim: bool = False) -> torch.Tensor:
     """
     Allows for concurrent ensemble processing by expanding a deterministic batch tensor.
     
@@ -633,15 +633,16 @@ def expand_ensemble_batch(tensor: torch.Tensor, n_members: int) -> torch.Tensor:
     Args:
         tensor: Tensor of shape (B, ...) or (B, S, ...)
         n_members: The ensemble size (S)
+        has_ensemble_dim: Whether the tensor already contains the ensemble dimension as its second dimension.
 
     Returns:
         Tensor of shape (B * n_members, ...)
     """
     B = tensor.shape[0]
     
-    # Check if tensor already has the ensemble dimension S by some heuristic 
-    # or by strictly passing shapes. Assuming standard (B, S, ...) input for LBCs:
-    if tensor.dim() >= 2 and tensor.shape[1] == n_members:
+    if has_ensemble_dim:
+        if tensor.dim() < 2 or tensor.shape[1] != n_members:
+            raise ValueError(f"Expected ensemble dimension of size {n_members} at index 1, but got shape {tensor.shape}")
         # Already has ensemble dimension, flatten B and S
         return tensor.view(B * n_members, *tensor.shape[2:])
     

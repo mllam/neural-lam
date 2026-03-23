@@ -25,13 +25,24 @@ def test_batched_ensemble_expansion_and_folding():
 
     # 3. Test with Probabilistic Lateral Boundary Conditions (B, S, T, N, F)
     prob_lbc = torch.rand(B, S, T, N, F)
-    expanded_lbc = expand_ensemble_batch(prob_lbc, n_members=S)
+    expanded_lbc = expand_ensemble_batch(prob_lbc, n_members=S, has_ensemble_dim=True)
     
     assert expanded_lbc.shape == (B * S, T, N, F)
     # The first element of B*S should be the first member of the first batch
     assert torch.allclose(expanded_lbc[0], prob_lbc[0, 0])
     # The (S)th element should be the first member of the second batch
     assert torch.allclose(expanded_lbc[S], prob_lbc[1, 0])
+
+    # 4. Test ambiguous case where S == T (e.g., T=3 timesteps, S=3 members)
+    S_ambig = 3
+    init_state_ambig = torch.rand(B, S_ambig, N, F) # Shape (B, T, N, F) where T == S
+    # If has_ensemble_dim=False, it should repeat B -> B*S rather than flattening B*T
+    expanded_ambig = expand_ensemble_batch(init_state_ambig, n_members=S_ambig, has_ensemble_dim=False)
+    assert expanded_ambig.shape == (B * S_ambig, S_ambig, N, F)
+    assert torch.allclose(expanded_ambig[0], init_state_ambig[0])
+    assert torch.allclose(expanded_ambig[1], init_state_ambig[0])
+    assert torch.allclose(expanded_ambig[S_ambig], init_state_ambig[1])
+
 if __name__ == "__main__":
     test_batched_ensemble_expansion_and_folding()
     print("Test passed successfully!")
