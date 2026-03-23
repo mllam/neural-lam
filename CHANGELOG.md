@@ -72,6 +72,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Fix caching of MEPS example data in CI/CD [\#181](https://github.com/mllam/neural-lam/pull/181) @observingClouds
 
+### Fixed
+
+- Prevent image overwriting in `plot_examples()` by updating logging key logic [#205](https://github.com/mllam/neural-lam/pull/205) @Shristi-Goel
 - Migrated build backend from PDM to Hatchling with hatch-vcs and added uv build in deploy CI
 
 - Warn when running with `--eval` without `--load` to avoid accidentally evaluating randomly initialized weights [#190](https://github.com/mllam/neural-lam/pull/190) @varunsiravuri

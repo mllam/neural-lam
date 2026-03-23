@@ -554,15 +554,8 @@ class ARModel(pl.LightningModule):
                 for var_name, fig in zip(
                     self._datastore.get_vars_names("state"), var_figs
                 ):
-
-                    # We need treat logging images differently for different
-                    # loggers. WANDB can log multiple images to the same key,
-                    # while other loggers, as MLFlow, need unique keys for
-                    # each image.
-                    if isinstance(self.logger, pl.loggers.WandbLogger):
-                        key = f"{var_name}_example_{example_i}"
-                    else:
-                        key = f"{var_name}_example"
+                    # Use example index in key to avoid overwriting images
+                    key = f"{var_name}_example_{example_i}"
 
                     if hasattr(self.logger, "log_image"):
                         self.logger.log_image(key=key, images=[fig], step=t_i)
@@ -571,9 +564,8 @@ class ARModel(pl.LightningModule):
                             f"{self.logger} does not support image logging."
                         )
 
-                plt.close(
-                    "all"
-                )  # Close all figs for this time step, saves memory
+                plt.close("all")  
+                # Close all figs for this time step, saves memory
 
             # Save pred and target as .pt files
             torch.save(
