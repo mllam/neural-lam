@@ -56,6 +56,7 @@ W&B auto-disabled in tests. `DummyDatastore` used; example data downloaded from 
 
 1. **Search before creating.** Use any of: GitHub UI search, `gh issue list --state all --search "<keywords>"`, or `curl "https://api.github.com/search/issues?q=<keywords>+repo:mllam/neural-lam+type:issue"`. Duplicate issues will be closed.
 2. **Every PR requires an issue.** No exceptions. Open one first if none exists.
+3. **Include minimal example.** Each issue should include a minimal, reproducible example on how to easily recreate a bug, including all necessary module imports and data. Include full traceback if it is a bug-report.
 
 ### Pull Requests
 
