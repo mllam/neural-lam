@@ -3,6 +3,8 @@ import pytest
 
 # First-party
 from neural_lam.datastore.mdp import MDPDatastore
+from tests.conftest import init_datastore_example
+from tests.test_training import run_simple_training
 
 STATE_ONLY_CONFIG = (
     "tests/datastore_examples/mdp/danra_100m_winds/state_only.datastore.yaml"
@@ -38,3 +40,9 @@ def test_state_only_datastore_forcing_returns_empty():
         datastore = MDPDatastore(config_path=STATE_ONLY_CONFIG)
 
     assert datastore.get_vars_names("forcing") == []
+
+
+def test_state_only_datastore_training_setup_runs():
+    """Run the shared small training setup against the MDP datastore."""
+    datastore = init_datastore_example(MDPDatastore.SHORT_NAME)
+    run_simple_training(datastore, set_output_std=False)
