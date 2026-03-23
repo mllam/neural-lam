@@ -262,6 +262,11 @@ def main(input_args=None):
                     "--var_leads_metric_watch."
                 )
 
+    if args.eval and not args.load:
+        logger.warning(
+            "Evaluation (--eval) without --load: no checkpoint will be loaded.",
+        )
+
     # Get an (actual) random run id as a unique identifier
     random_run_id = random.randint(0, 9999)
 

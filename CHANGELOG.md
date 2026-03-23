@@ -58,6 +58,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Infer spatial coordinate names for MDPDatastore (rather than assuming names `x` and `y`), allows for e.g. lat/lon regular grids [\#169](https://github.com/mllam/neural-lam/pull/169) @leifdenby
 
+
 ### Maintenance
 
 - Update PR template to clarify milestone/roadmap requirement and maintenance changes [\#186](https://github.com/mllam/neural-lam/pull/186) @joeloskarsson
@@ -71,6 +72,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Fix caching of MEPS example data in CI/CD [\#181](https://github.com/mllam/neural-lam/pull/181) @observingClouds
 
 - Migrated build backend from PDM to Hatchling with hatch-vcs and added uv build in deploy CI
+
+- Warn when running with `--eval` without `--load` to avoid accidentally evaluating randomly initialized weights [#190](https://github.com/mllam/neural-lam/pull/190) @varunsiravuri
 
 ## [v0.5.0](https://github.com/mllam/neural-lam/releases/tag/v0.5.0)
 
