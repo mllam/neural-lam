@@ -15,18 +15,18 @@ end
     BaseGraphModel --> GraphLAM
 
 subgraph Imports
-    base_graph_model["base_graph_model"]
-    datastore["datastore"]
-    interaction_net["interaction_net"]
-    config["config"]
     torch_geometric["torch_geometric"]
+    config["config"]
+    interaction_net["interaction_net"]
+    datastore["datastore"]
+    base_graph_model["base_graph_model"]
 end
 
-    base_graph_model --> module
-    datastore --> module
-    interaction_net --> module
-    config --> module
     torch_geometric --> module
+    config --> module
+    interaction_net --> module
+    datastore --> module
+    base_graph_model --> module
     module --> GraphLAM
 
 subgraph Methods
@@ -46,6 +46,6 @@ classDef method fill:#2d043f,stroke:#7c3aed,stroke-width:1.5px,color:#ede9fe,fon
 classDef callNode fill:#064e3b,stroke:#10b981,stroke-width:1.5px,color:#d1fae5,font-size:16px
 class BaseGraphModel parent
 class GraphLAM base
-class base_graph_model,datastore,interaction_net,config,torch_geometric import
+class torch_geometric,config,interaction_net,datastore,base_graph_model import
 class GraphLAM_get_num_mesh,GraphLAM_embedd_mesh_nodes,GraphLAM_process_step method
 ```

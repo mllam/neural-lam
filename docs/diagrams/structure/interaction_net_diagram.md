@@ -10,22 +10,22 @@ subgraph Parent_Class
 end
 
 subgraph Base_Class
-    InteractionNet["InteractionNet"]
     SplitMLPs["SplitMLPs"]
+    InteractionNet["InteractionNet"]
 end
 
     MessagePassing --> InteractionNet
     Module --> SplitMLPs
 
 subgraph Imports
-    torch["torch"]
     torch_geometric["torch_geometric"]
+    torch["torch"]
 end
 
-    torch --> module
     torch_geometric --> module
-    module --> InteractionNet
+    torch --> module
     module --> SplitMLPs
+    module --> InteractionNet
 
 subgraph Methods
     InteractionNet_forward["forward()"]
@@ -45,7 +45,7 @@ classDef import fill:#1f2937,stroke:#6b7280,stroke-width:1.5px,color:#e5e7eb,fon
 classDef method fill:#2d043f,stroke:#7c3aed,stroke-width:1.5px,color:#ede9fe,font-size:16px
 classDef callNode fill:#064e3b,stroke:#10b981,stroke-width:1.5px,color:#d1fae5,font-size:16px
 class MessagePassing,Module parent
-class InteractionNet,SplitMLPs base
-class torch,torch_geometric import
+class SplitMLPs,InteractionNet base
+class torch_geometric,torch import
 class InteractionNet_forward,InteractionNet_message,InteractionNet_aggregate,SplitMLPs_forward method
 ```

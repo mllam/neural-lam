@@ -19,13 +19,6 @@ exclude_files = {
     "dig_validator.py",
     "__init__.py",
     "utils.py",
-    "config.py",
-    "metrics.py",
-    "plot_graph.py",
-    "custom_loggers.py",
-    "create_graph.py",
-    "evaluate.py",
-    "train_model.py",
 }
 
 IGNORE_CALLS = {"print", "len", "range", "str", "int", "float"}
@@ -157,30 +150,35 @@ def validate_folder(folder, mode):
 
 
 # MAIN
-parser = argparse.ArgumentParser()
-parser.add_argument(
-    "--mode", choices=["structure", "dataflow", "all"], default="all"
-)
-args = parser.parse_args()
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--mode", choices=["structure", "dataflow", "all"], default="all"
+    )
+    args = parser.parse_args()
 
-scan_codebase()
+    scan_codebase()
 
-ok_structure = True
-ok_dataflow = True
+    ok_structure = True
+    ok_dataflow = True
 
-if args.mode in ["structure", "all"]:
-    if os.path.exists(structure_folder):
-        ok_structure = validate_folder(structure_folder, "structure")
-    else:
-        print(f"Warning: {structure_folder} does not exist.")
+    if args.mode in ["structure", "all"]:
+        if os.path.exists(structure_folder):
+            ok_structure = validate_folder(structure_folder, "structure")
+        else:
+            print(f"Warning: {structure_folder} does not exist.")
 
-if args.mode in ["dataflow", "all"]:
-    if os.path.exists(dataflow_folder):
-        ok_dataflow = validate_folder(dataflow_folder, "dataflow")
-    else:
-        print(f"Warning: {dataflow_folder} does not exist.")
+    if args.mode in ["dataflow", "all"]:
+        if os.path.exists(dataflow_folder):
+            ok_dataflow = validate_folder(dataflow_folder, "dataflow")
+        else:
+            print(f"Warning: {dataflow_folder} does not exist.")
 
-if not (ok_structure and ok_dataflow):
-    sys.exit(1)
+    if not (ok_structure and ok_dataflow):
+        sys.exit(1)
 
-print("\nAll requested diagrams are valid!")
+    print("\nAll requested diagrams are valid!")
+
+
+if __name__ == "__main__":
+    main()

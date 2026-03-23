@@ -18,26 +18,26 @@ end
     LightningDataModule --> WeatherDataModule
 
 subgraph Imports
-    xarray["xarray"]
-    warnings["warnings"]
-    typing["typing"]
-    neural_lam["neural_lam"]
-    torch["torch"]
-    datetime["datetime"]
-    loguru["loguru"]
-    numpy["numpy"]
     pytorch_lightning["pytorch_lightning"]
+    typing["typing"]
+    datetime["datetime"]
+    numpy["numpy"]
+    warnings["warnings"]
+    neural_lam["neural_lam"]
+    xarray["xarray"]
+    loguru["loguru"]
+    torch["torch"]
 end
 
-    xarray --> module
-    warnings --> module
-    typing --> module
-    neural_lam --> module
-    torch --> module
-    datetime --> module
-    loguru --> module
-    numpy --> module
     pytorch_lightning --> module
+    typing --> module
+    datetime --> module
+    numpy --> module
+    warnings --> module
+    neural_lam --> module
+    xarray --> module
+    loguru --> module
+    torch --> module
     module --> WeatherDataset
     module --> WeatherDataModule
 
@@ -76,6 +76,6 @@ classDef method fill:#2d043f,stroke:#7c3aed,stroke-width:1.5px,color:#ede9fe,fon
 classDef callNode fill:#064e3b,stroke:#10b981,stroke-width:1.5px,color:#d1fae5,font-size:16px
 class Dataset,LightningDataModule parent
 class WeatherDataset,WeatherDataModule base
-class xarray,warnings,typing,neural_lam,torch,datetime,loguru,numpy,pytorch_lightning import
+class pytorch_lightning,typing,datetime,numpy,warnings,neural_lam,xarray,loguru,torch import
 class WeatherDataset__compute_std_safe,WeatherDataset___len__,WeatherDataset__slice_state_time,WeatherDataset__slice_forcing_time,WeatherDataset__build_item_dataarrays,WeatherDataset___getitem__,WeatherDataset___iter__,WeatherDataset_create_dataarray_from_tensor,WeatherDataModule_setup,WeatherDataModule_train_dataloader,WeatherDataModule_val_dataloader,WeatherDataModule_test_dataloader method
 ```

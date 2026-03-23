@@ -13,13 +13,6 @@ exclude_files = {
     "dig_validator.py",
     "__init__.py",
     "utils.py",
-    "config.py",
-    "metrics.py",
-    "plot_graph.py",
-    "custom_loggers.py",
-    "create_graph.py",
-    "evaluate.py",
-    "train_model.py",
 }
 
 IGNORE_CALLS = {
@@ -54,22 +47,6 @@ IGNORE_CALLS = {
     "values",
     "format",
 }
-
-parser = argparse.ArgumentParser()
-parser.add_argument(
-    "--mode",
-    choices=["structure", "dataflow"],
-    default="structure",
-    help="Diagram mode",
-)
-args = parser.parse_args()
-
-if args.mode == "structure":
-    diagrams_folder = os.path.join(repo_root, "docs", "diagrams", "structure")
-else:
-    diagrams_folder = os.path.join(repo_root, "docs", "diagrams", "dataflow")
-
-os.makedirs(diagrams_folder, exist_ok=True)
 
 
 # --- File & AST Utility Functions ---
@@ -462,71 +439,98 @@ def generate_dataflow(node_types, edges, method_name):
 
 
 # --- Core Application Loop ---
-found_files = 0
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--mode",
+        choices=["structure", "dataflow"],
+        default="structure",
+        help="Diagram mode",
+    )
+    args = parser.parse_args()
 
-for folder_to_scan in folders_to_scan:
-    for root, dirs, files in os.walk(folder_to_scan):
-        dirs[:] = [d for d in dirs if d not in exclude_dirs]
-        for file in files:
-            if not file.lower().endswith(".py") or file in exclude_files:
-                continue
-            found_files += 1
-            filepath = os.path.join(root, file)
-            print(f"Processing: {filepath}")
+    if args.mode == "structure":
+        diagrams_folder = os.path.join(
+            repo_root, "docs", "diagrams", "structure"
+        )
+    else:
+        diagrams_folder = os.path.join(
+            repo_root, "docs", "diagrams", "dataflow"
+        )
 
-            if args.mode == "structure":
-                module_name, imports, classes, inheritance, methods = (
-                    parse_structure(filepath)
-                )
-                mermaid = generate_structure(
-                    module_name, imports, classes, inheritance, methods
-                )
-                output_filename = os.path.join(
-                    diagrams_folder, f"{os.path.splitext(file)[0]}_diagram.md"
-                )
-                diagram_changed(
-                    output_filename, "```mermaid\n" + mermaid + "\n```\n"
-                )
-                print(f"  Generated: {output_filename}")
+    os.makedirs(diagrams_folder, exist_ok=True)
 
-            else:
-                module_name, methods = extract_all_methods(filepath)
+    found_files = 0
 
-                core_methods = {}
-                for m_name, f_node in methods.items():
-                    ml = m_name.lower()
-                    if (
-                        "process_step" in ml
-                        or "forward" in ml
-                        or "hi_processor_step" in ml
-                        or "common_step" in ml
-                    ):
-                        core_methods[m_name] = f_node
-                methods = core_methods
-
-                if not methods:
+    for folder_to_scan in folders_to_scan:
+        for root, dirs, files in os.walk(folder_to_scan):
+            dirs[:] = [d for d in dirs if d not in exclude_dirs]
+            for file in files:
+                if not file.lower().endswith(".py") or file in exclude_files:
                     continue
+                found_files += 1
+                filepath = os.path.join(root, file)
+                print(f"Processing: {filepath}")
 
-                output_filename = os.path.join(
-                    diagrams_folder, f"{os.path.splitext(file)[0]}_dataflow.md"
-                )
-
-                md_blocks = [f"# Dataflow: `{module_name}`\n"]
-                all_node_types = {}
-                all_edges = []
-
-                for method_full_name, func_node in methods.items():
-                    node_types, edges = parse_dataflow_for_method(func_node)
-                    all_node_types.update(node_types)
-                    all_edges.extend(edges)
-
-                if all_edges:
-                    mermaid = generate_dataflow(
-                        all_node_types, all_edges, module_name
+                if args.mode == "structure":
+                    module_name, imports, classes, inheritance, methods = (
+                        parse_structure(filepath)
                     )
-                    md_blocks.append("```mermaid\n" + mermaid + "```\n")
-                    diagram_changed(output_filename, "\n".join(md_blocks))
+                    mermaid = generate_structure(
+                        module_name, imports, classes, inheritance, methods
+                    )
+                    output_filename = os.path.join(
+                        diagrams_folder,
+                        f"{os.path.splitext(file)[0]}_diagram.md",
+                    )
+                    diagram_changed(
+                        output_filename, "```mermaid\n" + mermaid + "\n```\n"
+                    )
                     print(f"  Generated: {output_filename}")
 
-if found_files == 0:
-    print("No Python files found.")
+                else:
+                    module_name, methods = extract_all_methods(filepath)
+
+                    core_methods = {}
+                    for m_name, f_node in methods.items():
+                        ml = m_name.lower()
+                        if (
+                            "process_step" in ml
+                            or "forward" in ml
+                            or "hi_processor_step" in ml
+                            or "common_step" in ml
+                        ):
+                            core_methods[m_name] = f_node
+                    methods = core_methods
+
+                    if not methods:
+                        continue
+
+                    output_filename = os.path.join(
+                        diagrams_folder,
+                        f"{os.path.splitext(file)[0]}_dataflow.md",
+                    )
+
+                    md_blocks = [f"# Dataflow: `{module_name}`\n"]
+                    all_node_types = {}
+                    all_edges = []
+
+                    for method_full_name, func_node in methods.items():
+                        node_types, edges = parse_dataflow_for_method(func_node)
+                        all_node_types.update(node_types)
+                        all_edges.extend(edges)
+
+                    if all_edges:
+                        mermaid = generate_dataflow(
+                            all_node_types, all_edges, module_name
+                        )
+                        md_blocks.append("```mermaid\n" + mermaid + "```\n")
+                        diagram_changed(output_filename, "\n".join(md_blocks))
+                        print(f"  Generated: {output_filename}")
+
+    if found_files == 0:
+        print("No Python files found.")
+
+
+if __name__ == "__main__":
+    main()
