@@ -232,9 +232,15 @@ def test_boundary_mask(datastore_name):
     assert isinstance(da_mask, xr.DataArray)
     assert set(da_mask.dims) == {"grid_index"}
     assert da_mask.dtype == "int"
-    assert set(da_mask.values) == {0, 1}
-    assert da_mask.sum() > 0
-    assert da_mask.sum() < da_mask.size
+
+    # Allow for global domains (all zeros) or regional domains (mix of 0 and 1)
+    assert set(da_mask.values).issubset({0, 1})
+
+    # For regional domains (non-global), ensure we have both boundary and interior
+    if da_mask.sum() > 0:
+        # Has boundary points - this is a regional domain
+        assert da_mask.sum() < da_mask.size  # Must also have interior points
+    # For global domains, sum can be 0 (all interior, no boundaries)
 
     if isinstance(datastore, BaseRegularGridDatastore):
         grid_shape = datastore.grid_shape_state

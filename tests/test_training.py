@@ -189,3 +189,20 @@ def test_all_gather_cat_multi_device_simulation():
         "all_gather_cat produced incorrectly ordered/combined values "
         "on multi-device simulation"
     )
+
+
+def test_training_global():
+    """
+    Test that training works end-to-end with a global domain (no boundary
+    forcing). This verifies that the model can handle all-zero boundary masks
+    correctly, which is essential for global forecasting support.
+    """
+    datastore = init_datastore_example("globaldummydata")
+
+    # Verify this is actually a global domain
+    assert (
+        datastore.boundary_mask.sum() == 0
+    ), "GlobalDummyDatastore should have all-zero boundary mask"
+
+    # Run training - should complete without errors
+    run_simple_training(datastore, set_output_std=False)

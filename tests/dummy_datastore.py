@@ -758,3 +758,56 @@ class EnsembleDummyDatastore(BaseDatastore):
     @property
     def state_feature_weights_values(self) -> list[float]:
         return [1.0]
+
+
+class GlobalDummyDatastore(DummyDatastore):
+    """
+    Datastore variant for testing global forecasting support. Returns an
+    all-zero boundary mask, representing a global domain with no lateral
+    boundaries. All model predictions should be used everywhere without
+    boundary forcing.
+    """
+
+    SHORT_NAME = "globaldummydata"
+
+    def __init__(
+        self,
+        config_path=None,
+        n_grid_points=10000,
+        n_timesteps=10,
+        step_length=None,
+    ) -> None:
+        """
+        Create a global dummy datastore with random data and no boundaries.
+
+        Parameters
+        ----------
+        config_path : None
+            No config file is needed for the dummy datastore. This argument is
+            only present to match the signature of the other datastores.
+        n_grid_points : int
+            The number of grid points in the dataset. Must be a perfect square.
+        n_timesteps : int
+            The number of timesteps in the dataset.
+        step_length : timedelta, optional
+            The step length between timesteps. Defaults to timedelta(hours=1).
+        """
+        # Initialize parent class
+        super().__init__(
+            config_path=config_path,
+            n_grid_points=n_grid_points,
+            n_timesteps=n_timesteps,
+            step_length=step_length,
+        )
+
+        # Override boundary mask to be all zeros (global domain)
+        n_points_1d = int(np.sqrt(n_grid_points))
+        self.ds["boundary_mask"] = xr.DataArray(
+            np.zeros((n_points_1d, n_points_1d), dtype=int),
+            dims=["x", "y"],
+        )
+
+        # Re-stack the spatial dimensions after overriding boundary_mask
+        self.ds = self.ds.drop_vars("grid_index").stack(
+            grid_index=self.spatial_coordinates
+        )
