@@ -19,7 +19,56 @@ from .config import load_config_and_datastore
 from .datastore.base import BaseRegularGridDatastore
 
 
+def _median_nearest_neighbor_distance(pos: np.ndarray) -> float:
+    """Typical spacing between nodes in data units.
+
+    Used as one heuristic for arrow/node clearance in matplotlib data space.
+    """
+    n = pos.shape[0]
+    if n <= 1:
+        return 0.05
+    # Large graphs: subsample so KD-tree stays cheap
+    if n > 8000:
+        rng = np.random.default_rng(0)
+        idx = rng.choice(n, size=4000, replace=False)
+        p = pos[idx]
+    else:
+        p = pos
+    tree = scipy.spatial.cKDTree(p)
+    dists, _ = tree.query(p, k=2)
+    nn = dists[:, 1]
+    valid = nn > 1e-12
+    if not np.any(valid):
+        return 0.05
+    return float(np.median(nn[valid]))
+
+
+def _scatter_marker_radius_data(
+    axis, ref_xy: np.ndarray, s_points2: float
+) -> float:
+    """Approximate scatter marker radius in data units.
+
+    Matplotlib scatter uses area ``s`` in points^2. We convert to radius in pt
+    and map it to data units via the axis transforms so arrow trimming matches
+    visible markers (fix for arrowheads hiding underneath nodes).
+    """
+    if s_points2 <= 1e-12:
+        return 0.0
+    r_pt = float(np.sqrt(s_points2 / np.pi))
+    p0 = axis.transData.transform(ref_xy)
+    p1 = p0 + np.array([r_pt, 0.0], dtype=float)
+    ref1 = axis.transData.inverted().transform(p1)
+    return float(np.linalg.norm(ref1 - ref_xy))
+
+
 def plot_graph(graph, title=None):
+    """Plot a PyG ``Data`` object in 2D with directed/undirected edges.
+
+    Directed graphs use a single vectorised ``quiver`` call. Sizes/widths
+    scale with the number of nodes (N) and arrows are trimmed in data space
+    by an estimated node marker radius, so arrowheads don't get hidden under
+    node markers.
+    """
     fig, axis = plt.subplots(figsize=(8, 8), dpi=200)  # W,H
     edge_index = graph.edge_index
     pos = graph.pos
@@ -33,57 +82,120 @@ def plot_graph(graph, title=None):
         # Keep only 1 direction of edge_index
         edge_index = edge_index[:, edge_index[0] < edge_index[1]]  # (2, M/2)
 
-    # Move all to cpu and numpy, compute (in)-degrees
-    degrees = (
-        pyg.utils.degree(edge_index[1], num_nodes=pos.shape[0]).cpu().numpy()
-    )
+    # Degrees for node colouring (must match one-direction storage for undirected)
+    n_nodes_t = int(pos.shape[0])
+    if is_undirected:
+        degrees = (
+            pyg.utils.degree(edge_index[0], num_nodes=n_nodes_t)
+            + pyg.utils.degree(edge_index[1], num_nodes=n_nodes_t)
+        ).cpu().numpy()
+    else:
+        degrees = pyg.utils.degree(
+            edge_index[1], num_nodes=n_nodes_t
+        ).cpu().numpy()
+
     edge_index = edge_index.cpu().numpy()
     pos = pos.cpu().numpy()
+
+    n_nodes = int(pos.shape[0])
+    nn_dist = _median_nearest_neighbor_distance(pos)
+    span = float(
+        max(
+            np.ptp(pos[:, 0]),
+            np.ptp(pos[:, 1]),
+            1e-12,
+        )
+    )
 
     from_pos = pos[edge_index[0]]
     to_pos = pos[edge_index[1]]
 
+    inv_sqrt_n = 1.0 / max(np.sqrt(n_nodes), 1.0)
+
+    # Marker area (points^2): larger on small graphs; floor/clip for huge N
+    node_area = float(np.clip(240.0 * inv_sqrt_n, 12.0, 140.0))
+    marker_lw = float(np.clip(0.55 * inv_sqrt_n, 0.1, 0.45))
+
+    # Limits before quiver so transData matches final view (needed for marker-radius trimming).
+    pad = float(0.05 * span)
+    axis.set_xlim(float(pos[:, 0].min()) - pad, float(pos[:, 0].max()) + pad)
+    axis.set_ylim(float(pos[:, 1].min()) - pad, float(pos[:, 1].max()) + pad)
+
+    # Node "radius" in data units for trimming directed arrows
+    ref_xy = np.asarray(pos.mean(axis=0), dtype=float)
+    r_marker = _scatter_marker_radius_data(axis, ref_xy, node_area)
+    node_r_data = float(
+        max(1e-9, r_marker, 0.24 * nn_dist, 0.014 * span)
+    )
+
     if is_undirected:
-        # Plot undirected edges as simple line collection
         edge_lines = np.stack((from_pos, to_pos), axis=1)
+        line_w = float(np.clip(1.5 * inv_sqrt_n, 0.2, 2.4))
         axis.add_collection(
             matplotlib.collections.LineCollection(
-                edge_lines, lw=0.4, colors="black", zorder=1
+                edge_lines, lw=line_w, colors="black", zorder=1
             )
         )
     else:
-        # Plot directed edges as vectorised quiver arrows
-        dx = to_pos[:, 0] - from_pos[:, 0]
-        dy = to_pos[:, 1] - from_pos[:, 1]
-        valid = np.hypot(dx, dy) > 0
-        src = from_pos[valid]
-        dx, dy = dx[valid], dy[valid]
-        axis.quiver(
-            src[:, 0],
-            src[:, 1],
-            dx,
-            dy,
-            angles="xy",
-            scale_units="xy",
-            scale=1,
-            width=0.002,
-            color="black",
-            zorder=1,
-        )
+        # Vectorised quiver; trim both ends by ~node radius so heads clear markers.
+        vec = to_pos - from_pos
+        dist = np.hypot(vec[:, 0], vec[:, 1])
+        valid = dist > 1e-12
+
+        u = np.zeros_like(vec)
+        u[valid] = vec[valid] / dist[valid, np.newaxis]
+
+        trim_e = np.zeros_like(dist)
+        trim_e[valid] = np.minimum(node_r_data, 0.48 * dist[valid])
+
+        src = from_pos + u * trim_e[:, np.newaxis]
+        dst = to_pos - u * trim_e[:, np.newaxis]
+
+        dx = dst[:, 0] - src[:, 0]
+        dy = dst[:, 1] - src[:, 1]
+        ok = np.hypot(dx, dy) > 1e-12
+        dx, dy = dx[ok], dy[ok]
+        src_x, src_y = src[ok, 0], src[ok, 1]
+
+        # Quiver shaft/heads scaling: keep readable for small N and light for large N.
+        qwidth = float(np.clip(32.0 * inv_sqrt_n, 0.004, 0.024))
+        head_w = float(np.clip(4.5 - n_nodes / 3000.0, 2.6, 5.5))
+        head_l = float(np.clip(5.2 - n_nodes / 3000.0, 3.4, 6.2))
+
+        if dx.size > 0:
+            axis.quiver(
+                src_x,
+                src_y,
+                dx,
+                dy,
+                angles="xy",
+                scale_units="xy",
+                scale=1,
+                width=qwidth,
+                headwidth=head_w,
+                headlength=head_l,
+                headaxislength=head_l * 0.9,
+                color="black",
+                zorder=1,
+                pivot="tail",
+            )
 
     # Plot nodes
     node_scatter = axis.scatter(
         pos[:, 0],
         pos[:, 1],
         c=degrees,
-        s=3,
+        s=node_area,
         marker="o",
         zorder=2,
         cmap="viridis",
         clim=None,
+        edgecolors="face",
+        linewidths=marker_lw,
     )
 
     plt.colorbar(node_scatter, aspect=50)
+    axis.set_aspect("equal", adjustable="datalim")
 
     if title is not None:
         axis.set_title(title)
