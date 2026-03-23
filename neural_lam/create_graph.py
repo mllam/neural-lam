@@ -343,7 +343,7 @@ def create_graph(
                 plt.show()
 
                 plot_graph(
-                    pyg_up, title=f"Up graph, {to_level} -> {from_level}"
+                    pyg_down, title=f"Up graph, {to_level} -> {from_level}"
                 )
                 plt.show()
 

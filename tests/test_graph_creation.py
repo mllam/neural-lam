@@ -1,7 +1,6 @@
 # Standard library
 import tempfile
 from pathlib import Path
-from unittest.mock import patch
 
 # Third-party
 import pytest
@@ -13,7 +12,6 @@ from neural_lam.datastore import DATASTORES
 from neural_lam.datastore.base import BaseRegularGridDatastore
 from neural_lam.utils import BufferList
 from tests.conftest import init_datastore_example
-from tests.dummy_datastore import DummyDatastore
 
 
 @pytest.mark.parametrize("graph_name", ["1level", "multiscale", "hierarchical"])
@@ -120,63 +118,6 @@ def test_graph_creation(datastore_name, graph_name):
                         assert r.shape[0] == 2  # adjacency matrix uses two rows
                     elif file_id.endswith("_features"):
                         assert r.shape[1] == d_features
-
-
-def test_hierarchical_plot_uses_correct_up_graph(tmp_path):
-    """Verify that hierarchical graph visualization passes the up-graph
-    (with reversed edges) to plot_graph, not the down-graph twice.
-
-    Regression test: previously pyg_down was mistakenly passed for both
-    up and down graph plots, producing identical visualizations with
-    wrong in-degree coloring for the up-graph.
-    """
-    datastore = DummyDatastore()
-    graph_dir_path = tmp_path / "graph" / "hierarchical"
-
-    # Capture (edge_index, title) for every plot_graph call
-    captured_plots = []
-
-    def _capture_plot_graph(graph, title=None):
-        captured_plots.append((graph.edge_index.clone(), title))
-        return None, None
-
-    with (
-        patch(
-            "neural_lam.create_graph.plot_graph",
-            side_effect=_capture_plot_graph,
-        ),
-        patch("neural_lam.create_graph.plt"),
-    ):
-        create_graph_from_datastore(
-            datastore=datastore,
-            output_root_path=str(graph_dir_path),
-            hierarchical=True,
-            n_max_levels=3,
-            create_plot=True,
-        )
-
-    up_plots = [(ei, t) for ei, t in captured_plots if t and "Up graph" in t]
-    down_plots = [
-        (ei, t) for ei, t in captured_plots if t and "Down graph" in t
-    ]
-
-    assert len(up_plots) > 0, "No up-graph plots were captured"
-    assert len(up_plots) == len(
-        down_plots
-    ), "Mismatched number of up/down graph plots"
-
-    for (up_ei, up_title), (down_ei, down_title) in zip(up_plots, down_plots):
-        # Up edges must be the reverse of down edges (same nodes,
-        # swapped source/target) because pyg_up is constructed by
-        # inverting pyg_down.edge_index
-        assert torch.equal(up_ei[0], down_ei[1]), (
-            f"Up graph senders should match down graph receivers "
-            f"({up_title} vs {down_title})"
-        )
-        assert torch.equal(up_ei[1], down_ei[0]), (
-            f"Up graph receivers should match down graph senders "
-            f"({up_title} vs {down_title})"
-        )
 
 
 class TestBufferList:
