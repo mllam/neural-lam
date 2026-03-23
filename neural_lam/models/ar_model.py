@@ -156,9 +156,21 @@ class ARModel(pl.LightningModule):
         # For storing spatial loss maps during evaluation
         self.spatial_loss_maps: List[Any] = []
 
-        # Track whether we've already warned about out-of-range
-        # val_steps_to_log to avoid flooding logs every batch
-        self._warned_val_steps = False
+        # Filter val_steps_to_log to valid steps and emit one warning at
+        # construction time
+        invalid_steps = [
+            s for s in args.val_steps_to_log if s > args.ar_steps_eval
+        ]
+        if invalid_steps:
+            warnings.warn(
+                f"val_steps_to_log contains steps {invalid_steps} that exceed "
+                f"ar_steps_eval ({args.ar_steps_eval}). These steps will be "
+                "skipped.",
+                UserWarning,
+            )
+        self.valid_steps_to_log = [
+            s for s in args.val_steps_to_log if s <= args.ar_steps_eval
+        ]
 
         self.time_step_int, self.time_step_unit = get_integer_time(
             self._datastore.step_length
@@ -350,26 +362,9 @@ class ARModel(pl.LightningModule):
         mean_loss = torch.mean(time_step_loss)
 
         # Log loss per time step forward and mean
-        if not self._warned_val_steps:
-            skipped_steps = [
-                step
-                for step in self.args.val_steps_to_log
-                if step > len(time_step_loss)
-            ]
-            if skipped_steps:
-                warnings.warn(
-                    f"val_steps_to_log contains steps {skipped_steps} "
-                    f"that exceed the number of prediction steps "
-                    f"({len(time_step_loss)}). "
-                    "These steps will be skipped.",
-                    UserWarning,
-                )
-            self._warned_val_steps = True
-
         val_log_dict = {
             f"val_loss_unroll{step}": time_step_loss[step - 1]
-            for step in self.args.val_steps_to_log
-            if step <= len(time_step_loss)
+            for step in self.valid_steps_to_log
         }
         val_log_dict["val_mean_loss"] = mean_loss
         self.log_dict(
@@ -420,26 +415,9 @@ class ARModel(pl.LightningModule):
         mean_loss = torch.mean(time_step_loss)
 
         # Log loss per time step forward and mean
-        if not self._warned_val_steps:
-            skipped_steps = [
-                step
-                for step in self.args.val_steps_to_log
-                if step > len(time_step_loss)
-            ]
-            if skipped_steps:
-                warnings.warn(
-                    f"val_steps_to_log contains steps {skipped_steps} "
-                    f"that exceed the number of prediction steps "
-                    f"({len(time_step_loss)}). "
-                    "These steps will be skipped.",
-                    UserWarning,
-                )
-            self._warned_val_steps = True
-
         test_log_dict = {
             f"test_loss_unroll{step}": time_step_loss[step - 1]
-            for step in self.args.val_steps_to_log
-            if step <= len(time_step_loss)
+            for step in self.valid_steps_to_log
         }
         test_log_dict["test_mean_loss"] = mean_loss
 
@@ -476,11 +454,7 @@ class ARModel(pl.LightningModule):
         spatial_loss = self.loss(
             prediction, target, pred_std, average_grid=False
         )  # (B, pred_steps, num_grid_nodes)
-        valid_step_indices = [
-            step - 1
-            for step in self.args.val_steps_to_log
-            if step <= spatial_loss.shape[1]
-        ]
+        valid_step_indices = [s - 1 for s in self.valid_steps_to_log]
         log_spatial_losses = spatial_loss[:, valid_step_indices]
         self.spatial_loss_maps.append(log_spatial_losses)
         # (B, N_log, num_grid_nodes)
@@ -753,7 +727,7 @@ class ARModel(pl.LightningModule):
                     f"({(self.time_step_int * t_i)} {self.time_step_unit})",
                 )
                 for t_i, loss_map in zip(
-                    self.args.val_steps_to_log, mean_spatial_loss
+                    self.valid_steps_to_log, mean_spatial_loss
                 )
             ]
 
@@ -776,7 +750,7 @@ class ARModel(pl.LightningModule):
                 self.logger.save_dir, "spatial_loss_maps"
             )
             os.makedirs(pdf_loss_maps_dir, exist_ok=True)
-            for t_i, fig in zip(self.args.val_steps_to_log, pdf_loss_map_figs):
+            for t_i, fig in zip(self.valid_steps_to_log, pdf_loss_map_figs):
                 fig.savefig(os.path.join(pdf_loss_maps_dir, f"loss_t{t_i}.pdf"))
             # save mean spatial loss as .pt file also
             torch.save(
