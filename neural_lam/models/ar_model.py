@@ -6,9 +6,11 @@ from typing import Any, Dict, List
 # Third-party
 import matplotlib.pyplot as plt
 import numpy as np
+import pandas as pd
 import pytorch_lightning as pl
 import torch
 import xarray as xr
+from loguru import logger
 
 # First-party
 from neural_lam.utils import get_integer_time
@@ -160,6 +162,8 @@ class ARModel(pl.LightningModule):
             self._datastore.step_length
         )
 
+        self._weather_dataset_cache: Dict[tuple, Any] = {}
+
     def _create_dataarray_from_tensor(
         self,
         tensor: torch.Tensor,
@@ -191,7 +195,12 @@ class ARModel(pl.LightningModule):
         # TODO: creating an instance of WeatherDataset here on every call is
         # not how this should be done but whether WeatherDataset should be
         # provided to ARModel or where to put plotting still needs discussion
-        weather_dataset = WeatherDataset(datastore=self._datastore, split=split)
+        cache_key = (split, category)
+        if cache_key not in self._weather_dataset_cache:
+            self._weather_dataset_cache[cache_key] = WeatherDataset(
+                datastore=self._datastore, split=split
+            )
+        weather_dataset = self._weather_dataset_cache[cache_key]
         time = np.array(time.cpu(), dtype="datetime64[ns]")
         da = weather_dataset.create_dataarray_from_tensor(
             tensor=tensor, time=time, category=category
@@ -381,6 +390,113 @@ class ARModel(pl.LightningModule):
         for metric_list in self.val_metrics.values():
             metric_list.clear()
 
+    def _save_predictions_to_zarr(
+        self,
+        batch_times: torch.Tensor,
+        batch_predictions: torch.Tensor,
+        batch_idx: int,
+        zarr_output_path: str,
+    ):
+        """
+        Save state predictions for a single batch to a Zarr dataset.
+
+        Predictions must already be in the original (un-standardized) scale
+        before calling this method. The resulting dataset contains a variable
+        named ``state`` with coordinates
+        ``(start_time, elapsed_forecast_duration, grid_index, state_feature)``
+        (or ``x``/``y`` instead of ``grid_index`` for regular-grid datastores).
+
+        Multi-GPU safe: rank 0 writes the full-extent metadata template on the
+        first batch, all ranks then synchronise via ``barrier()``, and every
+        rank writes its slice using ``region="auto"``.
+
+        Parameters
+        ----------
+        batch_times : torch.Tensor
+            Forecast times, shape ``(B, pred_steps)`` as int64 nanoseconds
+            since epoch.  These are the *predicted* times, so
+            ``batch_times[:, 0]`` is ``analysis_time + step_length``.
+        batch_predictions : torch.Tensor
+            Predictions in the **original** data scale, shape
+            ``(B, pred_steps, num_grid_nodes, d_f)``.
+        batch_idx : int
+            Index of the current batch in the epoch.
+        zarr_output_path : str
+            Filesystem path where the Zarr store will be written.
+        """
+        batch_predictions = batch_predictions.cpu()
+        batch_times_cpu = batch_times.cpu()
+        batch_size = batch_predictions.shape[0]
+
+        step_ns = int(pd.Timedelta(self._datastore.step_length).value)
+
+        analysis_times_ns = (
+            batch_times_cpu[:, 0].numpy().astype("int64") - step_ns
+        )  # (B,)
+        analysis_times = analysis_times_ns.astype("datetime64[ns]")
+
+        pred_steps = batch_times_cpu.shape[1]
+        offsets_ns = np.arange(1, pred_steps + 1, dtype="int64") * step_ns
+        elapsed = offsets_ns.astype("timedelta64[ns]")
+
+        time_encoding = {
+            "start_time": {
+                "units": "Seconds since 1970-01-01 00:00:00",
+                "dtype": "int64",
+            },
+            "elapsed_forecast_duration": {
+                "units": "seconds",
+                "dtype": "int64",
+            },
+        }
+
+        das = []
+        for i in range(batch_size):
+            da_i = self._create_dataarray_from_tensor(
+                tensor=batch_predictions[i],
+                time=batch_times_cpu[i],
+                split="test",
+                category="state",
+            )
+            da_i = da_i.assign_coords(
+                elapsed_forecast_duration=(
+                    "time",
+                    elapsed,
+                )
+            )
+            da_i = da_i.swap_dims({"time": "elapsed_forecast_duration"})
+            da_i = da_i.drop_vars("time", errors="ignore")
+            da_i.name = "state"
+            das.append(da_i)
+
+        da_batch = xr.concat(das, dim="start_time")
+        da_batch = da_batch.assign_coords(
+            start_time=("start_time", analysis_times)
+        )
+        da_batch = da_batch.chunk({"start_time": batch_size})
+        ds_batch = da_batch.to_dataset(name="state")
+
+        if self.trainer.is_global_zero and batch_idx == 0:
+            logger.info(f"Creating Zarr store at {zarr_output_path}")
+            all_times = self._datastore.get_dataarray(
+                category="state", split="test"
+            ).coords["time"].values
+            template_da = da_batch.reindex(
+                start_time=all_times, fill_value=np.nan
+            )
+            template_ds = template_da.to_dataset(name="state")
+            template_ds.to_zarr(
+                zarr_output_path,
+                compute=False,
+                mode="w",
+                encoding=time_encoding,
+                consolidated=True,
+            )
+
+        self.trainer.strategy.barrier()
+
+        ds_batch.to_zarr(zarr_output_path, region="auto")
+
     # pylint: disable-next=unused-argument
     def test_step(self, batch, batch_idx):
         """
@@ -444,6 +560,17 @@ class ARModel(pl.LightningModule):
         ]
         self.spatial_loss_maps.append(log_spatial_losses)
         # (B, N_log, num_grid_nodes)
+
+        # Save predictions to Zarr if requested
+        if getattr(self.args, "save_eval_to_zarr_path", None):
+            # Rescale from standardized space to original data scale
+            pred_rescaled = prediction * self.state_std + self.state_mean
+            self._save_predictions_to_zarr(
+                batch_times=batch_times,
+                batch_predictions=pred_rescaled,
+                batch_idx=batch_idx,
+                zarr_output_path=self.args.save_eval_to_zarr_path,
+            )
 
         # Plot example predictions (on rank 0 only)
         if (
