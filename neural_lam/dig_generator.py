@@ -491,16 +491,51 @@ def main():
                 else:
                     module_name, methods = extract_all_methods(filepath)
 
-                    core_methods = {}
-                    for m_name, f_node in methods.items():
-                        ml = m_name.lower()
-                        if (
-                            "process_step" in ml
-                            or "forward" in ml
-                            or "hi_processor_step" in ml
-                            or "common_step" in ml
-                        ):
-                            core_methods[m_name] = f_node
+                    # Model inference methods
+                    MODEL_METHODS = {
+                        "process_step",
+                        "forward",
+                        "hi_processor_step",
+                        "common_step",
+                    }
+                    # Dataset & data-loading methods
+                    DATASET_METHODS = {
+                        "__getitem__",
+                        "_build_item_dataarrays",
+                    }
+                    # Graph construction methods
+                    GRAPH_METHODS = {
+                        "create_graph",
+                        "create_graph_from_datastore",
+                    }
+                    # Metric computation methods
+                    METRIC_METHODS = {
+                        "mask_and_reduce_metric",
+                        "wmse",
+                        "mse",
+                    }
+                    # Visualisation methods
+                    VIS_METHODS = {
+                        "plot_prediction",
+                        "plot_error_map",
+                    }
+                    # Training entry-point
+                    TRAIN_METHODS = {"main"}
+
+                    ALLOWED_METHODS = (
+                        MODEL_METHODS
+                        | DATASET_METHODS
+                        | GRAPH_METHODS
+                        | METRIC_METHODS
+                        | VIS_METHODS
+                        | TRAIN_METHODS
+                    )
+
+                    core_methods = {
+                        m_name: f_node
+                        for m_name, f_node in methods.items()
+                        if m_name.split(".")[-1] in ALLOWED_METHODS
+                    }
                     methods = core_methods
 
                     if not methods:
