@@ -1,6 +1,8 @@
 # Standard library
+import importlib
 import os
 from argparse import ArgumentDefaultsHelpFormatter, ArgumentParser
+from pathlib import Path
 from typing import Optional
 
 # Third-party
@@ -14,9 +16,20 @@ import torch_geometric as pyg
 from loguru import logger
 from torch_geometric.utils.convert import from_networkx
 
+try:
+    # Optional dependency used by the new graph-generation bridge.
+    wmg = importlib.import_module("weather_model_graphs")
+
+    HAS_WEATHER_MODEL_GRAPHS = True
+except ImportError:
+    wmg = None
+    HAS_WEATHER_MODEL_GRAPHS = False
+
 # Local
 from .config import load_config_and_datastore
 from .datastore.base import BaseRegularGridDatastore
+
+SUPPORTED_ARCHETYPES = ("keisler", "graphcast", "hierarchical")
 
 
 def plot_graph(graph, title=None):
@@ -543,8 +556,99 @@ def create_graph_from_datastore(
     n_max_levels: Optional[int] = None,
     hierarchical: bool = False,
     create_plot: bool = False,
+    archetype: Optional[str] = None,
+    mesh_node_distance: Optional[float] = None,
+    level_refinement_factor: Optional[int] = None,
+    backend: str = "auto",
 ):
     if isinstance(datastore, BaseRegularGridDatastore):
+        if archetype is None:
+            if hierarchical:
+                archetype = "hierarchical"
+            elif n_max_levels == 1:
+                archetype = "keisler"
+            else:
+                archetype = "graphcast"
+
+        if archetype not in SUPPORTED_ARCHETYPES:
+            raise ValueError(
+                f"Unsupported archetype '{archetype}'. Supported values: "
+                f"{SUPPORTED_ARCHETYPES}"
+            )
+
+        if backend not in {"auto", "wmg", "legacy"}:
+            raise ValueError(
+                "`backend` must be one of {'auto', 'wmg', 'legacy'}"
+            )
+
+        use_wmg = backend in {"auto", "wmg"} and HAS_WEATHER_MODEL_GRAPHS
+        if backend == "wmg" and not HAS_WEATHER_MODEL_GRAPHS:
+            raise RuntimeError(
+                "weather-model-graphs backend requested but package "
+                "`weather_model_graphs` is not installed"
+            )
+
+        if use_wmg:
+            xy = datastore.get_xy(category="state", stacked=True)
+
+            # Keep the boundary points out of the decode domain if available.
+            decode_mask = None
+            try:
+                boundary_mask = getattr(datastore, "boundary_mask", None)
+                if boundary_mask is not None:
+                    decode_mask = np.logical_not(
+                        np.asarray(boundary_mask).reshape(-1).astype(bool)
+                    )
+            except Exception as exc:
+                if backend == "wmg":
+                    raise
+                logger.warning(
+                    "Could not read datastore boundary mask for "
+                    f"weather-model-graphs call. Error: {exc}"
+                )
+
+            wmg_kwargs = {
+                "coords": xy,
+                "coords_crs": datastore.coords_projection,
+                "graph_crs": datastore.coords_projection,
+                "decode_mask": decode_mask,
+                "return_components": True,
+            }
+            if mesh_node_distance is not None:
+                wmg_kwargs["mesh_node_distance"] = mesh_node_distance
+            if n_max_levels is not None:
+                wmg_kwargs["max_num_levels"] = n_max_levels
+            if level_refinement_factor is not None:
+                wmg_kwargs["level_refinement_factor"] = (
+                    level_refinement_factor
+                )
+
+            try:
+                constructor = {
+                    "keisler": wmg.create.archetype.create_keisler_graph,
+                    "graphcast": wmg.create.archetype.create_graphcast_graph,
+                    "hierarchical": (
+                        wmg.create.archetype.
+                        create_oskarsson_hierarchical_graph
+                    ),
+                }[archetype]
+                components = constructor(**wmg_kwargs)
+                wmg.save.to_neural_lam(
+                    components,
+                    output_root_path,
+                    hierarchical=(archetype == "hierarchical"),
+                )
+                return
+            except Exception as exc:
+                if backend == "wmg":
+                    raise
+                logger.warning(
+                    "weather-model-graphs generation failed, falling back "
+                    f"to legacy graph generator. Error: {exc}"
+                )
+
+        # Legacy fallback path, kept for backward compatibility and for
+        # environments where weather-model-graphs is not installed.
         xy = datastore.get_xy(category="state", stacked=False)
     else:
         raise NotImplementedError(
@@ -574,7 +678,27 @@ def cli(input_args=None):
         "--name",
         type=str,
         default="multiscale",
-        help="Name to save graph as",
+        help="Deprecated alias for --graph_name",
+    )
+    parser.add_argument(
+        "--graph_name",
+        type=str,
+        default=None,
+        help="Name of graph directory to create",
+    )
+    parser.add_argument(
+        "--output_dir",
+        type=str,
+        default=None,
+        help="Output directory for graph files. If omitted, uses "
+        "<datastore-root>/graph/<graph_name>",
+    )
+    parser.add_argument(
+        "--archetype",
+        type=str,
+        choices=SUPPORTED_ARCHETYPES,
+        default=None,
+        help="Graph archetype to create via weather-model-graphs",
     )
     parser.add_argument(
         "--plot",
@@ -590,7 +714,32 @@ def cli(input_args=None):
     parser.add_argument(
         "--hierarchical",
         action="store_true",
-        help="Generate hierarchical mesh graph. Otherwise multi-scale.",
+        help="Deprecated flag equivalent to --archetype hierarchical",
+    )
+    parser.add_argument(
+        "--max_num_levels",
+        type=int,
+        default=None,
+        help="Maximum number of graph levels to generate",
+    )
+    parser.add_argument(
+        "--mesh_node_distance",
+        type=float,
+        default=None,
+        help="Mesh node spacing parameter forwarded to weather-model-graphs",
+    )
+    parser.add_argument(
+        "--level_refinement_factor",
+        type=int,
+        default=None,
+        help="Level refinement factor forwarded to weather-model-graphs",
+    )
+    parser.add_argument(
+        "--backend",
+        type=str,
+        default="auto",
+        choices=["auto", "wmg", "legacy"],
+        help="Graph creation backend to use",
     )
     args = parser.parse_args(input_args)
 
@@ -601,12 +750,33 @@ def cli(input_args=None):
     # Load neural-lam configuration and datastore to use
     _, datastore = load_config_and_datastore(config_path=args.config_path)
 
+    graph_name = args.graph_name or args.name
+    if args.graph_name is not None and args.name != "multiscale":
+        raise ValueError("Use either --graph_name or --name, not both")
+
+    n_max_levels = (
+        args.max_num_levels if args.max_num_levels is not None else args.levels
+    )
+
+    archetype = args.archetype
+    if archetype is None and args.hierarchical:
+        archetype = "hierarchical"
+
+    if args.output_dir is None:
+        output_dir = Path(datastore.root_path) / "graph" / graph_name
+    else:
+        output_dir = Path(args.output_dir)
+
     create_graph_from_datastore(
         datastore=datastore,
-        output_root_path=os.path.join(datastore.root_path, "graph", args.name),
-        n_max_levels=args.levels,
+        output_root_path=str(output_dir),
+        n_max_levels=n_max_levels,
         hierarchical=args.hierarchical,
         create_plot=args.plot,
+        archetype=archetype,
+        mesh_node_distance=args.mesh_node_distance,
+        level_refinement_factor=args.level_refinement_factor,
+        backend=args.backend,
     )
 
 

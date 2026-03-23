@@ -13,19 +13,20 @@ Graph Neural Networks are implemented using [PyG](https://pyg.org/) and logging 
 
 The repository contains LAM versions of:
 
-* The graph-based model from [Keisler (2022)](https://arxiv.org/abs/2202.07575).
-* GraphCast, by [Lam et al. (2023)](https://arxiv.org/abs/2212.12794).
-* The hierarchical model from [Oskarsson et al. (2023)](https://arxiv.org/abs/2309.17370).
+- The graph-based model from [Keisler (2022)](https://arxiv.org/abs/2202.07575).
+- GraphCast, by [Lam et al. (2023)](https://arxiv.org/abs/2212.12794).
+- The hierarchical model from [Oskarsson et al. (2023)](https://arxiv.org/abs/2309.17370).
 
 # Publications
+
 For a more in-depth scientific introduction to machine learning for LAM weather forecasting see the publications listed here.
 As the code in the repository is continuously evolving, the latest version might feature some small differences to what was used for these publications.
 We retain some paper-specific branches for reproducibility purposes.
 
-
-*If you use Neural-LAM in your work, please cite the relevant paper(s)*.
+_If you use Neural-LAM in your work, please cite the relevant paper(s)_.
 
 #### [Graph-based Neural Weather Prediction for Limited Area Modeling](https://arxiv.org/abs/2309.17370)
+
 ```
 @inproceedings{oskarsson2023graphbased,
     title={Graph-based Neural Weather Prediction for Limited Area Modeling},
@@ -34,9 +35,11 @@ We retain some paper-specific branches for reproducibility purposes.
     year={2023}
 }
 ```
+
 See the branch [`ccai_paper_2023`](https://github.com/joeloskarsson/neural-lam/tree/ccai_paper_2023) for a revision of the code that reproduces this workshop paper.
 
 #### [Probabilistic Weather Forecasting with Hierarchical Graph Neural Networks](https://arxiv.org/abs/2406.04759)
+
 ```
 @inproceedings{oskarsson2024probabilistic,
   title = {Probabilistic Weather Forecasting with Hierarchical Graph Neural Networks},
@@ -46,21 +49,22 @@ See the branch [`ccai_paper_2023`](https://github.com/joeloskarsson/neural-lam/t
   year = {2024},
 }
 ```
+
 See the branches [`prob_model_lam`](https://github.com/mllam/neural-lam/tree/prob_model_lam) and [`prob_model_global`](https://github.com/mllam/neural-lam/tree/prob_model_global) for revisions of the code that reproduces this paper.
 The global and probabilistic models from this paper are not yet fully merged with `main` (see issues [62](https://github.com/mllam/neural-lam/issues/62) and [63](https://github.com/mllam/neural-lam/issues/63)).
 
 # Modularity
+
 The Neural-LAM code is designed to modularize the different components involved in training and evaluating neural weather prediction models.
 Models, graphs and data are stored separately and it should be possible to swap out individual components.
 Still, some restrictions are inevitable:
 
-* The graph used has to be compatible with what the model expects. E.g. a hierarchical model requires a hierarchical graph.
-* The graph and data are specific to the limited area under consideration. This is of course true for the data, but also the graph should be created with the exact geometry of the area in mind.
+- The graph used has to be compatible with what the model expects. E.g. a hierarchical model requires a hierarchical graph.
+- The graph and data are specific to the limited area under consideration. This is of course true for the data, but also the graph should be created with the exact geometry of the area in mind.
 
 <p align="middle">
   <img src="https://raw.githubusercontent.com/mllam/neural-lam/main/figures/neural_lam_setup.png" width="600"/>
 </p>
-
 
 # Installing Neural-LAM
 
@@ -91,7 +95,7 @@ python -m pip install neural_lam
 
 1. Clone this repository and navigate to the root directory.
 2. Install `uv` if you don't have it installed on your system (either with `pip install uv` or [following the install instructions](https://docs.astral.sh/uv/getting-started/installation)).
-> If you are happy using the latest version of `torch` with GPU support (expecting the latest version of CUDA is installed on your system) you can skip to step 5.
+   > If you are happy using the latest version of `torch` with GPU support (expecting the latest version of CUDA is installed on your system) you can skip to step 5.
 3. Create a virtual environment for uv to use with `uv venv --no-project`.
 4. Install a specific version of `torch` with `uv pip install torch --index-url https://download.pytorch.org/whl/cpu` for a CPU-only version or `uv pip install torch --index-url https://download.pytorch.org/whl/cu111` for CUDA 11.1 support (you can find the correct URL for the variant you want on [PyTorch webpage](https://pytorch.org/get-started/locally/)).
 5. Install the dependencies with `uv pip install .`. If you will be developing `neural-lam` we recommend to install the development dependencies with `uv pip install --group dev -e .`. This installs the `neural-lam` package in editable mode, so you can make changes to the code and see the effects immediately.
@@ -99,17 +103,16 @@ python -m pip install neural_lam
 #### Using `pip`
 
 1. Clone this repository and navigate to the root directory.
-> If you are happy using the latest version of `torch` with GPU support (expecting the latest version of CUDA is installed on your system) you can skip to step 3.
+   > If you are happy using the latest version of `torch` with GPU support (expecting the latest version of CUDA is installed on your system) you can skip to step 3.
 2. Install a specific version of `torch` with `python -m pip install torch --index-url https://download.pytorch.org/whl/cpu` for a CPU-only version or `python -m pip install torch --index-url https://download.pytorch.org/whl/cu111` for CUDA 11.1 support (you can find the correct URL for the variant you want on [PyTorch webpage](https://pytorch.org/get-started/locally/)).
 3. Install the dependencies with `python -m pip install .`. If you will be developing `neural-lam` we recommend to install in editable mode and install the development dependencies with `python -m pip install --group dev -e .` so you can make changes to the code and see the effects immediately.
-
 
 # Using Neural-LAM
 
 Once `neural-lam` is installed you will be able to train/evaluate models. For this you will in general need two things:
 
 1. **Data to train/evaluate the model**. To represent this data we use a concept of
-   *datastores* in Neural-LAM (see the [Data](#data-the-datastore-and-weatherdataset-classes) section for more details).
+   _datastores_ in Neural-LAM (see the [Data](#data-the-datastore-and-weatherdataset-classes) section for more details).
    In brief, a datastore implements the process of loading data from disk in a
    specific format (for example zarr or numpy files) by implementing an
    interface that provides the data in a data-structure that can be used within
@@ -145,6 +148,7 @@ data/
 ```
 
 And the content of `config.yaml` could in this case look like:
+
 ```yaml
 datastore:
   kind: mdp
@@ -169,12 +173,11 @@ For now the neural-lam config only defines few things:
 
 1. The kind of datastore and the path to its config
 2. The weighting of different features in
-the loss function. If you don't define the state feature weighting it will default to
-weighting all features equally.
+   the loss function. If you don't define the state feature weighting it will default to
+   weighting all features equally.
 3. Valid numerical range for output of each feature.The numerical range of all features default to $]-\infty, \infty[$.
 
 (This example is taken from the `tests/datastore_examples/mdp` directory.)
-
 
 Below follows instructions on how to use Neural-LAM to train and evaluate
 models, with details first given for each kind of datastore implemented
@@ -210,7 +213,7 @@ the input-data representation is split into two parts:
 There are currently two different datastores implemented in the codebase:
 
 1. `neural_lam.datastore.MDPDatastore` which represents loading of
-   *training-ready* datasets in zarr format created with the
+   _training-ready_ datasets in zarr format created with the
    [mllam-data-prep](https://github.com/mllam/mllam-data-prep) package.
    Training-ready refers to the fact that this data has been transformed
    (variables have been stacked, spatial coordinates have been flattened,
@@ -229,7 +232,6 @@ If neither of these options fit your need you can create your own datastore by
 subclassing the `neural_lam.datastore.BaseDataStore` class or
 `neural_lam.datastore.BaseRegularGridDatastore` class (if your data is stored on
 a regular grid) and implementing the abstract methods.
-
 
 ### MDP (mllam-data-prep) Datastore - `MDPDatastore`
 
@@ -298,74 +300,74 @@ dataset:
   name: meps_example
   num_forcing_features: 16
   var_longnames:
-  - pres_heightAboveGround_0_instant
-  - pres_heightAboveSea_0_instant
-  - nlwrs_heightAboveGround_0_accum
-  - nswrs_heightAboveGround_0_accum
-  - r_heightAboveGround_2_instant
-  - r_hybrid_65_instant
-  - t_heightAboveGround_2_instant
-  - t_hybrid_65_instant
-  - t_isobaricInhPa_500_instant
-  - t_isobaricInhPa_850_instant
-  - u_hybrid_65_instant
-  - u_isobaricInhPa_850_instant
-  - v_hybrid_65_instant
-  - v_isobaricInhPa_850_instant
-  - wvint_entireAtmosphere_0_instant
-  - z_isobaricInhPa_1000_instant
-  - z_isobaricInhPa_500_instant
+    - pres_heightAboveGround_0_instant
+    - pres_heightAboveSea_0_instant
+    - nlwrs_heightAboveGround_0_accum
+    - nswrs_heightAboveGround_0_accum
+    - r_heightAboveGround_2_instant
+    - r_hybrid_65_instant
+    - t_heightAboveGround_2_instant
+    - t_hybrid_65_instant
+    - t_isobaricInhPa_500_instant
+    - t_isobaricInhPa_850_instant
+    - u_hybrid_65_instant
+    - u_isobaricInhPa_850_instant
+    - v_hybrid_65_instant
+    - v_isobaricInhPa_850_instant
+    - wvint_entireAtmosphere_0_instant
+    - z_isobaricInhPa_1000_instant
+    - z_isobaricInhPa_500_instant
   var_names:
-  - pres_0g
-  - pres_0s
-  - nlwrs_0
-  - nswrs_0
-  - r_2
-  - r_65
-  - t_2
-  - t_65
-  - t_500
-  - t_850
-  - u_65
-  - u_850
-  - v_65
-  - v_850
-  - wvint_0
-  - z_1000
-  - z_500
+    - pres_0g
+    - pres_0s
+    - nlwrs_0
+    - nswrs_0
+    - r_2
+    - r_65
+    - t_2
+    - t_65
+    - t_500
+    - t_850
+    - u_65
+    - u_850
+    - v_65
+    - v_850
+    - wvint_0
+    - z_1000
+    - z_500
   var_units:
-  - Pa
-  - Pa
-  - W/m\textsuperscript{2}
-  - W/m\textsuperscript{2}
-  - "-"
-  - "-"
-  - K
-  - K
-  - K
-  - K
-  - m/s
-  - m/s
-  - m/s
-  - m/s
-  - kg/m\textsuperscript{2}
-  - m\textsuperscript{2}/s\textsuperscript{2}
-  - m\textsuperscript{2}/s\textsuperscript{2}
+    - Pa
+    - Pa
+    - W/m\textsuperscript{2}
+    - W/m\textsuperscript{2}
+    - "-"
+    - "-"
+    - K
+    - K
+    - K
+    - K
+    - m/s
+    - m/s
+    - m/s
+    - m/s
+    - kg/m\textsuperscript{2}
+    - m\textsuperscript{2}/s\textsuperscript{2}
+    - m\textsuperscript{2}/s\textsuperscript{2}
   num_timesteps: 65
   num_ensemble_members: 2
   step_length: 3
   remove_state_features_with_index: [15]
 grid_shape_state:
-- 268
-- 238
+  - 268
+  - 238
 projection:
   class_name: LambertConformal
   kwargs:
     central_latitude: 63.3
     central_longitude: 15.0
     standard_parallels:
-    - 63.3
-    - 63.3
+      - 63.3
+      - 63.3
 ```
 
 Which you can then use in a neural-lam configuration file like this:
@@ -391,18 +393,28 @@ python -m neural_lam.datastore.npyfilesmeps.compute_standardization_stats <path-
 
 ### Graph creation
 
-Run `python -m neural_lam.create_mesh` with suitable options to generate the graph you want to use (see `python neural_lam.create_mesh --help` for a list of options).
-The graphs used for the different models in the [paper](#graph-based-neural-weather-prediction-for-limited-area-modeling) can be created as:
+Run `python -m neural_lam.create_graph --help` for graph creation options.
+The CLI now supports an archetype-oriented interface and can call
+`weather-model-graphs` directly when available.
 
-* **GC-LAM**: `python -m neural_lam.create_graph --config_path <neural-lam-config-path> --name multiscale`
-* **Hi-LAM**: `python -m neural_lam.create_graph --config_path <neural-lam-config-path> --name hierarchical --hierarchical` (also works for Hi-LAM-Parallel)
-* **L1-LAM**: `python -m neural_lam.create_graph --config_path <neural-lam-config-path> --name 1level --levels 1`
+The graphs used for the different models in the
+[paper](#graph-based-neural-weather-prediction-for-limited-area-modeling) can
+be created as:
 
-The graph-related files are stored in a directory called `graphs`.
+- **GC-LAM**: `python -m neural_lam.create_graph --config_path <neural-lam-config-path> --graph_name multiscale --archetype graphcast --max_num_levels 3`
+- **Hi-LAM**: `python -m neural_lam.create_graph --config_path <neural-lam-config-path> --graph_name hierarchical --archetype hierarchical --max_num_levels 3` (also works for Hi-LAM-Parallel)
+- **L1-LAM**: `python -m neural_lam.create_graph --config_path <neural-lam-config-path> --graph_name 1level --archetype keisler`
+
+For backward compatibility, `--name`, `--levels`, and `--hierarchical`
+continue to work as deprecated aliases.
+
+By default output is stored under `graph/<graph_name>` in the datastore root,
+which matches what training and plotting commands expect.
 
 ## Logging your experiments
 
 ### Weights & Biases Integration
+
 The project is fully integrated with [Weights & Biases](https://www.wandb.ai/) (W&B) for logging and visualization, but can just as easily be used without it.
 When W&B is used, training configuration, training/test statistics and plots are sent to the W&B servers and made available in an interactive web interface.
 If W&B is turned off, logging instead saves everything locally to a directory like `wandb/dryrun...`.
@@ -410,15 +422,19 @@ The W&B project name is set to `neural-lam`, but this can be changed in the flag
 See the [W&B documentation](https://docs.wandb.ai/) for details.
 
 If you would like to login and use W&B, run:
+
 ```
 wandb login
 ```
+
 If you would like to turn off W&B and just log things locally, run:
+
 ```
 wandb off
 ```
 
 ### MLFlow Integration
+
 The project is also integrated with [MLFlow](https://mlflow.org/) for logging and storing artefacts.
 
 MLFlow is not used by default, but can be switched to by setting `--logger mlflow` in the training command. With MLFlow enabled, training configuration, training/test statistics and plots are logged to the MLFlow server. MLFlow is self-hosted and can be run locally or on a server. See the [MLFlow documentation](https://mlflow.org/docs/latest/index.html) for details.
@@ -426,49 +442,57 @@ MLFlow is not used by default, but can be switched to by setting `--logger mlflo
 Use the environment variable `MLFLOW_TRACKING_URI` to set the URI of the MLFlow server. If not set the logging can not be used. An example of setting the URI to a server is and running a training command is `MLFLOW_TRACKING_URI=http://localhost:5000 python -m neural_lam.train_model --config_path <config_path> --logger mlflow`.
 
 ## Train Models
+
 Models can be trained using `python -m neural_lam.train_model --config_path <config_path>`.
 Run `python neural_lam.train_model --help` for a full list of training options.
 A few of the key ones are outlined below:
 
-* `--config_path`: Path to the configuration for neural-lam (for example in `data/myexperiment/config.yaml`).
-* `--model`: Which model to train
-* `--graph`: Which graph to use with the model
-* `--epochs`: Number of epochs to train for
-* `--processor_layers`: Number of GNN layers to use in the processing part of the model
-* `--ar_steps_train`: Number of time steps to unroll for when making predictions and computing the loss
-* `--ar_steps_eval`: Number of time steps to unroll for during validation steps
+- `--config_path`: Path to the configuration for neural-lam (for example in `data/myexperiment/config.yaml`).
+- `--model`: Which model to train
+- `--graph`: Which graph to use with the model
+- `--epochs`: Number of epochs to train for
+- `--processor_layers`: Number of GNN layers to use in the processing part of the model
+- `--ar_steps_train`: Number of time steps to unroll for when making predictions and computing the loss
+- `--ar_steps_eval`: Number of time steps to unroll for during validation steps
 
 Checkpoints of trained models are stored in the `saved_models` directory.
 The implemented models are:
 
 ### Graph-LAM
+
 This is the basic graph-based LAM model.
 The encode-process-decode framework is used with a mesh graph in order to make one-step pedictions.
 This model class is used both for the L1-LAM and GC-LAM models from the [paper](#graph-based-neural-weather-prediction-for-limited-area-modeling), only with different graphs.
 
 To train 1L-LAM use
+
 ```
 python -m neural_lam.train_model --model graph_lam --graph 1level ...
 ```
 
 To train GC-LAM use
+
 ```
 python -m neural_lam.train_model --model graph_lam --graph multiscale ...
 ```
 
 ### Hi-LAM
+
 A version of Graph-LAM that uses a hierarchical mesh graph and performs sequential message passing through the hierarchy during processing.
 
 To train Hi-LAM use
+
 ```
 python -m neural_lam.train_model --model hi_lam --graph hierarchical ...
 ```
 
 ### Hi-LAM-Parallel
+
 A version of Hi-LAM where all message passing in the hierarchical mesh (up, down, inter-level) is ran in parallel.
 Not included in the paper as initial experiments showed worse results than Hi-LAM, but could be interesting to try in more settings.
 
 To train Hi-LAM-Parallel use
+
 ```
 python -m neural_lam.train_model --model hi_lam_parallel --graph hierarchical ...
 ```
@@ -481,6 +505,7 @@ The training script can be run on a cluster with multiple GPU-nodes. Neural LAM 
 The code can be used on systems both with and without slurm. If the cluster has multiple nodes, set the `--num_nodes` argument accordingly.
 
 Using SLURM, the job can be started with `sbatch slurm_job.sh` with a shell script like the following.
+
 ```
 #!/bin/bash -l
 #SBATCH --job-name=Neural-LAM
@@ -506,27 +531,31 @@ srun -ul python -m neural_lam.train_model \
 When using on a system without SLURM, where all GPU's are visible, it is possible to select a subset of GPU's to use for training with the `devices` cli argument, e.g. `--devices 0 1` to use the first 2 GPU's.
 
 ## Evaluate Models
+
 Evaluation is also done using `python -m neural_lam.train_model --config_path <config-path>`, but using the `--eval` option.
 Use `--eval val` to evaluate the model on the validation set and `--eval test` to evaluate on test data.
 Most of the training options are also relevant for evaluation.
 Some options specifically important for evaluation are:
 
-* `--load`: Path to model checkpoint file (`.ckpt`) to load parameters from
-* `--n_example_pred`: Number of example predictions to plot during evaluation.
-* `--ar_steps_eval`: Number of time steps to unroll for during evaluation
+- `--load`: Path to model checkpoint file (`.ckpt`) to load parameters from
+- `--n_example_pred`: Number of example predictions to plot during evaluation.
+- `--ar_steps_eval`: Number of time steps to unroll for during evaluation
 
 **Note:** While it is technically possible to use multiple GPUs for running evaluation, this is strongly discouraged. If using multiple devices the `DistributedSampler` will replicate some samples to make sure all devices have the same batch size, meaning that evaluation metrics will be unreliable.
 A possible workaround is to just use batch size 1 during evaluation.
 This issue stems from PyTorch Lightning. See for example [this PR](https://github.com/Lightning-AI/torchmetrics/pull/1886) for more discussion.
 
 # Repository Structure
+
 Except for training and pre-processing scripts all the source code can be found in the `neural_lam` directory.
 Model classes, including abstract base classes, are located in `neural_lam/models`.
 Notebooks for visualization and analysis are located in `docs`.
 
 ## Format of graph directory
+
 The `graphs` directory contains generated graph structures that can be used by different graph-based models.
 The structure is shown with examples below:
+
 ```
 graphs
 ├── graph1                                  - Directory with a graph definition
@@ -543,19 +572,23 @@ graphs
 ```
 
 ### Mesh hierarchy format
+
 To keep track of levels in the mesh graph, a list format is used for the files with mesh graph information.
 In particular, the files
+
 ```
 │   ├── m2m_edge_index.pt                   - Edges in mesh graph (neural_lam.create_mesh)
 │   ├── m2m_features.pt                     - Static features of mesh edges (neural_lam.create_mesh)
 │   ├── mesh_features.pt                    - Static features of mesh nodes (neural_lam.create_mesh)
 ```
+
 all contain lists of length `L`, for a hierarchical mesh graph with `L` layers.
 For non-hierarchical graphs `L == 1` and these are all just singly-entry lists.
 Each entry in the list contains the corresponding edge set or features of that level.
 Note that the first level (index 0 in these lists) corresponds to the lowest level in the hierarchy.
 
 In addition, hierarchical mesh graphs (`L > 1`) feature a few additional files with static data:
+
 ```
 ├── graph1
 │   ├── ...
@@ -565,22 +598,27 @@ In addition, hierarchical mesh graphs (`L > 1`) feature a few additional files w
 │   ├── mesh_up_features.pt                 - Static features of upward mesh edges (neural_lam.create_mesh)
 │   ├── ...
 ```
+
 These files have the same list format as the ones above, but each list has length `L-1` (as these edges describe connections between levels).
 Entries 0 in these lists describe edges between the lowest levels 1 and 2.
 
 # Development and Contributing
+
 Any push or Pull-Request to the main branch will trigger a selection of pre-commit hooks.
 These hooks will run a series of checks on the code, like formatting and linting.
 If any of these checks fail the push or PR will be rejected.
 To test whether your code passes these checks before pushing, run
-``` bash
+
+```bash
 pre-commit run --all-files
 ```
+
 from the root directory of the repository.
 
-Furthermore, all tests in the ```tests``` directory will be run upon pushing changes by a github action. Failure in any of the tests will also reject the push/PR.
+Furthermore, all tests in the `tests` directory will be run upon pushing changes by a github action. Failure in any of the tests will also reject the push/PR.
 
 # Contact
+
 If you are interested in machine learning models for LAM, have questions about the implementation or ideas for extending it, feel free to get in touch.
 There is an open [mllam slack channel](https://join.slack.com/t/ml-lam/shared_invite/zt-2t112zvm8-Vt6aBvhX7nYa6Kbj_LkCBQ) that anyone can join (after following the link you have to request to join, this is to avoid spam bots).
 You can also open a github issue on this page.

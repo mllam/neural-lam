@@ -1,5 +1,6 @@
 # Standard library
 from argparse import ArgumentDefaultsHelpFormatter, ArgumentParser
+from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 # Third-party
@@ -117,3 +118,90 @@ def test_wandb_id_ignored_with_mlflow_warns():
     warning_msg = mock_log.warning.call_args[0][0]
     assert "--wandb_id is set but logger is" in warning_msg
     assert "mlflow" in warning_msg
+
+
+@patch("neural_lam.create_graph.create_graph_from_datastore")
+@patch("neural_lam.create_graph.load_config_and_datastore")
+def test_create_graph_cli_archetype_interface(
+    mock_load_cfg, mock_create_graph_from_datastore
+):
+    """create_graph CLI forwards archetype-oriented args correctly."""
+    datastore = MagicMock()
+    datastore.root_path = Path("/tmp/my-data")
+    mock_load_cfg.return_value = (MagicMock(), datastore)
+
+    neural_lam.create_graph.cli(
+        [
+            "--config_path",
+            "dummy.yaml",
+            "--graph_name",
+            "mygraph",
+            "--archetype",
+            "graphcast",
+            "--max_num_levels",
+            "4",
+            "--mesh_node_distance",
+            "0.5",
+            "--level_refinement_factor",
+            "3",
+            "--backend",
+            "legacy",
+        ]
+    )
+
+    _, kwargs = mock_create_graph_from_datastore.call_args
+    assert kwargs["output_root_path"] == "/tmp/my-data/graph/mygraph"
+    assert kwargs["archetype"] == "graphcast"
+    assert kwargs["n_max_levels"] == 4
+    assert kwargs["mesh_node_distance"] == 0.5
+    assert kwargs["level_refinement_factor"] == 3
+    assert kwargs["backend"] == "legacy"
+
+
+@patch("neural_lam.create_graph.create_graph_from_datastore")
+@patch("neural_lam.create_graph.load_config_and_datastore")
+def test_create_graph_cli_deprecated_aliases(
+    mock_load_cfg, mock_create_graph_from_datastore
+):
+    """Deprecated --name/--levels/--hierarchical aliases still work."""
+    datastore = MagicMock()
+    datastore.root_path = Path("/tmp/my-data")
+    mock_load_cfg.return_value = (MagicMock(), datastore)
+
+    neural_lam.create_graph.cli(
+        [
+            "--config_path",
+            "dummy.yaml",
+            "--name",
+            "hier",
+            "--levels",
+            "3",
+            "--hierarchical",
+        ]
+    )
+
+    _, kwargs = mock_create_graph_from_datastore.call_args
+    assert kwargs["output_root_path"] == "/tmp/my-data/graph/hier"
+    assert kwargs["n_max_levels"] == 3
+    assert kwargs["hierarchical"] is True
+    assert kwargs["archetype"] == "hierarchical"
+
+
+@patch("neural_lam.create_graph.load_config_and_datastore")
+def test_create_graph_cli_name_conflict_raises(mock_load_cfg):
+    """Using --graph_name and --name together should fail fast."""
+    datastore = MagicMock()
+    datastore.root_path = Path("/tmp/my-data")
+    mock_load_cfg.return_value = (MagicMock(), datastore)
+
+    with pytest.raises(ValueError):
+        neural_lam.create_graph.cli(
+            [
+                "--config_path",
+                "dummy.yaml",
+                "--name",
+                "legacy-name",
+                "--graph_name",
+                "new-name",
+            ]
+        )
