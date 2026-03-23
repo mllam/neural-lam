@@ -42,6 +42,13 @@ requires-python = ">=3.10"
 
 [dependency-groups]
 dev = ["pre-commit>=3.8.0", "pytest>=8.3.2", "pooch>=1.8.2"]
+docs = [
+    "sphinx>=7.0",
+    "sphinx-book-theme",
+    "sphinx-autodoc-typehints",
+    "sphinx-copybutton>=0.5",
+    "myst-parser>=2.0",
+]
 
 [tool.black]
 line-length = 80
