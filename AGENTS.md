@@ -68,6 +68,7 @@ W&B auto-disabled in tests. `DummyDatastore` used; example data downloaded from 
 4. **Read the full issue thread before writing code.** Rejected approaches and prior decisions are
    there. Ignoring them wastes everyone's time.
 5. **Run pre-commit hooks locally.** Linting needs to be done locally before each new commit with e.g. `uvx pre-commit run --all`
+6. **Testing Mandate.** Run `pytests tests/` before opening a PR and if tests fail do not open the PR , fix the failure first.
 
 ### Communication
 
