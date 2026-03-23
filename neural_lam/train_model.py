@@ -245,19 +245,22 @@ def main(input_args=None):
     # Check that config only specifies logging for lead times that exist
     # Check --val_steps_to_log
     for step in args.val_steps_to_log:
-        assert 0 < step <= args.ar_steps_eval, (
-            f"Can not log validation step {step} when validation is "
-            f"only unrolled {args.ar_steps_eval} steps. Adjust "
-            "--val_steps_to_log."
-        )
+        if step > args.ar_steps_eval:
+            raise ValueError(
+                f"Can not log validation step {step} when validation is "
+                f"only unrolled {args.ar_steps_eval} steps. Adjust "
+                "--val_steps_to_log."
+            )
     # Check --var_leads_metric_watch
     for var_i, leads in args.var_leads_metrics_watch.items():
         for step in leads:
-            assert 0 < step <= args.ar_steps_eval, (
-                f"Can not log validation step {step} for variable {var_i} when "
-                f"validation is only unrolled {args.ar_steps_eval} steps. "
-                "Adjust --var_leads_metric_watch."
-            )
+            if step > args.ar_steps_eval:
+                raise ValueError(
+                    f"Can not log validation step {step} for variable "
+                    f"{var_i} when validation is only unrolled "
+                    f"{args.ar_steps_eval} steps. Adjust "
+                    "--var_leads_metric_watch."
+                )
 
     # Get an (actual) random run id as a unique identifier
     random_run_id = random.randint(0, 9999)
