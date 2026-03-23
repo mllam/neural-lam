@@ -43,6 +43,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `fractional_plot_bundle` now correctly multiplies by fraction instead of dividing
 [\#222](https://github.com/mllam/neural-lam/pull/222) @santhil-cyber
 
+- Fix `all_gather_cat` producing wrong shapes on single-device runs by only flattening when `all_gather` actually introduces a new leading dimension [\#424](https://github.com/mllam/neural-lam/pull/424) @RajdeepKushwaha5
+
 ### Added
 
 - Expose `--wandb_id` CLI argument to allow resuming an existing W&B run by
