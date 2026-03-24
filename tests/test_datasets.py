@@ -15,7 +15,7 @@ from neural_lam.datastore.base import BaseRegularGridDatastore
 from neural_lam.models.graph_lam import GraphLAM
 from neural_lam.weather_dataset import WeatherDataset
 from tests.conftest import init_datastore_example
-from tests.dummy_datastore import DummyDatastore
+from tests.dummy_datastore import DummyDatastore, EnsembleDummyDatastore
 
 
 @pytest.mark.parametrize("datastore_name", DATASTORES.keys())
