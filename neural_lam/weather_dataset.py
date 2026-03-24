@@ -38,6 +38,7 @@ class WeatherDataset(torch.utils.data.Dataset):
         ar_steps: int = 3,
         num_past_forcing_steps: int = 1,
         num_future_forcing_steps: int = 1,
+        load_single_member: bool = False,
         standardize: bool = True,
     ) -> None:
         super().__init__()
@@ -47,6 +48,7 @@ class WeatherDataset(torch.utils.data.Dataset):
         self.datastore = datastore
         self.num_past_forcing_steps = num_past_forcing_steps
         self.num_future_forcing_steps = num_future_forcing_steps
+        self.load_single_member = load_single_member
 
         self.da_state = self.datastore.get_dataarray(
             category="state", split=self.split
@@ -380,6 +382,7 @@ class WeatherDataModule(pl.LightningDataModule):
         standardize: bool = True,
         num_past_forcing_steps: int = 1,
         num_future_forcing_steps: int = 1,
+        load_single_member: bool = False,
         batch_size: int = 4,
         num_workers: int = 16,
         eval_split: str = "test",
@@ -391,6 +394,7 @@ class WeatherDataModule(pl.LightningDataModule):
         self.ar_steps_train = ar_steps_train
         self.ar_steps_eval = ar_steps_eval
         self.standardize = standardize
+        self.load_single_member = load_single_member
         self.batch_size = batch_size
         self.num_workers = num_workers
         self.train_dataset = None

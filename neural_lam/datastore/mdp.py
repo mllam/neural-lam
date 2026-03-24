@@ -77,6 +77,11 @@ class MDPDatastore(BaseRegularGridDatastore):
             self._ds = mdp.create_dataset(config=self._config)
             self._ds.to_zarr(fp_ds)
         self._n_boundary_points = n_boundary_points
+        self.is_ensemble = "ensemble_member" in self._ds["state"].dims
+        self.has_ensemble_forcing = (
+            "forcing" in self._ds
+            and "ensemble_member" in self._ds["forcing"].dims
+        )
 
         log_on_rank_zero(
             "The loaded datastore contains the following features:"
@@ -253,8 +258,10 @@ class MDPDatastore(BaseRegularGridDatastore):
         elapsed_forecast_duration)` dimensions if `is_forecast` is True, or
         `(time)` if `is_forecast` is False.
 
-        If the data is ensemble data, the dataarray will have an additional
-        `ensemble_member` dimension.
+        If we have multiple ensemble members of state data, the returned state
+        dataarray will have an additional `ensemble_member` dimension. If
+        `has_ensemble_forcing=True`, the returned forcing dataarray will also
+        have an additional `ensemble_member` dimension.
 
         Parameters
         ----------
