@@ -81,14 +81,10 @@ tags
 .DS_Store
 __MACOSX
 
-# Virtual environments
+# pdm (https://pdm-project.org/en/stable/)
+.pdm-python
 .venv
-venv
-activate
 
-# Build artifacts
-dist/
-build/
-*.egg-info/
-
+# exclude pdm.lock file so that both cpu and gpu versions of torch will be accepted by pdm
+pdm.lock
 tests/test_outputs/

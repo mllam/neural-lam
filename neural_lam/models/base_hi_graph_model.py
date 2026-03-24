@@ -14,8 +14,31 @@ class BaseHiGraphModel(BaseGraphModel):
     Base class for hierarchical graph models.
     """
 
-    def __init__(self, args, config: NeuralLAMConfig, datastore: BaseDatastore):
-        super().__init__(args, config=config, datastore=datastore)
+    def __init__(
+        self,
+        config: NeuralLAMConfig,
+        datastore: BaseDatastore,
+        graph_name: str = "multiscale",
+        hidden_dim: int = 64,
+        hidden_layers: int = 1,
+        processor_layers: int = 4,
+        mesh_aggr: str = "sum",
+        num_past_forcing_steps: int = 1,
+        num_future_forcing_steps: int = 1,
+        output_std: bool = False,
+    ):
+        super().__init__(
+            config=config,
+            datastore=datastore,
+            graph_name=graph_name,
+            hidden_dim=hidden_dim,
+            hidden_layers=hidden_layers,
+            processor_layers=processor_layers,
+            mesh_aggr=mesh_aggr,
+            num_past_forcing_steps=num_past_forcing_steps,
+            num_future_forcing_steps=num_future_forcing_steps,
+            output_std=output_std,
+        )
 
         # Track number of nodes, edges on each level
         # Flatten lists for efficient embedding
@@ -27,10 +50,10 @@ class BaseHiGraphModel(BaseGraphModel):
         ]  # Needs as python list for later
 
         # Print some useful info
-        utils.log_on_rank_zero("Loaded hierarchical graph with structure:")
+        utils.rank_zero_print("Loaded hierarchical graph with structure:")
         for level_index, level_mesh_size in enumerate(self.level_mesh_sizes):
             same_level_edges = self.m2m_features[level_index].shape[0]
-            utils.log_on_rank_zero(
+            utils.rank_zero_print(
                 f"level {level_index} - {level_mesh_size} nodes, "
                 f"{same_level_edges} same-level edges"
             )
@@ -38,8 +61,8 @@ class BaseHiGraphModel(BaseGraphModel):
             if level_index < (self.num_levels - 1):
                 up_edges = self.mesh_up_features[level_index].shape[0]
                 down_edges = self.mesh_down_features[level_index].shape[0]
-                utils.log_on_rank_zero(f"  {level_index}<->{level_index + 1}")
-                utils.log_on_rank_zero(
+                utils.rank_zero_print(f"  {level_index}<->{level_index + 1}")
+                utils.rank_zero_print(
                     f" - {up_edges} up edges, {down_edges} down edges"
                 )
         # Embedders
@@ -81,8 +104,8 @@ class BaseHiGraphModel(BaseGraphModel):
             [
                 InteractionNet(
                     edge_index,
-                    args.hidden_dim,
-                    hidden_layers=args.hidden_layers,
+                    hidden_dim,
+                    hidden_layers=hidden_layers,
                 )
                 for edge_index in self.mesh_up_edge_index
             ]
@@ -93,8 +116,8 @@ class BaseHiGraphModel(BaseGraphModel):
             [
                 InteractionNet(
                     edge_index,
-                    args.hidden_dim,
-                    hidden_layers=args.hidden_layers,
+                    hidden_dim,
+                    hidden_layers=hidden_layers,
                     update_edges=False,
                 )
                 for edge_index in self.mesh_down_edge_index

@@ -11,7 +11,6 @@ import numpy as np
 import scipy.spatial
 import torch
 import torch_geometric as pyg
-from loguru import logger
 from torch_geometric.utils.convert import from_networkx
 
 # Local
@@ -231,7 +230,7 @@ def create_graph(
     """
     os.makedirs(graph_dir_path, exist_ok=True)
 
-    logger.info(f"Writing graph components to {graph_dir_path}")
+    print(f"Writing graph components to {graph_dir_path}")
 
     grid_xy = torch.tensor(xy)
     pos_max = torch.max(torch.abs(grid_xy))
@@ -594,8 +593,9 @@ def cli(input_args=None):
     )
     args = parser.parse_args(input_args)
 
-    if args.config_path is None:
-        raise ValueError("Specify your config with --config_path")
+    assert (
+        args.config_path is not None
+    ), "Specify your config with --config_path"
 
     # Load neural-lam configuration and datastore to use
     _, datastore = load_config_and_datastore(config_path=args.config_path)
