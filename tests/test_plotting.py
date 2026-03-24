@@ -143,7 +143,10 @@ def test_plot_examples_integration_saves_figure(
     ), f"Expected time_step_unit={time_unit}, got {model.time_step_unit}"
 
     # Generate prediction
-    prediction, target, _ = model.forecast_for_batch(batch)
+    (init_states, target, forcing_features, _batch_times) = batch
+    prediction, _ = model.forecaster(
+        init_states, forcing_features, target
+    )
 
     # Rescale to original data scale
     da_state_stats = datastore.get_standardization_dataarray("state")

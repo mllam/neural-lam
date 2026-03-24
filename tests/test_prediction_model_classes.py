@@ -151,10 +151,10 @@ def test_forecaster_module_checkpoint(tmp_path):
     )
 
     # Validate the correct internal hierarchy has been constructed
-    assert loaded_model._forecaster.predictor.__class__.__name__ == "GraphLAM"
+    assert loaded_model.forecaster.predictor.__class__.__name__ == "GraphLAM"
 
     # Verify that outputs match (checkpoint successfully restored weights)
-    B, num_grid_nodes = 2, model._forecaster.predictor.num_grid_nodes
+    B, num_grid_nodes = 2, model.forecaster.predictor.num_grid_nodes
     d_state = datastore.get_num_data_vars(category="state")
     num_past_forcing_steps = 1
     num_future_forcing_steps = 1
@@ -166,10 +166,10 @@ def test_forecaster_module_checkpoint(tmp_path):
     boundary_states = torch.ones(B, 1, num_grid_nodes, d_state) * 5.0
 
     with torch.no_grad():
-        out_before = model._forecaster(
+        out_before = model.forecaster(
             init_states, forcing_features, boundary_states
         )
-        out_after = loaded_model._forecaster(
+        out_after = loaded_model.forecaster(
             init_states, forcing_features, boundary_states
         )
 
@@ -265,10 +265,10 @@ def test_forecaster_module_old_checkpoint(tmp_path):
     )
 
     # Validate the correct internal hierarchy has been constructed
-    assert loaded_model._forecaster.predictor.__class__.__name__ == "GraphLAM"
+    assert loaded_model.forecaster.predictor.__class__.__name__ == "GraphLAM"
 
     # Verify that outputs match (checkpoint successfully restored weights)
-    B, num_grid_nodes = 2, model._forecaster.predictor.num_grid_nodes
+    B, num_grid_nodes = 2, model.forecaster.predictor.num_grid_nodes
     d_state = datastore.get_num_data_vars(category="state")
     num_past_forcing_steps = 1
     num_future_forcing_steps = 1
@@ -280,10 +280,10 @@ def test_forecaster_module_old_checkpoint(tmp_path):
     boundary_states = torch.ones(B, 1, num_grid_nodes, d_state) * 5.0
 
     with torch.no_grad():
-        out_before = model._forecaster(
+        out_before = model.forecaster(
             init_states, forcing_features, boundary_states
         )
-        out_after = loaded_model._forecaster(
+        out_after = loaded_model.forecaster(
             init_states, forcing_features, boundary_states
         )
 

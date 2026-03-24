@@ -144,43 +144,20 @@ class ForecasterModule(pl.LightningModule):
         )
         return opt
 
-    def forecast_for_batch(self, batch):
-        """Run the forecaster on a batch and return predictions.
-
-        Unpacks the batch, runs the forecaster, and returns the raw pred_std
-        (None if the forecaster does not output uncertainty estimates).
-
-        Parameters
-        ----------
-        batch : tuple
-            Tuple of (init_states, target_states, forcing_features,
-            batch_times) tensors from the dataloader.
-
-        Returns
-        -------
-        prediction : torch.Tensor
-            Predicted states.
-        target_states : torch.Tensor
-            Ground-truth target states.
-        pred_std : torch.Tensor or None
-            Predicted standard deviations, or None if not output by model.
-        """
+    def training_step(self, batch):
         (init_states, target_states, forcing_features, _batch_times) = batch
-
         prediction, pred_std = self.forecaster(
             init_states, forcing_features, target_states
         )
-
-        return prediction, target_states, pred_std
-
-    def training_step(self, batch):
-        prediction, target, pred_std = self.forecast_for_batch(batch)
         if pred_std is None:
             pred_std = self.per_var_std
 
         batch_loss = torch.mean(
             self.loss(
-                prediction, target, pred_std, mask=self.interior_mask_bool
+                prediction,
+                target_states,
+                pred_std,
+                mask=self.interior_mask_bool,
             )
         )
 
@@ -205,13 +182,19 @@ class ForecasterModule(pl.LightningModule):
 
     # pylint: disable-next=unused-argument
     def validation_step(self, batch, batch_idx):
-        prediction, target, pred_std = self.forecast_for_batch(batch)
+        (init_states, target_states, forcing_features, _batch_times) = batch
+        prediction, pred_std = self.forecaster(
+            init_states, forcing_features, target_states
+        )
         if pred_std is None:
             pred_std = self.per_var_std
 
         time_step_loss = torch.mean(
             self.loss(
-                prediction, target, pred_std, mask=self.interior_mask_bool
+                prediction,
+                target_states,
+                pred_std,
+                mask=self.interior_mask_bool,
             ),
             dim=0,
         )
@@ -233,7 +216,7 @@ class ForecasterModule(pl.LightningModule):
 
         entry_mses = metrics.mse(
             prediction,
-            target,
+            target_states,
             pred_std,
             mask=self.interior_mask_bool,
             sum_vars=False,
@@ -247,7 +230,10 @@ class ForecasterModule(pl.LightningModule):
 
     # pylint: disable-next=unused-argument
     def test_step(self, batch, batch_idx):
-        prediction, target, pred_std = self.forecast_for_batch(batch)
+        (init_states, target_states, forcing_features, _batch_times) = batch
+        prediction, pred_std = self.forecaster(
+            init_states, forcing_features, target_states
+        )
 
         if pred_std is not None:
             mean_pred_std = torch.mean(
@@ -260,7 +246,10 @@ class ForecasterModule(pl.LightningModule):
 
         time_step_loss = torch.mean(
             self.loss(
-                prediction, target, pred_std, mask=self.interior_mask_bool
+                prediction,
+                target_states,
+                pred_std,
+                mask=self.interior_mask_bool,
             ),
             dim=0,
         )
@@ -285,7 +274,7 @@ class ForecasterModule(pl.LightningModule):
             metric_func = metrics.get_metric(metric_name)
             batch_metric_vals = metric_func(
                 prediction,
-                target,
+                target_states,
                 pred_std,
                 mask=self.interior_mask_bool,
                 sum_vars=False,
@@ -293,7 +282,7 @@ class ForecasterModule(pl.LightningModule):
             self.test_metrics[metric_name].append(batch_metric_vals)
 
         spatial_loss = self.loss(
-            prediction, target, pred_std, average_grid=False
+            prediction, target_states, pred_std, average_grid=False
         )
         log_spatial_losses = spatial_loss[
             :,
@@ -577,35 +566,35 @@ class ForecasterModule(pl.LightningModule):
 
         # 1. Broad namespace remap: for pre-refactor checkpoints
         # The old ARModel was a flat LightningModule. Everything that belonged
-        # to the predictor needs to be moved to '_forecaster.predictor.'
+        # to the predictor needs to be moved to 'forecaster.predictor.'
         old_keys = list(loaded_state_dict.keys())
         for key in old_keys:
-            if not key.startswith("_forecaster.") and key not in (
+            if not key.startswith("forecaster.") and key not in (
                 "interior_mask_bool",
                 "per_var_std",
             ):
-                new_key = f"_forecaster.predictor.{key}"
+                new_key = f"forecaster.predictor.{key}"
                 loaded_state_dict[new_key] = loaded_state_dict.pop(key)
 
         # 2. Specific rename from g2m_gnn.grid_mlp -> encoding_grid_mlp
-        # Will be under _forecaster.predictor due to the remap above, or
+        # Will be under forecaster.predictor due to the remap above, or
         # already there if from a recent checkpoint before this rename.
         if (
-            "_forecaster.predictor.g2m_gnn.grid_mlp.0.weight"
+            "forecaster.predictor.g2m_gnn.grid_mlp.0.weight"
             in loaded_state_dict
         ):
             replace_keys = list(
                 filter(
                     lambda key: key.startswith(
-                        "_forecaster.predictor.g2m_gnn.grid_mlp"
+                        "forecaster.predictor.g2m_gnn.grid_mlp"
                     ),
                     loaded_state_dict.keys(),
                 )
             )
             for old_key in replace_keys:
                 new_key = old_key.replace(
-                    "_forecaster.predictor.g2m_gnn.grid_mlp",
-                    "_forecaster.predictor.encoding_grid_mlp",
+                    "forecaster.predictor.g2m_gnn.grid_mlp",
+                    "forecaster.predictor.encoding_grid_mlp",
                 )
                 loaded_state_dict[new_key] = loaded_state_dict[old_key]
                 del loaded_state_dict[old_key]
