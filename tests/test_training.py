@@ -38,14 +38,20 @@ def run_simple_training(datastore, set_output_std):
     else:
         device_name = "cpu"
 
+    if torch.cuda.is_available() and torch.cuda.device_count() >= 2:
+        num_devices = 2
+    else:
+        num_devices = 1
+
     trainer = pl.Trainer(
         max_epochs=1,
         deterministic=True,
         accelerator=device_name,
         # XXX: `devices` has to be set to 2 otherwise
         # neural_lam.models.ar_model.ARModel.aggregate_and_plot_metrics fails
-        # because it expects to aggregate over multiple devices
-        devices=2,
+        # because it expects to aggregate over multiple devices.
+        # Now fixed in all_gather_cat to handle single-device cases.
+        devices=num_devices,
         log_every_n_steps=1,
         # use `detect_anomaly` to ensure that we don't have NaNs popping up
         # during training

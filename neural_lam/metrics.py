@@ -1,5 +1,6 @@
 # Third-party
 import torch
+import torch.fft
 
 
 def get_metric(metric_name):
@@ -53,7 +54,9 @@ def mask_and_reduce_metric(metric_entry_vals, mask, average_grid, sum_vars):
     return metric_entry_vals
 
 
-def wmse(pred, target, pred_std, mask=None, average_grid=True, sum_vars=True):
+def wmse(
+    pred, target, pred_std, mask=None, average_grid=True, sum_vars=True, **kwargs
+):
     """
     Weighted Mean Squared Error
 
@@ -84,7 +87,9 @@ def wmse(pred, target, pred_std, mask=None, average_grid=True, sum_vars=True):
     )
 
 
-def mse(pred, target, pred_std, mask=None, average_grid=True, sum_vars=True):
+def mse(
+    pred, target, pred_std, mask=None, average_grid=True, sum_vars=True, **kwargs
+):
     """
     (Unweighted) Mean Squared Error
 
@@ -108,7 +113,9 @@ def mse(pred, target, pred_std, mask=None, average_grid=True, sum_vars=True):
     )
 
 
-def wmae(pred, target, pred_std, mask=None, average_grid=True, sum_vars=True):
+def wmae(
+    pred, target, pred_std, mask=None, average_grid=True, sum_vars=True, **kwargs
+):
     """
     Weighted Mean Absolute Error
 
@@ -139,7 +146,9 @@ def wmae(pred, target, pred_std, mask=None, average_grid=True, sum_vars=True):
     )
 
 
-def mae(pred, target, pred_std, mask=None, average_grid=True, sum_vars=True):
+def mae(
+    pred, target, pred_std, mask=None, average_grid=True, sum_vars=True, **kwargs
+):
     """
     (Unweighted) Mean Absolute Error
 
@@ -163,7 +172,9 @@ def mae(pred, target, pred_std, mask=None, average_grid=True, sum_vars=True):
     )
 
 
-def nll(pred, target, pred_std, mask=None, average_grid=True, sum_vars=True):
+def nll(
+    pred, target, pred_std, mask=None, average_grid=True, sum_vars=True, **kwargs
+):
     """
     Negative Log Likelihood loss, for isotropic Gaussian likelihood
 
@@ -191,7 +202,7 @@ def nll(pred, target, pred_std, mask=None, average_grid=True, sum_vars=True):
 
 
 def crps_gauss(
-    pred, target, pred_std, mask=None, average_grid=True, sum_vars=True
+    pred, target, pred_std, mask=None, average_grid=True, sum_vars=True, **kwargs
 ):
     """
     (Negative) Continuous Ranked Probability Score (CRPS)
@@ -227,6 +238,78 @@ def crps_gauss(
     )
 
 
+def log_spectral_distance(
+    pred,
+    target,
+    pred_std,
+    mask=None,
+    average_grid=True,
+    sum_vars=True,
+    grid_shape=None,
+    eps=1e-8,
+):
+    """
+    Log-Spectral Distance (LSD)
+
+    (...,) is any number of batch dimensions, potentially different
+            but broadcastable
+    pred: (..., N, d_state), prediction
+    target: (..., N, d_state), target
+    pred_std: (..., N, d_state) or (d_state,), predicted std.-dev. (unused)
+    mask: (N,), boolean mask describing which grid nodes to use (unused)
+    average_grid: boolean, if result should be averaged over grid
+    sum_vars: boolean, if variable dimension -1 should be reduced
+    grid_shape: tuple (ny, nx), shape of the 2D grid
+    eps: float, small value to avoid log(0)
+
+    Returns:
+    metric_val: One of (...,), (..., d_state), depends on reduction arguments.
+    """
+    if grid_shape is None:
+        # Fallback to MSE if grid shape is not provided
+        # Or we could try to infer it if N is a perfect square
+        num_nodes = pred.shape[-2]
+        side = int(num_nodes**0.5)
+        if side**2 == num_nodes:
+            grid_shape = (side, side)
+        else:
+            raise ValueError(
+                "log_spectral_distance requires grid_shape or a square grid"
+            )
+
+    # Reshape to (..., d_state, ny, nx) for FFT
+    ny, nx = grid_shape
+    # Move d_state to before grid dimensions
+    # pred is (..., N, d_state) -> (..., d_state, N) -> (..., d_state, ny, nx)
+    p = pred.transpose(-1, -2).reshape(*pred.shape[:-2], pred.shape[-1], ny, nx)
+    t = target.transpose(-1, -2).reshape(
+        *target.shape[:-2], target.shape[-1], ny, nx
+    )
+
+    # Compute 2D RFFT
+    f_pred = torch.fft.rfft2(p, norm="ortho")
+    f_target = torch.fft.rfft2(t, norm="ortho")
+
+    # Power Spectrum: |F(u,v)|^2
+    ps_pred = torch.abs(f_pred) ** 2
+    ps_target = torch.abs(f_target) ** 2
+
+    # Log-Spectral Distance: 10 * log10(P_target / P_pred)
+    # entry_lsd is (..., d_state, freq_y, freq_x)
+    entry_lsd = (
+        10 * torch.log10((ps_target + eps) / (ps_pred + eps))
+    ) ** 2
+
+    # Average over frequency dimensions
+    metric_val = torch.mean(entry_lsd, dim=(-2, -1))  # (..., d_state)
+    metric_val = torch.sqrt(metric_val)
+
+    if sum_vars:
+        metric_val = torch.sum(metric_val, dim=-1)  # (...,)
+
+    return metric_val
+
+
 DEFINED_METRICS = {
     "mse": mse,
     "mae": mae,
@@ -234,4 +317,5 @@ DEFINED_METRICS = {
     "wmae": wmae,
     "nll": nll,
     "crps_gauss": crps_gauss,
+    "lsd": log_spectral_distance,
 }

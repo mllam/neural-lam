@@ -124,6 +124,14 @@ class ARModel(pl.LightningModule):
         # Instantiate loss function
         self.loss = metrics.get_metric(args.loss)
 
+        # Store grid shape for spectral metrics if datastore is regular grid
+        from ..datastore.base import BaseRegularGridDatastore
+        if isinstance(datastore, BaseRegularGridDatastore):
+            grid_shape = datastore.grid_shape_state
+            self.grid_shape = (grid_shape.y, grid_shape.x)
+        else:
+            self.grid_shape = None
+
         boundary_mask = torch.tensor(
             da_boundary_mask.values, dtype=torch.float32
         ).unsqueeze(
@@ -303,7 +311,11 @@ class ARModel(pl.LightningModule):
         # Compute loss
         batch_loss = torch.mean(
             self.loss(
-                prediction, target, pred_std, mask=self.interior_mask_bool
+                prediction,
+                target,
+                pred_std,
+                mask=self.interior_mask_bool,
+                grid_shape=self.grid_shape,
             )
         )  # mean over unrolled times and batch
 
@@ -346,7 +358,11 @@ class ARModel(pl.LightningModule):
 
         time_step_loss = torch.mean(
             self.loss(
-                prediction, target, pred_std, mask=self.interior_mask_bool
+                prediction,
+                target,
+                pred_std,
+                mask=self.interior_mask_bool,
+                grid_shape=self.grid_shape,
             ),
             dim=0,
         )  # (time_steps-1)
@@ -400,7 +416,11 @@ class ARModel(pl.LightningModule):
 
         time_step_loss = torch.mean(
             self.loss(
-                prediction, target, pred_std, mask=self.interior_mask_bool
+                prediction,
+                target,
+                pred_std,
+                mask=self.interior_mask_bool,
+                grid_shape=self.grid_shape,
             ),
             dim=0,
         )  # (time_steps-1,)
@@ -444,7 +464,11 @@ class ARModel(pl.LightningModule):
 
         # Save per-sample spatial loss for specific times
         spatial_loss = self.loss(
-            prediction, target, pred_std, average_grid=False
+            prediction,
+            target,
+            pred_std,
+            average_grid=False,
+            grid_shape=self.grid_shape,
         )  # (B, pred_steps, num_grid_nodes)
         log_spatial_losses = spatial_loss[
             :, [step - 1 for step in self.args.val_steps_to_log]
