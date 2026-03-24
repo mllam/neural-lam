@@ -16,7 +16,7 @@ from neural_lam.datastore.npyfilesmeps import (
 )
 
 # Local
-from .dummy_datastore import DummyDatastore
+from .dummy_datastore import DummyDatastore, GlobalDummyDatastore
 
 # Disable weights and biases to avoid unnecessary logging
 # and to avoid having to deal with authentication
@@ -103,9 +103,11 @@ DATASTORES_EXAMPLES = dict(
     ),
     npyfilesmeps=None,
     dummydata=None,
+    globaldummydata=None,
 )
 
 DATASTORES[DummyDatastore.SHORT_NAME] = DummyDatastore
+DATASTORES[GlobalDummyDatastore.SHORT_NAME] = GlobalDummyDatastore
 
 
 def init_datastore_example(datastore_kind):
