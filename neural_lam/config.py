@@ -1,7 +1,8 @@
 # Standard library
 import dataclasses
+import argparse
 from pathlib import Path
-from typing import Dict, Union
+from typing import Dict, Union, Tuple
 
 # Third-party
 import dataclass_wizard
@@ -20,24 +21,28 @@ class DatastoreSelection:
     """
     Configuration for selecting a datastore to use with neural-lam.
 
-    Attributes
-    ----------
-    kind : str
-        The kind of datastore to use, currently `mdp` or `npyfilesmeps` are
-        implemented.
-    config_path : str
-        The path to the configuration file for the selected datastore, this is
-        assumed to be relative to the configuration file for neural-lam.
+    Args:
+        kind (str): The kind of datastore to use. Currently 'mdp' or 
+            'npyfilesmeps' are implemented.
+        config_path (str): The path to the configuration file for the selected 
+            datastore, assumed to be relative to the neural-lam config file.
     """
 
     kind: str
 
     def __post_init__(self):
+        """
+        Validates the datastore kind against registered DATASTORES.
+
+        Raises:
+            ValueError: If the provided kind is not found in the DATASTORES registry.
+        """
         if self.kind not in DATASTORES:
             available = ", ".join(DATASTORES.keys())
             raise ValueError(
                 f"Unknown datastore kind '{self.kind}'. "
-                f"Available options are: {available}."
+                f"Supported options are: {available}. "
+                "Please verify your configuration file."
             )
 
     config_path: str
@@ -46,13 +51,11 @@ class DatastoreSelection:
 @dataclasses.dataclass
 class ManualStateFeatureWeighting:
     """
-    Configuration for weighting the state features in the loss function where
-    the weights are manually specified.
+    Configuration for manual weighting of state features in the loss function.
 
-    Attributes
-    ----------
-    weights : Dict[str, float]
-        Manual weights for the state features.
+    Args:
+        weights (Dict[str, float]): Dictionary mapping feature names to 
+            their respective manual weights.
     """
 
     weights: Dict[str, float]
@@ -61,8 +64,7 @@ class ManualStateFeatureWeighting:
 @dataclasses.dataclass
 class UniformFeatureWeighting:
     """
-    Configuration for weighting the state features in the loss function where
-    all state features are weighted equally.
+    Configuration for equal weighting of all state features in the loss function.
     """
 
     pass
@@ -71,14 +73,11 @@ class UniformFeatureWeighting:
 @dataclasses.dataclass
 class OutputClamping:
     """
-    Configuration for clamping the output of the model.
+    Configuration for clamping the model's output values.
 
-    Attributes
-    ----------
-    lower : Dict[str, float]
-        The minimum value to clamp each output feature to.
-    upper : Dict[str, float]
-        The maximum value to clamp each output feature to.
+    Args:
+        lower (Dict[str, float]): Minimum values for each output feature.
+        upper (Dict[str, float]): Maximum values for each output feature.
     """
 
     lower: Dict[str, float] = dataclasses.field(default_factory=dict)
@@ -88,15 +87,14 @@ class OutputClamping:
 @dataclasses.dataclass
 class TrainingConfig:
     """
-    Configuration related to training neural-lam
+    Configuration parameters related to the training process of neural-lam.
 
-    Attributes
-    ----------
-    state_feature_weighting : Union[ManualStateFeatureWeighting,
-                                    UniformFeatureWeighting]
-        The method to use for weighting the state features in the loss
-        function. Defaults to uniform weighting (`UniformFeatureWeighting`, i.e.
-        all features are weighted equally).
+    Args:
+        state_feature_weighting (Union[ManualStateFeatureWeighting, UniformFeatureWeighting]): 
+            The method used for weighting state features. Defaults to 
+            UniformFeatureWeighting.
+        output_clamping (OutputClamping): Clamping configuration for model 
+            predictions.
     """
 
     state_feature_weighting: Union[
@@ -111,15 +109,12 @@ class TrainingConfig:
 @dataclasses.dataclass
 class NeuralLAMConfig(dataclass_wizard.JSONWizard, dataclass_wizard.YAMLWizard):
     """
-    Dataclass for Neural-LAM configuration. This class is used to load and
-    store the configuration for using Neural-LAM.
+    Primary configuration class for Neural-LAM. Handles loading and 
+    storing all parameters required for model execution and training.
 
-    Attributes
-    ----------
-    datastore : DatastoreSelection
-        The configuration for the datastore to use.
-    training : TrainingConfig
-        The configuration for training the model.
+    Args:
+        datastore (DatastoreSelection): Selection and config path for the data source.
+        training (TrainingConfig): Training-specific parameters and loss weighting.
     """
 
     datastore: DatastoreSelection
@@ -127,7 +122,7 @@ class NeuralLAMConfig(dataclass_wizard.JSONWizard, dataclass_wizard.YAMLWizard):
 
     class _(dataclass_wizard.JSONWizard.Meta):
         """
-        Define the configuration class as a JSON wizard class.
+        Metadata for the JSON/YAML Wizard to handle configuration tagging.
         """
 
         tag_key = "__config_class__"
@@ -135,34 +130,38 @@ class NeuralLAMConfig(dataclass_wizard.JSONWizard, dataclass_wizard.YAMLWizard):
 
 
 class InvalidConfigError(Exception):
+    """Raised when the configuration file contains invalid keys or structure."""
     pass
 
 
 def load_config_and_datastore(
     config_path: str,
-) -> tuple[NeuralLAMConfig, Union[MDPDatastore, NpyFilesDatastoreMEPS]]:
+) -> Tuple[NeuralLAMConfig, Union[MDPDatastore, NpyFilesDatastoreMEPS]]:
     """
-    Load the neural-lam configuration and the datastore specified in the
-    configuration.
+    Loads the Neural-LAM configuration and initializes the specified datastore.
 
-    Parameters
-    ----------
-    config_path : str
-        Path to the Neural-LAM configuration file.
+    Args:
+        config_path (str): Path to the YAML configuration file.
 
-    Returns
-    -------
-    tuple[NeuralLAMConfig, Union[MDPDatastore, NpyFilesDatastoreMEPS]]
-        The Neural-LAM configuration and the loaded datastore.
+    Returns:
+        Tuple[NeuralLAMConfig, Union[MDPDatastore, NpyFilesDatastoreMEPS]]: 
+            A tuple containing the validated configuration object and the 
+            initialized datastore instance.
+
+    Raises:
+        InvalidConfigError: If the configuration file is missing required keys 
+            or has an invalid structure.
+        FileNotFoundError: If the config_path does not exist.
     """
     try:
         config = NeuralLAMConfig.from_yaml_file(config_path)
     except dataclass_wizard.errors.UnknownJSONKey as ex:
         raise InvalidConfigError(
-            "There was an error loading the configuration file at "
-            f"{config_path}. "
+            f"Failed to load configuration at '{config_path}'. "
+            "Ensure all keys match the NeuralLAMConfig schema."
         ) from ex
 
+    # Resolve datastore path relative to the main config file
     datastore_config_path = (
         Path(config_path).parent / config.datastore.config_path
     )
