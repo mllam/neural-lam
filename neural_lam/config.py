@@ -42,8 +42,8 @@ class DatastoreSelection:
         """
         Validate datastore configuration after initialization.
 
-        Ensures that required fields such as the datastore kind and
-        configuration path are correctly specified.
+        Ensures that the datastore kind is correctly
+        specified and supported.
         """
         if self.kind not in DATASTORES:
             raise ValueError(f"Datastore kind {self.kind} is not implemented")
@@ -104,9 +104,8 @@ class TrainingConfig:
 
     Attributes
     ----------
-    state_feature_weighting : Union[
-    ManualStateFeatureWeighting, UniformFeatureWeighting
-    ]
+    state_feature_weighting : Union[ManualStateFeatureWeighting,
+      UniformFeatureWeighting]
         Strategy used to weight state features in the loss function.
         Defaults to uniform weighting (all features contribute equally).
 

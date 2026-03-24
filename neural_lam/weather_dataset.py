@@ -229,12 +229,12 @@ class WeatherDataset(torch.utils.data.Dataset):
 
     def _slice_state_time(self, da_state, idx, n_steps: int):
         """
-        Produce a time slice the given dataarray `da_state` starting
-        at `idx` and with `n_steps` steps.An `offset` is calculated based on the
-        `num_past_forcing_steps` class attribute. `Offset` is used to offset the
-        start of the sample, to assert that enough previous time steps are
-        available for the 2 initial states and any corresponding forcings
-        (calculated in `_slice_forcing_time`).
+        Produce a time slice of the given dataarray `da_state`
+        starting at `idx` and with `n_steps` steps. An `offset` is calculated
+        based on the `num_past_forcing_steps` class attribute. `Offset` is used
+        to offset the start of the sample, to assert that enough previous
+        time steps are available for the 2 initial states and any
+        corresponding forcings (calculated in `_slice_forcing_time`).
 
         Parameters
         ----------
@@ -318,9 +318,9 @@ class WeatherDataset(torch.utils.data.Dataset):
             'window', 'forcing_feature').
         """
         # The current implementation requires at least 2 time steps for the
-        # initial state(see GraphCast). The forcing data is windowed around the
-        # current autoregressive time step. The two `init_steps` can also be
-        # used as past forcings.
+        # initial state (see GraphCast). The forcing data is windowed around
+        # the current autoregressive time step. The two `init_steps` can
+        # also be used as past forcings.
         init_steps = 2
         da_list = []
 

@@ -43,8 +43,11 @@ class BufferList(nn.Module):
 
         Parameters
         ----------
-        buffers : iterable of torch.Tensor
+        buffer_tensors : iterable of torch.Tensor
             Sequence of tensors to register as buffers.
+        persistent : bool, optional
+            Whether the registered buffers are persistent (included in the
+            module's state dict). Defaults to True.
         """
         super().__init__()
         self.n_buffers = len(buffer_tensors)
@@ -275,8 +278,9 @@ def load_graph(graph_dir_path, device="cpu"):
 
         Parameters
         ----------
-        path : str
-            Path to the file containing the serialized graph.
+        fn : str
+            Filename (relative to ``graph_dir_path``) containing the
+            serialized graph.
 
         Returns
         -------
@@ -572,7 +576,8 @@ def init_training_logger_metrics(training_logger, val_steps):
         pass
     else:
         warnings.warn(
-            "Only WandbLogger & MLFlowLogger are support for tracking metrics."
+            "Only WandbLogger and MLFlowLogger are supported for tracking "
+            "metrics. "
             "Experiment results will only go to stdout."
         )
 
@@ -583,8 +588,8 @@ def setup_training_logger(datastore, args, run_name):
 
     Parameters
     ----------
-    datastore : Datastore
-        Datastore object.
+    datastore : object
+        Neural-LAM datastore-like object with a ``_config`` attribute.
 
     args : argparse.Namespace
         Arguments from command line.
