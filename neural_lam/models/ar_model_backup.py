@@ -1,7 +1,7 @@
 # Standard library
 import os
 import warnings
-from typing import Any
+from typing import Any, Dict, List
 
 # Third-party
 import matplotlib.pyplot as plt
@@ -19,9 +19,6 @@ from ..config import NeuralLAMConfig
 from ..datastore import BaseDatastore
 from ..loss_weighting import get_state_feature_weighting
 from ..weather_dataset import WeatherDataset
-from .metric_tracker import MetricTracker
-from .model_visualizer import ModelVisualizer
-from .normalization_manager import NormalizationManager
 
 
 class ARModel(pl.LightningModule):
@@ -45,41 +42,47 @@ class ARModel(pl.LightningModule):
         self._datastore = datastore
         num_state_vars = datastore.get_num_data_vars(category="state")
         num_forcing_vars = datastore.get_num_data_vars(category="forcing")
-
-        # Initialize helper modules
-        self.normalization_manager = NormalizationManager(datastore)
-        self.metric_tracker = MetricTracker(output_std=bool(args.output_std))
-
-        # Get time step info for visualizer
-        self.time_step_int, self.time_step_unit = get_integer_time(
-            self._datastore.step_length
+        # Load static features standardized
+        da_static_features = datastore.get_dataarray(
+            category="static", split=None, standardize=True
         )
-        self.visualizer = ModelVisualizer(
-            datastore=datastore,
-            args=args,
-            time_step_int=self.time_step_int,
-            time_step_unit=self.time_step_unit,
+        if da_static_features is None:
+            raise ValueError("Static features are required for ARModel")
+        da_state_stats = datastore.get_standardization_dataarray(
+            category="state"
         )
-
-        # Get references to normalization buffers for compatibility
-        # These are now managed by normalization_manager but exposed as properties
-        # for backward compatibility with existing code
-        for key in ["state_mean", "state_std", "diff_mean", "diff_std"]:
-            self.register_buffer(
-                key,
-                getattr(self.normalization_manager, key),
-                persistent=False,
-            )
-
-        self.register_buffer(
-            "grid_static_features",
-            self.normalization_manager.grid_static_features,
-            persistent=False,
-        )
-
         da_boundary_mask = datastore.boundary_mask
         num_past_forcing_steps = args.num_past_forcing_steps
         num_future_forcing_steps = args.num_future_forcing_steps
+
+        # Load static features for grid/data,
+        self.register_buffer(
+            "grid_static_features",
+            torch.tensor(da_static_features.values, dtype=torch.float32),
+            persistent=False,
+        )
+
+        state_stats = {
+            "state_mean": torch.tensor(
+                da_state_stats.state_mean.values, dtype=torch.float32
+            ),
+            "state_std": torch.tensor(
+                da_state_stats.state_std.values, dtype=torch.float32
+            ),
+            # Note that the one-step-diff stats (diff_mean and diff_std) are
+            # for differences computed on standardized data
+            "diff_mean": torch.tensor(
+                da_state_stats.state_diff_mean_standardized.values,
+                dtype=torch.float32,
+            ),
+            "diff_std": torch.tensor(
+                da_state_stats.state_diff_std_standardized.values,
+                dtype=torch.float32,
+            ),
+        }
+
+        for key, val in state_stats.items():
+            self.register_buffer(key, val, persistent=False)
 
         state_feature_weights = get_state_feature_weighting(
             config=config, datastore=datastore
@@ -133,12 +136,29 @@ class ARModel(pl.LightningModule):
             "interior_mask", 1.0 - self.boundary_mask, persistent=False
         )  # (num_grid_nodes, 1), 1 for non-border
 
+        self.val_metrics: Dict[str, List] = {
+            "mse": [],
+        }
+        self.test_metrics: Dict[str, List] = {
+            "mse": [],
+            "mae": [],
+        }
+        if self.output_std:
+            self.test_metrics["output_std"] = []  # Treat as metric
+
         # For making restoring of optimizer state optional
         self.restore_opt = args.restore_opt
 
         # For example plotting
         self.n_example_pred = args.n_example_pred
         self.plotted_examples = 0
+
+        # For storing spatial loss maps during evaluation
+        self.spatial_loss_maps: List[Any] = []
+
+        self.time_step_int, self.time_step_unit = get_integer_time(
+            self._datastore.step_length
+        )
 
     def _create_dataarray_from_tensor(
         self,
@@ -347,7 +367,7 @@ class ARModel(pl.LightningModule):
             batch_size=batch[0].shape[0],
         )
 
-        # Store MSEs using metric tracker
+        # Store MSEs
         entry_mses = metrics.mse(
             prediction,
             target,
@@ -355,29 +375,18 @@ class ARModel(pl.LightningModule):
             mask=self.interior_mask_bool,
             sum_vars=False,
         )  # (B, pred_steps, d_f)
-        self.metric_tracker.add_val_metric("mse", entry_mses)
+        self.val_metrics["mse"].append(entry_mses)
 
     def on_validation_epoch_end(self):
         """
         Compute val metrics at the end of val epoch
         """
-        # Get metrics from tracker
-        val_metrics = self.metric_tracker.get_val_metrics()
+        # Create error maps for all test metrics
+        self.aggregate_and_plot_metrics(self.val_metrics, prefix="val")
 
-        # Gather and plot metrics
-        for metric_name, metric_val_list in val_metrics.items():
-            metric_tensor = self.all_gather_cat(torch.cat(metric_val_list, dim=0))
-            # Pass the gathered tensor back for visualization
-            self.visualizer.aggregate_and_plot_metrics(
-                {metric_name: [metric_tensor]},
-                prefix="val",
-                state_std=self.state_std,
-                logger=self.logger,
-                trainer=self.trainer,
-            )
-
-        # Clear metrics
-        self.metric_tracker.clear_val_metrics()
+        # Clear lists with validation metrics values
+        for metric_list in self.val_metrics.values():
+            metric_list.clear()
 
     # pylint: disable-next=unused-argument
     def test_step(self, batch, batch_idx):
@@ -412,7 +421,9 @@ class ARModel(pl.LightningModule):
             batch_size=batch[0].shape[0],
         )
 
-        # Compute all evaluation metrics for error maps
+        # Compute all evaluation metrics for error maps Note: explicitly list
+        # metrics here, as test_metrics can contain additional ones, computed
+        # differently, but that should be aggregated on_test_epoch_end
         for metric_name in ("mse", "mae"):
             metric_func = metrics.get_metric(metric_name)
             batch_metric_vals = metric_func(
@@ -422,14 +433,14 @@ class ARModel(pl.LightningModule):
                 mask=self.interior_mask_bool,
                 sum_vars=False,
             )  # (B, pred_steps, d_f)
-            self.metric_tracker.add_test_metric(metric_name, batch_metric_vals)
+            self.test_metrics[metric_name].append(batch_metric_vals)
 
         if self.output_std:
             # Store output std. per variable, spatially averaged
             mean_pred_std = torch.mean(
                 pred_std[..., self.interior_mask_bool, :], dim=-2
             )  # (B, pred_steps, d_f)
-            self.metric_tracker.add_test_metric("output_std", mean_pred_std)
+            self.test_metrics["output_std"].append(mean_pred_std)
 
         # Save per-sample spatial loss for specific times
         spatial_loss = self.loss(
@@ -438,7 +449,7 @@ class ARModel(pl.LightningModule):
         log_spatial_losses = spatial_loss[
             :, [step - 1 for step in self.args.val_steps_to_log]
         ]
-        self.metric_tracker.add_spatial_loss_map(log_spatial_losses)
+        self.spatial_loss_maps.append(log_spatial_losses)
         # (B, N_log, num_grid_nodes)
 
         # Plot example predictions (on rank 0 only)
@@ -587,41 +598,160 @@ class ARModel(pl.LightningModule):
                 ),
             )
 
+    def create_metric_log_dict(self, metric_tensor, prefix, metric_name):
+        """
+        Put together a dict with everything to log for one metric. Also saves
+        plots as pdf and csv if using test prefix.
+
+        metric_tensor: (pred_steps, d_f), metric values per time and variable
+        prefix: string, prefix to use for logging metric_name: string, name of
+        the metric
+
+        Return: log_dict: dict with everything to log for given metric
+        """
+        log_dict = {}
+        metric_fig = vis.plot_error_map(
+            errors=metric_tensor,
+            datastore=self._datastore,
+        )
+        full_log_name = f"{prefix}_{metric_name}"
+        log_dict[full_log_name] = metric_fig
+
+        if prefix == "test":
+            # Save pdf
+            metric_fig.savefig(
+                os.path.join(self.logger.save_dir, f"{full_log_name}.pdf")
+            )
+            # Save errors also as csv
+            np.savetxt(
+                os.path.join(self.logger.save_dir, f"{full_log_name}.csv"),
+                metric_tensor.cpu().numpy(),
+                delimiter=",",
+            )
+
+        # Check if metrics are watched, log exact values for specific vars
+        var_names = self._datastore.get_vars_names(category="state")
+        if full_log_name in self.args.metrics_watch:
+            for var_i, timesteps in self.args.var_leads_metrics_watch.items():
+                var_name = var_names[var_i]
+                for step in timesteps:
+                    key = f"{full_log_name}_{var_name}_step_{step}"
+                    log_dict[key] = metric_tensor[step - 1, var_i]
+
+        return log_dict
+
+    def aggregate_and_plot_metrics(self, metrics_dict, prefix):
+        """
+        Aggregate and create error map plots for all metrics in metrics_dict
+
+        metrics_dict: dictionary with metric_names and list of tensors
+            with step-evals.
+        prefix: string, prefix to use for logging
+        """
+        log_dict = {}
+        for metric_name, metric_val_list in metrics_dict.items():
+            metric_tensor = self.all_gather_cat(
+                torch.cat(metric_val_list, dim=0)
+            )  # (N_eval, pred_steps, d_f)
+
+            if self.trainer.is_global_zero:
+                metric_tensor_averaged = torch.mean(metric_tensor, dim=0)
+                # (pred_steps, d_f)
+
+                # Take square root after all averaging to change MSE to RMSE
+                if "mse" in metric_name:
+                    metric_tensor_averaged = torch.sqrt(metric_tensor_averaged)
+                    metric_name = metric_name.replace("mse", "rmse")
+
+                # NOTE: we here assume rescaling for all metrics is linear
+                metric_rescaled = metric_tensor_averaged * self.state_std
+                # (pred_steps, d_f)
+                log_dict.update(
+                    self.create_metric_log_dict(
+                        metric_rescaled, prefix, metric_name
+                    )
+                )
+
+        # Ensure that log_dict has structure for
+        # logging as dict(str, plt.Figure)
+        assert all(
+            isinstance(key, str) and isinstance(value, plt.Figure)
+            for key, value in log_dict.items()
+        )
+
+        if self.trainer.is_global_zero and not self.trainer.sanity_checking:
+
+            current_epoch = self.trainer.current_epoch
+
+            for key, figure in log_dict.items():
+                # For other loggers than wandb, add epoch to key.
+                # Wandb can log multiple images to the same key, while other
+                # loggers, such as MLFlow need unique keys for each image.
+                if not isinstance(self.logger, pl.loggers.WandbLogger):
+                    key = f"{key}-{current_epoch}"
+
+                if hasattr(self.logger, "log_image"):
+                    self.logger.log_image(key=key, images=[figure])
+
+            plt.close("all")  # Close all figs
+
     def on_test_epoch_end(self):
         """
         Compute test metrics and make plots at the end of test epoch. Will
         gather stored tensors and perform plotting and logging on rank 0.
         """
-        # Get metrics from tracker
-        test_metrics = self.metric_tracker.get_test_metrics()
-
-        # Gather and plot metrics
-        for metric_name, metric_val_list in test_metrics.items():
-            metric_tensor = self.all_gather_cat(torch.cat(metric_val_list, dim=0))
-            # Pass the gathered tensor back for visualization
-            self.visualizer.aggregate_and_plot_metrics(
-                {metric_name: [metric_tensor]},
-                prefix="test",
-                state_std=self.state_std,
-                logger=self.logger,
-                trainer=self.trainer,
-            )
+        # Create error maps for all test metrics
+        self.aggregate_and_plot_metrics(self.test_metrics, prefix="test")
 
         # Plot spatial loss maps
-        spatial_loss_maps = self.metric_tracker.get_spatial_loss_maps()
         spatial_loss_tensor = self.all_gather_cat(
-            torch.cat(spatial_loss_maps, dim=0)
+            torch.cat(self.spatial_loss_maps, dim=0)
         )  # (N_test, N_log, num_grid_nodes)
+        if self.trainer.is_global_zero:
+            mean_spatial_loss = torch.mean(
+                spatial_loss_tensor, dim=0
+            )  # (N_log, num_grid_nodes)
 
-        self.visualizer.plot_spatial_loss(
-            spatial_loss_tensor=spatial_loss_tensor,
-            logger=self.logger,
-            trainer=self.trainer,
-        )
+            loss_map_figs = [
+                vis.plot_spatial_error(
+                    error=loss_map,
+                    datastore=self._datastore,
+                    title=f"Test loss, t={t_i} "
+                    f"({(self.time_step_int * t_i)} {self.time_step_unit})",
+                )
+                for t_i, loss_map in zip(
+                    self.args.val_steps_to_log, mean_spatial_loss
+                )
+            ]
 
-        # Clear metrics
-        self.metric_tracker.clear_test_metrics()
-        self.metric_tracker.clear_spatial_loss_maps()
+            # log all to same key, sequentially
+            for i, fig in enumerate(loss_map_figs):
+                key = "test_loss"
+                if not isinstance(self.logger, pl.loggers.WandbLogger):
+                    key = f"{key}_{i}"
+                if hasattr(self.logger, "log_image"):
+                    self.logger.log_image(key=key, images=[fig])
+
+            # also make without title and save as pdf
+            pdf_loss_map_figs = [
+                vis.plot_spatial_error(
+                    error=loss_map, datastore=self._datastore
+                )
+                for loss_map in mean_spatial_loss
+            ]
+            pdf_loss_maps_dir = os.path.join(
+                self.logger.save_dir, "spatial_loss_maps"
+            )
+            os.makedirs(pdf_loss_maps_dir, exist_ok=True)
+            for t_i, fig in zip(self.args.val_steps_to_log, pdf_loss_map_figs):
+                fig.savefig(os.path.join(pdf_loss_maps_dir, f"loss_t{t_i}.pdf"))
+            # save mean spatial loss as .pt file also
+            torch.save(
+                mean_spatial_loss.cpu(),
+                os.path.join(self.logger.save_dir, "mean_spatial_loss.pt"),
+            )
+
+        self.spatial_loss_maps.clear()
 
     def on_load_checkpoint(self, checkpoint):
         """
