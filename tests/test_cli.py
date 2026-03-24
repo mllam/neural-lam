@@ -1,9 +1,11 @@
 # Standard library
 from argparse import ArgumentDefaultsHelpFormatter, ArgumentParser
+from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 # Third-party
 import pytest
+import torch
 
 # First-party
 import neural_lam
@@ -117,3 +119,121 @@ def test_wandb_id_ignored_with_mlflow_warns():
     warning_msg = mock_log.warning.call_args[0][0]
     assert "--wandb_id is set but logger is" in warning_msg
     assert "mlflow" in warning_msg
+
+
+def _make_batch(ar_steps, forcing_dim, monotonic_times=True):
+    """Create a synthetic weather batch with DataLoader-like batch dim."""
+    batch_size = 2
+    n_grid = 5
+    d_state = 3
+
+    init_states = torch.randn(batch_size, 2, n_grid, d_state)
+    target_states = torch.randn(batch_size, ar_steps, n_grid, d_state)
+    forcing = torch.randn(batch_size, ar_steps, n_grid, forcing_dim)
+
+    base = torch.arange(ar_steps, dtype=torch.int64)
+    if monotonic_times:
+        target_times = torch.stack([base, base + 10], dim=0)
+    else:
+        target_times = torch.stack(
+            [
+                torch.tensor([3, 2, 1], dtype=torch.int64),
+                torch.tensor([7, 6, 5], dtype=torch.int64),
+            ],
+            dim=0,
+        )
+
+    return init_states, target_states, forcing, target_times
+
+
+def test_dry_run_data_preflight_success_skips_training_setup():
+    """--dry_run_data runs preflight checks and exits before trainer setup."""
+
+    class DummyDataModule:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        def setup(self, stage=None):
+            self.stage = stage
+
+        def train_dataloader(self):
+            # window size = 1 + 1 + 1 = 3, forcing dim=6 is valid
+            return [_make_batch(ar_steps=2, forcing_dim=6)]
+
+        def val_dataloader(self):
+            return [_make_batch(ar_steps=3, forcing_dim=6)]
+
+        def test_dataloader(self):
+            return [_make_batch(ar_steps=3, forcing_dim=6)]
+
+    with (
+        patch(
+            "neural_lam.train_model.load_config_and_datastore",
+            return_value=(MagicMock(), MagicMock()),
+        ),
+        patch(
+            "neural_lam.train_model.WeatherDataModule",
+            DummyDataModule,
+        ),
+        patch("neural_lam.train_model.pl.Trainer") as mock_trainer,
+        patch(
+            "neural_lam.train_model.utils.setup_training_logger"
+        ) as mock_setup_logger,
+    ):
+        neural_lam.train_model.main(
+            [
+                "--config_path",
+                "dummy.yaml",
+                "--dry_run_data",
+                "--ar_steps_train",
+                "2",
+                "--ar_steps_eval",
+                "3",
+                "--val_steps_to_log",
+                "1",
+                "2",
+                "3",
+                "--num_workers",
+                "0",
+            ]
+        )
+
+    mock_trainer.assert_not_called()
+    mock_setup_logger.assert_not_called()
+
+
+def test_dry_run_data_preflight_failure_raises_value_error():
+    """--dry_run_data fails fast when preflight detects invalid batches."""
+
+    class DummyBadDataModule:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        def setup(self, stage=None):
+            self.stage = stage
+
+        def train_dataloader(self):
+            # Non-monotonic times should fail preflight checks.
+            return [
+                _make_batch(ar_steps=3, forcing_dim=6, monotonic_times=False)
+            ]
+
+        def val_dataloader(self):
+            return [_make_batch(ar_steps=3, forcing_dim=6)]
+
+        def test_dataloader(self):
+            return [_make_batch(ar_steps=3, forcing_dim=6)]
+
+    args = SimpleNamespace(
+        eval=None,
+        ar_steps_train=3,
+        ar_steps_eval=3,
+        num_past_forcing_steps=1,
+        num_future_forcing_steps=1,
+    )
+
+    with pytest.raises(ValueError, match="strictly increasing"):
+        neural_lam.train_model._run_data_preflight(
+            data_module=DummyBadDataModule(),
+            args=args,
+        )

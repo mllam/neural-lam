@@ -3,6 +3,7 @@ import json
 import random
 import time
 from argparse import ArgumentDefaultsHelpFormatter, ArgumentParser
+from typing import Iterable
 
 # Third-party
 # for logging the model:
@@ -22,6 +23,182 @@ MODELS = {
     "hi_lam": HiLAM,
     "hi_lam_parallel": HiLAMParallel,
 }
+
+
+def _validate_preflight_batch(
+    batch,
+    split_name: str,
+    expected_ar_steps: int,
+    forcing_window_size: int,
+):
+    """Validate one dataloader batch for shape and numerical sanity."""
+    if not isinstance(batch, (tuple, list)) or len(batch) != 4:
+        raise ValueError(
+            f"{split_name}: expected batch to be a 4-tuple "
+            "(init_states, target_states, forcing, target_times)."
+        )
+
+    init_states, target_states, forcing, target_times = batch
+
+    if not all(isinstance(t, torch.Tensor) for t in batch):
+        raise ValueError(f"{split_name}: all batch entries must be tensors.")
+
+    # Support both directly sampled items and DataLoader-batched tensors.
+    if init_states.dim() == 3:
+        init_states = init_states.unsqueeze(0)
+    if target_states.dim() == 3:
+        target_states = target_states.unsqueeze(0)
+    if forcing.dim() == 3:
+        forcing = forcing.unsqueeze(0)
+    if target_times.dim() == 1:
+        target_times = target_times.unsqueeze(0)
+
+    if init_states.dim() != 4:
+        raise ValueError(
+            f"{split_name}: init_states must have 4 dims, got "
+            f"{init_states.dim()}."
+        )
+    if target_states.dim() != 4:
+        raise ValueError(
+            f"{split_name}: target_states must have 4 dims, got "
+            f"{target_states.dim()}."
+        )
+    if forcing.dim() != 4:
+        raise ValueError(
+            f"{split_name}: forcing must have 4 dims, got {forcing.dim()}."
+        )
+    if target_times.dim() != 2:
+        raise ValueError(
+            f"{split_name}: target_times must have 2 dims, got "
+            f"{target_times.dim()}."
+        )
+
+    batch_size = init_states.shape[0]
+    if (
+        target_states.shape[0] != batch_size
+        or forcing.shape[0] != batch_size
+        or target_times.shape[0] != batch_size
+    ):
+        raise ValueError(
+            f"{split_name}: inconsistent batch dimension across tensors."
+        )
+
+    if init_states.shape[1] != 2:
+        raise ValueError(
+            f"{split_name}: init_states time dimension must be 2, got "
+            f"{init_states.shape[1]}."
+        )
+
+    if target_states.shape[1] != expected_ar_steps:
+        raise ValueError(
+            f"{split_name}: target_states time dimension must match "
+            f"expected_ar_steps={expected_ar_steps}, got "
+            f"{target_states.shape[1]}."
+        )
+
+    if forcing.shape[1] != expected_ar_steps:
+        raise ValueError(
+            f"{split_name}: forcing time dimension must match "
+            f"expected_ar_steps={expected_ar_steps}, got "
+            f"{forcing.shape[1]}."
+        )
+
+    if target_times.shape[1] != expected_ar_steps:
+        raise ValueError(
+            f"{split_name}: target_times length must match "
+            f"expected_ar_steps={expected_ar_steps}, got "
+            f"{target_times.shape[1]}."
+        )
+
+    if forcing_window_size <= 0:
+        raise ValueError(
+            f"{split_name}: forcing_window_size must be > 0, got "
+            f"{forcing_window_size}."
+        )
+
+    if forcing.shape[-1] % forcing_window_size != 0:
+        raise ValueError(
+            f"{split_name}: forcing feature size ({forcing.shape[-1]}) is "
+            f"not divisible by forcing window size ({forcing_window_size})."
+        )
+
+    if not torch.isfinite(init_states).all():
+        raise ValueError(f"{split_name}: init_states contains NaN/Inf.")
+    if not torch.isfinite(target_states).all():
+        raise ValueError(f"{split_name}: target_states contains NaN/Inf.")
+    if not torch.isfinite(forcing).all():
+        raise ValueError(f"{split_name}: forcing contains NaN/Inf.")
+
+    if target_times.dtype not in (torch.int64, torch.int32):
+        raise ValueError(
+            f"{split_name}: target_times must be integer dtype, got "
+            f"{target_times.dtype}."
+        )
+    if target_times.shape[1] > 1 and not torch.all(
+        torch.diff(target_times, dim=1) > 0
+    ):
+        raise ValueError(
+            f"{split_name}: target_times must be strictly increasing."
+        )
+
+
+def _validate_preflight_loader(
+    loader: Iterable,
+    split_name: str,
+    expected_ar_steps: int,
+    forcing_window_size: int,
+):
+    """Validate the first batch produced by a dataloader."""
+    try:
+        batch = next(iter(loader))
+    except StopIteration as exc:
+        raise ValueError(f"{split_name}: dataloader is empty.") from exc
+
+    _validate_preflight_batch(
+        batch=batch,
+        split_name=split_name,
+        expected_ar_steps=expected_ar_steps,
+        forcing_window_size=forcing_window_size,
+    )
+
+
+def _run_data_preflight(data_module: WeatherDataModule, args):
+    """Run one-batch data pipeline checks and fail fast on invalid data."""
+    forcing_window_size = (
+        args.num_past_forcing_steps + args.num_future_forcing_steps + 1
+    )
+
+    if args.eval:
+        data_module.setup(stage="test")
+        _validate_preflight_loader(
+            loader=data_module.test_dataloader(),
+            split_name=f"eval_{args.eval}",
+            expected_ar_steps=args.ar_steps_eval,
+            forcing_window_size=forcing_window_size,
+        )
+        logger.info(
+            f"Data preflight passed for eval split '{args.eval}' with "
+            f"ar_steps={args.ar_steps_eval}."
+        )
+    else:
+        data_module.setup(stage="fit")
+        _validate_preflight_loader(
+            loader=data_module.train_dataloader(),
+            split_name="train",
+            expected_ar_steps=args.ar_steps_train,
+            forcing_window_size=forcing_window_size,
+        )
+        _validate_preflight_loader(
+            loader=data_module.val_dataloader(),
+            split_name="val",
+            expected_ar_steps=args.ar_steps_eval,
+            forcing_window_size=forcing_window_size,
+        )
+        logger.info(
+            "Data preflight passed for train/val splits with "
+            f"ar_steps_train={args.ar_steps_train} and "
+            f"ar_steps_eval={args.ar_steps_eval}."
+        )
 
 
 @logger.catch
@@ -244,6 +421,14 @@ def main(input_args=None):
             "ensemble members as independent samples."
         ),
     )
+    parser.add_argument(
+        "--dry_run_data",
+        action="store_true",
+        help=(
+            "Validate one batch from each relevant dataloader and exit "
+            "without creating model/trainer or running train/test."
+        ),
+    )
     args = parser.parse_args(input_args)
     args.var_leads_metrics_watch = {
         int(k): v for k, v in json.loads(args.var_leads_metrics_watch).items()
@@ -296,6 +481,11 @@ def main(input_args=None):
         num_workers=args.num_workers,
         eval_split=args.eval or "test",
     )
+
+    if args.dry_run_data:
+        _run_data_preflight(data_module=data_module, args=args)
+        logger.info("Exiting after successful data preflight.")
+        return
 
     # Instantiate model + trainer
     if torch.cuda.is_available():

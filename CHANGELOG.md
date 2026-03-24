@@ -13,6 +13,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Enable `pin_memory` in DataLoaders when GPU is available for faster async CPU-to-GPU data transfers [\#236](https://github.com/mllam/neural-lam/pull/236) @abhaygoudannavar
 
+- Add `--dry_run_data` mode to `train_model` to preflight-validate dataloader batches (shape, finite values, monotonic target times, and forcing window consistency) before creating model/trainer [\#510](https://github.com/mllam/neural-lam/issues/510) @AR10129
+
 ### Changed
 
 - Change the default ensemble-loading behavior in `WeatherDataset` / `WeatherDataModule` to use all ensemble members as independent samples for ensemble datastores (with matching ensemble-member selection for forcing when available); single-member behavior now requires explicitly opting in via `--load_single_member` [\#332](https://github.com/mllam/neural-lam/pull/332) @kshirajahere
