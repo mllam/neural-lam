@@ -35,9 +35,14 @@ class BaseDatastore(abc.ABC):
     dimensions (rather than just `time`).
 
     # Ensemble vs deterministic data
-    If the datastore is used to represent ensemble data, then the `is_ensemble`
-    attribute should be set to True, and returned data from `get_dataarray` is
-    assumed to have an `ensemble_member` dimension.
+    If the datastore is used to present an ensemble of state realisations, for
+    example for forecast ensembles, then the `is_ensemble` attribute should be
+    set to `True` and returned state data from `get_dataarray` is expected to
+    have an `ensemble_member` dimension. If each ensemble member has its own
+    forcing values, then `has_ensemble_forcing` should be set to `True`, and
+    returned forcing data from `get_dataarray` is expected to have an
+    `ensemble_member` dimension; otherwise forcing data is expected not to have
+    one.
 
     # Grid index
     All methods that return data specific to a grid point (like
@@ -49,6 +54,7 @@ class BaseDatastore(abc.ABC):
     """
 
     is_ensemble: bool = False
+    has_ensemble_forcing: bool = False
     is_forecast: bool = False
 
     @property
@@ -213,7 +219,8 @@ class BaseDatastore(abc.ABC):
         mean = standard_da[f"{category}_mean"]
         std = standard_da[f"{category}_std"]
 
-        return (da - mean) / std
+        eps = np.finfo(std.dtype).eps
+        return (da - mean) / std.where(std > eps, other=eps)
 
     @abc.abstractmethod
     def get_dataarray(
@@ -242,8 +249,11 @@ class BaseDatastore(abc.ABC):
         elapsed_forecast_duration)` dimensions if `is_forecast` is True, or
         `(time)` if `is_forecast` is False.
 
-        If the data is ensemble data, the dataarray is expected to have an
-        additional `ensemble_member` dimension.
+        If we have multiple ensemble members of state data, the returned state
+        dataarray is expected to have an additional `ensemble_member`
+        dimension. If `has_ensemble_forcing=True`, the returned forcing
+        dataarray is expected to have an additional `ensemble_member`
+        dimension; otherwise it is expected not to have one.
 
         Parameters
         ----------
@@ -341,6 +351,23 @@ class BaseDatastore(abc.ABC):
         ]
         return [float(v) for v in extent]
 
+    @functools.lru_cache
+    def get_lat_lon(self, category: str) -> np.ndarray:
+        """
+        Return stacked longitude/latitude pairs for the requested category.
+        """
+
+        xy = self.get_xy(category=category, stacked=True)
+        if xy.size == 0:
+            return xy
+
+        lon_lat = ccrs.PlateCarree().transform_points(
+            self.coords_projection,
+            xy[:, 0],
+            xy[:, 1],
+        )[:, :2]
+        return lon_lat
+
     @property
     @abc.abstractmethod
     def num_grid_points(self) -> int:
@@ -373,7 +400,8 @@ class BaseDatastore(abc.ABC):
 
     @functools.lru_cache
     def expected_dim_order(
-        self, category: Optional[str] = None
+        self,
+        category: Optional[str] = None,
     ) -> tuple[str, ...]:
         """
         Return the expected dimension order for the dataarray or dataset
@@ -399,7 +427,6 @@ class BaseDatastore(abc.ABC):
         ----------
         category : str
             The category of the dataset (state/forcing/static).
-
         Returns
         -------
         List[str]
@@ -418,8 +445,9 @@ class BaseDatastore(abc.ABC):
                 elif not self.is_forecast:
                     dim_order.append("time")
 
-            if self.is_ensemble and category == "state":
-                # XXX: for now we only assume ensemble data for state variables
+            if category == "state" and self.is_ensemble:
+                dim_order.append("ensemble_member")
+            elif category == "forcing" and self.has_ensemble_forcing:
                 dim_order.append("ensemble_member")
 
         dim_order.append("grid_index")
@@ -458,6 +486,8 @@ class BaseRegularGridDatastore(BaseDatastore):
     - `get_xy` (method): Return the x, y coordinates of the dataset, with the
       option to not stack the coordinates (so that they are returned as a 2D
       grid).
+    - `get_lat_lon` (method): Return the latitude/longitude coordinates of
+      the dataset for convenience when plotting.
 
     The operation of going from (x,y)-indexed regular grid
     to `grid_index`-indexed data-array is called "stacking" and the reverse
