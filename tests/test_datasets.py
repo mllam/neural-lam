@@ -810,9 +810,9 @@ def test_forecast_len_raises_when_forecast_lead_times_do_not_match():
     state_elapsed = np.arange(5, dtype="timedelta64[h]").astype(
         "timedelta64[ns]"
     )
-    forcing_elapsed = np.array(
-        [0, 2, 4, 6, 8], dtype="timedelta64[h]"
-    ).astype("timedelta64[ns]")
+    forcing_elapsed = np.array([0, 2, 4, 6, 8], dtype="timedelta64[h]").astype(
+        "timedelta64[ns]"
+    )
 
     dataset.da_state = xr.DataArray(
         np.zeros((2, 5, 1, 1), dtype=np.float32),
@@ -868,9 +868,7 @@ def test_weather_dataset_forecast_empty_split_raises_value_error():
                         "state_feature",
                     ),
                     coords={
-                        "analysis_time": np.array(
-                            [], dtype="datetime64[ns]"
-                        ),
+                        "analysis_time": np.array([], dtype="datetime64[ns]"),
                         "elapsed_forecast_duration": np.arange(
                             3, dtype="timedelta64[h]"
                         ).astype("timedelta64[ns]"),
@@ -880,7 +878,9 @@ def test_weather_dataset_forecast_empty_split_raises_value_error():
                 )
             if category == "forcing":
                 return None
-            return super().get_dataarray(category=category, split=split, **kwargs)
+            return super().get_dataarray(
+                category=category, split=split, **kwargs
+            )
 
     datastore = EmptyForecastDatastore(n_grid_points=4, n_timesteps=10)
 
