@@ -643,9 +643,8 @@ def cli(input_args=None):
     )
     args = parser.parse_args(input_args)
 
-    assert (
-        args.config_path is not None
-    ), "Specify your config with --config_path"
+    if args.config_path is None:
+        raise ValueError("Specify your config with --config_path")
 
     # Load neural-lam configuration and datastore to use
     _, datastore = load_config_and_datastore(config_path=args.config_path)
