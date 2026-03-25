@@ -28,23 +28,15 @@ class InteractionNet(pyg.nn.MessagePassing):
         aggr="sum",
     ):
         """
-        Create a new InteractionNet
-
-        edge_index: (2,M), Edges in pyg format, with both sender and receiver
-            node indices starting at 0
-        input_dim: Dimensionality of input representations,
-            for both nodes and edges
-        update_edges: If new edge representations should be computed
-            and returned
-        hidden_layers: Number of hidden layers in MLPs
-        hidden_dim: Dimensionality of hidden layers, if None then same
-            as input_dim
-        edge_chunk_sizes: List of chunks sizes to split edge representation
-            into and use separate MLPs for (None = no chunking, same MLP)
-        aggr_chunk_sizes: List of chunks sizes to split aggregated node
-            representation into and use separate MLPs for
-            (None = no chunking, same MLP)
-        aggr: Message aggregation method (sum/mean)
+        Parameters:
+        - edge_index: (2,M), Edges in pyg format, with both sender and receiver node indices starting at 0
+        - input_dim: Dimensionality of input representations, for both nodes and edges
+        - update_edges: If new edge representations should be computed and returned
+        - hidden_layers: Number of hidden layers in MLPs
+        - hidden_dim: Dimensionality of hidden layers, if None then same as input_dim
+        - edge_chunk_sizes: List of chunks sizes to split edge representation into and use separate MLPs for (None = no chunking, same MLP)
+        - aggr_chunk_sizes: List of chunks sizes to split aggregated node representation into and use separate MLPs for (None = no chunking, same MLP)
+        - aggr: Message aggregation method (sum/mean)
         """
         if aggr not in ("sum", "mean"):
             raise ValueError(f"Unknown aggregation method: {aggr}")
@@ -96,14 +88,14 @@ class InteractionNet(pyg.nn.MessagePassing):
         Apply interaction network to update the representations of receiver
         nodes, and optionally the edge representations.
 
-        send_rep: (N_send, d_h), vector representations of sender nodes
-        rec_rep: (N_rec, d_h), vector representations of receiver nodes
-        edge_rep: (M, d_h), vector representations of edges used
+        Parameters:
+        - send_rep: (N_send, d_h), vector representations of sender nodes
+        - rec_rep: (N_rec, d_h), vector representations of receiver nodes
+        - edge_rep: (M, d_h), vector representations of edges used
 
         Returns:
-        rec_rep: (N_rec, d_h), updated vector representations of receiver nodes
-        (optionally) edge_rep: (M, d_h), updated vector representations
-            of edges
+        - rec_rep: (N_rec, d_h), updated vector representations of receiver nodes
+        - (optionally) edge_rep: (M, d_h), updated vector representations of edges
         """
         # Always concatenate to [rec_nodes, send_nodes] for propagation,
         # but only aggregate to rec_nodes

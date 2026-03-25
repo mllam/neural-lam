@@ -1,0 +1,200 @@
+Running Sphinx v9.0.4
+loading translations [en]... done
+making output directory... done
+[autosummary] generating autosummary for: api/generated/neural_lam.config.rst, api/generated/neural_lam.create_graph.rst, api/generated/neural_lam.datastore.base.rst, api/generated/neural_lam.datastore.mdp.rst, api/generated/neural_lam.datastore.npyfilesmeps.compute_standardization_stats.rst, api/generated/neural_lam.datastore.npyfilesmeps.config.rst, api/generated/neural_lam.datastore.npyfilesmeps.rst, api/generated/neural_lam.datastore.npyfilesmeps.store.rst, api/generated/neural_lam.datastore.plot_example.rst, api/generated/neural_lam.datastore.rst, ..., api/generated/neural_lam.vis.rst, api/generated/neural_lam.weather_dataset.rst, api/index.rst, contributing.md, getting_started.md, index.md, user_guide/data.md, user_guide/evaluation.md, user_guide/graphs.md, user_guide/training.md
+loading intersphinx inventory 'torch' from https://pytorch.org/docs/stable/objects.inv ...
+loading intersphinx inventory 'numpy' from https://numpy.org/doc/stable/objects.inv ...
+loading intersphinx inventory 'python' from https://docs.python.org/3/objects.inv ...
+loading intersphinx inventory 'xarray' from https://docs.xarray.dev/en/stable/objects.inv ...
+loading intersphinx inventory 'pytorch_lightning' from https://lightning.ai/docs/pytorch/stable/objects.inv ...
+loading intersphinx inventory 'torch_geometric' from https://pytorch-geometric.readthedocs.io/en/latest/objects.inv ...
+intersphinx inventory has moved: https://pytorch.org/docs/stable/objects.inv -> https://docs.pytorch.org/docs/stable/objects.inv
+myst v5.0.0: MdParserConfig(commonmark_only=False, gfm_only=False, enable_extensions={'colon_fence', 'fieldlist', 'deflist'}, disable_syntax=[], all_links_external=False, links_external_new_tab=False, url_schemes=('http', 'https', 'mailto', 'ftp'), ref_domains=None, fence_as_directive=set(), number_code_blocks=[], title_to_header=False, heading_anchors=0, heading_slug_func=None, html_meta={}, footnote_sort=True, footnote_transition=True, words_per_minute=200, substitutions={}, linkify_fuzzy_links=True, dmath_allow_labels=True, dmath_allow_space=True, dmath_allow_digits=True, dmath_double_inline=False, update_mathjax=True, mathjax_classes='tex2jax_process|mathjax_process|math|output_area', enable_checkboxes=False, suppress_warnings=[], highlight_code_blocks=True)
+building [mo]: targets for 0 po files that are out of date
+writing output... 
+building [html]: targets for 32 source files that are out of date
+updating environment: [new config] 32 added, 0 changed, 0 removed
+reading sources... [  3%] api/generated/neural_lam.config
+/Users/sumitkumarsingh/neural-lam/neural-lam/.venv/lib/python3.11/site-packages/sphinx_autodoc_typehints/_parser.py:30: RemovedInSphinx10Warning: 'sphinx_autodoc_typehints._parser._RstSnippetParser.set_application' is deprecated. Check CHANGES for Sphinx API modifications.
+  parser.set_application(settings.env.app)
+reading sources... [  6%] api/generated/neural_lam.create_graph
+/Users/sumitkumarsingh/neural-lam/neural-lam/.venv/lib/python3.11/site-packages/sphinx_autodoc_typehints/_parser.py:30: RemovedInSphinx10Warning: 'sphinx_autodoc_typehints._parser._RstSnippetParser.set_application' is deprecated. Check CHANGES for Sphinx API modifications.
+  parser.set_application(settings.env.app)
+:7: (ERROR/3) Unexpected indentation.
+:8: (WARNING/2) Block quote ends without a blank line; unexpected unindent.
+reading sources... [  9%] api/generated/neural_lam.datastore
+reading sources... [ 12%] api/generated/neural_lam.datastore.base
+/Users/sumitkumarsingh/neural-lam/neural-lam/.venv/lib/python3.11/site-packages/sphinx_autodoc_typehints/_parser.py:30: RemovedInSphinx10Warning: 'sphinx_autodoc_typehints._parser._RstSnippetParser.set_application' is deprecated. Check CHANGES for Sphinx API modifications.
+  parser.set_application(settings.env.app)
+reading sources... [ 16%] api/generated/neural_lam.datastore.mdp
+/Users/sumitkumarsingh/neural-lam/neural-lam/.venv/lib/python3.11/site-packages/sphinx_autodoc_typehints/_parser.py:30: RemovedInSphinx10Warning: 'sphinx_autodoc_typehints._parser._RstSnippetParser.set_application' is deprecated. Check CHANGES for Sphinx API modifications.
+  parser.set_application(settings.env.app)
+reading sources... [ 19%] api/generated/neural_lam.datastore.npyfilesmeps
+reading sources... [ 22%] api/generated/neural_lam.datastore.npyfilesmeps.compute_standardization_stats
+/Users/sumitkumarsingh/neural-lam/neural-lam/.venv/lib/python3.11/site-packages/sphinx_autodoc_typehints/_parser.py:30: RemovedInSphinx10Warning: 'sphinx_autodoc_typehints._parser._RstSnippetParser.set_application' is deprecated. Check CHANGES for Sphinx API modifications.
+  parser.set_application(settings.env.app)
+reading sources... [ 25%] api/generated/neural_lam.datastore.npyfilesmeps.config
+reading sources... [ 28%] api/generated/neural_lam.datastore.npyfilesmeps.store
+/Users/sumitkumarsingh/neural-lam/neural-lam/.venv/lib/python3.11/site-packages/sphinx_autodoc_typehints/_parser.py:30: RemovedInSphinx10Warning: 'sphinx_autodoc_typehints._parser._RstSnippetParser.set_application' is deprecated. Check CHANGES for Sphinx API modifications.
+  parser.set_application(settings.env.app)
+reading sources... [ 31%] api/generated/neural_lam.datastore.plot_example
+reading sources... [ 34%] api/generated/neural_lam.interaction_net
+reading sources... [ 38%] api/generated/neural_lam.loss_weighting
+/Users/sumitkumarsingh/neural-lam/neural-lam/.venv/lib/python3.11/site-packages/sphinx_autodoc_typehints/_parser.py:30: RemovedInSphinx10Warning: 'sphinx_autodoc_typehints._parser._RstSnippetParser.set_application' is deprecated. Check CHANGES for Sphinx API modifications.
+  parser.set_application(settings.env.app)
+reading sources... [ 41%] api/generated/neural_lam.metrics
+reading sources... [ 44%] api/generated/neural_lam.models
+reading sources... [ 47%] api/generated/neural_lam.models.ar_model
+/Users/sumitkumarsingh/neural-lam/neural-lam/.venv/lib/python3.11/site-packages/sphinx_autodoc_typehints/_parser.py:30: RemovedInSphinx10Warning: 'sphinx_autodoc_typehints._parser._RstSnippetParser.set_application' is deprecated. Check CHANGES for Sphinx API modifications.
+  parser.set_application(settings.env.app)
+reading sources... [ 50%] api/generated/neural_lam.models.base_graph_model
+reading sources... [ 53%] api/generated/neural_lam.models.base_hi_graph_model
+reading sources... [ 56%] api/generated/neural_lam.models.graph_lam
+reading sources... [ 59%] api/generated/neural_lam.models.hi_lam
+reading sources... [ 62%] api/generated/neural_lam.models.hi_lam_parallel
+reading sources... [ 66%] api/generated/neural_lam.train_model
+reading sources... [ 69%] api/generated/neural_lam.utils
+/Users/sumitkumarsingh/neural-lam/neural-lam/.venv/lib/python3.11/site-packages/sphinx_autodoc_typehints/_parser.py:30: RemovedInSphinx10Warning: 'sphinx_autodoc_typehints._parser._RstSnippetParser.set_application' is deprecated. Check CHANGES for Sphinx API modifications.
+  parser.set_application(settings.env.app)
+/Users/sumitkumarsingh/neural-lam/neural-lam/.venv/lib/python3.11/site-packages/sphinx_autodoc_typehints/_parser.py:30: RemovedInSphinx10Warning: 'sphinx_autodoc_typehints._parser._RstSnippetParser.set_application' is deprecated. Check CHANGES for Sphinx API modifications.
+  parser.set_application(settings.env.app)
+/Users/sumitkumarsingh/neural-lam/neural-lam/.venv/lib/python3.11/site-packages/sphinx_autodoc_typehints/_parser.py:30: RemovedInSphinx10Warning: 'sphinx_autodoc_typehints._parser._RstSnippetParser.set_application' is deprecated. Check CHANGES for Sphinx API modifications.
+  parser.set_application(settings.env.app)
+reading sources... [ 72%] api/generated/neural_lam.vis
+reading sources... [ 75%] api/generated/neural_lam.weather_dataset
+/Users/sumitkumarsingh/neural-lam/neural-lam/.venv/lib/python3.11/site-packages/sphinx_autodoc_typehints/_parser.py:30: RemovedInSphinx10Warning: 'sphinx_autodoc_typehints._parser._RstSnippetParser.set_application' is deprecated. Check CHANGES for Sphinx API modifications.
+  parser.set_application(settings.env.app)
+reading sources... [ 78%] api/index
+reading sources... [ 81%] contributing
+reading sources... [ 84%] getting_started
+reading sources... [ 88%] index
+reading sources... [ 91%] user_guide/data
+reading sources... [ 94%] user_guide/evaluation
+reading sources... [ 97%] user_guide/graphs
+reading sources... [100%] user_guide/training
+
+<unknown>:1: WARNING: duplicate object description of neural_lam.config.DatastoreSelection.kind, other instance in api/generated/neural_lam.config, use :no-index: for one of them
+<unknown>:1: WARNING: duplicate object description of neural_lam.config.DatastoreSelection.config_path, other instance in api/generated/neural_lam.config, use :no-index: for one of them
+<unknown>:1: WARNING: duplicate object description of neural_lam.config.ManualStateFeatureWeighting.weights, other instance in api/generated/neural_lam.config, use :no-index: for one of them
+<unknown>:1: WARNING: duplicate object description of neural_lam.config.OutputClamping.lower, other instance in api/generated/neural_lam.config, use :no-index: for one of them
+<unknown>:1: WARNING: duplicate object description of neural_lam.config.OutputClamping.upper, other instance in api/generated/neural_lam.config, use :no-index: for one of them
+<unknown>:1: WARNING: duplicate object description of neural_lam.config.TrainingConfig.state_feature_weighting, other instance in api/generated/neural_lam.config, use :no-index: for one of them
+<unknown>:1: WARNING: duplicate object description of neural_lam.config.NeuralLAMConfig.datastore, other instance in api/generated/neural_lam.config, use :no-index: for one of them
+<unknown>:1: WARNING: duplicate object description of neural_lam.config.NeuralLAMConfig.training, other instance in api/generated/neural_lam.config, use :no-index: for one of them
+/Users/sumitkumarsingh/neural-lam/neural-lam/neural_lam/create_graph.py:docstring of neural_lam.create_graph.create_graph:11: ERROR: Unexpected indentation. [docutils]
+/Users/sumitkumarsingh/neural-lam/neural-lam/neural_lam/create_graph.py:docstring of neural_lam.create_graph.create_graph:12: WARNING: Block quote ends without a blank line; unexpected unindent. [docutils]
+/Users/sumitkumarsingh/neural-lam/neural-lam/neural_lam/create_graph.py:docstring of neural_lam.create_graph.create_graph:25: ERROR: Unexpected indentation. [docutils]
+/Users/sumitkumarsingh/neural-lam/neural-lam/neural_lam/create_graph.py:docstring of neural_lam.create_graph.create_graph:26: WARNING: Block quote ends without a blank line; unexpected unindent. [docutils]
+WARNING: Failed guarded type import with ModuleNotFoundError("No module named 'iris'") [sphinx_autodoc_typehints.guarded_import]
+/Users/sumitkumarsingh/neural-lam/neural-lam/neural_lam/datastore/npyfilesmeps/store.py:docstring of neural_lam.datastore.npyfilesmeps.store.NpyFilesDatastoreMEPS:24: WARNING: Literal block expected; none found. [docutils]
+/Users/sumitkumarsingh/neural-lam/neural-lam/neural_lam/datastore/npyfilesmeps/store.py:docstring of neural_lam.datastore.npyfilesmeps.store.NpyFilesDatastoreMEPS:66: ERROR: Unexpected indentation. [docutils]
+/Users/sumitkumarsingh/neural-lam/neural-lam/neural_lam/models/ar_model.py:docstring of neural_lam.models.ar_model.ARModel.configure_optimizers:49: ERROR: Unknown directive type "testcode".
+
+.. testcode::
+
+    # The ReduceLROnPlateau scheduler requires a monitor
+    def configure_optimizers(self):
+        optimizer = Adam(...)
+        return {
+            "optimizer": optimizer,
+            "lr_scheduler": {
+                "scheduler": ReduceLROnPlateau(optimizer, ...),
+                "monitor": "metric_to_track",
+                "frequency": "indicates how often the metric is updated",
+                # If "monitor" references validation metrics, then "frequency" should be set to a
+                # multiple of "trainer.check_val_every_n_epoch".
+            },
+        }
+
+
+    # In the case of two optimizers, only one using the ReduceLROnPlateau scheduler
+    def configure_optimizers(self):
+        optimizer1 = Adam(...)
+        optimizer2 = SGD(...)
+        scheduler1 = ReduceLROnPlateau(optimizer1, ...)
+        scheduler2 = LambdaLR(optimizer2, ...)
+        return (
+            {
+                "optimizer": optimizer1,
+                "lr_scheduler": {
+                    "scheduler": scheduler1,
+                    "monitor": "metric_to_track",
+                },
+            },
+            {"optimizer": optimizer2, "lr_scheduler": scheduler2},
+        ) [docutils]
+looking for now-outdated files... none found
+pickling environment... done
+checking consistency... done
+preparing documents... done
+copying assets... 
+copying static files... 
+Writing evaluated template result to /Users/sumitkumarsingh/neural-lam/neural-lam/docs/_build/html/_static/basic.css
+Writing evaluated template result to /Users/sumitkumarsingh/neural-lam/neural-lam/docs/_build/html/_static/language_data.js
+Writing evaluated template result to /Users/sumitkumarsingh/neural-lam/neural-lam/docs/_build/html/_static/documentation_options.js
+Writing evaluated template result to /Users/sumitkumarsingh/neural-lam/neural-lam/docs/_build/html/_static/copybutton.js
+copying static files: done
+copying extra files... 
+copying extra files: done
+copying assets: done
+writing output... [  3%] api/generated/neural_lam.config
+writing output... [  6%] api/generated/neural_lam.create_graph
+writing output... [  9%] api/generated/neural_lam.datastore
+writing output... [ 12%] api/generated/neural_lam.datastore.base
+writing output... [ 16%] api/generated/neural_lam.datastore.mdp
+writing output... [ 19%] api/generated/neural_lam.datastore.npyfilesmeps
+writing output... [ 22%] api/generated/neural_lam.datastore.npyfilesmeps.compute_standardization_stats
+writing output... [ 25%] api/generated/neural_lam.datastore.npyfilesmeps.config
+writing output... [ 28%] api/generated/neural_lam.datastore.npyfilesmeps.store
+writing output... [ 31%] api/generated/neural_lam.datastore.plot_example
+writing output... [ 34%] api/generated/neural_lam.interaction_net
+writing output... [ 38%] api/generated/neural_lam.loss_weighting
+writing output... [ 41%] api/generated/neural_lam.metrics
+writing output... [ 44%] api/generated/neural_lam.models
+writing output... [ 47%] api/generated/neural_lam.models.ar_model
+writing output... [ 50%] api/generated/neural_lam.models.base_graph_model
+writing output... [ 53%] api/generated/neural_lam.models.base_hi_graph_model
+writing output... [ 56%] api/generated/neural_lam.models.graph_lam
+writing output... [ 59%] api/generated/neural_lam.models.hi_lam
+writing output... [ 62%] api/generated/neural_lam.models.hi_lam_parallel
+writing output... [ 66%] api/generated/neural_lam.train_model
+writing output... [ 69%] api/generated/neural_lam.utils
+writing output... [ 72%] api/generated/neural_lam.vis
+writing output... [ 75%] api/generated/neural_lam.weather_dataset
+writing output... [ 78%] api/index
+writing output... [ 81%] contributing
+writing output... [ 84%] getting_started
+writing output... [ 88%] index
+writing output... [ 91%] user_guide/data
+writing output... [ 94%] user_guide/evaluation
+writing output... [ 97%] user_guide/graphs
+writing output... [100%] user_guide/training
+
+generating indices... genindex py-modindex done
+highlighting module code... [  5%] neural_lam.config
+highlighting module code... [  9%] neural_lam.create_graph
+highlighting module code... [ 14%] neural_lam.datastore
+highlighting module code... [ 18%] neural_lam.datastore.base
+highlighting module code... [ 23%] neural_lam.datastore.mdp
+highlighting module code... [ 27%] neural_lam.datastore.npyfilesmeps.compute_standardization_stats
+highlighting module code... [ 32%] neural_lam.datastore.npyfilesmeps.config
+highlighting module code... [ 36%] neural_lam.datastore.npyfilesmeps.store
+highlighting module code... [ 41%] neural_lam.datastore.plot_example
+highlighting module code... [ 45%] neural_lam.interaction_net
+highlighting module code... [ 50%] neural_lam.loss_weighting
+highlighting module code... [ 55%] neural_lam.metrics
+highlighting module code... [ 59%] neural_lam.models.ar_model
+highlighting module code... [ 64%] neural_lam.models.base_graph_model
+highlighting module code... [ 68%] neural_lam.models.base_hi_graph_model
+highlighting module code... [ 73%] neural_lam.models.graph_lam
+highlighting module code... [ 77%] neural_lam.models.hi_lam
+highlighting module code... [ 82%] neural_lam.models.hi_lam_parallel
+highlighting module code... [ 86%] neural_lam.train_model
+highlighting module code... [ 91%] neural_lam.utils
+highlighting module code... [ 95%] neural_lam.vis
+highlighting module code... [100%] neural_lam.weather_dataset
+
+writing additional pages... search done
+dumping search index in English (code: en)... done
+dumping object inventory... done
+build finished with problems, 16 warnings (with warnings treated as errors).

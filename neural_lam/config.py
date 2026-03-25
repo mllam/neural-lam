@@ -88,8 +88,7 @@ class TrainingConfig:
 
     Attributes
     ----------
-    state_feature_weighting : Union[ManualStateFeatureWeighting,
-                                    UnformFeatureWeighting]
+    state_feature_weighting : Union[ManualStateFeatureWeighting, UniformFeatureWeighting]
         The method to use for weighting the state features in the loss
         function. Defaults to uniform weighting (`UnformFeatureWeighting`, i.e.
         all features are weighted equally).

@@ -1,6 +1,6 @@
 # Local Setup Guide
 
-This guide explains how to set up the Neural-LAM repository on your local machine after cloning it. 
+This guide explains how to set up the Neural-LAM repository on your local machine after cloning it.
 
 ### 1. Prerequisites
 - **Python >= 3.10** (e.g., Python 3.11 or 3.12).

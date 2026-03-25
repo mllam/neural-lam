@@ -1,5 +1,5 @@
 ## Describe your changes
-This PR implements the foundational **Sphinx documentation system** for `neural-lam`, as requested in [Issue #61](https://github.com/mllam/neural-lam/issues/61). 
+This PR implements the foundational **Sphinx documentation system** for `neural-lam`, as requested in [Issue #61](https://github.com/mllam/neural-lam/issues/61).
 
 **Key Changes:**
 *   **Sphinx Configuration**: Set up `docs/conf.py` with 8 extensions (autodoc, napoleon, intersphinx, myst-parser, etc.) and `sphinx-book-theme`.

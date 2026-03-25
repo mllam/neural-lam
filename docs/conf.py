@@ -3,6 +3,13 @@
 # For the full list of built-in configuration values, see the documentation:
 # https://www.sphinx-doc.org/en/master/usage/configuration.html
 
+# Standard library
+import os
+import sys
+
+# Add the project root to sys.path so autodoc can import neural_lam
+sys.path.insert(0, os.path.abspath(".."))
+
 # -- Project information -----------------------------------------------------
 
 project = "Neural-LAM"
@@ -20,7 +27,10 @@ extensions = [
     "myst_parser",
     "sphinx_copybutton",
     "sphinx_autodoc_typehints",
+    "sphinx.ext.doctest",
 ]
+
+autodoc_mock_imports = ["iris"]
 
 # MyST parser settings
 myst_enable_extensions = [
@@ -49,7 +59,7 @@ napoleon_include_special_with_doc = True
 napoleon_use_admonition_for_examples = True
 napoleon_use_admonition_for_notes = True
 napoleon_use_admonition_for_references = True
-napoleon_use_ivar = False
+napoleon_use_ivar = True
 napoleon_use_param = True
 napoleon_use_rtype = True
 napoleon_type_aliases = None

@@ -53,74 +53,64 @@ class NpyFilesDatastoreMEPS(BaseRegularGridDatastore):
     The MEPS dataset is organised into three splits: train, val, and test. Each
     split has a set of files which are:
 
-    - `{STATE_FILENAME_FORMAT}`:
-        The state variables for a forecast started at `analysis_time` with
-        member id `member_id`. The dimensions of the array are
-        `[forecast_timestep, y, x, feature]`.
+    - `{STATE_FILENAME_FORMAT}`: The state variables for a forecast started at `analysis_time` with member id `member_id`. The dimensions of the array are `[forecast_timestep, y, x, feature]`.
+    - `{TOA_SW_DOWN_FLUX_FILENAME_FORMAT}`: The top-of-atmosphere downwelling shortwave flux at `time`. The dimensions of the array are `[forecast_timestep, y, x]`.
+    - `{OPEN_WATER_FILENAME_FORMAT}`: The open water fraction at `time`. The dimensions of the array are `[y, x]`.
 
-    - `{TOA_SW_DOWN_FLUX_FILENAME_FORMAT}`:
-        The top-of-atmosphere downwelling shortwave flux at `time`. The
-        dimensions of the array are `[forecast_timestep, y, x]`.
+    Folder structure::
 
-    - `{OPEN_WATER_FILENAME_FORMAT}`:
-        The open water fraction at `time`. The dimensions of the array are
-        `[y, x]`.
-
-
-    Folder structure:
-
-    meps_example_reduced
-    ├── data_config.yaml
-    ├── samples
-    │   ├── test
-    │   │   ├── nwp_2022090100_mbr000.npy
-    │   │   ├── nwp_2022090100_mbr001.npy
-    │   │   ├── nwp_2022090112_mbr000.npy
-    │   │   ├── nwp_2022090112_mbr001.npy
-    │   │   ├── ...
-    │   │   ├── nwp_toa_downwelling_shortwave_flux_2022090100.npy
-    │   │   ├── nwp_toa_downwelling_shortwave_flux_2022090112.npy
-    │   │   ├── ...
-    │   │   ├── wtr_2022090100.npy
-    │   │   ├── wtr_2022090112.npy
-    │   │   └── ...
-    │   ├── train
-    │   │   ├── nwp_2022040100_mbr000.npy
-    │   │   ├── nwp_2022040100_mbr001.npy
-    │   │   ├── ...
-    │   │   ├── nwp_2022040112_mbr000.npy
-    │   │   ├── nwp_2022040112_mbr001.npy
-    │   │   ├── ...
-    │   │   ├── nwp_toa_downwelling_shortwave_flux_2022040100.npy
-    │   │   ├── nwp_toa_downwelling_shortwave_flux_2022040112.npy
-    │   │   ├── ...
-    │   │   ├── wtr_2022040100.npy
-    │   │   ├── wtr_2022040112.npy
-    │   │   └── ...
-    │   └── val
-    │       ├── nwp_2022060500_mbr000.npy
-    │       ├── nwp_2022060500_mbr001.npy
-    │       ├── ...
-    │       ├── nwp_2022060512_mbr000.npy
-    │       ├── nwp_2022060512_mbr001.npy
-    │       ├── ...
-    │       ├── nwp_toa_downwelling_shortwave_flux_2022060500.npy
-    │       ├── nwp_toa_downwelling_shortwave_flux_2022060512.npy
-    │       ├── ...
-    │       ├── wtr_2022060500.npy
-    │       ├── wtr_2022060512.npy
-    │       └── ...
-    └── static
-        ├── border_mask.npy
-        ├── diff_mean.pt
-        ├── diff_std.pt
-        ├── flux_stats.pt
-        ├── grid_features.pt
-        ├── nwp_xy.npy
-        ├── parameter_mean.pt
-        ├── parameter_std.pt
-        ├── parameter_weights.npy
-        └── surface_geopotential.npy
+        meps_example_reduced
+        ├── data_config.yaml
+        ├── samples
+        │   ├── test
+        │   │   ├── nwp_2022090100_mbr000.npy
+        │   │   ├── nwp_2022090100_mbr001.npy
+        │   │   ├── nwp_2022090112_mbr000.npy
+        │   │   ├── nwp_2022090112_mbr001.npy
+        │   │   ├── ...
+        │   │   ├── nwp_toa_downwelling_shortwave_flux_2022090100.npy
+        │   │   ├── nwp_toa_downwelling_shortwave_flux_2022090112.npy
+        │   │   ├── ...
+        │   │   ├── wtr_2022090100.npy
+        │   │   ├── wtr_2022090112.npy
+        │   │   └── ...
+        │   ├── train
+        │   │   ├── nwp_2022040100_mbr000.npy
+        │   │   ├── nwp_2022040100_mbr001.npy
+        │   │   ├── ...
+        │   │   ├── nwp_2022040112_mbr000.npy
+        │   │   ├── nwp_2022040112_mbr001.npy
+        │   │   ├── ...
+        │   │   ├── nwp_toa_downwelling_shortwave_flux_2022040100.npy
+        │   │   ├── nwp_toa_downwelling_shortwave_flux_2022040112.npy
+        │   │   ├── ...
+        │   │   ├── wtr_2022040100.npy
+        │   │   ├── wtr_2022040112.npy
+        │   │   └── ...
+        │   └── val
+        │       ├── nwp_2022060500_mbr000.npy
+        │       ├── nwp_2022060500_mbr001.npy
+        │       ├── ...
+        │       ├── nwp_2022060512_mbr000.npy
+        │       ├── nwp_2022060512_mbr001.npy
+        │       ├── ...
+        │       ├── nwp_toa_downwelling_shortwave_flux_2022060500.npy
+        │       ├── nwp_toa_downwelling_shortwave_flux_2022060512.npy
+        │       ├── ...
+        │       ├── wtr_2022060500.npy
+        │       ├── wtr_2022060512.npy
+        │       └── ...
+        └── static
+            ├── border_mask.npy
+            ├── diff_mean.pt
+            ├── diff_std.pt
+            ├── flux_stats.pt
+            ├── grid_features.pt
+            ├── nwp_xy.npy
+            ├── parameter_mean.pt
+            ├── parameter_std.pt
+            ├── parameter_weights.npy
+            └── surface_geopotential.npy
 
     For the MEPS dataset:
     N_t' = 65
@@ -226,11 +216,10 @@ class NpyFilesDatastoreMEPS(BaseRegularGridDatastore):
         xr.DataArray
             The data array for the given category and split, with dimensions
             per category:
-            state:     `[elapsed_forecast_duration, analysis_time, grid_index,
-                        feature, ensemble_member]`
-            forcing:   `[elapsed_forecast_duration, analysis_time, grid_index,
-                        feature]`
-            static:    `[grid_index, feature]`
+
+            - state: `[elapsed_forecast_duration, analysis_time, grid_index, feature, ensemble_member]`
+            - forcing: `[elapsed_forecast_duration, analysis_time, grid_index, feature]`
+            - static: `[grid_index, feature]`
 
         """
         if category == "state":
@@ -634,8 +623,8 @@ class NpyFilesDatastoreMEPS(BaseRegularGridDatastore):
         np.ndarray
             The x, y coordinates of the dataset (with x first then y second),
             returned differently based on the value of `stacked`:
-            - `stacked==True`: shape `(n_grid_points, 2)` where
-                                      n_grid_points=N_x*N_y.
+
+            - `stacked==True`: shape `(n_grid_points, 2)` where n_grid_points=N_x*N_y.
             - `stacked==False`: shape `(N_x, N_y, 2)`
 
         """

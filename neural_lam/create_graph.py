@@ -168,47 +168,31 @@ def create_graph(
     `graph_dir_path`.
 
     Creates the following files for all graphs:
-    - g2m_edge_index.pt  [2, N_g2m_edges]
-    - g2m_features.pt    [N_g2m_edges, d_features]
-    - m2g_edge_index.pt  [2, N_m2m_edges]
-    - m2g_features.pt    [N_m2m_edges, d_features]
-    - m2m_edge_index.pt  list of [2, N_m2m_edges_level], length==n_levels
-    - m2m_features.pt    list of [N_m2m_edges_level, d_features],
-                         length==n_levels
-    - mesh_features.pt   list of [N_mesh_nodes_level, d_mesh_static],
-                         length==n_levels
+    - `g2m_edge_index.pt`  [2, N_g2m_edges]
+    - `g2m_features.pt`    [N_g2m_edges, d_features]
+    - `m2g_edge_index.pt`  [2, N_m2m_edges]
+    - `m2g_features.pt`    [N_m2m_edges, d_features]
+    - `m2m_edge_index.pt`  list of [2, N_m2m_edges_level], length==n_levels
+    - `m2m_features.pt`    list of [N_m2m_edges_level, d_features], length==n_levels
+    - `mesh_features.pt`   list of [N_mesh_nodes_level, d_mesh_static], length==n_levels
 
-    where
-      d_features:
-            number of features per edge (currently d_features==3, for
-            edge-length, x and y)
-      N_g2m_edges:
-            number of edges in the graph from grid-to-mesh
-      N_m2g_edges:
-            number of edges in the graph from mesh-to-grid
-      N_m2m_edges_level:
-            number of edges in the graph from mesh-to-mesh at a given level
-            (list index corresponds to the level)
-      d_mesh_static:
-            number of static features per mesh node (currently
-            d_mesh_static==2, for x and y)
-      N_mesh_nodes_level:
-            number of nodes in the mesh at a given level
+    where:
+    - d_features: number of features per edge (currently d_features==3, for edge-length, x and y)
+    - N_g2m_edges: number of edges in the graph from grid-to-mesh
+    - N_m2g_edges: number of edges in the graph from mesh-to-grid
+    - N_m2m_edges_level: number of edges in the graph from mesh-to-mesh at a given level (list index corresponds to the level)
+    - d_mesh_static: number of static features per mesh node (currently d_mesh_static==2, for x and y)
+    - N_mesh_nodes_level: number of nodes in the mesh at a given level
 
     And in addition for hierarchical graphs:
-    - mesh_up_edge_index.pt
-        list of [2, N_mesh_updown_edges_level], length==n_levels-1
-    - mesh_up_features.pt
-        list of [N_mesh_updown_edges_level, d_features], length==n_levels-1
-    - mesh_down_edge_index.pt
-        list of [2, N_mesh_updown_edges_level], length==n_levels-1
-    - mesh_down_features.pt
-        list of [N_mesh_updown_edges_level, d_features], length==n_levels-1
+    - `mesh_up_edge_index.pt` list of [2, N_mesh_updown_edges_level], length==n_levels-1
+    - `mesh_up_features.pt` list of [N_mesh_updown_edges_level, d_features], length==n_levels-1
+    - `mesh_down_edge_index.pt` list of [2, N_mesh_updown_edges_level], length==n_levels-1
+    - `mesh_down_features.pt` list of [N_mesh_updown_edges_level, d_features], length==n_levels-1
 
     where N_mesh_updown_edges_level is the number of edges in the graph from
     mesh-to-mesh between two consecutive levels (list index corresponds index
-    of lower level)
-
+    of lower level).
 
     Parameters
     ----------

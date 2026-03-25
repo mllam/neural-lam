@@ -32,7 +32,7 @@ def plot_example_from_datastore(
         Whether to standardize the data before plotting, by default True.
     selection : dict, optional
         Selections to apply to the dataarray, for example
-        `time="1990-09-03T0:00" would select this single timestep, by default
+        `time="1990-09-03T0:00"` would select this single timestep, by default
         {}.
     index_selection: dict, optional
         Index-based selection to apply to the dataarray, for example
