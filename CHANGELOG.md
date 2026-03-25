@@ -6,7 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [unreleased](https://github.com/mllam/neural-lam/compare/v0.5.0...HEAD)
-
+# Live Demo
+http://127.0.0.1:5500/docs/_build/html/getting_started.html#quick-start
 ### Added
 
 - Add `AGENTS.md` file to the repo to give agents more information about the codebase and the contribution culture.[\#416](https://github.com/mllam/neural-lam/pull/416) @sadamov
