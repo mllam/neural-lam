@@ -6,9 +6,6 @@ from unittest.mock import patch
 
 # Third-party
 import matplotlib
-
-matplotlib.use("Agg")  # non-interactive backend for headless test runs
-
 import matplotlib.figure
 import matplotlib.pyplot as plt
 import numpy as np
@@ -25,6 +22,8 @@ from neural_lam.models.graph_lam import GraphLAM
 from neural_lam.weather_dataset import WeatherDataset
 from tests.conftest import init_datastore_example
 from tests.dummy_datastore import DummyDatastore
+
+plt.switch_backend("Agg")  # non-interactive backend for headless test runs
 
 # Create output directory for test figures
 TEST_OUTPUT_DIR = Path(__file__).parent / "test_outputs" / "plotting"
@@ -172,7 +171,7 @@ def test_plot_error_map() -> None:
     assert actual_y_ticklabels == expected_y_ticklabels
 
     assert len(ax.texts) == pred_steps * d_f
-    assert colorbar_ax.get_ylabel() == "Relative scale (1-step diff stds)"
+    assert colorbar_ax.get_ylabel() == "Error / Std(1-step change)"
 
 
 def test_plot_error_heatmap_uses_relative_color_scale():
@@ -200,7 +199,25 @@ def test_plot_error_heatmap_uses_relative_color_scale():
     assert image.norm.vmin == 0.0
     assert image.norm.vmax == pytest.approx(expected_color_values.max())
     assert len(fig.axes) == 2
-    assert colorbar.get_ylabel() == "Relative scale (1-step diff stds)"
+    assert colorbar.get_ylabel() == "Error / Std(1-step change)"
+
+    plt.close(fig)
+
+
+def test_plot_error_heatmap_uses_absolute_scale_without_stats():
+    """Without standardization stats the colorbar should stay in raw units."""
+
+    class NoStatsHeatmapDatastore(HeatmapDatastore):
+        def get_standardization_dataarray(self, category):
+            raise KeyError("Missing standardization stats")
+
+    errors = torch.tensor([[1.0, 2.0], [3.0, 4.0]])
+    datastore = NoStatsHeatmapDatastore(n_vars=errors.shape[1])
+
+    fig = vis.plot_error_heatmap(errors, datastore=datastore)
+    colorbar = fig.axes[1]
+
+    assert colorbar.get_ylabel() == "Absolute scale"
 
     plt.close(fig)
 
@@ -261,6 +278,7 @@ def test_plot_error_heatmap_skips_annotations_for_very_dense_grids():
 
     assert len(ax.texts) == 0
     assert fig.get_size_inches()[0] > 18.0
+    assert ax.get_xticklabels()[0].get_fontsize() == pytest.approx(9.0)
 
     plt.close(fig)
 
@@ -298,7 +316,7 @@ def test_plot_spatial_error() -> None:
 
 
 def test_plot_spatial_error_crop_to_interior_changes_extent() -> None:
-    """Check interior cropping forwards interior lon/lat bounds to set_extent."""
+    """Check interior cropping forwards interior lon/lat bounds."""
     datastore = init_datastore_example("dummydata")
     n_grid = datastore.num_grid_points
     grid_shape = (datastore.grid_shape_state.x, datastore.grid_shape_state.y)

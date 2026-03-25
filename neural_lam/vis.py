@@ -57,7 +57,7 @@ def _compute_heatmap_layout(n_rows: int, n_cols: int) -> dict[str, float]:
     return {
         "fig_width": fig_width,
         "fig_height": fig_height,
-        "tick_label_size": float(np.clip(15.0 - 0.18 * max_dim, 7.0, 14.0)),
+        "tick_label_size": float(np.clip(15.0 - 0.18 * max_dim, 9.0, 14.0)),
         "annotation_size": float(np.clip(13.0 - 0.22 * max_dim, 5.0, 12.0)),
         "title_size": float(np.clip(16.0 - 0.15 * max_dim, 9.0, 15.0)),
         "x_tick_rotation": 45.0 if n_cols > 12 else 0.0,
@@ -126,12 +126,12 @@ def _get_heatmap_color_values(
             category="state"
         )
     except (AttributeError, KeyError, TypeError, ValueError):
-        return errors_np, "Relative scale"
+        return errors_np, "Absolute scale"
 
     n_vars = errors_np.shape[0]
     state_std = _get_feature_scale(ds_state_stats, "state_std", n_vars)
     if state_std is None:
-        return errors_np, "Relative scale"
+        return errors_np, "Absolute scale"
 
     scale = state_std
     colorbar_label = "Relative scale (state stds)"
@@ -141,7 +141,7 @@ def _get_heatmap_color_values(
     )
     if state_diff_std_standardized is not None:
         scale = scale * state_diff_std_standardized
-        colorbar_label = "Relative scale (1-step diff stds)"
+        colorbar_label = "Error / Std(1-step change)"
 
     safe_scale = np.where(
         np.isfinite(scale) & (np.abs(scale) > np.finfo(float).eps),
@@ -174,7 +174,34 @@ def plot_on_axis(
     boundary_alpha=None,
     crop_to_interior=False,
 ):
-    """Plot weather state on a projection-aware axis using datastore metadata."""
+    """Plot weather state on a projection-aware axis using datastore metadata.
+
+    Parameters
+    ----------
+    ax : matplotlib.axes.Axes
+        The axis to plot on. Should have a cartopy projection.
+    da : xarray.DataArray
+        The data to plot. Should have shape (N_grid,).
+    datastore : BaseRegularGridDatastore
+        The datastore containing metadata about the grid.
+    vmin : float, optional
+        Minimum value for color scale.
+    vmax : float, optional
+        Maximum value for color scale.
+    ax_title : str, optional
+        Title for the axis.
+    cmap : str or matplotlib.colors.Colormap, optional
+        Colormap to use for plotting.
+    boundary_alpha : float, optional
+        If provided, overlay boundary mask with given alpha transparency.
+    crop_to_interior : bool, optional
+        If True, crop the plot to the interior region.
+
+    Returns
+    -------
+    matplotlib.collections.QuadMesh
+        The mesh object created by pcolormesh.
+    """
     ax.coastlines(resolution="50m")
     ax.add_feature(cfeature.BORDERS, linestyle="-", alpha=0.5)
 
@@ -261,8 +288,6 @@ def plot_error_heatmap(
     errors,
     datastore: BaseRegularGridDatastore,
     title=None,
-    color_values=None,
-    colorbar_label=None,
 ):
     """
     Plot a heatmap of errors for state variables across forecast lead times.
@@ -275,13 +300,6 @@ def plot_error_heatmap(
         Datastore providing step length and variable metadata.
     title : str, optional
         Optional title for the figure.
-    color_values : torch.Tensor, optional
-        Optional values used only for the background colors. If omitted,
-        colors are normalized from ``errors`` using datastore state-variable
-        standardization statistics.
-    colorbar_label : str, optional
-        Optional label for the colorbar. If omitted, an automatic label is
-        chosen based on the color normalization used.
     """
     errors_np = _to_heatmap_matrix(errors)
     d_f, pred_steps = errors_np.shape
@@ -289,22 +307,9 @@ def plot_error_heatmap(
 
     time_step_int, time_step_unit = utils.get_integer_time(step_length)
     layout = _compute_heatmap_layout(n_rows=d_f, n_cols=pred_steps)
-
-    if color_values is None:
-        color_values_np, default_colorbar_label = _get_heatmap_color_values(
-            errors_np, datastore
-        )
-    else:
-        color_values_np = _to_heatmap_matrix(color_values)
-        default_colorbar_label = "Relative scale"
-        if color_values_np.shape != errors_np.shape:
-            raise ValueError(
-                "color_values must have the same shape as errors: "
-                f"got {color_values_np.T.shape} and {errors_np.T.shape}"
-            )
-
-    if colorbar_label is None:
-        colorbar_label = default_colorbar_label
+    color_values_np, colorbar_label = _get_heatmap_color_values(
+        errors_np, datastore
+    )
 
     finite_color_values = color_values_np[np.isfinite(color_values_np)]
     if finite_color_values.size == 0:
