@@ -168,6 +168,9 @@ class ARModel(pl.LightningModule):
             self._datastore.step_length
         )
 
+        # Graph information for metrics (to be set by subclasses)
+        self.edge_index = None
+
     def _create_dataarray_from_tensor(
         self,
         tensor: torch.Tensor,
@@ -316,6 +319,7 @@ class ARModel(pl.LightningModule):
                 pred_std,
                 mask=self.interior_mask_bool,
                 grid_shape=self.grid_shape,
+                edge_index=self.edge_index,
             )
         )  # mean over unrolled times and batch
 
@@ -363,6 +367,7 @@ class ARModel(pl.LightningModule):
                 pred_std,
                 mask=self.interior_mask_bool,
                 grid_shape=self.grid_shape,
+                edge_index=self.edge_index,
             ),
             dim=0,
         )  # (time_steps-1)
@@ -421,6 +426,7 @@ class ARModel(pl.LightningModule):
                 pred_std,
                 mask=self.interior_mask_bool,
                 grid_shape=self.grid_shape,
+                edge_index=self.edge_index,
             ),
             dim=0,
         )  # (time_steps-1,)
@@ -469,6 +475,7 @@ class ARModel(pl.LightningModule):
             pred_std,
             average_grid=False,
             grid_shape=self.grid_shape,
+            edge_index=self.edge_index,
         )  # (B, pred_steps, num_grid_nodes)
         log_spatial_losses = spatial_loss[
             :, [step - 1 for step in self.args.val_steps_to_log]

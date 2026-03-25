@@ -246,6 +246,8 @@ def log_spectral_distance(
     average_grid=True,
     sum_vars=True,
     grid_shape=None,
+    edge_index=None,
+    num_moments=10,
     eps=1e-8,
 ):
     """
@@ -259,55 +261,141 @@ def log_spectral_distance(
     mask: (N,), boolean mask describing which grid nodes to use (unused)
     average_grid: boolean, if result should be averaged over grid
     sum_vars: boolean, if variable dimension -1 should be reduced
-    grid_shape: tuple (ny, nx), shape of the 2D grid
+    grid_shape: tuple (ny, nx), shape of the 2D grid (for regular grids)
+    edge_index: (2, M), edges in the graph (for unstructured grids)
+    num_moments: int, number of Laplacian moments to use for unstructured LSD
     eps: float, small value to avoid log(0)
 
     Returns:
     metric_val: One of (...,), (..., d_state), depends on reduction arguments.
     """
-    if grid_shape is None:
-        # Fallback to MSE if grid shape is not provided
-        # Or we could try to infer it if N is a perfect square
-        num_nodes = pred.shape[-2]
-        side = int(num_nodes**0.5)
-        if side**2 == num_nodes:
+    # Regular grid LSD using FFT
+    if grid_shape is not None or (edge_index is None and _is_square_grid(pred)):
+        if grid_shape is None:
+            num_nodes = pred.shape[-2]
+            side = int(num_nodes**0.5)
             grid_shape = (side, side)
-        else:
-            raise ValueError(
-                "log_spectral_distance requires grid_shape or a square grid"
-            )
 
-    # Reshape to (..., d_state, ny, nx) for FFT
-    ny, nx = grid_shape
-    # Move d_state to before grid dimensions
-    # pred is (..., N, d_state) -> (..., d_state, N) -> (..., d_state, ny, nx)
-    p = pred.transpose(-1, -2).reshape(*pred.shape[:-2], pred.shape[-1], ny, nx)
-    t = target.transpose(-1, -2).reshape(
-        *target.shape[:-2], target.shape[-1], ny, nx
-    )
+        # Reshape to (..., d_state, ny, nx) for FFT
+        ny, nx = grid_shape
+        # Move d_state to before grid dimensions
+        # pred is (..., N, d_state) -> (..., d_state, N) -> (..., d_state, ny, nx)
+        p = pred.transpose(-1, -2).reshape(
+            *pred.shape[:-2], pred.shape[-1], ny, nx
+        )
+        t = target.transpose(-1, -2).reshape(
+            *target.shape[:-2], target.shape[-1], ny, nx
+        )
 
-    # Compute 2D RFFT
-    f_pred = torch.fft.rfft2(p, norm="ortho")
-    f_target = torch.fft.rfft2(t, norm="ortho")
+        # Compute 2D RFFT
+        f_pred = torch.fft.rfft2(p, norm="ortho")
+        f_target = torch.fft.rfft2(t, norm="ortho")
 
-    # Power Spectrum: |F(u,v)|^2
-    ps_pred = torch.abs(f_pred) ** 2
-    ps_target = torch.abs(f_target) ** 2
+        # Power Spectrum: |F(u,v)|^2
+        ps_pred = torch.abs(f_pred) ** 2
+        ps_target = torch.abs(f_target) ** 2
 
-    # Log-Spectral Distance: 10 * log10(P_target / P_pred)
-    # entry_lsd is (..., d_state, freq_y, freq_x)
-    entry_lsd = (
-        10 * torch.log10((ps_target + eps) / (ps_pred + eps))
-    ) ** 2
+        # Average over frequency dimensions
+        # entry_lsd is (..., d_state, freq_y, freq_x)
+        # We compute mean( (10 * log10(P_target/P_pred))^2 ) then sqrt
+        diff_lsd = (10 * torch.log10((ps_target + eps) / (ps_pred + eps))) ** 2
+        metric_val = torch.mean(diff_lsd, dim=(-2, -1))  # (..., d_state)
+        metric_val = torch.sqrt(metric_val)
 
-    # Average over frequency dimensions
-    metric_val = torch.mean(entry_lsd, dim=(-2, -1))  # (..., d_state)
-    metric_val = torch.sqrt(metric_val)
+    # Unstructured grid LSD using Graph Signal Processing
+    elif edge_index is not None:
+        # Compute spectral moments using Normalized Laplacian
+        # moments: (..., d_state, num_moments)
+        m_pred = _compute_laplacian_moments(pred, edge_index, num_moments)
+        m_target = _compute_laplacian_moments(target, edge_index, num_moments)
+
+        # Log-Spectral Distance over moments:
+        # RMS of 10 * log10(m_target / m_pred)
+        # diff_lsd is (..., d_state, num_moments)
+        diff_lsd = (10 * torch.log10((m_target + eps) / (m_pred + eps))) ** 2
+        metric_val = torch.mean(diff_lsd, dim=-1)  # (..., d_state)
+        metric_val = torch.sqrt(metric_val)
+
+    else:
+        raise ValueError(
+            "log_spectral_distance requires grid_shape, edge_index, "
+            "or a square grid"
+        )
 
     if sum_vars:
         metric_val = torch.sum(metric_val, dim=-1)  # (...,)
 
     return metric_val
+
+
+def _is_square_grid(pred):
+    """Check if the grid dimension is a perfect square"""
+    num_nodes = pred.shape[-2]
+    side = int(num_nodes**0.5)
+    return side**2 == num_nodes
+
+
+def _compute_laplacian_moments(x, edge_index, num_moments):
+    """
+    Compute moments of the spectral distribution: m_k = x^T L^k x
+    where L is the Normalized Laplacian.
+    """
+    # x: (..., N, d_state)
+    # edge_index: (2, M)
+    # returns: (..., d_state, num_moments)
+    N = x.shape[-2]
+    device = x.device
+
+    # 1. Compute Normalized Laplacian as a sparse matrix
+    # L = I - D^-1/2 A D^-1/2
+    row, col = edge_index
+    deg = torch.zeros(N, device=device)
+    # Assume unweighted adjacency for now, or use edge_weight if provided
+    # For neural-lam, m2m_edge_index is usually unweighted or has features
+    deg.scatter_add_(0, col, torch.ones_like(row, dtype=torch.float32))
+
+    deg_inv_sqrt = deg.pow(-0.5)
+    deg_inv_sqrt[deg_inv_sqrt == float("inf")] = 0
+
+    # Normalized weights: -1 / sqrt(di * dj)
+    val = -deg_inv_sqrt[row] * deg_inv_sqrt[col]
+
+    # Sparse Laplacian L
+    # Off-diagonal: -D^-1/2 A D^-1/2
+    indices = torch.cat(
+        [edge_index, torch.stack([torch.arange(N, device=device)] * 2)], dim=1
+    )
+    values = torch.cat([val, torch.ones(N, device=device)])
+    L = torch.sparse_coo_tensor(indices, values, (N, N)).coalesce()
+
+    # 2. Iteratively compute x_k = L^k x and m_k = x^T x_k
+    # x is (..., N, d_state)
+    # Reshape x to (N, -1) for sparse mm
+    orig_shape = x.shape
+    x_flat = x.transpose(-2, -1).reshape(-1, N).t()  # (N, B * d_state)
+
+    moments = []
+    curr_x = x_flat
+    for _ in range(num_moments):
+        # m_k = x^T (L^k x)
+        # dot product per column
+        m_k = torch.sum(x_flat * curr_x, dim=0)  # (B * d_state,)
+        moments.append(m_k)
+        # curr_x = L * curr_x
+        curr_x = torch.sparse.mm(L, curr_x)
+
+    # moments: list of (B * d_state,)
+    moments = torch.stack(moments, dim=-1)  # (B * d_state, num_moments)
+
+    # Reshape back to (..., d_state, num_moments)
+    res = moments.view(*orig_shape[:-2], orig_shape[-1], num_moments)
+
+    # Normalize moments by k=0 (total energy) to get relative distribution?
+    # Actually, standard LSD compares absolute power spectra.
+    # But if we want it to be scale-invariant, we could.
+    # The proposal didn't specify, so we use absolute moments for now.
+    # We take absolute value to ensure positivity before log
+    return torch.abs(res)
 
 
 DEFINED_METRICS = {
