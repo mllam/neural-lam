@@ -31,7 +31,7 @@ def _validate_preflight_batch(
     expected_ar_steps: int,
     forcing_window_size: int,
 ):
-    """Validate one dataloader batch for shape and numerical sanity."""
+    """Validate one batch for pipeline-specific temporal/forcing invariants."""
     if not isinstance(batch, (tuple, list)) or len(batch) != 4:
         raise ValueError(
             f"{split_name}: expected batch to be a 4-tuple "
@@ -42,52 +42,6 @@ def _validate_preflight_batch(
 
     if not all(isinstance(t, torch.Tensor) for t in batch):
         raise ValueError(f"{split_name}: all batch entries must be tensors.")
-
-    # Support both directly sampled items and DataLoader-batched tensors.
-    if init_states.dim() == 3:
-        init_states = init_states.unsqueeze(0)
-    if target_states.dim() == 3:
-        target_states = target_states.unsqueeze(0)
-    if forcing.dim() == 3:
-        forcing = forcing.unsqueeze(0)
-    if target_times.dim() == 1:
-        target_times = target_times.unsqueeze(0)
-
-    if init_states.dim() != 4:
-        raise ValueError(
-            f"{split_name}: init_states must have 4 dims, got "
-            f"{init_states.dim()}."
-        )
-    if target_states.dim() != 4:
-        raise ValueError(
-            f"{split_name}: target_states must have 4 dims, got "
-            f"{target_states.dim()}."
-        )
-    if forcing.dim() != 4:
-        raise ValueError(
-            f"{split_name}: forcing must have 4 dims, got {forcing.dim()}."
-        )
-    if target_times.dim() != 2:
-        raise ValueError(
-            f"{split_name}: target_times must have 2 dims, got "
-            f"{target_times.dim()}."
-        )
-
-    batch_size = init_states.shape[0]
-    if (
-        target_states.shape[0] != batch_size
-        or forcing.shape[0] != batch_size
-        or target_times.shape[0] != batch_size
-    ):
-        raise ValueError(
-            f"{split_name}: inconsistent batch dimension across tensors."
-        )
-
-    if init_states.shape[1] != 2:
-        raise ValueError(
-            f"{split_name}: init_states time dimension must be 2, got "
-            f"{init_states.shape[1]}."
-        )
 
     if target_states.shape[1] != expected_ar_steps:
         raise ValueError(
@@ -110,35 +64,10 @@ def _validate_preflight_batch(
             f"{target_times.shape[1]}."
         )
 
-    if forcing_window_size <= 0:
-        raise ValueError(
-            f"{split_name}: forcing_window_size must be > 0, got "
-            f"{forcing_window_size}."
-        )
-
     if forcing.shape[-1] % forcing_window_size != 0:
         raise ValueError(
             f"{split_name}: forcing feature size ({forcing.shape[-1]}) is "
             f"not divisible by forcing window size ({forcing_window_size})."
-        )
-
-    if not torch.isfinite(init_states).all():
-        raise ValueError(f"{split_name}: init_states contains NaN/Inf.")
-    if not torch.isfinite(target_states).all():
-        raise ValueError(f"{split_name}: target_states contains NaN/Inf.")
-    if not torch.isfinite(forcing).all():
-        raise ValueError(f"{split_name}: forcing contains NaN/Inf.")
-
-    if target_times.dtype not in (torch.int64, torch.int32):
-        raise ValueError(
-            f"{split_name}: target_times must be integer dtype, got "
-            f"{target_times.dtype}."
-        )
-    if target_times.shape[1] > 1 and not torch.all(
-        torch.diff(target_times, dim=1) > 0
-    ):
-        raise ValueError(
-            f"{split_name}: target_times must be strictly increasing."
         )
 
 

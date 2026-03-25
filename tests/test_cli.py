@@ -13,9 +13,8 @@ import neural_lam.create_graph
 import neural_lam.train_model
 
 
-def test_import():
-    """This test just ensures that each cli entry-point can be imported for now,
-    eventually we should test their execution too."""
+def test_cli_entrypoints_importable():
+    """Each CLI entry-point can be imported."""
     assert neural_lam is not None
     assert neural_lam.create_graph is not None
     assert neural_lam.train_model is not None
@@ -121,7 +120,7 @@ def test_wandb_id_ignored_with_mlflow_warns():
     assert "mlflow" in warning_msg
 
 
-def _make_batch(ar_steps, forcing_dim, monotonic_times=True):
+def _make_batch(ar_steps, forcing_dim):
     """Create a synthetic weather batch with DataLoader-like batch dim."""
     batch_size = 2
     n_grid = 5
@@ -130,18 +129,8 @@ def _make_batch(ar_steps, forcing_dim, monotonic_times=True):
     init_states = torch.randn(batch_size, 2, n_grid, d_state)
     target_states = torch.randn(batch_size, ar_steps, n_grid, d_state)
     forcing = torch.randn(batch_size, ar_steps, n_grid, forcing_dim)
-
     base = torch.arange(ar_steps, dtype=torch.int64)
-    if monotonic_times:
-        target_times = torch.stack([base, base + 10], dim=0)
-    else:
-        target_times = torch.stack(
-            [
-                torch.tensor([3, 2, 1], dtype=torch.int64),
-                torch.tensor([7, 6, 5], dtype=torch.int64),
-            ],
-            dim=0,
-        )
+    target_times = torch.stack([base, base + 10], dim=0)
 
     return init_states, target_states, forcing, target_times
 
@@ -213,10 +202,8 @@ def test_dry_run_data_preflight_failure_raises_value_error():
             self.stage = stage
 
         def train_dataloader(self):
-            # Non-monotonic times should fail preflight checks.
-            return [
-                _make_batch(ar_steps=3, forcing_dim=6, monotonic_times=False)
-            ]
+            # window size = 1 + 1 + 1 = 3, forcing dim=5 is invalid
+            return [_make_batch(ar_steps=3, forcing_dim=5)]
 
         def val_dataloader(self):
             return [_make_batch(ar_steps=3, forcing_dim=6)]
@@ -232,7 +219,7 @@ def test_dry_run_data_preflight_failure_raises_value_error():
         num_future_forcing_steps=1,
     )
 
-    with pytest.raises(ValueError, match="strictly increasing"):
+    with pytest.raises(ValueError, match="forcing feature size"):
         neural_lam.train_model._run_data_preflight(
             data_module=DummyBadDataModule(),
             args=args,

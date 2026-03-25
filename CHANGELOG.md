@@ -13,7 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Enable `pin_memory` in DataLoaders when GPU is available for faster async CPU-to-GPU data transfers [\#236](https://github.com/mllam/neural-lam/pull/236) @abhaygoudannavar
 
-- Add `--dry_run_data` mode to `train_model` to preflight-validate dataloader batches (shape, finite values, monotonic target times, and forcing window consistency) before creating model/trainer [\#510](https://github.com/mllam/neural-lam/issues/510) @AR10129
+- Add `--dry_run_data` mode to `train_model` to preflight-validate dataloader batches for pipeline-specific temporal alignment and forcing window consistency before creating model/trainer [\#510](https://github.com/mllam/neural-lam/issues/510) @AR10129
 
 ### Changed
 
