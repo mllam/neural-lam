@@ -18,6 +18,48 @@ from torch_geometric.utils.convert import from_networkx
 from .config import load_config_and_datastore
 from .datastore.base import BaseRegularGridDatastore
 
+def validate_graph(edge_index, num_nodes, name="graph"):
+    """
+    Basic sanity checks to catch common graph issues early.
+    """
+
+    if edge_index.shape[0] != 2:
+        raise ValueError(f"[{name}] edge_index should have shape [2, num_edges]")
+
+    if edge_index.numel() == 0:
+        raise ValueError(f"[{name}] edge_index is empty")
+
+    if edge_index.min() < 0:
+        raise ValueError(f"[{name}] found negative node indices")
+
+    if edge_index.max() >= num_nodes:
+        raise ValueError(
+            f"[{name}] edge_index contains node index >= num_nodes ({num_nodes})"
+        )
+
+    logger.info(f"[{name}] validation passed")
+
+
+def compute_graph_stats(edge_index, num_nodes, name="graph"):
+    """
+    Log a few useful stats so it's easier to understand the graph structure.
+    """
+
+    import torch
+
+    degrees = torch.bincount(edge_index[1], minlength=num_nodes)
+
+    num_edges = edge_index.shape[1]
+    avg_degree = degrees.float().mean().item()
+    max_degree = degrees.max().item()
+    isolated_nodes = (degrees == 0).sum().item()
+
+    logger.info(f"[{name}] nodes: {num_nodes}")
+    logger.info(f"[{name}] edges: {num_edges}")
+    logger.info(f"[{name}] avg degree: {avg_degree:.2f}")
+    logger.info(f"[{name}] max degree: {max_degree}")
+    logger.info(f"[{name}] isolated nodes: {isolated_nodes}")
+
 
 def plot_graph(graph, title=None):
     fig, axis = plt.subplots(figsize=(8, 8), dpi=200)  # W,H
@@ -361,6 +403,9 @@ def create_graph(
             )
             for level_graph, start_index in zip(G, first_index_level)
         ]
+        for level, graph in enumerate(m2m_graphs):
+            validate_graph(graph.edge_index, graph.num_nodes, f"m2m_level_{level}")
+            compute_graph_stats(graph.edge_index, graph.num_nodes, f"m2m_level_{level}")
 
         mesh_pos = [graph.pos.to(torch.float32) for graph in m2m_graphs]
 
@@ -486,6 +531,8 @@ def create_graph(
             )
 
     pyg_g2m = from_networkx(G_g2m)
+    validate_graph(pyg_g2m.edge_index, pyg_g2m.num_nodes, "g2m")
+    compute_graph_stats(pyg_g2m.edge_index, pyg_g2m.num_nodes, "g2m")
 
     if create_plot:
         plot_graph(pyg_g2m, title="Grid-to-mesh")
@@ -525,6 +572,8 @@ def create_graph(
         G_m2g, first_label=0, ordering="sorted"
     )
     pyg_m2g = from_networkx(G_m2g_int)
+    validate_graph(pyg_m2g.edge_index, pyg_m2g.num_nodes, "m2g")
+    compute_graph_stats(pyg_m2g.edge_index, pyg_m2g.num_nodes, "m2g")
 
     if create_plot:
         plot_graph(pyg_m2g, title="Mesh-to-grid")
