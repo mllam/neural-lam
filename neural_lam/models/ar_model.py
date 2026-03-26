@@ -170,23 +170,35 @@ class ARModel(pl.LightningModule):
         """
         Create an `xr.DataArray` from a tensor, with the correct dimensions and
         coordinates to match the datastore used by the model. This function in
-        in effect is the inverse of what is returned by
-        `WeatherDataset.__getitem__`.
+        effect is the inverse of what is returned by `WeatherDataset.__getitem__`.
+
+        Supports both deterministic (3D) and ensemble/probabilistic (4D) forecasts
+        for Zarr export and external verification.
 
         Parameters
         ----------
         tensor : torch.Tensor
-            The tensor to convert to a `xr.DataArray` with dimensions [time,
-            grid_index, feature]. The tensor will be copied to the CPU if it is
-            not already there.
+            The tensor to convert to a `xr.DataArray`. Supported shapes:
+            - 3D: [time, grid_index, feature] for deterministic predictions
+            - 4D: [ensemble_member, time, grid_index, feature] for 
+              ensemble/probabilistic predictions
+            The tensor will be copied to the CPU if it is not already there.
         time : torch.Tensor
             The time index or indices for the data, given as tensor representing
-            epoch time in nanoseconds. The tensor will be
-            copied to the CPU memory if they are not already there.
+            epoch time in nanoseconds. For 3D tensors, can be a single value or
+            list. For 4D tensors, must be a list matching the time dimension.
+            The tensor will be copied to the CPU memory if not already there.
         split : str
             The split of the data, either 'train', 'val', or 'test'
         category : str
             The category of the data, either 'state' or 'forcing'
+
+        Returns
+        -------
+        xr.DataArray
+            DataArray with proper dimensions and coordinates including
+            'time', 'grid_index', '{category}_feature', and optionally
+            'ensemble_member' for ensemble predictions. Ready for Zarr export.
         """
         # TODO: creating an instance of WeatherDataset here on every call is
         # not how this should be done but whether WeatherDataset should be
@@ -229,11 +241,44 @@ class ARModel(pl.LightningModule):
 
     def unroll_prediction(self, init_states, forcing_features, true_states):
         """
-        Roll out prediction taking multiple autoregressive steps with model
-        init_states: (B, 2, num_grid_nodes, d_f) forcing_features: (B,
-        pred_steps, num_grid_nodes, d_static_f) true_states: (B, pred_steps,
-        num_grid_nodes, d_f)
+        Roll out prediction taking multiple autoregressive steps with model.
+
+        Supports both deterministic (4D) and ensemble/probabilistic (5D) tensor
+        inputs for Zarr export of probabilistic forecasts.
+
+        Parameters
+        ----------
+        init_states : torch.Tensor
+            Initial states. Shape:
+            - Deterministic: (B, 2, num_grid_nodes, d_f)
+            - Ensemble: (B, S, 2, num_grid_nodes, d_f) where S is ensemble members
+        forcing_features : torch.Tensor
+            Forcing features. Shape:
+            - Deterministic: (B, pred_steps, num_grid_nodes, d_forcing_f)
+            - Ensemble: (B, S, pred_steps, num_grid_nodes, d_forcing_f)
+        true_states : torch.Tensor
+            True boundary states. Shape:
+            - Deterministic: (B, pred_steps, num_grid_nodes, d_f)
+            - Ensemble: (B, S, pred_steps, num_grid_nodes, d_f)
+
+        Returns
+        -------
+        prediction : torch.Tensor
+            Predictions with shape:
+            - Deterministic: (B, pred_steps, num_grid_nodes, d_f)
+            - Ensemble: (B, S, pred_steps, num_grid_nodes, d_f)
+        pred_std : torch.Tensor
+            Prediction std or per-variable std depending on output_std setting.
         """
+        # Handle ensemble dimension if present (5D vs 4D)
+        is_ensemble = init_states.ndim == 5
+        if is_ensemble:
+            B, S, _, N, F = init_states.shape
+            # Reshape to (B*S, 2, N, F) for processing
+            init_states = init_states.reshape(B * S, *init_states.shape[2:])
+            forcing_features = forcing_features.reshape(B * S, *forcing_features.shape[2:])
+            true_states = true_states.reshape(B * S, *true_states.shape[2:])
+
         prev_prev_state = init_states[:, 0]
         prev_state = init_states[:, 1]
         prediction_list = []
@@ -247,7 +292,7 @@ class ARModel(pl.LightningModule):
             pred_state, pred_std = self.predict_step(
                 prev_state, prev_prev_state, forcing
             )
-            # state: (B, num_grid_nodes, d_f) pred_std: (B, num_grid_nodes,
+            # state: (B*S, num_grid_nodes, d_f) pred_std: (B*S, num_grid_nodes,
             # d_f) or None
 
             # Overwrite border with true state
@@ -266,13 +311,25 @@ class ARModel(pl.LightningModule):
 
         prediction = torch.stack(
             prediction_list, dim=1
-        )  # (B, pred_steps, num_grid_nodes, d_f)
-        if self.output_std:
-            pred_std = torch.stack(
-                pred_std_list, dim=1
-            )  # (B, pred_steps, num_grid_nodes, d_f)
+        )  # (B*S, pred_steps, num_grid_nodes, d_f)
+
+        # Reshape back to ensemble form if needed
+        if is_ensemble:
+            prediction = prediction.reshape(B, S, *prediction.shape[1:])
+            if self.output_std:
+                pred_std = torch.stack(
+                    pred_std_list, dim=1
+                )  # (B*S, pred_steps, num_grid_nodes, d_f)
+                pred_std = pred_std.reshape(B, S, *pred_std.shape[1:])
+            else:
+                pred_std = self.per_var_std  # (d_f,)
         else:
-            pred_std = self.per_var_std  # (d_f,)
+            if self.output_std:
+                pred_std = torch.stack(
+                    pred_std_list, dim=1
+                )  # (B, pred_steps, num_grid_nodes, d_f)
+            else:
+                pred_std = self.per_var_std  # (d_f,)
 
         return prediction, pred_std
 
