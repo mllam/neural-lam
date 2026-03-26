@@ -156,6 +156,72 @@ def test_dataset_item_create_dataarray_from_tensor(datastore_name):
         )
 
 
+def test_dataset_item_create_dataarray_from_tensor_4d_ensemble():
+    """Test creating DataArray from 4D ensemble tensor (S, T, N, F).
+    
+    Verify that 4D tensors representing ensemble/probabilistic predictions
+    are properly converted to xarray DataArrays with ensemble_member coordinate.
+    """
+    n_timesteps = 15
+    n_ensemble_members = 3
+    datastore = DummyDatastore(n_timesteps=n_timesteps)
+    
+    N_pred_steps = 4
+    num_past_forcing_steps = 1
+    num_future_forcing_steps = 1
+    dataset = WeatherDataset(
+        datastore=datastore,
+        split="train",
+        ar_steps=N_pred_steps,
+        num_past_forcing_steps=num_past_forcing_steps,
+        num_future_forcing_steps=num_future_forcing_steps,
+    )
+    
+    N_grid = datastore.num_grid_points
+    N_features = datastore.get_num_data_vars(category="state")
+    
+    # Create synthetic 4D ensemble tensor: (S, T, N, F)
+    tensor_4d = torch.randn(n_ensemble_members, N_pred_steps, N_grid, N_features)
+    times = [np.datetime64(f"2020-01-{i+1:02d}") for i in range(N_pred_steps)]
+    
+    da_ensemble = dataset.create_dataarray_from_tensor(
+        tensor=tensor_4d,
+        time=times,
+        category="state"
+    )
+    
+    # Verify shape and dimensions
+    assert da_ensemble.shape == (n_ensemble_members, N_pred_steps, N_grid, N_features)
+    assert da_ensemble.dims == ("ensemble_member", "time", "grid_index", "state_feature")
+    
+    # Verify ensemble_member coordinate exists and has correct size
+    assert "ensemble_member" in da_ensemble.coords
+    assert da_ensemble.ensemble_member.size == n_ensemble_members
+    np.testing.assert_array_equal(
+        da_ensemble.ensemble_member.values, 
+        np.arange(n_ensemble_members)
+    )
+    
+    # Verify time coordinate matches input
+    assert "time" in da_ensemble.coords
+    assert len(da_ensemble.time) == N_pred_steps
+    np.testing.assert_array_equal(
+        da_ensemble.time.values, 
+        np.array(times, dtype="datetime64[ns]")
+    )
+    
+    # Verify grid_index and state_feature are properly mapped
+    assert "grid_index" in da_ensemble.coords
+    assert "state_feature" in da_ensemble.coords
+    
+    # Verify values match input tensor
+    np.testing.assert_allclose(
+        da_ensemble.values, 
+        tensor_4d.cpu().numpy(), 
+        rtol=1e-6
+    )
+
+
 @pytest.mark.parametrize("split", ["train", "val", "test"])
 @pytest.mark.parametrize("datastore_name", DATASTORES.keys())
 def test_single_batch(datastore_name, split):
