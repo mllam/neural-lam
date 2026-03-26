@@ -227,6 +227,58 @@ def crps_gauss(
     )
 
 
+def crps_loss(
+    pred_ens, target, mask=None, average_grid=True, sum_vars=True
+):
+    """
+    Ensemble CRPS using the sample-based estimator.
+
+    Expects:
+    pred_ens: (B, S, T, N, d_state), ensemble predictions
+    target: (B, T, N, d_state), verifying truth
+    mask: (N,) or (N, 1), optional boolean/grid mask
+
+    Returns:
+    metric_val reduced according to average_grid/sum_vars after computing
+    CRPS entries with shape (B, T, N, d_state).
+    """
+    if pred_ens.dim() != 5:
+        raise ValueError("pred_ens must have shape (B, S, T, N, d_state)")
+    if target.dim() != 4:
+        raise ValueError("target must have shape (B, T, N, d_state)")
+    if pred_ens.shape[0] != target.shape[0]:
+        raise ValueError(
+            "Batch size mismatch between pred_ens and target in crps_loss"
+        )
+    if pred_ens.shape[2:] != target.shape[1:]:
+        raise ValueError(
+            "Shape mismatch: pred_ens (T,N,d_state) must match target "
+            "(T,N,d_state)"
+        )
+
+    if mask is not None:
+        if mask.dim() == 2:
+            mask = mask[:, 0]
+        mask = mask.to(torch.bool)
+
+    # E|X - y|
+    target_expanded = target.unsqueeze(1)  # (B, 1, T, N, d_state)
+    term_obs = torch.abs(pred_ens - target_expanded).mean(dim=1)
+    # (B, T, N, d_state)
+
+    # 0.5 * E|X - X'|
+    pairwise_abs = torch.abs(
+        pred_ens.unsqueeze(2) - pred_ens.unsqueeze(1)
+    )  # (B, S, S, T, N, d_state)
+    term_ens = 0.5 * pairwise_abs.mean(dim=(1, 2))
+    # (B, T, N, d_state)
+
+    entry_crps = term_obs - term_ens
+    return mask_and_reduce_metric(
+        entry_crps, mask=mask, average_grid=average_grid, sum_vars=sum_vars
+    )
+
+
 DEFINED_METRICS = {
     "mse": mse,
     "mae": mae,
