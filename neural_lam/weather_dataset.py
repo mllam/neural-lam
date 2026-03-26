@@ -553,28 +553,39 @@ class WeatherDataset(torch.utils.data.Dataset):
         and number of times provided and add the x/y coordinates from the
         datastore.
 
-        The number if times provided is expected to match the shape of the
+        Supports both deterministic (2D/3D) and ensemble/probabilistic (4D) 
+        tensors.
+
+        The number of times provided is expected to match the shape of the
         tensor. For a 2D tensor, the dimensions are assumed to be (grid_index,
         {category}_feature) and only a single time should be provided. For a 3D
         tensor, the dimensions are assumed to be (time, grid_index,
-        {category}_feature) and a list of times should be provided.
+        {category}_feature) and a list of times should be provided. For a 4D
+        tensor, the dimensions are assumed to be (ensemble_member, time,
+        grid_index, {category}_feature) and a list of times should be provided.
 
         Parameters
         ----------
         tensor : torch.Tensor
-            The tensor to construct the DataArray from, this assumed to have
-            the same dimension ordering as returned by the __getitem__ method
-            (i.e. time, grid_index, {category}_feature). The tensor will be
-            copied to the CPU before constructing the DataArray.
+            The tensor to construct the DataArray from. Supported shapes:
+            - 2D: (grid_index, {category}_feature)
+            - 3D: (time, grid_index, {category}_feature) for deterministic
+            - 4D: (ensemble_member, time, grid_index, {category}_feature) for
+              ensemble/probabilistic predictions
+            The tensor will be copied to the CPU before constructing the 
+            DataArray.
         time : datetime.datetime or list[datetime.datetime]
-            The time or times of the tensor.
+            The time or times of the tensor. For 2D tensors, a single value.
+            For 3D/4D tensors, a list of times matching the time dimension.
         category : str
             The category of the tensor, either "state", "forcing" or "static".
 
         Returns
         -------
         da : xr.DataArray
-            The constructed DataArray.
+            The constructed DataArray with proper dimensions and coordinates
+            including 'time', 'grid_index', '{category}_feature', and 
+            optionally 'ensemble_member' for ensemble predictions.
         """
 
         def _is_listlike(obj):
@@ -582,6 +593,7 @@ class WeatherDataset(torch.utils.data.Dataset):
             return hasattr(obj, "__iter__") and not isinstance(obj, str)
 
         add_time_as_dim = False
+        add_ensemble_as_dim = False
         if len(tensor.shape) == 2:
             dims = ["grid_index", f"{category}_feature"]
             if _is_listlike(time):
@@ -596,12 +608,22 @@ class WeatherDataset(torch.utils.data.Dataset):
             if not _is_listlike(time):
                 raise ValueError(
                     "Expected a list of times for a 3D tensor with assumed "
-                    "dimensions (time, grid_index, {category}_feature), but "
-                    "got a single time"
+                    "dimensions (time, grid_index, {category}_feature), but got "
+                    "a single time"
+                )
+        elif len(tensor.shape) == 4:
+            add_time_as_dim = True
+            add_ensemble_as_dim = True
+            dims = ["ensemble_member", "time", "grid_index", f"{category}_feature"]
+            if not _is_listlike(time):
+                raise ValueError(
+                    "Expected a list of times for a 4D tensor with assumed "
+                    "dimensions (ensemble_member, time, grid_index, "
+                    f"{category}_feature), but got a single time"
                 )
         else:
             raise ValueError(
-                "Expected tensor to have 2 or 3 dimensions, but got "
+                "Expected tensor to have 2, 3 or 4 dimensions, but got "
                 f"{len(tensor.shape)}"
             )
 
@@ -615,6 +637,14 @@ class WeatherDataset(torch.utils.data.Dataset):
         }
         if add_time_as_dim:
             coords["time"] = time
+        if add_ensemble_as_dim:
+            if (
+                "ensemble_member" in da_datastore_state.coords
+                and da_datastore_state.ensemble_member.size == tensor.shape[0]
+            ):
+                coords["ensemble_member"] = da_datastore_state.ensemble_member
+            else:
+                coords["ensemble_member"] = np.arange(tensor.shape[0])
 
         da = xr.DataArray(
             tensor.cpu().numpy(),

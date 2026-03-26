@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added support for 4D ensemble tensors in `WeatherDataset.create_dataarray_from_tensor()` with `ensemble_member` coordinate binding for probabilistic Zarr exports [\#520](https://github.com/mllam/neural-lam/issues/520)
+- Updated `ARModel._create_dataarray_from_tensor()` to support ensemble/probabilistic (4D) tensor conversion for external verification [\#520](https://github.com/mllam/neural-lam/issues/520)
+- Updated `ARModel.unroll_prediction()` to properly handle ensemble dimension stacking for ensemble/probabilistic forecasts [\#520](https://github.com/mllam/neural-lam/issues/520)
+- Added test `test_dataset_item_create_dataarray_from_tensor_4d_ensemble()` for 4D ensemble DataArray creation [\#520](https://github.com/mllam/neural-lam/issues/520)
+
 - Add `AGENTS.md` file to the repo to give agents more information about the codebase and the contribution culture.[\#416](https://github.com/mllam/neural-lam/pull/416) @sadamov
 
 - Enable `pin_memory` in DataLoaders when GPU is available for faster async CPU-to-GPU data transfers [\#236](https://github.com/mllam/neural-lam/pull/236) @abhaygoudannavar
