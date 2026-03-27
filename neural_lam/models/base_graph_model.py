@@ -348,10 +348,10 @@ class BaseGraphModel(ARModel):
             pred_delta_mean, pred_std_raw = net_output.chunk(
                 2, dim=-1
             )  # both (B, num_grid_nodes, d_f)
-            # NOTE: The predicted std. is not scaled in any way here
+            # Scale predicted std. with one-step difference std.
             # linter for some reason does not think softplus is callable
             # pylint: disable-next=not-callable
-            pred_std = torch.nn.functional.softplus(pred_std_raw)
+            pred_std = torch.nn.functional.softplus(pred_std_raw) * self.diff_std
         else:
             pred_delta_mean = net_output
             pred_std = None
