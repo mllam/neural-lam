@@ -47,8 +47,8 @@ class BufferList(nn.Module):
     def __itruediv__(self, other):
         """Divide each element in list with other"""
         return self.__imul__(1.0 / other)
-
     def __imul__(self, other):
+
         """Multiply each element in list with other"""
         for buffer_tensor in self:
             buffer_tensor *= other
@@ -493,12 +493,11 @@ def log_on_rank_zero(msg: str, level: str = "info", *args, **kwargs):
     if rank_zero_only.rank == 0:
         log_fn = getattr(logger, level, logger.info)
         log_fn(msg, *args, **kwargs)
-
-
 @rank_zero_only
 def rank_zero_print(*args, **kwargs):
     """Print a message only on rank zero."""
     print(*args, **kwargs)
+
 
 
 def init_training_logger_metrics(training_logger, val_steps):

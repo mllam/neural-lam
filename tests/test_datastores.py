@@ -289,6 +289,35 @@ def test_get_xy(datastore_name):
         assert xy_unstacked.shape[1] == ny
         assert xy_unstacked.shape[2] == 2
 
+        @pytest.mark.parametrize("datastore_name", DATASTORES.keys())
+        def test_get_lat_lon(datastore_name):
+            """Check that the `datastore.get_lat_lon` helper returns valid
+            shapes and values."""
+            datastore = init_datastore_example(datastore_name)
+
+            if not isinstance(datastore, BaseRegularGridDatastore):
+                pytest.skip(
+                    "Datastore does not implement `BaseCartesianDatastore`"
+                )
+
+            nx, ny = datastore.grid_shape_state.x, datastore.grid_shape_state.y
+
+            lonlat = datastore.get_lat_lon(category="state")
+            lonlat_grid = lonlat.reshape(nx, ny, 2)
+
+            assert lonlat.shape == (nx * ny, 2)
+            assert lonlat_grid.shape == (nx, ny, 2)
+            assert np.isfinite(lonlat).all()
+            assert np.isfinite(lonlat_grid).all()
+
+            lon = lonlat[:, 0]
+            lat = lonlat[:, 1]
+
+            assert np.all((lat >= -90.0) & (lat <= 90.0))
+            lon_in_180 = (lon >= -180.0) & (lon <= 180.0)
+            lon_in_360 = (lon >= 0.0) & (lon <= 360.0)
+            assert np.all(lon_in_180 | lon_in_360)
+
 
 @pytest.mark.parametrize("datastore_name", DATASTORES.keys())
 def test_get_projection(datastore_name):
