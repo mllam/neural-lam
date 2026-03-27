@@ -70,3 +70,99 @@ yaml_samples = zip(
 def test_config_load_from_yaml(yaml_str, config_expected):
     c = nlconfig.NeuralLAMConfig.from_yaml(yaml_str)
     assert c == config_expected
+
+
+# Tests for validate_config
+def test_validate_config_passes_with_existing_datastore_path(tmp_path):
+    """validate_config should not raise when datastore config_path exists."""
+    datastore_file = tmp_path / "datastore.yaml"
+    datastore_file.write_text("dummy: true\n")
+
+    nlam_config_path = str(tmp_path / "nlam_config.yaml")
+
+    config = nlconfig.NeuralLAMConfig(
+        datastore=nlconfig.DatastoreSelection(
+            kind="mdp", config_path="datastore.yaml"
+        ),
+        training=nlconfig.TrainingConfig(),
+    )
+
+    nlconfig.validate_config(config, nlam_config_path)
+
+
+def test_validate_config_raises_on_missing_datastore_file(tmp_path):
+    """validate_config raises InvalidConfigError when the resolved
+    datastore config path does not exist on disk."""
+    nlam_config_path = str(tmp_path / "nlam_config.yaml")
+
+    config = nlconfig.NeuralLAMConfig(
+        datastore=nlconfig.DatastoreSelection(
+            kind="mdp", config_path="does_not_exist.yaml"
+        ),
+        training=nlconfig.TrainingConfig(),
+    )
+
+    with pytest.raises(nlconfig.InvalidConfigError, match="datastore.config_path"):
+        nlconfig.validate_config(config, nlam_config_path)
+
+
+def test_validate_config_error_message_contains_resolved_path(tmp_path):
+    """The error message must contain the resolved path so users
+    know exactly what file is missing."""
+    nlam_config_path = str(tmp_path / "nlam_config.yaml")
+
+    config = nlconfig.NeuralLAMConfig(
+        datastore=nlconfig.DatastoreSelection(
+            kind="mdp", config_path="missing.yaml"
+        ),
+        training=nlconfig.TrainingConfig(),
+    )
+
+    with pytest.raises(nlconfig.InvalidConfigError) as exc_info:
+        nlconfig.validate_config(config, nlam_config_path)
+
+    assert "missing.yaml" in str(exc_info.value)
+
+
+def test_validate_config_raises_on_empty_manual_weights(tmp_path):
+    """ManualStateFeatureWeighting with an empty weights dict is invalid
+    and should raise InvalidConfigError at startup."""
+    datastore_file = tmp_path / "datastore.yaml"
+    datastore_file.write_text("dummy: true\n")
+    nlam_config_path = str(tmp_path / "nlam_config.yaml")
+
+    config = nlconfig.NeuralLAMConfig(
+        datastore=nlconfig.DatastoreSelection(
+            kind="mdp", config_path="datastore.yaml"
+        ),
+        training=nlconfig.TrainingConfig(
+            state_feature_weighting=nlconfig.ManualStateFeatureWeighting(
+                weights={}
+            )
+        ),
+    )
+
+    with pytest.raises(
+        nlconfig.InvalidConfigError, match="state_feature_weighting"
+    ):
+        nlconfig.validate_config(config, nlam_config_path)
+
+
+def test_validate_config_passes_with_manual_weights(tmp_path):
+    """ManualStateFeatureWeighting with actual weights should pass."""
+    datastore_file = tmp_path / "datastore.yaml"
+    datastore_file.write_text("dummy: true\n")
+    nlam_config_path = str(tmp_path / "nlam_config.yaml")
+
+    config = nlconfig.NeuralLAMConfig(
+        datastore=nlconfig.DatastoreSelection(
+            kind="mdp", config_path="datastore.yaml"
+        ),
+        training=nlconfig.TrainingConfig(
+            state_feature_weighting=nlconfig.ManualStateFeatureWeighting(
+                weights={"u100m": 1.0, "v100m": 0.5}
+            )
+        ),
+    )
+
+    nlconfig.validate_config(config, nlam_config_path)

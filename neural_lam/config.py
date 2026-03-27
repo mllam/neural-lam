@@ -153,6 +153,69 @@ class InvalidConfigError(Exception):
     pass
 
 
+def validate_config(config: "NeuralLAMConfig", config_path: str) -> None:
+    """Validate a loaded NeuralLAMConfig and raise descriptive errors.
+
+    This runs after YAML parsing so dataclass defaults are already applied.
+    It catches issues that would otherwise produce cryptic runtime tracebacks,
+    such as a missing or non-existent datastore config file.
+
+    Parameters
+    ----------
+    config : NeuralLAMConfig
+        The fully loaded config object.
+    config_path : str
+        Path to the neural-lam YAML config file. Used to resolve the
+        datastore config path, which is relative to this file.
+
+    Raises
+    ------
+    InvalidConfigError
+        If any required field is missing, invalid, or points to a
+        non-existent file.
+    """
+    errors = []
+
+    # datastore.config_path must resolve to an existing file
+    resolved = Path(config_path).parent / config.datastore.config_path
+    if not resolved.exists():
+        errors.append(
+            f"Missing required config field: 'datastore.config_path'.\n"
+            f"  Resolved path does not exist: {resolved}\n"
+            f"  This path is resolved relative to your neural-lam config "
+            f"file at: {config_path}\n"
+            f"  Check that 'config_path' in the 'datastore' section is "
+            f"correct."
+        )
+
+    # if ManualStateFeatureWeighting, weights must not be empty
+    weighting = config.training.state_feature_weighting
+    if isinstance(weighting, ManualStateFeatureWeighting):
+        if not weighting.weights:
+            errors.append(
+                "Invalid config field: 'training.state_feature_weighting.weights'.\n"
+                "  ManualStateFeatureWeighting requires at least one weight "
+                "entry.\n"
+                "  Example:\n"
+                "    training:\n"
+                "      state_feature_weighting:\n"
+                "        __config_class__: ManualStateFeatureWeighting\n"
+                "        weights:\n"
+                "          u100m: 1.0\n"
+                "          v100m: 1.0"
+            )
+
+    if errors:
+        error_list = "\n\n".join(
+            f"  [{i + 1}] {e}" for i, e in enumerate(errors)
+        )
+        raise InvalidConfigError(
+            f"neural-lam config validation failed "
+            f"({len(errors)} error(s)):\n\n{error_list}\n\n"
+            f"Refer to the config documentation for correct usage."
+        )
+
+
 def load_config_and_datastore(
     config_path: str,
 ) -> tuple[NeuralLAMConfig, Union[MDPDatastore, NpyFilesDatastoreMEPS]]:
@@ -177,6 +240,9 @@ def load_config_and_datastore(
             "There was an error loading the configuration file at "
             f"{config_path}. "
         ) from ex
+    
+    validate_config(config, config_path)
+
     # datastore config is assumed to be relative to the config file
     datastore_config_path = (
         Path(config_path).parent / config.datastore.config_path
