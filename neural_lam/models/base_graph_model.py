@@ -351,7 +351,7 @@ class BaseGraphModel(ARModel):
             # NOTE: The predicted std. is not scaled in any way here
             # linter for some reason does not think softplus is callable
             # pylint: disable-next=not-callable
-            pred_std = torch.nn.functional.softplus(pred_std_raw)
+            pred_std = torch.clamp(torch.nn.functional.softplus(pred_std_raw), min=1e-6)
         else:
             pred_delta_mean = net_output
             pred_std = None

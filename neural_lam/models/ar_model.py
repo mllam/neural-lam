@@ -46,31 +46,6 @@ class ARModel(pl.LightningModule):
             )
         self.args = args
         self._datastore = datastore
-
-    @property
-    def is_ensemble(self):
-        return self.output_mode == "ensemble" and self.ensemble_size > 1
-
-    def forward(self, x, *args, **kwargs):
-        preds = self._deterministic_forward(x, *args, **kwargs)
-        if self.is_ensemble:
-            preds = self._sample_ensemble(preds)
-        return preds
-
-    def _deterministic_forward(self, x, *args, **kwargs):
-        # Placeholder for deterministic forward pass
-        return x
-
-    def _sample_ensemble(self, preds):
-        noise = torch.randn(
-            self.ensemble_size,
-            *preds.shape,
-            device=preds.device,
-            dtype=preds.dtype,
-        ) * 0.01
-        preds = preds.unsqueeze(0).repeat(self.ensemble_size, *[1]*(preds.ndim))
-        preds = preds + noise
-        return preds
         num_state_vars = datastore.get_num_data_vars(category="state")
         num_forcing_vars = datastore.get_num_data_vars(category="forcing")
         # Load static features standardized
@@ -124,6 +99,14 @@ class ARModel(pl.LightningModule):
 
         # Double grid output dim. to also output std.-dev.
         self.output_std = bool(args.output_std)
+        if self.output_std and args.loss in ("mse", "mae", "wmse", "wmae"):
+            raise ValueError(
+                f"Prediction of standard deviation (--output_std) is "
+                f"incompatible with loss function '{args.loss}' as it "
+                f"leads to degenerate learned-variance training. Use "
+                f"'nll' or 'crps_gauss' instead."
+            )
+
         if self.output_std:
             # Pred. dim. in grid cell
             self.grid_output_dim = 2 * num_state_vars
@@ -190,6 +173,27 @@ class ARModel(pl.LightningModule):
         self.time_step_int, self.time_step_unit = get_integer_time(
             self._datastore.step_length
         )
+
+    def _sample_ensemble(self, preds, pred_std=None):
+        if pred_std is not None:
+            noise = torch.randn(
+                self.ensemble_size,
+                *preds.shape,
+                device=preds.device,
+                dtype=preds.dtype,
+            ) * pred_std.unsqueeze(0)
+        else:
+            noise = torch.randn(
+                self.ensemble_size,
+                *preds.shape,
+                device=preds.device,
+                dtype=preds.dtype,
+            ) * 0.01
+        preds = preds.unsqueeze(0).repeat(
+            self.ensemble_size, *[1] * preds.ndim
+        )
+        preds = preds + noise
+        return preds
 
     def _create_dataarray_from_tensor(
         self,
