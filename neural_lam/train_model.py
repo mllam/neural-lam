@@ -5,6 +5,7 @@ import time
 from argparse import ArgumentDefaultsHelpFormatter, ArgumentParser
 
 # Third-party
+# for logging the model:
 import pytorch_lightning as pl
 import torch
 from lightning_fabric.utilities import seed
@@ -86,8 +87,8 @@ def main(input_args=None):
     parser.add_argument(
         "--precision",
         type=str,
-        default="32",
-        choices=["32", "16", "bf16"],
+        default=32,
+        help="Numerical precision to use for model (32/16/bf16)",
     )
 
     # Model architecture
@@ -97,13 +98,7 @@ def main(input_args=None):
         default="multiscale",
         help="Graph to load and use in graph-based model",
     )
-    parser.add_argument(
-        "--graph_path",
-        type=str,
-        default=None,
-        help="Optional path to graph directory "
-        "(overrides datastore graph path)",
-    )
+
     parser.add_argument(
         "--hidden_dim",
         type=int,
@@ -198,6 +193,18 @@ def main(input_args=None):
         help="""Logger run name, for e.g. MLFlow (with default value `None`
           neural-lam's default format string is used)""",
     )
+
+    # Wandb-specific settings
+    parser.add_argument(
+        "--wandb_id",
+        type=str,
+        default=None,
+        help="Wandb run ID to use. If the run ID already exists in the "
+        "project, W&B resumes that run. If it does not exist, W&B creates "
+        "a new run with that ID. Useful on HPC systems with limited job "
+        "runtimes or that may crash, allowing training to be continued "
+        "across multiple job submissions.",
+    )
     parser.add_argument(
         "--val_steps_to_log",
         nargs="+",
@@ -232,8 +239,6 @@ def main(input_args=None):
     )
 
     args = parser.parse_args(input_args)
-    if args.graph_path is not None and args.graph != "multiscale":
-        raise ValueError("Cannot specify both --graph and --graph_path.")
     args.var_leads_metrics_watch = {
         int(k): v for k, v in json.loads(args.var_leads_metrics_watch).items()
     }
@@ -241,23 +246,20 @@ def main(input_args=None):
     # Check that config only specifies logging for lead times that exist
     # Check --val_steps_to_log
     for step in args.val_steps_to_log:
-        if not (0 < step <= args.ar_steps_eval):
-            raise ValueError(
-                f"Cannot log validation step {step} when validation is "
-                f"only unrolled {args.ar_steps_eval} steps. "
-                "Adjust --val_steps_to_log."
-            )
-
-    # Check --var_leads_metrics_watch
+        assert 0 < step <= args.ar_steps_eval, (
+            f"Can not log validation step {step} when validation is "
+            f"only unrolled {args.ar_steps_eval} steps. Adjust "
+            "--val_steps_to_log."
+        )
+    # Check --var_leads_metric_watch
     for var_i, leads in args.var_leads_metrics_watch.items():
         for step in leads:
-            if not (0 < step <= args.ar_steps_eval):
-                raise ValueError(
-                    f"Cannot log validation step {step} for variable {var_i} "
-                    "when validation is only unrolled "
-                    f"{args.ar_steps_eval} steps. "
-                    "Adjust --var_leads_metrics_watch."
-                )
+            assert 0 < step <= args.ar_steps_eval, (
+                f"Can not log validation step {step} for variable {var_i} when "
+                f"validation is only unrolled {args.ar_steps_eval} steps. "
+                "Adjust --var_leads_metric_watch."
+            )
+
     # Get an (actual) random run id as a unique identifier
     random_run_id = random.randint(0, 9999)
 
