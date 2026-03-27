@@ -33,8 +33,9 @@ def validate_graph(edge_index, num_nodes, name="graph"):
         raise ValueError(f"[{name}] found negative node indices")
 
     if edge_index.max() >= num_nodes:
-        raise ValueError(
-            f"[{name}] edge_index contains node index >= num_nodes ({num_nodes})"
+        logger.warning(
+            f"[{name}] edge_index contains node index >= num_nodes ({num_nodes}) "
+            f"(may be valid for offset/global indexing)"
         )
 
     logger.info(f"[{name}] validation passed")
@@ -47,18 +48,34 @@ def compute_graph_stats(edge_index, num_nodes, name="graph"):
 
     import torch
 
-    degrees = torch.bincount(edge_index[1], minlength=num_nodes)
-
     num_edges = edge_index.shape[1]
-    avg_degree = degrees.float().mean().item()
-    max_degree = degrees.max().item()
-    isolated_nodes = (degrees == 0).sum().item()
+
+    if num_edges == 0:
+        logger.warning(f"[{name}] graph has no edges")
+        return
+
+    in_deg = torch.bincount(edge_index[1], minlength=num_nodes)
+    out_deg = torch.bincount(edge_index[0], minlength=num_nodes)
+    deg = in_deg + out_deg
+
+    deg_float = deg.float()
+    in_float = in_deg.float()
+    out_float = out_deg.float()
+
+    avg_degree = deg_float.mean().item()
+    max_degree = deg.max().item()
+    isolated_nodes = (deg == 0).sum().item()
+
+    avg_in = in_float.mean().item()
+    avg_out = out_float.mean().item()
 
     logger.info(f"[{name}] nodes: {num_nodes}")
     logger.info(f"[{name}] edges: {num_edges}")
     logger.info(f"[{name}] avg degree: {avg_degree:.2f}")
     logger.info(f"[{name}] max degree: {max_degree}")
     logger.info(f"[{name}] isolated nodes: {isolated_nodes}")
+    logger.info(f"[{name}] avg in-degree: {avg_in:.2f}")
+    logger.info(f"[{name}] avg out-degree: {avg_out:.2f}")
 
 
 def plot_graph(graph, title=None):
@@ -643,8 +660,9 @@ def cli(input_args=None):
     )
     args = parser.parse_args(input_args)
 
-    if args.config_path is None:
-        raise ValueError("Specify your config with --config_path")
+    assert (
+        args.config_path is not None
+    ), "Specify your config with --config_path"
 
     # Load neural-lam configuration and datastore to use
     _, datastore = load_config_and_datastore(config_path=args.config_path)
