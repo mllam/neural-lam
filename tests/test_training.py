@@ -1,5 +1,4 @@
 # Standard library
-import warnings
 from pathlib import Path
 
 # Third-party
