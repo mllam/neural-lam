@@ -8,6 +8,7 @@ from pathlib import Path
 # Third-party
 import torch
 import torch.distributed as dist
+from loguru import logger
 from torch.utils.data.distributed import DistributedSampler
 from tqdm import tqdm
 
@@ -78,10 +79,10 @@ def setup(rank, world_size):  # pylint: disable=redefined-outer-name
             )
         master_node = hostname_lines[0].strip()
     else:
-        print(
-            "\033[91mCareful, you are running this script with --distributed "
+        logger.warning(
+            "Careful, you are running this script with --distributed "
             "without any scheduler. In most cases this will result in slower "
-            "execution and the --distributed flag should be removed.\033[0m"
+            "execution and the --distributed flag should be removed."
         )
         master_node = "localhost"
     os.environ["MASTER_ADDR"] = master_node
@@ -92,7 +93,7 @@ def setup(rank, world_size):  # pylint: disable=redefined-outer-name
         world_size=world_size,
     )
     if rank == 0:
-        print(
+        logger.info(
             f"Initialized {dist.get_backend()} "
             f"process group with world size {world_size}."
         )
@@ -110,7 +111,7 @@ def save_stats(
     mean = torch.mean(means, dim=0)  # (d_features,)
     second_moment = torch.mean(squares, dim=0)  # (d_features,)
     std = torch.sqrt(second_moment - mean**2)  # (d_features,)
-    print(
+    logger.info(
         f"Saving {filename_prefix} mean and std.-dev. to "
         f"{filename_prefix}_mean.pt and {filename_prefix}_std.pt"
     )
@@ -132,7 +133,7 @@ def save_stats(
     flux_mean = torch.mean(flux_means)  # (,)
     flux_second_moment = torch.mean(flux_squares)  # (,)
     flux_std = torch.sqrt(flux_second_moment - flux_mean**2)  # (,)
-    print("Saving flux mean and std.-dev. to flux_stats.pt")
+    logger.info("Saving flux mean and std.-dev. to flux_stats.pt")
     torch.save(
         torch.stack((flux_mean, flux_std)).cpu(),
         os.path.join(static_dir_path, "flux_stats.pt"),
@@ -206,7 +207,7 @@ def main(
     )
 
     if rank == 0:
-        print("Computing mean and std.-dev. for parameters...")
+        logger.info("Computing mean and std.-dev. for parameters...")
     means, squares, flux_means, flux_squares = [], [], [], []
 
     for init_batch, target_batch, forcing_batch, _ in tqdm(loader):
@@ -280,7 +281,7 @@ def main(
         dist.barrier()
 
     if rank == 0:
-        print("Computing mean and std.-dev. for one-step differences...")
+        logger.info("Computing mean and std.-dev. for one-step differences...")
     ds_standard = WeatherDataset(
         datastore=datastore,
         split="train",
