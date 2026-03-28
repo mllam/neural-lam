@@ -263,7 +263,7 @@ def test_plot_error_heatmap_uses_white_to_red_colormap():
 
 
 def test_plot_error_heatmap_adapts_layout_for_grid_size():
-    """Dense heatmaps get larger figures, smaller fonts, and suppress annotations."""
+    """Dense heatmaps adapt size, font scale, and annotation density."""
     small_fig = vis.plot_error_heatmap(
         torch.ones((4, 5)), datastore=HeatmapDatastore(n_vars=5)
     )
