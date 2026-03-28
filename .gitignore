@@ -11,6 +11,10 @@ sweeps
 *.zarr
 *slurm*
 
+### Documentation ###
+docs/_build/
+docs/.doctrees/
+
 ### Python ###
 # Byte-compiled / optimized / DLL files
 __pycache__/
@@ -85,6 +89,8 @@ __MACOSX
 .venv
 venv
 activate
+.cache/
+.wandb/
 
 # Build artifacts
 dist/
