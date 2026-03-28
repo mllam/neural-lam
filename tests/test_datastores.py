@@ -198,7 +198,10 @@ def test_get_dataarray(datastore_name):
                     ]
 
             if datastore.is_ensemble and category == "state":
-                # assume that only state variables change with ensemble members
+                expected_dims.append("ensemble_member")
+            elif category == "forcing" and getattr(
+                datastore, "has_ensemble_forcing", False
+            ):
                 expected_dims.append("ensemble_member")
 
             # XXX: for now we only have a single attribute to get the shape of
