@@ -13,6 +13,15 @@ class BaseGraphModel(ARModel):
     """
     Base (abstract) class for graph-based models building on
     the encode-process-decode idea.
+
+    Parameters
+    ----------
+    args : Namespace
+        Command-line arguments containing model hyper-parameters and configuration.
+    config : NeuralLAMConfig
+        Configuration object containing training and dataset settings.
+    datastore : BaseDatastore
+        Datastore object providing access to weather data and spatial features.
     """
 
     def __init__(self, args, config: NeuralLAMConfig, datastore: BaseDatastore):
@@ -86,7 +95,7 @@ class BaseGraphModel(ARModel):
         self, config: NeuralLAMConfig, datastore: BaseDatastore
     ):
         """
-        Prepare parameters for clamping predicted values to valid range
+        Prepare parameters for clamping predicted values to valid range.
         """
 
         # Read configs
@@ -219,18 +228,28 @@ class BaseGraphModel(ARModel):
 
     def get_clamped_new_state(self, state_delta, prev_state):
         """
-        Clamp prediction to valid range supplied in config
-        Returns the clamped new state after adding delta to original state
+        Clamp prediction to valid range supplied in config.
+        
+        Returns the clamped new state after adding delta to original state.
 
         Instead of the new state being computed as
         $X_{t+1} = X_t + \\delta = X_t + model(\\{X_t,X_{t-1},...\\}, forcing)$
         The clamped values will be
         $f(f^{-1}(X_t) + model(\\{X_t, X_{t-1},... \\}, forcing))$
         Which means the model will learn to output values in the range of the
-        inverse clamping function
+        inverse clamping function.
 
-        state_delta: (B, num_grid_nodes, feature_dim)
-        prev_state: (B, num_grid_nodes, feature_dim)
+        Parameters
+        ----------
+        state_delta : torch.Tensor
+            The predicted change in state, with shape `(B, num_grid_nodes, feature_dim)`.
+        prev_state : torch.Tensor
+            The previous state $X_t$, with shape `(B, num_grid_nodes, feature_dim)`.
+
+        Returns
+        -------
+        torch.Tensor
+            The new, clamped state with shape `(B, num_grid_nodes, feature_dim)`.
         """
 
         # Assign new state, but overwrite clamped values of each type later
@@ -267,34 +286,66 @@ class BaseGraphModel(ARModel):
 
     def get_num_mesh(self):
         """
-        Compute number of mesh nodes from loaded features,
-        and number of mesh nodes that should be ignored in encoding/decoding
+        Compute number of mesh nodes from loaded features.
+
+        Returns
+        -------
+        int
+            Number of mesh nodes from loaded features.
+        int
+            Number of mesh nodes that should be ignored in encoding/decoding.
         """
         raise NotImplementedError("get_num_mesh not implemented")
 
     def embedd_mesh_nodes(self):
         """
-        Embed static mesh features
-        Returns tensor of shape (num_mesh_nodes, d_h)
+        Embed static mesh features.
+
+        Returns
+        -------
+        torch.Tensor
+            A tensor of embedded mesh features with shape `(num_mesh_nodes, d_h)`.
         """
         raise NotImplementedError("embedd_mesh_nodes not implemented")
 
     def process_step(self, mesh_rep):
         """
-        Process step of embedd-process-decode framework
-        Processes the representation on the mesh, possible in multiple steps
+        Process step of encode-process-decode framework.
+        
+        Processes the representation on the mesh, possibly in multiple steps.
 
-        mesh_rep: has shape (B, num_mesh_nodes, d_h)
-        Returns mesh_rep: (B, num_mesh_nodes, d_h)
+        Parameters
+        ----------
+        mesh_rep : torch.Tensor
+            The representation of data on the mesh nodes. Expected shape is 
+            `(B, num_mesh_nodes, d_h)`.
+
+        Returns
+        -------
+        torch.Tensor
+            The processed mesh representation with shape `(B, num_mesh_nodes, d_h)`.
         """
         raise NotImplementedError("process_step not implemented")
 
     def predict_step(self, prev_state, prev_prev_state, forcing):
         """
-        Step state one step ahead using prediction model, X_{t-1}, X_t -> X_t+1
-        prev_state: (B, num_grid_nodes, feature_dim), X_t
-        prev_prev_state: (B, num_grid_nodes, feature_dim), X_{t-1}
-        forcing: (B, num_grid_nodes, forcing_dim)
+        Step state one step ahead using prediction model: $X_{t-1}, X_t \\rightarrow X_{t+1}$.
+
+        Parameters
+        ----------
+        prev_state : torch.Tensor
+            The previous state $X_t$, with shape `(B, num_grid_nodes, feature_dim)`.
+        prev_prev_state : torch.Tensor
+            The state before the previous one $X_{t-1}$, with shape `(B, num_grid_nodes, feature_dim)`.
+        forcing : torch.Tensor
+            The forcing data for the step, with shape `(B, num_grid_nodes, forcing_dim)`.
+
+        Returns
+        -------
+        tuple of torch.Tensor or None
+            A tuple containing:
+            - The newly predicted state $X_{t+1}$ with shape `(B, num_grid_nodes, feature_dim)`.
+            - The predicted standard deviation (if applicable) with shape `(B, num_grid_nodes, feature_dim)`, or `None`.
         """
         batch_size = prev_state.shape[0]
 

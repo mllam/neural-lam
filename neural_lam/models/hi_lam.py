@@ -12,7 +12,16 @@ class HiLAM(BaseHiGraphModel):
     """
     Hierarchical graph model with message passing that goes sequentially down
     and up the hierarchy during processing.
-    The Hi-LAM model from Oskarsson et al. (2023)
+    The Hi-LAM model from Oskarsson et al. (2023).
+
+    Parameters
+    ----------
+    args : Namespace
+        Command-line arguments containing model hyper-parameters and configuration.
+    config : NeuralLAMConfig
+        Configuration object containing training and dataset settings.
+    datastore : BaseDatastore
+        Datastore object providing access to weather data and spatial features.
     """
 
     def __init__(self, args, config: NeuralLAMConfig, datastore: BaseDatastore):
@@ -37,6 +46,16 @@ class HiLAM(BaseHiGraphModel):
     def make_same_gnns(self, args):
         """
         Make intra-level GNNs.
+
+        Parameters
+        ----------
+        args : Namespace
+            Command-line arguments with configuration for GNNs.
+
+        Returns
+        -------
+        nn.ModuleList
+            A list of GNN interaction networks for the same level.
         """
         return nn.ModuleList(
             [
@@ -52,6 +71,16 @@ class HiLAM(BaseHiGraphModel):
     def make_up_gnns(self, args):
         """
         Make GNNs for processing steps up through the hierarchy.
+
+        Parameters
+        ----------
+        args : Namespace
+            Command-line arguments with configuration for GNNs.
+
+        Returns
+        -------
+        nn.ModuleList
+            A list of GNN interaction networks for up steps.
         """
         return nn.ModuleList(
             [
@@ -67,6 +96,16 @@ class HiLAM(BaseHiGraphModel):
     def make_down_gnns(self, args):
         """
         Make GNNs for processing steps down through the hierarchy.
+
+        Parameters
+        ----------
+        args : Namespace
+            Command-line arguments with configuration for GNNs.
+
+        Returns
+        -------
+        nn.ModuleList
+            A list of GNN interaction networks for down steps.
         """
         return nn.ModuleList(
             [
@@ -90,6 +129,25 @@ class HiLAM(BaseHiGraphModel):
         """
         Run down-part of vertical processing, sequentially alternating between
         processing using down edges and same-level edges.
+
+        Parameters
+        ----------
+        mesh_rep_levels : list of torch.Tensor
+            Node representations for each level.
+        mesh_same_rep : list of torch.Tensor
+            Same-level edge representations.
+        mesh_down_rep : list of torch.Tensor
+            Down-edge representations.
+        down_gnns : nn.ModuleList
+            GNN models for processing down-edges.
+        same_gnns : nn.ModuleList
+            GNN models for processing same-level edges.
+
+        Returns
+        -------
+        tuple
+            A tuple containing `(mesh_rep_levels, mesh_same_rep, mesh_down_rep)` 
+            after processing.
         """
         # Run same level processing on level L
         mesh_rep_levels[-1], mesh_same_rep[-1] = same_gnns[-1](
@@ -129,6 +187,25 @@ class HiLAM(BaseHiGraphModel):
         """
         Run up-part of vertical processing, sequentially alternating between
         processing using up edges and same-level edges.
+
+        Parameters
+        ----------
+        mesh_rep_levels : list of torch.Tensor
+            Node representations for each level.
+        mesh_same_rep : list of torch.Tensor
+            Same-level edge representations.
+        mesh_up_rep : list of torch.Tensor
+            Up-edge representations.
+        up_gnns : nn.ModuleList
+            GNN models for processing up-edges.
+        same_gnns : nn.ModuleList
+            GNN models for processing same-level edges.
+
+        Returns
+        -------
+        tuple
+            A tuple containing `(mesh_rep_levels, mesh_same_rep, mesh_up_rep)` 
+            after processing.
         """
 
         # Run same level processing on level 0
@@ -169,14 +246,21 @@ class HiLAM(BaseHiGraphModel):
         Internal processor step of hierarchical graph models.
         Between mesh init and read out.
 
-        Each input is list with representations, each with shape
+        Parameters
+        ----------
+        mesh_rep_levels : list of torch.Tensor 
+            Node representations for each level, each with shape `(B, N_mesh[l], d_h)`.
+        mesh_same_rep : list of torch.Tensor
+            Same-level edge representations, each with shape `(B, M_same[l], d_h)`.
+        mesh_up_rep : list of torch.Tensor
+            Up-edge representations, each with shape `(B, M_up[l -> l+1], d_h)`.
+        mesh_down_rep : list of torch.Tensor
+            Down-edge representations, each with shape `(B, M_down[l <- l+1], d_h)`.
 
-        mesh_rep_levels: (B, N_mesh[l], d_h)
-        mesh_same_rep: (B, M_same[l], d_h)
-        mesh_up_rep: (B, M_up[l -> l+1], d_h)
-        mesh_down_rep: (B, M_down[l <- l+1], d_h)
-
-        Returns same lists
+        Returns
+        -------
+        tuple
+            A tuple `(mesh_rep_levels, mesh_same_rep, mesh_up_rep, mesh_down_rep)`.
         """
         for down_gnns, down_same_gnns, up_gnns, up_same_gnns in zip(
             self.mesh_down_gnns,

@@ -12,9 +12,18 @@ from .base_graph_model import BaseGraphModel
 class GraphLAM(BaseGraphModel):
     """
     Full graph-based LAM model that can be used with different
-    (non-hierarchical )graphs. Mainly based on GraphCast, but the model from
+    (non-hierarchical) graphs. Mainly based on GraphCast, but the model from
     Keisler (2022) is almost identical. Used for GC-LAM and L1-LAM in
     Oskarsson et al. (2023).
+
+    Parameters
+    ----------
+    args : Namespace
+        Command-line arguments containing model hyper-parameters and configuration.
+    config : NeuralLAMConfig
+        Configuration object containing training and dataset settings.
+    datastore : BaseDatastore
+        Datastore object providing access to weather data and spatial features.
     """
 
     def __init__(self, args, config: NeuralLAMConfig, datastore: BaseDatastore):
@@ -58,25 +67,44 @@ class GraphLAM(BaseGraphModel):
 
     def get_num_mesh(self):
         """
-        Compute number of mesh nodes from loaded features,
-        and number of mesh nodes that should be ignored in encoding/decoding
+        Compute number of mesh nodes from loaded features.
+
+        Returns
+        -------
+        int
+            Number of mesh nodes from loaded features.
+        int
+            Number of mesh nodes that should be ignored in encoding/decoding.
         """
         return self.mesh_static_features.shape[0], 0
 
     def embedd_mesh_nodes(self):
         """
-        Embed static mesh features
-        Returns tensor of shape (N_mesh, d_h)
+        Embed static mesh features.
+
+        Returns
+        -------
+        torch.Tensor
+            Embedded static mesh features with shape `(N_mesh, d_h)`.
         """
         return self.mesh_embedder(self.mesh_static_features)  # (N_mesh, d_h)
 
     def process_step(self, mesh_rep):
         """
-        Process step of embedd-process-decode framework
-        Processes the representation on the mesh, possible in multiple steps
+        Process step of encode-process-decode framework.
+        
+        Processes the representation on the mesh.
 
-        mesh_rep: has shape (B, N_mesh, d_h)
-        Returns mesh_rep: (B, N_mesh, d_h)
+        Parameters
+        ----------
+        mesh_rep : torch.Tensor
+            The representation of data on the mesh nodes. Expected shape is 
+            `(B, N_mesh, d_h)`.
+
+        Returns
+        -------
+        torch.Tensor
+            The processed mesh representation with shape `(B, N_mesh, d_h)`.
         """
         # Embed m2m here first
         batch_size = mesh_rep.shape[0]

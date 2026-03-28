@@ -47,6 +47,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Add missing NumPy-style docstrings to `BaseGraphModel`, `GraphLAM`, and `HiLAM` to allow automatic API documentation generation with Sphinx. @[yourusername]
+
 - Expose `--wandb_id` CLI argument to allow resuming an existing W&B run by
   ID. When provided, `resume="allow"` is set automatically so the same job
   script works for both the initial submission and all resubmissions, making
