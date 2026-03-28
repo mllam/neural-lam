@@ -32,6 +32,7 @@ def plot_graph(graph, title=None):
         # Keep only 1 direction of edge_index
         edge_index = edge_index[:, edge_index[0] < edge_index[1]]  # (2, M/2)
     # TODO: indicate direction of directed edges
+    # For undirected graphs visible as lines; directed graphs need directional markers.
 
     # Move all to cpu and numpy, compute (in)-degrees
     degrees = (
@@ -71,9 +72,23 @@ def plot_graph(graph, title=None):
 
 
 def sort_nodes_internally(nx_graph):
-    # For some reason the networkx .nodes() return list can not be sorted,
-    # but this is the ordering used by pyg when converting.
-    # This function fixes this.
+    """
+    Reconstruct a NetworkX graph with nodes sorted by index.
+
+    NetworkX node ordering may differ from PyG's conversion expectation.
+    This function ensures node indices are sorted consistently to match
+    PyG's node-to-index mapping during conversion.
+
+    Parameters
+    ----------
+    nx_graph : networkx.DiGraph
+        Input directed graph with potentially unsorted node indices.
+
+    Returns
+    -------
+    networkx.DiGraph
+        New graph with nodes and edges, sorted by node index.
+    """
     H = networkx.DiGraph()
     H.add_nodes_from(sorted(nx_graph.nodes(data=True)))
     H.add_edges_from(nx_graph.edges(data=True))
@@ -81,6 +96,28 @@ def sort_nodes_internally(nx_graph):
 
 
 def save_edges(graph, name, base_path):
+    """
+    Save graph edge topology and features to PyTorch checkpoint files.
+
+    Saves two files:
+    - `{name}_edge_index.pt`: Edge list, shape [2, num_edges]
+    - `{name}_features.pt`: Edge features, shape [num_edges, 3] containing:
+        - Column 0: edge length (Euclidean distance between nodes)
+        - Columns 1-2: vector difference [dx, dy] from source to target
+
+    Parameters
+    ----------
+    graph : torch_geometric.data.Data
+        PyG graph with attributes: edge_index, len (edge lengths), vdiff (vector differences).
+    name : str
+        Base name for saved files (e.g., "g2m", "m2g").
+    base_path : str
+        Directory path where files will be saved.
+
+    Returns
+    -------
+    None
+    """
     torch.save(
         graph.edge_index, os.path.join(base_path, f"{name}_edge_index.pt")
     )
@@ -105,6 +142,25 @@ def save_edges_list(graphs, name, base_path):
 
 
 def from_networkx_with_start_index(nx_graph, start_index):
+    """
+    Convert NetworkX graph to PyG and adjust edge indices for hierarchical meshes.
+
+    When combining multiple mesh levels into a single PyG graph, node indices
+    must be offset to avoid collisions. This function handles that offset during
+    conversion from NetworkX format.
+
+    Parameters
+    ----------
+    nx_graph : networkx.DiGraph
+        Input directed graph.
+    start_index : int
+        Offset to add to all edge indices (for multi-level graph merging).
+
+    Returns
+    -------
+    torch_geometric.data.Data
+        PyG graph with adjusted edge_index for hierarchical mesh assembly.
+    """
     pyg_graph = from_networkx(nx_graph)
     pyg_graph.edge_index += start_index
     return pyg_graph
@@ -114,7 +170,9 @@ def mk_2d_graph(xy, nx, ny):
     xm, xM = np.amin(xy[:, :, 0][:, 0]), np.amax(xy[:, :, 0][:, 0])
     ym, yM = np.amin(xy[:, :, 1][0, :]), np.amax(xy[:, :, 1][0, :])
 
-    # avoid nodes on border
+    # Place mesh nodes away from domain borders (inset by half grid spacing).
+    # For limited area models (LAM), this avoids mesh nodes at hard boundaries.
+    # Global forecasting may require periodic boundary handling instead.
     dx = (xM - xm) / nx
     dy = (yM - ym) / ny
     lx = np.linspace(xm + dx / 2, xM - dx / 2, nx)
