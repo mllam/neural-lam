@@ -1,4 +1,5 @@
 # Third-party
+import pytest
 import torch
 
 # First-party
@@ -74,12 +75,14 @@ def test_crps_ens_single_member():
     target = torch.tensor([[[2.0, 2.0, 2.0]]])  # shape (1, 1, 3)
     pred_std = torch.ones_like(pred)
 
-    result_summed = crps_ens(
-        pred, target, pred_std, sum_vars=True, ens_dim=1
-    )
-    result_not_summed = crps_ens(
-        pred, target, pred_std, sum_vars=False, ens_dim=1
-    )
+    with pytest.warns(UserWarning, match="single ensemble member"):
+        result_summed = crps_ens(
+            pred, target, pred_std, sum_vars=True, ens_dim=1
+        )
+    with pytest.warns(UserWarning, match="single ensemble member"):
+        result_not_summed = crps_ens(
+            pred, target, pred_std, sum_vars=False, ens_dim=1
+        )
 
     assert result_not_summed.shape[-1] == 3, (
         "sum_vars=False should preserve feature dimension in N=1 path"
@@ -96,9 +99,10 @@ def test_crps_ens_single_member_none_pred_std():
 
     # This previously crashed with: TypeError: ones_like(): argument
     # must be Tensor, not NoneType
-    result = crps_ens(
-        pred, target, pred_std=None, sum_vars=True, ens_dim=1
-    )
+    with pytest.warns(UserWarning, match="single ensemble member"):
+        result = crps_ens(
+            pred, target, pred_std=None, sum_vars=True, ens_dim=1
+        )
     assert result.numel() == 1, "Should return a scalar"
 
 
@@ -109,9 +113,10 @@ def test_crps_ens_single_member_mask_consistency():
     pred_std = torch.ones_like(pred)
     mask = torch.tensor([True])  # single grid node, keep it
 
-    result = crps_ens(
-        pred, target, pred_std, mask=mask, sum_vars=False, ens_dim=1
-    )
+    with pytest.warns(UserWarning, match="single ensemble member"):
+        result = crps_ens(
+            pred, target, pred_std, mask=mask, sum_vars=False, ens_dim=1
+        )
     # Should produce a result with shape (..., 3) since sum_vars=False
     assert result.shape[-1] == 3, "masked result should preserve features"
 
@@ -144,12 +149,12 @@ def test_crps_ens_biased():
 
 
 def test_crps_ens_almost_fair():
-    """Verify almost-fair CRPS with alpha=0 matches unbiased."""
+    """Verify almost-fair CRPS with alpha=1 matches unbiased."""
     pred = torch.tensor([[[[1.0]], [[2.0]], [[5.0]]]])
     target = torch.tensor([[[3.0]]])
 
-    result_af = crps_ens(
-        pred, target, estimator="almost-fair", afc_alpha=0.0,
+    result_af_1 = crps_ens(
+        pred, target, estimator="almost-fair", afc_alpha=1.0,
         ens_dim=1, average_grid=True, sum_vars=True,
     )
     result_unbiased = crps_ens(
@@ -157,18 +162,58 @@ def test_crps_ens_almost_fair():
         ens_dim=1, average_grid=True, sum_vars=True,
     )
 
-    # almost-fair with alpha=0: diff_factor = (M-1+0)/(M*(M-1)) = 1/M
-    # This equals the biased estimator, NOT unbiased.
-    # So they should NOT be equal.
-    # Almost-fair with alpha=1: diff_factor = (M-1+1)/(M*(M-1)) = 1/(M-1)
+    # almost-fair with alpha=1: diff_factor = (M-1+1)/(M*(M-1)) = 1/(M-1)
     # which equals unbiased.
-    result_af_1 = crps_ens(
-        pred, target, estimator="almost-fair", afc_alpha=1.0,
-        ens_dim=1, average_grid=True, sum_vars=True,
-    )
-
     assert torch.isclose(result_af_1, result_unbiased, atol=1e-5), (
         "Almost-fair CRPS with alpha=1 should equal unbiased CRPS"
     )
 
 
+def test_crps_ens_almost_fair_missing_alpha():
+    """Verify ValueError when afc_alpha is not provided."""
+    pred = torch.tensor([[[[1.0]], [[2.0]], [[5.0]]]])
+    target = torch.tensor([[[3.0]]])
+
+    with pytest.raises(ValueError, match="afc_alpha must be provided"):
+        crps_ens(
+            pred, target, estimator="almost-fair", ens_dim=1,
+        )
+
+
+def test_crps_ens_n2_all_estimators():
+    """N=2 special case should work for all estimator types,
+    not just unbiased (addresses Joel's review)."""
+    pred = torch.tensor([[[[1.0]], [[3.0]]]])  # 2 members
+    target = torch.tensor([[[2.0]]])
+
+    result_biased = crps_ens(
+        pred, target, estimator="biased", ens_dim=1,
+        average_grid=True, sum_vars=True,
+    )
+    result_unbiased = crps_ens(
+        pred, target, estimator="unbiased", ens_dim=1,
+        average_grid=True, sum_vars=True,
+    )
+    result_af = crps_ens(
+        pred, target, estimator="almost-fair", afc_alpha=0.5,
+        ens_dim=1, average_grid=True, sum_vars=True,
+    )
+
+    # All should produce valid (finite) results
+    assert torch.isfinite(result_biased), "Biased N=2 should be finite"
+    assert torch.isfinite(result_unbiased), "Unbiased N=2 should be finite"
+    assert torch.isfinite(result_af), "Almost-fair N=2 should be finite"
+
+    # Biased and unbiased should differ for N=2
+    assert not torch.isclose(result_biased, result_unbiased, atol=1e-5), (
+        "Biased and unbiased should differ for N=2"
+    )
+
+
+def test_spread_squared_single_member_raises():
+    """spread_squared should raise ValueError for S=1."""
+    pred = torch.tensor([[[[1.0]]]])  # 1 member
+    target = torch.tensor([[[1.0]]])
+
+    with pytest.raises(ValueError, match="more than 1 ensemble member"):
+        spread_squared(pred, target, ens_dim=1)

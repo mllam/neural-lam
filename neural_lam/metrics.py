@@ -240,13 +240,13 @@ def crps_ens(
 ):
     """
     (Negative) Continuous Ranked Probability Score (CRPS)
-    Estimator from ensemble samples.  See e.g. Weatherbench 2.
+    Estimator from ensemble samples. See e.g. Weatherbench 2.
 
-    Supports three estimator variants (see Ferro 2014,
-    https://arxiv.org/html/2412.15832v1):
+    Supports three estimator variants:
         - "biased"      : diff_factor = 1 / M
         - "unbiased"    : diff_factor = 1 / (M - 1)          (fair)
         - "almost-fair" : diff_factor = (M-1+α) / (M*(M-1))
+          (see Lang et al., 2024 — AIFS)
 
     Uses a rank-based O(M log M) implementation for the spread term
     instead of the O(M²) pairwise formulation (see Zamo & Naveau, WB2).
@@ -264,12 +264,18 @@ def crps_ens(
     Returns:
     metric_val: shape depends on reduction arguments.
     """
-    num_ens = pred.shape[ens_dim]  # Number of ensemble members
+    import warnings
 
-    # ------------------------------------------------------------------
-    # S = 1 : CRPS degenerates to MAE
-    # ------------------------------------------------------------------
+    num_ens = pred.shape[ens_dim]
+
+    # S = 1: CRPS degenerates to MAE
     if num_ens == 1:
+        warnings.warn(
+            "crps_ens called with a single ensemble member (S=1). "
+            "Falling back to MAE. This may indicate an error in the "
+            "ensemble dimension.",
+            stacklevel=2,
+        )
         return mae(
             pred.squeeze(ens_dim),
             target,
@@ -281,38 +287,29 @@ def crps_ens(
             sum_vars=sum_vars,
         )
 
-    assert (
-        num_ens > 1
-    ), "CRPS can only be estimated for ensemble with more than 1 member"
-
-    # ------------------------------------------------------------------
-    # MAE term:  E|X_i - y|
-    # ------------------------------------------------------------------
+    # MAE term: E|X_i - y|
     mean_mae = torch.mean(
         torch.abs(pred - target.unsqueeze(ens_dim)), dim=ens_dim
     )  # (..., N, d_state)
 
-    # ------------------------------------------------------------------
     # Spread term factor depends on estimator choice
-    # ------------------------------------------------------------------
     if estimator == "biased":
         diff_factor = 1 / num_ens
     elif estimator == "unbiased":
         diff_factor = 1 / (num_ens - 1)
     elif estimator == "almost-fair":
-        assert (
-            afc_alpha is not None
-        ), "afc_alpha must be provided for almost-fair CRPS estimator"
+        if afc_alpha is None:
+            raise ValueError(
+                "afc_alpha must be provided for almost-fair CRPS estimator"
+            )
         diff_factor = (num_ens - 1 + afc_alpha) / (
             num_ens * (num_ens - 1)
         )
     else:
         raise NotImplementedError(f"Unknown CRPS estimator: {estimator}")
 
-    # ------------------------------------------------------------------
-    # S = 2 : closed-form pair difference (no sorting needed)
-    # ------------------------------------------------------------------
-    if num_ens == 2 and estimator == "unbiased":
+    # S = 2: closed-form pair difference (no sorting needed)
+    if num_ens == 2:
         pair_diffs_term = (
             -0.5
             * diff_factor
@@ -321,10 +318,8 @@ def crps_ens(
             )
         )  # (..., N, d_state)
     else:
-        # --------------------------------------------------------------
-        # Rank-based O(M log M) spread term for general case
+        # Rank-based O(M log M) spread term
         # Ranks start at 1; two argsorts compute entry ranks
-        # --------------------------------------------------------------
         ranks = (
             pred.argsort(dim=ens_dim).argsort(dim=ens_dim) + 1
         )
@@ -366,9 +361,10 @@ def spread_squared(
     Returns:
     metric_val: depends on reduction arguments.
     """
-    assert (
-        pred.shape[ens_dim] > 1
-    ), "spread_squared requires more than 1 ensemble member"
+    if pred.shape[ens_dim] <= 1:
+        raise ValueError(
+            "spread_squared requires more than 1 ensemble member"
+        )
     entry_var = torch.var(pred, dim=ens_dim)  # (..., N, d_state)
     return mask_and_reduce_metric(entry_var, mask, average_grid, sum_vars)
 
