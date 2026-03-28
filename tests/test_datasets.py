@@ -13,7 +13,7 @@ from neural_lam.create_graph import create_graph_from_datastore
 from neural_lam.datastore import DATASTORES
 from neural_lam.datastore.base import BaseRegularGridDatastore
 from neural_lam.models.graph_lam import GraphLAM
-from neural_lam.weather_dataset import WeatherDataset
+from neural_lam.weather_dataset import WeatherDataModule, WeatherDataset
 from tests.conftest import init_datastore_example
 from tests.dummy_datastore import DummyDatastore, EnsembleDummyDatastore
 
@@ -391,6 +391,7 @@ def test_ensemble_forcing_without_member_dim_is_shared():
     init_states_0, _, forcing_0, target_times_0 = dataset[0]
     init_states_1, _, forcing_1, target_times_1 = dataset[1]
 
+    # Adjacent indices correspond to same time, different member
     assert torch.equal(target_times_0, target_times_1)
     assert not torch.equal(init_states_0, init_states_1)
     assert torch.equal(forcing_0, forcing_1)
@@ -496,3 +497,28 @@ def test_weather_dataset_no_forcing_standardize():
     assert (
         forcing.shape[-1] == 0
     ), "Expected zero forcing features when forcing is None"
+
+
+def test_datamodule_dataloaders_with_zero_workers():
+    """`persistent_workers=True` is invalid when `num_workers=0`."""
+    datastore = DummyDatastore(n_timesteps=10)
+    data_module = WeatherDataModule(
+        datastore=datastore,
+        ar_steps_train=2,
+        ar_steps_eval=2,
+        batch_size=2,
+        num_workers=0,
+    )
+
+    data_module.setup(stage=None)
+
+    train_batch = next(iter(data_module.train_dataloader()))
+    val_batch = next(iter(data_module.val_dataloader()))
+    test_batch = next(iter(data_module.test_dataloader()))
+
+    for batch in (train_batch, val_batch, test_batch):
+        init_states, target_states, forcing, target_times = batch
+        assert init_states.ndim == 4
+        assert target_states.ndim == 4
+        assert forcing.ndim == 4
+        assert target_times.ndim == 2

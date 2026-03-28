@@ -106,7 +106,6 @@ class ARModel(pl.LightningModule):
                 f"leads to degenerate learned-variance training. Use "
                 f"'nll' or 'crps_gauss' instead."
             )
-
         if self.output_std:
             # Pred. dim. in grid cell
             self.grid_output_dim = 2 * num_state_vars
@@ -173,6 +172,25 @@ class ARModel(pl.LightningModule):
         self.time_step_int, self.time_step_unit = get_integer_time(
             self._datastore.step_length
         )
+
+    @property
+    def is_ensemble(self):
+        return self.output_mode == "ensemble" and self.ensemble_size > 1
+
+    def forward(self, preds, pred_std=None):
+        """
+        Convert deterministic predictions to ensemble samples when requested.
+
+        Parameters
+        ----------
+        preds : torch.Tensor
+            Deterministic prediction tensor.
+        pred_std : torch.Tensor, optional
+            Predicted standard deviation tensor used to scale ensemble noise.
+        """
+        if self.is_ensemble:
+            preds = self._sample_ensemble(preds, pred_std=pred_std)
+        return preds
 
     def _sample_ensemble(self, preds, pred_std=None):
         if pred_std is not None:
@@ -360,11 +378,19 @@ class ARModel(pl.LightningModule):
 
         tensor_to_gather: (d1, d2, ...), distributed over K ranks
 
-        returns:
-            - single-device strategies: (d1, d2, ...)
-            - multi-device strategies: (K*d1, d2, ...)
+        returns: (K*d1, d2, ...)
         """
-        gathered = self.all_gather(tensor_to_gather)
+        trainer = getattr(self, "_trainer", None)
+        if trainer is not None and getattr(trainer, "world_size", 1) == 1:
+            return tensor_to_gather
+
+        try:
+            gathered = self.all_gather(tensor_to_gather)
+        except RuntimeError:
+            # Lightning modules without an attached trainer cannot call
+            # `all_gather`; in that case there is nothing to aggregate.
+            return tensor_to_gather
+
         # all_gather adds a leading dim (K,) only on multi-device runs;
         # on single-device it returns the tensor unchanged.
         if gathered.dim() > tensor_to_gather.dim():
@@ -645,6 +671,7 @@ class ARModel(pl.LightningModule):
         Return: log_dict: dict with everything to log for given metric
         """
         log_dict = {}
+        scalar_log_dict = {}
         metric_fig = vis.plot_error_map(
             errors=metric_tensor,
             datastore=self._datastore,
@@ -671,9 +698,9 @@ class ARModel(pl.LightningModule):
                 var_name = var_names[var_i]
                 for step in timesteps:
                     key = f"{full_log_name}_{var_name}_step_{step}"
-                    log_dict[key] = metric_tensor[step - 1, var_i]
+                    scalar_log_dict[key] = metric_tensor[step - 1, var_i]
 
-        return log_dict
+        return log_dict, scalar_log_dict
 
     def aggregate_and_plot_metrics(self, metrics_dict, prefix):
         """
@@ -684,6 +711,7 @@ class ARModel(pl.LightningModule):
         prefix: string, prefix to use for logging
         """
         log_dict = {}
+        scalar_log_dict = {}
         for metric_name, metric_val_list in metrics_dict.items():
             metric_tensor = self.all_gather_cat(
                 torch.cat(metric_val_list, dim=0)
@@ -701,11 +729,11 @@ class ARModel(pl.LightningModule):
                 # NOTE: we here assume rescaling for all metrics is linear
                 metric_rescaled = metric_tensor_averaged * self.state_std
                 # (pred_steps, d_f)
-                log_dict.update(
-                    self.create_metric_log_dict(
-                        metric_rescaled, prefix, metric_name
-                    )
+                figure_logs, metric_scalars = self.create_metric_log_dict(
+                    metric_rescaled, prefix, metric_name
                 )
+                log_dict.update(figure_logs)
+                scalar_log_dict.update(metric_scalars)
 
         # Ensure that log_dict has structure for
         # logging as dict(str, plt.Figure)
@@ -717,6 +745,14 @@ class ARModel(pl.LightningModule):
         if self.trainer.is_global_zero and not self.trainer.sanity_checking:
 
             current_epoch = self.trainer.current_epoch
+
+            if scalar_log_dict:
+                self.log_dict(
+                    scalar_log_dict,
+                    on_step=False,
+                    on_epoch=True,
+                    sync_dist=False,
+                )
 
             for key, figure in log_dict.items():
                 # For other loggers than wandb, add epoch to key.
