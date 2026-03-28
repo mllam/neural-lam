@@ -325,9 +325,16 @@ class ARModel(pl.LightningModule):
 
         tensor_to_gather: (d1, d2, ...), distributed over K ranks
 
-        returns: (K*d1, d2, ...)
+        returns:
+            - single-device strategies: (d1, d2, ...)
+            - multi-device strategies: (K*d1, d2, ...)
         """
-        return self.all_gather(tensor_to_gather).flatten(0, 1)
+        gathered = self.all_gather(tensor_to_gather)
+        # all_gather adds a leading dim (K,) only on multi-device runs;
+        # on single-device it returns the tensor unchanged.
+        if gathered.dim() > tensor_to_gather.dim():
+            return gathered.flatten(0, 1)
+        return gathered
 
     # newer lightning versions requires batch_idx argument, even if unused
     # pylint: disable-next=unused-argument
@@ -528,9 +535,10 @@ class ARModel(pl.LightningModule):
                 var_figs = [
                     vis.plot_prediction(
                         datastore=self._datastore,
-                        title=f"{var_name} ({var_unit}), "
-                        f"t={t_i} ({(self.time_step_int * t_i)}"
+                        title=f"{var_name}, t={t_i}"
+                        f" ({self.time_step_int * t_i}"
                         f"{self.time_step_unit})",
+                        colorbar_label=var_unit,
                         vrange=var_vrange,
                         da_prediction=da_prediction.isel(
                             state_feature=var_i, time=t_i - 1
@@ -709,7 +717,7 @@ class ARModel(pl.LightningModule):
                     error=loss_map,
                     datastore=self._datastore,
                     title=f"Test loss, t={t_i} "
-                    f"({(self.time_step_int * t_i)} {self.time_step_int_unit})",
+                    f"({(self.time_step_int * t_i)} {self.time_step_unit})",
                 )
                 for t_i, loss_map in zip(
                     self.args.val_steps_to_log, mean_spatial_loss

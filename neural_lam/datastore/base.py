@@ -35,9 +35,14 @@ class BaseDatastore(abc.ABC):
     dimensions (rather than just `time`).
 
     # Ensemble vs deterministic data
-    If the datastore is used to represent ensemble data, then the `is_ensemble`
-    attribute should be set to True, and returned data from `get_dataarray` is
-    assumed to have an `ensemble_member` dimension.
+    If the datastore is used to present an ensemble of state realisations, for
+    example for forecast ensembles, then the `is_ensemble` attribute should be
+    set to `True` and returned state data from `get_dataarray` is expected to
+    have an `ensemble_member` dimension. If each ensemble member has its own
+    forcing values, then `has_ensemble_forcing` should be set to `True`, and
+    returned forcing data from `get_dataarray` is expected to have an
+    `ensemble_member` dimension; otherwise forcing data is expected not to have
+    one.
 
     # Grid index
     All methods that return data specific to a grid point (like
@@ -49,6 +54,7 @@ class BaseDatastore(abc.ABC):
     """
 
     is_ensemble: bool = False
+    has_ensemble_forcing: bool = False
     is_forecast: bool = False
 
     @property
@@ -213,7 +219,8 @@ class BaseDatastore(abc.ABC):
         mean = standard_da[f"{category}_mean"]
         std = standard_da[f"{category}_std"]
 
-        return (da - mean) / std
+        eps = np.finfo(std.dtype).eps
+        return (da - mean) / std.where(std > eps, other=eps)
 
     @abc.abstractmethod
     def get_dataarray(
@@ -242,8 +249,11 @@ class BaseDatastore(abc.ABC):
         elapsed_forecast_duration)` dimensions if `is_forecast` is True, or
         `(time)` if `is_forecast` is False.
 
-        If the data is ensemble data, the dataarray is expected to have an
-        additional `ensemble_member` dimension.
+        If we have multiple ensemble members of state data, the returned state
+        dataarray is expected to have an additional `ensemble_member`
+        dimension. If `has_ensemble_forcing=True`, the returned forcing
+        dataarray is expected to have an additional `ensemble_member`
+        dimension; otherwise it is expected not to have one.
 
         Parameters
         ----------
@@ -341,6 +351,23 @@ class BaseDatastore(abc.ABC):
         ]
         return [float(v) for v in extent]
 
+    @functools.lru_cache
+    def get_lat_lon(self, category: str) -> np.ndarray:
+        """
+        Return stacked longitude/latitude pairs for the requested category.
+        """
+
+        xy = self.get_xy(category=category, stacked=True)
+        if xy.size == 0:
+            return xy
+
+        lon_lat = ccrs.PlateCarree().transform_points(
+            self.coords_projection,
+            xy[:, 0],
+            xy[:, 1],
+        )[:, :2]
+        return lon_lat
+
     @property
     @abc.abstractmethod
     def num_grid_points(self) -> int:
@@ -373,7 +400,8 @@ class BaseDatastore(abc.ABC):
 
     @functools.lru_cache
     def expected_dim_order(
-        self, category: Optional[str] = None
+        self,
+        category: Optional[str] = None,
     ) -> tuple[str, ...]:
         """
         Return the expected dimension order for the dataarray or dataset
@@ -399,7 +427,6 @@ class BaseDatastore(abc.ABC):
         ----------
         category : str
             The category of the dataset (state/forcing/static).
-
         Returns
         -------
         List[str]
@@ -418,8 +445,9 @@ class BaseDatastore(abc.ABC):
                 elif not self.is_forecast:
                     dim_order.append("time")
 
-            if self.is_ensemble and category == "state":
-                # XXX: for now we only assume ensemble data for state variables
+            if category == "state" and self.is_ensemble:
+                dim_order.append("ensemble_member")
+            elif category == "forcing" and self.has_ensemble_forcing:
                 dim_order.append("ensemble_member")
 
         dim_order.append("grid_index")
@@ -447,7 +475,9 @@ class BaseRegularGridDatastore(BaseDatastore):
     `BaseDatastore`) for regular-gridded source data each `grid_index`
     coordinate value is assumed to be associated with `x` and `y`-values that
     allow the processed data-arrays can be reshaped back into into 2D
-    xy-gridded arrays.
+    xy-gridded arrays (to change the name of the spatial coordinates the
+    `spatial_coordinates` value should be changed from its default value of
+    `("x", "y")`).
 
     The following methods and attributes must be implemented for datastore that
     represents regular-gridded data:
@@ -456,6 +486,8 @@ class BaseRegularGridDatastore(BaseDatastore):
     - `get_xy` (method): Return the x, y coordinates of the dataset, with the
       option to not stack the coordinates (so that they are returned as a 2D
       grid).
+    - `get_lat_lon` (method): Return the latitude/longitude coordinates of
+      the dataset for convenience when plotting.
 
     The operation of going from (x,y)-indexed regular grid
     to `grid_index`-indexed data-array is called "stacking" and the reverse
@@ -464,7 +496,7 @@ class BaseRegularGridDatastore(BaseDatastore):
     `stack_grid_coords` and `unstack_grid_coords` respectively).
     """
 
-    CARTESIAN_COORDS = ["x", "y"]
+    spatial_coordinates = ("x", "y")
 
     @cached_property
     @abc.abstractmethod
@@ -507,8 +539,9 @@ class BaseRegularGridDatastore(BaseDatastore):
     ) -> Union[xr.DataArray, xr.Dataset]:
         """
         Unstack the spatial grid coordinates from `grid_index` into separate `x`
-        and `y` dimensions to create a 2D grid. Only performs unstacking if the
-        data is currently stacked (has grid_index dimension).
+        and `y` dimensions to create a 2D grid (if the spatial coordinates have
+        different names, those are used instead). Only performs unstacking if
+        the data is currently stacked (has grid_index dimension).
 
         Parameters
         ----------
@@ -526,16 +559,33 @@ class BaseRegularGridDatastore(BaseDatastore):
 
         # Check whether `grid_index` is a multi-index
         if not isinstance(da_or_ds.indexes.get("grid_index"), MultiIndex):
-            da_or_ds = da_or_ds.set_index(grid_index=self.CARTESIAN_COORDS)
+            da_or_ds = da_or_ds.set_index(grid_index=self.spatial_coordinates)
 
         da_or_ds_unstacked = da_or_ds.unstack("grid_index")
 
         # Ensure that the x, y dimensions are in the correct order
         dims = da_or_ds_unstacked.dims
-        xy_dim_order = [d for d in dims if d in self.CARTESIAN_COORDS]
+        xy_dim_order = [d for d in dims if d in self.spatial_coordinates]
 
-        if xy_dim_order != self.CARTESIAN_COORDS:
-            da_or_ds_unstacked = da_or_ds_unstacked.transpose("x", "y")
+        if xy_dim_order != self.spatial_coordinates:
+            # work out where the first spatial coordinate is located
+            # so that we can insert the second spatial coordinate next to it in
+            # the correct order. Although this looks verbose, it ensures that
+            # we don't change the order of any other dimensions.
+            first_xy_dim_index = min(
+                dims.index(self.spatial_coordinates[0]),
+                dims.index(self.spatial_coordinates[1]),
+            )
+            new_dim_order = list(dims)
+            new_dim_order.remove(self.spatial_coordinates[0])
+            new_dim_order.remove(self.spatial_coordinates[1])
+            new_dim_order.insert(
+                first_xy_dim_index, self.spatial_coordinates[0]
+            )
+            new_dim_order.insert(
+                first_xy_dim_index + 1, self.spatial_coordinates[1]
+            )
+            da_or_ds_unstacked = da_or_ds_unstacked.transpose(*new_dim_order)
 
         return da_or_ds_unstacked
 
@@ -561,7 +611,7 @@ class BaseRegularGridDatastore(BaseDatastore):
         if "grid_index" in da_or_ds.dims:
             return da_or_ds
 
-        da_or_ds_stacked = da_or_ds.stack(grid_index=self.CARTESIAN_COORDS)
+        da_or_ds_stacked = da_or_ds.stack(grid_index=self.spatial_coordinates)
 
         # infer what category of data the array represents by finding the
         # dimension named in the format `{category}_feature`
