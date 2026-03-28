@@ -15,6 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Split `AGENTS.md` into a technical overview for AI agents and a comprehensive human-facing contributing guide in `docs/contributing/contributing.md` ([#516](https://github.com/mllam/neural-lam/issues/516)) @[yourusername]
 - Replace remaining `print()` calls with `loguru` `logger.info()` in `compute_standardization_stats.py` for structured and consistent logging @[yourusername]
 - Change the default ensemble-loading behavior in `WeatherDataset` / `WeatherDataModule` to use all ensemble members as independent samples for ensemble datastores (with matching ensemble-member selection for forcing when available); single-member behavior now requires explicitly opting in via `--load_single_member` [\#332](https://github.com/mllam/neural-lam/pull/332) @kshirajahere
 - Refactor graph loading: move zero-indexing out of the model and update plotting to prepare using the research-branch graph I/O [\#184](https://github.com/mllam/neural-lam/pull/184) @zweihuehner
