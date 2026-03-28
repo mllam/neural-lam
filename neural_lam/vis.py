@@ -31,7 +31,11 @@ _HEATMAP_CMAP = matplotlib.colors.LinearSegmentedColormap.from_list(
 
 
 def _tex_safe(s: str) -> str:
-    """Escape TeX special characters in s if TeX rendering is active."""
+    """Escape TeX special characters in s if TeX rendering is currently active.
+
+    Needed because % is a TeX comment character; without escaping it would
+    silently truncate any text that follows it (e.g. the title for r2m (%)).
+    """
     if plt.rcParams.get("text.usetex", False):
         s = s.replace("%", r"\%")
     return s
@@ -65,26 +69,14 @@ def _compute_heatmap_layout(n_rows: int, n_cols: int) -> dict[str, float]:
     }
 
 
-def _get_heatmap_var_labels(
-    datastore: BaseRegularGridDatastore, n_vars: int
-) -> list[str]:
-    """Build state-variable labels, padding defensively if metadata is short."""
-    var_names = list(datastore.get_vars_names(category="state"))
-    var_units = list(datastore.get_vars_units(category="state"))
-
-    if len(var_names) < n_vars:
-        var_names.extend(
-            [f"state_feature_{i}" for i in range(len(var_names), n_vars)]
-        )
-    if len(var_units) < n_vars:
-        var_units.extend([""] * (n_vars - len(var_units)))
-
-    labels = []
-    for name, unit in zip(var_names[:n_vars], var_units[:n_vars]):
-        label = f"{name} ({unit})" if unit else name
-        labels.append(_tex_safe(label))
-
-    return labels
+def _get_heatmap_var_labels(datastore: BaseRegularGridDatastore) -> list[str]:
+    """Build state-variable labels from datastore metadata."""
+    var_names = datastore.get_vars_names(category="state")
+    var_units = datastore.get_vars_units(category="state")
+    return [
+        _tex_safe(f"{name} ({unit})" if unit else name)
+        for name, unit in zip(var_names, var_units)
+    ]
 
 
 def _to_heatmap_matrix(values) -> np.ndarray:
@@ -125,12 +117,24 @@ def _get_heatmap_color_values(
         ds_state_stats = datastore.get_standardization_dataarray(
             category="state"
         )
-    except (AttributeError, KeyError, TypeError, ValueError):
+    except (AttributeError, KeyError, TypeError, ValueError) as exc:
+        warnings.warn(
+            f"Could not load standardization stats ({exc}); "
+            "falling back to absolute scale.",
+            UserWarning,
+            stacklevel=3,
+        )
         return errors_np, "Absolute scale"
 
     n_vars = errors_np.shape[0]
     state_std = _get_feature_scale(ds_state_stats, "state_std", n_vars)
     if state_std is None:
+        warnings.warn(
+            "State standardization stats are unavailable; "
+            "falling back to absolute scale.",
+            UserWarning,
+            stacklevel=3,
+        )
         return errors_np, "Absolute scale"
 
     scale = state_std
@@ -375,7 +379,7 @@ def plot_error_heatmap(
 
     ax.set_yticks(np.arange(d_f))
     ax.set_yticklabels(
-        _get_heatmap_var_labels(datastore=datastore, n_vars=d_f),
+        _get_heatmap_var_labels(datastore=datastore),
         size=layout["tick_label_size"],
     )
 

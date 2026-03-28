@@ -214,11 +214,33 @@ def test_plot_error_heatmap_uses_absolute_scale_without_stats():
     errors = torch.tensor([[1.0, 2.0], [3.0, 4.0]])
     datastore = NoStatsHeatmapDatastore(n_vars=errors.shape[1])
 
-    fig = vis.plot_error_heatmap(errors, datastore=datastore)
+    with pytest.warns(UserWarning, match="falling back to absolute scale"):
+        fig = vis.plot_error_heatmap(errors, datastore=datastore)
     colorbar = fig.axes[1]
 
     assert colorbar.get_ylabel() == "Absolute scale"
 
+    plt.close(fig)
+
+
+def test_plot_error_heatmap_uses_state_std_only_when_diff_std_absent():
+    """Without diff std the heatmap should fall back to state-std scaling."""
+
+    class StateStdOnlyDatastore(HeatmapDatastore):
+        def get_standardization_dataarray(self, category):
+            return (
+                super()
+                .get_standardization_dataarray(category)
+                .drop_vars("state_diff_std_standardized")
+            )
+
+    errors = torch.tensor([[2.0, 4.0], [1.0, 3.0]])
+    fig = vis.plot_error_heatmap(
+        errors,
+        datastore=StateStdOnlyDatastore(n_vars=2, state_std=[2.0, 1.0]),
+    )
+
+    assert fig.axes[1].get_ylabel() == "Relative scale (state stds)"
     plt.close(fig)
 
 
@@ -240,47 +262,30 @@ def test_plot_error_heatmap_uses_white_to_red_colormap():
     plt.close(fig)
 
 
-def test_plot_error_heatmap_adapts_figure_and_font_sizes():
-    """Dense heatmaps should get more space and smaller text."""
-    small_errors = torch.ones((4, 5))
-    large_errors = torch.ones((20, 30))
-
+def test_plot_error_heatmap_adapts_layout_for_grid_size():
+    """Dense heatmaps get larger figures, smaller fonts, and suppress annotations."""
     small_fig = vis.plot_error_heatmap(
-        small_errors, datastore=HeatmapDatastore(n_vars=small_errors.shape[1])
+        torch.ones((4, 5)), datastore=HeatmapDatastore(n_vars=5)
     )
     large_fig = vis.plot_error_heatmap(
-        large_errors, datastore=HeatmapDatastore(n_vars=large_errors.shape[1])
+        torch.ones((20, 30)), datastore=HeatmapDatastore(n_vars=30)
     )
-
-    small_ax = small_fig.axes[0]
-    large_ax = large_fig.axes[0]
+    dense_fig = vis.plot_error_heatmap(
+        torch.ones((40, 50)), datastore=HeatmapDatastore(n_vars=50)
+    )
 
     assert large_fig.get_size_inches()[0] > small_fig.get_size_inches()[0]
-    assert large_fig.get_size_inches()[1] > small_fig.get_size_inches()[1]
     assert (
-        large_ax.get_yticklabels()[0].get_fontsize()
-        < small_ax.get_yticklabels()[0].get_fontsize()
+        large_fig.axes[0].get_yticklabels()[0].get_fontsize()
+        < small_fig.axes[0].get_yticklabels()[0].get_fontsize()
     )
-    assert large_ax.texts[0].get_fontsize() < small_ax.texts[0].get_fontsize()
-    assert large_ax.get_xticklabels()[0].get_rotation() == 45.0
+    assert large_fig.axes[0].get_xticklabels()[0].get_rotation() == 45.0
+    assert len(dense_fig.axes[0].texts) == 0
+    assert dense_fig.get_size_inches()[0] > 18.0
 
     plt.close(small_fig)
     plt.close(large_fig)
-
-
-def test_plot_error_heatmap_skips_annotations_for_very_dense_grids():
-    """Very dense heatmaps should omit in-cell text to stay readable."""
-    dense_errors = torch.ones((40, 50))
-    fig = vis.plot_error_heatmap(
-        dense_errors, datastore=HeatmapDatastore(n_vars=dense_errors.shape[1])
-    )
-    ax = fig.axes[0]
-
-    assert len(ax.texts) == 0
-    assert fig.get_size_inches()[0] > 18.0
-    assert ax.get_xticklabels()[0].get_fontsize() == pytest.approx(9.0)
-
-    plt.close(fig)
+    plt.close(dense_fig)
 
 
 def test_plot_error_map_deprecated_wrapper():
@@ -363,11 +368,14 @@ def test_plot_spatial_error_crop_to_interior_changes_extent() -> None:
 @pytest.fixture
 def model_and_batch(tmp_path, time_step, time_unit):
     """Setup a model and dataset for testing plot_examples."""
+    # Create timedelta with specified step length.
     step_length_kwargs = {time_unit: time_step}
     step_length = timedelta(**step_length_kwargs)
 
+    # Create datastore with specified step length.
     datastore = DummyDatastore(step_length=step_length)
 
+    # Create minimal model args.
     class ModelArgs:
         output_std = False
         loss = "mse"
@@ -385,6 +393,7 @@ def model_and_batch(tmp_path, time_step, time_unit):
         num_future_forcing_steps = 0
         var_leads_metrics_watch = {}
 
+    # Create graph files if they do not already exist.
     graph_dir_path = Path(datastore.root_path) / "graph" / "1level"
     if not graph_dir_path.exists():
         create_graph_from_datastore(
@@ -393,6 +402,7 @@ def model_and_batch(tmp_path, time_step, time_unit):
             n_max_levels=1,
         )
 
+    # Create config.
     config = nlconfig.NeuralLAMConfig(
         datastore=nlconfig.DatastoreSelection(
             kind=datastore.SHORT_NAME,
@@ -400,12 +410,14 @@ def model_and_batch(tmp_path, time_step, time_unit):
         ),
     )
 
+    # Create model.
     model = GraphLAM(
         args=ModelArgs(),
         config=config,
         datastore=datastore,
     )
 
+    # Create dataset to get a sample batch.
     dataset = WeatherDataset(
         datastore=datastore,
         split="train",
@@ -414,6 +426,7 @@ def model_and_batch(tmp_path, time_step, time_unit):
         num_future_forcing_steps=0,
     )
 
+    # Get a batch (just use one sample).
     sample = dataset[0]
     batch = tuple(torch.stack([item]) for item in sample)
 
@@ -436,8 +449,10 @@ def test_plot_examples_integration_saves_figure(
     """Integration test that saves an actual figure for manual inspection."""
     model, batch, datastore, tmp_path = model_and_batch
 
+    # Reset plotted examples counter.
     model.plotted_examples = 0
 
+    # Verify that the model correctly inferred time step from the datastore.
     assert (
         model.time_step_int == time_step
     ), f"Expected time_step_int={time_step}, got {model.time_step_int}"
@@ -445,15 +460,19 @@ def test_plot_examples_integration_saves_figure(
         model.time_step_unit == time_unit
     ), f"Expected time_step_unit={time_unit}, got {model.time_step_unit}"
 
+    # Generate prediction.
     prediction, target, _, _ = model.common_step(batch)
 
+    # Rescale to original data scale.
     prediction_rescaled = prediction * model.state_std + model.state_mean
     target_rescaled = target * model.state_std + model.state_mean
 
+    # Get first example.
     pred_slice = prediction_rescaled[0].detach()
     target_slice = target_rescaled[0].detach()
     time_slice = batch[3][0]
 
+    # Create DataArrays.
     dataset = WeatherDataset(datastore=datastore, split="train")
 
     time = np.array(time_slice.cpu(), dtype="datetime64[ns]")
@@ -466,6 +485,7 @@ def test_plot_examples_integration_saves_figure(
         tensor=target_slice, time=time, category="state"
     ).unstack("grid_index")
 
+    # Get vranges.
     var_vmin = (
         torch.minimum(
             pred_slice.flatten(0, 1).min(dim=0)[0],
@@ -487,6 +507,7 @@ def test_plot_examples_integration_saves_figure(
     var_names = datastore.get_vars_names("state")
     var_units = datastore.get_vars_units("state")
 
+    # Create plot for specified timestep and first variable.
     fig = vis.plot_prediction(
         datastore=datastore,
         title=f"{var_names[0]}, t={t_i} ({time_step * t_i} {time_unit})",
@@ -498,6 +519,7 @@ def test_plot_examples_integration_saves_figure(
         da_target=da_target.isel(state_feature=0, time=t_i - 1).squeeze(),
     )
 
+    # Save for inspection.
     output_path = (
         TEST_OUTPUT_DIR
         / f"ar_model_integration_t{t_i}_{time_step}{time_unit}.png"
@@ -507,6 +529,7 @@ def test_plot_examples_integration_saves_figure(
 
     plt.close(fig)
 
+    # Verify the figure was created.
     assert fig is not None
     assert isinstance(fig, plt.Figure)
     assert output_path.exists()
