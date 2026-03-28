@@ -245,12 +245,14 @@ def plot_on_axis(
     )
 
     if boundary_alpha is not None:
+        # Overlay boundary mask
         mask_da = datastore.boundary_mask
         mask_values = mask_da.values
         if mask_values.ndim == 2 and mask_values.shape[1] == 1:
             mask_values = mask_values[:, 0]
         mask_2d = mask_values.reshape(grid_shape)
 
+        # Create overlay: 1 where boundary, NaN where interior
         overlay = np.where(mask_2d == 1, 1.0, np.nan)
 
         ax.pcolormesh(
@@ -263,6 +265,7 @@ def plot_on_axis(
         )
 
     if crop_to_interior:
+        # Calculate extent of interior
         mask_da = datastore.boundary_mask
         mask_values = mask_da.values
         if mask_values.ndim == 2 and mask_values.shape[1] == 1:
@@ -287,6 +290,8 @@ def plot_on_axis(
     return mesh
 
 
+# rc_context applies NeurIPS font/text settings; figure size is overridden
+# by the explicit figsize= below but font family and usetex stay in effect.
 @matplotlib.rc_context(utils.fractional_plot_bundle(1))
 def plot_error_heatmap(
     errors,
@@ -473,6 +478,7 @@ def plot_spatial_error(
     colorbar_label: str = "",
 ):
     """Plot spatial error with projection-aware axes."""
+
     error_np = error.detach().cpu().numpy()
 
     if vrange is None:
