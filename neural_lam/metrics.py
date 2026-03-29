@@ -157,10 +157,14 @@ def mae(pred, target, pred_std, mask=None, average_grid=True, sum_vars=True):
     metric_val: One of (...,), (..., d_state), (..., N), (..., N, d_state),
     depending on reduction arguments.
     """
-    # Replace pred_std with constant ones
-    return wmae(
-        pred, target, torch.ones_like(pred_std), mask, average_grid, sum_vars
-    )
+    # Replace pred_std with constant ones. Allow pred_std to be omitted for
+    # call sites that only need unweighted MAE behavior.
+    if pred_std is None:
+        pred_std_ones = torch.ones_like(pred)
+    else:
+        pred_std_ones = torch.ones_like(pred_std)
+
+    return wmae(pred, target, pred_std_ones, mask, average_grid, sum_vars)
 
 
 def nll(pred, target, pred_std, mask=None, average_grid=True, sum_vars=True):
@@ -227,6 +231,62 @@ def crps_gauss(
     )
 
 
+def crps_ens(
+    pred,
+    target,
+    pred_std,
+    mask=None,
+    average_grid=True,
+    sum_vars=True,
+    ens_dim=-3,
+):
+    """
+    Continuous Ranked Probability Score (CRPS) for finite ensembles.
+
+    (...,) is any number of batch dimensions, potentially different
+        but broadcastable
+    pred: (..., N_ens, N, d_state), prediction with ensemble dimension at
+        ens_dim
+    target: (..., N, d_state), target
+    pred_std: unused, kept for metric API compatibility
+    mask: (N,), boolean mask describing which grid nodes to use in metric
+    average_grid: boolean, if grid dimension -2 should be reduced (mean over N)
+    sum_vars: boolean, if variable dimension -1 should be reduced (sum
+        over d_state)
+    ens_dim: int, index of ensemble member dimension in pred
+
+    Returns:
+    metric_val: One of (...,), (..., d_state), (..., N), (..., N, d_state),
+    depending on reduction arguments.
+    """
+    if pred.shape[ens_dim] == 1:
+        return mae(
+            pred.squeeze(ens_dim),
+            target,
+            None,
+            mask=mask,
+            average_grid=average_grid,
+            sum_vars=sum_vars,
+        )
+
+    pred_ens_first = pred.movedim(ens_dim, 0)
+
+    first_term = torch.mean(
+        torch.abs(pred_ens_first - target.unsqueeze(0)), dim=0
+    )
+
+    pairwise_abs_diff = torch.abs(
+        pred_ens_first.unsqueeze(0) - pred_ens_first.unsqueeze(1)
+    )
+    second_term = 0.5 * torch.mean(pairwise_abs_diff, dim=(0, 1))
+
+    entry_crps = first_term - second_term
+
+    return mask_and_reduce_metric(
+        entry_crps, mask=mask, average_grid=average_grid, sum_vars=sum_vars
+    )
+
+
 DEFINED_METRICS = {
     "mse": mse,
     "mae": mae,
@@ -234,4 +294,5 @@ DEFINED_METRICS = {
     "wmae": wmae,
     "nll": nll,
     "crps_gauss": crps_gauss,
+    "crps_ens": crps_ens,
 }

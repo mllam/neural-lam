@@ -177,8 +177,9 @@ class ARModel(pl.LightningModule):
         ----------
         tensor : torch.Tensor
             The tensor to convert to a `xr.DataArray` with dimensions [time,
-            grid_index, feature]. The tensor will be copied to the CPU if it is
-            not already there.
+            grid_index, feature] for deterministic outputs, or [time,
+            grid_index, ensemble_member, feature] for probabilistic outputs.
+            The tensor will be copied to the CPU if it is not already there.
         time : torch.Tensor
             The time index or indices for the data, given as tensor representing
             epoch time in nanoseconds. The tensor will be
@@ -193,10 +194,45 @@ class ARModel(pl.LightningModule):
         # provided to ARModel or where to put plotting still needs discussion
         weather_dataset = WeatherDataset(datastore=self._datastore, split=split)
         time = np.array(time.cpu(), dtype="datetime64[ns]")
-        da = weather_dataset.create_dataarray_from_tensor(
-            tensor=tensor, time=time, category=category
+
+        if tensor.ndim == 4:
+            da_datastore_category = getattr(weather_dataset, f"da_{category}")
+            feature_dim_name = f"{category}_feature"
+
+            da = xr.DataArray(
+                tensor.cpu().numpy(),
+                dims=(
+                    "time",
+                    "grid_index",
+                    "ensemble_member",
+                    feature_dim_name,
+                ),
+                coords={
+                    "time": time,
+                    "grid_index": da_datastore_category.grid_index,
+                    "ensemble_member": np.arange(tensor.shape[2]),
+                    feature_dim_name: da_datastore_category[feature_dim_name],
+                },
+            )
+
+            for grid_coord in ["x", "y"]:
+                if (
+                    grid_coord in da_datastore_category.coords
+                    and grid_coord not in da.coords
+                ):
+                    da.coords[grid_coord] = da_datastore_category[grid_coord]
+
+            return da
+
+        if tensor.ndim in (2, 3):
+            return weather_dataset.create_dataarray_from_tensor(
+                tensor=tensor, time=time, category=category
+            )
+
+        raise ValueError(
+            "Expected tensor to have 2, 3 or 4 dimensions, "
+            f"but got {tensor.ndim}."
         )
-        return da
 
     def configure_optimizers(self):
         opt = torch.optim.AdamW(
