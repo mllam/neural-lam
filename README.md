@@ -402,7 +402,7 @@ The graph-related files are stored in a directory called `graphs`.
 
 ### Graph artifact files (debugging reference)
 
-After generation, a graph directory (for example `data/.../graph/multiscale/`) contains PyTorch tensors used by `neural_lam.utils.load_graph`. Names follow the relation they represent:
+After generation, a graph directory (for example `data/.../graph/multiscale/`) contains PyTorch tensors used by `neural_lam.utils.load_graph`. Names follow the relation they represent. In those prefixes, **`g` means grid** and **`m` means mesh** (so e.g. `g2m` is grid→mesh and `m2g` is mesh→grid).
 
 | File(s) | Role |
 |--------|------|
