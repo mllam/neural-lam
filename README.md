@@ -391,7 +391,7 @@ python -m neural_lam.datastore.npyfilesmeps.compute_standardization_stats <path-
 
 ### Graph creation
 
-Run `python -m neural_lam.create_mesh` with suitable options to generate the graph you want to use (see `python neural_lam.create_mesh --help` for a list of options).
+Run `python -m neural_lam.create_graph --help` for options, then generate the graph with the commands below.
 The graphs used for the different models in the [paper](#graph-based-neural-weather-prediction-for-limited-area-modeling) can be created as:
 
 * **GC-LAM**: `python -m neural_lam.create_graph --config_path <neural-lam-config-path> --name multiscale`
@@ -399,6 +399,24 @@ The graphs used for the different models in the [paper](#graph-based-neural-weat
 * **L1-LAM**: `python -m neural_lam.create_graph --config_path <neural-lam-config-path> --name 1level --levels 1`
 
 The graph-related files are stored in a directory called `graphs`.
+
+### Graph artifact files (debugging reference)
+
+After generation, a graph directory (for example `data/.../graph/multiscale/`) contains PyTorch tensors used by `neural_lam.utils.load_graph`. Names follow the relation they represent:
+
+| File(s) | Role |
+|--------|------|
+| `g2m_edge_index.pt`, `g2m_features.pt` | Grid → mesh edges. `edge_index` has shape `(2, E)`; indices refer to the **combined** grid+mesh node set used when that graph was exported (see `neural_lam.create_graph.create_graph`). |
+| `m2g_edge_index.pt`, `m2g_features.pt` | Mesh → grid edges; same combined indexing scheme as `g2m` after integer relabelling. |
+| `m2m_edge_index.pt`, `m2m_features.pt` | Mesh-only message passing. **List** of length `n_levels`: one `(2, E_l)` (and matching features) per mesh level. In the hierarchical case, node ids are **global** mesh indices (concatenated levels). |
+| `mesh_features.pt` | List of static mesh node features per level (e.g. normalised positions), length `n_levels`. |
+| `mesh_up_edge_index.pt`, `mesh_down_edge_index.pt` (+ features) | **Hierarchical graphs only**: inter-level mesh connectivity (lists, one entry per level transition). |
+
+Edge feature tensors store `len` (edge length) and `vdiff` (endpoint position difference components) per edge, as produced in `create_graph.save_edges` / `save_edges_list`. At load time, `load_graph` may re-zero indices and normalise lengths; see that function for the exact contract.
+
+If training fails after regenerating a graph, check: (1) all expected files exist, (2) tensor shapes match the model (`--graph` vs hierarchical flag), (3) `edge_index` values stay within valid node ranges—`tests/test_graph_creation.py` includes checks for (1) and basic index validity on example datastores.
+
+A more formal on-disk specification is discussed in [issue #323](https://github.com/mllam/neural-lam/issues/323).
 
 ## Logging your experiments
 
