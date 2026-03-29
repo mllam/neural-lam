@@ -226,6 +226,63 @@ def crps_gauss(
         entry_crps, mask=mask, average_grid=average_grid, sum_vars=sum_vars
     )
 
+def rank_histogram(
+    ensemble_pred,
+    target,
+    mask=None,
+    num_bins=None,
+):
+    """
+    Compute rank histogram for ensemble calibration assessment
+
+    Counts how often observations fall in each rank bin among ensemble members.
+    Well-calibrated ensembles produce flat histograms.
+
+    ensemble_pred: (M, ..., N, d_state), ensemble predictions with M members
+    target: (..., N, d_state), observations
+    mask: (N,), boolean mask for grid nodes to include
+    num_bins: int, number of bins (default M + 1)
+
+    Returns:
+    bin_counts: (num_bins, d_state), histogram counts per variable
+    """
+    # M = number of ensemble members
+    num_members = ensemble_pred.shape[0]
+    if num_bins is None:
+        num_bins = num_members + 1
+
+    # Move ensemble dim to last for easier comparison
+    # (M, ..., N, d_state) -> (..., N, d_state, M)
+    ensemble_transposed = ensemble_pred.movedim(0, -1)
+
+    # Expand target to match: (..., N, d_state) -> (..., N, d_state, 1)
+    target_expanded = target.unsqueeze(-1)
+
+    # Count how many ensemble members are below the target
+    # ranks are in {0, 1, ..., M}, representing M+1 possible positions
+    ranks = (ensemble_transposed < target_expanded).sum(dim=-1)  # (..., N, d_state)
+
+    # Apply mask if provided
+    if mask is not None:
+        ranks = ranks[..., mask, :]  # (..., N', d_state)
+
+    # Flatten all batch and spatial dimensions, keep variable dim
+    # (..., N', d_state) -> (total_samples, d_state)
+    ranks_flat = ranks.reshape(-1, ranks.shape[-1])
+
+    # Compute histogram for each variable
+    d_state = ranks_flat.shape[-1]
+    bin_counts = torch.zeros(
+        num_bins, d_state, dtype=torch.long, device=ranks_flat.device
+    )
+
+    for var_idx in range(d_state):
+        bin_counts[:, var_idx] = torch.bincount(
+            ranks_flat[:, var_idx].long(),
+            minlength=num_bins,
+        )[:num_bins]
+
+    return bin_counts
 
 DEFINED_METRICS = {
     "mse": mse,
