@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- Add `rank_histogram` metric for ensemble forecast calibration diagnostics [\#540](https://github.com/mllam/neural-lam/pull/XXX)
+- Add `rank_histogram` metric for ensemble forecast calibration diagnostics [\#540](https://github.com/mllam/neural-lam/pull/540)
 
 - Add `AGENTS.md` file to the repo to give agents more information about the codebase and the contribution culture.[\#416](https://github.com/mllam/neural-lam/pull/416) @sadamov
 
