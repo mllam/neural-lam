@@ -650,6 +650,8 @@ class WeatherDataModule(pl.LightningDataModule):
         batch_size: int = 4,
         num_workers: int = 16,
         eval_split: str = "test",
+        eval_sample_start: int = 0,
+        eval_sample_end: int = None,
     ):
         super().__init__()
         self._datastore = datastore
@@ -666,6 +668,16 @@ class WeatherDataModule(pl.LightningDataModule):
         self.test_dataset = None
         self.multiprocessing_context: Union[str, None] = None
         self.eval_split = eval_split
+        self.eval_sample_start = eval_sample_start
+        self.eval_sample_end = eval_sample_end
+        if (
+            eval_sample_end is not None
+            and eval_sample_end <= eval_sample_start
+        ):
+            raise ValueError(
+                f"eval_sample_end ({eval_sample_end}) must be greater than "
+                f"eval_sample_start ({eval_sample_start})."
+            )
         if num_workers > 0:
             # default to spawn for now, as the default on linux "fork" hangs
             # when using dask (which the npyfilesmeps datastore uses)
@@ -702,6 +714,23 @@ class WeatherDataModule(pl.LightningDataModule):
                 num_future_forcing_steps=self.num_future_forcing_steps,
                 load_single_member=self.load_single_member,
             )
+            # Apply sample range subsetting for resumable inference
+            if (
+                self.eval_sample_start > 0
+                or self.eval_sample_end is not None
+            ):
+                total = len(self.test_dataset)
+                end = (
+                    self.eval_sample_end
+                    if self.eval_sample_end is not None
+                    else total
+                )
+                indices = range(
+                    self.eval_sample_start, min(end, total)
+                )
+                self.test_dataset = torch.utils.data.Subset(
+                    self.test_dataset, indices
+                )
 
     def train_dataloader(self):
         """Load train dataset."""

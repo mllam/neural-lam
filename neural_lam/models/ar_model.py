@@ -496,7 +496,22 @@ class ARModel(pl.LightningModule):
             time[:n_examples],
         ):
             # Each slice is (pred_steps, num_grid_nodes, d_f)
-            self.plotted_examples += 1  # Increment already here
+
+            # Skip if example files already exist (resumable inference)
+            if self.logger is not None and self.logger.save_dir is not None:
+                pred_path = os.path.join(
+                    self.logger.save_dir,
+                    f"example_pred_{self.plotted_examples + 1}.pt",
+                )
+                target_path = os.path.join(
+                    self.logger.save_dir,
+                    f"example_target_{self.plotted_examples + 1}.pt",
+                )
+                if os.path.exists(pred_path) and os.path.exists(target_path):
+                    self.plotted_examples += 1
+                    continue
+
+            self.plotted_examples += 1  # Increment after skip check
 
             da_prediction = self._create_dataarray_from_tensor(
                 tensor=pred_slice,
