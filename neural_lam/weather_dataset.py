@@ -152,7 +152,7 @@ class WeatherDataset(torch.utils.data.Dataset):
 
     def _compute_std_safe(self, std: xr.DataArray, feature: str):
         eps = np.finfo(std.dtype).eps
-        if bool((std <= eps).any()):
+        if (std <= eps).any():   # Removed unnecessary bool() conversion
             logger.warning(
                 f"Some {feature} features have near-zero std and will be "
                 "standardized using machine epsilon to avoid NaN."
