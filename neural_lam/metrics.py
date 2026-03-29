@@ -188,7 +188,24 @@ def nll(pred, target, pred_std, mask=None, average_grid=True, sum_vars=True):
     return mask_and_reduce_metric(
         entry_nll, mask=mask, average_grid=average_grid, sum_vars=sum_vars
     )
-
+#added Rank_histogram
+def rank_histogram(ensemble_pred, target, mask=None):
+    """
+    Computes rank histogram counts for ensemble calibration.
+    ensemble_pred: (M, ..., d_state) where M is ensemble size
+    target: (..., d_state)
+    """
+    num_members = ensemble_pred.shape[0]
+    combined = torch.cat([ensemble_pred, target.unsqueeze(0)], dim=0)
+    ranks = torch.argsort(torch.argsort(combined, dim=0), dim=0)[-1]
+    
+    if mask is not None:
+        ranks = ranks[mask]
+    hist = torch.zeros((num_members + 1, ensemble_pred.shape[-1]), device=ensemble_pred.device)
+    for i in range(num_members + 1):
+        hist[i] = torch.sum(ranks == i, dim=0)
+        
+    return hist
 
 def crps_gauss(
     pred, target, pred_std, mask=None, average_grid=True, sum_vars=True
