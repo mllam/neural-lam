@@ -13,6 +13,8 @@ import torch
 import torch_geometric as pyg
 from loguru import logger
 from torch_geometric.utils.convert import from_networkx
+import json
+from pathlib import Path
 
 # Local
 from .config import load_config_and_datastore
@@ -76,6 +78,33 @@ def compute_graph_stats(edge_index, num_nodes, name="graph"):
     logger.info(f"[{name}] isolated nodes: {isolated_nodes}")
     logger.info(f"[{name}] avg in-degree: {avg_in:.2f}")
     logger.info(f"[{name}] avg out-degree: {avg_out:.2f}")
+
+def export_graph(edge_index, num_nodes, path, include_stats=False, name="graph"):
+    
+    #Export graph structure (nodes and edges) to a JSON file.
+    #Useful for debugging or inspecting the graph outside the codebase.
+    
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+
+    num_edges = edge_index.shape[1]
+    edges = edge_index.t().tolist()
+
+    graph_data = {
+        "num_nodes": int(num_nodes),
+        "num_edges": int(num_edges),
+        "edges": edges,
+    }
+
+    if include_stats:
+        # reuse existing logging-based stats
+        compute_graph_stats(edge_index, num_nodes, name=name)
+        graph_data["stats_logged"] = True
+
+    with open(path, "w") as f:
+        json.dump(graph_data, f, indent=2)
+
+    logger.info(f"[{name}] exported graph to {path}")
 
 
 def plot_graph(graph, title=None):
