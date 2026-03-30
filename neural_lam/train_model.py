@@ -202,6 +202,12 @@ def main(input_args=None):
         default=1,
         help="Number of example predictions to plot during evaluation",
     )
+    parser.add_argument(
+        "--create_gif",
+        action="store_true",
+        help="If set, create GIF animations from prediction PNG frames and "
+        "save to disk. PNGs are always created and logged to wandb/mlflow.",
+    )
 
     # Logger Settings
     parser.add_argument(
