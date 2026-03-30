@@ -344,9 +344,7 @@ def main(input_args=None):
     else:
         device_name = "cpu"
 
-    devices, strategy = resolve_devices_and_strategy(
-        args.devices, device_name
-    )
+    devices, strategy = resolve_devices_and_strategy(args.devices, device_name)
 
     # Load model parameters Use new args for model
     ModelClass = MODELS[args.model]

@@ -82,9 +82,7 @@ def test_resolve_devices_and_strategy(
 )
 def test_resolve_devices_and_strategy_cpu_rejects_invalid(args_devices):
     with pytest.raises(ValueError, match="single integer > 0"):
-        neural_lam.train_model.resolve_devices_and_strategy(
-            args_devices, "cpu"
-        )
+        neural_lam.train_model.resolve_devices_and_strategy(args_devices, "cpu")
 
 
 # --- setup_training_logger tests ----------------------------------------------
