@@ -584,3 +584,6 @@ Furthermore, all tests in the ```tests``` directory will be run upon pushing cha
 If you are interested in machine learning models for LAM, have questions about the implementation or ideas for extending it, feel free to get in touch.
 There is an open [mllam slack channel](https://join.slack.com/t/ml-lam/shared_invite/zt-2t112zvm8-Vt6aBvhX7nYa6Kbj_LkCBQ) that anyone can join (after following the link you have to request to join, this is to avoid spam bots).
 You can also open a github issue on this page.
+
+## Contribution (GSoC 2026)
+This repository is being enhanced with structured documentation using tools like Sphinx to improve usability and accessibility.
