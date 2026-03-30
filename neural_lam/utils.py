@@ -35,30 +35,92 @@ class BufferList(nn.Module):
         for buffer_i, tensor in enumerate(buffer_tensors):
             self.register_buffer(f"b{buffer_i}", tensor, persistent=persistent)
 
-    def __getitem__(self, key):
-        return getattr(self, f"b{key}")
+def __getitem__(self, key):
+    """
+    Retrieve a buffer tensor by index.
 
-    def __len__(self):
-        return self.n_buffers
+    Parameters
+    ----------
+    key : int
+        Index of the buffer.
 
-    def __iter__(self):
-        return (self[i] for i in range(len(self)))
+    Returns
+    -------
+    torch.Tensor
+        The corresponding buffer tensor.
+    """
+    return getattr(self, f"b{key}")
 
-    def __itruediv__(self, other):
-        """Divide each element in list with other"""
-        return self.__imul__(1.0 / other)
+def __len__(self):
+    """
+    Return the number of stored buffers.
 
-    def __imul__(self, other):
-        """Multiply each element in list with other"""
-        for buffer_tensor in self:
-            buffer_tensor *= other
+    Returns
+    -------
+    int
+        Number of buffers.
+    """
+    return self.n_buffers
 
-        return self
+def __iter__(self):
+    """
+    Iterate over buffer tensors.
+
+    Returns
+    -------
+    iterator of torch.Tensor
+        Iterator over stored buffers.
+    """
+    return (self[i] for i in range(len(self)))
+
+def __itruediv__(self, other):
+    """
+    Divide each buffer tensor by a scalar value.
+
+    Parameters
+    ----------
+    other : float
+        Value to divide each buffer tensor by.
+
+    Returns
+    -------
+    BufferList
+        Updated BufferList instance.
+    """
+    return self.__imul__(1.0 / other)
+
+def __imul__(self, other):
+    """
+    Multiply each buffer tensor by a scalar value.
+
+    Parameters
+    ----------
+    other : float
+        Value to multiply each buffer tensor by.
+
+    Returns
+    -------
+    BufferList
+        Updated BufferList instance.
+    """
+    for buffer_tensor in self:
+        buffer_tensor *= other
+    return self
 
 
 def zero_index_edge_index(edge_index):
     """
-    Make both sender and receiver indices of edge_index start at 0
+    Normalize edge indices so that they start from zero.
+
+    Parameters
+    ----------
+    edge_index : torch.Tensor
+        Edge index tensor of shape (2, N_edges).
+
+    Returns
+    -------
+    torch.Tensor
+        Zero-indexed edge index tensor.
     """
     return edge_index - edge_index.min(dim=1, keepdim=True)[0]
 
