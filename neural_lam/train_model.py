@@ -98,10 +98,11 @@ def main(input_args: Optional[List[str]] = None) -> None:
         help="If optimizer state should be restored with model",
     )
     parser.add_argument(
-        "--precision",
-        type=str,
-        default=32,
-        help="Numerical precision to use for model (32/16/bf16)",
+    "--precision",
+    type=str,
+    default="32",
+    choices=["32", "16", "bf16"],
+    help="Numerical precision to use for model (32, 16, bf16)",
     )
 
     # Model architecture
@@ -264,12 +265,19 @@ def main(input_args: Optional[List[str]] = None) -> None:
         ),
     )
     args = parser.parse_args(input_args)
+
+# Validate CLI arguments
+if args.batch_size <= 0:
+    raise ValueError("batch_size must be positive")
+
+if args.epochs <= 0:
+    raise ValueError("epochs must be positive")
+
+if args.var_leads_metrics_watch:
     args.var_leads_metrics_watch = {
         int(k): v for k, v in json.loads(args.var_leads_metrics_watch).items()
     }
 
-    # Check that config only specifies logging for lead times that exist
-    # Check --val_steps_to_log
     for step in args.val_steps_to_log:
         if step > args.ar_steps_eval:
             raise ValueError(
