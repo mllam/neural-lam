@@ -20,6 +20,21 @@ from .datastore.base import BaseRegularGridDatastore
 
 
 def plot_graph(graph, title=None):
+    """
+    Plot a graph with nodes colored by degree.
+
+    Parameters
+    ----------
+    graph : torch_geometric.data.Data
+        Graph object containing edge_index and pos attributes.
+    title : str, optional
+        Title for the plot (default: None).
+
+    Returns
+    -------
+    tuple
+        Tuple of (fig, axis) matplotlib objects.
+    """
     fig, axis = plt.subplots(figsize=(8, 8), dpi=200)  # W,H
     edge_index = graph.edge_index
     pos = graph.pos
@@ -71,9 +86,22 @@ def plot_graph(graph, title=None):
 
 
 def sort_nodes_internally(nx_graph):
-    # For some reason the networkx .nodes() return list can not be sorted,
-    # but this is the ordering used by pyg when converting.
-    # This function fixes this.
+    """
+    Return a new directed graph with nodes sorted internally.
+
+    Fixes node ordering for correct conversion to PyTorch Geometric
+    format, since networkx .nodes() return list cannot be sorted directly.
+
+    Parameters
+    ----------
+    nx_graph : networkx.DiGraph
+        Input directed graph to sort.
+
+    Returns
+    -------
+    networkx.DiGraph
+        New directed graph with sorted node ordering.
+    """
     H = networkx.DiGraph()
     H.add_nodes_from(sorted(nx_graph.nodes(data=True)))
     H.add_edges_from(nx_graph.edges(data=True))
@@ -81,6 +109,22 @@ def sort_nodes_internally(nx_graph):
 
 
 def save_edges(graph, name, base_path):
+    """
+    Save edge index and edge features of a graph to disk.
+
+    Parameters
+    ----------
+    graph : torch_geometric.data.Data
+        Graph object containing edge_index, len, and vdiff attributes.
+    name : str
+        Name prefix for the saved files.
+    base_path : str
+        Directory path where files will be saved.
+
+    Returns
+    -------
+    None
+    """
     torch.save(
         graph.edge_index, os.path.join(base_path, f"{name}_edge_index.pt")
     )
@@ -91,6 +135,23 @@ def save_edges(graph, name, base_path):
 
 
 def save_edges_list(graphs, name, base_path):
+    """
+    Save edge indices and edge features of a list of graphs to disk.
+
+    Parameters
+    ----------
+    graphs : list of torch_geometric.data.Data
+        List of graph objects each containing edge_index, len,
+        and vdiff attributes.
+    name : str
+        Name prefix for the saved files.
+    base_path : str
+        Directory path where files will be saved.
+
+    Returns
+    -------
+    None
+    """
     torch.save(
         [graph.edge_index for graph in graphs],
         os.path.join(base_path, f"{name}_edge_index.pt"),
@@ -105,12 +166,47 @@ def save_edges_list(graphs, name, base_path):
 
 
 def from_networkx_with_start_index(nx_graph, start_index):
+    """
+    Convert a NetworkX graph to PyTorch Geometric format with
+    shifted edge indices.
+
+    Parameters
+    ----------
+    nx_graph : networkx.DiGraph
+        Input directed graph to convert.
+    start_index : int
+        Integer offset to add to all edge indices after conversion.
+
+    Returns
+    -------
+    torch_geometric.data.Data
+        PyTorch Geometric graph with shifted edge indices.
+    """
     pyg_graph = from_networkx(nx_graph)
     pyg_graph.edge_index += start_index
     return pyg_graph
 
 
 def mk_2d_graph(xy, nx, ny):
+    """
+    Create a 2D directed grid graph with diagonal edges.
+
+    Parameters
+    ----------
+    xy : np.ndarray
+        Grid coordinates of shape (Nx, Ny, 2).
+    nx : int
+        Number of nodes along x-axis.
+    ny : int
+        Number of nodes along y-axis.
+
+    Returns
+    -------
+    networkx.DiGraph
+        Directed graph with nodes positioned on a 2D grid,
+        including diagonal edges with length and vector
+        difference features.
+    """
     xm, xM = np.amin(xy[:, :, 0][:, 0]), np.amax(xy[:, :, 0][:, 0])
     ym, yM = np.amin(xy[:, :, 1][0, :]), np.amax(xy[:, :, 1][0, :])
 
@@ -150,7 +246,24 @@ def mk_2d_graph(xy, nx, ny):
 
 
 def prepend_node_index(graph, new_index):
-    # Relabel node indices in graph, insert (graph_level, i, j)
+    """
+    Relabel graph nodes by prepending a new index level.
+
+    Inserts a new leading index so node labels become tuples of
+    (new_index, i, j).
+
+    Parameters
+    ----------
+    graph : networkx.Graph
+        Input graph whose nodes will be relabelled.
+    new_index : int
+        Index value to prepend to each node label.
+
+    Returns
+    -------
+    networkx.Graph
+        New graph with relabelled node indices.
+    """
     ijk = [tuple((new_index,) + x) for x in graph.nodes]
     to_mapping = dict(zip(graph.nodes, ijk))
     return networkx.relabel_nodes(graph, to_mapping, copy=True)
@@ -544,6 +657,32 @@ def create_graph_from_datastore(
     hierarchical: bool = False,
     create_plot: bool = False,
 ):
+    """
+    Create graph components from a datastore and save to disk.
+
+    Parameters
+    ----------
+    datastore : BaseRegularGridDatastore
+        Datastore object providing grid coordinates.
+    output_root_path : str
+        Directory path to save the generated graph components.
+    n_max_levels : int, optional
+        Maximum number of mesh levels (default: None).
+    hierarchical : bool
+        Whether to generate a hierarchical graph (default: False).
+    create_plot : bool
+        Whether to plot graphs during generation (default: False).
+
+    Returns
+    -------
+    None
+
+    Raises
+    ------
+    NotImplementedError
+        If datastore is not a BaseRegularGridDatastore.
+    """
+
     if isinstance(datastore, BaseRegularGridDatastore):
         xy = datastore.get_xy(category="state", stacked=False)
     else:
@@ -561,6 +700,26 @@ def create_graph_from_datastore(
 
 
 def cli(input_args=None):
+    """
+    Command-line interface for graph generation.
+
+    Parses command-line arguments and triggers graph creation
+    from a neural-lam configuration file.
+
+    Parameters
+    ----------
+    input_args : list of str, optional
+        List of arguments to parse (default: None, uses sys.argv).
+
+    Returns
+    -------
+    None
+
+    Raises
+    ------
+    ValueError
+        If --config_path is not provided.
+    """
     parser = ArgumentParser(
         description="Graph generation for neural-lam",
         formatter_class=ArgumentDefaultsHelpFormatter,
