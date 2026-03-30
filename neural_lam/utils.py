@@ -22,43 +22,100 @@ from .custom_loggers import CustomMLFlowLogger
 
 class BufferList(nn.Module):
     """
-    A list of torch buffer tensors that sit together as a Module with no
-    parameters and only buffers.
+    A container for storing a list of tensors as buffers within a PyTorch module.
 
-    This should be replaced by a native torch BufferList once implemented.
-    See: https://github.com/pytorch/pytorch/issues/37386
+    Unlike parameters, buffers are not updated during backpropagation but are
+    still part of the module’s state (e.g., for saving/loading models).
+
+    This class mimics a list-like structure for buffers until PyTorch provides
+    a native BufferList implementation.
+
+    Reference:
+        https://github.com/pytorch/pytorch/issues/37386
     """
 
     def __init__(self, buffer_tensors, persistent=True):
+        """
+        Initialize the BufferList.
+
+        Args:
+            buffer_tensors (list[torch.Tensor]): List of tensors to register as buffers.
+            persistent (bool): Whether buffers should be part of the module state_dict.
+        """
         super().__init__()
         self.n_buffers = len(buffer_tensors)
         for buffer_i, tensor in enumerate(buffer_tensors):
             self.register_buffer(f"b{buffer_i}", tensor, persistent=persistent)
 
     def __getitem__(self, key):
+        """
+        Retrieve a buffer tensor by index.
+
+        Args:
+            key (int): Index of the buffer.
+
+        Returns:
+            torch.Tensor: The corresponding buffer tensor.
+        """
         return getattr(self, f"b{key}")
 
     def __len__(self):
+        """
+        Return the number of buffers.
+
+        Returns:
+            int: Total number of buffer tensors.
+        """
         return self.n_buffers
 
     def __iter__(self):
+        """
+        Iterate over all buffer tensors.
+
+        Returns:
+            iterator: Iterator over buffer tensors.
+        """
         return (self[i] for i in range(len(self)))
 
     def __itruediv__(self, other):
-        """Divide each element in list with other"""
+        """
+        Divide each buffer tensor by a scalar value.
+
+        Args:
+            other (float): Value to divide each buffer by.
+
+        Returns:
+            BufferList: Updated BufferList instance.
+        """
         return self.__imul__(1.0 / other)
 
     def __imul__(self, other):
-        """Multiply each element in list with other"""
+        """
+        Multiply each buffer tensor by a scalar value.
+
+        Args:
+            other (float): Value to multiply each buffer by.
+
+        Returns:
+            BufferList: Updated BufferList instance.
+        """
         for buffer_tensor in self:
             buffer_tensor *= other
-
         return self
 
 
 def zero_index_edge_index(edge_index):
     """
-    Make both sender and receiver indices of edge_index start at 0
+    Normalize edge indices so that they start from zero.
+
+    This shifts both sender and receiver indices such that the minimum
+    index becomes 0 for each row.
+
+    Args:
+        edge_index (torch.Tensor): Edge index tensor of shape (2, N_edges).
+
+    Returns:
+        torch.Tensor: Zero-indexed edge index tensor.
     """
     return edge_index - edge_index.min(dim=1, keepdim=True)[0]
 
@@ -70,31 +127,25 @@ def zero_index_m2g(
     restore: bool = False,
 ) -> torch.Tensor:
     """
-    Zero-index the m2g (mesh-to-grid) edge index, or undo this operation.
+    Convert mesh-to-grid edge indices to zero-based indexing or restore them.
 
-    Special handling is needed since not all mesh nodes may be present.
+    This function handles cases where mesh and grid nodes are indexed differently,
+    ensuring consistent indexing for graph-based computations.
 
-    Parameters
-    ----------
-    m2g_edge_index : torch.Tensor
-        Edge index tensor of shape (2, N_edges).
-    mesh_static_features : list of torch.Tensor
-        Mesh node feature tensors.
-    mesh_first : bool
-        If True, mesh nodes are indexed before grid nodes.
-    restore : bool
-        If True, undo zero-indexing (restore original indices).
+    Args:
+        m2g_edge_index (torch.Tensor): Edge index tensor of shape (2, N_edges).
+        mesh_static_features (list[torch.Tensor]): List of mesh node feature tensors.
+        mesh_first (bool): Whether mesh nodes are indexed before grid nodes.
+        restore (bool, optional): If True, restores original indices. Defaults to False.
 
-    Returns
-    -------
-    torch.Tensor
-        Edge index tensor with zero-based or restored indices.
+    Returns:
+        torch.Tensor: Updated edge index tensor with zero-based or restored indices.
     """
 
     sign = 1 if restore else -1
 
     if mesh_first:
-        # Mesh has the first indices, adjust grid indices (row 1)
+        # Mesh nodes come first → adjust grid indices (row 1)
         num_mesh_nodes = mesh_static_features[0].shape[0]
         return torch.stack(
             (
@@ -104,7 +155,7 @@ def zero_index_m2g(
             dim=0,
         )
     else:
-        # Grid (interior) has the first indices, adjust mesh indices (row 0)
+        # Grid nodes come first → adjust mesh indices (row 0)
         num_interior_nodes = m2g_edge_index[1].max() + 1
         return torch.stack(
             (
@@ -113,7 +164,6 @@ def zero_index_m2g(
             ),
             dim=0,
         )
-
 
 def zero_index_g2m(
     g2m_edge_index: torch.Tensor,
