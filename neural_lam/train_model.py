@@ -16,6 +16,7 @@ from . import utils
 from .config import load_config_and_datastore
 from .models import GraphLAM, HiLAM, HiLAMParallel
 from .weather_dataset import WeatherDataModule
+from typing import Optional, List
 
 MODELS = {
     "graph_lam": GraphLAM,
@@ -25,8 +26,20 @@ MODELS = {
 
 
 @logger.catch
-def main(input_args=None):
-    """Main function for training and evaluating models."""
+def main(input_args: Optional[List[str]] = None) -> None:
+    """
+    Entry point for training and evaluating Neural-LAM models.
+
+    This function parses command-line arguments, configures the training
+    environment, and initializes the selected model architecture.
+
+    Args:
+        input_args (list, optional): List of input arguments for CLI parsing.
+            If None, arguments are taken from sys.argv.
+
+    Returns:
+        None
+    """
     parser = ArgumentParser(
         description="Train or evaluate MLWP models for LAM",
         formatter_class=ArgumentDefaultsHelpFormatter,
@@ -44,7 +57,7 @@ def main(input_args=None):
         help="Model architecture to train/evaluate",
         choices=MODELS.keys(),
     )
-    parser.add_argument("--seed", type=int, default=42, help="random seed")
+    parser.add_argument("--seed", type=int, default=42,help="Random seed for reproducibility")
     parser.add_argument(
         "--num_workers",
         type=int,
@@ -71,7 +84,7 @@ def main(input_args=None):
         "--epochs",
         type=int,
         default=200,
-        help="upper epoch limit",
+        help="Maximum number of training epochs",
     )
     parser.add_argument("--batch_size", type=int, default=4, help="batch size")
     parser.add_argument(
