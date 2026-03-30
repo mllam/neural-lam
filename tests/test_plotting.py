@@ -366,9 +366,7 @@ def test_plot_examples_integration_saves_figure(
     "time_step,time_unit",
     [(1, "hours")],
 )
-def test_plot_examples_gif_integration(
-    model_and_batch, monkeypatch
-):
+def test_plot_examples_gif_integration(model_and_batch, monkeypatch):
     model, batch, datastore, tmp_path = model_and_batch
 
     # Enable the GIF path and reset the example counter
@@ -381,7 +379,9 @@ def test_plot_examples_gif_integration(
         save_dir = str(tmp_path)
 
     simple_logger = _SimpleLogger()
-    monkeypatch.setattr(type(model), "logger", property(lambda self: simple_logger))
+    monkeypatch.setattr(
+        type(model), "logger", property(lambda self: simple_logger)
+    )
 
     with torch.no_grad():
         prediction, _, _, _ = model.common_step(batch)
@@ -391,7 +391,7 @@ def test_plot_examples_gif_integration(
 
     var_names = datastore.get_vars_names("state")
     pred_steps = batch[1].shape[1]
-    example_i = 1 
+    example_i = 1
     plot_dir = tmp_path / f"example_plots_{example_i}"
 
     assert plot_dir.is_dir(), "Plot directory was not created"
