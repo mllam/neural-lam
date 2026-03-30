@@ -37,6 +37,7 @@ dependencies = [
     "mlflow>=2.16.2",
     "boto3>=1.35.32",
     "nvidia-ml-py>=13.580.82",
+    "pillow>=9.0.0",
 ]
 requires-python = ">=3.10"
 
