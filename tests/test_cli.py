@@ -109,7 +109,7 @@ def test_wandb_id_ignored_with_mlflow_warns():
         patch.dict(
             "os.environ", {"MLFLOW_TRACKING_URI": "http://localhost:5000"}
         ),
-        patch("neural_lam.utils.loguru_logger") as mock_log,
+        patch("neural_lam.utils.logger") as mock_log,
     ):
         setup_training_logger(datastore, args, run_name="my-run")
 
