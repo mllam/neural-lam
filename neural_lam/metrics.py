@@ -291,3 +291,30 @@ def rank_histogram(
         hist.append(h)
 
     return torch.stack(hist, dim=1)
+
+# Validation Utilities
+
+def validate_inputs(pred: torch.Tensor, target: torch.Tensor) -> None:
+    """
+    Validate prediction and target tensors for metric computation.
+
+    Raises
+    ------
+    ValueError if inputs are invalid.
+    """
+
+    if pred.shape != target.shape:
+        raise ValueError(
+            f"Shape mismatch: pred {pred.shape}, target {target.shape}"
+        )
+
+    if torch.isnan(pred).any() or torch.isnan(target).any():
+        raise ValueError("Inputs contain NaNs")
+
+    if torch.isinf(pred).any() or torch.isinf(target).any():
+        raise ValueError("Inputs contain infinite values")
+
+    if pred.dtype != target.dtype:
+        raise ValueError(
+            f"Dtype mismatch: pred {pred.dtype}, target {target.dtype}"
+        )
