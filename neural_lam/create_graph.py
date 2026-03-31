@@ -20,6 +20,25 @@ from .datastore.base import BaseRegularGridDatastore
 
 
 def plot_graph(graph, title=None):
+    """
+    Plot a PyG graph with nodes coloured by in-degree.
+
+    Renders edges as lines and nodes as scatter points coloured by in-degree
+    using the viridis colormap. Undirected graphs are shown with one edge
+    direction only.
+
+    Parameters
+    ----------
+    graph : torch_geometric.data.Data
+        Graph with ``edge_index`` (2, M) and ``pos`` (N, 2) attributes.
+    title : str, optional
+        Title string added to the axis. If None, no title is set.
+
+    Returns
+    -------
+    fig : matplotlib.figure.Figure
+    axis : matplotlib.axes.Axes
+    """
     fig, axis = plt.subplots(figsize=(8, 8), dpi=200)  # W,H
     edge_index = graph.edge_index
     pos = graph.pos
@@ -71,6 +90,24 @@ def plot_graph(graph, title=None):
 
 
 def sort_nodes_internally(nx_graph):
+    """
+    Return a copy of ``nx_graph`` with nodes sorted by their index.
+
+    NetworkX does not guarantee node ordering when iterating, but
+    PyG's ``from_networkx`` uses the iteration order. This function
+    rebuilds the graph with sorted nodes so that the resulting PyG
+    tensor indices are deterministic.
+
+    Parameters
+    ----------
+    nx_graph : networkx.DiGraph
+        Directed graph whose nodes have data attributes.
+
+    Returns
+    -------
+    networkx.DiGraph
+        New directed graph with nodes sorted ascending by node key.
+    """
     # For some reason the networkx .nodes() return list can not be sorted,
     # but this is the ordering used by pyg when converting.
     # This function fixes this.
@@ -81,6 +118,23 @@ def sort_nodes_internally(nx_graph):
 
 
 def save_edges(graph, name, base_path):
+    """
+    Save edge indices and features from a PyG graph to disk.
+
+    Writes two ``.pt`` files under ``base_path``:
+    - ``{name}_edge_index.pt`` — LongTensor of shape (2, M)
+    - ``{name}_features.pt``   — FloatTensor of shape (M, 3),
+      where columns are [edge_length, vdiff_x, vdiff_y]
+
+    Parameters
+    ----------
+    graph : torch_geometric.data.Data
+        Graph with ``edge_index``, ``len`` (M,), and ``vdiff`` (M, 2).
+    name : str
+        Prefix used for the output filenames (e.g. ``"g2m"``).
+    base_path : str
+        Directory in which to write the files.
+    """
     torch.save(
         graph.edge_index, os.path.join(base_path, f"{name}_edge_index.pt")
     )
@@ -91,6 +145,25 @@ def save_edges(graph, name, base_path):
 
 
 def save_edges_list(graphs, name, base_path):
+    """
+    Save edge indices and features for a list of PyG graphs to disk.
+
+    Used for hierarchical graphs where each mesh level has its own
+    edge set. Writes two ``.pt`` files under ``base_path``:
+    - ``{name}_edge_index.pt`` — list of LongTensors, each (2, M_i)
+    - ``{name}_features.pt``   — list of FloatTensors, each (M_i, 3),
+      where columns are [edge_length, vdiff_x, vdiff_y]
+
+    Parameters
+    ----------
+    graphs : list of torch_geometric.data.Data
+        One graph per mesh level, each with ``edge_index``, ``len``,
+        and ``vdiff`` attributes.
+    name : str
+        Prefix used for the output filenames (e.g. ``"mesh_up"``).
+    base_path : str
+        Directory in which to write the files.
+    """
     torch.save(
         [graph.edge_index for graph in graphs],
         os.path.join(base_path, f"{name}_edge_index.pt"),
@@ -105,12 +178,59 @@ def save_edges_list(graphs, name, base_path):
 
 
 def from_networkx_with_start_index(nx_graph, start_index):
+    """
+    Convert a NetworkX graph to PyG and offset all node indices.
+
+    PyG's ``from_networkx`` always starts node indices at 0. When
+    combining multiple sub-graphs (e.g. grid nodes and mesh nodes),
+    the mesh node indices must be shifted by the number of grid nodes
+    so that they do not overlap.
+
+    Parameters
+    ----------
+    nx_graph : networkx.Graph or networkx.DiGraph
+        Graph to convert.
+    start_index : int
+        Value added to every entry in ``edge_index`` after conversion.
+
+    Returns
+    -------
+    torch_geometric.data.Data
+        Converted graph with ``edge_index`` offset by ``start_index``.
+    """
     pyg_graph = from_networkx(nx_graph)
     pyg_graph.edge_index += start_index
     return pyg_graph
 
 
 def mk_2d_graph(xy, nx, ny):
+    """
+    Build a 2-D directed mesh graph over a regular grid domain.
+
+    Places ``nx * ny`` mesh nodes on a uniform grid strictly inside the
+    bounding box of ``xy``. Each node is connected to its four axis-aligned
+    neighbours and four diagonal neighbours (8-connectivity), forming a
+    directed graph where every undirected edge becomes two directed edges.
+    Edge attributes ``len`` (Euclidean distance) and ``vdiff`` (vector
+    difference of node positions) are set for every edge.
+
+    Parameters
+    ----------
+    xy : np.ndarray, shape (Nx, Ny, 2)
+        Grid-point coordinates in the domain, ordered as (x, y) in the
+        last dimension.
+    nx : int
+        Number of mesh nodes along the x-axis.
+    ny : int
+        Number of mesh nodes along the y-axis.
+
+    Returns
+    -------
+    networkx.DiGraph
+        Directed graph with node attribute ``pos`` (np.ndarray shape (2,))
+        and edge attributes ``len`` (float) and ``vdiff`` (np.ndarray
+        shape (2,)).
+    """
     xm, xM = np.amin(xy[:, :, 0][:, 0]), np.amax(xy[:, :, 0][:, 0])
     ym, yM = np.amin(xy[:, :, 1][0, :]), np.amax(xy[:, :, 1][0, :])
 
@@ -150,6 +270,26 @@ def mk_2d_graph(xy, nx, ny):
 
 
 def prepend_node_index(graph, new_index):
+    """
+    Prepend a level index to every node key in ``graph``.
+
+    Node keys are assumed to be 2-tuples ``(i, j)``. After relabelling,
+    each key becomes the 3-tuple ``(new_index, i, j)``. This is used to
+    distinguish nodes across mesh hierarchy levels when graphs from
+    multiple levels are later combined.
+
+    Parameters
+    ----------
+    graph : networkx.Graph
+        Graph whose nodes have 2-tuple keys.
+    new_index : int
+        Level index to prepend (e.g. 0 for the finest level).
+
+    Returns
+    -------
+    networkx.Graph
+        New graph (copy) with relabelled 3-tuple node keys.
+    """
     # Relabel node indices in graph, insert (graph_level, i, j)
     ijk = [tuple((new_index,) + x) for x in graph.nodes]
     to_mapping = dict(zip(graph.nodes, ijk))
@@ -544,6 +684,28 @@ def create_graph_from_datastore(
     hierarchical: bool = False,
     create_plot: bool = False,
 ):
+    """
+    Build and save a mesh graph from a datastore's grid coordinates.
+
+    Extracts the (x, y) grid coordinates from ``datastore`` and delegates
+    to :func:`create_graph`. Currently only supports datastores that
+    inherit from :class:`BaseRegularGridDatastore`.
+
+    Parameters
+    ----------
+    datastore : BaseRegularGridDatastore
+        Datastore providing the grid geometry via ``get_xy``.
+    output_root_path : str
+        Directory where all graph ``.pt`` files are written.
+    n_max_levels : int, optional
+        Maximum number of mesh hierarchy levels. If None, the number of
+        levels is determined automatically from the grid resolution.
+    hierarchical : bool
+        If True, build a hierarchical graph (for HiLAM); otherwise build
+        a single-level graph (for GraphLAM). Default is False.
+    create_plot : bool
+        If True, save a PNG visualisation of the graph. Default is False.
+    """
     if isinstance(datastore, BaseRegularGridDatastore):
         xy = datastore.get_xy(category="state", stacked=False)
     else:

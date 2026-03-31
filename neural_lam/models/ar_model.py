@@ -200,6 +200,18 @@ class ARModel(pl.LightningModule):
         return da
 
     def configure_optimizers(self):
+        """
+        Set up the AdamW optimiser for training.
+
+        Uses the learning rate specified by ``self.args.lr`` and fixed
+        betas ``(0.9, 0.95)``, following common practice for transformer-
+        and GNN-based weather models.
+
+        Returns
+        -------
+        torch.optim.AdamW
+            Configured optimiser over all model parameters.
+        """
         opt = torch.optim.AdamW(
             self.parameters(), lr=self.args.lr, betas=(0.9, 0.95)
         )
