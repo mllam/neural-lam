@@ -15,6 +15,7 @@ from pytorch_lightning.loggers import MLFlowLogger, WandbLogger
 from pytorch_lightning.utilities import rank_zero_only
 from torch import nn
 from tueplots import bundles, figsizes
+from typing import Tuple, Dict, Any
 
 # Local
 from .custom_loggers import CustomMLFlowLogger
@@ -229,10 +230,20 @@ def zero_index_g2m(
         )
 
 
-def load_graph(graph_dir_path, device="cpu"):
-    """Load all tensors representing the graph from `graph_dir_path`.
+def load_graph(
+    graph_dir_path: str,
+    device: str = "cpu"
+) -> Tuple[bool, Dict[str, Any]]:
+    """
+    Load graph structure, features, and connectivity tensors from disk.
 
-    Needs the following files for all graphs:
+    This function loads all required graph components from the specified
+    directory, including edge indices, edge features, and node features.
+    It also handles hierarchical graphs by loading additional up/down edges
+    and normalizes edge indices to ensure zero-based indexing.
+
+    Required files (for all graphs)
+    ------------------------------
     - m2m_edge_index.pt
     - g2m_edge_index.pt
     - m2g_edge_index.pt
@@ -241,7 +252,8 @@ def load_graph(graph_dir_path, device="cpu"):
     - m2g_features.pt
     - mesh_features.pt
 
-    And in addition for hierarchical graphs:
+    Additional files (for hierarchical graphs)
+    ------------------------------------------
     - mesh_up_edge_index.pt
     - mesh_down_edge_index.pt
     - mesh_up_features.pt
@@ -250,36 +262,37 @@ def load_graph(graph_dir_path, device="cpu"):
     Parameters
     ----------
     graph_dir_path : str
-        Path to directory containing the graph files.
-    device : str
-        Device to load tensors to.
+        Path to the directory containing graph data files.
+    device : str, optional
+        Device to load tensors onto (e.g., "cpu", "cuda"), by default "cpu".
 
     Returns
     -------
-    hierarchical : bool
-        Whether the graph is hierarchical.
-    graph : dict
-        Dictionary containing the graph tensors, with keys as follows:
-        - g2m_edge_index
-        - m2g_edge_index
-        - m2m_edge_index
-        - mesh_up_edge_index
-        - mesh_down_edge_index
-        - g2m_features
-        - m2g_features
-        - m2m_features
-        - mesh_up_features
-        - mesh_down_features
-        - mesh_static_features
-
+    tuple
+        A tuple containing:
+        - hierarchical (bool): Whether the graph is hierarchical.
+        - graph (dict): Dictionary containing graph components including edge
+          indices, features, and static node features.
     """
+def loads_file(fn: str) -> torch.Tensor:
+    """
+    Load a tensor file from the graph directory.
 
-    def loads_file(fn):
-        return torch.load(
-            os.path.join(graph_dir_path, fn),
-            map_location=device,
-            weights_only=True,
-        )
+    Parameters
+    ----------
+    fn : str
+        Filename of the tensor file.
+
+    Returns
+    -------
+    torch.Tensor
+        Loaded tensor mapped to the specified device.
+    """
+    return torch.load(
+        os.path.join(graph_dir_path, fn),
+        map_location=device,
+        weights_only=True,
+    )
 
     # Load static node features
     mesh_static_features = loads_file(
