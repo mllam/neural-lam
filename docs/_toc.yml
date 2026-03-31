@@ -1,0 +1,6 @@
+format: jb-book
+root: intro
+chapters:
+  - file: installation
+  - file: quickstart
+  - file: api/index

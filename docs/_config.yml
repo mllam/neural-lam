@@ -1,0 +1,20 @@
+title: neural-lam
+author: MLLAM Community
+logo: ""
+
+execute:
+  execute_notebooks: "off"
+
+sphinx:
+  extra_extensions:
+    - autoapi.extension
+  config:
+    autoapi_dirs:
+      - ../neural_lam
+    autoapi_type: python
+    autoapi_options:
+      - members
+      - undoc-members
+      - show-inheritance
+    suppress_warnings:
+      - autoapi
