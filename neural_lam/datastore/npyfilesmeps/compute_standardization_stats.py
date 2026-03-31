@@ -183,7 +183,6 @@ def main(
         datastore=datastore,
         split="train",
         ar_steps=ar_steps,
-        standardize=False,
         num_past_forcing_steps=0,
         num_future_forcing_steps=0,
     )
@@ -308,8 +307,12 @@ def main(
         sampler=sampler_standard,
     )
 
-    state_mean = torch.load(os.path.join(static_dir_path, "parameter_mean.pt"))
-    state_std = torch.load(os.path.join(static_dir_path, "parameter_std.pt"))
+    state_mean = torch.load(
+        os.path.join(static_dir_path, "parameter_mean.pt"), weights_only=True
+    )
+    state_std = torch.load(
+        os.path.join(static_dir_path, "parameter_std.pt"), weights_only=True
+    )
 
     time_step_int, time_step_unit = get_integer_time(step_length)
     assert (

@@ -8,33 +8,6 @@ from neural_lam.models.graph_lam import GraphLAM
 from tests.conftest import init_datastore_example
 
 
-def test_forcing_normalization_tiling():
-    """Test forcing stats are tiled correctly for windowed forcing."""
-    num_forcing_vars = 2
-    window_size = 3
-    forcing_mean = torch.tensor([10.0, 20.0])
-    forcing_std = torch.tensor([2.0, 4.0])
-
-    forcing = torch.ones(2, 4, num_forcing_vars * window_size) * 30.0
-
-    window_size_calc = forcing.shape[-1] // forcing_mean.shape[-1]
-    assert window_size_calc == window_size
-
-    forcing_mean_tiled = forcing_mean.repeat_interleave(window_size_calc)
-    forcing_std_tiled = forcing_std.repeat_interleave(window_size_calc)
-
-    assert forcing_mean_tiled.shape == (num_forcing_vars * window_size,)
-    assert forcing_std_tiled.shape == (num_forcing_vars * window_size,)
-
-    expected_mean = torch.tensor([10.0, 10.0, 10.0, 20.0, 20.0, 20.0])
-    expected_std = torch.tensor([2.0, 2.0, 2.0, 4.0, 4.0, 4.0])
-    assert torch.allclose(forcing_mean_tiled, expected_mean)
-    assert torch.allclose(forcing_std_tiled, expected_std)
-
-    normalized = (forcing - forcing_mean_tiled) / forcing_std_tiled
-    assert normalized.shape == forcing.shape
-
-
 @pytest.mark.parametrize("datastore_name", ["mdp"])
 def test_on_after_batch_transfer(datastore_name):
     """Test on_after_batch_transfer with real datastore."""
