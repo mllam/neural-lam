@@ -16,6 +16,8 @@ from pytorch_lightning.utilities import rank_zero_only
 from torch import nn
 from tueplots import bundles, figsizes
 from typing import Tuple, Dict, Any
+from typing import List
+import torch.nn as nn
 
 # Local
 from .custom_loggers import CustomMLFlowLogger
@@ -109,7 +111,7 @@ def __imul__(self, other):
     return self
 
 
-def zero_index_edge_index(edge_index):
+def zero_index_edge_index(edge_index: torch.Tensor) -> torch.Tensor:
     """
     Normalize edge indices so that they start from zero.
 
@@ -294,6 +296,7 @@ def loads_file(fn: str) -> torch.Tensor:
         weights_only=True,
     )
 
+
     # Load static node features
     mesh_static_features = loads_file(
         "mesh_features.pt"
@@ -409,32 +412,56 @@ def loads_file(fn: str) -> torch.Tensor:
         "mesh_static_features": mesh_static_features,
     }
 
-
-def make_mlp(blueprint, layer_norm=True):
+def make_mlp(blueprint: List[int], layer_norm: bool = True) -> nn.Sequential:
     """
-    Create MLP from list blueprint, with
-    input dimensionality: blueprint[0]
-    output dimensionality: blueprint[-1] and
-    hidden layers of dimensions: blueprint[1], ..., blueprint[-2]
+    Construct a multi-layer perceptron (MLP) from a layer blueprint.
 
-    if layer_norm is True, includes a LayerNorm layer at
-    the output (as used in GraphCast)
+    The blueprint defines the input, hidden, and output layer sizes.
+    For example, a blueprint of [d_in, h1, h2, d_out] creates an MLP with:
+    - input dimension d_in
+    - two hidden layers (h1, h2)
+    - output dimension d_out
+
+    Each hidden layer is followed by a SiLU (Swish) activation function.
+    Optionally, a LayerNorm is applied to the output layer.
+
+    Parameters
+    ----------
+    blueprint : list of int
+        List specifying layer dimensions. Must contain at least two values
+        (input and output dimensions).
+    layer_norm : bool, optional
+        Whether to apply LayerNorm to the output layer, by default True.
+
+    Returns
+    -------
+    nn.Sequential
+        A PyTorch Sequential model representing the constructed MLP.
+
+    Raises
+    ------
+    AssertionError
+        If the blueprint does not define a valid MLP structure.
     """
     hidden_layers = len(blueprint) - 2
     assert hidden_layers >= 0, "Invalid MLP blueprint"
 
     layers = []
+
+    # Create linear layers with activation (except for final layer)
     for layer_i, (dim1, dim2) in enumerate(zip(blueprint[:-1], blueprint[1:])):
         layers.append(nn.Linear(dim1, dim2))
-        if layer_i != hidden_layers:
-            layers.append(nn.SiLU())  # Swish activation
 
-    # Optionally add layer norm to output
+        # Add activation for all layers except the last one
+        if layer_i != hidden_layers:
+            layers.append(nn.SiLU())  # SiLU (Swish) activation
+
+    # Optionally normalize the output layer
     if layer_norm:
         layers.append(nn.LayerNorm(blueprint[-1]))
 
+    # Combine all layers into a sequential model
     return nn.Sequential(*layers)
-
 
 @cache
 def has_working_latex():
