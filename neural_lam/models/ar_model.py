@@ -628,17 +628,25 @@ class ARModel(pl.LightningModule):
                 metric_tensor.cpu().numpy(),
                 delimiter=",",
             )
+            # Check if metrics are watched, log exact values for specific vars
+            var_names = self._datastore.get_vars_names(category="state")
 
-        # Check if metrics are watched, log exact values for specific vars
-        var_names = self._datastore.get_vars_names(category="state")
-        if full_log_name in self.args.metrics_watch:
-            for var_i, timesteps in self.args.var_leads_metrics_watch.items():
-                var_name = var_names[var_i]
-                for step in timesteps:
-                    key = f"{full_log_name}_{var_name}_step_{step}"
-                    log_dict[key] = metric_tensor[step - 1, var_i]
+            if full_log_name in self.args.metrics_watch:
+                for var_i, timesteps in self.args.var_leads_metrics_watch.items():
+                    var_name = var_names[var_i]
+                    for step in timesteps:
+                        key = f"{full_log_name}_{var_name}_step_{step}"
+                        log_dict[key] = metric_tensor[step - 1, var_i]
 
-        return log_dict
+            else:
+                if self.args.metrics_watch:
+                    import warnings
+                    warnings.warn(
+                        f"{full_log_name} not found in metrics_watch. Check prefix (val/test)."
+                    )
+
+            return log_dict
+        
 
     def aggregate_and_plot_metrics(self, metrics_dict, prefix):
         """
