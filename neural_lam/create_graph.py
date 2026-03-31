@@ -20,6 +20,21 @@ from .datastore.base import BaseRegularGridDatastore
 
 
 def plot_graph(graph, title=None):
+    """
+    Plot a graph with nodes coloured by degree.
+
+    Parameters
+    ----------
+    graph : torch_geometric.data.Data
+        Graph object with edge_index and pos attributes.
+    title : str, optional
+        Title for the plot. If None, no title is shown.
+
+    Returns
+    -------
+    tuple
+        A (fig, axis) tuple of the matplotlib figure and axis.
+    """
     fig, axis = plt.subplots(figsize=(8, 8), dpi=200)  # W,H
     edge_index = graph.edge_index
     pos = graph.pos
@@ -68,9 +83,27 @@ def plot_graph(graph, title=None):
         axis.set_title(title)
 
     return fig, axis
+    
 
 
 def sort_nodes_internally(nx_graph):
+    """
+    Return a copy of the graph with nodes sorted internally.
+
+    Converts the input DiGraph into a new DiGraph with nodes sorted
+    by their keys. This is needed because networkx node ordering
+    is used by PyTorch Geometric during conversion.
+
+    Parameters
+    ----------
+    nx_graph : networkx.DiGraph
+        Input directed graph to sort.
+
+    Returns
+    -------
+    networkx.DiGraph
+        New directed graph with nodes sorted by key.
+    """
     # For some reason the networkx .nodes() return list can not be sorted,
     # but this is the ordering used by pyg when converting.
     # This function fixes this.
@@ -81,6 +114,22 @@ def sort_nodes_internally(nx_graph):
 
 
 def save_edges(graph, name, base_path):
+    """
+    Save edge index and edge features of a graph to disk.
+
+    Saves two files: {name}_edge_index.pt and {name}_features.pt,
+    where features are the concatenation of edge length and vector
+    difference (len, vdiff).
+
+    Parameters
+    ----------
+    graph : torch_geometric.data.Data
+        Graph with edge_index, len, and vdiff attributes.
+    name : str
+        Name prefix for the saved files.
+    base_path : str
+        Directory path where files will be saved.
+    """
     torch.save(
         graph.edge_index, os.path.join(base_path, f"{name}_edge_index.pt")
     )
@@ -91,6 +140,22 @@ def save_edges(graph, name, base_path):
 
 
 def save_edges_list(graphs, name, base_path):
+    """
+    Save edge indices and features for a list of graphs to disk.
+
+    Saves two files: {name}_edge_index.pt (list of edge indices) and
+    {name}_features.pt (list of edge feature tensors), where features
+    are the concatenation of edge length and vector difference.
+
+    Parameters
+    ----------
+    graphs : list of torch_geometric.data.Data
+        List of graphs, each with edge_index, len, and vdiff attributes.
+    name : str
+        Name prefix for the saved files.
+    base_path : str
+        Directory path where files will be saved.
+    """
     torch.save(
         [graph.edge_index for graph in graphs],
         os.path.join(base_path, f"{name}_edge_index.pt"),
@@ -105,12 +170,52 @@ def save_edges_list(graphs, name, base_path):
 
 
 def from_networkx_with_start_index(nx_graph, start_index):
+    """
+    Convert a networkx graph to PyTorch Geometric format with offset indices.
+
+    Converts the graph and shifts all node indices in edge_index by
+    start_index, so nodes are correctly indexed in a larger combined graph.
+
+    Parameters
+    ----------
+    nx_graph : networkx.Graph
+        Input graph to convert.
+    start_index : int
+        Integer offset to add to all node indices in edge_index.
+
+    Returns
+    -------
+    torch_geometric.data.Data
+        PyG graph with edge_index shifted by start_index.
+    """
     pyg_graph = from_networkx(nx_graph)
     pyg_graph.edge_index += start_index
     return pyg_graph
 
 
 def mk_2d_graph(xy, nx, ny):
+    """
+    Create a 2D directed graph over a regular grid with diagonal edges.
+
+    Builds a grid graph of nx by ny nodes positioned within the spatial
+    extent of xy, avoiding border nodes. Adds both axis-aligned and
+    diagonal edges in both directions, storing edge length and vector
+    difference as edge attributes.
+
+    Parameters
+    ----------
+    xy : np.ndarray
+        Grid coordinates of shape (Nx, Ny, 2).
+    nx : int
+        Number of nodes along the x axis.
+    ny : int
+        Number of nodes along the y axis.
+
+    Returns
+    -------
+    networkx.DiGraph
+        Directed graph with pos, len, and vdiff attributes on nodes and edges.
+    """
     xm, xM = np.amin(xy[:, :, 0][:, 0]), np.amax(xy[:, :, 0][:, 0])
     ym, yM = np.amin(xy[:, :, 1][0, :]), np.amax(xy[:, :, 1][0, :])
 
@@ -150,6 +255,25 @@ def mk_2d_graph(xy, nx, ny):
 
 
 def prepend_node_index(graph, new_index):
+    """
+    Relabel graph nodes by prepending a new index level.
+
+    Transforms each node key (i, j) into (new_index, i, j), which is
+    used to distinguish nodes across different hierarchy levels in the
+    mesh graph.
+
+    Parameters
+    ----------
+    graph : networkx.Graph
+        Input graph with tuple node keys.
+    new_index : int
+        Index to prepend to each node key.
+
+    Returns
+    -------
+    networkx.Graph
+        Copy of the graph with relabelled node keys.
+    """
     # Relabel node indices in graph, insert (graph_level, i, j)
     ijk = [tuple((new_index,) + x) for x in graph.nodes]
     to_mapping = dict(zip(graph.nodes, ijk))
@@ -544,6 +668,31 @@ def create_graph_from_datastore(
     hierarchical: bool = False,
     create_plot: bool = False,
 ):
+    """
+    Create graph components from a datastore and save to disk.
+
+    Extracts grid coordinates from the datastore and calls create_graph
+    to build and save all graph components to output_root_path.
+    Currently only supports BaseRegularGridDatastore.
+
+    Parameters
+    ----------
+    datastore : BaseRegularGridDatastore
+        Datastore to extract grid coordinates from.
+    output_root_path : str
+        Directory path where graph components will be saved.
+    n_max_levels : int, optional
+        Limit multi-scale mesh to given number of levels (default: None).
+    hierarchical : bool
+        Generate hierarchical mesh graph (default: False).
+    create_plot : bool
+        If graphs should be plotted during generation (default: False).
+
+    Raises
+    ------
+    NotImplementedError
+        If the datastore is not a BaseRegularGridDatastore.
+    """
     if isinstance(datastore, BaseRegularGridDatastore):
         xy = datastore.get_xy(category="state", stacked=False)
     else:
@@ -561,6 +710,17 @@ def create_graph_from_datastore(
 
 
 def cli(input_args=None):
+    """
+    Command-line interface for graph generation.
+
+    Parses command-line arguments and calls create_graph_from_datastore
+    to generate and save graph components for a given neural-lam config.
+
+    Parameters
+    ----------
+    input_args : list of str, optional
+        List of argument strings. If None, reads from sys.argv.
+    """
     parser = ArgumentParser(
         description="Graph generation for neural-lam",
         formatter_class=ArgumentDefaultsHelpFormatter,
