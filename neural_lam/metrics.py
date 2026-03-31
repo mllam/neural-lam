@@ -1,5 +1,6 @@
 # Third-party
 import torch
+from typing import Optional
 
 
 def get_metric(metric_name):
@@ -235,3 +236,58 @@ DEFINED_METRICS = {
     "nll": nll,
     "crps_gauss": crps_gauss,
 }
+
+def rank_histogram(
+    ensemble_pred: torch.Tensor,
+    target: torch.Tensor,
+    mask: Optional[torch.Tensor] = None,
+    num_bins: Optional[int] = None,
+) -> torch.Tensor:
+    """
+    Compute rank histogram for ensemble calibration.
+
+    A rank histogram evaluates how well an ensemble forecast is calibrated
+    by comparing the rank of the true value within the ensemble predictions.
+
+    Parameters
+    ----------
+    ensemble_pred : torch.Tensor
+        Ensemble predictions of shape (M, ..., N, d_state),
+        where M is number of ensemble members.
+    target : torch.Tensor
+        Ground truth tensor of shape (..., N, d_state).
+    mask : torch.Tensor, optional
+        Boolean mask of same spatial shape as target.
+    num_bins : int, optional
+        Number of bins for histogram. Defaults to M + 1.
+
+    Returns
+    -------
+    torch.Tensor
+        Histogram counts of shape (num_bins, d_state).
+    """
+
+    M = ensemble_pred.shape[0]
+
+    if num_bins is None:
+        num_bins = M + 1
+
+    target_exp = target.unsqueeze(0)
+
+    # Compute ranks: count how many ensemble values are less than target
+    ranks = (ensemble_pred < target_exp).sum(dim=0)
+
+    # Apply mask if provided
+    if mask is not None:
+        mask = mask.bool()
+        ranks = ranks[mask]
+
+    # Flatten everything except last dimension (state)
+    ranks = ranks.reshape(-1, ranks.shape[-1])
+
+    hist = []
+    for d in range(ranks.shape[-1]):
+        h = torch.bincount(ranks[:, d], minlength=num_bins)
+        hist.append(h)
+
+    return torch.stack(hist, dim=1)
