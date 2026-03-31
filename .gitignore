@@ -92,3 +92,4 @@ build/
 *.egg-info/
 
 tests/test_outputs/
+docs/_build/
