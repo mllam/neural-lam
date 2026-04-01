@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Add generalized Log-Spectral Distance (LSD) metric for spatial frequency analysis.
+  Supports both regular grids (via FFT) and irregular grids (via Graph Signal Processing). [\#508](https://github.com/mllam/neural-lam/pull/508) @sohampatil01-svg
+
 - Add support for GIF animation generation for model predictions [\#218](https://github.com/mllam/neural-lam/pull/218) @kartikangiras
 
 - Add `AGENTS.md` file to the repo to give agents more information about the codebase and the contribution culture.[\#416](https://github.com/mllam/neural-lam/pull/416) @sadamov
@@ -22,6 +25,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Replace `print()`-based `rank_zero_print` with `loguru` `logger.info()` for structured log-level control ([#33](https://github.com/mllam/neural-lam/issues/33))
 
 ### Fixed
+
+- Replace deprecated `FacetGrid.axes` with `FacetGrid.axs` in `plot_example_from_datastore` to silence xarray DeprecationWarning (>= 2022.11) [\#482](https://github.com/mllam/neural-lam/pull/482) @sohampatil01-svg
 
 - Standardize all script references to use `create_graph` instead of the legacy `create_mesh` name in README and `pyproject.toml`, and fix minor README typos [\#426](https://github.com/mllam/neural-lam/pull/426) @GiGiKoneti
 

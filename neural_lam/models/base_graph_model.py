@@ -32,6 +32,12 @@ class BaseGraphModel(ARModel):
             else:
                 setattr(self, name, attr_value)
 
+        # Set edge_index for metrics (from finest level mesh graph)
+        if self.hierarchical:
+            self.edge_index = self.m2m_edge_index[0]
+        else:
+            self.edge_index = self.m2m_edge_index
+
         # Specify dimensions of data
         self.num_mesh_nodes, _ = self.get_num_mesh()
         utils.log_on_rank_zero(
