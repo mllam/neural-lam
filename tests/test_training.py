@@ -74,6 +74,9 @@ def run_simple_training(datastore, set_output_std, metrics_watch=None):
         num_future_forcing_steps=1,
     )
 
+    _mw = metrics_watch or []
+    _vlmw = {0: [1]} if _mw else {}
+
     class ModelArgs:
         output_std = set_output_std
         loss = "mse"
@@ -88,8 +91,8 @@ def run_simple_training(datastore, set_output_std, metrics_watch=None):
         mesh_aggr = "sum"
         lr = 1.0e-3
         val_steps_to_log = [1, 3]
-        metrics_watch = metrics_watch or []
-        var_leads_metrics_watch = {0: [1]} if metrics_watch else {}
+        metrics_watch = _mw
+        var_leads_metrics_watch = _vlmw
         num_past_forcing_steps = 1
         num_future_forcing_steps = 1
 
