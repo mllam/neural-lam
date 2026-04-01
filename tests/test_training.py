@@ -88,16 +88,12 @@ def run_simple_training(datastore, set_output_std, metrics_watch=None):
         mesh_aggr = "sum"
         lr = 1.0e-3
         val_steps_to_log = [1, 3]
-        metrics_watch_list = metrics_watch or []
-        var_leads_metrics_watch = {0: [1]}  # Need to populate if matching
+        metrics_watch = metrics_watch or []
+        var_leads_metrics_watch = {0: [1]} if metrics_watch else {}
         num_past_forcing_steps = 1
         num_future_forcing_steps = 1
 
     model_args = ModelArgs()
-
-    if metrics_watch:
-        model_args.metrics_watch = metrics_watch
-        model_args.var_leads_metrics_watch = {0: [1]}
 
     config = nlconfig.NeuralLAMConfig(
         datastore=nlconfig.DatastoreSelection(

@@ -387,9 +387,7 @@ class ARModel(pl.LightningModule):
 
         if self.trainer.is_global_zero:
             if getattr(self.args, "metrics_watch", None):
-                unmatched = set(self.args.metrics_watch) - getattr(
-                    self, "matched_metrics", set()
-                )
+                unmatched = set(self.args.metrics_watch) - self.matched_metrics
                 if unmatched:
                     warnings.warn(
                         "The following metrics in --metrics_watch "
@@ -768,18 +766,15 @@ class ARModel(pl.LightningModule):
                 os.path.join(self.logger.save_dir, "mean_spatial_loss.pt"),
             )
 
-            if self.trainer.is_global_zero:
-                if getattr(self.args, "metrics_watch", None):
-                    unmatched = set(self.args.metrics_watch) - getattr(
-                        self, "matched_metrics", set()
+            if getattr(self.args, "metrics_watch", None):
+                unmatched = set(self.args.metrics_watch) - self.matched_metrics
+                if unmatched:
+                    warnings.warn(
+                        "The following metrics in --metrics_watch "
+                        "were not found during test phase: "
+                        f"{sorted(unmatched)}. Ensure the metric prefix "
+                        "matches the evaluation mode (expected 'test_')."
                     )
-                    if unmatched:
-                        warnings.warn(
-                            "The following metrics in --metrics_watch "
-                            "were not found during test phase: "
-                            f"{sorted(unmatched)}. Ensure the metric prefix "
-                            "matches the evaluation mode (expected 'test_')."
-                        )
 
         self.matched_metrics = set()
         self.spatial_loss_maps.clear()
