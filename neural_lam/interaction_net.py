@@ -49,7 +49,8 @@ class InteractionNet(pyg.nn.MessagePassing):
             (None = no chunking, same MLP)
         aggr: Message aggregation method (sum/mean)
         """
-        assert aggr in ("sum", "mean"), f"Unknown aggregation method: {aggr}"
+        if aggr not in ("sum", "mean"):
+            raise ValueError(f"Unknown aggregation method: {aggr}")
         super().__init__(aggr=aggr)
 
         if hidden_dim is None:
