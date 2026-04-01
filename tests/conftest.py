@@ -43,6 +43,18 @@ TEST_DATA_KNOWN_HASH = (
 
 
 def download_meps_example_reduced_dataset():
+    """
+    Download and prepare the reduced MEPS example dataset used in tests.
+
+    The dataset is retrieved from an S3 bucket, extracted locally, and
+    standardization statistics are computed if the required files are
+    missing.
+
+    Returns
+    -------
+    pathlib.Path
+        Path to the datastore configuration file for the dataset.
+    """
     # Download and unzip test data into data/meps_example_reduced
     root_path = DATASTORE_EXAMPLES_ROOT_PATH / "npyfilesmeps"
     dataset_path = root_path / "meps_example_reduced"
