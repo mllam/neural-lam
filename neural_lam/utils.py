@@ -40,6 +40,10 @@ class BufferList(nn.Module):
             return [self[i] for i in range(*key.indices(len(self)))]
         if key < 0:
             key += len(self)
+        if not (0 <= key < len(self)):
+            raise IndexError(
+                f"index {key} out of range for BufferList of length {len(self)}"
+            )
         return getattr(self, f"b{key}")
 
     def __len__(self):

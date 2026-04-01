@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Extend `BufferList.__getitem__` with slice and negative-index support (Python sequence semantics); out-of-bounds integer access raises `IndexError`. [\#472](https://github.com/mllam/neural-lam/pull/472) @sudhansu-24
+
 - Enable `pin_memory` in DataLoaders when GPU is available for faster async CPU-to-GPU data transfers [\#236](https://github.com/mllam/neural-lam/pull/236) @abhaygoudannavar
 
 ### Changed

@@ -120,58 +120,74 @@ def test_graph_creation(datastore_name, graph_name):
                         assert r.shape[1] == d_features
 
 
-class TestBufferList:
-    """Tests for BufferList slice and negative index support."""
+@pytest.fixture
+def buffer_list_five():
+    """Five scalar buffers for BufferList indexing tests."""
+    tensors = [torch.tensor([float(i)]) for i in range(5)]
+    return BufferList(tensors)
 
-    @pytest.fixture
-    def buffer_list(self):
-        tensors = [torch.tensor([float(i)]) for i in range(5)]
-        return BufferList(tensors)
 
-    def test_integer_index(self, buffer_list):
-        """Positive integer indexing returns the correct buffer."""
-        assert torch.equal(buffer_list[0], torch.tensor([0.0]))
-        assert torch.equal(buffer_list[4], torch.tensor([4.0]))
+def test_buffer_list_integer_index(buffer_list_five):
+    """Positive integer indexing returns the correct buffer."""
+    assert torch.equal(buffer_list_five[0], torch.tensor([0.0]))
+    assert torch.equal(buffer_list_five[4], torch.tensor([4.0]))
 
-    def test_negative_index(self, buffer_list):
-        """Negative indexing follows Python sequence convention."""
-        assert torch.equal(buffer_list[-1], torch.tensor([4.0]))
-        assert torch.equal(buffer_list[-3], torch.tensor([2.0]))
 
-    def test_slice_full(self, buffer_list):
-        """Full slice returns all buffers as a list."""
-        result = buffer_list[:]
-        assert len(result) == 5
-        for i, tensor in enumerate(result):
-            assert torch.equal(tensor, torch.tensor([float(i)]))
+def test_buffer_list_negative_index(buffer_list_five):
+    """Negative indexing follows Python sequence convention."""
+    assert torch.equal(buffer_list_five[-1], torch.tensor([4.0]))
+    assert torch.equal(buffer_list_five[-3], torch.tensor([2.0]))
 
-    def test_slice_from_index(self, buffer_list):
-        """Slice from index returns the correct subset."""
-        result = buffer_list[2:]
-        assert len(result) == 3
-        for i, tensor in enumerate(result):
-            assert torch.equal(tensor, torch.tensor([float(i + 2)]))
 
-    def test_slice_with_step(self, buffer_list):
-        """Slice with step skips elements correctly."""
-        result = buffer_list[::2]
-        assert len(result) == 3
-        expected_vals = [0.0, 2.0, 4.0]
-        for tensor, expected in zip(result, expected_vals):
-            assert torch.equal(tensor, torch.tensor([expected]))
+def test_buffer_list_out_of_bounds_raises_index_error(buffer_list_five):
+    """Out-of-bounds access raises IndexError (not AttributeError)."""
+    with pytest.raises(IndexError):
+        _ = buffer_list_five[5]
+    with pytest.raises(IndexError):
+        _ = buffer_list_five[-6]
+    with pytest.raises(IndexError):
+        _ = buffer_list_five[-100]
 
-    def test_slice_negative_bounds(self, buffer_list):
-        """Slice with negative bounds follows Python convention."""
-        result = buffer_list[-2:]
-        assert len(result) == 2
-        assert torch.equal(result[0], torch.tensor([3.0]))
-        assert torch.equal(result[1], torch.tensor([4.0]))
 
-    def test_len(self, buffer_list):
-        """Length reflects number of registered buffers."""
-        assert len(buffer_list) == 5
+def test_buffer_list_slice_full(buffer_list_five):
+    """Full slice returns all buffers as a list."""
+    result = buffer_list_five[:]
+    assert len(result) == 5
+    for i, tensor in enumerate(result):
+        assert torch.equal(tensor, torch.tensor([float(i)]))
 
-    def test_iter(self, buffer_list):
-        """Iteration yields all buffers in order."""
-        values = [t.item() for t in buffer_list]
-        assert values == [0.0, 1.0, 2.0, 3.0, 4.0]
+
+def test_buffer_list_slice_from_index(buffer_list_five):
+    """Slice from index returns the correct subset."""
+    result = buffer_list_five[2:]
+    assert len(result) == 3
+    for i, tensor in enumerate(result):
+        assert torch.equal(tensor, torch.tensor([float(i + 2)]))
+
+
+def test_buffer_list_slice_with_step(buffer_list_five):
+    """Slice with step skips elements correctly."""
+    result = buffer_list_five[::2]
+    assert len(result) == 3
+    expected_vals = [0.0, 2.0, 4.0]
+    for tensor, expected in zip(result, expected_vals):
+        assert torch.equal(tensor, torch.tensor([expected]))
+
+
+def test_buffer_list_slice_negative_bounds(buffer_list_five):
+    """Slice with negative bounds follows Python convention."""
+    result = buffer_list_five[-2:]
+    assert len(result) == 2
+    assert torch.equal(result[0], torch.tensor([3.0]))
+    assert torch.equal(result[1], torch.tensor([4.0]))
+
+
+def test_buffer_list_len(buffer_list_five):
+    """Length reflects number of registered buffers."""
+    assert len(buffer_list_five) == 5
+
+
+def test_buffer_list_iter(buffer_list_five):
+    """Iteration yields all buffers in order."""
+    values = [t.item() for t in buffer_list_five]
+    assert values == [0.0, 1.0, 2.0, 3.0, 4.0]
