@@ -23,6 +23,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Mask boundary nodes in spatial loss maps computed during `test_step`, consistent with all other loss calls that use `interior_mask_bool` [\#568](https://github.com/mllam/neural-lam/pull/568) @RajdeepKushwaha5
+
 - Standardize all script references to use `create_graph` instead of the legacy `create_mesh` name in README and `pyproject.toml`, and fix minor README typos [\#426](https://github.com/mllam/neural-lam/pull/426) @GiGiKoneti
 
 - Initialize `da_forcing_mean` and `da_forcing_std` to `None` when forcing data is absent, fixing `AttributeError` in `WeatherDataset` with `standardize=True` [\#369](https://github.com/mllam/neural-lam/issues/369) @Sir-Sloth-The-Lazy

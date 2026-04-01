@@ -189,3 +189,50 @@ def test_all_gather_cat_multi_device_simulation():
         "all_gather_cat produced incorrectly ordered/combined values "
         "on multi-device simulation"
     )
+
+
+def test_spatial_loss_maps_exclude_boundary():
+    """
+    Test that spatial loss maps mask out boundary nodes with NaN and that
+    nanmean correctly ignores them during aggregation, matching the masking
+    logic in test_step and on_test_epoch_end.
+    """
+    num_grid_nodes = 10
+    pred_steps = 3
+    batch_size = 2
+
+    # Interior mask: first 6 nodes interior, last 4 boundary
+    interior_mask_bool = torch.tensor(
+        [True] * 6 + [False] * 4
+    )  # (num_grid_nodes,)
+
+    # Simulate spatial loss (all ones for simplicity)
+    spatial_loss = torch.ones(batch_size, pred_steps, num_grid_nodes)
+
+    # Apply the same masking as test_step
+    spatial_loss[..., ~interior_mask_bool] = float("nan")
+
+    # Boundary nodes should be NaN
+    assert torch.all(
+        torch.isnan(spatial_loss[..., ~interior_mask_bool])
+    ), "Boundary nodes should be NaN"
+
+    # Interior nodes should not be NaN
+    assert not torch.any(
+        torch.isnan(spatial_loss[..., interior_mask_bool])
+    ), "Interior nodes should not be NaN"
+
+    # nanmean over batch dim should ignore NaN boundary nodes
+    mean_spatial_loss = torch.nanmean(spatial_loss, dim=0)
+    assert mean_spatial_loss.shape == (pred_steps, num_grid_nodes)
+
+    # Interior nodes: mean of 1.0 = 1.0
+    assert torch.allclose(
+        mean_spatial_loss[:, interior_mask_bool],
+        torch.ones(pred_steps, interior_mask_bool.sum().item()),
+    )
+
+    # Boundary nodes: nanmean of all-NaN = NaN
+    assert torch.all(
+        torch.isnan(mean_spatial_loss[:, ~interior_mask_bool])
+    ), "Boundary nodes should remain NaN after nanmean"

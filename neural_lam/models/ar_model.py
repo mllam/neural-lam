@@ -447,6 +447,8 @@ class ARModel(pl.LightningModule):
         spatial_loss = self.loss(
             prediction, target, pred_std, average_grid=False
         )  # (B, pred_steps, num_grid_nodes)
+        # Exclude boundary nodes, consistent with training/validation loss
+        spatial_loss[..., ~self.interior_mask_bool] = float("nan")
         log_spatial_losses = spatial_loss[
             :, [step - 1 for step in self.args.val_steps_to_log]
         ]
@@ -753,7 +755,7 @@ class ARModel(pl.LightningModule):
             torch.cat(self.spatial_loss_maps, dim=0)
         )  # (N_test, N_log, num_grid_nodes)
         if self.trainer.is_global_zero:
-            mean_spatial_loss = torch.mean(
+            mean_spatial_loss = torch.nanmean(
                 spatial_loss_tensor, dim=0
             )  # (N_log, num_grid_nodes)
 
