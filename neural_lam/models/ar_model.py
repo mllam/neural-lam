@@ -9,6 +9,7 @@ import numpy as np
 import pytorch_lightning as pl
 import torch
 import xarray as xr
+from PIL import Image
 
 # First-party
 from neural_lam.utils import get_integer_time
@@ -325,9 +326,16 @@ class ARModel(pl.LightningModule):
 
         tensor_to_gather: (d1, d2, ...), distributed over K ranks
 
-        returns: (K*d1, d2, ...)
+        returns:
+            - single-device strategies: (d1, d2, ...)
+            - multi-device strategies: (K*d1, d2, ...)
         """
-        return self.all_gather(tensor_to_gather).flatten(0, 1)
+        gathered = self.all_gather(tensor_to_gather)
+        # all_gather adds a leading dim (K,) only on multi-device runs;
+        # on single-device it returns the tensor unchanged.
+        if gathered.dim() > tensor_to_gather.dim():
+            return gathered.flatten(0, 1)
+        return gathered
 
     # newer lightning versions requires batch_idx argument, even if unused
     # pylint: disable-next=unused-argument
@@ -522,6 +530,19 @@ class ARModel(pl.LightningModule):
             )  # (d_f,)
             var_vranges = list(zip(var_vmin, var_vmax))
 
+            example_i = self.plotted_examples
+
+            if self.args.create_gif:
+                plot_dir_path = os.path.join(
+                    self.logger.save_dir,
+                    f"example_plots_{example_i}",
+                )
+                os.makedirs(plot_dir_path, exist_ok=True)
+                png_frames: Dict[str, List[str]] = {
+                    var_name: []
+                    for var_name in self._datastore.get_vars_names("state")
+                }
+
             # Iterate over prediction horizon time steps
             for t_i, _ in enumerate(zip(pred_slice, target_slice), start=1):
                 # Create one figure per variable at this time step
@@ -549,8 +570,6 @@ class ARModel(pl.LightningModule):
                     )
                 ]
 
-                example_i = self.plotted_examples
-
                 for var_name, fig in zip(
                     self._datastore.get_vars_names("state"), var_figs
                 ):
@@ -571,9 +590,42 @@ class ARModel(pl.LightningModule):
                             f"{self.logger} does not support image logging."
                         )
 
+                    # Save PNG frame for GIF animation
+                    if self.args.create_gif:
+                        png_path = os.path.join(
+                            plot_dir_path,
+                            f"{var_name}_example_{example_i}"
+                            f"_prediction_t_{t_i:02d}.png",
+                        )
+                        fig.savefig(png_path, dpi=100, bbox_inches="tight")
+                        png_frames[var_name].append(png_path)
+
                 plt.close(
                     "all"
                 )  # Close all figs for this time step, saves memory
+
+            # Generate GIF animations from the saved PNG frames,
+            # one GIF per variable combining all prediction time steps
+            if self.args.create_gif:
+                for var_name, frames_for_var in png_frames.items():
+                    if frames_for_var:
+                        gif_path = os.path.join(
+                            plot_dir_path,
+                            f"{var_name}_example_{example_i}_prediction.gif",
+                        )
+                        frames = [Image.open(f) for f in frames_for_var]
+
+                        try:
+                            frames[0].save(
+                                gif_path,
+                                save_all=True,
+                                append_images=frames[1:],
+                                loop=0,
+                                duration=1000,
+                            )
+                        finally:
+                            for frame in frames:
+                                frame.close()
 
             # Save pred and target as .pt files
             torch.save(
