@@ -39,6 +39,8 @@ This release introduces new features including GIF animation support, wandb run 
 
 ### Fixed
 
+- Fix `AssertionError` in `aggregate_and_plot_metrics` when using `--metrics_watch` flags by using `isinstance` dispatch for figure vs scalar logging [\#303](https://github.com/mllam/neural-lam/pull/303) @AftAb-25
+
 - Fix validation crash in `plot_error_map` and resolve DDP NCCL initialization error on single-device setups [\#193](https://github.com/mllam/neural-lam/pull/193) @AdityaKumarSethia
 
 - Fix `--metrics_watch` handling to avoid AttributeError when unset and improve warning behavior during evaluation [#420](https://github.com/mllam/neural-lam/pull/420) @archit7-beep

@@ -732,28 +732,25 @@ class ARModel(pl.LightningModule):
                     )
                 )
 
-        # Ensure that log_dict has structure for
-        # logging as dict(str, plt.Figure)
-        assert all(
-            isinstance(key, str) and isinstance(value, plt.Figure)
-            for key, value in log_dict.items()
-        )
-
         if self.trainer.is_global_zero and not self.trainer.sanity_checking:
 
             current_epoch = self.trainer.current_epoch
 
-            for key, figure in log_dict.items():
-                # For other loggers than wandb, add epoch to key.
-                # Wandb can log multiple images to the same key, while other
-                # loggers, such as MLFlow need unique keys for each image.
-                if not isinstance(self.logger, pl.loggers.WandbLogger):
-                    key = f"{key}-{current_epoch}"
+            for key, value in log_dict.items():
+                if isinstance(value, plt.Figure):
+                    # For other loggers than wandb, add epoch to key.
+                    # Wandb can log multiple images to the same key, while other
+                    # loggers, such as MLFlow need unique keys for each image.
+                    log_key = key
+                    if not isinstance(self.logger, pl.loggers.WandbLogger):
+                        log_key = f"{key}-{current_epoch}"
 
-                if hasattr(self.logger, "log_image"):
-                    self.logger.log_image(key=key, images=[figure])
-
-            plt.close("all")  # Close all figs
+                    if hasattr(self.logger, "log_image"):
+                        self.logger.log_image(key=log_key, images=[value])
+                elif isinstance(value, (int, float, torch.Tensor)):
+                    # Log scalar metrics
+                    plt.close("all")  # Close all figs
+                    self.log(key, value, on_step=False, on_epoch=True, rank_zero_only=True)
 
     def on_test_epoch_end(self):
         """
