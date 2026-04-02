@@ -71,6 +71,10 @@ def wmse(pred, target, pred_std, mask=None, average_grid=True, sum_vars=True):
     metric_val: One of (...,), (..., d_state), (..., N), (..., N, d_state),
     depending on reduction arguments.
     """
+    assert pred.shape == target.shape, (
+        f"pred and target must have the same shape, "
+        f"got {pred.shape} and {target.shape}"
+    )
     entry_mse = torch.nn.functional.mse_loss(
         pred, target, reduction="none"
     )  # (..., N, d_state)
@@ -126,6 +130,10 @@ def wmae(pred, target, pred_std, mask=None, average_grid=True, sum_vars=True):
     metric_val: One of (...,), (..., d_state), (..., N), (..., N, d_state),
     depending on reduction arguments.
     """
+    assert pred.shape == target.shape, (
+        f"pred and target must have the same shape, "
+        f"got {pred.shape} and {target.shape}"
+    )
     entry_mae = torch.nn.functional.l1_loss(
         pred, target, reduction="none"
     )  # (..., N, d_state)
@@ -182,6 +190,9 @@ def nll(pred, target, pred_std, mask=None, average_grid=True, sum_vars=True):
     depending on reduction arguments.
     """
     # Broadcast pred_std if shaped (d_state,), done internally in Normal class
+    # Clamp from below to prevent the distribution from collapsing to a spike,
+    # which causes log_prob to blow up
+    pred_std = pred_std.clamp(min=1e-6)
     dist = torch.distributions.Normal(pred, pred_std)  # (..., N, d_state)
     entry_nll = -dist.log_prob(target)  # (..., N, d_state)
 
