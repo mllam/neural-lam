@@ -161,7 +161,13 @@ def plot_error_map(errors, datastore: BaseRegularGridDatastore, title=None):
     predictions horizons
     errors: (pred_steps, d_f)
     """
-    errors_np = errors.T.cpu().numpy()  # (d_f, pred_steps)
+    errors_np = errors.detach().cpu().numpy()
+
+    if errors_np.ndim == 1:
+        # single prediction horizon case
+        errors_np = errors_np[None, :]  # make it (1, d_f)
+
+    errors_np = errors_np.T  # (d_f, pred_steps)
     d_f, pred_steps = errors_np.shape
     step_length = datastore.step_length
 
