@@ -23,6 +23,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Fix `AssertionError` in `aggregate_and_plot_metrics` when using `--metrics_watch` flags by using `isinstance` dispatch for figure vs scalar logging [\#303](https://github.com/mllam/neural-lam/pull/303) @AftAb-25
+
 - Fix `--metrics_watch` handling to avoid AttributeError when unset and improve warning behavior during evaluation [#420](https://github.com/mllam/neural-lam/pull/420) @archit7-beep
 
 - Standardize all script references to use `create_graph` instead of the legacy `create_mesh` name in README and `pyproject.toml`, and fix minor README typos [\#426](https://github.com/mllam/neural-lam/pull/426) @GiGiKoneti
