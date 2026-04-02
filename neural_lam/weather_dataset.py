@@ -703,38 +703,26 @@ class WeatherDataModule(pl.LightningDataModule):
                 load_single_member=self.load_single_member,
             )
 
-    def train_dataloader(self):
-        """Load train dataset."""
+    def _make_dataloader(self, dataset, shuffle: bool):
+        """Construct a DataLoader with shared configuration."""
         return torch.utils.data.DataLoader(
-            self.train_dataset,
+            dataset,
             batch_size=self.batch_size,
             num_workers=self.num_workers,
-            shuffle=True,
+            shuffle=shuffle,
             multiprocessing_context=self.multiprocessing_context,
             persistent_workers=self.num_workers > 0,
             pin_memory=torch.cuda.is_available(),
         )
+
+    def train_dataloader(self):
+        """Load train dataset."""
+        return self._make_dataloader(self.train_dataset, shuffle=True)
 
     def val_dataloader(self):
         """Load validation dataset."""
-        return torch.utils.data.DataLoader(
-            self.val_dataset,
-            batch_size=self.batch_size,
-            num_workers=self.num_workers,
-            shuffle=False,
-            multiprocessing_context=self.multiprocessing_context,
-            persistent_workers=self.num_workers > 0,
-            pin_memory=torch.cuda.is_available(),
-        )
+        return self._make_dataloader(self.val_dataset, shuffle=False)
 
     def test_dataloader(self):
         """Load test dataset."""
-        return torch.utils.data.DataLoader(
-            self.test_dataset,
-            batch_size=self.batch_size,
-            num_workers=self.num_workers,
-            shuffle=False,
-            multiprocessing_context=self.multiprocessing_context,
-            persistent_workers=self.num_workers > 0,
-            pin_memory=torch.cuda.is_available(),
-        )
+        return self._make_dataloader(self.test_dataset, shuffle=False)
