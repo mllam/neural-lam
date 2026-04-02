@@ -33,6 +33,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Switch to lat/lon-based plotting with `pcolormesh` and `cartopy` for accurate spatial visualisation regardless of underlying projection. [\#168](https://github.com/mllam/neural-lam/pull/168) @sadamov
 
+- Resolve `xarray` `FacetGrid` `DeprecationWarning` in `plot_example.py` by using a compatibility shim [\#482](https://github.com/mllam/neural-lam/pull/482) @sohampatil01-svg
+
 - Replace `shell=True` subprocess call in `compute_standardization_stats.py` with a safe argument list and Python-side hostname parsing to prevent command injection via `SLURM_JOB_NODELIST` [\#264](https://github.com/mllam/neural-lam/pull/264) @ashum9
 
 - Avoid NaN when standardizing fields with zero std [#189](https://github.com/mllam/neural-lam/pull/189) @varunsiravuri

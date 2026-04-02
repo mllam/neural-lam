@@ -80,7 +80,7 @@ def plot_example_from_datastore(
         transform=crs,
         size=4,
     )
-    for ax in g.axs.flat:
+    for ax in getattr(g, "axs", g.axes).flat:
         ax.coastlines()
         ax.gridlines(draw_labels=["left", "bottom"])
         ax.set_extent(datastore.get_xy_extent(category=category), crs=crs)
