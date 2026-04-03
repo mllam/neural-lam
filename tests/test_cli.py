@@ -117,3 +117,28 @@ def test_wandb_id_ignored_with_mlflow_warns():
     warning_msg = mock_log.warning.call_args[0][0]
     assert "--wandb_id is set but logger is" in warning_msg
     assert "mlflow" in warning_msg
+
+
+@pytest.mark.parametrize("loss", ["mse", "mae", "wmse", "wmae"])
+def test_output_std_rejected_for_incompatible_losses(loss):
+    with patch("neural_lam.train_model.load_config_and_datastore") as mock_load:
+        with pytest.raises(SystemExit, match="2"):
+            neural_lam.train_model.main.__wrapped__(
+                ["--config_path", "dummy.yaml", "--output_std", "--loss", loss]
+            )
+
+    mock_load.assert_not_called()
+
+
+@pytest.mark.parametrize("loss", ["nll", "crps_gauss"])
+def test_output_std_allowed_for_probabilistic_losses(loss):
+    with patch(
+        "neural_lam.train_model.load_config_and_datastore",
+        side_effect=RuntimeError("load_config_called"),
+    ) as mock_load:
+        with pytest.raises(RuntimeError, match="load_config_called"):
+            neural_lam.train_model.main.__wrapped__(
+                ["--config_path", "dummy.yaml", "--output_std", "--loss", loss]
+            )
+
+    mock_load.assert_called_once()

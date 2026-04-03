@@ -23,6 +23,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Reject incompatible `--output_std` / loss combinations early in
+  `train_model.py`, so learned predictive std-dev is only enabled with
+  variance-aware losses such as `nll` and `crps_gauss` ([#363](https://github.com/mllam/neural-lam/issues/363))
 - Fix `--metrics_watch` handling to avoid AttributeError when unset and improve warning behavior during evaluation [#420](https://github.com/mllam/neural-lam/pull/420) @archit7-beep
 
 - Standardize all script references to use `create_graph` instead of the legacy `create_mesh` name in README and `pyproject.toml`, and fix minor README typos [\#426](https://github.com/mllam/neural-lam/pull/426) @GiGiKoneti

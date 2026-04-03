@@ -2,22 +2,6 @@
 import torch
 
 
-def get_metric(metric_name):
-    """
-    Get a defined metric with given name
-
-    metric_name: str, name of the metric
-
-    Returns:
-    metric: function implementing the metric
-    """
-    metric_name_lower = metric_name.lower()
-    assert (
-        metric_name_lower in DEFINED_METRICS
-    ), f"Unknown metric: {metric_name}"
-    return DEFINED_METRICS[metric_name_lower]
-
-
 def mask_and_reduce_metric(metric_entry_vals, mask, average_grid, sum_vars):
     """
     Masks and (optionally) reduces entry-wise metric values
@@ -228,10 +212,47 @@ def crps_gauss(
 
 
 DEFINED_METRICS = {
-    "mse": mse,
-    "mae": mae,
-    "wmse": wmse,
-    "wmae": wmae,
-    "nll": nll,
-    "crps_gauss": crps_gauss,
+    "mse": {"fn": mse, "supports_output_std": False},
+    "mae": {"fn": mae, "supports_output_std": False},
+    "wmse": {"fn": wmse, "supports_output_std": False},
+    "wmae": {"fn": wmae, "supports_output_std": False},
+    "nll": {"fn": nll, "supports_output_std": True},
+    "crps_gauss": {"fn": crps_gauss, "supports_output_std": True},
 }
+
+
+def is_defined_metric(metric_name):
+    """Check whether a metric/loss name exists in the registry."""
+    return metric_name.lower() in DEFINED_METRICS
+
+
+def get_metric(metric_name):
+    """
+    Get a defined metric with given name
+
+    metric_name: str, name of the metric
+
+    Returns:
+    metric: function implementing the metric
+    """
+    metric_name_lower = metric_name.lower()
+    if not is_defined_metric(metric_name):
+        raise ValueError(f"Unknown metric: {metric_name}")
+    return DEFINED_METRICS[metric_name_lower]["fn"]
+
+
+def metric_supports_output_std(metric_name):
+    """Return whether the metric can train a learned predictive std-dev."""
+    metric_name_lower = metric_name.lower()
+    if not is_defined_metric(metric_name):
+        raise ValueError(f"Unknown metric: {metric_name}")
+    return DEFINED_METRICS[metric_name_lower]["supports_output_std"]
+
+
+def get_output_std_compatible_metrics():
+    """Return the loss names that can train a learned predictive std-dev."""
+    return sorted(
+        metric_name
+        for metric_name, metric_info in DEFINED_METRICS.items()
+        if metric_info["supports_output_std"]
+    )

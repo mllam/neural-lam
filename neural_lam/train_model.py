@@ -12,7 +12,7 @@ from lightning_fabric.utilities import seed
 from loguru import logger
 
 # Local
-from . import utils
+from . import metrics, utils
 from .config import load_config_and_datastore
 from .models import GraphLAM, HiLAM, HiLAMParallel
 from .weather_dataset import WeatherDataModule
@@ -22,6 +22,25 @@ MODELS = {
     "hi_lam": HiLAM,
     "hi_lam_parallel": HiLAMParallel,
 }
+
+
+def get_loss_output_std_compatibility_error(loss, output_std):
+    """Return an actionable config error for invalid output-std/loss combos."""
+    if not output_std:
+        return None
+
+    if not metrics.is_defined_metric(loss):
+        return None
+
+    if metrics.metric_supports_output_std(loss):
+        return None
+
+    supported_losses = ", ".join(metrics.get_output_std_compatible_metrics())
+    return (
+        "Training with --output_std requires a loss that incorporates "
+        f"predicted std-dev. The current choice of --loss '{loss}' does not. "
+        f"Supported losses: {supported_losses}."
+    )
 
 
 @logger.catch
@@ -140,7 +159,10 @@ def main(input_args=None):
         "--loss",
         type=str,
         default="wmse",
-        help="Loss function to use, see metric.py",
+        help=(
+            "Loss function to use, see metric.py. When --output_std is set, "
+            "only losses that support learned predictive std-dev are valid."
+        ),
     )
     parser.add_argument("--lr", type=float, default=1e-3, help="learning rate")
     parser.add_argument(
@@ -254,6 +276,12 @@ def main(input_args=None):
     args.var_leads_metrics_watch = {
         int(k): v for k, v in json.loads(args.var_leads_metrics_watch).items()
     }
+
+    compatibility_error = get_loss_output_std_compatibility_error(
+        args.loss, args.output_std
+    )
+    if compatibility_error is not None:
+        parser.error(compatibility_error)
 
     # Check that config only specifies logging for lead times that exist
     # Check --val_steps_to_log
