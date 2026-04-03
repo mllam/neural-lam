@@ -37,9 +37,14 @@ class BaseDatastore(abc.ABC):
     dimensions (rather than just `time`).
 
     # Ensemble vs deterministic data
-    If the datastore is used to represent ensemble data, then the `is_ensemble`
-    attribute should be set to True, and returned data from `get_dataarray` is
-    assumed to have an `ensemble_member` dimension.
+    If the datastore is used to present an ensemble of state realisations, for
+    example for forecast ensembles, then the `is_ensemble` attribute should be
+    set to `True` and returned state data from `get_dataarray` is expected to
+    have an `ensemble_member` dimension. If each ensemble member has its own
+    forcing values, then `has_ensemble_forcing` should be set to `True`, and
+    returned forcing data from `get_dataarray` is expected to have an
+    `ensemble_member` dimension; otherwise forcing data is expected not to have
+    one.
 
     # Grid index
     All methods that return data specific to a grid point (like
@@ -51,6 +56,7 @@ class BaseDatastore(abc.ABC):
     """
 
     is_ensemble: bool = False
+    has_ensemble_forcing: bool = False
     is_forecast: bool = False
 
     @property
@@ -247,8 +253,11 @@ class BaseDatastore(abc.ABC):
         elapsed_forecast_duration)` dimensions if `is_forecast` is True, or
         `(time)` if `is_forecast` is False.
 
-        If the data is ensemble data, the dataarray is expected to have an
-        additional `ensemble_member` dimension.
+        If we have multiple ensemble members of state data, the returned state
+        dataarray is expected to have an additional `ensemble_member`
+        dimension. If `has_ensemble_forcing=True`, the returned forcing
+        dataarray is expected to have an additional `ensemble_member`
+        dimension; otherwise it is expected not to have one.
 
         Parameters
         ----------
@@ -397,7 +406,8 @@ class BaseDatastore(abc.ABC):
 
     @functools.lru_cache
     def expected_dim_order(
-        self, category: Optional[str] = None
+        self,
+        category: Optional[str] = None,
     ) -> tuple[str, ...]:
         """
         Return the expected dimension order for the dataarray or dataset
@@ -423,7 +433,6 @@ class BaseDatastore(abc.ABC):
         ----------
         category : str
             The category of the dataset (state/forcing/static).
-
         Returns
         -------
         List[str]
@@ -442,8 +451,9 @@ class BaseDatastore(abc.ABC):
                 elif not self.is_forecast:
                     dim_order.append("time")
 
-            if self.is_ensemble and category == "state":
-                # XXX: for now we only assume ensemble data for state variables
+            if category == "state" and self.is_ensemble:
+                dim_order.append("ensemble_member")
+            elif category == "forcing" and self.has_ensemble_forcing:
                 dim_order.append("ensemble_member")
 
         dim_order.append("grid_index")

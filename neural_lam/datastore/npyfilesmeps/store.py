@@ -144,7 +144,6 @@ class NpyFilesDatastoreMEPS(BaseRegularGridDatastore):
 
     SHORT_NAME = "npyfilesmeps"
 
-    is_ensemble = True
     is_forecast = True
 
     def __init__(
@@ -175,6 +174,8 @@ class NpyFilesDatastoreMEPS(BaseRegularGridDatastore):
         self._remove_state_features_with_index = (
             self.config.dataset.remove_state_features_with_index
         )
+        self.is_ensemble = self._num_ensemble_members > 1
+        self.has_ensemble_forcing = False
 
     @property
     def root_path(self) -> Path:
