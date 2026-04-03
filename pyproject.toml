@@ -44,8 +44,6 @@ requires-python = ">=3.10"
 [dependency-groups]
 dev = ["pre-commit>=3.8.0", "pytest>=8.3.2", "pooch>=1.8.2"]
 
-[tool.pdm.dev-dependencies]
-docs = [ "jupyter-book<2.0.0", "sphinx-autoapi>=3.0.0", "myst-nb>=1.0.0", "sphinx-copybutton>=0.5.2","pydata-sphinx-theme>=0.15.2","interrogate>=1.7.0","pydocstyle>=6.3.0","sphinx>=7.2.6","sphinxcontrib-mermaid>=0.9.2"]
 
 [tool.setuptools]
 py-modules = ["neural_lam"]
@@ -125,10 +123,6 @@ core-metadata-version = "2.4"
 source = "vcs"
 fallback-version = "0.0.0"
 
-[build-system]
-requires = ["pdm-backend"]
-build-backend = "pdm.backend"
-
 [tool.pytest.ini_options]
 norecursedirs = ["docs"]
 [tool.hatch.build.targets.sdist]
@@ -141,4 +135,17 @@ exclude = [
 exclude = [
   ".venv/",
   "venv/",
+]
+
+[project.optional-dependencies]
+docs = [
+    "jupyter-book<2.0.0",
+    "sphinx-autoapi>=3.0.0",
+    "myst-nb>=1.0.0",
+    "sphinx-copybutton>=0.5.2",
+    "pydata-sphinx-theme>=0.15.2",
+    "interrogate>=1.7.0",
+    "pydocstyle>=6.3.0",
+    "sphinx>=7.2.6",
+    "sphinxcontrib-mermaid>=0.9.2",
 ]
