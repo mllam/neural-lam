@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [unreleased](https://github.com/mllam/neural-lam/compare/v0.5.0...HEAD)
 
+### Added
+
+- Run notebooks in `docs/notebooks/` as pytest tests via `nbmake` in CI refs [\#69](https://github.com/mllam/neural-lam/issues/69)
+
 ### Maintenance
 
 - Update PR template to clarify milestone/roadmap requirement and maintenance changes [\#186](https://github.com/mllam/neural-lam/pull/186) @joeloskarsson

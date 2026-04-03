@@ -40,7 +40,7 @@ dependencies = [
 requires-python = ">=3.10"
 
 [dependency-groups]
-dev = ["pre-commit>=3.8.0", "pytest>=8.3.2", "pooch>=1.8.2"]
+dev = ["pre-commit>=3.8.0", "pytest>=8.3.2", "pooch>=1.8.2", "nbmake>=1.5.0", "ipykernel>=6.0.0"]
 
 [tool.setuptools]
 py-modules = ["neural_lam"]
@@ -113,6 +113,10 @@ min-similarity-lines = 10
 [tool.pdm.version]
 source = "scm"
 fallback_version = "0.0.0"
+
+[tool.pytest.ini_options]
+testpaths = ["neural_lam", "tests", "docs/notebooks"]
+addopts = "--doctest-modules --nbmake -vv -s"
 
 [build-system]
 requires = ["pdm-backend"]
