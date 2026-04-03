@@ -26,6 +26,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Collapse ensemble predictions to their mean in `ARModel.plot_examples()` so the existing two-panel example plotting path remains valid after 4D ensemble DataArray support [\#579](https://github.com/mllam/neural-lam/issues/579)
 - Initialize `da_forcing_mean` and `da_forcing_std` to `None` when forcing data is absent, fixing `AttributeError` in `WeatherDataset` with `standardize=True` [\#369](https://github.com/mllam/neural-lam/issues/369) @Sir-Sloth-The-Lazy
 
 - Ensure proper sorting of `analysis_time` in `NpyFilesDatastoreMEPS._get_analysis_times` independent of the order in which files are processed with glob [\#386](https://github.com/mllam/neural-lam/pull/386) @Gopisokk

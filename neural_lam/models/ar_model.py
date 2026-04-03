@@ -180,7 +180,7 @@ class ARModel(pl.LightningModule):
         tensor : torch.Tensor
             The tensor to convert to a `xr.DataArray`. Supported shapes:
             - 3D: [time, grid_index, feature] for deterministic predictions
-            - 4D: [ensemble_member, time, grid_index, feature] for 
+            - 4D: [ensemble_member, time, grid_index, feature] for
               ensemble/probabilistic predictions
             The tensor will be copied to the CPU if it is not already there.
         time : torch.Tensor
@@ -276,7 +276,9 @@ class ARModel(pl.LightningModule):
             B, S, _, N, F = init_states.shape
             # Reshape to (B*S, 2, N, F) for processing
             init_states = init_states.reshape(B * S, *init_states.shape[2:])
-            forcing_features = forcing_features.reshape(B * S, *forcing_features.shape[2:])
+            forcing_features = forcing_features.reshape(
+                B * S, *forcing_features.shape[2:]
+            )
             true_states = true_states.reshape(B * S, *true_states.shape[2:])
 
         prev_prev_state = init_states[:, 0]
@@ -341,7 +343,7 @@ class ARModel(pl.LightningModule):
         num_grid_nodes, d_forcing),
             where index 0 corresponds to index 1 of init_states
         """
-        (init_states, target_states, forcing_features, batch_times) = batch
+        init_states, target_states, forcing_features, batch_times = batch
 
         prediction, pred_std = self.unroll_prediction(
             init_states, forcing_features, target_states
@@ -542,8 +544,12 @@ class ARModel(pl.LightningModule):
         target = batch[1]
         time = batch[3]
 
-        # Rescale to original data scale
+        # Rescale to original data scale. For ensemble predictions, keep the
+        # existing two-panel example plot contract by plotting the ensemble
+        # mean against the target.
         prediction_rescaled = prediction * self.state_std + self.state_mean
+        if prediction_rescaled.ndim == 5:
+            prediction_rescaled = torch.mean(prediction_rescaled, dim=1)
         target_rescaled = target * self.state_std + self.state_mean
 
         # Iterate over the examples

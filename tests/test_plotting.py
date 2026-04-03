@@ -1,6 +1,7 @@
 # Standard library
 from datetime import timedelta
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Iterator
 from unittest.mock import patch
 
@@ -359,3 +360,74 @@ def test_plot_examples_integration_saves_figure(
     assert fig is not None
     assert isinstance(fig, plt.Figure)
     assert output_path.exists()
+
+
+@pytest.mark.parametrize(
+    "time_step,time_unit",
+    [(1, "hours")],
+)
+def test_plot_examples_uses_ensemble_mean_for_prediction_panel(
+    model_and_batch, monkeypatch
+):
+    """Ensemble predictions should be reduced to their mean in the current
+    two-panel example plotting path."""
+    model, batch, datastore, tmp_path = model_and_batch
+    model.plotted_examples = 0
+    logger = SimpleNamespace(
+        save_dir=str(tmp_path),
+        log_image=lambda **kwargs: None,
+    )
+    model.__dict__["_logger"] = logger
+    model.__dict__["_trainer"] = SimpleNamespace(logger=logger)
+
+    with torch.no_grad():
+        prediction, _, _, _ = model.common_step(batch)
+
+    ensemble_offsets = torch.tensor(
+        [0.0, 1.0, 2.0], dtype=prediction.dtype
+    ).view(1, 3, 1, 1, 1)
+    ensemble_prediction = prediction.unsqueeze(1) + ensemble_offsets
+    ensemble_prediction_rescaled = (
+        ensemble_prediction * model.state_std + model.state_mean
+    )
+    expected_mean_slice = ensemble_prediction_rescaled.mean(dim=1)[0]
+
+    captured_predictions = []
+
+    def fake_plot_prediction(*, da_prediction, da_target, **kwargs):
+        captured_predictions.append(da_prediction.copy(deep=True))
+        return matplotlib.figure.Figure()
+
+    monkeypatch.setattr(
+        "neural_lam.models.ar_model.vis.plot_prediction",
+        fake_plot_prediction,
+    )
+
+    model.plot_examples(
+        batch=batch,
+        n_examples=1,
+        split="train",
+        prediction=ensemble_prediction,
+    )
+
+    assert captured_predictions
+    assert all(
+        "ensemble_member" not in da_prediction.dims
+        for da_prediction in captured_predictions
+    )
+
+    dataset = WeatherDataset(datastore=datastore, split="train")
+    time = np.array(batch[3][0].cpu(), dtype="datetime64[ns]")
+    expected_da_prediction = dataset.create_dataarray_from_tensor(
+        tensor=expected_mean_slice.detach(),
+        time=time,
+        category="state",
+    ).unstack("grid_index")
+
+    np.testing.assert_allclose(
+        captured_predictions[0].values,
+        expected_da_prediction.isel(state_feature=0, time=0).squeeze().values,
+    )
+
+    saved_pred = torch.load(tmp_path / "example_pred_1.pt")
+    torch.testing.assert_close(saved_pred, expected_mean_slice.cpu())
