@@ -528,16 +528,16 @@ class ARModel(pl.LightningModule):
 
             var_vmin = (
                 torch.minimum(
-                    pred_slice.flatten(0, 1).min(dim=0)[0],
-                    target_slice.flatten(0, 1).min(dim=0)[0],
+                    pred_slice.flatten(0, -2).min(dim=0)[0],
+                    target_slice.flatten(0, -2).min(dim=0)[0],
                 )
                 .cpu()
                 .numpy()
             )  # (d_f,)
             var_vmax = (
                 torch.maximum(
-                    pred_slice.flatten(0, 1).max(dim=0)[0],
-                    target_slice.flatten(0, 1).max(dim=0)[0],
+                    pred_slice.flatten(0, -2).max(dim=0)[0],
+                    target_slice.flatten(0, -2).max(dim=0)[0],
                 )
                 .cpu()
                 .numpy()
