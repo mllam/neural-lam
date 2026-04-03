@@ -1,7 +1,10 @@
 # Standard library
 from pathlib import Path
+from types import SimpleNamespace
+from unittest.mock import patch
 
 # Third-party
+import matplotlib.pyplot as plt
 import pytest
 import pytorch_lightning as pl
 import torch
@@ -16,6 +19,7 @@ from neural_lam.models.ar_model import ARModel
 from neural_lam.models.graph_lam import GraphLAM
 from neural_lam.weather_dataset import WeatherDataModule
 from tests.conftest import init_datastore_example
+from tests.dummy_datastore import DummyDatastore
 
 
 def run_simple_training(datastore, set_output_std, metrics_watch=None):
@@ -193,3 +197,74 @@ def test_all_gather_cat_multi_device_simulation():
         "all_gather_cat produced incorrectly ordered/combined values "
         "on multi-device simulation"
     )
+
+
+class MockARModel(ARModel):
+    def predict_step(self, prev_state, prev_prev_state, forcing):
+        pred_state = torch.zeros_like(prev_state)
+        pred_std = torch.ones_like(prev_state) if self.output_std else None
+        return pred_state, pred_std
+
+
+def test_on_test_epoch_end_resets_test_state(tmp_path):
+    datastore = DummyDatastore()
+
+    class ModelArgs:
+        output_std = False
+        loss = "mse"
+        restore_opt = False
+        n_example_pred = 2
+        graph = "1level"
+        hidden_dim = 4
+        hidden_layers = 1
+        processor_layers = 1
+        mesh_aggr = "sum"
+        lr = 1.0e-3
+        val_steps_to_log = [1, 2]
+        metrics_watch = []
+        var_leads_metrics_watch = {}
+        num_past_forcing_steps = 0
+        num_future_forcing_steps = 0
+
+    config = nlconfig.NeuralLAMConfig(
+        datastore=nlconfig.DatastoreSelection(
+            kind=datastore.SHORT_NAME, config_path=datastore.root_path
+        )
+    )
+    model = MockARModel(args=ModelArgs(), datastore=datastore, config=config)
+
+    model.test_metrics = {
+        "mse": [torch.ones(1, 2, datastore.N_FEATURES["state"])],
+        "mae": [torch.ones(1, 2, datastore.N_FEATURES["state"])],
+    }
+    model.spatial_loss_maps = [
+        torch.ones(
+            1, len(model.args.val_steps_to_log), datastore.num_grid_points
+        )
+    ]
+    model.plotted_examples = model.n_example_pred
+    model.matched_metrics = {"test_rmse"}
+    model.aggregate_and_plot_metrics = lambda metrics_dict, prefix: None
+    model.all_gather_cat = lambda tensor: tensor
+    model._trainer = SimpleNamespace(
+        is_global_zero=True,
+        sanity_checking=False,
+        current_epoch=0,
+        logger=SimpleNamespace(
+            save_dir=str(tmp_path),
+            log_image=lambda **kwargs: None,
+        ),
+    )
+
+    with patch(
+        "neural_lam.models.ar_model.vis.plot_spatial_error",
+        side_effect=lambda *args, **kwargs: plt.figure(),
+    ):
+        model.on_test_epoch_end()
+
+    assert all(
+        len(metric_vals) == 0 for metric_vals in model.test_metrics.values()
+    )
+    assert model.spatial_loss_maps == []
+    assert model.plotted_examples == 0
+    assert model.matched_metrics == set()

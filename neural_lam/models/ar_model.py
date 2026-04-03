@@ -286,7 +286,7 @@ class ARModel(pl.LightningModule):
         num_grid_nodes, d_forcing),
             where index 0 corresponds to index 1 of init_states
         """
-        (init_states, target_states, forcing_features, batch_times) = batch
+        init_states, target_states, forcing_features, batch_times = batch
 
         prediction, pred_std = self.unroll_prediction(
             init_states, forcing_features, target_states
@@ -823,6 +823,9 @@ class ARModel(pl.LightningModule):
 
         self.matched_metrics = set()
         self.spatial_loss_maps.clear()
+        for metric_list in self.test_metrics.values():
+            metric_list.clear()
+        self.plotted_examples = 0
 
     def on_load_checkpoint(self, checkpoint):
         """
