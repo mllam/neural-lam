@@ -558,7 +558,7 @@ class ARModel(pl.LightningModule):
                 }
 
             # Iterate over prediction horizon time steps
-            for t_i, _ in enumerate(zip(pred_slice, target_slice), start=1):
+            for t_i in range(1, len(time_slice) + 1):
                 # Create one figure per variable at this time step
                 var_figs = [
                     vis.plot_prediction(
