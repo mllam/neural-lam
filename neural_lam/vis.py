@@ -12,6 +12,9 @@ import xarray as xr
 from . import utils
 from .datastore.base import BaseRegularGridDatastore
 
+# Set backend AFTER ALL imports
+matplotlib.use("Agg")
+
 # Font sizes shared across all plot functions for visual consistency.
 _TITLE_SIZE = 13  # suptitle and per-axes titles
 _LABEL_SIZE = 11  # axis / colorbar labels
