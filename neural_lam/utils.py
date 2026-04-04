@@ -267,7 +267,7 @@ def load_graph(graph_dir_path, device="cpu"):
     assert g2m_edge_index.min() >= 0, "Negative node index in g2m"
 
     n_levels = len(m2m_edge_index)
-    hierarchical = n_levels > 1  # Nor just single level mesh graph
+    hierarchical = n_levels > 1  # Not just single level mesh graph
 
     # Load static edge features
     # List of (M_m2m[l], d_edge_f)
