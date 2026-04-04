@@ -2,6 +2,7 @@
 import abc
 import collections
 import dataclasses
+import datetime
 import functools
 from datetime import timedelta
 from functools import cached_property
@@ -11,6 +12,7 @@ from typing import List, Optional, Union
 # Third-party
 import cartopy.crs as ccrs
 import numpy as np
+import torch
 import xarray as xr
 from pandas.core.indexes.multi import MultiIndex
 
@@ -428,6 +430,85 @@ class BaseDatastore(abc.ABC):
             dim_order.append(f"{category}_feature")
 
         return tuple(dim_order)
+
+    def create_dataarray_from_tensor(
+        self,
+        tensor: torch.Tensor,
+        time: Union[datetime.datetime, list[datetime.datetime]],
+        category: str,
+    ):
+        """
+        Construct a xarray.DataArray from a `pytorch.Tensor` with coordinates
+        for `grid_index`, `time` and `{category}_feature` matching the shape
+        and number of times provided and add the x/y coordinates from the
+        datastore.
+        """
+
+        def _is_listlike(obj):
+            return hasattr(obj, "__iter__") and not isinstance(obj, str)
+
+        add_time_as_dim = False
+        if len(tensor.shape) == 2:
+            dims = ["grid_index", f"{category}_feature"]
+            if _is_listlike(time):
+                raise ValueError(
+                    "Expected a single time for a 2D tensor with assumed "
+                    f"dimensions (grid_index, {category}_feature), but got "
+                    f"{len(time)} times"  # type: ignore
+                )
+        elif len(tensor.shape) == 3:
+            add_time_as_dim = True
+            dims = ["time", "grid_index", f"{category}_feature"]
+            if not _is_listlike(time):
+                raise ValueError(
+                    "Expected a list of times for a 3D tensor with assumed "
+                    f"dimensions (time, grid_index, {category}_feature), but "
+                    "got a single time"
+                )
+        else:
+            raise ValueError(
+                "Expected tensor to have 2 or 3 dimensions, but got "
+                f"{len(tensor.shape)}"
+            )
+
+        # Get original dataarray to extract proper coordinates
+        # Get original dataarray to extract proper coordinates
+        da_datastore_state = self.get_dataarray(category=category, split="test")
+
+        if da_datastore_state is None:
+            raise ValueError(
+                f"Could not load dataarray for category '{category}'"
+            )
+
+        da_grid_index = da_datastore_state.grid_index
+
+        # Safely fetch the correct feature category
+        da_category_feature = getattr(da_datastore_state, f"{category}_feature")
+
+        coords = {
+            f"{category}_feature": da_category_feature,
+            "grid_index": da_grid_index,
+        }
+        if add_time_as_dim:
+            coords["time"] = time
+
+        da = xr.DataArray(
+            tensor.cpu().numpy(),
+            dims=dims,
+            coords=coords,
+        )
+
+        for grid_coord in ["x", "y"]:
+            if (
+                grid_coord in da_datastore_state.coords
+                and grid_coord not in da.coords
+            ):
+                da.coords[grid_coord] = da_datastore_state[grid_coord]
+
+        if not add_time_as_dim:
+            da.coords["time"] = time
+
+        return da
 
 
 @dataclasses.dataclass

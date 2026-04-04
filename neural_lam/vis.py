@@ -13,7 +13,6 @@ import xarray as xr
 # Local
 from . import utils
 from .datastore.base import BaseRegularGridDatastore
-from .weather_dataset import WeatherDataset
 
 
 @matplotlib.rc_context(utils.fractional_plot_bundle(1))
@@ -194,7 +193,6 @@ def plot_spatial_error(
 def plot_examples(
     datastore: BaseRegularGridDatastore,
     logger: pl.loggers.Logger,
-    split: str,
     prediction: torch.Tensor,
     target: torch.Tensor,
     time_batch: torch.Tensor,
@@ -206,7 +204,6 @@ def plot_examples(
     Args:
         datastore: The object containing dataset metadata.
         logger: The logger instance used to save the images.
-        split: The dataset split (e.g., 'train', 'val', 'test').
         prediction: Output tensors predicted from the model.
         target: Ground truth tensors.
         time_batch: Time timestamps corresponding to the data.
@@ -215,9 +212,6 @@ def plot_examples(
     time_step_int, time_step_unit = utils.get_integer_time(
         datastore.step_length
     )
-
-    # Instantiating dataset outside the loop
-    weather_dataset = WeatherDataset(datastore=datastore, split=split)
 
     for i, (pred_slice, target_slice, time_slice) in enumerate(
         zip(prediction, target, time_batch)
@@ -230,11 +224,12 @@ def plot_examples(
 
         time_arr = np.array(time_slice.cpu(), dtype="datetime64[ns]")
 
-        da_prediction = weather_dataset.create_dataarray_from_tensor(
+        # Call directly on datastore now!
+        da_prediction = datastore.create_dataarray_from_tensor(
             tensor=pred_slice, time=time_arr, category="state"
         ).unstack("grid_index")
 
-        da_target = weather_dataset.create_dataarray_from_tensor(
+        da_target = datastore.create_dataarray_from_tensor(
             tensor=target_slice, time=time_arr, category="state"
         ).unstack("grid_index")
 

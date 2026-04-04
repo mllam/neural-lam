@@ -427,7 +427,6 @@ class ARModel(pl.LightningModule):
             vis.plot_examples(
                 datastore=self._datastore,
                 logger=self.logger,
-                split="test",
                 prediction=pred_slice,
                 target=target_slice,
                 time_batch=time_slice,
