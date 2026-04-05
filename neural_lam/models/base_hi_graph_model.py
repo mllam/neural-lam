@@ -5,7 +5,7 @@ from torch import nn
 from .. import utils
 from ..config import NeuralLAMConfig
 from ..datastore import BaseDatastore
-from ..interaction_net import InteractionNet, PropagationNet
+from ..interaction_net import get_gnn_class
 from .base_graph_model import BaseGraphModel
 
 
@@ -26,7 +26,10 @@ class BaseHiGraphModel(BaseGraphModel):
         num_past_forcing_steps: int = 1,
         num_future_forcing_steps: int = 1,
         output_std: bool = False,
-        vertical_propnets: bool = False,
+        g2m_gnn_type: str = "InteractionNet",
+        m2g_gnn_type: str = "InteractionNet",
+        mesh_up_gnn_type: str = "InteractionNet",
+        mesh_down_gnn_type: str = "InteractionNet",
     ):
         super().__init__(
             config=config,
@@ -39,8 +42,11 @@ class BaseHiGraphModel(BaseGraphModel):
             num_past_forcing_steps=num_past_forcing_steps,
             num_future_forcing_steps=num_future_forcing_steps,
             output_std=output_std,
-            vertical_propnets=vertical_propnets,
+            g2m_gnn_type=g2m_gnn_type,
+            m2g_gnn_type=m2g_gnn_type,
         )
+        self.mesh_up_gnn_type = mesh_up_gnn_type
+        self.mesh_down_gnn_type = mesh_down_gnn_type
 
         # Track number of nodes, edges on each level
         # Flatten lists for efficient embedding
@@ -101,13 +107,11 @@ class BaseHiGraphModel(BaseGraphModel):
         )
 
         # Instantiate GNNs
-        # Init GNNs
-        init_gnn_class = (
-            PropagationNet if self.vertical_propnets else InteractionNet
-        )
+        # Init GNNs (message passing up the hierarchy)
+        mesh_up_class = get_gnn_class(mesh_up_gnn_type)
         self.mesh_init_gnns = nn.ModuleList(
             [
-                init_gnn_class(
+                mesh_up_class(
                     edge_index,
                     hidden_dim,
                     hidden_layers=hidden_layers,
@@ -116,10 +120,11 @@ class BaseHiGraphModel(BaseGraphModel):
             ]
         )
 
-        # Read out GNNs
+        # Read out GNNs (message passing down the hierarchy)
+        mesh_down_class = get_gnn_class(mesh_down_gnn_type)
         self.mesh_read_gnns = nn.ModuleList(
             [
-                InteractionNet(
+                mesh_down_class(
                     edge_index,
                     hidden_dim,
                     hidden_layers=hidden_layers,

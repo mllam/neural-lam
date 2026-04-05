@@ -4,7 +4,7 @@ from torch import nn
 # Local
 from ..config import NeuralLAMConfig
 from ..datastore import BaseDatastore
-from ..interaction_net import InteractionNet, PropagationNet
+from ..interaction_net import InteractionNet, get_gnn_class
 from .base_hi_graph_model import BaseHiGraphModel
 
 
@@ -27,7 +27,10 @@ class HiLAM(BaseHiGraphModel):
         num_past_forcing_steps: int = 1,
         num_future_forcing_steps: int = 1,
         output_std: bool = False,
-        vertical_propnets: bool = False,
+        g2m_gnn_type: str = "InteractionNet",
+        m2g_gnn_type: str = "InteractionNet",
+        mesh_up_gnn_type: str = "InteractionNet",
+        mesh_down_gnn_type: str = "InteractionNet",
     ):
         super().__init__(
             config=config,
@@ -40,7 +43,10 @@ class HiLAM(BaseHiGraphModel):
             num_past_forcing_steps=num_past_forcing_steps,
             num_future_forcing_steps=num_future_forcing_steps,
             output_std=output_std,
-            vertical_propnets=vertical_propnets,
+            g2m_gnn_type=g2m_gnn_type,
+            m2g_gnn_type=m2g_gnn_type,
+            mesh_up_gnn_type=mesh_up_gnn_type,
+            mesh_down_gnn_type=mesh_down_gnn_type,
         )
 
         # Make down GNNs, both for down edges and same level
@@ -78,11 +84,7 @@ class HiLAM(BaseHiGraphModel):
         """
         Make GNNs for processing steps up through the hierarchy.
         """
-        gnn_class = (
-            PropagationNet
-            if self.vertical_propnets
-            else InteractionNet
-        )
+        gnn_class = get_gnn_class(self.mesh_up_gnn_type)
         return nn.ModuleList(
             [
                 gnn_class(
@@ -98,9 +100,10 @@ class HiLAM(BaseHiGraphModel):
         """
         Make GNNs for processing steps down through the hierarchy.
         """
+        gnn_class = get_gnn_class(self.mesh_down_gnn_type)
         return nn.ModuleList(
             [
-                InteractionNet(
+                gnn_class(
                     edge_index,
                     self.hidden_dim,
                     hidden_layers=self.hidden_layers,

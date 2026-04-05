@@ -124,10 +124,32 @@ def main(input_args=None):
         "output dimensions",
     )
     parser.add_argument(
-        "--vertical_propnets",
-        action="store_true",
-        help="If PropagationNets should be used for all vertical "
-        "(grid-mesh and up/down) message passing",
+        "--g2m_gnn_type",
+        type=str,
+        default="InteractionNet",
+        help="GNN type for grid-to-mesh encoding "
+        "(e.g. InteractionNet, PropagationNet)",
+    )
+    parser.add_argument(
+        "--m2g_gnn_type",
+        type=str,
+        default="InteractionNet",
+        help="GNN type for mesh-to-grid decoding "
+        "(e.g. InteractionNet, PropagationNet)",
+    )
+    parser.add_argument(
+        "--mesh_up_gnn_type",
+        type=str,
+        default="InteractionNet",
+        help="GNN type for upward mesh message passing in hierarchical "
+        "models (e.g. InteractionNet, PropagationNet)",
+    )
+    parser.add_argument(
+        "--mesh_down_gnn_type",
+        type=str,
+        default="InteractionNet",
+        help="GNN type for downward mesh message passing in hierarchical "
+        "models (e.g. InteractionNet, PropagationNet)",
     )
 
     # Training options
@@ -301,7 +323,10 @@ def main(input_args=None):
         num_past_forcing_steps=args.num_past_forcing_steps,
         num_future_forcing_steps=args.num_future_forcing_steps,
         output_std=args.output_std,
-        vertical_propnets=args.vertical_propnets,
+        g2m_gnn_type=args.g2m_gnn_type,
+        m2g_gnn_type=args.m2g_gnn_type,
+        mesh_up_gnn_type=args.mesh_up_gnn_type,
+        mesh_down_gnn_type=args.mesh_down_gnn_type,
     )
     forecaster = ARForecaster(predictor, datastore)
 

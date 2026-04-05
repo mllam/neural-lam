@@ -33,7 +33,10 @@ def _make_fully_connected_edge_index(n_send, n_rec):
 
 
 def _build_model_and_data(datastore, config, model_name, graph_name,
-                          vertical_propnets=False):
+                          g2m_gnn_type="InteractionNet",
+                          m2g_gnn_type="InteractionNet",
+                          mesh_up_gnn_type="InteractionNet",
+                          mesh_down_gnn_type="InteractionNet"):
     """Helper to build a model and matching random input tensors."""
     num_past_forcing_steps = 1
     num_future_forcing_steps = 1
@@ -49,7 +52,10 @@ def _build_model_and_data(datastore, config, model_name, graph_name,
         num_past_forcing_steps=num_past_forcing_steps,
         num_future_forcing_steps=num_future_forcing_steps,
         output_std=False,
-        vertical_propnets=vertical_propnets,
+        g2m_gnn_type=g2m_gnn_type,
+        m2g_gnn_type=m2g_gnn_type,
+        mesh_up_gnn_type=mesh_up_gnn_type,
+        mesh_down_gnn_type=mesh_down_gnn_type,
     )
     forecaster = ARForecaster(predictor, datastore)
 
@@ -756,7 +762,7 @@ class TestNumericalStability:
 
 
 class TestDefaultBehaviorUnchanged:
-    """Tests that without vertical_propnets, models use InteractionNet
+    """Tests that with default GNN types, models use InteractionNet
     (backward compatibility). All tests use deterministic models only."""
 
     def test_base_graph_model_default_uses_interaction_net(self):
@@ -772,26 +778,42 @@ class TestDefaultBehaviorUnchanged:
         assert isinstance(predictor.m2g_gnn, InteractionNet)
         assert not isinstance(predictor.m2g_gnn, PropagationNet)
 
-    def test_base_graph_model_propnet_flag(self):
-        """With vertical_propnets=True, g2m/m2g should be PropagationNet."""
+    def test_base_graph_model_propnet_g2m_m2g(self):
+        """With PropagationNet for g2m/m2g, both should be PropagationNet."""
         datastore, config = _get_datastore_and_config("1level")
 
         _, predictor, _, _, _ = _build_model_and_data(
             datastore, config, "graph_lam", "1level",
-            vertical_propnets=True,
+            g2m_gnn_type="PropagationNet",
+            m2g_gnn_type="PropagationNet",
         )
 
         assert isinstance(predictor.g2m_gnn, PropagationNet)
         assert isinstance(predictor.m2g_gnn, PropagationNet)
 
-    def test_graph_lam_processor_always_interaction_net(self):
-        """GraphLAM processor GNNs should always be InteractionNet,
-        even with vertical_propnets=True."""
+    def test_base_graph_model_propnet_g2m_only(self):
+        """Setting only g2m to PropagationNet should leave m2g as
+        InteractionNet."""
         datastore, config = _get_datastore_and_config("1level")
 
         _, predictor, _, _, _ = _build_model_and_data(
             datastore, config, "graph_lam", "1level",
-            vertical_propnets=True,
+            g2m_gnn_type="PropagationNet",
+        )
+
+        assert isinstance(predictor.g2m_gnn, PropagationNet)
+        assert isinstance(predictor.m2g_gnn, InteractionNet)
+        assert not isinstance(predictor.m2g_gnn, PropagationNet)
+
+    def test_graph_lam_processor_always_interaction_net(self):
+        """GraphLAM processor GNNs should always be InteractionNet,
+        even with PropagationNet for g2m/m2g."""
+        datastore, config = _get_datastore_and_config("1level")
+
+        _, predictor, _, _, _ = _build_model_and_data(
+            datastore, config, "graph_lam", "1level",
+            g2m_gnn_type="PropagationNet",
+            m2g_gnn_type="PropagationNet",
         )
 
         # Check processor GNNs are InteractionNet (not PropagationNet)
@@ -800,9 +822,8 @@ class TestDefaultBehaviorUnchanged:
                 assert not isinstance(module, PropagationNet)
 
     def test_default_forward_pass_unchanged(self):
-        """A forward pass with default settings (no vertical_propnets)
-        should produce the same output as before the PropagationNet
-        addition, verified by deterministic seeding."""
+        """A forward pass with default GNN types should produce the same
+        output as another default run, verified by deterministic seeding."""
         datastore, config = _get_datastore_and_config("1level")
 
         torch.manual_seed(42)
@@ -824,7 +845,7 @@ class TestDefaultBehaviorUnchanged:
         assert torch.allclose(out_a, out_b)
 
     def test_propnet_forward_pass_differs(self):
-        """A forward pass with vertical_propnets=True should produce
+        """A forward pass with PropagationNet for g2m/m2g should produce
         different outputs than the default (InteractionNet)."""
         datastore, config = _get_datastore_and_config("1level")
 
@@ -838,7 +859,8 @@ class TestDefaultBehaviorUnchanged:
         torch.manual_seed(42)
         forecaster_prop, _, _, _, _ = _build_model_and_data(
             datastore, config, "graph_lam", "1level",
-            vertical_propnets=True,
+            g2m_gnn_type="PropagationNet",
+            m2g_gnn_type="PropagationNet",
         )
 
         with torch.no_grad():
@@ -856,7 +878,7 @@ class TestDefaultBehaviorUnchanged:
 
 
 class TestHierarchicalIntegration:
-    """Tests for PropagationNet in hierarchical deterministic models."""
+    """Tests for GNN type selection in hierarchical deterministic models."""
 
     def test_hilam_default_uses_interaction_net(self):
         """HiLAM should use InteractionNet for all GNNs by default."""
@@ -883,15 +905,17 @@ class TestHierarchicalIntegration:
                 assert isinstance(gnn, InteractionNet)
                 assert not isinstance(gnn, PropagationNet)
 
-    def test_hilam_propnet_flag_affects_vertical_gnns(self):
-        """With vertical_propnets=True, HiLAM should use PropagationNet
-        for mesh_init_gnns and mesh_up_gnns, but InteractionNet for
-        mesh_down_gnns and same-level GNNs."""
+    def test_hilam_propnet_for_vertical_gnns(self):
+        """With PropagationNet for g2m, m2g, and mesh_up, HiLAM should use
+        PropagationNet for those while keeping mesh_down and same-level
+        as InteractionNet."""
         datastore, config = _get_datastore_and_config("hierarchical")
 
         _, predictor, _, _, _ = _build_model_and_data(
             datastore, config, "hi_lam", "hierarchical",
-            vertical_propnets=True,
+            g2m_gnn_type="PropagationNet",
+            m2g_gnn_type="PropagationNet",
+            mesh_up_gnn_type="PropagationNet",
         )
 
         # g2m and m2g should be PropagationNet
@@ -907,7 +931,7 @@ class TestHierarchicalIntegration:
             for gnn in up_gnn_list:
                 assert isinstance(gnn, PropagationNet)
 
-        # mesh_down_gnns should ALWAYS be InteractionNet (not PropagationNet)
+        # mesh_down_gnns should still be InteractionNet (default)
         for down_gnn_list in predictor.mesh_down_gnns:
             for gnn in down_gnn_list:
                 assert isinstance(gnn, InteractionNet)
@@ -923,9 +947,32 @@ class TestHierarchicalIntegration:
                 assert isinstance(gnn, InteractionNet)
                 assert not isinstance(gnn, PropagationNet)
 
+    def test_hilam_propnet_mesh_down(self):
+        """Setting mesh_down_gnn_type to PropagationNet should affect
+        mesh_down_gnns and mesh_read_gnns."""
+        datastore, config = _get_datastore_and_config("hierarchical")
+
+        _, predictor, _, _, _ = _build_model_and_data(
+            datastore, config, "hi_lam", "hierarchical",
+            mesh_down_gnn_type="PropagationNet",
+        )
+
+        # mesh_down_gnns should be PropagationNet
+        for down_gnn_list in predictor.mesh_down_gnns:
+            for gnn in down_gnn_list:
+                assert isinstance(gnn, PropagationNet)
+
+        # mesh_read_gnns should also be PropagationNet
+        for gnn in predictor.mesh_read_gnns:
+            assert isinstance(gnn, PropagationNet)
+
+        # g2m and m2g should still be InteractionNet (default)
+        assert isinstance(predictor.g2m_gnn, InteractionNet)
+        assert not isinstance(predictor.g2m_gnn, PropagationNet)
+
     def test_hilam_propnet_forward_pass_differs(self):
-        """HiLAM with vertical_propnets=True should produce different
-        outputs than the default."""
+        """HiLAM with PropagationNet for vertical GNNs should produce
+        different outputs than the default."""
         datastore, config = _get_datastore_and_config("hierarchical")
 
         torch.manual_seed(42)
@@ -938,7 +985,9 @@ class TestHierarchicalIntegration:
         torch.manual_seed(42)
         forecaster_prop, _, _, _, _ = _build_model_and_data(
             datastore, config, "hi_lam", "hierarchical",
-            vertical_propnets=True,
+            g2m_gnn_type="PropagationNet",
+            m2g_gnn_type="PropagationNet",
+            mesh_up_gnn_type="PropagationNet",
         )
 
         with torch.no_grad():
@@ -949,13 +998,15 @@ class TestHierarchicalIntegration:
 
         assert not torch.allclose(out_default, out_prop)
 
-    def test_hilam_parallel_propnet_flag(self):
-        """HiLAMParallel should also support vertical_propnets flag."""
+    def test_hilam_parallel_gnn_type_selection(self):
+        """HiLAMParallel should support GNN type selection."""
         datastore, config = _get_datastore_and_config("hierarchical")
 
         _, predictor, _, _, _ = _build_model_and_data(
             datastore, config, "hi_lam_parallel", "hierarchical",
-            vertical_propnets=True,
+            g2m_gnn_type="PropagationNet",
+            m2g_gnn_type="PropagationNet",
+            mesh_up_gnn_type="PropagationNet",
         )
 
         # g2m and m2g should be PropagationNet
@@ -966,14 +1017,14 @@ class TestHierarchicalIntegration:
         for gnn in predictor.mesh_init_gnns:
             assert isinstance(gnn, PropagationNet)
 
-    def test_hilam_read_gnns_always_interaction_net(self):
-        """mesh_read_gnns should always be InteractionNet, even with
-        vertical_propnets=True."""
+    def test_hilam_read_gnns_respect_mesh_down_type(self):
+        """mesh_read_gnns should use the mesh_down_gnn_type."""
         datastore, config = _get_datastore_and_config("hierarchical")
 
+        # Default: mesh_read_gnns should be InteractionNet
         _, predictor, _, _, _ = _build_model_and_data(
             datastore, config, "hi_lam", "hierarchical",
-            vertical_propnets=True,
+            mesh_up_gnn_type="PropagationNet",
         )
 
         for gnn in predictor.mesh_read_gnns:

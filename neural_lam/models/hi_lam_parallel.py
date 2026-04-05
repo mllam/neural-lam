@@ -30,7 +30,10 @@ class HiLAMParallel(BaseHiGraphModel):
         num_past_forcing_steps: int = 1,
         num_future_forcing_steps: int = 1,
         output_std: bool = False,
-        vertical_propnets: bool = False,
+        g2m_gnn_type: str = "InteractionNet",
+        m2g_gnn_type: str = "InteractionNet",
+        mesh_up_gnn_type: str = "InteractionNet",
+        mesh_down_gnn_type: str = "InteractionNet",
     ):
         super().__init__(
             config=config,
@@ -43,7 +46,10 @@ class HiLAMParallel(BaseHiGraphModel):
             num_past_forcing_steps=num_past_forcing_steps,
             num_future_forcing_steps=num_future_forcing_steps,
             output_std=output_std,
-            vertical_propnets=vertical_propnets,
+            g2m_gnn_type=g2m_gnn_type,
+            m2g_gnn_type=m2g_gnn_type,
+            mesh_up_gnn_type=mesh_up_gnn_type,
+            mesh_down_gnn_type=mesh_down_gnn_type,
         )
 
         # Processor GNNs
