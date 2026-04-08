@@ -9,9 +9,9 @@
 #
 # To test both CPU and GPU installations with both UV and pip we use two sets
 # of hosts to run the training on:
-# - ubuntu-latest for CPU and for PR GPU validation: these are on github
-# - cirun-aws-runner--${{ github.run_id }} for non-PR GPU runs: these are on
-#   AWS, orchestrated by cirun.io
+# - ubuntu-latest for CPU: these are on github
+# - cirun-aws-runner--${{ github.run_id }} for GPU: these are on AWS,
+#   orchestrated by cirun.io
 #
 # To enable installing different pytorch variants we use an approach where we
 # first install a specific torch version (and variant), and then install neural-lam.
@@ -26,15 +26,17 @@ on: [push, pull_request, workflow_dispatch]
 
 jobs:
   tests:
-    runs-on: ${{ matrix.device == 'gpu' && github.event_name != 'pull_request' && format('cirun-aws-runner--{0}', github.run_id) || 'ubuntu-latest' }}
+    runs-on: ${{ matrix.runner }}
     strategy:
       matrix:
         package_manager: [pip, uv]
         device: [cpu, gpu]
         include:
           - device: cpu
+            runner: ubuntu-latest
             torch_index: https://download.pytorch.org/whl/cpu
           - device: gpu
+            runner: "cirun-aws-runner--${{ github.run_id }}"
             torch_index: https://download.pytorch.org/whl/cu128
 
     steps:
@@ -51,7 +53,7 @@ jobs:
         uses: astral-sh/setup-uv@v7
 
       - name: Create virtual environment (pip GPU)
-        if: matrix.package_manager == 'pip' && matrix.device == 'gpu' && github.event_name != 'pull_request'
+        if: matrix.package_manager == 'pip' && matrix.device == 'gpu'
         run: |
           # venv must be made on nvme drive, otherwise we run out of space
           python -m venv /opt/dlami/nvme/venv
