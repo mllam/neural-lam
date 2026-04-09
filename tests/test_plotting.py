@@ -144,9 +144,7 @@ def test_plot_examples_integration_saves_figure(
 
     # Generate prediction
     (init_states, target, forcing_features, _batch_times) = batch
-    prediction, _ = model.forecaster(
-        init_states, forcing_features, target
-    )
+    prediction, _ = model.forecaster(init_states, forcing_features, target)
 
     # Rescale to original data scale
     da_state_stats = datastore.get_standardization_dataarray("state")

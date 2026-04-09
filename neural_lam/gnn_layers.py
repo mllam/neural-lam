@@ -184,9 +184,7 @@ class PropagationNet(InteractionNet):
         """
         # Residual connection is to sender node, propagating information
         # to edge
-        return x_j + self.edge_mlp(
-            torch.cat((edge_attr, x_j, x_i), dim=-1)
-        )
+        return x_j + self.edge_mlp(torch.cat((edge_attr, x_j, x_i), dim=-1))
 
 
 GNN_TYPES = {

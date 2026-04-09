@@ -370,8 +370,10 @@ def test_fold_unfold_equivalence():
     # Run each sample independently and stack
     with torch.no_grad():
         pred_explicit = torch.stack(
-            [forecaster(init_states[s], forcing[s], boundary[s])[0]
-             for s in range(S)]
+            [
+                forecaster(init_states[s], forcing[s], boundary[s])[0]
+                for s in range(S)
+            ]
         )
 
     assert torch.allclose(pred_folded, pred_explicit)

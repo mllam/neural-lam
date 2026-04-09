@@ -7,7 +7,7 @@ import torch
 # First-party
 from neural_lam import config as nlconfig
 from neural_lam.create_graph import create_graph_from_datastore
-from neural_lam.interaction_net import InteractionNet, PropagationNet
+from neural_lam.gnn_layers import InteractionNet, PropagationNet
 from neural_lam.models import MODELS
 from neural_lam.models.ar_forecaster import ARForecaster
 from tests.conftest import init_datastore_example
@@ -32,11 +32,16 @@ def _make_fully_connected_edge_index(n_send, n_rec):
     return torch.stack([senders, receivers])
 
 
-def _build_model_and_data(datastore, config, model_name, graph_name,
-                          g2m_gnn_type="InteractionNet",
-                          m2g_gnn_type="InteractionNet",
-                          mesh_up_gnn_type="InteractionNet",
-                          mesh_down_gnn_type="InteractionNet"):
+def _build_model_and_data(
+    datastore,
+    config,
+    model_name,
+    graph_name,
+    g2m_gnn_type="InteractionNet",
+    m2g_gnn_type="InteractionNet",
+    mesh_up_gnn_type="InteractionNet",
+    mesh_down_gnn_type="InteractionNet",
+):
     """Helper to build a model and matching random input tensors."""
     num_past_forcing_steps = 1
     num_future_forcing_steps = 1
@@ -107,9 +112,9 @@ def _get_datastore_and_config(graph_name):
     return datastore, config
 
 
-# 
+#
 # Section A: Structural Tests
-# 
+#
 
 
 class TestPropagationNetStructure:
@@ -130,9 +135,7 @@ class TestPropagationNetStructure:
         """InteractionNet should use whatever aggregation is passed."""
         edge_index = _make_edge_index(5, 4, 10)
         net_sum = InteractionNet(edge_index.clone(), input_dim=8, aggr="sum")
-        net_mean = InteractionNet(
-            edge_index.clone(), input_dim=8, aggr="mean"
-        )
+        net_mean = InteractionNet(edge_index.clone(), input_dim=8, aggr="mean")
         assert net_sum.aggr == "sum"
         assert net_mean.aggr == "mean"
 
@@ -167,9 +170,9 @@ class TestPropagationNetStructure:
         assert stored_ei[0].min() >= pnet.num_rec
 
 
-# 
+#
 # Section B: Forward Pass Correctness
-# 
+#
 
 
 class TestPropagationNetForwardPass:
@@ -217,9 +220,7 @@ class TestPropagationNetForwardPass:
         edge_index = _make_fully_connected_edge_index(n_send, n_rec)
         n_edges = edge_index.shape[1]
 
-        pnet = PropagationNet(
-            edge_index, input_dim=d_h, update_edges=True
-        )
+        pnet = PropagationNet(edge_index, input_dim=d_h, update_edges=True)
 
         # Zero out edge MLP so edge_mlp(...) = 0
         # Then message = x_j + 0 = x_j
@@ -252,9 +253,7 @@ class TestPropagationNetForwardPass:
         n_send, n_rec, n_edges, d_h = 3, 2, 6, 4
         edge_index = _make_edge_index(n_send, n_rec, n_edges)
 
-        pnet = PropagationNet(
-            edge_index, input_dim=d_h, update_edges=False
-        )
+        pnet = PropagationNet(edge_index, input_dim=d_h, update_edges=False)
 
         # Zero out aggr_mlp so aggr_mlp(...) = 0
         # Then rec_new = agg_msgs + 0 = agg_msgs (for PropagationNet)
@@ -309,9 +308,9 @@ class TestPropagationNetForwardPass:
         assert not torch.allclose(i_rec, p_rec)
 
 
-# 
+#
 # Section C: Edge Update Behavior
-# 
+#
 
 
 class TestEdgeUpdateBehavior:
@@ -321,9 +320,7 @@ class TestEdgeUpdateBehavior:
         """update_edges=True should return (rec_rep, edge_rep) tuple."""
         n_send, n_rec, n_edges, d_h = 5, 4, 10, 8
         edge_index = _make_edge_index(n_send, n_rec, n_edges)
-        pnet = PropagationNet(
-            edge_index, input_dim=d_h, update_edges=True
-        )
+        pnet = PropagationNet(edge_index, input_dim=d_h, update_edges=True)
 
         send_rep = torch.randn(n_send, d_h)
         rec_rep = torch.randn(n_rec, d_h)
@@ -338,9 +335,7 @@ class TestEdgeUpdateBehavior:
         """update_edges=False should return only rec_rep tensor."""
         n_send, n_rec, n_edges, d_h = 5, 4, 10, 8
         edge_index = _make_edge_index(n_send, n_rec, n_edges)
-        pnet = PropagationNet(
-            edge_index, input_dim=d_h, update_edges=False
-        )
+        pnet = PropagationNet(edge_index, input_dim=d_h, update_edges=False)
 
         send_rep = torch.randn(n_send, d_h)
         rec_rep = torch.randn(n_rec, d_h)
@@ -356,9 +351,7 @@ class TestEdgeUpdateBehavior:
         n_send, n_rec, n_edges, d_h = 5, 4, 10, 8
         edge_index = _make_edge_index(n_send, n_rec, n_edges)
 
-        pnet = PropagationNet(
-            edge_index, input_dim=d_h, update_edges=True
-        )
+        pnet = PropagationNet(edge_index, input_dim=d_h, update_edges=True)
 
         torch.manual_seed(42)
         send_rep = torch.randn(n_send, d_h)
@@ -380,9 +373,9 @@ class TestEdgeUpdateBehavior:
         assert torch.allclose(edge_out, expected_edge_out, atol=1e-5)
 
 
-# 
+#
 # Section D: Batched Processing
-# 
+#
 
 
 class TestBatchedProcessing:
@@ -393,9 +386,7 @@ class TestBatchedProcessing:
         n_send, n_rec, n_edges, d_h, B = 5, 4, 10, 8, 3
         edge_index = _make_edge_index(n_send, n_rec, n_edges)
 
-        pnet = PropagationNet(
-            edge_index, input_dim=d_h, update_edges=True
-        )
+        pnet = PropagationNet(edge_index, input_dim=d_h, update_edges=True)
 
         torch.manual_seed(42)
         send_rep = torch.randn(B, n_send, d_h)
@@ -411,9 +402,7 @@ class TestBatchedProcessing:
         n_send, n_rec, n_edges, d_h = 5, 4, 10, 8
         edge_index = _make_edge_index(n_send, n_rec, n_edges)
 
-        pnet = PropagationNet(
-            edge_index, input_dim=d_h, update_edges=False
-        )
+        pnet = PropagationNet(edge_index, input_dim=d_h, update_edges=False)
 
         torch.manual_seed(42)
         send_rep_0 = torch.randn(1, n_send, d_h)
@@ -439,9 +428,9 @@ class TestBatchedProcessing:
         assert torch.allclose(out_batch[1], out_1[0], atol=1e-6)
 
 
-# 
+#
 # Section E: Chunk/Split MLP Support
-# 
+#
 
 
 class TestChunkSupport:
@@ -502,9 +491,9 @@ class TestChunkSupport:
         assert not torch.allclose(out_plain, out_chunked)
 
 
-# 
+#
 # Section F: Gradient Flow
-# 
+#
 
 
 class TestGradientFlow:
@@ -515,9 +504,7 @@ class TestGradientFlow:
         n_send, n_rec, n_edges, d_h = 5, 4, 10, 8
         edge_index = _make_edge_index(n_send, n_rec, n_edges)
 
-        pnet = PropagationNet(
-            edge_index, input_dim=d_h, update_edges=False
-        )
+        pnet = PropagationNet(edge_index, input_dim=d_h, update_edges=False)
 
         send_rep = torch.randn(n_send, d_h, requires_grad=True)
         rec_rep = torch.randn(n_rec, d_h, requires_grad=True)
@@ -537,9 +524,7 @@ class TestGradientFlow:
         n_send, n_rec, n_edges, d_h = 3, 2, 6, 4
         edge_index = _make_edge_index(n_send, n_rec, n_edges)
 
-        pnet = PropagationNet(
-            edge_index, input_dim=d_h, update_edges=False
-        )
+        pnet = PropagationNet(edge_index, input_dim=d_h, update_edges=False)
 
         send_rep = torch.randn(n_send, d_h, requires_grad=True)
         rec_rep = torch.randn(n_rec, d_h, requires_grad=True)
@@ -574,9 +559,7 @@ class TestGradientFlow:
         n_send, n_rec, n_edges, d_h = 5, 4, 10, 8
         edge_index = _make_edge_index(n_send, n_rec, n_edges)
 
-        pnet = PropagationNet(
-            edge_index, input_dim=d_h, update_edges=True
-        )
+        pnet = PropagationNet(edge_index, input_dim=d_h, update_edges=True)
 
         send_rep = torch.randn(n_send, d_h, requires_grad=True)
         rec_rep = torch.randn(n_rec, d_h, requires_grad=True)
@@ -591,9 +574,9 @@ class TestGradientFlow:
         assert edge_rep.grad.abs().sum() > 0
 
 
-# 
+#
 # Section G: Graph Structure Compatibility
-# 
+#
 
 
 class TestGraphStructureCompatibility:
@@ -606,9 +589,7 @@ class TestGraphStructureCompatibility:
         n_edges = 200
         edge_index = _make_edge_index(n_send, n_rec, n_edges)
 
-        pnet = PropagationNet(
-            edge_index, input_dim=d_h, update_edges=False
-        )
+        pnet = PropagationNet(edge_index, input_dim=d_h, update_edges=False)
 
         send_rep = torch.randn(n_send, d_h)
         rec_rep = torch.randn(n_rec, d_h)
@@ -623,9 +604,7 @@ class TestGraphStructureCompatibility:
         d_h = 8
         edge_index = torch.tensor([[0], [0]])
 
-        pnet = PropagationNet(
-            edge_index, input_dim=d_h, update_edges=False
-        )
+        pnet = PropagationNet(edge_index, input_dim=d_h, update_edges=False)
 
         send_rep = torch.randn(1, d_h)
         rec_rep = torch.randn(1, d_h)
@@ -645,9 +624,7 @@ class TestGraphStructureCompatibility:
         # Receivers 0 and 2 get edges, receiver 1 is disconnected
         edge_index = torch.tensor([[0, 1], [0, 2]])
 
-        pnet = PropagationNet(
-            edge_index, input_dim=d_h, update_edges=False
-        )
+        pnet = PropagationNet(edge_index, input_dim=d_h, update_edges=False)
 
         torch.manual_seed(42)
         send_rep = torch.randn(2, d_h)
@@ -663,9 +640,7 @@ class TestGraphStructureCompatibility:
         # Disconnected receiver: agg_msgs = 0, so
         # rec_new = 0 + aggr_mlp(cat(rec_rep[1], 0))
         zeros = torch.zeros(d_h)
-        expected = zeros + pnet.aggr_mlp(
-            torch.cat((rec_rep[1], zeros), dim=-1)
-        )
+        expected = zeros + pnet.aggr_mlp(torch.cat((rec_rep[1], zeros), dim=-1))
         assert torch.allclose(out[1], expected, atol=1e-6)
 
     def test_self_loops(self):
@@ -677,9 +652,7 @@ class TestGraphStructureCompatibility:
         indices = torch.arange(n_nodes)
         edge_index = torch.stack([indices, indices])
 
-        pnet = PropagationNet(
-            edge_index, input_dim=d_h, update_edges=False
-        )
+        pnet = PropagationNet(edge_index, input_dim=d_h, update_edges=False)
 
         send_rep = torch.randn(n_nodes, d_h)
         rec_rep = torch.randn(n_nodes, d_h)
@@ -690,9 +663,9 @@ class TestGraphStructureCompatibility:
         assert torch.isfinite(out).all()
 
 
-# 
+#
 # Section H: Numerical Stability
-# 
+#
 
 
 class TestNumericalStability:
@@ -727,12 +700,12 @@ class TestNumericalStability:
                 send_rep, current_rec, current_edge
             )
 
-        assert torch.isfinite(current_rec).all(), (
-            "Receiver reps contain non-finite values after deep stacking"
-        )
-        assert torch.isfinite(current_edge).all(), (
-            "Edge reps contain non-finite values after deep stacking"
-        )
+        assert torch.isfinite(
+            current_rec
+        ).all(), "Receiver reps contain non-finite values after deep stacking"
+        assert torch.isfinite(
+            current_edge
+        ).all(), "Edge reps contain non-finite values after deep stacking"
 
     def test_high_degree_stability(self):
         """With many incoming edges per receiver, mean aggregation should
@@ -742,9 +715,7 @@ class TestNumericalStability:
         n_edges = 500
         edge_index = _make_edge_index(n_send, n_rec, n_edges)
 
-        pnet = PropagationNet(
-            edge_index, input_dim=d_h, update_edges=False
-        )
+        pnet = PropagationNet(edge_index, input_dim=d_h, update_edges=False)
 
         send_rep = torch.randn(n_send, d_h)
         rec_rep = torch.randn(n_rec, d_h)
@@ -756,9 +727,9 @@ class TestNumericalStability:
         assert out.abs().max() < 1000
 
 
-# 
+#
 # Section I: Model-Level Integration (Deterministic Models)
-# 
+#
 
 
 class TestDefaultBehaviorUnchanged:
@@ -783,7 +754,10 @@ class TestDefaultBehaviorUnchanged:
         datastore, config = _get_datastore_and_config("1level")
 
         _, predictor, _, _, _ = _build_model_and_data(
-            datastore, config, "graph_lam", "1level",
+            datastore,
+            config,
+            "graph_lam",
+            "1level",
             g2m_gnn_type="PropagationNet",
             m2g_gnn_type="PropagationNet",
         )
@@ -797,7 +771,10 @@ class TestDefaultBehaviorUnchanged:
         datastore, config = _get_datastore_and_config("1level")
 
         _, predictor, _, _, _ = _build_model_and_data(
-            datastore, config, "graph_lam", "1level",
+            datastore,
+            config,
+            "graph_lam",
+            "1level",
             g2m_gnn_type="PropagationNet",
         )
 
@@ -811,7 +788,10 @@ class TestDefaultBehaviorUnchanged:
         datastore, config = _get_datastore_and_config("1level")
 
         _, predictor, _, _, _ = _build_model_and_data(
-            datastore, config, "graph_lam", "1level",
+            datastore,
+            config,
+            "graph_lam",
+            "1level",
             g2m_gnn_type="PropagationNet",
             m2g_gnn_type="PropagationNet",
         )
@@ -827,10 +807,8 @@ class TestDefaultBehaviorUnchanged:
         datastore, config = _get_datastore_and_config("1level")
 
         torch.manual_seed(42)
-        forecaster_a, _, init_states, forcing, boundary = (
-            _build_model_and_data(
-                datastore, config, "graph_lam", "1level"
-            )
+        forecaster_a, _, init_states, forcing, boundary = _build_model_and_data(
+            datastore, config, "graph_lam", "1level"
         )
 
         torch.manual_seed(42)
@@ -851,30 +829,29 @@ class TestDefaultBehaviorUnchanged:
 
         torch.manual_seed(42)
         forecaster_default, _, init_states, forcing, boundary = (
-            _build_model_and_data(
-                datastore, config, "graph_lam", "1level"
-            )
+            _build_model_and_data(datastore, config, "graph_lam", "1level")
         )
 
         torch.manual_seed(42)
         forecaster_prop, _, _, _, _ = _build_model_and_data(
-            datastore, config, "graph_lam", "1level",
+            datastore,
+            config,
+            "graph_lam",
+            "1level",
             g2m_gnn_type="PropagationNet",
             m2g_gnn_type="PropagationNet",
         )
 
         with torch.no_grad():
-            out_default, _ = forecaster_default(
-                init_states, forcing, boundary
-            )
+            out_default, _ = forecaster_default(init_states, forcing, boundary)
             out_prop, _ = forecaster_prop(init_states, forcing, boundary)
 
         assert not torch.allclose(out_default, out_prop)
 
 
-# 
+#
 # Section J: Hierarchical Model Integration
-# 
+#
 
 
 class TestHierarchicalIntegration:
@@ -912,7 +889,10 @@ class TestHierarchicalIntegration:
         datastore, config = _get_datastore_and_config("hierarchical")
 
         _, predictor, _, _, _ = _build_model_and_data(
-            datastore, config, "hi_lam", "hierarchical",
+            datastore,
+            config,
+            "hi_lam",
+            "hierarchical",
             g2m_gnn_type="PropagationNet",
             m2g_gnn_type="PropagationNet",
             mesh_up_gnn_type="PropagationNet",
@@ -953,7 +933,10 @@ class TestHierarchicalIntegration:
         datastore, config = _get_datastore_and_config("hierarchical")
 
         _, predictor, _, _, _ = _build_model_and_data(
-            datastore, config, "hi_lam", "hierarchical",
+            datastore,
+            config,
+            "hi_lam",
+            "hierarchical",
             mesh_down_gnn_type="PropagationNet",
         )
 
@@ -977,23 +960,22 @@ class TestHierarchicalIntegration:
 
         torch.manual_seed(42)
         forecaster_default, _, init_states, forcing, boundary = (
-            _build_model_and_data(
-                datastore, config, "hi_lam", "hierarchical"
-            )
+            _build_model_and_data(datastore, config, "hi_lam", "hierarchical")
         )
 
         torch.manual_seed(42)
         forecaster_prop, _, _, _, _ = _build_model_and_data(
-            datastore, config, "hi_lam", "hierarchical",
+            datastore,
+            config,
+            "hi_lam",
+            "hierarchical",
             g2m_gnn_type="PropagationNet",
             m2g_gnn_type="PropagationNet",
             mesh_up_gnn_type="PropagationNet",
         )
 
         with torch.no_grad():
-            out_default, _ = forecaster_default(
-                init_states, forcing, boundary
-            )
+            out_default, _ = forecaster_default(init_states, forcing, boundary)
             out_prop, _ = forecaster_prop(init_states, forcing, boundary)
 
         assert not torch.allclose(out_default, out_prop)
@@ -1003,7 +985,10 @@ class TestHierarchicalIntegration:
         datastore, config = _get_datastore_and_config("hierarchical")
 
         _, predictor, _, _, _ = _build_model_and_data(
-            datastore, config, "hi_lam_parallel", "hierarchical",
+            datastore,
+            config,
+            "hi_lam_parallel",
+            "hierarchical",
             g2m_gnn_type="PropagationNet",
             m2g_gnn_type="PropagationNet",
             mesh_up_gnn_type="PropagationNet",
@@ -1023,7 +1008,10 @@ class TestHierarchicalIntegration:
 
         # Default: mesh_read_gnns should be InteractionNet
         _, predictor, _, _, _ = _build_model_and_data(
-            datastore, config, "hi_lam", "hierarchical",
+            datastore,
+            config,
+            "hi_lam",
+            "hierarchical",
             mesh_up_gnn_type="PropagationNet",
         )
 

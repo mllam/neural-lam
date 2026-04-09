@@ -540,9 +540,7 @@ class ForecasterModule(pl.LightningModule):
                     self.logger.log_image(key=key, images=[fig])
 
             pdf_loss_map_figs = [
-                vis.plot_spatial_error(
-                    error=loss_map, datastore=self.datastore
-                )
+                vis.plot_spatial_error(error=loss_map, datastore=self.datastore)
                 for loss_map in mean_spatial_loss
             ]
             pdf_loss_maps_dir = os.path.join(

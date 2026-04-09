@@ -14,7 +14,7 @@ from loguru import logger
 # Local
 from . import utils
 from .config import load_config_and_datastore
-from .interaction_net import GNN_TYPES
+from .gnn_layers import GNN_TYPES
 from .models import MODELS, ForecasterModule
 from .models.ar_forecaster import ARForecaster
 from .weather_dataset import WeatherDataModule
@@ -150,7 +150,8 @@ def main(input_args=None):
         type=str,
         default="InteractionNet",
         choices=list(GNN_TYPES.keys()),
-        help="GNN type for downward mesh message passing in hierarchical models",
+        help="GNN type for downward mesh message passing in "
+        "hierarchical models",
     )
 
     # Training options

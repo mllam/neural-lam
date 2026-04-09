@@ -5,7 +5,7 @@ import torch_geometric as pyg
 from .. import utils
 from ..config import NeuralLAMConfig
 from ..datastore import BaseDatastore
-from ..interaction_net import InteractionNet
+from ..gnn_layers import InteractionNet
 from .base_graph_model import BaseGraphModel
 
 

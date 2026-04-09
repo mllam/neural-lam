@@ -5,7 +5,7 @@ from torch import nn
 from .. import utils
 from ..config import NeuralLAMConfig
 from ..datastore import BaseDatastore
-from ..interaction_net import get_gnn_class
+from ..gnn_layers import get_gnn_class
 from .base_graph_model import BaseGraphModel
 
 
