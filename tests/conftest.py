@@ -101,7 +101,7 @@ DATASTORES_EXAMPLES = dict(
         / "danra_100m_winds"
         / "danra.datastore.yaml"
     ),
-    npyfilesmeps=download_meps_example_reduced_dataset(),
+    npyfilesmeps=None,
     dummydata=None,
 )
 
@@ -109,6 +109,14 @@ DATASTORES[DummyDatastore.SHORT_NAME] = DummyDatastore
 
 
 def init_datastore_example(datastore_kind):
+    if (
+        datastore_kind == "npyfilesmeps"
+        and DATASTORES_EXAMPLES["npyfilesmeps"] is None
+    ):
+        DATASTORES_EXAMPLES["npyfilesmeps"] = (
+            download_meps_example_reduced_dataset()
+        )
+
     datastore = init_datastore(
         datastore_kind=datastore_kind,
         config_path=DATASTORES_EXAMPLES[datastore_kind],
