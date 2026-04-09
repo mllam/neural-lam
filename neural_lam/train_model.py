@@ -3,7 +3,7 @@ import json
 import random
 import time
 from argparse import ArgumentDefaultsHelpFormatter, ArgumentParser
-
+import os
 # Third-party
 # for logging the model:
 import pytorch_lightning as pl
@@ -316,25 +316,54 @@ def main(input_args=None):
             f"{time.strftime('%m_%d_%H')}-{random_run_id:04d}"
         )
 
+
+    run_dir = f"runs/{run_name}"
+    os.makedirs(run_dir, exist_ok=True)
+
     training_logger = utils.setup_training_logger(
-        datastore=datastore, args=args, run_name=run_name
+        datastore=datastore, args=args, run_name=run_name , run_dir=run_dir
     )
 
+
+   
+   
+
     checkpoint_callback = pl.callbacks.ModelCheckpoint(
-        dirpath=f"saved_models/{run_name}",
+        dirpath= run_dir,
         filename="min_val_loss",
         monitor="val_mean_loss",
         mode="min",
         save_last=True,
     )
+    csv_logger = pl.loggers.CSVLogger(
+    save_dir=run_dir,
+    name="lightning_logs"
+    )
+    if args.devices == ["auto"]:
+        devices = "auto" # Let Lightning decide CPU/GPU automatically.
+    else:
+        devices = [int(d) for d in args.devices]   # conver device ids from string -> int.
+
+    # GPU will be used if CUDA is available, otherwise fallback to CPU.
+    accelerator = "gpu" if torch.cuda.is_available() else "cpu"
+    
+    # Select appropriate distributed strategy .
+    # DDP should only be used when multiple GPUs are requested.
+    if accelerator == "gpu" and isinstance(devices, list) and len(devices) > 1:
+        strategy = "ddp"
+    else:
+        strategy = "auto"
+
+
     trainer = pl.Trainer(
+        default_root_dir =run_dir,
         max_epochs=args.epochs,
         deterministic=True,
-        strategy="ddp",
-        accelerator=device_name,
+        strategy=strategy,
+        accelerator= accelerator,
         num_nodes=args.num_nodes,
-        devices=devices,
-        logger=training_logger,
+        devices= devices,
+        logger=[training_logger,csv_logger],
         log_every_n_steps=1,
         callbacks=[checkpoint_callback],
         check_val_every_n_epoch=args.val_interval,
