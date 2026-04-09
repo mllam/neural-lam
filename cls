@@ -1,0 +1,102 @@
+[33m7d36175[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mmain[m[33m)[m plotting crash fix
+[33mf030d73[m Constructor update and fix save_dir and fix MLflow tracking
+[33mbf1102a[m Wandb logger and MLflow logger into runs  also add fallback in Mlflow logger
+[33m1295b0c[m set run directory into Trainer and ModelCheckpoin path change.
+[33mcedc8ab[m feat: replace rank_zero_print with loguru logger (#33) (#191)
+[33m73ecd68[m Remove shell=True to prevent command injection in compute_standardization_stats (#264)
+[33m92663cf[m fix: avoid NaN when standardizing fields with zero std #136  (#189)
+[33m5e66e61[m Migrate build backend from PDM to setuptools (#213)
+[33m6fd328a[m feat: expose wandb.init resume and id arguments in train_model (#197)
+[33m268449e[m feat: enable pin_memory in DataLoaders for async GPU transfers (#236)
+[33m3d5d56b[m Stop hardcoding names of Cartesian coords (#169)
+[33m210a969[m Fix time step unit in plot title formatting (#204)
+[33m0387fea[m Fix Slack link in README.md (#288)
+[33mfa45696[m Fix/fractional plot bundle (#222)
+[33m4826d66[m fix: disable persistent_workers when num_workers is 0 (#235)
+[33m3ed60f2[m Fix README images on PyPI page (#188)
+[33m8d2f32c[m [maint] Fix caching of meps example data (#181)
+[33m60b233c[m [maint] run full test suite only with uv package manager (#178)
+[33m113a1bf[m Update PR template to clarify milestone/roadmap requirement and maintenance changes (#186)
+[33mfacf4ce[m [Feat] generalize step length (#172)
+[33m4fb6cf7[m [Maint] update tests to use recent python versions (#173)
+[33m3ecbbf1[m [Maint] Exclude dev deps from build (#174)
+[33m6a74464[m Prepare v0.5.0 release  (#180)
+[33m886c653[m [Maint] Replace deprecated pynvml with nvidia-ml-py in dependencies (#176)
+[33mce5ede0[m Add workflow_dispatch trigger to CI workflow (#152)
+[33m25b72c8[m Add command line argument to overwrite run name (#156)
+[33m3258a70[m Add link to full MEPS dataset (#102)
+[33m2fbb831[m Change Slack invite link to new URL (#175)
+[33m380a8f5[m Update Slack badge link in README.md (#170)
+[33m5f5f059[m Implement more robust LaTeX availability check function (#162)
+[33m579efc8[m Add mypy testing (#113)
+[33m5968d34[m Update MEPS example link in readme (#155)
+[33m4d8acea[m Fix torch version detect for pdm in CI (#154)
+[33m78a7b1f[m revise the order bug in create_graph (#150)
+[33m5c60fa7[m Fix crash when running with --output_std (#147)
+[33m21a8082[m Change default logging argument to prevent crash when running eval (#145)
+[33m0e9c2cc[m Prepare v0.4.0 release (#142)
+[33m1d1095a[m Calculate step length properly (#141)
+[33m7d54734[m Use correct --eval data split (#139)
+[33m876f210[m add package build and upload to pypi for releases into ci/cd setup (#71)
+[33m3f8e3ba[m Fix cicd tests (#140)
+[33mada9c16[m updated cicd badges with new test matrix (#130)
+[33m465f404[m Dynamic versioning (#118)
+[33m43524f7[m use nvme store for venv on aws-gpu with pip (#126)
+[33m1c281a2[m Standardize state diff stats in mdp datastore. Change variable name. (#122)
+[33m0541f88[m add detect_anomaly in test_training.py (#124)
+[33m103c8b7[m Fix nans in gradient from inverse softplus (#123)
+[33mf342487[m Add Functionality to Apply Constraints to Predictions (#92)
+[33m659f23f[m add missing changelog and info for new test dataset (#116)
+[33m7fc68c9[m Fix botocore exception import for mlflow logger (#111)
+[33m82939a2[m Fix type error when calling `create_dataarray_from_tensor` (#106)
+[33md494cd3[m Fix how torch version is derived in ci/cd and clean up github actions (#115)
+[33mf233f87[m Update test data to smaller and consistent domains in space and time (#110)
+[33m807e476[m Implement standardization of static features (#96)
+[33m698bed7[m Add support for mlflow (#77)
+[33md2e26a9[m Add multi-node-training (#103)
+[33mcfda1c9[m prepare v0.3.0 release (#98)
+[33m3369515[m Fix ManualStateFeatureWeighting kwarg in config.yaml in readme (#99)
+[33m1a12826[m Change wandb env var to properly disable at start of testing (#94)
+[33m71cfdf9[m Fix evaluation example visualisation plots (#91)
+[33mc3c1722[m Add "datastores" to represent input data from zarr, npy, etc (#66)
+[33m2cc617e[m Add weights_only=True to all torch.load calls (#86)
+[33m7112013[m Update version number to v0.2.0 (#81)
+[33m2d36857[m Release version 0.2.0 (#79)
+[33ma7d6bf7[m Add slack and new publication info to readme (#78)
+[33ma2ddcd4[m Clarify PR template (#74)
+[33m68399f7[m Update Argument Parser to use action="store_true" instead of 0/1 for boolean arguments. (#72)
+[33m4969f92[m Move deps to pyproject toml and setup ci/cd cpu+gpu install testing (#37)
+[33ma54c45f[m Refactor codebase into a python package (#32)
+[33m72965a9[m Cap numpy version to less than 2.0.0 (#68)
+[33ma4e9a3b[m Add draft github pull-request template (#53)
+[33m066efe0[m Add entry for PR #22 (previously forgotten) (#56)
+[33m96f193e[m Run ci/cd tests on push to main (#55)
+[33mc8d3553[m Fix swapped x and y dimensions in comments and variable names for MEPS data (#52)
+[33m81d0840[m Feature: add tests for meps dataset (#38)
+[33m743c07a[m Parallelize parameter weight computation using PyTorch Distributed (#22)
+[33me5400bb[m Change copyright notice to specify all contributors (#47)
+[33m9d558d1[m Fix minor bugs in data_config.yaml workflow (#40)
+[33m879cfec[m Make restoration of optimizer and scheduler more robust (#17)
+[33m5b71be3[m Simplify pre-commit setup (#29)
+[33m4a97a12[m Replace constants.py with data_config.yaml (#31)
+[33m83d50bf[m Add changelog (#28)
+[33mb0050b9[m Remove batch-static tensor from dataset class and models (#13)
+[33m0669ff4[m Re-define RMSE metric to take sqrt after sample averaging (#10)
+[33m1cddf09[m Fix github pre-commit action using incomplete python env (#8)
+[33m474bad9[m Add pre-commit configuration for linting and formatting (#6)
+[33mc14b6b4[m Introduce metrics module with new loss options
+[33m2378ed7[m Update bibtex in readme
+[33mcd94f57[m Change run id format to avoid name collisions
+[33m9912ece[m Make sure wandb is initialized before defining metrics, also for pytorch-lightning >= 2.1
+[33m6377d44[m Fix bug in test rmse computation, causing incorrect values (generally inflated)
+[33m2d86715[m Add option to train only on control member of ensemble dataset
+[33me5f1ad3[m Refactor all InteractionNet instances to all use same general class
+[33md24c0a8[m Fix bug where some mesh features were set as persistent buffers
+[33m6866989[m Update readme with links to ideas for making code area-agnostic
+[33m89a4c63[m Implement multi-GPU training using DDP
+[33m9ef74e4[m Add MIT license
+[33mb20c77c[m Update readme with link to example data
+[33mbec3a7e[m Update readme with usage instructions
+[33m5572303[m Add project source files
+[33mc8a4596[m Add arxiv link to readme
+[33mf4b4a82[m Add initial readme
