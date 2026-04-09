@@ -31,8 +31,6 @@ class CustomMLFlowLogger(pl.loggers.MLFlowLogger):
             experiment_name=experiment_name, tracking_uri=tracking_uri
         )
 
-        
-
         mlflow.start_run(run_id=self.run_id, log_system_metrics=True)
         mlflow.set_tag("mlflow.runName", run_name)
         mlflow.log_param("run_id", self.run_id)
@@ -48,6 +46,7 @@ class CustomMLFlowLogger(pl.loggers.MLFlowLogger):
         str
             Path to the directory where the artifacts are saved.
         """
+        
         return self._save_dir 
 
     def log_image(self, key, images, step=None):

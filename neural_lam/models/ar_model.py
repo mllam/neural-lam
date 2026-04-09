@@ -669,7 +669,7 @@ class ARModel(pl.LightningModule):
         Return: log_dict: dict with everything to log for given metric
         """
         log_dict = {}
-        metric_fig = vis.plot_error_heatmap(
+        metric_fig = vis.plot_error_map(
             errors=metric_tensor,
             datastore=self._datastore,
         )
