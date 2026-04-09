@@ -1,5 +1,6 @@
 # Third-party
 import matplotlib
+matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
 import xarray as xr
@@ -10,29 +11,51 @@ from .datastore.base import BaseRegularGridDatastore
 
 
 @matplotlib.rc_context(utils.fractional_plot_bundle(1))
-def plot_error_map(errors, datastore: BaseRegularGridDatastore, title=None):
+def plot_error_heatmap(errors, datastore: BaseRegularGridDatastore, title=None,errors_norm=None):
     """
     Plot a heatmap of errors of different variables at different
     predictions horizons
     errors: (pred_steps, d_f)
     """
     errors_np = errors.T.cpu().numpy()  # (d_f, pred_steps)
+    if errors_norm is not None:
+        errors_norm_np = errors_norm.T.cpu().numpy()
+        if errors_norm_np.ndim == 1:
+         errors_norm_np = errors_norm_np.reshape(1, -1)
+    else:
+        errors_norm_np = None
+    
+    if errors_np.ndim == 1:
+        errors_np = errors_np.reshape(1,-1)
+    
+
     d_f, pred_steps = errors_np.shape
     step_length = datastore.step_length
 
     # Normalize all errors to [0,1] for color map
-    max_errors = errors_np.max(axis=1)  # d_f
-    errors_norm = errors_np / np.expand_dims(max_errors, axis=1)
+    
+    if errors_norm_np is not None:
+       vmin = np.min(errors_norm_np)
+       vmax = np.max(errors_norm_np)
+       color_data = errors_norm_np
+    else:
+        vmin = np.min(errors_np)
+        vmax = np.max(errors_np)
+        color_data = errors_np
+    
 
     time_step_int, time_step_unit = utils.get_integer_time(step_length)
 
-    fig, ax = plt.subplots(figsize=(15, 10))
+    fig_width = max(6, pred_steps*0.8)
+    fig_height = max(4, d_f *0.6)
+
+    fig, ax = plt.subplots(figsize=(fig_width,fig_height))
 
     ax.imshow(
-        errors_norm,
+        color_data,
         cmap="OrRd",
-        vmin=0,
-        vmax=1.0,
+        vmin=vmin,
+        vmax=vmax,
         interpolation="none",
         aspect="auto",
         alpha=0.8,
@@ -45,20 +68,28 @@ def plot_error_map(errors, datastore: BaseRegularGridDatastore, title=None):
         ax.text(i, j, formatted_error, ha="center", va="center", usetex=False)
 
     # Ticks and labels
-    label_size = 15
+    n_cells = d_f * pred_steps
+    show_annotations = n_cells <=200
+    if show_annotations:
+        for(j,i), error in np.ndenumerate(errors_np):
+            formatted_error = f"{error:3f}" if error < 9999 else f"{error: .2E}"
+            ax.text(i, j, formatted_error, ha="center", va="center")
+
+    fontsize = max(6,min(14, 200//max(d_f , pred_steps)))
     ax.set_xticks(np.arange(pred_steps))
     pred_hor_i = np.arange(pred_steps) + 1
     pred_hor_h = time_step_int * pred_hor_i
-    ax.set_xticklabels(pred_hor_h, size=label_size)
-    ax.set_xlabel(f"Lead time ({time_step_unit[0]})", size=label_size)
+    ax.set_xticklabels(pred_hor_h, size=fontsize)
+    ax.set_xlabel(f"Lead time ({time_step_unit[0]})", size=fontsize)
 
     ax.set_yticks(np.arange(d_f))
     var_names = datastore.get_vars_names(category="state")
     var_units = datastore.get_vars_units(category="state")
     y_ticklabels = [
-        f"{name} ({unit})" for name, unit in zip(var_names, var_units)
+        f"{name} ({unit})" #for name, unit in zip(var_names, var_units)
+        for name, unit in zip(var_names[:d_f], var_units[:d_f])
     ]
-    ax.set_yticklabels(y_ticklabels, rotation=30, size=label_size)
+    ax.set_yticklabels(y_ticklabels, rotation=30, size=fontsize)
 
     if title:
         ax.set_title(title, size=15)
@@ -154,7 +185,7 @@ def plot_spatial_error(
     )
 
     ax.coastlines()  # Add coastline outlines
-    error_grid = (
+    errors_np = (
         error.reshape(
             [datastore.grid_shape_state.x, datastore.grid_shape_state.y]
         )
@@ -163,7 +194,7 @@ def plot_spatial_error(
     )
 
     im = ax.imshow(
-        error_grid,
+        errors_np,
         origin="lower",
         extent=extent,
         alpha=pixel_alpha,
