@@ -6,6 +6,7 @@ import mlflow
 import mlflow.pytorch
 import pytorch_lightning as pl
 from loguru import logger
+import os
 
 
 class CustomMLFlowLogger(pl.loggers.MLFlowLogger):
@@ -15,10 +16,22 @@ class CustomMLFlowLogger(pl.loggers.MLFlowLogger):
     of version `2.0.3` at least.
     """
 
-    def __init__(self, experiment_name, tracking_uri, run_name):
+    def __init__(self, experiment_name, tracking_uri, run_name, save_dir):
+        self._run_name = run_name
+        self._save_dir = os.path.abspath(save_dir)
+
+        os.makedirs(self._save_dir, exist_ok=True)
+
+        tracking_uri = f"file:///{self._save_dir}"
+
+        mlflow.set_tracking_uri(tracking_uri)
+        mlflow.set_experiment(experiment_name)
+        
         super().__init__(
             experiment_name=experiment_name, tracking_uri=tracking_uri
         )
+
+        
 
         mlflow.start_run(run_id=self.run_id, log_system_metrics=True)
         mlflow.set_tag("mlflow.runName", run_name)
@@ -35,7 +48,7 @@ class CustomMLFlowLogger(pl.loggers.MLFlowLogger):
         str
             Path to the directory where the artifacts are saved.
         """
-        return "mlruns"
+        return self._save_dir 
 
     def log_image(self, key, images, step=None):
         """
@@ -65,4 +78,4 @@ class CustomMLFlowLogger(pl.loggers.MLFlowLogger):
             mlflow.log_image(img, f"{key}.png")
         except NoCredentialsError:
             logger.error("Error logging image\nSet AWS credentials")
-            sys.exit(1)
+            raise RuntimeError("Failed to log image: AWS Credentials not configured")
