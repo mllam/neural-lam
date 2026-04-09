@@ -14,6 +14,7 @@ from loguru import logger
 # Local
 from . import utils
 from .config import load_config_and_datastore
+from .interaction_net import GNN_TYPES
 from .models import MODELS, ForecasterModule
 from .models.ar_forecaster import ARForecaster
 from .weather_dataset import WeatherDataModule
@@ -127,29 +128,29 @@ def main(input_args=None):
         "--g2m_gnn_type",
         type=str,
         default="InteractionNet",
-        help="GNN type for grid-to-mesh encoding "
-        "(e.g. InteractionNet, PropagationNet)",
+        choices=list(GNN_TYPES.keys()),
+        help="GNN type for grid-to-mesh encoding",
     )
     parser.add_argument(
         "--m2g_gnn_type",
         type=str,
         default="InteractionNet",
-        help="GNN type for mesh-to-grid decoding "
-        "(e.g. InteractionNet, PropagationNet)",
+        choices=list(GNN_TYPES.keys()),
+        help="GNN type for mesh-to-grid decoding",
     )
     parser.add_argument(
         "--mesh_up_gnn_type",
         type=str,
         default="InteractionNet",
-        help="GNN type for upward mesh message passing in hierarchical "
-        "models (e.g. InteractionNet, PropagationNet)",
+        choices=list(GNN_TYPES.keys()),
+        help="GNN type for upward mesh message passing in hierarchical models",
     )
     parser.add_argument(
         "--mesh_down_gnn_type",
         type=str,
         default="InteractionNet",
-        help="GNN type for downward mesh message passing in hierarchical "
-        "models (e.g. InteractionNet, PropagationNet)",
+        choices=list(GNN_TYPES.keys()),
+        help="GNN type for downward mesh message passing in hierarchical models",
     )
 
     # Training options
