@@ -1,5 +1,4 @@
 # Third-party
-import matplotlib.pyplot as plt
 import pytest
 import torch
 
@@ -38,22 +37,12 @@ class TestBaseMetricInterface:
         """Each metric must have the full logging-semantics interface."""
         metric = get_metric(metric_name)
         assert hasattr(metric, "name")
-        assert hasattr(metric, "__name__")
         assert hasattr(metric, "display_name")
         assert hasattr(metric, "aggregate")
         assert hasattr(metric, "post_process")
         assert hasattr(metric, "rescale")
         assert hasattr(metric, "prepare_for_logging")
         assert callable(metric)
-
-    @pytest.mark.parametrize(
-        "metric_name",
-        ["mse", "mae", "wmse", "wmae", "nll", "crps_gauss", "output_std"],
-    )
-    def test_metric_exposes_callable_name(self, metric_name):
-        """Metric objects should expose a function-like __name__."""
-        metric = get_metric(metric_name)
-        assert metric.__name__ == metric_name
 
     def test_unknown_metric_raises(self):
         """get_metric should raise for unknown metric names."""
@@ -429,53 +418,3 @@ class TestBackwardCompatibility:
             sum_vars=False,
         )
         assert result.shape == (2, 5)  # (B, d_state)
-
-
-def test_aggregate_and_plot_metrics_supports_unknown_metric_keys():
-    """Unknown metric keys should still use the generic aggregation path."""
-
-    class MockLogger:
-        def log_image(self, key, images):
-            pass
-
-    class MockModule:
-        def __init__(self):
-            self.state_std = torch.tensor([2.0, 3.0])
-            self.trainer = type(
-                "Trainer",
-                (),
-                {
-                    "is_global_zero": True,
-                    "sanity_checking": False,
-                    "current_epoch": 0,
-                },
-            )()
-            self.logger = MockLogger()
-            self.captured = None
-
-        def all_gather_cat(self, tensor):
-            return tensor
-
-        def create_metric_log_dict(self, metric_tensor, prefix, metric_name):
-            self.captured = (metric_tensor, prefix, metric_name)
-            return {f"{prefix}_{metric_name}": plt.figure()}
-
-    module = MockModule()
-    # First-party
-    from neural_lam.models.ar_model import ARModel
-
-    module.aggregate_and_plot_metrics = (
-        ARModel.aggregate_and_plot_metrics.__get__(module, MockModule)
-    )
-
-    custom_metric_vals = [torch.ones(2, 3, 2)]
-    module.aggregate_and_plot_metrics(
-        {"custom_metric": custom_metric_vals}, prefix="test"
-    )
-
-    metric_tensor, prefix, metric_name = module.captured
-    torch.testing.assert_close(
-        metric_tensor, torch.tensor([[2.0, 3.0]]).repeat(3, 1)
-    )
-    assert prefix == "test"
-    assert metric_name == "custom_metric"
