@@ -5,6 +5,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 import torch
+import xarray as xr
 from torch.utils.data import DataLoader
 
 # First-party
@@ -16,6 +17,45 @@ from neural_lam.models.graph_lam import GraphLAM
 from neural_lam.weather_dataset import WeatherDataset
 from tests.conftest import init_datastore_example
 from tests.dummy_datastore import DummyDatastore, EnsembleDummyDatastore
+
+
+class ForecastArrayDatastore(DummyDatastore):
+    is_forecast = True
+
+    def __init__(self, da_state, da_forcing):
+        super().__init__(n_grid_points=1, n_timesteps=1)
+        self._state_da = da_state
+        self._forcing_da = da_forcing
+        self.is_ensemble = "ensemble_member" in da_state.dims
+        self.has_ensemble_forcing = (
+            da_forcing is not None and "ensemble_member" in da_forcing.dims
+        )
+
+    def get_dataarray(self, category, split, **kwargs):
+        if category == "state":
+            return self._state_da
+        if category == "forcing":
+            return self._forcing_da
+        return super().get_dataarray(category, split, **kwargs)
+
+
+def make_forecast_dataset(
+    da_state,
+    da_forcing,
+    *,
+    ar_steps,
+    num_past_forcing_steps,
+    num_future_forcing_steps,
+):
+    datastore = ForecastArrayDatastore(da_state=da_state, da_forcing=da_forcing)
+    return WeatherDataset(
+        datastore=datastore,
+        split="train",
+        ar_steps=ar_steps,
+        num_past_forcing_steps=num_past_forcing_steps,
+        num_future_forcing_steps=num_future_forcing_steps,
+        standardize=False,
+    )
 
 
 @pytest.mark.parametrize("datastore_name", DATASTORES.keys())
@@ -481,26 +521,31 @@ def test_dataset_out_of_bounds_indexing_raises():
         dataset[-len(dataset) - 1]
 
 
+def test_negative_indexing_does_not_call_len_in_getitem():
+    class LenBombDataset(WeatherDataset):
+        def __len__(self):
+            raise AssertionError("__getitem__ should use cached dataset length")
+
+    datastore = DummyDatastore(n_grid_points=4, n_timesteps=10)
+    dataset = LenBombDataset(
+        datastore=datastore,
+        split="train",
+        ar_steps=2,
+        num_past_forcing_steps=1,
+        num_future_forcing_steps=1,
+    )
+
+    dataset[-1]
+
+
 def test_forecast_len_raises_when_forcing_horizon_too_short():
-    # Standard library
-    from types import SimpleNamespace
-
-    # Third-party
-    import xarray as xr
-
-    dataset = WeatherDataset.__new__(WeatherDataset)
-    dataset.datastore = SimpleNamespace(is_forecast=True, is_ensemble=False)
-    dataset.ar_steps = 2
-    dataset.num_past_forcing_steps = 1
-    dataset.num_future_forcing_steps = 2
-
     analysis_time = np.array(
         ["2021-01-01T00:00:00", "2021-01-01T01:00:00"],
         dtype="datetime64[ns]",
     )
     elapsed = np.arange(5, dtype="timedelta64[h]").astype("timedelta64[ns]")
 
-    dataset.da_state = xr.DataArray(
+    da_state = xr.DataArray(
         np.zeros((2, 5, 1, 1), dtype=np.float32),
         dims=(
             "analysis_time",
@@ -515,7 +560,7 @@ def test_forecast_len_raises_when_forcing_horizon_too_short():
             "state_feature": ["state_feat_0"],
         },
     )
-    dataset.da_forcing = xr.DataArray(
+    da_forcing = xr.DataArray(
         np.zeros((2, 5, 1, 1), dtype=np.float32),
         dims=(
             "analysis_time",
@@ -535,29 +580,23 @@ def test_forecast_len_raises_when_forcing_horizon_too_short():
         ValueError,
         match="forecast lead times must match|forcing forecast steps",
     ):
-        len(dataset)
+        make_forecast_dataset(
+            da_state,
+            da_forcing,
+            ar_steps=2,
+            num_past_forcing_steps=1,
+            num_future_forcing_steps=2,
+        )
 
 
 def test_forecast_len_raises_when_state_horizon_too_short_for_past_forcing():
-    # Standard library
-    from types import SimpleNamespace
-
-    # Third-party
-    import xarray as xr
-
-    dataset = WeatherDataset.__new__(WeatherDataset)
-    dataset.datastore = SimpleNamespace(is_forecast=True, is_ensemble=False)
-    dataset.ar_steps = 1
-    dataset.num_past_forcing_steps = 4
-    dataset.num_future_forcing_steps = 0
-
     analysis_time = np.array(
         ["2021-01-01T00:00:00", "2021-01-01T01:00:00"],
         dtype="datetime64[ns]",
     )
     elapsed = np.arange(4, dtype="timedelta64[h]").astype("timedelta64[ns]")
 
-    dataset.da_state = xr.DataArray(
+    da_state = xr.DataArray(
         np.zeros((2, 4, 1, 1), dtype=np.float32),
         dims=(
             "analysis_time",
@@ -572,10 +611,15 @@ def test_forecast_len_raises_when_state_horizon_too_short_for_past_forcing():
             "state_feature": ["state_feat_0"],
         },
     )
-    dataset.da_forcing = None
 
     with pytest.raises(ValueError, match="initial and target states"):
-        len(dataset)
+        make_forecast_dataset(
+            da_state,
+            None,
+            ar_steps=1,
+            num_past_forcing_steps=4,
+            num_future_forcing_steps=0,
+        )
 
 
 def test_forecast_len_accepts_exact_state_horizon_for_past_forcing():
@@ -671,18 +715,6 @@ def test_forecast_len_accepts_exact_forcing_horizon():
 
 
 def test_forecast_len_raises_when_forcing_shorter_than_state_horizon():
-    # Standard library
-    from types import SimpleNamespace
-
-    # Third-party
-    import xarray as xr
-
-    dataset = WeatherDataset.__new__(WeatherDataset)
-    dataset.datastore = SimpleNamespace(is_forecast=True, is_ensemble=False)
-    dataset.ar_steps = 2
-    dataset.num_past_forcing_steps = 1
-    dataset.num_future_forcing_steps = 2
-
     analysis_time = np.array(
         ["2021-01-01T00:00:00", "2021-01-01T01:00:00"],
         dtype="datetime64[ns]",
@@ -694,7 +726,7 @@ def test_forecast_len_raises_when_forcing_shorter_than_state_horizon():
         "timedelta64[ns]"
     )
 
-    dataset.da_state = xr.DataArray(
+    da_state = xr.DataArray(
         np.zeros((2, 6, 1, 1), dtype=np.float32),
         dims=(
             "analysis_time",
@@ -709,7 +741,7 @@ def test_forecast_len_raises_when_forcing_shorter_than_state_horizon():
             "state_feature": ["state_feat_0"],
         },
     )
-    dataset.da_forcing = xr.DataArray(
+    da_forcing = xr.DataArray(
         np.zeros((2, 5, 1, 1), dtype=np.float32),
         dims=(
             "analysis_time",
@@ -729,22 +761,16 @@ def test_forecast_len_raises_when_forcing_shorter_than_state_horizon():
         ValueError,
         match="forecast lead times must match|forcing forecast steps",
     ):
-        len(dataset)
+        make_forecast_dataset(
+            da_state,
+            da_forcing,
+            ar_steps=2,
+            num_past_forcing_steps=1,
+            num_future_forcing_steps=2,
+        )
 
 
 def test_forecast_len_raises_when_analysis_times_do_not_match():
-    # Standard library
-    from types import SimpleNamespace
-
-    # Third-party
-    import xarray as xr
-
-    dataset = WeatherDataset.__new__(WeatherDataset)
-    dataset.datastore = SimpleNamespace(is_forecast=True, is_ensemble=False)
-    dataset.ar_steps = 2
-    dataset.num_past_forcing_steps = 1
-    dataset.num_future_forcing_steps = 1
-
     state_analysis_time = np.array(
         ["2021-01-01T00:00:00", "2021-01-01T01:00:00"],
         dtype="datetime64[ns]",
@@ -755,7 +781,7 @@ def test_forecast_len_raises_when_analysis_times_do_not_match():
     )
     elapsed = np.arange(5, dtype="timedelta64[h]").astype("timedelta64[ns]")
 
-    dataset.da_state = xr.DataArray(
+    da_state = xr.DataArray(
         np.zeros((2, 5, 1, 1), dtype=np.float32),
         dims=(
             "analysis_time",
@@ -770,7 +796,7 @@ def test_forecast_len_raises_when_analysis_times_do_not_match():
             "state_feature": ["state_feat_0"],
         },
     )
-    dataset.da_forcing = xr.DataArray(
+    da_forcing = xr.DataArray(
         np.zeros((1, 5, 1, 1), dtype=np.float32),
         dims=(
             "analysis_time",
@@ -787,22 +813,16 @@ def test_forecast_len_raises_when_analysis_times_do_not_match():
     )
 
     with pytest.raises(ValueError, match="analysis times must match"):
-        len(dataset)
+        make_forecast_dataset(
+            da_state,
+            da_forcing,
+            ar_steps=2,
+            num_past_forcing_steps=1,
+            num_future_forcing_steps=1,
+        )
 
 
 def test_forecast_len_raises_when_forecast_lead_times_do_not_match():
-    # Standard library
-    from types import SimpleNamespace
-
-    # Third-party
-    import xarray as xr
-
-    dataset = WeatherDataset.__new__(WeatherDataset)
-    dataset.datastore = SimpleNamespace(is_forecast=True, is_ensemble=False)
-    dataset.ar_steps = 2
-    dataset.num_past_forcing_steps = 1
-    dataset.num_future_forcing_steps = 1
-
     analysis_time = np.array(
         ["2021-01-01T00:00:00", "2021-01-01T01:00:00"],
         dtype="datetime64[ns]",
@@ -814,7 +834,7 @@ def test_forecast_len_raises_when_forecast_lead_times_do_not_match():
         "timedelta64[ns]"
     )
 
-    dataset.da_state = xr.DataArray(
+    da_state = xr.DataArray(
         np.zeros((2, 5, 1, 1), dtype=np.float32),
         dims=(
             "analysis_time",
@@ -829,7 +849,7 @@ def test_forecast_len_raises_when_forecast_lead_times_do_not_match():
             "state_feature": ["state_feat_0"],
         },
     )
-    dataset.da_forcing = xr.DataArray(
+    da_forcing = xr.DataArray(
         np.zeros((2, 5, 1, 1), dtype=np.float32),
         dims=(
             "analysis_time",
@@ -846,7 +866,13 @@ def test_forecast_len_raises_when_forecast_lead_times_do_not_match():
     )
 
     with pytest.raises(ValueError, match="forecast lead times must match"):
-        len(dataset)
+        make_forecast_dataset(
+            da_state,
+            da_forcing,
+            ar_steps=2,
+            num_past_forcing_steps=1,
+            num_future_forcing_steps=1,
+        )
 
 
 def test_weather_dataset_forecast_empty_split_raises_value_error():
