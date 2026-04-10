@@ -199,7 +199,9 @@ class WeatherDataset(torch.utils.data.Dataset):
                 "forecast-mode datasets."
             )
 
-        n_forcing_forecast_steps = self.da_forcing.elapsed_forecast_duration.size
+        n_forcing_forecast_steps = (
+            self.da_forcing.elapsed_forecast_duration.size
+        )
         required_forcing_forecast_steps = (
             max(2, self.num_past_forcing_steps)
             + self.ar_steps
