@@ -22,6 +22,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Replace `print()`-based `rank_zero_print` with `loguru` `logger.info()` for structured log-level control ([#33](https://github.com/mllam/neural-lam/issues/33))
 
 ### Fixed
+- Fix validation crash in `plot_error_map` and resolve DDP NCCL initialization error on single-device setups
+[\#193](https://github.com/mllam/neural-lam/pull/193) @AdityaKumarSethia
 
 - Fix `--metrics_watch` handling to avoid AttributeError when unset and improve warning behavior during evaluation [#420](https://github.com/mllam/neural-lam/pull/420) @archit7-beep
 
