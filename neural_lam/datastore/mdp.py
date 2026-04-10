@@ -191,8 +191,16 @@ class MDPDatastore(BaseRegularGridDatastore):
             The names of the variables in the given category.
 
         """
-        if category not in self._ds and category == "forcing":
-            warnings.warn("no forcing data found in datastore")
+        if f"{category}_feature" not in self._ds:
+            if category == "forcing":
+                warnings.warn("no forcing data found in datastore")
+            elif category == "static":
+                warnings.warn(
+                    "No static features found in the datastore. "
+                    "Training without static features.",
+                    UserWarning,
+                    stacklevel=2,
+                )
             return []
         return self._ds[f"{category}_feature"].values.tolist()
 
