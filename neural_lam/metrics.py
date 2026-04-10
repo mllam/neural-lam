@@ -76,6 +76,14 @@ class BaseMetric:
         """
         return self.name
 
+    @property
+    def __name__(self):
+        """
+        Preserve a function-like name for light introspection/backward
+        compatibility in code that still treats metrics as callables.
+        """
+        return self.name or self.__class__.__name__
+
     def aggregate(self, metric_tensor):
         """
         Aggregate a gathered metric tensor over the evaluation dimension.

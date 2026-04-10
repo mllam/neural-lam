@@ -436,10 +436,10 @@ class ARModel(pl.LightningModule):
             batch_size=batch[0].shape[0],
         )
 
-        # Compute all evaluation metrics for error maps. The metric objects
-        # own their own reduction semantics, so the model only asks each
-        # registered metric to produce per-batch values here.
-        for metric_name in self.test_metrics:
+        # Compute the built-in evaluation metrics for error maps. test_metrics
+        # may also contain subclass-specific entries that are populated
+        # differently and only aggregated later.
+        for metric_name in ("mse", "mae"):
             metric_func = metrics.get_metric(metric_name)
             batch_metric_vals = metric_func(
                 prediction,
@@ -711,16 +711,30 @@ class ARModel(pl.LightningModule):
             )  # (N_eval, pred_steps, d_f)
 
             if self.trainer.is_global_zero:
-                # Look up the metric object for aggregation, post-processing,
-                # and rescaling.
-                metric_obj = metrics.get_metric(metric_name)
-                metric_rescaled = metric_obj.prepare_for_logging(
-                    metric_tensor, self.state_std
-                )
-                # (pred_steps, d_f)
+                if metric_name.lower() in metrics.DEFINED_METRICS:
+                    # Known metrics own their own aggregation, post-processing,
+                    # and rescaling semantics.
+                    metric_obj = metrics.get_metric(metric_name)
+                    metric_rescaled = metric_obj.prepare_for_logging(
+                        metric_tensor, self.state_std
+                    )
+                    display_name = metric_obj.display_name
+                else:
+                    # Preserve the previous generic fallback for
+                    # subclass-specific metrics that are stored directly in
+                    # test_metrics / val_metrics.
+                    metric_tensor_averaged = torch.mean(metric_tensor, dim=0)
+                    display_name = metric_name
+                    if "mse" in metric_name:
+                        metric_tensor_averaged = torch.sqrt(
+                            metric_tensor_averaged
+                        )
+                        display_name = metric_name.replace("mse", "rmse")
+                    metric_rescaled = metric_tensor_averaged * self.state_std
+
                 log_dict.update(
                     self.create_metric_log_dict(
-                        metric_rescaled, prefix, metric_obj.display_name
+                        metric_rescaled, prefix, display_name
                     )
                 )
 
