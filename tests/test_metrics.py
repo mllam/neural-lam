@@ -461,10 +461,11 @@ def test_aggregate_and_plot_metrics_supports_unknown_metric_keys():
             return {f"{prefix}_{metric_name}": plt.figure()}
 
     module = MockModule()
+    # First-party
     from neural_lam.models.ar_model import ARModel
 
-    module.aggregate_and_plot_metrics = ARModel.aggregate_and_plot_metrics.__get__(
-        module, MockModule
+    module.aggregate_and_plot_metrics = (
+        ARModel.aggregate_and_plot_metrics.__get__(module, MockModule)
     )
 
     custom_metric_vals = [torch.ones(2, 3, 2)]
@@ -473,6 +474,8 @@ def test_aggregate_and_plot_metrics_supports_unknown_metric_keys():
     )
 
     metric_tensor, prefix, metric_name = module.captured
-    torch.testing.assert_close(metric_tensor, torch.tensor([[2.0, 3.0]]).repeat(3, 1))
+    torch.testing.assert_close(
+        metric_tensor, torch.tensor([[2.0, 3.0]]).repeat(3, 1)
+    )
     assert prefix == "test"
     assert metric_name == "custom_metric"
