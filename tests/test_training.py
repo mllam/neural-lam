@@ -1,4 +1,5 @@
 # Standard library
+import warnings
 from pathlib import Path
 
 # Third-party
@@ -18,7 +19,7 @@ from neural_lam.weather_dataset import WeatherDataModule
 from tests.conftest import init_datastore_example
 
 
-def run_simple_training(datastore, set_output_std):
+def run_simple_training(datastore, set_output_std, metrics_watch=None):
     """
     Run one epoch of a simple model training setup using the given datastore.
 
@@ -35,6 +36,14 @@ def run_simple_training(datastore, set_output_std):
         torch.set_float32_matmul_precision(
             "high"
         )  # Allows using Tensor Cores on A100s
+
+        if torch.cuda.device_count() < 2:
+            warnings.warn(
+                "Running test suite on a single CUDA device. "
+                "Multi-device testing still required.",
+                UserWarning,
+            )
+
     else:
         device_name = "cpu"
 
@@ -42,10 +51,9 @@ def run_simple_training(datastore, set_output_std):
         max_epochs=1,
         deterministic=True,
         accelerator=device_name,
-        # XXX: `devices` has to be set to 2 otherwise
-        # neural_lam.models.ar_model.ARModel.aggregate_and_plot_metrics fails
-        # because it expects to aggregate over multiple devices
-        devices=2,
+        # Dynamically allocate devices
+        # to support single-GPU machines
+        devices=2 if torch.cuda.device_count() >= 2 else 1,
         log_every_n_steps=1,
         # use `detect_anomaly` to ensure that we don't have NaNs popping up
         # during training
@@ -73,6 +81,9 @@ def run_simple_training(datastore, set_output_std):
         num_future_forcing_steps=1,
     )
 
+    _mw = metrics_watch or []
+    _vlmw = {0: [1]} if _mw else {}
+
     class ModelArgs:
         output_std = set_output_std
         loss = "mse"
@@ -87,7 +98,8 @@ def run_simple_training(datastore, set_output_std):
         mesh_aggr = "sum"
         lr = 1.0e-3
         val_steps_to_log = [1, 3]
-        metrics_watch = []
+        metrics_watch = _mw
+        var_leads_metrics_watch = _vlmw
         num_past_forcing_steps = 1
         num_future_forcing_steps = 1
 
@@ -104,7 +116,7 @@ def run_simple_training(datastore, set_output_std):
         datastore=datastore,
         config=config,
     )
-    wandb.init()
+    wandb.init(mode="disabled")  # Disable wandb for offline test run
     trainer.fit(model=model, datamodule=data_module)
 
 
