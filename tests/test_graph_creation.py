@@ -13,6 +13,30 @@ from neural_lam.datastore.base import BaseRegularGridDatastore
 from tests.conftest import init_datastore_example
 
 
+def _assert_edge_rows_match_index(
+    edge_index: torch.Tensor, features: torch.Tensor, label: str
+) -> None:
+    """One feature row per column in *edge_index* (one edge)."""
+    n_edges = edge_index.shape[1]
+    n_rows = features.shape[0]
+    assert n_edges == n_rows, (
+        f"{label}: edge_index has {n_edges} edges, features has {n_rows} rows"
+    )
+
+
+def _assert_list_pairs_match(
+    edge_indices: list,
+    features_list: list,
+    label: str,
+) -> None:
+    assert len(edge_indices) == len(features_list), (
+        f"{label}: got {len(edge_indices)} index tensors and "
+        f"{len(features_list)} feature tensors"
+    )
+    for i, (ei, ft) in enumerate(zip(edge_indices, features_list)):
+        _assert_edge_rows_match_index(ei, ft, f"{label}[{i}]")
+
+
 @pytest.mark.parametrize("graph_name", ["1level", "multiscale", "hierarchical"])
 @pytest.mark.parametrize("datastore_name", DATASTORES.keys())
 def test_graph_creation(datastore_name, graph_name):
@@ -60,8 +84,6 @@ def test_graph_creation(datastore_name, graph_name):
             ]
         )
 
-    # TODO: check that the number of edges is consistent over the files, for
-    # now we just check the number of features
     d_features = 3
     d_mesh_static = 2
 
@@ -117,3 +139,24 @@ def test_graph_creation(datastore_name, graph_name):
                         assert r.shape[0] == 2  # adjacency matrix uses two rows
                     elif file_id.endswith("_features"):
                         assert r.shape[1] == d_features
+
+        g2m_ei = torch.load(graph_dir_path / "g2m_edge_index.pt")
+        g2m_ft = torch.load(graph_dir_path / "g2m_features.pt")
+        _assert_edge_rows_match_index(g2m_ei, g2m_ft, "g2m")
+
+        m2g_ei = torch.load(graph_dir_path / "m2g_edge_index.pt")
+        m2g_ft = torch.load(graph_dir_path / "m2g_features.pt")
+        _assert_edge_rows_match_index(m2g_ei, m2g_ft, "m2g")
+
+        m2m_ei = torch.load(graph_dir_path / "m2m_edge_index.pt")
+        m2m_ft = torch.load(graph_dir_path / "m2m_features.pt")
+        _assert_list_pairs_match(m2m_ei, m2m_ft, "m2m")
+
+        if hierarchical:
+            up_ei = torch.load(graph_dir_path / "mesh_up_edge_index.pt")
+            up_ft = torch.load(graph_dir_path / "mesh_up_features.pt")
+            _assert_list_pairs_match(up_ei, up_ft, "mesh_up")
+
+            down_ei = torch.load(graph_dir_path / "mesh_down_edge_index.pt")
+            down_ft = torch.load(graph_dir_path / "mesh_down_features.pt")
+            _assert_list_pairs_match(down_ei, down_ft, "mesh_down")
