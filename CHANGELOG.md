@@ -319,3 +319,4 @@ This release introduces Datastores to represent input data from different source
 
 First tagged release of `neural-lam`, matching Oskarsson et al 2023 publication
 (<https://arxiv.org/abs/2309.17370>)
+- Add division-by-zero check in mesh position normalization to handle degenerate grids. Prevents NaN/Inf propagation.
