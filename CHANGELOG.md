@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [unreleased](https://github.com/mllam/neural-lam/compare/v0.6.0...HEAD)
 
+### Fixed
+
+- Add missing bounds check for `val_steps_to_log` in `test_step` to prevent `IndexError`. Closes #592.
+
 ## [v0.6.0](https://github.com/mllam/neural-lam/releases/tag/v0.6.0)
 
 This release introduces new features including GIF animation support, wandb run resumption, and improved ensemble loading, alongside a large number of bug fixes and maintenance updates.

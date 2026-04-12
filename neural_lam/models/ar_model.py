@@ -425,6 +425,7 @@ class ARModel(pl.LightningModule):
         test_log_dict = {
             f"test_loss_unroll{step}": time_step_loss[step - 1]
             for step in self.args.val_steps_to_log
+            if step <= len(time_step_loss)
         }
         test_log_dict["test_mean_loss"] = mean_loss
 
