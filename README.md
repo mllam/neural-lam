@@ -390,6 +390,9 @@ python -m neural_lam.datastore.npyfilesmeps.compute_standardization_stats <path-
 
 ### Graph creation
 
+> **Note:** The `create_graph` command below is deprecated and will be removed
+> in a future release. Please use `create_graph_with_wmg` (see below) instead.
+
 Run `python -m neural_lam.create_graph` with suitable options to generate the graph you want to use (see `python -m neural_lam.create_graph --help` for a list of options).
 The graphs used for the different models in the [paper](#graph-based-neural-weather-prediction-for-limited-area-modeling) can be created as:
 
@@ -398,6 +401,26 @@ The graphs used for the different models in the [paper](#graph-based-neural-weat
 * **L1-LAM**: `python -m neural_lam.create_graph --config_path <neural-lam-config-path> --name 1level --levels 1`
 
 The graph-related files are stored in a directory called `graphs`.
+
+### Graph creation with weather-model-graphs
+
+The recommended way to create graphs is with the `create_graph_with_wmg`
+command, which delegates graph construction to
+[weather-model-graphs](https://github.com/mllam/weather-model-graphs):
+
+```bash
+python -m neural_lam.create_graph_with_wmg --config_path <neural-lam-config-path> --archetype <archetype>
+```
+
+Available archetypes:
+
+* **keisler** (default): `python -m neural_lam.create_graph_with_wmg --config_path <neural-lam-config-path> --archetype keisler`
+* **graphcast**: `python -m neural_lam.create_graph_with_wmg --config_path <neural-lam-config-path> --archetype graphcast`
+* **hierarchical**: `python -m neural_lam.create_graph_with_wmg --config_path <neural-lam-config-path> --archetype hierarchical`
+
+Run `python -m neural_lam.create_graph_with_wmg --help` for the full list of
+options (e.g. `--mesh_node_distance`, `--grid_mesh_ratio`,
+`--level_refinement_factor`, `--max_num_levels`).
 
 ## Logging your experiments
 

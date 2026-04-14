@@ -17,12 +17,8 @@ ARCHETYPE_FUNCTIONS = {
 }
 
 
-def _estimate_mesh_node_distance(xy):
-    """Estimate a reasonable mesh node distance from grid coordinates.
-
-    Uses the average grid spacing to produce a mesh that is roughly 3x
-    coarser than the grid, similar to the default behaviour of the old
-    ``create_graph.py`` script.
+def _estimate_grid_node_spacing(xy):
+    """Estimate the average grid node spacing from grid coordinates.
 
     Parameters
     ----------
@@ -32,15 +28,13 @@ def _estimate_mesh_node_distance(xy):
     Returns
     -------
     float
-        Estimated mesh node distance in coordinate units.
+        Estimated average grid node spacing in coordinate units.
     """
     x_range = np.ptp(xy[:, 0])
     y_range = np.ptp(xy[:, 1])
     n_points = len(xy)
     # avg grid spacing ≈ sqrt(area / n_points)
-    avg_spacing = np.sqrt(x_range * y_range / n_points)
-    # mesh is ~3x coarser than the grid
-    return float(avg_spacing * 3)
+    return float(np.sqrt(x_range * y_range / n_points))
 
 
 def create_graph_from_datastore(
@@ -48,6 +42,7 @@ def create_graph_from_datastore(
     output_root_path,
     archetype="keisler",
     mesh_node_distance=None,
+    grid_mesh_ratio=3.0,
     level_refinement_factor=3,
     max_num_levels=None,
 ):
@@ -64,7 +59,10 @@ def create_graph_from_datastore(
         ``"hierarchical"``.
     mesh_node_distance : float or None
         Distance between created mesh nodes (in coordinate units). If None,
-        automatically estimated from the grid spacing.
+        automatically estimated as ``grid_mesh_ratio * grid_spacing``.
+    grid_mesh_ratio : float
+        Ratio of mesh node distance to grid node spacing. Only used when
+        ``mesh_node_distance`` is None. Default is 3.0.
     level_refinement_factor : int
         Refinement factor between mesh hierarchy levels. Only used for
         ``"graphcast"`` and ``"hierarchical"`` archetypes.
@@ -83,19 +81,17 @@ def create_graph_from_datastore(
             f"Must be one of: {list(ARCHETYPE_FUNCTIONS.keys())}"
         )
 
-    xy = datastore.get_xy(category="state", stacked=False)
-
-    # wmg expects coords as 2D array of shape (num_nodes, 2), but the
-    # datastore may return a 3D array of shape (Nx, Ny, 2) when
-    # stacked=False.  Reshape to (N, 2) for wmg.
+    xy = datastore.get_xy(category="state", stacked=True)
     xy = np.array(xy)
-    if xy.ndim == 3:
-        xy = xy.reshape(-1, 2)
 
     if mesh_node_distance is None:
-        mesh_node_distance = _estimate_mesh_node_distance(xy)
+        grid_spacing = _estimate_grid_node_spacing(xy)
+        mesh_node_distance = grid_spacing * grid_mesh_ratio
 
-    # Build keyword arguments for the archetype function
+    # Build keyword arguments for the archetype function.
+    # return_components=True is required because wmg.save.to_neural_lam()
+    # expects the graph as separate g2m, m2g and m2m sub-graph components
+    # rather than a single merged graph.
     archetype_kwargs = dict(
         coords=xy,
         mesh_node_distance=mesh_node_distance,
@@ -149,7 +145,15 @@ def cli(input_args=None):
         type=float,
         default=None,
         help="Distance between mesh nodes (in coordinate units). "
-        "If not set, estimated automatically from grid spacing.",
+        "If not set, estimated automatically from grid spacing "
+        "and --grid_mesh_ratio.",
+    )
+    parser.add_argument(
+        "--grid_mesh_ratio",
+        type=float,
+        default=3.0,
+        help="Ratio of mesh node distance to grid node spacing. "
+        "Only used when --mesh_node_distance is not set.",
     )
     parser.add_argument(
         "--level_refinement_factor",
@@ -179,6 +183,7 @@ def cli(input_args=None):
         output_root_path=os.path.join(datastore.root_path, "graph", args.name),
         archetype=args.archetype,
         mesh_node_distance=args.mesh_node_distance,
+        grid_mesh_ratio=args.grid_mesh_ratio,
         level_refinement_factor=args.level_refinement_factor,
         max_num_levels=args.max_num_levels,
     )
