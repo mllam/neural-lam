@@ -38,7 +38,7 @@ dependencies = [
     "boto3>=1.35.32",
     "nvidia-ml-py>=13.580.82",
     "pillow>=9.0.0",
-    "weather-model-graphs[pytorch] @ git+https://github.com/prajwal-tech07/weather-model-graphs@issue-384/to-neural-lam",
+    "weather-model-graphs",
 ]
 requires-python = ">=3.10"
 
@@ -134,3 +134,6 @@ exclude = [
   ".venv/",
   "venv/",
 ]
+
+[tool.uv.sources]
+weather-model-graphs = { git = "https://github.com/prajwal-tech07/weather-model-graphs", rev = "issue-384/to-neural-lam" }
