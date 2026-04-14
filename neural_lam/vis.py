@@ -112,7 +112,20 @@ def _get_feature_scale(
 def _get_heatmap_color_values(
     errors_np: np.ndarray, datastore: BaseRegularGridDatastore
 ) -> tuple[np.ndarray, str]:
-    """Normalize heatmap colors to a cross-variable relative scale."""
+    """
+    Normalize heatmap colors to a cross-variable relative scale.
+
+    The returned array drives the colormap only; the numeric annotations in the
+    heatmap remain the original (physical-unit) values passed in `errors_np`.
+
+    Scaling logic:
+    - Prefer a relative scale based on datastore standardization stats.
+      Start with `state_std` (per-variable climatological std).
+    - If `state_diff_std_standardized` is available, also fold that in to
+      represent error relative to typical one-step variability.
+    - If any required stats are missing or invalid, fall back to absolute
+      scaling using the raw error values.
+    """
     try:
         ds_state_stats = datastore.get_standardization_dataarray(
             category="state"
@@ -304,11 +317,19 @@ def plot_error_heatmap(
     Parameters
     ----------
     errors : torch.Tensor
-        Error values with shape `(pred_steps, d_f)`.
+        Error values with shape `(pred_steps, d_f)`. These values are used for
+        the numeric annotations in each cell.
     datastore : BaseRegularGridDatastore
         Datastore providing step length and variable metadata.
     title : str, optional
         Optional title for the figure.
+
+    Notes
+    -----
+    The heatmap colormap is driven by a relative cross-variable scale derived
+    from datastore standardization stats (see `_get_heatmap_color_values`).
+    If those stats are unavailable, the plot falls back to absolute scaling
+    on the raw `errors` values.
     """
     errors_np = _to_heatmap_matrix(errors)
     d_f, pred_steps = errors_np.shape
