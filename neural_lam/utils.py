@@ -604,6 +604,8 @@ def get_integer_time(tdelta) -> tuple[int, str]:
         (86400, 'milliseconds')
         >>> get_integer_time(timedelta(0))
         (0, 'seconds')
+        >>> get_integer_time(timedelta(days=-7))
+        (-1, 'weeks')
     """
     total_microseconds = (
         tdelta.days * 86400_000000
