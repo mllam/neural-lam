@@ -224,7 +224,6 @@ def plot_examples(
 
         time_arr = np.array(time_slice.cpu(), dtype="datetime64[ns]")
 
-        # Call directly on datastore now!
         da_prediction = datastore.create_dataarray_from_tensor(
             tensor=pred_slice, time=time_arr, category="state"
         ).unstack("grid_index")
