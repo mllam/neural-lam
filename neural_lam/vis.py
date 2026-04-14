@@ -80,10 +80,19 @@ def _get_heatmap_var_labels(datastore: BaseRegularGridDatastore) -> list[str]:
 
 
 def _to_heatmap_matrix(values) -> np.ndarray:
-    """Convert `(pred_steps, d_f)` values to a `(d_f, pred_steps)` matrix."""
+    """
+    Convert heatmap inputs to a `(d_f, pred_steps)` matrix.
+
+    A single-step tensor may arrive as one-dimensional `(d_f,)`, especially in
+    single-GPU or focused metric logging paths. In that case we first treat it
+    as one row of `(pred_steps=1, d_f)` before transposing.
+    """
     if hasattr(values, "detach"):
         values = values.detach().cpu().numpy()
-    return np.asarray(values, dtype=float).T
+    values = np.asarray(values, dtype=float)
+    if values.ndim == 1:
+        values = values[np.newaxis, :]
+    return values.T
 
 
 def _get_feature_scale(
