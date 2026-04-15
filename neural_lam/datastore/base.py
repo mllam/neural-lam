@@ -436,7 +436,7 @@ class BaseDatastore(abc.ABC):
         tensor: torch.Tensor,
         time: Union[datetime.datetime, list[datetime.datetime]],
         category: str,
-    ):
+    ) -> xr.DataArray:
         """
         Construct a xarray.DataArray from a `pytorch.Tensor` with coordinates
         for `grid_index`, `time` and `{category}_feature` matching the shape
@@ -471,43 +471,27 @@ class BaseDatastore(abc.ABC):
                 f"{len(tensor.shape)}"
             )
 
-        # Get original dataarray to extract proper coordinates
-        # Get original dataarray to extract proper coordinates
-        da_datastore_state = self.get_dataarray(category=category, split="test")
-
-        if da_datastore_state is None:
-            raise ValueError(
-                f"Could not load dataarray for category '{category}'"
-            )
-
-        da_grid_index = da_datastore_state.grid_index
-
         # Safely fetch the correct feature category
-        da_category_feature = getattr(da_datastore_state, f"{category}_feature")
-
-        coords = {
-            f"{category}_feature": da_category_feature,
-            "grid_index": da_grid_index,
+        feature_names = self.get_vars_names(category)
+        grid_index = np.arange(self.num_grid_points)
+        coords: dict = {
+            f"{category}_feature": feature_names,
+            "grid_index": grid_index,
         }
         if add_time_as_dim:
             coords["time"] = time
-
         da = xr.DataArray(
             tensor.cpu().numpy(),
             dims=dims,
             coords=coords,
         )
-
-        for grid_coord in ["x", "y"]:
-            if (
-                grid_coord in da_datastore_state.coords
-                and grid_coord not in da.coords
-            ):
-                da.coords[grid_coord] = da_datastore_state[grid_coord]
-
+        # Attach x, y coordinates so the DataArray can later be unstacked
+        # into a 2D spatial grid via unstack("grid_index")
+        xy = self.get_xy(category, stacked=True)
+        da.coords["x"] = xr.DataArray(xy[:, 0], dims=["grid_index"])
+        da.coords["y"] = xr.DataArray(xy[:, 1], dims=["grid_index"])
         if not add_time_as_dim:
             da.coords["time"] = time
-
         return da
 
 

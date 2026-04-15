@@ -188,3 +188,87 @@ def test_plot_examples_integration_saves_figure(
     assert fig is not None
     assert isinstance(fig, plt.Figure)
     assert output_path.exists()
+
+
+@pytest.mark.parametrize("n_examples", [1, 2])
+@pytest.mark.parametrize("n_pred_steps", [1, 3])
+def test_plot_examples_calls_logger_and_saves_pt_files(
+    tmp_path, n_examples, n_pred_steps
+):
+    """Unit test for vis.plot_examples."""
+    # Standard library
+    from unittest.mock import MagicMock
+
+    # Third-party
+    import isodate
+
+    datastore = DummyDatastore()
+    n_state_features = datastore.get_num_data_vars("state")
+    n_grid = datastore.num_grid_points
+
+    prediction = torch.randn(n_examples, n_pred_steps, n_grid, n_state_features)
+    target = torch.randn(n_examples, n_pred_steps, n_grid, n_state_features)
+
+    t0_ns = int(isodate.parse_datetime("2021-01-01T00:00:00").timestamp() * 1e9)
+    step_ns = int(datastore.step_length.total_seconds() * 1e9)
+    time_batch = torch.tensor(
+        [
+            [t0_ns + i * step_ns + j * step_ns for j in range(n_pred_steps)]
+            for i in range(n_examples)
+        ],
+        dtype=torch.int64,
+    )
+    mock_logger = MagicMock()
+    mock_logger.save_dir = str(tmp_path)
+
+    vis.plot_examples(
+        datastore=datastore,
+        logger=mock_logger,
+        prediction=prediction,
+        target=target,
+        time_batch=time_batch,
+        first_example_idx=0,
+    )
+
+    expected_log_calls = n_examples * n_pred_steps * n_state_features
+    assert mock_logger.log_image.call_count == expected_log_calls
+    for i in range(n_examples):
+        assert (tmp_path / f"example_pred_{i}.pt").exists()
+        assert (tmp_path / f"example_target_{i}.pt").exists()
+    plt.close("all")
+
+
+def test_plot_examples_first_example_idx_offset(tmp_path):
+    """Verify first_example_idx offsets saved filenames correctly."""
+    # Standard library
+    from unittest.mock import MagicMock
+
+    # Third-party
+    import isodate
+
+    datastore = DummyDatastore()
+    n_state_features = datastore.get_num_data_vars("state")
+    n_grid = datastore.num_grid_points
+
+    prediction = torch.randn(1, 1, n_grid, n_state_features)
+    target = torch.randn(1, 1, n_grid, n_state_features)
+
+    t0_ns = int(isodate.parse_datetime("2021-01-01T00:00:00").timestamp() * 1e9)
+    step_ns = int(datastore.step_length.total_seconds() * 1e9)
+    time_batch = torch.tensor([[t0_ns + step_ns]], dtype=torch.int64)
+
+    mock_logger = MagicMock()
+    mock_logger.save_dir = str(tmp_path)
+
+    vis.plot_examples(
+        datastore=datastore,
+        logger=mock_logger,
+        prediction=prediction,
+        target=target,
+        time_batch=time_batch,
+        first_example_idx=3,
+    )
+
+    assert (tmp_path / "example_pred_3.pt").exists()
+    assert not (tmp_path / "example_pred_0.pt").exists()
+    plt.close("all")
