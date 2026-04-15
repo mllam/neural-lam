@@ -8,19 +8,24 @@ import pytest
 
 # First-party
 from neural_lam import utils
-from neural_lam.create_graph import create_graph_from_datastore
+from neural_lam.create_graph_with_wmg import create_graph_from_datastore
 from neural_lam.plot_graph import (
     plot_graph,
 )
 from tests.dummy_datastore import DummyDatastore
 
 
-@pytest.fixture(scope="module", params=["1level", "multiscale", "hierarchical"])
+@pytest.fixture(scope="module", params=["1level", "hierarchical"])
 def graph_fixture(request, tmp_path_factory):
     """Create a graph from a DummyDatastore and load it back.
 
-    Parametrized over graph types: 1level (flat), multiscale (flat multi-level),
-    and hierarchical.
+    Parametrized over graph types: 1level (flat, keisler archetype)
+    and hierarchical (multi-level with up/down edges).
+
+    Note: The graphcast archetype is not included here because it produces
+    multi-level m2m edges without up/down edges, which is not yet
+    compatible with ``utils.load_graph``. Graphcast graph creation is
+    tested separately in ``test_graph_creation.py``.
 
     Returns
     -------
@@ -31,14 +36,11 @@ def graph_fixture(request, tmp_path_factory):
     datastore = DummyDatastore()
 
     if graph_name == "hierarchical":
-        hierarchical = True
-        n_max_levels = 3
-    elif graph_name == "multiscale":
-        hierarchical = False
-        n_max_levels = 3
+        archetype = "hierarchical"
+        max_num_levels = 3
     elif graph_name == "1level":
-        hierarchical = False
-        n_max_levels = 1
+        archetype = "keisler"
+        max_num_levels = None
     else:
         raise ValueError(f"Unknown graph_name: {graph_name}")
 
@@ -46,8 +48,8 @@ def graph_fixture(request, tmp_path_factory):
     create_graph_from_datastore(
         datastore=datastore,
         output_root_path=str(graph_dir_path),
-        hierarchical=hierarchical,
-        n_max_levels=n_max_levels,
+        archetype=archetype,
+        max_num_levels=max_num_levels,
     )
 
     is_hierarchical, graph_ldict = utils.load_graph(
