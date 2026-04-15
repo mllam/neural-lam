@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [unreleased](https://github.com/mllam/neural-lam/compare/v0.6.0...HEAD)
 
+### Maintenance
+
+- Separate unit tests from integration tests into `tests/unit/` and `tests/integration/` directories, move `conftest.py` (S3 fixture) into integration, extract `test_all_gather_cat` into a standalone unit test file, and convert `test_clamping` to use `DummyDatastore` [\#599](https://github.com/mllam/neural-lam/issues/599)
+
 ## [v0.6.0](https://github.com/mllam/neural-lam/releases/tag/v0.6.0)
 
 This release introduces new features including GIF animation support, wandb run resumption, and improved ensemble loading, alongside a large number of bug fixes and maintenance updates.

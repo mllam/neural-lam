@@ -47,6 +47,12 @@ dev = ["pre-commit>=3.8.0", "pytest>=8.3.2", "pooch>=1.8.2"]
 [tool.black]
 line-length = 80
 
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = [
+    "integration: tests that require network access or real data (deselect with '-m not integration')",
+]
+
 [tool.isort]
 default_section = "THIRDPARTY" # codespell:ignore
 profile = "black"

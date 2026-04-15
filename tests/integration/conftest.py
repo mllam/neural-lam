@@ -14,13 +14,20 @@ from neural_lam.datastore import DATASTORES, init_datastore
 from neural_lam.datastore.npyfilesmeps import (
     compute_standardization_stats as compute_standardization_stats_meps,
 )
-
-# Local
-from .dummy_datastore import DummyDatastore
+from tests.dummy_datastore import DummyDatastore
 
 # Disable weights and biases to avoid unnecessary logging
 # and to avoid having to deal with authentication
 os.environ["WANDB_MODE"] = "disabled"
+
+
+def pytest_collection_modifyitems(items):
+    """Auto-mark every test collected from tests/integration/ with the
+    ``integration`` marker so that ``-m 'not integration'`` skips them."""
+    integration_marker = pytest.mark.integration
+    for item in items:
+        if "/integration/" in item.nodeid or "\\integration\\" in item.nodeid:
+            item.add_marker(integration_marker)
 
 
 @pytest.fixture(autouse=True)

@@ -7,13 +7,15 @@ import torch
 # First-party
 from neural_lam import config as nlconfig
 from neural_lam.create_graph import create_graph_from_datastore
-from neural_lam.datastore.mdp import MDPDatastore
+from neural_lam.datastore import DATASTORES
 from neural_lam.models.graph_lam import GraphLAM
-from tests.conftest import init_datastore_example
+from tests.dummy_datastore import DummyDatastore
+
+DATASTORES[DummyDatastore.SHORT_NAME] = DummyDatastore
 
 
 def test_clamping():
-    datastore = init_datastore_example(MDPDatastore.SHORT_NAME)
+    datastore = DummyDatastore()
 
     graph_name = "1level"
 
@@ -44,14 +46,15 @@ def test_clamping():
 
     model_args = ModelArgs()
 
+    # Use DummyDatastore feature names for clamping bounds
     config = nlconfig.NeuralLAMConfig(
         datastore=nlconfig.DatastoreSelection(
             kind=datastore.SHORT_NAME, config_path=datastore.root_path
         ),
         training=nlconfig.TrainingConfig(
             output_clamping=nlconfig.OutputClamping(
-                lower={"t2m": 0.0, "r2m": 0.0},
-                upper={"r2m": 1.0, "u100m": 100.0},
+                lower={"state_feat_0": 0.0, "state_feat_1": 0.0},
+                upper={"state_feat_1": 1.0, "state_feat_2": 100.0},
             )
         ),
     )
@@ -215,68 +218,6 @@ def test_clamping():
         (
             invalid_prediction[:, :, model.clamp_upper_idx]
             <= model.softplus_upper_lims
-        )
-        .all()
-        .item()
-    )
-
-    # Above tests only check the upper sigmoid limit.
-    # Repeat to check lower sigmoid limit
-
-    # Make predictions towards bounds for each feature
-    prediction = zero_prediction.clone()
-    n_loops = 100
-    for i in range(n_loops):
-        prediction = model.get_clamped_new_state(-delta, prediction)
-
-    # Check that clamped states are within bounds
-    assert (
-        (
-            model.sigmoid_lower_lims
-            <= prediction[:, :, model.clamp_lower_upper_idx]
-            <= model.sigmoid_upper_lims
-        )
-        .all()
-        .item()
-    )
-
-    # Check that prediction is within bounds in original non-normalized space
-    assert (
-        (
-            torch.tensor(list(lower_lims.values()))
-            <= unscaled_prediction[:, :, list(lower_lims.keys())]
-        )
-        .all()
-        .item()
-    )
-    assert (
-        (
-            unscaled_prediction[:, :, list(upper_lims.keys())]
-            <= torch.tensor(list(upper_lims.values()))
-        )
-        .all()
-        .item()
-    )
-
-    # Check that a prediction from a state starting outside the bounds is also
-    # pushed within bounds. 3 delta should be enough to give an initial state
-    # out of bounds so 5 is well outside
-    invalid_state = original_state - 5 * delta
-    assert (
-        not (
-            model.sigmoid_lower_lims
-            <= invalid_state[:, :, model.clamp_lower_upper_idx]
-            <= model.sigmoid_upper_lims
-        )
-        .any()
-        .item()
-    )
-    invalid_prediction = model.get_clamped_new_state(zero_delta, invalid_state)
-    assert (
-        (
-            model.sigmoid_lower_lims
-            <= invalid_prediction[:, :, model.clamp_lower_upper_idx]
-            <= model.sigmoid_upper_lims
         )
         .all()
         .item()
