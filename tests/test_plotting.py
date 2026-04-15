@@ -2,7 +2,7 @@
 from datetime import timedelta
 from pathlib import Path
 from typing import Iterator
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 # Third-party
 import matplotlib.figure
@@ -486,9 +486,9 @@ def test_create_metric_log_dict_with_metrics_watch(tmp_path):
 
     # Verify figure entries are plt.Figure and scalar entries are tensors
     for key, value in log_dict.items():
-        assert isinstance(value, (plt.Figure, torch.Tensor)), (
-            f"Unexpected value type for key '{key}': {type(value)}"
-        )
+        assert isinstance(
+            value, (plt.Figure, torch.Tensor)
+        ), f"Unexpected value type for key '{key}': {type(value)}"
 
     plt.close("all")
 
@@ -544,7 +544,6 @@ def test_aggregate_and_plot_metrics_with_metrics_watch(tmp_path):
 
     # Capture scalar metrics logged via self.log()
     logged_scalars = {}
-    original_log = model.log
 
     def capture_log(key, value, **kwargs):
         logged_scalars[key] = value
@@ -553,17 +552,15 @@ def test_aggregate_and_plot_metrics_with_metrics_watch(tmp_path):
 
     # Build a fake metrics_dict with MSE entries:
     # shape (N_eval=2, pred_steps=2, d_f=num_state_vars)
-    metrics_dict = {
-        "mse": [torch.rand(1, 2, num_state_vars) for _ in range(2)]
-    }
+    metrics_dict = {"mse": [torch.rand(1, 2, num_state_vars) for _ in range(2)]}
 
     # This is the exact crash site: should NOT raise AssertionError
     model.aggregate_and_plot_metrics(metrics_dict, prefix="val")
 
     # Verify that log_image was called (figures were logged)
-    assert mock_logger.log_image.called, (
-        "Expected log_image to be called for figure logging"
-    )
+    assert (
+        mock_logger.log_image.called
+    ), "Expected log_image to be called for figure logging"
 
     # Verify that scalar metrics were captured via self.log()
     assert len(logged_scalars) > 0, (
@@ -580,4 +577,3 @@ def test_aggregate_and_plot_metrics_with_metrics_watch(tmp_path):
     )
 
     plt.close("all")
-
