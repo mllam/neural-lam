@@ -419,7 +419,7 @@ Available archetypes:
 * **hierarchical**: `python -m neural_lam.create_graph_with_wmg --config_path <neural-lam-config-path> --archetype hierarchical`
 
 Run `python -m neural_lam.create_graph_with_wmg --help` for the full list of
-options (e.g. `--mesh_node_distance`, `--grid_mesh_ratio`,
+options (e.g. `--mesh_node_distance`, `--grid_mesh_spacing_ratio`,
 `--level_refinement_factor`, `--max_num_levels`).
 
 ## Logging your experiments
