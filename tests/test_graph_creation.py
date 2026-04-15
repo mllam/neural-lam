@@ -13,28 +13,81 @@ from neural_lam.datastore.base import BaseRegularGridDatastore
 from tests.conftest import init_datastore_example
 
 
-def _assert_edge_rows_match_index(
-    edge_index: torch.Tensor, features: torch.Tensor, label: str
+def _ctx(datastore_name: str, graph_name: str, pair: str) -> str:
+    """Short prefix for assertion messages (CI-friendly)."""
+    return f"datastore={datastore_name!r}, graph={graph_name!r}, pair={pair}"
+
+
+def _assert_tensor_edge_feature_agree(
+    edge_index,
+    features,
+    *,
+    datastore_name: str,
+    graph_name: str,
+    pair: str,
+    d_features: int,
 ) -> None:
-    """One feature row per column in *edge_index* (one edge)."""
+    """One feature row per column in *edge_index* (one edge); validate types/shapes."""
+    c = _ctx(datastore_name, graph_name, pair)
+    assert isinstance(edge_index, torch.Tensor), (
+        f"{c}: edge_index must be torch.Tensor, got {type(edge_index).__name__}"
+    )
+    assert isinstance(features, torch.Tensor), (
+        f"{c}: features must be torch.Tensor, got {type(features).__name__}"
+    )
+    assert edge_index.dim() == 2, (
+        f"{c}: edge_index must be 2D, got dim={edge_index.dim()} "
+        f"shape={tuple(edge_index.shape)}"
+    )
+    assert edge_index.shape[0] == 2, (
+        f"{c}: edge_index must have 2 rows (COO), got shape[0]={edge_index.shape[0]}"
+    )
+    assert features.dim() == 2, (
+        f"{c}: features must be 2D, got dim={features.dim()} "
+        f"shape={tuple(features.shape)}"
+    )
+    assert features.shape[1] == d_features, (
+        f"{c}: features last dim must be d_features={d_features}, "
+        f"got {features.shape[1]}"
+    )
     n_edges = edge_index.shape[1]
     n_rows = features.shape[0]
     assert n_edges == n_rows, (
-        f"{label}: edge_index has {n_edges} edges, features has {n_rows} rows"
+        f"{c}: edge_index/features row mismatch — edge_index has {n_edges} edges "
+        f"(shape[1]={n_edges}) but features has {n_rows} rows (shape[0]={n_rows})"
     )
 
 
-def _assert_list_pairs_match(
-    edge_indices: list,
-    features_list: list,
-    label: str,
+def _assert_list_edge_feature_agree(
+    edge_indices,
+    features_list,
+    *,
+    datastore_name: str,
+    graph_name: str,
+    pair: str,
+    d_features: int,
 ) -> None:
+    """Same as :func:`_assert_tensor_edge_feature_agree` but for per-level lists."""
+    c = _ctx(datastore_name, graph_name, pair)
+    assert isinstance(edge_indices, list), (
+        f"{c}: edge_index artifact must be a list, got {type(edge_indices).__name__}"
+    )
+    assert isinstance(features_list, list), (
+        f"{c}: features artifact must be a list, got {type(features_list).__name__}"
+    )
     assert len(edge_indices) == len(features_list), (
-        f"{label}: got {len(edge_indices)} index tensors and "
+        f"{c}: list length mismatch: {len(edge_indices)} edge_index tensors vs "
         f"{len(features_list)} feature tensors"
     )
-    for i, (ei, ft) in enumerate(zip(edge_indices, features_list)):
-        _assert_edge_rows_match_index(ei, ft, f"{label}[{i}]")
+    for level, (ei, ft) in enumerate(zip(edge_indices, features_list)):
+        _assert_tensor_edge_feature_agree(
+            ei,
+            ft,
+            datastore_name=datastore_name,
+            graph_name=graph_name,
+            pair=f"{pair}[level={level}]",
+            d_features=d_features,
+        )
 
 
 @pytest.mark.parametrize("graph_name", ["1level", "multiscale", "hierarchical"])
@@ -142,21 +195,56 @@ def test_graph_creation(datastore_name, graph_name):
 
         g2m_ei = torch.load(graph_dir_path / "g2m_edge_index.pt")
         g2m_ft = torch.load(graph_dir_path / "g2m_features.pt")
-        _assert_edge_rows_match_index(g2m_ei, g2m_ft, "g2m")
+        _assert_tensor_edge_feature_agree(
+            g2m_ei,
+            g2m_ft,
+            datastore_name=datastore_name,
+            graph_name=graph_name,
+            pair="g2m",
+            d_features=d_features,
+        )
 
         m2g_ei = torch.load(graph_dir_path / "m2g_edge_index.pt")
         m2g_ft = torch.load(graph_dir_path / "m2g_features.pt")
-        _assert_edge_rows_match_index(m2g_ei, m2g_ft, "m2g")
+        _assert_tensor_edge_feature_agree(
+            m2g_ei,
+            m2g_ft,
+            datastore_name=datastore_name,
+            graph_name=graph_name,
+            pair="m2g",
+            d_features=d_features,
+        )
 
         m2m_ei = torch.load(graph_dir_path / "m2m_edge_index.pt")
         m2m_ft = torch.load(graph_dir_path / "m2m_features.pt")
-        _assert_list_pairs_match(m2m_ei, m2m_ft, "m2m")
+        _assert_list_edge_feature_agree(
+            m2m_ei,
+            m2m_ft,
+            datastore_name=datastore_name,
+            graph_name=graph_name,
+            pair="m2m",
+            d_features=d_features,
+        )
 
         if hierarchical:
             up_ei = torch.load(graph_dir_path / "mesh_up_edge_index.pt")
             up_ft = torch.load(graph_dir_path / "mesh_up_features.pt")
-            _assert_list_pairs_match(up_ei, up_ft, "mesh_up")
+            _assert_list_edge_feature_agree(
+                up_ei,
+                up_ft,
+                datastore_name=datastore_name,
+                graph_name=graph_name,
+                pair="mesh_up",
+                d_features=d_features,
+            )
 
             down_ei = torch.load(graph_dir_path / "mesh_down_edge_index.pt")
             down_ft = torch.load(graph_dir_path / "mesh_down_features.pt")
-            _assert_list_pairs_match(down_ei, down_ft, "mesh_down")
+            _assert_list_edge_feature_agree(
+                down_ei,
+                down_ft,
+                datastore_name=datastore_name,
+                graph_name=graph_name,
+                pair="mesh_down",
+                d_features=d_features,
+            )
