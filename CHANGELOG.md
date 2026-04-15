@@ -70,6 +70,8 @@ This release introduces new features including GIF animation support, wandb run 
 
 ### Maintenance
 
+- Clear `test_metrics` lists in `on_test_epoch_end` for consistency with `val_metrics` clearing in `on_validation_epoch_end` [\#433](https://github.com/mllam/neural-lam/issues/433) [\#435](https://github.com/mllam/neural-lam/pull/435) @RajdeepKushwaha5
+
 - Update PR template to clarify milestone/roadmap requirement and maintenance changes [\#186](https://github.com/mllam/neural-lam/pull/186) @joeloskarsson
 
 - Update CI/CD to use python 3.13 for testing and full range of current python versions for linting (3.10 - 3.14) [\#173](https://github.com/mllam/neural-lam/pull/173) @observingClouds

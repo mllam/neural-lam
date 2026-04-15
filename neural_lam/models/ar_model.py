@@ -824,6 +824,10 @@ class ARModel(pl.LightningModule):
         self.matched_metrics = set()
         self.spatial_loss_maps.clear()
 
+        # Clear lists with test metrics values
+        for metric_list in self.test_metrics.values():
+            metric_list.clear()
+
     def on_load_checkpoint(self, checkpoint):
         """
         Perform any changes to state dict before loading checkpoint
