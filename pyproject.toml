@@ -13,6 +13,7 @@ authors = [
     { name = "Daniel Holmberg", email = "daniel.holmberg@helsinki.fi" },
 ]
 readme = "README.md"
+license = { text = "MIT" }
 
 # PEP 621 project metadata
 # See https://www.python.org/dev/peps/pep-0621/
@@ -36,14 +37,12 @@ dependencies = [
     "mlflow>=2.16.2",
     "boto3>=1.35.32",
     "nvidia-ml-py>=13.580.82",
+    "pillow>=9.0.0",
 ]
 requires-python = ">=3.10"
 
 [dependency-groups]
 dev = ["pre-commit>=3.8.0", "pytest>=8.3.2", "pooch>=1.8.2", "nbmake>=1.5.0", "ipykernel>=6.0.0"]
-
-[tool.setuptools]
-py-modules = ["neural_lam"]
 
 [tool.black]
 line-length = 80
@@ -87,7 +86,7 @@ skip = "requirements/*"
 # Pylint config
 [tool.pylint]
 ignore = [
-    "create_mesh.py", # Disable linting for now, as major rework is planned/expected
+    "create_graph.py", # Disable linting for now, as major rework is planned/expected
 ]
 # Temporary fix for import neural_lam statements until set up as proper package
 init-hook = 'import sys; sys.path.append(".")'
@@ -109,10 +108,16 @@ allow-any-import-level = "neural_lam"
 [tool.pylint.SIMILARITIES]
 min-similarity-lines = 10
 
+[build-system]
+requires = ["hatchling>=1.27.0", "hatch-vcs"]
+build-backend = "hatchling.build"
 
-[tool.pdm.version]
-source = "scm"
-fallback_version = "0.0.0"
+[tool.hatch.metadata]
+core-metadata-version = "2.4"
+
+[tool.hatch.version]
+source = "vcs"
+fallback-version = "0.0.0"
 
 [tool.pytest.ini_options]
 testpaths = ["neural_lam", "tests", "docs/notebooks"]
@@ -121,3 +126,9 @@ addopts = "--doctest-modules --nbmake --nbmake-timeout=600 -vv -s"
 [build-system]
 requires = ["pdm-backend"]
 build-backend = "pdm.backend"
+
+[tool.hatch.build.targets.wheel]
+exclude = [
+  ".venv/",
+  "venv/",
+]
