@@ -41,8 +41,35 @@ dependencies = [
 ]
 requires-python = ">=3.10"
 
+[project.optional-dependencies]
+cpu = ["torch>=2.3.0"]
+gpu = ["torch>=2.3.0"]
+
 [dependency-groups]
 dev = ["pre-commit>=3.8.0", "pytest>=8.3.2", "pooch>=1.8.2"]
+
+[tool.uv]
+# uv-specific configuration for PyTorch CPU/GPU variant selection.
+# NOTE: --torch-backend is only supported in `uv pip`, not `uv sync`.
+# Tracking issue for project-interface support: https://github.com/astral-sh/uv/issues/12994
+# Until then, we use extras + explicit index routing for `uv sync`.
+conflicts = [[{ extra = "cpu" }, { extra = "gpu" }]]
+
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
+
+[[tool.uv.index]]
+name = "pytorch-gpu"
+url = "https://download.pytorch.org/whl/cu128"
+explicit = true
+
+[tool.uv.sources]
+torch = [
+    { index = "pytorch-cpu", extra = "cpu" },
+    { index = "pytorch-gpu", extra = "gpu" },
+]
 
 [tool.black]
 line-length = 80
