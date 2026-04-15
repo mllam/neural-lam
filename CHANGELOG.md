@@ -27,7 +27,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Maintenance
 
-- Add two-layer caching to CI workflows (pip download cache + uv venv cache) to reduce build times by 80-95% [\#605](https://github.com/mllam/neural-lam/pull/3605) @Sharkyii
+- Add two-layer caching to install-and-test CI workflow (pip download cache + uv venv cache) to reduce build times by 80-95% [\#605](https://github.com/mllam/neural-lam/pull/3605) @Sharkyii
 
 - Ensure proper sorting of `analysis_time` in `NpyFilesDatastoreMEPS._get_analysis_times` independent of the order in which files are processed with glob [\#386](https://github.com/mllam/neural-lam/pull/386) @Gopisokk
 
