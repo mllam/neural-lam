@@ -121,8 +121,8 @@ jobs:
 
       - name: Run notebook tests
         if: |
-          matrix.package_manager == 'uv' && 
-          (github.event_name == 'push' || 
+          matrix.package_manager == 'uv' &&
+          (github.event_name == 'push' ||
            contains(github.event.pull_request.labels.*.name, 'run-notebooks'))
         run: |
           pytest -vv -s docs/notebooks/
