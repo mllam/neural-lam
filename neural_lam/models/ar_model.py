@@ -750,7 +750,13 @@ class ARModel(pl.LightningModule):
                 elif isinstance(value, (int, float, torch.Tensor)):
                     # Log scalar metrics
                     plt.close("all")  # Close all figs
-                    self.log(key, value, on_step=False, on_epoch=True, rank_zero_only=True)
+                    self.log(
+                        key,
+                        value,
+                        on_step=False,
+                        on_epoch=True,
+                        rank_zero_only=True,
+                    )
 
     def on_test_epoch_end(self):
         """
