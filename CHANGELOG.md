@@ -79,6 +79,8 @@ This release introduces new features including GIF animation support, wandb run 
 
 ### Maintenance
 
+- Fix notebook CI failure by adding pytest fixture to create required `danra.datastore.zarr` file and removing duplicate `[build-system]` section in `pyproject.toml` [\#577](https://github.com/mllam/neural-lam/pull/577)
+
 - Update PR template to clarify milestone/roadmap requirement and maintenance changes [\#186](https://github.com/mllam/neural-lam/pull/186) @joeloskarsson
 
 - Update CI/CD to use python 3.13 for testing and full range of current python versions for linting (3.10 - 3.14) [\#173](https://github.com/mllam/neural-lam/pull/173) @observingClouds

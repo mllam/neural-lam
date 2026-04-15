@@ -123,10 +123,6 @@ fallback-version = "0.0.0"
 testpaths = ["neural_lam", "tests", "docs/notebooks"]
 addopts = "--doctest-modules --nbmake --nbmake-timeout=600 -vv -s"
 
-[build-system]
-requires = ["pdm-backend"]
-build-backend = "pdm.backend"
-
 [tool.hatch.build.targets.wheel]
 exclude = [
   ".venv/",
