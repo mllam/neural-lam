@@ -10,6 +10,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - Run notebooks in `docs/notebooks/` as pytest tests via `nbmake` in CI refs [\#69](https://github.com/mllam/neural-lam/issues/69)
+- Add 10-minute timeout for notebook cell execution via `--nbmake-timeout=600` [\#577](https://github.com/mllam/neural-lam/pull/577)
+
+### Changed
+
+- Notebook tests now run selectively: on push to main or when PR has `run-notebooks` label [\#577](https://github.com/mllam/neural-lam/pull/577)
 
 ### Maintenance
 
