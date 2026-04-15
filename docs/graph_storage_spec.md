@@ -100,12 +100,9 @@ The `neural-lam` graph format on disk does not explicitly store node features fo
 
 #### Node index space
 
-Node indices in edge tensors MUST be stored in a single global index space:
+The node indices in edge index tensors MUST be defined so that for each nodeset (for example "mesh nodes level 0") the indices run from `0` to `N-1`, where `N` is the number of nodes in that nodeset, i.e. the node indices for each nodeset MUST be contiguous. For example, if there are `N_0` mesh nodes at level `0`, then the node indices for those nodes MUST be `0` to `N_0 - 1`. If there are `N_1` mesh nodes at level `1`, then the node indices for those nodes MUST be `N_0` to `N_0 + N_1 - 1`, and so on.
 
-- Mesh nodes MUST come first.
-- Grid nodes MUST follow after all mesh nodes.
-- For hierarchical graphs, each mesh level MUST occupy a contiguous mesh index
-  range in ascending level order.
+NOTE: There is no requirement that the node indices for different nodesets be non-overlapping, in fact they should be overlapping, as the node indices for each nodeset are defined to run from `0` to `N-1` for that nodeset. The key requirement is that the node indices for each nodeset are contiguous and defined in a consistent manner across all edge index tensors.
 
 #### Mesh node features
 
