@@ -112,8 +112,7 @@ that level. Each tensor MUST satisfy the following requirements:
 
 - `mesh_features` entries MUST have shape `[N_level, 2]`, where `N_level` is the number of mesh nodes at that level.
 - Columns MUST be x/y coordinates.
-- In graphs created by `neural_lam.create_graph`, coordinates are normalized by
-  dividing by the maximum absolute grid coordinate.
+- Mesh node features SHOULD NOT be normalized, instead any normalization will be performed inside `neural-lam` after graph loading.
 - Dtype MUST be `torch.float32`.
 
 ### Edges
@@ -176,6 +175,7 @@ For every edge feature tensor above:
 
 - The shape MUST be `[E_component, N_f]`.
 - `N_f` MUST be consistent across all edge feature tensors in the graph.
+- Edge features SHOULD NOT be normalized, instead any normalization will be performed inside `neural-lam` after graph loading.
 - Dtype MUST be `torch.float32`.
 
 In graphs created by `neural_lam.create_graph`, `N_f == 3` by default with:
