@@ -747,9 +747,8 @@ class ARModel(pl.LightningModule):
 
                     if hasattr(self.logger, "log_image"):
                         self.logger.log_image(key=log_key, images=[value])
-                elif isinstance(value, (int, float, torch.Tensor)):
+                elif isinstance(value, torch.Tensor):
                     # Log scalar metrics
-                    plt.close("all")  # Close all figs
                     self.log(
                         key,
                         value,
@@ -757,6 +756,8 @@ class ARModel(pl.LightningModule):
                         on_epoch=True,
                         rank_zero_only=True,
                     )
+
+        plt.close("all")
 
     def on_test_epoch_end(self):
         """

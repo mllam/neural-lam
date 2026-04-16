@@ -534,10 +534,11 @@ def test_aggregate_and_plot_metrics_with_metrics_watch(tmp_path):
     mock_trainer.current_epoch = 0
     model._trainer = mock_trainer
 
-    # Mock logger so log_image calls don't fail
+    # Mock logger so log_image calls don't fail.
+    # In Lightning, self.logger resolves to self._trainer.logger,
+    # so we must attach the mock there.
     mock_logger = MagicMock()
-    mock_logger.log_image = MagicMock()
-    model._logger = mock_logger
+    mock_trainer.logger = mock_logger
 
     # Patch all_gather_cat to be a no-op (single process)
     model.all_gather_cat = lambda x: x
