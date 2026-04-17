@@ -24,6 +24,10 @@ _TICK_SIZE = 11  # tick labels
 # or when the total number of cells exceeds a readable count.
 _MIN_CELL_SIZE_FOR_ANNOTATIONS = 18
 _MAX_CELLS_FOR_ANNOTATIONS = 800
+_HEATMAP_CMAP = matplotlib.colors.LinearSegmentedColormap.from_list(
+    "error_heatmap_white_red",
+    ["#ffffff", "#fee5d9", "#fcae91", "#fb6a4a", "#cb181d"],
+)
 
 
 def _tex_safe(s: str) -> str:
@@ -118,17 +122,16 @@ def _get_heatmap_color_values(
     errors_np: np.ndarray,
     datastore: BaseRegularGridDatastore,
     normalization: str,
-) -> tuple[np.ndarray, str, str, float, float]:
+) -> tuple[np.ndarray, str, matplotlib.colors.Colormap]:
     """
     Normalize heatmap colors according to `normalization`.
 
-    Returns a 5-tuple: (color_values, colorbar_label, cmap, vmin, vmax).
-    The color_values array drives the colormap only; numeric cell annotations
-    always show the original values from `errors_np`.
+    Returns a 3-tuple: (color_values, colorbar_label, cmap).
+    The returned array drives the colormap only; the numeric annotations in the
+    heatmap remain the original (physical-unit) values passed in `errors_np`.
 
     Both modes fall back to per-variable max normalization when their required
     stat is unavailable, appending "[fallback]" to the colorbar label.
-    The two modes never fall back to each other.
     """
 
     def _per_var_fallback():
@@ -137,9 +140,7 @@ def _get_heatmap_color_values(
         return (
             errors_np / safe,
             "Per-variable scale (relative to max error) [fallback]",
-            "Reds",
-            0.0,
-            1.0,
+            _HEATMAP_CMAP,
         )
 
     try:
@@ -169,12 +170,9 @@ def _get_heatmap_color_values(
             state_std,
             1.0,
         )
-        color = errors_np / safe_std[:, None]
-        finite = color[np.isfinite(color)]
-        vmax = float(finite.max()) if finite.size > 0 else 1.0
-        return color, "RMSE / state_std", "Reds", 0.0, vmax
+        return errors_np / safe_std[:, None], "Error / state_std", _HEATMAP_CMAP
 
-    if normalization == "one_step":
+    if normalization == "diff_std":
         diff_std_std = _get_feature_scale(
             ds_stats, "state_diff_std_standardized", n_vars
         )
@@ -188,6 +186,12 @@ def _get_heatmap_color_values(
             return _per_var_fallback()
         state_std = _get_feature_scale(ds_stats, "state_std", n_vars)
         if state_std is None:
+            warnings.warn(
+                "state_std unavailable (needed to recover physical diff_std); "
+                "falling back to per-variable scale.",
+                UserWarning,
+                stacklevel=3,
+            )
             return _per_var_fallback()
         scale = state_std * diff_std_std  # physical diff_std
         safe = np.where(
@@ -195,14 +199,15 @@ def _get_heatmap_color_values(
             scale,
             1.0,
         )
-        color = errors_np / safe[:, None]
-        finite = color[np.isfinite(color)]
-        vmax = float(finite.max()) if finite.size > 0 else 1.0
-        return color, "Error / Std(1-step change)", "Reds", 0.0, vmax
+        return (
+            errors_np / safe[:, None],
+            "Error / physical diff_std",
+            _HEATMAP_CMAP,
+        )
 
     raise ValueError(
         f"Unknown normalization {normalization!r}; "
-        "expected 'state_std' or 'one_step'."
+        "expected 'state_std' or 'diff_std'."
     )
 
 
@@ -362,10 +367,10 @@ def plot_error_heatmap(
         Datastore providing step length and variable metadata.
     title : str, optional
         Optional title for the figure.
-    normalization : {"state_std", "one_step"}, default "state_std"
-        Color scaling mode. ``"state_std"`` divides by climatological std;
-        ``"one_step"`` divides by the typical one-step change magnitude.
-        Both fall back to per-variable max when the required stats are missing.
+    normalization : {"state_std", "diff_std"}, default "state_std"
+        Color scaling mode. "state_std" divides by climatological std;
+        "diff_std" divides by the typical one-step change magnitude. Both fall
+        back to per-variable max error when the required stats are missing.
 
     Notes
     -----
@@ -379,11 +384,18 @@ def plot_error_heatmap(
 
     time_step_int, time_step_unit = utils.get_integer_time(step_length)
     layout = _compute_heatmap_layout(n_rows=d_f, n_cols=pred_steps)
-    color_values_np, colorbar_label, heatmap_cmap, vmin, vmax = (
-        _get_heatmap_color_values(errors_np, datastore, normalization)
+    color_values_np, colorbar_label, heatmap_cmap = _get_heatmap_color_values(
+        errors_np, datastore, normalization
     )
-    if np.isclose(vmin, vmax):
-        vmax = vmin + 1.0
+    finite_color_values = color_values_np[np.isfinite(color_values_np)]
+    if finite_color_values.size == 0:
+        vmin, vmax = 0.0, 1.0
+    else:
+        vmin = float(finite_color_values.min())
+        vmax = float(finite_color_values.max())
+        vmin = min(0.0, vmin)
+        if np.isclose(vmin, vmax):
+            vmax = vmin + 1.0
 
     fig, ax = plt.subplots(
         figsize=(layout["fig_width"], layout["fig_height"]),

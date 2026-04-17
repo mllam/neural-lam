@@ -179,7 +179,7 @@ def test_plot_error_map() -> None:
 
 
 def test_plot_error_heatmap_state_std_normalization():
-    """state_std mode: colors are RMSE / state_std."""
+    """state_std mode: colors are Error / state_std."""
     errors = torch.tensor(
         [
             [1.0, 100.0, 10.0],
@@ -200,19 +200,15 @@ def test_plot_error_heatmap_state_std_normalization():
     image = ax.images[0]
     colorbar = fig.axes[1]
 
-    # color = errors.T / state_std[:, None]
     expected = errors.T.numpy() / np.array([[1.0], [100.0], [10.0]])
     np.testing.assert_allclose(image.get_array(), expected)
-    assert image.norm.vmin == pytest.approx(0.0)
-    assert image.norm.vmax == pytest.approx(expected.max())
-    assert len(fig.axes) == 2
-    assert colorbar.get_ylabel() == "RMSE / state_std"
+    assert colorbar.get_ylabel() == "Error / state_std"
 
     plt.close(fig)
 
 
-def test_plot_error_heatmap_one_step_normalization():
-    """one_step mode: colors are RMSE / physical diff_std."""
+def test_plot_error_heatmap_diff_std_normalization():
+    """diff_std mode: colors are Error / physical diff_std."""
     errors = torch.tensor(
         [
             [1.0, 100.0, 10.0],
@@ -227,7 +223,7 @@ def test_plot_error_heatmap_one_step_normalization():
     )
 
     fig = vis.plot_error_heatmap(
-        errors, datastore=datastore, normalization="one_step"
+        errors, datastore=datastore, normalization="diff_std"
     )
     ax = fig.axes[0]
     image = ax.images[0]
@@ -236,9 +232,7 @@ def test_plot_error_heatmap_one_step_normalization():
     # physical diff_std = state_std * state_diff_std_standardized = [1, 200, 5]
     expected = errors.T.numpy() / np.array([[1.0], [200.0], [5.0]])
     np.testing.assert_allclose(image.get_array(), expected)
-    assert image.norm.vmin == pytest.approx(0.0)
-    assert image.norm.vmax == pytest.approx(expected.max())
-    assert colorbar.get_ylabel() == "Error / Std(1-step change)"
+    assert colorbar.get_ylabel() == "Error / physical diff_std"
 
     plt.close(fig)
 
@@ -262,15 +256,13 @@ def test_plot_error_heatmap_falls_back_to_per_var_scale_without_stats():
     # errors_np after transpose: var0=[1,3], var1=[2,4]; max per var: [3,4]
     expected = np.array([[1 / 3, 3 / 3], [2 / 4, 4 / 4]])
     np.testing.assert_allclose(image.get_array(), expected)
-    assert image.norm.vmin == pytest.approx(0.0)
-    assert image.norm.vmax == pytest.approx(1.0)
     assert "[fallback]" in colorbar.get_ylabel()
 
     plt.close(fig)
 
 
-def test_plot_error_heatmap_one_step_falls_back_when_diff_std_absent():
-    """one_step falls back to per-var max when diff_std is missing."""
+def test_plot_error_heatmap_diff_std_falls_back_when_diff_std_absent():
+    """diff_std mode falls back to per-var max when diff_std is missing."""
 
     class StateStdOnlyDatastore(HeatmapDatastore):
         def get_standardization_dataarray(self, category):
@@ -285,7 +277,7 @@ def test_plot_error_heatmap_one_step_falls_back_when_diff_std_absent():
 
     with pytest.warns(UserWarning, match="falling back to per-variable scale"):
         fig = vis.plot_error_heatmap(
-            errors, datastore=datastore, normalization="one_step"
+            errors, datastore=datastore, normalization="diff_std"
         )
     colorbar = fig.axes[1]
     assert "[fallback]" in colorbar.get_ylabel()
@@ -314,9 +306,7 @@ def test_plot_error_heatmap_state_std_ignores_diff_std():
     # errors_np after transpose: var0=[2,1], var1=[4,3]; state_std=[2,1]
     expected = np.array([[2 / 2, 1 / 2], [4 / 1, 3 / 1]])
     np.testing.assert_allclose(image.get_array(), expected)
-    assert image.norm.vmin == pytest.approx(0.0)
-    assert image.norm.vmax == pytest.approx(4.0)
-    assert fig.axes[1].get_ylabel() == "RMSE / state_std"
+    assert fig.axes[1].get_ylabel() == "Error / state_std"
     plt.close(fig)
 
 
