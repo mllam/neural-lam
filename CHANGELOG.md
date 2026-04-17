@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Change metric heatmap (`plot_error_map`, now `plot_error_heatmap`) to use a
+  shared cross-variable color scale instead of per-row normalization, add a
+  colorbar, and scale figure size and font sizes with grid dimensions
+  ([#375](https://github.com/mllam/neural-lam/issues/375))
+
 - Resolve `xarray` `FacetGrid` `DeprecationWarning` in `plot_example.py` by using a compatibility shim [\#482](https://github.com/mllam/neural-lam/pull/482) @sohampatil01-svg
 
 ## [v0.6.0](https://github.com/mllam/neural-lam/releases/tag/v0.6.0)
