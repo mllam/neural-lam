@@ -179,7 +179,7 @@ def test_plot_error_map() -> None:
 
 
 def test_plot_error_heatmap_state_std_normalization():
-    """state_std mode: colors are RMSE / state_std, cross-variable comparable."""
+    """state_std mode: colors are RMSE / state_std."""
     errors = torch.tensor(
         [
             [1.0, 100.0, 10.0],
@@ -193,7 +193,9 @@ def test_plot_error_heatmap_state_std_normalization():
         state_diff_std_standardized=[1.0, 2.0, 0.5],
     )
 
-    fig = vis.plot_error_heatmap(errors, datastore=datastore, normalization="state_std")
+    fig = vis.plot_error_heatmap(
+        errors, datastore=datastore, normalization="state_std"
+    )
     ax = fig.axes[0]
     image = ax.images[0]
     colorbar = fig.axes[1]
@@ -210,7 +212,7 @@ def test_plot_error_heatmap_state_std_normalization():
 
 
 def test_plot_error_heatmap_one_step_normalization():
-    """one_step mode: colors are RMSE / diff_std (physical), cross-variable comparable."""
+    """one_step mode: colors are RMSE / physical diff_std."""
     errors = torch.tensor(
         [
             [1.0, 100.0, 10.0],
@@ -224,7 +226,9 @@ def test_plot_error_heatmap_one_step_normalization():
         state_diff_std_standardized=[1.0, 2.0, 0.5],
     )
 
-    fig = vis.plot_error_heatmap(errors, datastore=datastore, normalization="one_step")
+    fig = vis.plot_error_heatmap(
+        errors, datastore=datastore, normalization="one_step"
+    )
     ax = fig.axes[0]
     image = ax.images[0]
     colorbar = fig.axes[1]
@@ -240,7 +244,7 @@ def test_plot_error_heatmap_one_step_normalization():
 
 
 def test_plot_error_heatmap_falls_back_to_per_var_scale_without_stats():
-    """When stats are unavailable colors fall back to per-variable max normalization."""
+    """Colors fall back to per-variable max when stats are unavailable."""
 
     class NoStatsHeatmapDatastore(HeatmapDatastore):
         def get_standardization_dataarray(self, category):
@@ -266,7 +270,7 @@ def test_plot_error_heatmap_falls_back_to_per_var_scale_without_stats():
 
 
 def test_plot_error_heatmap_one_step_falls_back_when_diff_std_absent():
-    """one_step mode falls back to per-var max when diff_std is missing, never to state_std."""
+    """one_step falls back to per-var max when diff_std is missing."""
 
     class StateStdOnlyDatastore(HeatmapDatastore):
         def get_standardization_dataarray(self, category):
@@ -289,7 +293,7 @@ def test_plot_error_heatmap_one_step_falls_back_when_diff_std_absent():
 
 
 def test_plot_error_heatmap_state_std_ignores_diff_std():
-    """state_std mode uses only state_std; presence or absence of diff_std is irrelevant."""
+    """state_std mode is unaffected by presence or absence of diff_std."""
 
     class StateStdOnlyDatastore(HeatmapDatastore):
         def get_standardization_dataarray(self, category):
@@ -301,7 +305,9 @@ def test_plot_error_heatmap_state_std_ignores_diff_std():
 
     errors = torch.tensor([[2.0, 4.0], [1.0, 3.0]])
     datastore = StateStdOnlyDatastore(n_vars=2, state_std=[2.0, 1.0])
-    fig = vis.plot_error_heatmap(errors, datastore=datastore, normalization="state_std")
+    fig = vis.plot_error_heatmap(
+        errors, datastore=datastore, normalization="state_std"
+    )
     ax = fig.axes[0]
     image = ax.images[0]
 
