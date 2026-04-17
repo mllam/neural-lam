@@ -115,6 +115,8 @@ that level. Each tensor MUST satisfy the following requirements:
 - Mesh node features SHOULD NOT be normalized, instead any normalization will be performed inside `neural-lam` after graph loading.
 - Dtype MUST be `torch.float32`.
 
+*NOTE*: the reason for requiring that the first two columns of the mesh node features contain the x and y coordinates is that we know which columns contain the coordinate values, so that all coordinate values (both x and y) can be normalized together in `neural-lam`.
+
 ### Edges
 
 #### Edge indices
@@ -174,12 +176,7 @@ of the corresponding `mesh_*_edge_index.pt` file.
 For every edge feature tensor above:
 
 - The shape MUST be `[E_component, N_f]`.
-- `N_f` MUST be consistent across all edge feature tensors in the graph.
+- `N_f` must be at least `3` (to hold the x-length, y-length, and total length of the edge, see next point), but can be larger if additional static features are included. The value of `N_f` MUST be consistent across all edge feature tensors in the graph.
+- The first three columns (`<feature_tensor>[0:3,:]`) of the edge feature tensors MUST contain the x-length, y-length, and total length of the edge, i.e. if `sender_pos` and `receiver_pos` (with shapes `[N,2]` and `N` the number of nodes) are the x and y coordinates of the sender and receiver nodes, then `vdiff = receiver_pos - sender_pos`, so that column `0` is `vdiff[0,:]`, column `1` is `vdiff[1,:]`, and column `2` is `torch.norm(vdiff, dim=0)`.
 - Edge features SHOULD NOT be normalized, instead any normalization will be performed inside `neural-lam` after graph loading.
 - Dtype MUST be `torch.float32`.
-
-In graphs created by `neural_lam.create_graph`, `N_f == 3` by default with:
-
-- Column `0`: edge length, where `edge_length = ||sender_pos - receiver_pos||_2`.
-- Column `1`: x-component of `vdiff = sender_pos - receiver_pos`.
-- Column `2`: y-component of `vdiff = sender_pos - receiver_pos`.
