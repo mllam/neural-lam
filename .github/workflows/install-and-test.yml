@@ -44,6 +44,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Set up Python 3.13
+        id: setup-python
         uses: actions/setup-python@v6
         with:
           python-version: 3.13
@@ -71,9 +72,9 @@ jobs:
         uses: actions/cache@v4
         with:
           path: .venv
-          key: uv-venv-${{ runner.os }}-${{ matrix.device }}-${{ hashFiles('uv.lock') }}
+          key: uv-venv-${{ runner.os }}-${{ matrix.device }}-py${{ steps.setup-python.outputs.python-version }}-${{ hashFiles('uv.lock') }}
           restore-keys: |
-            uv-venv-${{ runner.os }}-${{ matrix.device }}-
+            uv-venv-${{ runner.os }}-${{ matrix.device }}-py${{ steps.setup-python.outputs.python-version }}-
 
       - name: Create virtual environment (pip GPU)
         if: matrix.package_manager == 'pip' && matrix.device == 'gpu'
