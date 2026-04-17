@@ -102,7 +102,10 @@ jobs:
       - name: Setup environment with uv (if applicable)
         if: matrix.package_manager == 'uv'
         run: |
-          if [ "${{ steps.cache-venv.outputs.cache-hit }}" != "true" ]; then
+          if [ "${{ steps.cache-venv.outputs.cache-hit }}" != "true" ] && [ -d .venv ]; then
+            rm -rf .venv
+          fi
+          if [ ! -d .venv ]; then
             uv venv --no-project
           fi
           source .venv/bin/activate
