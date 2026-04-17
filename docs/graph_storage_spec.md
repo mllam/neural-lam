@@ -110,8 +110,8 @@ NOTE: There is no requirement that the node indices for different nodesets be no
 where each entry is a tensor containing static features for the mesh nodes at
 that level. Each tensor MUST satisfy the following requirements:
 
-- `mesh_features` entries MUST have shape `[N_level, 2]`, where `N_level` is the number of mesh nodes at that level.
-- Columns MUST be x/y coordinates.
+- `mesh_features` entries MUST have shape `[N_level, N_f]`, where `N_level` is the number of mesh nodes at that level and `N_f` is the number of features per node. `N_f` MUST be at minimum `2` (for x and y coordinates of the node, see next point), but can be larger if additional static features are included. The value of `N_f` MUST be consistent across all levels, so that all entries in the list have the same number of features per node.
+- `mesh_features[i][:, 0:2]` MUST contain the x and y coordinates of the mesh nodes at level `i`, so that column `0` is x and column `1` is y.
 - Mesh node features SHOULD NOT be normalized, instead any normalization will be performed inside `neural-lam` after graph loading.
 - Dtype MUST be `torch.float32`.
 
