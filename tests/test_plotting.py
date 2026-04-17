@@ -178,8 +178,8 @@ def test_plot_error_map() -> None:
     assert colorbar_ax.get_ylabel() != ""
 
 
-def test_plot_error_heatmap_uses_relative_color_scale():
-    """Heatmap colors should compare relative magnitudes across variables."""
+def test_plot_error_heatmap_state_std_normalization():
+    """state_std mode: colors are RMSE / state_std, cross-variable comparable."""
     errors = torch.tensor(
         [
             [1.0, 100.0, 10.0],
@@ -193,23 +193,54 @@ def test_plot_error_heatmap_uses_relative_color_scale():
         state_diff_std_standardized=[1.0, 2.0, 0.5],
     )
 
-    fig = vis.plot_error_heatmap(errors, datastore=datastore)
+    fig = vis.plot_error_heatmap(errors, datastore=datastore, normalization="state_std")
     ax = fig.axes[0]
     image = ax.images[0]
     colorbar = fig.axes[1]
 
-    expected_color_values = errors.T.numpy() / np.array([[1.0], [200.0], [5.0]])
-    np.testing.assert_allclose(image.get_array(), expected_color_values)
-    assert image.norm.vmin == 0.0
-    assert image.norm.vmax == pytest.approx(expected_color_values.max())
+    # color = errors.T / state_std[:, None]
+    expected = errors.T.numpy() / np.array([[1.0], [100.0], [10.0]])
+    np.testing.assert_allclose(image.get_array(), expected)
+    assert image.norm.vmin == pytest.approx(0.0)
+    assert image.norm.vmax == pytest.approx(expected.max())
     assert len(fig.axes) == 2
+    assert colorbar.get_ylabel() == "RMSE / state_std"
+
+    plt.close(fig)
+
+
+def test_plot_error_heatmap_one_step_normalization():
+    """one_step mode: colors are RMSE / diff_std (physical), cross-variable comparable."""
+    errors = torch.tensor(
+        [
+            [1.0, 100.0, 10.0],
+            [2.0, 80.0, 5.0],
+            [3.0, 60.0, 2.5],
+        ]
+    )
+    datastore = HeatmapDatastore(
+        n_vars=errors.shape[1],
+        state_std=[1.0, 100.0, 10.0],
+        state_diff_std_standardized=[1.0, 2.0, 0.5],
+    )
+
+    fig = vis.plot_error_heatmap(errors, datastore=datastore, normalization="one_step")
+    ax = fig.axes[0]
+    image = ax.images[0]
+    colorbar = fig.axes[1]
+
+    # physical diff_std = state_std * state_diff_std_standardized = [1, 200, 5]
+    expected = errors.T.numpy() / np.array([[1.0], [200.0], [5.0]])
+    np.testing.assert_allclose(image.get_array(), expected)
+    assert image.norm.vmin == pytest.approx(0.0)
+    assert image.norm.vmax == pytest.approx(expected.max())
     assert colorbar.get_ylabel() == "Error / Std(1-step change)"
 
     plt.close(fig)
 
 
-def test_plot_error_heatmap_uses_absolute_scale_without_stats():
-    """Without standardization stats the colorbar should stay in raw units."""
+def test_plot_error_heatmap_falls_back_to_per_var_scale_without_stats():
+    """When stats are unavailable colors fall back to per-variable max normalization."""
 
     class NoStatsHeatmapDatastore(HeatmapDatastore):
         def get_standardization_dataarray(self, category):
@@ -218,17 +249,47 @@ def test_plot_error_heatmap_uses_absolute_scale_without_stats():
     errors = torch.tensor([[1.0, 2.0], [3.0, 4.0]])
     datastore = NoStatsHeatmapDatastore(n_vars=errors.shape[1])
 
-    with pytest.warns(UserWarning, match="falling back to absolute scale"):
+    with pytest.warns(UserWarning, match="falling back to per-variable scale"):
         fig = vis.plot_error_heatmap(errors, datastore=datastore)
+    ax = fig.axes[0]
+    image = ax.images[0]
     colorbar = fig.axes[1]
 
-    assert colorbar.get_ylabel() == "Absolute scale"
+    # errors_np after transpose: var0=[1,3], var1=[2,4]; max per var: [3,4]
+    expected = np.array([[1 / 3, 3 / 3], [2 / 4, 4 / 4]])
+    np.testing.assert_allclose(image.get_array(), expected)
+    assert image.norm.vmin == pytest.approx(0.0)
+    assert image.norm.vmax == pytest.approx(1.0)
+    assert "[fallback]" in colorbar.get_ylabel()
 
     plt.close(fig)
 
 
-def test_plot_error_heatmap_uses_state_std_only_when_diff_std_absent():
-    """Without diff std the heatmap should fall back to state-std scaling."""
+def test_plot_error_heatmap_one_step_falls_back_when_diff_std_absent():
+    """one_step mode falls back to per-var max when diff_std is missing, never to state_std."""
+
+    class StateStdOnlyDatastore(HeatmapDatastore):
+        def get_standardization_dataarray(self, category):
+            return (
+                super()
+                .get_standardization_dataarray(category)
+                .drop_vars("state_diff_std_standardized")
+            )
+
+    errors = torch.tensor([[1.0, 2.0], [3.0, 4.0]])
+    datastore = StateStdOnlyDatastore(n_vars=2, state_std=[2.0, 1.0])
+
+    with pytest.warns(UserWarning, match="falling back to per-variable scale"):
+        fig = vis.plot_error_heatmap(
+            errors, datastore=datastore, normalization="one_step"
+        )
+    colorbar = fig.axes[1]
+    assert "[fallback]" in colorbar.get_ylabel()
+    plt.close(fig)
+
+
+def test_plot_error_heatmap_state_std_ignores_diff_std():
+    """state_std mode uses only state_std; presence or absence of diff_std is irrelevant."""
 
     class StateStdOnlyDatastore(HeatmapDatastore):
         def get_standardization_dataarray(self, category):
@@ -239,12 +300,17 @@ def test_plot_error_heatmap_uses_state_std_only_when_diff_std_absent():
             )
 
     errors = torch.tensor([[2.0, 4.0], [1.0, 3.0]])
-    fig = vis.plot_error_heatmap(
-        errors,
-        datastore=StateStdOnlyDatastore(n_vars=2, state_std=[2.0, 1.0]),
-    )
+    datastore = StateStdOnlyDatastore(n_vars=2, state_std=[2.0, 1.0])
+    fig = vis.plot_error_heatmap(errors, datastore=datastore, normalization="state_std")
+    ax = fig.axes[0]
+    image = ax.images[0]
 
-    assert fig.axes[1].get_ylabel() == "Relative scale (state stds)"
+    # errors_np after transpose: var0=[2,1], var1=[4,3]; state_std=[2,1]
+    expected = np.array([[2 / 2, 1 / 2], [4 / 1, 3 / 1]])
+    np.testing.assert_allclose(image.get_array(), expected)
+    assert image.norm.vmin == pytest.approx(0.0)
+    assert image.norm.vmax == pytest.approx(4.0)
+    assert fig.axes[1].get_ylabel() == "RMSE / state_std"
     plt.close(fig)
 
 
