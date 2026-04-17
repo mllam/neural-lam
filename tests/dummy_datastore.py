@@ -310,9 +310,13 @@ class DummyDatastore(BaseRegularGridDatastore):
 
         for op in ops:
             if "mean" in op:
-                da_op = xr.zeros_like(self.ds[f"{category}_feature"]).astype(float)
+                da_op = xr.zeros_like(self.ds[f"{category}_feature"]).astype(
+                    float
+                )
             else:
-                da_op = xr.ones_like(self.ds[f"{category}_feature"]).astype(float)
+                da_op = xr.ones_like(self.ds[f"{category}_feature"]).astype(
+                    float
+                )
             ds_standardization[f"{category}_{op}"] = da_op
 
         return ds_standardization
