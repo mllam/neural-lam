@@ -67,6 +67,7 @@ jobs:
 
       - name: Cache virtual environment
         if: matrix.package_manager == 'uv'
+        id: cache-venv
         uses: actions/cache@v4
         with:
           path: .venv
@@ -101,7 +102,9 @@ jobs:
       - name: Setup environment with uv (if applicable)
         if: matrix.package_manager == 'uv'
         run: |
-          uv venv --no-project
+          if [ "${{ steps.cache-venv.outputs.cache-hit }}" != "true" ]; then
+            uv venv --no-project
+          fi
           source .venv/bin/activate
           uv pip install torch --index-url ${{ matrix.torch_index }}
           uv pip install --group dev -e .
