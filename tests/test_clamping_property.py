@@ -45,14 +45,17 @@ def _get_model():
         num_past_forcing_steps = 1
         num_future_forcing_steps = 1
 
+    var1 = datastore.get_vars_names("state")[0]
+    var2 = datastore.get_vars_names("state")[1]
+
     config = nlconfig.NeuralLAMConfig(
         datastore=nlconfig.DatastoreSelection(
             kind=datastore.SHORT_NAME, config_path=datastore.root_path
         ),
         training=nlconfig.TrainingConfig(
             output_clamping=nlconfig.OutputClamping(
-                lower={"t2m": 0.0, "r2m": 0.0},
-                upper={"r2m": 1.0, "swvl1": 100.0},
+                lower={var1: -1.0, var2: -1.0},
+                upper={var1: 1.0, var2: 1.0},
             )
         ),
     )
