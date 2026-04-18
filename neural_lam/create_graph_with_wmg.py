@@ -89,8 +89,9 @@ def create_graph_from_datastore(
         mesh_node_distance = grid_spacing * grid_mesh_spacing_ratio
 
     # Build keyword arguments for the archetype function.
-    # return_components=True is required because wmg.save.to_neural_lam()
-    # expects the graph as separate g2m, m2g and m2m sub-graph components
+    # return_components=True is required because
+    # wmg.save.to_torch_tensors_on_disk() expects the graph as
+    # separate g2m, m2g and m2m sub-graph components
     # rather than a single merged graph.
     archetype_kwargs = dict(
         coords=xy,
@@ -108,7 +109,7 @@ def create_graph_from_datastore(
 
     hierarchical = archetype == "hierarchical"
 
-    wmg.save.to_neural_lam(
+    wmg.save.to_torch_tensors_on_disk(
         graph_components=graph_components,
         output_directory=output_root_path,
         hierarchical=hierarchical,
