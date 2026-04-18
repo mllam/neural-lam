@@ -34,8 +34,12 @@ def verify_standardization(dataset_std, dataset_raw, idx):
 
     # Fetch standardization stats and safely reshape them manually
     # stats are (d_features,). Broadcast with (N_times, N_grid, d_features)
-    mean = dataset_std.state_mean.view(1, 1, -1)
-    std = dataset_std.state_std.view(1, 1, -1)
+    mean = torch.tensor(
+        dataset_std.da_state_mean.values, dtype=torch.float32
+    ).view(1, 1, -1)
+    std = torch.tensor(
+        dataset_std.da_state_std.values, dtype=torch.float32
+    ).view(1, 1, -1)
 
     # Reconstruct
     reconstructed_init = init_std * std + mean
