@@ -476,6 +476,22 @@ class ForecasterModule(pl.LightningModule):
         full_log_name = f"{prefix}_{metric_name}"
         log_dict[full_log_name] = metric_fig
 
+        # Unnormalized companion so cross-variable comparisons are possible
+        abs_fig = vis.plot_error_map_absolute(
+            errors=metric_tensor,
+            datastore=self.datastore,
+        )
+        log_dict[f"{full_log_name}_absolute"] = abs_fig
+
+        # For CRPS, add a lead-time line plot to make temporal trends visible
+        if "crps" in metric_name:
+            crps_fig = vis.plot_crps_leadtime(
+                crps_tensor=metric_tensor,
+                datastore=self.datastore,
+                title=f"{full_log_name} vs. lead time",
+            )
+            log_dict[f"{full_log_name}_leadtime"] = crps_fig
+
         if prefix == "test":
             metric_fig.savefig(
                 os.path.join(self.logger.save_dir, f"{full_log_name}.pdf")
