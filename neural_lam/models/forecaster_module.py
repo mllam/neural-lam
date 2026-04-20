@@ -9,6 +9,7 @@ import numpy as np
 import pytorch_lightning as pl
 import torch
 import xarray as xr
+from PIL import Image
 
 # First-party
 from neural_lam.utils import get_integer_time
@@ -39,6 +40,7 @@ class ForecasterModule(pl.LightningModule):
         lr: float = 1e-3,
         restore_opt: bool = False,
         n_example_pred: int = 1,
+        create_gif: bool = False,
         val_steps_to_log: Optional[List[int]] = None,
         metrics_watch: Optional[List[str]] = None,
         var_leads_metrics_watch: Optional[Dict[int, List[int]]] = None,
@@ -115,6 +117,7 @@ class ForecasterModule(pl.LightningModule):
 
         # For example plotting
         self.n_example_pred = n_example_pred
+        self.create_gif = create_gif
         self.plotted_examples = 0
 
         # For storing spatial loss maps during evaluation
@@ -144,11 +147,15 @@ class ForecasterModule(pl.LightningModule):
         )
         return opt
 
-    def training_step(self, batch):
-        (init_states, target_states, forcing_features, _batch_times) = batch
+    def common_step(self, batch):
+        init_states, target_states, forcing_features, batch_times = batch
         prediction, pred_std = self.forecaster(
             init_states, forcing_features, target_states
         )
+        return prediction, target_states, pred_std, batch_times
+
+    def training_step(self, batch):
+        prediction, target_states, pred_std, _ = self.common_step(batch)
         if pred_std is None:
             pred_std = self.per_var_std
 
@@ -182,10 +189,7 @@ class ForecasterModule(pl.LightningModule):
 
     # pylint: disable-next=unused-argument
     def validation_step(self, batch, batch_idx):
-        (init_states, target_states, forcing_features, _batch_times) = batch
-        prediction, pred_std = self.forecaster(
-            init_states, forcing_features, target_states
-        )
+        prediction, target_states, pred_std, _ = self.common_step(batch)
         if pred_std is None:
             pred_std = self.per_var_std
 
@@ -230,10 +234,7 @@ class ForecasterModule(pl.LightningModule):
 
     # pylint: disable-next=unused-argument
     def test_step(self, batch, batch_idx):
-        (init_states, target_states, forcing_features, _batch_times) = batch
-        prediction, pred_std = self.forecaster(
-            init_states, forcing_features, target_states
-        )
+        prediction, target_states, pred_std, _ = self.common_step(batch)
 
         if pred_std is not None:
             mean_pred_std = torch.mean(
@@ -368,6 +369,19 @@ class ForecasterModule(pl.LightningModule):
             )
             var_vranges = list(zip(var_vmin, var_vmax))
 
+            example_i = self.plotted_examples
+
+            if self.create_gif:
+                plot_dir_path = os.path.join(
+                    self.logger.save_dir,
+                    f"example_plots_{example_i}",
+                )
+                os.makedirs(plot_dir_path, exist_ok=True)
+                png_frames: Dict[str, List[str]] = {
+                    var_name: []
+                    for var_name in self.datastore.get_vars_names("state")
+                }
+
             for t_i, _ in enumerate(zip(pred_slice, target_slice), start=1):
                 var_figs = [
                     vis.plot_prediction(
@@ -392,8 +406,6 @@ class ForecasterModule(pl.LightningModule):
                     )
                 ]
 
-                example_i = self.plotted_examples
-
                 for var_name, fig in zip(
                     self.datastore.get_vars_names("state"), var_figs
                 ):
@@ -409,7 +421,36 @@ class ForecasterModule(pl.LightningModule):
                             f"{self.logger} does not support image logging."
                         )
 
+                    if self.create_gif:
+                        png_path = os.path.join(
+                            plot_dir_path,
+                            f"{var_name}_example_{example_i}"
+                            f"_prediction_t_{t_i:02d}.png",
+                        )
+                        fig.savefig(png_path, dpi=100, bbox_inches="tight")
+                        png_frames[var_name].append(png_path)
+
                 plt.close("all")
+
+            if self.create_gif:
+                for var_name, frames_for_var in png_frames.items():
+                    if frames_for_var:
+                        gif_path = os.path.join(
+                            plot_dir_path,
+                            f"{var_name}_example_{example_i}_prediction.gif",
+                        )
+                        frames = [Image.open(f) for f in frames_for_var]
+                        try:
+                            frames[0].save(
+                                gif_path,
+                                save_all=True,
+                                append_images=frames[1:],
+                                loop=0,
+                                duration=1000,
+                            )
+                        finally:
+                            for frame in frames:
+                                frame.close()
 
             torch.save(
                 pred_slice.cpu(),
@@ -540,9 +581,7 @@ class ForecasterModule(pl.LightningModule):
                     self.logger.log_image(key=key, images=[fig])
 
             pdf_loss_map_figs = [
-                vis.plot_spatial_error(
-                    error=loss_map, datastore=self.datastore
-                )
+                vis.plot_spatial_error(error=loss_map, datastore=self.datastore)
                 for loss_map in mean_spatial_loss
             ]
             pdf_loss_maps_dir = os.path.join(
