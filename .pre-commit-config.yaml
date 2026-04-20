@@ -10,7 +10,15 @@ repos:
       - id: check-yaml
       - id: debug-statements
       - id: end-of-file-fixer
+      - id: no-commit-to-branch
+        args: [--branch, main]
       - id: trailing-whitespace
+
+  - repo: https://github.com/pre-commit/pygrep-hooks
+    rev: v1.10.0
+    hooks:
+      - id: python-check-blanket-noqa
+        description: Require specific codes on noqa comments
 
   - repo: https://github.com/codespell-project/codespell
     rev: v2.4.1
@@ -18,24 +26,21 @@ repos:
       - id: codespell
         description: Check for spelling errors
 
-  - repo: https://github.com/psf/black
-    rev: 25.11.0
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.15.4
     hooks:
-      - id: black
-        description: Format Python code
+      - id: ruff-check
+        args: [--fix]
+        description: Lint Python code with Ruff
+      - id: ruff-format
+        description: Format Python code with Ruff
 
-  - repo: https://github.com/PyCQA/isort
-    rev: 7.0.0
+  - repo: https://github.com/tox-dev/pyproject-fmt
+    rev: v2.5.1
     hooks:
-      - id: isort
-        description: Group and sort Python imports
+      - id: pyproject-fmt
+        description: Normalize pyproject.toml formatting
 
-  - repo: https://github.com/PyCQA/flake8
-    rev: 7.3.0
-    hooks:
-      - id: flake8
-        description: Check Python code for correctness, consistency and adherence to best practices
-        additional_dependencies: [Flake8-pyproject]
   - repo: https://github.com/pre-commit/mirrors-mypy
     rev: v1.19.0
     hooks:
