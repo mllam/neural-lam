@@ -82,8 +82,7 @@ def main(input_args=None):
     parser.add_argument(
         "--load_training_state",
         action="store_true",
-        help="If full training state should be restored with model "
-        "(default: false)",
+        help="If full training state should be restored with model",
     )
     parser.add_argument(
         "--precision",
@@ -252,6 +251,11 @@ def main(input_args=None):
         ),
     )
     args = parser.parse_args(input_args)
+    # In tests parse_args may be patched with MagicMock. Normalize the flag
+    # to avoid truthy MagicMock attributes changing control flow.
+    load_training_state = bool(
+        getattr(args, "load_training_state", False)
+    )
     args.var_leads_metrics_watch = {
         int(k): v for k, v in json.loads(args.var_leads_metrics_watch).items()
     }
@@ -282,7 +286,7 @@ def main(input_args=None):
         )
 
     assert (
-        args.load or not args.load_training_state
+        args.load or not load_training_state
     ), "Can not restore training state when not loading a checkpoint"
 
     # Get an (actual) random run id as a unique identifier
@@ -328,7 +332,7 @@ def main(input_args=None):
 
     # Load model parameters Use new args for model
     ModelClass = MODELS[args.model]
-    if args.load and not args.load_training_state:
+    if args.load and not load_training_state:
         # Restore only model weights, not training state
         model = ModelClass.load_from_checkpoint(
             args.load,
@@ -394,7 +398,7 @@ def main(input_args=None):
         )
     else:
         # Only pass ckpt_path when restoring full training state
-        ckpt_for_fit = args.load if args.load_training_state else None
+        ckpt_for_fit = args.load if load_training_state else None
         trainer.fit(
             model=model,
             datamodule=data_module,
