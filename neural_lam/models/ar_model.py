@@ -9,6 +9,7 @@ import numpy as np
 import pytorch_lightning as pl
 import torch
 import xarray as xr
+from PIL import Image
 
 # First-party
 from neural_lam.utils import get_integer_time
@@ -159,6 +160,7 @@ class ARModel(pl.LightningModule):
         self.time_step_int, self.time_step_unit = get_integer_time(
             self._datastore.step_length
         )
+        self.matched_metrics: set[str] = set()
 
     def _create_dataarray_from_tensor(
         self,
@@ -343,9 +345,16 @@ class ARModel(pl.LightningModule):
 
         tensor_to_gather: (d1, d2, ...), distributed over K ranks
 
-        returns: (K*d1, d2, ...)
+        returns:
+            - single-device strategies: (d1, d2, ...)
+            - multi-device strategies: (K*d1, d2, ...)
         """
-        return self.all_gather(tensor_to_gather).flatten(0, 1)
+        gathered = self.all_gather(tensor_to_gather)
+        # all_gather adds a leading dim (K,) only on multi-device runs;
+        # on single-device it returns the tensor unchanged.
+        if gathered.dim() > tensor_to_gather.dim():
+            return gathered.flatten(0, 1)
+        return gathered
 
     # newer lightning versions requires batch_idx argument, even if unused
     # pylint: disable-next=unused-argument
@@ -394,6 +403,19 @@ class ARModel(pl.LightningModule):
         """
         # Create error maps for all test metrics
         self.aggregate_and_plot_metrics(self.val_metrics, prefix="val")
+
+        if self.trainer.is_global_zero:
+            if getattr(self.args, "metrics_watch", None):
+                unmatched = set(self.args.metrics_watch) - self.matched_metrics
+                if unmatched:
+                    warnings.warn(
+                        "The following metrics in --metrics_watch "
+                        "were not found during validation phase: "
+                        f"{sorted(unmatched)}. Ensure the metric prefix "
+                        "matches the evaluation mode (expected 'val_')."
+                    )
+
+        self.matched_metrics = set()
 
         # Clear lists with validation metrics values
         for metric_list in self.val_metrics.values():
@@ -540,15 +562,29 @@ class ARModel(pl.LightningModule):
             )  # (d_f,)
             var_vranges = list(zip(var_vmin, var_vmax))
 
+            example_i = self.plotted_examples
+
+            if self.args.create_gif:
+                plot_dir_path = os.path.join(
+                    self.logger.save_dir,
+                    f"example_plots_{example_i}",
+                )
+                os.makedirs(plot_dir_path, exist_ok=True)
+                png_frames: Dict[str, List[str]] = {
+                    var_name: []
+                    for var_name in self._datastore.get_vars_names("state")
+                }
+
             # Iterate over prediction horizon time steps
             for t_i, _ in enumerate(zip(pred_slice, target_slice), start=1):
                 # Create one figure per variable at this time step
                 var_figs = [
                     vis.plot_prediction(
                         datastore=self._datastore,
-                        title=f"{var_name} ({var_unit}), "
-                        f"t={t_i} ({(self.time_step_int * t_i)}"
+                        title=f"{var_name}, t={t_i}"
+                        f" ({self.time_step_int * t_i}"
                         f"{self.time_step_unit})",
+                        colorbar_label=var_unit,
                         vrange=var_vrange,
                         da_prediction=da_prediction.isel(
                             state_feature=var_i, time=t_i - 1
@@ -565,8 +601,6 @@ class ARModel(pl.LightningModule):
                         )
                     )
                 ]
-
-                example_i = self.plotted_examples
 
                 for var_name, fig in zip(
                     self._datastore.get_vars_names("state"), var_figs
@@ -588,9 +622,42 @@ class ARModel(pl.LightningModule):
                             f"{self.logger} does not support image logging."
                         )
 
+                    # Save PNG frame for GIF animation
+                    if self.args.create_gif:
+                        png_path = os.path.join(
+                            plot_dir_path,
+                            f"{var_name}_example_{example_i}"
+                            f"_prediction_t_{t_i:02d}.png",
+                        )
+                        fig.savefig(png_path, dpi=100, bbox_inches="tight")
+                        png_frames[var_name].append(png_path)
+
                 plt.close(
                     "all"
                 )  # Close all figs for this time step, saves memory
+
+            # Generate GIF animations from the saved PNG frames,
+            # one GIF per variable combining all prediction time steps
+            if self.args.create_gif:
+                for var_name, frames_for_var in png_frames.items():
+                    if frames_for_var:
+                        gif_path = os.path.join(
+                            plot_dir_path,
+                            f"{var_name}_example_{example_i}_prediction.gif",
+                        )
+                        frames = [Image.open(f) for f in frames_for_var]
+
+                        try:
+                            frames[0].save(
+                                gif_path,
+                                save_all=True,
+                                append_images=frames[1:],
+                                loop=0,
+                                duration=1000,
+                            )
+                        finally:
+                            for frame in frames:
+                                frame.close()
 
             # Save pred and target as .pt files
             torch.save(
@@ -642,6 +709,7 @@ class ARModel(pl.LightningModule):
         # Check if metrics are watched, log exact values for specific vars
         var_names = self._datastore.get_vars_names(category="state")
         if full_log_name in self.args.metrics_watch:
+            self.matched_metrics.add(full_log_name)
             for var_i, timesteps in self.args.var_leads_metrics_watch.items():
                 var_name = var_names[var_i]
                 for step in timesteps:
@@ -761,6 +829,17 @@ class ARModel(pl.LightningModule):
                 os.path.join(self.logger.save_dir, "mean_spatial_loss.pt"),
             )
 
+            if getattr(self.args, "metrics_watch", None):
+                unmatched = set(self.args.metrics_watch) - self.matched_metrics
+                if unmatched:
+                    warnings.warn(
+                        "The following metrics in --metrics_watch "
+                        "were not found during test phase: "
+                        f"{sorted(unmatched)}. Ensure the metric prefix "
+                        "matches the evaluation mode (expected 'test_')."
+                    )
+
+        self.matched_metrics = set()
         self.spatial_loss_maps.clear()
 
     def on_load_checkpoint(self, checkpoint):
