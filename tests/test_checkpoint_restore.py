@@ -7,21 +7,21 @@ import pytest
 
 @patch("neural_lam.train_model.load_config_and_datastore")
 @patch("neural_lam.train_model.seed")
-def test_load_training_state_without_load_raises(mock_seed, mock_load_config):
+def test_load_training_state_without_load(mock_seed, mock_load_config):
     """
     Using --load_training_state without --load should fail the assertion
     that a checkpoint path is required for restoring training state.
     """
     # Import main after setting up patches
+    # First-party
     from neural_lam.train_model import main
 
-    # Bypass the @logger.catch decorator by calling the wrapped function directly
+    # Bypass the @logger.catch decorator by calling the wrapped
+    # function directly.
     # The decorator stores the original function as __wrapped__
     original_main = main.__wrapped__
 
-    with pytest.raises(
-        AssertionError, match="Can not restore training state"
-    ):
+    with pytest.raises(AssertionError, match="Can not restore training state"):
         original_main(
             [
                 "--config_path",

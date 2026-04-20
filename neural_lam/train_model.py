@@ -253,9 +253,7 @@ def main(input_args=None):
     args = parser.parse_args(input_args)
     # In tests parse_args may be patched with MagicMock. Normalize the flag
     # to avoid truthy MagicMock attributes changing control flow.
-    load_training_state = bool(
-        getattr(args, "load_training_state", False)
-    )
+    load_training_state = bool(vars(args).get("load_training_state", False))
     args.var_leads_metrics_watch = {
         int(k): v for k, v in json.loads(args.var_leads_metrics_watch).items()
     }
