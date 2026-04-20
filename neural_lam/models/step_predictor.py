@@ -22,51 +22,47 @@ class StepPredictor(nn.Module, ABC):
         self,
         config: NeuralLAMConfig,
         datastore: BaseDatastore,
-        num_past_forcing_steps: int = 1,
-        num_future_forcing_steps: int = 1,
         output_std: bool = False,
     ):
         super().__init__()
 
         num_state_vars = datastore.get_num_data_vars(category="state")
-        num_forcing_vars = datastore.get_num_data_vars(category="forcing")
 
         # Load static features standardized
         da_static_features = datastore.get_dataarray(
             category="static", split=None, standardize=True
         )
         if da_static_features is None:
-            raise ValueError("Static features are required for StepPredictor")
+            # Create empty static features of the correct shape
+            num_grid_nodes = datastore.num_grid_points
+            grid_static_features = torch.empty(
+                (num_grid_nodes, 0), dtype=torch.float32
+            )
+        else:
+            grid_static_features = torch.tensor(
+                da_static_features.values, dtype=torch.float32
+            )
+
+        self.register_buffer(
+            "grid_static_features",
+            grid_static_features,
+            persistent=False,
+        )
 
         da_state_stats = datastore.get_standardization_dataarray(
             category="state"
         )
 
         self.register_buffer(
-            "grid_static_features",
-            torch.tensor(da_static_features.values, dtype=torch.float32),
+            "state_mean",
+            torch.tensor(da_state_stats.state_mean.values, dtype=torch.float32),
             persistent=False,
         )
-
-        state_stats = {
-            "state_mean": torch.tensor(
-                da_state_stats.state_mean.values, dtype=torch.float32
-            ),
-            "state_std": torch.tensor(
-                da_state_stats.state_std.values, dtype=torch.float32
-            ),
-            "diff_mean": torch.tensor(
-                da_state_stats.state_diff_mean_standardized.values,
-                dtype=torch.float32,
-            ),
-            "diff_std": torch.tensor(
-                da_state_stats.state_diff_std_standardized.values,
-                dtype=torch.float32,
-            ),
-        }
-
-        for key, val in state_stats.items():
-            self.register_buffer(key, val, persistent=False)
+        self.register_buffer(
+            "state_std",
+            torch.tensor(da_state_stats.state_std.values, dtype=torch.float32),
+            persistent=False,
+        )
 
         self.output_std = bool(output_std)
         if self.output_std:
@@ -74,17 +70,12 @@ class StepPredictor(nn.Module, ABC):
         else:
             self.grid_output_dim = num_state_vars
 
-        (
-            self.num_grid_nodes,
-            grid_static_dim,
-        ) = self.grid_static_features.shape
+        (self.num_grid_nodes, _) = self.grid_static_features.shape
 
-        self.grid_dim = (
-            2 * num_state_vars
-            + grid_static_dim
-            + num_forcing_vars
-            * (num_past_forcing_steps + num_future_forcing_steps + 1)
-        )
+    @property
+    def predicts_std(self) -> bool:
+        """Whether this predictor outputs a predicted standard deviation."""
+        return self.output_std
 
     def expand_to_batch(self, x: torch.Tensor, batch_size: int) -> torch.Tensor:
         """

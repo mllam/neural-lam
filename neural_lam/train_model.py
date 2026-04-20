@@ -15,6 +15,7 @@ from loguru import logger
 from . import utils
 from .config import load_config_and_datastore
 from .models import MODELS, ForecasterModule
+from .models.ar_forecaster import ARForecaster
 from .weather_dataset import WeatherDataModule
 
 
@@ -164,6 +165,12 @@ def main(input_args=None):
         default=1,
         help="Number of example predictions to plot during evaluation",
     )
+    parser.add_argument(
+        "--create_gif",
+        action="store_true",
+        help="If set, create GIF animations from prediction PNG frames and "
+        "save to disk. PNGs are always created and logged to wandb/mlflow.",
+    )
 
     # Logger Settings
     parser.add_argument(
@@ -230,7 +237,14 @@ def main(input_args=None):
         default=1,
         help="Number of future time steps to use as input for forcing data",
     )
-
+    parser.add_argument(
+        "--load_single_member",
+        action="store_true",
+        help=(
+            "If set, only use ensemble member 0 instead of treating all "
+            "ensemble members as independent samples."
+        ),
+    )
     args = parser.parse_args(input_args)
     args.var_leads_metrics_watch = {
         int(k): v for k, v in json.loads(args.var_leads_metrics_watch).items()
@@ -239,19 +253,27 @@ def main(input_args=None):
     # Check that config only specifies logging for lead times that exist
     # Check --val_steps_to_log
     for step in args.val_steps_to_log:
-        assert 0 < step <= args.ar_steps_eval, (
-            f"Can not log validation step {step} when validation is "
-            f"only unrolled {args.ar_steps_eval} steps. Adjust "
-            "--val_steps_to_log."
-        )
+        if step > args.ar_steps_eval:
+            raise ValueError(
+                f"Can not log validation step {step} when validation is "
+                f"only unrolled {args.ar_steps_eval} steps. Adjust "
+                "--val_steps_to_log."
+            )
     # Check --var_leads_metric_watch
     for var_i, leads in args.var_leads_metrics_watch.items():
         for step in leads:
-            assert 0 < step <= args.ar_steps_eval, (
-                f"Can not log validation step {step} for variable {var_i} when "
-                f"validation is only unrolled {args.ar_steps_eval} steps. "
-                "Adjust --var_leads_metric_watch."
-            )
+            if step > args.ar_steps_eval:
+                raise ValueError(
+                    f"Can not log validation step {step} for variable "
+                    f"{var_i} when validation is only unrolled "
+                    f"{args.ar_steps_eval} steps. Adjust "
+                    "--var_leads_metric_watch."
+                )
+
+    if args.eval and not args.load:
+        logger.warning(
+            "Evaluation (--eval) without --load: no checkpoint will be loaded.",
+        )
 
     # Get an (actual) random run id as a unique identifier
     random_run_id = random.randint(0, 9999)
@@ -270,6 +292,7 @@ def main(input_args=None):
         standardize=True,
         num_past_forcing_steps=args.num_past_forcing_steps,
         num_future_forcing_steps=args.num_future_forcing_steps,
+        load_single_member=args.load_single_member,
         batch_size=args.batch_size,
         num_workers=args.num_workers,
         eval_split=args.eval or "test",
@@ -293,10 +316,8 @@ def main(input_args=None):
         except ValueError:
             raise ValueError("devices should be 'auto' or a list of integers")
 
-    # Build predictor and forecaster externally, then pass to ForecasterModule
-    # (Items 2 & 3: dependency injection + explicit params)
-    from .models.ar_forecaster import ARForecaster
-
+    # Build predictor and forecaster externally, then inject into
+    # ForecasterModule
     predictor_class = MODELS[args.model]
     predictor = predictor_class(
         config=config,
@@ -323,7 +344,6 @@ def main(input_args=None):
         val_steps_to_log=args.val_steps_to_log,
         metrics_watch=args.metrics_watch,
         var_leads_metrics_watch=args.var_leads_metrics_watch,
-        output_std=args.output_std,
     )
 
     if args.eval:
@@ -353,7 +373,7 @@ def main(input_args=None):
     trainer = pl.Trainer(
         max_epochs=args.epochs,
         deterministic=True,
-        strategy="ddp",
+        strategy="auto",
         accelerator=device_name,
         num_nodes=args.num_nodes,
         devices=devices,

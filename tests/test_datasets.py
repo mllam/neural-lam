@@ -15,7 +15,7 @@ from neural_lam.datastore.base import BaseRegularGridDatastore
 from neural_lam.models.forecaster_module import ForecasterModule
 from neural_lam.weather_dataset import WeatherDataset
 from tests.conftest import init_datastore_example
-from tests.dummy_datastore import DummyDatastore
+from tests.dummy_datastore import DummyDatastore, EnsembleDummyDatastore
 
 
 @pytest.mark.parametrize("datastore_name", DATASTORES.keys())
@@ -216,18 +216,42 @@ def test_single_batch(datastore_name, split):
 
     dataset = WeatherDataset(datastore=datastore, split=split, ar_steps=2)
 
-    model = ForecasterModule(
-        model_name="graph_lam",
-        args=args,
-        datastore=datastore,
+    # First-party
+    from neural_lam.models import MODELS
+    from neural_lam.models.ar_forecaster import ARForecaster
+
+    predictor_class = MODELS["graph_lam"]
+    predictor = predictor_class(
         config=config,
+        datastore=datastore,
+        graph_name=args.graph,
+        hidden_dim=args.hidden_dim,
+        hidden_layers=args.hidden_layers,
+        processor_layers=args.processor_layers,
+        mesh_aggr=args.mesh_aggr,
+        num_past_forcing_steps=args.num_past_forcing_steps,
+        num_future_forcing_steps=args.num_future_forcing_steps,
+        output_std=args.output_std,
+    )
+    forecaster = ARForecaster(predictor, datastore=datastore)
+
+    model = ForecasterModule(
+        forecaster=forecaster,
+        config=config,
+        datastore=datastore,
+        loss=args.loss,
+        restore_opt=args.restore_opt,
+        n_example_pred=args.n_example_pred,
+        val_steps_to_log=args.val_steps_to_log,
+        metrics_watch=args.metrics_watch,
+        var_leads_metrics_watch=args.var_leads_metrics_watch,
+        lr=args.lr,
     )
 
     model_device = model.to(device_name)
     data_loader = DataLoader(dataset, batch_size=2)
     batch = next(iter(data_loader))
     batch_device = [part.to(device_name) for part in batch]
-    model_device.common_step(batch_device)
     model_device.training_step(batch_device)
 
 
@@ -270,6 +294,173 @@ def test_dataset_length(dataset_config):
     dataset[expected_len - 1]
 
 
+def test_ensemble_len_scales_with_default_all_members():
+    datastore = EnsembleDummyDatastore(
+        is_forecast=False,
+        forcing_has_ensemble=False,
+        n_ensemble_members=3,
+        n_timesteps=10,
+    )
+
+    dataset_all = WeatherDataset(
+        datastore=datastore,
+        split="train",
+        ar_steps=2,
+        num_past_forcing_steps=1,
+        num_future_forcing_steps=1,
+        standardize=False,
+    )
+
+    dataset_single = WeatherDataset(
+        datastore=datastore,
+        split="train",
+        ar_steps=2,
+        num_past_forcing_steps=1,
+        num_future_forcing_steps=1,
+        load_single_member=True,
+        standardize=False,
+    )
+
+    assert len(dataset_all) == len(dataset_single) * 3
+
+
+def test_expected_dim_order_handles_optional_ensemble_forcing():
+    datastore_with_ensemble_forcing = EnsembleDummyDatastore(
+        is_forecast=False,
+        forcing_has_ensemble=True,
+        n_ensemble_members=3,
+        n_timesteps=10,
+    )
+
+    datastore_without_ensemble_forcing = EnsembleDummyDatastore(
+        is_forecast=False,
+        forcing_has_ensemble=False,
+        n_ensemble_members=3,
+        n_timesteps=10,
+    )
+
+    assert datastore_with_ensemble_forcing.is_ensemble is True
+    assert datastore_with_ensemble_forcing.has_ensemble_forcing is True
+    assert datastore_without_ensemble_forcing.is_ensemble is True
+    assert datastore_without_ensemble_forcing.has_ensemble_forcing is False
+
+    assert datastore_with_ensemble_forcing.expected_dim_order(
+        category="forcing"
+    ) == ("time", "ensemble_member", "grid_index", "forcing_feature")
+    assert datastore_without_ensemble_forcing.expected_dim_order(
+        category="forcing"
+    ) == ("time", "grid_index", "forcing_feature")
+    assert datastore_with_ensemble_forcing.expected_dim_order(
+        category="static"
+    ) == ("grid_index", "static_feature")
+
+
+def test_ensemble_index_mapping_is_time_major():
+    datastore = EnsembleDummyDatastore(
+        is_forecast=False,
+        forcing_has_ensemble=False,
+        n_ensemble_members=3,
+        n_timesteps=10,
+    )
+    dataset = WeatherDataset(
+        datastore=datastore,
+        split="train",
+        ar_steps=2,
+        num_past_forcing_steps=1,
+        num_future_forcing_steps=1,
+        load_single_member=False,
+        standardize=False,
+    )
+
+    init_states_0, _, _, target_times_0 = dataset[0]
+    init_states_1, _, _, target_times_1 = dataset[1]
+
+    # Adjacent flat indices correspond to same sample_idx and different member.
+    assert torch.equal(target_times_0, target_times_1)
+    assert not torch.equal(init_states_0, init_states_1)
+
+
+def test_ensemble_forcing_uses_same_member_when_available():
+    datastore = EnsembleDummyDatastore(
+        is_forecast=False,
+        forcing_has_ensemble=True,
+        n_ensemble_members=3,
+        n_timesteps=10,
+    )
+    dataset = WeatherDataset(
+        datastore=datastore,
+        split="train",
+        ar_steps=2,
+        num_past_forcing_steps=1,
+        num_future_forcing_steps=1,
+        load_single_member=False,
+        standardize=False,
+    )
+
+    _, _, forcing_0, target_times_0 = dataset[0]
+    _, _, forcing_1, target_times_1 = dataset[1]
+
+    assert torch.equal(target_times_0, target_times_1)
+    assert not torch.equal(forcing_0, forcing_1)
+
+
+def test_ensemble_forcing_without_member_dim_is_shared():
+    datastore = EnsembleDummyDatastore(
+        is_forecast=False,
+        forcing_has_ensemble=False,
+        n_ensemble_members=3,
+        n_timesteps=10,
+    )
+    dataset = WeatherDataset(
+        datastore=datastore,
+        split="train",
+        ar_steps=2,
+        num_past_forcing_steps=1,
+        num_future_forcing_steps=1,
+        load_single_member=False,
+        standardize=False,
+    )
+
+    init_states_0, _, forcing_0, target_times_0 = dataset[0]
+    init_states_1, _, forcing_1, target_times_1 = dataset[1]
+
+    assert torch.equal(target_times_0, target_times_1)
+    assert not torch.equal(init_states_0, init_states_1)
+    assert torch.equal(forcing_0, forcing_1)
+
+
+def test_forecast_ensemble_len_scales_with_default_all_members():
+    datastore = EnsembleDummyDatastore(
+        is_forecast=True,
+        forcing_has_ensemble=True,
+        n_ensemble_members=3,
+        n_analysis_times=4,
+        n_forecast_steps=6,
+    )
+
+    dataset_all = WeatherDataset(
+        datastore=datastore,
+        split="train",
+        ar_steps=2,
+        num_past_forcing_steps=1,
+        num_future_forcing_steps=1,
+        standardize=False,
+    )
+
+    with pytest.warns(UserWarning, match="only using first ensemble member"):
+        dataset_single = WeatherDataset(
+            datastore=datastore,
+            split="train",
+            ar_steps=2,
+            num_past_forcing_steps=1,
+            num_future_forcing_steps=1,
+            load_single_member=True,
+            standardize=False,
+        )
+
+    assert len(dataset_all) == len(dataset_single) * 3
+
+
 def test_standardization_with_zero_std():
     """Regression test for https://github.com/mllam/neural-lam/issues/136
 
@@ -296,3 +487,45 @@ def test_standardization_with_zero_std():
     assert not np.isnan(
         result.values
     ).any(), "NaN found after _compute_std_safe"
+
+
+def test_weather_dataset_no_forcing_standardize():
+    """Regression test: WeatherDataset must not raise AttributeError when the
+    datastore has no forcing data and standardize=True (the default).
+
+    Before the fix, self.da_forcing_std was accessed at line 123 of
+    weather_dataset.py without ever being assigned when da_forcing is None,
+    causing:
+        AttributeError: 'WeatherDataset' object has no attribute
+        'da_forcing_std'
+    """
+
+    class NoForcingDatastore(DummyDatastore):
+        """DummyDatastore that returns None for the forcing category."""
+
+        def get_dataarray(self, category, split, **kwargs):
+            if category == "forcing":
+                return None
+            return super().get_dataarray(
+                category=category, split=split, **kwargs
+            )
+
+    datastore = NoForcingDatastore(n_grid_points=100, n_timesteps=20)
+
+    # Should not raise AttributeError
+    dataset = WeatherDataset(
+        datastore=datastore,
+        split="train",
+        ar_steps=3,
+        standardize=True,
+    )
+
+    assert dataset.forcing_std_safe is None
+    assert dataset.da_forcing_mean is None
+    assert dataset.da_forcing_std is None
+
+    # Ensure we can still retrieve a sample (forcing tensor should be empty)
+    init_states, target_states, forcing, target_times = dataset[0]
+    assert (
+        forcing.shape[-1] == 0
+    ), "Expected zero forcing features when forcing is None"

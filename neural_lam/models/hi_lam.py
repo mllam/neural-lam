@@ -19,7 +19,7 @@ class HiLAM(BaseHiGraphModel):
         self,
         config: NeuralLAMConfig,
         datastore: BaseDatastore,
-        graph: str = "multiscale",
+        graph_name: str = "multiscale",
         hidden_dim: int = 64,
         hidden_layers: int = 1,
         processor_layers: int = 4,
@@ -31,7 +31,7 @@ class HiLAM(BaseHiGraphModel):
         super().__init__(
             config=config,
             datastore=datastore,
-            graph=graph,
+            graph_name=graph_name,
             hidden_dim=hidden_dim,
             hidden_layers=hidden_layers,
             processor_layers=processor_layers,
