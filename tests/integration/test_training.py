@@ -16,7 +16,7 @@ from neural_lam.datastore.base import BaseRegularGridDatastore
 from neural_lam.models.ar_model import ARModel
 from neural_lam.models.graph_lam import GraphLAM
 from neural_lam.weather_dataset import WeatherDataModule
-from tests.conftest import init_datastore_example
+from tests.integration.conftest import init_datastore_example
 
 
 def run_simple_training(datastore, set_output_std, metrics_watch=None):

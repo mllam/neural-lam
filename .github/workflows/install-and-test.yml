@@ -114,10 +114,15 @@ jobs:
         run: |
           python -c "import neural_lam; print('neural-lam imported successfully')"
 
-      - name: Run tests
+      - name: Run tests (unit)
         if: matrix.package_manager == 'uv'
         run: |
-          pytest -vv -s --doctest-modules
+          pytest -vv -s tests/unit/ --tb=short
+
+      - name: Run tests (integration)
+        if: matrix.package_manager == 'uv'
+        run: |
+          pytest -vv -s tests/integration/ --doctest-modules
 
       - name: Upload test figures
         if: matrix.package_manager == 'uv'
