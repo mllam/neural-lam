@@ -1,6 +1,7 @@
-# Third-party
+# Standard library
 import io
 
+# Third-party
 import cartopy.crs as ccrs
 import cartopy.feature as cfeature
 import matplotlib
@@ -47,7 +48,9 @@ def get_var_cmap(var_name: str) -> str:
     """
     low = var_name.lower()
     # Anomaly / difference / bias fields  → diverging (sign matters)
-    if any(k in low for k in ("anom", "anomaly", "diff", "bias", "error", "err")):
+    if any(
+        k in low for k in ("anom", "anomaly", "diff", "bias", "error", "err")
+    ):
         return "RdBu_r"
     # Uncertainty / spread / std fields   → sequential warm (intensity matters)
     if any(k in low for k in ("std", "spread", "unc", "uncertainty", "crps")):
@@ -311,7 +314,9 @@ def plot_error_map_absolute(
     if title:
         ax.set_title(title, size=_TITLE_SIZE)
     else:
-        ax.set_title("Absolute metric values (shared colour scale)", size=_TITLE_SIZE)
+        ax.set_title(
+            "Absolute metric values (shared colour scale)", size=_TITLE_SIZE
+        )
 
     return fig
 
@@ -740,8 +745,13 @@ def plot_rank_histogram(ranks, n_members, var_names, title=None):
             color="steelblue",
             alpha=0.7,
         )
-        ax.axhline(flat_level, color="red", linestyle="--", linewidth=1,
-                   label="Flat (perfect)")
+        ax.axhline(
+            flat_level,
+            color="red",
+            linestyle="--",
+            linewidth=1,
+            label="Flat (perfect)",
+        )
 
         ax.set_xlabel("Rank", size=_LABEL_SIZE)
         ax.set_ylabel("Count", size=_LABEL_SIZE)
@@ -773,18 +783,20 @@ def plot_reliability_diagram(
     """Reliability diagram for probabilistic calibration.
 
     A model with perfect reliability produces points along the 45° diagonal.
-    Points below the diagonal indicate over-confidence; above = under-confidence.
+    Points below the diagonal indicate over-confidence; above the diagonal
+    indicates under-confidence.
 
     Parameters
     ----------
     forecast_probs : (d_f, n_thresholds) array-like — predicted probabilities
-    observed_freqs : (d_f, n_thresholds) array-like — observed event frequencies
-    thresholds : (n_thresholds,) array-like — probability threshold levels [0, 1]
+    observed_freqs : (d_f, n_thresholds) array-like — observed event
+        frequencies
+    thresholds : (n_thresholds,) array-like — probability threshold levels in
+        [0, 1]
     var_names : list[str]
     """
     fp = _to_numpy(forecast_probs)  # (d_f, n_thresholds)
     of = _to_numpy(observed_freqs)
-    thresholds_np = _to_numpy(thresholds)
 
     if fp.ndim == 1:
         fp = fp[np.newaxis, :]
@@ -810,8 +822,7 @@ def plot_reliability_diagram(
         # Both x and y use fp[var_i] so the shading is on the same axis scale
         # as the scatter.
         ax.fill_between(
-            fp[var_i], fp[var_i], of[var_i],
-            alpha=0.1, color="steelblue"
+            fp[var_i], fp[var_i], of[var_i], alpha=0.1, color="steelblue"
         )
         ax.set_xlim(0, 1)
         ax.set_ylim(0, 1)
@@ -918,7 +929,8 @@ def plot_spaghetti(
     contour_level : float — geophysical contour value to draw
     var_name : str — variable name for title
     datastore : BaseRegularGridDatastore
-    alpha_per_member : float — line transparency (lower = more readable when S is large)
+    alpha_per_member : float — line transparency (lower = more readable
+        when S is large)
     """
     samples_np = _to_numpy(samples)  # (S, N_grid)
     n_members = samples_np.shape[0]
@@ -1017,17 +1029,29 @@ def plot_plume(
     fig, ax = plt.subplots(figsize=(10, 4))
 
     ax.fill_between(
-        lead_times, p10, p90,
-        alpha=0.25, color="steelblue", label="10–90th pct."
+        lead_times,
+        p10,
+        p90,
+        alpha=0.25,
+        color="steelblue",
+        label="10–90th pct.",
     )
     ax.fill_between(
-        lead_times, p25, p75,
-        alpha=0.45, color="steelblue", label="25–75th pct."
+        lead_times,
+        p25,
+        p75,
+        alpha=0.45,
+        color="steelblue",
+        label="25–75th pct.",
     )
     ax.plot(lead_times, p50, color="steelblue", linewidth=1.5, label="Median")
     ax.plot(
-        lead_times, target_np,
-        color="black", linewidth=1.5, linestyle="-", label="Observation"
+        lead_times,
+        target_np,
+        color="black",
+        linewidth=1.5,
+        linestyle="-",
+        label="Observation",
     )
 
     ax.set_xlabel("Lead time (h)", size=_LABEL_SIZE)
@@ -1131,6 +1155,7 @@ def save_forecast_animation(figs, filename: str, duration_ms: int = 700):
     -------
     str — path to the saved file
     """
+    # Third-party
     from PIL import Image  # Pillow is already a project dependency
 
     frames = []
@@ -1184,6 +1209,7 @@ def plot_power_spectrum(
     grid_shape : (int, int) — (grid_x, grid_y) reshape dimensions
     var_name : str — variable name for the title
     """
+
     def _radial_power(field_2d):
         """Compute radially-averaged power spectrum of a 2-D field."""
         nx, ny = field_2d.shape
@@ -1221,7 +1247,8 @@ def plot_power_spectrum(
     for m_i, member in enumerate(members_np):
         k, p_member = _radial_power(member)
         ax.loglog(
-            k, p_member,
+            k,
+            p_member,
             color="steelblue",
             linewidth=0.6,
             alpha=0.35,
@@ -1237,8 +1264,11 @@ def plot_power_spectrum(
         ax.set_title(title, size=_TITLE_SIZE)
     else:
         ax.set_title(
-            _tex_safe(f"Power Spectrum — {var_name}") if var_name
-            else "Power Spectrum",
+            (
+                _tex_safe(f"Power Spectrum — {var_name}")
+                if var_name
+                else "Power Spectrum"
+            ),
             size=_TITLE_SIZE,
         )
 
@@ -1268,7 +1298,7 @@ def plot_latent_pca(prior_samples, vi_samples, title=None):
     prior_np = _to_numpy(prior_samples)
     vi_np = _to_numpy(vi_samples)
 
-    # Aggregate spatial dimension if present: (S, N_mesh, d_latent) → (S, d_latent)
+    # Aggregate spatial dim if present: (S, N_mesh, d_latent) → (S, d_latent)
     if prior_np.ndim == 3:
         prior_np = prior_np.mean(axis=1)
         vi_np = vi_np.mean(axis=1)
@@ -1287,12 +1317,20 @@ def plot_latent_pca(prior_samples, vi_samples, title=None):
     fig, ax = plt.subplots(figsize=(7, 6))
 
     ax.scatter(
-        prior_pca[:, 0], prior_pca[:, 1],
-        alpha=0.6, s=20, color="steelblue", label="Prior"
+        prior_pca[:, 0],
+        prior_pca[:, 1],
+        alpha=0.6,
+        s=20,
+        color="steelblue",
+        label="Prior",
     )
     ax.scatter(
-        vi_pca[:, 0], vi_pca[:, 1],
-        alpha=0.6, s=20, color="salmon", label="Variational"
+        vi_pca[:, 0],
+        vi_pca[:, 1],
+        alpha=0.6,
+        s=20,
+        color="salmon",
+        label="Variational",
     )
     ax.axhline(0, color="k", linewidth=0.5)
     ax.axvline(0, color="k", linewidth=0.5)
@@ -1305,7 +1343,9 @@ def plot_latent_pca(prior_samples, vi_samples, title=None):
     if title:
         ax.set_title(title, size=_TITLE_SIZE)
     else:
-        ax.set_title("Latent Space — PCA Scatter (Prior vs. VI)", size=_TITLE_SIZE)
+        ax.set_title(
+            "Latent Space — PCA Scatter (Prior vs. VI)", size=_TITLE_SIZE
+        )
 
     fig.tight_layout()
     return fig
