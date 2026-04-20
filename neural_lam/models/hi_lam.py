@@ -15,26 +15,49 @@ class HiLAM(BaseHiGraphModel):
     The Hi-LAM model from Oskarsson et al. (2023)
     """
 
-    def __init__(self, args, config: NeuralLAMConfig, datastore: BaseDatastore):
-        super().__init__(args, config=config, datastore=datastore)
+    def __init__(
+        self,
+        config: NeuralLAMConfig,
+        datastore: BaseDatastore,
+        graph_name: str = "multiscale",
+        hidden_dim: int = 64,
+        hidden_layers: int = 1,
+        processor_layers: int = 4,
+        mesh_aggr: str = "sum",
+        num_past_forcing_steps: int = 1,
+        num_future_forcing_steps: int = 1,
+        output_std: bool = False,
+    ):
+        super().__init__(
+            config=config,
+            datastore=datastore,
+            graph_name=graph_name,
+            hidden_dim=hidden_dim,
+            hidden_layers=hidden_layers,
+            processor_layers=processor_layers,
+            mesh_aggr=mesh_aggr,
+            num_past_forcing_steps=num_past_forcing_steps,
+            num_future_forcing_steps=num_future_forcing_steps,
+            output_std=output_std,
+        )
 
         # Make down GNNs, both for down edges and same level
         self.mesh_down_gnns = nn.ModuleList(
-            [self.make_down_gnns(args) for _ in range(args.processor_layers)]
+            [self.make_down_gnns() for _ in range(processor_layers)]
         )  # Nested lists (proc_steps, num_levels-1)
         self.mesh_down_same_gnns = nn.ModuleList(
-            [self.make_same_gnns(args) for _ in range(args.processor_layers)]
+            [self.make_same_gnns() for _ in range(processor_layers)]
         )  # Nested lists (proc_steps, num_levels)
 
         # Make up GNNs, both for up edges and same level
         self.mesh_up_gnns = nn.ModuleList(
-            [self.make_up_gnns(args) for _ in range(args.processor_layers)]
+            [self.make_up_gnns() for _ in range(processor_layers)]
         )  # Nested lists (proc_steps, num_levels-1)
         self.mesh_up_same_gnns = nn.ModuleList(
-            [self.make_same_gnns(args) for _ in range(args.processor_layers)]
+            [self.make_same_gnns() for _ in range(processor_layers)]
         )  # Nested lists (proc_steps, num_levels)
 
-    def make_same_gnns(self, args):
+    def make_same_gnns(self):
         """
         Make intra-level GNNs.
         """
@@ -42,14 +65,14 @@ class HiLAM(BaseHiGraphModel):
             [
                 InteractionNet(
                     edge_index,
-                    args.hidden_dim,
-                    hidden_layers=args.hidden_layers,
+                    self.hidden_dim,
+                    hidden_layers=self.hidden_layers,
                 )
                 for edge_index in self.m2m_edge_index
             ]
         )
 
-    def make_up_gnns(self, args):
+    def make_up_gnns(self):
         """
         Make GNNs for processing steps up through the hierarchy.
         """
@@ -57,14 +80,14 @@ class HiLAM(BaseHiGraphModel):
             [
                 InteractionNet(
                     edge_index,
-                    args.hidden_dim,
-                    hidden_layers=args.hidden_layers,
+                    self.hidden_dim,
+                    hidden_layers=self.hidden_layers,
                 )
                 for edge_index in self.mesh_up_edge_index
             ]
         )
 
-    def make_down_gnns(self, args):
+    def make_down_gnns(self):
         """
         Make GNNs for processing steps down through the hierarchy.
         """
@@ -72,8 +95,8 @@ class HiLAM(BaseHiGraphModel):
             [
                 InteractionNet(
                     edge_index,
-                    args.hidden_dim,
-                    hidden_layers=args.hidden_layers,
+                    self.hidden_dim,
+                    hidden_layers=self.hidden_layers,
                 )
                 for edge_index in self.mesh_down_edge_index
             ]
