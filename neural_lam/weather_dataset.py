@@ -191,11 +191,16 @@ class WeatherDataset(torch.utils.data.Dataset):
             )
 
         if not np.array_equal(
-            self.da_state.elapsed_forecast_duration.values,
-            self.da_forcing.elapsed_forecast_duration.values,
+            self.da_state.elapsed_forecast_duration.values[
+                :required_state_forecast_steps
+            ],
+            self.da_forcing.elapsed_forecast_duration.values[
+                :required_state_forecast_steps
+            ],
         ):
             raise ValueError(
-                "State and forcing forecast lead times must match for "
+                "State and forcing forecast lead times must match across "
+                "the state forecast horizon used for target alignment in "
                 "forecast-mode datasets."
             )
 
