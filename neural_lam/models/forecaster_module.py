@@ -62,6 +62,7 @@ class ForecasterModule(pl.LightningModule):
         self.save_hyperparameters(ignore=["datastore", "forecaster"])
         self.datastore = datastore
         self.forecaster = forecaster
+        self.matched_metrics: set = set()
 
         # Compute interior_mask_bool directly from datastore
         boundary_mask = (
@@ -229,6 +230,19 @@ class ForecasterModule(pl.LightningModule):
 
     def on_validation_epoch_end(self):
         self.aggregate_and_plot_metrics(self.val_metrics, prefix="val")
+
+        if self.trainer.is_global_zero and self.hparams.metrics_watch:
+            unmatched = set(self.hparams.metrics_watch) - self.matched_metrics
+            if unmatched:
+                warnings.warn(
+                    "The following metrics in --metrics_watch "
+                    "were not found during validation phase: "
+                    f"{sorted(unmatched)}. Ensure the metric prefix "
+                    "matches the evaluation mode (expected 'val_')."
+                )
+
+        self.matched_metrics = set()
+
         for metric_list in self.val_metrics.values():
             metric_list.clear()
 
@@ -488,6 +502,7 @@ class ForecasterModule(pl.LightningModule):
 
         var_names = self.datastore.get_vars_names(category="state")
         if full_log_name in self.hparams.metrics_watch:
+            self.matched_metrics.add(full_log_name)
             for (
                 var_i,
                 timesteps,
@@ -598,6 +613,19 @@ class ForecasterModule(pl.LightningModule):
                 os.path.join(self.logger.save_dir, "mean_spatial_loss.pt"),
             )
 
+            if self.hparams.metrics_watch:
+                unmatched = (
+                    set(self.hparams.metrics_watch) - self.matched_metrics
+                )
+                if unmatched:
+                    warnings.warn(
+                        "The following metrics in --metrics_watch "
+                        "were not found during test phase: "
+                        f"{sorted(unmatched)}. Ensure the metric prefix "
+                        "matches the evaluation mode (expected 'test_')."
+                    )
+
+        self.matched_metrics = set()
         self.spatial_loss_maps.clear()
 
     def on_load_checkpoint(self, checkpoint):
