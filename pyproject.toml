@@ -42,6 +42,7 @@ dependencies = [
   "numpy>=1.24.2",
   "nvidia-ml-py>=13.580.82",
   "parse>=1.20.2",
+  "pillow>=9",
   "plotly>=5.15",
   "pyproj>=3.4.1",
   "pytorch-lightning>=2.0.3",
@@ -100,9 +101,12 @@ lint.ignore = [
 ]
 lint.per-file-ignores."__init__.py" = [ "F401" ]
 
+lint.isort.import-heading = { first-party = "First-party", standard-library = "Standard library", third-party = "Third-party" }
+lint.isort.known-first-party = [ "neural_lam", "tests" ]
+
 [tool.pylint]
 ignore = [
-  "create_mesh.py", # Disable linting for now, as major rework is planned/expected
+  "create_graph.py", # Disable linting for now, as major rework is planned/expected
 ]
 # Temporary fix for import neural_lam statements until set up as proper package
 init-hook = 'import sys; sys.path.append(".")'
@@ -126,5 +130,3 @@ min-similarity-lines = 10
 
 [tool.codespell]
 skip = "requirements/*"
-
-# Pylint config

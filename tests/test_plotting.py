@@ -280,12 +280,12 @@ def test_plot_examples_integration_saves_figure(
     model.plotted_examples = 0
 
     # Verify that the model correctly inferred time step from datastore
-    assert (
-        model.time_step_int == time_step
-    ), f"Expected time_step_int={time_step}, got {model.time_step_int}"
-    assert (
-        model.time_step_unit == time_unit
-    ), f"Expected time_step_unit={time_unit}, got {model.time_step_unit}"
+    assert model.time_step_int == time_step, (
+        f"Expected time_step_int={time_step}, got {model.time_step_int}"
+    )
+    assert model.time_step_unit == time_unit, (
+        f"Expected time_step_unit={time_unit}, got {model.time_step_unit}"
+    )
 
     # Generate prediction
     prediction, target, _, _ = model.common_step(batch)
@@ -486,9 +486,9 @@ def test_create_metric_log_dict_with_metrics_watch(tmp_path):
 
     # Verify figure entries are plt.Figure and scalar entries are tensors
     for key, value in log_dict.items():
-        assert isinstance(
-            value, (plt.Figure, torch.Tensor)
-        ), f"Unexpected value type for key '{key}': {type(value)}"
+        assert isinstance(value, (plt.Figure, torch.Tensor)), (
+            f"Unexpected value type for key '{key}': {type(value)}"
+        )
 
     plt.close("all")
 

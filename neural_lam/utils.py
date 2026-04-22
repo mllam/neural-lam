@@ -267,12 +267,12 @@ def load_graph(graph_dir_path, device="cpu"):
     m2g_features = m2g_features / longest_edge
 
     # Some checks for consistency
-    assert (
-        len(m2m_features) == n_levels
-    ), "Inconsistent number of levels in mesh"
-    assert (
-        len(mesh_static_features) == n_levels
-    ), "Inconsistent number of levels in mesh"
+    assert len(m2m_features) == n_levels, (
+        "Inconsistent number of levels in mesh"
+    )
+    assert len(mesh_static_features) == n_levels, (
+        "Inconsistent number of levels in mesh"
+    )
 
     if hierarchical:
         # Load up and down edges and features

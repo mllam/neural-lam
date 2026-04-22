@@ -229,9 +229,10 @@ def main(
         flux_squares.append(torch.mean(flux_batch**2).cpu())  # (,)
 
     if distributed and world_size > 1:
-        means_gathered, squares_gathered = [None] * world_size, [
-            None
-        ] * world_size
+        means_gathered, squares_gathered = (
+            [None] * world_size,
+            [None] * world_size,
+        )
         flux_means_gathered, flux_squares_gathered = (
             [None] * world_size,
             [None] * world_size,
@@ -308,9 +309,9 @@ def main(
         sampler=sampler_standard,
     )
     time_step_int, time_step_unit = get_integer_time(step_length)
-    assert (
-        time_step_unit == "hours"
-    ), "Only 'hours' time unit is supported by meps datastore."
+    assert time_step_unit == "hours", (
+        "Only 'hours' time unit is supported by meps datastore."
+    )
     used_subsample_len = (65 // time_step_int) * time_step_int
 
     diff_means, diff_squares = [], []
@@ -319,8 +320,9 @@ def main(
         loader_standard, disable=rank != 0
     ):
         if distributed:
-            init_batch, target_batch = init_batch.to(device), target_batch.to(
-                device
+            init_batch, target_batch = (
+                init_batch.to(device),
+                target_batch.to(device),
             )
         # (N_batch, N_t', N_grid, d_features)
         batch = torch.cat((init_batch, target_batch), dim=1)

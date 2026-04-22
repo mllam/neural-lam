@@ -166,9 +166,7 @@ def test_single_batch(datastore_name, split):
     """
     datastore = init_datastore_example(datastore_name)
 
-    device_name = (
-        torch.device("cuda") if torch.cuda.is_available() else "cpu"
-    )  # noqa
+    device_name = torch.device("cuda") if torch.cuda.is_available() else "cpu"
 
     graph_name = "1level"
 
@@ -212,7 +210,7 @@ def test_single_batch(datastore_name, split):
 
     dataset = WeatherDataset(datastore=datastore, split=split, ar_steps=2)
 
-    model = GraphLAM(args=args, datastore=datastore, config=config)  # noqa
+    model = GraphLAM(args=args, datastore=datastore, config=config)
 
     model_device = model.to(device_name)
     data_loader = DataLoader(dataset, batch_size=2)
@@ -446,14 +444,14 @@ def test_standardization_with_zero_std():
 
     eps = np.finfo(std_da.dtype).eps
 
-    assert (
-        float(result[0]) == eps
-    ), "Zero std was not clamped to machine epsilon"
+    assert float(result[0]) == eps, (
+        "Zero std was not clamped to machine epsilon"
+    )
     assert float(result[1]) == 1.0
     assert float(result[2]) == 2.0
-    assert not np.isnan(
-        result.values
-    ).any(), "NaN found after _compute_std_safe"
+    assert not np.isnan(result.values).any(), (
+        "NaN found after _compute_std_safe"
+    )
 
 
 def test_weather_dataset_no_forcing_standardize():
@@ -493,6 +491,6 @@ def test_weather_dataset_no_forcing_standardize():
 
     # Ensure we can still retrieve a sample (forcing tensor should be empty)
     init_states, target_states, forcing, target_times = dataset[0]
-    assert (
-        forcing.shape[-1] == 0
-    ), "Expected zero forcing features when forcing is None"
+    assert forcing.shape[-1] == 0, (
+        "Expected zero forcing features when forcing is None"
+    )
