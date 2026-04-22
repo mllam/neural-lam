@@ -754,7 +754,6 @@ class ARModel(pl.LightningModule):
                         value,
                         on_step=False,
                         on_epoch=True,
-                        rank_zero_only=True,
                     )
 
         plt.close("all")

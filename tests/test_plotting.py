@@ -559,9 +559,7 @@ def test_aggregate_and_plot_metrics_with_metrics_watch(tmp_path):
     model.aggregate_and_plot_metrics(metrics_dict, prefix="val")
 
     # Verify that log_image was called (figures were logged)
-    assert (
-        mock_logger.log_image.called
-    ), "Expected log_image to be called for figure logging"
+    mock_logger.log_image.assert_called()
 
     # Verify that scalar metrics were captured via self.log()
     assert len(logged_scalars) > 0, (
