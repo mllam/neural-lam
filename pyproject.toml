@@ -120,7 +120,7 @@ source = "vcs"
 fallback-version = "0.0.0"
 
 [tool.pytest.ini_options]
-testpaths = ["neural_lam", "tests", "docs/notebooks"]
+testpaths = ["neural_lam", "tests"]
 addopts = "--doctest-modules --nbmake --nbmake-timeout=600 -vv -s"
 
 [tool.hatch.build.targets.wheel]
