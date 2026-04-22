@@ -48,7 +48,7 @@ jobs:
         uses: actions/setup-python@v6
         with:
           python-version: 3.13
-          cache: 'pip'
+          cache: ${{ matrix.package_manager == 'pip' && 'pip' || '' }}
 
       - name : Install uv (if applicable)
         if: matrix.package_manager == 'uv'
