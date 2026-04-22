@@ -6,6 +6,7 @@ import tempfile
 import warnings
 from functools import cache
 from pathlib import Path
+from typing import Any, Iterator, Union
 
 # Third-party
 import pytorch_lightning as pl
@@ -29,26 +30,28 @@ class BufferList(nn.Module):
     See: https://github.com/pytorch/pytorch/issues/37386
     """
 
-    def __init__(self, buffer_tensors, persistent=True):
+    def __init__(
+        self, buffer_tensors: list[torch.Tensor], persistent: bool = True
+    ) -> None:
         super().__init__()
         self.n_buffers = len(buffer_tensors)
         for buffer_i, tensor in enumerate(buffer_tensors):
             self.register_buffer(f"b{buffer_i}", tensor, persistent=persistent)
 
-    def __getitem__(self, key):
+    def __getitem__(self, key: int) -> torch.Tensor:
         return getattr(self, f"b{key}")
 
-    def __len__(self):
+    def __len__(self) -> int:
         return self.n_buffers
 
-    def __iter__(self):
+    def __iter__(self) -> Iterator[torch.Tensor]:
         return (self[i] for i in range(len(self)))
 
-    def __itruediv__(self, other):
+    def __itruediv__(self, other: float) -> "BufferList":
         """Divide each element in list with other"""
         return self.__imul__(1.0 / other)
 
-    def __imul__(self, other):
+    def __imul__(self, other: float) -> "BufferList":
         """Multiply each element in list with other"""
         for buffer_tensor in self:
             buffer_tensor *= other
@@ -56,7 +59,7 @@ class BufferList(nn.Module):
         return self
 
 
-def zero_index_edge_index(edge_index):
+def zero_index_edge_index(edge_index: torch.Tensor) -> torch.Tensor:
     """
     Make both sender and receiver indices of edge_index start at 0
     """
@@ -167,7 +170,9 @@ def zero_index_g2m(
         )
 
 
-def load_graph(graph_dir_path, device="cpu"):
+def load_graph(
+    graph_dir_path: Union[str, Path], device: str = "cpu"
+) -> tuple[bool, dict[str, Any]]:
     """Load all tensors representing the graph from `graph_dir_path`.
 
     Needs the following files for all graphs:
@@ -313,12 +318,10 @@ def load_graph(graph_dir_path, device="cpu"):
         m2m_features = m2m_features[0]
         mesh_static_features = mesh_static_features[0]
 
-        (
-            mesh_up_edge_index,
-            mesh_down_edge_index,
-            mesh_up_features,
-            mesh_down_features,
-        ) = ([], [], [], [])
+        mesh_up_edge_index = []  # type: ignore[assignment]
+        mesh_down_edge_index = []  # type: ignore[assignment]
+        mesh_up_features = []  # type: ignore[assignment]
+        mesh_down_features = []  # type: ignore[assignment]
 
     return hierarchical, {
         "g2m_edge_index": g2m_edge_index,
@@ -335,7 +338,7 @@ def load_graph(graph_dir_path, device="cpu"):
     }
 
 
-def make_mlp(blueprint, layer_norm=True):
+def make_mlp(blueprint: list[int], layer_norm: bool = True) -> nn.Sequential:
     """
     Create MLP from list blueprint, with
     input dimensionality: blueprint[0]
@@ -424,7 +427,7 @@ $E=mc^2$ \LaTeX\ ok
         return False
 
 
-def fractional_plot_bundle(fraction):
+def fractional_plot_bundle(fraction: float) -> dict[str, Any]:
     """
     Get the tueplots bundle, but with figure width as a fraction of
     the page width.
@@ -457,7 +460,9 @@ def log_on_rank_zero(msg: str, level: str = "info", *args, **kwargs):
         log_fn(msg, *args, **kwargs)
 
 
-def init_training_logger_metrics(training_logger, val_steps):
+def init_training_logger_metrics(
+    training_logger: Any, val_steps: list[int]
+) -> None:
     """
     Set up logger metrics to track
     """
@@ -544,7 +549,9 @@ def setup_training_logger(datastore, args, run_name):
     return training_logger
 
 
-def inverse_softplus(x, beta=1, threshold=20):
+def inverse_softplus(
+    x: torch.Tensor, beta: float = 1, threshold: float = 20
+) -> torch.Tensor:
     """
     Inverse of torch.nn.functional.softplus
 
@@ -567,7 +574,7 @@ def inverse_softplus(x, beta=1, threshold=20):
     return x
 
 
-def inverse_sigmoid(x):
+def inverse_sigmoid(x: torch.Tensor) -> torch.Tensor:
     """
     Inverse of torch.sigmoid
 
