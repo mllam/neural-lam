@@ -98,7 +98,7 @@ jobs:
       - name: Install package (including dev dependencies)
         if : matrix.package_manager != 'uv'
         run: |
-          python -m pip install -e .[dev]
+          python -m pip install --group dev .
 
       - name: Setup environment with uv (if applicable)
         if: matrix.package_manager == 'uv'
