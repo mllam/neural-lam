@@ -109,12 +109,10 @@ jobs:
           if [ ! -d .venv ]; then
             uv venv --no-project
           fi
-          source .venv/bin/activate
           if [ "${{ steps.cache-venv.outputs.cache-hit }}" != "true" ]; then
             uv pip install torch --index-url ${{ matrix.torch_index }}
-            uv pip install --group dev .
+            uv pip install --group dev -e .
           fi
-          uv pip install -e . --no-deps
           uv pip list
           echo "$PWD/.venv/bin" >> $GITHUB_PATH
 
