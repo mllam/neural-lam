@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Fix `AssertionError` in `aggregate_and_plot_metrics` when using `--metrics_watch` flags by using `isinstance` dispatch for figure vs scalar logging [\#303](https://github.com/mllam/neural-lam/pull/303) @AftAb-25
+
 - Resolve `xarray` `FacetGrid` `DeprecationWarning` in `plot_example.py` by using a compatibility shim [\#482](https://github.com/mllam/neural-lam/pull/482) @sohampatil01-svg
 
 ## [v0.6.0](https://github.com/mllam/neural-lam/releases/tag/v0.6.0)
@@ -42,8 +44,6 @@ This release introduces new features including GIF animation support, wandb run 
 - Infer spatial coordinate names for MDPDatastore (rather than assuming names `x` and `y`), allows for e.g. lat/lon regular grids [\#169](https://github.com/mllam/neural-lam/pull/169) @leifdenby
 
 ### Fixed
-
-- Fix `AssertionError` in `aggregate_and_plot_metrics` when using `--metrics_watch` flags by using `isinstance` dispatch for figure vs scalar logging [\#303](https://github.com/mllam/neural-lam/pull/303) @AftAb-25
 
 - Fix validation crash in `plot_error_map` and resolve DDP NCCL initialization error on single-device setups [\#193](https://github.com/mllam/neural-lam/pull/193) @AdityaKumarSethia
 
