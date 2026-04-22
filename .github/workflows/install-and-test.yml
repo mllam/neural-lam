@@ -125,7 +125,7 @@ jobs:
           (github.event_name == 'push' ||
            contains(github.event.pull_request.labels.*.name, 'run-notebooks'))
         run: |
-          pytest -vv -s docs/notebooks/
+          pytest -vv -s --nbmake --nbmake-timeout=600 docs/notebooks/
 
       - name: Upload test figures
         if: matrix.package_manager == 'uv'
