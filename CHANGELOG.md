@@ -13,6 +13,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Resolve `xarray` `FacetGrid` `DeprecationWarning` in `plot_example.py` by using a compatibility shim [\#482](https://github.com/mllam/neural-lam/pull/482) @sohampatil01-svg
 
+- Fix missing space in `loss_weighting.py` error message f-string concatenation that produced "featurein" instead of "feature in" [\#573](https://github.com/mllam/neural-lam/pull/573) @RajdeepKushwaha5
+
 ## [v0.6.0](https://github.com/mllam/neural-lam/releases/tag/v0.6.0)
 
 This release introduces new features including GIF animation support, wandb run resumption, and improved ensemble loading, alongside a large number of bug fixes and maintenance updates.
