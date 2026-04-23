@@ -511,6 +511,26 @@ class WeatherDataset(torch.utils.data.Dataset):
 
         tensor_dtype = torch.float32
 
+        # Explicitly transpose to ensure (time, grid_index, feature)
+        # This prevents "Incorrect Handling" if the datastore returned a different order
+        da_init_states = da_init_states.transpose(
+            "time", "grid_index", "state_feature"
+        )
+        da_target_states = da_target_states.transpose(
+            "time", "grid_index", "state_feature"
+        )
+
+        # For forcing, the feature dimension was renamed in _build_item_dataarrays
+        # bug fixing of empty DataArray when self.da_forcing is None
+        if "forcing_feature_windowed" in da_forcing_windowed.dims:
+            da_forcing_windowed = da_forcing_windowed.transpose(
+                "time", "grid_index", "forcing_feature_windowed"
+            )
+        else:
+            da_forcing_windowed = da_forcing_windowed.transpose(
+                "time", "grid_index", "forcing_feature"
+            )
+
         init_states = torch.tensor(da_init_states.values, dtype=tensor_dtype)
         target_states = torch.tensor(
             da_target_states.values, dtype=tensor_dtype
