@@ -510,7 +510,8 @@ class WeatherDataset(torch.utils.data.Dataset):
         ) = self._build_item_dataarrays(idx=idx)
 
         tensor_dtype = torch.float32
-
+        # Standardize dimension order to (time, grid_index, feature) to satisfy
+        # GNN model input requirements for state tensors.
         da_init_states = da_init_states.transpose(
             "time", "grid_index", "state_feature"
         )
