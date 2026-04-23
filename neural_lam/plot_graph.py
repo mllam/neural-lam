@@ -1,3 +1,5 @@
+"""Command-line utility for plotting saved Neural-LAM graphs."""
+
 # Standard library
 import os
 from argparse import ArgumentDefaultsHelpFormatter, ArgumentParser

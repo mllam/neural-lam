@@ -35,6 +35,7 @@ OPEN_WATER_FILENAME_FORMAT = "wtr_{analysis_time:%Y%m%d%H}.npy"
 
 
 def _load_np(fp, add_feature_dim, feature_dim_mask=None):
+    """Load an ``.npy`` file and optionally expand/mask the feature axis."""
     arr = np.load(fp)
     if add_feature_dim:
         arr = arr[..., np.newaxis]
@@ -44,25 +45,25 @@ def _load_np(fp, add_feature_dim, feature_dim_mask=None):
 
 
 class NpyFilesDatastoreMEPS(BaseRegularGridDatastore):
-    __doc__ = f"""
+    """
     Represents a dataset stored as numpy files on disk. The dataset is assumed
     to be stored in a directory structure where each sample is stored in a
-    separate file. The file-name format is assumed to be
-    '{STATE_FILENAME_FORMAT}'
+    separate file. The file-name format is assumed to be described by
+    ``STATE_FILENAME_FORMAT``.
 
     The MEPS dataset is organised into three splits: train, val, and test. Each
     split has a set of files which are:
 
-    - `{STATE_FILENAME_FORMAT}`:
+    - ``STATE_FILENAME_FORMAT``:
         The state variables for a forecast started at `analysis_time` with
         member id `member_id`. The dimensions of the array are
         `[forecast_timestep, y, x, feature]`.
 
-    - `{TOA_SW_DOWN_FLUX_FILENAME_FORMAT}`:
+    - ``TOA_SW_DOWN_FLUX_FILENAME_FORMAT``:
         The top-of-atmosphere downwelling shortwave flux at `time`. The
         dimensions of the array are `[forecast_timestep, y, x]`.
 
-    - `{OPEN_WATER_FILENAME_FORMAT}`:
+    - ``OPEN_WATER_FILENAME_FORMAT``:
         The open water fraction at `time`. The dimensions of the array are
         `[y, x]`.
 
@@ -140,6 +141,7 @@ class NpyFilesDatastoreMEPS(BaseRegularGridDatastore):
     d_features = 8
     d_forcing = 1
     """
+
     SHORT_NAME = "npyfilesmeps"
 
     is_forecast = True
@@ -551,6 +553,19 @@ class NpyFilesDatastoreMEPS(BaseRegularGridDatastore):
         return sorted(times)
 
     def _calc_datetime_forcing_features(self, da_time: xr.DataArray):
+        """
+        Compute sinusoidal encodings of hour-of-day and day-of-year.
+
+        Parameters
+        ----------
+        da_time : xr.DataArray
+            Time coordinate with dimension ``time``.
+
+        Returns
+        -------
+        xr.DataArray
+            Normalized sine/cosine features with dims ``("feature",)``.
+        """
         da_hour_angle = da_time.dt.hour / 12 * np.pi
         da_year_angle = da_time.dt.dayofyear / 365 * 2 * np.pi
 
@@ -574,6 +589,7 @@ class NpyFilesDatastoreMEPS(BaseRegularGridDatastore):
         return da_datetime_forcing
 
     def get_vars_units(self, category: str) -> List[str]:
+        """Return unit strings for the variables in ``category``."""
         if category == "state":
             return self.config.dataset.var_units
         elif category == "forcing":
@@ -591,6 +607,7 @@ class NpyFilesDatastoreMEPS(BaseRegularGridDatastore):
             raise NotImplementedError(f"Category {category} not supported")
 
     def get_vars_names(self, category: str) -> List[str]:
+        """Return canonical short names for the variables in ``category``."""
         if category == "state":
             return self.config.dataset.var_names
         elif category == "forcing":
@@ -610,6 +627,7 @@ class NpyFilesDatastoreMEPS(BaseRegularGridDatastore):
             raise NotImplementedError(f"Category {category} not supported")
 
     def get_vars_long_names(self, category: str) -> List[str]:
+        """Return descriptive names for the variables in ``category``."""
         if category == "state":
             return self.config.dataset.var_longnames
         else:
@@ -617,6 +635,7 @@ class NpyFilesDatastoreMEPS(BaseRegularGridDatastore):
             return self.get_vars_names(category=category)
 
     def get_num_data_vars(self, category: str) -> int:
+        """Return the number of variables available in ``category``."""
         return len(self.get_vars_names(category=category))
 
     def get_xy(self, category: str, stacked: bool) -> np.ndarray:
@@ -732,6 +751,7 @@ class NpyFilesDatastoreMEPS(BaseRegularGridDatastore):
         """
 
         def load_pickled_tensor(fn):
+            """Load a serialized tensor from ``static`` and convert to numpy."""
             return torch.load(
                 self.root_path / "static" / fn, weights_only=True
             ).numpy()

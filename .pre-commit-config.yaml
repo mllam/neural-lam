@@ -36,9 +36,16 @@ repos:
       - id: flake8
         description: Check Python code for correctness, consistency and adherence to best practices
         additional_dependencies: [Flake8-pyproject]
+  - repo: https://github.com/econchick/interrogate
+    rev: 1.7.0
+    hooks:
+      - id: interrogate
+        description: Ensure documentation coverage stays perfect
+        pass_filenames: false
+        args: ["--fail-under=100", "neural_lam"]
   - repo: https://github.com/pre-commit/mirrors-mypy
     rev: v1.19.0
     hooks:
-    -   id: mypy
+      - id: mypy
         additional_dependencies: [types-PyYAML, types-Pillow, types-tqdm]
         description: Check for type errors

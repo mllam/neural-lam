@@ -1,3 +1,5 @@
+"""Abstract base classes describing Neural-LAM datastore APIs."""
+
 # Standard library
 import abc
 import collections
@@ -91,8 +93,10 @@ class BaseDatastore(abc.ABC):
     def step_length(self) -> timedelta:
         """The step length of the dataset as a time interval.
 
-        Returns:
-            timedelta: The step length as a datetime.timedelta object.
+        Returns
+        -------
+        datetime.timedelta
+            The step length as a ``datetime.timedelta`` object.
 
         """
         pass
@@ -393,8 +397,10 @@ class BaseDatastore(abc.ABC):
         the loss function for each state variable (e.g. via the standard
         deviation of the 1-step differences of the state variables).
 
-        Returns:
-            List[float]: The weights for each state feature.
+        Returns
+        -------
+        List[float]
+            The weights for each state feature.
         """
         pass
 

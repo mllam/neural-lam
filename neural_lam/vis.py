@@ -1,3 +1,5 @@
+"""Visualization helpers for analysing Neural-LAM predictions and errors."""
+
 # Third-party
 import cartopy.crs as ccrs
 import cartopy.feature as cfeature
@@ -157,9 +159,23 @@ def plot_on_axis(
 @matplotlib.rc_context(utils.fractional_plot_bundle(1))
 def plot_error_map(errors, datastore: BaseRegularGridDatastore, title=None):
     """
-    Plot a heatmap of errors of different variables at different
-    predictions horizons
-    errors: (pred_steps, d_f)
+    Plot a heatmap of per-variable errors across prediction horizons.
+
+    Parameters
+    ----------
+    errors : torch.Tensor
+        Error values for each horizon and feature.
+
+        * **Shape**: ``(pred_steps, d_f)``
+    datastore : BaseRegularGridDatastore
+        Datastore providing metadata for labels and units.
+    title : str or None, optional
+        Optional plot title.
+
+    Returns
+    -------
+    matplotlib.figure.Figure
+        Figure handle containing the rendered heatmap.
     """
 
     # Ensure errors is 2D even for single-step/single-GPU runs
@@ -228,10 +244,29 @@ def plot_prediction(
     colorbar_label: str = "",
 ):
     """
-    Plot example prediction and grond truth.
+    Plot a prediction alongside the corresponding ground truth field.
 
-    Each has shape (N_grid,)
+    Parameters
+    ----------
+    datastore : BaseRegularGridDatastore
+        Datastore providing coordinate metadata and projection details.
+    da_prediction : xarray.DataArray
+        Predicted field.
 
+        * **Shape**: ``(num_grid_nodes,)``
+    da_target : xarray.DataArray
+        Ground-truth field.
+
+        * **Shape**: ``(num_grid_nodes,)``
+    title : str or None, optional
+        Optional figure title.
+    vrange : tuple[float, float] or None, optional
+        Explicit value range ``(vmin, vmax)`` for the color scale.
+
+    Returns
+    -------
+    matplotlib.figure.Figure
+        Figure handle containing the two subplots.
     """
     if vrange is None:
         vmin = float(min(da_prediction.min(), da_target.min()))
@@ -289,8 +324,27 @@ def plot_spatial_error(
     crop_to_interior=True,
     colorbar_label: str = "",
 ):
-    """Plot spatial error with projection-aware axes."""
+    """
+    Plot spatial error magnitudes on the datastore grid.
 
+    Parameters
+    ----------
+    error : torch.Tensor
+        Error magnitudes on the flattened grid.
+
+        * **Shape**: ``(N_grid,)``
+    datastore : BaseRegularGridDatastore
+        Datastore providing coordinate metadata and boundary masks.
+    title : str or None, optional
+        Optional figure title.
+    vrange : tuple[float, float] or None, optional
+        Explicit value range ``(vmin, vmax)`` for the color scale.
+
+    Returns
+    -------
+    matplotlib.figure.Figure
+        Figure handle containing the plotted map.
+    """
     error_np = error.detach().cpu().numpy()
 
     if vrange is None:

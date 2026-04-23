@@ -1,3 +1,5 @@
+"""Dataset helpers wrapping Neural-LAM datastores for PyTorch Lightning."""
+
 # Standard library
 import datetime
 import warnings
@@ -56,6 +58,26 @@ class WeatherDataset(torch.utils.data.Dataset):
         load_single_member: bool = False,
         standardize: bool = True,
     ):
+        """
+        Parameters
+        ----------
+        datastore : BaseDatastore
+            Datastore providing access to state/forcing/static arrays.
+        split : str, optional
+            Data split (``"train"``, ``"val"``, or ``"test"``).
+            Default ``"train"``.
+        ar_steps : int, optional
+            Number of autoregressive steps per training sample. Default ``3``.
+        num_past_forcing_steps : int, optional
+            Past forcing window length ``i`` so that ``[t-i, ..., t]`` forcings
+            are concatenated. Default ``1``.
+        num_future_forcing_steps : int, optional
+            Future forcing window length ``j`` so that ``[t, ..., t+j]``
+            forcings are available. Default ``1``.
+        standardize : bool, optional
+            If ``True``, normalize state/forcing arrays via datastore stats.
+        """
+
         super().__init__()
 
         self.split = split
@@ -151,6 +173,22 @@ class WeatherDataset(torch.utils.data.Dataset):
                 self.forcing_std_safe = None
 
     def _compute_std_safe(self, std: xr.DataArray, feature: str):
+        """
+        Replace near-zero standard deviations with machine epsilon.
+
+        Parameters
+        ----------
+        std : xr.DataArray
+            Standard deviation array for the given feature category.
+        feature : str
+        Feature category name used in the warning message.
+
+        Returns
+        -------
+        xr.DataArray
+            Standard deviation array with near-zero values replaced by
+            machine epsilon to avoid division by zero during standardization.
+        """
         eps = np.finfo(std.dtype).eps
         if bool((std <= eps).any()):
             logger.warning(
@@ -160,6 +198,14 @@ class WeatherDataset(torch.utils.data.Dataset):
         return std.where(std > eps, other=eps)
 
     def __len__(self):
+        """
+        Return the number of autoregressive training samples available.
+
+        Returns
+        -------
+        int
+            Number of (init, target) pairs derivable from the datastore.
+        """
         if self.datastore.is_forecast:
             # for now we simply create a single sample for each analysis time
             # and then take the first (2 + ar_steps) forecast times.
@@ -203,11 +249,11 @@ class WeatherDataset(torch.utils.data.Dataset):
     def _slice_state_time(self, da_state, idx, n_steps: int):
         """
         Produce a time slice of the given dataarray `da_state` (state) starting
-        at `idx` and with `n_steps` steps. An `offset`is calculated based on the
-        `num_past_forcing_steps` class attribute. `Offset` is used to offset the
-        start of the sample, to assert that enough previous time steps are
-        available for the 2 initial states and any corresponding forcings
-        (calculated in `_slice_forcing_time`).
+        at `idx` and with `n_steps` steps. An `offset` is calculated based on
+        the `num_past_forcing_steps` class attribute. `Offset` is used to offset
+        the start of the sample, to assert that enough previous time steps
+        are available for the 2 initial states and any corresponding
+        forcings (calculated in `_slice_forcing_time`).
 
         Parameters
         ----------
@@ -292,8 +338,8 @@ class WeatherDataset(torch.utils.data.Dataset):
         """
         # The current implementation requires at least 2 time steps for the
         # initial state (see GraphCast). The forcing data is windowed around the
-        # current autregressive time step. The two `init_steps` can also be used
-        # as past forcings.
+        # current autoregressive time step. The two `init_steps` can also be
+        # used as past forcings.
         init_steps = 2
         da_list = []
 
@@ -578,7 +624,7 @@ class WeatherDataset(torch.utils.data.Dataset):
         """
 
         def _is_listlike(obj):
-            # match list, tuple, numpy array
+            """Return ``True`` for list/tuple/ndarray-like containers."""
             return hasattr(obj, "__iter__") and not isinstance(obj, str)
 
         add_time_as_dim = False
@@ -651,6 +697,29 @@ class WeatherDataModule(pl.LightningDataModule):
         num_workers: int = 16,
         eval_split: str = "test",
     ):
+        """
+        Parameters
+        ----------
+        datastore : BaseDatastore
+            Datastore used for all splits.
+        ar_steps_train : int, optional
+            Number of autoregressive steps for training batches. Default ``3``.
+        ar_steps_eval : int, optional
+            Number of autoregressive steps for validation/test batches.
+            Default ``25``.
+        standardize : bool, optional
+            If ``True``, datasets are returned standardized. Default ``True``.
+        num_past_forcing_steps : int, optional
+            Number of past forcing steps to include. Default ``1``.
+        num_future_forcing_steps : int, optional
+            Number of future forcing steps to include. Default ``1``.
+        batch_size : int, optional
+            Mini-batch size for dataloaders. Default ``4``.
+        num_workers : int, optional
+            Number of background workers per dataloader. Default ``16``.
+        eval_split : str, optional
+            Dataset split to use for ``test_dataloader``. Default ``"test"``.
+        """
         super().__init__()
         self._datastore = datastore
         self.num_past_forcing_steps = num_past_forcing_steps
@@ -672,6 +741,16 @@ class WeatherDataModule(pl.LightningDataModule):
             self.multiprocessing_context = "spawn"
 
     def setup(self, stage=None):
+        """
+        Instantiate datasets for the requested trainer stage.
+
+        Parameters
+        ----------
+        stage : str or None, optional
+            Trainer stage identifier (``"fit"``/``"test"``/``None``). When
+            ``None``, both the training split and the validation/test
+            evaluation splits are prepared.
+        """
         if stage == "fit" or stage is None:
             self.train_dataset = WeatherDataset(
                 datastore=self._datastore,

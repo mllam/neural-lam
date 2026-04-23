@@ -1,3 +1,5 @@
+"""CLI entry point for training Neural-LAM models."""
+
 # Standard library
 import json
 import random

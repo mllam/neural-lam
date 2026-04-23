@@ -1,3 +1,5 @@
+"""Base class for Neural-LAM graph models."""
+
 # Third-party
 import torch
 
@@ -16,6 +18,18 @@ class BaseGraphModel(ARModel):
     """
 
     def __init__(self, args, config: NeuralLAMConfig, datastore: BaseDatastore):
+        """
+        Initialize the graph-model scaffolding shared by concrete variants.
+
+        Parameters
+        ----------
+        args : argparse.Namespace
+            Training/runtime arguments describing graph paths and widths.
+        config : NeuralLAMConfig
+            Experiment configuration for clamping and weighting.
+        datastore : BaseDatastore
+            Datastore providing static features and metadata (e.g. graph path).
+        """
         super().__init__(args, config=config, datastore=datastore)
 
         # Load graph with static features
@@ -86,7 +100,14 @@ class BaseGraphModel(ARModel):
         self, config: NeuralLAMConfig, datastore: BaseDatastore
     ):
         """
-        Prepare parameters for clamping predicted values to valid range
+        Prepare per-feature parameters for clamping model outputs.
+
+        Parameters
+        ----------
+        config : NeuralLAMConfig
+            Model and training configuration containing clamping settings.
+        datastore : BaseDatastore
+            Datastore that provides the ordering of state variables.
         """
 
         # Read configs
@@ -218,19 +239,42 @@ class BaseGraphModel(ARModel):
         )
 
     def get_clamped_new_state(self, state_delta, prev_state):
-        """
-        Clamp prediction to valid range supplied in config
-        Returns the clamped new state after adding delta to original state
+        r"""
+        Clamp predicted deltas and add them to the previous state.
 
-        Instead of the new state being computed as
-        $X_{t+1} = X_t + \\delta = X_t + model(\\{X_t,X_{t-1},...\\}, forcing)$
-        The clamped values will be
-        $f(f^{-1}(X_t) + model(\\{X_t, X_{t-1},... \\}, forcing))$
-        Which means the model will learn to output values in the range of the
-        inverse clamping function
+        The clamped values follow
+        ``X_{t+1} = f(f^{-1}(X_t) + \Delta X_t)`` where ``\Delta X_t`` is the
+        model output. ``f(·)`` applies the appropriate clamp per variable,
+        while ``f^{-1}(·)`` makes the inverse transformation so the network
+        predicts in the unclamped space. The element-wise clamp is implemented
+        as
 
-        state_delta: (B, num_grid_nodes, feature_dim)
-        prev_state: (B, num_grid_nodes, feature_dim)
+        * ``f(z) = a + (b - a) * \sigma(z)`` for variables with bounds
+          ``(a, b)`` (``\sigma`` is the logistic function)
+        * ``f(z) = a + \operatorname{softplus}(z)`` for lower-bounded variables
+        * ``f(z) = b - \operatorname{softplus}(-z)`` for upper-bounded variables
+
+        which ensures ``X_{t+1}`` respects the physical limits encoded in the
+        datastore configuration while keeping the model output centered in a
+        numerically stable range.
+
+        Parameters
+        ----------
+        state_delta : torch.Tensor
+            Predicted change to apply to the previous state.
+
+            * **Shape**: ``(B, num_grid_nodes, num_state_vars)``
+        prev_state : torch.Tensor
+            Previous state ``X_t``.
+
+            * **Shape**: ``(B, num_grid_nodes, num_state_vars)``
+
+        Returns
+        -------
+        torch.Tensor
+            Clamped next state ``X_{t+1}``.
+
+            * **Shape**: ``(B, num_grid_nodes, num_state_vars)``
         """
 
         # Assign new state, but overwrite clamped values of each type later
@@ -267,34 +311,77 @@ class BaseGraphModel(ARModel):
 
     def get_num_mesh(self):
         """
-        Compute number of mesh nodes from loaded features,
-        and number of mesh nodes that should be ignored in encoding/decoding
+        Compute mesh node counts used for encoding and decoding.
+
+        Returns
+        -------
+        tuple[int, int]
+            Total number of mesh nodes and the number that should be ignored
+            during encoding/decoding.
         """
         raise NotImplementedError("get_num_mesh not implemented")
 
     def embedd_mesh_nodes(self):
         """
-        Embed static mesh features
-        Returns tensor of shape (num_mesh_nodes, d_h)
+        Embed static mesh features for downstream processing.
+
+        Returns
+        -------
+        torch.Tensor
+            Embedded mesh node representations.
+
+            * **Shape**: ``(num_mesh_nodes, hidden_dim)``
         """
         raise NotImplementedError("embedd_mesh_nodes not implemented")
 
     def process_step(self, mesh_rep):
         """
-        Process step of embedd-process-decode framework
-        Processes the representation on the mesh, possible in multiple steps
+        Run the processor portion of the encode-process-decode framework.
 
-        mesh_rep: has shape (B, num_mesh_nodes, d_h)
-        Returns mesh_rep: (B, num_mesh_nodes, d_h)
+        Parameters
+        ----------
+        mesh_rep : torch.Tensor
+            Mesh node representations prior to the processor.
+
+            * **Shape**: ``(B, num_mesh_nodes, hidden_dim)``
+
+        Returns
+        -------
+        torch.Tensor
+            Updated mesh representations after processing.
+
+            * **Shape**: ``(B, num_mesh_nodes, hidden_dim)``
         """
         raise NotImplementedError("process_step not implemented")
 
     def predict_step(self, prev_state, prev_prev_state, forcing):
         """
-        Step state one step ahead using prediction model, X_{t-1}, X_t -> X_t+1
-        prev_state: (B, num_grid_nodes, feature_dim), X_t
-        prev_prev_state: (B, num_grid_nodes, feature_dim), X_{t-1}
-        forcing: (B, num_grid_nodes, forcing_dim)
+        Advance the state by one step using the prediction model.
+
+        Parameters
+        ----------
+        prev_state : torch.Tensor
+            Current state ``X_t``.
+
+            * **Shape**: ``(B, num_grid_nodes, num_state_vars)``
+        prev_prev_state : torch.Tensor
+            Previous state ``X_{t-1}``.
+
+            * **Shape**: ``(B, num_grid_nodes, num_state_vars)``
+        forcing : torch.Tensor
+            Forcing inputs applied at the prediction step.
+
+            * **Shape**: ``(B, num_grid_nodes, num_forcing_vars)``
+
+        Returns
+        -------
+        tuple[torch.Tensor, torch.Tensor | None]
+            Tuple ``(new_state, pred_std)`` where ``pred_std`` is ``None``
+            when the model does not emit uncertainty estimates.
+
+            * **Shape**: ``(B, num_grid_nodes, num_state_vars)`` for
+              ``new_state`` and ``(B, num_grid_nodes, num_state_vars)`` for
+              ``pred_std`` when present.
         """
         batch_size = prev_state.shape[0]
 
@@ -310,25 +397,27 @@ class BaseGraphModel(ARModel):
         )
 
         # Embed all features
-        grid_emb = self.grid_embedder(grid_features)  # (B, num_grid_nodes, d_h)
-        g2m_emb = self.g2m_embedder(self.g2m_features)  # (M_g2m, d_h)
-        m2g_emb = self.m2g_embedder(self.m2g_features)  # (M_m2g, d_h)
+        grid_emb = self.grid_embedder(
+            grid_features
+        )  # (B, num_grid_nodes, hidden_dim)
+        g2m_emb = self.g2m_embedder(self.g2m_features)  # (M_g2m, hidden_dim)
+        m2g_emb = self.m2g_embedder(self.m2g_features)  # (M_m2g, hidden_dim)
         mesh_emb = self.embedd_mesh_nodes()
 
         # Map from grid to mesh
         mesh_emb_expanded = self.expand_to_batch(
             mesh_emb, batch_size
-        )  # (B, num_mesh_nodes, d_h)
+        )  # (B, num_mesh_nodes, hidden_dim)
         g2m_emb_expanded = self.expand_to_batch(g2m_emb, batch_size)
 
         # This also splits representation into grid and mesh
         mesh_rep = self.g2m_gnn(
             grid_emb, mesh_emb_expanded, g2m_emb_expanded
-        )  # (B, num_mesh_nodes, d_h)
+        )  # (B, num_mesh_nodes, hidden_dim)
         # Also MLP with residual for grid representation
         grid_rep = grid_emb + self.encoding_grid_mlp(
             grid_emb
-        )  # (B, num_grid_nodes, d_h)
+        )  # (B, num_grid_nodes, hidden_dim)
 
         # Run processor step
         mesh_rep = self.process_step(mesh_rep)
@@ -337,7 +426,7 @@ class BaseGraphModel(ARModel):
         m2g_emb_expanded = self.expand_to_batch(m2g_emb, batch_size)
         grid_rep = self.m2g_gnn(
             mesh_rep, grid_rep, m2g_emb_expanded
-        )  # (B, num_grid_nodes, d_h)
+        )  # (B, num_grid_nodes, hidden_dim)
 
         # Map to output dimension, only for grid
         net_output = self.output_map(
@@ -347,7 +436,7 @@ class BaseGraphModel(ARModel):
         if self.output_std:
             pred_delta_mean, pred_std_raw = net_output.chunk(
                 2, dim=-1
-            )  # both (B, num_grid_nodes, d_f)
+            )  # both (B, num_grid_nodes, num_state_vars)
             # NOTE: The predicted std. is not scaled in any way here
             # linter for some reason does not think softplus is callable
             # pylint: disable-next=not-callable

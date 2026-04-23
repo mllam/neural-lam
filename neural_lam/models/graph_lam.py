@@ -1,3 +1,5 @@
+"""GraphLAM: the non-hierarchical Neural-LAM architecture."""
+
 # Third-party
 import torch_geometric as pyg
 
@@ -18,6 +20,7 @@ class GraphLAM(BaseGraphModel):
     """
 
     def __init__(self, args, config: NeuralLAMConfig, datastore: BaseDatastore):
+        """Initialize the non-hierarchical GraphLAM variant."""
         super().__init__(args, config=config, datastore=datastore)
 
         assert (
@@ -58,25 +61,46 @@ class GraphLAM(BaseGraphModel):
 
     def get_num_mesh(self):
         """
-        Compute number of mesh nodes from loaded features,
-        and number of mesh nodes that should be ignored in encoding/decoding
+        Compute mesh node counts used for encoding and decoding.
+
+        Returns
+        -------
+        tuple[int, int]
+            Total number of mesh nodes and the number to ignore during
+            encoding/decoding.
         """
         return self.mesh_static_features.shape[0], 0
 
     def embedd_mesh_nodes(self):
         """
-        Embed static mesh features
-        Returns tensor of shape (N_mesh, d_h)
+        Embed static mesh features.
+
+        Returns
+        -------
+        torch.Tensor
+            Embedded mesh node representations.
+
+            * **Shape**: ``(N_mesh, d_h)``
         """
         return self.mesh_embedder(self.mesh_static_features)  # (N_mesh, d_h)
 
     def process_step(self, mesh_rep):
         """
-        Process step of embedd-process-decode framework
-        Processes the representation on the mesh, possible in multiple steps
+        Run the processor portion of the encode-process-decode framework.
 
-        mesh_rep: has shape (B, N_mesh, d_h)
-        Returns mesh_rep: (B, N_mesh, d_h)
+        Parameters
+        ----------
+        mesh_rep : torch.Tensor
+            Mesh node representations before processing.
+
+            * **Shape**: ``(B, N_mesh, d_h)``
+
+        Returns
+        -------
+        torch.Tensor
+            Updated mesh representations.
+
+            * **Shape**: ``(B, N_mesh, d_h)``
         """
         # Embed m2m here first
         batch_size = mesh_rep.shape[0]

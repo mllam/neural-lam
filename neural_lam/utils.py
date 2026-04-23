@@ -1,3 +1,5 @@
+"""Utility helpers shared across Neural-LAM training and evaluation."""
+
 # Standard library
 import os
 import shutil
@@ -30,18 +32,31 @@ class BufferList(nn.Module):
     """
 
     def __init__(self, buffer_tensors, persistent=True):
+        """
+        Register a collection of tensors as buffers inside a module.
+
+        Parameters
+        ----------
+        buffer_tensors : Sequence[torch.Tensor]
+            Buffers to register in the order they should be indexed.
+        persistent : bool, optional
+            If ``True``, buffers are saved in checkpoints. Default ``True``.
+        """
         super().__init__()
         self.n_buffers = len(buffer_tensors)
         for buffer_i, tensor in enumerate(buffer_tensors):
             self.register_buffer(f"b{buffer_i}", tensor, persistent=persistent)
 
     def __getitem__(self, key):
+        """Return the buffer at ``key`` (0-indexed)."""
         return getattr(self, f"b{key}")
 
     def __len__(self):
+        """Return the number of registered buffers."""
         return self.n_buffers
 
     def __iter__(self):
+        """Iterate over the registered buffers in ascending index order."""
         return (self[i] for i in range(len(self)))
 
     def __itruediv__(self, other):
@@ -213,6 +228,10 @@ def load_graph(graph_dir_path, device="cpu"):
     """
 
     def loads_file(fn):
+        """Load ``torch.load`` data from ``graph_dir_path``.
+
+        Applies ``map_location`` so tensors land on the requested device.
+        """
         return torch.load(
             os.path.join(graph_dir_path, fn),
             map_location=device,
@@ -248,7 +267,7 @@ def load_graph(graph_dir_path, device="cpu"):
     assert g2m_edge_index.min() >= 0, "Negative node index in g2m"
 
     n_levels = len(m2m_edge_index)
-    hierarchical = n_levels > 1  # Nor just single level mesh graph
+    hierarchical = n_levels > 1  # Not just single level mesh graph
 
     # Load static edge features
     # List of (M_m2m[l], d_edge_f)
@@ -337,13 +356,22 @@ def load_graph(graph_dir_path, device="cpu"):
 
 def make_mlp(blueprint, layer_norm=True):
     """
-    Create MLP from list blueprint, with
-    input dimensionality: blueprint[0]
-    output dimensionality: blueprint[-1] and
-    hidden layers of dimensions: blueprint[1], ..., blueprint[-2]
+    Construct a multilayer perceptron from a blueprint of layer widths.
 
-    if layer_norm is True, includes a LayerNorm layer at
-    the output (as used in GraphCast)
+    Parameters
+    ----------
+    blueprint : list[int]
+        Sequence of layer dimensions where ``blueprint[0]`` is the input size,
+        ``blueprint[-1]`` is the output size, the intermediate entries specify
+        the hidden layer widths, and ``len(blueprint) - 2`` is the number of
+        hidden layers.
+    layer_norm : bool, optional
+        If ``True``, append a ``LayerNorm`` to the output as in GraphCast.
+
+    Returns
+    -------
+    torch.nn.Sequential
+        Sequential module implementing the specified MLP.
     """
     hidden_layers = len(blueprint) - 2
     assert hidden_layers >= 0, "Invalid MLP blueprint"
@@ -364,7 +392,12 @@ def make_mlp(blueprint, layer_norm=True):
 @cache
 def has_working_latex():
     """
-    Check if LaTeX is available or its toolchain
+    Check whether a LaTeX toolchain is available on the system.
+
+    Returns
+    -------
+    bool
+        ``True`` if ``latex`` and the required auxiliary tools are callable.
     """
     # If latex/toolchain is not available, some visualizations might not render
     # correctly, but will at least not raise an error. Alternatively, use
@@ -426,8 +459,17 @@ $E=mc^2$ \LaTeX\ ok
 
 def fractional_plot_bundle(fraction):
     """
-    Get the tueplots bundle, but with figure width as a fraction of
-    the page width.
+    Return a ``tueplots`` bundle scaled to a fraction of the page width.
+
+    Parameters
+    ----------
+    fraction : float
+        Denominator applied to the default NeurIPS figure width.
+
+    Returns
+    -------
+    dict
+        Matplotlib rcParams bundle with updated ``figure.figsize``.
     """
 
     usetex = has_working_latex()
@@ -442,6 +484,11 @@ def fractional_plot_bundle(fraction):
 
 
 @rank_zero_only
+def rank_zero_print(*args, **kwargs):
+    """Print arguments only from the rank-zero process in distributed runs."""
+    print(*args, **kwargs)
+
+
 def log_on_rank_zero(msg: str, level: str = "info", *args, **kwargs):
     """Log a message only on rank zero using loguru logger.
 
@@ -459,7 +506,14 @@ def log_on_rank_zero(msg: str, level: str = "info", *args, **kwargs):
 
 def init_training_logger_metrics(training_logger, val_steps):
     """
-    Set up logger metrics to track
+    Configure validation metric aggregation for the active training logger.
+
+    Parameters
+    ----------
+    training_logger : pytorch_lightning.loggers.Logger
+        Logger instance used during training.
+    val_steps : Iterable[int]
+        Autoregressive rollout lengths to log as separate metrics.
     """
     experiment = training_logger.experiment
     if isinstance(training_logger, WandbLogger):
@@ -477,16 +531,15 @@ def init_training_logger_metrics(training_logger, val_steps):
 
 @rank_zero_only
 def setup_training_logger(datastore, args, run_name):
-    """Set up the training logger (WandB or MLFlow).
+    """
+    Instantiate the configured experiment logger.
 
     Parameters
     ----------
-    datastore : Datastore
-        Datastore object.
-
+    datastore : BaseDatastore
+        Datastore providing metadata for logging configuration.
     args : argparse.Namespace
-        Arguments from command line.
-
+        Parsed training arguments controlling the logger backend.
     run_name : str
         Name of the run.
 
@@ -546,13 +599,34 @@ def setup_training_logger(datastore, args, run_name):
 
 def inverse_softplus(x, beta=1, threshold=20):
     """
-    Inverse of torch.nn.functional.softplus
+    Inverse of :func:`torch.nn.functional.softplus`.
 
-    Input is clamped to approximately positive values of x, and the function is
-    linear for inputs above x*beta for numerical stability.
+    For most inputs this function is exact up to numerical precision. The
+    input is clamped to ensure numerical stability: values above
+    ``threshold / beta`` are treated as linear (which is exact in that
+    regime), and values near zero are clamped to avoid ``log`` of
+    non-positive numbers. Only near the lower clamping bound does the
+    result deviate from the true inverse.
 
-    Note that this torch.clamp will make gradients 0, but this is not a
-    problem as values of x that are this close to 0 have gradients of 0 anyhow.
+    Parameters
+    ----------
+    x : torch.Tensor
+        Input tensor whose softplus inverse should be computed.
+    beta : float, optional
+        Softplus ``beta`` parameter that controls the sharpness. Default ``1``.
+    threshold : float, optional
+        Threshold above which the function is treated as linear for numerical
+        stability. Default ``20``.
+
+    Returns
+    -------
+    torch.Tensor
+        Tensor containing the inverse-softplus values.
+
+    Notes
+    -----
+    ``torch.clamp`` will zero the gradients near the bounds, but values this
+    close to zero or ``threshold / beta`` already have negligible gradients.
     """
     x_clamped = torch.clamp(
         x, min=torch.log(torch.tensor(1e-6 + 1)) / beta, max=threshold / beta
@@ -569,12 +643,30 @@ def inverse_softplus(x, beta=1, threshold=20):
 
 def inverse_sigmoid(x):
     """
-    Inverse of torch.sigmoid
+    Inverse of ``torch.sigmoid`` with clamping for numerical stability.
 
-    Sigmoid output takes values in [0,1], this makes sure input is just within
-    this interval.
-    Note that this torch.clamp will make gradients 0, but this is not a problem
-    as values of x that are this close to 0 or 1 have gradients of 0 anyhow.
+    Sigmoid output takes values in ``[0, 1]``; we clamp the input slightly
+    within that open interval before applying ``log(x / (1 - x))``.
+
+    Note that ``torch.clamp`` will make gradients 0 near the bounds, but
+    this is not a problem as values of x that are this close to 0 or 1
+    have gradients of 0 anyhow.
+
+    Parameters
+    ----------
+    x : torch.Tensor
+        Input tensor assumed to contain logits after a sigmoid.
+
+    Returns
+    -------
+    torch.Tensor
+        Tensor containing ``log(x / (1 - x))`` after clamping away from the
+        saturation limits.
+
+    Notes
+    -----
+    ``torch.clamp`` zeroes gradients for values at the bounds, but values this
+    close to 0 or 1 already have negligible gradients.
     """
     x_clamped = torch.clamp(x, min=1e-6, max=1 - 1e-6)
     return torch.log(x_clamped / (1 - x_clamped))
@@ -582,26 +674,32 @@ def inverse_sigmoid(x):
 
 def get_integer_time(tdelta) -> tuple[int, str]:
     """
-    Get the largest time unit that can represent the given timedelta as an
-    integer.
+    Express a :class:`datetime.timedelta` as an integer number of time units.
 
-    Returns:
-        int: The integer value of the timedelta in the largest time unit, or
-                1 if no such unit exists.
-        str: The time unit as a string ('weeks', 'days', 'hours', 'minutes',
-                'seconds', 'milliseconds', 'microseconds'). If no unit can
-                represent the timedelta as an integer, returns 'unknown'.
+    Parameters
+    ----------
+    tdelta : datetime.timedelta
+        Time interval to convert.
 
-    Examples:
-        >>> from datetime import timedelta
-        >>> get_integer_time(timedelta(days=14))
-        (2, 'weeks')
-        >>> get_integer_time(timedelta(hours=5))
-        (5, 'hours')
-        >>> get_integer_time(timedelta(milliseconds=1000))
-        (1, 'seconds')
-        >>> get_integer_time(timedelta(days=0.001))
-        (1, 'unknown')
+    Returns
+    -------
+    tuple[int, str]
+        Integer value and the corresponding unit (``"weeks"``, ``"days"``,
+        ``"hours"``, ``"minutes"``, ``"seconds"``, ``"milliseconds"``, or
+        ``"microseconds"``). If no unit yields an integer count,
+        ``(1, "unknown")`` is returned.
+
+    Examples
+    --------
+    >>> from datetime import timedelta
+    >>> get_integer_time(timedelta(days=14))
+    (2, 'weeks')
+    >>> get_integer_time(timedelta(hours=5))
+    (5, 'hours')
+    >>> get_integer_time(timedelta(milliseconds=1000))
+    (1, 'seconds')
+    >>> get_integer_time(timedelta(days=0.001))
+    (1, 'unknown')
     """
     total_seconds = tdelta.total_seconds()
 

@@ -1,3 +1,5 @@
+"""Parallel message-passing variant of the Hi-LAM architecture."""
+
 # Third-party
 import torch
 import torch_geometric as pyg
@@ -19,6 +21,7 @@ class HiLAMParallel(BaseHiGraphModel):
     """
 
     def __init__(self, args, config: NeuralLAMConfig, datastore: BaseDatastore):
+        """Initialize the parallel hierarchical message-passing processor."""
         super().__init__(args, config=config, datastore=datastore)
 
         # Processor GNNs
@@ -56,17 +59,35 @@ class HiLAMParallel(BaseHiGraphModel):
         self, mesh_rep_levels, mesh_same_rep, mesh_up_rep, mesh_down_rep
     ):
         """
-        Internal processor step of hierarchical graph models.
-        Between mesh init and read out.
+        Internal processor step executed between mesh init and read-out.
 
-        Each input is list with representations, each with shape
+        Parameters
+        ----------
+        mesh_rep_levels : list[torch.Tensor]
+            Mesh representations for each level.
 
-        mesh_rep_levels: (B, N_mesh[l], d_h)
-        mesh_same_rep: (B, M_same[l], d_h)
-        mesh_up_rep: (B, M_up[l -> l+1], d_h)
-        mesh_down_rep: (B, M_down[l <- l+1], d_h)
+            * **Shape**: ``(B, N_mesh[l], d_h)``
+        mesh_same_rep : list[torch.Tensor]
+            Same-level edge representations.
 
-        Returns same lists
+            * **Shape**: ``(B, M_same[l], d_h)``
+        mesh_up_rep : list[torch.Tensor]
+            Upward edge representations.
+
+            * **Shape**: ``(B, M_up[l], d_h)``
+        mesh_down_rep : list[torch.Tensor]
+            Downward edge representations.
+
+            * **Shape**: ``(B, M_down[l], d_h)``
+
+        Returns
+        -------
+        tuple[
+            list[torch.Tensor], list[torch.Tensor], list[torch.Tensor],
+            list[torch.Tensor]
+        ]
+            Updated representations ``(mesh_rep_levels, mesh_same_rep,
+            mesh_up_rep, mesh_down_rep)`` after the parallel pass.
         """
 
         # First join all node and edge representations to single tensors

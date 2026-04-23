@@ -1,3 +1,5 @@
+"""Base implementations for hierarchical (multi-level) graph models."""
+
 # Third-party
 from torch import nn
 
@@ -15,6 +17,7 @@ class BaseHiGraphModel(BaseGraphModel):
     """
 
     def __init__(self, args, config: NeuralLAMConfig, datastore: BaseDatastore):
+        """Extend :class:`BaseGraphModel` with hierarchical mesh structures."""
         super().__init__(args, config=config, datastore=datastore)
 
         # Track number of nodes, edges on each level
@@ -103,8 +106,13 @@ class BaseHiGraphModel(BaseGraphModel):
 
     def get_num_mesh(self):
         """
-        Compute number of mesh nodes from loaded features,
-        and number of mesh nodes that should be ignored in encoding/decoding
+        Compute mesh node counts used for encoding and decoding.
+
+        Returns
+        -------
+        tuple[int, int]
+            Total number of mesh nodes and the number to ignore during
+            encoding/decoding.
         """
         num_mesh_nodes = sum(
             node_feat.shape[0] for node_feat in self.mesh_static_features
@@ -116,26 +124,41 @@ class BaseHiGraphModel(BaseGraphModel):
 
     def embedd_mesh_nodes(self):
         """
-        Embed static mesh features
-        This embeds only bottom level, rest is done at beginning of
-        processing step
-        Returns tensor of shape (num_mesh_nodes[0], d_h)
+        Embed static mesh features for the bottom level of the hierarchy.
+
+        Returns
+        -------
+        torch.Tensor
+            Embedded representations for the base-level mesh nodes.
+
+            * **Shape**: ``(num_mesh_nodes[0], hidden_dim)``
         """
         return self.mesh_embedders[0](self.mesh_static_features[0])
 
     def process_step(self, mesh_rep):
         """
-        Process step of embedd-process-decode framework
-        Processes the representation on the mesh, possible in multiple steps
+        Run the processor portion of the hierarchical encode-process-decode.
 
-        mesh_rep: has shape (B, num_mesh_nodes, d_h)
-        Returns mesh_rep: (B, num_mesh_nodes, d_h)
+        Parameters
+        ----------
+        mesh_rep : torch.Tensor
+            Base-level mesh representations prior to the processor.
+
+            * **Shape**: ``(B, num_mesh_nodes[0], hidden_dim)`` (only the
+              bottom-level nodes are present at this point)
+
+        Returns
+        -------
+        torch.Tensor
+            Updated base-level mesh representations.
+
+            * **Shape**: ``(B, num_mesh_nodes[0], hidden_dim)``
         """
         batch_size = mesh_rep.shape[0]
 
         # EMBED REMAINING MESH NODES (levels >= 1) -
         # Create list of mesh node representations for each level,
-        # each of size (B, num_mesh_nodes[l], d_h)
+        # each of size (B, num_mesh_nodes[l], hidden_dim)
         mesh_rep_levels = [mesh_rep] + [
             self.expand_to_batch(emb(node_static_features), batch_size)
             for emb, node_static_features in zip(
@@ -171,10 +194,10 @@ class BaseHiGraphModel(BaseGraphModel):
             # Extract representations
             send_node_rep = mesh_rep_levels[
                 level_l - 1
-            ]  # (B, num_mesh_nodes[l-1], d_h)
+            ]  # (B, num_mesh_nodes[l-1], hidden_dim)
             rec_node_rep = mesh_rep_levels[
                 level_l
-            ]  # (B, num_mesh_nodes[l], d_h)
+            ]  # (B, num_mesh_nodes[l], hidden_dim)
             edge_rep = mesh_up_rep[level_l - 1]
 
             # Apply GNN
@@ -184,9 +207,11 @@ class BaseHiGraphModel(BaseGraphModel):
 
             # Update node and edge vectors in lists
             mesh_rep_levels[level_l] = (
-                new_node_rep  # (B, num_mesh_nodes[l], d_h)
+                new_node_rep  # (B, num_mesh_nodes[l], hidden_dim)
             )
-            mesh_up_rep[level_l - 1] = new_edge_rep  # (B, M_up[l-1], d_h)
+            mesh_up_rep[level_l - 1] = (
+                new_edge_rep  # (B, M_up[l-1], hidden_dim)
+            )
 
         # - PROCESSOR -
         mesh_rep_levels, _, _, mesh_down_rep = self.hi_processor_step(
@@ -201,10 +226,10 @@ class BaseHiGraphModel(BaseGraphModel):
             # Extract representations
             send_node_rep = mesh_rep_levels[
                 level_l + 1
-            ]  # (B, num_mesh_nodes[l+1], d_h)
+            ]  # (B, num_mesh_nodes[l+1], hidden_dim)
             rec_node_rep = mesh_rep_levels[
                 level_l
-            ]  # (B, num_mesh_nodes[l], d_h)
+            ]  # (B, num_mesh_nodes[l], hidden_dim)
             edge_rep = mesh_down_rep[level_l]
 
             # Apply GNN
@@ -212,26 +237,48 @@ class BaseHiGraphModel(BaseGraphModel):
 
             # Update node and edge vectors in lists
             mesh_rep_levels[level_l] = (
-                new_node_rep  # (B, num_mesh_nodes[l], d_h)
+                new_node_rep  # (B, num_mesh_nodes[l], hidden_dim)
             )
 
         # Return only bottom level representation
-        return mesh_rep_levels[0]  # (B, num_mesh_nodes[0], d_h)
+        return mesh_rep_levels[0]  # (B, num_mesh_nodes[0], hidden_dim)
 
     def hi_processor_step(
         self, mesh_rep_levels, mesh_same_rep, mesh_up_rep, mesh_down_rep
     ):
         """
-        Internal processor step of hierarchical graph models.
-        Between mesh init and read out.
+        Internal processor step executed between mesh init and read-out.
 
-        Each input is list with representations, each with shape
+        Parameters
+        ----------
+        mesh_rep_levels : list[torch.Tensor]
+            Mesh representations for each level.
 
-        mesh_rep_levels: (B, num_mesh_nodes[l], d_h)
-        mesh_same_rep: (B, M_same[l], d_h)
-        mesh_up_rep: (B, M_up[l -> l+1], d_h)
-        mesh_down_rep: (B, M_down[l <- l+1], d_h)
+            * Each element ``l`` has shape ``(B, num_mesh_nodes[l],
+              hidden_dim)``.
+        mesh_same_rep : list[torch.Tensor]
+            Same-level edge representations per level.
 
-        Returns same lists
+            * Each element ``l`` has shape ``(B, M_same[l], hidden_dim)``.
+        mesh_up_rep : list[torch.Tensor]
+            Edge representations from level ``l`` to ``l+1``.
+
+            * Each element ``l`` has shape ``(B, M_up[l -> l+1], hidden_dim)``.
+        mesh_down_rep : list[torch.Tensor]
+            Edge representations from level ``l+1`` down to ``l``.
+
+            * Each element ``l`` has shape ``(B, M_down[l <- l+1],
+              hidden_dim)``.
+
+        Returns
+        -------
+        tuple[
+            list[torch.Tensor], list[torch.Tensor], list[torch.Tensor],
+            list[torch.Tensor]
+        ]
+            Updated representations for (mesh, same-level, up edges, down edges)
+            in that order.
+
+            * Each list preserves the element-wise shapes described above.
         """
         raise NotImplementedError("hi_process_step not implemented")
