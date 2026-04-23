@@ -36,7 +36,7 @@ repos:
         description: Format Python code with Ruff
 
   - repo: https://github.com/tox-dev/pyproject-fmt
-    rev: v2.5.1
+    rev: v2.21.0
     hooks:
       - id: pyproject-fmt
         description: Normalize pyproject.toml formatting

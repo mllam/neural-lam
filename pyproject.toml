@@ -1,6 +1,5 @@
 [build-system]
 build-backend = "hatchling.build"
-
 requires = [ "hatch-vcs", "hatchling>=1.27" ]
 
 [project]
@@ -8,7 +7,6 @@ name = "neural-lam"
 description = "LAM-based data-driven forecasting"
 readme = "README.md"
 license = { text = "MIT" }
-
 authors = [
   { name = "Joel Oskarsson", email = "joel.oskarsson@outlook.com" },
   { name = "Simon Adamov", email = "Simon.Adamov@meteoswiss.ch" },
@@ -20,13 +18,13 @@ authors = [
   { name = "Daniel Holmberg", email = "daniel.holmberg@helsinki.fi" },
 ]
 requires-python = ">=3.10"
-
 classifiers = [
   "Programming Language :: Python :: 3 :: Only",
   "Programming Language :: Python :: 3.10",
   "Programming Language :: Python :: 3.11",
   "Programming Language :: Python :: 3.12",
   "Programming Language :: Python :: 3.13",
+  "Programming Language :: Python :: 3.14",
 ]
 dynamic = [ "version" ]
 # PEP 621 project metadata
@@ -57,31 +55,24 @@ dependencies = [
 [dependency-groups]
 dev = [ "pooch>=1.8.2", "pre-commit>=3.8", "pytest>=8.3.2" ]
 
-[tool.hatch.metadata]
-core-metadata-version = "2.4"
-
-[tool.hatch.version]
-source = "vcs"
-fallback-version = "0.0.0"
-
-[tool.hatch.build.targets.sdist]
-exclude = [
+[tool.hatch]
+build.targets.sdist.exclude = [
   ".venv/",
   "venv/",
 ]
-
-[tool.hatch.build.targets.wheel]
-exclude = [
+build.targets.wheel.exclude = [
   ".venv/",
   "venv/",
 ]
+metadata.core-metadata-version = "2.4"
+version.source = "vcs"
+version.fallback-version = "0.0.0"
 
 [tool.ruff]
 target-version = "py310"
 line-length = 80
 # Avoid notebook churn from lint-only modernization.
 extend-exclude = [ "docs/notebooks/*.ipynb" ]
-
 lint.select = [ "E", "F", "G", "I", "PT", "PTH", "S", "TCH", "UP", "W" ]
 lint.ignore = [
   "E203",   # Keep Black-compatible whitespace behaviour
@@ -100,7 +91,6 @@ lint.ignore = [
   "UP045",  # Optional/Union modernization deferred to follow-up cleanup
 ]
 lint.per-file-ignores."__init__.py" = [ "F401" ]
-
 lint.isort.import-heading = { first-party = "First-party", standard-library = "Standard library", third-party = "Third-party" }
 lint.isort.known-first-party = [ "neural_lam", "tests" ]
 
@@ -110,10 +100,7 @@ ignore = [
 ]
 # Temporary fix for import neural_lam statements until set up as proper package
 init-hook = 'import sys; sys.path.append(".")'
-[tool.pylint.TYPECHECK]
-generated-members = [ "numpy.*", "torch.*" ]
-[tool.pylint.'MESSAGES CONTROL']
-disable = [
+"MESSAGES CONTROL".disable = [
   "C0114", # 'missing-module-docstring', Do not require module docstrings
   "R0901", # 'too-many-ancestors', Allow many layers of sub-classing
   "R0902", # 'too-many-instance-attribtes', Allow many attributes
@@ -121,12 +108,10 @@ disable = [
   "R0914", # 'too-many-locals', Allow many local variables
   "W0223", # 'abstract-method', Subclasses do not have to override all abstract methods
 ]
-[tool.pylint.DESIGN]
-max-statements = 100 # Allow for some more involved functions
-[tool.pylint.IMPORTS]
-allow-any-import-level = "neural_lam"
-[tool.pylint.SIMILARITIES]
-min-similarity-lines = 10
+DESIGN.max-statements = 100  # Allow for some more involved functions
+IMPORTS.allow-any-import-level = "neural_lam"
+SIMILARITIES.min-similarity-lines = 10
+TYPECHECK.generated-members = [ "numpy.*", "torch.*" ]
 
 [tool.codespell]
 skip = "requirements/*"
