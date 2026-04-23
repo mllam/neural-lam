@@ -321,6 +321,11 @@ This release introduces Datastores to represent input data from different source
   [\#78](https://github.com/mllam/neural-lam/pull/78)
   @joeloskarsson
 
+### Fixed
+
+- Explicitly transpose forcing and state DataArrays in WeatherDataset.
+  __getitem__ to ensure consistent dimension ordering.
+
 ## [v0.1.0](https://github.com/mllam/neural-lam/releases/tag/v0.1.0)
 
 First tagged release of `neural-lam`, matching Oskarsson et al 2023 publication

@@ -511,7 +511,6 @@ class WeatherDataset(torch.utils.data.Dataset):
 
         tensor_dtype = torch.float32
 
-        # Explicitly transpose to ensure (time, grid_index, feature)
         da_init_states = da_init_states.transpose(
             "time", "grid_index", "state_feature"
         )
@@ -519,15 +518,15 @@ class WeatherDataset(torch.utils.data.Dataset):
             "time", "grid_index", "state_feature"
         )
 
-        # For forcing feature dimension was renamed in _build_item_dataarrays
-        if "forcing_feature_windowed" in da_forcing_windowed.dims:
-            da_forcing_windowed = da_forcing_windowed.transpose(
-                "time", "grid_index", "forcing_feature_windowed"
-            )
-        else:
-            da_forcing_windowed = da_forcing_windowed.transpose(
-                "time", "grid_index", "forcing_feature"
-            )
+        # Identify the forcing dimension dynamically based on dataset structure
+        forcing_dim = [
+            d for d in da_forcing_windowed.dims if "forcing_feature" in d
+        ][0]
+
+        # Perform the transpose using the dynamically found dimension
+        da_forcing_windowed = da_forcing_windowed.transpose(
+            "time", "grid_index", forcing_dim
+        )
 
         init_states = torch.tensor(da_init_states.values, dtype=tensor_dtype)
         target_states = torch.tensor(
