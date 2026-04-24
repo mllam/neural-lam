@@ -72,7 +72,7 @@ def plot_graph(
     return fig, axis
 
 
-def sort_nodes_internally(nx_graph: networkx.Graph) -> networkx.Graph:
+def sort_nodes_internally(nx_graph: networkx.Graph) -> networkx.DiGraph:
     # For some reason the networkx .nodes() return list can not be sorted,
     # but this is the ordering used by pyg when converting.
     # This function fixes this.
@@ -116,7 +116,7 @@ def from_networkx_with_start_index(
     return pyg_graph
 
 
-def mk_2d_graph(xy: np.ndarray, nx: int, ny: int) -> networkx.Graph:
+def mk_2d_graph(xy: np.ndarray, nx: int, ny: int) -> networkx.DiGraph:
     xm, xM = np.amin(xy[:, :, 0][:, 0]), np.amax(xy[:, :, 0][:, 0])
     ym, yM = np.amin(xy[:, :, 1][0, :]), np.amax(xy[:, :, 1][0, :])
 

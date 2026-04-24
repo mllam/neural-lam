@@ -14,9 +14,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Resolve `xarray` `FacetGrid` `DeprecationWarning` in `plot_example.py` by using a compatibility shim [\#482](https://github.com/mllam/neural-lam/pull/482) @sohampatil01-svg
 
 ### Maintenance
-- Stabilize the `WeatherDataset` batch contract by introducing the `ForecastBatch` named container, replacing brittle positional tuple unpacking across the codebase [\#613](https://github.com/mllam/neural-lam/issues/613) @GiGiKoneti
+
 - Add comprehensive type hints to `neural_lam/create_graph.py` [\#618](https://github.com/mllam/neural-lam/pull/618) @GiGiKoneti
-- Add comprehensive type hints to all functions and class methods in `utils.py` [\#620](https://github.com/mllam/neural-lam/pull/620) @GiGiKoneti
 
 ## [v0.6.0](https://github.com/mllam/neural-lam/releases/tag/v0.6.0)
 
