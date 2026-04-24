@@ -91,7 +91,7 @@ lint.ignore = [
   "UP045",  # Optional/Union modernization deferred to follow-up cleanup
 ]
 lint.per-file-ignores."__init__.py" = [ "F401" ]
-lint.isort.import-heading = { first-party = "First-party", standard-library = "Standard library", third-party = "Third-party" }
+lint.isort.import-heading = { first-party = "First-party", local-folder = "Local", standard-library = "Standard library", third-party = "Third-party" }
 lint.isort.known-first-party = [ "neural_lam", "tests" ]
 
 [tool.pylint]
