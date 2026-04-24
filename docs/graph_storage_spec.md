@@ -112,10 +112,10 @@ that level. Each tensor MUST satisfy the following requirements:
 
 - `mesh_features` entries MUST have shape `[N_level, N_f]`, where `N_level` is the number of mesh nodes at that level and `N_f` is the number of features per node. `N_f` MUST be at minimum `2` (for x and y coordinates of the node, see next point), but can be larger if additional static features are included. The value of `N_f` MUST be consistent across all levels, so that all entries in the list have the same number of features per node.
 - `mesh_features[i][:, 0:2]` MUST contain the x and y coordinates of the mesh nodes at level `i`, so that column `0` is x and column `1` is y.
-- Mesh node features SHOULD NOT be normalized, instead any normalization will be performed inside `neural-lam` after graph loading.
+- Mesh node features SHOULD NOT be normalized. Instead, normalization will be performed inside `neural-lam` after graph loading.
 - Dtype MUST be `torch.float32`.
 
-*NOTE*: the reason for requiring that the first two columns of the mesh node features contain the x and y coordinates is that we know which columns contain the coordinate values, so that all coordinate values (both x and y) can be normalized together in `neural-lam`.
+*NOTE*: The reason for requiring that the first two columns of the mesh node features contain the x and y coordinates is that `neural-lam` applies different normalization strategies to coordinates vs. extra features. The first two columns (coordinates) share the same spatial scale and are normalized jointly by their maximum absolute value across all levels. Any additional feature columns (index 2 onwards) are normalized independently by their own maximum absolute values.
 
 ### Edges
 

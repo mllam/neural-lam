@@ -224,6 +224,26 @@ def load_graph(graph_dir_path, device="cpu"):
         "mesh_features.pt"
     )  # List of (N_mesh[l], d_mesh_static)
 
+    # Normalize static mesh features
+    num_features = mesh_static_features[0].shape[1]
+
+    # Coordinates (first two columns) are normalized jointly
+    pos_max = max(torch.max(torch.abs(m[:, :2])) for m in mesh_static_features)
+
+    for i in range(num_features):
+        if i < 2:
+            scale = pos_max
+        else:
+            # Extra features are normalized independently per column
+            scale = max(
+                torch.max(torch.abs(m[:, i])) for m in mesh_static_features
+            )
+            if scale == 0:
+                scale = 1.0
+
+        for m in mesh_static_features:
+            m[:, i] /= scale
+
     # Load edges (edge_index)
     m2m_edge_index = BufferList(
         [zero_index_edge_index(ei) for ei in loads_file("m2m_edge_index.pt")],

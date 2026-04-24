@@ -277,13 +277,6 @@ def _check_mesh_features(
         errors.append(f"{name}: contains non-finite values")
         return
 
-    max_abs = float(torch.max(torch.abs(mesh_features)).item())
-    if max_abs > 1.0 + 1.0e-4:
-        warnings.append(
-            f"{name}: max |coordinate|={max_abs:.4f}, expected <= 1 "
-            "for create_graph output"
-        )
-
 
 def _require_file(path: Path, errors: list[str]) -> bool:
     """
