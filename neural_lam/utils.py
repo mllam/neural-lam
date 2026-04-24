@@ -1,4 +1,5 @@
 # Standard library
+import datetime
 import os
 import shutil
 import subprocess
@@ -217,7 +218,7 @@ def load_graph(
 
     """
 
-    def loads_file(fn):
+    def loads_file(fn: str) -> Any:
         return torch.load(
             os.path.join(graph_dir_path, fn),
             map_location=device,
@@ -318,17 +319,10 @@ def load_graph(
         m2m_features = m2m_features[0]
         mesh_static_features = mesh_static_features[0]
 
-        (
-            mesh_up_edge_index,
-            mesh_down_edge_index,
-            mesh_up_features,
-            mesh_down_features,
-        ) = (
-            [],  # type: ignore[assignment]
-            [],  # type: ignore[assignment]
-            [],  # type: ignore[assignment]
-            [],  # type: ignore[assignment]
-        )
+        mesh_up_edge_index = BufferList([], persistent=False)
+        mesh_down_edge_index = BufferList([], persistent=False)
+        mesh_up_features = BufferList([], persistent=False)
+        mesh_down_features = BufferList([], persistent=False)
 
     return hierarchical, {
         "g2m_edge_index": g2m_edge_index,
@@ -372,7 +366,7 @@ def make_mlp(blueprint: list[int], layer_norm: bool = True) -> nn.Sequential:
 
 
 @cache
-def has_working_latex():
+def has_working_latex() -> bool:
     """
     Check if LaTeX is available or its toolchain
     """
@@ -404,8 +398,8 @@ $E=mc^2$ \LaTeX\ ok
 
     try:
         with tempfile.TemporaryDirectory() as td:
-            td = Path(td)
-            (td / "test.tex").write_text(tex_src, encoding="utf-8")
+            td_path = Path(td)
+            (td_path / "test.tex").write_text(tex_src, encoding="utf-8")
             cmd = [
                 "latex",
                 "-interaction=nonstopmode",
@@ -452,7 +446,9 @@ def fractional_plot_bundle(fraction: float) -> dict[str, Any]:
 
 
 @rank_zero_only
-def log_on_rank_zero(msg: str, level: str = "info", *args, **kwargs):
+def log_on_rank_zero(
+    msg: str, level: str = "info", *args: Any, **kwargs: Any
+) -> None:
     """Log a message only on rank zero using loguru logger.
 
     Parameters
@@ -488,7 +484,7 @@ def init_training_logger_metrics(
 
 
 @rank_zero_only
-def setup_training_logger(datastore, args, run_name):
+def setup_training_logger(datastore: Any, args: Any, run_name: str) -> Any:
     """Set up the training logger (WandB or MLFlow).
 
     Parameters
@@ -594,7 +590,7 @@ def inverse_sigmoid(x: torch.Tensor) -> torch.Tensor:
     return torch.log(x_clamped / (1 - x_clamped))
 
 
-def get_integer_time(tdelta) -> tuple[int, str]:
+def get_integer_time(tdelta: datetime.timedelta) -> tuple[int, str]:
     """
     Get the largest time unit that can represent the given timedelta as an
     integer.
