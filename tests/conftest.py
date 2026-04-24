@@ -57,7 +57,7 @@ def download_meps_example_reduced_dataset():
 
     config_path = dataset_path / "meps_example_reduced.datastore.yaml"
 
-    with open(config_path, "r") as f:
+    with config_path.open() as f:
         config = yaml.safe_load(f)
 
     if "class" in config["projection"]:
@@ -69,7 +69,7 @@ def download_meps_example_reduced_dataset():
         # dataclass
         config["projection"]["class_name"] = config["projection"].pop("class")
 
-        with open(config_path, "w") as f:
+        with config_path.open("w") as f:
             yaml.dump(config, f)
 
     # create parameters, only run if the files we expect are not present

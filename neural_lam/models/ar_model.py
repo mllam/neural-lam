@@ -127,9 +127,7 @@ class ARModel(pl.LightningModule):
 
         boundary_mask = torch.tensor(
             da_boundary_mask.values, dtype=torch.float32
-        ).unsqueeze(
-            1
-        )  # add feature dim
+        ).unsqueeze(1)  # add feature dim
 
         self.register_buffer("boundary_mask", boundary_mask, persistent=False)
         # Pre-compute interior mask for use in loss function
@@ -587,7 +585,6 @@ class ARModel(pl.LightningModule):
                 for var_name, fig in zip(
                     self._datastore.get_vars_names("state"), var_figs
                 ):
-
                     # We need treat logging images differently for different
                     # loggers. WANDB can log multiple images to the same key,
                     # while other loggers, as MLFlow, need unique keys for
@@ -733,7 +730,6 @@ class ARModel(pl.LightningModule):
                 )
 
         if self.trainer.is_global_zero and not self.trainer.sanity_checking:
-
             current_epoch = self.trainer.current_epoch
 
             for key, value in log_dict.items():

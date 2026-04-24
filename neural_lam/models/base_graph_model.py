@@ -113,10 +113,10 @@ class BaseGraphModel(ARModel):
         sigmoid_center = 0
         softplus_center = 0
 
-        normalize_clamping_lim = (
-            lambda x, feature_idx: (x - self.state_mean[feature_idx])
-            / self.state_std[feature_idx]
-        )
+        def normalize_clamping_lim(x, feature_idx):
+            return (x - self.state_mean[feature_idx]) / self.state_std[
+                feature_idx
+            ]
 
         # Check which clamping functions to use for each feature
         sigmoid_lower_upper_idx = []
@@ -131,11 +131,11 @@ class BaseGraphModel(ARModel):
 
         for feature_idx, feature in enumerate(state_feature_names):
             if feature in lower_lims and feature in upper_lims:
-                assert (
-                    lower_lims[feature] < upper_lims[feature]
-                ), f'Invalid clamping limits for feature "{feature}",\
+                assert lower_lims[feature] < upper_lims[feature], (
+                    f'Invalid clamping limits for feature "{feature}",\
                      lower: {lower_lims[feature]}, larger than\
                      upper: {upper_lims[feature]}'
+                )
                 sigmoid_lower_upper_idx.append(feature_idx)
                 sigmoid_lower_lims.append(
                     normalize_clamping_lim(lower_lims[feature], feature_idx)

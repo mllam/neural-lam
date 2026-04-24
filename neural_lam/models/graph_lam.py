@@ -20,9 +20,9 @@ class GraphLAM(BaseGraphModel):
     def __init__(self, args, config: NeuralLAMConfig, datastore: BaseDatastore):
         super().__init__(args, config=config, datastore=datastore)
 
-        assert (
-            not self.hierarchical
-        ), "GraphLAM does not use a hierarchical mesh graph"
+        assert not self.hierarchical, (
+            "GraphLAM does not use a hierarchical mesh graph"
+        )
 
         # grid_dim from data + static + batch_static
         mesh_dim = self.mesh_static_features.shape[1]

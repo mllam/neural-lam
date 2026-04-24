@@ -112,7 +112,7 @@ def run_simple_training(datastore, set_output_std, metrics_watch=None):
         )
     )
 
-    model = GraphLAM(  # noqa
+    model = GraphLAM(
         args=model_args,
         datastore=datastore,
         config=config,

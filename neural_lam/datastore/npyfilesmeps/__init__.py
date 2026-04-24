@@ -1,2 +1,2 @@
 # Local
-from .store import NpyFilesDatastoreMEPS  # noqa
+from .store import NpyFilesDatastoreMEPS  # noqa: F401
