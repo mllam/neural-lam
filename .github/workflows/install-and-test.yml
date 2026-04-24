@@ -73,8 +73,6 @@ jobs:
         with:
           path: .venv
           key: uv-venv-${{ runner.os }}-${{ matrix.device }}-py${{ steps.setup-python.outputs.python-version }}-${{ hashFiles('uv.lock') }}
-          restore-keys: |
-            uv-venv-${{ runner.os }}-${{ matrix.device }}-py${{ steps.setup-python.outputs.python-version }}-
 
       - name: Create virtual environment (pip GPU)
         if: matrix.package_manager == 'pip' && matrix.device == 'gpu'
@@ -103,13 +101,9 @@ jobs:
       - name: Setup environment with uv (if applicable)
         if: matrix.package_manager == 'uv'
         run: |
-          if [ "${{ steps.cache-venv.outputs.cache-hit }}" != "true" ] && [ -d .venv ]; then
-            rm -rf .venv
-          fi
-          if [ ! -d .venv ]; then
-            uv venv --no-project
-          fi
           if [ "${{ steps.cache-venv.outputs.cache-hit }}" != "true" ]; then
+            rm -rf .venv
+            uv venv --no-project
             uv pip install torch --index-url ${{ matrix.torch_index }}
             uv pip install --group dev -e .
           fi
