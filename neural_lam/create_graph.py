@@ -92,7 +92,9 @@ def save_edges(graph: pyg.data.Data, name: str, base_path: str) -> None:
     torch.save(edge_features, os.path.join(base_path, f"{name}_features.pt"))
 
 
-def save_edges_list(graphs: list[pyg.data.Data], name: str, base_path: str) -> None:
+def save_edges_list(
+    graphs: list[pyg.data.Data], name: str, base_path: str
+) -> None:
     torch.save(
         [graph.edge_index for graph in graphs],
         os.path.join(base_path, f"{name}_edge_index.pt"),
@@ -153,7 +155,7 @@ def mk_2d_graph(xy: np.ndarray, nx: int, ny: int) -> networkx.Graph:
     return dg
 
 
-def prepend_node_index(graph: pyg.data.Data, new_index: int) -> None:
+def prepend_node_index(graph: networkx.Graph, new_index: int) -> networkx.Graph:
     # Relabel node indices in graph, insert (graph_level, i, j)
     ijk = [tuple((new_index,) + x) for x in graph.nodes]
     to_mapping = dict(zip(graph.nodes, ijk))
