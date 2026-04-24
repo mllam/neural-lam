@@ -318,10 +318,17 @@ def load_graph(
         m2m_features = m2m_features[0]
         mesh_static_features = mesh_static_features[0]
 
-        mesh_up_edge_index = []  # type: ignore[assignment]
-        mesh_down_edge_index = []  # type: ignore[assignment]
-        mesh_up_features = []  # type: ignore[assignment]
-        mesh_down_features = []  # type: ignore[assignment]
+        (
+            mesh_up_edge_index,
+            mesh_down_edge_index,
+            mesh_up_features,
+            mesh_down_features,
+        ) = (
+            [],  # type: ignore[assignment]
+            [],  # type: ignore[assignment]
+            [],  # type: ignore[assignment]
+            [],  # type: ignore[assignment]
+        )
 
     return hierarchical, {
         "g2m_edge_index": g2m_edge_index,
@@ -550,7 +557,7 @@ def setup_training_logger(datastore, args, run_name):
 
 
 def inverse_softplus(
-    x: torch.Tensor, beta: float = 1, threshold: float = 20
+    x: torch.Tensor, beta: float = 1.0, threshold: float = 20.0
 ) -> torch.Tensor:
     """
     Inverse of torch.nn.functional.softplus
