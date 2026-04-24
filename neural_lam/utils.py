@@ -167,7 +167,23 @@ def zero_index_g2m(
         )
 
 
-def load_graph(graph_dir_path, device="cpu"):
+def resolve_graph_path(graph_arg, datastore):
+    """
+    Resolve graph_arg to a filesystem path.
+    If graph_arg is an existing directory, use it.
+    If it exists but is not a directory, raise ValueError.
+    Otherwise, resolve relative to datastore.root_path / "graph".
+    """
+    graph_path = Path(graph_arg)
+    if graph_path.exists():
+        if not graph_path.is_dir():
+            raise ValueError(f"Graph path {graph_path} is not a directory")
+        return graph_path
+
+    return datastore.root_path / "graph" / graph_arg
+
+
+def load_graph(graph_dir_path, device="cpu", datastore=None):
     """Load all tensors representing the graph from `graph_dir_path`.
 
     Needs the following files for all graphs:
@@ -320,7 +336,7 @@ def load_graph(graph_dir_path, device="cpu"):
             mesh_down_features,
         ) = ([], [], [], [])
 
-    return hierarchical, {
+    graph_dict = {
         "g2m_edge_index": g2m_edge_index,
         "m2g_edge_index": m2g_edge_index,
         "m2m_edge_index": m2m_edge_index,
@@ -333,6 +349,28 @@ def load_graph(graph_dir_path, device="cpu"):
         "mesh_down_features": mesh_down_features,
         "mesh_static_features": mesh_static_features,
     }
+
+    if datastore is not None:
+        expected_grid_nodes = datastore.num_grid_points
+        mesh_features = graph_dict["mesh_static_features"]
+
+        if isinstance(mesh_features, BufferList):
+            loaded_mesh_nodes = mesh_features[0].shape[0]
+        else:
+            loaded_mesh_nodes = mesh_features.shape[0]
+
+        loaded_total_nodes = graph_dict["g2m_edge_index"].max().item() + 1
+        loaded_grid_nodes = loaded_total_nodes - loaded_mesh_nodes
+
+        if loaded_grid_nodes != expected_grid_nodes:
+            warnings.warn(
+                f"Incompatible graph structure at {graph_dir_path}: "
+                f"expected {expected_grid_nodes} grid nodes, "
+                f"but graph contains {loaded_grid_nodes}. "
+                "This may cause unexpected behavior."
+            )
+
+    return hierarchical, graph_dict
 
 
 def make_mlp(blueprint, layer_norm=True):
@@ -455,6 +493,12 @@ def log_on_rank_zero(msg: str, level: str = "info", *args, **kwargs):
     if rank_zero_only.rank == 0:
         log_fn = getattr(logger, level, logger.info)
         log_fn(msg, *args, **kwargs)
+
+
+@rank_zero_only
+def rank_zero_print(*args, **kwargs):
+    """Print a message only on rank zero."""
+    print(*args, **kwargs)
 
 
 def init_training_logger_metrics(training_logger, val_steps):

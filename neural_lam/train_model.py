@@ -98,6 +98,7 @@ def main(input_args=None):
         default="multiscale",
         help="Graph to load and use in graph-based model",
     )
+
     parser.add_argument(
         "--hidden_dim",
         type=int,

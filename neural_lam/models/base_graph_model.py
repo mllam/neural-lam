@@ -1,3 +1,7 @@
+# Standard library
+
+# Third-party
+
 # Third-party
 import torch
 
@@ -21,11 +25,15 @@ class BaseGraphModel(ARModel):
         # Load graph with static features
         # NOTE: (IMPORTANT!) mesh nodes MUST have the first
         # num_mesh_nodes indices,
-        graph_dir_path = datastore.root_path / "graph" / args.graph
+        graph_dir_path = utils.resolve_graph_path(args.graph, datastore)
+
         self.hierarchical, graph_ldict = utils.load_graph(
-            graph_dir_path=graph_dir_path
+            graph_dir_path=graph_dir_path,
+            datastore=datastore,
         )
+
         for name, attr_value in graph_ldict.items():
+
             # Make BufferLists module members and register tensors as buffers
             if isinstance(attr_value, torch.Tensor):
                 self.register_buffer(name, attr_value, persistent=False)
