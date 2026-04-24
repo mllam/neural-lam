@@ -10,7 +10,7 @@ import wandb
 
 # First-party
 from neural_lam import config as nlconfig
-from neural_lam.create_graph import create_graph_from_datastore
+from neural_lam.create_graph_with_wmg import create_graph_from_datastore
 from neural_lam.datastore import DATASTORES
 from neural_lam.datastore.base import BaseRegularGridDatastore
 from neural_lam.models.ar_model import ARModel
@@ -68,7 +68,7 @@ def run_simple_training(datastore, set_output_std, metrics_watch=None):
         create_graph_from_datastore(
             datastore=datastore,
             output_root_path=str(graph_dir_path),
-            n_max_levels=1,
+            archetype="keisler",
         )
 
     data_module = WeatherDataModule(

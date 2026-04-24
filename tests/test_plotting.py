@@ -16,7 +16,7 @@ from cartopy import crs as ccrs
 # First-party
 from neural_lam import config as nlconfig
 from neural_lam import vis
-from neural_lam.create_graph import create_graph_from_datastore
+from neural_lam.create_graph_with_wmg import create_graph_from_datastore
 from neural_lam.models.graph_lam import GraphLAM
 from neural_lam.weather_dataset import WeatherDataset
 from tests.conftest import init_datastore_example
@@ -226,7 +226,7 @@ def model_and_batch(tmp_path, time_step, time_unit):
         create_graph_from_datastore(
             datastore=datastore,
             output_root_path=str(graph_dir_path),
-            n_max_levels=1,
+            archetype="keisler",
         )
 
     # Create config

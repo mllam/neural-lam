@@ -6,7 +6,7 @@ import torch
 
 # First-party
 from neural_lam import config as nlconfig
-from neural_lam.create_graph import create_graph_from_datastore
+from neural_lam.create_graph_with_wmg import create_graph_from_datastore
 from neural_lam.datastore.mdp import MDPDatastore
 from neural_lam.models.graph_lam import GraphLAM
 from tests.conftest import init_datastore_example
@@ -23,7 +23,7 @@ def test_clamping():
         create_graph_from_datastore(
             datastore=datastore,
             output_root_path=str(graph_dir_path),
-            n_max_levels=1,
+            archetype="keisler",
         )
 
     class ModelArgs:

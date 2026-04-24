@@ -62,7 +62,20 @@ jobs:
       - name: Determine PyTorch version for neural-lam (using pip dry-run)
         if: matrix.package_manager == 'pip'
         run: |
-          TORCH_VERSION=$(python -m pip install --dry-run "." | grep "Would install" | grep -o 'torch-[0-9.]*' | awk -F'-' '{print $2}' | tail -n 1)
+          # 1. Run pip install in simulation mode for the current directory (".")
+          #    --disable-pip-version-check stops the "[notice] A new release of pip is available" message.
+          #    2>/dev/null silences any other unexpected errors or warnings by throwing them away.
+          # 2. grep "Would install": Filter the output to only look at the summary of what pip intends to do.
+          # 3. grep -o 'torch-[0-9.]*': Extract just the package name and version for torch.
+          # 4. awk -F'-' '{print $2}': Strip the "torch-" prefix to get just the version number.
+          # 5. grep -v '^$': Remove any empty lines that might have been produced.
+          # 6. tail -n 1: Grab only the final result.
+          TORCH_VERSION=$(python -m pip install --disable-pip-version-check --dry-run "." 2>/dev/null \
+            | grep "Would install" \
+            | grep -o 'torch-[0-9.]*' \
+            | awk -F'-' '{print $2}' \
+            | grep -v '^$' \
+            | tail -n 1)
           echo "Torch version detected: $TORCH_VERSION"
           echo "TORCH_VERSION=$TORCH_VERSION" >> $GITHUB_ENV
 
