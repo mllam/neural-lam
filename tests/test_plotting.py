@@ -17,7 +17,9 @@ from cartopy import crs as ccrs
 from neural_lam import config as nlconfig
 from neural_lam import vis
 from neural_lam.create_graph import create_graph_from_datastore
+from neural_lam.models.ar_forecaster import ARForecaster
 from neural_lam.models.forecaster_module import ForecasterModule
+from neural_lam.models.graph_lam import GraphLAM
 from neural_lam.weather_dataset import WeatherDataset
 from tests.conftest import init_datastore_example
 from tests.dummy_datastore import DummyDatastore
@@ -453,22 +455,33 @@ def test_plot_examples_gif_integration(model_and_batch, monkeypatch):
 
 # Shared ModelArgs for metrics_watch regression tests (issue #302).
 # Kept at module level to avoid copy-paste duplication across tests.
-class _MetricsWatchModelArgs:
-    output_std = False
-    loss = "mse"
-    restore_opt = False
-    n_example_pred = 1
-    graph = "1level"
-    hidden_dim = 4
-    hidden_layers = 1
-    processor_layers = 1
-    mesh_aggr = "sum"
-    lr = 1.0e-3
-    val_steps_to_log = [1, 2]
-    metrics_watch = ["val_rmse"]
-    var_leads_metrics_watch = {0: [1]}
-    num_past_forcing_steps = 0
-    num_future_forcing_steps = 0
+def _build_metrics_watch_module(datastore, config):
+    """Build a ForecasterModule wired for metrics_watch tests."""
+    predictor = GraphLAM(
+        config=config,
+        datastore=datastore,
+        graph_name="1level",
+        hidden_dim=4,
+        hidden_layers=1,
+        processor_layers=1,
+        mesh_aggr="sum",
+        num_past_forcing_steps=0,
+        num_future_forcing_steps=0,
+        output_std=False,
+    )
+    forecaster = ARForecaster(predictor, datastore)
+    return ForecasterModule(
+        forecaster=forecaster,
+        config=config,
+        datastore=datastore,
+        loss="mse",
+        lr=1.0e-3,
+        restore_opt=False,
+        n_example_pred=1,
+        val_steps_to_log=[1, 2],
+        metrics_watch=["val_rmse"],
+        var_leads_metrics_watch={0: [1]},
+    )
 
 
 def test_create_metric_log_dict_with_metrics_watch(tmp_path):
@@ -498,11 +511,7 @@ def test_create_metric_log_dict_with_metrics_watch(tmp_path):
         ),
     )
 
-    model = GraphLAM(
-        args=_MetricsWatchModelArgs(),
-        config=config,
-        datastore=datastore,
-    )
+    model = _build_metrics_watch_module(datastore, config)
 
     # Create a dummy metric tensor: (pred_steps=2, d_f=num_state_vars)
     metric_tensor = torch.rand(2, num_state_vars)
@@ -561,11 +570,7 @@ def test_aggregate_and_plot_metrics_with_metrics_watch(tmp_path):
         ),
     )
 
-    model = GraphLAM(
-        args=_MetricsWatchModelArgs(),
-        config=config,
-        datastore=datastore,
-    )
+    model = _build_metrics_watch_module(datastore, config)
 
     # Mock the trainer to simulate rank-0 single-process execution
     mock_trainer = MagicMock()
@@ -583,13 +588,13 @@ def test_aggregate_and_plot_metrics_with_metrics_watch(tmp_path):
     # Patch all_gather_cat to be a no-op (single process)
     model.all_gather_cat = lambda x: x
 
-    # Capture scalar metrics logged via self.log()
+    # Capture scalar metrics logged via self.log_dict()
     logged_scalars = {}
 
-    def capture_log(key, value, **kwargs):
-        logged_scalars[key] = value
+    def capture_log_dict(d, **kwargs):
+        logged_scalars.update(d)
 
-    model.log = capture_log
+    model.log_dict = capture_log_dict
 
     # Build a fake metrics_dict with MSE entries:
     # shape (N_eval=2, pred_steps=2, d_f=num_state_vars)
@@ -601,9 +606,9 @@ def test_aggregate_and_plot_metrics_with_metrics_watch(tmp_path):
     # Verify that log_image was called (figures were logged)
     mock_logger.log_image.assert_called()
 
-    # Verify that scalar metrics were captured via self.log()
+    # Verify that scalar metrics were captured via self.log_dict()
     assert len(logged_scalars) > 0, (
-        "Expected scalar metrics to be logged via self.log() "
+        "Expected scalar metrics to be logged via self.log_dict() "
         "when metrics_watch is configured"
     )
 
