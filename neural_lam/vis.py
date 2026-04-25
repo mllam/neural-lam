@@ -1,6 +1,3 @@
-# Standard library
-from typing import Optional, Union
-
 # Third-party
 import cartopy.crs as ccrs
 import cartopy.feature as cfeature
@@ -39,11 +36,11 @@ def plot_on_axis(
     ax: matplotlib.axes.Axes,
     da: xr.DataArray,
     datastore: BaseRegularGridDatastore,
-    vmin: Optional[float] = None,
-    vmax: Optional[float] = None,
-    ax_title: Optional[str] = None,
-    cmap: Union[str, matplotlib.colors.Colormap] = "plasma",
-    boundary_alpha: Optional[float] = None,
+    vmin: float | None = None,
+    vmax: float | None = None,
+    ax_title: str | None = None,
+    cmap: str | matplotlib.colors.Colormap = "plasma",
+    boundary_alpha: float | None = None,
     crop_to_interior: bool = False,
 ) -> matplotlib.collections.QuadMesh:
     """Plot weather state on given axis using datastore metadata.
@@ -164,7 +161,7 @@ def plot_on_axis(
 def plot_error_map(
     errors: torch.Tensor,
     datastore: BaseRegularGridDatastore,
-    title: Optional[str] = None,
+    title: str | None = None,
 ) -> matplotlib.figure.Figure:
     """
     Plot a heatmap of errors of different variables at different
@@ -231,8 +228,8 @@ def plot_prediction(
     datastore: BaseRegularGridDatastore,
     da_prediction: xr.DataArray,
     da_target: xr.DataArray,
-    title: Optional[str] = None,
-    vrange: Optional[tuple[float, float]] = None,
+    title: str | None = None,
+    vrange: tuple[float, float] | None = None,
     boundary_alpha: float = 0.7,
     crop_to_interior: bool = True,
     colorbar_label: str = "",
@@ -293,8 +290,8 @@ def plot_prediction(
 def plot_spatial_error(
     error: torch.Tensor,
     datastore: BaseRegularGridDatastore,
-    title: Optional[str] = None,
-    vrange: Optional[tuple[float, float]] = None,
+    title: str | None = None,
+    vrange: tuple[float, float] | None = None,
     boundary_alpha: float = 0.7,
     crop_to_interior: bool = True,
     colorbar_label: str = "",
