@@ -1,4 +1,5 @@
 # Standard library
+import argparse
 import json
 import random
 import time
@@ -13,7 +14,27 @@ from loguru import logger
 
 # Local
 from . import utils
-from .config import load_config_and_datastore
+from .config import (
+    DatastoreSelection,
+    ManualStateFeatureWeighting,
+    NeuralLAMConfig,
+    OutputClamping,
+    TrainingConfig,
+    UniformFeatureWeighting,
+    load_config_and_datastore,
+)
+
+torch.serialization.add_safe_globals(
+    [
+        argparse.Namespace,
+        DatastoreSelection,
+        ManualStateFeatureWeighting,
+        NeuralLAMConfig,
+        OutputClamping,
+        TrainingConfig,
+        UniformFeatureWeighting,
+    ]
+)
 from .models import GraphLAM, HiLAM, HiLAMParallel
 from .weather_dataset import WeatherDataModule
 
