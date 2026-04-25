@@ -16,6 +16,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Maintenance
 
 - Add comprehensive type hints to `neural_lam/vis.py` [\#624](https://github.com/mllam/neural-lam/pull/624) @GiGiKoneti
+- Add comprehensive type hints to all functions and class methods in `utils.py` [\#620](https://github.com/mllam/neural-lam/pull/620) @GiGiKoneti
+
+- Add probabilistic objective regression coverage for weighted losses and `pred_std` broadcasting semantics [\#504](https://github.com/mllam/neural-lam/pull/504) @kshirajahere
 
 - Add comprehensive type hints to `neural_lam/create_graph.py` [\#618](https://github.com/mllam/neural-lam/pull/618) @GiGiKoneti
 
