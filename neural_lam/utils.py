@@ -36,6 +36,16 @@ class BufferList(nn.Module):
             self.register_buffer(f"b{buffer_i}", tensor, persistent=persistent)
 
     def __getitem__(self, key):
+        # Unpack slice indices and call recursively for each position
+        if isinstance(key, slice):
+            return [self[i] for i in range(*key.indices(len(self)))]
+        # Support negative indexing (e.g. buffer_list[-1] -> last element)
+        if key < 0:
+            key += len(self)
+        if not (0 <= key < len(self)):
+            raise IndexError(
+                f"index {key} out of range for BufferList of length {len(self)}"
+            )
         return getattr(self, f"b{key}")
 
     def __len__(self):

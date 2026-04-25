@@ -27,6 +27,8 @@ This release introduces new features including GIF animation support, wandb run 
 
 - Add `AGENTS.md` file to the repo to give agents more information about the codebase and the contribution culture.[\#416](https://github.com/mllam/neural-lam/pull/416) @sadamov
 
+- Extend `BufferList.__getitem__` with slice and negative-index support; out-of-bounds integer access raises `IndexError`. [\#472](https://github.com/mllam/neural-lam/pull/472) @sudhansu-24
+
 - Enable `pin_memory` in DataLoaders when GPU is available for faster async CPU-to-GPU data transfers [\#236](https://github.com/mllam/neural-lam/pull/236) @abhaygoudannavar
 
 - Expose `--wandb_id` CLI argument to allow resuming an existing W&B run by
