@@ -31,7 +31,12 @@ class MDPDatastore(BaseRegularGridDatastore):
 
     SHORT_NAME = "mdp"
 
-    def __init__(self, config_path, n_boundary_points=30, reuse_existing=True):
+    def __init__(
+        self,
+        config_path: Union[str, Path],
+        n_boundary_points: int = 30,
+        reuse_existing: bool = True,
+    ) -> None:
         """
         Construct a new MDPDatastore from the configuration file at
         `config_path`. A boundary mask is created with `n_boundary_points`
@@ -60,7 +65,7 @@ class MDPDatastore(BaseRegularGridDatastore):
             ".yaml", ".zarr"
         )
 
-        self._ds = None
+        _ds = None
         if reuse_existing and fp_ds.exists():
             # check that the zarr directory is newer than the config file
             if fp_ds.stat().st_mtime < self._config_path.stat().st_mtime:
@@ -69,11 +74,13 @@ class MDPDatastore(BaseRegularGridDatastore):
                     f"The old zarr archive (in {fp_ds}) will be used."
                     "To generate new zarr-archive, move the old one first."
                 )
-            self._ds = xr.open_zarr(fp_ds, consolidated=True)
+            _ds = xr.open_zarr(fp_ds, consolidated=True)
 
-        if self._ds is None:
-            self._ds = mdp.create_dataset(config=self._config)
-            self._ds.to_zarr(fp_ds)
+        if _ds is None:
+            _ds = mdp.create_dataset(config=self._config)
+            _ds.to_zarr(fp_ds)
+
+        self._ds: xr.Dataset = _ds
         self._n_boundary_points = n_boundary_points
         self.is_ensemble = "ensemble_member" in self._ds["state"].dims
         self.has_ensemble_forcing = (
@@ -118,6 +125,7 @@ class MDPDatastore(BaseRegularGridDatastore):
                     dim_order == dim_order_
                 ), "all inputs must have the same dimension order"
 
+        assert dim_order is not None, "dim_order could not be determined"
         self.spatial_coordinates = dim_order
 
     @property
@@ -444,7 +452,7 @@ class MDPDatastore(BaseRegularGridDatastore):
         return ProjectionClass(**kwargs)
 
     @cached_property
-    def grid_shape_state(self):
+    def grid_shape_state(self) -> CartesianGridShape:
         """The shape of the cartesian grid for the state variables.
 
         Returns
