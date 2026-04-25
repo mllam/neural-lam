@@ -81,7 +81,7 @@ per-file-ignores = [
 ]
 
 [tool.codespell]
-skip = "requirements/*"
+skip = "requirements/*,docs/notebooks/hello_world_danra.ipynb"
 
 # Pylint config
 [tool.pylint]
