@@ -15,6 +15,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Maintenance
 
+- Add probabilistic objective regression coverage for weighted losses and `pred_std` broadcasting semantics [\#504](https://github.com/mllam/neural-lam/pull/504) @kshirajahere
+
 - Add comprehensive type hints to `neural_lam/create_graph.py` [\#618](https://github.com/mllam/neural-lam/pull/618) @GiGiKoneti
 
 ## [v0.6.0](https://github.com/mllam/neural-lam/releases/tag/v0.6.0)
@@ -80,7 +82,6 @@ This release introduces new features including GIF animation support, wandb run 
 
 ### Maintenance
 
-- Add probabilistic objective regression coverage for weighted losses and `pred_std` broadcasting semantics [\#504](https://github.com/mllam/neural-lam/pull/504) @kshirajahere
 - Update PR template to clarify milestone/roadmap requirement and maintenance changes [\#186](https://github.com/mllam/neural-lam/pull/186) @joeloskarsson
 
 - Update CI/CD to use python 3.13 for testing and full range of current python versions for linting (3.10 - 3.14) [\#173](https://github.com/mllam/neural-lam/pull/173) @observingClouds
