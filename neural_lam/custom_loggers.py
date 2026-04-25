@@ -16,11 +16,12 @@ class CustomMLFlowLogger(pl.loggers.MLFlowLogger):
     of version `2.0.3` at least.
     """
 
-    def __init__(self, experiment_name, tracking_uri, run_name, save_dir=None):
+    def __init__(self, experiment_name, tracking_uri, run_name, save_dir):
         super().__init__(
             experiment_name=experiment_name, tracking_uri=tracking_uri
         )
-        self._save_dir = save_dir or "mlruns"
+        self._save_dir = save_dir
+        os.makedirs(self._save_dir, exist_ok=True)
 
         mlflow.start_run(run_id=self.run_id, log_system_metrics=True)
         mlflow.set_tag("mlflow.runName", run_name)
@@ -59,7 +60,6 @@ class CustomMLFlowLogger(pl.loggers.MLFlowLogger):
 
         # Need to save the image to a temporary file, then log that file
         # mlflow.log_image, should do this automatically, but is buggy
-        os.makedirs(self.save_dir, exist_ok=True)
         temporary_image = os.path.join(self.save_dir, f"{key}.png")
         images[0].savefig(temporary_image)
 

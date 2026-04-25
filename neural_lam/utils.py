@@ -490,6 +490,11 @@ def setup_training_logger(datastore, args, run_name, run_dir):
     run_name : str
         Name of the run.
 
+    run_dir : str
+        Directory under which all artifacts for this run are written
+        (logger ``save_dir``, checkpoints, Lightning ``default_root_dir``).
+        Typically ``runs/<run_name>``.
+
     Returns
     -------
     training_logger : pytorch_lightning.loggers.base

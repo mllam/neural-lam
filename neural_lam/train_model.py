@@ -24,6 +24,8 @@ MODELS = {
     "hi_lam_parallel": HiLAMParallel,
 }
 
+RUNS_ROOT = "runs"
+
 
 @logger.catch
 def main(input_args=None):
@@ -339,7 +341,7 @@ def main(input_args=None):
             f"{time.strftime('%m_%d_%H')}-{random_run_id:04d}"
         )
 
-    run_dir = os.path.join("runs", run_name)
+    run_dir = os.path.join(RUNS_ROOT, run_name)
 
     training_logger = utils.setup_training_logger(
         datastore=datastore, args=args, run_name=run_name, run_dir=run_dir
