@@ -30,6 +30,7 @@ class MDPDatastore(BaseRegularGridDatastore):
     """
 
     SHORT_NAME = "mdp"
+    _ds: xr.Dataset
 
     def __init__(
         self,
@@ -47,7 +48,7 @@ class MDPDatastore(BaseRegularGridDatastore):
 
         Parameters
         ----------
-        config_path : str
+        config_path : str or Path
             The path to the configuration file, this will be fed to the
             `mllam_data_prep.Config.from_yaml_file` method to then call
             `mllam_data_prep.create_dataset` to create the dataset.
@@ -80,7 +81,7 @@ class MDPDatastore(BaseRegularGridDatastore):
             _ds = mdp.create_dataset(config=self._config)
             _ds.to_zarr(fp_ds)
 
-        self._ds: xr.Dataset = _ds
+        self._ds = _ds
         self._n_boundary_points = n_boundary_points
         self.is_ensemble = "ensemble_member" in self._ds["state"].dims
         self.has_ensemble_forcing = (
@@ -125,7 +126,8 @@ class MDPDatastore(BaseRegularGridDatastore):
                     dim_order == dim_order_
                 ), "all inputs must have the same dimension order"
 
-        assert dim_order is not None, "dim_order could not be determined"
+        if dim_order is None:
+            raise ValueError("Could not determine dim_order from inputs.")
         self.spatial_coordinates = dim_order
 
     @property
