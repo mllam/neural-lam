@@ -2,7 +2,7 @@
 from datetime import timedelta
 from pathlib import Path
 from typing import Iterator
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 # Third-party
 import matplotlib.figure
@@ -449,3 +449,170 @@ def test_plot_examples_gif_integration(model_and_batch, monkeypatch):
         gif = plot_dir / f"{var_name}_example_{example_i}_prediction.gif"
         assert gif.exists(), f"Missing GIF: {gif.name}"
         assert gif.read_bytes()[:3] == b"GIF", f"{gif.name} is not a valid GIF"
+
+
+# Shared ModelArgs for metrics_watch regression tests (issue #302).
+# Kept at module level to avoid copy-paste duplication across tests.
+class _MetricsWatchModelArgs:
+    output_std = False
+    loss = "mse"
+    restore_opt = False
+    n_example_pred = 1
+    graph = "1level"
+    hidden_dim = 4
+    hidden_layers = 1
+    processor_layers = 1
+    mesh_aggr = "sum"
+    lr = 1.0e-3
+    val_steps_to_log = [1, 2]
+    metrics_watch = ["val_rmse"]
+    var_leads_metrics_watch = {0: [1]}
+    num_past_forcing_steps = 0
+    num_future_forcing_steps = 0
+
+
+def test_create_metric_log_dict_with_metrics_watch(tmp_path):
+    """
+    Regression test for issue #302: AssertionError when using --metrics_watch.
+
+    Previously, aggregate_and_plot_metrics asserted all log_dict values were
+    plt.Figure, which failed when --metrics_watch added scalar tensor values.
+    This test verifies that create_metric_log_dict correctly returns a single
+    dict containing both plt.Figure and scalar entries.
+    """
+    datastore = DummyDatastore()
+    num_state_vars = datastore.get_num_data_vars(category="state")
+
+    graph_dir_path = Path(datastore.root_path) / "graph" / "1level"
+    if not graph_dir_path.exists():
+        create_graph_from_datastore(
+            datastore=datastore,
+            output_root_path=str(graph_dir_path),
+            n_max_levels=1,
+        )
+
+    config = nlconfig.NeuralLAMConfig(
+        datastore=nlconfig.DatastoreSelection(
+            kind=datastore.SHORT_NAME,
+            config_path=datastore.root_path,
+        ),
+    )
+
+    model = GraphLAM(
+        args=_MetricsWatchModelArgs(),
+        config=config,
+        datastore=datastore,
+    )
+
+    # Create a dummy metric tensor: (pred_steps=2, d_f=num_state_vars)
+    metric_tensor = torch.rand(2, num_state_vars)
+
+    # This call should not raise an AssertionError (the original bug)
+    log_dict = model.create_metric_log_dict(
+        metric_tensor, prefix="val", metric_name="rmse"
+    )
+
+    # Verify log_dict contains the error-map figure
+    assert "val_rmse" in log_dict
+    assert isinstance(log_dict["val_rmse"], plt.Figure)
+
+    # Verify log_dict also contains the watched scalar metric
+    var_names = datastore.get_vars_names(category="state")
+    expected_key = f"val_rmse_{var_names[0]}_step_1"
+    assert expected_key in log_dict, (
+        f"Expected key '{expected_key}' in log_dict, "
+        f"got keys: {list(log_dict.keys())}"
+    )
+
+    # Verify figure entries are plt.Figure and scalar entries are tensors
+    for key, value in log_dict.items():
+        assert isinstance(
+            value, (plt.Figure, torch.Tensor)
+        ), f"Unexpected value type for key '{key}': {type(value)}"
+
+    plt.close("all")
+
+
+def test_aggregate_and_plot_metrics_with_metrics_watch(tmp_path):
+    """
+    Integration test for issue #302: exercises the full watched-metrics path
+    through aggregate_and_plot_metrics(), which is the exact crash site of the
+    original AssertionError.
+
+    Previously, aggregate_and_plot_metrics asserted all values in the log dict
+    were plt.Figure objects, which failed when --metrics_watch added scalar
+    tensor values. This test ensures the full pipeline works without crashing.
+    """
+    datastore = DummyDatastore()
+    num_state_vars = datastore.get_num_data_vars(category="state")
+
+    graph_dir_path = Path(datastore.root_path) / "graph" / "1level"
+    if not graph_dir_path.exists():
+        create_graph_from_datastore(
+            datastore=datastore,
+            output_root_path=str(graph_dir_path),
+            n_max_levels=1,
+        )
+
+    config = nlconfig.NeuralLAMConfig(
+        datastore=nlconfig.DatastoreSelection(
+            kind=datastore.SHORT_NAME,
+            config_path=datastore.root_path,
+        ),
+    )
+
+    model = GraphLAM(
+        args=_MetricsWatchModelArgs(),
+        config=config,
+        datastore=datastore,
+    )
+
+    # Mock the trainer to simulate rank-0 single-process execution
+    mock_trainer = MagicMock()
+    mock_trainer.is_global_zero = True
+    mock_trainer.sanity_checking = False
+    mock_trainer.current_epoch = 0
+    model._trainer = mock_trainer
+
+    # Mock logger so log_image calls don't fail.
+    # In Lightning, self.logger resolves to self._trainer.logger,
+    # so we must attach the mock there.
+    mock_logger = MagicMock()
+    mock_trainer.logger = mock_logger
+
+    # Patch all_gather_cat to be a no-op (single process)
+    model.all_gather_cat = lambda x: x
+
+    # Capture scalar metrics logged via self.log()
+    logged_scalars = {}
+
+    def capture_log(key, value, **kwargs):
+        logged_scalars[key] = value
+
+    model.log = capture_log
+
+    # Build a fake metrics_dict with MSE entries:
+    # shape (N_eval=2, pred_steps=2, d_f=num_state_vars)
+    metrics_dict = {"mse": [torch.rand(1, 2, num_state_vars) for _ in range(2)]}
+
+    # This is the exact crash site: should NOT raise AssertionError
+    model.aggregate_and_plot_metrics(metrics_dict, prefix="val")
+
+    # Verify that log_image was called (figures were logged)
+    mock_logger.log_image.assert_called()
+
+    # Verify that scalar metrics were captured via self.log()
+    assert len(logged_scalars) > 0, (
+        "Expected scalar metrics to be logged via self.log() "
+        "when metrics_watch is configured"
+    )
+
+    # Verify the expected watched-metric key is present
+    var_names = datastore.get_vars_names(category="state")
+    expected_key = f"val_rmse_{var_names[0]}_step_1"
+    assert expected_key in logged_scalars, (
+        f"Expected key '{expected_key}' in logged scalars, "
+        f"got keys: {list(logged_scalars.keys())}"
+    )
+
+    plt.close("all")
