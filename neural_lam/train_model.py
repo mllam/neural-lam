@@ -23,6 +23,8 @@ from .config import (
     UniformFeatureWeighting,
     load_config_and_datastore,
 )
+from .models import GraphLAM, HiLAM, HiLAMParallel
+from .weather_dataset import WeatherDataModule
 
 torch.serialization.add_safe_globals(
     [
@@ -35,8 +37,6 @@ torch.serialization.add_safe_globals(
         UniformFeatureWeighting,
     ]
 )
-from .models import GraphLAM, HiLAM, HiLAMParallel
-from .weather_dataset import WeatherDataModule
 
 MODELS = {
     "graph_lam": GraphLAM,
