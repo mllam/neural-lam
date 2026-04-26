@@ -7,7 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [unreleased](https://github.com/mllam/neural-lam/compare/v0.6.0...HEAD)
 
+### Changed
 
+- Split `ARModel` into `ForecasterModule`, `Forecaster` and
+  `StepPredictor` [\#208](https://github.com/mllam/neural-lam/pull/208)
+  @Sir-Sloth-The-Lazy
 
 ### Fixed
 
@@ -42,10 +46,6 @@ This release introduces new features including GIF animation support, wandb run 
   [\#197](https://github.com/mllam/neural-lam/pull/197) @Mani212005
 
 ### Changed
-
-- Split `ARModel` into `ForecasterModule`, `Forecaster` and
-  `StepPredictor` [\#208](https://github.com/mllam/neural-lam/pull/208)
-  @Sir-Sloth-The-Lazy
 
 - Change the default ensemble-loading behavior in `WeatherDataset` / `WeatherDataModule` to use all ensemble members as independent samples for ensemble datastores (with matching ensemble-member selection for forcing when available); single-member behavior now requires explicitly opting in via `--load_single_member` [\#332](https://github.com/mllam/neural-lam/pull/332) @kshirajahere
 

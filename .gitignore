@@ -85,6 +85,7 @@ __MACOSX
 .venv
 venv
 activate
+uv.lock
 
 # Build artifacts
 dist/
