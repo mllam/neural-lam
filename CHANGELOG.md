@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [unreleased](https://github.com/mllam/neural-lam/compare/v0.6.0...HEAD)
 
+### Maintenance
+
+- Split test suite into `tests/unit/` and `tests/integration/`, moving the S3 fixture into the integration conftest and refactoring `test_clamping.py` to use `DummyDatastore` [\#615](https://github.com/mllam/neural-lam/pull/615) @jishanahmed-shaikh
+
 ### Fixed
 
 - Fix `AssertionError` in `aggregate_and_plot_metrics` when using `--metrics_watch` flags by using `isinstance` dispatch for figure vs scalar logging [\#303](https://github.com/mllam/neural-lam/pull/303) @AftAb-25
