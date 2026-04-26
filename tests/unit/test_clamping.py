@@ -7,14 +7,10 @@ import torch
 # First-party
 from neural_lam import config as nlconfig
 from neural_lam.create_graph import create_graph_from_datastore
-from neural_lam.datastore import DATASTORES
 from neural_lam.models.graph_lam import GraphLAM
 
 # Local
 from tests.dummy_datastore import DummyDatastore
-
-# Register DummyDatastore so DatastoreSelection validation passes
-DATASTORES.setdefault(DummyDatastore.SHORT_NAME, DummyDatastore)
 
 
 def test_clamping():
@@ -49,8 +45,7 @@ def test_clamping():
 
     model_args = ModelArgs()
 
-    # DummyDatastore has state features: state_feat_0 .. state_feat_4
-    # Use the first two for lower clamping and the second for upper clamping
+    # Pick three distinct state features to drive the clamping config
     state_features = datastore.get_vars_names(category="state")
     feat_lower = state_features[0]
     feat_both = state_features[1]

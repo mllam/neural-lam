@@ -5,9 +5,19 @@ import os
 import pytest
 from pytorch_lightning.utilities import rank_zero_only
 
+# First-party
+from neural_lam.datastore import DATASTORES
+
+# Local
+from .dummy_datastore import DummyDatastore
+
 # Disable weights and biases to avoid unnecessary logging
 # and to avoid having to deal with authentication
 os.environ["WANDB_MODE"] = "disabled"
+
+# Register DummyDatastore so DatastoreSelection validation passes
+# in any test that uses it (unit or integration)
+DATASTORES.setdefault(DummyDatastore.SHORT_NAME, DummyDatastore)
 
 
 @pytest.fixture(autouse=True)

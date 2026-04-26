@@ -122,7 +122,12 @@ jobs:
       - name: Run tests (integration)
         if: matrix.package_manager == 'uv'
         run: |
-          pytest -vv -s tests/integration/ --doctest-modules
+          pytest -vv -s tests/integration/ --tb=short
+
+      - name: Run doctests
+        if: matrix.package_manager == 'uv'
+        run: |
+          pytest -vv --doctest-modules neural_lam/
 
       - name: Upload test figures
         if: matrix.package_manager == 'uv'

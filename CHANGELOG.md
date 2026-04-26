@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Maintenance
 
-- Split test suite into `tests/unit/` and `tests/integration/`, moving the S3 fixture into the integration conftest and refactoring `test_clamping.py` to use `DummyDatastore` [\#599](https://github.com/mllam/neural-lam/issues/599) @jishanahmed-shaikh
+- Split test suite into `tests/unit/` and `tests/integration/`, moving the S3 fixture into the integration conftest and refactoring `test_clamping.py` to use `DummyDatastore` [\#615](https://github.com/mllam/neural-lam/pull/615) @jishanahmed-shaikh
 
 ### Fixed
 

@@ -110,9 +110,6 @@ min-similarity-lines = 10
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-markers = [
-    "integration: tests that require network access or real data (deselect with '-m not integration')",
-]
 
 [build-system]
 requires = ["hatchling>=1.27.0", "hatch-vcs"]
