@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [unreleased](https://github.com/mllam/neural-lam/compare/v0.6.0...HEAD)
 
+### Changed
+
+- Split `ARModel` into `ForecasterModule`, `Forecaster` and
+  `StepPredictor` [\#208](https://github.com/mllam/neural-lam/pull/208)
+  @Sir-Sloth-The-Lazy
+
 ### Fixed
 
 - Fix `AssertionError` in `aggregate_and_plot_metrics` when using `--metrics_watch` flags by using `isinstance` dispatch for figure vs scalar logging [\#303](https://github.com/mllam/neural-lam/pull/303) @AftAb-25

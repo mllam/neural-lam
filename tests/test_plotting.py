@@ -17,6 +17,8 @@ from cartopy import crs as ccrs
 from neural_lam import config as nlconfig
 from neural_lam import vis
 from neural_lam.create_graph import create_graph_from_datastore
+from neural_lam.models.ar_forecaster import ARForecaster
+from neural_lam.models.forecaster_module import ForecasterModule
 from neural_lam.models.graph_lam import GraphLAM
 from neural_lam.weather_dataset import WeatherDataset
 from tests.conftest import init_datastore_example
@@ -238,10 +240,37 @@ def model_and_batch(tmp_path, time_step, time_unit):
     )
 
     # Create model
-    model = GraphLAM(
-        args=ModelArgs(),
+    # First-party
+    from neural_lam.models import MODELS
+    from neural_lam.models.ar_forecaster import ARForecaster
+
+    args = ModelArgs()
+    predictor_class = MODELS["graph_lam"]
+    predictor = predictor_class(
         config=config,
         datastore=datastore,
+        graph_name=args.graph,
+        hidden_dim=args.hidden_dim,
+        hidden_layers=args.hidden_layers,
+        processor_layers=args.processor_layers,
+        mesh_aggr=args.mesh_aggr,
+        num_past_forcing_steps=args.num_past_forcing_steps,
+        num_future_forcing_steps=args.num_future_forcing_steps,
+        output_std=args.output_std,
+    )
+    forecaster = ARForecaster(predictor, datastore=datastore)
+
+    model = ForecasterModule(
+        forecaster=forecaster,
+        config=config,
+        datastore=datastore,
+        loss=args.loss,
+        restore_opt=args.restore_opt,
+        n_example_pred=args.n_example_pred,
+        val_steps_to_log=args.val_steps_to_log,
+        metrics_watch=args.metrics_watch,
+        var_leads_metrics_watch=args.var_leads_metrics_watch,
+        lr=args.lr,
     )
 
     # Create dataset to get a sample batch
@@ -288,11 +317,24 @@ def test_plot_examples_integration_saves_figure(
     ), f"Expected time_step_unit={time_unit}, got {model.time_step_unit}"
 
     # Generate prediction
-    prediction, target, _, _ = model.common_step(batch)
+    (init_states, target, forcing_features, _batch_times) = batch
+    prediction, _ = model.forecaster(init_states, forcing_features, target)
 
     # Rescale to original data scale
-    prediction_rescaled = prediction * model.state_std + model.state_mean
-    target_rescaled = target * model.state_std + model.state_mean
+    da_state_stats = datastore.get_standardization_dataarray("state")
+    state_std = torch.tensor(
+        da_state_stats.state_std.values,
+        dtype=torch.float32,
+        device=prediction.device,
+    )
+    state_mean = torch.tensor(
+        da_state_stats.state_mean.values,
+        dtype=torch.float32,
+        device=prediction.device,
+    )
+
+    prediction_rescaled = prediction * state_std + state_mean
+    target_rescaled = target * state_std + state_mean
 
     # Get first example
     pred_slice = prediction_rescaled[0].detach()  # Detach from graph
@@ -370,7 +412,7 @@ def test_plot_examples_gif_integration(model_and_batch, monkeypatch):
     model, batch, datastore, tmp_path = model_and_batch
 
     # Enable the GIF path and reset the example counter
-    model.args.create_gif = True
+    model.create_gif = True
     model.plotted_examples = 0
 
     # Minimal logger: plot_examples only reads save_dir and optionally calls
@@ -413,22 +455,33 @@ def test_plot_examples_gif_integration(model_and_batch, monkeypatch):
 
 # Shared ModelArgs for metrics_watch regression tests (issue #302).
 # Kept at module level to avoid copy-paste duplication across tests.
-class _MetricsWatchModelArgs:
-    output_std = False
-    loss = "mse"
-    restore_opt = False
-    n_example_pred = 1
-    graph = "1level"
-    hidden_dim = 4
-    hidden_layers = 1
-    processor_layers = 1
-    mesh_aggr = "sum"
-    lr = 1.0e-3
-    val_steps_to_log = [1, 2]
-    metrics_watch = ["val_rmse"]
-    var_leads_metrics_watch = {0: [1]}
-    num_past_forcing_steps = 0
-    num_future_forcing_steps = 0
+def _build_metrics_watch_module(datastore, config):
+    """Build a ForecasterModule wired for metrics_watch tests."""
+    predictor = GraphLAM(
+        config=config,
+        datastore=datastore,
+        graph_name="1level",
+        hidden_dim=4,
+        hidden_layers=1,
+        processor_layers=1,
+        mesh_aggr="sum",
+        num_past_forcing_steps=0,
+        num_future_forcing_steps=0,
+        output_std=False,
+    )
+    forecaster = ARForecaster(predictor, datastore)
+    return ForecasterModule(
+        forecaster=forecaster,
+        config=config,
+        datastore=datastore,
+        loss="mse",
+        lr=1.0e-3,
+        restore_opt=False,
+        n_example_pred=1,
+        val_steps_to_log=[1, 2],
+        metrics_watch=["val_rmse"],
+        var_leads_metrics_watch={0: [1]},
+    )
 
 
 def test_create_metric_log_dict_with_metrics_watch(tmp_path):
@@ -458,11 +511,7 @@ def test_create_metric_log_dict_with_metrics_watch(tmp_path):
         ),
     )
 
-    model = GraphLAM(
-        args=_MetricsWatchModelArgs(),
-        config=config,
-        datastore=datastore,
-    )
+    model = _build_metrics_watch_module(datastore, config)
 
     # Create a dummy metric tensor: (pred_steps=2, d_f=num_state_vars)
     metric_tensor = torch.rand(2, num_state_vars)
@@ -521,11 +570,7 @@ def test_aggregate_and_plot_metrics_with_metrics_watch(tmp_path):
         ),
     )
 
-    model = GraphLAM(
-        args=_MetricsWatchModelArgs(),
-        config=config,
-        datastore=datastore,
-    )
+    model = _build_metrics_watch_module(datastore, config)
 
     # Mock the trainer to simulate rank-0 single-process execution
     mock_trainer = MagicMock()
@@ -543,13 +588,13 @@ def test_aggregate_and_plot_metrics_with_metrics_watch(tmp_path):
     # Patch all_gather_cat to be a no-op (single process)
     model.all_gather_cat = lambda x: x
 
-    # Capture scalar metrics logged via self.log()
+    # Capture scalar metrics logged via self.log_dict()
     logged_scalars = {}
 
-    def capture_log(key, value, **kwargs):
-        logged_scalars[key] = value
+    def capture_log_dict(d, **kwargs):
+        logged_scalars.update(d)
 
-    model.log = capture_log
+    model.log_dict = capture_log_dict
 
     # Build a fake metrics_dict with MSE entries:
     # shape (N_eval=2, pred_steps=2, d_f=num_state_vars)
@@ -561,9 +606,9 @@ def test_aggregate_and_plot_metrics_with_metrics_watch(tmp_path):
     # Verify that log_image was called (figures were logged)
     mock_logger.log_image.assert_called()
 
-    # Verify that scalar metrics were captured via self.log()
+    # Verify that scalar metrics were captured via self.log_dict()
     assert len(logged_scalars) > 0, (
-        "Expected scalar metrics to be logged via self.log() "
+        "Expected scalar metrics to be logged via self.log_dict() "
         "when metrics_watch is configured"
     )
 

@@ -18,8 +18,31 @@ class HiLAMParallel(BaseHiGraphModel):
     of Hi-LAM.
     """
 
-    def __init__(self, args, config: NeuralLAMConfig, datastore: BaseDatastore):
-        super().__init__(args, config=config, datastore=datastore)
+    def __init__(
+        self,
+        config: NeuralLAMConfig,
+        datastore: BaseDatastore,
+        graph_name: str = "multiscale",
+        hidden_dim: int = 64,
+        hidden_layers: int = 1,
+        processor_layers: int = 4,
+        mesh_aggr: str = "sum",
+        num_past_forcing_steps: int = 1,
+        num_future_forcing_steps: int = 1,
+        output_std: bool = False,
+    ):
+        super().__init__(
+            config=config,
+            datastore=datastore,
+            graph_name=graph_name,
+            hidden_dim=hidden_dim,
+            hidden_layers=hidden_layers,
+            processor_layers=processor_layers,
+            mesh_aggr=mesh_aggr,
+            num_past_forcing_steps=num_past_forcing_steps,
+            num_future_forcing_steps=num_future_forcing_steps,
+            output_std=output_std,
+        )
 
         # Processor GNNs
         # Create the complete edge_index combining all edges for processing
@@ -31,18 +54,18 @@ class HiLAMParallel(BaseHiGraphModel):
         total_edge_index = torch.cat(total_edge_index_list, dim=1)
         self.edge_split_sections = [ei.shape[1] for ei in total_edge_index_list]
 
-        if args.processor_layers == 0:
+        if processor_layers == 0:
             self.processor = lambda x, edge_attr: (x, edge_attr)
         else:
             processor_nets = [
                 InteractionNet(
                     total_edge_index,
-                    args.hidden_dim,
-                    hidden_layers=args.hidden_layers,
+                    hidden_dim,
+                    hidden_layers=hidden_layers,
                     edge_chunk_sizes=self.edge_split_sections,
                     aggr_chunk_sizes=self.level_mesh_sizes,
                 )
-                for _ in range(args.processor_layers)
+                for _ in range(processor_layers)
             ]
             self.processor = pyg.nn.Sequential(
                 "mesh_rep, edge_rep",

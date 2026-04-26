@@ -17,8 +17,31 @@ class GraphLAM(BaseGraphModel):
     Oskarsson et al. (2023).
     """
 
-    def __init__(self, args, config: NeuralLAMConfig, datastore: BaseDatastore):
-        super().__init__(args, config=config, datastore=datastore)
+    def __init__(
+        self,
+        config: NeuralLAMConfig,
+        datastore: BaseDatastore,
+        graph_name: str = "multiscale",
+        hidden_dim: int = 64,
+        hidden_layers: int = 1,
+        processor_layers: int = 4,
+        mesh_aggr: str = "sum",
+        num_past_forcing_steps: int = 1,
+        num_future_forcing_steps: int = 1,
+        output_std: bool = False,
+    ):
+        super().__init__(
+            config=config,
+            datastore=datastore,
+            graph_name=graph_name,
+            hidden_dim=hidden_dim,
+            hidden_layers=hidden_layers,
+            processor_layers=processor_layers,
+            mesh_aggr=mesh_aggr,
+            num_past_forcing_steps=num_past_forcing_steps,
+            num_future_forcing_steps=num_future_forcing_steps,
+            output_std=output_std,
+        )
 
         assert (
             not self.hierarchical
@@ -42,11 +65,11 @@ class GraphLAM(BaseGraphModel):
         processor_nets = [
             InteractionNet(
                 self.m2m_edge_index,
-                args.hidden_dim,
-                hidden_layers=args.hidden_layers,
-                aggr=args.mesh_aggr,
+                hidden_dim,
+                hidden_layers=hidden_layers,
+                aggr=mesh_aggr,
             )
-            for _ in range(args.processor_layers)
+            for _ in range(processor_layers)
         ]
         self.processor = pyg.nn.Sequential(
             "mesh_rep, edge_rep",

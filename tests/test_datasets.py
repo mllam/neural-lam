@@ -12,7 +12,7 @@ from neural_lam import config as nlconfig
 from neural_lam.create_graph import create_graph_from_datastore
 from neural_lam.datastore import DATASTORES
 from neural_lam.datastore.base import BaseRegularGridDatastore
-from neural_lam.models.graph_lam import GraphLAM
+from neural_lam.models.forecaster_module import ForecasterModule
 from neural_lam.weather_dataset import WeatherDataset
 from tests.conftest import init_datastore_example
 from tests.dummy_datastore import DummyDatastore, EnsembleDummyDatastore
@@ -182,6 +182,10 @@ def test_single_batch(datastore_name, split):
         hidden_layers = 1
         processor_layers = 2
         mesh_aggr = "sum"
+        lr = 1.0e-3
+        val_steps_to_log = [1]
+        metrics_watch = []
+        var_leads_metrics_watch = {}
         num_past_forcing_steps = 1
         num_future_forcing_steps = 1
 
@@ -212,13 +216,42 @@ def test_single_batch(datastore_name, split):
 
     dataset = WeatherDataset(datastore=datastore, split=split, ar_steps=2)
 
-    model = GraphLAM(args=args, datastore=datastore, config=config)  # noqa
+    # First-party
+    from neural_lam.models import MODELS
+    from neural_lam.models.ar_forecaster import ARForecaster
+
+    predictor_class = MODELS["graph_lam"]
+    predictor = predictor_class(
+        config=config,
+        datastore=datastore,
+        graph_name=args.graph,
+        hidden_dim=args.hidden_dim,
+        hidden_layers=args.hidden_layers,
+        processor_layers=args.processor_layers,
+        mesh_aggr=args.mesh_aggr,
+        num_past_forcing_steps=args.num_past_forcing_steps,
+        num_future_forcing_steps=args.num_future_forcing_steps,
+        output_std=args.output_std,
+    )
+    forecaster = ARForecaster(predictor, datastore=datastore)
+
+    model = ForecasterModule(
+        forecaster=forecaster,
+        config=config,
+        datastore=datastore,
+        loss=args.loss,
+        restore_opt=args.restore_opt,
+        n_example_pred=args.n_example_pred,
+        val_steps_to_log=args.val_steps_to_log,
+        metrics_watch=args.metrics_watch,
+        var_leads_metrics_watch=args.var_leads_metrics_watch,
+        lr=args.lr,
+    )
 
     model_device = model.to(device_name)
     data_loader = DataLoader(dataset, batch_size=2)
     batch = next(iter(data_loader))
     batch_device = [part.to(device_name) for part in batch]
-    model_device.common_step(batch_device)
     model_device.training_step(batch_device)
 
 
