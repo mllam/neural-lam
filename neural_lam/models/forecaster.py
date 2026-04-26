@@ -29,6 +29,13 @@ class Forecaster(nn.Module, ABC):
         init_states: (B, 2, num_grid_nodes, d_f)
         forcing_features: (B, pred_steps, num_grid_nodes, d_static_f)
         boundary_states: (B, pred_steps, num_grid_nodes, d_f)
+            True state values used ONLY to overwrite boundary nodes at
+            each AR step — interior predictions must not depend on
+            ``boundary_states`` in any other way. This is a temporary
+            mechanism that mirrors the pre-refactor ARModel behavior;
+            it will be replaced by a dedicated boundary-forcing input
+            in #138 (training on interior + boundary datastore), at
+            which point this parameter will be removed.
         Returns:
             prediction: (B, pred_steps, num_grid_nodes, d_f)
             pred_std: (B, pred_steps, num_grid_nodes, d_f) or (d_f,)
