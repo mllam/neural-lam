@@ -44,8 +44,29 @@ class ForecasterModule(pl.LightningModule):
         val_steps_to_log: Optional[List[int]] = None,
         metrics_watch: Optional[List[str]] = None,
         var_leads_metrics_watch: Optional[Dict[int, List[int]]] = None,
+        args=None,
     ):
         super().__init__()
+        # Pre-refactor ARModel checkpoints saved every hyperparameter nested
+        # inside an argparse Namespace under the single key 'args'. When
+        # Lightning calls __init__ during load_from_checkpoint it would
+        # otherwise drop 'args' (not in the new signature) and silently fall
+        # back to defaults for loss/lr/create_gif/etc. Unpack the namespace
+        # here so legacy checkpoints round-trip correctly.
+        if args is not None:
+            loss = getattr(args, "loss", loss)
+            lr = getattr(args, "lr", lr)
+            restore_opt = getattr(args, "restore_opt", restore_opt)
+            n_example_pred = getattr(args, "n_example_pred", n_example_pred)
+            create_gif = getattr(args, "create_gif", create_gif)
+            val_steps_to_log = getattr(
+                args, "val_steps_to_log", val_steps_to_log
+            )
+            metrics_watch = getattr(args, "metrics_watch", metrics_watch)
+            var_leads_metrics_watch = getattr(
+                args, "var_leads_metrics_watch", var_leads_metrics_watch
+            )
+
         # Resolve mutable defaults
         if val_steps_to_log is None:
             val_steps_to_log = [
@@ -58,8 +79,10 @@ class ForecasterModule(pl.LightningModule):
 
         # Note: datastore is excluded from saved hparams and must be provided
         # explicitly when calling load_from_checkpoint(path,
-        # datastore=datastore)
-        self.save_hyperparameters(ignore=["datastore", "forecaster"])
+        # datastore=datastore). 'args' is excluded too — its fields have been
+        # unpacked into the explicit kwargs above, so re-saving it would
+        # duplicate state.
+        self.save_hyperparameters(ignore=["datastore", "forecaster", "args"])
         self.datastore = datastore
         self.forecaster = forecaster
         self.matched_metrics: set = set()
@@ -552,9 +575,13 @@ class ForecasterModule(pl.LightningModule):
         }
 
         if self.trainer.is_global_zero and not self.trainer.sanity_checking:
-            # Log scalars via Lightning's built-in mechanism
+            # Log scalars via Lightning's built-in mechanism. No sync_dist:
+            # we are inside `if is_global_zero`, so only rank 0 reaches this
+            # call. sync_dist=True would launch a distributed collective
+            # from one rank and hang DDP. The values are already aggregated
+            # via all_gather_cat above, so no further sync is needed.
             if scalar_dict:
-                self.log_dict(scalar_dict, sync_dist=True)
+                self.log_dict(scalar_dict, rank_zero_only=True)
 
             current_epoch = self.trainer.current_epoch
 

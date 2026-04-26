@@ -1,3 +1,6 @@
+# Standard library
+from argparse import Namespace
+
 # Third-party
 import pytorch_lightning as pl
 import torch
@@ -203,15 +206,24 @@ def test_forecaster_module_old_checkpoint(tmp_path):
     )
     forecaster = ARForecaster(predictor, datastore)
 
+    # Use distinctive non-default values so we can detect silent fallback
+    # to ForecasterModule's defaults during load.
+    saved_loss = "mse"
+    saved_lr = 0.123
+    saved_create_gif = True
+    saved_val_steps = [2]
+    saved_n_example_pred = 7
+
     model = ForecasterModule(
         forecaster=forecaster,
         config=config,
         datastore=datastore,
-        loss="mse",
-        lr=1e-3,
+        loss=saved_loss,
+        lr=saved_lr,
         restore_opt=False,
-        n_example_pred=1,
-        val_steps_to_log=[1],
+        n_example_pred=saved_n_example_pred,
+        create_gif=saved_create_gif,
+        val_steps_to_log=saved_val_steps,
         metrics_watch=[],
     )
 
@@ -225,7 +237,9 @@ def test_forecaster_module_old_checkpoint(tmp_path):
     trainer.strategy.connect(model)
     trainer.save_checkpoint(ckpt_path)
 
-    # Manually hack the checkpoint to emulate a pre-refactor state dict
+    # Manually hack the checkpoint to emulate a pre-refactor checkpoint:
+    # both the state_dict (flat keys) AND the hyper_parameters (nested
+    # under an argparse Namespace called 'args' as old ARModel saved them).
     ckpt = torch.load(ckpt_path, weights_only=False)
     old_state_dict = {}
     for k, v in ckpt["state_dict"].items():
@@ -237,8 +251,21 @@ def test_forecaster_module_old_checkpoint(tmp_path):
             old_state_dict[new_k] = v
         else:
             old_state_dict[k] = v
-
     ckpt["state_dict"] = old_state_dict
+
+    ckpt["hyper_parameters"] = {
+        "args": Namespace(
+            loss=saved_loss,
+            lr=saved_lr,
+            restore_opt=False,
+            n_example_pred=saved_n_example_pred,
+            create_gif=saved_create_gif,
+            val_steps_to_log=saved_val_steps,
+            metrics_watch=[],
+            var_leads_metrics_watch={},
+        ),
+        "config": ckpt["hyper_parameters"]["config"],
+    }
     torch.save(ckpt, ckpt_path)
 
     # Build a fresh forecaster structure for loading weights into
@@ -266,6 +293,14 @@ def test_forecaster_module_old_checkpoint(tmp_path):
 
     # Validate the correct internal hierarchy has been constructed
     assert loaded_model.forecaster.predictor.__class__.__name__ == "GraphLAM"
+
+    # Hyperparameters nested in the legacy 'args' namespace must round-trip
+    # rather than silently falling back to ForecasterModule defaults.
+    assert loaded_model.hparams.loss == saved_loss
+    assert loaded_model.hparams.lr == saved_lr
+    assert loaded_model.hparams.val_steps_to_log == saved_val_steps
+    assert loaded_model.create_gif is saved_create_gif
+    assert loaded_model.n_example_pred == saved_n_example_pred
 
     # Verify that outputs match (checkpoint successfully restored weights)
     B, num_grid_nodes = 2, model.forecaster.predictor.num_grid_nodes
