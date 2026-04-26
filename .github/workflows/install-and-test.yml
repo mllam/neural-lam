@@ -81,7 +81,7 @@ jobs:
       - name: Install with uv
         if: matrix.package_manager == 'uv'
         run: |
-          uv sync --extra ${{ matrix.device }} --group dev
+          uv sync --extra ${{ matrix.device }} --group dev --locked
           echo "$PWD/.venv/bin" >> $GITHUB_PATH
 
       - name: Print torch version

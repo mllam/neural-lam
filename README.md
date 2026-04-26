@@ -96,11 +96,12 @@ python -m pip install neural_lam
    PyTorch index, and installs all other dependencies (including dev tools)
    in one step.
 
-   If you need a different CUDA version, swap `torch` after install:
+   If you need a different CUDA version, install with the `cpu` extra first (smaller download) and then swap `torch` to your CUDA variant:
    ```bash
-   uv sync --extra gpu --group dev              # create env
-   uv pip install torch --torch-backend auto    # replace torch to match your GPU
+   uv sync --extra cpu --group dev              # create env (small torch wheel)
+   uv pip install torch --torch-backend auto    # replace torch with your CUDA variant
    ```
+   Note: this swap is venv-local and will be reverted by the next `uv sync`.
 
 #### Using `pip`
 

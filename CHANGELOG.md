@@ -19,7 +19,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Add comprehensive type hints to `neural_lam/create_graph.py` [\#618](https://github.com/mllam/neural-lam/pull/618) @GiGiKoneti
 
-- Use CPU/GPU optional-dependency extras with `[tool.uv.sources]` to simplify torch installation in CI and for users [\#600](https://github.com/mllam/neural-lam/issues/600) @RajdeepKushwaha5
+- Use `cpu`/`gpu` extras with `[tool.uv.sources]` and a committed `uv.lock` to simplify and pin torch installation in CI and for users [\#604](https://github.com/mllam/neural-lam/pull/604) @RajdeepKushwaha5
+- Update default CUDA version in install instructions and CI from 11.1 to 12.8. Users on older CUDA versions need to install the matching `torch` variant manually (see README) [\#604](https://github.com/mllam/neural-lam/pull/604) @RajdeepKushwaha5
 
 ## [v0.6.0](https://github.com/mllam/neural-lam/releases/tag/v0.6.0)
 
