@@ -206,6 +206,24 @@ class ARModel(pl.LightningModule):
         )
         return opt
 
+    def on_before_optimizer_step(self, optimizer):
+        """Log the total gradient L2 norm before clipping for diagnostics.
+
+        This uses max_norm=inf so the norm is computed without any actual
+        clipping, giving the *pre-clip* value for monitoring.
+        """
+        grad_norm = torch.nn.utils.clip_grad_norm_(
+            self.parameters(), max_norm=float("inf")
+        )
+        self.log(
+            "grad_norm",
+            grad_norm,
+            on_step=True,
+            on_epoch=False,
+            prog_bar=False,
+            sync_dist=False,
+        )
+
     @property
     def interior_mask_bool(self):
         """
