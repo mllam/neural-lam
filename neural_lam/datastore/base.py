@@ -640,3 +640,34 @@ class BaseRegularGridDatastore(BaseDatastore):
 
         """
         return self.grid_shape_state.x * self.grid_shape_state.y
+
+def get_area_weights(self) -> "xr.DataArray":
+    """Return latitude-based area weights for global domains.
+    
+    Returns:
+        DataArray of shape (grid_index,) with cos(lat) weights normalized
+        to have mean 1.0.
+    """
+    lat_lon = self.get_lat_lon()
+    # Extract latitude values (first element of stacked dim)
+    lat = lat_lon.isel(grid_index=0).lat.values
+    
+    from neural_lam.geometry import get_area_weights as compute_weights
+    weights = compute_weights(lat)
+    
+    import xarray as xr
+    return xr.DataArray(weights, dims=["grid_index"])
+
+def get_cartesian_coords(self) -> np.ndarray:
+    """Return cartesian coordinates on unit sphere.
+    
+    Returns:
+        Array of shape (grid_index, 3) with (x, y, z) coordinates
+        on the unit sphere.
+    """
+    lat_lon = self.get_lat_lon()
+    lon = lat_lon.isel(grid_index=0).lon.values
+    lat = lat_lon.isel(grid_index=0).lat.values
+    
+    from neural_lam.geometry import lat_lon_to_cartesian
+    return lat_lon_to_cartesian(lon, lat)
