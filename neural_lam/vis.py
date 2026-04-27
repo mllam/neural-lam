@@ -332,3 +332,127 @@ def plot_spatial_error(
         fig.suptitle(title, size=_TITLE_SIZE)
 
     return fig
+
+
+def plot_on_axis(
+    ax,
+    datastore: BaseRegularGridDatastore,
+    data,
+    alpha=None,
+    vmin=None,
+    vmax=None,
+    ax_title=None,
+):
+    """
+    Plot weather state on a specific axis using datastore metadata.
+    Ensures memory safety by explicitly detaching the tensor.
+    """
+    ax.coastlines()
+
+    # transpose (.T) to match the (x, y) orientation required by imshow
+    data_grid = (
+        data.detach()
+        .reshape([datastore.grid_shape_state.x, datastore.grid_shape_state.y])
+        .T.cpu()
+        .numpy()
+    )
+
+    im = ax.imshow(
+        data_grid,
+        origin="lower",
+        extent=datastore.get_xy_extent("state"),
+        alpha=alpha,
+        vmin=vmin,
+        vmax=vmax,
+        cmap="plasma",
+        transform=datastore.coords_projection,
+    )
+
+    if ax_title:
+        ax.set_title(ax_title, size=15)
+    return im
+
+
+@matplotlib.rc_context(utils.fractional_plot_bundle(1))
+def plot_ensemble_prediction(
+    datastore: BaseRegularGridDatastore,
+    samples,
+    target,
+    ens_mean,
+    ens_std,
+    title=None,
+    vrange=None,
+):
+    """
+    Plot example predictions, ground truth, mean and standard deviatio.
+    from ensemble forecast using datastore metadata.
+    """
+    # Get common scale from detached tensors
+    if vrange is None:
+        vmin = min(vals.min().cpu().item() for vals in (samples, target))
+        vmax = max(vals.max().cpu().item() for vals in (samples, target))
+    else:
+        vmin, vmax = vrange
+
+    da_mask = datastore.unstack_grid_coords(datastore.boundary_mask)
+    pixel_alpha = (
+        np.invert(da_mask.values.astype(bool)).astype(float).clip(0.7, 1).T
+    )
+
+    fig, axes = plt.subplots(
+        3,
+        3,
+        figsize=(15, 15),
+        subplot_kw={"projection": datastore.coords_projection},
+    )
+    axes = axes.flatten()
+
+    # Plot statistical summaries
+    gt_im = plot_on_axis(
+        axes[0],
+        datastore,
+        target,
+        alpha=pixel_alpha,
+        vmin=vmin,
+        vmax=vmax,
+        ax_title="Ground Truth",
+    )
+    plot_on_axis(
+        axes[1],
+        datastore,
+        ens_mean,
+        alpha=pixel_alpha,
+        vmin=vmin,
+        vmax=vmax,
+        ax_title="Ens. Mean",
+    )
+    std_im = plot_on_axis(
+        axes[2], datastore, ens_std, alpha=pixel_alpha, ax_title="Ens. Std."
+    )
+
+    for member_i, (ax, member) in enumerate(
+        zip(axes[3:], samples[:6]), start=1
+    ):
+        plot_on_axis(
+            ax,
+            datastore,
+            member,
+            alpha=pixel_alpha,
+            vmin=vmin,
+            vmax=vmax,
+            ax_title=f"Member {member_i}",
+        )
+
+    for ax in axes[(3 + samples.shape[0]) :]:
+        ax.axis("off")
+
+    fig.colorbar(
+        gt_im, ax=axes[:2], aspect=60, location="bottom", shrink=0.9
+    ).ax.tick_params(labelsize=10)
+    fig.colorbar(
+        std_im, aspect=30, location="bottom", shrink=0.9
+    ).ax.tick_params(labelsize=10)
+
+    if title:
+        fig.suptitle(title, size=20)
+    return fig
