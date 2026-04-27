@@ -23,7 +23,7 @@ from typing import Any
 # Third-party
 import torch
 
-EDGE_FEATURE_DIM = 3
+ALLOWED_EDGE_FEATURE_DIMS = (3, 4)
 MESH_FEATURE_DIM = 2
 
 
@@ -174,7 +174,7 @@ def _check_edge_features(
 
     Args:
         name (str): Logical name used in error/warning messages.
-        features (torch.Tensor): Edge features expected as shape `[E, 3]`.
+        features (torch.Tensor): Edge features expected as shape `[E, 3 or 4]`.
         expected_num_edges (int): Expected number of rows (`E`) to match edge
             index count.
         errors (list[str]): Mutable list where validation errors are appended.
@@ -188,7 +188,9 @@ def _check_edge_features(
         return
 
     if features.ndim != 2:
-        errors.append(f"{name}: expected shape [E, 3], got {features.shape}")
+        errors.append(
+            f"{name}: expected shape [E, 3 or 4], got {features.shape}"
+        )
         return
 
     if features.shape[0] != expected_num_edges:
@@ -197,9 +199,9 @@ def _check_edge_features(
             f"of edges ({expected_num_edges})"
         )
 
-    if features.shape[1] != EDGE_FEATURE_DIM:
+    if features.shape[1] not in ALLOWED_EDGE_FEATURE_DIMS:
         errors.append(
-            f"{name}: expected feature dim {EDGE_FEATURE_DIM}, got "
+            f"{name}: expected feature dim in {ALLOWED_EDGE_FEATURE_DIMS}, got "
             f"{features.shape[1]}"
         )
         return

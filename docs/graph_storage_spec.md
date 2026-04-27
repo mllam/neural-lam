@@ -176,7 +176,10 @@ of the corresponding `mesh_*_edge_index.pt` file.
 For every edge feature tensor above:
 
 - The shape MUST be `[E_component, N_f]`.
-- `N_f` must be at least `3` (to hold the x-length, y-length, and total length of the edge, see next point), but can be larger if additional static features are included. The value of `N_f` MUST be consistent across all edge feature tensors in the graph.
-- The first three columns (`<feature_tensor>[0:3,:]`) of the edge feature tensors MUST contain the x-length, y-length, and total length of the edge, i.e. if `sender_pos` and `receiver_pos` (with shapes `[N,2]` and `N` the number of nodes) are the x and y coordinates of the sender and receiver nodes, then `vdiff = receiver_pos - sender_pos`, so that column `0` is `vdiff[0,:]`, column `1` is `vdiff[1,:]`, and column `2` is `torch.norm(vdiff, dim=0)`.
-- Edge features SHOULD NOT be normalized, instead any normalization will be performed inside `neural-lam` after graph loading.
+- `N_f` MUST be exactly `3` (for 2D edges) or exactly `4` (for 3D edges). The value of `N_f` MUST be consistent across all edge feature tensors in the graph.
+- The first column (`<feature_tensor>[:, 0]`) MUST contain the total edge length (e.g., the Euclidean distance between the sender and receiver nodes).
+- The following columns MUST contain the Cartesian coordinate displacements (`vdiff = receiver_pos - sender_pos`). For 2D edges (`N_f == 3`), columns `1` and `2` are the x- and y-displacements respectively. For 3D edges (`N_f == 4`), columns `1`, `2`, and `3` are the x-, y-, and z-displacements respectively.
+- Edge features SHOULD NOT be normalized. Instead, normalization will be performed inside `neural-lam` after graph loading.
 - Dtype MUST be `torch.float32`.
+
+*NOTE*: The reason for requiring that the first column be the total edge length is that `neural-lam` uses this column to compute the normalization factor (the longest edge length found across the `m2m` edge features). Since edge length and the Cartesian displacements all measure distance and share the same physical scale, all edge feature columns are normalized jointly by this single factor after loading.
