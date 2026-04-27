@@ -10,7 +10,7 @@ from tests.conftest import init_datastore_example
 
 def _load_validator_module():
     script_path = (
-        Path(__file__).resolve().parents[1] / "docs" / "validate_graph.py"
+        Path(__file__).resolve().parents[1] / "docs" / "validate_graph_new.py"
     )
     spec = importlib.util.spec_from_file_location(
         "validate_graph_script", script_path
@@ -41,7 +41,9 @@ def test_validate_graph_script_for_all_graph_types():
                 n_max_levels=n_max_levels,
             )
 
-            report = validator.validate_graph_directory(graph_dir_path)
-            assert report.ok, f"{name} failed validation: {report.errors}"
-            assert report.num_levels == expected_levels
-            assert report.hierarchical == hierarchical
+            report, spec, props = validator.validate_graph_directory(
+                graph_dir_path
+            )
+            assert not report.has_fails(), f"{name} failed validation"
+            assert len(props.num_mesh_nodes_per_level) == expected_levels
+            assert props.hierarchical == hierarchical
