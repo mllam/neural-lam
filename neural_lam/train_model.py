@@ -170,6 +170,12 @@ def main(input_args=None):
         default=1,
         help="Number of example predictions to plot during evaluation",
     )
+    parser.add_argument(
+        "--create_gif",
+        action="store_true",
+        help="If set, create GIF animations from prediction PNG frames and "
+        "save to disk. PNGs are always created and logged to wandb/mlflow.",
+    )
 
     # Logger Settings
     parser.add_argument(
@@ -346,7 +352,7 @@ def main(input_args=None):
     trainer = pl.Trainer(
         max_epochs=args.epochs,
         deterministic=True,
-        strategy="ddp",
+        strategy="auto",
         accelerator=device_name,
         num_nodes=args.num_nodes,
         devices=devices,
