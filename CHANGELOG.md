@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [unreleased](https://github.com/mllam/neural-lam/compare/v0.6.0...HEAD)
 
+
+### Changed
+
+- Proper checkpoint restore: use `load_from_checkpoint` for weights-only loading and `ckpt_path` for full training state restore, removing the `on_load_checkpoint` optimizer hack [\#240](https://github.com/mllam/neural-lam/pull/240) @Mani212005
+
 ### Fixed
 
 - Fix `AssertionError` in `aggregate_and_plot_metrics` when using `--metrics_watch` flags by using `isinstance` dispatch for figure vs scalar logging [\#303](https://github.com/mllam/neural-lam/pull/303) @AftAb-25
@@ -72,6 +77,7 @@ This release introduces new features including GIF animation support, wandb run 
 
 - Fix README image paths to use absolute GitHub URLs so images display correctly on PyPI [\#188](https://github.com/mllam/neural-lam/pull/188) @bk-simon
 
+
 - Fix typo in `ar_model.py` that causes `AttributeError` during evaluation [\#204](https://github.com/mllam/neural-lam/pull/204) @ritinikhil
 
 - Changed the hardcoded True to a conditional check "persistent_workers=self.num_workers > 0" [\#235](https://github.com/mllam/neural-lam/pull/235) @santhil-cyber
@@ -83,6 +89,7 @@ This release introduces new features including GIF animation support, wandb run 
 - Fix `all_gather_cat` producing wrong shapes on single-device runs by only flattening when `all_gather` actually introduces a new leading dimension [\#424](https://github.com/mllam/neural-lam/pull/424) @RajdeepKushwaha5
 
 - Fix Slack domain link [\#288](https://github.com/mllam/neural-lam/pull/288) @sadamov
+
 
 ### Maintenance
 

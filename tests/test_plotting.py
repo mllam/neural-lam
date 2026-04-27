@@ -206,7 +206,6 @@ def model_and_batch(tmp_path, time_step, time_unit):
     class ModelArgs:
         output_std = False
         loss = "mse"
-        restore_opt = False
         n_example_pred = 2
         create_gif = False
         graph = "1level"

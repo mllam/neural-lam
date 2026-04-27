@@ -175,7 +175,6 @@ def test_single_batch(datastore_name, split):
     class ModelArgs:
         output_std = False
         loss = "mse"
-        restore_opt = False
         n_example_pred = 1
         graph = graph_name
         hidden_dim = 4
