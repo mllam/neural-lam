@@ -1,4 +1,5 @@
 # Standard library
+import warnings
 from pathlib import Path
 
 # Third-party
@@ -35,6 +36,14 @@ def run_simple_training(datastore, set_output_std, metrics_watch=None):
         torch.set_float32_matmul_precision(
             "high"
         )  # Allows using Tensor Cores on A100s
+
+        if torch.cuda.device_count() < 2:
+            warnings.warn(
+                "Running test suite on a single CUDA device. "
+                "Multi-device testing still required.",
+                UserWarning,
+            )
+
     else:
         device_name = "cpu"
 
@@ -42,10 +51,9 @@ def run_simple_training(datastore, set_output_std, metrics_watch=None):
         max_epochs=1,
         deterministic=True,
         accelerator=device_name,
-        # XXX: `devices` has to be set to 2 otherwise
-        # neural_lam.models.ar_model.ARModel.aggregate_and_plot_metrics fails
-        # because it expects to aggregate over multiple devices
-        devices=2,
+        # Dynamically allocate devices
+        # to support single-GPU machines
+        devices=2 if torch.cuda.device_count() >= 2 else 1,
         log_every_n_steps=1,
         # use `detect_anomaly` to ensure that we don't have NaNs popping up
         # during training
@@ -91,6 +99,7 @@ def run_simple_training(datastore, set_output_std, metrics_watch=None):
         mesh_aggr = "sum"
         lr = 1.0e-3
         val_steps_to_log = [1, 3]
+        ar_steps_eval = 5
         metrics_watch = _mw
         var_leads_metrics_watch = _vlmw
         num_past_forcing_steps = 1
@@ -104,7 +113,7 @@ def run_simple_training(datastore, set_output_std, metrics_watch=None):
         )
     )
 
-    model = GraphLAM(  # noqa
+    model = GraphLAM(
         args=model_args,
         datastore=datastore,
         config=config,
@@ -119,8 +128,8 @@ def test_training(datastore_name):
 
     if not isinstance(datastore, BaseRegularGridDatastore):
         pytest.skip(
-            f"Skipping test for {datastore_name} as it is not a regular "
-            "grid datastore."
+            f"Skipping test for {datastore_name} as "
+            f"it is not a regular grid datastore."
         )
 
     run_simple_training(datastore, set_output_std=False)
