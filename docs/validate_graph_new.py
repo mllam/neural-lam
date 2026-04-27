@@ -403,7 +403,7 @@ def _load_pt(path: Path) -> Any:
     return torch.load(path, map_location="cpu", weights_only=True)
 
 
-def infer_levels(m2m_edge_index: Any) -> GraphProperties:
+def infer_num_levels(m2m_edge_index: Any) -> GraphProperties:
     """
     Infer the number of mesh levels from the `m2m_edge_index` list.
 
@@ -1217,7 +1217,7 @@ def validate_graph_directory(
     )
 
     # Inference steps
-    props += infer_levels(m2m_edge_index)
+    props += infer_num_levels(m2m_edge_index)
     props += infer_mesh_nodes_per_level(mesh_features)
     props += infer_grid_nodes(m2g_edge_index, props.num_mesh_nodes_total)
 
