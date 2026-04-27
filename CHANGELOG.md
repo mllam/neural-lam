@@ -84,7 +84,18 @@ This release introduces new features including GIF animation support, wandb run 
 
 - Fix Slack domain link [\#288](https://github.com/mllam/neural-lam/pull/288) @sadamov
 
+### Added
+
+- Run notebooks in `docs/notebooks/` as pytest tests via `nbmake` in CI refs [\#69](https://github.com/mllam/neural-lam/issues/69)
+- Add 10-minute timeout for notebook cell execution via `--nbmake-timeout=600` [\#577](https://github.com/mllam/neural-lam/pull/577)
+
+### Changed
+
+- Notebook tests now run selectively: on push to main or when PR has `run-notebooks` label [\#577](https://github.com/mllam/neural-lam/pull/577)
+
 ### Maintenance
+
+- Fix notebook CI failure by adding pytest fixture to create required `danra.datastore.zarr` file and removing duplicate `[build-system]` section in `pyproject.toml` [\#577](https://github.com/mllam/neural-lam/pull/577)
 
 - Update PR template to clarify milestone/roadmap requirement and maintenance changes [\#186](https://github.com/mllam/neural-lam/pull/186) @joeloskarsson
 

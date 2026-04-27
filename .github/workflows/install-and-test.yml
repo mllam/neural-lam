@@ -114,10 +114,18 @@ jobs:
         run: |
           python -c "import neural_lam; print('neural-lam imported successfully')"
 
-      - name: Run tests
+      - name: Run tests (excluding notebooks)
         if: matrix.package_manager == 'uv'
         run: |
-          pytest -vv -s --doctest-modules
+          pytest -vv -s --doctest-modules --ignore=docs/notebooks
+
+      - name: Run notebook tests
+        if: |
+          matrix.package_manager == 'uv' &&
+          (github.event_name == 'push' ||
+           contains(github.event.pull_request.labels.*.name, 'run-notebooks'))
+        run: |
+          pytest -vv -s --nbmake --nbmake-timeout=600 docs/notebooks/
 
       - name: Upload test figures
         if: matrix.package_manager == 'uv'

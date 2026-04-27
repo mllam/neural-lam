@@ -42,7 +42,7 @@ dependencies = [
 requires-python = ">=3.10"
 
 [dependency-groups]
-dev = ["pre-commit>=3.8.0", "pytest>=8.3.2", "pooch>=1.8.2"]
+dev = ["pre-commit>=3.8.0", "pytest>=8.3.2", "pooch>=1.8.2", "nbmake>=1.5.0", "ipykernel>=6.0.0"]
 
 [tool.black]
 line-length = 80
@@ -81,7 +81,7 @@ per-file-ignores = [
 ]
 
 [tool.codespell]
-skip = "requirements/*"
+skip = "requirements/*,docs/notebooks/hello_world_danra.ipynb"
 
 # Pylint config
 [tool.pylint]
@@ -119,11 +119,9 @@ core-metadata-version = "2.4"
 source = "vcs"
 fallback-version = "0.0.0"
 
-[tool.hatch.build.targets.sdist]
-exclude = [
-  ".venv/",
-  "venv/",
-]
+[tool.pytest.ini_options]
+testpaths = ["neural_lam", "tests"]
+addopts = "--doctest-modules -vv -s"
 
 [tool.hatch.build.targets.wheel]
 exclude = [
