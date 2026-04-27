@@ -1,5 +1,6 @@
 # Standard library
 from abc import ABC, abstractmethod
+from typing import Optional
 
 # Third-party
 import torch
@@ -24,7 +25,7 @@ class Forecaster(nn.Module, ABC):
         init_states: torch.Tensor,
         forcing_features: torch.Tensor,
         boundary_states: torch.Tensor,
-    ) -> tuple[torch.Tensor, torch.Tensor]:
+    ) -> tuple[torch.Tensor, Optional[torch.Tensor]]:
         """
         init_states: (B, 2, num_grid_nodes, d_f)
         forcing_features: (B, pred_steps, num_grid_nodes, d_static_f)
@@ -38,6 +39,7 @@ class Forecaster(nn.Module, ABC):
             which point this parameter will be removed.
         Returns:
             prediction: (B, pred_steps, num_grid_nodes, d_f)
-            pred_std: (B, pred_steps, num_grid_nodes, d_f) or (d_f,)
+            pred_std: (B, pred_steps, num_grid_nodes, d_f) or (d_f,),
+                or None if predicts_std is False
         """
         pass

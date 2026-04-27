@@ -77,12 +77,12 @@ class ForecasterModule(pl.LightningModule):
         if var_leads_metrics_watch is None:
             var_leads_metrics_watch = {}
 
-        # Note: datastore is excluded from saved hparams and must be provided
-        # explicitly when calling load_from_checkpoint(path,
-        # datastore=datastore). 'args' is excluded too — its fields have been
-        # unpacked into the explicit kwargs above, so re-saving it would
-        # duplicate state.
-        self.save_hyperparameters(ignore=["datastore", "forecaster", "args"])
+        # datastore and forecaster are excluded from saved hparams and must be
+        # provided explicitly when calling load_from_checkpoint. Saving args
+        # makes the checkpoint self-describing: it carries model, graph_name,
+        # hidden_dim, etc. so the caller can reconstruct the exact forecaster
+        # architecture from the checkpoint alone.
+        self.save_hyperparameters(ignore=["datastore", "forecaster"])
         self.datastore = datastore
         self.forecaster = forecaster
         self.matched_metrics: set = set()

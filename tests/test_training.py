@@ -27,7 +27,12 @@ NUM_PAST_FORCING_STEPS = 1
 NUM_FUTURE_FORCING_STEPS = 1
 
 
-def run_simple_training(datastore, set_output_std, metrics_watch=None):
+def run_simple_training(
+    datastore,
+    set_output_std,
+    metrics_watch=None,
+    var_leads_metrics_watch=None,
+):
     """
     Run one epoch of a simple model training setup using the given datastore.
 
@@ -38,6 +43,10 @@ def run_simple_training(datastore, set_output_std, metrics_watch=None):
     set_output_std : bool
         If --output_std should be set during training
     """
+    if metrics_watch is None:
+        metrics_watch = []
+    if var_leads_metrics_watch is None:
+        var_leads_metrics_watch = {}
 
     if torch.cuda.is_available():
         device_name = "cuda"
@@ -126,8 +135,8 @@ def run_simple_training(datastore, set_output_std, metrics_watch=None):
         restore_opt=False,
         n_example_pred=1,
         val_steps_to_log=[1, 3],
-        metrics_watch=[],
-        var_leads_metrics_watch={},
+        metrics_watch=metrics_watch,
+        var_leads_metrics_watch=var_leads_metrics_watch,
     )
     wandb.init(mode="disabled")  # Disable wandb for offline test run
     trainer.fit(model=model, datamodule=data_module)

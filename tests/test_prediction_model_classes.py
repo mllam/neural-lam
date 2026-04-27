@@ -325,6 +325,73 @@ def test_forecaster_module_old_checkpoint(tmp_path):
     assert torch.allclose(out_before[0], out_after[0])
 
 
+def test_graph_lam_no_static_features():
+    """GraphLAM (real GNN) should run a forward pass when the datastore has
+    no static features — verifying that the empty static tensor flows through
+    the graph encoder/processor/decoder without error."""
+    base_datastore = init_datastore_example("mdp")
+
+    class NoStaticWrapper:
+        """Delegate everything to the real datastore, but return None for
+        static so StepPredictor creates an empty (N, 0) static buffer."""
+
+        def __init__(self, ds):
+            self._ds = ds
+
+        def __getattr__(self, name):
+            return getattr(self._ds, name)
+
+        def get_dataarray(self, category, split=None, standardize=False):
+            if category == "static":
+                return None
+            return self._ds.get_dataarray(
+                category, split, standardize=standardize
+            )
+
+    datastore = NoStaticWrapper(base_datastore)
+    config = nlconfig.NeuralLAMConfig(
+        datastore=nlconfig.DatastoreSelection(
+            kind=base_datastore.SHORT_NAME,
+            config_path=base_datastore.root_path,
+        )
+    )
+
+    # First-party
+    from neural_lam.models import MODELS
+
+    predictor = MODELS["graph_lam"](
+        config=config,
+        datastore=datastore,
+        graph_name="1level",
+        hidden_dim=4,
+        hidden_layers=1,
+        processor_layers=1,
+        mesh_aggr="sum",
+        num_past_forcing_steps=1,
+        num_future_forcing_steps=1,
+        output_std=False,
+    )
+
+    assert predictor.grid_static_features.shape[1] == 0
+
+    forecaster = ARForecaster(predictor, datastore)
+    B = 2
+    num_grid_nodes = predictor.num_grid_nodes
+    d_state = base_datastore.get_num_data_vars(category="state")
+    d_forcing = base_datastore.get_num_data_vars(category="forcing") * 3
+    init_states = torch.zeros(B, 2, num_grid_nodes, d_state)
+    forcing_features = torch.zeros(B, 1, num_grid_nodes, d_forcing)
+    boundary_states = torch.zeros(B, 1, num_grid_nodes, d_state)
+
+    with torch.no_grad():
+        prediction, pred_std = forecaster(
+            init_states, forcing_features, boundary_states
+        )
+
+    assert prediction.shape == (B, 1, num_grid_nodes, d_state)
+    assert pred_std is None
+
+
 def test_step_predictor_no_static_features():
     """Model should run correctly when the datastore has no static features,
     using an empty (N, 0) tensor in place of static features."""
