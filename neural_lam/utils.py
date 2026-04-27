@@ -484,7 +484,9 @@ def init_training_logger_metrics(
 
 
 @rank_zero_only
-def setup_training_logger(datastore: Any, args: Any, run_name: str) -> Any:
+def setup_training_logger(
+    datastore: Any, args: Any, run_name: str, run_dir: str
+) -> Any:
     """Set up the training logger (WandB or MLFlow).
 
     Parameters
@@ -497,6 +499,11 @@ def setup_training_logger(datastore: Any, args: Any, run_name: str) -> Any:
 
     run_name : str
         Name of the run.
+
+    run_dir : str
+        Directory under which all artifacts for this run are written
+        (logger ``save_dir``, checkpoints, Lightning ``default_root_dir``).
+        Typically ``runs/<run_name>``.
 
     Returns
     -------
@@ -528,6 +535,7 @@ def setup_training_logger(datastore: Any, args: Any, run_name: str) -> Any:
             config=dict(training=vars(args), datastore=datastore._config),
             resume=wandb_resume,
             id=args.wandb_id,
+            save_dir=run_dir,
         )
     elif args.logger == "mlflow":
         if args.wandb_id is not None:
@@ -544,6 +552,7 @@ def setup_training_logger(datastore: Any, args: Any, run_name: str) -> Any:
             experiment_name=args.logger_project,
             tracking_uri=url,
             run_name=run_name,
+            save_dir=run_dir,
         )
         training_logger.log_hyperparams(
             dict(training=vars(args), datastore=datastore._config)

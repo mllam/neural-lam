@@ -1,7 +1,8 @@
 ### Project Specific ###
-wandb
+runs/
 saved_models
 lightning_logs
+wandb
 data
 graphs
 *.sif

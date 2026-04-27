@@ -43,6 +43,7 @@ This release introduces new features including GIF animation support, wandb run 
 
 ### Changed
 
+- Consolidate all training/evaluation run outputs (checkpoints, logger files, plots) into a single `runs/<run-name>/` directory instead of scattering across `saved_models/`, `lightning_logs/`, `wandb/`, and `mlruns/` [\#293](https://github.com/mllam/neural-lam/issues/293) @sudhansu-24
 - Change the default ensemble-loading behavior in `WeatherDataset` / `WeatherDataModule` to use all ensemble members as independent samples for ensemble datastores (with matching ensemble-member selection for forcing when available); single-member behavior now requires explicitly opting in via `--load_single_member` [\#332](https://github.com/mllam/neural-lam/pull/332) @kshirajahere
 
 - Refactor graph loading: move zero-indexing out of the model and update plotting to prepare using the research-branch graph I/O [\#184](https://github.com/mllam/neural-lam/pull/184) @zweihuehner

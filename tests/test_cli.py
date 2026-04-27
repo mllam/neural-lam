@@ -83,12 +83,15 @@ def test_wandb_logger_kwargs(
     datastore = MagicMock()
     datastore._config = {}
 
-    setup_training_logger(datastore, args, run_name="my-run")
+    setup_training_logger(
+        datastore, args, run_name="my-run", run_dir="runs/my-run"
+    )
 
     _, kwargs = mock_wandb.call_args
     assert kwargs["resume"] == expected_resume
     assert kwargs["id"] == expected_id
     assert kwargs["name"] == expected_name
+    assert kwargs["save_dir"] == "runs/my-run"
 
 
 def test_wandb_id_ignored_with_mlflow_warns():
@@ -111,7 +114,9 @@ def test_wandb_id_ignored_with_mlflow_warns():
         ),
         patch("neural_lam.utils.logger") as mock_log,
     ):
-        setup_training_logger(datastore, args, run_name="my-run")
+        setup_training_logger(
+            datastore, args, run_name="my-run", run_dir="runs/my-run"
+        )
 
     mock_log.warning.assert_called_once()
     warning_msg = mock_log.warning.call_args[0][0]
