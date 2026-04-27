@@ -159,22 +159,20 @@ class ARModel(pl.LightningModule):
 
         # Filter val_steps_to_log to valid steps and emit one warning at
         # construction time
-        val_steps = getattr(args, "val_steps_to_log", [])
-        ar_steps_eval = getattr(args, "ar_steps_eval", None)
-        if ar_steps_eval is not None:
-            invalid_steps = [s for s in val_steps if s > ar_steps_eval]
-            if invalid_steps:
-                warnings.warn(
-                    f"val_steps_to_log contains steps {invalid_steps} "
-                    f"that exceed ar_steps_eval ({ar_steps_eval}). "
-                    "These steps will be skipped.",
-                    UserWarning,
-                )
-            self.valid_steps_to_log = [
-                s for s in val_steps if s <= ar_steps_eval
-            ]
-        else:
-            self.valid_steps_to_log = val_steps
+        self.valid_steps_to_log = [
+            s for s in args.val_steps_to_log if s <= args.ar_steps_eval
+        ]
+        invalid_steps = [
+            s for s in args.val_steps_to_log if s > args.ar_steps_eval
+        ]
+        if invalid_steps:
+            warnings.warn(
+                f"val_steps_to_log contains steps {invalid_steps} "
+                f"that exceed ar_steps_eval ({args.ar_steps_eval}). "
+                "These steps will be skipped from logging. "
+                "Adjust --val_steps_to_log or --ar_steps_eval.",
+                UserWarning,
+            )
 
         self.time_step_int, self.time_step_unit = get_integer_time(
             self._datastore.step_length

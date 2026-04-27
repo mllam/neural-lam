@@ -14,6 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Resolve `xarray` `FacetGrid` `DeprecationWarning` in `plot_example.py` by using a compatibility shim [\#482](https://github.com/mllam/neural-lam/pull/482) @sohampatil01-svg
 
 - Add missing bounds check in `test_step` to prevent `IndexError` when `val_steps_to_log` exceeds prediction steps [\#220](https://github.com/mllam/neural-lam/pull/220) @santhil-cyber
+
 ### Maintenance
 
 - Add comprehensive type hints to all functions and class methods in `utils.py` [\#620](https://github.com/mllam/neural-lam/pull/620) @GiGiKoneti
