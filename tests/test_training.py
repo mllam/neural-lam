@@ -99,6 +99,7 @@ def run_simple_training(datastore, set_output_std, metrics_watch=None):
         mesh_aggr = "sum"
         lr = 1.0e-3
         val_steps_to_log = [1, 3]
+        ar_steps_eval = 5
         metrics_watch = _mw
         var_leads_metrics_watch = _vlmw
         num_past_forcing_steps = 1
@@ -112,7 +113,7 @@ def run_simple_training(datastore, set_output_std, metrics_watch=None):
         )
     )
 
-    model = GraphLAM(  # noqa
+    model = GraphLAM(
         args=model_args,
         datastore=datastore,
         config=config,
@@ -127,8 +128,8 @@ def test_training(datastore_name):
 
     if not isinstance(datastore, BaseRegularGridDatastore):
         pytest.skip(
-            f"Skipping test for {datastore_name} as it is not a regular "
-            "grid datastore."
+            f"Skipping test for {datastore_name} as "
+            f"it is not a regular grid datastore."
         )
 
     run_simple_training(datastore, set_output_std=False)
