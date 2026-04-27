@@ -75,7 +75,6 @@ def run_simple_training(datastore, set_output_std, metrics_watch=None):
         datastore=datastore,
         ar_steps_train=3,
         ar_steps_eval=5,
-        standardize=True,
         batch_size=2,
         num_workers=1,
         num_past_forcing_steps=1,

@@ -27,6 +27,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 This release introduces new features including GIF animation support, wandb run resumption, and improved ensemble loading, alongside a large number of bug fixes and maintenance updates.
 
+### Changed
+
+- Move data normalization from CPU (Dataset) to GPU (LightningModule) using `on_after_batch_transfer()` hook for improved performance and multi-GPU compatibility [\#239](https://github.com/mllam/neural-lam/pull/239) @Sharkyii
+
 ### Added
 
 - Add support for GIF animation generation for model predictions [\#218](https://github.com/mllam/neural-lam/pull/218) @kartikangiras

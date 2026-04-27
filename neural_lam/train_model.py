@@ -294,7 +294,6 @@ def main(input_args=None):
         datastore=datastore,
         ar_steps_train=args.ar_steps_train,
         ar_steps_eval=args.ar_steps_eval,
-        standardize=True,
         num_past_forcing_steps=args.num_past_forcing_steps,
         num_future_forcing_steps=args.num_future_forcing_steps,
         load_single_member=args.load_single_member,

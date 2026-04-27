@@ -178,11 +178,11 @@ def main(
     # Setting this to the original value of the Oskarsson et al. paper (2023)
     # 65 forecast steps - 2 initial steps = 63
     ar_steps = 63
+    # Raw (non-standardized) data for computing mean/std
     ds = WeatherDataset(
         datastore=datastore,
         split="train",
         ar_steps=ar_steps,
-        standardize=False,
         num_past_forcing_steps=0,
         num_future_forcing_steps=0,
     )
@@ -285,10 +285,9 @@ def main(
         datastore=datastore,
         split="train",
         ar_steps=ar_steps,
-        standardize=True,
         num_past_forcing_steps=0,
         num_future_forcing_steps=0,
-    )  # Re-load with standardization
+    )
     if distributed:
         ds_standard = PaddedWeatherDataset(
             ds_standard,
@@ -307,6 +306,14 @@ def main(
         num_workers=n_workers,
         sampler=sampler_standard,
     )
+
+    state_mean = torch.load(
+        os.path.join(static_dir_path, "parameter_mean.pt"), weights_only=True
+    )
+    state_std = torch.load(
+        os.path.join(static_dir_path, "parameter_std.pt"), weights_only=True
+    )
+
     time_step_int, time_step_unit = get_integer_time(step_length)
     assert (
         time_step_unit == "hours"
@@ -322,6 +329,8 @@ def main(
             init_batch, target_batch = init_batch.to(device), target_batch.to(
                 device
             )
+        init_batch = (init_batch - state_mean) / state_std
+        target_batch = (target_batch - state_mean) / state_std
         # (N_batch, N_t', N_grid, d_features)
         batch = torch.cat((init_batch, target_batch), dim=1)
         # Note: batch contains only 1h-steps
