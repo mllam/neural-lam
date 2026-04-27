@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [unreleased](https://github.com/mllam/neural-lam/compare/v0.6.0...HEAD)
 
+### Fixed
+
+- Fix `AssertionError` in `aggregate_and_plot_metrics` when using `--metrics_watch` flags by using `isinstance` dispatch for figure vs scalar logging [\#303](https://github.com/mllam/neural-lam/pull/303) @AftAb-25
+
+- Resolve `xarray` `FacetGrid` `DeprecationWarning` in `plot_example.py` by using a compatibility shim [\#482](https://github.com/mllam/neural-lam/pull/482) @sohampatil01-svg
+
+- Add missing bounds check in `test_step` to prevent `IndexError` when `val_steps_to_log` exceeds prediction steps [\#220](https://github.com/mllam/neural-lam/pull/220) @santhil-cyber
+
+### Maintenance
+
+- Add comprehensive type hints to all functions and class methods in `utils.py` [\#620](https://github.com/mllam/neural-lam/pull/620) @GiGiKoneti
+
+- Add probabilistic objective regression coverage for weighted losses and `pred_std` broadcasting semantics [\#504](https://github.com/mllam/neural-lam/pull/504) @kshirajahere
+
+- Add comprehensive type hints to `neural_lam/create_graph.py` [\#618](https://github.com/mllam/neural-lam/pull/618) @GiGiKoneti
+
 ## [v0.6.0](https://github.com/mllam/neural-lam/releases/tag/v0.6.0)
 
 This release introduces new features including GIF animation support, wandb run resumption, and improved ensemble loading, alongside a large number of bug fixes and maintenance updates.
