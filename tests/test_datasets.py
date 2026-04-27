@@ -5,6 +5,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 import torch
+import xarray as xr
 from torch.utils.data import DataLoader
 
 # First-party
@@ -16,6 +17,45 @@ from neural_lam.models.graph_lam import GraphLAM
 from neural_lam.weather_dataset import WeatherDataset
 from tests.conftest import init_datastore_example
 from tests.dummy_datastore import DummyDatastore, EnsembleDummyDatastore
+
+
+class ForecastArrayDatastore(DummyDatastore):
+    is_forecast = True
+
+    def __init__(self, da_state, da_forcing):
+        super().__init__(n_grid_points=1, n_timesteps=1)
+        self._state_da = da_state
+        self._forcing_da = da_forcing
+        self.is_ensemble = "ensemble_member" in da_state.dims
+        self.has_ensemble_forcing = (
+            da_forcing is not None and "ensemble_member" in da_forcing.dims
+        )
+
+    def get_dataarray(self, category, split, **kwargs):
+        if category == "state":
+            return self._state_da
+        if category == "forcing":
+            return self._forcing_da
+        return super().get_dataarray(category, split, **kwargs)
+
+
+def make_forecast_dataset(
+    da_state,
+    da_forcing,
+    *,
+    ar_steps,
+    num_past_forcing_steps,
+    num_future_forcing_steps,
+):
+    datastore = ForecastArrayDatastore(da_state=da_state, da_forcing=da_forcing)
+    return WeatherDataset(
+        datastore=datastore,
+        split="train",
+        ar_steps=ar_steps,
+        num_past_forcing_steps=num_past_forcing_steps,
+        num_future_forcing_steps=num_future_forcing_steps,
+        standardize=False,
+    )
 
 
 @pytest.mark.parametrize("datastore_name", DATASTORES.keys())
@@ -227,12 +267,12 @@ def test_single_batch(datastore_name, split):
 @pytest.mark.parametrize(
     "dataset_config",
     [
-        {"past": 0, "future": 0, "ar_steps": 1, "exp_len_reduction": 3},
-        {"past": 2, "future": 0, "ar_steps": 1, "exp_len_reduction": 3},
-        {"past": 0, "future": 2, "ar_steps": 1, "exp_len_reduction": 5},
-        {"past": 4, "future": 0, "ar_steps": 1, "exp_len_reduction": 5},
-        {"past": 0, "future": 0, "ar_steps": 5, "exp_len_reduction": 7},
-        {"past": 3, "future": 3, "ar_steps": 2, "exp_len_reduction": 8},
+        {"past": 0, "future": 0, "ar_steps": 1, "exp_len_reduction": 2},
+        {"past": 2, "future": 0, "ar_steps": 1, "exp_len_reduction": 2},
+        {"past": 0, "future": 2, "ar_steps": 1, "exp_len_reduction": 4},
+        {"past": 4, "future": 0, "ar_steps": 1, "exp_len_reduction": 4},
+        {"past": 0, "future": 0, "ar_steps": 5, "exp_len_reduction": 6},
+        {"past": 3, "future": 3, "ar_steps": 2, "exp_len_reduction": 7},
     ],
 )
 def test_dataset_length(dataset_config):
@@ -458,6 +498,504 @@ def test_standardization_with_zero_std():
     ).any(), "NaN found after _compute_std_safe"
 
 
+def test_dataset_out_of_bounds_indexing_raises():
+    """Ensure out-of-range indexing fails instead of returning bad samples."""
+    datastore = DummyDatastore(n_grid_points=4, n_timesteps=10)
+    dataset = WeatherDataset(
+        datastore=datastore,
+        split="train",
+        ar_steps=2,
+        num_past_forcing_steps=1,
+        num_future_forcing_steps=1,
+    )
+
+    # In-bounds indices work, including Python-style negative indexing.
+    dataset[0]
+    dataset[len(dataset) - 1]
+    dataset[-1]
+
+    # Out-of-bounds indices must fail explicitly.
+    with pytest.raises(IndexError):
+        dataset[len(dataset)]
+    with pytest.raises(IndexError):
+        dataset[len(dataset) + 1]
+    with pytest.raises(IndexError):
+        dataset[-len(dataset) - 1]
+
+
+def test_negative_indexing_does_not_call_len_in_getitem():
+    class LenBombDataset(WeatherDataset):
+        def __len__(self):
+            raise AssertionError("__getitem__ should use cached dataset length")
+
+    datastore = DummyDatastore(n_grid_points=4, n_timesteps=10)
+    dataset = LenBombDataset(
+        datastore=datastore,
+        split="train",
+        ar_steps=2,
+        num_past_forcing_steps=1,
+        num_future_forcing_steps=1,
+    )
+
+    dataset[-1]
+
+
+def test_forecast_len_raises_when_forcing_horizon_too_short():
+    analysis_time = np.array(
+        ["2021-01-01T00:00:00", "2021-01-01T01:00:00"],
+        dtype="datetime64[ns]",
+    )
+    elapsed = np.arange(5, dtype="timedelta64[h]").astype("timedelta64[ns]")
+
+    da_state = xr.DataArray(
+        np.zeros((2, 5, 1, 1), dtype=np.float32),
+        dims=(
+            "analysis_time",
+            "elapsed_forecast_duration",
+            "grid_index",
+            "state_feature",
+        ),
+        coords={
+            "analysis_time": analysis_time,
+            "elapsed_forecast_duration": elapsed,
+            "grid_index": [0],
+            "state_feature": ["state_feat_0"],
+        },
+    )
+    da_forcing = xr.DataArray(
+        np.zeros((2, 5, 1, 1), dtype=np.float32),
+        dims=(
+            "analysis_time",
+            "elapsed_forecast_duration",
+            "grid_index",
+            "forcing_feature",
+        ),
+        coords={
+            "analysis_time": analysis_time,
+            "elapsed_forecast_duration": elapsed,
+            "grid_index": [0],
+            "forcing_feature": ["forcing_feat_0"],
+        },
+    )
+
+    with pytest.raises(
+        ValueError,
+        match="forecast lead times must match|forcing forecast steps",
+    ):
+        make_forecast_dataset(
+            da_state,
+            da_forcing,
+            ar_steps=2,
+            num_past_forcing_steps=1,
+            num_future_forcing_steps=2,
+        )
+
+
+def test_forecast_len_raises_when_state_horizon_too_short_for_past_forcing():
+    analysis_time = np.array(
+        ["2021-01-01T00:00:00", "2021-01-01T01:00:00"],
+        dtype="datetime64[ns]",
+    )
+    elapsed = np.arange(4, dtype="timedelta64[h]").astype("timedelta64[ns]")
+
+    da_state = xr.DataArray(
+        np.zeros((2, 4, 1, 1), dtype=np.float32),
+        dims=(
+            "analysis_time",
+            "elapsed_forecast_duration",
+            "grid_index",
+            "state_feature",
+        ),
+        coords={
+            "analysis_time": analysis_time,
+            "elapsed_forecast_duration": elapsed,
+            "grid_index": [0],
+            "state_feature": ["state_feat_0"],
+        },
+    )
+
+    with pytest.raises(ValueError, match="initial and target states"):
+        make_forecast_dataset(
+            da_state,
+            None,
+            ar_steps=1,
+            num_past_forcing_steps=4,
+            num_future_forcing_steps=0,
+        )
+
+
+def test_forecast_len_accepts_exact_state_horizon_for_past_forcing():
+    analysis_time = np.array(
+        ["2021-01-01T00:00:00", "2021-01-01T01:00:00"],
+        dtype="datetime64[ns]",
+    )
+    elapsed = np.arange(5, dtype="timedelta64[h]").astype("timedelta64[ns]")
+
+    da_state = xr.DataArray(
+        np.zeros((2, 5, 1, 1), dtype=np.float32),
+        dims=(
+            "analysis_time",
+            "elapsed_forecast_duration",
+            "grid_index",
+            "state_feature",
+        ),
+        coords={
+            "analysis_time": analysis_time,
+            "elapsed_forecast_duration": elapsed,
+            "grid_index": [0],
+            "state_feature": ["state_feat_0"],
+        },
+    )
+
+    dataset = make_forecast_dataset(
+        da_state,
+        None,
+        ar_steps=1,
+        num_past_forcing_steps=4,
+        num_future_forcing_steps=0,
+    )
+    assert len(dataset) == 2
+
+
+def test_forecast_len_accepts_exact_forcing_horizon():
+    analysis_time = np.array(
+        ["2021-01-01T00:00:00", "2021-01-01T01:00:00"],
+        dtype="datetime64[ns]",
+    )
+    elapsed = np.arange(6, dtype="timedelta64[h]").astype("timedelta64[ns]")
+
+    da_state = xr.DataArray(
+        np.zeros((2, 6, 1, 1), dtype=np.float32),
+        dims=(
+            "analysis_time",
+            "elapsed_forecast_duration",
+            "grid_index",
+            "state_feature",
+        ),
+        coords={
+            "analysis_time": analysis_time,
+            "elapsed_forecast_duration": elapsed,
+            "grid_index": [0],
+            "state_feature": ["state_feat_0"],
+        },
+    )
+    da_forcing = xr.DataArray(
+        np.zeros((2, 6, 1, 1), dtype=np.float32),
+        dims=(
+            "analysis_time",
+            "elapsed_forecast_duration",
+            "grid_index",
+            "forcing_feature",
+        ),
+        coords={
+            "analysis_time": analysis_time,
+            "elapsed_forecast_duration": elapsed,
+            "grid_index": [0],
+            "forcing_feature": ["forcing_feat_0"],
+        },
+    )
+
+    dataset = make_forecast_dataset(
+        da_state,
+        da_forcing,
+        ar_steps=2,
+        num_past_forcing_steps=1,
+        num_future_forcing_steps=2,
+    )
+    assert len(dataset) == 2
+
+
+def test_forecast_len_accepts_longer_forcing_horizon_with_matching_prefix():
+    analysis_time = np.array(
+        ["2021-01-01T00:00:00", "2021-01-01T01:00:00"],
+        dtype="datetime64[ns]",
+    )
+    state_elapsed = np.arange(4, dtype="timedelta64[h]").astype(
+        "timedelta64[ns]"
+    )
+    forcing_elapsed = np.arange(6, dtype="timedelta64[h]").astype(
+        "timedelta64[ns]"
+    )
+
+    da_state = xr.DataArray(
+        np.zeros((2, 4, 1, 1), dtype=np.float32),
+        dims=(
+            "analysis_time",
+            "elapsed_forecast_duration",
+            "grid_index",
+            "state_feature",
+        ),
+        coords={
+            "analysis_time": analysis_time,
+            "elapsed_forecast_duration": state_elapsed,
+            "grid_index": [0],
+            "state_feature": ["state_feat_0"],
+        },
+    )
+    da_forcing = xr.DataArray(
+        np.zeros((2, 6, 1, 1), dtype=np.float32),
+        dims=(
+            "analysis_time",
+            "elapsed_forecast_duration",
+            "grid_index",
+            "forcing_feature",
+        ),
+        coords={
+            "analysis_time": analysis_time,
+            "elapsed_forecast_duration": forcing_elapsed,
+            "grid_index": [0],
+            "forcing_feature": ["forcing_feat_0"],
+        },
+    )
+
+    dataset = make_forecast_dataset(
+        da_state,
+        da_forcing,
+        ar_steps=2,
+        num_past_forcing_steps=1,
+        num_future_forcing_steps=2,
+    )
+
+    assert len(dataset) == 2
+
+
+def test_forecast_len_raises_when_forcing_shorter_than_state_horizon():
+    analysis_time = np.array(
+        ["2021-01-01T00:00:00", "2021-01-01T01:00:00"],
+        dtype="datetime64[ns]",
+    )
+    state_elapsed = np.arange(6, dtype="timedelta64[h]").astype(
+        "timedelta64[ns]"
+    )
+    forcing_elapsed = np.arange(5, dtype="timedelta64[h]").astype(
+        "timedelta64[ns]"
+    )
+
+    da_state = xr.DataArray(
+        np.zeros((2, 6, 1, 1), dtype=np.float32),
+        dims=(
+            "analysis_time",
+            "elapsed_forecast_duration",
+            "grid_index",
+            "state_feature",
+        ),
+        coords={
+            "analysis_time": analysis_time,
+            "elapsed_forecast_duration": state_elapsed,
+            "grid_index": [0],
+            "state_feature": ["state_feat_0"],
+        },
+    )
+    da_forcing = xr.DataArray(
+        np.zeros((2, 5, 1, 1), dtype=np.float32),
+        dims=(
+            "analysis_time",
+            "elapsed_forecast_duration",
+            "grid_index",
+            "forcing_feature",
+        ),
+        coords={
+            "analysis_time": analysis_time,
+            "elapsed_forecast_duration": forcing_elapsed,
+            "grid_index": [0],
+            "forcing_feature": ["forcing_feat_0"],
+        },
+    )
+
+    with pytest.raises(
+        ValueError,
+        match="forecast lead times must match|forcing forecast steps",
+    ):
+        make_forecast_dataset(
+            da_state,
+            da_forcing,
+            ar_steps=2,
+            num_past_forcing_steps=1,
+            num_future_forcing_steps=2,
+        )
+
+
+def test_forecast_len_raises_when_analysis_times_do_not_match():
+    state_analysis_time = np.array(
+        ["2021-01-01T00:00:00", "2021-01-01T01:00:00"],
+        dtype="datetime64[ns]",
+    )
+    forcing_analysis_time = np.array(
+        ["2021-01-01T00:00:00"],
+        dtype="datetime64[ns]",
+    )
+    elapsed = np.arange(5, dtype="timedelta64[h]").astype("timedelta64[ns]")
+
+    da_state = xr.DataArray(
+        np.zeros((2, 5, 1, 1), dtype=np.float32),
+        dims=(
+            "analysis_time",
+            "elapsed_forecast_duration",
+            "grid_index",
+            "state_feature",
+        ),
+        coords={
+            "analysis_time": state_analysis_time,
+            "elapsed_forecast_duration": elapsed,
+            "grid_index": [0],
+            "state_feature": ["state_feat_0"],
+        },
+    )
+    da_forcing = xr.DataArray(
+        np.zeros((1, 5, 1, 1), dtype=np.float32),
+        dims=(
+            "analysis_time",
+            "elapsed_forecast_duration",
+            "grid_index",
+            "forcing_feature",
+        ),
+        coords={
+            "analysis_time": forcing_analysis_time,
+            "elapsed_forecast_duration": elapsed,
+            "grid_index": [0],
+            "forcing_feature": ["forcing_feat_0"],
+        },
+    )
+
+    with pytest.raises(ValueError, match="analysis times must match"):
+        make_forecast_dataset(
+            da_state,
+            da_forcing,
+            ar_steps=2,
+            num_past_forcing_steps=1,
+            num_future_forcing_steps=1,
+        )
+
+
+def test_forecast_len_raises_when_forecast_lead_times_do_not_match():
+    analysis_time = np.array(
+        ["2021-01-01T00:00:00", "2021-01-01T01:00:00"],
+        dtype="datetime64[ns]",
+    )
+    state_elapsed = np.arange(5, dtype="timedelta64[h]").astype(
+        "timedelta64[ns]"
+    )
+    forcing_elapsed = np.array([0, 2, 4, 6, 8], dtype="timedelta64[h]").astype(
+        "timedelta64[ns]"
+    )
+
+    da_state = xr.DataArray(
+        np.zeros((2, 5, 1, 1), dtype=np.float32),
+        dims=(
+            "analysis_time",
+            "elapsed_forecast_duration",
+            "grid_index",
+            "state_feature",
+        ),
+        coords={
+            "analysis_time": analysis_time,
+            "elapsed_forecast_duration": state_elapsed,
+            "grid_index": [0],
+            "state_feature": ["state_feat_0"],
+        },
+    )
+    da_forcing = xr.DataArray(
+        np.zeros((2, 5, 1, 1), dtype=np.float32),
+        dims=(
+            "analysis_time",
+            "elapsed_forecast_duration",
+            "grid_index",
+            "forcing_feature",
+        ),
+        coords={
+            "analysis_time": analysis_time,
+            "elapsed_forecast_duration": forcing_elapsed,
+            "grid_index": [0],
+            "forcing_feature": ["forcing_feat_0"],
+        },
+    )
+
+    with pytest.raises(ValueError, match="forecast lead times must match"):
+        make_forecast_dataset(
+            da_state,
+            da_forcing,
+            ar_steps=2,
+            num_past_forcing_steps=1,
+            num_future_forcing_steps=1,
+        )
+
+
+def test_weather_dataset_forecast_empty_split_raises_value_error():
+    """Empty forecast splits should raise the intended user-facing error."""
+    # Third-party
+    import xarray as xr
+
+    class EmptyForecastDatastore(DummyDatastore):
+        is_forecast = True
+
+        def get_dataarray(self, category, split, **kwargs):
+            if category == "state":
+                return xr.DataArray(
+                    np.zeros((0, 3, 1, 1), dtype=np.float32),
+                    dims=(
+                        "analysis_time",
+                        "elapsed_forecast_duration",
+                        "grid_index",
+                        "state_feature",
+                    ),
+                    coords={
+                        "analysis_time": np.array([], dtype="datetime64[ns]"),
+                        "elapsed_forecast_duration": np.arange(
+                            3, dtype="timedelta64[h]"
+                        ).astype("timedelta64[ns]"),
+                        "grid_index": [0],
+                        "state_feature": ["state_feat_0"],
+                    },
+                )
+            if category == "forcing":
+                return None
+            return super().get_dataarray(
+                category=category, split=split, **kwargs
+            )
+
+    datastore = EmptyForecastDatastore(n_grid_points=4, n_timesteps=10)
+
+    with pytest.raises(ValueError, match="0 total time steps"):
+        WeatherDataset(
+            datastore=datastore,
+            split="train",
+            ar_steps=1,
+            num_past_forcing_steps=1,
+            num_future_forcing_steps=0,
+            standardize=False,
+        )
+
+
+def test_analysis_len_limited_by_shorter_forcing_horizon():
+    """Analysis-mode datasets must not expose samples whose forcing windows
+    overrun the available forcing time axis."""
+
+    class ShortForcingDatastore(DummyDatastore):
+        def get_dataarray(self, category, split, **kwargs):
+            da = super().get_dataarray(category=category, split=split, **kwargs)
+            if category == "forcing":
+                return da.isel(time=slice(None, -1))
+            return da
+
+    datastore = ShortForcingDatastore(n_grid_points=4, n_timesteps=7)
+    dataset = WeatherDataset(
+        datastore=datastore,
+        split="train",
+        ar_steps=2,
+        num_past_forcing_steps=1,
+        num_future_forcing_steps=2,
+        standardize=False,
+    )
+
+    assert len(dataset) == 1
+
+    _, _, forcing, _ = dataset[0]
+    assert not torch.isnan(forcing).any()
+
+    with pytest.raises(IndexError):
+        dataset[1]
+
+
 def test_weather_dataset_no_forcing_standardize():
     """Regression test: WeatherDataset must not raise AttributeError when the
     datastore has no forcing data and standardize=True (the default).
@@ -493,8 +1031,5 @@ def test_weather_dataset_no_forcing_standardize():
     assert dataset.da_forcing_mean is None
     assert dataset.da_forcing_std is None
 
-    # Ensure we can still retrieve a sample (forcing tensor should be empty)
-    init_states, target_states, forcing, target_times = dataset[0]
-    assert (
-        forcing.shape[-1] == 0
-    ), "Expected zero forcing features when forcing is None"
+    _, _, forcing, _ = dataset[0]
+    assert forcing.shape[-1] == 0

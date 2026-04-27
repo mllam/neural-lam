@@ -85,19 +85,6 @@ class WeatherDataset(torch.utils.data.Dataset):
                 stacklevel=2,
             )
 
-        # check that with the provided data-arrays and ar_steps that we have a
-        # non-zero amount of samples
-        if self.__len__() <= 0 and self.da_state is not None:
-            raise ValueError(
-                "The provided datastore only provides "
-                f"{len(self.da_state.time)} total time steps, which is too few "
-                "to create a single sample for the WeatherDataset "
-                f"configuration used in the `{split}` split. You could try "
-                "either reducing the number of autoregressive steps "
-                "(`ar_steps`) and/or the forcing window size "
-                "(`num_past_forcing_steps` and `num_future_forcing_steps`)"
-            )
-
         # Check the dimensions and their ordering
         parts = dict(state=self.da_state)
         if self.da_forcing is not None:
@@ -115,6 +102,27 @@ class WeatherDataset(torch.utils.data.Dataset):
                         f"({expected_dim_order}). Maybe you forgot to "
                         "transpose the data in `BaseDatastore.get_dataarray`?"
                     )
+
+        self._validate_dataset_configuration()
+        self._dataset_len = self._compute_dataset_len()
+
+        # check that with the provided data-arrays and ar_steps that we have a
+        # non-zero amount of samples
+        if self._dataset_len <= 0 and self.da_state is not None:
+            time_dim = (
+                self.da_state.analysis_time
+                if self.datastore.is_forecast
+                else self.da_state.time
+            )
+            raise ValueError(
+                "The provided datastore only provides "
+                f"{len(time_dim)} total time steps, which is too few "
+                "to create a single sample for the WeatherDataset "
+                f"configuration used in the `{split}` split. You could try "
+                "either reducing the number of autoregressive steps "
+                "(`ar_steps`) and/or the forcing window size "
+                "(`num_past_forcing_steps` and `num_future_forcing_steps`)"
+            )
 
         # Set up for standardization
         # TODO: This will become part of ar_model.py soon!
@@ -150,6 +158,101 @@ class WeatherDataset(torch.utils.data.Dataset):
             else:
                 self.forcing_std_safe = None
 
+    def _validate_dataset_configuration(self):
+        """Validate dataset structure once during initialization."""
+        if not self.datastore.is_forecast:
+            return
+
+        required_state_forecast_steps = (
+            max(2, self.num_past_forcing_steps) + self.ar_steps
+        )
+        n_state_forecast_steps = self.da_state.elapsed_forecast_duration.size
+        if n_state_forecast_steps < required_state_forecast_steps:
+            raise ValueError(
+                "The number of forecast steps available "
+                f"({n_state_forecast_steps}) is less than the required "
+                f"{required_state_forecast_steps} "
+                f"(max(2, num_past_forcing_steps="
+                f"{self.num_past_forcing_steps}) + ar_steps="
+                f"{self.ar_steps}) for creating a sample with initial "
+                "and target states."
+            )
+
+        if self.da_forcing is None:
+            return
+
+        if not np.array_equal(
+            self.da_state.analysis_time.values,
+            self.da_forcing.analysis_time.values,
+        ):
+            raise ValueError(
+                "State and forcing analysis times must match for "
+                "forecast-mode datasets."
+            )
+
+        if not np.array_equal(
+            self.da_state.elapsed_forecast_duration.values[
+                :required_state_forecast_steps
+            ],
+            self.da_forcing.elapsed_forecast_duration.values[
+                :required_state_forecast_steps
+            ],
+        ):
+            raise ValueError(
+                "State and forcing forecast lead times must match across "
+                "the state forecast horizon used for target alignment in "
+                "forecast-mode datasets."
+            )
+
+        n_forcing_forecast_steps = (
+            self.da_forcing.elapsed_forecast_duration.size
+        )
+        required_forcing_forecast_steps = (
+            max(2, self.num_past_forcing_steps)
+            + self.ar_steps
+            + self.num_future_forcing_steps
+        )
+        if n_forcing_forecast_steps < required_forcing_forecast_steps:
+            raise ValueError(
+                "The number of forcing forecast steps available "
+                f"({n_forcing_forecast_steps}) is less than the required "
+                f"{required_forcing_forecast_steps} "
+                f"(max(2, num_past_forcing_steps="
+                f"{self.num_past_forcing_steps})"
+                f" + ar_steps={self.ar_steps} + "
+                f"num_future_forcing_steps="
+                f"{self.num_future_forcing_steps}) "
+                "for constructing forcing windows."
+            )
+
+    def _compute_dataset_len(self):
+        """Compute dataset length without running structural validation."""
+        if self.datastore.is_forecast:
+            base_len = self.da_state.analysis_time.size
+        else:
+            n_state_samples = (
+                len(self.da_state.time)
+                - self.ar_steps
+                - max(2, self.num_past_forcing_steps)
+                - self.num_future_forcing_steps
+                + 1
+            )
+            if self.da_forcing is None:
+                base_len = max(0, n_state_samples)
+            else:
+                n_forcing_samples = (
+                    len(self.da_forcing.time)
+                    - self.ar_steps
+                    - max(2, self.num_past_forcing_steps)
+                    - self.num_future_forcing_steps
+                    + 1
+                )
+                base_len = max(0, min(n_state_samples, n_forcing_samples))
+
+        if self.datastore.is_ensemble and not self.load_single_member:
+            return base_len * self.da_state.ensemble_member.size
+        return base_len
+
     def _compute_std_safe(self, std: xr.DataArray, feature: str):
         eps = np.finfo(std.dtype).eps
         if bool((std <= eps).any()):
@@ -160,45 +263,9 @@ class WeatherDataset(torch.utils.data.Dataset):
         return std.where(std > eps, other=eps)
 
     def __len__(self):
-        if self.datastore.is_forecast:
-            # for now we simply create a single sample for each analysis time
-            # and then take the first (2 + ar_steps) forecast times.
-            # If the datastore returns an ensemble of state realisations and
-            # `load_single_member=False`, each ensemble member is exposed as an
-            # independent sample by scaling the base dataset length below.
-
-            # check that there are enough forecast steps available to create
-            # samples given the number of autoregressive steps requested
-            n_forecast_steps = self.da_state.elapsed_forecast_duration.size
-            if n_forecast_steps < 2 + self.ar_steps:
-                raise ValueError(
-                    "The number of forecast steps available "
-                    f"({n_forecast_steps}) is less than the required "
-                    f"2+ar_steps (2+{self.ar_steps}={2 + self.ar_steps}) for "
-                    "creating a sample with initial and target states."
-                )
-
-            base_len = self.da_state.analysis_time.size
-        else:
-            # Calculate the number of samples in the dataset n_samples = total
-            # time steps - (autoregressive steps + past forcing + future
-            # forcing)
-            #:
-            # Where:
-            #   - total time steps: len(self.da_state.time)
-            #   - autoregressive steps: self.ar_steps
-            #   - past forcing: max(2, self.num_past_forcing_steps) (at least 2
-            #     time steps are required for the initial state)
-            #   - future forcing: self.num_future_forcing_steps
-            base_len = (
-                len(self.da_state.time)
-                - self.ar_steps
-                - max(2, self.num_past_forcing_steps)
-                - self.num_future_forcing_steps
-            )
-        if self.datastore.is_ensemble and not self.load_single_member:
-            return base_len * self.da_state.ensemble_member.size
-        return base_len
+        if hasattr(self, "_dataset_len"):
+            return self._dataset_len
+        return self._compute_dataset_len()
 
     def _slice_state_time(self, da_state, idx, n_steps: int):
         """
@@ -502,6 +569,17 @@ class WeatherDataset(torch.utils.data.Dataset):
             the target steps.
 
         """
+        dataset_len = self._dataset_len
+
+        # Match Python sequence semantics for negative indexing.
+        if idx < 0:
+            idx += dataset_len
+        if idx < 0 or idx >= dataset_len:
+            raise IndexError(
+                f"Index {idx} is out of bounds for dataset of size "
+                f"{dataset_len}"
+            )
+
         (
             da_init_states,
             da_target_states,

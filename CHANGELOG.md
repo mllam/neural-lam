@@ -54,6 +54,7 @@ This release introduces new features including GIF animation support, wandb run 
 - Infer spatial coordinate names for MDPDatastore (rather than assuming names `x` and `y`), allows for e.g. lat/lon regular grids [\#169](https://github.com/mllam/neural-lam/pull/169) @leifdenby
 
 ### Fixed
+- Fix `WeatherDataset` boundary handling for out-of-range indexing and forecast-mode forcing horizon validation to prevent malformed samples [\#312](https://github.com/mllam/neural-lam/pull/312)
 
 - Fix validation crash in `plot_error_map` and resolve DDP NCCL initialization error on single-device setups [\#193](https://github.com/mllam/neural-lam/pull/193) @AdityaKumarSethia
 
