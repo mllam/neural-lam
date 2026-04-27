@@ -145,7 +145,7 @@ class ARModel(pl.LightningModule):
             "mae": [],
         }
         if self.output_std:
-            self.test_metrics["output_std"] = []  # Treat as metric
+            self.test_metrics["output_std"] = []
 
         # For making restoring of optimizer state optional
         self.restore_opt = args.restore_opt
@@ -303,7 +303,7 @@ class ARModel(pl.LightningModule):
         num_grid_nodes, d_forcing),
             where index 0 corresponds to index 1 of init_states
         """
-        (init_states, target_states, forcing_features, batch_times) = batch
+        init_states, target_states, forcing_features, batch_times = batch
 
         prediction, pred_std = self.unroll_prediction(
             init_states, forcing_features, target_states
@@ -386,7 +386,7 @@ class ARModel(pl.LightningModule):
         )
 
         # Store MSEs
-        entry_mses = metrics.mse(
+        entry_mses = metrics.get_metric("mse")(
             prediction,
             target,
             pred_std,
@@ -452,9 +452,9 @@ class ARModel(pl.LightningModule):
             batch_size=batch[0].shape[0],
         )
 
-        # Compute all evaluation metrics for error maps Note: explicitly list
-        # metrics here, as test_metrics can contain additional ones, computed
-        # differently, but that should be aggregated on_test_epoch_end
+        # Compute the built-in evaluation metrics for error maps. test_metrics
+        # may also contain subclass-specific entries that are populated
+        # differently and only aggregated later.
         for metric_name in ("mse", "mae"):
             metric_func = metrics.get_metric(metric_name)
             batch_metric_vals = metric_func(
@@ -465,13 +465,6 @@ class ARModel(pl.LightningModule):
                 sum_vars=False,
             )  # (B, pred_steps, d_f)
             self.test_metrics[metric_name].append(batch_metric_vals)
-
-        if self.output_std:
-            # Store output std. per variable, spatially averaged
-            mean_pred_std = torch.mean(
-                pred_std[..., self.interior_mask_bool, :], dim=-2
-            )  # (B, pred_steps, d_f)
-            self.test_metrics["output_std"].append(mean_pred_std)
 
         # Save per-sample spatial loss for specific times
         spatial_loss = self.loss(
@@ -717,7 +710,10 @@ class ARModel(pl.LightningModule):
 
     def aggregate_and_plot_metrics(self, metrics_dict, prefix):
         """
-        Aggregate and create error map plots for all metrics in metrics_dict
+        Aggregate and create error map plots for all metrics in metrics_dict.
+
+        Each metric object defines its own post-processing and rescaling
+        behavior, so no metric-specific logic is needed here.
 
         metrics_dict: dictionary with metric_names and list of tensors
             with step-evals.
@@ -730,20 +726,30 @@ class ARModel(pl.LightningModule):
             )  # (N_eval, pred_steps, d_f)
 
             if self.trainer.is_global_zero:
-                metric_tensor_averaged = torch.mean(metric_tensor, dim=0)
-                # (pred_steps, d_f)
+                if metric_name.lower() in metrics.DEFINED_METRICS:
+                    # Known metrics own their own aggregation, post-processing,
+                    # and rescaling semantics.
+                    metric_obj = metrics.get_metric(metric_name)
+                    metric_rescaled = metric_obj.prepare_for_logging(
+                        metric_tensor, self.state_std
+                    )
+                    display_name = metric_obj.display_name
+                else:
+                    # Preserve the previous generic fallback for
+                    # subclass-specific metrics that are stored directly in
+                    # test_metrics / val_metrics.
+                    metric_tensor_averaged = torch.mean(metric_tensor, dim=0)
+                    display_name = metric_name
+                    if "mse" in metric_name:
+                        metric_tensor_averaged = torch.sqrt(
+                            metric_tensor_averaged
+                        )
+                        display_name = metric_name.replace("mse", "rmse")
+                    metric_rescaled = metric_tensor_averaged * self.state_std
 
-                # Take square root after all averaging to change MSE to RMSE
-                if "mse" in metric_name:
-                    metric_tensor_averaged = torch.sqrt(metric_tensor_averaged)
-                    metric_name = metric_name.replace("mse", "rmse")
-
-                # NOTE: we here assume rescaling for all metrics is linear
-                metric_rescaled = metric_tensor_averaged * self.state_std
-                # (pred_steps, d_f)
                 log_dict.update(
                     self.create_metric_log_dict(
-                        metric_rescaled, prefix, metric_name
+                        metric_rescaled, prefix, display_name
                     )
                 )
 
