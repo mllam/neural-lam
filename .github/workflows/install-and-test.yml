@@ -44,13 +44,35 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Set up Python 3.13
+        id: setup-python
         uses: actions/setup-python@v6
         with:
           python-version: 3.13
+          cache: ${{ matrix.package_manager == 'pip' && 'pip' || '' }}
 
       - name : Install uv (if applicable)
         if: matrix.package_manager == 'uv'
         uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+
+      - name: Generate lock file if missing
+        if: matrix.package_manager == 'uv'
+        run: |
+          if [ ! -f uv.lock ]; then
+            echo "Generating uv.lock for cache key computation..."
+            uv lock
+          else
+            echo "uv.lock already exists"
+          fi
+
+      - name: Cache virtual environment
+        if: matrix.package_manager == 'uv'
+        id: cache-venv
+        uses: actions/cache@v4
+        with:
+          path: .venv
+          key: uv-venv-${{ runner.os }}-${{ matrix.device }}-py${{ steps.setup-python.outputs.python-version }}-${{ hashFiles('uv.lock') }}
 
       - name: Create virtual environment (pip GPU)
         if: matrix.package_manager == 'pip' && matrix.device == 'gpu'
@@ -79,10 +101,12 @@ jobs:
       - name: Setup environment with uv (if applicable)
         if: matrix.package_manager == 'uv'
         run: |
-          uv venv --no-project
-          source .venv/bin/activate
-          uv pip install torch --index-url ${{ matrix.torch_index }}
-          uv pip install --group dev -e .
+          if [ "${{ steps.cache-venv.outputs.cache-hit }}" != "true" ]; then
+            rm -rf .venv
+            uv venv --no-project
+            uv pip install torch --index-url ${{ matrix.torch_index }}
+            uv pip install --group dev -e .
+          fi
           uv pip list
           echo "$PWD/.venv/bin" >> $GITHUB_PATH
 

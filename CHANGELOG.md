@@ -63,6 +63,10 @@ This release introduces new features including GIF animation support, wandb run 
 
 - Initialize `da_forcing_mean` and `da_forcing_std` to `None` when forcing data is absent, fixing `AttributeError` in `WeatherDataset` with `standardize=True` [\#369](https://github.com/mllam/neural-lam/issues/369) @Sir-Sloth-The-Lazy
 
+### Maintenance
+
+- Add two-layer caching to install-and-test CI workflow (pip download cache + uv venv cache) to reduce build times by 80-95% [\#606](https://github.com/mllam/neural-lam/pull/606) @Sharkyii
+
 - Ensure proper sorting of `analysis_time` in `NpyFilesDatastoreMEPS._get_analysis_times` independent of the order in which files are processed with glob [\#386](https://github.com/mllam/neural-lam/pull/386) @Gopisokk
 
 - Replace `shell=True` subprocess call in `compute_standardization_stats.py` with a safe argument list and Python-side hostname parsing to prevent command injection via `SLURM_JOB_NODELIST` [\#264](https://github.com/mllam/neural-lam/pull/264) @ashum9
