@@ -125,6 +125,27 @@ def test_plot_error_map() -> None:
     assert len(ax.texts) == pred_steps * d_f
 
 
+def test_plot_error_map_zero_row() -> None:
+    """Regression test: zero-error variable should not produce NaNs."""
+    datastore = init_datastore_example("dummydata")
+    d_f = len(datastore.get_vars_names(category="state"))
+    pred_steps = 3
+
+    errors = torch.ones((pred_steps, d_f), dtype=torch.float32)
+    errors[:, 0] = 0.0  
+
+    fig = vis.plot_error_map(
+        errors=errors,
+        datastore=datastore,
+        title="Zero Error Row",
+    )
+
+    ax = fig.axes[0]
+    plotted = np.asarray(ax.images[0].get_array())
+
+    assert np.isfinite(plotted).all()
+
+
 def test_plot_spatial_error() -> None:
     """Check that plot_spatial_error runs without error and returns a Figure."""
     datastore = init_datastore_example("dummydata")
