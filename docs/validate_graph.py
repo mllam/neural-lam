@@ -206,8 +206,10 @@ def _check_edge_features(
         )
         return
 
-    if not torch.is_floating_point(features):
-        errors.append(f"{name}: expected floating-point dtype")
+    if features.dtype != torch.float32:
+        errors.append(
+            f"{name}: expected torch.float32 dtype, got {features.dtype}"
+        )
         return
 
     if not torch.isfinite(features).all():
@@ -271,8 +273,10 @@ def _check_mesh_features(
         )
         return
 
-    if not torch.is_floating_point(mesh_features):
-        errors.append(f"{name}: expected floating-point dtype")
+    if mesh_features.dtype != torch.float32:
+        errors.append(
+            f"{name}: expected torch.float32 dtype, got {mesh_features.dtype}"
+        )
         return
 
     if not torch.isfinite(mesh_features).all():
@@ -297,6 +301,23 @@ def _require_file(path: Path, errors: list[str]) -> bool:
     return True
 
 
+def _check_edge_feature_dim_consistency(
+    named_features: list[tuple[str, Any]],
+    errors: list[str],
+) -> None:
+    """Ensure all edge feature tensors have the same dimensionality."""
+    dims = {}
+    for name, feats in named_features:
+        if isinstance(feats, torch.Tensor) and feats.ndim == 2:
+            dims[name] = feats.shape[1]
+    unique_dims = set(dims.values())
+    if len(unique_dims) > 1:
+        summary = ", ".join(f"{n}={d}" for n, d in dims.items())
+        errors.append(
+            f"edge feature dimensionality mismatch across components: {summary}"
+        )
+
+
 def validate_graph_directory(
     graph_dir_path: str | Path,
 ) -> GraphValidationReport:
@@ -314,6 +335,7 @@ def validate_graph_directory(
     graph_dir = Path(graph_dir_path)
     errors: list[str] = []
     warnings: list[str] = []
+    edge_feature_tensors: list[tuple[str, Any]] = []
 
     required_files = [
         "m2m_edge_index.pt",
@@ -418,6 +440,9 @@ def validate_graph_directory(
         )
 
         if level_index < len(m2m_features):
+            edge_feature_tensors.append(
+                (f"m2m_features[{level_index}]", m2m_features[level_index])
+            )
             _check_edge_features(
                 name=f"m2m_features[{level_index}]",
                 features=m2m_features[level_index],
@@ -503,6 +528,12 @@ def validate_graph_directory(
                     expected_sender_range=(lower_start, lower_stop),
                     expected_receiver_range=(upper_start, upper_stop),
                 )
+                edge_feature_tensors.append(
+                    (
+                        f"mesh_up_features[{level_index}]",
+                        mesh_up_features[level_index],
+                    )
+                )
                 _check_edge_features(
                     name=f"mesh_up_features[{level_index}]",
                     features=mesh_up_features[level_index],
@@ -518,6 +549,12 @@ def validate_graph_directory(
                     expected_sender_range=(upper_start, upper_stop),
                     expected_receiver_range=(lower_start, lower_stop),
                 )
+                edge_feature_tensors.append(
+                    (
+                        f"mesh_down_features[{level_index}]",
+                        mesh_down_features[level_index],
+                    )
+                )
                 _check_edge_features(
                     name=f"mesh_down_features[{level_index}]",
                     features=mesh_down_features[level_index],
@@ -531,6 +568,7 @@ def validate_graph_directory(
         edge_index=g2m_edge_index,
         errors=errors,
     )
+    edge_feature_tensors.append(("g2m_features", g2m_features))
     _check_edge_features(
         name="g2m_features",
         features=g2m_features,
@@ -544,6 +582,7 @@ def validate_graph_directory(
         edge_index=m2g_edge_index,
         errors=errors,
     )
+    edge_feature_tensors.append(("m2g_features", m2g_features))
     _check_edge_features(
         name="m2g_features",
         features=m2g_features,
@@ -585,6 +624,8 @@ def validate_graph_directory(
                     "g2m_edge_index: sender indices outside inferred grid "
                     f"range [{g2m_lower}, {g2m_upper})"
                 )
+
+    _check_edge_feature_dim_consistency(edge_feature_tensors, errors)
 
     return GraphValidationReport(
         graph_dir=str(graph_dir),
