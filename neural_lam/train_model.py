@@ -16,6 +16,7 @@ from . import utils
 from .config import load_config_and_datastore
 from .models import GraphLAM, HiLAM, HiLAMParallel
 from .weather_dataset import WeatherDataModule
+from typing import Optional, List
 
 MODELS = {
     "graph_lam": GraphLAM,
@@ -25,8 +26,20 @@ MODELS = {
 
 
 @logger.catch
-def main(input_args=None):
-    """Main function for training and evaluating models."""
+def main(input_args: Optional[List[str]] = None) -> None:
+    """
+    Entry point for training and evaluating Neural-LAM models.
+
+    This function parses command-line arguments, configures the training
+    environment, and initializes the selected model architecture.
+
+    Args:
+        input_args (list, optional): List of input arguments for CLI parsing.
+            If None, arguments are taken from sys.argv.
+
+    Returns:
+        None
+    """
     parser = ArgumentParser(
         description="Train or evaluate MLWP models for LAM",
         formatter_class=ArgumentDefaultsHelpFormatter,
@@ -44,7 +57,7 @@ def main(input_args=None):
         help="Model architecture to train/evaluate",
         choices=MODELS.keys(),
     )
-    parser.add_argument("--seed", type=int, default=42, help="random seed")
+    parser.add_argument("--seed", type=int, default=42,help="Random seed for reproducibility")
     parser.add_argument(
         "--num_workers",
         type=int,
@@ -71,7 +84,7 @@ def main(input_args=None):
         "--epochs",
         type=int,
         default=200,
-        help="upper epoch limit",
+        help="Maximum number of training epochs",
     )
     parser.add_argument("--batch_size", type=int, default=4, help="batch size")
     parser.add_argument(
@@ -85,10 +98,11 @@ def main(input_args=None):
         help="If optimizer state should be restored with model",
     )
     parser.add_argument(
-        "--precision",
-        type=str,
-        default=32,
-        help="Numerical precision to use for model (32/16/bf16)",
+    "--precision",
+    type=str,
+    default="32",
+    choices=["32", "16", "bf16"],
+    help="Numerical precision to use for model (32, 16, bf16)",
     )
 
     # Model architecture
@@ -251,12 +265,19 @@ def main(input_args=None):
         ),
     )
     args = parser.parse_args(input_args)
+
+# Validate CLI arguments
+if args.batch_size <= 0:
+    raise ValueError("batch_size must be positive")
+
+if args.epochs <= 0:
+    raise ValueError("epochs must be positive")
+
+if args.var_leads_metrics_watch:
     args.var_leads_metrics_watch = {
         int(k): v for k, v in json.loads(args.var_leads_metrics_watch).items()
     }
 
-    # Check that config only specifies logging for lead times that exist
-    # Check --val_steps_to_log
     for step in args.val_steps_to_log:
         if step > args.ar_steps_eval:
             raise ValueError(
