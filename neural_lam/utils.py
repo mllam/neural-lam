@@ -548,8 +548,12 @@ def setup_training_logger(datastore: Any, args: Any, run_name: str) -> Any:
         training_logger.log_hyperparams(
             dict(training=vars(args), datastore=datastore._config)
         )
-
-    return training_logger
+        return training_logger
+    else:
+        raise ValueError(
+            f"Unsupported logger type: {args.logger!r}. "
+            "Supported loggers are: 'wandb', 'mlflow'."
+        )
 
 
 def inverse_softplus(
