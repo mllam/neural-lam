@@ -568,6 +568,24 @@ These files have the same list format as the ones above, but each list has lengt
 Entries 0 in these lists describe edges between the lowest levels 1 and 2.
 
 # Development and Contributing
+
+## Development Environment Setup
+
+For development, we recommend using a virtual environment. See the [official Python venv documentation](https://docs.python.org/3/library/venv.html) for instructions on how to set one up.
+
+To install neural-lam in editable mode with development dependencies:
+
+```bash
+python -m pip install --group dev -e .
+```
+
+To verify that the environment is working correctly, run:
+
+```bash
+pytest
+```
+
+## Code Quality
 Any push or Pull-Request to the main branch will trigger a selection of pre-commit hooks.
 These hooks will run a series of checks on the code, like formatting and linting.
 If any of these checks fail the push or PR will be rejected.
