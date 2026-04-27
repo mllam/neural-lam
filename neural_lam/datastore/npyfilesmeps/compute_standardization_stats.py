@@ -48,7 +48,7 @@ class PaddedWeatherDataset(torch.utils.data.Dataset):
         return self.original_indices
 
     def get_original_window_indices(self, step_length):
-        step_int, _ = get_integer_time(step_length.total_seconds())
+        step_int, _ = get_integer_time(step_length)
         return [
             i // step_int for i in range(len(self.original_indices) * step_int)
         ]

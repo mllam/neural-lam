@@ -72,6 +72,8 @@ This release introduces new features including GIF animation support, wandb run 
 
 - Fix typo in `ar_model.py` that causes `AttributeError` during evaluation [\#204](https://github.com/mllam/neural-lam/pull/204) @ritinikhil
 
+- Fix `get_integer_time` to avoid floating-point precision issues and correctly handle zero timedelta [#494](https://github.com/mllam/neural-lam/pull/494) @Saptami191
+
 - Changed the hardcoded True to a conditional check "persistent_workers=self.num_workers > 0" [\#235](https://github.com/mllam/neural-lam/pull/235) @santhil-cyber
 
 - Avoid eager download of the MEPS example dataset during pytest collection by lazily initializing it in `tests/conftest.py`, allowing tests to run without triggering a dataset download at import time. [#391](https://github.com/mllam/neural-lam/pull/391) @Saptami191
