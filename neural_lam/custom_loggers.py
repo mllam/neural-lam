@@ -57,12 +57,14 @@ class CustomMLFlowLogger(pl.loggers.MLFlowLogger):
 
         # Need to save the image to a temporary file, then log that file
         # mlflow.log_image, should do this automatically, but is buggy
-        temporary_image = f"{key}.png"
-        images[0].savefig(temporary_image)
+        for i, fig in enumerate(images):
+            img_key = f"{key}_{i}" if len(images) > 1 else key
+            temporary_image = f"{img_key}.png"
+            fig.savefig(temporary_image)
 
-        img = Image.open(temporary_image)
-        try:
-            mlflow.log_image(img, f"{key}.png")
-        except NoCredentialsError:
-            logger.error("Error logging image\nSet AWS credentials")
-            sys.exit(1)
+            img = Image.open(temporary_image)
+            try:
+                mlflow.log_image(img, f"{img_key}.png")
+            except NoCredentialsError:
+                logger.error("Error logging image\nSet AWS credentials")
+                sys.exit(1)
