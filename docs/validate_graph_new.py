@@ -291,8 +291,8 @@ class GraphProperties:
 
     Attributes
     ----------
-    hierarchical : bool
-        Whether the graph has hierarchical mesh levels.
+    is_hierarchical : bool
+        Whether the graph has is_hierarchical mesh levels.
     num_levels : int
         Number of mesh levels encoded in `m2m_*`/`mesh_*`.
     num_mesh_nodes_per_level : list[int]
@@ -303,48 +303,11 @@ class GraphProperties:
         Inferred number of grid nodes.
     """
 
-    hierarchical: bool = False
+    is_hierarchical: bool = False
     num_levels: int = 0
     num_mesh_nodes_per_level: list[int] = field(default_factory=list)
     num_mesh_nodes_total: int = 0
     num_grid_nodes: int = 0
-
-    def __add__(self, other: "GraphProperties") -> "GraphProperties":
-        """
-        Combine two GraphProperties objects. Returns a new object taking the
-        non-default properties from either side (assumes they don't conflict).
-
-        Parameters
-        ----------
-        other : GraphProperties
-            The other properties to merge.
-
-        Returns
-        -------
-        GraphProperties
-            A new merged properties object.
-        """
-        return GraphProperties(
-            hierarchical=self.hierarchical or other.hierarchical,
-            num_levels=max(self.num_levels, other.num_levels),
-            num_mesh_nodes_per_level=self.num_mesh_nodes_per_level
-            or other.num_mesh_nodes_per_level,
-            num_mesh_nodes_total=max(
-                self.num_mesh_nodes_total, other.num_mesh_nodes_total
-            ),
-            num_grid_nodes=max(self.num_grid_nodes, other.num_grid_nodes),
-        )
-
-    def __iadd__(self, other: "GraphProperties") -> "GraphProperties":
-        self.hierarchical = self.hierarchical or other.hierarchical
-        self.num_levels = max(self.num_levels, other.num_levels)
-        if other.num_mesh_nodes_per_level:
-            self.num_mesh_nodes_per_level = other.num_mesh_nodes_per_level
-        self.num_mesh_nodes_total = max(
-            self.num_mesh_nodes_total, other.num_mesh_nodes_total
-        )
-        self.num_grid_nodes = max(self.num_grid_nodes, other.num_grid_nodes)
-        return self
 
 
 @contextmanager
@@ -403,7 +366,7 @@ def _load_pt(path: Path) -> Any:
     return torch.load(path, map_location="cpu", weights_only=True)
 
 
-def infer_num_levels(m2m_edge_index: Any) -> GraphProperties:
+def infer_num_levels(m2m_edge_index: Any) -> tuple[int, bool]:
     """
     Infer the number of mesh levels from the `m2m_edge_index` list.
 
@@ -414,17 +377,18 @@ def infer_num_levels(m2m_edge_index: Any) -> GraphProperties:
 
     Returns
     -------
-    GraphProperties
-        Properties object with inferred `num_levels` and `hierarchical`.
+    tuple[int, bool]
+        The inferred `num_levels` and `is_hierarchical` flag.
     """
-    props = GraphProperties()
+    num_levels = 0
+    is_hierarchical = False
     if isinstance(m2m_edge_index, list):
-        props.num_levels = len(m2m_edge_index)
-        props.hierarchical = props.num_levels > 1
-    return props
+        num_levels = len(m2m_edge_index)
+        is_hierarchical = num_levels > 1
+    return num_levels, is_hierarchical
 
 
-def infer_mesh_nodes_per_level(mesh_features: Any) -> GraphProperties:
+def infer_num_mesh_nodes_per_level(mesh_features: Any) -> list[int]:
     """
     Infer the number of mesh nodes per level from `mesh_features`.
 
@@ -435,24 +399,18 @@ def infer_mesh_nodes_per_level(mesh_features: Any) -> GraphProperties:
 
     Returns
     -------
-    GraphProperties
-        Properties object with inferred `num_mesh_nodes_per_level` and
-        `num_mesh_nodes_total`.
+    list[int]
+        The inferred `num_mesh_nodes_per_level`.
     """
-    props = GraphProperties()
+    nodes_per_level = []
     if isinstance(mesh_features, list):
-        nodes_per_level = []
         for tensor in mesh_features:
             if isinstance(tensor, torch.Tensor) and tensor.ndim == 2:
                 nodes_per_level.append(int(tensor.shape[0]))
-        props.num_mesh_nodes_per_level = nodes_per_level
-        props.num_mesh_nodes_total = sum(nodes_per_level)
-    return props
+    return nodes_per_level
 
 
-def infer_grid_nodes(
-    m2g_edge_index: Any, num_mesh_nodes_total: int
-) -> GraphProperties:
+def infer_num_grid_nodes(m2g_edge_index: Any, num_mesh_nodes_total: int) -> int:
     """
     Infer the total number of grid nodes based on the receiver indices in `m2g_edge_index`.  # noqa: E501
 
@@ -465,20 +423,20 @@ def infer_grid_nodes(
 
     Returns
     -------
-    GraphProperties
-        Properties object with inferred `num_grid_nodes`.
+    int
+        The inferred `num_grid_nodes`.
     """
-    props = GraphProperties()
+    num_grid_nodes = 0
     if isinstance(m2g_edge_index, torch.Tensor) and num_mesh_nodes_total > 0:
         if (
             m2g_edge_index.ndim == 2
             and m2g_edge_index.shape[0] == 2
             and m2g_edge_index.shape[1] > 0
         ):
-            props.num_grid_nodes = (
+            num_grid_nodes = (
                 int(m2g_edge_index[1].max().item()) - num_mesh_nodes_total + 1
             )
-    return props
+    return num_grid_nodes
 
 
 # -------------------------
@@ -1111,7 +1069,11 @@ def validate_graph_directory(
         The accumulated inferred properties of the graph.
     """
     report = ValidationReport()
-    props = GraphProperties()
+    is_hierarchical = False
+    num_levels = 0
+    num_mesh_nodes_per_level: list[int] = []
+    num_mesh_nodes_total = 0
+    num_grid_nodes = 0
     graph_dir = Path(graph_dir_path) if graph_dir_path else None
     edge_feature_tensors = []
 
@@ -1133,7 +1095,7 @@ def validate_graph_directory(
     produced.
 
     The format specified in this document was designed to support the definition of  # noqa: E501
-    both flat (e.g. Keisler 2022, Lam et al 2022) and hierarchical (Oskarsson et al  # noqa: E501
+    both flat (e.g. Keisler 2022, Lam et al 2022) and is_hierarchical (Oskarsson et al  # noqa: E501
     2023) graphs for GNN-based MLWP in neural-lam.
 
     The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL NOT",
@@ -1188,7 +1150,7 @@ def validate_graph_directory(
             "FAIL",
             f"Graph directory does not exist: {graph_dir}",
         )
-        return report, spec_text, props
+        return report, spec_text, GraphProperties()
     elif graph_dir:
         report += check_required_files(
             graph_dir, required_files, "2. File and Directory Structure"
@@ -1217,9 +1179,10 @@ def validate_graph_directory(
     )
 
     # Inference steps
-    props += infer_num_levels(m2m_edge_index)
-    props += infer_mesh_nodes_per_level(mesh_features)
-    props += infer_grid_nodes(m2g_edge_index, props.num_mesh_nodes_total)
+    num_levels, is_hierarchical = infer_num_levels(m2m_edge_index)
+    num_mesh_nodes_per_level = infer_num_mesh_nodes_per_level(mesh_features)
+    num_mesh_nodes_total = sum(num_mesh_nodes_per_level)
+    num_grid_nodes = infer_num_grid_nodes(m2g_edge_index, num_mesh_nodes_total)
 
     spec_text += textwrap.dedent(
         """\
@@ -1239,29 +1202,29 @@ def validate_graph_directory(
         "mesh_up_features.pt",
         "mesh_down_features.pt",
     ]
-    if graph_dir and props.hierarchical:
+    if graph_dir and is_hierarchical:
         report += check_required_files(
             graph_dir, extra_required_if_hier, "2. File and Directory Structure"
         )
 
     mesh_up_edge_index = (
         _load_pt(graph_dir / "mesh_up_edge_index.pt")
-        if graph_dir and props.hierarchical
+        if graph_dir and is_hierarchical
         else None
     )
     mesh_down_edge_index = (
         _load_pt(graph_dir / "mesh_down_edge_index.pt")
-        if graph_dir and props.hierarchical
+        if graph_dir and is_hierarchical
         else None
     )
     mesh_up_features = (
         _load_pt(graph_dir / "mesh_up_features.pt")
-        if graph_dir and props.hierarchical
+        if graph_dir and is_hierarchical
         else None
     )
     mesh_down_features = (
         _load_pt(graph_dir / "mesh_down_features.pt")
-        if graph_dir and props.hierarchical
+        if graph_dir and is_hierarchical
         else None
     )
 
@@ -1335,7 +1298,7 @@ def validate_graph_directory(
     report += check_list_type_and_length(
         mesh_features,
         "mesh_features.pt",
-        props.num_levels,
+        num_levels,
         "3. File content requirements (Mesh Nodes)",
     )
 
@@ -1386,13 +1349,13 @@ def validate_graph_directory(
     report += check_list_type_and_length(
         m2m_edge_index,
         "m2m_edge_index.pt",
-        props.num_levels,
+        num_levels,
         "3. File content requirements (Edges)",
     )
 
     level_offsets: list[int] = []
     cumulative = 0
-    for n_level_nodes in props.num_mesh_nodes_per_level:
+    for n_level_nodes in num_mesh_nodes_per_level:
         level_offsets.append(cumulative)
         cumulative += n_level_nodes
 
@@ -1401,7 +1364,7 @@ def validate_graph_directory(
             expected_range = None
             if level_index < len(level_offsets):
                 start = level_offsets[level_index]
-                stop = start + props.num_mesh_nodes_per_level[level_index]
+                stop = start + num_mesh_nodes_per_level[level_index]
                 expected_range = (start, stop)
             report += check_edge_index(
                 f"m2m_edge_index[{level_index}]",
@@ -1411,8 +1374,8 @@ def validate_graph_directory(
                 expected_receiver_range=expected_range,
             )
 
-    if props.hierarchical:
-        expected_len = props.num_levels - 1
+    if is_hierarchical:
+        expected_len = num_levels - 1
         report += check_list_type_and_length(
             mesh_up_edge_index,
             "mesh_up_edge_index.pt",
@@ -1430,16 +1393,13 @@ def validate_graph_directory(
             mesh_down_edge_index, list
         ):
             for level_index in range(expected_len):
-                if level_index + 1 >= len(props.num_mesh_nodes_per_level):
+                if level_index + 1 >= len(num_mesh_nodes_per_level):
                     continue
                 lower_start = level_offsets[level_index]
-                lower_stop = (
-                    lower_start + props.num_mesh_nodes_per_level[level_index]
-                )
+                lower_stop = lower_start + num_mesh_nodes_per_level[level_index]
                 upper_start = level_offsets[level_index + 1]
                 upper_stop = (
-                    upper_start
-                    + props.num_mesh_nodes_per_level[level_index + 1]
+                    upper_start + num_mesh_nodes_per_level[level_index + 1]
                 )
 
                 report += check_edge_index(
@@ -1467,9 +1427,9 @@ def validate_graph_directory(
     report += check_grid_node_relationships(
         g2m_edge_index,
         m2g_edge_index,
-        props.num_mesh_nodes_per_level,
-        props.num_mesh_nodes_total,
-        props.num_grid_nodes,
+        num_mesh_nodes_per_level,
+        num_mesh_nodes_total,
+        num_grid_nodes,
         "3. File content requirements (Edges)",
     )
 
@@ -1515,7 +1475,7 @@ def validate_graph_directory(
     report += check_list_type_and_length(
         m2m_features,
         "m2m_features.pt",
-        props.num_levels,
+        num_levels,
         "3. File content requirements (Edge Features)",
     )
 
@@ -1537,8 +1497,8 @@ def validate_graph_directory(
                 "3. File content requirements (Edge Features)",
             )
 
-    if props.hierarchical:
-        expected_len = props.num_levels - 1
+    if is_hierarchical:
+        expected_len = num_levels - 1
         report += check_list_type_and_length(
             mesh_up_features,
             "mesh_up_features.pt",
@@ -1628,6 +1588,13 @@ def validate_graph_directory(
         edge_feature_tensors, "3. File content requirements (Edge Features)"
     )
 
+    props = GraphProperties(
+        is_hierarchical=is_hierarchical,
+        num_levels=num_levels,
+        num_mesh_nodes_per_level=num_mesh_nodes_per_level,
+        num_mesh_nodes_total=num_mesh_nodes_total,
+        num_grid_nodes=num_grid_nodes,
+    )
     return report, spec_text, props
 
 
@@ -1688,7 +1655,7 @@ def cli(input_args=None):
         print(json.dumps(payload, indent=2))
     else:
         print(f"Graph directory: {args.graph_dir}")
-        print(f"Hierarchical: {props.hierarchical}")
+        print(f"Hierarchical: {props.is_hierarchical}")
         print(f"Mesh levels: {props.num_levels}")
         print(f"Mesh nodes per level: {props.num_mesh_nodes_per_level}")
         print(f"Mesh nodes total: {props.num_mesh_nodes_total}")

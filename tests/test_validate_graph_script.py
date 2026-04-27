@@ -32,12 +32,12 @@ def test_validate_graph_script_for_all_graph_types():
     ]
 
     with tempfile.TemporaryDirectory() as tmpdir:
-        for name, hierarchical, n_max_levels, expected_levels in cases:
+        for name, is_hierarchical, n_max_levels, expected_levels in cases:
             graph_dir_path = Path(tmpdir) / "graph" / name
             create_graph_from_datastore(
                 datastore=datastore,
                 output_root_path=str(graph_dir_path),
-                hierarchical=hierarchical,
+                hierarchical=is_hierarchical,
                 n_max_levels=n_max_levels,
             )
 
@@ -46,4 +46,4 @@ def test_validate_graph_script_for_all_graph_types():
             )
             assert not report.has_fails(), f"{name} failed validation"
             assert len(props.num_mesh_nodes_per_level) == expected_levels
-            assert props.hierarchical == hierarchical
+            assert props.is_hierarchical == is_hierarchical
