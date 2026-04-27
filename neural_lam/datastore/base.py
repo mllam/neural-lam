@@ -274,17 +274,20 @@ class BaseDatastore(abc.ABC):
 
     @cached_property
     @abc.abstractmethod
-    def boundary_mask(self) -> xr.DataArray:
+    def boundary_mask(self) -> Optional[xr.DataArray]:
         """
         Return the boundary mask for the dataset, with spatial dimensions
         stacked. Where the value is 1, the grid point is a boundary point, and
         where the value is 0, the grid point is not a boundary point.
 
+        For global datastores that have no lateral boundaries, this should
+        return None.
+
         Returns
         -------
-        xr.DataArray
+        xr.DataArray or None
             The boundary mask for the dataset, with dimensions
-            `('grid_index',)`.
+            `('grid_index',)`, or None for global domains.
 
         """
         pass

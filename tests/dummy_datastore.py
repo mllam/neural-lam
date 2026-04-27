@@ -758,3 +758,26 @@ class EnsembleDummyDatastore(BaseDatastore):
     @property
     def state_feature_weights_values(self) -> list[float]:
         return [1.0]
+
+
+class GlobalDummyDatastore(DummyDatastore):
+    """
+    Variant of DummyDatastore that simulates a global domain with no
+    lateral boundaries. A global setup should not have a boundary mask
+    at all, so ``boundary_mask`` returns None.
+    """
+
+    SHORT_NAME = "dummydata_global"
+
+    @cached_property
+    def boundary_mask(self) -> None:
+        """Return None for global domains (no boundary mask).
+
+        A global domain has no lateral boundaries, so no boundary mask
+        is needed. The model will use predictions everywhere.
+
+        Returns
+        -------
+        None
+        """
+        return None

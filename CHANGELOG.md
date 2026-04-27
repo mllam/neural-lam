@@ -33,6 +33,8 @@ This release introduces new features including GIF animation support, wandb run 
 
 - Add `AGENTS.md` file to the repo to give agents more information about the codebase and the contribution culture.[\#416](https://github.com/mllam/neural-lam/pull/416) @sadamov
 
+- Support global domains with no boundary mask: `boundary_mask` can now return `None`, and the model and visualisation code handles this gracefully [\#444](https://github.com/mllam/neural-lam/pull/444) @RajdeepKushwaha5
+
 - Enable `pin_memory` in DataLoaders when GPU is available for faster async CPU-to-GPU data transfers [\#236](https://github.com/mllam/neural-lam/pull/236) @abhaygoudannavar
 
 - Expose `--wandb_id` CLI argument to allow resuming an existing W&B run by

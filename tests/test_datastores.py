@@ -225,16 +225,22 @@ def test_get_dataarray(datastore_name):
 @pytest.mark.parametrize("datastore_name", DATASTORES.keys())
 def test_boundary_mask(datastore_name):
     """Check that the `datastore.boundary_mask` property is implemented and
-    that the returned object is an xarray DataArray with the correct shape."""
+    that the returned object is an xarray DataArray with the correct shape,
+    or None for global domains."""
     datastore = init_datastore_example(datastore_name)
     da_mask = datastore.boundary_mask
+
+    if da_mask is None:
+        # Global-style datastore: no boundary mask at all
+        return
 
     assert isinstance(da_mask, xr.DataArray)
     assert set(da_mask.dims) == {"grid_index"}
     assert da_mask.dtype == "int"
     assert set(da_mask.values) == {0, 1}
-    assert da_mask.sum() > 0
-    assert da_mask.sum() < da_mask.size
+    # If a mask is present it must have both boundary and interior points
+    mask_sum = int(da_mask.sum())
+    assert 0 < mask_sum < da_mask.size
 
     if isinstance(datastore, BaseRegularGridDatastore):
         grid_shape = datastore.grid_shape_state

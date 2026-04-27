@@ -108,7 +108,7 @@ def plot_on_axis(
         shading="auto",
     )
 
-    if boundary_alpha is not None:
+    if boundary_alpha is not None and datastore.boundary_mask is not None:
         # Overlay boundary mask
         mask_da = datastore.boundary_mask
         mask_values = mask_da.values
@@ -128,7 +128,7 @@ def plot_on_axis(
             shading="auto",
         )
 
-    if crop_to_interior:
+    if crop_to_interior and datastore.boundary_mask is not None:
         # Calculate extent of interior
         mask_da = datastore.boundary_mask
         mask_values = mask_da.values
