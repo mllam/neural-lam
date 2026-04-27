@@ -432,6 +432,11 @@ class WeatherDataset(torch.utils.data.Dataset):
         da_target_times = da_target_states.time
 
         if self.standardize:
+            # Avoid division by zero by replacing 0 std with 1.
+            # Variables with 0 std will have value 0 after centering.
+            safe_state_std = xr.where(
+                self.da_state_std == 0, 1.0, self.da_state_std
+            )
             da_init_states = (
                 da_init_states - self.da_state_mean
             ) / self.state_std_safe
@@ -444,6 +449,9 @@ class WeatherDataset(torch.utils.data.Dataset):
                 # forcing data is the forcing feature dimension. To standardize
                 # on `.device` we need a different implementation. (e.g. a
                 # tensor with repeated means and stds for each "windowed" time.)
+                safe_forcing_std = xr.where(
+                    self.da_forcing_std == 0, 1.0, self.da_forcing_std
+                )
                 da_forcing_windowed = (
                     da_forcing_windowed - self.da_forcing_mean
                 ) / self.forcing_std_safe

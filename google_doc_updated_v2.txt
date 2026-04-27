@@ -1,0 +1,396 @@
+﻿* 
+
+  
+
+
+
+
+
+Probabilistic Forecasting for Limited Area 
+                         Weather Models
+                                  Project Proposal.2026 
+                                 
+
+
+                            Shaurya Mishra
+                         Organization: mllam ·Mentors: Joel Oskarsson, Leif
+                  github.com/shauryam2807    Portfolio  devm89548@gmail.com
+
+
+
+
+
+
+Table of Contents
+          Introduction and Contributor Information ..................................................... …2
+          About Me ............................................................................................................. 2
+          My Personal Projects ......................................................................................... 3
+          My Open-Source Contributions ................................................................... …..4
+          Project Abstract ................................................................................................... 5
+         Project Goals ......................................................................................................... 6
+         Technical Details ................................................................................................... 7
+   1. 7.1. Deterministic vs. Probabilistic Forecasting ........................................ 7
+   2. 7.2. Architectural Integration: The Forecaster Abstraction ....................... 7
+   3. 7.3. Diffusion-LAM (Integration of Published Work) ................................ 7
+   4. 7.4. Evaluation Metrics ........................................................................... 7
+         Contributions Approach ...................................................................................... 8
+         Workflow and Execution Strategy ...................................................................... 9
+         Why neural-lam? ................................................................................................. 10
+         Why Am I an Ideal Contributor? ........................................................................ 11
+         Project Timeline .................................................................................................. 12
+         Commitments ...................................................................................................... 13
+         Post-GSoC ........................................................................................................... 14
+         References ............................................................................................................15
+
+
+
+
+
+
+
+
+Introduction and Contributor Information
+
+
+Category
+	Detail
+	Personal Name
+	Shaurya Mishra
+	Email
+	devm89548@gmail.com
+	GitHub
+	shauryam2807
+	Portfolio
+	Link
+	Academic University
+	Dr. APJ Abdul Kalam University
+	Degree
+	B.Tech CSE (AI & ML)
+	Timezone
+	IST (UTC+5:30)
+	Nation
+	India
+	Skills
+	PyTorch · PyTorch Lightning · Deep Learning · GNNs · NLP · xarray · Hydra · Git · Competitive Programming
+	
+
+About Me
+
+
+I'm currently in my B.Tech (AI & ML) at Dr. APJ Abdul Kalam University. Most of my time outside coursework goes into building things — I've put together end-to-end OCR pipelines with CRAFT and TrOCR, shipped a medicine identification app, and spent a lot of hours on competitive programming. I got into open-source about a year ago and haven't looked back since.
+I started contributing to neural-lam in early 2026. Here's what I've done so far:
+Repo
+	PR
+	Type
+	Description
+	neural-lam
+	#226
+	[ENH]
+	Ported crps_ens + spread_squared metrics with unit tests
+	neural-lam
+	#225
+	[FIX]
+	Restored missing meps.datastore.yaml
+	neural-lam
+	#201
+	[FIX]
+	Investigated NaN in state standardization
+	
+
+Working on these PRs gave me a pretty solid understanding of how the codebase fits together — the model hierarchy (ARModel, BaseGraphModel), the data pipeline, how metrics get registered and computed, and how CI runs.mllam · GSoC 2026Shaurya Mishra03
+My Personal Projects
+    Mini OCR Scanner · GitHub
+* This was my first serious ML project. I built a pipeline that takes a PDF, uses CRAFT to find where the text is, runs TrOCR to read it, and then passes everything through the Gemini API to fix OCR mistakes. It actually works surprisingly well on messy scanned documents.
+* Building this taught me how to chain multiple models together — something that's pretty similar to how neural-lam connects data loading, model inference, and evaluation.
+   Medicine Identifier · GitHub
+* You point your camera at a pill or medicine box, and it tells you what it is — name, dosage, uses, side effects. I used Google Gemini Vision API for the image analysis and built the backend with Supabase Edge Functions.
+* This was my first time building a full-stack app around an ML model, and it showed me how much work goes into making the inference pipeline reliable beyond just the model itself.04
+My Open-Source ContributionsPR #226Added CRPS & Ensemble Spread Metrics (Issue #62)
+Ported crps_ens and spread_squared from prob_model_lam →main. Added comprehensive test suite verifying unbiased estimators mathematically.PR #225Restored Missing MEPS Datastore Config (Issue #121)
+Added missing meps.datastore.yaml to datastore_examples, fixing broken integration tests for NpyFiles-MEPS datastore.PR #201Investigated NaN in State Standardization (Issue #136)
+Submitted fix for div-by-zero when std = 0. Closed in favor of PR #189, which I then reviewed. Active in#gsoc-project3 Slack.mllam · GSoC 2026Shaurya Mishra05
+Project Abstract
+
+
+Weather is chaotic — small differences in initial conditions can lead to very different outcomes a few days later. Current ML weather models in neural-lam predict just one future state, which is useful but doesn't tell you how confident that prediction is. That's where probabilistic forecasting comes in: instead of one answer, you get a distribution of possible futures.
+My goal for this summer is to bring probabilistic forecasting into neural-lam. Concretely, that means three things:
+* Refactor class hierarchy — implement Issue #49's proposed ForecasterModule /Forecaster / ARForecaster split, extending the Forecaster abstraction with a compute_loss() interface as the foundation for probabilistic models
+* Integrate Graph-EFM — critically evaluate and port from research branch into the new hierarchy on main
+* Integrate Diffusion-LAM — build upon the existing published prototype (Larsson et al., 2025) and properly integrate it into the redesigned codebase
+* Enhance Data & Evaluation — ensemble iteration, probabilistic metrics, visualization
+By the end of the summer, someone should be able to clone the repo, pick a probabilistic model, train it on MEPS or DANRA, and get meaningful uncertainty estimates out of it — all with the existing neural-lamworkflow.
+Total: 350+ hours · 12 weeks × 35–40 hrs/weekmllam · GSoC 2026Shaurya Mishra06
+Project Goals
+Goal 1 — Probabilistic Evaluation Infrastructure
+* Integrate CRPS + spread metrics into evaluation pipeline (after ensemble models are available)
+* Port ensemble visualization from prob_model_lam
+Goal 2 — Refactor and Merge Graph-EFM
+* Port GraphEFM, PropagationNet, encoder/decoder from research branch
+* Refactor to unified class hierarchy (Issue #49)
+* Validate against published results (Oskarsson et al., 2024)
+Goal 3 — Integrate Diffusion-LAM into Redesigned Codebase
+* Study the published Diffusion-LAM paper (Larsson et al., 2025, arXiv:2502.07532) and existing prototype code
+* Critically evaluate design decisions — propose improvements where the prototype can be done better
+* Integrate into the new Forecaster class hierarchy with proper boundary conditioning and custom compute_loss logic
+Goal 4 — Training and Comparative Evaluation
+* Focus full-scale training on the standard benchmark MEPS dataset. If Kaggle compute quotas allow, attempt a transfer-learning or fine-tuning run on DANRA as a stretch goal to test geographic generalization.
+* Benchmark: spread-skill, CRPS-ens, spatial coherence vs. deterministic baselinesmllam · GSoC 2026Shaurya Mishra07
+Technical Details
+ 7.1 Deterministic vs. Probabilistic Forecasting
+Right now, neural-lam's models (Hi-LAM, GraphLAM) are deterministic — they take         today's weather and predict a single "best guess" for tomorrow by minimizing 
+MSE:Ldet = ||X̂t+1 − Xt+1||²
+That works well for short-range forecasts, but it can't tell you anything about the cone of uncertainty — the fact that a 5-day forecast could realistically go many different ways. Probabilistic models fix this by learning to sample from p(Xt+1 | Xt), giving you multiple physically plausible futures.
+7.2 Architectural Integration: The Forecaster Abstraction
+The neural-lam codebase is currently undergoing a pivotal architectural class hierarchy refactoring (PR #208) to decouple the monolithic ARModel. The evolving design introduces a generic ForecasterModule (handling PyTorch Lightning mechanics) which delegates step-by-step sequence unrolling to an ARForecaster, which in turn wraps a deterministic StepPredictor.
+While this StepPredictor $\rightarrow$ ARForecaster paradigm is excellent for deterministic regression models like GraphLAM, it presents a fundamental architectural barrier for integrating generative, non-autoregressive regimes:
+* Diffusion-LAM does not unroll sequential predictions during training. Instead, it samples random timesteps $t$, injects noise into latent targets, and optimizes a noise-matching MSE loss.
+* Graph-EFM requires formulating a latent space using a variational posterior distribution (which mandates access to future ground-truth states) during training, but must strictly sample from a prior distribution during inference.
+If these generative models are rigidly forced into the StepPredictor interface within an ARForecaster loop, the `ForecasterModule`'s `training_step` will catastrophically fail, as it inherently expects a fully unrolled spatiotemporal prediction sequence to calculate its standard loss.The Core Innovation: Delegating Loss to the Forecaster
+
+To elegantly resolve this codebase constraint and future-proof the integration of arbitrary generative architectures, I propose that probabilistic models must bypass ARForecaster entirely and inherit directly from the base Forecaster class.
+
+Crucially, the responsibility of loss computation must be inverted and delegated from the Lightning module down into the `Forecaster` abstraction by introducing a mandatory compute_loss(self, batch, mask) interface.
+* For deterministic models: ARForecaster.compute_loss() acts as a zero-duplication wrapper. It internally calls its own forward() unrolling loop, and then applies the configured loss function (stored as self.loss_fn via Hydra) to the generated sequence.
+* For Graph-EFM: Since Graph-EFM still uses AR unrolling during training (to produce the latent sequence over which the ELBO is computed), it subclasses ARForecaster directly. It reuses the existing AR loop from ARForecaster.forward() and only overrides compute_loss() to inject its variational posterior encoding and add the KL divergence term. This means zero duplication of AR loop code.
+* For Diffusion-LAM: Since Diffusion-LAM genuinely does not perform step-by-step unrolling during training (it samples random diffusion timesteps and optimizes noise-matching), it subclasses Forecaster directly, bypassing ARForecaster entirely. Its compute_loss() locally orchestrates the noise addition and denoising loss computation.
+During inference (test_step), the ForecasterModule falls back to calling forecaster.forward(), at which point Diffusion-LAM executes its full reverse SDE/ODE solver, and Graph-EFM unrolls using its prior—perfectly mimicking the standard NWP evaluation pipeline while keeping the PyTorch Lightning module clean.
+7.3 Diffusion-LAM (Integration of Published Work)
+The mllam team has recently published Diffusion-LAM (Larsson et al., 2025, arXiv:2502.07532)—a probabilistic LAM that leverages Latent Diffusion Models (LDMs) trained over GraphLAM-extracted features. By injecting noise into target states and learning to denoise them conditioned on recent observations and boundary forcings, it explicitly models the uncertainty distribution of future weather over specific geographic regions.
+Design & Integration Strategy:
+* Direct Forecaster Subclassing: As established in Section 7.2, Diffusion-LAM will be integrated as a direct subclass of Forecaster. During training, its custom compute_loss() will bypass sequence unrolling entirely. Instead, it will locally orchestrate the random diffusion step $t$, noise addition to the latent targets, and return the noise-matching MSE score.
+* Inference Pipeline: The forward() method will exclusively encapsulate the chosen reverse sampling strategy (e.g., DDPM or DDIM parameterizations). The initial configuration will allow users to specify arbitrary ensemble sizes, which will govern the number of random Gaussian noise maps sampled from the prior $N(0, I)$ at inference time.
+* Component Modularity: The noise schedule formulation and LDM architecture will be heavily parameterized, decoupling the generative specifics from the core `neural-lam` feature extraction layers (e.g. `HierarchicalMeshGraph`).
+7.4 Evaluation Metrics
+
+
+Metric
+	Description
+	Measures
+	CRPS
+	E|X−y| − 0.5·E|X−X'|
+	Calibration + sharpness
+	Spread-Skill
+	√Var(ens) / RMSE
+	Reliability (target ≈ 1.0)
+	Calibration Error
+	χ² statistic from rank histogram
+	Statistical consistency
+	Log-Spectral Distance (LSD)
+	Power spectrum comparison
+	Physical plausibility
+	
+
+Contributions ApproachPR #226CRPS & Ensemble Spread Metrics (Issue #62)
+Problem: The prob_model_lam branch had CRPS and spread metrics, but they weren't on main. Without them, there's no way to properly evaluate probabilistic models — which is kind of the whole point of this GSoC project.
+* Studied unbiased pairwise estimator: CRPS = E|Xi−y| − (1/2M(M−1))·Σ|Xi−Xj|
+* Implemented spread_squared with Bessel's correction
+* Wrote 3 unit tests verifying mathematical correctness
+* Registered with is_ensemble=True in DEFINED_METRICS
+* Learnings — Biased vs. unbiased CRPS; metric registry pattern; tensor shapes (batch, ensemble, nodes, features)
+PR #225Restored MEPS Datastore Config (Issue #121)
+* Traced deletion to previous commit
+* Reconstructed YAML from NpyFilesDatastoreMEPS constructor
+* Validated against example data files
+* Learnings — BaseRegularGridDatastore interface; config.yaml vs. meps.datastore.yaml relationship
+PR #201NaN State Standardization (Issue #136)
+* Root cause: division by da_state_std where std = 0.0
+* Fix: xr.where(std > 0, (x - mean) / std, 0.0)
+* Closed in favor of PR #189 → reviewed and gave feedback
+* Learnings — xarray pipeline; importance of checking for duplicate work before submittingmllam · GSoC 2026Shaurya Mishra09
+Workflow and Execution Strategy
+9.1 Development
+* Branch-per-feature: feat/ensemble-dataset, feat/graph-efm-port,feat/diffusion-lam
+* Test-driven: Unit tests for shapes, losses, sampling alongside implementation
+* Review cycle: Self-review → pre-commit (black, ruff, isort) → CI → PR → mentor feedback
+9.2 Communication
+* Weekly updates in #gsoc-project3 Slack · Bi-weekly video call with mentors
+* Blog posts at midterm + final · GitHub issues for each sub-task
+9.3 Risk Mitigation
+
+
+	
+
+	Risk
+	Mitigation
+	Graph-EFM refactoring takes longer
+	Start flat graph only, add hierarchical later
+	GPU compute limitations
+	All development and training on Kaggle free-tier T4 GPUs (30 hrs/week). MEPS-example dataset used for rapid iteration; full MEPS evaluation batched within weekly Kaggle quota. No reliance on external cluster access.
+	Diffusion-LAM doesn't converge
+	Linear β first, tune with cosine later
+	Breaking changes on main
+	Frequent rebases; small focused PRs
+	
+
+10. Why neural-lam?
+
+
+Honestly, I stumbled into neural-lam while looking for GSoC organizations that use graph neural networks in a scientific context — and it turned out to be exactly what I was looking for.
+* It matters. Weather forecasting isn't abstract — better regional models directly help disaster preparedness, farming, and everyday planning. That feels meaningful in a way most ML projects don't.
+* The ML is genuinely interesting. This project sits right at the intersection of GNNs and generative models (VAEs, diffusion, flow matching). That's the area I want to build my career in.
+* LAMs need attention. Everyone talks about global models like GraphCast, but local weather services in Scandinavia (SMHI, DMI) need high-resolution regional models and nobody's building those tools for them.
+* The community is great. Joel and Leif are responsive and welcoming. The Slack channel has real discussions, not just announcements.
+* I already know the stack. PyTorch, Lightning, xarray, Hydra — these are tools I use in every project. There's no ramp-up time on the tooling.11
+Why Am I an Ideal Contributor?
+
+
+* I know this codebase. Three PRs touching different parts — data pipeline, evaluation metrics, datastore config. I've read through most of the important modules and I understand how the pieces connect.
+* I've already done research-to-main porting. PR #226 was exactly this: reading code on the research branch, understanding the math behind unbiased CRPS, and porting it over with proper tests. That's literally the core skill needed for the Graph-EFM port.
+* I'm comfortable with PyTorch. Between the OCR pipeline, the metrics implementation, and my coursework projects, I've spent hundreds of hours working with tensors, custom loss functions, and Lightning training loops.
+* I understand generative models. I've studied VAEs (ELBO, KL divergence, reparameterization trick), DDPMs (forward/reverse process, noise scheduling), and Flow Matching enough to implement them, not just describe them.
+* I handle feedback well. When PR #201 was closed because someone else had already fixed the issue, I didn't get frustrated — I went and reviewed their solution instead. That's how open-source should work.mllam · GSoC 2026Shaurya Mishra12
+Project Timeline
+
+
+I'll be working 35–40 hours a week for the full 12 weeks. My university has summer break during this entire period, so this will be my main focus. Here's the week-by-week breakdown:Community Bonding · 
+
+
+Dates: May 8 – Jun 1
+* Study Graph-EFM paper + Diffusion-LAM paper — annotate architecture diagrams and training objectives.
+* Deep-dive into prob_model_lam and Diffusion-LAM prototype code — critically evaluate design decisions.
+* Set up GPU environment (Kaggle/Colab); reproduce deterministic baseline on MEPS-example.
+* Discuss class hierarchy design (Issue #49) with mentors: ForecasterModule / ARForecaster / StepPredictor split.
+* Create GitHub kanban board with issues for each sub-task.
+Phase 1: Class Hierarchy Refactor (Issue #49)
+
+
+Duration: Weeks 1–3 (Jun 2 – Jun 22)
+Week
+	Dates
+	Key Tasks
+	Week 1
+	Jun 2 – Jun 8
+	Refactor the Forecaster base class to include the compute_loss(self, batch, mask) method. This is necessary to cleanly support probabilistic generative loss functions (like ELBO and noise-matching), building upon the architecture introduced in the newly merged PR #208 (ForecasterModule, ARForecaster). The implementation must maintain seamless backward compatibility with all existing deterministic models
+	Week 2
+	Jun 9 – Jun 15
+	Write comprehensive unit and integration tests validating the new probabilistic hooks. Create 'dummy' stochastic models (e.g., a simple Gaussian noise predictor) to verify that the ForecasterModule training step correctly delegates loss computation and handles ensemble inference shapes without breaking.
+	Week 3
+	Jun 16 – Jun 22
+	Buffer week for class hierarchy refinement. Write comprehensive integration tests for ARForecaster/StepPredictor migration.Document the new class hierarchy with usage examples for future contributors
+	DELIVERABLE
+	
+
+	PR for refactored class hierarchy + ensemble data/eval infrastructure.
+	-----
+Phase 2: Graph-EFM Integration
+
+
+Duration: Weeks 4–6 (Jun 23 – Jul 13)
+Week
+	Dates
+	Key Tasks
+	Week 4
+	Jun 23 – Jun 29
+	Critically evaluate prob_model_lam branch. Port PropagationNet and latent encoder/decoder as clean ARForecaster subclass components. Unit tests for shapes and graph integration.
+	Week 5
+	Jun 30 – Jul 6
+	GraphEFM as an ARForecaster subclass — reuses AR unrolling, overrides compute_loss() to add variational posterior encoding and KL divergence for ELBO. Port hierarchical variants. Add Hydra config and initial training on MEPS-example.
+	Week 6
+	Jul 7 – Jul 13
+	Evaluate on MEPS-example: CRPS-ens, spread-skill, rank histograms. Compare against published results (Oskarsson et al., 2024). Write model documentation + usage examples.
+	DELIVERABLE
+	
+
+	PR for Graph-EFM as ARForecaster subclass + evaluation report.
+	-----
+Midterm Evaluation
+
+
+Dates: Jul 14 – Jul 18
+* Submit refactored hierarchy + Graph-EFM on main with passing CI.
+* Blog post: class hierarchy design decisions, porting process, learnings.
+* Present results to mentors.
+Phase 3: Diffusion-LAM Integration
+
+
+Duration: Weeks 7–10 (Jul 21 – Aug 17)
+Week
+	Dates
+	Key Tasks
+	Week 7
+	Jul 21 – Jul 27
+	Deep-dive into existing Diffusion-LAM prototype. Design boundary conditioning integration. Propose and discuss design improvements with mentors.
+	Week 8
+	Jul 28 – Aug 3
+	Implement Diffusion-LAM as a direct Forecaster subclass with custom compute_loss() for noise-matching. Port and make configurable the noise scheduler, forward/reverse diffusion, and denoiser. Tests for correctness.
+	Week 9
+	Aug 4 – Aug 10
+	Register in model registry + Hydra config. Integrate boundary conditioning. Initial training on MEPS-example — verify convergence.
+	Week 10
+	Aug 11 – Aug 17
+	Evaluate on MEPS-example — compare with Graph-EFM and deterministic baselines. Experiment with sampling speed (DDIM) and ensemble quality tuning.
+	DELIVERABLE
+	
+
+	PR for Diffusion-LAM integration + evaluation results.
+	-----
+Phase 4: Evaluation & Docs
+
+
+Duration: Weeks 11–12 (Aug 18 – Sep 1)
+Week
+	Dates
+	Key Tasks
+	Week 11
+	Aug 18 – Aug 24
+	Full comparative evaluation (Graph-EFM vs. Diffusion-LAM vs. deterministic). Metrics: CRPS, spread-skill, rank histograms, MAE, RMSE. Spatial error maps + per-variable comparison tables.
+	Week 12
+	Aug 25 – Sep 1
+	Contributor guide: "How to add a probabilistic model." Final cleanup: docstrings, CI, remove debug code. Submit final PRs · Final blog post.
+	DELIVERABLE
+	
+
+	Final evaluation report + documentation + blog post.
+	-----
+
+
+Final Evaluation
+
+
+Dates: Sep 1 – Sep 8
+* Submit deliverables and project report to GSoC.
+* Present results to mllam community.
+Commitments
+
+
+I want to be upfront about my availability: this summer is completely free. No internship, no summer courses, no competing commitments.
+* I'll put in 35–40 hours a week — roughly 5–6 hours a day, which is sustainable and leaves room for deep work on tricky problems
+* My university break runs May through August, which lines up perfectly with GSoC
+* I'm used to async communication (IST is 3.5 hours ahead of CET), and I'm a morning person, so there's a good overlap window
+* I'll write 2 blog posts — one at midterm and one at final — documenting what I learned and what went wrong (because something always does)14
+
+
+Post-GSoC
+
+
+I don't plan to disappear after the summer. This project is genuinely interesting to me, and I'd like to stay involved.
+* Keep maintaining — I'll stick around to triage issues, review PRs, and help onboard future GSoC contributors
+* Improve probabilistic models further — explore Classifier-Free Guidance for Diffusion-LAM, Consistency Models for faster sampling, and other generative approaches the team may publish
+* Test on DANRA — to see if the models generalize across different regions and climates
+* Help weather services adopt it — if SMHI or DMI want to try probabilistic models, I'd love to help make that happen
+* Write it up — if the results are interesting enough, I'd like to collaborate with Joel and Leif on a workshop paper (maybe NeurIPS Climate Change AI)mllam ·
+References
+
+
+* Larsson, E., Oskarsson, J., Landelius, T., Lindsten, F. (2025). Diffusion-LAM: Probabilistic Limited Area Weather Forecasting with Diffusion. arXiv:2502.07532.
+
+
+* Oskarsson, J., Landelius, T., Lindsten, F. (2024). Probabilistic Weather Forecasting with Hierarchical Graph Neural Networks. arXiv:2406.04759.
+
+
+* Ho, J., Jain, A., Abbeel, P. (2020). Denoising Diffusion Probabilistic Models. NeurIPS 2020.
+
+
+* Price, I., et al. (2023). GenCast: Diffusion-based ensemble forecasting. arXiv:2312.15796.
+
+
+* Lam, R., et al. (2023). GraphCast: Learning skillful medium-range global weather forecasting.Science.
+
+
+* Rasp, S., et al. (2024). WeatherBench 2.
+
+
+* Song, J., Meng, C., Ermon, S. (2021). Denoising Diffusion Implicit Models. ICLR 2021.
+
+
+* Lipman, Y., et al. (2023). Flow Matching for Generative Modeling. ICLR 2023.mllam ·
