@@ -1,6 +1,7 @@
 # Standard library
 import os
 from argparse import ArgumentDefaultsHelpFormatter, ArgumentParser
+from typing import Any, Optional
 
 # Third-party
 import numpy as np
@@ -17,12 +18,12 @@ GRID_HEIGHT = 0
 
 
 def plot_graph(
-    grid_pos,
-    hierarchical,
-    graph_ldict,
-    show_axis=False,
-    save=None,
-):
+    grid_pos: np.ndarray,
+    hierarchical: bool,
+    graph_ldict: dict[str, Any],
+    show_axis: bool = False,
+    save: Optional[str] = None,
+) -> go.Figure:
     """Build a 3D plotly figure of the graph structure.
 
     Parameters
@@ -229,7 +230,7 @@ def plot_graph(
     return fig
 
 
-def main():
+def main() -> None:
     """Plot graph structure in 3D using plotly."""
     parser = ArgumentParser(
         description="Plot graph",
