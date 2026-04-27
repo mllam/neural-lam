@@ -630,3 +630,53 @@ def get_integer_time(tdelta: datetime.timedelta) -> tuple[int, str]:
             return int(total_seconds / unit_in_seconds), unit
 
     return 1, "unknown"
+
+def expand_ensemble_batch(tensor: torch.Tensor, n_members: int, has_ensemble_dim: bool = False) -> torch.Tensor:
+    """
+    Allows for concurrent ensemble processing by expanding a deterministic batch tensor.
+    
+    The input expands (B,...) -> (B * n_members,...) if it lacks an ensemble dimension 
+    (such as beginning states or circumstances shared by all members).
+    It flattens the input to (B * S,...) if it already has an ensemble
+    dimension (for example, perturbed LBCs with shape (B, S,...)).
+
+    Args:
+        tensor: Tensor of shape (B, ...) or (B, S, ...)
+        n_members: The ensemble size (S)
+        has_ensemble_dim: Whether the tensor already contains the ensemble dimension as its second dimension.
+
+    Returns:
+        Tensor of shape (B * n_members, ...)
+    """
+    B = tensor.shape[0]
+    
+    if has_ensemble_dim:
+        if tensor.dim() < 2 or tensor.shape[1] != n_members:
+            raise ValueError(f"Expected ensemble dimension of size {n_members} at index 1, but got shape {tensor.shape}")
+        # Already has ensemble dimension, flatten B and S
+        return tensor.view(B * n_members, *tensor.shape[2:])
+    
+    # No ensemble dimension, repeat interleave so elements stay grouped by batch
+    # e.g., [b1, b2] -> [b1, b1, b2, b2]
+    return tensor.repeat_interleave(n_members, dim=0)
+
+def fold_ensemble_batch(tensor: torch.Tensor, n_members: int) -> torch.Tensor:
+    """
+    Folds a batched ensemble tensor back into separated batch and ensemble dimensions.
+    
+    (B * n_members, ...) -> (B, n_members, ...)
+    
+    Args:
+        tensor: Tensor of shape (B * n_members, ...)
+        n_members: The ensemble size (S)
+
+    Returns:
+        Tensor of shape (B, n_members, ...)
+    """
+    B_times_S = tensor.shape[0]
+    
+    if B_times_S % n_members != 0:
+        raise ValueError(f"Batch dimension {B_times_S} is not divisible by ensemble size {n_members}")
+        
+    B = B_times_S // n_members
+    return tensor.view(B, n_members, *tensor.shape[1:])
