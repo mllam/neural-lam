@@ -415,8 +415,10 @@ def create_graph(
     # Save m2m edges
     save_edges_list(m2m_graphs, "m2m", graph_dir_path)
 
-    # Divide mesh node pos by max coordinate of grid cell
-    mesh_pos = [pos / pos_max for pos in mesh_pos]
+    # Divide mesh node pos by max coordinate of grid cell.
+    # Guard against degenerate grids where pos_max is zero to avoid NaN/Inf.
+    if pos_max > 0:
+        mesh_pos = [pos / pos_max for pos in mesh_pos]
 
     # Save mesh positions
     torch.save(
