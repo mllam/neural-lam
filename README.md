@@ -15,7 +15,19 @@ The repository contains LAM versions of:
 
 * The graph-based model from [Keisler (2022)](https://arxiv.org/abs/2202.07575).
 * GraphCast, by [Lam et al. (2023)](https://arxiv.org/abs/2212.12794).
-* The hierarchical model from [Oskarsson et al. (2023)](https://arxiv.org/abs/2309.17370).
+* The hierarchical model from [Oskarsson et al. (2023)](https://arxiv.org/abs/2309.17370).Neural-LAM is a repository of graph-based neural weather prediction models for Limited Area Modeling (LAM).
+Also global forecasting is possible...
+
+## Who is this repository for?
+
+Neural-LAM is useful for:
+
+- Researchers working on machine learning for weather forecasting
+- Students learning about Graph Neural Networks and scientific ML
+- Developers interested in regional weather modeling systems
+
+If you are new, you may start by exploring the example datasets and running the training scripts with default configurations.
+
 
 # Publications
 For a more in-depth scientific introduction to machine learning for LAM weather forecasting see the publications listed here.
