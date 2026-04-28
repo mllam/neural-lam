@@ -17,6 +17,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Maintenance
 
+- Explicitly cleanup the temporary directory in `DummyDatastore` by adding a `__del__` method, preventing `ResourceWarning` during garbage collection in tests [\#487](https://github.com/mllam/neural-lam/pull/487) @sohampatil01-svg
+
 - Add comprehensive type hints to all functions and class methods in `utils.py` [\#620](https://github.com/mllam/neural-lam/pull/620) @GiGiKoneti
 
 - Add probabilistic objective regression coverage for weighted losses and `pred_std` broadcasting semantics [\#504](https://github.com/mllam/neural-lam/pull/504) @kshirajahere
@@ -85,8 +87,6 @@ This release introduces new features including GIF animation support, wandb run 
 - Fix Slack domain link [\#288](https://github.com/mllam/neural-lam/pull/288) @sadamov
 
 ### Maintenance
-
-- Explicitly cleanup the temporary directory in `DummyDatastore` by adding a `__del__` method, preventing `ResourceWarning` during garbage collection in tests [\#487](https://github.com/mllam/neural-lam/pull/487) @sohampatil01-svg
 
 - Update PR template to clarify milestone/roadmap requirement and maintenance changes [\#186](https://github.com/mllam/neural-lam/pull/186) @joeloskarsson
 
