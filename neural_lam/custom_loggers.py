@@ -1,6 +1,6 @@
 # Standard library
 import sys
-
+import os
 # Third-party
 import mlflow
 import mlflow.pytorch
@@ -58,11 +58,16 @@ class CustomMLFlowLogger(pl.loggers.MLFlowLogger):
         # Need to save the image to a temporary file, then log that file
         # mlflow.log_image, should do this automatically, but is buggy
         temporary_image = f"{key}.png"
-        images[0].savefig(temporary_image)
-
-        img = Image.open(temporary_image)
         try:
-            mlflow.log_image(img, f"{key}.png")
+            images[0].savefig(temporary_image)
+
+            with Image.open(temporary_image) as img:
+                mlflow.log_image(img, f"{key}.png")
+
         except NoCredentialsError:
             logger.error("Error logging image\nSet AWS credentials")
-            sys.exit(1)
+            raise RuntimeError("Error logging image\nSet AWS credentials")
+
+        finally:
+            if os.path.exists(temporary_image):
+                os.remove(temporary_image)
