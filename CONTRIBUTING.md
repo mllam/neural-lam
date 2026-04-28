@@ -71,6 +71,28 @@ pytest -vv -s --doctest-modules
 > **Note:** The first test run downloads ~50 MB of example data via
 > [pooch](https://www.fatiando.org/pooch/).
 
+## Community roadmap
+
+Our community roadmap is defined by
+[milestones](https://github.com/mllam/neural-lam/milestones) on the
+[`neural-lam` GitHub repo](https://github.com/mllam/neural-lam). We use
+[semantic versioning](https://semver.org/) `vX.Y.Z` for the milestones, so
+issues on the roadmap carry the version they will be part of as their
+milestone.
+
+The process for putting issues or PRs on the roadmap is:
+
+1. **Propose** — label your issue or PR with a milestone in the form
+   `vX.Y.Z (proposed)` (e.g. `v0.9.2 (proposed)`).
+2. **Discuss** — at a development meeting the assignee explains the purpose
+   and how it fits the current roadmap. The group decides whether to accept
+   it and which revision it targets (it may be moved to a later release).
+3. **Accept** — once accepted the `(proposed)` suffix is removed and the
+   issue or PR is placed on the milestone for that version.
+
+To propose something for the roadmap, all you need to do is add a milestone
+label in the form `vX.Y.Z (proposed)`.
+
 ## Pull requests
 
 1. Push your branch and open a PR against `main`.
@@ -87,12 +109,14 @@ pytest -vv -s --doctest-modules
 6. After review, iterate on the feedback. Once the review is resolved and
    CI is green:
    - **Bugfixes and maintenance PRs** are merged directly by the assignee.
-   - **Feature PRs** (anything labelled `enhancement`) are added to the
-     next release milestone as **proposed**, then discussed at the next
+   - **Feature PRs** (anything labelled `enhancement`) are proposed for the
+     [community roadmap](#community-roadmap) by adding a `vX.Y.Z (proposed)`
+     milestone, then discussed at the next
      [monthly dev meeting](#monthly-development-meetings) so the team can
-     align on roadmap and scope. Once the team confirms the PR for the
-     release, the milestone is updated to **confirmed**.
-7. **Confirmed feature PRs** are merged when the milestone closes (or
+     align on roadmap and scope. Feature PRs accepted for the roadmap
+     (i.e. assigned a `vX.Y.Z` milestone without `(proposed)`) are merged
+     by the assignee once the milestone is ready.
+7. **Accepted feature PRs** are merged when the milestone closes (or
    sooner if the feature is self-contained and the maintainers agree).
    Bugfix and maintenance PRs are merged as soon as step 6 completes.
 
