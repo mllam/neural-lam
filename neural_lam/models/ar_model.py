@@ -9,6 +9,7 @@ import numpy as np
 import pytorch_lightning as pl
 import torch
 import xarray as xr
+from PIL import Image
 
 # First-party
 from neural_lam.utils import get_integer_time
@@ -156,9 +157,27 @@ class ARModel(pl.LightningModule):
         # For storing spatial loss maps during evaluation
         self.spatial_loss_maps: List[Any] = []
 
+        # Filter val_steps_to_log to valid steps and emit one warning at
+        # construction time
+        self.valid_steps_to_log = [
+            s for s in args.val_steps_to_log if s <= args.ar_steps_eval
+        ]
+        invalid_steps = [
+            s for s in args.val_steps_to_log if s > args.ar_steps_eval
+        ]
+        if invalid_steps:
+            warnings.warn(
+                f"val_steps_to_log contains steps {invalid_steps} "
+                f"that exceed ar_steps_eval ({args.ar_steps_eval}). "
+                "These steps will be skipped from logging. "
+                "Adjust --val_steps_to_log or --ar_steps_eval.",
+                UserWarning,
+            )
+
         self.time_step_int, self.time_step_unit = get_integer_time(
             self._datastore.step_length
         )
+        self.matched_metrics: set[str] = set()
 
     def _create_dataarray_from_tensor(
         self,
@@ -355,8 +374,7 @@ class ARModel(pl.LightningModule):
         # Log loss per time step forward and mean
         val_log_dict = {
             f"val_loss_unroll{step}": time_step_loss[step - 1]
-            for step in self.args.val_steps_to_log
-            if step <= len(time_step_loss)
+            for step in self.valid_steps_to_log
         }
         val_log_dict["val_mean_loss"] = mean_loss
         self.log_dict(
@@ -384,6 +402,19 @@ class ARModel(pl.LightningModule):
         # Create error maps for all test metrics
         self.aggregate_and_plot_metrics(self.val_metrics, prefix="val")
 
+        if self.trainer.is_global_zero:
+            if getattr(self.args, "metrics_watch", None):
+                unmatched = set(self.args.metrics_watch) - self.matched_metrics
+                if unmatched:
+                    warnings.warn(
+                        "The following metrics in --metrics_watch "
+                        "were not found during validation phase: "
+                        f"{sorted(unmatched)}. Ensure the metric prefix "
+                        "matches the evaluation mode (expected 'val_')."
+                    )
+
+        self.matched_metrics = set()
+
         # Clear lists with validation metrics values
         for metric_list in self.val_metrics.values():
             metric_list.clear()
@@ -409,7 +440,7 @@ class ARModel(pl.LightningModule):
         # Log loss per time step forward and mean
         test_log_dict = {
             f"test_loss_unroll{step}": time_step_loss[step - 1]
-            for step in self.args.val_steps_to_log
+            for step in self.valid_steps_to_log
         }
         test_log_dict["test_mean_loss"] = mean_loss
 
@@ -446,9 +477,8 @@ class ARModel(pl.LightningModule):
         spatial_loss = self.loss(
             prediction, target, pred_std, average_grid=False
         )  # (B, pred_steps, num_grid_nodes)
-        log_spatial_losses = spatial_loss[
-            :, [step - 1 for step in self.args.val_steps_to_log]
-        ]
+        valid_step_indices = [s - 1 for s in self.valid_steps_to_log]
+        log_spatial_losses = spatial_loss[:, valid_step_indices]
         self.spatial_loss_maps.append(log_spatial_losses)
         # (B, N_log, num_grid_nodes)
 
@@ -529,6 +559,19 @@ class ARModel(pl.LightningModule):
             )  # (d_f,)
             var_vranges = list(zip(var_vmin, var_vmax))
 
+            example_i = self.plotted_examples
+
+            if self.args.create_gif:
+                plot_dir_path = os.path.join(
+                    self.logger.save_dir,
+                    f"example_plots_{example_i}",
+                )
+                os.makedirs(plot_dir_path, exist_ok=True)
+                png_frames: Dict[str, List[str]] = {
+                    var_name: []
+                    for var_name in self._datastore.get_vars_names("state")
+                }
+
             # Iterate over prediction horizon time steps
             for t_i, _ in enumerate(zip(pred_slice, target_slice), start=1):
                 # Create one figure per variable at this time step
@@ -556,8 +599,6 @@ class ARModel(pl.LightningModule):
                     )
                 ]
 
-                example_i = self.plotted_examples
-
                 for var_name, fig in zip(
                     self._datastore.get_vars_names("state"), var_figs
                 ):
@@ -578,9 +619,42 @@ class ARModel(pl.LightningModule):
                             f"{self.logger} does not support image logging."
                         )
 
+                    # Save PNG frame for GIF animation
+                    if self.args.create_gif:
+                        png_path = os.path.join(
+                            plot_dir_path,
+                            f"{var_name}_example_{example_i}"
+                            f"_prediction_t_{t_i:02d}.png",
+                        )
+                        fig.savefig(png_path, dpi=100, bbox_inches="tight")
+                        png_frames[var_name].append(png_path)
+
                 plt.close(
                     "all"
                 )  # Close all figs for this time step, saves memory
+
+            # Generate GIF animations from the saved PNG frames,
+            # one GIF per variable combining all prediction time steps
+            if self.args.create_gif:
+                for var_name, frames_for_var in png_frames.items():
+                    if frames_for_var:
+                        gif_path = os.path.join(
+                            plot_dir_path,
+                            f"{var_name}_example_{example_i}_prediction.gif",
+                        )
+                        frames = [Image.open(f) for f in frames_for_var]
+
+                        try:
+                            frames[0].save(
+                                gif_path,
+                                save_all=True,
+                                append_images=frames[1:],
+                                loop=0,
+                                duration=1000,
+                            )
+                        finally:
+                            for frame in frames:
+                                frame.close()
 
             # Save pred and target as .pt files
             torch.save(
@@ -632,6 +706,7 @@ class ARModel(pl.LightningModule):
         # Check if metrics are watched, log exact values for specific vars
         var_names = self._datastore.get_vars_names(category="state")
         if full_log_name in self.args.metrics_watch:
+            self.matched_metrics.add(full_log_name)
             for var_i, timesteps in self.args.var_leads_metrics_watch.items():
                 var_name = var_names[var_i]
                 for step in timesteps:
@@ -672,28 +747,31 @@ class ARModel(pl.LightningModule):
                     )
                 )
 
-        # Ensure that log_dict has structure for
-        # logging as dict(str, plt.Figure)
-        assert all(
-            isinstance(key, str) and isinstance(value, plt.Figure)
-            for key, value in log_dict.items()
-        )
-
         if self.trainer.is_global_zero and not self.trainer.sanity_checking:
 
             current_epoch = self.trainer.current_epoch
 
-            for key, figure in log_dict.items():
-                # For other loggers than wandb, add epoch to key.
-                # Wandb can log multiple images to the same key, while other
-                # loggers, such as MLFlow need unique keys for each image.
-                if not isinstance(self.logger, pl.loggers.WandbLogger):
-                    key = f"{key}-{current_epoch}"
+            for key, value in log_dict.items():
+                if isinstance(value, plt.Figure):
+                    # For other loggers than wandb, add epoch to key.
+                    # Wandb can log multiple images to the same key, while other
+                    # loggers, such as MLFlow need unique keys for each image.
+                    log_key = key
+                    if not isinstance(self.logger, pl.loggers.WandbLogger):
+                        log_key = f"{key}-{current_epoch}"
 
-                if hasattr(self.logger, "log_image"):
-                    self.logger.log_image(key=key, images=[figure])
+                    if hasattr(self.logger, "log_image"):
+                        self.logger.log_image(key=log_key, images=[value])
+                elif isinstance(value, torch.Tensor):
+                    # Log scalar metrics
+                    self.log(
+                        key,
+                        value,
+                        on_step=False,
+                        on_epoch=True,
+                    )
 
-            plt.close("all")  # Close all figs
+        plt.close("all")
 
     def on_test_epoch_end(self):
         """
@@ -720,7 +798,7 @@ class ARModel(pl.LightningModule):
                     f"({(self.time_step_int * t_i)} {self.time_step_unit})",
                 )
                 for t_i, loss_map in zip(
-                    self.args.val_steps_to_log, mean_spatial_loss
+                    self.valid_steps_to_log, mean_spatial_loss
                 )
             ]
 
@@ -743,7 +821,7 @@ class ARModel(pl.LightningModule):
                 self.logger.save_dir, "spatial_loss_maps"
             )
             os.makedirs(pdf_loss_maps_dir, exist_ok=True)
-            for t_i, fig in zip(self.args.val_steps_to_log, pdf_loss_map_figs):
+            for t_i, fig in zip(self.valid_steps_to_log, pdf_loss_map_figs):
                 fig.savefig(os.path.join(pdf_loss_maps_dir, f"loss_t{t_i}.pdf"))
             # save mean spatial loss as .pt file also
             torch.save(
@@ -751,6 +829,17 @@ class ARModel(pl.LightningModule):
                 os.path.join(self.logger.save_dir, "mean_spatial_loss.pt"),
             )
 
+            if getattr(self.args, "metrics_watch", None):
+                unmatched = set(self.args.metrics_watch) - self.matched_metrics
+                if unmatched:
+                    warnings.warn(
+                        "The following metrics in --metrics_watch "
+                        "were not found during test phase: "
+                        f"{sorted(unmatched)}. Ensure the metric prefix "
+                        "matches the evaluation mode (expected 'test_')."
+                    )
+
+        self.matched_metrics = set()
         self.spatial_loss_maps.clear()
 
     def on_load_checkpoint(self, checkpoint):
