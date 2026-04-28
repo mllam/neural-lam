@@ -58,6 +58,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Fix `IndexError` in distributed flux stats gathering and silent diff stats shape corruption in `compute_standardization_stats.py` when running with `--distributed` and `world_size > 1` [\#411](https://github.com/mllam/neural-lam/pull/411) @RajdeepKushwaha5
 
+- Fix `AttributeError` in `PaddedWeatherDataset.get_original_window_indices` by passing `step_length` (a `timedelta`) directly to `get_integer_time()` instead of `step_length.total_seconds()` (a `float`) [\#410](https://github.com/mllam/neural-lam/pull/410) @RajdeepKushwaha5
+
 ### Maintenance
 
 - Fix GPU CI torch version resolution to query the target wheel index instead of PyPI [\#639](https://github.com/mllam/neural-lam/pull/639) @Sir-Sloth-The-Lazy
