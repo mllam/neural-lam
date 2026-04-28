@@ -15,6 +15,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Add missing bounds check in `test_step` to prevent `IndexError` when `val_steps_to_log` exceeds prediction steps [\#220](https://github.com/mllam/neural-lam/pull/220) @santhil-cyber
 
+- Fix `AttributeError` in `PaddedWeatherDataset.get_original_window_indices` by passing `step_length` (a `timedelta`) directly to `get_integer_time()` instead of `step_length.total_seconds()` (a `float`) [\#410](https://github.com/mllam/neural-lam/pull/410) @RajdeepKushwaha5
+
 ### Maintenance
 
 - Add comprehensive type hints to all functions and class methods in `utils.py` [\#620](https://github.com/mllam/neural-lam/pull/620) @GiGiKoneti
