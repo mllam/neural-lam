@@ -1,23 +1,25 @@
 # Configuration to test both CPU and GPU installations with both UV and pip
 #
-# We don't use lock files in neural-lam, because that would tie us to a
-# particular variant of pytorch (gpu/cpu), and want it to be possible for
-# people choose which variant to install. Because we don't use lock files the
-# specific package versions to install is resolved on every install. This means
-# that has upstream packages evolve the specific version installed might change
-# (if we don't pin it). Currently, we do not pin pytorch in pyproject.toml
+# torch is a required dependency in [project.dependencies]. The CPU/GPU variant
+# is selected at install time via extras defined in pyproject.toml:
+#
+#   uv sync --extra cpu --group dev  # CPU runners
+#   uv sync --extra gpu --group dev  # GPU runners (CUDA 12.8)
+#
+# The extras route torch to the correct PyTorch index via [tool.uv.sources]
+# and [[tool.uv.index]] in pyproject.toml.
+#
+# NOTE: `uv sync --torch-backend` is not yet supported (uv pip only).
+# Tracking: https://github.com/astral-sh/uv/issues/12994
+#
+# pip does not support extras-based index routing. The pip path uses a dry-run
+# to detect the required torch version and installs from the correct index URL.
 #
 # To test both CPU and GPU installations with both UV and pip we use two sets
 # of hosts to run the training on:
 # - ubuntu-latest for CPU: these are on github
 # - cirun-aws-runner--${{ github.run_id }} for GPU: these are on AWS,
 #   orchestrated by cirun.io
-#
-# To enable installing different pytorch variants we use an approach where we
-# first install a specific torch version (and variant), and then install neural-lam.
-# To ensure that the version of torch installed is compatible with neural-lam we
-# first use `pip install --dry-run .` to determine the version of torch that would
-# be installed.
 name: CPU+GPU testing
 
 on: [push, pull_request, workflow_dispatch]
@@ -48,7 +50,7 @@ jobs:
         with:
           python-version: 3.13
 
-      - name : Install uv (if applicable)
+      - name: Install uv (if applicable)
         if: matrix.package_manager == 'uv'
         uses: astral-sh/setup-uv@v7
 
@@ -66,24 +68,20 @@ jobs:
           echo "Torch version detected: $TORCH_VERSION"
           echo "TORCH_VERSION=$TORCH_VERSION" >> $GITHUB_ENV
 
-      - name: Install PyTorch
-        if : matrix.package_manager != 'uv'
+      - name: Install PyTorch (pip)
+        if: matrix.package_manager == 'pip'
         run: |
           python -m pip install "torch==$TORCH_VERSION" --index-url ${{ matrix.torch_index }}
 
-      - name: Install package (including dev dependencies)
-        if : matrix.package_manager != 'uv'
+      - name: Install package (pip)
+        if: matrix.package_manager == 'pip'
         run: |
           python -m pip install --group dev .
 
-      - name: Setup environment with uv (if applicable)
+      - name: Install with uv
         if: matrix.package_manager == 'uv'
         run: |
-          uv venv --no-project
-          source .venv/bin/activate
-          uv pip install torch --index-url ${{ matrix.torch_index }}
-          uv pip install --group dev -e .
-          uv pip list
+          uv sync --extra ${{ matrix.device }} --group dev --locked
           echo "$PWD/.venv/bin" >> $GITHUB_PATH
 
       - name: Print torch version

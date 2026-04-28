@@ -70,10 +70,7 @@ keeping versions consistent (it automatically updates the `pyproject.toml`
 file), makes it easy to handle virtual environments and includes the
 development toolchain packages installation too.
 
-**regarding `torch` installation**: because `torch` creates different package
-variants for different CUDA versions and cpu-only support you will need to install
-`torch` separately if you don't want the most recent GPU variant that also
-expects the most recent version of CUDA on your system.
+**regarding `torch` installation**: `torch` is a required dependency, but it ships separate variants for CPU-only and each CUDA version. With `uv`, the correct PyTorch index is chosen automatically via `[tool.uv.sources]`. With `pip`, you must pass `--index-url` explicitly (see instructions below).
 
 We cover all the installation options in our [github actions ci/cd
 setup](.github/workflows/) which you can use as a reference.
@@ -90,16 +87,27 @@ python -m pip install neural_lam
 
 1. Clone this repository and navigate to the root directory.
 2. Install `uv` if you don't have it installed on your system (either with `pip install uv` or [following the install instructions](https://docs.astral.sh/uv/getting-started/installation)).
-> If you are happy using the latest version of `torch` with GPU support (expecting the latest version of CUDA is installed on your system) you can skip to step 5.
-3. Create a virtual environment for uv to use with `uv venv --no-project`.
-4. Install a specific version of `torch` with `uv pip install torch --index-url https://download.pytorch.org/whl/cpu` for a CPU-only version or `uv pip install torch --index-url https://download.pytorch.org/whl/cu111` for CUDA 11.1 support (you can find the correct URL for the variant you want on [PyTorch webpage](https://pytorch.org/get-started/locally/)).
-5. Install the dependencies with `uv pip install .`. If you will be developing `neural-lam` we recommend to install the development dependencies with `uv pip install --group dev -e .`. This installs the `neural-lam` package in editable mode, so you can make changes to the code and see the effects immediately.
+3. Install with the CPU or GPU extra:
+   ```bash
+   uv sync --extra cpu --group dev  # CPU-only
+   uv sync --extra gpu --group dev  # GPU (CUDA 12.8)
+   ```
+   This creates a virtual environment, installs `torch` from the correct
+   PyTorch index, and installs all other dependencies (including dev tools)
+   in one step.
+
+   If you need a different CUDA version, install with the `cpu` extra first (smaller download) and then swap `torch` to your CUDA variant:
+   ```bash
+   uv sync --extra cpu --group dev              # create env (small torch wheel)
+   uv pip install torch --torch-backend auto    # replace torch with your CUDA variant
+   ```
+   Note: this swap is venv-local and will be reverted by the next `uv sync`.
 
 #### Using `pip`
 
 1. Clone this repository and navigate to the root directory.
 > If you are happy using the latest version of `torch` with GPU support (expecting the latest version of CUDA is installed on your system) you can skip to step 3.
-2. Install a specific version of `torch` with `python -m pip install torch --index-url https://download.pytorch.org/whl/cpu` for a CPU-only version or `python -m pip install torch --index-url https://download.pytorch.org/whl/cu111` for CUDA 11.1 support (you can find the correct URL for the variant you want on [PyTorch webpage](https://pytorch.org/get-started/locally/)).
+2. Install a specific version of `torch` with `python -m pip install torch --index-url https://download.pytorch.org/whl/cpu` for a CPU-only version or `python -m pip install torch --index-url https://download.pytorch.org/whl/cu128` for CUDA 12.8 support (you can find the correct URL for the variant you want on [PyTorch webpage](https://pytorch.org/get-started/locally/)).
 3. Install the dependencies with `python -m pip install .`. If you will be developing `neural-lam` we recommend to install in editable mode and install the development dependencies with `python -m pip install --group dev -e .` so you can make changes to the code and see the effects immediately.
 
 
