@@ -15,6 +15,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Add missing bounds check in `test_step` to prevent `IndexError` when `val_steps_to_log` exceeds prediction steps [\#220](https://github.com/mllam/neural-lam/pull/220) @santhil-cyber
 
+- Reset `plotted_examples` counter in `on_test_epoch_end` to ensure example prediction plots are generated on every `trainer.test()` call [\#437](https://github.com/mllam/neural-lam/pull/437) @RajdeepKushwaha5
+
 ### Maintenance
 
 - Add comprehensive type hints to all functions and class methods in `utils.py` [\#620](https://github.com/mllam/neural-lam/pull/620) @GiGiKoneti
