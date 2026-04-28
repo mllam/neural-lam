@@ -13,6 +13,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Re-wrote graph storage spec validator check functions to strictly verify edge index
+  `torch.int64` typing and mesh node feature dimensionality consistency, with explicit
+  keyword-only API requirements and NumPy style docstrings detailing PASS/FAIL conditions.
 - `docs/graph_storage_spec.md` is now auto-generated from the validator (single source of truth lives in `docs/validate_graph.py`).
 
 ### Fixed

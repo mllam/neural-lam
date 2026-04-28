@@ -446,10 +446,15 @@ def infer_num_grid_nodes(
 # -------------------------
 @log_function_call
 def check_required_files(
-    graph_dir: Path, files: List[str], section_name: str
+    *, graph_dir: Path, files: List[str], section_name: str
 ) -> ValidationReport:
     """
-    Verify that all files in a provided list exist in the graph directory.
+    Verify that all required files exist in the graph directory.
+
+    Checks
+    ------
+    1. For each filename in `files`, `(graph_dir / filename).exists()`
+       is True (FAIL).
 
     Parameters
     ----------
@@ -463,7 +468,8 @@ def check_required_files(
     Returns
     -------
     ValidationReport
-        The report indicating if the files are present.
+        Contains one PASS row if all files are present, or one FAIL row listing
+        missing filenames otherwise.
     """
     report = ValidationReport()
     missing = [f for f in files if not (graph_dir / f).exists()]
@@ -486,14 +492,21 @@ def check_required_files(
 
 @log_function_call
 def check_list_type_and_length(
+    *,
     obj: Any,
     name: str,
     expected_length: int,
     section_name: str,
-    allow_empty: bool = False,
 ) -> ValidationReport:
     """
     Verify that an object is a list of the expected length.
+
+    Checks
+    ------
+    1. `obj` is a `list` (FAIL).
+    2. `len(obj) == expected_length` (FAIL).
+
+    If `obj is None`, returns an empty report (no checks performed).
 
     Parameters
     ----------
@@ -505,13 +518,12 @@ def check_list_type_and_length(
         The length the list should be.
     section_name : str
         The spec section name for reporting.
-    allow_empty : bool, optional
-        Whether an empty list is allowed regardless of expected length.
 
     Returns
     -------
     ValidationReport
-        The report indicating if the list properties are valid.
+        Contains one PASS row if the length matches, or one FAIL row otherwise.
+        Returns an empty report if `obj is None`.
     """
     report = ValidationReport()
     if obj is None:
@@ -523,15 +535,6 @@ def check_list_type_and_length(
             "List format",
             "FAIL",
             f"{name}: expected list[Tensor], got {type(obj)}",
-        )
-        return report
-
-    if not allow_empty and len(obj) == 0:
-        report.add(
-            section_name,
-            "List format",
-            "FAIL",
-            f"{name}: list must not be empty",
         )
         return report
 
@@ -555,14 +558,29 @@ def check_list_type_and_length(
 
 @log_function_call
 def check_edge_indices(
+    *,
     name: str,
-    edge_index: Any,
+    edge_index: torch.Tensor | None,
     section_name: str,
     expected_sender_range: tuple[int, int] | None = None,
     expected_receiver_range: tuple[int, int] | None = None,
 ) -> ValidationReport:
     """
-    Validate edge index tensor shape, dtype, and optional index ranges.
+    Validate an edge index tensor.
+
+    Checks
+    ------
+    1. Object is a `torch.Tensor` (FAIL).
+    2. Shape is `[2, E]` (`ndim == 2` and `shape[0] == 2`) (FAIL).
+    3. Dtype is exactly `torch.int64` (FAIL).
+    4. Tensor contains at least one edge (`E > 0`) (FAIL).
+    5. All values are non-negative (FAIL).
+    6. If `expected_sender_range=(lo, hi)`, row-0 values lie in
+       `[lo, hi)` (FAIL).
+    7. If `expected_receiver_range=(lo, hi)`, row-1 values lie in
+       `[lo, hi)` (FAIL).
+
+    If `edge_index is None`, returns an empty report (no checks performed).
 
     Parameters
     ----------
@@ -580,11 +598,12 @@ def check_edge_indices(
     Returns
     -------
     ValidationReport
-        The validation report.
+        Contains PASS or FAIL rows for each applicable check.
+        Empty report if `edge_index is None`.
     """
     report = ValidationReport()
     if edge_index is None:
-        return report
+        return report  # Silently skip if file missing or spec-generation mode
 
     if not isinstance(edge_index, torch.Tensor):
         report.add(
@@ -612,25 +631,19 @@ def check_edge_indices(
     )
 
     # Check for integer dtype
-    if edge_index.dtype not in (
-        torch.uint8,
-        torch.int8,
-        torch.int16,
-        torch.int32,
-        torch.int64,
-    ):
+    if edge_index.dtype != torch.int64:
         report.add(
             section_name,
             "Edge index dtype",
             "FAIL",
-            f"{name}: expected integer dtype, got {edge_index.dtype}",
+            f"{name}: expected torch.int64 dtype, got {edge_index.dtype}",
         )
     else:
         report.add(
             section_name,
             "Edge index dtype",
             "PASS",
-            f"{name}: dtype is integer",
+            f"{name}: dtype is torch.int64",
         )
 
     if edge_index.shape[1] == 0:
@@ -683,13 +696,28 @@ def check_edge_indices(
 
 @log_function_call
 def check_edge_features(
+    *,
     name: str,
-    features: Any,
+    features: torch.Tensor | None,
     expected_num_edges: int | None,
     section_name: str,
 ) -> ValidationReport:
     """
-    Validate edge feature tensor shape, dtype, and basic geometric consistency.
+    Validate an edge feature tensor.
+
+    Checks
+    ------
+    1. Object is a `torch.Tensor` (FAIL).
+    2. Shape is `[E, N_f]` (`ndim == 2`) (FAIL).
+    3. (If `expected_num_edges` given) `shape[0] == expected_num_edges` (FAIL).
+    4. `shape[1] ∈ {3, 4}` (FAIL).
+    5. Dtype is exactly `torch.float32` (FAIL).
+    6. All values are finite (no NaN/Inf) (FAIL).
+    7. Column 0 (edge length) is non-negative (FAIL).
+    8. `||features[:, 1:]||₂ ≈ features[:, 0]` within `5.0e-3` absolute
+       tolerance (WARNING).
+
+    If `features is None`, returns an empty report (no checks performed).
 
     Parameters
     ----------
@@ -705,11 +733,12 @@ def check_edge_features(
     Returns
     -------
     ValidationReport
-        The validation report.
+        Contains PASS, FAIL, or WARNING rows per check.
+        Empty report if `features is None`.
     """
     report = ValidationReport()
     if features is None:
-        return report
+        return report  # Silently skip if file missing or spec-generation mode
 
     if not isinstance(features, torch.Tensor):
         report.add(
@@ -812,12 +841,25 @@ def check_edge_features(
 
 @log_function_call
 def check_mesh_node_features(
+    *,
     name: str,
-    mesh_features: Any,
+    mesh_features: torch.Tensor | None,
     section_name: str,
 ) -> ValidationReport:
     """
-    Validate mesh node feature tensor shape and dtype.
+    Validate a single mesh-level node feature tensor.
+
+    Checks
+    ------
+    1. Object is a `torch.Tensor` (FAIL).
+    2. `ndim == 2` (shape `[N_level, N_f]`) (FAIL).
+    3. `shape[0] >= 1` (at least one node at this level) (FAIL).
+    4. `shape[1] >= 2` (`MESH_FEATURE_DIM`; for x and y coordinate columns)
+       (FAIL).
+    5. Dtype is exactly `torch.float32` (FAIL).
+    6. All values are finite (FAIL).
+
+    If `mesh_features is None`, returns an empty report (no checks performed).
 
     Parameters
     ----------
@@ -831,11 +873,12 @@ def check_mesh_node_features(
     Returns
     -------
     ValidationReport
-        The validation report.
+        Contains PASS or FAIL rows per check. Empty report if
+        `mesh_features is None`.
     """
     report = ValidationReport()
     if mesh_features is None:
-        return report
+        return report  # Silently skip if file missing or spec-generation mode
 
     if not isinstance(mesh_features, torch.Tensor):
         report.add(
@@ -861,6 +904,13 @@ def check_mesh_node_features(
             "Mesh features values",
             "FAIL",
             f"{name}: contains zero mesh nodes",
+        )
+    else:
+        report.add(
+            section_name,
+            "Mesh features values",
+            "PASS",
+            f"{name}: contains {mesh_features.shape[0]} mesh nodes",
         )
 
     if mesh_features.shape[1] < MESH_FEATURE_DIM:
@@ -900,17 +950,32 @@ def check_mesh_node_features(
             "FAIL",
             f"{name}: contains non-finite values",
         )
+    else:
+        report.add(
+            section_name,
+            "Mesh features values",
+            "PASS",
+            f"{name}: all values are finite",
+        )
 
     return report
 
 
 @log_function_call
-def check_edge_feature_dim_consistency(
+def check_mesh_node_feature_dim_consistency(
+    *,
     named_features: list[tuple[str, Any]],
     section_name: str,
 ) -> ValidationReport:
     """
-    Ensure all edge feature tensors have the same dimensionality.
+    Ensure all mesh node feature tensors share the same N_f.
+
+    Checks
+    ------
+    1. Every entry in `named_features` (where the value is a 2-D `torch.Tensor`)
+       has the same `shape[1]` (FAIL). Non-tensor or non-2-D entries are
+       silently skipped (their structural validity is enforced by
+       `check_mesh_node_features`).
 
     Parameters
     ----------
@@ -922,7 +987,66 @@ def check_edge_feature_dim_consistency(
     Returns
     -------
     ValidationReport
-        The validation report.
+        One PASS row if uniform; one FAIL row listing per-level `N_f` if not.
+        Empty report if no eligible tensors are found.
+    """
+    report = ValidationReport()
+    dims = {}
+    for name, feats in named_features:
+        if isinstance(feats, torch.Tensor) and feats.ndim == 2:
+            dims[name] = feats.shape[1]
+
+    if not dims:
+        return report
+
+    unique_dims = set(dims.values())
+    if len(unique_dims) > 1:
+        summary = ", ".join(f"{n}={d}" for n, d in dims.items())
+        report.add(
+            section_name,
+            "Mesh node feature dimensionality consistency",
+            "FAIL",
+            f"Mismatch across levels: {summary}",
+        )
+    elif len(unique_dims) == 1:
+        report.add(
+            section_name,
+            "Mesh node feature dimensionality consistency",
+            "PASS",
+            f"All levels share N_f={list(unique_dims)[0]}",
+        )
+
+    return report
+
+
+@log_function_call
+def check_edge_feature_dim_consistency(
+    *,
+    named_features: list[tuple[str, Any]],
+    section_name: str,
+) -> ValidationReport:
+    """
+    Ensure all edge feature tensors share the same N_f.
+
+    Checks
+    ------
+    1. Every entry in `named_features` (where the value is a 2-D `torch.Tensor`)
+       has the same `shape[1]` (FAIL). Non-tensor or non-2-D entries are
+       silently skipped (their structural validity is enforced by
+       `check_edge_features`).
+
+    Parameters
+    ----------
+    named_features : list[tuple[str, Any]]
+        List of (name, feature_tensor) tuples.
+    section_name : str
+        The spec section name for reporting.
+
+    Returns
+    -------
+    ValidationReport
+        One PASS row if uniform; one FAIL row listing per-component `N_f` if
+        not. Empty report if no eligible tensors are found.
     """
     report = ValidationReport()
     dims = {}
@@ -952,15 +1076,32 @@ def check_edge_feature_dim_consistency(
 
 @log_function_call
 def check_grid_node_relationships(
-    g2m_edge_index: Any,
-    m2g_edge_index: Any,
+    *,
+    g2m_edge_index: torch.Tensor | None,
+    m2g_edge_index: torch.Tensor | None,
     mesh_nodes_per_level: list[int],
     num_mesh_nodes_total: int,
     num_grid_nodes: int,
     section_name: str,
 ) -> ValidationReport:
     """
-    Check the inferred grid node ranges against indices in g2m and m2g.
+    Verify g2m / m2g edge indices reference the correct grid- and
+    bottom-mesh-level node ranges.
+
+    Checks
+    ------
+    1. `m2g_edge_index[1].min() == num_mesh_nodes_total` (FAIL).
+       m2g receivers start at the first grid-node index.
+    2. `g2m_edge_index[1].max() < mesh_nodes_per_level[0]` (FAIL).
+       g2m receivers lie on the bottom mesh level only.
+    3. `m2g_edge_index[0].max() < mesh_nodes_per_level[0]` (FAIL).
+       m2g senders lie on the bottom mesh level only.
+    4. `g2m_edge_index[0]` values lie in ranges (FAIL).
+       `[num_mesh_nodes_total, num_mesh_nodes_total + num_grid_nodes)`
+
+    If any precondition fails (non-tensor input, zero mesh nodes, malformed
+    shapes), returns an empty report (those preconditions are reported by
+    upstream checks).
 
     Parameters
     ----------
@@ -980,7 +1121,7 @@ def check_grid_node_relationships(
     Returns
     -------
     ValidationReport
-        The validation report.
+        Contains PASS or FAIL rows for each of the four checks.
     """
     report = ValidationReport()
 
@@ -988,7 +1129,7 @@ def check_grid_node_relationships(
         isinstance(g2m_edge_index, torch.Tensor)
         and isinstance(m2g_edge_index, torch.Tensor)
     ):
-        return report
+        return report  # Silently skip if files missing or spec-generation mode
 
     if num_mesh_nodes_total == 0 or len(mesh_nodes_per_level) == 0:
         return report
@@ -1015,21 +1156,44 @@ def check_grid_node_relationships(
             "FAIL",
             f"m2g_edge_index: expected receiver indices to start at {num_mesh_nodes_total}, got {m2g_receiver_min}",  # noqa: E501
         )
+    else:
+        report.add(
+            section_name,
+            "Grid node relationships",
+            "PASS",
+            f"m2g_edge_index: receiver indices start at {num_mesh_nodes_total}",
+        )
 
-    if int(g2m_edge_index[1].max().item()) >= mesh_nodes_per_level[0]:
+    g2m_receiver_max = int(g2m_edge_index[1].max().item())
+    if g2m_receiver_max >= mesh_nodes_per_level[0]:
         report.add(
             section_name,
             "Grid node relationships",
             "FAIL",
             "g2m_edge_index: expected receivers on bottom mesh level",
         )
+    else:
+        report.add(
+            section_name,
+            "Grid node relationships",
+            "PASS",
+            "g2m_edge_index: receivers are on bottom mesh level",
+        )
 
-    if int(m2g_edge_index[0].max().item()) >= mesh_nodes_per_level[0]:
+    m2g_sender_max = int(m2g_edge_index[0].max().item())
+    if m2g_sender_max >= mesh_nodes_per_level[0]:
         report.add(
             section_name,
             "Grid node relationships",
             "FAIL",
             "m2g_edge_index: expected senders on bottom mesh level",
+        )
+    else:
+        report.add(
+            section_name,
+            "Grid node relationships",
+            "PASS",
+            "m2g_edge_index: senders are on bottom mesh level",
         )
 
     g2m_sender_min = int(g2m_edge_index[0].min().item())
@@ -1042,6 +1206,13 @@ def check_grid_node_relationships(
             "Grid node relationships",
             "FAIL",
             f"g2m_edge_index: sender indices outside inferred grid range [{g2m_lower}, {g2m_upper})",  # noqa: E501
+        )
+    else:
+        report.add(
+            section_name,
+            "Grid node relationships",
+            "PASS",
+            "g2m_edge_index: sender indices within inferred grid range",
         )
 
     return report
@@ -1153,7 +1324,9 @@ def validate_graph_directory(
         return report, spec_text, GraphProperties()
     elif graph_dir:
         report += check_required_files(
-            graph_dir, required_files, "2.2 Graph Filenames"
+            graph_dir=graph_dir,
+            files=required_files,
+            section_name="2.2 Graph Filenames",
         )
 
     m2m_edge_index = (
@@ -1204,7 +1377,9 @@ def validate_graph_directory(
     ]
     if graph_dir and is_hierarchical:
         report += check_required_files(
-            graph_dir, extra_required_if_hier, "2.2 Graph Filenames"
+            graph_dir=graph_dir,
+            files=extra_required_if_hier,
+            section_name="2.2 Graph Filenames",
         )
 
     mesh_up_edge_index = (
@@ -1302,10 +1477,10 @@ def validate_graph_directory(
     )
 
     report += check_list_type_and_length(
-        mesh_features,
-        "mesh_features.pt",
-        num_levels,
-        "3.1.2 Mesh node features",
+        obj=mesh_features,
+        name="mesh_features.pt",
+        expected_length=num_levels,
+        section_name="3.1.2 Mesh node features",
     )
 
     spec_text += textwrap.dedent(
@@ -1343,10 +1518,19 @@ def validate_graph_directory(
     if isinstance(mesh_features, list):
         for level_index, mesh_tensor in enumerate(mesh_features):
             report += check_mesh_node_features(
-                f"mesh_features[{level_index}]",
-                mesh_tensor,
-                "3.1.2 Mesh node features",
+                name=f"mesh_features[{level_index}]",
+                mesh_features=mesh_tensor,
+                section_name="3.1.2 Mesh node features",
             )
+
+        # Enforced check for mesh_features dimension consistency
+        # enforced via check_mesh_node_feature_dim_consistency
+        report += check_mesh_node_feature_dim_consistency(
+            named_features=[
+                (f"mesh_features[{i}]", t) for i, t in enumerate(mesh_features)
+            ],
+            section_name="3.1.2 Mesh node features",
+        )
 
     spec_text += textwrap.dedent(
         """\
@@ -1377,10 +1561,10 @@ def validate_graph_directory(
     )
 
     report += check_list_type_and_length(
-        m2m_edge_index,
-        "m2m_edge_index.pt",
-        num_levels,
-        "3.2.1 Edge indices",
+        obj=m2m_edge_index,
+        name="m2m_edge_index.pt",
+        expected_length=num_levels,
+        section_name="3.2.1 Edge indices",
     )
 
     spec_text += textwrap.dedent(
@@ -1410,7 +1594,7 @@ def validate_graph_directory(
     - Dtype MUST be `torch.int64`.
     """
     )
-    # enforced via check_edge_indices (integer dtype)
+    # enforced via check_edge_indices (torch.int64 dtype)
 
     level_offsets: list[int] = []
     cumulative = 0
@@ -1426,9 +1610,9 @@ def validate_graph_directory(
                 stop = start + num_mesh_nodes_per_level[level_index]
                 expected_range = (start, stop)
             report += check_edge_indices(
-                f"m2m_edge_index[{level_index}]",
-                level_edge_index,
-                "3.2.1 Edge indices",
+                name=f"m2m_edge_index[{level_index}]",
+                edge_index=level_edge_index,
+                section_name="3.2.1 Edge indices",
                 expected_sender_range=expected_range,
                 expected_receiver_range=expected_range,
             )
@@ -1436,16 +1620,16 @@ def validate_graph_directory(
     if is_hierarchical:
         expected_len = num_levels - 1
         report += check_list_type_and_length(
-            mesh_up_edge_index,
-            "mesh_up_edge_index.pt",
-            expected_len,
-            "3.2.1 Edge indices",
+            obj=mesh_up_edge_index,
+            name="mesh_up_edge_index.pt",
+            expected_length=expected_len,
+            section_name="3.2.1 Edge indices",
         )
         report += check_list_type_and_length(
-            mesh_down_edge_index,
-            "mesh_down_edge_index.pt",
-            expected_len,
-            "3.2.1 Edge indices",
+            obj=mesh_down_edge_index,
+            name="mesh_down_edge_index.pt",
+            expected_length=expected_len,
+            section_name="3.2.1 Edge indices",
         )
 
         if isinstance(mesh_up_edge_index, list) and isinstance(
@@ -1464,34 +1648,38 @@ def validate_graph_directory(
                 )
 
                 report += check_edge_indices(
-                    f"mesh_up_edge_index[{level_index}]",
-                    mesh_up_edge_index[level_index],
-                    "3.2.1 Edge indices",
+                    name=f"mesh_up_edge_index[{level_index}]",
+                    edge_index=mesh_up_edge_index[level_index],
+                    section_name="3.2.1 Edge indices",
                     expected_sender_range=(lower_start, lower_stop),
                     expected_receiver_range=(upper_start, upper_stop),
                 )
                 report += check_edge_indices(
-                    f"mesh_down_edge_index[{level_index}]",
-                    mesh_down_edge_index[level_index],
-                    "3.2.1 Edge indices",
+                    name=f"mesh_down_edge_index[{level_index}]",
+                    edge_index=mesh_down_edge_index[level_index],
+                    section_name="3.2.1 Edge indices",
                     expected_sender_range=(upper_start, upper_stop),
                     expected_receiver_range=(lower_start, lower_stop),
                 )
 
     report += check_edge_indices(
-        "g2m_edge_index", g2m_edge_index, "3.2.1 Edge indices"
+        name="g2m_edge_index",
+        edge_index=g2m_edge_index,
+        section_name="3.2.1 Edge indices",
     )
     report += check_edge_indices(
-        "m2g_edge_index", m2g_edge_index, "3.2.1 Edge indices"
+        name="m2g_edge_index",
+        edge_index=m2g_edge_index,
+        section_name="3.2.1 Edge indices",
     )
 
     report += check_grid_node_relationships(
-        g2m_edge_index,
-        m2g_edge_index,
-        num_mesh_nodes_per_level,
-        num_mesh_nodes_total,
-        num_grid_nodes,
-        "3.2.1 Edge indices",
+        g2m_edge_index=g2m_edge_index,
+        m2g_edge_index=m2g_edge_index,
+        mesh_nodes_per_level=num_mesh_nodes_per_level,
+        num_mesh_nodes_total=num_mesh_nodes_total,
+        num_grid_nodes=num_grid_nodes,
+        section_name="3.2.1 Edge indices",
     )
 
     spec_text += textwrap.dedent(
@@ -1522,10 +1710,10 @@ def validate_graph_directory(
     )
 
     report += check_list_type_and_length(
-        m2m_features,
-        "m2m_features.pt",
-        num_levels,
-        "3.2.2 Edge features",
+        obj=m2m_features,
+        name="m2m_features.pt",
+        expected_length=num_levels,
+        section_name="3.2.2 Edge features",
     )
 
     spec_text += textwrap.dedent(
@@ -1597,25 +1785,25 @@ def validate_graph_directory(
                 else None
             )
             report += check_edge_features(
-                f"m2m_features[{level_index}]",
-                level_features,
-                expected_num,
-                "3.2.2 Edge features",
+                name=f"m2m_features[{level_index}]",
+                features=level_features,
+                expected_num_edges=expected_num,
+                section_name="3.2.2 Edge features",
             )
 
     if is_hierarchical:
         expected_len = num_levels - 1
         report += check_list_type_and_length(
-            mesh_up_features,
-            "mesh_up_features.pt",
-            expected_len,
-            "3.2.2 Edge features",
+            obj=mesh_up_features,
+            name="mesh_up_features.pt",
+            expected_length=expected_len,
+            section_name="3.2.2 Edge features",
         )
         report += check_list_type_and_length(
-            mesh_down_features,
-            "mesh_down_features.pt",
-            expected_len,
-            "3.2.2 Edge features",
+            obj=mesh_down_features,
+            name="mesh_down_features.pt",
+            expected_length=expected_len,
+            section_name="3.2.2 Edge features",
         )
 
         if isinstance(mesh_up_features, list) and isinstance(
@@ -1634,12 +1822,12 @@ def validate_graph_directory(
                     and mesh_up_edge_index[level_index].ndim == 2
                 ):
                     expected_num = mesh_up_edge_index[level_index].shape[1]
-                report += check_edge_features(
-                    f"mesh_up_features[{level_index}]",
-                    level_features,
-                    expected_num,
-                    "3.2.2 Edge features",
-                )
+                    report += check_edge_features(
+                        name=f"mesh_up_features[{level_index}]",
+                        features=level_features,
+                        expected_num_edges=expected_num,
+                        section_name="3.2.2 Edge features",
+                    )
 
         if isinstance(mesh_down_features, list) and isinstance(
             mesh_down_edge_index, list
@@ -1657,12 +1845,12 @@ def validate_graph_directory(
                     and mesh_down_edge_index[level_index].ndim == 2
                 ):
                     expected_num = mesh_down_edge_index[level_index].shape[1]
-                report += check_edge_features(
-                    f"mesh_down_features[{level_index}]",
-                    level_features,
-                    expected_num,
-                    "3.2.2 Edge features",
-                )
+                    report += check_edge_features(
+                        name=f"mesh_down_features[{level_index}]",
+                        features=level_features,
+                        expected_num_edges=expected_num,
+                        section_name="3.2.2 Edge features",
+                    )
 
     edge_feature_tensors.append(("g2m_features", g2m_features))
     expected_num_g2m = (
@@ -1672,10 +1860,10 @@ def validate_graph_directory(
         else None
     )
     report += check_edge_features(
-        "g2m_features",
-        g2m_features,
-        expected_num_g2m,
-        "3.2.2 Edge features",
+        name="g2m_features",
+        features=g2m_features,
+        expected_num_edges=expected_num_g2m,
+        section_name="3.2.2 Edge features",
     )
 
     edge_feature_tensors.append(("m2g_features", m2g_features))
@@ -1686,14 +1874,50 @@ def validate_graph_directory(
         else None
     )
     report += check_edge_features(
-        "m2g_features",
-        m2g_features,
-        expected_num_m2g,
-        "3.2.2 Edge features",
+        name="m2g_features",
+        features=m2g_features,
+        expected_num_edges=expected_num_m2g,
+        section_name="3.2.2 Edge features",
     )
 
     report += check_edge_feature_dim_consistency(
-        edge_feature_tensors, "3.2.2 Edge features"
+        named_features=edge_feature_tensors, section_name="3.2.2 Edge features"
+    )
+
+    edge_feature_tensors.append(("m2g_features", m2g_features))
+    expected_num_m2g = (
+        m2g_edge_index.shape[1]
+        if isinstance(m2g_edge_index, torch.Tensor)
+        and m2g_edge_index.ndim == 2  # noqa: E501
+        else None
+    )
+    report += check_edge_features(
+        name="g2m_features",
+        features=g2m_features,
+        expected_num_edges=expected_num_g2m,
+        section_name="3.2.2 Edge features",
+    )
+
+    edge_feature_tensors.append(("m2g_features", m2g_features))
+    expected_num_m2g = (
+        m2g_edge_index.shape[1]
+        if isinstance(m2g_edge_index, torch.Tensor)
+        and m2g_edge_index.ndim == 2  # noqa: E501
+        else None
+    )
+    report += check_edge_features(
+        name="m2g_features",
+        features=m2g_features,
+        expected_num_edges=expected_num_m2g,
+        section_name="3.2.2 Edge features",
+    )
+
+    report += check_edge_feature_dim_consistency(
+        named_features=edge_feature_tensors, section_name="3.2.2 Edge features"
+    )
+
+    report += check_edge_feature_dim_consistency(
+        named_features=edge_feature_tensors, section_name="3.2.2 Edge features"
     )
 
     props = GraphProperties(
