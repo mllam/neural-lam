@@ -10,7 +10,7 @@ from tests.conftest import init_datastore_example
 
 def _load_validator_module():
     script_path = (
-        Path(__file__).resolve().parents[1] / "docs" / "validate_graph_new.py"
+        Path(__file__).resolve().parents[1] / "docs" / "validate_graph.py"
     )
     spec = importlib.util.spec_from_file_location(
         "validate_graph_script", script_path

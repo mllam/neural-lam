@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [unreleased](https://github.com/mllam/neural-lam/compare/v0.6.0...HEAD)
 
+### Added
+
+- Graph storage spec validator (`docs/validate_graph.py`), auto-generated `docs/graph_storage_spec.md`, and pre-commit hook to keep them in sync.
+
+### Changed
+
+- `docs/graph_storage_spec.md` is now auto-generated from the validator (single source of truth lives in `docs/validate_graph.py`).
+
 ### Fixed
 
 - Fix `AssertionError` in `aggregate_and_plot_metrics` when using `--metrics_watch` flags by using `isinstance` dispatch for figure vs scalar logging [\#303](https://github.com/mllam/neural-lam/pull/303) @AftAb-25
