@@ -366,13 +366,15 @@ def _load_pt(path: Path) -> Any:
     return torch.load(path, map_location="cpu", weights_only=True)
 
 
-def infer_num_levels(m2m_edge_index: Any) -> tuple[int, bool]:
+def infer_num_levels(
+    m2m_edge_index: list[torch.Tensor] | None,
+) -> tuple[int, bool]:
     """
     Infer the number of mesh levels from the `m2m_edge_index` list.
 
     Parameters
     ----------
-    m2m_edge_index : Any
+    m2m_edge_index : list[torch.Tensor] | None
         The loaded m2m edge indices.
 
     Returns
@@ -388,13 +390,15 @@ def infer_num_levels(m2m_edge_index: Any) -> tuple[int, bool]:
     return num_levels, is_hierarchical
 
 
-def infer_num_mesh_nodes_per_level(mesh_features: Any) -> list[int]:
+def infer_num_mesh_nodes_per_level(
+    mesh_features: list[torch.Tensor] | None,
+) -> list[int]:
     """
     Infer the number of mesh nodes per level from `mesh_features`.
 
     Parameters
     ----------
-    mesh_features : Any
+    mesh_features : list[torch.Tensor] | None
         The loaded mesh features.
 
     Returns
@@ -411,14 +415,14 @@ def infer_num_mesh_nodes_per_level(mesh_features: Any) -> list[int]:
 
 
 def infer_num_grid_nodes(
-    m2g_edge_index: Any, num_mesh_nodes_total: int
+    m2g_edge_index: torch.Tensor | None, num_mesh_nodes_total: int
 ) -> int:  # noqa: E501
     """
     Infer the total number of grid nodes based on the receiver indices in `m2g_edge_index`.  # noqa: E501
 
     Parameters
     ----------
-    m2g_edge_index : Any
+    m2g_edge_index : torch.Tensor | None
         The loaded m2g edge indices.
     num_mesh_nodes_total : int
         The previously inferred total number of mesh nodes.
@@ -586,7 +590,7 @@ def check_edge_indices(
     ----------
     name : str
         Logical name used in error messages.
-    edge_index : Any
+    edge_index : torch.Tensor | None
         Edge index tensor expected as shape `[2, E]`.
     section_name : str
         The spec section name for reporting.
@@ -723,7 +727,7 @@ def check_edge_features(
     ----------
     name : str
         Logical name used in error/warning messages.
-    features : Any
+    features : torch.Tensor | None
         Edge features expected as shape `[E, 3 or 4]`.
     expected_num_edges : int | None
         Expected number of rows (`E`) to match edge index count.
@@ -865,7 +869,7 @@ def check_mesh_node_features(
     ----------
     name : str
         Logical name used in error/warning messages.
-    mesh_features : Any
+    mesh_features : torch.Tensor | None
         Mesh node features expected as shape `[N, >=2]`.
     section_name : str
         The spec section name for reporting.
@@ -964,7 +968,7 @@ def check_mesh_node_features(
 @log_function_call
 def check_mesh_node_feature_dim_consistency(
     *,
-    named_features: list[tuple[str, Any]],
+    named_features: list[tuple[str, torch.Tensor]],
     section_name: str,
 ) -> ValidationReport:
     """
@@ -972,14 +976,13 @@ def check_mesh_node_feature_dim_consistency(
 
     Checks
     ------
-    1. Every entry in `named_features` (where the value is a 2-D `torch.Tensor`)
-       has the same `shape[1]` (FAIL). Non-tensor or non-2-D entries are
-       silently skipped (their structural validity is enforced by
-       `check_mesh_node_features`).
+    1. Every entry in `named_features` is a `torch.Tensor` (FAIL).
+    2. Every entry in `named_features` has `ndim == 2` (FAIL).
+    3. All valid entries have the same `shape[1]` (FAIL).
 
     Parameters
     ----------
-    named_features : list[tuple[str, Any]]
+    named_features : list[tuple[str, torch.Tensor]]
         List of (name, feature_tensor) tuples.
     section_name : str
         The spec section name for reporting.
@@ -988,13 +991,29 @@ def check_mesh_node_feature_dim_consistency(
     -------
     ValidationReport
         One PASS row if uniform; one FAIL row listing per-level `N_f` if not.
+        Also contains FAIL rows for any non-tensor or non-2-D entries.
         Empty report if no eligible tensors are found.
     """
     report = ValidationReport()
     dims = {}
     for name, feats in named_features:
-        if isinstance(feats, torch.Tensor) and feats.ndim == 2:
-            dims[name] = feats.shape[1]
+        if not isinstance(feats, torch.Tensor):
+            report.add(
+                section_name,
+                "Mesh node feature dimensionality consistency",
+                "FAIL",
+                f"{name}: expected torch.Tensor, got {type(feats)}",
+            )
+            continue
+        if feats.ndim != 2:
+            report.add(
+                section_name,
+                "Mesh node feature dimensionality consistency",
+                "FAIL",
+                f"{name}: expected 2-D tensor, got {feats.ndim}-D",
+            )
+            continue
+        dims[name] = feats.shape[1]
 
     if not dims:
         return report
@@ -1022,7 +1041,7 @@ def check_mesh_node_feature_dim_consistency(
 @log_function_call
 def check_edge_feature_dim_consistency(
     *,
-    named_features: list[tuple[str, Any]],
+    named_features: list[tuple[str, torch.Tensor]],
     section_name: str,
 ) -> ValidationReport:
     """
@@ -1030,14 +1049,13 @@ def check_edge_feature_dim_consistency(
 
     Checks
     ------
-    1. Every entry in `named_features` (where the value is a 2-D `torch.Tensor`)
-       has the same `shape[1]` (FAIL). Non-tensor or non-2-D entries are
-       silently skipped (their structural validity is enforced by
-       `check_edge_features`).
+    1. Every entry in `named_features` is a `torch.Tensor` (FAIL).
+    2. Every entry in `named_features` has `ndim == 2` (FAIL).
+    3. All valid entries have the same `shape[1]` (FAIL).
 
     Parameters
     ----------
-    named_features : list[tuple[str, Any]]
+    named_features : list[tuple[str, torch.Tensor]]
         List of (name, feature_tensor) tuples.
     section_name : str
         The spec section name for reporting.
@@ -1046,13 +1064,32 @@ def check_edge_feature_dim_consistency(
     -------
     ValidationReport
         One PASS row if uniform; one FAIL row listing per-component `N_f` if
-        not. Empty report if no eligible tensors are found.
+        not. Also contains FAIL rows for any non-tensor or non-2-D entries.
+        Empty report if no eligible tensors are found.
     """
     report = ValidationReport()
     dims = {}
     for name, feats in named_features:
-        if isinstance(feats, torch.Tensor) and feats.ndim == 2:
-            dims[name] = feats.shape[1]
+        if not isinstance(feats, torch.Tensor):
+            report.add(
+                section_name,
+                "Edge feature dimensionality consistency",
+                "FAIL",
+                f"{name}: expected torch.Tensor, got {type(feats)}",
+            )
+            continue
+        if feats.ndim != 2:
+            report.add(
+                section_name,
+                "Edge feature dimensionality consistency",
+                "FAIL",
+                f"{name}: expected 2-D tensor, got {feats.ndim}-D",
+            )
+            continue
+        dims[name] = feats.shape[1]
+
+    if not dims:
+        return report
 
     unique_dims = set(dims.values())
     if len(unique_dims) > 1:
@@ -1105,9 +1142,9 @@ def check_grid_node_relationships(
 
     Parameters
     ----------
-    g2m_edge_index : Any
+    g2m_edge_index : torch.Tensor | None
         g2m edge indices tensor.
-    m2g_edge_index : Any
+    m2g_edge_index : torch.Tensor | None
         m2g edge indices tensor.
     mesh_nodes_per_level : list[int]
         Number of nodes at each mesh level.
