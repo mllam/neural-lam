@@ -1,0 +1,136 @@
+# Configuration to test both CPU and GPU installations with both UV and pip
+#
+# We don't use lock files in neural-lam, because that would tie us to a
+# particular variant of pytorch (gpu/cpu), and want it to be possible for
+# people choose which variant to install. Because we don't use lock files the
+# specific package versions to install is resolved on every install. This means
+# that has upstream packages evolve the specific version installed might change
+# (if we don't pin it). Currently, we do not pin pytorch in pyproject.toml
+#
+# To test both CPU and GPU installations with both UV and pip we use two sets
+# of hosts to run the training on:
+# - ubuntu-latest for CPU: these are on github
+# - cirun-aws-runner--${{ github.run_id }} for GPU: these are on AWS,
+#   orchestrated by cirun.io
+#
+# To enable installing different pytorch variants we use an approach where we
+# first install a specific torch version (and variant), and then install neural-lam.
+# To ensure that the version of torch installed is compatible with neural-lam we
+# first use `pip install --dry-run .` to determine the version of torch that would
+# be installed.
+name: CPU+GPU testing
+
+on: [push, pull_request, workflow_dispatch]
+
+
+
+jobs:
+  tests:
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      matrix:
+        package_manager: [pip, uv]
+        device: [cpu, gpu]
+        include:
+          - device: cpu
+            runner: ubuntu-latest
+            torch_index: https://download.pytorch.org/whl/cpu
+          - device: gpu
+            runner: "cirun-aws-runner--${{ github.run_id }}"
+            torch_index: https://download.pytorch.org/whl/cu128
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.13
+        uses: actions/setup-python@v6
+        with:
+          python-version: 3.13
+
+      - name : Install uv (if applicable)
+        if: matrix.package_manager == 'uv'
+        uses: astral-sh/setup-uv@v7
+
+      - name: Create virtual environment (pip GPU)
+        if: matrix.package_manager == 'pip' && matrix.device == 'gpu'
+        run: |
+          # venv must be made on nvme drive, otherwise we run out of space
+          python -m venv /opt/dlami/nvme/venv
+          source /opt/dlami/nvme/venv/bin/activate
+
+      - name: Determine PyTorch version for neural-lam (using pip dry-run)
+        if: matrix.package_manager == 'pip'
+        run: |
+          TORCH_VERSION=$(python -m pip install --dry-run "." | grep "Would install" | grep -o 'torch-[0-9.]*' | awk -F'-' '{print $2}' | tail -n 1)
+          echo "Torch version detected: $TORCH_VERSION"
+          echo "TORCH_VERSION=$TORCH_VERSION" >> $GITHUB_ENV
+
+      - name: Install PyTorch
+        if : matrix.package_manager != 'uv'
+        run: |
+          python -m pip install "torch==$TORCH_VERSION" --index-url ${{ matrix.torch_index }}
+
+      - name: Install package (including dev dependencies)
+        if : matrix.package_manager != 'uv'
+        run: |
+          python -m pip install --group dev .
+
+      - name: Setup environment with uv (if applicable)
+        if: matrix.package_manager == 'uv'
+        run: |
+          uv venv --no-project
+          source .venv/bin/activate
+          uv pip install torch --index-url ${{ matrix.torch_index }}
+          uv pip install --group dev -e .
+          uv pip list
+          echo "$PWD/.venv/bin" >> $GITHUB_PATH
+
+      - name: Print torch version
+        run: |
+          python -c "import torch; print(torch.__version__)"
+
+      - name: Check torch version and variant is cpu
+        if: matrix.device == 'cpu'
+        run: |
+          python -c "import torch; assert torch.__version__.endswith('+cpu')"
+
+      - name: Check torch version and variant is gpu
+        if: matrix.device == 'gpu'
+        run: |
+          python -c "import torch; assert not torch.__version__.endswith('+cpu')"
+
+      - name: Load cache data
+        if: matrix.package_manager == 'uv'
+        uses: actions/cache/restore@v4
+        with:
+          path: tests/datastore_examples/npyfilesmeps/meps_example_reduced.v0.3.0.tar.gz
+          key: ${{ runner.os }}-meps-reduced-example-data-v0.3.0
+          restore-keys: |
+            ${{ runner.os }}-meps-reduced-example-data-v0.3.0
+
+      - name: Run smoke test
+        if: matrix.package_manager != 'uv'
+        run: |
+          python -c "import neural_lam; print('neural-lam imported successfully')"
+
+      - name: Run tests
+        if: matrix.package_manager == 'uv'
+        run: |
+          pytest -vv -s --doctest-modules
+
+      - name: Upload test figures
+        if: matrix.package_manager == 'uv'
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-figures-${{ matrix.device }}-${{ matrix.package_manager }}
+          path: tests/test_outputs/
+          if-no-files-found: warn
+          retention-days: 30
+
+      - name: Save cache data
+        if: matrix.package_manager == 'uv'
+        uses: actions/cache/save@v4
+        with:
+          path: tests/datastore_examples/npyfilesmeps/meps_example_reduced.v0.3.0.tar.gz
+          key: ${{ runner.os }}-meps-reduced-example-data-v0.3.0
