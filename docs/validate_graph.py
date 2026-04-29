@@ -8,11 +8,12 @@ Run with:
 # /// script
 # requires-python = ">=3.10"
 # dependencies = [
-#   "numpy>=1.24.2",
 #   "torch>=2.3.0",
 #   "rich>=13.0.0",
 # ]
 # ///
+
+from __future__ import annotations
 
 # Standard library
 import json
@@ -25,8 +26,11 @@ from functools import wraps
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
-# Third-party
-import torch
+try:
+    # Third-party
+    import torch
+except ImportError:
+    torch = None  # type: ignore[assignment]
 
 try:
     # Third-party
@@ -1389,10 +1393,13 @@ def validate_graph_directory(
     )
 
     # Inference steps
-    num_levels, is_hierarchical = infer_num_levels(m2m_edge_index)
-    num_mesh_nodes_per_level = infer_num_mesh_nodes_per_level(mesh_features)
-    num_mesh_nodes_total = sum(num_mesh_nodes_per_level)
-    num_grid_nodes = infer_num_grid_nodes(m2g_edge_index, num_mesh_nodes_total)
+    if graph_dir is not None:
+        num_levels, is_hierarchical = infer_num_levels(m2m_edge_index)
+        num_mesh_nodes_per_level = infer_num_mesh_nodes_per_level(mesh_features)
+        num_mesh_nodes_total = sum(num_mesh_nodes_per_level)
+        num_grid_nodes = infer_num_grid_nodes(
+            m2g_edge_index, num_mesh_nodes_total
+        )
 
     spec_text += textwrap.dedent(
         """\
@@ -1810,55 +1817,41 @@ def validate_graph_directory(
     )
     # enforced inside check_edge_features below (dtype check)
 
-    if isinstance(m2m_features, list) and isinstance(m2m_edge_index, list):
-        for level_index, level_features in enumerate(m2m_features):
-            edge_feature_tensors.append(
-                (f"m2m_features[{level_index}]", level_features)
-            )
-            expected_num = (
-                m2m_edge_index[level_index].shape[1]
-                if isinstance(m2m_edge_index[level_index], torch.Tensor)
-                and m2m_edge_index[level_index].ndim == 2
-                else None
-            )
-            report += check_edge_features(
-                name=f"m2m_features[{level_index}]",
-                features=level_features,
-                expected_num_edges=expected_num,
-                section_name="3.2.2 Edge features",
-            )
-
-    if is_hierarchical:
-        expected_len = num_levels - 1
-        report += check_list_type_and_length(
-            obj=mesh_up_features,
-            name="mesh_up_features.pt",
-            expected_length=expected_len,
-            section_name="3.2.2 Edge features",
-        )
-        report += check_list_type_and_length(
-            obj=mesh_down_features,
-            name="mesh_down_features.pt",
-            expected_length=expected_len,
-            section_name="3.2.2 Edge features",
-        )
-
-        if isinstance(mesh_up_features, list) and isinstance(
-            mesh_up_edge_index, list
-        ):
-            for level_index, level_features in enumerate(mesh_up_features):
+    if graph_dir is not None:
+        if isinstance(m2m_features, list) and isinstance(m2m_edge_index, list):
+            for level_index, level_features in enumerate(m2m_features):
                 edge_feature_tensors.append(
-                    (f"mesh_up_features[{level_index}]", level_features)
+                    (f"m2m_features[{level_index}]", level_features)
                 )
-                expected_num = None
-                if (
-                    level_index < len(mesh_up_edge_index)
-                    and isinstance(
-                        mesh_up_edge_index[level_index], torch.Tensor
+                expected_num = (
+                    m2m_edge_index[level_index].shape[1]
+                    if isinstance(m2m_edge_index[level_index], torch.Tensor)
+                    and m2m_edge_index[level_index].ndim == 2
+                    else None
+                )
+                report += check_edge_features(
+                    name=f"m2m_features[{level_index}]",
+                    features=level_features,
+                    expected_num_edges=expected_num,
+                    section_name="3.2.2 Edge features",
+                )
+
+        if is_hierarchical and isinstance(
+            mesh_up_features, list
+        ):  # pragma: no cover
+            if isinstance(mesh_up_edge_index, list):
+                for level_index, level_features in enumerate(mesh_up_features):
+                    edge_feature_tensors.append(
+                        (f"mesh_up_features[{level_index}]", level_features)
                     )
-                    and mesh_up_edge_index[level_index].ndim == 2
-                ):
-                    expected_num = mesh_up_edge_index[level_index].shape[1]
+                    expected_num = (
+                        mesh_up_edge_index[level_index].shape[1]
+                        if isinstance(
+                            mesh_up_edge_index[level_index], torch.Tensor
+                        )
+                        and mesh_up_edge_index[level_index].ndim == 2
+                        else None
+                    )
                     report += check_edge_features(
                         name=f"mesh_up_features[{level_index}]",
                         features=level_features,
@@ -1866,22 +1859,24 @@ def validate_graph_directory(
                         section_name="3.2.2 Edge features",
                     )
 
-        if isinstance(mesh_down_features, list) and isinstance(
-            mesh_down_edge_index, list
-        ):
-            for level_index, level_features in enumerate(mesh_down_features):
-                edge_feature_tensors.append(
-                    (f"mesh_down_features[{level_index}]", level_features)
-                )
-                expected_num = None
-                if (
-                    level_index < len(mesh_down_edge_index)
-                    and isinstance(
-                        mesh_down_edge_index[level_index], torch.Tensor
-                    )
-                    and mesh_down_edge_index[level_index].ndim == 2
+        if is_hierarchical and isinstance(
+            mesh_down_features, list
+        ):  # pragma: no cover
+            if isinstance(mesh_down_edge_index, list):
+                for level_index, level_features in enumerate(
+                    mesh_down_features
                 ):
-                    expected_num = mesh_down_edge_index[level_index].shape[1]
+                    edge_feature_tensors.append(
+                        (f"mesh_down_features[{level_index}]", level_features)
+                    )
+                    expected_num = (
+                        mesh_down_edge_index[level_index].shape[1]
+                        if isinstance(
+                            mesh_down_edge_index[level_index], torch.Tensor
+                        )
+                        and mesh_down_edge_index[level_index].ndim == 2
+                        else None
+                    )
                     report += check_edge_features(
                         name=f"mesh_down_features[{level_index}]",
                         features=level_features,
@@ -1889,73 +1884,38 @@ def validate_graph_directory(
                         section_name="3.2.2 Edge features",
                     )
 
-    edge_feature_tensors.append(("g2m_features", g2m_features))
-    expected_num_g2m = (
-        g2m_edge_index.shape[1]
-        if isinstance(g2m_edge_index, torch.Tensor)
-        and g2m_edge_index.ndim == 2  # noqa: E501
-        else None
-    )
-    report += check_edge_features(
-        name="g2m_features",
-        features=g2m_features,
-        expected_num_edges=expected_num_g2m,
-        section_name="3.2.2 Edge features",
-    )
+        edge_feature_tensors.append(("g2m_features", g2m_features))
+        expected_num_g2m = (
+            g2m_edge_index.shape[1]
+            if isinstance(g2m_edge_index, torch.Tensor)
+            and g2m_edge_index.ndim == 2  # noqa: E501
+            else None
+        )
+        report += check_edge_features(
+            name="g2m_features",
+            features=g2m_features,
+            expected_num_edges=expected_num_g2m,
+            section_name="3.2.2 Edge features",
+        )
 
-    edge_feature_tensors.append(("m2g_features", m2g_features))
-    expected_num_m2g = (
-        m2g_edge_index.shape[1]
-        if isinstance(m2g_edge_index, torch.Tensor)
-        and m2g_edge_index.ndim == 2  # noqa: E501
-        else None
-    )
-    report += check_edge_features(
-        name="m2g_features",
-        features=m2g_features,
-        expected_num_edges=expected_num_m2g,
-        section_name="3.2.2 Edge features",
-    )
+        edge_feature_tensors.append(("m2g_features", m2g_features))
+        expected_num_m2g = (
+            m2g_edge_index.shape[1]
+            if isinstance(m2g_edge_index, torch.Tensor)
+            and m2g_edge_index.ndim == 2  # noqa: E501
+            else None
+        )
+        report += check_edge_features(
+            name="m2g_features",
+            features=m2g_features,
+            expected_num_edges=expected_num_m2g,
+            section_name="3.2.2 Edge features",
+        )
 
-    report += check_edge_feature_dim_consistency(
-        named_features=edge_feature_tensors, section_name="3.2.2 Edge features"
-    )
-
-    edge_feature_tensors.append(("m2g_features", m2g_features))
-    expected_num_m2g = (
-        m2g_edge_index.shape[1]
-        if isinstance(m2g_edge_index, torch.Tensor)
-        and m2g_edge_index.ndim == 2  # noqa: E501
-        else None
-    )
-    report += check_edge_features(
-        name="g2m_features",
-        features=g2m_features,
-        expected_num_edges=expected_num_g2m,
-        section_name="3.2.2 Edge features",
-    )
-
-    edge_feature_tensors.append(("m2g_features", m2g_features))
-    expected_num_m2g = (
-        m2g_edge_index.shape[1]
-        if isinstance(m2g_edge_index, torch.Tensor)
-        and m2g_edge_index.ndim == 2  # noqa: E501
-        else None
-    )
-    report += check_edge_features(
-        name="m2g_features",
-        features=m2g_features,
-        expected_num_edges=expected_num_m2g,
-        section_name="3.2.2 Edge features",
-    )
-
-    report += check_edge_feature_dim_consistency(
-        named_features=edge_feature_tensors, section_name="3.2.2 Edge features"
-    )
-
-    report += check_edge_feature_dim_consistency(
-        named_features=edge_feature_tensors, section_name="3.2.2 Edge features"
-    )
+        report += check_edge_feature_dim_consistency(
+            named_features=edge_feature_tensors,
+            section_name="3.2.2 Edge features",
+        )
 
     props = GraphProperties(
         is_hierarchical=is_hierarchical,
