@@ -9,14 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- Graph storage spec validator (`docs/validate_graph.py`), auto-generated `docs/graph_storage_spec.md`, and pre-commit hook to keep them in sync.
-
-### Changed
-
-- Re-wrote graph storage spec validator check functions to strictly verify edge index
-  `torch.int64` typing and mesh node feature dimensionality consistency, with explicit
-  keyword-only API requirements and NumPy style docstrings detailing PASS/FAIL conditions.
-- `docs/graph_storage_spec.md` is now auto-generated from the validator (single source of truth lives in `docs/validate_graph.py`).
+- Graph storage specification (`docs/graph_storage_spec.md`), PEP 723–compliant validator script (`docs/validate_graph.py`), and pre-commit hook keeping the spec in sync with the validator for the torch-tensors-on-disk graph format currently used in neural-lam [\#323](https://github.com/mllam/neural-lam/pull/323) @leifdenby
 
 ### Fixed
 
