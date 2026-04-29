@@ -587,7 +587,7 @@ class WeatherDataset(torch.utils.data.Dataset):
             if _is_listlike(time):
                 raise ValueError(
                     "Expected a single time for a 2D tensor with assumed "
-                    "dimensions (grid_index, {category}_feature), but got "
+                    f"dimensions (grid_index, {category}_feature), but got "
                     f"{len(time)} times"  # type: ignore
                 )
         elif len(tensor.shape) == 3:
@@ -607,7 +607,7 @@ class WeatherDataset(torch.utils.data.Dataset):
 
         da_datastore_state = getattr(self, f"da_{category}")
         da_grid_index = da_datastore_state.grid_index
-        da_state_feature = da_datastore_state.state_feature
+        da_state_feature = da_datastore_state[f"{category}_feature"]
 
         coords = {
             f"{category}_feature": da_state_feature,
