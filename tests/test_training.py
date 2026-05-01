@@ -13,7 +13,7 @@ from neural_lam import config as nlconfig
 from neural_lam.create_graph import create_graph_from_datastore
 from neural_lam.datastore import DATASTORES
 from neural_lam.datastore.base import BaseRegularGridDatastore
-from neural_lam.models.forecaster_module import ForecasterModule
+from neural_lam.models import ForecasterModule
 from neural_lam.weather_dataset import WeatherDataModule
 from tests.conftest import init_datastore_example
 
@@ -108,12 +108,10 @@ def run_simple_training(
     # Build predictor and forecaster externally, then inject into
     # ForecasterModule
     # First-party
-    from neural_lam.models import MODELS
-    from neural_lam.models.ar_forecaster import ARForecaster
+    from neural_lam.models import MODELS, ARForecaster
 
     predictor_class = MODELS["graph_lam"]
     predictor = predictor_class(
-        config=config,
         datastore=datastore,
         graph_name=graph_name,
         hidden_dim=HIDDEN_DIM,
@@ -123,6 +121,8 @@ def run_simple_training(
         num_past_forcing_steps=NUM_PAST_FORCING_STEPS,
         num_future_forcing_steps=NUM_FUTURE_FORCING_STEPS,
         output_std=set_output_std,
+        output_clamping_lower=config.training.output_clamping.lower,
+        output_clamping_upper=config.training.output_clamping.upper,
     )
     forecaster = ARForecaster(predictor, datastore)
 

@@ -1,12 +1,14 @@
+# Standard library
+from typing import Dict, Optional
+
 # Third-party
 from torch import nn
 
 # Local
-from .. import utils
-from ..config import NeuralLAMConfig
-from ..datastore import BaseDatastore
-from ..interaction_net import InteractionNet
-from .base_graph_model import BaseGraphModel
+from .... import utils
+from ....datastore import BaseDatastore
+from ....interaction_net import InteractionNet
+from .base import BaseGraphModel
 
 
 class BaseHiGraphModel(BaseGraphModel):
@@ -16,7 +18,6 @@ class BaseHiGraphModel(BaseGraphModel):
 
     def __init__(
         self,
-        config: NeuralLAMConfig,
         datastore: BaseDatastore,
         graph_name: str = "multiscale",
         hidden_dim: int = 64,
@@ -26,9 +27,10 @@ class BaseHiGraphModel(BaseGraphModel):
         num_past_forcing_steps: int = 1,
         num_future_forcing_steps: int = 1,
         output_std: bool = False,
+        output_clamping_lower: Optional[Dict[str, float]] = None,
+        output_clamping_upper: Optional[Dict[str, float]] = None,
     ):
         super().__init__(
-            config=config,
             datastore=datastore,
             graph_name=graph_name,
             hidden_dim=hidden_dim,
@@ -38,6 +40,8 @@ class BaseHiGraphModel(BaseGraphModel):
             num_past_forcing_steps=num_past_forcing_steps,
             num_future_forcing_steps=num_future_forcing_steps,
             output_std=output_std,
+            output_clamping_lower=output_clamping_lower,
+            output_clamping_upper=output_clamping_upper,
         )
 
         # Track number of nodes, edges on each level

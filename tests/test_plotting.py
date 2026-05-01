@@ -17,9 +17,7 @@ from cartopy import crs as ccrs
 from neural_lam import config as nlconfig
 from neural_lam import vis
 from neural_lam.create_graph import create_graph_from_datastore
-from neural_lam.models.ar_forecaster import ARForecaster
-from neural_lam.models.forecaster_module import ForecasterModule
-from neural_lam.models.graph_lam import GraphLAM
+from neural_lam.models import ARForecaster, ForecasterModule, GraphLAM
 from neural_lam.weather_dataset import WeatherDataset
 from tests.conftest import init_datastore_example
 from tests.dummy_datastore import DummyDatastore
@@ -241,13 +239,11 @@ def model_and_batch(tmp_path, time_step, time_unit):
 
     # Create model
     # First-party
-    from neural_lam.models import MODELS
-    from neural_lam.models.ar_forecaster import ARForecaster
+    from neural_lam.models import MODELS, ARForecaster
 
     args = ModelArgs()
     predictor_class = MODELS["graph_lam"]
     predictor = predictor_class(
-        config=config,
         datastore=datastore,
         graph_name=args.graph,
         hidden_dim=args.hidden_dim,
@@ -257,6 +253,8 @@ def model_and_batch(tmp_path, time_step, time_unit):
         num_past_forcing_steps=args.num_past_forcing_steps,
         num_future_forcing_steps=args.num_future_forcing_steps,
         output_std=args.output_std,
+        output_clamping_lower=config.training.output_clamping.lower,
+        output_clamping_upper=config.training.output_clamping.upper,
     )
     forecaster = ARForecaster(predictor, datastore=datastore)
 
@@ -458,7 +456,6 @@ def test_plot_examples_gif_integration(model_and_batch, monkeypatch):
 def _build_metrics_watch_module(datastore, config):
     """Build a ForecasterModule wired for metrics_watch tests."""
     predictor = GraphLAM(
-        config=config,
         datastore=datastore,
         graph_name="1level",
         hidden_dim=4,
@@ -468,6 +465,8 @@ def _build_metrics_watch_module(datastore, config):
         num_past_forcing_steps=0,
         num_future_forcing_steps=0,
         output_std=False,
+        output_clamping_lower=config.training.output_clamping.lower,
+        output_clamping_upper=config.training.output_clamping.upper,
     )
     forecaster = ARForecaster(predictor, datastore)
     return ForecasterModule(

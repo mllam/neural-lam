@@ -76,7 +76,7 @@ def test_create_gif_forwarded_to_forecaster_module():
         patch("neural_lam.train_model.MODELS", {"graph_lam": MagicMock()}),
         patch("neural_lam.train_model.ARForecaster"),
         patch(
-            "neural_lam.models.forecaster_module.ForecasterModule.__init__",
+            "neural_lam.models.module.ForecasterModule.__init__",
             capture_init,
         ),
         pytest.raises(SystemExit),

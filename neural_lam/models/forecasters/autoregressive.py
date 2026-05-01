@@ -2,9 +2,9 @@
 import torch
 
 # Local
-from ..datastore import BaseDatastore
-from .forecaster import Forecaster
-from .step_predictor import StepPredictor
+from ...datastore import BaseDatastore
+from ..step_predictors.base import StepPredictor
+from .base import Forecaster
 
 
 class ARForecaster(Forecaster):
@@ -39,10 +39,39 @@ class ARForecaster(Forecaster):
         boundary_states: torch.Tensor,
     ) -> tuple[torch.Tensor, torch.Tensor]:
         """
-        Unroll the autoregressive model.
-        boundary_states is used ONLY to overwrite boundary nodes at each step.
-        The interior prediction at step i must not depend on
-        boundary_states[:, i] in any other way.
+        Unroll the autoregressive model: at each step ``i`` call
+        ``self.predictor`` to produce the next state, then overwrite
+        boundary nodes with the true value from ``boundary_states[:, i]``.
+
+        Parameters
+        ----------
+        init_states : torch.Tensor
+            Shape ``(B, 2, num_grid_nodes, d_f)``. The two initial states
+            ``[X_{t-1}, X_t]`` used to seed the rollout. Dims: ``B`` is
+            batch size, ``2`` is the time index, ``num_grid_nodes`` is the
+            number of spatial nodes, and ``d_f`` is the state feature
+            dimension.
+        forcing_features : torch.Tensor
+            Shape ``(B, pred_steps, num_grid_nodes, d_static_f)``. Forcing
+            features for each predicted step; ``pred_steps`` defines the
+            rollout length.
+        boundary_states : torch.Tensor
+            Shape ``(B, pred_steps, num_grid_nodes, d_f)``. True state
+            values used ONLY to overwrite boundary nodes at each AR step.
+            The interior prediction at step ``i`` must not depend on
+            ``boundary_states[:, i]`` in any other way.
+
+        Returns
+        -------
+        prediction : torch.Tensor
+            Shape ``(B, pred_steps, num_grid_nodes, d_f)``. Stacked
+            per-step forecasts (with boundary overwritten by the true
+            value).
+        pred_std : torch.Tensor or None
+            Shape ``(B, pred_steps, num_grid_nodes, d_f)`` when the
+            wrapped predictor outputs an std, otherwise ``None`` (in which
+            case ``ForecasterModule`` substitutes the constant
+            per-variable std).
         """
 
         prev_prev_state = init_states[:, 0]

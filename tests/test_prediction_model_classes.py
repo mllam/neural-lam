@@ -7,9 +7,7 @@ import torch
 
 # First-party
 from neural_lam import config as nlconfig
-from neural_lam.models.ar_forecaster import ARForecaster
-from neural_lam.models.forecaster_module import ForecasterModule
-from neural_lam.models.step_predictor import StepPredictor
+from neural_lam.models import ARForecaster, ForecasterModule, StepPredictor
 from tests.conftest import init_datastore_example
 from tests.dummy_datastore import DummyDatastore
 
@@ -24,8 +22,8 @@ class NoStaticDummyDatastore(DummyDatastore):
 
 
 class MockStepPredictor(StepPredictor):
-    def __init__(self, config, datastore, **kwargs):
-        super().__init__(config, datastore, **kwargs)
+    def __init__(self, datastore, **kwargs):
+        super().__init__(datastore, **kwargs)
 
     def forward(self, prev_state, prev_prev_state, forcing):
         # Return zeros for state
@@ -37,13 +35,7 @@ class MockStepPredictor(StepPredictor):
 
 def test_ar_forecaster_unroll():
     datastore = init_datastore_example("mdp")
-    config = nlconfig.NeuralLAMConfig(
-        datastore=nlconfig.DatastoreSelection(
-            kind=datastore.SHORT_NAME, config_path=datastore.root_path
-        )
-    )
     predictor = MockStepPredictor(
-        config=config,
         datastore=datastore,
         output_std=False,
     )
@@ -95,7 +87,6 @@ def test_forecaster_module_checkpoint(tmp_path):
 
     predictor_class = MODELS["graph_lam"]
     predictor = predictor_class(
-        config=config,
         datastore=datastore,
         graph_name="1level",
         hidden_dim=4,
@@ -132,7 +123,6 @@ def test_forecaster_module_checkpoint(tmp_path):
 
     # Build a fresh forecaster structure for loading weights into
     load_predictor = predictor_class(
-        config=config,
         datastore=datastore,
         graph_name="1level",
         hidden_dim=4,
@@ -193,7 +183,6 @@ def test_forecaster_module_old_checkpoint(tmp_path):
 
     predictor_class = MODELS["graph_lam"]
     predictor = predictor_class(
-        config=config,
         datastore=datastore,
         graph_name="1level",
         hidden_dim=4,
@@ -270,7 +259,6 @@ def test_forecaster_module_old_checkpoint(tmp_path):
 
     # Build a fresh forecaster structure for loading weights into
     load_predictor = predictor_class(
-        config=config,
         datastore=datastore,
         graph_name="1level",
         hidden_dim=4,
@@ -349,18 +337,11 @@ def test_graph_lam_no_static_features():
             )
 
     datastore = NoStaticWrapper(base_datastore)
-    config = nlconfig.NeuralLAMConfig(
-        datastore=nlconfig.DatastoreSelection(
-            kind=base_datastore.SHORT_NAME,
-            config_path=base_datastore.root_path,
-        )
-    )
 
     # First-party
     from neural_lam.models import MODELS
 
     predictor = MODELS["graph_lam"](
-        config=config,
         datastore=datastore,
         graph_name="1level",
         hidden_dim=4,
@@ -396,14 +377,8 @@ def test_step_predictor_no_static_features():
     """Model should run correctly when the datastore has no static features,
     using an empty (N, 0) tensor in place of static features."""
     datastore = NoStaticDummyDatastore()
-    config = nlconfig.NeuralLAMConfig(
-        datastore=nlconfig.DatastoreSelection(
-            kind=datastore.SHORT_NAME, config_path=datastore.root_path
-        )
-    )
 
     predictor = MockStepPredictor(
-        config=config,
         datastore=datastore,
         output_std=False,
     )

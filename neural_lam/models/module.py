@@ -20,7 +20,7 @@ from ..config import NeuralLAMConfig
 from ..datastore import BaseDatastore
 from ..loss_weighting import get_state_feature_weighting
 from ..weather_dataset import WeatherDataset
-from .forecaster import Forecaster
+from .forecasters.base import Forecaster
 
 
 class ForecasterModule(pl.LightningModule):

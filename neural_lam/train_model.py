@@ -14,8 +14,7 @@ from loguru import logger
 # Local
 from . import utils
 from .config import load_config_and_datastore
-from .models import MODELS, ForecasterModule
-from .models.ar_forecaster import ARForecaster
+from .models import MODELS, ARForecaster, ForecasterModule
 from .weather_dataset import WeatherDataModule
 
 
@@ -32,7 +31,6 @@ def load_forecaster_module_from_checkpoint(ckpt_path, config, datastore):
     args = ckpt["hyper_parameters"]["args"]
     predictor_class = MODELS[args.model]
     predictor = predictor_class(
-        config=config,
         datastore=datastore,
         graph_name=args.graph,
         hidden_dim=args.hidden_dim,
@@ -42,6 +40,8 @@ def load_forecaster_module_from_checkpoint(ckpt_path, config, datastore):
         num_past_forcing_steps=args.num_past_forcing_steps,
         num_future_forcing_steps=args.num_future_forcing_steps,
         output_std=args.output_std,
+        output_clamping_lower=config.training.output_clamping.lower,
+        output_clamping_upper=config.training.output_clamping.upper,
     )
     forecaster = ARForecaster(predictor, datastore)
     return ForecasterModule.load_from_checkpoint(
@@ -353,7 +353,6 @@ def main(input_args=None):
     # ForecasterModule
     predictor_class = MODELS[args.model]
     predictor = predictor_class(
-        config=config,
         datastore=datastore,
         graph_name=args.graph,
         hidden_dim=args.hidden_dim,
@@ -363,6 +362,8 @@ def main(input_args=None):
         num_past_forcing_steps=args.num_past_forcing_steps,
         num_future_forcing_steps=args.num_future_forcing_steps,
         output_std=args.output_std,
+        output_clamping_lower=config.training.output_clamping.lower,
+        output_clamping_upper=config.training.output_clamping.upper,
     )
     forecaster = ARForecaster(predictor, datastore)
 

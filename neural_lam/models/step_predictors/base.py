@@ -1,15 +1,14 @@
 # Standard library
 from abc import ABC, abstractmethod
-from typing import Optional
+from typing import Dict, Optional
 
 # Third-party
 import torch
 from torch import nn
 
 # Local
-from .. import utils
-from ..config import NeuralLAMConfig
-from ..datastore import BaseDatastore
+from ... import utils
+from ...datastore import BaseDatastore
 
 
 class StepPredictor(nn.Module, ABC):
@@ -20,11 +19,18 @@ class StepPredictor(nn.Module, ABC):
 
     def __init__(
         self,
-        config: NeuralLAMConfig,
         datastore: BaseDatastore,
         output_std: bool = False,
+        output_clamping_lower: Optional[Dict[str, float]] = None,
+        output_clamping_upper: Optional[Dict[str, float]] = None,
     ):
         super().__init__()
+        self._output_clamping_lower: Dict[str, float] = (
+            dict(output_clamping_lower) if output_clamping_lower else {}
+        )
+        self._output_clamping_upper: Dict[str, float] = (
+            dict(output_clamping_upper) if output_clamping_upper else {}
+        )
 
         num_state_vars = datastore.get_num_data_vars(category="state")
 
@@ -91,30 +97,52 @@ class StepPredictor(nn.Module, ABC):
         forcing: torch.Tensor,
     ) -> tuple[torch.Tensor, Optional[torch.Tensor]]:
         """
-        Step state one step ahead using prediction model, X_{t-1}, X_t -> X_t+1
-        prev_state: (B, num_grid_nodes, feature_dim), X_t
-        prev_prev_state: (B, num_grid_nodes, feature_dim), X_{t-1}
-        forcing: (B, num_grid_nodes, forcing_dim)
+        Advance the state by one step:
+        ``(X_{t-1}, X_t, forcing_t) -> X_{t+1}``.
 
-        Returns:
-            pred_state: (B, num_grid_nodes, d_f)
-            pred_std: (B, num_grid_nodes, d_f) or None
+        Parameters
+        ----------
+        prev_state : torch.Tensor
+            Shape ``(B, num_grid_nodes, feature_dim)``. The current state
+            ``X_t``. Dims: ``B`` is batch size, ``num_grid_nodes`` is the
+            number of spatial nodes, and ``feature_dim`` is the number of
+            state variables.
+        prev_prev_state : torch.Tensor
+            Shape ``(B, num_grid_nodes, feature_dim)``. The previous state
+            ``X_{t-1}``, used as additional conditioning.
+        forcing : torch.Tensor
+            Shape ``(B, num_grid_nodes, forcing_dim)``. External forcings
+            for this step (already concatenated past/current/future
+            windows).
+
+        Returns
+        -------
+        pred_state : torch.Tensor
+            Shape ``(B, num_grid_nodes, feature_dim)``. The predicted next
+            state ``X_{t+1}``.
+        pred_std : torch.Tensor or None
+            Shape ``(B, num_grid_nodes, feature_dim)`` when ``output_std``
+            is True, otherwise ``None``. Per-feature predicted standard
+            deviation.
         """
         pass
 
-    def prepare_clamping_params(
-        self, config: NeuralLAMConfig, datastore: BaseDatastore
-    ):
+    def prepare_clamping_params(self, datastore: BaseDatastore):
         """
-        Prepare parameters for clamping predicted values to valid range
+        Prepare parameters for clamping predicted values to valid range.
+
+        Reads the per-feature lower/upper limits from
+        ``self._output_clamping_lower`` and ``self._output_clamping_upper``
+        (set in ``__init__``) and registers the buffers and clamping
+        functions used by ``get_clamped_new_state``.
         """
 
-        # Read configs
+        # Read clamping limits stored on self
         state_feature_names = datastore.get_vars_names(category="state")
-        lower_lims = config.training.output_clamping.lower
-        upper_lims = config.training.output_clamping.upper
+        lower_lims = self._output_clamping_lower
+        upper_lims = self._output_clamping_upper
 
-        # Check that limits in config are for valid features
+        # Check that limits are for valid features
         unknown_features_lower = set(lower_lims.keys()) - set(
             state_feature_names
         )

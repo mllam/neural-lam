@@ -10,7 +10,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - Split `ARModel` into `ForecasterModule`, `Forecaster` and
-  `StepPredictor` [\#208](https://github.com/mllam/neural-lam/pull/208)
+  `StepPredictor`, and reorganise `neural_lam.models` to mirror the new
+  hierarchy (`forecasters/`, `step_predictors/`, `step_predictors/graph/`).
+  Decouple `NeuralLAMConfig` from the predictor stack: `StepPredictor` and
+  the graph-based predictors now take `output_clamping_lower` /
+  `output_clamping_upper` dicts directly instead of the full config, so
+  `NeuralLAMConfig` no longer propagates below `ForecasterModule`.
+  [\#208](https://github.com/mllam/neural-lam/pull/208)
   @Sir-Sloth-The-Lazy
 
 ### Fixed
