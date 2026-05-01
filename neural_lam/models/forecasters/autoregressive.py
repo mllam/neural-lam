@@ -1,3 +1,6 @@
+# Standard library
+from typing import Optional
+
 # Third-party
 import torch
 
@@ -37,7 +40,7 @@ class ARForecaster(Forecaster):
         init_states: torch.Tensor,
         forcing_features: torch.Tensor,
         boundary_states: torch.Tensor,
-    ) -> tuple[torch.Tensor, torch.Tensor]:
+    ) -> tuple[torch.Tensor, Optional[torch.Tensor]]:
         """
         Unroll the autoregressive model: at each step ``i`` call
         ``self.predictor`` to produce the next state, then overwrite

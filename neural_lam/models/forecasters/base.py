@@ -61,9 +61,10 @@ class Forecaster(nn.Module, ABC):
             Shape ``(B, pred_steps, num_grid_nodes, d_f)``. Forecast of
             state at each predicted step.
         pred_std : torch.Tensor or None
-            Shape ``(B, pred_steps, num_grid_nodes, d_f)`` or ``(d_f,)``,
-            or ``None`` when ``predicts_std`` is False. Per-feature
-            predicted standard deviation; the constant per-variable std
-            used by the loss is substituted upstream when ``None``.
+            Shape ``(B, pred_steps, num_grid_nodes, d_f)`` when
+            ``predicts_std`` is True, otherwise ``None``. Per-feature
+            predicted standard deviation; when ``None``, the constant
+            per-variable std is substituted upstream by
+            ``ForecasterModule``.
         """
         pass
