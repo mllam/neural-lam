@@ -85,7 +85,20 @@ class StepPredictor(nn.Module, ABC):
 
     def expand_to_batch(self, x: torch.Tensor, batch_size: int) -> torch.Tensor:
         """
-        Expand tensor with shape (N, d) to (B, N, d)
+        Expand a shared node-feature tensor into a batch of copies.
+
+        Parameters
+        ----------
+        x : torch.Tensor
+            Shape ``(N, d)``. Tensor to expand. Dims: ``N`` is the number
+            of nodes and ``d`` is the feature dimension.
+        batch_size : int
+            Target batch size ``B``.
+
+        Returns
+        -------
+        torch.Tensor
+            Shape ``(B, N, d)``. Batch-expanded view of ``x``.
         """
         return x.unsqueeze(0).expand(batch_size, -1, -1)
 
@@ -109,21 +122,24 @@ class StepPredictor(nn.Module, ABC):
             state variables.
         prev_prev_state : torch.Tensor
             Shape ``(B, num_grid_nodes, feature_dim)``. The previous state
-            ``X_{t-1}``, used as additional conditioning.
+            ``X_{t-1}``, used as additional conditioning. Dims: same as
+            ``prev_state``.
         forcing : torch.Tensor
             Shape ``(B, num_grid_nodes, forcing_dim)``. External forcings
             for this step (already concatenated past/current/future
-            windows).
+            windows). Dims: ``B`` is batch size, ``num_grid_nodes`` is
+            the number of spatial nodes, and ``forcing_dim`` is the
+            forcing feature dimension.
 
         Returns
         -------
         pred_state : torch.Tensor
             Shape ``(B, num_grid_nodes, feature_dim)``. The predicted next
-            state ``X_{t+1}``.
+            state ``X_{t+1}``. Dims: same as ``prev_state``.
         pred_std : torch.Tensor or None
             Shape ``(B, num_grid_nodes, feature_dim)`` when ``output_std``
             is True, otherwise ``None``. Per-feature predicted standard
-            deviation.
+            deviation. Dims: same as ``prev_state``.
         """
         pass
 
@@ -267,18 +283,32 @@ class StepPredictor(nn.Module, ABC):
 
     def get_clamped_new_state(self, state_delta, prev_state):
         """
-        Clamp prediction to valid range supplied in config
-        Returns the clamped new state after adding delta to original state
+        Clamp the next-state prediction to its valid feature range.
 
-        Instead of the new state being computed as
-        $X_{t+1} = X_t + \\delta = X_t + model(\\{X_t,X_{t-1},...\\}, forcing)$
-        The clamped values will be
-        $f(f^{-1}(X_t) + model(\\{X_t, X_{t-1},... \\}, forcing))$
-        Which means the model will learn to output values in the range of the
-        inverse clamping function
+        Instead of the plain residual update
+        ``X_{t+1} = X_t + delta``, the clamped form is
+        ``X_{t+1} = f(f^{-1}(X_t) + delta)``
+        so the model learns to output increments in the domain of the
+        inverse clamping function.
 
-        state_delta: (B, num_grid_nodes, feature_dim)
-        prev_state: (B, num_grid_nodes, feature_dim)
+        Parameters
+        ----------
+        state_delta : torch.Tensor
+            Shape ``(B, num_grid_nodes, feature_dim)``. Raw predicted
+            state increment (network output, already rescaled). Dims:
+            ``B`` is batch size, ``num_grid_nodes`` is the number of
+            spatial nodes, and ``feature_dim`` is the number of state
+            variables.
+        prev_state : torch.Tensor
+            Shape ``(B, num_grid_nodes, feature_dim)``. Current state
+            ``X_t`` used as the base for the clamped update. Dims: same
+            as ``state_delta``.
+
+        Returns
+        -------
+        torch.Tensor
+            Shape ``(B, num_grid_nodes, feature_dim)``. Clamped next
+            state. Dims: same as ``state_delta``.
         """
 
         # Assign new state, but overwrite clamped values of each type later

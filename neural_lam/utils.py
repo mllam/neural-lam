@@ -595,23 +595,33 @@ def get_integer_time(tdelta: datetime.timedelta) -> tuple[int, str]:
     Get the largest time unit that can represent the given timedelta as an
     integer.
 
-    Returns:
-        int: The integer value of the timedelta in the largest time unit, or
-                1 if no such unit exists.
-        str: The time unit as a string ('weeks', 'days', 'hours', 'minutes',
-                'seconds', 'milliseconds', 'microseconds'). If no unit can
-                represent the timedelta as an integer, returns 'unknown'.
+    Parameters
+    ----------
+    tdelta : datetime.timedelta
+        The time interval to convert.
 
-    Examples:
-        >>> from datetime import timedelta
-        >>> get_integer_time(timedelta(days=14))
-        (2, 'weeks')
-        >>> get_integer_time(timedelta(hours=5))
-        (5, 'hours')
-        >>> get_integer_time(timedelta(milliseconds=1000))
-        (1, 'seconds')
-        >>> get_integer_time(timedelta(days=0.001))
-        (1, 'unknown')
+    Returns
+    -------
+    int
+        Integer value of the timedelta in the largest unit that divides
+        it exactly, or ``1`` if no such unit exists.
+    str
+        The time unit as a string (``'weeks'``, ``'days'``, ``'hours'``,
+        ``'minutes'``, ``'seconds'``, ``'milliseconds'``,
+        ``'microseconds'``). Returns ``'unknown'`` if no unit divides
+        evenly.
+
+    Examples
+    --------
+    >>> from datetime import timedelta
+    >>> get_integer_time(timedelta(days=14))
+    (2, 'weeks')
+    >>> get_integer_time(timedelta(hours=5))
+    (5, 'hours')
+    >>> get_integer_time(timedelta(milliseconds=1000))
+    (1, 'seconds')
+    >>> get_integer_time(timedelta(days=0.001))
+    (1, 'unknown')
     """
     total_seconds = tdelta.total_seconds()
 

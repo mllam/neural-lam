@@ -91,8 +91,10 @@ class BaseDatastore(abc.ABC):
     def step_length(self) -> timedelta:
         """The step length of the dataset as a time interval.
 
-        Returns:
-            timedelta: The step length as a datetime.timedelta object.
+        Returns
+        -------
+        datetime.timedelta
+            The step length of the dataset.
 
         """
         pass
@@ -385,16 +387,17 @@ class BaseDatastore(abc.ABC):
     @abc.abstractmethod
     def state_feature_weights_values(self) -> List[float]:
         """
-        Return the weights for each state feature as a list of floats. The
-        weights are defined by the user in a config file for the datastore.
+        Return the weights for each state feature as a list of floats.
 
-        Implementations of this method must assert that there is one weight for
-        each state feature in the datastore. The weights can be used to scale
-        the loss function for each state variable (e.g. via the standard
-        deviation of the 1-step differences of the state variables).
+        The weights are defined by the user in a config file for the
+        datastore. Implementations must assert that there is one weight
+        for each state feature. The weights can be used to scale the
+        loss function for each state variable.
 
-        Returns:
-            List[float]: The weights for each state feature.
+        Returns
+        -------
+        list of float
+            The weight for each state feature.
         """
         pass
 

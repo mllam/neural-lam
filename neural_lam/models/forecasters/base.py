@@ -34,7 +34,7 @@ class Forecaster(nn.Module, ABC):
         ----------
         init_states : torch.Tensor
             Shape ``(B, 2, num_grid_nodes, d_f)``. The two initial states
-            ``[X_{t-1}, X_t]`` used to seed the forecast. Dims: ``B`` is
+            ``[X_{t-1}, X_t]`` used to start the forecast from. Dims: ``B`` is
             batch size, ``2`` is the time index (``[X_{t-1}, X_t]``),
             ``num_grid_nodes`` is the number of spatial nodes, and ``d_f``
             is the state feature dimension.
@@ -49,22 +49,26 @@ class Forecaster(nn.Module, ABC):
             Shape ``(B, pred_steps, num_grid_nodes, d_f)``. True state
             values used ONLY to overwrite boundary nodes at each AR step
             — interior predictions must not depend on ``boundary_states``
-            in any other way. This is a temporary mechanism that mirrors
-            the pre-refactor ARModel behavior; it will be replaced by a
-            dedicated boundary-forcing input in #138 (training on interior
-            + boundary datastore), at which point this parameter will be
+            in any other way. Dims: ``B`` is batch size, ``pred_steps``
+            is the rollout length, ``num_grid_nodes`` is the number of
+            spatial nodes, and ``d_f`` is the state feature dimension.
+            This is a temporary mechanism that mirrors the pre-refactor
+            ARModel behavior; it will be replaced by a dedicated
+            boundary-forcing input in #138 (training on interior +
+            boundary datastore), at which point this parameter will be
             removed.
 
         Returns
         -------
         prediction : torch.Tensor
             Shape ``(B, pred_steps, num_grid_nodes, d_f)``. Forecast of
-            state at each predicted step.
+            state at each predicted step. Dims: same as
+            ``boundary_states``.
         pred_std : torch.Tensor or None
             Shape ``(B, pred_steps, num_grid_nodes, d_f)`` when
             ``predicts_std`` is True, otherwise ``None``. Per-feature
             predicted standard deviation; when ``None``, the constant
             per-variable std is substituted upstream by
-            ``ForecasterModule``.
+            ``ForecasterModule``. Dims: same as ``prediction``.
         """
         pass

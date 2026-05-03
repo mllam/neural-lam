@@ -145,18 +145,35 @@ class BaseGraphModel(StepPredictor):
 
     def embedd_mesh_nodes(self):
         """
-        Embed static mesh features
-        Returns tensor of shape (num_mesh_nodes, d_h)
+        Embed static mesh node features.
+
+        Returns
+        -------
+        torch.Tensor
+            Shape ``(num_mesh_nodes, d_h)``. Embedded mesh node
+            representations. Dims: ``num_mesh_nodes`` is the number of
+            mesh nodes and ``d_h`` is the hidden dimension.
         """
         raise NotImplementedError("embedd_mesh_nodes not implemented")
 
     def process_step(self, mesh_rep):
         """
-        Process step of embedd-process-decode framework
-        Processes the representation on the mesh, possible in multiple steps
+        Process the mesh representation in the encode-process-decode
+        framework, running one or more message-passing steps.
 
-        mesh_rep: has shape (B, num_mesh_nodes, d_h)
-        Returns mesh_rep: (B, num_mesh_nodes, d_h)
+        Parameters
+        ----------
+        mesh_rep : torch.Tensor
+            Shape ``(B, num_mesh_nodes, d_h)``. Current mesh node
+            representations. Dims: ``B`` is batch size,
+            ``num_mesh_nodes`` is the number of mesh nodes, and ``d_h``
+            is the hidden dimension.
+
+        Returns
+        -------
+        torch.Tensor
+            Shape ``(B, num_mesh_nodes, d_h)``. Updated mesh node
+            representations. Dims: same as ``mesh_rep``.
         """
         raise NotImplementedError("process_step not implemented")
 
@@ -178,22 +195,26 @@ class BaseGraphModel(StepPredictor):
             number of state variables.
         prev_prev_state : torch.Tensor
             Shape ``(B, num_grid_nodes, feature_dim)``. The previous state
-            ``X_{t-1}``, used as additional conditioning.
+            ``X_{t-1}``, used as additional conditioning. Dims: same as
+            ``prev_state``.
         forcing : torch.Tensor
             Shape ``(B, num_grid_nodes, forcing_dim)``. External forcings
             for this step (already concatenated past/current/future
-            windows).
+            windows). Dims: ``B`` is batch size, ``num_grid_nodes`` is
+            the number of spatial grid nodes, and ``forcing_dim`` is the
+            forcing feature dimension.
 
         Returns
         -------
         new_state : torch.Tensor
             Shape ``(B, num_grid_nodes, feature_dim)``. The predicted next
-            state ``X_{t+1}`` after delta-add and clamping.
+            state ``X_{t+1}`` after delta-add and clamping. Dims: same as
+            ``prev_state``.
         pred_std : torch.Tensor or None
             Shape ``(B, num_grid_nodes, feature_dim)`` when ``output_std``
             is True, otherwise ``None``. Per-feature predicted standard
             deviation (raw softplus output, not rescaled by diff
-            statistics).
+            statistics). Dims: same as ``prev_state``.
         """
         batch_size = prev_state.shape[0]
 
