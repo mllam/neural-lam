@@ -22,7 +22,7 @@ For a more in-depth scientific introduction to machine learning for LAM weather 
 As the code in the repository is continuously evolving, the latest version might feature some small differences to what was used for these publications.
 We retain some paper-specific branches for reproducibility purposes.
 
-
+### Core Neural-LAM Publications
 *If you use Neural-LAM in your work, please cite the relevant paper(s)*.
 
 #### [Graph-based Neural Weather Prediction for Limited Area Modeling](https://arxiv.org/abs/2309.17370)
@@ -48,6 +48,12 @@ See the branch [`ccai_paper_2023`](https://github.com/joeloskarsson/neural-lam/t
 ```
 See the branches [`prob_model_lam`](https://github.com/mllam/neural-lam/tree/prob_model_lam) and [`prob_model_global`](https://github.com/mllam/neural-lam/tree/prob_model_global) for revisions of the code that reproduces this paper.
 The global and probabilistic models from this paper are not yet fully merged with `main` (see issues [62](https://github.com/mllam/neural-lam/issues/62) and [63](https://github.com/mllam/neural-lam/issues/63)).
+
+### Research Using Neural-LAM
+
+This section can be extended over time with research projects and publications built using Neural-LAM. 
+
+If you use Neural-LAM in your research, feel free to open a PR to add your work here.
 
 # Modularity
 The Neural-LAM code is designed to modularize the different components involved in training and evaluating neural weather prediction models.
