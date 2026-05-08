@@ -147,6 +147,10 @@ class ForecasterModule(pl.LightningModule):
         # For storing spatial loss maps during evaluation
         self.spatial_loss_maps: List[Any] = []
 
+        # Warn once per phase if val_steps_to_log exceeds the actual rollout
+        self._val_steps_warn_issued = False
+        self._test_steps_warn_issued = False
+
         self.time_step_int, self.time_step_unit = get_integer_time(
             self.datastore.step_length
         )
@@ -212,6 +216,27 @@ class ForecasterModule(pl.LightningModule):
         return gathered
 
     # pylint: disable-next=unused-argument
+    def _warn_skipped_val_steps(self, pred_steps: int, phase: str) -> None:
+        """Warn once per phase if any val_steps_to_log exceed pred_steps."""
+        flag = f"_{phase}_steps_warn_issued"
+        if getattr(self, flag):
+            return
+        invalid = [
+            s
+            for s in self.hparams.val_steps_to_log
+            if s > pred_steps
+        ]
+        if invalid:
+            warnings.warn(
+                f"val_steps_to_log contains steps {invalid} that exceed "
+                f"the {phase} rollout length ({pred_steps}). "
+                "These steps will be skipped from logging. "
+                "Adjust --val_steps_to_log or the eval ar_steps.",
+                UserWarning,
+                stacklevel=2,
+            )
+        setattr(self, flag, True)
+
     def validation_step(self, batch, batch_idx):
         prediction, target_states, pred_std, _ = self.common_step(batch)
         if pred_std is None:
@@ -227,6 +252,7 @@ class ForecasterModule(pl.LightningModule):
             dim=0,
         )
         mean_loss = torch.mean(time_step_loss)
+        self._warn_skipped_val_steps(len(time_step_loss), "val")
 
         val_log_dict = {
             f"val_loss_unroll{step}": time_step_loss[step - 1]
@@ -292,6 +318,7 @@ class ForecasterModule(pl.LightningModule):
             dim=0,
         )
         mean_loss = torch.mean(time_step_loss)
+        self._warn_skipped_val_steps(len(time_step_loss), "test")
 
         test_log_dict = {
             f"test_loss_unroll{step}": time_step_loss[step - 1]

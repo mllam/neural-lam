@@ -148,8 +148,8 @@ def test_training(datastore_name):
 
     if not isinstance(datastore, BaseRegularGridDatastore):
         pytest.skip(
-            f"Skipping test for {datastore_name} as it is not a regular "
-            "grid datastore."
+            f"Skipping test for {datastore_name} as "
+            f"it is not a regular grid datastore."
         )
 
     run_simple_training(datastore, set_output_std=False)
