@@ -97,11 +97,11 @@ class GraphLAM(BaseGraphModel):
         Returns
         -------
         torch.Tensor
-            Shape ``(N_mesh, d_h)``. Embedded mesh node representations.
-            Dims: ``N_mesh`` is the number of mesh nodes and ``d_h`` is
+            Shape ``(num_mesh_nodes, d_h)``. Embedded mesh node representations.
+            Dims: ``num_mesh_nodes`` is the number of mesh nodes and ``d_h`` is
             the hidden dimension.
         """
-        return self.mesh_embedder(self.mesh_static_features)  # (N_mesh, d_h)
+        return self.mesh_embedder(self.mesh_static_features)  # (num_mesh_nodes, d_h)
 
     def process_step(self, mesh_rep):
         """
@@ -111,15 +111,15 @@ class GraphLAM(BaseGraphModel):
         Parameters
         ----------
         mesh_rep : torch.Tensor
-            Shape ``(B, N_mesh, d_h)``. Current mesh node
-            representations. Dims: ``B`` is batch size, ``N_mesh`` is
+            Shape ``(B, num_mesh_nodes, d_h)``. Current mesh node
+            representations. Dims: ``B`` is batch size, ``num_mesh_nodes`` is
             the number of mesh nodes, and ``d_h`` is the hidden
             dimension.
 
         Returns
         -------
         torch.Tensor
-            Shape ``(B, N_mesh, d_h)``. Updated mesh node
+            Shape ``(B, num_mesh_nodes, d_h)``. Updated mesh node
             representations. Dims: same as ``mesh_rep``.
         """
         # Embed m2m here first
@@ -131,5 +131,5 @@ class GraphLAM(BaseGraphModel):
 
         mesh_rep, _ = self.processor(
             mesh_rep, m2m_emb_expanded
-        )  # (B, N_mesh, d_h)
+        )  # (B, num_mesh_nodes, d_h)
         return mesh_rep

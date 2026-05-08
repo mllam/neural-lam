@@ -89,9 +89,9 @@ class HiLAMParallel(BaseHiGraphModel):
         Parameters
         ----------
         mesh_rep_levels : list of torch.Tensor
-            One tensor per level, each of shape ``(B, N_mesh[l], d_h)``.
+            One tensor per level, each of shape ``(B, num_mesh_nodes[l], d_h)``.
             Node representations at each hierarchy level. Dims: ``B`` is
-            batch size, ``N_mesh[l]`` is the node count at level ``l``,
+            batch size, ``num_mesh_nodes[l]`` is the node count at level ``l``,
             and ``d_h`` is the hidden dimension.
         mesh_same_rep : list of torch.Tensor
             One tensor per level, each of shape ``(B, M_same[l], d_h)``.
@@ -111,7 +111,7 @@ class HiLAMParallel(BaseHiGraphModel):
         """
 
         # First join all node and edge representations to single tensors
-        mesh_rep = torch.cat(mesh_rep_levels, dim=1)  # (B, N_mesh, d_h)
+        mesh_rep = torch.cat(mesh_rep_levels, dim=1)  # (B, num_mesh_nodes, d_h)
         mesh_edge_rep = torch.cat(
             mesh_same_rep + mesh_up_rep + mesh_down_rep, axis=1
         )  # (B, M_mesh, d_h)

@@ -189,30 +189,30 @@ class BaseGraphModel(StepPredictor):
         Parameters
         ----------
         prev_state : torch.Tensor
-            Shape ``(B, num_grid_nodes, feature_dim)``. The current state
+            Shape ``(B, num_grid_nodes, d_f)``. The current state
             ``X_t``. Dims: ``B`` is batch size, ``num_grid_nodes`` is the
-            number of spatial grid nodes, and ``feature_dim`` is the
-            number of state variables.
+            number of spatial grid nodes, and ``d_f`` is the number of
+            state variables.
         prev_prev_state : torch.Tensor
-            Shape ``(B, num_grid_nodes, feature_dim)``. The previous state
+            Shape ``(B, num_grid_nodes, d_f)``. The previous state
             ``X_{t-1}``, used as additional conditioning. Dims: same as
             ``prev_state``.
         forcing : torch.Tensor
-            Shape ``(B, num_grid_nodes, forcing_dim)``. External forcings
+            Shape ``(B, num_grid_nodes, d_forcing)``. External forcings
             for this step (already concatenated past/current/future
             windows). Dims: ``B`` is batch size, ``num_grid_nodes`` is
-            the number of spatial grid nodes, and ``forcing_dim`` is the
+            the number of spatial grid nodes, and ``d_forcing`` is the
             forcing feature dimension.
 
         Returns
         -------
         new_state : torch.Tensor
-            Shape ``(B, num_grid_nodes, feature_dim)``. The predicted next
-            state ``X_{t+1}`` after delta-add and clamping. Dims: same as
+            Shape ``(B, num_grid_nodes, d_f)``. The predicted next state
+            ``X_{t+1}`` after delta-add and clamping. Dims: same as
             ``prev_state``.
         pred_std : torch.Tensor or None
-            Shape ``(B, num_grid_nodes, feature_dim)`` when ``output_std``
-            is True, otherwise ``None``. Per-feature predicted standard
+            Shape ``(B, num_grid_nodes, d_f)`` when ``output_std`` is
+            True, otherwise ``None``. Per-feature predicted standard
             deviation (raw softplus output, not rescaled by diff
             statistics). Dims: same as ``prev_state``.
         """

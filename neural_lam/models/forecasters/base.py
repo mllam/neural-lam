@@ -39,11 +39,11 @@ class Forecaster(nn.Module, ABC):
             ``num_grid_nodes`` is the number of spatial nodes, and ``d_f``
             is the state feature dimension.
         forcing_features : torch.Tensor
-            Shape ``(B, pred_steps, num_grid_nodes, d_static_f)``. External
+            Shape ``(B, pred_steps, num_grid_nodes, d_forcing)``. External
             forcings provided at each predicted step. Dims: ``B`` is batch
             size, ``pred_steps`` is the autoregressive rollout length,
             ``num_grid_nodes`` is the number of spatial nodes, and
-            ``d_static_f`` is the forcing feature dimension (already
+            ``d_forcing`` is the forcing feature dimension (already
             concatenated past/current/future windows).
         boundary_states : torch.Tensor
             Shape ``(B, pred_steps, num_grid_nodes, d_f)``. True state

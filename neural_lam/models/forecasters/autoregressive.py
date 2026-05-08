@@ -55,11 +55,11 @@ class ARForecaster(Forecaster):
             number of spatial nodes, and ``d_f`` is the state feature
             dimension.
         forcing_features : torch.Tensor
-            Shape ``(B, pred_steps, num_grid_nodes, d_static_f)``. Forcing
+            Shape ``(B, pred_steps, num_grid_nodes, d_forcing)``. Forcing
             features for each predicted step; ``pred_steps`` defines the
             rollout length. Dims: ``B`` is batch size, ``pred_steps`` is
             the number of predicted steps, ``num_grid_nodes`` is the
-            number of spatial nodes, and ``d_static_f`` is the forcing
+            number of spatial nodes, and ``d_forcing`` is the forcing
             feature dimension (already concatenated past/current/future
             windows).
         boundary_states : torch.Tensor
