@@ -216,6 +216,7 @@ def model_and_batch(tmp_path, time_step, time_unit):
         mesh_aggr = "sum"
         lr = 1.0e-3
         val_steps_to_log = [1, 2]
+        ar_steps_eval = 2
         metrics_watch = []
         num_past_forcing_steps = 0
         num_future_forcing_steps = 0
@@ -425,6 +426,7 @@ class _MetricsWatchModelArgs:
     mesh_aggr = "sum"
     lr = 1.0e-3
     val_steps_to_log = [1, 2]
+    ar_steps_eval = 2
     metrics_watch = ["val_rmse"]
     var_leads_metrics_watch = {0: [1]}
     num_past_forcing_steps = 0
