@@ -157,7 +157,9 @@ class HiLAM(BaseHiGraphModel):
             send_node_rep = mesh_rep_levels[
                 level_l + 1
             ]  # (B, num_mesh_nodes[l+1], d_h)
-            rec_node_rep = mesh_rep_levels[level_l]  # (B, num_mesh_nodes[l], d_h)
+            rec_node_rep = mesh_rep_levels[
+                level_l
+            ]  # (B, num_mesh_nodes[l], d_h)
             down_edge_rep = mesh_down_rep[level_l]
             same_edge_rep = mesh_same_rep[level_l]
 
@@ -219,7 +221,9 @@ class HiLAM(BaseHiGraphModel):
             send_node_rep = mesh_rep_levels[
                 level_l - 1
             ]  # (B, num_mesh_nodes[l-1], d_h)
-            rec_node_rep = mesh_rep_levels[level_l]  # (B, num_mesh_nodes[l], d_h)
+            rec_node_rep = mesh_rep_levels[
+                level_l
+            ]  # (B, num_mesh_nodes[l], d_h)
             up_edge_rep = mesh_up_rep[level_l - 1]
             same_edge_rep = mesh_same_rep[level_l]
 

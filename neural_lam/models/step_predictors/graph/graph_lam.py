@@ -101,7 +101,9 @@ class GraphLAM(BaseGraphModel):
             Dims: ``num_mesh_nodes`` is the number of mesh nodes and ``d_h`` is
             the hidden dimension.
         """
-        return self.mesh_embedder(self.mesh_static_features)  # (num_mesh_nodes, d_h)
+        return self.mesh_embedder(
+            self.mesh_static_features
+        )  # (num_mesh_nodes, d_h)
 
     def process_step(self, mesh_rep):
         """

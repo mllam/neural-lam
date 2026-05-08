@@ -221,11 +221,7 @@ class ForecasterModule(pl.LightningModule):
         flag = f"_{phase}_steps_warn_issued"
         if getattr(self, flag):
             return
-        invalid = [
-            s
-            for s in self.hparams.val_steps_to_log
-            if s > pred_steps
-        ]
+        invalid = [s for s in self.hparams.val_steps_to_log if s > pred_steps]
         if invalid:
             warnings.warn(
                 f"val_steps_to_log contains steps {invalid} that exceed "
