@@ -193,10 +193,12 @@ class MDPDatastore(BaseRegularGridDatastore):
             The names of the variables in the given category.
 
         """
-        if category not in self._ds and category == "forcing":
-            warnings.warn("no forcing data found in datastore")
+        feature_key = f"{category}_feature"
+        if feature_key not in self._ds:
+            if category == "forcing":
+                warnings.warn("no forcing data found in datastore")
             return []
-        return self._ds[f"{category}_feature"].values.tolist()
+        return self._ds[feature_key].values.tolist()
 
     def get_vars_long_names(self, category: str) -> List[str]:
         """
@@ -213,10 +215,12 @@ class MDPDatastore(BaseRegularGridDatastore):
             The long names of the variables in the given category.
 
         """
-        if category not in self._ds and category == "forcing":
-            warnings.warn("no forcing data found in datastore")
+        long_name_key = f"{category}_feature_long_name"
+        if long_name_key not in self._ds:
+            if category == "forcing":
+                warnings.warn("no forcing data found in datastore")
             return []
-        return self._ds[f"{category}_feature_long_name"].values.tolist()
+        return self._ds[long_name_key].values.tolist()
 
     def get_num_data_vars(self, category: str) -> int:
         """Return the number of variables in the given category.
