@@ -692,6 +692,18 @@ class ForecasterModule(pl.LightningModule):
         prediction_rescaled = prediction * state_std + state_mean
         target_rescaled = target * state_std + state_mean
 
+        # Load boundary forcing for plotting (raw, unstandardized)
+        da_boundary_forcing = None
+        n_boundary_vars = 0
+        if self.datastore_boundary is not None:
+            da_boundary_forcing = self.datastore_boundary.get_dataarray(
+                category="forcing", split=split, standardize=False
+            )
+            if da_boundary_forcing is not None:
+                n_boundary_vars = self.datastore_boundary.get_num_data_vars(
+                    "forcing"
+                )
+
         for pred_slice, target_slice, time_slice in zip(
             prediction_rescaled[:n_examples],
             target_rescaled[:n_examples],
@@ -744,6 +756,19 @@ class ForecasterModule(pl.LightningModule):
                 }
 
             for t_i, _ in enumerate(zip(pred_slice, target_slice), start=1):
+                # Select boundary field for this timestep (if available)
+                boundary_da_t = None
+                if (
+                    da_boundary_forcing is not None
+                    and "time" in da_boundary_forcing.dims
+                ):
+                    target_time = np.array(
+                        time_slice[t_i - 1].cpu(), dtype="datetime64[ns]"
+                    )
+                    boundary_da_t = da_boundary_forcing.sel(
+                        time=target_time, method="nearest"
+                    )
+
                 var_figs = [
                     vis.plot_prediction(
                         datastore=self.datastore,
@@ -757,6 +782,18 @@ class ForecasterModule(pl.LightningModule):
                         da_target=da_target.isel(
                             state_feature=var_i, time=t_i - 1
                         ).squeeze(),
+                        boundary_da=(
+                            boundary_da_t.isel(forcing_feature=var_i).squeeze()
+                            if boundary_da_t is not None
+                            and var_i < n_boundary_vars
+                            else None
+                        ),
+                        boundary_datastore=(
+                            self.datastore_boundary
+                            if boundary_da_t is not None
+                            and var_i < n_boundary_vars
+                            else None
+                        ),
                     )
                     for var_i, (var_name, var_unit, var_vrange) in enumerate(
                         zip(

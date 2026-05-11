@@ -537,6 +537,11 @@ Some options specifically important for evaluation are:
 * `--n_example_pred`: Number of example predictions to plot during evaluation.
 * `--ar_steps_eval`: Number of time steps to unroll for during evaluation
 
+When a `datastore_boundary` is configured in `config.yaml`, evaluation plots
+will overlay the boundary forcing data underneath the interior prediction and
+ground truth panels, allowing visual inspection of the boundary conditions used
+during the forecast.
+
 **Note:** While it is technically possible to use multiple GPUs for running evaluation, this is strongly discouraged. If using multiple devices the `DistributedSampler` will replicate some samples to make sure all devices have the same batch size, meaning that evaluation metrics will be unreliable.
 A possible workaround is to just use batch size 1 during evaluation.
 This issue stems from PyTorch Lightning. See for example [this PR](https://github.com/Lightning-AI/torchmetrics/pull/1886) for more discussion.
