@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- Add optional boundary datastore support: `NeuralLAMConfig` accepts a `datastore_boundary` field, `WeatherDataset` loads and standardizes boundary forcing from a separate domain, and `__getitem__` returns a 5-tuple `(init_states, target_states, forcing, boundary, target_times)`. New CLI args `--num_past_boundary_steps` / `--num_future_boundary_steps` control the boundary forcing window. [\#635](https://github.com/mllam/neural-lam/pull/635) @sadamov
+- Add optional boundary datastore support: `NeuralLAMConfig` accepts a `datastore_boundary` field, `WeatherDataset` loads and standardizes boundary forcing from a separate domain, and `__getitem__` returns a 5-tuple `(init_states, target_states, forcing, boundary, target_times)`. New CLI args `--num_past_boundary_steps` / `--num_future_boundary_steps` control the boundary forcing window. `MDPDatastore` now supports boundary-only datastores (forcing + static, no state variables). [\#635](https://github.com/mllam/neural-lam/pull/635) @sadamov
 
 ### Changed
 
