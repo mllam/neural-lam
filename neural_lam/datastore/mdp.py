@@ -75,7 +75,9 @@ class MDPDatastore(BaseRegularGridDatastore):
             self._ds = mdp.create_dataset(config=self._config)
             self._ds.to_zarr(fp_ds)
         self._n_boundary_points = n_boundary_points
-        self.is_ensemble = "ensemble_member" in self._ds["state"].dims
+        self.is_ensemble = (
+            "state" in self._ds and "ensemble_member" in self._ds["state"].dims
+        )
         self.has_ensemble_forcing = (
             "forcing" in self._ds
             and "ensemble_member" in self._ds["forcing"].dims
@@ -453,9 +455,16 @@ class MDPDatastore(BaseRegularGridDatastore):
             The shape of the cartesian grid for the state variables.
 
         """
-        ds_state = self.unstack_grid_coords(self._ds["state"])
+        # Use state if available, otherwise fall back to forcing (e.g.
+        # boundary-only datastores that have no state variables).
+        for category in ("state", "forcing", "static"):
+            if category in self._ds:
+                ds_cat = self.unstack_grid_coords(self._ds[category])
+                break
+        else:
+            raise ValueError("Dataset has no state, forcing, or static data")
         xdim, ydim = self.spatial_coordinates
-        da_x, da_y = ds_state[xdim], ds_state[ydim]
+        da_x, da_y = ds_cat[xdim], ds_cat[ydim]
         assert da_x.ndim == da_y.ndim == 1
         return CartesianGridShape(x=da_x.size, y=da_y.size)
 
