@@ -473,6 +473,25 @@ class DummyDatastore(BaseRegularGridDatastore):
         return CartesianGridShape(x=n_points_1d, y=n_points_1d)
 
 
+class BoundaryDummyDatastore(DummyDatastore):
+    """DummyDatastore acting as a boundary forcing provider.
+
+    Uses a different (smaller) grid and different forcing features to simulate
+    a boundary datastore from a separate domain.  Only the ``forcing``
+    category is meaningful; ``state`` and ``static`` are inherited but unused.
+    """
+
+    SHORT_NAME = "dummydata_boundary"
+    N_FEATURES = dict(state=5, forcing=3, static=1)
+
+    def __init__(self, n_grid_points=400, n_timesteps=10, step_length=None):
+        super().__init__(
+            n_grid_points=n_grid_points,
+            n_timesteps=n_timesteps,
+            step_length=step_length,
+        )
+
+
 class EnsembleDummyDatastore(BaseDatastore):
     """Small offline datastore for ensemble WeatherDataset tests.
 

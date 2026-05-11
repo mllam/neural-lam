@@ -116,7 +116,7 @@ def test_time_slicing_analysis(
 
     sample = dataset[0]
 
-    init_states, target_states, forcing, _ = [
+    init_states, target_states, forcing, _boundary, _ = [
         tensor.numpy() for tensor in sample
     ]
 
@@ -192,4 +192,6 @@ def test_step_length_timedeltas(step_length):
 
     # Test that we can get a sample
     sample = dataset[0]
-    assert len(sample) == 4  # init_states, target_states, forcing, target_times
+    assert (
+        len(sample) == 5
+    )  # init_states, target_states, forcing, boundary, target_times

@@ -15,7 +15,11 @@ from neural_lam.datastore.base import BaseRegularGridDatastore
 from neural_lam.models import ForecasterModule
 from neural_lam.weather_dataset import WeatherDataset
 from tests.conftest import init_datastore_example
-from tests.dummy_datastore import DummyDatastore, EnsembleDummyDatastore
+from tests.dummy_datastore import (
+    BoundaryDummyDatastore,
+    DummyDatastore,
+    EnsembleDummyDatastore,
+)
 
 
 @pytest.mark.parametrize("datastore_name", DATASTORES.keys())
@@ -48,7 +52,7 @@ def test_dataset_item_shapes(datastore_name):
 
     # unpack the item, this is the current return signature for
     # WeatherDataset.__getitem__
-    init_states, target_states, forcing, target_times = item
+    init_states, target_states, forcing, boundary, target_times = item
 
     # initial states
     assert init_states.ndim == 3
@@ -99,9 +103,9 @@ def test_dataset_item_create_dataarray_from_tensor(datastore_name):
 
     # unpack the item, this is the current return signature for
     # WeatherDataset.__getitem__
-    _, target_states, _, target_times_arr = dataset[idx]
-    _, da_target_true, _, da_target_times_true = dataset._build_item_dataarrays(
-        idx=idx
+    _, target_states, _, _, target_times_arr = dataset[idx]
+    _, da_target_true, _, _, da_target_times_true = (
+        dataset._build_item_dataarrays(idx=idx)
     )
 
     target_times = np.array(target_times_arr, dtype="datetime64[ns]")
@@ -374,8 +378,8 @@ def test_ensemble_index_mapping_is_time_major():
         standardize=False,
     )
 
-    init_states_0, _, _, target_times_0 = dataset[0]
-    init_states_1, _, _, target_times_1 = dataset[1]
+    init_states_0, _, _, _, target_times_0 = dataset[0]
+    init_states_1, _, _, _, target_times_1 = dataset[1]
 
     # Adjacent flat indices correspond to same sample_idx and different member.
     assert torch.equal(target_times_0, target_times_1)
@@ -399,8 +403,8 @@ def test_ensemble_forcing_uses_same_member_when_available():
         standardize=False,
     )
 
-    _, _, forcing_0, target_times_0 = dataset[0]
-    _, _, forcing_1, target_times_1 = dataset[1]
+    _, _, forcing_0, _, target_times_0 = dataset[0]
+    _, _, forcing_1, _, target_times_1 = dataset[1]
 
     assert torch.equal(target_times_0, target_times_1)
     assert not torch.equal(forcing_0, forcing_1)
@@ -423,8 +427,8 @@ def test_ensemble_forcing_without_member_dim_is_shared():
         standardize=False,
     )
 
-    init_states_0, _, forcing_0, target_times_0 = dataset[0]
-    init_states_1, _, forcing_1, target_times_1 = dataset[1]
+    init_states_0, _, forcing_0, _, target_times_0 = dataset[0]
+    init_states_1, _, forcing_1, _, target_times_1 = dataset[1]
 
     assert torch.equal(target_times_0, target_times_1)
     assert not torch.equal(init_states_0, init_states_1)
@@ -527,7 +531,132 @@ def test_weather_dataset_no_forcing_standardize():
     assert dataset.da_forcing_std is None
 
     # Ensure we can still retrieve a sample (forcing tensor should be empty)
-    init_states, target_states, forcing, target_times = dataset[0]
+    init_states, target_states, forcing, boundary, target_times = dataset[0]
     assert (
         forcing.shape[-1] == 0
     ), "Expected zero forcing features when forcing is None"
+
+
+def test_boundary_datastore_shapes():
+    """WeatherDataset with a boundary datastore should return a 5-tuple where
+    the boundary tensor has the boundary grid and windowed features."""
+    n_timesteps = 20
+    ar_steps = 3
+    num_past_boundary = 1
+    num_future_boundary = 1
+    boundary_window = num_past_boundary + num_future_boundary + 1
+
+    datastore = DummyDatastore(n_grid_points=100, n_timesteps=n_timesteps)
+    boundary_ds = BoundaryDummyDatastore(
+        n_grid_points=25, n_timesteps=n_timesteps
+    )
+
+    dataset = WeatherDataset(
+        datastore=datastore,
+        split="train",
+        ar_steps=ar_steps,
+        num_past_forcing_steps=1,
+        num_future_forcing_steps=1,
+        num_past_boundary_steps=num_past_boundary,
+        num_future_boundary_steps=num_future_boundary,
+        datastore_boundary=boundary_ds,
+        standardize=True,
+    )
+
+    init_states, target_states, forcing, boundary, target_times = dataset[0]
+
+    assert init_states.shape == (2, 100, datastore.N_FEATURES["state"])
+    assert target_states.shape == (ar_steps, 100, datastore.N_FEATURES["state"])
+    assert forcing.ndim == 3
+    assert boundary.ndim == 3
+    assert boundary.shape[0] == ar_steps
+    assert boundary.shape[1] == 25  # boundary grid
+    n_boundary_features = boundary_ds.N_FEATURES["forcing"]
+    assert boundary.shape[2] == n_boundary_features * boundary_window
+    assert target_times.shape == (ar_steps,)
+
+    # Verify no NaN from standardization
+    assert not torch.isnan(boundary).any()
+
+
+def test_boundary_datastore_none_gives_empty_boundary():
+    """Without a boundary datastore the boundary tensor should have zero
+    features (last dim == 0)."""
+    datastore = DummyDatastore(n_grid_points=100, n_timesteps=20)
+
+    dataset = WeatherDataset(
+        datastore=datastore,
+        split="train",
+        ar_steps=3,
+        standardize=False,
+    )
+
+    _, _, _, boundary, _ = dataset[0]
+    assert boundary.shape[-1] == 0
+
+
+def test_boundary_datastore_standardization():
+    """Boundary forcing should be standardized when standardize=True and
+    left raw when standardize=False."""
+    n_timesteps = 20
+    datastore = DummyDatastore(n_grid_points=100, n_timesteps=n_timesteps)
+    boundary_ds = BoundaryDummyDatastore(
+        n_grid_points=25, n_timesteps=n_timesteps
+    )
+
+    dataset_std = WeatherDataset(
+        datastore=datastore,
+        split="train",
+        ar_steps=2,
+        num_past_boundary_steps=0,
+        num_future_boundary_steps=0,
+        datastore_boundary=boundary_ds,
+        standardize=True,
+    )
+
+    dataset_raw = WeatherDataset(
+        datastore=datastore,
+        split="train",
+        ar_steps=2,
+        num_past_boundary_steps=0,
+        num_future_boundary_steps=0,
+        datastore_boundary=boundary_ds,
+        standardize=False,
+    )
+
+    _, _, _, boundary_std, _ = dataset_std[0]
+    _, _, _, boundary_raw, _ = dataset_raw[0]
+
+    # Standardized and raw should differ (unless data happens to have
+    # mean=0 and std=1, which is essentially impossible for random data)
+    assert not torch.equal(boundary_std, boundary_raw)
+
+
+def test_boundary_dataset_length_unchanged():
+    """Adding a boundary datastore should not change the dataset length."""
+    n_timesteps = 20
+    datastore = DummyDatastore(n_grid_points=100, n_timesteps=n_timesteps)
+    boundary_ds = BoundaryDummyDatastore(
+        n_grid_points=25, n_timesteps=n_timesteps
+    )
+
+    dataset_no_boundary = WeatherDataset(
+        datastore=datastore,
+        split="train",
+        ar_steps=3,
+        num_past_forcing_steps=1,
+        num_future_forcing_steps=1,
+    )
+
+    dataset_with_boundary = WeatherDataset(
+        datastore=datastore,
+        split="train",
+        ar_steps=3,
+        num_past_forcing_steps=1,
+        num_future_forcing_steps=1,
+        num_past_boundary_steps=1,
+        num_future_boundary_steps=1,
+        datastore_boundary=boundary_ds,
+    )
+
+    assert len(dataset_no_boundary) == len(dataset_with_boundary)

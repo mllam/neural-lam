@@ -148,6 +148,9 @@ And the content of `config.yaml` could in this case look like:
 datastore:
   kind: mdp
   config_path: danra.datastore.yaml
+datastore_boundary:  # optional, for boundary forcing from a separate domain
+  kind: mdp
+  config_path: era5_boundary.datastore.yaml
 training:
   state_feature_weighting:
     __config_class__: ManualStateFeatureWeighting
@@ -167,10 +170,14 @@ training:
 For now the neural-lam config only defines few things:
 
 1. The kind of datastore and the path to its config
-2. The weighting of different features in
+2. (Optional) A boundary datastore (`datastore_boundary`) providing boundary
+   forcing from a separate domain (e.g. ERA5 for a LAM domain). When set, the
+   boundary forcing is windowed and included as an additional tensor in each
+   training sample.
+3. The weighting of different features in
 the loss function. If you don't define the state feature weighting it will default to
 weighting all features equally.
-3. Valid numerical range for output of each feature. The numerical range of all features default to $]-\infty, \infty[$.
+4. Valid numerical range for output of each feature. The numerical range of all features default to $]-\infty, \infty[$.
 
 (This example is taken from the `tests/datastore_examples/mdp` directory.)
 

@@ -176,7 +176,13 @@ class ForecasterModule(pl.LightningModule):
         return opt
 
     def common_step(self, batch):
-        init_states, target_states, forcing_features, batch_times = batch
+        (
+            init_states,
+            target_states,
+            forcing_features,
+            boundary_features,
+            batch_times,
+        ) = batch
         prediction, pred_std = self.forecaster(
             init_states, forcing_features, target_states
         )
@@ -374,7 +380,7 @@ class ForecasterModule(pl.LightningModule):
     def plot_examples(self, batch, n_examples, split, prediction):
 
         target = batch[1]
-        time = batch[3]
+        time = batch[4]
 
         da_state_stats = self.datastore.get_standardization_dataarray("state")
         state_std = torch.tensor(

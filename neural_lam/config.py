@@ -119,6 +119,7 @@ class NeuralLAMConfig(dataclass_wizard.JSONWizard, dataclass_wizard.YAMLWizard):
     """
 
     datastore: DatastoreSelection
+    datastore_boundary: Union[DatastoreSelection, None] = None
     training: TrainingConfig = dataclasses.field(default_factory=TrainingConfig)
 
     class _(dataclass_wizard.JSONWizard.Meta):
@@ -155,9 +156,13 @@ class InvalidConfigError(Exception):
 
 def load_config_and_datastore(
     config_path: str,
-) -> tuple[NeuralLAMConfig, Union[MDPDatastore, NpyFilesDatastoreMEPS]]:
+) -> tuple[
+    NeuralLAMConfig,
+    Union[MDPDatastore, NpyFilesDatastoreMEPS],
+    Union[MDPDatastore, NpyFilesDatastoreMEPS, None],
+]:
     """
-    Load the neural-lam configuration and the datastore specified in the
+    Load the neural-lam configuration and the datastores specified in the
     configuration.
 
     Parameters
@@ -167,8 +172,9 @@ def load_config_and_datastore(
 
     Returns
     -------
-    tuple[NeuralLAMConfig, Union[MDPDatastore, NpyFilesDatastoreMEPS]]
-        The Neural-LAM configuration and the loaded datastore.
+    tuple[NeuralLAMConfig, datastore, datastore_boundary]
+        The Neural-LAM configuration, the loaded (interior) datastore,
+        and the boundary datastore (or None if not configured).
     """
     try:
         config = NeuralLAMConfig.from_yaml_file(config_path)
@@ -185,4 +191,14 @@ def load_config_and_datastore(
         datastore_kind=config.datastore.kind, config_path=datastore_config_path
     )
 
-    return config, datastore
+    datastore_boundary = None
+    if config.datastore_boundary is not None:
+        datastore_boundary_config_path = (
+            Path(config_path).parent / config.datastore_boundary.config_path
+        )
+        datastore_boundary = init_datastore(
+            datastore_kind=config.datastore_boundary.kind,
+            config_path=datastore_boundary_config_path,
+        )
+
+    return config, datastore, datastore_boundary

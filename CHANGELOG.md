@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [unreleased](https://github.com/mllam/neural-lam/compare/v0.6.0...HEAD)
 
+### Added
+
+- Add optional boundary datastore support: `NeuralLAMConfig` accepts a `datastore_boundary` field, `WeatherDataset` loads and standardizes boundary forcing from a separate domain, and `__getitem__` returns a 5-tuple `(init_states, target_states, forcing, boundary, target_times)`. New CLI args `--num_past_boundary_steps` / `--num_future_boundary_steps` control the boundary forcing window. [\#TODO](https://github.com/mllam/neural-lam/pull/TODO) @sadamov
+
 ### Changed
 
 - Split `ARModel` into `ForecasterModule`, `Forecaster` and

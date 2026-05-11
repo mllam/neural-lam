@@ -316,7 +316,7 @@ def test_plot_examples_integration_saves_figure(
     ), f"Expected time_step_unit={time_unit}, got {model.time_step_unit}"
 
     # Generate prediction
-    (init_states, target, forcing_features, _batch_times) = batch
+    (init_states, target, forcing_features, _boundary, _batch_times) = batch
     prediction, _ = model.forecaster(init_states, forcing_features, target)
 
     # Rescale to original data scale
@@ -338,7 +338,7 @@ def test_plot_examples_integration_saves_figure(
     # Get first example
     pred_slice = prediction_rescaled[0].detach()  # Detach from graph
     target_slice = target_rescaled[0].detach()
-    time_slice = batch[3][0]
+    time_slice = batch[4][0]
 
     # Create DataArrays
     dataset = WeatherDataset(datastore=datastore, split="train")
