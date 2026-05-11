@@ -34,6 +34,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Graph storage specification (`docs/graph_storage_spec.md`), PEP 723–compliant validator script (`docs/validate_graph.py`), and pre-commit hook keeping the spec in sync with the validator for the torch-tensors-on-disk graph format currently used in neural-lam [\#323](https://github.com/mllam/neural-lam/pull/323) @leifdenby
 
+- Support plotting boundary data from a separate boundary datastore in `vis.plot_on_axis` and `vis.plot_prediction` via optional `boundary_da` and `boundary_datastore` parameters [\#636](https://github.com/mllam/neural-lam/pull/636)
+
 ### Changed
 
 - Replace the single `datastore` key in the neural-lam config with a named `datastores` mapping. Each datastore's role is now implied by the categories it provides rather than by a dedicated config key. Existing configs must move their datastore under a named entry in `datastores:` [\#635](https://github.com/mllam/neural-lam/pull/635) @sadamov
