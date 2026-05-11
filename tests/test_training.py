@@ -13,13 +13,26 @@ from neural_lam import config as nlconfig
 from neural_lam.create_graph import create_graph_from_datastore
 from neural_lam.datastore import DATASTORES
 from neural_lam.datastore.base import BaseRegularGridDatastore
-from neural_lam.models.ar_model import ARModel
-from neural_lam.models.graph_lam import GraphLAM
+from neural_lam.models import ForecasterModule
 from neural_lam.weather_dataset import WeatherDataModule
 from tests.conftest import init_datastore_example
 
+# Model architecture defaults for tests
+GRAPH = "1level"
+HIDDEN_DIM = 4
+HIDDEN_LAYERS = 1
+PROCESSOR_LAYERS = 2
+MESH_AGGR = "sum"
+NUM_PAST_FORCING_STEPS = 1
+NUM_FUTURE_FORCING_STEPS = 1
 
-def run_simple_training(datastore, set_output_std, metrics_watch=None):
+
+def run_simple_training(
+    datastore,
+    set_output_std,
+    metrics_watch=None,
+    var_leads_metrics_watch=None,
+):
     """
     Run one epoch of a simple model training setup using the given datastore.
 
@@ -30,6 +43,10 @@ def run_simple_training(datastore, set_output_std, metrics_watch=None):
     set_output_std : bool
         If --output_std should be set during training
     """
+    if metrics_watch is None:
+        metrics_watch = []
+    if var_leads_metrics_watch is None:
+        var_leads_metrics_watch = {}
 
     if torch.cuda.is_available():
         device_name = "cuda"
@@ -82,40 +99,44 @@ def run_simple_training(datastore, set_output_std, metrics_watch=None):
         num_future_forcing_steps=1,
     )
 
-    _mw = metrics_watch or []
-    _vlmw = {0: [1]} if _mw else {}
-
-    class ModelArgs:
-        output_std = set_output_std
-        loss = "mse"
-        restore_opt = False
-        n_example_pred = 1
-        # XXX: this should be superfluous when we have already defined the
-        # model object no?
-        graph = graph_name
-        hidden_dim = 4
-        hidden_layers = 1
-        processor_layers = 2
-        mesh_aggr = "sum"
-        lr = 1.0e-3
-        val_steps_to_log = [1, 3]
-        metrics_watch = _mw
-        var_leads_metrics_watch = _vlmw
-        num_past_forcing_steps = 1
-        num_future_forcing_steps = 1
-
-    model_args = ModelArgs()
-
     config = nlconfig.NeuralLAMConfig(
         datastore=nlconfig.DatastoreSelection(
             kind=datastore.SHORT_NAME, config_path=datastore.root_path
         )
     )
 
-    model = GraphLAM(  # noqa
-        args=model_args,
+    # Build predictor and forecaster externally, then inject into
+    # ForecasterModule
+    # First-party
+    from neural_lam.models import MODELS, ARForecaster
+
+    predictor_class = MODELS["graph_lam"]
+    predictor = predictor_class(
         datastore=datastore,
+        graph_name=graph_name,
+        hidden_dim=HIDDEN_DIM,
+        hidden_layers=HIDDEN_LAYERS,
+        processor_layers=PROCESSOR_LAYERS,
+        mesh_aggr=MESH_AGGR,
+        num_past_forcing_steps=NUM_PAST_FORCING_STEPS,
+        num_future_forcing_steps=NUM_FUTURE_FORCING_STEPS,
+        output_std=set_output_std,
+        output_clamping_lower=config.training.output_clamping.lower,
+        output_clamping_upper=config.training.output_clamping.upper,
+    )
+    forecaster = ARForecaster(predictor, datastore)
+
+    model = ForecasterModule(
+        forecaster=forecaster,
         config=config,
+        datastore=datastore,
+        loss="mse",
+        lr=1.0e-3,
+        restore_opt=False,
+        n_example_pred=1,
+        val_steps_to_log=[1, 3],
+        metrics_watch=metrics_watch,
+        var_leads_metrics_watch=var_leads_metrics_watch,
     )
     wandb.init(mode="disabled")  # Disable wandb for offline test run
     trainer.fit(model=model, datamodule=data_module)
@@ -127,8 +148,8 @@ def test_training(datastore_name):
 
     if not isinstance(datastore, BaseRegularGridDatastore):
         pytest.skip(
-            f"Skipping test for {datastore_name} as it is not a regular "
-            "grid datastore."
+            f"Skipping test for {datastore_name} as "
+            f"it is not a regular grid datastore."
         )
 
     run_simple_training(datastore, set_output_std=False)
@@ -154,8 +175,10 @@ def test_all_gather_cat_single_device():
             return tensor_to_gather
 
     module = MockModule()
-    # Bind the real ARModel.all_gather_cat to our mock
-    module.all_gather_cat = ARModel.all_gather_cat.__get__(module, MockModule)
+    # Bind the real ForecasterModule.all_gather_cat to our mock
+    module.all_gather_cat = ForecasterModule.all_gather_cat.__get__(
+        module, MockModule
+    )
 
     # Simulate a 3D metric tensor: (N_eval, pred_steps, d_f)
     tensor = torch.randn(4, 3, 5)
@@ -183,8 +206,10 @@ def test_all_gather_cat_multi_device_simulation():
             return torch.stack([tensor, tensor], dim=0)
 
     module = MockModule()
-    # Bind the real ARModel.all_gather_cat to our mock
-    module.all_gather_cat = ARModel.all_gather_cat.__get__(module, MockModule)
+    # Bind the real ForecasterModule.all_gather_cat to our mock
+    module.all_gather_cat = ForecasterModule.all_gather_cat.__get__(
+        module, MockModule
+    )
 
     tensor = torch.randn(4, 3, 5)  # (N_eval, pred_steps, d_f)
     result = module.all_gather_cat(tensor)

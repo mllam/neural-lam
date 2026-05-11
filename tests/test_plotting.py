@@ -2,7 +2,7 @@
 from datetime import timedelta
 from pathlib import Path
 from typing import Iterator
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 # Third-party
 import matplotlib
@@ -18,7 +18,7 @@ from cartopy import crs as ccrs
 from neural_lam import config as nlconfig
 from neural_lam import vis
 from neural_lam.create_graph import create_graph_from_datastore
-from neural_lam.models.graph_lam import GraphLAM
+from neural_lam.models import ARForecaster, ForecasterModule, GraphLAM
 from neural_lam.weather_dataset import WeatherDataset
 from tests.conftest import init_datastore_example
 from tests.dummy_datastore import DummyDatastore
@@ -425,6 +425,7 @@ def model_and_batch(tmp_path, time_step, time_unit):
         mesh_aggr = "sum"
         lr = 1.0e-3
         val_steps_to_log = [1, 2]
+        ar_steps_eval = 2
         metrics_watch = []
         num_past_forcing_steps = 0
         num_future_forcing_steps = 0
@@ -447,11 +448,38 @@ def model_and_batch(tmp_path, time_step, time_unit):
         ),
     )
 
-    # Create model.
-    model = GraphLAM(
-        args=ModelArgs(),
+    # Create model
+    # First-party
+    from neural_lam.models import MODELS, ARForecaster
+
+    args = ModelArgs()
+    predictor_class = MODELS["graph_lam"]
+    predictor = predictor_class(
+        datastore=datastore,
+        graph_name=args.graph,
+        hidden_dim=args.hidden_dim,
+        hidden_layers=args.hidden_layers,
+        processor_layers=args.processor_layers,
+        mesh_aggr=args.mesh_aggr,
+        num_past_forcing_steps=args.num_past_forcing_steps,
+        num_future_forcing_steps=args.num_future_forcing_steps,
+        output_std=args.output_std,
+        output_clamping_lower=config.training.output_clamping.lower,
+        output_clamping_upper=config.training.output_clamping.upper,
+    )
+    forecaster = ARForecaster(predictor, datastore=datastore)
+
+    model = ForecasterModule(
+        forecaster=forecaster,
         config=config,
         datastore=datastore,
+        loss=args.loss,
+        restore_opt=args.restore_opt,
+        n_example_pred=args.n_example_pred,
+        val_steps_to_log=args.val_steps_to_log,
+        metrics_watch=args.metrics_watch,
+        var_leads_metrics_watch=args.var_leads_metrics_watch,
+        lr=args.lr,
     )
 
     # Create dataset to get a sample batch.
@@ -497,12 +525,25 @@ def test_plot_examples_integration_saves_figure(
         model.time_step_unit == time_unit
     ), f"Expected time_step_unit={time_unit}, got {model.time_step_unit}"
 
-    # Generate prediction.
-    prediction, target, _, _ = model.common_step(batch)
+    # Generate prediction
+    (init_states, target, forcing_features, _batch_times) = batch
+    prediction, _ = model.forecaster(init_states, forcing_features, target)
 
-    # Rescale to original data scale.
-    prediction_rescaled = prediction * model.state_std + model.state_mean
-    target_rescaled = target * model.state_std + model.state_mean
+    # Rescale to original data scale
+    da_state_stats = datastore.get_standardization_dataarray("state")
+    state_std = torch.tensor(
+        da_state_stats.state_std.values,
+        dtype=torch.float32,
+        device=prediction.device,
+    )
+    state_mean = torch.tensor(
+        da_state_stats.state_mean.values,
+        dtype=torch.float32,
+        device=prediction.device,
+    )
+
+    prediction_rescaled = prediction * state_std + state_mean
+    target_rescaled = target * state_std + state_mean
 
     # Get first example.
     pred_slice = prediction_rescaled[0].detach()
@@ -580,7 +621,7 @@ def test_plot_examples_gif_integration(model_and_batch, monkeypatch):
     model, batch, datastore, tmp_path = model_and_batch
 
     # Enable the GIF path and reset the example counter
-    model.args.create_gif = True
+    model.create_gif = True
     model.plotted_examples = 0
 
     # Minimal logger: plot_examples only reads save_dir and optionally calls
@@ -619,3 +660,174 @@ def test_plot_examples_gif_integration(model_and_batch, monkeypatch):
         gif = plot_dir / f"{var_name}_example_{example_i}_prediction.gif"
         assert gif.exists(), f"Missing GIF: {gif.name}"
         assert gif.read_bytes()[:3] == b"GIF", f"{gif.name} is not a valid GIF"
+
+
+# Shared ModelArgs for metrics_watch regression tests (issue #302).
+# Kept at module level to avoid copy-paste duplication across tests.
+def _build_metrics_watch_module(datastore, config):
+    """Build a ForecasterModule wired for metrics_watch tests."""
+    predictor = GraphLAM(
+        datastore=datastore,
+        graph_name="1level",
+        hidden_dim=4,
+        hidden_layers=1,
+        processor_layers=1,
+        mesh_aggr="sum",
+        num_past_forcing_steps=0,
+        num_future_forcing_steps=0,
+        output_std=False,
+        output_clamping_lower=config.training.output_clamping.lower,
+        output_clamping_upper=config.training.output_clamping.upper,
+    )
+    forecaster = ARForecaster(predictor, datastore)
+    return ForecasterModule(
+        forecaster=forecaster,
+        config=config,
+        datastore=datastore,
+        loss="mse",
+        lr=1.0e-3,
+        restore_opt=False,
+        n_example_pred=1,
+        val_steps_to_log=[1, 2],
+        metrics_watch=["val_rmse"],
+        var_leads_metrics_watch={0: [1]},
+    )
+
+
+def test_create_metric_log_dict_with_metrics_watch(tmp_path):
+    """
+    Regression test for issue #302: AssertionError when using --metrics_watch.
+
+    Previously, aggregate_and_plot_metrics asserted all log_dict values were
+    plt.Figure, which failed when --metrics_watch added scalar tensor values.
+    This test verifies that create_metric_log_dict correctly returns a single
+    dict containing both plt.Figure and scalar entries.
+    """
+    datastore = DummyDatastore()
+    num_state_vars = datastore.get_num_data_vars(category="state")
+
+    graph_dir_path = Path(datastore.root_path) / "graph" / "1level"
+    if not graph_dir_path.exists():
+        create_graph_from_datastore(
+            datastore=datastore,
+            output_root_path=str(graph_dir_path),
+            n_max_levels=1,
+        )
+
+    config = nlconfig.NeuralLAMConfig(
+        datastore=nlconfig.DatastoreSelection(
+            kind=datastore.SHORT_NAME,
+            config_path=datastore.root_path,
+        ),
+    )
+
+    model = _build_metrics_watch_module(datastore, config)
+
+    # Create a dummy metric tensor: (pred_steps=2, d_f=num_state_vars)
+    metric_tensor = torch.rand(2, num_state_vars)
+
+    # This call should not raise an AssertionError (the original bug)
+    log_dict = model.create_metric_log_dict(
+        metric_tensor, prefix="val", metric_name="rmse"
+    )
+
+    # Verify log_dict contains the error-map figure
+    assert "val_rmse" in log_dict
+    assert isinstance(log_dict["val_rmse"], plt.Figure)
+
+    # Verify log_dict also contains the watched scalar metric
+    var_names = datastore.get_vars_names(category="state")
+    expected_key = f"val_rmse_{var_names[0]}_step_1"
+    assert expected_key in log_dict, (
+        f"Expected key '{expected_key}' in log_dict, "
+        f"got keys: {list(log_dict.keys())}"
+    )
+
+    # Verify figure entries are plt.Figure and scalar entries are tensors
+    for key, value in log_dict.items():
+        assert isinstance(
+            value, (plt.Figure, torch.Tensor)
+        ), f"Unexpected value type for key '{key}': {type(value)}"
+
+    plt.close("all")
+
+
+def test_aggregate_and_plot_metrics_with_metrics_watch(tmp_path):
+    """
+    Integration test for issue #302: exercises the full watched-metrics path
+    through aggregate_and_plot_metrics(), which is the exact crash site of the
+    original AssertionError.
+
+    Previously, aggregate_and_plot_metrics asserted all values in the log dict
+    were plt.Figure objects, which failed when --metrics_watch added scalar
+    tensor values. This test ensures the full pipeline works without crashing.
+    """
+    datastore = DummyDatastore()
+    num_state_vars = datastore.get_num_data_vars(category="state")
+
+    graph_dir_path = Path(datastore.root_path) / "graph" / "1level"
+    if not graph_dir_path.exists():
+        create_graph_from_datastore(
+            datastore=datastore,
+            output_root_path=str(graph_dir_path),
+            n_max_levels=1,
+        )
+
+    config = nlconfig.NeuralLAMConfig(
+        datastore=nlconfig.DatastoreSelection(
+            kind=datastore.SHORT_NAME,
+            config_path=datastore.root_path,
+        ),
+    )
+
+    model = _build_metrics_watch_module(datastore, config)
+
+    # Mock the trainer to simulate rank-0 single-process execution
+    mock_trainer = MagicMock()
+    mock_trainer.is_global_zero = True
+    mock_trainer.sanity_checking = False
+    mock_trainer.current_epoch = 0
+    model._trainer = mock_trainer
+
+    # Mock logger so log_image calls don't fail.
+    # In Lightning, self.logger resolves to self._trainer.logger,
+    # so we must attach the mock there.
+    mock_logger = MagicMock()
+    mock_trainer.logger = mock_logger
+
+    # Patch all_gather_cat to be a no-op (single process)
+    model.all_gather_cat = lambda x: x
+
+    # Capture scalar metrics logged via self.log_dict()
+    logged_scalars = {}
+
+    def capture_log_dict(d, **kwargs):
+        logged_scalars.update(d)
+
+    model.log_dict = capture_log_dict
+
+    # Build a fake metrics_dict with MSE entries:
+    # shape (N_eval=2, pred_steps=2, d_f=num_state_vars)
+    metrics_dict = {"mse": [torch.rand(1, 2, num_state_vars) for _ in range(2)]}
+
+    # This is the exact crash site: should NOT raise AssertionError
+    model.aggregate_and_plot_metrics(metrics_dict, prefix="val")
+
+    # Verify that log_image was called (figures were logged)
+    mock_logger.log_image.assert_called()
+
+    # Verify that scalar metrics were captured via self.log_dict()
+    assert len(logged_scalars) > 0, (
+        "Expected scalar metrics to be logged via self.log_dict() "
+        "when metrics_watch is configured"
+    )
+
+    # Verify the expected watched-metric key is present
+    var_names = datastore.get_vars_names(category="state")
+    expected_key = f"val_rmse_{var_names[0]}_step_1"
+    assert expected_key in logged_scalars, (
+        f"Expected key '{expected_key}' in logged scalars, "
+        f"got keys: {list(logged_scalars.keys())}"
+    )
+
+    plt.close("all")
