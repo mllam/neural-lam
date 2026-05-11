@@ -556,3 +556,7 @@ class MDPDatastore(BaseRegularGridDatastore):
 
         coords = np.stack((lon.values, lat.values), axis=1)
         return coords
+
+    @property
+    def num_grid_points(self) -> int:
+        return len(self._ds.grid_index)
