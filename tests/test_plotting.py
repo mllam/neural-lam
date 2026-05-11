@@ -21,7 +21,7 @@ from neural_lam.create_graph import create_graph_from_datastore
 from neural_lam.models import ARForecaster, ForecasterModule, GraphLAM
 from neural_lam.weather_dataset import WeatherDataset
 from tests.conftest import init_datastore_example
-from tests.dummy_datastore import DummyDatastore
+from tests.dummy_datastore import BoundaryDummyDatastore, DummyDatastore
 
 # Create output directory for test figures
 TEST_OUTPUT_DIR = Path(__file__).parent / "test_outputs" / "plotting"
@@ -141,8 +141,7 @@ def test_plot_on_axis_with_boundary() -> None:
     datastore = init_datastore_example("dummydata")
     n_grid = datastore.num_grid_points
 
-    # Create a boundary datastore with a coarser grid
-    boundary_datastore = DummyDatastore(n_grid_points=2500)
+    boundary_datastore = BoundaryDummyDatastore()
     n_boundary = boundary_datastore.num_grid_points
 
     da = xr.DataArray(np.linspace(0.0, 1.0, n_grid))
@@ -170,7 +169,7 @@ def test_plot_prediction_with_boundary() -> None:
     datastore = init_datastore_example("dummydata")
     n_grid = datastore.num_grid_points
 
-    boundary_datastore = DummyDatastore(n_grid_points=2500)
+    boundary_datastore = BoundaryDummyDatastore()
     n_boundary = boundary_datastore.num_grid_points
 
     da_pred = xr.DataArray(np.linspace(0.0, 1.0, n_grid))
@@ -221,13 +220,13 @@ def test_plot_on_axis_boundary_sets_extent() -> None:
     """When boundary data is present and crop_to_interior is False,
     the extent should be set to cover the boundary domain."""
 
-    class _LargerDummyDatastore(DummyDatastore):
+    class _LargerBoundaryDatastore(BoundaryDummyDatastore):
         bbox_size_km = [1000, 1000]
 
     datastore = init_datastore_example("dummydata")
     n_grid = datastore.num_grid_points
 
-    boundary_datastore = _LargerDummyDatastore(n_grid_points=2500)
+    boundary_datastore = _LargerBoundaryDatastore()
     n_boundary = boundary_datastore.num_grid_points
 
     da = xr.DataArray(np.linspace(0.0, 1.0, n_grid))
