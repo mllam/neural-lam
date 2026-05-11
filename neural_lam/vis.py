@@ -157,9 +157,23 @@ def plot_on_axis(
 @matplotlib.rc_context(utils.fractional_plot_bundle(1))
 def plot_error_map(errors, datastore: BaseRegularGridDatastore, title=None):
     """
-    Plot a heatmap of errors of different variables at different
-    predictions horizons
-    errors: (pred_steps, d_f)
+    Plot a heatmap of errors across variables and prediction horizons.
+
+    Parameters
+    ----------
+    errors : torch.Tensor
+        Shape ``(pred_steps, d_f)``. Per-step, per-variable errors.
+        Dims: ``pred_steps`` is the number of forecast steps and ``d_f``
+        is the number of state variables.
+    datastore : BaseRegularGridDatastore
+        Datastore providing variable names, units, and step length.
+    title : str, optional
+        Title for the axes.
+
+    Returns
+    -------
+    matplotlib.figure.Figure
+        The completed heatmap figure.
     """
 
     # Ensure errors is 2D even for single-step/single-GPU runs
@@ -228,10 +242,32 @@ def plot_prediction(
     colorbar_label: str = "",
 ):
     """
-    Plot example prediction and grond truth.
+    Plot an example prediction alongside the ground truth.
 
-    Each has shape (N_grid,)
+    Parameters
+    ----------
+    datastore : BaseRegularGridDatastore
+        Datastore providing grid metadata and projection.
+    da_prediction : xarray.DataArray
+        Shape ``(N_grid,)``. Predicted field values.
+    da_target : xarray.DataArray
+        Shape ``(N_grid,)``. Ground-truth field values.
+    title : str, optional
+        Overall figure title.
+    vrange : tuple of (float, float), optional
+        ``(vmin, vmax)`` for the shared colour scale. Inferred from data
+        if not given.
+    boundary_alpha : float, optional
+        Alpha transparency for the boundary overlay (default 0.7).
+    crop_to_interior : bool, optional
+        If True, crop the axes to the interior region (default True).
+    colorbar_label : str, optional
+        Label for the shared colorbar.
 
+    Returns
+    -------
+    matplotlib.figure.Figure
+        The completed two-panel prediction figure.
     """
     if vrange is None:
         vmin = float(min(da_prediction.min(), da_target.min()))
@@ -289,7 +325,33 @@ def plot_spatial_error(
     crop_to_interior=True,
     colorbar_label: str = "",
 ):
-    """Plot spatial error with projection-aware axes."""
+    """
+    Plot a spatially resolved error map on a projection-aware axis.
+
+    Parameters
+    ----------
+    error : torch.Tensor
+        Shape ``(N_grid,)``. Per-node error values. Dims: ``N_grid`` is
+        the number of grid nodes.
+    datastore : BaseRegularGridDatastore
+        Datastore providing grid metadata and projection.
+    title : str, optional
+        Figure title.
+    vrange : tuple of (float, float), optional
+        ``(vmin, vmax)`` for the colour scale. Inferred from data if not
+        given.
+    boundary_alpha : float, optional
+        Alpha transparency for the boundary overlay (default 0.7).
+    crop_to_interior : bool, optional
+        If True, crop the axes to the interior region (default True).
+    colorbar_label : str, optional
+        Label for the colorbar.
+
+    Returns
+    -------
+    matplotlib.figure.Figure
+        The completed spatial error figure.
+    """
 
     error_np = error.detach().cpu().numpy()
 
