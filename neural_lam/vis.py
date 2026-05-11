@@ -349,6 +349,8 @@ def plot_on_axis(
     cmap: str | matplotlib.colors.Colormap = "plasma",
     boundary_alpha: float | None = None,
     crop_to_interior: bool = False,
+    boundary_da: Optional[xr.DataArray] = None,
+    boundary_datastore: Optional[BaseRegularGridDatastore] = None,
 ) -> matplotlib.collections.QuadMesh:
     """
     Plot weather state on a projection-aware axis using datastore metadata.
@@ -373,6 +375,13 @@ def plot_on_axis(
         If provided, overlay boundary mask with given alpha transparency.
     crop_to_interior : bool, optional
         If True, crop the plot to the interior region.
+    boundary_da : xarray.DataArray, optional
+        Boundary data from a separate boundary datastore. Shape
+        ``(N_boundary,)``. Plotted underneath the interior data with
+        reduced opacity.
+    boundary_datastore : BaseRegularGridDatastore, optional
+        Datastore providing grid metadata for the boundary data.
+        Required when ``boundary_da`` is given.
 
     Returns
     -------
@@ -392,6 +401,37 @@ def plot_on_axis(
     gl.right_labels = False
     gl.xlabel_style = {"size": _TICK_SIZE}
     gl.ylabel_style = {"size": _TICK_SIZE}
+
+    # Plot boundary data underneath interior data when provided
+    if boundary_da is not None and boundary_datastore is not None:
+        b_lats_lons = boundary_datastore.get_lat_lon("state")
+        b_grid_shape = (
+            boundary_datastore.grid_shape_state.x,
+            boundary_datastore.grid_shape_state.y,
+        )
+        b_lons = b_lats_lons[:, 0].reshape(b_grid_shape)
+        b_lats = b_lats_lons[:, 1].reshape(b_grid_shape)
+
+        if (
+            isinstance(boundary_da, xr.DataArray)
+            and "x" in boundary_da.dims
+            and "y" in boundary_da.dims
+        ):
+            boundary_da = boundary_da.transpose("x", "y")
+
+        b_values = boundary_da.values.reshape(b_grid_shape)
+
+        ax.pcolormesh(
+            b_lons,
+            b_lats,
+            b_values,
+            transform=ccrs.PlateCarree(),
+            vmin=vmin,
+            vmax=vmax,
+            cmap=cmap,
+            shading="auto",
+            alpha=0.5,
+        )
 
     lats_lons = datastore.get_lat_lon("state")
     grid_shape = (
@@ -456,6 +496,13 @@ def plot_on_axis(
             ax.set_extent(
                 [min_lon, max_lon, min_lat, max_lat], crs=ccrs.PlateCarree()
             )
+    elif boundary_da is not None and boundary_datastore is not None:
+        # When boundary data is shown, set extent to cover the boundary
+        # domain so both interior and boundary regions are visible
+        ax.set_extent(
+            [b_lons.min(), b_lons.max(), b_lats.min(), b_lats.max()],
+            crs=ccrs.PlateCarree(),
+        )
 
     if ax_title:
         ax.set_title(ax_title, size=_TITLE_SIZE)
@@ -623,6 +670,8 @@ def plot_prediction(
     boundary_alpha: float = 0.7,
     crop_to_interior: bool = True,
     colorbar_label: str = "",
+    boundary_da: Optional[xr.DataArray] = None,
+    boundary_datastore: Optional[BaseRegularGridDatastore] = None,
 ) -> matplotlib.figure.Figure:
     """
     Plot an example prediction alongside the ground truth.
@@ -646,6 +695,12 @@ def plot_prediction(
         If True, crop the axes to the interior region (default True).
     colorbar_label : str, optional
         Label for the shared colorbar.
+    boundary_da : xarray.DataArray, optional
+        Boundary field from a separate boundary datastore. Shape
+        ``(N_boundary,)``. Plotted underneath with reduced opacity.
+    boundary_datastore : BaseRegularGridDatastore, optional
+        Datastore providing grid metadata for the boundary data.
+        Required when ``boundary_da`` is given.
 
     Returns
     -------
@@ -678,6 +733,8 @@ def plot_prediction(
             cmap="viridis",
             boundary_alpha=boundary_alpha,
             crop_to_interior=crop_to_interior,
+            boundary_da=boundary_da,
+            boundary_datastore=boundary_datastore,
         )
 
     if title:

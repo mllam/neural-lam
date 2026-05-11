@@ -136,6 +136,130 @@ def test_plot_prediction() -> None:
     assert prediction_ax.collections[0].norm.vmax == expected_vmax
 
 
+def test_plot_on_axis_with_boundary() -> None:
+    """Boundary data from a separate datastore adds an extra pcolormesh."""
+    datastore = init_datastore_example("dummydata")
+    n_grid = datastore.num_grid_points
+
+    # Create a boundary datastore with a coarser grid
+    boundary_datastore = DummyDatastore(n_grid_points=2500)
+    n_boundary = boundary_datastore.num_grid_points
+
+    da = xr.DataArray(np.linspace(0.0, 1.0, n_grid))
+    boundary_da = xr.DataArray(np.linspace(0.5, 1.5, n_boundary))
+
+    fig, ax = plt.subplots(
+        subplot_kw={"projection": datastore.coords_projection}
+    )
+    mesh = vis.plot_on_axis(
+        ax=ax,
+        da=da,
+        datastore=datastore,
+        boundary_da=boundary_da,
+        boundary_datastore=boundary_datastore,
+        boundary_alpha=None,
+        crop_to_interior=False,
+    )
+    assert mesh is not None
+    # Two pcolormesh collections: boundary underneath + interior on top
+    assert len(ax.collections) == 2
+
+
+def test_plot_prediction_with_boundary() -> None:
+    """plot_prediction with boundary data shows boundary in both panels."""
+    datastore = init_datastore_example("dummydata")
+    n_grid = datastore.num_grid_points
+
+    boundary_datastore = DummyDatastore(n_grid_points=2500)
+    n_boundary = boundary_datastore.num_grid_points
+
+    da_pred = xr.DataArray(np.linspace(0.0, 1.0, n_grid))
+    da_target = xr.DataArray(np.linspace(1.0, 2.0, n_grid))
+    boundary_da = xr.DataArray(np.linspace(0.5, 1.5, n_boundary))
+
+    fig = vis.plot_prediction(
+        datastore=datastore,
+        da_prediction=da_pred,
+        da_target=da_target,
+        title="Test with Boundary",
+        boundary_alpha=None,
+        crop_to_interior=False,
+        boundary_da=boundary_da,
+        boundary_datastore=boundary_datastore,
+    )
+
+    assert isinstance(fig, matplotlib.figure.Figure)
+
+    ground_truth_ax, prediction_ax, _ = fig.axes
+    # Each panel: boundary pcolormesh + interior pcolormesh
+    assert len(ground_truth_ax.collections) == 2
+    assert len(prediction_ax.collections) == 2
+
+
+def test_plot_prediction_boundary_none_is_backward_compatible() -> None:
+    """Passing no boundary params behaves identically to the old API."""
+    datastore = init_datastore_example("dummydata")
+    n_grid = datastore.num_grid_points
+
+    da_pred = xr.DataArray(np.linspace(0.0, 1.0, n_grid))
+    da_target = xr.DataArray(np.linspace(1.0, 2.0, n_grid))
+
+    fig = vis.plot_prediction(
+        datastore=datastore,
+        da_prediction=da_pred,
+        da_target=da_target,
+        boundary_alpha=None,
+        crop_to_interior=False,
+    )
+
+    ground_truth_ax = fig.axes[0]
+    # No boundary data -> only one collection per panel
+    assert len(ground_truth_ax.collections) == 1
+
+
+def test_plot_on_axis_boundary_sets_extent() -> None:
+    """When boundary data is present and crop_to_interior is False,
+    the extent should be set to cover the boundary domain."""
+
+    class _LargerDummyDatastore(DummyDatastore):
+        bbox_size_km = [1000, 1000]
+
+    datastore = init_datastore_example("dummydata")
+    n_grid = datastore.num_grid_points
+
+    boundary_datastore = _LargerDummyDatastore(n_grid_points=2500)
+    n_boundary = boundary_datastore.num_grid_points
+
+    da = xr.DataArray(np.linspace(0.0, 1.0, n_grid))
+    boundary_da = xr.DataArray(np.linspace(0.5, 1.5, n_boundary))
+
+    with patch(
+        "cartopy.mpl.geoaxes.GeoAxes.set_extent", autospec=True
+    ) as set_extent_mock:
+        vis.plot_on_axis(
+            ax=plt.axes(projection=datastore.coords_projection),
+            da=da,
+            datastore=datastore,
+            boundary_da=boundary_da,
+            boundary_datastore=boundary_datastore,
+            boundary_alpha=None,
+            crop_to_interior=False,
+        )
+
+    assert set_extent_mock.call_count == 1
+    called_extent = set_extent_mock.call_args.args[1]
+    assert isinstance(set_extent_mock.call_args.kwargs["crs"], ccrs.PlateCarree)
+
+    # The extent should match the boundary datastore's lat/lon range
+    b_lats_lons = boundary_datastore.get_lat_lon("state")
+    b_lons = b_lats_lons[:, 0]
+    b_lats = b_lats_lons[:, 1]
+    assert called_extent[0] == pytest.approx(float(b_lons.min()))
+    assert called_extent[1] == pytest.approx(float(b_lons.max()))
+    assert called_extent[2] == pytest.approx(float(b_lats.min()))
+    assert called_extent[3] == pytest.approx(float(b_lats.max()))
+
+
 def test_plot_error_map() -> None:
     """Check the deprecated error-heatmap wrapper still renders correctly."""
     datastore = init_datastore_example("dummydata")
