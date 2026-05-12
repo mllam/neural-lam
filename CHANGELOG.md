@@ -7,13 +7,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [unreleased](https://github.com/mllam/neural-lam/compare/v0.6.0...HEAD)
 
+### Changed
+
+- Split `ARModel` into `ForecasterModule`, `Forecaster` and
+  `StepPredictor`, and reorganise `neural_lam.models` to mirror the new
+  hierarchy (`forecasters/`, `step_predictors/`, `step_predictors/graph/`).
+  Decouple `NeuralLAMConfig` from the predictor stack: `StepPredictor` and
+  the graph-based predictors now take `output_clamping_lower` /
+  `output_clamping_upper` dicts directly instead of the full config, so
+  `NeuralLAMConfig` no longer propagates below `ForecasterModule`.
+  [\#208](https://github.com/mllam/neural-lam/pull/208)
+  @Sir-Sloth-The-Lazy
+
 ### Fixed
 
+- Change metric heatmap (`plot_error_map`, now `plot_error_heatmap`) to use a
+  shared cross-variable color scale instead of per-row normalization, add a
+  colorbar, and scale figure size and font sizes with grid dimensions
+  ([#375](https://github.com/mllam/neural-lam/issues/375))
 - Fix `AssertionError` in `aggregate_and_plot_metrics` when using `--metrics_watch` flags by using `isinstance` dispatch for figure vs scalar logging [\#303](https://github.com/mllam/neural-lam/pull/303) @AftAb-25
 
 - Resolve `xarray` `FacetGrid` `DeprecationWarning` in `plot_example.py` by using a compatibility shim [\#482](https://github.com/mllam/neural-lam/pull/482) @sohampatil01-svg
 
 - Add missing bounds check in `test_step` to prevent `IndexError` when `val_steps_to_log` exceeds prediction steps [\#220](https://github.com/mllam/neural-lam/pull/220) @santhil-cyber
+
+- Fix `IndexError` in distributed flux stats gathering and silent diff stats shape corruption in `compute_standardization_stats.py` when running with `--distributed` and `world_size > 1` [\#411](https://github.com/mllam/neural-lam/pull/411) @RajdeepKushwaha5
 
 ### Maintenance
 
