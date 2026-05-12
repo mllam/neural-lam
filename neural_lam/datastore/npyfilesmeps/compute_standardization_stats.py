@@ -246,11 +246,10 @@ def main(
                 [means_gathered[i] for i in original_indices],
                 [squares_gathered[i] for i in original_indices],
             )
-            n_real_per_rank = len(ds.get_original_indices()) // world_size
             flux_means = [
                 torch.cat(
                     [
-                        torch.stack(rank_flux[:n_real_per_rank])
+                        torch.stack(rank_flux)
                         for rank_flux in flux_means_gathered
                     ]
                 )
@@ -258,7 +257,7 @@ def main(
             flux_squares = [
                 torch.cat(
                     [
-                        torch.stack(rank_flux[:n_real_per_rank])
+                        torch.stack(rank_flux)
                         for rank_flux in flux_squares_gathered
                     ]
                 )
