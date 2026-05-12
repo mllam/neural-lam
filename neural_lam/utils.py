@@ -21,6 +21,9 @@ from tueplots import bundles, figsizes
 # Local
 from .custom_loggers import CustomMLFlowLogger
 
+GRAPH_VERSION_SENTINEL_FILENAME = "created-with-neural-lam-version"
+LEGACY_NEURAL_LAM_VERSION_CUTOFF = "0.5.0"
+
 
 class BufferList(nn.Module):
     """
@@ -225,30 +228,51 @@ def load_graph(
             weights_only=True,
         )
 
+    def load_graph_version() -> str | None:
+        version_path = Path(graph_dir_path) / GRAPH_VERSION_SENTINEL_FILENAME
+        if not version_path.exists():
+            warnings.warn(
+                "Graph version sentinel is missing; assuming legacy mesh "
+                "feature normalization for compatibility with "
+                f"neural-lam<={LEGACY_NEURAL_LAM_VERSION_CUTOFF}.",
+                RuntimeWarning,
+                stacklevel=2,
+            )
+            return None
+
+        return version_path.read_text(encoding="utf-8").strip()
+
     # Load static node features
     mesh_static_features = loads_file(
         "mesh_features.pt"
     )  # List of (N_mesh[l], d_mesh_static)
 
-    # Normalize static mesh features
-    num_features = mesh_static_features[0].shape[1]
+    graph_creation_version = load_graph_version()
+    should_normalize_mesh_features = graph_creation_version is not None
 
-    # Coordinates (first two columns) are normalized jointly
-    pos_max = max(torch.max(torch.abs(m[:, :2])) for m in mesh_static_features)
+    # Normalize static mesh features for the current on-disk graph format.
+    # Legacy graphs already store normalized mesh coordinates.
+    if should_normalize_mesh_features:
+        num_features = mesh_static_features[0].shape[1]
 
-    for i in range(num_features):
-        if i < 2:
-            scale = pos_max
-        else:
-            # Extra features are normalized independently per column
-            scale = max(
-                torch.max(torch.abs(m[:, i])) for m in mesh_static_features
-            )
-            if scale == 0:
-                scale = 1.0
+        # Coordinates (first two columns) are normalized jointly
+        pos_max = max(
+            torch.max(torch.abs(m[:, :2])) for m in mesh_static_features
+        )
 
-        for m in mesh_static_features:
-            m[:, i] /= scale
+        for i in range(num_features):
+            if i < 2:
+                scale = pos_max
+            else:
+                # Extra features are normalized independently per column
+                scale = max(
+                    torch.max(torch.abs(m[:, i])) for m in mesh_static_features
+                )
+                if scale == 0:
+                    scale = 1.0
+
+            for m in mesh_static_features:
+                m[:, i] /= scale
 
     # Load edges (edge_index)
     m2m_edge_index = BufferList(

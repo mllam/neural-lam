@@ -7,7 +7,11 @@ import pytest
 import torch
 
 # First-party
-from neural_lam.create_graph import create_graph_from_datastore
+from neural_lam import __version__ as neural_lam_version
+from neural_lam.create_graph import (
+    GRAPH_NEURAL_LAM_VERSION_FILENAME,
+    create_graph_from_datastore,
+)
 from neural_lam.datastore import DATASTORES
 from neural_lam.datastore.base import BaseRegularGridDatastore
 from tests.conftest import init_datastore_example
@@ -49,6 +53,7 @@ def test_graph_creation(datastore_name, graph_name):
         "g2m_features.pt",
         "m2g_features.pt",
         "mesh_features.pt",
+        GRAPH_NEURAL_LAM_VERSION_FILENAME,
     ]
     if hierarchical:
         required_graph_files.extend(
@@ -81,8 +86,14 @@ def test_graph_creation(datastore_name, graph_name):
         for file_name in required_graph_files:
             assert (graph_dir_path / file_name).exists()
 
+        assert (graph_dir_path / GRAPH_NEURAL_LAM_VERSION_FILENAME).read_text(
+            encoding="utf-8"
+        ).strip() == neural_lam_version
+
         # try to load each and ensure they have the right shape
         for file_name in required_graph_files:
+            if file_name == GRAPH_NEURAL_LAM_VERSION_FILENAME:
+                continue
             file_id = Path(file_name).stem  # remove the extension
             result = torch.load(graph_dir_path / file_name)
 

@@ -48,6 +48,16 @@ Required files for all graphs (all of these files MUST be present):
 - `g2m_features.pt`
 - `m2g_features.pt`
 - `mesh_features.pt`
+
+### 2.2.1 Graph format compatibility
+
+Graph directories SHOULD include the file `created-with-neural-lam-version`.
+When present, it MUST contain the `neural_lam.__version__` string from the code that created the graph.
+
+The currently supported compatibility mapping is:
+
+- `<=0.5.0` -> `format_spec_version="legacy"`
+- `>0.5.0` -> `format_spec_version="0.1.0"`
 Additional required files for hierarchical graphs (`L > 1` mesh levels), all  # noqa: E501
 of which MUST be present:
 

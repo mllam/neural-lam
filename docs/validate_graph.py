@@ -44,6 +44,19 @@ except ImportError:
 
 ALLOWED_EDGE_FEATURE_DIMS = (3, 4)
 MESH_FEATURE_DIM = 2
+GRAPH_VERSION_SENTINEL_FILENAME = "created-with-neural-lam-version"
+LEGACY_NEURAL_LAM_VERSION_CUTOFF = "0.5.0"
+CURRENT_GRAPH_FORMAT_SPEC_VERSION = "0.1.0"
+GRAPH_FORMAT_COMPATIBILITY = [
+    {
+        "neural_lam_spec": f"<={LEGACY_NEURAL_LAM_VERSION_CUTOFF}",
+        "format_spec_version": "legacy",
+    },
+    {
+        "neural_lam_spec": f">{LEGACY_NEURAL_LAM_VERSION_CUTOFF}",
+        "format_spec_version": CURRENT_GRAPH_FORMAT_SPEC_VERSION,
+    },
+]
 
 # -------------------------
 # Logging decorator and registry
@@ -305,6 +318,10 @@ class GraphProperties:
         Total number of mesh nodes across levels.
     num_grid_nodes : int
         Inferred number of grid nodes.
+    graph_creation_neural_lam_version : str | None
+        Version string stored in the graph-version sentinel file.
+    graph_format_spec_version : str | None
+        Graph format spec version resolved from the stored neural-lam version.
     """
 
     is_hierarchical: bool = False
@@ -312,6 +329,8 @@ class GraphProperties:
     num_mesh_nodes_per_level: list[int] = field(default_factory=list)
     num_mesh_nodes_total: int = 0
     num_grid_nodes: int = 0
+    graph_creation_neural_lam_version: Optional[str] = None
+    graph_format_spec_version: Optional[str] = None
 
 
 @contextmanager
@@ -1345,6 +1364,24 @@ def validate_graph_directory(
     """
     )
 
+    compatibility_lines = "\n".join(
+        (
+            f"- `{row['neural_lam_spec']}` -> "
+            f'`format_spec_version="{row["format_spec_version"]}"`'
+        )
+        for row in GRAPH_FORMAT_COMPATIBILITY
+    )
+
+    spec_text += (
+        "\n### 2.2.1 Graph format compatibility\n\n"
+        f"Graph directories SHOULD include the file "
+        f"`{GRAPH_VERSION_SENTINEL_FILENAME}`.\n"
+        "When present, it MUST contain the `neural_lam.__version__` string "
+        "from the code that created the graph.\n\n"
+        "The currently supported compatibility mapping is:\n\n"
+        f"{compatibility_lines}\n"
+    )
+
     required_files = [
         "m2m_edge_index.pt",
         "g2m_edge_index.pt",
@@ -1369,6 +1406,32 @@ def validate_graph_directory(
             files=required_files,
             section_name="2.2 Graph Filenames",
         )
+
+    graph_creation_neural_lam_version: Optional[str] = None
+    graph_format_spec_version: Optional[str] = None
+    if graph_dir is not None:
+        version_file = graph_dir / GRAPH_VERSION_SENTINEL_FILENAME
+        if version_file.exists():
+            graph_creation_neural_lam_version = version_file.read_text(
+                encoding="utf-8"
+            ).strip()
+            graph_format_spec_version = CURRENT_GRAPH_FORMAT_SPEC_VERSION
+            report.add(
+                "2.2 Graph Filenames",
+                "Graph version sentinel",
+                "PASS",
+                "Graph version sentinel is present",
+            )
+        else:
+            graph_format_spec_version = "legacy"
+            report.add(
+                "2.2 Graph Filenames",
+                "Graph version sentinel",
+                "WARNING",
+                "Graph version sentinel is missing; assuming legacy mesh "
+                f"feature normalization for compatibility with "
+                f"neural-lam<={LEGACY_NEURAL_LAM_VERSION_CUTOFF}.",
+            )
 
     m2m_edge_index = (
         _load_pt(graph_dir / "m2m_edge_index.pt") if graph_dir else None
@@ -1923,6 +1986,8 @@ def validate_graph_directory(
         num_mesh_nodes_per_level=num_mesh_nodes_per_level,
         num_mesh_nodes_total=num_mesh_nodes_total,
         num_grid_nodes=num_grid_nodes,
+        graph_creation_neural_lam_version=graph_creation_neural_lam_version,
+        graph_format_spec_version=graph_format_spec_version,
     )
     return report, spec_text, props
 

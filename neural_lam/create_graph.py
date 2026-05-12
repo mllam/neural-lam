@@ -15,8 +15,12 @@ from loguru import logger
 from torch_geometric.utils.convert import from_networkx
 
 # Local
+from . import __version__ as neural_lam_version
 from .config import load_config_and_datastore
 from .datastore.base import BaseRegularGridDatastore
+
+# Stores the neural-lam version string used when the graph was created.
+GRAPH_NEURAL_LAM_VERSION_FILENAME = "created-with-neural-lam-version"
 
 
 def plot_graph(
@@ -535,6 +539,13 @@ def create_graph(
     save_edges(pyg_g2m, "g2m", graph_dir_path)
     # m2g
     save_edges(pyg_m2g, "m2g", graph_dir_path)
+
+    with open(
+        os.path.join(graph_dir_path, GRAPH_NEURAL_LAM_VERSION_FILENAME),
+        "w",
+        encoding="utf-8",
+    ) as fp:
+        fp.write(neural_lam_version)
 
 
 def create_graph_from_datastore(
