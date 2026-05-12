@@ -22,7 +22,7 @@ from tueplots import bundles, figsizes
 from .custom_loggers import CustomMLFlowLogger
 
 GRAPH_VERSION_SENTINEL_FILENAME = "created-with-neural-lam-version"
-LEGACY_NEURAL_LAM_VERSION_CUTOFF = "0.5.0"
+LEGACY_NEURAL_LAM_VERSION_CUTOFF = "0.6.0"
 
 
 class BufferList(nn.Module):
@@ -232,9 +232,11 @@ def load_graph(
         version_path = Path(graph_dir_path) / GRAPH_VERSION_SENTINEL_FILENAME
         if not version_path.exists():
             warnings.warn(
-                "Graph version sentinel is missing; assuming legacy mesh "
-                "feature normalization for compatibility with "
-                f"neural-lam<={LEGACY_NEURAL_LAM_VERSION_CUTOFF}.",
+                "Graph version sentinel is missing; assuming this graph was "
+                f"created with neural-lam<={LEGACY_NEURAL_LAM_VERSION_CUTOFF}, "
+                "and therefore skipping mesh node feature normalization "
+                "after graph loading, since mesh node features are assumed "
+                "to already be normalized.",
                 RuntimeWarning,
                 stacklevel=2,
             )

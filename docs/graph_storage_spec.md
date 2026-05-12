@@ -56,17 +56,17 @@ When present, it MUST contain the `neural_lam.__version__` string from the code 
 
 The currently supported compatibility mapping is:
 
-- `<=0.5.0` -> `format_spec_version="legacy"`
-- `>0.5.0` -> `format_spec_version="0.1.0"`
+- `<=0.6.0` -> `format_spec_version="legacy"`
+- `>0.6.0` -> `format_spec_version="0.1.0"`
 
 #### Legacy behavior
 
-Graph directories created by `neural-lam<=0.5.0` are treated as legacy.
+Graph directories created by `neural-lam<=0.6.0` are treated as legacy.
 They do not contain the `created-with-neural-lam-version` file, and the
 mesh node features stored in `mesh_features.pt` are assumed to already be
 normalized.
 
-Graph directories created by `neural-lam>=0.6.0` use the current format.
+Graph directories created by `neural-lam>0.6.0` use the current format.
 They SHOULD include the version file, and `mesh_features.pt` is expected to
 contain the raw, unnormalized mesh node features that will be normalized on
 load.

@@ -45,7 +45,7 @@ except ImportError:
 ALLOWED_EDGE_FEATURE_DIMS = (3, 4)
 MESH_FEATURE_DIM = 2
 GRAPH_VERSION_SENTINEL_FILENAME = "created-with-neural-lam-version"
-LEGACY_NEURAL_LAM_VERSION_CUTOFF = "0.5.0"
+LEGACY_NEURAL_LAM_VERSION_CUTOFF = "0.6.0"
 CURRENT_GRAPH_FORMAT_SPEC_VERSION = "0.1.0"
 GRAPH_FORMAT_COMPATIBILITY = [
     {
@@ -1387,12 +1387,12 @@ def validate_graph_directory(
 
     #### Legacy behavior
 
-    Graph directories created by `neural-lam<=0.5.0` are treated as legacy.
+    Graph directories created by `neural-lam<=0.6.0` are treated as legacy.
     They do not contain the `created-with-neural-lam-version` file, and the
     mesh node features stored in `mesh_features.pt` are assumed to already be
     normalized.
 
-    Graph directories created by `neural-lam>=0.6.0` use the current format.
+    Graph directories created by `neural-lam>0.6.0` use the current format.
     They SHOULD include the version file, and `mesh_features.pt` is expected to
     contain the raw, unnormalized mesh node features that will be normalized on
     load.
@@ -1445,9 +1445,9 @@ def validate_graph_directory(
                 "2.2 Graph Filenames",
                 "Graph version sentinel",
                 "WARNING",
-                "Graph version sentinel is missing; assuming legacy mesh "
-                f"feature normalization for compatibility with "
-                f"neural-lam<={LEGACY_NEURAL_LAM_VERSION_CUTOFF}.",
+                "Graph version sentinel is missing; assuming this graph was "
+                f"created with neural-lam<={LEGACY_NEURAL_LAM_VERSION_CUTOFF}, "
+                "so mesh node features should already be normalized.",
             )
 
     m2m_edge_index = (

@@ -74,7 +74,7 @@ def test_load_graph_respects_current_and_legacy_mesh_feature_formats():
         # on disk.
         (graph_dir_path / GRAPH_NEURAL_LAM_VERSION_FILENAME).unlink()
 
-        with pytest.warns(RuntimeWarning, match="neural-lam<=0.5.0"):
+        with pytest.warns(RuntimeWarning, match="neural-lam<=0.6.0"):
             _, legacy_graph_ldict = utils.load_graph(
                 graph_dir_path=str(graph_dir_path)
             )
