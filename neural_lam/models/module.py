@@ -529,7 +529,7 @@ class ForecasterModule(pl.LightningModule):
 
     def create_metric_log_dict(self, metric_tensor, prefix, metric_name):
         log_dict = {}
-        metric_fig = vis.plot_error_map(
+        metric_fig = vis.plot_error_heatmap(
             errors=metric_tensor,
             datastore=self.datastore,
         )
