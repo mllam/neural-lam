@@ -95,7 +95,11 @@ def test_wandb_logger_kwargs(
 
 
 def test_wandb_id_ignored_with_mlflow_warns():
-    """--wandb_id is ignored when logger=mlflow and a warning is emitted."""
+    """--wandb_id is ignored when logger=mlflow and a warning is emitted.
+
+    Also asserts that `run_dir` is forwarded to `CustomMLFlowLogger` as
+    `save_dir`.
+    """
     # First-party
     from neural_lam.utils import setup_training_logger
 
@@ -108,7 +112,7 @@ def test_wandb_id_ignored_with_mlflow_warns():
     datastore._config = {}
 
     with (
-        patch("neural_lam.utils.CustomMLFlowLogger"),
+        patch("neural_lam.utils.CustomMLFlowLogger") as mock_mlflow,
         patch.dict(
             "os.environ", {"MLFLOW_TRACKING_URI": "http://localhost:5000"}
         ),
@@ -122,3 +126,6 @@ def test_wandb_id_ignored_with_mlflow_warns():
     warning_msg = mock_log.warning.call_args[0][0]
     assert "--wandb_id is set but logger is" in warning_msg
     assert "mlflow" in warning_msg
+
+    _, kwargs = mock_mlflow.call_args
+    assert kwargs["save_dir"] == "runs/my-run"

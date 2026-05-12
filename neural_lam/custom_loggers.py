@@ -17,6 +17,11 @@ class CustomMLFlowLogger(pl.loggers.MLFlowLogger):
     """
 
     def __init__(self, experiment_name, tracking_uri, run_name, save_dir):
+        """Initialize the logger and ensure ``save_dir`` exists on disk.
+
+        ``save_dir`` is created eagerly (with ``exist_ok=True``) so that
+        subsequent ``log_image`` calls can write temporary files there.
+        """
         super().__init__(
             experiment_name=experiment_name, tracking_uri=tracking_uri
         )

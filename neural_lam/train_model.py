@@ -52,8 +52,6 @@ def load_forecaster_module_from_checkpoint(ckpt_path, config, datastore):
         weights_only=False,
     )
 
-RUNS_ROOT = "runs"
-
 
 @logger.catch
 def main(input_args=None):
@@ -229,6 +227,13 @@ def main(input_args=None):
         help="""Logger run name, for e.g. MLFlow (with default value `None`
           neural-lam's default format string is used)""",
     )
+    parser.add_argument(
+        "--runs_root",
+        type=str,
+        default="runs",
+        help="Root directory under which per-run output dirs (checkpoints, "
+        "logger files, plots) are written as `<runs_root>/<run_name>/`",
+    )
 
     # Wandb-specific settings
     parser.add_argument(
@@ -398,7 +403,7 @@ def main(input_args=None):
             f"{time.strftime('%m_%d_%H')}-{random_run_id:04d}"
         )
 
-    run_dir = os.path.join(RUNS_ROOT, run_name)
+    run_dir = os.path.join(args.runs_root, run_name)
 
     training_logger = utils.setup_training_logger(
         datastore=datastore, args=args, run_name=run_name, run_dir=run_dir
