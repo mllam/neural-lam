@@ -16,6 +16,7 @@ from neural_lam.utils import get_integer_time
 
 # Local
 from .. import metrics, vis
+from ..batch import coerce_forecast_batch
 from ..config import NeuralLAMConfig
 from ..datastore import BaseDatastore
 from ..loss_weighting import get_state_feature_weighting
@@ -176,13 +177,14 @@ class ForecasterModule(pl.LightningModule):
         return opt
 
     def common_step(self, batch):
-        init_states, target_states, forcing_features, batch_times = batch
+        batch = coerce_forecast_batch(batch)
         prediction, pred_std = self.forecaster(
-            init_states, forcing_features, target_states
+            batch.init_states, batch.forcing, batch.target_states
         )
-        return prediction, target_states, pred_std, batch_times
+        return prediction, batch.target_states, pred_std, batch.target_times
 
     def training_step(self, batch):
+        batch = coerce_forecast_batch(batch)
         prediction, target_states, pred_std, _ = self.common_step(batch)
         if pred_std is None:
             pred_std = self.per_var_std
@@ -203,7 +205,7 @@ class ForecasterModule(pl.LightningModule):
             on_step=True,
             on_epoch=True,
             sync_dist=True,
-            batch_size=batch[0].shape[0],
+            batch_size=batch.init_states.shape[0],
         )
         return batch_loss
 
@@ -234,6 +236,7 @@ class ForecasterModule(pl.LightningModule):
         setattr(self, flag, True)
 
     def validation_step(self, batch, batch_idx):
+        batch = coerce_forecast_batch(batch)
         prediction, target_states, pred_std, _ = self.common_step(batch)
         if pred_std is None:
             pred_std = self.per_var_std
@@ -261,7 +264,7 @@ class ForecasterModule(pl.LightningModule):
             on_step=False,
             on_epoch=True,
             sync_dist=True,
-            batch_size=batch[0].shape[0],
+            batch_size=batch.init_states.shape[0],
         )
 
         entry_mses = metrics.mse(
@@ -293,6 +296,7 @@ class ForecasterModule(pl.LightningModule):
 
     # pylint: disable-next=unused-argument
     def test_step(self, batch, batch_idx):
+        batch = coerce_forecast_batch(batch)
         prediction, target_states, pred_std, _ = self.common_step(batch)
 
         if pred_std is not None:
@@ -328,7 +332,7 @@ class ForecasterModule(pl.LightningModule):
             on_step=False,
             on_epoch=True,
             sync_dist=True,
-            batch_size=batch[0].shape[0],
+            batch_size=batch.init_states.shape[0],
         )
 
         for metric_name in ("mse", "mae"):
@@ -373,8 +377,9 @@ class ForecasterModule(pl.LightningModule):
 
     def plot_examples(self, batch, n_examples, split, prediction):
 
-        target = batch[1]
-        time = batch[3]
+        batch = coerce_forecast_batch(batch)
+        target = batch.target_states
+        time = batch.target_times
 
         da_state_stats = self.datastore.get_standardization_dataarray("state")
         state_std = torch.tensor(

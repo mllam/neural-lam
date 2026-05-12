@@ -11,6 +11,7 @@ import xarray as xr
 from loguru import logger
 
 # First-party
+from neural_lam.batch import ForecastBatch
 from neural_lam.datastore.base import BaseDatastore
 
 
@@ -495,10 +496,9 @@ class WeatherDataset(torch.utils.data.Dataset):
 
         Returns
         -------
-        init_states : TrainingSample
-            A training sample object containing the initial states, target
-            states, forcing and batch times. The batch times are the times of
-            the target steps.
+        ForecastBatch
+            A named training sample containing the initial states, target
+            states, forcing, and target times.
 
         """
         (
@@ -527,7 +527,12 @@ class WeatherDataset(torch.utils.data.Dataset):
         # forcing: (ar_steps, N_grid, d_windowed_forcing)
         # target_times: (ar_steps,)
 
-        return init_states, target_states, forcing, target_times
+        return ForecastBatch(
+            init_states=init_states,
+            target_states=target_states,
+            forcing=forcing,
+            target_times=target_times,
+        )
 
     def __iter__(self):
         """

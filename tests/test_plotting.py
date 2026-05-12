@@ -17,6 +17,7 @@ from cartopy import crs as ccrs
 # First-party
 from neural_lam import config as nlconfig
 from neural_lam import vis
+from neural_lam.batch import ForecastBatch
 from neural_lam.create_graph import create_graph_from_datastore
 from neural_lam.models import ARForecaster, ForecasterModule, GraphLAM
 from neural_lam.weather_dataset import WeatherDataset
@@ -493,7 +494,12 @@ def model_and_batch(tmp_path, time_step, time_unit):
 
     # Get a batch (just use one sample).
     sample = dataset[0]
-    batch = tuple(torch.stack([item]) for item in sample)
+    batch = ForecastBatch(
+        init_states=torch.stack([sample.init_states]),
+        target_states=torch.stack([sample.target_states]),
+        forcing=torch.stack([sample.forcing]),
+        target_times=torch.stack([sample.target_times]),
+    )
 
     return model, batch, datastore, tmp_path
 
@@ -526,8 +532,9 @@ def test_plot_examples_integration_saves_figure(
     ), f"Expected time_step_unit={time_unit}, got {model.time_step_unit}"
 
     # Generate prediction
-    (init_states, target, forcing_features, _batch_times) = batch
-    prediction, _ = model.forecaster(init_states, forcing_features, target)
+    prediction, _ = model.forecaster(
+        batch.init_states, batch.forcing, batch.target_states
+    )
 
     # Rescale to original data scale
     da_state_stats = datastore.get_standardization_dataarray("state")
@@ -543,12 +550,12 @@ def test_plot_examples_integration_saves_figure(
     )
 
     prediction_rescaled = prediction * state_std + state_mean
-    target_rescaled = target * state_std + state_mean
+    target_rescaled = batch.target_states * state_std + state_mean
 
     # Get first example.
     pred_slice = prediction_rescaled[0].detach()
     target_slice = target_rescaled[0].detach()
-    time_slice = batch[3][0]
+    time_slice = batch.target_times[0]
 
     # Create DataArrays.
     dataset = WeatherDataset(datastore=datastore, split="train")
@@ -641,7 +648,7 @@ def test_plot_examples_gif_integration(model_and_batch, monkeypatch):
         )
 
     var_names = datastore.get_vars_names("state")
-    pred_steps = batch[1].shape[1]
+    pred_steps = batch.target_states.shape[1]
     example_i = 1
     plot_dir = tmp_path / f"example_plots_{example_i}"
 

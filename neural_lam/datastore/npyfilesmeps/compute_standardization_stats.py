@@ -203,7 +203,10 @@ def main(
         print("Computing mean and std.-dev. for parameters...")
     means, squares, flux_means, flux_squares = [], [], [], []
 
-    for init_batch, target_batch, forcing_batch, _ in tqdm(loader):
+    for batch in tqdm(loader):
+        init_batch = batch.init_states
+        target_batch = batch.target_states
+        forcing_batch = batch.forcing
         if distributed:
             init_batch, target_batch, forcing_batch = (
                 init_batch.to(device),
@@ -317,9 +320,9 @@ def main(
 
     diff_means, diff_squares = [], []
 
-    for init_batch, target_batch, _, _ in tqdm(
-        loader_standard, disable=rank != 0
-    ):
+    for batch in tqdm(loader_standard, disable=rank != 0):
+        init_batch = batch.init_states
+        target_batch = batch.target_states
         if distributed:
             init_batch, target_batch = init_batch.to(device), target_batch.to(
                 device

@@ -35,6 +35,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Maintenance
 
+- Add a named `ForecastBatch` contract for `WeatherDataset` batches and update
+  internal consumers to use field access [\#613](https://github.com/mllam/neural-lam/issues/613) @kshirajahere
+
 - Add comprehensive type hints to all functions and class methods in `utils.py` [\#620](https://github.com/mllam/neural-lam/pull/620) @GiGiKoneti
 
 - Add probabilistic objective regression coverage for weighted losses and `pred_std` broadcasting semantics [\#504](https://github.com/mllam/neural-lam/pull/504) @kshirajahere
