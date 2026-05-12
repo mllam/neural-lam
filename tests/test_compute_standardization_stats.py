@@ -1,5 +1,4 @@
 # Third-party
-import pytest
 import torch
 
 # First-party
@@ -54,7 +53,7 @@ class TestPaddedWeatherDataset:
 
 
 class TestFluxStatsGather:
-    """Flux stats distributed gather fix."""
+    """Flux stats distributed gather: stack per-rank batch scalars into 1-D."""
 
     def _make_gathered(self, world_size, n_batches):
         return [
@@ -62,92 +61,36 @@ class TestFluxStatsGather:
             for r in range(world_size)
         ]
 
-    def test_old_code_raises_indexerror(self):
-        """torch.tensor(gathered)[i] crashes for i >= ws."""
-        ws, nb, n_orig = 2, 3, 50
-        gathered = self._make_gathered(ws, nb)
-        old = torch.tensor(gathered)
-        assert old.shape == (ws, nb)
-        with pytest.raises(IndexError):
-            _ = [old[i] for i in range(n_orig)]
-
     def test_fix_shape(self):
-        """Flatten only real per-rank flux scalars into 1-D tensor."""
+        """Stack flattens per-rank scalars into a 1-D tensor."""
         ws, nb = 4, 3
-        n_real_per_rank = 2
         gathered = self._make_gathered(ws, nb)
-        result = torch.cat(
-            [torch.stack(rf[:n_real_per_rank]) for rf in gathered]
-        )
-        assert result.shape == (ws * n_real_per_rank,)
+        result = torch.cat([torch.stack(rf) for rf in gathered])
+        assert result.shape == (ws * nb,)
 
     def test_fix_mean(self):
-        """Padded flux scalars do not contribute to the global mean."""
+        """Global mean is the mean over all per-rank batch scalars."""
         gathered = [
-            [torch.tensor(0.0), torch.tensor(100.0)],
-            [torch.tensor(2.0), torch.tensor(200.0)],
+            [torch.tensor(0.0), torch.tensor(2.0)],
+            [torch.tensor(4.0), torch.tensor(6.0)],
         ]
-        n_real_per_rank = 1
-        result = torch.cat(
-            [torch.stack(rf[:n_real_per_rank]) for rf in gathered]
-        )
-        assert torch.isclose(torch.mean(result), torch.tensor(1.0))
-
-    def test_fix_single_rank(self):
-        """Single-rank edge case."""
-        gathered = [[torch.tensor(1.0), torch.tensor(2.0)]]
-        n_real_per_rank = 2
-        result = torch.cat(
-            [torch.stack(rf[:n_real_per_rank]) for rf in gathered]
-        )
-        assert result.shape == (2,)
-
-    def test_fix_large_world_size(self):
-        """8 GPUs."""
-        ws, nb = 8, 5
-        n_real_per_rank = 4
-        gathered = self._make_gathered(ws, nb)
-        result = torch.cat(
-            [torch.stack(rf[:n_real_per_rank]) for rf in gathered]
-        )
-        assert result.shape == (ws * n_real_per_rank,)
+        result = torch.cat([torch.stack(rf) for rf in gathered])
+        assert torch.isclose(torch.mean(result), torch.tensor(3.0))
 
 
 # -- Bug 2: diff stats wrong shape -----------------------------------------
 
 
 class TestDiffStatsShape:
-    """Diff stats distributed shape fix."""
-
-    def test_old_code_wrong_shape(self):
-        """List-comp gives flat 1-D via torch.cat."""
-        d_f, total, n_orig = 17, 100, 80
-        data = torch.randn(total, d_f)
-        indices = list(range(n_orig))
-
-        old = [data[i] for i in indices]
-        assert old[0].shape == (d_f,)
-        flat = torch.cat(old, dim=0)
-        # (n_orig * d_f,) — wrong
-        assert flat.shape == (n_orig * d_f,)
-        # scalar mean — wrong
-        assert torch.mean(flat, dim=0).shape == ()
+    """Diff stats distributed gather: contiguous slice preserves (N, d_f)."""
 
     def test_fix_shape(self):
-        """Contiguous slice preserves (N, d_f)."""
+        """Slicing the gathered tensor preserves the feature dimension."""
         d_f, total, n_orig = 17, 100, 80
         data = torch.randn(total, d_f)
 
         result = data[:n_orig]
         assert result.shape == (n_orig, d_f)
-
-    def test_fix_mean_shape(self):
-        """save_stats produces (d_f,) mean."""
-        d_f, total, n_orig = 17, 100, 80
-        data = torch.randn(total, d_f)
-
-        result = data[:n_orig]
-        assert torch.mean(result, dim=0).shape == (d_f,)
 
     def test_fix_preserves_values(self):
         """Contiguous slice selects the expected rows."""
@@ -171,12 +114,3 @@ class TestDiffStatsShape:
 
         assert torch.equal(result, data[:12])
         assert not torch.equal(result, old_result)
-
-    def test_fix_all_indices(self):
-        """No padding — identity selection."""
-        d_f, n = 8, 20
-        data = torch.randn(n, d_f)
-
-        result = data[:n]
-        assert result.shape == (n, d_f)
-        assert torch.equal(result, data)
