@@ -1382,6 +1382,23 @@ def validate_graph_directory(
         f"{compatibility_lines}\n"
     )
 
+    spec_text += textwrap.dedent(
+        """\
+
+    #### Legacy behavior
+
+    Graph directories created by `neural-lam<=0.5.0` are treated as legacy.
+    They do not contain the `created-with-neural-lam-version` file, and the
+    mesh node features stored in `mesh_features.pt` are assumed to already be
+    normalized.
+
+    Graph directories created by `neural-lam>=0.6.0` use the current format.
+    They SHOULD include the version file, and `mesh_features.pt` is expected to
+    contain the raw, unnormalized mesh node features that will be normalized on
+    load.
+    """
+    )
+
     required_files = [
         "m2m_edge_index.pt",
         "g2m_edge_index.pt",
