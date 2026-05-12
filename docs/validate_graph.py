@@ -881,8 +881,8 @@ def check_mesh_node_features(
     1. Object is a `torch.Tensor` (FAIL).
     2. `ndim == 2` (shape `[N_level, N_f]`) (FAIL).
     3. `shape[0] >= 1` (at least one node at this level) (FAIL).
-    4. `shape[1] >= 2` (`MESH_FEATURE_DIM`; for x and y coordinate columns)
-       (FAIL).
+    4. `shape[1] == 2` (`MESH_FEATURE_DIM`; for the two horizontal coordinate
+       columns) (FAIL).
     5. Dtype is exactly `torch.float32` (FAIL).
     6. All values are finite (FAIL).
 
@@ -893,7 +893,7 @@ def check_mesh_node_features(
     name : str
         Logical name used in error/warning messages.
     mesh_features : torch.Tensor | None
-        Mesh node features expected as shape `[N, >=2]`.
+        Mesh node features expected as shape `[N, 2]`.
     section_name : str
         The spec section name for reporting.
 
@@ -921,9 +921,25 @@ def check_mesh_node_features(
             section_name,
             "Mesh features shape",
             "FAIL",
-            f"{name}: expected shape [N, >=2], got {tuple(mesh_features.shape)}",  # noqa: E501
+            f"{name}: expected shape [N, 2], got {tuple(mesh_features.shape)}",
         )
         return report
+
+    if mesh_features.shape[1] != MESH_FEATURE_DIM:
+        report.add(
+            section_name,
+            "Mesh features shape",
+            "FAIL",
+            f"{name}: expected exactly {MESH_FEATURE_DIM} features, got "
+            f"{mesh_features.shape[1]}",
+        )
+    else:
+        report.add(
+            section_name,
+            "Mesh features shape",
+            "PASS",
+            f"{name}: feature dim is exactly {MESH_FEATURE_DIM}",
+        )
 
     if mesh_features.shape[0] == 0:
         report.add(
@@ -938,21 +954,6 @@ def check_mesh_node_features(
             "Mesh features values",
             "PASS",
             f"{name}: contains {mesh_features.shape[0]} mesh nodes",
-        )
-
-    if mesh_features.shape[1] < MESH_FEATURE_DIM:
-        report.add(
-            section_name,
-            "Mesh features shape",
-            "FAIL",
-            f"{name}: expected at least {MESH_FEATURE_DIM} features, got {mesh_features.shape[1]}",  # noqa: E501
-        )
-    else:
-        report.add(
-            section_name,
-            "Mesh features shape",
-            "PASS",
-            f"{name}: features dimensionality is {mesh_features.shape[1]}",
         )
 
     if mesh_features.dtype != torch.float32:
@@ -1611,19 +1612,19 @@ def validate_graph_directory(
         """\
     Each tensor MUST satisfy the following requirements:
 
-    - `mesh_features` entries MUST have shape `[N_level, N_f]`, where `N_level` is the number of mesh nodes at that level and `N_f` is the number of features per node. `N_f` MUST be at minimum `2` (for x and y coordinates of the node, see next point), but can be larger if additional static features are included. The value of `N_f` MUST be consistent across all levels, so that all entries in the list have the same number of features per node.  # noqa: E501
+    - `mesh_features` entries MUST have shape `[N_level, 2]`, where `N_level` is the number of mesh nodes at that level. The two features MUST be the horizontal coordinates of the mesh nodes at level `i`.  # noqa: E501
     """
     )
     # enforced inside check_mesh_node_features below (shape + N_f checks)
 
     spec_text += textwrap.dedent(
         """\
-    - `mesh_features[i][:, 0:2]` MUST contain the x and y coordinates of the mesh nodes at level `i`, so that column `0` is x and column `1` is y.  # noqa: E501
+    - `mesh_features[i][:, 0]` and `mesh_features[i][:, 1]` MUST contain the horizontal coordinates of the mesh nodes at level `i`, with column `0` and column `1` representing the two orthogonal horizontal axes.  # noqa: E501
 
-      *NOTE*: The reason for requiring that the first two columns of the mesh node features contain the x and y coordinates is that `neural-lam` applies different normalization strategies to coordinates vs. extra features. The first two columns (coordinates) share the same spatial scale and are normalized jointly by their maximum absolute value across all levels. Any additional feature columns (index 2 onwards) are normalized independently by their own maximum absolute values.  # noqa: E501
+      *NOTE*: These coordinates SHOULD be provided in a local equal-area projection, because the two mesh node features are normalized together after graph loading.  # noqa: E501
     """
     )
-    # semantic requirement — no structural check for content of first two columns  # noqa: E501
+    # semantic requirement — no structural check for content of the two columns
 
     spec_text += textwrap.dedent(
         """\

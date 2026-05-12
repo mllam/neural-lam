@@ -134,10 +134,10 @@ where each entry is a tensor containing static features for the mesh nodes at  #
 that level.
 Each tensor MUST satisfy the following requirements:
 
-- `mesh_features` entries MUST have shape `[N_level, N_f]`, where `N_level` is the number of mesh nodes at that level and `N_f` is the number of features per node. `N_f` MUST be at minimum `2` (for x and y coordinates of the node, see next point), but can be larger if additional static features are included. The value of `N_f` MUST be consistent across all levels, so that all entries in the list have the same number of features per node.  # noqa: E501
-- `mesh_features[i][:, 0:2]` MUST contain the x and y coordinates of the mesh nodes at level `i`, so that column `0` is x and column `1` is y.  # noqa: E501
+- `mesh_features` entries MUST have shape `[N_level, 2]`, where `N_level` is the number of mesh nodes at that level. The two features MUST be the horizontal coordinates of the mesh nodes at level `i`.  # noqa: E501
+- `mesh_features[i][:, 0]` and `mesh_features[i][:, 1]` MUST contain the horizontal coordinates of the mesh nodes at level `i`, with column `0` and column `1` representing the two orthogonal horizontal axes.  # noqa: E501
 
-  *NOTE*: The reason for requiring that the first two columns of the mesh node features contain the x and y coordinates is that `neural-lam` applies different normalization strategies to coordinates vs. extra features. The first two columns (coordinates) share the same spatial scale and are normalized jointly by their maximum absolute value across all levels. Any additional feature columns (index 2 onwards) are normalized independently by their own maximum absolute values.  # noqa: E501
+  *NOTE*: These coordinates SHOULD be provided in a local equal-area projection, because the two mesh node features are normalized together after graph loading.  # noqa: E501
 - Mesh node features SHOULD NOT be normalized. Instead, normalization will be performed inside `neural-lam` after graph loading.  # noqa: E501
 - Dtype MUST be `torch.float32`.
 ### 3.2 Edges
