@@ -55,6 +55,8 @@ def _build_model_and_data(
         num_past_forcing_steps=num_past_forcing_steps,
         num_future_forcing_steps=num_future_forcing_steps,
         output_std=False,
+        output_clamping_lower=config.training.output_clamping.lower,
+        output_clamping_upper=config.training.output_clamping.upper,
         g2m_gnn_type=g2m_gnn_type,
         m2g_gnn_type=m2g_gnn_type,
         mesh_up_gnn_type=mesh_up_gnn_type,
