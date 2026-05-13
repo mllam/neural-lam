@@ -8,7 +8,7 @@ import torch
 from neural_lam import config as nlconfig
 from neural_lam.create_graph import create_graph_from_datastore
 from neural_lam.datastore.mdp import MDPDatastore
-from neural_lam.models.graph_lam import GraphLAM
+from neural_lam.models import GraphLAM
 from tests.conftest import init_datastore_example
 
 
@@ -38,6 +38,7 @@ def test_clamping():
         mesh_aggr = "sum"
         lr = 1.0e-3
         val_steps_to_log = [1, 3]
+        ar_steps_eval = 3
         metrics_watch = []
         num_past_forcing_steps = 1
         num_future_forcing_steps = 1
@@ -57,7 +58,6 @@ def test_clamping():
     )
 
     model = GraphLAM(
-        config=config,
         datastore=datastore,
         graph_name=model_args.graph,
         hidden_dim=model_args.hidden_dim,
@@ -67,6 +67,8 @@ def test_clamping():
         num_past_forcing_steps=model_args.num_past_forcing_steps,
         num_future_forcing_steps=model_args.num_future_forcing_steps,
         output_std=model_args.output_std,
+        output_clamping_lower=config.training.output_clamping.lower,
+        output_clamping_upper=config.training.output_clamping.upper,
     )
 
     features = datastore.get_vars_names(category="state")

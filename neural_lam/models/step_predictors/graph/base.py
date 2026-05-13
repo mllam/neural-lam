@@ -1,12 +1,14 @@
+# Standard library
+from typing import Dict, Optional
+
 # Third-party
 import torch
 
 # Local
-from .. import utils
-from ..config import NeuralLAMConfig
-from ..datastore import BaseDatastore
-from ..gnn_layers import get_gnn_class
-from .step_predictor import StepPredictor
+from .... import utils
+from ....datastore import BaseDatastore
+from ....gnn_layers import get_gnn_class
+from ..base import StepPredictor
 
 
 class BaseGraphModel(StepPredictor):
@@ -17,7 +19,6 @@ class BaseGraphModel(StepPredictor):
 
     def __init__(
         self,
-        config: NeuralLAMConfig,
         datastore: BaseDatastore,
         graph_name: str = "multiscale",
         hidden_dim: int = 64,
@@ -27,13 +28,16 @@ class BaseGraphModel(StepPredictor):
         num_past_forcing_steps: int = 1,
         num_future_forcing_steps: int = 1,
         output_std: bool = False,
+        output_clamping_lower: Optional[Dict[str, float]] = None,
+        output_clamping_upper: Optional[Dict[str, float]] = None,
         g2m_gnn_type: str = "InteractionNet",
         m2g_gnn_type: str = "InteractionNet",
     ):
         super().__init__(
-            config=config,
             datastore=datastore,
             output_std=output_std,
+            output_clamping_lower=output_clamping_lower,
+            output_clamping_upper=output_clamping_upper,
         )
         self.g2m_gnn_type = g2m_gnn_type
         self.m2g_gnn_type = m2g_gnn_type
@@ -79,7 +83,7 @@ class BaseGraphModel(StepPredictor):
 
         # Specify dimensions of data
         self.num_mesh_nodes, _ = self.get_num_mesh()
-        utils.rank_zero_print(
+        utils.log_on_rank_zero(
             f"Loaded graph with {self.num_grid_nodes + self.num_mesh_nodes} "
             f"nodes ({self.num_grid_nodes} grid, {self.num_mesh_nodes} mesh)"
         )
@@ -134,7 +138,7 @@ class BaseGraphModel(StepPredictor):
         )  # No layer norm on this one
 
         # Compute indices and define clamping functions
-        self.prepare_clamping_params(config, datastore)
+        self.prepare_clamping_params(datastore)
 
     def get_num_mesh(self):
         """
@@ -145,27 +149,76 @@ class BaseGraphModel(StepPredictor):
 
     def embedd_mesh_nodes(self):
         """
-        Embed static mesh features
-        Returns tensor of shape (num_mesh_nodes, d_h)
+        Embed static mesh node features.
+
+        Returns
+        -------
+        torch.Tensor
+            Shape ``(num_mesh_nodes, d_h)``. Embedded mesh node
+            representations. Dims: ``num_mesh_nodes`` is the number of
+            mesh nodes and ``d_h`` is the hidden dimension.
         """
         raise NotImplementedError("embedd_mesh_nodes not implemented")
 
     def process_step(self, mesh_rep):
         """
-        Process step of embedd-process-decode framework
-        Processes the representation on the mesh, possible in multiple steps
+        Process the mesh representation in the encode-process-decode
+        framework, running one or more message-passing steps.
 
-        mesh_rep: has shape (B, num_mesh_nodes, d_h)
-        Returns mesh_rep: (B, num_mesh_nodes, d_h)
+        Parameters
+        ----------
+        mesh_rep : torch.Tensor
+            Shape ``(B, num_mesh_nodes, d_h)``. Current mesh node
+            representations. Dims: ``B`` is batch size,
+            ``num_mesh_nodes`` is the number of mesh nodes, and ``d_h``
+            is the hidden dimension.
+
+        Returns
+        -------
+        torch.Tensor
+            Shape ``(B, num_mesh_nodes, d_h)``. Updated mesh node
+            representations. Dims: same as ``mesh_rep``.
         """
         raise NotImplementedError("process_step not implemented")
 
     def forward(self, prev_state, prev_prev_state, forcing):
         """
-        Step state one step ahead using prediction model, X_{t-1}, X_t -> X_t+1
-        prev_state: (B, num_grid_nodes, feature_dim), X_t
-        prev_prev_state: (B, num_grid_nodes, feature_dim), X_{t-1}
-        forcing: (B, num_grid_nodes, forcing_dim)
+        Advance the state by one step using the encode-process-decode
+        graph pipeline: embed grid + edge features, map grid -> mesh via
+        the g2m GNN, run the (subclass-defined) processor on the mesh,
+        decode mesh -> grid via the m2g GNN, project to a state delta,
+        rescale with difference statistics, and add to ``prev_state``
+        (with optional clamping). Returns ``(X_{t+1}, optional std)``.
+
+        Parameters
+        ----------
+        prev_state : torch.Tensor
+            Shape ``(B, num_grid_nodes, d_f)``. The current state
+            ``X_t``. Dims: ``B`` is batch size, ``num_grid_nodes`` is the
+            number of spatial grid nodes, and ``d_f`` is the number of
+            state variables.
+        prev_prev_state : torch.Tensor
+            Shape ``(B, num_grid_nodes, d_f)``. The previous state
+            ``X_{t-1}``, used as additional conditioning. Dims: same as
+            ``prev_state``.
+        forcing : torch.Tensor
+            Shape ``(B, num_grid_nodes, d_forcing)``. External forcings
+            for this step (already concatenated past/current/future
+            windows). Dims: ``B`` is batch size, ``num_grid_nodes`` is
+            the number of spatial grid nodes, and ``d_forcing`` is the
+            forcing feature dimension.
+
+        Returns
+        -------
+        new_state : torch.Tensor
+            Shape ``(B, num_grid_nodes, d_f)``. The predicted next state
+            ``X_{t+1}`` after delta-add and clamping. Dims: same as
+            ``prev_state``.
+        pred_std : torch.Tensor or None
+            Shape ``(B, num_grid_nodes, d_f)`` when ``output_std`` is
+            True, otherwise ``None``. Per-feature predicted standard
+            deviation (raw softplus output, not rescaled by diff
+            statistics). Dims: same as ``prev_state``.
         """
         batch_size = prev_state.shape[0]
 

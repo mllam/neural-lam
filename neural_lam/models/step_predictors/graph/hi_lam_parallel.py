@@ -1,12 +1,14 @@
+# Standard library
+from typing import Dict, Optional
+
 # Third-party
 import torch
 import torch_geometric as pyg
 
 # Local
-from ..config import NeuralLAMConfig
-from ..datastore import BaseDatastore
-from ..gnn_layers import InteractionNet
-from .base_hi_graph_model import BaseHiGraphModel
+from ....datastore import BaseDatastore
+from ....gnn_layers import InteractionNet
+from .hierarchical import BaseHiGraphModel
 
 
 class HiLAMParallel(BaseHiGraphModel):
@@ -20,7 +22,6 @@ class HiLAMParallel(BaseHiGraphModel):
 
     def __init__(
         self,
-        config: NeuralLAMConfig,
         datastore: BaseDatastore,
         graph_name: str = "multiscale",
         hidden_dim: int = 64,
@@ -30,13 +31,14 @@ class HiLAMParallel(BaseHiGraphModel):
         num_past_forcing_steps: int = 1,
         num_future_forcing_steps: int = 1,
         output_std: bool = False,
+        output_clamping_lower: Optional[Dict[str, float]] = None,
+        output_clamping_upper: Optional[Dict[str, float]] = None,
         g2m_gnn_type: str = "InteractionNet",
         m2g_gnn_type: str = "InteractionNet",
         mesh_up_gnn_type: str = "InteractionNet",
         mesh_down_gnn_type: str = "InteractionNet",
     ):
         super().__init__(
-            config=config,
             datastore=datastore,
             graph_name=graph_name,
             hidden_dim=hidden_dim,
@@ -46,6 +48,8 @@ class HiLAMParallel(BaseHiGraphModel):
             num_past_forcing_steps=num_past_forcing_steps,
             num_future_forcing_steps=num_future_forcing_steps,
             output_std=output_std,
+            output_clamping_lower=output_clamping_lower,
+            output_clamping_upper=output_clamping_upper,
             g2m_gnn_type=g2m_gnn_type,
             m2g_gnn_type=m2g_gnn_type,
             mesh_up_gnn_type=mesh_up_gnn_type,
@@ -87,21 +91,35 @@ class HiLAMParallel(BaseHiGraphModel):
         self, mesh_rep_levels, mesh_same_rep, mesh_up_rep, mesh_down_rep
     ):
         """
-        Internal processor step of hierarchical graph models.
-        Between mesh init and read out.
+        Run all processor steps in parallel across all edge types and
+        hierarchy levels.
 
-        Each input is list with representations, each with shape
+        Parameters
+        ----------
+        mesh_rep_levels : list of torch.Tensor
+            One tensor per level, each of shape ``(B, num_mesh_nodes[l], d_h)``.
+            Node representations at each hierarchy level. Dims: ``B`` is
+            batch size, ``num_mesh_nodes[l]`` is the node count at level ``l``,
+            and ``d_h`` is the hidden dimension.
+        mesh_same_rep : list of torch.Tensor
+            One tensor per level, each of shape ``(B, M_same[l], d_h)``.
+            Same-level edge representations.
+        mesh_up_rep : list of torch.Tensor
+            One tensor per inter-level gap, each of shape
+            ``(B, M_up[l], d_h)``. Upward edge representations.
+        mesh_down_rep : list of torch.Tensor
+            One tensor per inter-level gap, each of shape
+            ``(B, M_down[l], d_h)``. Downward edge representations.
 
-        mesh_rep_levels: (B, N_mesh[l], d_h)
-        mesh_same_rep: (B, M_same[l], d_h)
-        mesh_up_rep: (B, M_up[l -> l+1], d_h)
-        mesh_down_rep: (B, M_down[l <- l+1], d_h)
-
-        Returns same lists
+        Returns
+        -------
+        tuple of (list, list, list, list)
+            Updated ``(mesh_rep_levels, mesh_same_rep, mesh_up_rep,
+            mesh_down_rep)``.
         """
 
         # First join all node and edge representations to single tensors
-        mesh_rep = torch.cat(mesh_rep_levels, dim=1)  # (B, N_mesh, d_h)
+        mesh_rep = torch.cat(mesh_rep_levels, dim=1)  # (B, num_mesh_nodes, d_h)
         mesh_edge_rep = torch.cat(
             mesh_same_rep + mesh_up_rep + mesh_down_rep, axis=1
         )  # (B, M_mesh, d_h)

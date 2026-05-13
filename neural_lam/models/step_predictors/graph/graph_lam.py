@@ -1,12 +1,14 @@
+# Standard library
+from typing import Dict, Optional
+
 # Third-party
 import torch_geometric as pyg
 
 # Local
-from .. import utils
-from ..config import NeuralLAMConfig
-from ..datastore import BaseDatastore
-from ..gnn_layers import InteractionNet
-from .base_graph_model import BaseGraphModel
+from .... import utils
+from ....datastore import BaseDatastore
+from ....gnn_layers import InteractionNet
+from .base import BaseGraphModel
 
 
 class GraphLAM(BaseGraphModel):
@@ -19,7 +21,6 @@ class GraphLAM(BaseGraphModel):
 
     def __init__(
         self,
-        config: NeuralLAMConfig,
         datastore: BaseDatastore,
         graph_name: str = "multiscale",
         hidden_dim: int = 64,
@@ -29,12 +30,12 @@ class GraphLAM(BaseGraphModel):
         num_past_forcing_steps: int = 1,
         num_future_forcing_steps: int = 1,
         output_std: bool = False,
+        output_clamping_lower: Optional[Dict[str, float]] = None,
+        output_clamping_upper: Optional[Dict[str, float]] = None,
         g2m_gnn_type: str = "InteractionNet",
         m2g_gnn_type: str = "InteractionNet",
-        **kwargs,
     ):
         super().__init__(
-            config=config,
             datastore=datastore,
             graph_name=graph_name,
             hidden_dim=hidden_dim,
@@ -44,6 +45,8 @@ class GraphLAM(BaseGraphModel):
             num_past_forcing_steps=num_past_forcing_steps,
             num_future_forcing_steps=num_future_forcing_steps,
             output_std=output_std,
+            output_clamping_lower=output_clamping_lower,
+            output_clamping_upper=output_clamping_upper,
             g2m_gnn_type=g2m_gnn_type,
             m2g_gnn_type=m2g_gnn_type,
         )
@@ -55,7 +58,7 @@ class GraphLAM(BaseGraphModel):
         # grid_dim from data + static + batch_static
         mesh_dim = self.mesh_static_features.shape[1]
         m2m_edges, m2m_dim = self.m2m_features.shape
-        utils.rank_zero_print(
+        utils.log_on_rank_zero(
             f"Edges in subgraphs: m2m={m2m_edges}, g2m={self.g2m_edges}, "
             f"m2g={self.m2g_edges}"
         )
@@ -93,18 +96,37 @@ class GraphLAM(BaseGraphModel):
 
     def embedd_mesh_nodes(self):
         """
-        Embed static mesh features
-        Returns tensor of shape (N_mesh, d_h)
+        Embed static mesh node features.
+
+        Returns
+        -------
+        torch.Tensor
+            Shape ``(num_mesh_nodes, d_h)``. Embedded mesh node representations.
+            Dims: ``num_mesh_nodes`` is the number of mesh nodes and ``d_h`` is
+            the hidden dimension.
         """
-        return self.mesh_embedder(self.mesh_static_features)  # (N_mesh, d_h)
+        return self.mesh_embedder(
+            self.mesh_static_features
+        )  # (num_mesh_nodes, d_h)
 
     def process_step(self, mesh_rep):
         """
-        Process step of embedd-process-decode framework
-        Processes the representation on the mesh, possible in multiple steps
+        Process the mesh representation through the flat message-passing
+        processor (all nodes at a single level).
 
-        mesh_rep: has shape (B, N_mesh, d_h)
-        Returns mesh_rep: (B, N_mesh, d_h)
+        Parameters
+        ----------
+        mesh_rep : torch.Tensor
+            Shape ``(B, num_mesh_nodes, d_h)``. Current mesh node
+            representations. Dims: ``B`` is batch size, ``num_mesh_nodes`` is
+            the number of mesh nodes, and ``d_h`` is the hidden
+            dimension.
+
+        Returns
+        -------
+        torch.Tensor
+            Shape ``(B, num_mesh_nodes, d_h)``. Updated mesh node
+            representations. Dims: same as ``mesh_rep``.
         """
         # Embed m2m here first
         batch_size = mesh_rep.shape[0]
@@ -115,5 +137,5 @@ class GraphLAM(BaseGraphModel):
 
         mesh_rep, _ = self.processor(
             mesh_rep, m2m_emb_expanded
-        )  # (B, N_mesh, d_h)
+        )  # (B, num_mesh_nodes, d_h)
         return mesh_rep

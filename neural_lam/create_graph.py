@@ -11,6 +11,7 @@ import numpy as np
 import scipy.spatial
 import torch
 import torch_geometric as pyg
+from loguru import logger
 from torch_geometric.utils.convert import from_networkx
 
 # Local
@@ -18,7 +19,9 @@ from .config import load_config_and_datastore
 from .datastore.base import BaseRegularGridDatastore
 
 
-def plot_graph(graph, title=None):
+def plot_graph(
+    graph: pyg.data.Data, title: Optional[str] = None
+) -> tuple[matplotlib.figure.Figure, matplotlib.axes.Axes]:
     fig, axis = plt.subplots(figsize=(8, 8), dpi=200)  # W,H
     edge_index = graph.edge_index
     pos = graph.pos
@@ -69,7 +72,7 @@ def plot_graph(graph, title=None):
     return fig, axis
 
 
-def sort_nodes_internally(nx_graph):
+def sort_nodes_internally(nx_graph: networkx.Graph) -> networkx.DiGraph:
     # For some reason the networkx .nodes() return list can not be sorted,
     # but this is the ordering used by pyg when converting.
     # This function fixes this.
@@ -79,7 +82,7 @@ def sort_nodes_internally(nx_graph):
     return H
 
 
-def save_edges(graph, name, base_path):
+def save_edges(graph: pyg.data.Data, name: str, base_path: str) -> None:
     torch.save(
         graph.edge_index, os.path.join(base_path, f"{name}_edge_index.pt")
     )
@@ -89,7 +92,9 @@ def save_edges(graph, name, base_path):
     torch.save(edge_features, os.path.join(base_path, f"{name}_features.pt"))
 
 
-def save_edges_list(graphs, name, base_path):
+def save_edges_list(
+    graphs: list[pyg.data.Data], name: str, base_path: str
+) -> None:
     torch.save(
         [graph.edge_index for graph in graphs],
         os.path.join(base_path, f"{name}_edge_index.pt"),
@@ -103,13 +108,15 @@ def save_edges_list(graphs, name, base_path):
     torch.save(edge_features, os.path.join(base_path, f"{name}_features.pt"))
 
 
-def from_networkx_with_start_index(nx_graph, start_index):
+def from_networkx_with_start_index(
+    nx_graph: networkx.Graph, start_index: int
+) -> pyg.data.Data:
     pyg_graph = from_networkx(nx_graph)
     pyg_graph.edge_index += start_index
     return pyg_graph
 
 
-def mk_2d_graph(xy, nx, ny):
+def mk_2d_graph(xy: np.ndarray, nx: int, ny: int) -> networkx.DiGraph:
     xm, xM = np.amin(xy[:, :, 0][:, 0]), np.amax(xy[:, :, 0][:, 0])
     ym, yM = np.amin(xy[:, :, 1][0, :]), np.amax(xy[:, :, 1][0, :])
 
@@ -148,7 +155,7 @@ def mk_2d_graph(xy, nx, ny):
     return dg
 
 
-def prepend_node_index(graph, new_index):
+def prepend_node_index(graph: networkx.Graph, new_index: int) -> networkx.Graph:
     # Relabel node indices in graph, insert (graph_level, i, j)
     ijk = [tuple((new_index,) + x) for x in graph.nodes]
     to_mapping = dict(zip(graph.nodes, ijk))
@@ -230,7 +237,7 @@ def create_graph(
     """
     os.makedirs(graph_dir_path, exist_ok=True)
 
-    print(f"Writing graph components to {graph_dir_path}")
+    logger.info(f"Writing graph components to {graph_dir_path}")
 
     grid_xy = torch.tensor(xy)
     pos_max = torch.max(torch.abs(grid_xy))
@@ -559,7 +566,7 @@ def create_graph_from_datastore(
     )
 
 
-def cli(input_args=None):
+def cli(input_args: Optional[list[str]] = None) -> None:
     parser = ArgumentParser(
         description="Graph generation for neural-lam",
         formatter_class=ArgumentDefaultsHelpFormatter,
@@ -593,9 +600,8 @@ def cli(input_args=None):
     )
     args = parser.parse_args(input_args)
 
-    assert (
-        args.config_path is not None
-    ), "Specify your config with --config_path"
+    if args.config_path is None:
+        raise ValueError("Specify your config with --config_path")
 
     # Load neural-lam configuration and datastore to use
     _, datastore = load_config_and_datastore(config_path=args.config_path)

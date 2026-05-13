@@ -39,14 +39,18 @@ class CustomMLFlowLogger(pl.loggers.MLFlowLogger):
 
     def log_image(self, key, images, step=None):
         """
-        Log a matplotlib figure as an image to MLFlow
+        Log a matplotlib figure as an image to MLFlow.
 
-        key: str
-            Key to log the image under
-        images: list
-            List of matplotlib figures to log
-        step: Union[int, None]
-            Step to log the image under. If None, logs under the key directly
+        Parameters
+        ----------
+        key : str
+            Key to log the image under. If ``step`` is given, the actual
+            key used is ``f"{key}_{step}"``.
+        images : list of matplotlib.figure.Figure
+            Figures to log; only the first element is used.
+        step : int or None, optional
+            Step to associate with the log entry. ``None`` logs without
+            a step suffix.
         """
         # Third-party
         from botocore.exceptions import NoCredentialsError

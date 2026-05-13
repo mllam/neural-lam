@@ -1,4 +1,4 @@
-[![slack](https://img.shields.io/badge/slack-join-brightgreen.svg?logo=slack)](https://kutt.it/mllam)
+[![slack](https://img.shields.io/badge/slack-join-brightgreen.svg?logo=slack)](https://kutt.to/mllam)
 [![Linting](https://github.com/mllam/neural-lam/actions/workflows/pre-commit.yml/badge.svg?branch=main)](https://github.com/mllam/neural-lam/actions/workflows/pre-commit.yml)
 [![CPU+GPU testing](https://github.com/mllam/neural-lam/actions/workflows/install-and-test.yml/badge.svg?branch=main)](https://github.com/mllam/neural-lam/actions/workflows/install-and-test.yml)
 
@@ -64,8 +64,7 @@ Still, some restrictions are inevitable:
 
 # Installing Neural-LAM
 
-When installing `neural-lam` you have a choice of either installing with
-directly `pip` or using the `uv` package manager.
+When installing `neural-lam` you have a choice of either installing directly with `pip` or using the `uv` package manager.
 We recommend using `uv` as it makes it easy to add/remove packages while
 keeping versions consistent (it automatically updates the `pyproject.toml`
 file), makes it easy to handle virtual environments and includes the
@@ -171,7 +170,7 @@ For now the neural-lam config only defines few things:
 2. The weighting of different features in
 the loss function. If you don't define the state feature weighting it will default to
 weighting all features equally.
-3. Valid numerical range for output of each feature.The numerical range of all features default to $]-\infty, \infty[$.
+3. Valid numerical range for output of each feature. The numerical range of all features default to $]-\infty, \infty[$.
 
 (This example is taken from the `tests/datastore_examples/mdp` directory.)
 
@@ -391,7 +390,7 @@ python -m neural_lam.datastore.npyfilesmeps.compute_standardization_stats <path-
 
 ### Graph creation
 
-Run `python -m neural_lam.create_mesh` with suitable options to generate the graph you want to use (see `python neural_lam.create_mesh --help` for a list of options).
+Run `python -m neural_lam.create_graph` with suitable options to generate the graph you want to use (see `python -m neural_lam.create_graph --help` for a list of options).
 The graphs used for the different models in the [paper](#graph-based-neural-weather-prediction-for-limited-area-modeling) can be created as:
 
 * **GC-LAM**: `python -m neural_lam.create_graph --config_path <neural-lam-config-path> --name multiscale`
@@ -522,7 +521,7 @@ This issue stems from PyTorch Lightning. See for example [this PR](https://githu
 # Repository Structure
 Except for training and pre-processing scripts all the source code can be found in the `neural_lam` directory.
 Model classes, including abstract base classes, are located in `neural_lam/models`.
-Notebooks for visualization and analysis are located in `docs`.
+Notebooks for visualization and analysis are located in `docs/notebooks`.
 
 ## Format of graph directory
 The `graphs` directory contains generated graph structures that can be used by different graph-based models.
@@ -530,13 +529,13 @@ The structure is shown with examples below:
 ```
 graphs
 ├── graph1                                  - Directory with a graph definition
-│   ├── m2m_edge_index.pt                   - Edges in mesh graph (neural_lam.create_mesh)
-│   ├── g2m_edge_index.pt                   - Edges from grid to mesh (neural_lam.create_mesh)
-│   ├── m2g_edge_index.pt                   - Edges from mesh to grid (neural_lam.create_mesh)
-│   ├── m2m_features.pt                     - Static features of mesh edges (neural_lam.create_mesh)
-│   ├── g2m_features.pt                     - Static features of grid to mesh edges (neural_lam.create_mesh)
-│   ├── m2g_features.pt                     - Static features of mesh to grid edges (neural_lam.create_mesh)
-│   └── mesh_features.pt                    - Static features of mesh nodes (neural_lam.create_mesh)
+│   ├── m2m_edge_index.pt                   - Edges in mesh graph (neural_lam.create_graph)
+│   ├── g2m_edge_index.pt                   - Edges from grid to mesh (neural_lam.create_graph)
+│   ├── m2g_edge_index.pt                   - Edges from mesh to grid (neural_lam.create_graph)
+│   ├── m2m_features.pt                     - Static features of mesh edges (neural_lam.create_graph)
+│   ├── g2m_features.pt                     - Static features of grid to mesh edges (neural_lam.create_graph)
+│   ├── m2g_features.pt                     - Static features of mesh to grid edges (neural_lam.create_graph)
+│   └── mesh_features.pt                    - Static features of mesh nodes (neural_lam.create_graph)
 ├── graph2
 ├── ...
 └── graphN
@@ -546,9 +545,9 @@ graphs
 To keep track of levels in the mesh graph, a list format is used for the files with mesh graph information.
 In particular, the files
 ```
-│   ├── m2m_edge_index.pt                   - Edges in mesh graph (neural_lam.create_mesh)
-│   ├── m2m_features.pt                     - Static features of mesh edges (neural_lam.create_mesh)
-│   ├── mesh_features.pt                    - Static features of mesh nodes (neural_lam.create_mesh)
+│   ├── m2m_edge_index.pt                   - Edges in mesh graph (neural_lam.create_graph)
+│   ├── m2m_features.pt                     - Static features of mesh edges (neural_lam.create_graph)
+│   ├── mesh_features.pt                    - Static features of mesh nodes (neural_lam.create_graph)
 ```
 all contain lists of length `L`, for a hierarchical mesh graph with `L` layers.
 For non-hierarchical graphs `L == 1` and these are all just singly-entry lists.
@@ -559,10 +558,10 @@ In addition, hierarchical mesh graphs (`L > 1`) feature a few additional files w
 ```
 ├── graph1
 │   ├── ...
-│   ├── mesh_down_edge_index.pt             - Downward edges in mesh graph (neural_lam.create_mesh)
-│   ├── mesh_up_edge_index.pt               - Upward edges in mesh graph (neural_lam.create_mesh)
-│   ├── mesh_down_features.pt               - Static features of downward mesh edges (neural_lam.create_mesh)
-│   ├── mesh_up_features.pt                 - Static features of upward mesh edges (neural_lam.create_mesh)
+│   ├── mesh_down_edge_index.pt             - Downward edges in mesh graph (neural_lam.create_graph)
+│   ├── mesh_up_edge_index.pt               - Upward edges in mesh graph (neural_lam.create_graph)
+│   ├── mesh_down_features.pt               - Static features of downward mesh edges (neural_lam.create_graph)
+│   ├── mesh_up_features.pt                 - Static features of upward mesh edges (neural_lam.create_graph)
 │   ├── ...
 ```
 These files have the same list format as the ones above, but each list has length `L-1` (as these edges describe connections between levels).

@@ -1,12 +1,13 @@
+# Standard library
+from argparse import Namespace
+
 # Third-party
 import pytorch_lightning as pl
 import torch
 
 # First-party
 from neural_lam import config as nlconfig
-from neural_lam.models.ar_forecaster import ARForecaster
-from neural_lam.models.forecaster_module import ForecasterModule
-from neural_lam.models.step_predictor import StepPredictor
+from neural_lam.models import ARForecaster, ForecasterModule, StepPredictor
 from tests.conftest import init_datastore_example
 from tests.dummy_datastore import DummyDatastore
 
@@ -21,8 +22,8 @@ class NoStaticDummyDatastore(DummyDatastore):
 
 
 class MockStepPredictor(StepPredictor):
-    def __init__(self, config, datastore, **kwargs):
-        super().__init__(config, datastore, **kwargs)
+    def __init__(self, datastore, **kwargs):
+        super().__init__(datastore, **kwargs)
 
     def forward(self, prev_state, prev_prev_state, forcing):
         # Return zeros for state
@@ -34,13 +35,7 @@ class MockStepPredictor(StepPredictor):
 
 def test_ar_forecaster_unroll():
     datastore = init_datastore_example("mdp")
-    config = nlconfig.NeuralLAMConfig(
-        datastore=nlconfig.DatastoreSelection(
-            kind=datastore.SHORT_NAME, config_path=datastore.root_path
-        )
-    )
     predictor = MockStepPredictor(
-        config=config,
         datastore=datastore,
         output_std=False,
     )
@@ -92,7 +87,6 @@ def test_forecaster_module_checkpoint(tmp_path):
 
     predictor_class = MODELS["graph_lam"]
     predictor = predictor_class(
-        config=config,
         datastore=datastore,
         graph_name="1level",
         hidden_dim=4,
@@ -129,7 +123,6 @@ def test_forecaster_module_checkpoint(tmp_path):
 
     # Build a fresh forecaster structure for loading weights into
     load_predictor = predictor_class(
-        config=config,
         datastore=datastore,
         graph_name="1level",
         hidden_dim=4,
@@ -176,7 +169,9 @@ def test_forecaster_module_checkpoint(tmp_path):
     assert torch.allclose(out_before[0], out_after[0])
 
 
-def test_forecaster_module_old_checkpoint(tmp_path):
+def test_old_checkpoint_load(tmp_path):
+    """Old-style (pre-refactor) checkpoints must load without error and with
+    the correct hyperparameters."""
     datastore = init_datastore_example("mdp")
 
     config = nlconfig.NeuralLAMConfig(
@@ -190,7 +185,6 @@ def test_forecaster_module_old_checkpoint(tmp_path):
 
     predictor_class = MODELS["graph_lam"]
     predictor = predictor_class(
-        config=config,
         datastore=datastore,
         graph_name="1level",
         hidden_dim=4,
@@ -203,15 +197,24 @@ def test_forecaster_module_old_checkpoint(tmp_path):
     )
     forecaster = ARForecaster(predictor, datastore)
 
+    # Use distinctive non-default values so we can detect silent fallback
+    # to ForecasterModule's defaults during load.
+    saved_loss = "mse"
+    saved_lr = 0.123
+    saved_create_gif = True
+    saved_val_steps = [2]
+    saved_n_example_pred = 7
+
     model = ForecasterModule(
         forecaster=forecaster,
         config=config,
         datastore=datastore,
-        loss="mse",
-        lr=1e-3,
+        loss=saved_loss,
+        lr=saved_lr,
         restore_opt=False,
-        n_example_pred=1,
-        val_steps_to_log=[1],
+        n_example_pred=saved_n_example_pred,
+        create_gif=saved_create_gif,
+        val_steps_to_log=saved_val_steps,
         metrics_watch=[],
     )
 
@@ -225,7 +228,9 @@ def test_forecaster_module_old_checkpoint(tmp_path):
     trainer.strategy.connect(model)
     trainer.save_checkpoint(ckpt_path)
 
-    # Manually hack the checkpoint to emulate a pre-refactor state dict
+    # Manually hack the checkpoint to emulate a pre-refactor checkpoint:
+    # both the state_dict (flat keys) AND the hyper_parameters (nested
+    # under an argparse Namespace called 'args' as old ARModel saved them).
     ckpt = torch.load(ckpt_path, weights_only=False)
     old_state_dict = {}
     for k, v in ckpt["state_dict"].items():
@@ -237,13 +242,25 @@ def test_forecaster_module_old_checkpoint(tmp_path):
             old_state_dict[new_k] = v
         else:
             old_state_dict[k] = v
-
     ckpt["state_dict"] = old_state_dict
+
+    ckpt["hyper_parameters"] = {
+        "args": Namespace(
+            loss=saved_loss,
+            lr=saved_lr,
+            restore_opt=False,
+            n_example_pred=saved_n_example_pred,
+            create_gif=saved_create_gif,
+            val_steps_to_log=saved_val_steps,
+            metrics_watch=[],
+            var_leads_metrics_watch={},
+        ),
+        "config": ckpt["hyper_parameters"]["config"],
+    }
     torch.save(ckpt, ckpt_path)
 
     # Build a fresh forecaster structure for loading weights into
     load_predictor = predictor_class(
-        config=config,
         datastore=datastore,
         graph_name="1level",
         hidden_dim=4,
@@ -266,6 +283,14 @@ def test_forecaster_module_old_checkpoint(tmp_path):
 
     # Validate the correct internal hierarchy has been constructed
     assert loaded_model.forecaster.predictor.__class__.__name__ == "GraphLAM"
+
+    # Hyperparameters nested in the legacy 'args' namespace must round-trip
+    # rather than silently falling back to ForecasterModule defaults.
+    assert loaded_model.hparams.loss == saved_loss
+    assert loaded_model.hparams.lr == saved_lr
+    assert loaded_model.hparams.val_steps_to_log == saved_val_steps
+    assert loaded_model.create_gif is saved_create_gif
+    assert loaded_model.n_example_pred == saved_n_example_pred
 
     # Verify that outputs match (checkpoint successfully restored weights)
     B, num_grid_nodes = 2, model.forecaster.predictor.num_grid_nodes
@@ -290,18 +315,72 @@ def test_forecaster_module_old_checkpoint(tmp_path):
     assert torch.allclose(out_before[0], out_after[0])
 
 
+def test_graph_lam_no_static_features():
+    """GraphLAM (real GNN) should run a forward pass when the datastore has
+    no static features — verifying that the empty static tensor flows through
+    the graph encoder/processor/decoder without error."""
+    base_datastore = init_datastore_example("mdp")
+
+    class NoStaticWrapper:
+        """Delegate everything to the real datastore, but return None for
+        static so StepPredictor creates an empty (N, 0) static buffer."""
+
+        def __init__(self, ds):
+            self._ds = ds
+
+        def __getattr__(self, name):
+            return getattr(self._ds, name)
+
+        def get_dataarray(self, category, split=None, standardize=False):
+            if category == "static":
+                return None
+            return self._ds.get_dataarray(
+                category, split, standardize=standardize
+            )
+
+    datastore = NoStaticWrapper(base_datastore)
+
+    # First-party
+    from neural_lam.models import MODELS
+
+    predictor = MODELS["graph_lam"](
+        datastore=datastore,
+        graph_name="1level",
+        hidden_dim=4,
+        hidden_layers=1,
+        processor_layers=1,
+        mesh_aggr="sum",
+        num_past_forcing_steps=1,
+        num_future_forcing_steps=1,
+        output_std=False,
+    )
+
+    assert predictor.grid_static_features.shape[1] == 0
+
+    forecaster = ARForecaster(predictor, datastore)
+    B = 2
+    num_grid_nodes = predictor.num_grid_nodes
+    d_state = base_datastore.get_num_data_vars(category="state")
+    d_forcing = base_datastore.get_num_data_vars(category="forcing") * 3
+    init_states = torch.zeros(B, 2, num_grid_nodes, d_state)
+    forcing_features = torch.zeros(B, 1, num_grid_nodes, d_forcing)
+    boundary_states = torch.zeros(B, 1, num_grid_nodes, d_state)
+
+    with torch.no_grad():
+        prediction, pred_std = forecaster(
+            init_states, forcing_features, boundary_states
+        )
+
+    assert prediction.shape == (B, 1, num_grid_nodes, d_state)
+    assert pred_std is None
+
+
 def test_step_predictor_no_static_features():
     """Model should run correctly when the datastore has no static features,
     using an empty (N, 0) tensor in place of static features."""
     datastore = NoStaticDummyDatastore()
-    config = nlconfig.NeuralLAMConfig(
-        datastore=nlconfig.DatastoreSelection(
-            kind=datastore.SHORT_NAME, config_path=datastore.root_path
-        )
-    )
 
     predictor = MockStepPredictor(
-        config=config,
         datastore=datastore,
         output_std=False,
     )
@@ -339,12 +418,7 @@ def test_fold_unfold_equivalence():
     for the existing logging/aggregation paths to remain correct.
     """
     datastore = init_datastore_example("mdp")
-    config = nlconfig.NeuralLAMConfig(
-        datastore=nlconfig.DatastoreSelection(
-            kind=datastore.SHORT_NAME, config_path=datastore.root_path
-        )
-    )
-    predictor = MockStepPredictor(config=config, datastore=datastore)
+    predictor = MockStepPredictor(datastore=datastore)
     forecaster = ARForecaster(predictor, datastore)
 
     S, B = 3, 2

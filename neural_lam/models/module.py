@@ -9,6 +9,7 @@ import numpy as np
 import pytorch_lightning as pl
 import torch
 import xarray as xr
+from PIL import Image
 
 # First-party
 from neural_lam.utils import get_integer_time
@@ -19,7 +20,7 @@ from ..config import NeuralLAMConfig
 from ..datastore import BaseDatastore
 from ..loss_weighting import get_state_feature_weighting
 from ..weather_dataset import WeatherDataset
-from .forecaster import Forecaster
+from .forecasters.base import Forecaster
 
 
 class ForecasterModule(pl.LightningModule):
@@ -39,11 +40,33 @@ class ForecasterModule(pl.LightningModule):
         lr: float = 1e-3,
         restore_opt: bool = False,
         n_example_pred: int = 1,
+        create_gif: bool = False,
         val_steps_to_log: Optional[List[int]] = None,
         metrics_watch: Optional[List[str]] = None,
         var_leads_metrics_watch: Optional[Dict[int, List[int]]] = None,
+        args=None,
     ):
         super().__init__()
+        # Pre-refactor ARModel checkpoints saved every hyperparameter nested
+        # inside an argparse Namespace under the single key 'args'. When
+        # Lightning calls __init__ during load_from_checkpoint it would
+        # otherwise drop 'args' (not in the new signature) and silently fall
+        # back to defaults for loss/lr/create_gif/etc. Unpack the namespace
+        # here so legacy checkpoints round-trip correctly.
+        if args is not None:
+            loss = getattr(args, "loss", loss)
+            lr = getattr(args, "lr", lr)
+            restore_opt = getattr(args, "restore_opt", restore_opt)
+            n_example_pred = getattr(args, "n_example_pred", n_example_pred)
+            create_gif = getattr(args, "create_gif", create_gif)
+            val_steps_to_log = getattr(
+                args, "val_steps_to_log", val_steps_to_log
+            )
+            metrics_watch = getattr(args, "metrics_watch", metrics_watch)
+            var_leads_metrics_watch = getattr(
+                args, "var_leads_metrics_watch", var_leads_metrics_watch
+            )
+
         # Resolve mutable defaults
         if val_steps_to_log is None:
             val_steps_to_log = [
@@ -54,12 +77,15 @@ class ForecasterModule(pl.LightningModule):
         if var_leads_metrics_watch is None:
             var_leads_metrics_watch = {}
 
-        # Note: datastore is excluded from saved hparams and must be provided
-        # explicitly when calling load_from_checkpoint(path,
-        # datastore=datastore)
+        # datastore and forecaster are excluded from saved hparams and must be
+        # provided explicitly when calling load_from_checkpoint. Saving args
+        # makes the checkpoint self-describing: it carries model, graph_name,
+        # hidden_dim, etc. so the caller can reconstruct the exact forecaster
+        # architecture from the checkpoint alone.
         self.save_hyperparameters(ignore=["datastore", "forecaster"])
         self.datastore = datastore
         self.forecaster = forecaster
+        self.matched_metrics: set = set()
 
         # Compute interior_mask_bool directly from datastore
         boundary_mask = (
@@ -115,10 +141,15 @@ class ForecasterModule(pl.LightningModule):
 
         # For example plotting
         self.n_example_pred = n_example_pred
+        self.create_gif = create_gif
         self.plotted_examples = 0
 
         # For storing spatial loss maps during evaluation
         self.spatial_loss_maps: List[Any] = []
+
+        # Warn once per phase if val_steps_to_log exceeds the actual rollout
+        self._val_steps_warn_issued = False
+        self._test_steps_warn_issued = False
 
         self.time_step_int, self.time_step_unit = get_integer_time(
             self.datastore.step_length
@@ -144,11 +175,15 @@ class ForecasterModule(pl.LightningModule):
         )
         return opt
 
-    def training_step(self, batch):
-        (init_states, target_states, forcing_features, _batch_times) = batch
+    def common_step(self, batch):
+        init_states, target_states, forcing_features, batch_times = batch
         prediction, pred_std = self.forecaster(
             init_states, forcing_features, target_states
         )
+        return prediction, target_states, pred_std, batch_times
+
+    def training_step(self, batch):
+        prediction, target_states, pred_std, _ = self.common_step(batch)
         if pred_std is None:
             pred_std = self.per_var_std
 
@@ -181,11 +216,25 @@ class ForecasterModule(pl.LightningModule):
         return gathered
 
     # pylint: disable-next=unused-argument
+    def _warn_skipped_val_steps(self, pred_steps: int, phase: str) -> None:
+        """Warn once per phase if any val_steps_to_log exceed pred_steps."""
+        flag = f"_{phase}_steps_warn_issued"
+        if getattr(self, flag):
+            return
+        invalid = [s for s in self.hparams.val_steps_to_log if s > pred_steps]
+        if invalid:
+            warnings.warn(
+                f"val_steps_to_log contains steps {invalid} that exceed "
+                f"the {phase} rollout length ({pred_steps}). "
+                "These steps will be skipped from logging. "
+                "Adjust --val_steps_to_log or the eval ar_steps.",
+                UserWarning,
+                stacklevel=2,
+            )
+        setattr(self, flag, True)
+
     def validation_step(self, batch, batch_idx):
-        (init_states, target_states, forcing_features, _batch_times) = batch
-        prediction, pred_std = self.forecaster(
-            init_states, forcing_features, target_states
-        )
+        prediction, target_states, pred_std, _ = self.common_step(batch)
         if pred_std is None:
             pred_std = self.per_var_std
 
@@ -199,6 +248,7 @@ class ForecasterModule(pl.LightningModule):
             dim=0,
         )
         mean_loss = torch.mean(time_step_loss)
+        self._warn_skipped_val_steps(len(time_step_loss), "val")
 
         val_log_dict = {
             f"val_loss_unroll{step}": time_step_loss[step - 1]
@@ -225,15 +275,25 @@ class ForecasterModule(pl.LightningModule):
 
     def on_validation_epoch_end(self):
         self.aggregate_and_plot_metrics(self.val_metrics, prefix="val")
+
+        if self.trainer.is_global_zero and self.hparams.metrics_watch:
+            unmatched = set(self.hparams.metrics_watch) - self.matched_metrics
+            if unmatched:
+                warnings.warn(
+                    "The following metrics in --metrics_watch "
+                    "were not found during validation phase: "
+                    f"{sorted(unmatched)}. Ensure the metric prefix "
+                    "matches the evaluation mode (expected 'val_')."
+                )
+
+        self.matched_metrics = set()
+
         for metric_list in self.val_metrics.values():
             metric_list.clear()
 
     # pylint: disable-next=unused-argument
     def test_step(self, batch, batch_idx):
-        (init_states, target_states, forcing_features, _batch_times) = batch
-        prediction, pred_std = self.forecaster(
-            init_states, forcing_features, target_states
-        )
+        prediction, target_states, pred_std, _ = self.common_step(batch)
 
         if pred_std is not None:
             mean_pred_std = torch.mean(
@@ -254,6 +314,7 @@ class ForecasterModule(pl.LightningModule):
             dim=0,
         )
         mean_loss = torch.mean(time_step_loss)
+        self._warn_skipped_val_steps(len(time_step_loss), "test")
 
         test_log_dict = {
             f"test_loss_unroll{step}": time_step_loss[step - 1]
@@ -368,6 +429,19 @@ class ForecasterModule(pl.LightningModule):
             )
             var_vranges = list(zip(var_vmin, var_vmax))
 
+            example_i = self.plotted_examples
+
+            if self.create_gif:
+                plot_dir_path = os.path.join(
+                    self.logger.save_dir,
+                    f"example_plots_{example_i}",
+                )
+                os.makedirs(plot_dir_path, exist_ok=True)
+                png_frames: Dict[str, List[str]] = {
+                    var_name: []
+                    for var_name in self.datastore.get_vars_names("state")
+                }
+
             for t_i, _ in enumerate(zip(pred_slice, target_slice), start=1):
                 var_figs = [
                     vis.plot_prediction(
@@ -392,8 +466,6 @@ class ForecasterModule(pl.LightningModule):
                     )
                 ]
 
-                example_i = self.plotted_examples
-
                 for var_name, fig in zip(
                     self.datastore.get_vars_names("state"), var_figs
                 ):
@@ -409,7 +481,36 @@ class ForecasterModule(pl.LightningModule):
                             f"{self.logger} does not support image logging."
                         )
 
+                    if self.create_gif:
+                        png_path = os.path.join(
+                            plot_dir_path,
+                            f"{var_name}_example_{example_i}"
+                            f"_prediction_t_{t_i:02d}.png",
+                        )
+                        fig.savefig(png_path, dpi=100, bbox_inches="tight")
+                        png_frames[var_name].append(png_path)
+
                 plt.close("all")
+
+            if self.create_gif:
+                for var_name, frames_for_var in png_frames.items():
+                    if frames_for_var:
+                        gif_path = os.path.join(
+                            plot_dir_path,
+                            f"{var_name}_example_{example_i}_prediction.gif",
+                        )
+                        frames = [Image.open(f) for f in frames_for_var]
+                        try:
+                            frames[0].save(
+                                gif_path,
+                                save_all=True,
+                                append_images=frames[1:],
+                                loop=0,
+                                duration=1000,
+                            )
+                        finally:
+                            for frame in frames:
+                                frame.close()
 
             torch.save(
                 pred_slice.cpu(),
@@ -428,7 +529,7 @@ class ForecasterModule(pl.LightningModule):
 
     def create_metric_log_dict(self, metric_tensor, prefix, metric_name):
         log_dict = {}
-        metric_fig = vis.plot_error_map(
+        metric_fig = vis.plot_error_heatmap(
             errors=metric_tensor,
             datastore=self.datastore,
         )
@@ -447,6 +548,7 @@ class ForecasterModule(pl.LightningModule):
 
         var_names = self.datastore.get_vars_names(category="state")
         if full_log_name in self.hparams.metrics_watch:
+            self.matched_metrics.add(full_log_name)
             for (
                 var_i,
                 timesteps,
@@ -496,9 +598,13 @@ class ForecasterModule(pl.LightningModule):
         }
 
         if self.trainer.is_global_zero and not self.trainer.sanity_checking:
-            # Log scalars via Lightning's built-in mechanism
+            # Log scalars via Lightning's built-in mechanism. No sync_dist:
+            # we are inside `if is_global_zero`, so only rank 0 reaches this
+            # call. sync_dist=True would launch a distributed collective
+            # from one rank and hang DDP. The values are already aggregated
+            # via all_gather_cat above, so no further sync is needed.
             if scalar_dict:
-                self.log_dict(scalar_dict, sync_dist=True)
+                self.log_dict(scalar_dict, rank_zero_only=True)
 
             current_epoch = self.trainer.current_epoch
 
@@ -557,6 +663,19 @@ class ForecasterModule(pl.LightningModule):
                 os.path.join(self.logger.save_dir, "mean_spatial_loss.pt"),
             )
 
+            if self.hparams.metrics_watch:
+                unmatched = (
+                    set(self.hparams.metrics_watch) - self.matched_metrics
+                )
+                if unmatched:
+                    warnings.warn(
+                        "The following metrics in --metrics_watch "
+                        "were not found during test phase: "
+                        f"{sorted(unmatched)}. Ensure the metric prefix "
+                        "matches the evaluation mode (expected 'test_')."
+                    )
+
+        self.matched_metrics = set()
         self.spatial_loss_maps.clear()
 
     def on_load_checkpoint(self, checkpoint):

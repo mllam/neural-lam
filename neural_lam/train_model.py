@@ -15,9 +15,42 @@ from loguru import logger
 from . import utils
 from .config import load_config_and_datastore
 from .gnn_layers import GNN_TYPES
-from .models import MODELS, ForecasterModule
-from .models.ar_forecaster import ARForecaster
+from .models import MODELS, ARForecaster, ForecasterModule
 from .weather_dataset import WeatherDataModule
+
+
+def load_forecaster_module_from_checkpoint(ckpt_path, config, datastore):
+    """
+    Reconstruct a ForecasterModule from a checkpoint without requiring the
+    caller to know the original architecture kwargs.
+
+    The checkpoint must have been saved with args in hyper_parameters (i.e.
+    created via train_model.main), so that model class and architecture kwargs
+    can be recovered automatically.
+    """
+    ckpt = torch.load(ckpt_path, weights_only=False)
+    args = ckpt["hyper_parameters"]["args"]
+    predictor_class = MODELS[args.model]
+    predictor = predictor_class(
+        datastore=datastore,
+        graph_name=args.graph,
+        hidden_dim=args.hidden_dim,
+        hidden_layers=args.hidden_layers,
+        processor_layers=args.processor_layers,
+        mesh_aggr=args.mesh_aggr,
+        num_past_forcing_steps=args.num_past_forcing_steps,
+        num_future_forcing_steps=args.num_future_forcing_steps,
+        output_std=args.output_std,
+        output_clamping_lower=config.training.output_clamping.lower,
+        output_clamping_upper=config.training.output_clamping.upper,
+    )
+    forecaster = ARForecaster(predictor, datastore)
+    return ForecasterModule.load_from_checkpoint(
+        ckpt_path,
+        forecaster=forecaster,
+        datastore=datastore,
+        weights_only=False,
+    )
 
 
 @logger.catch
@@ -195,6 +228,12 @@ def main(input_args=None):
         default=1,
         help="Number of example predictions to plot during evaluation",
     )
+    parser.add_argument(
+        "--create_gif",
+        action="store_true",
+        help="If set, create GIF animations from prediction PNG frames and "
+        "save to disk. PNGs are always created and logged to wandb/mlflow.",
+    )
 
     # Logger Settings
     parser.add_argument(
@@ -216,6 +255,18 @@ def main(input_args=None):
         default=None,
         help="""Logger run name, for e.g. MLFlow (with default value `None`
           neural-lam's default format string is used)""",
+    )
+
+    # Wandb-specific settings
+    parser.add_argument(
+        "--wandb_id",
+        type=str,
+        default=None,
+        help="Wandb run ID to use. If the run ID already exists in the "
+        "project, W&B resumes that run. If it does not exist, W&B creates "
+        "a new run with that ID. Useful on HPC systems with limited job "
+        "runtimes or that may crash, allowing training to be continued "
+        "across multiple job submissions.",
     )
     parser.add_argument(
         "--val_steps_to_log",
@@ -249,6 +300,14 @@ def main(input_args=None):
         default=1,
         help="Number of future time steps to use as input for forcing data",
     )
+    parser.add_argument(
+        "--load_single_member",
+        action="store_true",
+        help=(
+            "If set, only use ensemble member 0 instead of treating all "
+            "ensemble members as independent samples."
+        ),
+    )
     args = parser.parse_args(input_args)
     args.var_leads_metrics_watch = {
         int(k): v for k, v in json.loads(args.var_leads_metrics_watch).items()
@@ -257,19 +316,27 @@ def main(input_args=None):
     # Check that config only specifies logging for lead times that exist
     # Check --val_steps_to_log
     for step in args.val_steps_to_log:
-        assert 0 < step <= args.ar_steps_eval, (
-            f"Can not log validation step {step} when validation is "
-            f"only unrolled {args.ar_steps_eval} steps. Adjust "
-            "--val_steps_to_log."
-        )
+        if step > args.ar_steps_eval:
+            raise ValueError(
+                f"Can not log validation step {step} when validation is "
+                f"only unrolled {args.ar_steps_eval} steps. Adjust "
+                "--val_steps_to_log."
+            )
     # Check --var_leads_metric_watch
     for var_i, leads in args.var_leads_metrics_watch.items():
         for step in leads:
-            assert 0 < step <= args.ar_steps_eval, (
-                f"Can not log validation step {step} for variable {var_i} when "
-                f"validation is only unrolled {args.ar_steps_eval} steps. "
-                "Adjust --var_leads_metric_watch."
-            )
+            if step > args.ar_steps_eval:
+                raise ValueError(
+                    f"Can not log validation step {step} for variable "
+                    f"{var_i} when validation is only unrolled "
+                    f"{args.ar_steps_eval} steps. Adjust "
+                    "--var_leads_metric_watch."
+                )
+
+    if args.eval and not args.load:
+        logger.warning(
+            "Evaluation (--eval) without --load: no checkpoint will be loaded.",
+        )
 
     # Get an (actual) random run id as a unique identifier
     random_run_id = random.randint(0, 9999)
@@ -288,6 +355,7 @@ def main(input_args=None):
         standardize=True,
         num_past_forcing_steps=args.num_past_forcing_steps,
         num_future_forcing_steps=args.num_future_forcing_steps,
+        load_single_member=args.load_single_member,
         batch_size=args.batch_size,
         num_workers=args.num_workers,
         eval_split=args.eval or "test",
@@ -315,9 +383,8 @@ def main(input_args=None):
     # ForecasterModule
     predictor_class = MODELS[args.model]
     predictor = predictor_class(
-        config=config,
         datastore=datastore,
-        graph=args.graph,
+        graph_name=args.graph,
         hidden_dim=args.hidden_dim,
         hidden_layers=args.hidden_layers,
         processor_layers=args.processor_layers,
@@ -325,6 +392,8 @@ def main(input_args=None):
         num_past_forcing_steps=args.num_past_forcing_steps,
         num_future_forcing_steps=args.num_future_forcing_steps,
         output_std=args.output_std,
+        output_clamping_lower=config.training.output_clamping.lower,
+        output_clamping_upper=config.training.output_clamping.upper,
         g2m_gnn_type=args.g2m_gnn_type,
         m2g_gnn_type=args.m2g_gnn_type,
         mesh_up_gnn_type=args.mesh_up_gnn_type,
@@ -340,9 +409,11 @@ def main(input_args=None):
         lr=args.lr,
         restore_opt=args.restore_opt,
         n_example_pred=args.n_example_pred,
+        create_gif=args.create_gif,
         val_steps_to_log=args.val_steps_to_log,
         metrics_watch=args.metrics_watch,
         var_leads_metrics_watch=args.var_leads_metrics_watch,
+        args=args,
     )
 
     if args.eval:
@@ -372,7 +443,7 @@ def main(input_args=None):
     trainer = pl.Trainer(
         max_epochs=args.epochs,
         deterministic=True,
-        strategy="ddp",
+        strategy="auto",
         accelerator=device_name,
         num_nodes=args.num_nodes,
         devices=devices,

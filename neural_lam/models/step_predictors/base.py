@@ -1,15 +1,14 @@
 # Standard library
 from abc import ABC, abstractmethod
-from typing import Optional
+from typing import Dict, Optional
 
 # Third-party
 import torch
 from torch import nn
 
 # Local
-from .. import utils
-from ..config import NeuralLAMConfig
-from ..datastore import BaseDatastore
+from ... import utils
+from ...datastore import BaseDatastore
 
 
 class StepPredictor(nn.Module, ABC):
@@ -20,11 +19,18 @@ class StepPredictor(nn.Module, ABC):
 
     def __init__(
         self,
-        config: NeuralLAMConfig,
         datastore: BaseDatastore,
         output_std: bool = False,
+        output_clamping_lower: Optional[Dict[str, float]] = None,
+        output_clamping_upper: Optional[Dict[str, float]] = None,
     ):
         super().__init__()
+        self._output_clamping_lower: Dict[str, float] = (
+            dict(output_clamping_lower) if output_clamping_lower else {}
+        )
+        self._output_clamping_upper: Dict[str, float] = (
+            dict(output_clamping_upper) if output_clamping_upper else {}
+        )
 
         num_state_vars = datastore.get_num_data_vars(category="state")
 
@@ -79,7 +85,20 @@ class StepPredictor(nn.Module, ABC):
 
     def expand_to_batch(self, x: torch.Tensor, batch_size: int) -> torch.Tensor:
         """
-        Expand tensor with shape (N, d) to (B, N, d)
+        Expand a shared node-feature tensor into a batch of copies.
+
+        Parameters
+        ----------
+        x : torch.Tensor
+            Shape ``(N, d)``. Tensor to expand. Dims: ``N`` is the number
+            of nodes and ``d`` is the feature dimension.
+        batch_size : int
+            Target batch size ``B``.
+
+        Returns
+        -------
+        torch.Tensor
+            Shape ``(B, N, d)``. Batch-expanded view of ``x``.
         """
         return x.unsqueeze(0).expand(batch_size, -1, -1)
 
@@ -91,30 +110,55 @@ class StepPredictor(nn.Module, ABC):
         forcing: torch.Tensor,
     ) -> tuple[torch.Tensor, Optional[torch.Tensor]]:
         """
-        Step state one step ahead using prediction model, X_{t-1}, X_t -> X_t+1
-        prev_state: (B, num_grid_nodes, feature_dim), X_t
-        prev_prev_state: (B, num_grid_nodes, feature_dim), X_{t-1}
-        forcing: (B, num_grid_nodes, forcing_dim)
+        Advance the state by one step:
+        ``(X_{t-1}, X_t, forcing_t) -> X_{t+1}``.
 
-        Returns:
-            pred_state: (B, num_grid_nodes, d_f)
-            pred_std: (B, num_grid_nodes, d_f) or None
+        Parameters
+        ----------
+        prev_state : torch.Tensor
+            Shape ``(B, num_grid_nodes, d_f)``. The current state
+            ``X_t``. Dims: ``B`` is batch size, ``num_grid_nodes`` is the
+            number of spatial nodes, and ``d_f`` is the number of state
+            variables.
+        prev_prev_state : torch.Tensor
+            Shape ``(B, num_grid_nodes, d_f)``. The previous state
+            ``X_{t-1}``, used as additional conditioning. Dims: same as
+            ``prev_state``.
+        forcing : torch.Tensor
+            Shape ``(B, num_grid_nodes, d_forcing)``. External forcings
+            for this step (already concatenated past/current/future
+            windows). Dims: ``B`` is batch size, ``num_grid_nodes`` is
+            the number of spatial nodes, and ``d_forcing`` is the
+            forcing feature dimension.
+
+        Returns
+        -------
+        pred_state : torch.Tensor
+            Shape ``(B, num_grid_nodes, d_f)``. The predicted next
+            state ``X_{t+1}``. Dims: same as ``prev_state``.
+        pred_std : torch.Tensor or None
+            Shape ``(B, num_grid_nodes, d_f)`` when ``output_std``
+            is True, otherwise ``None``. Per-feature predicted standard
+            deviation. Dims: same as ``prev_state``.
         """
         pass
 
-    def prepare_clamping_params(
-        self, config: NeuralLAMConfig, datastore: BaseDatastore
-    ):
+    def prepare_clamping_params(self, datastore: BaseDatastore):
         """
-        Prepare parameters for clamping predicted values to valid range
+        Prepare parameters for clamping predicted values to valid range.
+
+        Reads the per-feature lower/upper limits from
+        ``self._output_clamping_lower`` and ``self._output_clamping_upper``
+        (set in ``__init__``) and registers the buffers and clamping
+        functions used by ``get_clamped_new_state``.
         """
 
-        # Read configs
+        # Read clamping limits stored on self
         state_feature_names = datastore.get_vars_names(category="state")
-        lower_lims = config.training.output_clamping.lower
-        upper_lims = config.training.output_clamping.upper
+        lower_lims = self._output_clamping_lower
+        upper_lims = self._output_clamping_upper
 
-        # Check that limits in config are for valid features
+        # Check that limits are for valid features
         unknown_features_lower = set(lower_lims.keys()) - set(
             state_feature_names
         )
@@ -239,18 +283,31 @@ class StepPredictor(nn.Module, ABC):
 
     def get_clamped_new_state(self, state_delta, prev_state):
         """
-        Clamp prediction to valid range supplied in config
-        Returns the clamped new state after adding delta to original state
+        Clamp the next-state prediction to its valid feature range.
 
-        Instead of the new state being computed as
-        $X_{t+1} = X_t + \\delta = X_t + model(\\{X_t,X_{t-1},...\\}, forcing)$
-        The clamped values will be
-        $f(f^{-1}(X_t) + model(\\{X_t, X_{t-1},... \\}, forcing))$
-        Which means the model will learn to output values in the range of the
-        inverse clamping function
+        Instead of the plain residual update
+        ``X_{t+1} = X_t + delta``, the clamped form is
+        ``X_{t+1} = f(f^{-1}(X_t) + delta)``
+        so the model learns to output increments in the domain of the
+        inverse clamping function.
 
-        state_delta: (B, num_grid_nodes, feature_dim)
-        prev_state: (B, num_grid_nodes, feature_dim)
+        Parameters
+        ----------
+        state_delta : torch.Tensor
+            Shape ``(B, num_grid_nodes, d_f)``. Raw predicted state
+            increment (network output, already rescaled). Dims: ``B`` is
+            batch size, ``num_grid_nodes`` is the number of spatial nodes,
+            and ``d_f`` is the number of state variables.
+        prev_state : torch.Tensor
+            Shape ``(B, num_grid_nodes, d_f)``. Current state ``X_t``
+            used as the base for the clamped update. Dims: same as
+            ``state_delta``.
+
+        Returns
+        -------
+        torch.Tensor
+            Shape ``(B, num_grid_nodes, d_f)``. Clamped next state.
+            Dims: same as ``state_delta``.
         """
 
         # Assign new state, but overwrite clamped values of each type later
