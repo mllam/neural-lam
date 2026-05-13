@@ -45,7 +45,21 @@ def _build_model_and_data(
     num_past_forcing_steps = 1
     num_future_forcing_steps = 1
 
-    predictor = MODELS[model_name](
+    # Standard library
+    import inspect
+
+    model_cls = MODELS[model_name]
+    model_params = inspect.signature(model_cls).parameters
+    gnn_kwargs = {
+        "g2m_gnn_type": g2m_gnn_type,
+        "m2g_gnn_type": m2g_gnn_type,
+    }
+    if "mesh_up_gnn_type" in model_params:
+        gnn_kwargs["mesh_up_gnn_type"] = mesh_up_gnn_type
+    if "mesh_down_gnn_type" in model_params:
+        gnn_kwargs["mesh_down_gnn_type"] = mesh_down_gnn_type
+
+    predictor = model_cls(
         datastore=datastore,
         graph_name=graph_name,
         hidden_dim=4,
@@ -57,10 +71,7 @@ def _build_model_and_data(
         output_std=False,
         output_clamping_lower=config.training.output_clamping.lower,
         output_clamping_upper=config.training.output_clamping.upper,
-        g2m_gnn_type=g2m_gnn_type,
-        m2g_gnn_type=m2g_gnn_type,
-        mesh_up_gnn_type=mesh_up_gnn_type,
-        mesh_down_gnn_type=mesh_down_gnn_type,
+        **gnn_kwargs,
     )
     forecaster = ARForecaster(predictor, datastore)
 
