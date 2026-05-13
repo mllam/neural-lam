@@ -137,7 +137,7 @@ Each tensor MUST satisfy the following requirements:
 - `mesh_features` entries MUST have shape `[N_level, 2]`, where `N_level` is the number of mesh nodes at that level. The two features MUST be the horizontal coordinates of the mesh nodes at level `i`.  # noqa: E501
 - `mesh_features[i][:, 0]` and `mesh_features[i][:, 1]` MUST contain the horizontal coordinates of the mesh nodes at level `i`, with column `0` and column `1` representing the two orthogonal horizontal axes.  # noqa: E501
 
-  *NOTE*: These coordinates SHOULD be provided in a local equal-area projection, because the two mesh node features are normalized together after graph loading.  # noqa: E501
+  *NOTE*: These coordinates SHOULD be provided in a local equal-area projection, because the two mesh node features are normalized together using the maximum span of the grid coordinates after graph loading.  # noqa: E501
 - Mesh node features SHOULD NOT be normalized. Instead, normalization will be performed inside `neural-lam` after graph loading.  # noqa: E501
 - Dtype MUST be `torch.float32`.
 ### 3.2 Edges

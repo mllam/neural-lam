@@ -1621,7 +1621,7 @@ def validate_graph_directory(
         """\
     - `mesh_features[i][:, 0]` and `mesh_features[i][:, 1]` MUST contain the horizontal coordinates of the mesh nodes at level `i`, with column `0` and column `1` representing the two orthogonal horizontal axes.  # noqa: E501
 
-      *NOTE*: These coordinates SHOULD be provided in a local equal-area projection, because the two mesh node features are normalized together after graph loading.  # noqa: E501
+      *NOTE*: These coordinates SHOULD be provided in a local equal-area projection, because the two mesh node features are normalized together using the maximum span of the grid coordinates after graph loading.  # noqa: E501
     """
     )
     # semantic requirement — no structural check for content of the two columns

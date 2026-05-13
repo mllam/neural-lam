@@ -2,7 +2,6 @@
 from pathlib import Path
 
 # Third-party
-import numpy as np
 import plotly.graph_objects as go
 import pytest
 
@@ -50,13 +49,19 @@ def graph_fixture(request, tmp_path_factory):
         n_max_levels=n_max_levels,
     )
 
+    grid_xy_extent = datastore.get_xy_extent(category="state")
+    grid_xy_max_span = max(
+        grid_xy_extent[1] - grid_xy_extent[0],
+        grid_xy_extent[3] - grid_xy_extent[2],
+    )
+
     is_hierarchical, graph_ldict = utils.load_graph(
-        graph_dir_path=str(graph_dir_path)
+        graph_dir_path=str(graph_dir_path),
+        mesh_node_features_scaling=grid_xy_max_span,
     )
 
     xy = datastore.get_xy("state", stacked=True)
-    pos_max = np.max(np.abs(xy))
-    grid_pos = xy / pos_max
+    grid_pos = xy / grid_xy_max_span
 
     return grid_pos, is_hierarchical, graph_ldict, graph_name
 

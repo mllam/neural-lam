@@ -175,7 +175,9 @@ def zero_index_g2m(
 
 
 def load_graph(
-    graph_dir_path: Union[str, Path], device: str = "cpu"
+    graph_dir_path: Union[str, Path],
+    mesh_node_features_scaling: float,
+    device: str = "cpu",
 ) -> tuple[bool, dict[str, Any]]:
     """Load all tensors representing the graph from `graph_dir_path`.
 
@@ -198,6 +200,9 @@ def load_graph(
     ----------
     graph_dir_path : str
         Path to directory containing the graph files.
+    mesh_node_features_scaling : float
+        Scalar used to normalize mesh node coordinate features for graphs in
+        the current on-disk format.
     device : str
         Device to load tensors to.
 
@@ -255,26 +260,18 @@ def load_graph(
     # Normalize static mesh features for the current on-disk graph format.
     # Legacy graphs already store normalized mesh coordinates.
     if should_normalize_mesh_features:
-        num_features = mesh_static_features[0].shape[1]
+        if mesh_node_features_scaling == 0:
+            warnings.warn(
+                "Mesh node feature scaling is zero; falling back to 1.0 so "
+                "mesh node coordinates are left unchanged after graph "
+                "loading.",
+                RuntimeWarning,
+                stacklevel=2,
+            )
+            mesh_node_features_scaling = 1.0
 
-        # Coordinates (first two columns) are normalized jointly
-        pos_max = max(
-            torch.max(torch.abs(m[:, :2])) for m in mesh_static_features
-        )
-
-        for i in range(num_features):
-            if i < 2:
-                scale = pos_max
-            else:
-                # Extra features are normalized independently per column
-                scale = max(
-                    torch.max(torch.abs(m[:, i])) for m in mesh_static_features
-                )
-                if scale == 0:
-                    scale = 1.0
-
-            for m in mesh_static_features:
-                m[:, i] /= scale
+        for m in mesh_static_features:
+            m[:, :2] /= mesh_node_features_scaling
 
     # Load edges (edge_index)
     m2m_edge_index = BufferList(

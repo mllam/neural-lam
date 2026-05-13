@@ -16,25 +16,12 @@ from tests.dummy_datastore import DummyDatastore
 
 
 def _normalize_mesh_features(
-    mesh_features: list[torch.Tensor],
+    mesh_features: list[torch.Tensor], grid_xy_max_span: float
 ) -> list[torch.Tensor]:
     normalized = [m.clone() for m in mesh_features]
-    num_features = normalized[0].shape[1]
 
-    pos_max = max(torch.max(torch.abs(m[:, :2])) for m in normalized)
-
-    for feature_index in range(num_features):
-        if feature_index < 2:
-            scale = pos_max
-        else:
-            scale = max(
-                torch.max(torch.abs(m[:, feature_index])) for m in normalized
-            )
-            if scale == 0:
-                scale = 1.0
-
-        for mesh_tensor in normalized:
-            mesh_tensor[:, feature_index] /= scale
+    for mesh_tensor in normalized:
+        mesh_tensor[:, :2] /= grid_xy_max_span
 
     return normalized
 
@@ -56,15 +43,26 @@ def test_load_graph_respects_current_and_legacy_mesh_feature_formats():
             n_max_levels=1,
         )
 
+        grid_xy_extent = datastore.get_xy_extent(category="state")
+        grid_xy_max_span = max(
+            grid_xy_extent[1] - grid_xy_extent[0],
+            grid_xy_extent[3] - grid_xy_extent[2],
+        )
+
         raw_mesh_features = torch.load(graph_dir_path / "mesh_features.pt")
-        expected_mesh_features = _normalize_mesh_features(raw_mesh_features)
+        expected_mesh_features = _normalize_mesh_features(
+            raw_mesh_features, grid_xy_max_span
+        )
 
         # New-format graphs should normalize mesh node coordinates on load.
         assert not torch.allclose(
             raw_mesh_features[0], expected_mesh_features[0]
         )
 
-        _, graph_ldict = utils.load_graph(graph_dir_path=str(graph_dir_path))
+        _, graph_ldict = utils.load_graph(
+            graph_dir_path=str(graph_dir_path),
+            mesh_node_features_scaling=grid_xy_max_span,
+        )
         assert torch.allclose(
             graph_ldict["mesh_static_features"], expected_mesh_features[0]
         )
@@ -76,7 +74,8 @@ def test_load_graph_respects_current_and_legacy_mesh_feature_formats():
 
         with pytest.warns(RuntimeWarning, match="neural-lam<=0.6.0"):
             _, legacy_graph_ldict = utils.load_graph(
-                graph_dir_path=str(graph_dir_path)
+                graph_dir_path=str(graph_dir_path),
+                mesh_node_features_scaling=grid_xy_max_span,
             )
 
         assert torch.allclose(

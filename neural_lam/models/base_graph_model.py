@@ -22,8 +22,14 @@ class BaseGraphModel(ARModel):
         # NOTE: (IMPORTANT!) mesh nodes MUST have the first
         # num_mesh_nodes indices,
         graph_dir_path = datastore.root_path / "graph" / args.graph
+        grid_xy_extent = datastore.get_xy_extent(category="state")
+        grid_xy_max_span = max(
+            grid_xy_extent[1] - grid_xy_extent[0],
+            grid_xy_extent[3] - grid_xy_extent[2],
+        )
         self.hierarchical, graph_ldict = utils.load_graph(
-            graph_dir_path=graph_dir_path
+            graph_dir_path=graph_dir_path,
+            mesh_node_features_scaling=grid_xy_max_span,
         )
         for name, attr_value in graph_ldict.items():
             # Make BufferLists module members and register tensors as buffers
