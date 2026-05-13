@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [unreleased](https://github.com/mllam/neural-lam/compare/v0.6.0...HEAD)
 
+### Added
+
+- Add `PropagationNet` GNN layer that incentivises directional message
+  propagation from sender to receiver nodes, and expose it alongside
+  `InteractionNet` through four new CLI arguments (`--g2m_gnn_type`,
+  `--m2g_gnn_type`, `--mesh_up_gnn_type`, `--mesh_down_gnn_type`) so
+  each edge-type's GNN can be chosen independently. A `GNN_TYPES` registry
+  and `get_gnn_class()` helper make it straightforward to register further
+  GNN types in the future.
+  [\#507](https://github.com/mllam/neural-lam/pull/507)
+  @Sir-Sloth-The-Lazy
+
 ### Changed
 
 - Split `ARModel` into `ForecasterModule`, `Forecaster` and
