@@ -8,8 +8,7 @@ import torch
 from neural_lam import config as nlconfig
 from neural_lam.create_graph import create_graph_from_datastore
 from neural_lam.gnn_layers import InteractionNet, PropagationNet
-from neural_lam.models import MODELS
-from neural_lam.models.ar_forecaster import ARForecaster
+from neural_lam.models import MODELS, ARForecaster
 from tests.conftest import init_datastore_example
 
 
@@ -47,7 +46,6 @@ def _build_model_and_data(
     num_future_forcing_steps = 1
 
     predictor = MODELS[model_name](
-        config=config,
         datastore=datastore,
         graph_name=graph_name,
         hidden_dim=4,

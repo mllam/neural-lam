@@ -27,7 +27,6 @@ NUM_PAST_FORCING_STEPS = 1
 NUM_FUTURE_FORCING_STEPS = 1
 
 
-
 def run_simple_training(
     datastore,
     set_output_std,
