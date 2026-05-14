@@ -16,8 +16,7 @@
 # To enable installing different pytorch variants we use an approach where we
 # first install a specific torch version (and variant), and then install neural-lam.
 # To ensure that the version of torch installed is compatible with neural-lam we
-# first use `pip install --dry-run .` to determine the version of torch that would
-# be installed.
+# use the latest torch version available from the selected CPU/GPU wheel index.
 name: CPU+GPU testing
 
 on: [push, pull_request, workflow_dispatch]
@@ -59,10 +58,14 @@ jobs:
           python -m venv /opt/dlami/nvme/venv
           source /opt/dlami/nvme/venv/bin/activate
 
-      - name: Determine PyTorch version for neural-lam (using pip dry-run)
+      - name: Determine PyTorch version from selected wheel index
         if: matrix.package_manager == 'pip'
         run: |
-          TORCH_VERSION=$(python -m pip install --dry-run "." | grep "Would install" | grep -o 'torch-[0-9.]*' | awk -F'-' '{print $2}' | tail -n 1)
+          TORCH_VERSION=$(python -m pip index versions torch --index-url ${{ matrix.torch_index }} | awk '/LATEST:/ {print $2}')
+          if [ -z "$TORCH_VERSION" ]; then
+            echo "Could not detect a torch version from ${{ matrix.torch_index }}" >&2
+            exit 1
+          fi
           echo "Torch version detected: $TORCH_VERSION"
           echo "TORCH_VERSION=$TORCH_VERSION" >> $GITHUB_ENV
 
