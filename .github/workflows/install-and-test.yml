@@ -13,8 +13,11 @@
 # - cirun-aws-runner--${{ github.run_id }} for GPU: these are on AWS,
 #   orchestrated by cirun.io
 #
-# To enable installing different pytorch variants we first install torch from
-# the selected CPU/GPU wheel index, and then install neural-lam.
+# To enable installing different pytorch variants we use an approach where we
+# first install a specific torch version (and variant), and then install neural-lam.
+# To ensure that the version of torch installed is compatible with neural-lam we
+# first use `pip install --dry-run .` to determine the version of torch that would
+# be installed.
 name: CPU+GPU testing
 
 on: [push, pull_request, workflow_dispatch]
@@ -56,10 +59,17 @@ jobs:
           python -m venv /opt/dlami/nvme/venv
           source /opt/dlami/nvme/venv/bin/activate
 
+      - name: Determine PyTorch version for neural-lam (using pip dry-run)
+        if: matrix.package_manager == 'pip'
+        run: |
+          TORCH_VERSION=$(python -m pip install --dry-run "." | grep "Would install" | grep -o 'torch-[0-9.]*' | awk -F'-' '{print $2}' | tail -n 1)
+          echo "Torch version detected: $TORCH_VERSION"
+          echo "TORCH_VERSION=$TORCH_VERSION" >> $GITHUB_ENV
+
       - name: Install PyTorch
         if : matrix.package_manager != 'uv'
         run: |
-          python -m pip install torch --index-url ${{ matrix.torch_index }}
+          python -m pip install "torch==$TORCH_VERSION" --index-url ${{ matrix.torch_index }}
 
       - name: Install package (including dev dependencies)
         if : matrix.package_manager != 'uv'
