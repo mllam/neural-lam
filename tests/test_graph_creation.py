@@ -3,11 +3,12 @@ import tempfile
 from pathlib import Path
 
 # Third-party
+import numpy as np
 import pytest
 import torch
 
 # First-party
-from neural_lam.create_graph import create_graph_from_datastore
+from neural_lam.create_graph import create_graph, create_graph_from_datastore
 from neural_lam.datastore import DATASTORES
 from neural_lam.datastore.base import BaseRegularGridDatastore
 from tests.conftest import init_datastore_example
@@ -117,3 +118,31 @@ def test_graph_creation(datastore_name, graph_name):
                         assert r.shape[0] == 2  # adjacency matrix uses two rows
                     elif file_id.endswith("_features"):
                         assert r.shape[1] == d_features
+
+
+@pytest.mark.parametrize("hierarchical", [False, True])
+def test_graph_creation_zero_grid_positions_are_finite(hierarchical):
+    """Check that zero-centered degenerate grids do not create NaN features."""
+    xy = np.zeros((9, 9, 2), dtype=np.float32)
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        graph_dir_path = Path(tmpdir) / "graph" / "zero-grid"
+
+        create_graph(
+            graph_dir_path=str(graph_dir_path),
+            xy=xy,
+            hierarchical=hierarchical,
+            n_max_levels=1,
+        )
+
+        feature_files = [
+            "mesh_features.pt",
+            "m2m_features.pt",
+            "g2m_features.pt",
+            "m2g_features.pt",
+        ]
+        for file_name in feature_files:
+            result = torch.load(graph_dir_path / file_name, weights_only=True)
+            tensors = result if isinstance(result, list) else [result]
+            for tensor in tensors:
+                assert torch.isfinite(tensor).all()

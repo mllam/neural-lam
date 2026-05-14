@@ -415,8 +415,16 @@ def create_graph(
     # Save m2m edges
     save_edges_list(m2m_graphs, "m2m", graph_dir_path)
 
-    # Divide mesh node pos by max coordinate of grid cell
-    mesh_pos = [pos / pos_max for pos in mesh_pos]
+    # Divide mesh node pos by max coordinate of grid cell. Degenerate test
+    # grids can have all coordinates at the origin, where normalization would
+    # otherwise create NaN values from 0 / 0.
+    if pos_max > 0:
+        mesh_pos = [pos / pos_max for pos in mesh_pos]
+    else:
+        logger.warning(
+            "Skipping mesh position normalization because the maximum grid "
+            "coordinate is zero."
+        )
 
     # Save mesh positions
     torch.save(
