@@ -542,6 +542,12 @@ will overlay the boundary forcing data underneath the interior prediction and
 ground truth panels, allowing visual inspection of the boundary conditions used
 during the forecast.
 
+Interior state variables are matched to boundary forcing fields **by name**.
+For each state variable plotted (e.g. `u100m`), the overlay is drawn only when
+the boundary datastore exposes a forcing feature with the same name. To pair
+fields across datastores that use different native variable names, align the
+names in the two mllam-data-prep configs.
+
 **Note:** While it is technically possible to use multiple GPUs for running evaluation, this is strongly discouraged. If using multiple devices the `DistributedSampler` will replicate some samples to make sure all devices have the same batch size, meaning that evaluation metrics will be unreliable.
 A possible workaround is to just use batch size 1 during evaluation.
 This issue stems from PyTorch Lightning. See for example [this PR](https://github.com/Lightning-AI/torchmetrics/pull/1886) for more discussion.

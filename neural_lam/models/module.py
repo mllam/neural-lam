@@ -692,16 +692,25 @@ class ForecasterModule(pl.LightningModule):
         prediction_rescaled = prediction * state_std + state_mean
         target_rescaled = target * state_std + state_mean
 
-        # Load boundary forcing for plotting (raw, unstandardized)
+        # Load boundary forcing for plotting (raw, unstandardized).
+        #
+        # Interior state variables are matched to boundary forcing fields
+        # *by name*: a boundary overlay is drawn for state variable
+        # ``var_name`` only when ``var_name`` is also a forcing feature on
+        # the boundary datastore. This means users must align variable
+        # names across the two mllam-data-prep configs (e.g. rename ERA5
+        # ``u_component_of_wind1000hPa`` to ``u100m`` if you want it to
+        # overlay DANRA's ``u100m``). Unmatched state variables plot
+        # without a boundary overlay.
         da_boundary_forcing = None
-        n_boundary_vars = 0
+        boundary_feature_names: set = set()
         if self.datastore_boundary is not None:
             da_boundary_forcing = self.datastore_boundary.get_dataarray(
                 category="forcing", split=split, standardize=False
             )
             if da_boundary_forcing is not None:
-                n_boundary_vars = self.datastore_boundary.get_num_data_vars(
-                    "forcing"
+                boundary_feature_names = set(
+                    self.datastore_boundary.get_vars_names("forcing")
                 )
 
         for pred_slice, target_slice, time_slice in zip(
@@ -769,6 +778,17 @@ class ForecasterModule(pl.LightningModule):
                         time=target_time, method="nearest"
                     )
 
+                def _boundary_for(var_name: str):
+                    """Return the boundary field for ``var_name`` if the
+                    boundary datastore exposes a forcing feature with the
+                    same name, else ``None``."""
+                    if (
+                        boundary_da_t is None
+                        or var_name not in boundary_feature_names
+                    ):
+                        return None
+                    return boundary_da_t.sel(forcing_feature=var_name).squeeze()
+
                 var_figs = [
                     vis.plot_prediction(
                         datastore=self.datastore,
@@ -782,16 +802,10 @@ class ForecasterModule(pl.LightningModule):
                         da_target=da_target.isel(
                             state_feature=var_i, time=t_i - 1
                         ).squeeze(),
-                        boundary_da=(
-                            boundary_da_t.isel(forcing_feature=var_i).squeeze()
-                            if boundary_da_t is not None
-                            and var_i < n_boundary_vars
-                            else None
-                        ),
+                        boundary_da=_boundary_for(var_name),
                         boundary_datastore=(
                             self.datastore_boundary
-                            if boundary_da_t is not None
-                            and var_i < n_boundary_vars
+                            if _boundary_for(var_name) is not None
                             else None
                         ),
                     )

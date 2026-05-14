@@ -425,7 +425,10 @@ def plot_on_axis(
         # regular grid otherwise.
         per_point_lats_lons = None
         for lon_name, lat_name in (("longitude", "latitude"), ("lon", "lat")):
-            if lon_name in boundary_da.coords and lat_name in boundary_da.coords:
+            if (
+                lon_name in boundary_da.coords
+                and lat_name in boundary_da.coords
+            ):
                 per_point_lats_lons = (
                     np.asarray(boundary_da[lon_name].values),
                     np.asarray(boundary_da[lat_name].values),
@@ -453,7 +456,9 @@ def plot_on_axis(
             # coords and unstacking; missing cells come back as NaN, so
             # pcolormesh just leaves them transparent and we get the
             # boundary "donut" around the interior.
-            lon_name = "longitude" if "longitude" in boundary_da.coords else "lon"
+            lon_name = (
+                "longitude" if "longitude" in boundary_da.coords else "lon"
+            )
             lat_name = "latitude" if "latitude" in boundary_da.coords else "lat"
             grid_dim = boundary_da.dims[-1]
             da_unstacked = boundary_da.set_index(
