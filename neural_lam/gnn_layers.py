@@ -62,18 +62,12 @@ class InteractionNet(pyg.nn.MessagePassing):
             # Default to input dim if not explicitly given
             hidden_dim = input_dim
 
-        # Normalize sender and receiver indices independently to start at 0,
-        # so this layer works regardless of the global node-numbering scheme
-        # used by the caller (e.g. graph files that offset grid nodes by the
-        # total mesh node count).
-        edge_index = (
-            edge_index - edge_index.min(dim=1, keepdim=True)[0]
-        ).clone()
         self.num_rec = edge_index[1].max() + 1
+        # Expects zero-based, locally-indexed edge_index from the caller
+        # (load_graph in utils.py normalises g2m/m2g before passing here).
         # Lay out the combined node tensor as [receivers | senders]:
         #   receivers → [0 .. num_rec-1]
         #   senders   → [num_rec .. num_rec+num_snd-1]
-        # Offset sender indices accordingly.
         edge_index = torch.stack(
             (edge_index[0] + self.num_rec, edge_index[1]), dim=0
         )
