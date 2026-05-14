@@ -30,7 +30,10 @@ class ForecastBatch(NamedTuple):
 def coerce_forecast_batch(
     batch: ForecastBatch | Sequence[torch.Tensor],
 ) -> ForecastBatch:
-    """Return batch as ForecastBatch while accepting the legacy 4-tuple shape."""
+    """Return batch as ForecastBatch.
+
+    Legacy 4-element batch tuples are accepted during the migration.
+    """
     if isinstance(batch, ForecastBatch):
         return batch
 
