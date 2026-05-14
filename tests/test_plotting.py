@@ -12,7 +12,6 @@ import numpy as np
 import pytest
 import torch
 import xarray as xr
-from cartopy import crs as ccrs
 
 # First-party
 from neural_lam import config as nlconfig
@@ -20,7 +19,10 @@ from neural_lam import vis
 from neural_lam.create_graph import create_graph_from_datastore
 from neural_lam.models import ARForecaster, ForecasterModule, GraphLAM
 from neural_lam.weather_dataset import WeatherDataset
-from tests.conftest import init_datastore_example
+from tests.conftest import (
+    init_datastore_boundary_example,
+    init_datastore_example,
+)
 from tests.dummy_datastore import BoundaryDummyDatastore, DummyDatastore
 
 # Create output directory for test figures
@@ -116,7 +118,6 @@ def test_plot_prediction() -> None:
         title="Test Prediction",
         vrange=(expected_vmin, expected_vmax),
         boundary_alpha=None,
-        crop_to_interior=False,
     )
 
     assert isinstance(fig, matplotlib.figure.Figure)
@@ -157,7 +158,6 @@ def test_plot_on_axis_with_boundary() -> None:
         boundary_da=boundary_da,
         boundary_datastore=boundary_datastore,
         boundary_alpha=None,
-        crop_to_interior=False,
     )
     assert mesh is not None
     # Two pcolormesh collections: boundary underneath + interior on top
@@ -182,7 +182,6 @@ def test_plot_prediction_with_boundary() -> None:
         da_target=da_target,
         title="Test with Boundary",
         boundary_alpha=None,
-        crop_to_interior=False,
         boundary_da=boundary_da,
         boundary_datastore=boundary_datastore,
     )
@@ -208,7 +207,6 @@ def test_plot_prediction_boundary_none_is_backward_compatible() -> None:
         da_prediction=da_pred,
         da_target=da_target,
         boundary_alpha=None,
-        crop_to_interior=False,
     )
 
     ground_truth_ax = fig.axes[0]
@@ -217,21 +215,20 @@ def test_plot_prediction_boundary_none_is_backward_compatible() -> None:
 
 
 def test_plot_on_axis_boundary_sets_extent() -> None:
-    """When boundary data is present and crop_to_interior is False,
-    the extent should be set to cover the boundary domain."""
-
-    class _LargerBoundaryDatastore(BoundaryDummyDatastore):
-        bbox_size_km = [1000, 1000]
+    """With a boundary datastore the axes extent should be the interior
+    bbox in the datastore's own projection, expanded by
+    ``boundary_margin_degrees`` worth of latitude on each side."""
 
     datastore = init_datastore_example("dummydata")
     n_grid = datastore.num_grid_points
 
-    boundary_datastore = _LargerBoundaryDatastore()
+    boundary_datastore = BoundaryDummyDatastore()
     n_boundary = boundary_datastore.num_grid_points
 
     da = xr.DataArray(np.linspace(0.0, 1.0, n_grid))
     boundary_da = xr.DataArray(np.linspace(0.5, 1.5, n_boundary))
 
+    margin = 3.0
     with patch(
         "cartopy.mpl.geoaxes.GeoAxes.set_extent", autospec=True
     ) as set_extent_mock:
@@ -242,21 +239,58 @@ def test_plot_on_axis_boundary_sets_extent() -> None:
             boundary_da=boundary_da,
             boundary_datastore=boundary_datastore,
             boundary_alpha=None,
-            crop_to_interior=False,
+            boundary_margin_degrees=margin,
         )
 
     assert set_extent_mock.call_count == 1
     called_extent = set_extent_mock.call_args.args[1]
-    assert isinstance(set_extent_mock.call_args.kwargs["crs"], ccrs.PlateCarree)
+    called_crs = set_extent_mock.call_args.kwargs["crs"]
+    assert type(called_crs) is type(datastore.coords_projection)
 
-    # The extent should match the boundary datastore's lat/lon range
-    b_lats_lons = boundary_datastore.get_lat_lon("state")
-    b_lons = b_lats_lons[:, 0]
-    b_lats = b_lats_lons[:, 1]
-    assert called_extent[0] == pytest.approx(float(b_lons.min()))
-    assert called_extent[1] == pytest.approx(float(b_lons.max()))
-    assert called_extent[2] == pytest.approx(float(b_lats.min()))
-    assert called_extent[3] == pytest.approx(float(b_lats.max()))
+    expected = vis._interior_padded_projected_bbox(datastore, margin)
+    for got, want in zip(called_extent, expected):
+        assert got == pytest.approx(want)
+
+
+@pytest.mark.slow
+def test_plot_prediction_with_era5_boundary() -> None:
+    """Integration test: DANRA interior + ERA5 boundary overlay.
+
+    Downloads ERA5 data from WeatherBench2 via mllam-data-prep on first run.
+    Verifies that plot_prediction works with real data from two different
+    datastores (LambertConformal interior + PlateCarree boundary).
+    """
+    datastore = init_datastore_example("mdp")
+    boundary_datastore = init_datastore_boundary_example("mdp")
+
+    n_grid = datastore.num_grid_points
+    n_boundary = boundary_datastore.num_grid_points
+
+    da_pred = xr.DataArray(np.linspace(0.0, 1.0, n_grid))
+    da_target = xr.DataArray(np.linspace(1.0, 2.0, n_grid))
+    boundary_da = xr.DataArray(np.linspace(0.5, 1.5, n_boundary))
+
+    fig = vis.plot_prediction(
+        datastore=datastore,
+        da_prediction=da_pred,
+        da_target=da_target,
+        title="DANRA + ERA5 boundary",
+        boundary_alpha=None,
+        boundary_da=boundary_da,
+        boundary_datastore=boundary_datastore,
+    )
+
+    assert isinstance(fig, matplotlib.figure.Figure)
+    ground_truth_ax, prediction_ax, _ = fig.axes
+    # Each panel: boundary pcolormesh + interior pcolormesh
+    assert len(ground_truth_ax.collections) == 2
+    assert len(prediction_ax.collections) == 2
+
+    fig.savefig(
+        TEST_OUTPUT_DIR / "danra_era5_boundary_overlay.png",
+        dpi=150,
+        bbox_inches="tight",
+    )
 
 
 def test_plot_error_map() -> None:
@@ -471,7 +505,6 @@ def test_plot_spatial_error() -> None:
         datastore=datastore,
         title="Test Spatial Error",
         boundary_alpha=None,
-        crop_to_interior=False,
     )
 
     assert isinstance(fig, matplotlib.figure.Figure)
@@ -479,8 +512,9 @@ def test_plot_spatial_error() -> None:
     assert fig.texts[0].get_text() == "Test Spatial Error"
 
 
-def test_plot_spatial_error_crop_to_interior_changes_extent() -> None:
-    """Check interior cropping forwards interior lon/lat bounds."""
+def test_plot_spatial_error_extent_matches_interior() -> None:
+    """`plot_spatial_error` always crops the axes to the interior bbox
+    (in the datastore's own projection, with zero margin)."""
     datastore = init_datastore_example("dummydata")
     n_grid = datastore.num_grid_points
     grid_shape = (datastore.grid_shape_state.x, datastore.grid_shape_state.y)
@@ -492,16 +526,6 @@ def test_plot_spatial_error_crop_to_interior_changes_extent() -> None:
     )
     datastore.__dict__.pop("boundary_mask", None)
 
-    lats_lons = datastore.get_lat_lon("state")
-    lons = lats_lons[:, 0].reshape(grid_shape)
-    lats = lats_lons[:, 1].reshape(grid_shape)
-    interior = boundary_mask == 0
-
-    expected_min_lon = float(lons[interior].min())
-    expected_max_lon = float(lons[interior].max())
-    expected_min_lat = float(lats[interior].min())
-    expected_max_lat = float(lats[interior].max())
-
     error = torch.linspace(0.0, 1.0, n_grid)
     with patch(
         "cartopy.mpl.geoaxes.GeoAxes.set_extent", autospec=True
@@ -510,18 +534,18 @@ def test_plot_spatial_error_crop_to_interior_changes_extent() -> None:
             error=error,
             datastore=datastore,
             boundary_alpha=None,
-            crop_to_interior=True,
         )
 
     assert set_extent_mock.call_count == 1
     called_extent = set_extent_mock.call_args.args[1]
     called_crs = set_extent_mock.call_args.kwargs["crs"]
+    assert type(called_crs) is type(datastore.coords_projection)
 
-    assert called_extent[0] == pytest.approx(expected_min_lon)
-    assert called_extent[1] == pytest.approx(expected_max_lon)
-    assert called_extent[2] == pytest.approx(expected_min_lat)
-    assert called_extent[3] == pytest.approx(expected_max_lat)
-    assert isinstance(called_crs, ccrs.PlateCarree)
+    expected = vis._interior_padded_projected_bbox(
+        datastore, margin_degrees=0.0
+    )
+    for got, want in zip(called_extent, expected):
+        assert got == pytest.approx(want)
 
 
 @pytest.fixture
