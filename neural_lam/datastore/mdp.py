@@ -288,10 +288,23 @@ class MDPDatastore(BaseRegularGridDatastore):
 
         da_category = self._ds[category]
 
-        # set units on x y coordinates if missing
-        for coord in ["x", "y"]:
+        # Set units on spatial coordinates if missing. Use the dim names
+        # actually declared in the config's grid_index stacking (so this
+        # works for both projected (x, y) and geographic (longitude,
+        # latitude) source datasets like ERA5).
+        _UNITS_BY_COORD = {
+            "x": "m",
+            "y": "m",
+            "longitude": "degrees_east",
+            "latitude": "degrees_north",
+            "lon": "degrees_east",
+            "lat": "degrees_north",
+        }
+        for coord in self.spatial_coordinates:
             if "units" not in da_category[coord].attrs:
-                da_category[coord].attrs["units"] = "m"
+                da_category[coord].attrs["units"] = _UNITS_BY_COORD.get(
+                    coord, ""
+                )
 
         # set multi-index for grid-index
         da_category = da_category.set_index(grid_index=self.spatial_coordinates)
