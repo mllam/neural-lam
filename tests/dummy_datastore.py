@@ -472,17 +472,22 @@ class DummyDatastore(BaseRegularGridDatastore):
         n_points_1d = int(np.sqrt(self.num_grid_points))
         return CartesianGridShape(x=n_points_1d, y=n_points_1d)
 
+    @cached_property
+    def state_feature_weights_values(self) -> List[float]:
+        return [1.0] * self.N_FEATURES["state"]
+
 
 class BoundaryDummyDatastore(DummyDatastore):
-    """DummyDatastore acting as a boundary forcing provider.
+    """DummyDatastore acting as a boundary forcing provider with no state.
 
-    Uses a different (smaller) grid and different forcing features to simulate
-    a boundary datastore from a separate domain.  Only the ``forcing``
-    category is meaningful; ``state`` and ``static`` are inherited but unused.
+    Mimics a real ERA5-style boundary datastore that only supplies ``forcing``
+    fields (no ``state`` variables). State metadata is dropped after init and
+    state-keyed lookups raise ``KeyError`` so any code path that accidentally
+    asks the boundary for ``state`` fails loudly in tests.
     """
 
     SHORT_NAME = "dummydata_boundary"
-    N_FEATURES = dict(state=5, forcing=3, static=1)
+    N_FEATURES = dict(state=0, forcing=3, static=1)
 
     def __init__(self, n_grid_points=400, n_timesteps=10, step_length=None):
         super().__init__(
@@ -490,6 +495,34 @@ class BoundaryDummyDatastore(DummyDatastore):
             n_timesteps=n_timesteps,
             step_length=step_length,
         )
+        state_vars = [
+            v
+            for v in (
+                "state",
+                "state_feature",
+                "state_feature_units",
+                "state_feature_long_name",
+            )
+            if v in self.ds.variables
+        ]
+        if state_vars:
+            self.ds = self.ds.drop_vars(state_vars)
+
+    def get_xy(self, category: str, stacked: bool) -> ndarray:
+        if category == "state":
+            raise KeyError(
+                "BoundaryDummyDatastore has no state category; "
+                "use 'forcing' instead."
+            )
+        return super().get_xy(category=category, stacked=stacked)
+
+    def get_vars_names(self, category: str) -> list[str]:
+        if category == "state":
+            raise KeyError(
+                "BoundaryDummyDatastore has no state category; "
+                "use 'forcing' instead."
+            )
+        return super().get_vars_names(category=category)
 
 
 class EnsembleDummyDatastore(BaseDatastore):
