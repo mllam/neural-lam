@@ -194,6 +194,38 @@ def test_plot_prediction_with_boundary() -> None:
     assert len(prediction_ax.collections) == 2
 
 
+def test_plot_prediction_with_stateless_boundary_uses_forcing_grid() -> None:
+    """A boundary datastore with no state must still plot via the forcing
+    grid. The plotting code must not query ``state`` on the boundary."""
+    datastore = init_datastore_example("dummydata")
+    n_grid = datastore.num_grid_points
+
+    boundary_datastore = BoundaryDummyDatastore()
+    # Sanity check: boundary truly has no state.
+    assert boundary_datastore.N_FEATURES["state"] == 0
+    with pytest.raises(KeyError):
+        boundary_datastore.get_xy("state", stacked=True)
+
+    n_boundary = boundary_datastore.num_grid_points
+    da_pred = xr.DataArray(np.linspace(0.0, 1.0, n_grid))
+    da_target = xr.DataArray(np.linspace(1.0, 2.0, n_grid))
+    boundary_da = xr.DataArray(np.linspace(0.5, 1.5, n_boundary))
+
+    fig = vis.plot_prediction(
+        datastore=datastore,
+        da_prediction=da_pred,
+        da_target=da_target,
+        boundary_alpha=None,
+        boundary_da=boundary_da,
+        boundary_datastore=boundary_datastore,
+    )
+
+    ground_truth_ax, prediction_ax, _ = fig.axes
+    # Each panel: boundary pcolormesh + interior pcolormesh.
+    assert len(ground_truth_ax.collections) == 2
+    assert len(prediction_ax.collections) == 2
+
+
 def test_plot_prediction_boundary_none_is_backward_compatible() -> None:
     """Passing no boundary params behaves identically to the old API."""
     datastore = init_datastore_example("dummydata")
