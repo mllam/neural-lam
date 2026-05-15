@@ -765,7 +765,11 @@ class ForecasterModule(pl.LightningModule):
                 }
 
             for t_i, _ in enumerate(zip(pred_slice, target_slice), start=1):
-                # Select boundary field for this timestep (if available)
+                # Select boundary field for this timestep (if available).
+                # Use ``method="nearest"`` because the boundary cadence is
+                # often coarser than the interior (e.g. ERA5 6h vs DANRA
+                # 1h) and we want every interior step to show the closest
+                # available boundary state, not skip frames.
                 boundary_da_t = None
                 if (
                     da_boundary_forcing is not None
