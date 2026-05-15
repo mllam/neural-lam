@@ -388,7 +388,7 @@ def plot_on_axis(
         Required when ``boundary_da`` is given.
     boundary_margin_degrees : float, optional
         Degrees of lat/lon to extend the axes extent beyond the interior
-        bbox when ``boundary_da`` is provided (default 2.0). Ignored when
+        bbox when ``boundary_da`` is provided (default 1.0). Ignored when
         no boundary data is shown.
 
     Returns
@@ -784,7 +784,7 @@ def plot_prediction(
     The figure is sized to match the interior domain's projected aspect
     ratio. When ``boundary_da`` is provided the panels include the
     boundary forcing as a thin ring around the interior, controlled by
-    ``boundary_margin_degrees`` (default 2 deg on each side).
+    ``boundary_margin_degrees`` (default 1 deg on each side).
 
     Parameters
     ----------
@@ -811,7 +811,7 @@ def plot_prediction(
         Required when ``boundary_da`` is given.
     boundary_margin_degrees : float, optional
         Degrees of lat/lon margin around the interior bbox when boundary
-        data is shown (default 2.0). Ignored when no boundary is given.
+        data is shown (default 1.0). Ignored when no boundary is given.
 
     Returns
     -------

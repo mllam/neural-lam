@@ -25,7 +25,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Split the training checkpoint setup into two callbacks: a validation-driven one that keeps the best `val_mean_loss` checkpoint (`min_val_loss.ckpt`) and a separate rescue callback that writes `last.ckpt` at every train-epoch end. Long HPC jobs that crash or time out between validation runs can resume from `last.ckpt` instead of losing all progress since the previous validation [\#250](https://github.com/mllam/neural-lam/pull/250) @Jayant-kernel
 
-- Support plotting boundary data from a separate boundary datastore in `vis.plot_on_axis` and `vis.plot_prediction` via optional `boundary_da` and `boundary_datastore` parameters. Evaluation figures automatically include the boundary forcing as a thin ring around the interior when a boundary datastore is configured; the ring thickness is controlled by `boundary_margin_degrees` (default 2.0). Figure size is derived from the interior domain's projected aspect ratio. [\#636](https://github.com/mllam/neural-lam/pull/636)
+- Support plotting boundary data from a separate boundary datastore in `vis.plot_on_axis` and `vis.plot_prediction` via optional `boundary_da` and `boundary_datastore` parameters. Evaluation figures automatically include the boundary forcing as a thin ring around the interior when a boundary datastore is configured; the ring thickness is controlled by `boundary_margin_degrees` (default 1.0). Figure size is derived from the interior domain's projected aspect ratio. [\#636](https://github.com/mllam/neural-lam/pull/636)
 
 ### Changed
 
