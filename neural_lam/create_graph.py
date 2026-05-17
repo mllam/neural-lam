@@ -21,7 +21,9 @@ from .config import load_config_and_datastore
 from .datastore.base import BaseRegularGridDatastore
 
 
-def plot_graph(graph, title=None):
+def plot_graph(
+    graph: pyg.data.Data, title: Optional[str] = None
+) -> tuple[matplotlib.figure.Figure, matplotlib.axes.Axes]:
     """
     Render a PyTorch Geometric graph using stored node coordinates.
 
@@ -87,8 +89,20 @@ def plot_graph(graph, title=None):
     return fig, axis
 
 
-def sort_nodes_internally(nx_graph):
-    """Return a copy of ``nx_graph`` with deterministically ordered nodes."""
+def sort_nodes_internally(nx_graph: networkx.Graph) -> networkx.DiGraph:
+    """
+    Return a copy of ``nx_graph`` with deterministically ordered nodes.
+
+    Parameters
+    ----------
+    nx_graph : networkx.Graph
+        The input graph to sort nodes for.
+
+    Returns
+    -------
+    networkx.DiGraph
+        A directed graph with nodes sorted alphabetically by their labels.
+    """
     # For some reason the networkx .nodes() return list can not be sorted,
     # but this is the ordering used by pyg when converting.
     # This function fixes this.
@@ -98,8 +112,19 @@ def sort_nodes_internally(nx_graph):
     return H
 
 
-def save_edges(graph, name, base_path):
-    """Persist edge indices/features for a PyG graph under ``base_path``."""
+def save_edges(graph: pyg.data.Data, name: str, base_path: str) -> None:
+    """
+    Persist edge indices/features for a PyG graph under ``base_path``.
+
+    Parameters
+    ----------
+    graph : torch_geometric.data.Data
+        The graph containing edge data.
+    name : str
+        The name prefix for the saved files.
+    base_path : str
+        The directory path where files should be saved.
+    """
     torch.save(
         graph.edge_index, os.path.join(base_path, f"{name}_edge_index.pt")
     )
@@ -109,8 +134,21 @@ def save_edges(graph, name, base_path):
     torch.save(edge_features, os.path.join(base_path, f"{name}_features.pt"))
 
 
-def save_edges_list(graphs, name, base_path):
-    """Persist edge indices/features for a list of graphs."""
+def save_edges_list(
+    graphs: list[pyg.data.Data], name: str, base_path: str
+) -> None:
+    """
+    Persist edge indices/features for a list of graphs.
+
+    Parameters
+    ----------
+    graphs : list of torch_geometric.data.Data
+        The list of graphs containing edge data.
+    name : str
+        The name prefix for the saved files.
+    base_path : str
+        The directory path where files should be saved.
+    """
     torch.save(
         [graph.edge_index for graph in graphs],
         os.path.join(base_path, f"{name}_edge_index.pt"),
@@ -124,15 +162,47 @@ def save_edges_list(graphs, name, base_path):
     torch.save(edge_features, os.path.join(base_path, f"{name}_features.pt"))
 
 
-def from_networkx_with_start_index(nx_graph, start_index):
-    """Convert a NetworkX graph to PyG and offset node indices."""
+def from_networkx_with_start_index(
+    nx_graph: networkx.Graph, start_index: int
+) -> pyg.data.Data:
+    """
+    Convert a NetworkX graph to PyG and offset node indices.
+
+    Parameters
+    ----------
+    nx_graph : networkx.Graph
+        The NetworkX graph to convert.
+    start_index : int
+        The value to add to each node index.
+
+    Returns
+    -------
+    pyg.data.Data
+        The converted PyG graph.
+    """
     pyg_graph = from_networkx(nx_graph)
     pyg_graph.edge_index += start_index
     return pyg_graph
 
 
-def mk_2d_graph(xy, nx, ny):
-    """Create a diagonal 2-D grid graph over the ``xy`` positions."""
+def mk_2d_graph(xy: np.ndarray, nx: int, ny: int) -> networkx.DiGraph:
+    """
+    Create a diagonal 2-D grid graph over the ``xy`` positions.
+
+    Parameters
+    ----------
+    xy : np.ndarray
+        The grid coordinates.
+    nx : int
+        Number of nodes in the x-dimension.
+    ny : int
+        Number of nodes in the y-dimension.
+
+    Returns
+    -------
+    networkx.DiGraph
+        The constructed directed 2-D grid graph.
+    """
     xm, xM = np.amin(xy[:, :, 0][:, 0]), np.amax(xy[:, :, 0][:, 0])
     ym, yM = np.amin(xy[:, :, 1][0, :]), np.amax(xy[:, :, 1][0, :])
 
@@ -171,8 +241,22 @@ def mk_2d_graph(xy, nx, ny):
     return dg
 
 
-def prepend_node_index(graph, new_index):
-    """Relabel each node by prepending ``new_index`` to its tuple identifier."""
+def prepend_node_index(graph: networkx.Graph, new_index: int) -> networkx.Graph:
+    """
+    Relabel each node by prepending ``new_index`` to its tuple identifier.
+
+    Parameters
+    ----------
+    graph : networkx.Graph
+        The graph to relabel.
+    new_index : int
+        The value to prepend to each node identifier.
+
+    Returns
+    -------
+    networkx.Graph
+        The relabeled graph.
+    """
     # Relabel node indices in graph, insert (graph_level, i, j)
     ijk = [tuple((new_index,) + x) for x in graph.nodes]
     to_mapping = dict(zip(graph.nodes, ijk))
@@ -599,7 +683,7 @@ def create_graph_from_datastore(
     )
 
 
-def cli(input_args=None):
+def cli(input_args: Optional[list[str]] = None) -> None:
     """
     Parse CLI arguments and call :func:`create_graph_from_datastore`.
 

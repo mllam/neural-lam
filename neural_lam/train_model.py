@@ -16,14 +16,42 @@ from loguru import logger
 # Local
 from . import utils
 from .config import load_config_and_datastore
-from .models import GraphLAM, HiLAM, HiLAMParallel
+from .models import MODELS, ARForecaster, ForecasterModule
 from .weather_dataset import WeatherDataModule
 
-MODELS = {
-    "graph_lam": GraphLAM,
-    "hi_lam": HiLAM,
-    "hi_lam_parallel": HiLAMParallel,
-}
+
+def load_forecaster_module_from_checkpoint(ckpt_path, config, datastore):
+    """
+    Reconstruct a ForecasterModule from a checkpoint without requiring the
+    caller to know the original architecture kwargs.
+
+    The checkpoint must have been saved with args in hyper_parameters (i.e.
+    created via train_model.main), so that model class and architecture kwargs
+    can be recovered automatically.
+    """
+    ckpt = torch.load(ckpt_path, weights_only=False)
+    args = ckpt["hyper_parameters"]["args"]
+    predictor_class = MODELS[args.model]
+    predictor = predictor_class(
+        datastore=datastore,
+        graph_name=args.graph,
+        hidden_dim=args.hidden_dim,
+        hidden_layers=args.hidden_layers,
+        processor_layers=args.processor_layers,
+        mesh_aggr=args.mesh_aggr,
+        num_past_forcing_steps=args.num_past_forcing_steps,
+        num_future_forcing_steps=args.num_future_forcing_steps,
+        output_std=args.output_std,
+        output_clamping_lower=config.training.output_clamping.lower,
+        output_clamping_upper=config.training.output_clamping.upper,
+    )
+    forecaster = ARForecaster(predictor, datastore)
+    return ForecasterModule.load_from_checkpoint(
+        ckpt_path,
+        forecaster=forecaster,
+        datastore=datastore,
+        weights_only=False,
+    )
 
 
 @logger.catch
@@ -323,9 +351,38 @@ def main(input_args=None):
         except ValueError:
             raise ValueError("devices should be 'auto' or a list of integers")
 
-    # Load model parameters Use new args for model
-    ModelClass = MODELS[args.model]
-    model = ModelClass(args, config=config, datastore=datastore)
+    # Build predictor and forecaster externally, then inject into
+    # ForecasterModule
+    predictor_class = MODELS[args.model]
+    predictor = predictor_class(
+        datastore=datastore,
+        graph_name=args.graph,
+        hidden_dim=args.hidden_dim,
+        hidden_layers=args.hidden_layers,
+        processor_layers=args.processor_layers,
+        mesh_aggr=args.mesh_aggr,
+        num_past_forcing_steps=args.num_past_forcing_steps,
+        num_future_forcing_steps=args.num_future_forcing_steps,
+        output_std=args.output_std,
+        output_clamping_lower=config.training.output_clamping.lower,
+        output_clamping_upper=config.training.output_clamping.upper,
+    )
+    forecaster = ARForecaster(predictor, datastore)
+
+    model = ForecasterModule(
+        forecaster=forecaster,
+        config=config,
+        datastore=datastore,
+        loss=args.loss,
+        lr=args.lr,
+        restore_opt=args.restore_opt,
+        n_example_pred=args.n_example_pred,
+        create_gif=args.create_gif,
+        val_steps_to_log=args.val_steps_to_log,
+        metrics_watch=args.metrics_watch,
+        var_leads_metrics_watch=args.var_leads_metrics_watch,
+        args=args,
+    )
 
     if args.eval:
         prefix = f"eval-{args.eval}-"
@@ -354,7 +411,7 @@ def main(input_args=None):
     trainer = pl.Trainer(
         max_epochs=args.epochs,
         deterministic=True,
-        strategy="ddp",
+        strategy="auto",
         accelerator=device_name,
         num_nodes=args.num_nodes,
         devices=devices,

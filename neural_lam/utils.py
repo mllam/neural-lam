@@ -1,6 +1,7 @@
 """Utility helpers shared across Neural-LAM training and evaluation."""
 
 # Standard library
+import datetime
 import os
 import shutil
 import subprocess
@@ -8,6 +9,7 @@ import tempfile
 import warnings
 from functools import cache
 from pathlib import Path
+from typing import Any, Iterator, Union
 
 # Third-party
 import pytorch_lightning as pl
@@ -31,7 +33,9 @@ class BufferList(nn.Module):
     See: https://github.com/pytorch/pytorch/issues/37386
     """
 
-    def __init__(self, buffer_tensors, persistent=True):
+    def __init__(
+        self, buffer_tensors: list[torch.Tensor], persistent: bool = True
+    ) -> None:
         """
         Register a collection of tensors as buffers inside a module.
 
@@ -47,33 +51,67 @@ class BufferList(nn.Module):
         for buffer_i, tensor in enumerate(buffer_tensors):
             self.register_buffer(f"b{buffer_i}", tensor, persistent=persistent)
 
-    def __getitem__(self, key):
+    def __getitem__(self, key: int) -> torch.Tensor:
         """Return the buffer at ``key`` (0-indexed)."""
         return getattr(self, f"b{key}")
 
-    def __len__(self):
+    def __len__(self) -> int:
         """Return the number of registered buffers."""
         return self.n_buffers
 
-    def __iter__(self):
+    def __iter__(self) -> Iterator[torch.Tensor]:
         """Iterate over the registered buffers in ascending index order."""
         return (self[i] for i in range(len(self)))
 
-    def __itruediv__(self, other):
-        """Divide each element in list with other"""
+    def __itruediv__(self, other: float) -> "BufferList":
+        """
+        Divide each element in list with other.
+
+        Parameters
+        ----------
+        other : float
+            The value to divide by.
+
+        Returns
+        -------
+        BufferList
+            The modified BufferList.
+        """
         return self.__imul__(1.0 / other)
 
-    def __imul__(self, other):
-        """Multiply each element in list with other"""
+    def __imul__(self, other: float) -> "BufferList":
+        """
+        Multiply each element in list with other.
+
+        Parameters
+        ----------
+        other : float
+            The value to multiply by.
+
+        Returns
+        -------
+        BufferList
+            The modified BufferList.
+        """
         for buffer_tensor in self:
             buffer_tensor *= other
 
         return self
 
 
-def zero_index_edge_index(edge_index):
+def zero_index_edge_index(edge_index: torch.Tensor) -> torch.Tensor:
     """
-    Make both sender and receiver indices of edge_index start at 0
+    Make both sender and receiver indices of edge_index start at 0.
+
+    Parameters
+    ----------
+    edge_index : torch.Tensor
+        Edge index tensor of shape (2, N_edges).
+
+    Returns
+    -------
+    torch.Tensor
+        Edge index tensor with indices starting at 0.
     """
     return edge_index - edge_index.min(dim=1, keepdim=True)[0]
 
@@ -182,7 +220,9 @@ def zero_index_g2m(
         )
 
 
-def load_graph(graph_dir_path, device="cpu"):
+def load_graph(
+    graph_dir_path: Union[str, Path], device: str = "cpu"
+) -> tuple[bool, dict[str, Any]]:
     """Load all tensors representing the graph from `graph_dir_path`.
 
     Needs the following files for all graphs:
@@ -227,10 +267,21 @@ def load_graph(graph_dir_path, device="cpu"):
 
     """
 
-    def loads_file(fn):
-        """Load ``torch.load`` data from ``graph_dir_path``.
+    def loads_file(fn: str) -> Any:
+        """
+        Load ``torch.load`` data from ``graph_dir_path``.
 
         Applies ``map_location`` so tensors land on the requested device.
+
+        Parameters
+        ----------
+        fn : str
+            The filename to load.
+
+        Returns
+        -------
+        Any
+            The loaded data.
         """
         return torch.load(
             os.path.join(graph_dir_path, fn),
@@ -332,12 +383,10 @@ def load_graph(graph_dir_path, device="cpu"):
         m2m_features = m2m_features[0]
         mesh_static_features = mesh_static_features[0]
 
-        (
-            mesh_up_edge_index,
-            mesh_down_edge_index,
-            mesh_up_features,
-            mesh_down_features,
-        ) = ([], [], [], [])
+        mesh_up_edge_index = BufferList([], persistent=False)
+        mesh_down_edge_index = BufferList([], persistent=False)
+        mesh_up_features = BufferList([], persistent=False)
+        mesh_down_features = BufferList([], persistent=False)
 
     return hierarchical, {
         "g2m_edge_index": g2m_edge_index,
@@ -354,7 +403,7 @@ def load_graph(graph_dir_path, device="cpu"):
     }
 
 
-def make_mlp(blueprint, layer_norm=True):
+def make_mlp(blueprint: list[int], layer_norm: bool = True) -> nn.Sequential:
     """
     Construct a multilayer perceptron from a blueprint of layer widths.
 
@@ -390,7 +439,7 @@ def make_mlp(blueprint, layer_norm=True):
 
 
 @cache
-def has_working_latex():
+def has_working_latex() -> bool:
     """
     Check whether a LaTeX toolchain is available on the system.
 
@@ -427,8 +476,8 @@ $E=mc^2$ \LaTeX\ ok
 
     try:
         with tempfile.TemporaryDirectory() as td:
-            td = Path(td)
-            (td / "test.tex").write_text(tex_src, encoding="utf-8")
+            td_path = Path(td)
+            (td_path / "test.tex").write_text(tex_src, encoding="utf-8")
             cmd = [
                 "latex",
                 "-interaction=nonstopmode",
@@ -457,7 +506,7 @@ $E=mc^2$ \LaTeX\ ok
         return False
 
 
-def fractional_plot_bundle(fraction):
+def fractional_plot_bundle(fraction: float) -> dict[str, Any]:
     """
     Return a ``tueplots`` bundle scaled to a fraction of the page width.
 
@@ -471,7 +520,6 @@ def fractional_plot_bundle(fraction):
     dict
         Matplotlib rcParams bundle with updated ``figure.figsize``.
     """
-
     usetex = has_working_latex()
     bundle = bundles.neurips2023(usetex=usetex, family="serif")
     bundle.update(figsizes.neurips2023())
@@ -484,35 +532,39 @@ def fractional_plot_bundle(fraction):
 
 
 @rank_zero_only
-def rank_zero_print(*args, **kwargs):
-    """Print arguments only from the rank-zero process in distributed runs."""
-    print(*args, **kwargs)
-
-
-def log_on_rank_zero(msg: str, level: str = "info", *args, **kwargs):
-    """Log a message only on rank zero using loguru logger.
+def log_on_rank_zero(
+    msg: str, level: str = "info", *args: Any, **kwargs: Any
+) -> None:
+    """
+    Log a message only on rank zero using loguru logger.
 
     Parameters
     ----------
     msg : str
         The message to log.
-    level : str, optional
-        The logging level (e.g. "info", "warning", "error"). Default is "info".
+    level : str, default "info"
+        The logging level (e.g. "info", "warning", "error").
+    *args : Any
+        Positional arguments passed to the logger.
+    **kwargs : Any
+        Keyword arguments passed to the logger.
     """
     if rank_zero_only.rank == 0:
         log_fn = getattr(logger, level, logger.info)
         log_fn(msg, *args, **kwargs)
 
 
-def init_training_logger_metrics(training_logger, val_steps):
+def init_training_logger_metrics(
+    training_logger: Any, val_steps: list[int]
+) -> None:
     """
     Configure validation metric aggregation for the active training logger.
 
     Parameters
     ----------
-    training_logger : pytorch_lightning.loggers.Logger
+    training_logger : Any
         Logger instance used during training.
-    val_steps : Iterable[int]
+    val_steps : list of int
         Autoregressive rollout lengths to log as separate metrics.
     """
     experiment = training_logger.experiment
@@ -530,13 +582,13 @@ def init_training_logger_metrics(training_logger, val_steps):
 
 
 @rank_zero_only
-def setup_training_logger(datastore, args, run_name):
+def setup_training_logger(datastore: Any, args: Any, run_name: str) -> Any:
     """
-    Instantiate the configured experiment logger.
+    Set up the training logger (WandB or MLFlow).
 
     Parameters
     ----------
-    datastore : BaseDatastore
+    datastore : Any
         Datastore providing metadata for logging configuration.
     args : argparse.Namespace
         Parsed training arguments controlling the logger backend.
@@ -545,8 +597,8 @@ def setup_training_logger(datastore, args, run_name):
 
     Returns
     -------
-    training_logger : pytorch_lightning.loggers.base
-        Logger object.
+    Any
+        The initialized logger object.
 
     Notes
     -----
@@ -555,7 +607,6 @@ def setup_training_logger(datastore, args, run_name):
     This allows the same job script to be safely resubmitted on HPC systems.
     The run name is set to ``None`` when resuming to preserve the existing name.
     """
-
     if args.wandb_id and args.logger != "wandb":
         logger.warning(
             f"--wandb_id is set but logger is {args.logger!r}; "
@@ -597,7 +648,9 @@ def setup_training_logger(datastore, args, run_name):
     return training_logger
 
 
-def inverse_softplus(x, beta=1, threshold=20):
+def inverse_softplus(
+    x: torch.Tensor, beta: float = 1.0, threshold: float = 20.0
+) -> torch.Tensor:
     """
     Inverse of :func:`torch.nn.functional.softplus`.
 
@@ -641,7 +694,7 @@ def inverse_softplus(x, beta=1, threshold=20):
     return x
 
 
-def inverse_sigmoid(x):
+def inverse_sigmoid(x: torch.Tensor) -> torch.Tensor:
     """
     Inverse of ``torch.sigmoid`` with clamping for numerical stability.
 
@@ -672,22 +725,25 @@ def inverse_sigmoid(x):
     return torch.log(x_clamped / (1 - x_clamped))
 
 
-def get_integer_time(tdelta) -> tuple[int, str]:
+def get_integer_time(tdelta: datetime.timedelta) -> tuple[int, str]:
     """
     Express a :class:`datetime.timedelta` as an integer number of time units.
 
     Parameters
     ----------
     tdelta : datetime.timedelta
-        Time interval to convert.
+        The time interval to convert.
 
     Returns
     -------
-    tuple[int, str]
-        Integer value and the corresponding unit (``"weeks"``, ``"days"``,
-        ``"hours"``, ``"minutes"``, ``"seconds"``, ``"milliseconds"``, or
-        ``"microseconds"``). If no unit yields an integer count,
-        ``(1, "unknown")`` is returned.
+    int
+        Integer value of the timedelta in the largest unit that divides
+        it exactly, or ``1`` if no such unit exists.
+    str
+        The time unit as a string (``'weeks'``, ``'days'``, ``'hours'``,
+        ``'minutes'``, ``'seconds'``, ``'milliseconds'``,
+        ``'microseconds'``). Returns ``'unknown'`` if no unit divides
+        evenly.
 
     Examples
     --------

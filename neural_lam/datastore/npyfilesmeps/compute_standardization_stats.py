@@ -64,26 +64,47 @@ class PaddedWeatherDataset(torch.utils.data.Dataset):
         """Return indices of the non-padded samples."""
         return self.original_indices
 
-    def get_original_window_indices(self, step_length):
-        """Return index mapping for sub-sampled windows at ``step_length``."""
-        step_int, _ = get_integer_time(step_length.total_seconds())
-        return [
-            i // step_int for i in range(len(self.original_indices) * step_int)
-        ]
-
 
 def get_rank():
-    """Return the rank inferred from SLURM or default to 0."""
+    """
+    Return the rank inferred from SLURM or default to 0.
+
+    Returns
+    -------
+    int
+        The current process rank.
+    """
     return int(os.environ.get("SLURM_PROCID", 0))
 
 
 def get_world_size():
-    """Return the world size inferred from SLURM or default to 1."""
+    """
+    Return the world size inferred from SLURM or default to 1.
+
+    Returns
+    -------
+    int
+        The total number of processes in the distributed group.
+    """
     return int(os.environ.get("SLURM_NTASKS", 1))
 
 
 def setup(rank, world_size):  # pylint: disable=redefined-outer-name
-    """Initialize the distributed group."""
+    """
+    Initialize the distributed group.
+
+    Parameters
+    ----------
+    rank : int
+        The rank of the current process.
+    world_size : int
+        The total number of processes.
+
+    Raises
+    ------
+    RuntimeError
+        If ``SLURM_JOB_NODELIST`` is set but no hostnames can be retrieved.
+    """
     if "SLURM_JOB_NODELIST" in os.environ:
         nodelist = os.environ["SLURM_JOB_NODELIST"]
         hostnames = subprocess.check_output(
@@ -286,20 +307,28 @@ def main(
                 torch.cat(means_gathered, dim=0),
                 torch.cat(squares_gathered, dim=0),
             )
-            flux_means_gathered, flux_squares_gathered = (
-                torch.tensor(flux_means_gathered),
-                torch.tensor(flux_squares_gathered),
-            )
 
             original_indices = ds.get_original_indices()
             means, squares = (
                 [means_gathered[i] for i in original_indices],
                 [squares_gathered[i] for i in original_indices],
             )
-            flux_means, flux_squares = (
-                [flux_means_gathered[i] for i in original_indices],
-                [flux_squares_gathered[i] for i in original_indices],
-            )
+            flux_means = [
+                torch.cat(
+                    [
+                        torch.stack(rank_flux)
+                        for rank_flux in flux_means_gathered
+                    ]
+                )
+            ]
+            flux_squares = [
+                torch.cat(
+                    [
+                        torch.stack(rank_flux)
+                        for rank_flux in flux_squares_gathered
+                    ]
+                )
+            ]
     else:
         means = [torch.cat(means, dim=0)]  # (N_batch, d_features,)
         squares = [torch.cat(squares, dim=0)]  # (N_batch, d_features,)
@@ -395,21 +424,13 @@ def main(
         )
 
         if rank == 0:
-            diff_means_gathered, diff_squares_gathered = (
-                torch.cat(diff_means_gathered, dim=0).view(
-                    -1, *diff_means[0].shape
-                ),
-                torch.cat(diff_squares_gathered, dim=0).view(
-                    -1, *diff_squares[0].shape
-                ),
+            diff_means_gathered = torch.cat(diff_means_gathered, dim=0)
+            diff_squares_gathered = torch.cat(diff_squares_gathered, dim=0)
+            n_original_windows = (
+                len(ds_standard.get_original_indices()) * time_step_int
             )
-            original_indices = ds_standard.get_original_window_indices(
-                step_length
-            )
-            diff_means, diff_squares = (
-                [diff_means_gathered[i] for i in original_indices],
-                [diff_squares_gathered[i] for i in original_indices],
-            )
+            diff_means = [diff_means_gathered[:n_original_windows]]
+            diff_squares = [diff_squares_gathered[:n_original_windows]]
 
     diff_means = [torch.cat(diff_means, dim=0)]  # (N_batch', d_features,)
     diff_squares = [torch.cat(diff_squares, dim=0)]  # (N_batch', d_features,)

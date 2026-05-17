@@ -35,7 +35,23 @@ OPEN_WATER_FILENAME_FORMAT = "wtr_{analysis_time:%Y%m%d%H}.npy"
 
 
 def _load_np(fp, add_feature_dim, feature_dim_mask=None):
-    """Load an ``.npy`` file and optionally expand/mask the feature axis."""
+    """
+    Load an ``.npy`` file and optionally expand/mask the feature axis.
+
+    Parameters
+    ----------
+    fp : str or Path
+        The file path to load.
+    add_feature_dim : bool
+        Whether to add a new feature dimension at the end.
+    feature_dim_mask : list of int or None, optional
+        Mask to apply to the feature dimension.
+
+    Returns
+    -------
+    np.ndarray
+        The loaded and optionally processed array.
+    """
     arr = np.load(fp)
     if add_feature_dim:
         arr = arr[..., np.newaxis]

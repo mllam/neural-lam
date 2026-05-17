@@ -30,7 +30,7 @@ class InteractionNet(pyg.nn.MessagePassing):
         aggr="sum",
     ):
         """
-        Initialise an InteractionNet message-passing layer.
+        Create a new InteractionNet.
 
         Parameters
         ----------
@@ -108,33 +108,30 @@ class InteractionNet(pyg.nn.MessagePassing):
 
     def forward(self, send_rep, rec_rep, edge_rep):
         """
-        Update receiver (and optionally edge) representations via message
-        passing.
+        Apply the interaction network to update receiver node
+        representations, and optionally edge representations.
 
         Parameters
         ----------
         send_rep : torch.Tensor
-            Vector representations of sender nodes.
-
-            * **Shape**: ``(num_send, input_dim)``
+            Shape ``(B, N_send, d_h)``. Sender node representations.
+            Dims: ``B`` is batch size, ``N_send`` is the number of
+            sender nodes, and ``d_h`` is the hidden dimension.
         rec_rep : torch.Tensor
-            Vector representations of receiver nodes.
-
-            * **Shape**: ``(num_rec, input_dim)``
+            Shape ``(B, N_rec, d_h)``. Receiver node representations.
+            Dims: ``N_rec`` is the number of receiver nodes.
         edge_rep : torch.Tensor
-            Edge representations used during message passing.
-
-            * **Shape**: ``(num_edges, input_dim)``
+            Shape ``(B, M, d_h)``. Edge representations. Dims: ``M``
+            is the number of edges.
 
         Returns
         -------
-        torch.Tensor or tuple[torch.Tensor, torch.Tensor]
-            Updated receiver representations. If ``self.update_edges`` is
-            ``True``, the tuple ``(rec_rep, edge_rep)`` containing the updated
-            receiver and edge representations is returned.
-
-            * **Shape**: ``(num_rec, hidden_dim)`` for receivers and
-              ``(num_edges, hidden_dim)`` for edges.
+        rec_rep : torch.Tensor
+            Shape ``(B, N_rec, d_h)``. Updated receiver node
+            representations.
+        edge_rep : torch.Tensor
+            Shape ``(B, M, d_h)``. Updated edge representations.
+            Only returned when ``update_edges=True``.
         """
         # Always concatenate to [rec_nodes, send_nodes] for propagation,
         # but only aggregate to rec_nodes
@@ -197,21 +194,18 @@ class SplitMLPs(nn.Module):
 
     def forward(self, x):
         """
-        Chunk up input tensor and feed each slice through its MLP.
+        Split input along dim -2 and feed each chunk through its MLP.
 
         Parameters
         ----------
         x : torch.Tensor
-            Input tensor to split and process.
-
-            * **Shape**: ``(..., N, d)`` where ``N = sum(chunk_sizes)``.
+            Shape ``(..., N, d)``. Input tensor where
+            ``N = sum(chunk_sizes)`` and ``d`` is the feature dimension.
 
         Returns
         -------
         torch.Tensor
-            Concatenated MLP outputs assembled along the chunk dimension.
-
-            * **Shape**: ``(..., N, d)``
+            Shape ``(..., N, d)``. Concatenated outputs from all MLPs.
         """
         chunks = torch.split(x, self.chunk_sizes, dim=-2)
         chunk_outputs = [

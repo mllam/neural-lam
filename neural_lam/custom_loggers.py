@@ -53,17 +53,18 @@ class CustomMLFlowLogger(pl.loggers.MLFlowLogger):
 
     def log_image(self, key, images, step=None):
         """
-        Log one or more Matplotlib figures as images in MLflow.
+        Log a matplotlib figure as an image to MLFlow.
 
         Parameters
         ----------
         key : str
-            Identifier under which to log the image.
-        images : Sequence[matplotlib.figure.Figure]
-            Figures to export; only the first element is logged.
+            Key to log the image under. If ``step`` is given, the actual
+            key used is ``f"{key}_{step}"``.
+        images : list of matplotlib.figure.Figure
+            Figures to log; only the first element is used.
         step : int or None, optional
-            Optional training step index appended to ``key``.
-
+            Step to associate with the log entry. ``None`` logs without
+            a step suffix.
         Raises
         ------
         SystemExit

@@ -139,7 +139,6 @@ class WeatherDataset(torch.utils.data.Dataset):
                     )
 
         # Set up for standardization
-        # TODO: This will become part of ar_model.py soon!
         self.standardize = standardize
         if standardize:
             self.ds_state_stats = self.datastore.get_standardization_dataarray(
@@ -181,7 +180,7 @@ class WeatherDataset(torch.utils.data.Dataset):
         std : xr.DataArray
             Standard deviation array for the given feature category.
         feature : str
-        Feature category name used in the warning message.
+            Feature category name used in the warning message.
 
         Returns
         -------
