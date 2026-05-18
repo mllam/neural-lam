@@ -1530,7 +1530,9 @@ def validate_graph_directory(
 
     - `_edge_index.pt`: edge connectivity
     - `_features.pt`: static features associated with each edge
-    - `mesh_features.pt`: static mesh node features
+
+    In addition to defining the properties of the graph edges, the mesh-node
+    features MUST be stored separately in `mesh_features.pt`.
 
     All files MUST be serialized with `torch.save(...)`.
 
