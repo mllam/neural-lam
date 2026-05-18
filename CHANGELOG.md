@@ -21,6 +21,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Fix hierarchical g2m/m2g `edge_index` zero-indexing: `zero_index_g2m`
+  and `zero_index_m2g` now offset grid nodes by the total mesh-node count
+  across all levels instead of the bottom-level count, matching how
+  `create_graph` numbers nodes. This resolves an `IndexError` in the GNN
+  layers during the HiLAM forward pass on hierarchical graphs; flat
+  graphs are unaffected. Adds a regression test that loads hierarchical
+  graphs and checks the zero-indexed g2m/m2g bounds.
+  ([#642](https://github.com/mllam/neural-lam/issues/642))
+  @Sir-Sloth-The-Lazy
+
 - Change metric heatmap (`plot_error_map`, now `plot_error_heatmap`) to use a
   shared cross-variable color scale instead of per-row normalization, add a
   colorbar, and scale figure size and font sizes with grid dimensions
