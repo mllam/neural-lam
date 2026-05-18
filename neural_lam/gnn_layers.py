@@ -63,11 +63,14 @@ class InteractionNet(pyg.nn.MessagePassing):
             hidden_dim = input_dim
 
         self.num_rec = edge_index[1].max() + 1
-        # Expects zero-based, locally-indexed edge_index from the caller
-        # (load_graph in utils.py normalises g2m/m2g before passing here).
-        # Lay out the combined node tensor as [receivers | senders]:
+        # edge_index is expected to be zero-based and local:
+        #   edge_index[0]: sender indices in [0 .. num_snd-1]
+        #   edge_index[1]: receiver indices in [0 .. num_rec-1]
+        # The edge indices used in this GNN layer are defined as:
         #   receivers → [0 .. num_rec-1]
         #   senders   → [num_rec .. num_rec+num_snd-1]
+        # Hence, sender indices from the input edge_index are offset
+        # by num_rec to obtain the indices used in this layer.
         edge_index = torch.stack(
             (edge_index[0] + self.num_rec, edge_index[1]), dim=0
         )

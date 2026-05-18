@@ -98,10 +98,8 @@ def zero_index_m2g(
     sign = 1 if restore else -1
 
     if mesh_first:
-        # Mesh has the first indices, adjust grid indices (row 1).
-        # Use the total number of mesh nodes across all levels because
-        # create_graph offsets grid nodes by the full mesh node count.
-        num_mesh_nodes = sum(sf.shape[0] for sf in mesh_static_features)
+        # Mesh has the first indices, adjust grid indices (row 1)
+        num_mesh_nodes = mesh_static_features[0].shape[0]
         return torch.stack(
             (
                 m2g_edge_index[0],
@@ -152,10 +150,8 @@ def zero_index_g2m(
     sign = 1 if restore else -1
 
     if mesh_first:
-        # Mesh has the first indices, adjust grid indices (row 0).
-        # Use the total number of mesh nodes across all levels because
-        # create_graph offsets grid nodes by the full mesh node count.
-        num_mesh_nodes = sum(sf.shape[0] for sf in mesh_static_features)
+        # Mesh has the first indices, adjust grid indices (row 0)
+        num_mesh_nodes = mesh_static_features[0].shape[0]
         return torch.stack(
             (
                 g2m_edge_index[0] + sign * num_mesh_nodes,
