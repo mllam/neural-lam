@@ -9,7 +9,7 @@ import torch
 # First-party
 from neural_lam import utils
 from neural_lam.create_graph import (
-    GRAPH_NEURAL_LAM_VERSION_FILENAME,
+    GRAPH_SPEC_VERSION_FILENAME,
     create_graph_from_datastore,
 )
 from tests.dummy_datastore import DummyDatastore
@@ -67,12 +67,12 @@ def test_load_graph_respects_current_and_legacy_mesh_feature_formats():
             graph_ldict["mesh_static_features"], expected_mesh_features[0]
         )
 
-        # Deleting the sentinel makes the graph look legacy, so load_graph()
-        # should leave the mesh node features exactly as they were stored
-        # on disk.
-        (graph_dir_path / GRAPH_NEURAL_LAM_VERSION_FILENAME).unlink()
+        # Deleting the spec version file makes the graph look legacy, so
+        # load_graph() should leave the mesh node features exactly as they
+        # were stored on disk.
+        (graph_dir_path / GRAPH_SPEC_VERSION_FILENAME).unlink()
 
-        with pytest.warns(RuntimeWarning, match="neural-lam<=0.6.0"):
+        with pytest.warns(RuntimeWarning, match="legacy pre-spec format"):
             _, legacy_graph_ldict = utils.load_graph(
                 graph_dir_path=str(graph_dir_path),
                 mesh_node_features_scaling=grid_xy_max_span,

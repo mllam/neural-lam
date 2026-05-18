@@ -21,8 +21,7 @@ from tueplots import bundles, figsizes
 # Local
 from .custom_loggers import CustomMLFlowLogger
 
-GRAPH_VERSION_SENTINEL_FILENAME = "created-with-neural-lam-version"
-LEGACY_NEURAL_LAM_VERSION_CUTOFF = "0.6.0"
+LEGACY_GRAPH_SPEC_VERSION = "legacy"
 
 
 class BufferList(nn.Module):
@@ -233,19 +232,25 @@ def load_graph(
             weights_only=True,
         )
 
-    def load_graph_version() -> str | None:
-        version_path = Path(graph_dir_path) / GRAPH_VERSION_SENTINEL_FILENAME
+    # TODO: move graph creation/loading/versioning into its own submodule.
+    # Local
+    from .create_graph import (  # Local import avoids circular imports.
+        CURRENT_GRAPH_SPEC_VERSION,
+        GRAPH_SPEC_VERSION_FILENAME,
+    )
+
+    def load_graph_spec_version() -> str:
+        version_path = Path(graph_dir_path) / GRAPH_SPEC_VERSION_FILENAME
         if not version_path.exists():
             warnings.warn(
-                "Graph version sentinel is missing; assuming this graph was "
-                f"created with neural-lam<={LEGACY_NEURAL_LAM_VERSION_CUTOFF}, "
-                "and therefore skipping mesh node feature normalization "
-                "after graph loading, since mesh node features are assumed "
-                "to already be normalized.",
+                "Graph spec version file is missing; assuming this graph uses "
+                "the legacy pre-spec format and therefore skipping mesh node "
+                "feature normalization after graph loading, since mesh node "
+                "features are assumed to already be normalized.",
                 RuntimeWarning,
                 stacklevel=2,
             )
-            return None
+            return LEGACY_GRAPH_SPEC_VERSION
 
         return version_path.read_text(encoding="utf-8").strip()
 
@@ -254,8 +259,19 @@ def load_graph(
         "mesh_features.pt"
     )  # List of (N_mesh[l], d_mesh_static)
 
-    graph_creation_version = load_graph_version()
-    should_normalize_mesh_features = graph_creation_version is not None
+    graph_spec_version = load_graph_spec_version()
+    if graph_spec_version not in {
+        LEGACY_GRAPH_SPEC_VERSION,
+        CURRENT_GRAPH_SPEC_VERSION,
+    }:
+        raise ValueError(
+            "Unsupported graph spec version "
+            f"{graph_spec_version!r} in {GRAPH_SPEC_VERSION_FILENAME}"
+        )
+
+    should_normalize_mesh_features = (
+        graph_spec_version == CURRENT_GRAPH_SPEC_VERSION
+    )
 
     # Normalize static mesh features for the current on-disk graph format.
     # Legacy graphs already store normalized mesh coordinates.

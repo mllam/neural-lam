@@ -7,17 +7,17 @@ Version: 0.1.0-draft
 
 ## 1. Introduction
 
-This document specifies the requirements for Graph disk format for `neural-lam`.  # noqa: E501
-These graphs are used by the Neural-LAM Graph Neural Network architectures for  # noqa: E501
+This document specifies the requirements for Graph disk format for `neural-lam`.
+These graphs are used by the Neural-LAM Graph Neural Network architectures for
 machine-learning weather prediction (MLWP) forecasting. These model
-architectures follow the encode-process-decode paradigm of sequential message  # noqa: E501
+architectures follow the encode-process-decode paradigm of sequential message
 passing, where physical variables are represented as features on so-called
-*grid* nodes, are *encoded* to *mesh* nodes, are *processed* on the mesh, and  # noqa: E501
-then *decoded* back to grid nodes where output tendencies or updated state are  # noqa: E501
+*grid* nodes, are *encoded* to *mesh* nodes, are *processed* on the mesh, and
+then *decoded* back to grid nodes where output tendencies or updated state are
 produced.
 
-The format specified in this document was designed to support the definition of  # noqa: E501
-both flat (e.g. Keisler 2022, Lam et al 2022) and hierarchical (Oskarsson et al  # noqa: E501
+The format specified in this document was designed to support the definition of
+both flat (e.g. Keisler 2022, Lam et al 2022) and hierarchical (Oskarsson et al
 2023) graphs for GNN-based MLWP in neural-lam.
 
 The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL NOT",
@@ -28,8 +28,8 @@ document are to be interpreted as described in RFC 2119.
 
 ### 2.1 Directory Structure
 
-Each graph MUST identified by a unique `name` and stored within the directory  # noqa: E501
-`graph/<name>/` that in turn MUST be placed within the same directory as the  # noqa: E501
+Each graph MUST identified by a unique `name` and stored within the directory
+`graph/<name>/` that in turn MUST be placed within the same directory as the
 datastore configuration from which the graph was derived (i.e. the spatial
 coordinates defining the `grid` coordinates are provided by the datastore).
 
@@ -49,28 +49,26 @@ Required files for all graphs (all of these files MUST be present):
 - `m2g_features.pt`
 - `mesh_features.pt`
 
-### 2.2.1 Graph format compatibility
+### 2.2.1 Graph format versioning
 
-Graph directories SHOULD include the file `created-with-neural-lam-version`.
-When present, it MUST contain the `neural_lam.__version__` string from the code that created the graph.
+Graph directories SHOULD include the file `graph-spec-version`.
+When present, it MUST contain the graph storage spec version as plain text.
+The current graph storage spec version is
+`0.1.0`.
 
-The currently supported compatibility mapping is:
-
-- `<=0.6.0` -> `format_spec_version="legacy"`
-- `>0.6.0` -> `format_spec_version="0.1.0"`
+If the file is missing, the graph is treated as a legacy pre-spec graph.
 
 #### Legacy behavior
 
-Graph directories created by `neural-lam<=0.6.0` are treated as legacy.
-They do not contain the `created-with-neural-lam-version` file, and the
-mesh node features stored in `mesh_features.pt` are assumed to already be
+Graph directories without `graph-spec-version` are treated as
+legacy pre-spec graphs, and `mesh_features.pt` is assumed to already be
 normalized.
 
-Graph directories created by `neural-lam>0.6.0` use the current format.
-They SHOULD include the version file, and `mesh_features.pt` is expected to
-contain the raw, unnormalized mesh node features that will be normalized on
-load.
-Additional required files for hierarchical graphs (`L > 1` mesh levels), all  # noqa: E501
+Graph directories with `graph-spec-version` equal to
+`0.1.0` use the current format, and
+`mesh_features.pt` is expected to contain the raw, unnormalized mesh node
+features that will be normalized on load.
+Additional required files for hierarchical graphs (`L > 1` mesh levels), all
 of which MUST be present:
 
 - `mesh_up_edge_index.pt`
@@ -81,13 +79,13 @@ of which MUST be present:
 
 The separate files represent the different "components" of the graph, where
 each of the sequential message passing steps, `encode`, `process`, and
-`decode` uses a separate component, so that `g2m` is used in `encode`, `m2m`  # noqa: E501
-is used in `process`, and `m2g` is used in `decode`. For hierarchical graphs,  # noqa: E501
-the `m2m` component is further split into separate inter-level and intra-level  # noqa: E501
+`decode` uses a separate component, so that `g2m` is used in `encode`, `m2m`
+is used in `process`, and `m2g` is used in `decode`. For hierarchical graphs,
+the `m2m` component is further split into separate inter-level and intra-level
 message-passing steps.
 
 Each graph component MUST be represented by two files: one for edge
-connectivity and one for edge features. The components are (which also define  # noqa: E501
+connectivity and one for edge features. The components are (which also define
 the expected file prefixes):
 
 - `g2m`: grid-to-mesh edges (sender on grid, receiver on mesh).
@@ -110,35 +108,35 @@ All files MUST be serialized with `torch.save(...)`.
 
 ## 3. File content requirements
 
-The content of the files depend on the number of mesh levels, denoted as `L` in  # noqa: E501
+The content of the files depend on the number of mesh levels, denoted as `L` in
 the text below, so that for:
 
 - Non-hierarchical graphs `L == 1`.
 - Hierarchical graphs `L > 1`.
 - Entry `0` MUST always be the bottom mesh level.
 
-Every tensors MUST stored in a manner ameanable to load with `torch.load(...)` (this can most easily be support by using `torch.save(...)` to store tensors to disk) and satisfy the requirements below.  # noqa: E501
+Every tensors MUST stored in a manner ameanable to load with `torch.load(...)` (this can most easily be support by using `torch.save(...)` to store tensors to disk) and satisfy the requirements below.
 ### 3.1 Nodes
 
-The `neural-lam` graph format on disk does not explicitly store node features for grid nodes, as these are expected to be dynamic and stored separately in the dataset. However, static features for mesh nodes MUST be stored in `mesh_features.pt` files (as described below).  # noqa: E501
+The `neural-lam` graph format on disk does not explicitly store node features for grid nodes, as these are expected to be dynamic and stored separately in the dataset. However, static features for mesh nodes MUST be stored in `mesh_features.pt` files (as described below).
 
 #### 3.1.1 Node index space
 
-The node indices in edge index tensors MUST be defined so that for each nodeset (for example "mesh nodes level 0") the indices run from `0` to `N-1`, where `N` is the number of nodes in that nodeset, i.e. the node indices for each nodeset MUST be contiguous. For example, if there are `N_0` mesh nodes at level `0`, then the node indices for those nodes MUST be `0` to `N_0 - 1`. If there are `N_1` mesh nodes at level `1`, then the node indices for those nodes MUST be `N_0` to `N_0 + N_1 - 1`, and so on.  # noqa: E501
+The node indices in edge index tensors MUST be defined so that for each nodeset (for example "mesh nodes level 0") the indices run from `0` to `N-1`, where `N` is the number of nodes in that nodeset, i.e. the node indices for each nodeset MUST be contiguous. For example, if there are `N_0` mesh nodes at level `0`, then the node indices for those nodes MUST be `0` to `N_0 - 1`. If there are `N_1` mesh nodes at level `1`, then the node indices for those nodes MUST be `N_0` to `N_0 + N_1 - 1`, and so on.
 
-NOTE: There is no requirement that the node indices for different nodesets be non-overlapping, in fact they should be overlapping, as the node indices for each nodeset are defined to run from `0` to `N-1` for that nodeset. The key requirement is that the node indices for each nodeset are contiguous and defined in a consistent manner across all edge index tensors.  # noqa: E501
+NOTE: There is no requirement that the node indices for different nodesets be non-overlapping, in fact they should be overlapping, as the node indices for each nodeset are defined to run from `0` to `N-1` for that nodeset. The key requirement is that the node indices for each nodeset are contiguous and defined in a consistent manner across all edge index tensors.
 #### 3.1.2 Mesh node features
 
-`mesh_features.pt` files MUST be lists of length `L` (number of mesh levels),  # noqa: E501
-where each entry is a tensor containing static features for the mesh nodes at  # noqa: E501
+`mesh_features.pt` files MUST be lists of length `L` (number of mesh levels),
+where each entry is a tensor containing static features for the mesh nodes at
 that level.
 Each tensor MUST satisfy the following requirements:
 
-- `mesh_features` entries MUST have shape `[N_level, 2]`, where `N_level` is the number of mesh nodes at that level. The two features MUST be the horizontal coordinates of the mesh nodes at level `i`.  # noqa: E501
-- `mesh_features[i][:, 0]` and `mesh_features[i][:, 1]` MUST contain the horizontal coordinates of the mesh nodes at level `i`, with column `0` and column `1` representing the two orthogonal horizontal axes.  # noqa: E501
+- `mesh_features` entries MUST have shape `[N_level, 2]`, where `N_level` is the number of mesh nodes at that level. The two features MUST be the horizontal coordinates of the mesh nodes at level `i`.
+- `mesh_features[i][:, 0]` and `mesh_features[i][:, 1]` MUST contain the horizontal coordinates of the mesh nodes at level `i`, with column `0` and column `1` representing the two orthogonal horizontal axes.
 
-  *NOTE*: These coordinates SHOULD be provided in a local equal-area projection, because the two mesh node features are normalized together using the maximum span of the grid coordinates after graph loading.  # noqa: E501
-- Mesh node features SHOULD NOT be normalized. Instead, normalization will be performed inside `neural-lam` after graph loading.  # noqa: E501
+  *NOTE*: These coordinates SHOULD be provided in a local equal-area projection, because the two mesh node features are normalized together using the maximum span of the grid coordinates after graph loading.
+- Mesh node features SHOULD NOT be normalized. Instead, normalization will be performed inside `neural-lam` after graph loading.
 - Dtype MUST be `torch.float32`.
 ### 3.2 Edges
 
@@ -152,14 +150,14 @@ The following edge index files MUST be defined:
 - `mesh_up_edge_index.pt` (hierarchical graphs only, `L > 1`)
 - `mesh_down_edge_index.pt` (hierarchical graphs only, `L > 1`)
 
-`g2m_edge_index.pt` and `m2g_edge_index.pt` MUST each contain a single tensor  # noqa: E501
+`g2m_edge_index.pt` and `m2g_edge_index.pt` MUST each contain a single tensor
 with shape `[2, E]`, where `E` is the number of edges in that component.
 `m2m_edge_index.pt` MUST contain a list of tensors of length `L`, i.e. one
-edge-index tensor per mesh level. Each entry MUST have shape `[2, E_level]`,  # noqa: E501
+edge-index tensor per mesh level. Each entry MUST have shape `[2, E_level]`,
 where `E_level` is the number of edges at that level.
 For hierarchical graphs, `mesh_up_edge_index.pt` and
 `mesh_down_edge_index.pt` MUST each contain a list of length `L - 1` of
-tensors, i.e. one per inter-level connection, so that entry `i` connects level  # noqa: E501
+tensors, i.e. one per inter-level connection, so that entry `i` connects level
 `i` and level `i+1`. Each entry MUST have shape `[2, E_interlevel]`, where
 `E_interlevel` is the number of edges going either up
 (`mesh_up_edge_index.pt`) or down (`mesh_down_edge_index.pt`) between that
@@ -178,24 +176,24 @@ The following edge feature files MUST be defined:
 - `mesh_up_features.pt` (hierarchical graphs only, `L > 1`)
 - `mesh_down_features.pt` (hierarchical graphs only, `L > 1`)
 
-`g2m_features.pt` and `m2g_features.pt` MUST each contain a single tensor with  # noqa: E501
-shape `[E, N_f]`, where `E` matches the number of edges in the corresponding  # noqa: E501
+`g2m_features.pt` and `m2g_features.pt` MUST each contain a single tensor with
+shape `[E, N_f]`, where `E` matches the number of edges in the corresponding
 `*_edge_index.pt` file.
-`m2m_features.pt` MUST contain a list of length `L`, i.e. one feature tensor  # noqa: E501
+`m2m_features.pt` MUST contain a list of length `L`, i.e. one feature tensor
 per mesh level. Entry `i` MUST have shape `[E_level, N_f]`, where `E_level`
 matches the edge count in entry `i` of `m2m_edge_index.pt`.
 For hierarchical graphs, `mesh_up_features.pt` and `mesh_down_features.pt`
 MUST each contain a list of length `L - 1`, i.e. one feature tensor per
-inter-level connection between level `i` and `i+1`. Entry `i` MUST have shape  # noqa: E501
-`[E_interlevel, N_f]`, where `E_interlevel` matches the edge count in entry `i`  # noqa: E501
+inter-level connection between level `i` and `i+1`. Entry `i` MUST have shape
+`[E_interlevel, N_f]`, where `E_interlevel` matches the edge count in entry `i`
 of the corresponding `mesh_*_edge_index.pt` file.
 For every edge feature tensor above:
 
 - The shape MUST be `[E_component, N_f]`.
-- `N_f` MUST be exactly `3` (for 2D edges) or exactly `4` (for 3D edges). The value of `N_f` MUST be consistent across all edge feature tensors in the graph.  # noqa: E501
-- The first column (`<feature_tensor>[:, 0]`) MUST contain the total edge length (e.g., the Euclidean distance between the sender and receiver nodes).  # noqa: E501
+- `N_f` MUST be exactly `3` (for 2D edges) or exactly `4` (for 3D edges). The value of `N_f` MUST be consistent across all edge feature tensors in the graph.
+- The first column (`<feature_tensor>[:, 0]`) MUST contain the total edge length (e.g., the Euclidean distance between the sender and receiver nodes).
 
-  *NOTE*: The reason for requiring that the first column be the total edge length is that `neural-lam` uses this column to compute the normalization factor (the longest edge length found across the `m2m` edge features). Since edge length and the Cartesian displacements all measure distance and share the same physical scale, all edge feature columns are normalized jointly by this single factor after loading.  # noqa: E501
-- The following columns MUST contain the Cartesian coordinate displacements (`vdiff = receiver_pos - sender_pos`). For 2D edges (`N_f == 3`), columns `1` and `2` are the x- and y-displacements respectively. For 3D edges (`N_f == 4`), columns `1`, `2`, and `3` are the x-, y-, and z-displacements respectively.  # noqa: E501
-- Edge features SHOULD NOT be normalized. Instead, normalization will be performed inside `neural-lam` after graph loading.  # noqa: E501
+  *NOTE*: The reason for requiring that the first column be the total edge length is that `neural-lam` uses this column to compute the normalization factor (the longest edge length found across the `m2m` edge features). Since edge length and the Cartesian displacements all measure distance and share the same physical scale, all edge feature columns are normalized jointly by this single factor after loading.
+- The following columns MUST contain the Cartesian coordinate displacements (`vdiff = receiver_pos - sender_pos`). For 2D edges (`N_f == 3`), columns `1` and `2` are the x- and y-displacements respectively. For 3D edges (`N_f == 4`), columns `1`, `2`, and `3` are the x-, y-, and z-displacements respectively.
+- Edge features SHOULD NOT be normalized. Instead, normalization will be performed inside `neural-lam` after graph loading.
 - Dtype MUST be `torch.float32`.
