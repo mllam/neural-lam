@@ -3,7 +3,7 @@
 
 # Neural-LAM Graph Storage Specification
 
-Version: 0.1.0-draft
+Version: 0.1.0
 
 ## 1. Introduction
 

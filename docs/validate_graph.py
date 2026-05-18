@@ -1301,10 +1301,10 @@ def validate_graph_directory(
     edge_feature_tensors = []
 
     spec_text = textwrap.dedent(
-        """\
+        f"""\
     # Neural-LAM Graph Storage Specification
 
-    Version: 0.1.0-draft
+    Version: {CURRENT_GRAPH_FORMAT_SPEC_VERSION}
 
     ## 1. Introduction
 
