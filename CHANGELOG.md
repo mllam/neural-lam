@@ -37,6 +37,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Add a named `ForecastBatch` contract for `WeatherDataset` batches and update
   internal consumers to use field access [\#613](https://github.com/mllam/neural-lam/issues/613) @kshirajahere
+- Fix GPU CI torch version resolution to query the target wheel index instead of PyPI [\#639](https://github.com/mllam/neural-lam/pull/639) @Sir-Sloth-The-Lazy
 
 - Add comprehensive type hints to all functions and class methods in `utils.py` [\#620](https://github.com/mllam/neural-lam/pull/620) @GiGiKoneti
 
