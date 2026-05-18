@@ -1352,36 +1352,6 @@ def validate_graph_directory(
     """
     )
 
-    spec_text += textwrap.dedent(
-        f"""\
-
-    ### 2.2.1 Graph format versioning
-
-    Graph directories SHOULD include the file `{GRAPH_SPEC_VERSION_FILENAME}`.
-    When present, it MUST contain the graph storage spec version as plain text.
-    The current graph storage spec version is
-    `{CURRENT_GRAPH_FORMAT_SPEC_VERSION}`.
-
-    If the file is missing, the graph is treated as a legacy pre-spec graph.
-    """
-    )
-
-    spec_text += textwrap.dedent(
-        f"""\
-
-    #### Legacy behavior
-
-    Graph directories without `{GRAPH_SPEC_VERSION_FILENAME}` are treated as
-    legacy pre-spec graphs, and `mesh_features.pt` is assumed to already be
-    normalized.
-
-    Graph directories with `{GRAPH_SPEC_VERSION_FILENAME}` equal to
-    `{CURRENT_GRAPH_FORMAT_SPEC_VERSION}` use the current format, and
-    `mesh_features.pt` is expected to contain the raw, unnormalized mesh node
-    features that will be normalized on load.
-    """
-    )
-
     required_files = [
         "m2m_edge_index.pt",
         "g2m_edge_index.pt",
@@ -1474,6 +1444,7 @@ def validate_graph_directory(
 
     spec_text += textwrap.dedent(
         """\
+
     Additional required files for hierarchical graphs (`L > 1` mesh levels), all  # noqa: E501
     of which MUST be present:
 
@@ -1496,6 +1467,21 @@ def validate_graph_directory(
             files=extra_required_if_hier,
             section_name="2.2 Graph Filenames",
         )
+
+    spec_text += textwrap.dedent(
+        f"""\
+
+    ### 2.2.1 Graph format versioning
+
+    Graph directories SHOULD include the file `{GRAPH_SPEC_VERSION_FILENAME}`.
+    When present, it MUST contain the graph storage spec version as plain text.
+    The current graph storage spec version is
+    `{CURRENT_GRAPH_FORMAT_SPEC_VERSION}`.
+
+    See `3.4 Differences to legacy format graphs` for the legacy-specific
+    behavior.
+    """
+    )
 
     mesh_up_edge_index = (
         _load_pt(graph_dir / "mesh_up_edge_index.pt")
@@ -1520,6 +1506,7 @@ def validate_graph_directory(
 
     spec_text += textwrap.dedent(
         """\
+
     ### 2.3 Graph Components and File Suffixes
 
     The separate files represent the different "components" of the graph, where
@@ -1996,6 +1983,21 @@ def validate_graph_directory(
         num_grid_nodes=num_grid_nodes,
         graph_format_spec_version=graph_format_spec_version,
     )
+
+    spec_text += textwrap.dedent(
+        f"""\
+
+    ### 3.4 Differences to legacy format graphs
+
+    Legacy pre-spec graphs do not include `{GRAPH_SPEC_VERSION_FILENAME}`.
+    Their `mesh_features.pt` files are assumed to already be normalized.
+
+    Current-format graphs include `{GRAPH_SPEC_VERSION_FILENAME}` with value
+    `{CURRENT_GRAPH_FORMAT_SPEC_VERSION}`, and their `mesh_features.pt` files
+    are normalized on load.
+    """
+    )
+
     spec_text = spec_text.replace("  # noqa: E501", "")
     return report, spec_text, props
 

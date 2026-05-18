@@ -49,25 +49,6 @@ Required files for all graphs (all of these files MUST be present):
 - `m2g_features.pt`
 - `mesh_features.pt`
 
-### 2.2.1 Graph format versioning
-
-Graph directories SHOULD include the file `graph-spec-version`.
-When present, it MUST contain the graph storage spec version as plain text.
-The current graph storage spec version is
-`0.1.0`.
-
-If the file is missing, the graph is treated as a legacy pre-spec graph.
-
-#### Legacy behavior
-
-Graph directories without `graph-spec-version` are treated as
-legacy pre-spec graphs, and `mesh_features.pt` is assumed to already be
-normalized.
-
-Graph directories with `graph-spec-version` equal to
-`0.1.0` use the current format, and
-`mesh_features.pt` is expected to contain the raw, unnormalized mesh node
-features that will be normalized on load.
 Additional required files for hierarchical graphs (`L > 1` mesh levels), all
 of which MUST be present:
 
@@ -75,6 +56,17 @@ of which MUST be present:
 - `mesh_down_edge_index.pt`
 - `mesh_up_features.pt`
 - `mesh_down_features.pt`
+
+### 2.2.1 Graph format versioning
+
+Graph directories SHOULD include the file `graph-spec-version`.
+When present, it MUST contain the graph storage spec version as plain text.
+The current graph storage spec version is
+`0.1.0`.
+
+See `3.4 Differences to legacy format graphs` for the legacy-specific
+behavior.
+
 ### 2.3 Graph Components and File Suffixes
 
 The separate files represent the different "components" of the graph, where
@@ -197,3 +189,12 @@ For every edge feature tensor above:
 - The following columns MUST contain the Cartesian coordinate displacements (`vdiff = receiver_pos - sender_pos`). For 2D edges (`N_f == 3`), columns `1` and `2` are the x- and y-displacements respectively. For 3D edges (`N_f == 4`), columns `1`, `2`, and `3` are the x-, y-, and z-displacements respectively.
 - Edge features SHOULD NOT be normalized. Instead, normalization will be performed inside `neural-lam` after graph loading.
 - Dtype MUST be `torch.float32`.
+
+### 3.4 Differences to legacy format graphs
+
+Legacy pre-spec graphs do not include `graph-spec-version`.
+Their `mesh_features.pt` files are assumed to already be normalized.
+
+Current-format graphs include `graph-spec-version` with value
+`0.1.0`, and their `mesh_features.pt` files
+are normalized on load.
