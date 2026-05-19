@@ -125,21 +125,32 @@ be stored in `mesh_features.pt` files (as described below).
 
 #### 3.1.1 Node index space
 
-The node indices in edge index tensors MUST be defined so that for each
-nodeset (for example "mesh nodes level 0") the indices run from `0` to
-`N-1`, where `N` is the number of nodes in that nodeset, i.e. the node
-indices for each nodeset MUST be contiguous. For example, if there are
-`N_0` mesh nodes at level `0`, then the node indices for those nodes
-MUST be `0` to `N_0 - 1`. If there are `N_1` mesh nodes at level `1`,
-then the node indices for those nodes MUST be `N_0` to `N_0 + N_1 - 1`,
-and so on.
+The node indices in edge index tensors MUST be defined so that for both
+the set of source nodes (where the edges connect from) and the set of
+destination nodes (where the edges connect to) should be denoted by
+indices running from `0` to `N_src-1` and `0` to `N_dst-1` respectively,
+where `N_src` and `N_dst` are the total number of source and destination
+nodes being connected. This means that the node indices in the edge index
+tensors are numbered separately, and the nodes in each set are only
+numbered identically if the set of nodes being connect from and to are the
+same set (as would be the case for mesh-to-mesh connections in
+non-hierarchical graphs).
+
+> **NOTE**: Although the integers used to label a given set of source or
+> destination nodes must be contiguous from `0` to `N-1` (where `N` is
+> the number of nodes) it is not a requirement that all node indexes are
+> actually present in the edge index tensors, i.e. it is not a
+> requirement that all nodes in either set source or destination nodes has
+> edges connecting to them (this is for example used when decoding to only
+> a subset in the grid nodes when training in a limited-area setting where
+> predictions are not required on the boundary)
 
 > **NOTE**: There is no requirement that the node indices for different
 > nodesets be non-overlapping, in fact they should be overlapping, as the
 > node indices for each nodeset are defined to run from `0` to `N-1` for
 > that nodeset. The key requirement is that the node indices for each
-> nodeset are contiguous and defined in a consistent manner across all edge
-> index tensors.
+> nodeset are contiguous and defined in a consistent manner across all
+> edge index tensors.
 #### 3.1.2 Mesh node features
 
 `mesh_features.pt` files MUST be lists of length `L` (number of mesh
