@@ -169,9 +169,7 @@ def test_forecaster_module_checkpoint(tmp_path):
     assert torch.allclose(out_before[0], out_after[0])
 
 
-def test_old_checkpoint_load(tmp_path):
-    """Old-style (pre-refactor) checkpoints must load without error and with
-    the correct hyperparameters."""
+def test_forecaster_module_old_checkpoint(tmp_path):
     datastore = init_datastore_example("mdp")
 
     config = nlconfig.NeuralLAMConfig(
