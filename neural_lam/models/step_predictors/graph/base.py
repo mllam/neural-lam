@@ -7,7 +7,7 @@ import torch
 # Local
 from .... import utils
 from ....datastore import BaseDatastore
-from ....interaction_net import InteractionNet
+from ....gnn_layers import get_gnn_class
 from ..base import StepPredictor
 
 
@@ -30,6 +30,8 @@ class BaseGraphModel(StepPredictor):
         output_std: bool = False,
         output_clamping_lower: Optional[Dict[str, float]] = None,
         output_clamping_upper: Optional[Dict[str, float]] = None,
+        g2m_gnn_type: str = "InteractionNet",
+        m2g_gnn_type: str = "InteractionNet",
     ):
         super().__init__(
             datastore=datastore,
@@ -37,6 +39,8 @@ class BaseGraphModel(StepPredictor):
             output_clamping_lower=output_clamping_lower,
             output_clamping_upper=output_clamping_upper,
         )
+        self.g2m_gnn_type = g2m_gnn_type
+        self.m2g_gnn_type = m2g_gnn_type
 
         # Retrieve difference statistics for rescaling in forward pass
         da_state_stats = datastore.get_standardization_dataarray("state")
@@ -109,7 +113,7 @@ class BaseGraphModel(StepPredictor):
 
         # GNNs
         # encoder
-        self.g2m_gnn = InteractionNet(
+        self.g2m_gnn = get_gnn_class(g2m_gnn_type)(
             self.g2m_edge_index,
             hidden_dim,
             hidden_layers=hidden_layers,
@@ -120,7 +124,7 @@ class BaseGraphModel(StepPredictor):
         )
 
         # decoder
-        self.m2g_gnn = InteractionNet(
+        self.m2g_gnn = get_gnn_class(m2g_gnn_type)(
             self.m2g_edge_index,
             hidden_dim,
             hidden_layers=hidden_layers,
