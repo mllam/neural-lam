@@ -244,9 +244,11 @@ def load_graph(
         if not version_path.exists():
             warnings.warn(
                 "Graph spec version file is missing; assuming this graph uses "
-                "the legacy pre-spec format and therefore skipping mesh node "
-                "feature normalization after graph loading, since mesh node "
-                "features are assumed to already be normalized.",
+                "the legacy pre-spec format. Mesh node feature normalization "
+                "will be skipped because legacy mesh node features are assumed "
+                "to already be normalized. Edge indices will be zero-offset on "
+                "load to convert legacy offset node labels to the per-node-set "
+                "zero-based index spaces required by the current graph spec.",
                 RuntimeWarning,
                 stacklevel=2,
             )
@@ -272,6 +274,9 @@ def load_graph(
     should_normalize_mesh_features = (
         graph_spec_version == CURRENT_GRAPH_SPEC_VERSION
     )
+    should_zero_index_edge_indices = (
+        graph_spec_version == LEGACY_GRAPH_SPEC_VERSION
+    )
 
     # Normalize static mesh features for the current on-disk graph format.
     # Legacy graphs already store normalized mesh coordinates.
@@ -291,23 +296,28 @@ def load_graph(
 
     # Load edges (edge_index)
     m2m_edge_index = BufferList(
-        [zero_index_edge_index(ei) for ei in loads_file("m2m_edge_index.pt")],
-        persistent=False,
+        loads_file("m2m_edge_index.pt"), persistent=False
     )  # List of (2, M_m2m[l])
     g2m_edge_index = loads_file("g2m_edge_index.pt")  # (2, M_g2m)
     m2g_edge_index = loads_file("m2g_edge_index.pt")  # (2, M_m2g)
 
-    # Change first indices to 0
-    # m2g and g2m has to be handled specially as not all mesh nodes
-    # might be indexed
-    m2g_min_indices = m2g_edge_index.min(dim=1, keepdim=True)[0]
-    mesh_first = m2g_min_indices[0] < m2g_min_indices[1]
-    g2m_edge_index = zero_index_g2m(
-        g2m_edge_index, mesh_static_features, mesh_first=mesh_first
-    )
-    m2g_edge_index = zero_index_m2g(
-        m2g_edge_index, mesh_static_features, mesh_first=mesh_first
-    )
+    if should_zero_index_edge_indices:
+        # Legacy graphs used a shifted node-index layout; normalize it on load.
+        m2m_edge_index = BufferList(
+            [zero_index_edge_index(ei) for ei in m2m_edge_index],
+            persistent=False,
+        )
+
+        # m2g and g2m has to be handled specially as not all mesh nodes
+        # might be indexed.
+        m2g_min_indices = m2g_edge_index.min(dim=1, keepdim=True)[0]
+        mesh_first = m2g_min_indices[0] < m2g_min_indices[1]
+        g2m_edge_index = zero_index_g2m(
+            g2m_edge_index, mesh_static_features, mesh_first=mesh_first
+        )
+        m2g_edge_index = zero_index_m2g(
+            m2g_edge_index, mesh_static_features, mesh_first=mesh_first
+        )
 
     assert m2g_edge_index.min() >= 0, "Negative node index in m2g"
     assert g2m_edge_index.min() >= 0, "Negative node index in g2m"
@@ -342,19 +352,21 @@ def load_graph(
     if hierarchical:
         # Load up and down edges and features
         mesh_up_edge_index = BufferList(
-            [
-                zero_index_edge_index(ei)
-                for ei in loads_file("mesh_up_edge_index.pt")
-            ],
-            persistent=False,
-        )  # List of (2, M_up[l])
+            loads_file("mesh_up_edge_index.pt"), persistent=False
+        )
         mesh_down_edge_index = BufferList(
-            [
-                zero_index_edge_index(ei)
-                for ei in loads_file("mesh_down_edge_index.pt")
-            ],
-            persistent=False,
-        )  # List of (2, M_down[l])
+            loads_file("mesh_down_edge_index.pt"), persistent=False
+        )
+
+        if should_zero_index_edge_indices:
+            mesh_up_edge_index = BufferList(
+                [zero_index_edge_index(ei) for ei in mesh_up_edge_index],
+                persistent=False,
+            )  # List of (2, M_up[l])
+            mesh_down_edge_index = BufferList(
+                [zero_index_edge_index(ei) for ei in mesh_down_edge_index],
+                persistent=False,
+            )  # List of (2, M_down[l])
 
         mesh_up_features = loads_file(
             "mesh_up_features.pt"

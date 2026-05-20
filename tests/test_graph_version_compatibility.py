@@ -26,6 +26,10 @@ def _normalize_mesh_features(
     return normalized
 
 
+def _load_edge_index(path: Path) -> torch.Tensor | list[torch.Tensor]:
+    return torch.load(path)
+
+
 def test_load_graph_respects_current_and_legacy_mesh_feature_formats():
     """Check current graphs normalize mesh node features.
 
@@ -50,6 +54,15 @@ def test_load_graph_respects_current_and_legacy_mesh_feature_formats():
         )
 
         raw_mesh_features = torch.load(graph_dir_path / "mesh_features.pt")
+        raw_m2m_edge_index = _load_edge_index(
+            graph_dir_path / "m2m_edge_index.pt"
+        )
+        raw_g2m_edge_index = _load_edge_index(
+            graph_dir_path / "g2m_edge_index.pt"
+        )
+        raw_m2g_edge_index = _load_edge_index(
+            graph_dir_path / "m2g_edge_index.pt"
+        )
         expected_mesh_features = _normalize_mesh_features(
             raw_mesh_features, grid_xy_max_span
         )
@@ -66,6 +79,9 @@ def test_load_graph_respects_current_and_legacy_mesh_feature_formats():
         assert torch.allclose(
             graph_ldict["mesh_static_features"], expected_mesh_features[0]
         )
+        assert torch.equal(graph_ldict["g2m_edge_index"], raw_g2m_edge_index)
+        assert torch.equal(graph_ldict["m2g_edge_index"], raw_m2g_edge_index)
+        assert torch.equal(graph_ldict["m2m_edge_index"], raw_m2m_edge_index[0])
 
         # Deleting the spec version file makes the graph look legacy, so
         # load_graph() should leave the mesh node features exactly as they
@@ -80,4 +96,10 @@ def test_load_graph_respects_current_and_legacy_mesh_feature_formats():
 
         assert torch.allclose(
             legacy_graph_ldict["mesh_static_features"], raw_mesh_features[0]
+        )
+        assert not torch.equal(
+            legacy_graph_ldict["g2m_edge_index"], raw_g2m_edge_index
+        )
+        assert not torch.equal(
+            legacy_graph_ldict["m2g_edge_index"], raw_m2g_edge_index
         )

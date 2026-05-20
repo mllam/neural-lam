@@ -2050,9 +2050,15 @@ def validate_graph_directory(
     Legacy pre-spec graphs do not include `{GRAPH_SPEC_VERSION_FILENAME}`.
     Their `mesh_features.pt` files are assumed to already be normalized.
 
+    Legacy pre-spec graphs may store edge indices in an offset node-index
+    layout. When loading those graphs, `neural-lam` zero-offsets the edge
+    indices so that each source and destination node set starts at `0`.
+
     Current-format graphs include `{GRAPH_SPEC_VERSION_FILENAME}` with value
-    `{CURRENT_GRAPH_FORMAT_SPEC_VERSION}`, and their `mesh_features.pt` files
-    are normalized on load.
+    `{CURRENT_GRAPH_FORMAT_SPEC_VERSION}`. Their `mesh_features.pt` files are
+    normalized on load, and their edge-index tensors are expected to already
+    use the zero-based per-node-set index space required by this
+    specification.
     """
     )
 
