@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Move data normalization from CPU (`WeatherDataset`) to GPU
+  (`ForecasterModule.on_after_batch_transfer`) for improved performance and
+  multi-GPU compatibility. `WeatherDataset` / `WeatherDataModule` no longer
+  take a `standardize` argument.
+  [\#239](https://github.com/mllam/neural-lam/pull/239) @Sharkyii
+
 - Split `ARModel` into `ForecasterModule`, `Forecaster` and
   `StepPredictor`, and reorganise `neural_lam.models` to mirror the new
   hierarchy (`forecasters/`, `step_predictors/`, `step_predictors/graph/`).
