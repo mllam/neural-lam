@@ -27,6 +27,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Fix `IndexError` in HiLAM forward pass by offsetting grid nodes in `zero_index_g2m`/`zero_index_m2g` by the total mesh-node count across all levels ([#642](https://github.com/mllam/neural-lam/issues/642)) @Sir-Sloth-The-Lazy
+
 - Change metric heatmap (`plot_error_map`, now `plot_error_heatmap`) to use a
   shared cross-variable color scale instead of per-row normalization, add a
   colorbar, and scale figure size and font sizes with grid dimensions
