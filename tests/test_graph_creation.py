@@ -95,7 +95,7 @@ def test_graph_creation(datastore_name, graph_name):
             if file_name == GRAPH_SPEC_VERSION_FILENAME:
                 continue
             file_id = Path(file_name).stem  # remove the extension
-            result = torch.load(graph_dir_path / file_name)
+            result = torch.load(graph_dir_path / file_name, weights_only=True)
 
             if file_id.startswith("g2m") or file_id.startswith("m2g"):
                 assert isinstance(result, torch.Tensor)
