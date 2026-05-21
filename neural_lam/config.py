@@ -117,6 +117,28 @@ class TrainingConfig:
 
 
 @dataclasses.dataclass
+class PlottingConfig:
+    """
+    Configuration related to evaluation plotting.
+
+    Attributes
+    ----------
+    boundary_margin_degrees : float
+        Lat/lon margin (in projection degrees) drawn around the interior
+        domain when a boundary datastore is configured. Defaults to 1.0.
+    boundary_var_mapping : Dict[str, str]
+        Optional mapping from interior state variable name to boundary
+        forcing feature name for the overlay. State variables not listed
+        fall back to matching a boundary forcing feature of the same name.
+    """
+
+    boundary_margin_degrees: float = 1.0
+    boundary_var_mapping: Dict[str, str] = dataclasses.field(
+        default_factory=dict
+    )
+
+
+@dataclasses.dataclass
 class NeuralLAMConfig(dataclass_wizard.JSONWizard, dataclass_wizard.YAMLWizard):
     """
     Configuration for the Neural-LAM model and training pipeline.
@@ -138,10 +160,13 @@ class NeuralLAMConfig(dataclass_wizard.JSONWizard, dataclass_wizard.YAMLWizard):
     training : TrainingConfig
         Configuration for training the model, including loss function and
         feature-weighting strategy. Defaults to ``TrainingConfig()``.
+    plotting : PlottingConfig
+        The configuration for evaluation plotting.
     """
 
     datastores: Dict[str, DatastoreSelection]
     training: TrainingConfig = dataclasses.field(default_factory=TrainingConfig)
+    plotting: PlottingConfig = dataclasses.field(default_factory=PlottingConfig)
 
     class _(dataclass_wizard.JSONWizard.Meta):
         """

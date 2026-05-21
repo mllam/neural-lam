@@ -125,6 +125,7 @@ class ForecasterModule(pl.LightningModule):
         self.save_hyperparameters(
             ignore=["datastore", "datastore_boundary", "forecaster"]
         )
+        self.config = config
         self.datastore = datastore
         self.datastore_boundary = datastore_boundary
         self.forecaster = forecaster
@@ -694,14 +695,17 @@ class ForecasterModule(pl.LightningModule):
 
         # Load boundary forcing for plotting (raw, unstandardized).
         #
-        # Interior state variables are matched to boundary forcing fields
-        # *by name*: a boundary overlay is drawn for state variable
-        # ``var_name`` only when ``var_name`` is also a forcing feature on
-        # the boundary datastore. This means users must align variable
-        # names across the two mllam-data-prep configs (e.g. rename ERA5
-        # ``u_component_of_wind1000hPa`` to ``u100m`` if you want it to
-        # overlay DANRA's ``u100m``). Unmatched state variables plot
+        # Interior state variables are matched to boundary forcing fields via
+        # ``config.plotting.boundary_var_mapping``: a boundary overlay is drawn
+        # for state variable ``var_name`` when its mapped boundary feature is a
+        # forcing feature on the boundary datastore. State variables absent from
+        # the mapping fall back to matching a boundary forcing feature of the
+        # same name (e.g. DANRA ``u100m`` overlays ERA5 ``u100m``); to overlay
+        # differently named fields add an explicit entry such as
+        # ``u100m: u_component_of_wind1000hPa``. Unmatched state variables plot
         # without a boundary overlay.
+        plotting_cfg = self.config.plotting
+        boundary_var_mapping = plotting_cfg.boundary_var_mapping
         da_boundary_forcing = None
         boundary_feature_names: set = set()
         if self.datastore_boundary is not None:
@@ -784,14 +788,18 @@ class ForecasterModule(pl.LightningModule):
 
                 def _boundary_for(var_name: str):
                     """Return the boundary field for ``var_name`` if the
-                    boundary datastore exposes a forcing feature with the
-                    same name, else ``None``."""
+                    boundary datastore exposes the mapped forcing feature
+                    (``boundary_var_mapping``, defaulting to the same name),
+                    else ``None``."""
+                    boundary_var = boundary_var_mapping.get(var_name, var_name)
                     if (
                         boundary_da_t is None
-                        or var_name not in boundary_feature_names
+                        or boundary_var not in boundary_feature_names
                     ):
                         return None
-                    return boundary_da_t.sel(forcing_feature=var_name).squeeze()
+                    return boundary_da_t.sel(
+                        forcing_feature=boundary_var
+                    ).squeeze()
 
                 var_figs = [
                     vis.plot_prediction(
@@ -806,11 +814,14 @@ class ForecasterModule(pl.LightningModule):
                         da_target=da_target.isel(
                             state_feature=var_i, time=t_i - 1
                         ).squeeze(),
-                        boundary_da=_boundary_for(var_name),
+                        boundary_da=boundary_field,
                         boundary_datastore=(
                             self.datastore_boundary
-                            if _boundary_for(var_name) is not None
+                            if boundary_field is not None
                             else None
+                        ),
+                        boundary_margin_degrees=(
+                            plotting_cfg.boundary_margin_degrees
                         ),
                     )
                     for var_i, (var_name, var_unit, var_vrange) in enumerate(
@@ -820,6 +831,7 @@ class ForecasterModule(pl.LightningModule):
                             var_vranges,
                         )
                     )
+                    for boundary_field in (_boundary_for(var_name),)
                 ]
 
                 for var_name, fig in zip(
