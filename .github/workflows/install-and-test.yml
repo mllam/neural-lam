@@ -67,7 +67,7 @@ jobs:
           # Read the lower-bound torch version directly from pyproject.toml so we
           # are not affected by PyPI resolving a version that the target wheel index
           # (e.g. cu128) does not yet carry.
-          MIN_VERSION=$(grep -o 'torch>=[0-9.]*' pyproject.toml | grep -o '[0-9.]*$')
+          MIN_VERSION=$(grep -o 'torch>=[0-9.]*' pyproject.toml | grep -o '[0-9.]*$' | head -n1)
           echo "Minimum torch version required: ${MIN_VERSION}"
           # Find the latest version satisfying that minimum in the target index.
           # This returns the highest version present in the wheel index (e.g. cu128)
