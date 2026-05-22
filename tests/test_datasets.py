@@ -314,7 +314,6 @@ def test_ensemble_len_scales_with_default_all_members():
         ar_steps=2,
         num_past_forcing_steps=1,
         num_future_forcing_steps=1,
-        standardize=False,
     )
 
     dataset_single = WeatherDataset(
@@ -324,7 +323,6 @@ def test_ensemble_len_scales_with_default_all_members():
         num_past_forcing_steps=1,
         num_future_forcing_steps=1,
         load_single_member=True,
-        standardize=False,
     )
 
     assert len(dataset_all) == len(dataset_single) * 3
@@ -375,7 +373,6 @@ def test_ensemble_index_mapping_is_time_major():
         num_past_forcing_steps=1,
         num_future_forcing_steps=1,
         load_single_member=False,
-        standardize=False,
     )
 
     init_states_0, _, _, _, target_times_0 = dataset[0]
@@ -400,7 +397,6 @@ def test_ensemble_forcing_uses_same_member_when_available():
         num_past_forcing_steps=1,
         num_future_forcing_steps=1,
         load_single_member=False,
-        standardize=False,
     )
 
     _, _, forcing_0, _, target_times_0 = dataset[0]
@@ -424,7 +420,6 @@ def test_ensemble_forcing_without_member_dim_is_shared():
         num_past_forcing_steps=1,
         num_future_forcing_steps=1,
         load_single_member=False,
-        standardize=False,
     )
 
     init_states_0, _, forcing_0, _, target_times_0 = dataset[0]
@@ -450,7 +445,6 @@ def test_forecast_ensemble_len_scales_with_default_all_members():
         ar_steps=2,
         num_past_forcing_steps=1,
         num_future_forcing_steps=1,
-        standardize=False,
     )
 
     with pytest.warns(UserWarning, match="only using first ensemble member"):
@@ -461,80 +455,9 @@ def test_forecast_ensemble_len_scales_with_default_all_members():
             num_past_forcing_steps=1,
             num_future_forcing_steps=1,
             load_single_member=True,
-            standardize=False,
         )
 
     assert len(dataset_all) == len(dataset_single) * 3
-
-
-def test_standardization_with_zero_std():
-    """Regression test for https://github.com/mllam/neural-lam/issues/136
-
-    When all values of a field are identical (std = 0), WeatherDataset
-    must not produce NaN via division-by-zero during standardization.
-    """
-    # Third-party
-    import xarray as xr
-
-    std_da = xr.DataArray(
-        np.array([0.0, 1.0, 2.0], dtype=np.float32), dims=["feature"]
-    )
-
-    dataset = WeatherDataset.__new__(WeatherDataset)
-    result = dataset._compute_std_safe(std_da, "state")
-
-    eps = np.finfo(std_da.dtype).eps
-
-    assert (
-        float(result[0]) == eps
-    ), "Zero std was not clamped to machine epsilon"
-    assert float(result[1]) == 1.0
-    assert float(result[2]) == 2.0
-    assert not np.isnan(
-        result.values
-    ).any(), "NaN found after _compute_std_safe"
-
-
-def test_weather_dataset_no_forcing_standardize():
-    """Regression test: WeatherDataset must not raise AttributeError when the
-    datastore has no forcing data and standardize=True (the default).
-
-    Before the fix, self.da_forcing_std was accessed at line 123 of
-    weather_dataset.py without ever being assigned when da_forcing is None,
-    causing:
-        AttributeError: 'WeatherDataset' object has no attribute
-        'da_forcing_std'
-    """
-
-    class NoForcingDatastore(DummyDatastore):
-        """DummyDatastore that returns None for the forcing category."""
-
-        def get_dataarray(self, category, split, **kwargs):
-            if category == "forcing":
-                return None
-            return super().get_dataarray(
-                category=category, split=split, **kwargs
-            )
-
-    datastore = NoForcingDatastore(n_grid_points=100, n_timesteps=20)
-
-    # Should not raise AttributeError
-    dataset = WeatherDataset(
-        datastore=datastore,
-        split="train",
-        ar_steps=3,
-        standardize=True,
-    )
-
-    assert dataset.forcing_std_safe is None
-    assert dataset.da_forcing_mean is None
-    assert dataset.da_forcing_std is None
-
-    # Ensure we can still retrieve a sample (forcing tensor should be empty)
-    init_states, target_states, forcing, boundary, target_times = dataset[0]
-    assert (
-        forcing.shape[-1] == 0
-    ), "Expected zero forcing features when forcing is None"
 
 
 def test_boundary_datastore_shapes():
@@ -560,7 +483,6 @@ def test_boundary_datastore_shapes():
         num_past_boundary_steps=num_past_boundary,
         num_future_boundary_steps=num_future_boundary,
         datastore_boundary=boundary_ds,
-        standardize=True,
     )
 
     init_states, target_states, forcing, boundary, target_times = dataset[0]
@@ -575,7 +497,7 @@ def test_boundary_datastore_shapes():
     assert boundary.shape[2] == n_boundary_features * boundary_window
     assert target_times.shape == (ar_steps,)
 
-    # Verify no NaN from standardization
+    # Verify the boundary tensor has no NaN values
     assert not torch.isnan(boundary).any()
 
 
@@ -588,48 +510,10 @@ def test_boundary_datastore_none_gives_empty_boundary():
         datastore=datastore,
         split="train",
         ar_steps=3,
-        standardize=False,
     )
 
     _, _, _, boundary, _ = dataset[0]
     assert boundary.shape[-1] == 0
-
-
-def test_boundary_datastore_standardization():
-    """Boundary forcing should be standardized when standardize=True and
-    left raw when standardize=False."""
-    n_timesteps = 20
-    datastore = DummyDatastore(n_grid_points=100, n_timesteps=n_timesteps)
-    boundary_ds = BoundaryDummyDatastore(
-        n_grid_points=25, n_timesteps=n_timesteps
-    )
-
-    dataset_std = WeatherDataset(
-        datastore=datastore,
-        split="train",
-        ar_steps=2,
-        num_past_boundary_steps=0,
-        num_future_boundary_steps=0,
-        datastore_boundary=boundary_ds,
-        standardize=True,
-    )
-
-    dataset_raw = WeatherDataset(
-        datastore=datastore,
-        split="train",
-        ar_steps=2,
-        num_past_boundary_steps=0,
-        num_future_boundary_steps=0,
-        datastore_boundary=boundary_ds,
-        standardize=False,
-    )
-
-    _, _, _, boundary_std, _ = dataset_std[0]
-    _, _, _, boundary_raw, _ = dataset_raw[0]
-
-    # Standardized and raw should differ (unless data happens to have
-    # mean=0 and std=1, which is essentially impossible for random data)
-    assert not torch.equal(boundary_std, boundary_raw)
 
 
 def test_boundary_dataset_length_unchanged():

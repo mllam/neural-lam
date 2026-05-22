@@ -8,7 +8,6 @@ import numpy as np
 import pytorch_lightning as pl
 import torch
 import xarray as xr
-from loguru import logger
 
 # First-party
 from neural_lam.datastore.base import BaseDatastore
@@ -52,8 +51,6 @@ class WeatherDataset(torch.utils.data.Dataset):
         realisations, treat each state ensemble member as an independent
         sample. If `True`, only ensemble member 0 is used. Default is False,
         so all members are used when available.
-    standardize : bool, optional
-        Whether to standardize the data. Default is True.
     """
 
     def __init__(
@@ -67,7 +64,6 @@ class WeatherDataset(torch.utils.data.Dataset):
         num_future_boundary_steps: int = 1,
         datastore_boundary: Union[BaseDatastore, None] = None,
         load_single_member: bool = False,
-        standardize: bool = True,
     ):
         super().__init__()
 
@@ -139,67 +135,6 @@ class WeatherDataset(torch.utils.data.Dataset):
                         f"({expected_dim_order}). Maybe you forgot to "
                         "transpose the data in `BaseDatastore.get_dataarray`?"
                     )
-
-        # Set up for standardization
-        self.standardize = standardize
-        if standardize:
-            self.ds_state_stats = self.datastore.get_standardization_dataarray(
-                category="state"
-            )
-
-            self.da_state_mean = self.ds_state_stats.state_mean
-            self.da_state_std = self.ds_state_stats.state_std
-
-            if self.da_forcing is not None:
-                self.ds_forcing_stats = (
-                    self.datastore.get_standardization_dataarray(
-                        category="forcing"
-                    )
-                )
-                self.da_forcing_mean = self.ds_forcing_stats.forcing_mean
-                self.da_forcing_std = self.ds_forcing_stats.forcing_std
-            else:
-                self.da_forcing_mean = None
-                self.da_forcing_std = None
-
-            if self.datastore_boundary is not None:
-                self.ds_boundary_stats = (
-                    self.datastore_boundary.get_standardization_dataarray(
-                        category="forcing"
-                    )
-                )
-                self.da_boundary_mean = self.ds_boundary_stats.forcing_mean
-                self.da_boundary_std = self.ds_boundary_stats.forcing_std
-            else:
-                self.da_boundary_mean = None
-                self.da_boundary_std = None
-
-            self.state_std_safe = self._compute_std_safe(
-                self.da_state_std, "state"
-            )
-
-            if self.da_forcing_std is not None:
-                self.forcing_std_safe = self._compute_std_safe(
-                    self.da_forcing_std, "forcing"
-                )
-            else:
-                self.forcing_std_safe = None
-
-            if self.da_boundary_std is not None:
-                self.boundary_std_safe = self._compute_std_safe(
-                    self.da_boundary_std, "boundary_forcing"
-                )
-            else:
-                self.boundary_std_safe = None
-
-    def _compute_std_safe(self, std: xr.DataArray, feature: str):
-        eps = np.finfo(std.dtype).eps
-        if bool((std <= eps).any()):
-            logger.warning(
-                f"Some {feature} features have near-zero std and will be "
-                "standardized using machine epsilon to avoid NaN."
-            )
-        return std.where(std > eps, other=eps)
 
     def __len__(self):
         if self.datastore.is_forecast:
@@ -503,28 +438,6 @@ class WeatherDataset(torch.utils.data.Dataset):
         da_target_states = da_state.isel(time=slice(2, None))
         da_target_times = da_target_states.time
 
-        if self.standardize:
-            da_init_states = (
-                da_init_states - self.da_state_mean
-            ) / self.state_std_safe
-            da_target_states = (
-                da_target_states - self.da_state_mean
-            ) / self.state_std_safe
-
-            if da_forcing is not None:
-                # XXX: Here we implicitly assume that the last dimension of the
-                # forcing data is the forcing feature dimension. To standardize
-                # on `.device` we need a different implementation. (e.g. a
-                # tensor with repeated means and stds for each "windowed" time.)
-                da_forcing_windowed = (
-                    da_forcing_windowed - self.da_forcing_mean
-                ) / self.forcing_std_safe
-
-            if da_boundary_windowed is not None:
-                da_boundary_windowed = (
-                    da_boundary_windowed - self.da_boundary_mean
-                ) / self.boundary_std_safe
-
         if da_forcing is not None:
             # stack the `forcing_feature` and `window_sample` dimensions into a
             # single `forcing_feature` dimension
@@ -590,13 +503,8 @@ class WeatherDataset(torch.utils.data.Dataset):
         Return a single training sample, which consists of the initial states,
         target states, forcing and batch times.
 
-        The implementation currently uses xarray.DataArray objects for the
-        standardization (scaling to mean 0.0 and standard deviation of 1.0) so
-        that we can make us of xarray's broadcasting capabilities. This makes
-        it possible to standardization with both global means, but also for
-        example where a grid-point mean has been computed. This code will have
-        to be replace if standardization is to be done on the GPU to handle
-        different shapes of the standardization.
+        The returned data is unstandardized; normalization is applied on-device
+        in `ForecasterModule.on_after_batch_transfer`.
 
         Parameters
         ----------
@@ -606,10 +514,14 @@ class WeatherDataset(torch.utils.data.Dataset):
 
         Returns
         -------
-        init_states : TrainingSample
-            A training sample object containing the initial states, target
-            states, forcing and batch times. The batch times are the times of
-            the target steps.
+        init_states : torch.Tensor
+            Initial states, shape (2, N_grid, d_features).
+        target_states : torch.Tensor
+            Target states, shape (ar_steps, N_grid, d_features).
+        forcing : torch.Tensor
+            Windowed forcing, shape (ar_steps, N_grid, d_windowed_forcing).
+        target_times : torch.Tensor
+            Times of the target steps, shape (ar_steps,).
 
         """
         (
@@ -756,7 +668,6 @@ class WeatherDataModule(pl.LightningDataModule):
         datastore: BaseDatastore,
         ar_steps_train: int = 3,
         ar_steps_eval: int = 25,
-        standardize: bool = True,
         num_past_forcing_steps: int = 1,
         num_future_forcing_steps: int = 1,
         num_past_boundary_steps: int = 1,
@@ -776,7 +687,6 @@ class WeatherDataModule(pl.LightningDataModule):
         self.num_future_boundary_steps = num_future_boundary_steps
         self.ar_steps_train = ar_steps_train
         self.ar_steps_eval = ar_steps_eval
-        self.standardize = standardize
         self.load_single_member = load_single_member
         self.batch_size = batch_size
         self.num_workers: int = num_workers
@@ -798,7 +708,6 @@ class WeatherDataModule(pl.LightningDataModule):
             num_future_boundary_steps=self.num_future_boundary_steps,
             datastore_boundary=self._datastore_boundary,
             load_single_member=self.load_single_member,
-            standardize=self.standardize,
         )
         if stage == "fit" or stage is None:
             self.train_dataset = WeatherDataset(

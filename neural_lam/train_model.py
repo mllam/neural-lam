@@ -14,6 +14,7 @@ from loguru import logger
 # Local
 from . import utils
 from .config import load_config_and_datastore
+from .gnn_layers import GNN_TYPES
 from .models import MODELS, ARForecaster, ForecasterModule
 from .weather_dataset import WeatherDataModule
 
@@ -155,6 +156,35 @@ def main(input_args=None):
         action="store_true",
         help="If models should additionally output std.-dev. per "
         "output dimensions",
+    )
+    parser.add_argument(
+        "--g2m_gnn_type",
+        type=str,
+        default="InteractionNet",
+        choices=list(GNN_TYPES.keys()),
+        help="GNN type for grid-to-mesh encoding",
+    )
+    parser.add_argument(
+        "--m2g_gnn_type",
+        type=str,
+        default="InteractionNet",
+        choices=list(GNN_TYPES.keys()),
+        help="GNN type for mesh-to-grid decoding",
+    )
+    parser.add_argument(
+        "--mesh_up_gnn_type",
+        type=str,
+        default="InteractionNet",
+        choices=list(GNN_TYPES.keys()),
+        help="GNN type for upward mesh message passing in hierarchical models",
+    )
+    parser.add_argument(
+        "--mesh_down_gnn_type",
+        type=str,
+        default="InteractionNet",
+        choices=list(GNN_TYPES.keys()),
+        help="GNN type for downward mesh message passing in "
+        "hierarchical models",
     )
 
     # Training options
@@ -337,7 +367,6 @@ def main(input_args=None):
         datastore=datastore,
         ar_steps_train=args.ar_steps_train,
         ar_steps_eval=args.ar_steps_eval,
-        standardize=True,
         num_past_forcing_steps=args.num_past_forcing_steps,
         num_future_forcing_steps=args.num_future_forcing_steps,
         num_past_boundary_steps=args.num_past_boundary_steps,
@@ -382,6 +411,10 @@ def main(input_args=None):
         output_std=args.output_std,
         output_clamping_lower=config.training.output_clamping.lower,
         output_clamping_upper=config.training.output_clamping.upper,
+        g2m_gnn_type=args.g2m_gnn_type,
+        m2g_gnn_type=args.m2g_gnn_type,
+        mesh_up_gnn_type=args.mesh_up_gnn_type,
+        mesh_down_gnn_type=args.mesh_down_gnn_type,
     )
     forecaster = ARForecaster(predictor, datastore)
 
