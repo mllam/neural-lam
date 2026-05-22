@@ -7,7 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [unreleased](https://github.com/mllam/neural-lam/compare/v0.6.0...HEAD)
 
+### Added
+
+- Add `PropagationNet` GNN layer that incentivises directional message
+  propagation from sender to receiver nodes, and expose it alongside
+  `InteractionNet` through four new CLI arguments (`--g2m_gnn_type`,
+  `--m2g_gnn_type`, `--mesh_up_gnn_type`, `--mesh_down_gnn_type`) so
+  each edge-type's GNN can be chosen independently. A `GNN_TYPES` registry
+  and `get_gnn_class()` helper make it straightforward to register further
+  GNN types in the future.
+  [\#507](https://github.com/mllam/neural-lam/pull/507)
+  @Sir-Sloth-The-Lazy
+
 ### Changed
+
+- Move data normalization from CPU (`WeatherDataset`) to GPU
+  (`ForecasterModule.on_after_batch_transfer`) for improved performance and
+  multi-GPU compatibility. `WeatherDataset` / `WeatherDataModule` no longer
+  take a `standardize` argument.
+  [\#239](https://github.com/mllam/neural-lam/pull/239) @Sharkyii
 
 - Split `ARModel` into `ForecasterModule`, `Forecaster` and
   `StepPredictor`, and reorganise `neural_lam.models` to mirror the new
@@ -20,6 +38,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   @Sir-Sloth-The-Lazy
 
 ### Fixed
+
+- Fix `IndexError` in HiLAM forward pass by offsetting grid nodes in `zero_index_g2m`/`zero_index_m2g` by the total mesh-node count across all levels ([#642](https://github.com/mllam/neural-lam/issues/642)) @Sir-Sloth-The-Lazy
 
 - Change metric heatmap (`plot_error_map`, now `plot_error_heatmap`) to use a
   shared cross-variable color scale instead of per-row normalization, add a

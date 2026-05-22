@@ -7,7 +7,7 @@ from torch import nn
 # Local
 from .... import utils
 from ....datastore import BaseDatastore
-from ....interaction_net import InteractionNet
+from ....gnn_layers import get_gnn_class
 from .base import BaseGraphModel
 
 
@@ -29,6 +29,10 @@ class BaseHiGraphModel(BaseGraphModel):
         output_std: bool = False,
         output_clamping_lower: Optional[Dict[str, float]] = None,
         output_clamping_upper: Optional[Dict[str, float]] = None,
+        g2m_gnn_type: str = "InteractionNet",
+        m2g_gnn_type: str = "InteractionNet",
+        mesh_up_gnn_type: str = "InteractionNet",
+        mesh_down_gnn_type: str = "InteractionNet",
     ):
         super().__init__(
             datastore=datastore,
@@ -42,7 +46,11 @@ class BaseHiGraphModel(BaseGraphModel):
             output_std=output_std,
             output_clamping_lower=output_clamping_lower,
             output_clamping_upper=output_clamping_upper,
+            g2m_gnn_type=g2m_gnn_type,
+            m2g_gnn_type=m2g_gnn_type,
         )
+        self.mesh_up_gnn_type = mesh_up_gnn_type
+        self.mesh_down_gnn_type = mesh_down_gnn_type
 
         # Track number of nodes, edges on each level
         # Flatten lists for efficient embedding
@@ -103,10 +111,11 @@ class BaseHiGraphModel(BaseGraphModel):
         )
 
         # Instantiate GNNs
-        # Init GNNs
+        # Init GNNs (message passing up the hierarchy)
+        mesh_up_class = get_gnn_class(mesh_up_gnn_type)
         self.mesh_init_gnns = nn.ModuleList(
             [
-                InteractionNet(
+                mesh_up_class(
                     edge_index,
                     hidden_dim,
                     hidden_layers=hidden_layers,
@@ -115,10 +124,11 @@ class BaseHiGraphModel(BaseGraphModel):
             ]
         )
 
-        # Read out GNNs
+        # Read out GNNs (message passing down the hierarchy)
+        mesh_down_class = get_gnn_class(mesh_down_gnn_type)
         self.mesh_read_gnns = nn.ModuleList(
             [
-                InteractionNet(
+                mesh_down_class(
                     edge_index,
                     hidden_dim,
                     hidden_layers=hidden_layers,
