@@ -89,8 +89,9 @@ python -m pip install neural_lam
 2. Install `uv` if you don't have it installed on your system (either with `pip install uv` or [following the install instructions](https://docs.astral.sh/uv/getting-started/installation)).
 3. Install with the CPU or GPU extra:
    ```bash
-   uv sync --extra cpu --group dev  # CPU-only
-   uv sync --extra gpu --group dev  # GPU (CUDA 12.8)
+   uv sync --extra cpu        --group dev  # CPU-only
+   uv sync --extra gpu        --group dev  # GPU, CUDA 13.0 (default)
+   uv sync --extra gpu-cu128  --group dev  # GPU, CUDA 12.8
    ```
    This creates a virtual environment, installs `torch` from the correct
    PyTorch index, and installs all other dependencies (including dev tools)
@@ -107,7 +108,7 @@ python -m pip install neural_lam
 
 1. Clone this repository and navigate to the root directory.
 > If you are happy using the latest version of `torch` with GPU support (expecting the latest version of CUDA is installed on your system) you can skip to step 3.
-2. Install a specific version of `torch` with `python -m pip install torch --index-url https://download.pytorch.org/whl/cpu` for a CPU-only version or `python -m pip install torch --index-url https://download.pytorch.org/whl/cu128` for CUDA 12.8 support (you can find the correct URL for the variant you want on [PyTorch webpage](https://pytorch.org/get-started/locally/)).
+2. Install a specific version of `torch` with `python -m pip install torch --index-url https://download.pytorch.org/whl/cpu` for a CPU-only version or `python -m pip install torch --index-url https://download.pytorch.org/whl/cu130` for CUDA 13.0 support (use `.../whl/cu128` for CUDA 12.8; you can find the correct URL for the variant you want on [PyTorch webpage](https://pytorch.org/get-started/locally/)).
 3. Install the dependencies with `python -m pip install .`. If you will be developing `neural-lam` we recommend to install in editable mode and install the development dependencies with `python -m pip install --group dev -e .` so you can make changes to the code and see the effects immediately.
 
 

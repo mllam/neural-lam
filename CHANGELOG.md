@@ -63,8 +63,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Add comprehensive type hints to `neural_lam/create_graph.py` [\#618](https://github.com/mllam/neural-lam/pull/618) @GiGiKoneti
 
-- Use `cpu`/`gpu` extras with `[tool.uv.sources]` and a committed `uv.lock` to simplify and pin torch installation in CI and for users [\#604](https://github.com/mllam/neural-lam/pull/604) @RajdeepKushwaha5
-- Update default CUDA version in install instructions and CI from 11.1 to 12.8. Users on older CUDA versions need to install the matching `torch` variant manually (see README) [\#604](https://github.com/mllam/neural-lam/pull/604) @RajdeepKushwaha5
+- Select the torch build via mutually-exclusive `cpu`, `gpu` (CUDA 13.0) and
+  `gpu-cu128` (CUDA 12.8) extras routed through `[tool.uv.sources]`, with torch
+  versions pinned per CUDA build and a committed `uv.lock`. CI now installs and
+  tests only with `uv` (CPU + CUDA 13.0); the `pip` install path is still
+  documented in the README. The default GPU build moves from CUDA 12.8 to 13.0;
+  users on other CUDA versions install the matching `torch` variant manually
+  (see README) [\#604](https://github.com/mllam/neural-lam/pull/604) @RajdeepKushwaha5
 
 ## [v0.6.0](https://github.com/mllam/neural-lam/releases/tag/v0.6.0)
 

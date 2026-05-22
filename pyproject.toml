@@ -41,9 +41,14 @@ dependencies = [
 ]
 requires-python = ">=3.10"
 
+# The torch variant is selected at install time via these mutually-exclusive
+# extras (see [tool.uv]). Versions are pinned per CUDA build because not every
+# torch release ships wheels for every CUDA version, e.g. cu128 wheels were
+# dropped in torch 2.12, so the cu128 extra stays on the 2.11 series.
 [project.optional-dependencies]
-cpu = ["torch>=2.3.0"]
-gpu = ["torch>=2.3.0"]
+cpu = ["torch>=2.12,<2.13"]
+gpu = ["torch>=2.12,<2.13"]        # CUDA 13.0, default GPU build
+gpu-cu128 = ["torch>=2.11,<2.12"]  # CUDA 12.8, last torch series with cu128 wheels
 
 [dependency-groups]
 dev = ["pre-commit>=3.8.0", "pytest>=8.3.2", "pooch>=1.8.2"]
@@ -53,7 +58,7 @@ dev = ["pre-commit>=3.8.0", "pytest>=8.3.2", "pooch>=1.8.2"]
 # NOTE: --torch-backend is only supported in `uv pip`, not `uv sync`.
 # Tracking issue for project-interface support: https://github.com/astral-sh/uv/issues/12994
 # Until then, we use extras + explicit index routing for `uv sync`.
-conflicts = [[{ extra = "cpu" }, { extra = "gpu" }]]
+conflicts = [[{ extra = "cpu" }, { extra = "gpu" }, { extra = "gpu-cu128" }]]
 
 [[tool.uv.index]]
 name = "pytorch-cpu"
@@ -61,14 +66,20 @@ url = "https://download.pytorch.org/whl/cpu"
 explicit = true
 
 [[tool.uv.index]]
-name = "pytorch-gpu"
+name = "pytorch-cu130"
+url = "https://download.pytorch.org/whl/cu130"
+explicit = true
+
+[[tool.uv.index]]
+name = "pytorch-cu128"
 url = "https://download.pytorch.org/whl/cu128"
 explicit = true
 
 [tool.uv.sources]
 torch = [
     { index = "pytorch-cpu", extra = "cpu" },
-    { index = "pytorch-gpu", extra = "gpu" },
+    { index = "pytorch-cu130", extra = "gpu" },
+    { index = "pytorch-cu128", extra = "gpu-cu128" },
 ]
 
 [tool.black]
