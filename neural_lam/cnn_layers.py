@@ -5,7 +5,6 @@ from torch import nn
 # Local
 from .datastore.base import CartesianGridShape
 
-
 GridShape = CartesianGridShape | tuple[int, int]
 
 

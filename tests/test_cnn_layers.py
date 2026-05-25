@@ -118,9 +118,7 @@ def test_reshrrr_block_preserves_shape_with_context():
     x = torch.randn(2, 8, 5, 4)
     context = torch.randn(2, 3)
 
-    y = ResHRRRBlock(channels=8, reduction=4, context_dim=3)(
-        x, context=context
-    )
+    y = ResHRRRBlock(channels=8, reduction=4, context_dim=3)(x, context=context)
 
     assert y.shape == x.shape
 
