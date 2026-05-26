@@ -6,7 +6,7 @@ from torch import nn
 
 # Local
 from ....datastore import BaseDatastore
-from ....interaction_net import InteractionNet
+from ....gnn_layers import InteractionNet, get_gnn_class
 from .hierarchical import BaseHiGraphModel
 
 
@@ -30,6 +30,10 @@ class HiLAM(BaseHiGraphModel):
         output_std: bool = False,
         output_clamping_lower: Optional[Dict[str, float]] = None,
         output_clamping_upper: Optional[Dict[str, float]] = None,
+        g2m_gnn_type: str = "InteractionNet",
+        m2g_gnn_type: str = "InteractionNet",
+        mesh_up_gnn_type: str = "InteractionNet",
+        mesh_down_gnn_type: str = "InteractionNet",
     ):
         super().__init__(
             datastore=datastore,
@@ -43,6 +47,10 @@ class HiLAM(BaseHiGraphModel):
             output_std=output_std,
             output_clamping_lower=output_clamping_lower,
             output_clamping_upper=output_clamping_upper,
+            g2m_gnn_type=g2m_gnn_type,
+            m2g_gnn_type=m2g_gnn_type,
+            mesh_up_gnn_type=mesh_up_gnn_type,
+            mesh_down_gnn_type=mesh_down_gnn_type,
         )
 
         # Make down GNNs, both for down edges and same level
@@ -80,9 +88,10 @@ class HiLAM(BaseHiGraphModel):
         """
         Make GNNs for processing steps up through the hierarchy.
         """
+        gnn_class = get_gnn_class(self.mesh_up_gnn_type)
         return nn.ModuleList(
             [
-                InteractionNet(
+                gnn_class(
                     edge_index,
                     self.hidden_dim,
                     hidden_layers=self.hidden_layers,
@@ -95,9 +104,10 @@ class HiLAM(BaseHiGraphModel):
         """
         Make GNNs for processing steps down through the hierarchy.
         """
+        gnn_class = get_gnn_class(self.mesh_down_gnn_type)
         return nn.ModuleList(
             [
-                InteractionNet(
+                gnn_class(
                     edge_index,
                     self.hidden_dim,
                     hidden_layers=self.hidden_layers,
