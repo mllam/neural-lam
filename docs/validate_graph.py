@@ -47,7 +47,6 @@ ALLOWED_EDGE_FEATURE_DIMS = (3, 4)
 MESH_FEATURE_DIM = 2
 GRAPH_SPEC_VERSION_FILENAME = "graph-spec-version"
 CURRENT_GRAPH_FORMAT_SPEC_VERSION = "0.1.0"
-LEGACY_GRAPH_SPEC_VERSION = "legacy"
 
 # -------------------------
 # Logging decorator and registry
@@ -1297,6 +1296,13 @@ def validate_graph_directory(
                     f"{GRAPH_SPEC_VERSION_FILENAME}: unsupported spec version "
                     f"{graph_format_spec_version!r}",
                 )
+                return (
+                    report,
+                    spec_text,
+                    GraphProperties(
+                        graph_format_spec_version=graph_format_spec_version
+                    ),
+                )
             else:
                 report.add(
                     "2.2.1 Graph format versioning",
@@ -1306,15 +1312,14 @@ def validate_graph_directory(
                     f"{graph_format_spec_version}",
                 )
         else:
-            graph_format_spec_version = LEGACY_GRAPH_SPEC_VERSION
             report.add(
                 "2.2.1 Graph format versioning",
                 "Graph spec version",
-                "WARNING",
-                "Graph spec version file is missing; assuming this graph "
-                "uses the legacy pre-spec format, so mesh node features "
-                "should already be normalized.",
+                "FAIL",
+                f"{GRAPH_SPEC_VERSION_FILENAME} is missing; legacy pre-spec "
+                "graphs cannot be validated against this specification.",
             )
+            return report, spec_text, GraphProperties()
 
     m2m_edge_index = (
         _load_pt(graph_dir / "m2m_edge_index.pt") if graph_dir else None
@@ -1937,9 +1942,12 @@ def validate_graph_directory(
     Legacy pre-spec graphs do not include `{GRAPH_SPEC_VERSION_FILENAME}`.
     Their `mesh_features.pt` files are assumed to already be normalized.
 
-    Legacy pre-spec graphs may store edge indices in an offset node-index
+    Legacy pre-spec graphs did not store edge indices in an offset node-index
     layout. When loading those graphs, `neural-lam` zero-offsets the edge
     indices so that each source and destination node set starts at `0`.
+
+    This validator does not validate legacy pre-spec graphs; regenerate or
+    migrate them to the current graph storage spec first.
 
     Current-format graphs include `{GRAPH_SPEC_VERSION_FILENAME}` with value
     `{CURRENT_GRAPH_FORMAT_SPEC_VERSION}`. Their `mesh_features.pt` files are
