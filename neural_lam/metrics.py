@@ -17,9 +17,8 @@ def get_metric(metric_name):
         Function implementing the requested metric.
     """
     metric_name_lower = metric_name.lower()
-    assert (
-        metric_name_lower in DEFINED_METRICS
-    ), f"Unknown metric: {metric_name}"
+    if metric_name_lower not in DEFINED_METRICS:
+        raise ValueError(f"Unknown metric: {metric_name}")
     return DEFINED_METRICS[metric_name_lower]
 
 
@@ -330,3 +329,18 @@ DEFINED_METRICS = {
     "nll": nll,
     "crps_gauss": crps_gauss,
 }
+
+OUTPUT_STD_COMPATIBLE_METRICS = ("crps_gauss", "nll")
+
+
+def metric_supports_output_std(metric_name):
+    """Return whether the metric can train a learned predictive std-dev."""
+    metric_name_lower = metric_name.lower()
+    if metric_name_lower not in DEFINED_METRICS:
+        raise ValueError(f"Unknown metric: {metric_name}")
+    return metric_name_lower in OUTPUT_STD_COMPATIBLE_METRICS
+
+
+def get_output_std_compatible_metrics():
+    """Return the loss names that can train a learned predictive std-dev."""
+    return sorted(OUTPUT_STD_COMPATIBLE_METRICS)

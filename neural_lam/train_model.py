@@ -12,7 +12,7 @@ from lightning_fabric.utilities import seed
 from loguru import logger
 
 # Local
-from . import utils
+from . import metrics, utils
 from .config import load_config_and_datastore
 from .gnn_layers import GNN_TYPES
 from .models import MODELS, ARForecaster, ForecasterModule
@@ -198,7 +198,11 @@ def main(input_args=None):
         "--loss",
         type=str,
         default="wmse",
-        help="Loss function to use, see metric.py",
+        choices=list(metrics.DEFINED_METRICS.keys()),
+        help=(
+            "Loss function to use, see metric.py. When --output_std is set, "
+            "only losses that support learned predictive std-dev are valid."
+        ),
     )
     parser.add_argument("--lr", type=float, default=1e-3, help="learning rate")
     parser.add_argument(
@@ -312,6 +316,16 @@ def main(input_args=None):
     args.var_leads_metrics_watch = {
         int(k): v for k, v in json.loads(args.var_leads_metrics_watch).items()
     }
+
+    if args.output_std and not metrics.metric_supports_output_std(args.loss):
+        supported_losses = ", ".join(
+            metrics.get_output_std_compatible_metrics()
+        )
+        parser.error(
+            "Training with --output_std requires a loss that incorporates "
+            f"predicted std-dev. The current choice of --loss '{args.loss}' "
+            f"does not. Supported losses: {supported_losses}."
+        )
 
     # Check that config only specifies logging for lead times that exist
     # Check --val_steps_to_log

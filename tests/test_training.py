@@ -30,6 +30,7 @@ NUM_FUTURE_FORCING_STEPS = 1
 def run_simple_training(
     datastore,
     set_output_std,
+    loss,
     metrics_watch=None,
     var_leads_metrics_watch=None,
 ):
@@ -42,6 +43,10 @@ def run_simple_training(
         Datastore to load data from for training
     set_output_std : bool
         If --output_std should be set during training
+    loss : str
+        Loss function to use during training
+    metrics_watch : list[str] | None
+        Optional metrics_watch configuration for evaluation
     """
     if metrics_watch is None:
         metrics_watch = []
@@ -129,7 +134,7 @@ def run_simple_training(
         forecaster=forecaster,
         config=config,
         datastore=datastore,
-        loss="mse",
+        loss=loss,
         lr=1.0e-3,
         restore_opt=False,
         n_example_pred=1,
@@ -151,12 +156,16 @@ def test_training(datastore_name):
             f"it is not a regular grid datastore."
         )
 
-    run_simple_training(datastore, set_output_std=False)
+    run_simple_training(datastore, set_output_std=False, loss="mse")
 
 
 def test_training_output_std():
     datastore = init_datastore_example("mdp")  # Test only with mdp datastore
-    run_simple_training(datastore, set_output_std=True)
+    run_simple_training(
+        datastore,
+        set_output_std=True,
+        loss="nll",
+    )
 
 
 def test_all_gather_cat_single_device():
