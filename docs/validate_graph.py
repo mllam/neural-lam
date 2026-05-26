@@ -19,6 +19,7 @@ from __future__ import annotations
 import json
 import sys
 import textwrap
+import warnings
 from argparse import ArgumentDefaultsHelpFormatter, ArgumentParser
 from contextlib import ExitStack, contextmanager
 from dataclasses import asdict, dataclass, field
@@ -425,33 +426,64 @@ def infer_num_mesh_nodes_per_level(
 
 
 def infer_num_grid_nodes(
-    m2g_edge_index: torch.Tensor | None, num_mesh_nodes_total: int
-) -> int:  # noqa: E501
+    g2m_edge_index: torch.Tensor | None,
+    m2g_edge_index: torch.Tensor | None,
+) -> int:
     """
-    Infer the total number of grid nodes based on the receiver indices in `m2g_edge_index`.  # noqa: E501
+    Infer the total number of grid nodes from g2m senders and m2g receivers.
+
+    Both g2m and m2g are needed because the set of grid nodes encoded from and
+    decoded to may differ. For example, in a LAM setting, decoding may only be
+    required for non-boundary grid nodes.
 
     Parameters
     ----------
+    g2m_edge_index : torch.Tensor | None
+        The loaded g2m edge indices.
     m2g_edge_index : torch.Tensor | None
         The loaded m2g edge indices.
-    num_mesh_nodes_total : int
-        The previously inferred total number of mesh nodes.
 
     Returns
     -------
     int
         The inferred `num_grid_nodes`.
     """
-    num_grid_nodes = 0
-    if isinstance(m2g_edge_index, torch.Tensor) and num_mesh_nodes_total > 0:
-        if (
-            m2g_edge_index.ndim == 2
-            and m2g_edge_index.shape[0] == 2
-            and m2g_edge_index.shape[1] > 0
-        ):
-            num_grid_nodes = (
-                int(m2g_edge_index[1].max().item()) - num_mesh_nodes_total + 1
-            )
+    candidates = {}
+    if (
+        isinstance(g2m_edge_index, torch.Tensor)
+        and g2m_edge_index.ndim == 2
+        and g2m_edge_index.shape[0] == 2
+        and g2m_edge_index.shape[1] > 0
+    ):
+        candidates["g2m_edge_index[0]"] = (
+            int(g2m_edge_index[0].max().item()) + 1
+        )
+
+    if (
+        isinstance(m2g_edge_index, torch.Tensor)
+        and m2g_edge_index.ndim == 2
+        and m2g_edge_index.shape[0] == 2
+        and m2g_edge_index.shape[1] > 0
+    ):
+        candidates["m2g_edge_index[1]"] = (
+            int(m2g_edge_index[1].max().item()) + 1
+        )
+
+    if not candidates:
+        return 0
+
+    num_grid_nodes = max(candidates.values())
+    if len(set(candidates.values())) > 1:
+        warnings.warn(
+            "Inferred different grid-node counts from g2m_edge_index row 0 "
+            f"({candidates['g2m_edge_index[0]']}) and m2g_edge_index row 1 "
+            f"({candidates['m2g_edge_index[1]']}); using "
+            f"{num_grid_nodes}. This can happen if the grid nodes encoded "
+            "from are not the same as the grid nodes decoded to.",
+            RuntimeWarning,
+            stacklevel=2,
+        )
+
     return num_grid_nodes
 
 
@@ -1441,9 +1473,7 @@ def validate_graph_directory(
         num_levels, is_hierarchical = infer_num_levels(m2m_edge_index)
         num_mesh_nodes_per_level = infer_num_mesh_nodes_per_level(mesh_features)
         num_mesh_nodes_total = sum(num_mesh_nodes_per_level)
-        num_grid_nodes = infer_num_grid_nodes(
-            m2g_edge_index, num_mesh_nodes_total
-        )
+        num_grid_nodes = infer_num_grid_nodes(g2m_edge_index, m2g_edge_index)
 
     spec_text += textwrap.dedent(
         """\
