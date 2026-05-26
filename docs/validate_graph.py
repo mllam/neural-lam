@@ -164,6 +164,8 @@ class ValidationReport:
         None
         """
         self.results.append(Result(section, requirement, status, detail))
+        if status == "FAIL":
+            self.ok = False
 
     def summarize(self) -> str:
         """
@@ -474,11 +476,13 @@ def infer_num_grid_nodes(
     num_grid_nodes = max(candidates.values())
     if len(set(candidates.values())) > 1:
         warnings.warn(
-            "Inferred different grid-node counts from g2m_edge_index row 0 "
-            f"({candidates['g2m_edge_index[0]']}) and m2g_edge_index row 1 "
+            "Inferred different grid-node counts from "
+            f"g2m_edge_index row 0 ({candidates['g2m_edge_index[0]']}) "
+            "and m2g_edge_index row 1 "
             f"({candidates['m2g_edge_index[1]']}); using "
-            f"{num_grid_nodes}. This can happen if the grid nodes encoded "
-            "from are not the same as the grid nodes decoded to.",
+            f"{num_grid_nodes}. This can be valid when the graph encodes "
+            "from and decodes to different grid-node subsets, for example "
+            "in LAM settings where decoding excludes boundary nodes.",
             RuntimeWarning,
             stacklevel=2,
         )

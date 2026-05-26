@@ -145,6 +145,7 @@ def test_validate_graph_script_rejects_hierarchical_offset_indices():
         report, _, _ = validator.validate_graph_directory(graph_dir_path)
 
     assert report.has_fails()
+    assert not report.ok
     assert any(
         "m2m_edge_index[1]: sender indices out" in d for d in _details(report)
     )
@@ -182,6 +183,7 @@ def test_validate_graph_script_requires_graph_spec_version():
         report, _, _ = validator.validate_graph_directory(graph_dir_path)
 
     assert report.has_fails()
+    assert not report.ok
     assert any("graph-spec-version is missing" in d for d in _details(report))
 
 
@@ -195,5 +197,6 @@ def test_validate_graph_script_rejects_unsupported_graph_spec_version():
         report, _, props = validator.validate_graph_directory(graph_dir_path)
 
     assert report.has_fails()
+    assert not report.ok
     assert props.graph_format_spec_version == "9.9.9"
     assert any("unsupported spec version" in d for d in _details(report))
