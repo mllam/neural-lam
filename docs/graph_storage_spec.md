@@ -252,9 +252,11 @@ performed inside `neural-lam` after graph loading.
 Legacy pre-spec graphs do not include `graph-spec-version`.
 Their `mesh_features.pt` files are assumed to already be normalized.
 
-Legacy pre-spec graphs did not store edge indices in an offset node-index
-layout. When loading those graphs, `neural-lam` zero-offsets the edge
-indices so that each source and destination node set starts at `0`.
+Legacy pre-spec graphs store edge indices in one combined offset
+node-index layout across all node sets rather than the zero-based
+per-node-set index space required by this specification. When loading
+those graphs, `neural-lam` zero-offsets the edge indices so that each
+source and destination node set starts at `0`.
 
 This validator does not validate legacy pre-spec graphs; regenerate or
 migrate them to the current graph storage spec first.
