@@ -722,6 +722,13 @@ def check_edge_indices(
                 "FAIL",
                 f"{name}: sender indices out of expected range [{send_min}, {send_max})",  # noqa: E501
             )
+        else:
+            report.add(
+                section_name,
+                "Sender index range",
+                "PASS",
+                f"{name}: sender indices are within [{send_min}, {send_max})",
+            )
 
     if expected_receiver_range is not None:
         rec_min, rec_max = expected_receiver_range
@@ -735,6 +742,13 @@ def check_edge_indices(
                 "Receiver index range",
                 "FAIL",
                 f"{name}: receiver indices out of expected range [{rec_min}, {rec_max})",  # noqa: E501
+            )
+        else:
+            report.add(
+                section_name,
+                "Receiver index range",
+                "PASS",
+                f"{name}: receiver indices are within [{rec_min}, {rec_max})",
             )
 
     return report
@@ -1154,150 +1168,6 @@ def check_edge_feature_dim_consistency(
     return report
 
 
-@log_function_call
-def check_grid_node_relationships(
-    *,
-    g2m_edge_index: torch.Tensor | None,
-    m2g_edge_index: torch.Tensor | None,
-    mesh_nodes_per_level: list[int],
-    num_mesh_nodes_total: int,
-    num_grid_nodes: int,
-    section_name: str,
-) -> ValidationReport:
-    """
-    Verify g2m / m2g edge indices reference the correct grid- and
-    bottom-mesh-level node ranges.
-
-    Checks
-    ------
-    1. `m2g_edge_index[1].min() == num_mesh_nodes_total` (FAIL).
-       m2g receivers start at the first grid-node index.
-    2. `g2m_edge_index[1].max() < mesh_nodes_per_level[0]` (FAIL).
-       g2m receivers lie on the bottom mesh level only.
-    3. `m2g_edge_index[0].max() < mesh_nodes_per_level[0]` (FAIL).
-       m2g senders lie on the bottom mesh level only.
-    4. `g2m_edge_index[0]` values lie in ranges (FAIL).
-       `[num_mesh_nodes_total, num_mesh_nodes_total + num_grid_nodes)`
-
-    If any precondition fails (non-tensor input, zero mesh nodes, malformed
-    shapes), returns an empty report (those preconditions are reported by
-    upstream checks).
-
-    Parameters
-    ----------
-    g2m_edge_index : torch.Tensor | None
-        g2m edge indices tensor.
-    m2g_edge_index : torch.Tensor | None
-        m2g edge indices tensor.
-    mesh_nodes_per_level : list[int]
-        Number of nodes at each mesh level.
-    num_mesh_nodes_total : int
-        Total number of mesh nodes.
-    num_grid_nodes : int
-        Total number of grid nodes inferred.
-    section_name : str
-        The spec section name for reporting.
-
-    Returns
-    -------
-    ValidationReport
-        Contains PASS or FAIL rows for each of the four checks.
-    """
-    report = ValidationReport()
-
-    if not (
-        isinstance(g2m_edge_index, torch.Tensor)
-        and isinstance(m2g_edge_index, torch.Tensor)
-    ):
-        return report  # Silently skip if files missing or spec-generation mode
-
-    if num_mesh_nodes_total == 0 or len(mesh_nodes_per_level) == 0:
-        return report
-
-    if (
-        g2m_edge_index.ndim != 2
-        or g2m_edge_index.shape[0] != 2
-        or g2m_edge_index.shape[1] == 0
-    ):
-        return report
-
-    if (
-        m2g_edge_index.ndim != 2
-        or m2g_edge_index.shape[0] != 2
-        or m2g_edge_index.shape[1] == 0
-    ):
-        return report
-
-    m2g_receiver_min = int(m2g_edge_index[1].min().item())
-    if m2g_receiver_min != num_mesh_nodes_total:
-        report.add(
-            section_name,
-            "Grid node relationships",
-            "FAIL",
-            f"m2g_edge_index: expected receiver indices to start at {num_mesh_nodes_total}, got {m2g_receiver_min}",  # noqa: E501
-        )
-    else:
-        report.add(
-            section_name,
-            "Grid node relationships",
-            "PASS",
-            f"m2g_edge_index: receiver indices start at {num_mesh_nodes_total}",
-        )
-
-    g2m_receiver_max = int(g2m_edge_index[1].max().item())
-    if g2m_receiver_max >= mesh_nodes_per_level[0]:
-        report.add(
-            section_name,
-            "Grid node relationships",
-            "FAIL",
-            "g2m_edge_index: expected receivers on bottom mesh level",
-        )
-    else:
-        report.add(
-            section_name,
-            "Grid node relationships",
-            "PASS",
-            "g2m_edge_index: receivers are on bottom mesh level",
-        )
-
-    m2g_sender_max = int(m2g_edge_index[0].max().item())
-    if m2g_sender_max >= mesh_nodes_per_level[0]:
-        report.add(
-            section_name,
-            "Grid node relationships",
-            "FAIL",
-            "m2g_edge_index: expected senders on bottom mesh level",
-        )
-    else:
-        report.add(
-            section_name,
-            "Grid node relationships",
-            "PASS",
-            "m2g_edge_index: senders are on bottom mesh level",
-        )
-
-    g2m_sender_min = int(g2m_edge_index[0].min().item())
-    g2m_sender_max = int(g2m_edge_index[0].max().item())
-    g2m_lower = num_mesh_nodes_total
-    g2m_upper = num_mesh_nodes_total + num_grid_nodes
-    if g2m_sender_min < g2m_lower or g2m_sender_max >= g2m_upper:
-        report.add(
-            section_name,
-            "Grid node relationships",
-            "FAIL",
-            f"g2m_edge_index: sender indices outside inferred grid range [{g2m_lower}, {g2m_upper})",  # noqa: E501
-        )
-    else:
-        report.add(
-            section_name,
-            "Grid node relationships",
-            "PASS",
-            "g2m_edge_index: sender indices within inferred grid range",
-        )
-
-    return report
-
-
 # -------------------------
 # Spec Orchestrator
 # -------------------------
@@ -1630,8 +1500,7 @@ def validate_graph_directory(
     > edge index tensors.
     """
     )
-    # Index-space contiguity is implicitly enforced later by check_edge_indices range assertions  # noqa: E501
-    # and check_grid_node_relationships.
+    # Index-space contiguity is implicitly enforced later by check_edge_indices range assertions.  # noqa: E501
 
     spec_text += textwrap.dedent(
         """\
@@ -1772,19 +1641,11 @@ def validate_graph_directory(
     )
     # enforced via check_edge_indices (torch.int64 dtype)
 
-    level_offsets: list[int] = []
-    cumulative = 0
-    for n_level_nodes in num_mesh_nodes_per_level:
-        level_offsets.append(cumulative)
-        cumulative += n_level_nodes
-
     if isinstance(m2m_edge_index, list):
         for level_index, level_edge_index in enumerate(m2m_edge_index):
             expected_range = None
-            if level_index < len(level_offsets):
-                start = level_offsets[level_index]
-                stop = start + num_mesh_nodes_per_level[level_index]
-                expected_range = (start, stop)
+            if level_index < len(num_mesh_nodes_per_level):
+                expected_range = (0, num_mesh_nodes_per_level[level_index])
             report += check_edge_indices(
                 name=f"m2m_edge_index[{level_index}]",
                 edge_index=level_edge_index,
@@ -1814,48 +1675,44 @@ def validate_graph_directory(
             for level_index in range(expected_len):
                 if level_index + 1 >= len(num_mesh_nodes_per_level):
                     continue
-                lower_start = level_offsets[level_index]
-                lower_stop = (
-                    lower_start + num_mesh_nodes_per_level[level_index]
-                )  # noqa: E501
-                upper_start = level_offsets[level_index + 1]
-                upper_stop = (
-                    upper_start + num_mesh_nodes_per_level[level_index + 1]
-                )
+                lower_range = (0, num_mesh_nodes_per_level[level_index])
+                upper_range = (0, num_mesh_nodes_per_level[level_index + 1])
 
                 report += check_edge_indices(
                     name=f"mesh_up_edge_index[{level_index}]",
                     edge_index=mesh_up_edge_index[level_index],
                     section_name="3.2.1 Edge indices",
-                    expected_sender_range=(lower_start, lower_stop),
-                    expected_receiver_range=(upper_start, upper_stop),
+                    expected_sender_range=lower_range,
+                    expected_receiver_range=upper_range,
                 )
                 report += check_edge_indices(
                     name=f"mesh_down_edge_index[{level_index}]",
                     edge_index=mesh_down_edge_index[level_index],
                     section_name="3.2.1 Edge indices",
-                    expected_sender_range=(upper_start, upper_stop),
-                    expected_receiver_range=(lower_start, lower_stop),
+                    expected_sender_range=upper_range,
+                    expected_receiver_range=lower_range,
                 )
+
+    bottom_mesh_range = None
+    grid_range = None
+    if num_mesh_nodes_per_level:
+        bottom_mesh_range = (0, num_mesh_nodes_per_level[0])
+    if num_grid_nodes > 0:
+        grid_range = (0, num_grid_nodes)
 
     report += check_edge_indices(
         name="g2m_edge_index",
         edge_index=g2m_edge_index,
         section_name="3.2.1 Edge indices",
+        expected_sender_range=grid_range,
+        expected_receiver_range=bottom_mesh_range,
     )
     report += check_edge_indices(
         name="m2g_edge_index",
         edge_index=m2g_edge_index,
         section_name="3.2.1 Edge indices",
-    )
-
-    report += check_grid_node_relationships(
-        g2m_edge_index=g2m_edge_index,
-        m2g_edge_index=m2g_edge_index,
-        mesh_nodes_per_level=num_mesh_nodes_per_level,
-        num_mesh_nodes_total=num_mesh_nodes_total,
-        num_grid_nodes=num_grid_nodes,
-        section_name="3.2.1 Edge indices",
+        expected_sender_range=bottom_mesh_range,
+        expected_receiver_range=grid_range,
     )
 
     spec_text += textwrap.dedent(
