@@ -754,6 +754,67 @@ def check_edge_indices(
 
 
 @log_function_call
+def check_grid_index_origin(
+    *,
+    name: str,
+    edge_index: torch.Tensor | None,
+    grid_row: int,
+    subset_description: str,
+    section_name: str,
+) -> ValidationReport:
+    """
+    Warn when a grid-index row does not reference grid index 0.
+
+    This is a diagnostic check, not a spec failure. Individual edge components
+    may validly reference only a subset of grid nodes, but a positive minimum
+    grid index can also indicate a legacy combined-offset node-index layout.
+
+    Parameters
+    ----------
+    name : str
+        Logical name used in warning messages.
+    edge_index : torch.Tensor | None
+        Edge index tensor expected as shape `[2, E]`.
+    grid_row : int
+        Row containing grid-node indices.
+    subset_description : str
+        Description of the valid subset case, e.g. "encoded from".
+    section_name : str
+        The spec section name for reporting.
+
+    Returns
+    -------
+    ValidationReport
+        Contains a WARNING if the grid row minimum is greater than zero.
+        Empty report if `edge_index` is missing or malformed.
+    """
+    report = ValidationReport()
+    if not isinstance(edge_index, torch.Tensor):
+        return report
+    if edge_index.ndim != 2 or edge_index.shape[0] != 2:
+        return report
+    if edge_index.shape[1] == 0:
+        return report
+
+    min_index = int(edge_index[grid_row].min().item())
+    if min_index > 0:
+        report.add(
+            section_name,
+            "Grid index origin",
+            "WARNING",
+            f"{name} row {grid_row} has minimum grid index {min_index} "
+            "rather than 0. Current-format graphs use one consistent "
+            "zero-based grid-node index space, but individual edge "
+            "components may reference only a subset of grid nodes. This can "
+            f"be valid when not all grid nodes are {subset_description}. It "
+            "can also indicate a legacy combined-offset index layout if the "
+            "graph was not written in the current format.",
+        )
+
+    return report
+
+
+@log_function_call
 def check_edge_features(
     *,
     name: str,
@@ -1712,12 +1773,26 @@ def validate_graph_directory(
         expected_sender_range=grid_range,
         expected_receiver_range=bottom_mesh_range,
     )
+    report += check_grid_index_origin(
+        name="g2m_edge_index",
+        edge_index=g2m_edge_index,
+        grid_row=0,
+        subset_description="encoded from",
+        section_name="3.2.1 Edge indices",
+    )
     report += check_edge_indices(
         name="m2g_edge_index",
         edge_index=m2g_edge_index,
         section_name="3.2.1 Edge indices",
         expected_sender_range=bottom_mesh_range,
         expected_receiver_range=grid_range,
+    )
+    report += check_grid_index_origin(
+        name="m2g_edge_index",
+        edge_index=m2g_edge_index,
+        grid_row=1,
+        subset_description="decoded to",
+        section_name="3.2.1 Edge indices",
     )
 
     spec_text += textwrap.dedent(

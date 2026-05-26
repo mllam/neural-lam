@@ -90,6 +90,10 @@ def _details(report) -> list[str]:
     return [result.detail for result in report.results]
 
 
+def _warnings(report):
+    return [result for result in report.results if result.status == "WARNING"]
+
+
 def test_validate_graph_script_for_flat_and_hierarchical_graphs():
     validator = _load_validator_module()
 
@@ -143,6 +147,28 @@ def test_validate_graph_script_rejects_hierarchical_offset_indices():
     assert report.has_fails()
     assert any(
         "m2m_edge_index[1]: sender indices out" in d for d in _details(report)
+    )
+
+
+def test_validate_graph_script_warns_when_grid_subset_does_not_start_at_zero():
+    validator = _load_validator_module()
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        graph_dir_path = Path(tmpdir) / "graph" / "grid-subset"
+        _write_graph(graph_dir_path)
+        torch.save(
+            torch.tensor([[0, 1, 2, 0], [1, 2, 3, 1]]),
+            graph_dir_path / "m2g_edge_index.pt",
+        )
+
+        report, _, _ = validator.validate_graph_directory(graph_dir_path)
+
+    assert not report.has_fails()
+    assert any(
+        "m2g_edge_index row 1 has minimum grid index 1 rather than 0"
+        in warning.detail
+        and "not all grid nodes are decoded to" in warning.detail
+        for warning in _warnings(report)
     )
 
 
