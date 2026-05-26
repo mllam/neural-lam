@@ -38,7 +38,7 @@ def get_manual_state_feature_weights(
         missing_features = set(state_feature_names) - set(feature_weight_names)
         raise ValueError(
             f"State feature weights must be provided for each state feature"
-            f"in the datastore ({state_feature_names}). {missing_features}"
+            f" in the datastore ({state_feature_names}). {missing_features}"
             " are missing and weights are defined for the features "
             f"{additional_features} which are not in the datastore."
         )
