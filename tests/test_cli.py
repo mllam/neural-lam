@@ -119,6 +119,16 @@ def test_wandb_id_ignored_with_mlflow_warns():
     assert "mlflow" in warning_msg
 
 
+def test_unknown_loss_rejected_before_loading_config():
+    with patch("neural_lam.train_model.load_config_and_datastore") as mock_load:
+        with pytest.raises(SystemExit, match="2"):
+            neural_lam.train_model.main.__wrapped__(
+                ["--config_path", "dummy.yaml", "--loss", "not_a_loss"]
+            )
+
+    mock_load.assert_not_called()
+
+
 @pytest.mark.parametrize("loss", ["mse", "mae", "wmse", "wmae"])
 def test_output_std_rejected_for_incompatible_losses(loss):
     with patch("neural_lam.train_model.load_config_and_datastore") as mock_load:

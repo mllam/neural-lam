@@ -47,12 +47,6 @@ class PaddedWeatherDataset(torch.utils.data.Dataset):
     def get_original_indices(self):
         return self.original_indices
 
-    def get_original_window_indices(self, step_length):
-        step_int, _ = get_integer_time(step_length.total_seconds())
-        return [
-            i // step_int for i in range(len(self.original_indices) * step_int)
-        ]
-
 
 def get_rank():
     return int(os.environ.get("SLURM_PROCID", 0))
@@ -178,11 +172,11 @@ def main(
     # Setting this to the original value of the Oskarsson et al. paper (2023)
     # 65 forecast steps - 2 initial steps = 63
     ar_steps = 63
+    # Raw (non-standardized) data for computing mean/std
     ds = WeatherDataset(
         datastore=datastore,
         split="train",
         ar_steps=ar_steps,
-        standardize=False,
         num_past_forcing_steps=0,
         num_future_forcing_steps=0,
     )
@@ -246,20 +240,28 @@ def main(
                 torch.cat(means_gathered, dim=0),
                 torch.cat(squares_gathered, dim=0),
             )
-            flux_means_gathered, flux_squares_gathered = (
-                torch.tensor(flux_means_gathered),
-                torch.tensor(flux_squares_gathered),
-            )
 
             original_indices = ds.get_original_indices()
             means, squares = (
                 [means_gathered[i] for i in original_indices],
                 [squares_gathered[i] for i in original_indices],
             )
-            flux_means, flux_squares = (
-                [flux_means_gathered[i] for i in original_indices],
-                [flux_squares_gathered[i] for i in original_indices],
-            )
+            flux_means = [
+                torch.cat(
+                    [
+                        torch.stack(rank_flux)
+                        for rank_flux in flux_means_gathered
+                    ]
+                )
+            ]
+            flux_squares = [
+                torch.cat(
+                    [
+                        torch.stack(rank_flux)
+                        for rank_flux in flux_squares_gathered
+                    ]
+                )
+            ]
     else:
         means = [torch.cat(means, dim=0)]  # (N_batch, d_features,)
         squares = [torch.cat(squares, dim=0)]  # (N_batch, d_features,)
@@ -285,10 +287,9 @@ def main(
         datastore=datastore,
         split="train",
         ar_steps=ar_steps,
-        standardize=True,
         num_past_forcing_steps=0,
         num_future_forcing_steps=0,
-    )  # Re-load with standardization
+    )
     if distributed:
         ds_standard = PaddedWeatherDataset(
             ds_standard,
@@ -307,6 +308,19 @@ def main(
         num_workers=n_workers,
         sampler=sampler_standard,
     )
+
+    # WeatherDataset no longer standardizes, so load the state mean/std saved
+    # in the first pass above and apply them inline to compute diff stats.
+    state_mean = torch.load(
+        os.path.join(static_dir_path, "parameter_mean.pt"), weights_only=True
+    )
+    state_std = torch.load(
+        os.path.join(static_dir_path, "parameter_std.pt"), weights_only=True
+    )
+    if distributed:
+        state_mean = state_mean.to(device)
+        state_std = state_std.to(device)
+
     time_step_int, time_step_unit = get_integer_time(step_length)
     assert (
         time_step_unit == "hours"
@@ -322,6 +336,8 @@ def main(
             init_batch, target_batch = init_batch.to(device), target_batch.to(
                 device
             )
+        init_batch = (init_batch - state_mean) / state_std
+        target_batch = (target_batch - state_mean) / state_std
         # (N_batch, N_t', N_grid, d_features)
         batch = torch.cat((init_batch, target_batch), dim=1)
         # Note: batch contains only 1h-steps
@@ -355,21 +371,13 @@ def main(
         )
 
         if rank == 0:
-            diff_means_gathered, diff_squares_gathered = (
-                torch.cat(diff_means_gathered, dim=0).view(
-                    -1, *diff_means[0].shape
-                ),
-                torch.cat(diff_squares_gathered, dim=0).view(
-                    -1, *diff_squares[0].shape
-                ),
+            diff_means_gathered = torch.cat(diff_means_gathered, dim=0)
+            diff_squares_gathered = torch.cat(diff_squares_gathered, dim=0)
+            n_original_windows = (
+                len(ds_standard.get_original_indices()) * time_step_int
             )
-            original_indices = ds_standard.get_original_window_indices(
-                step_length
-            )
-            diff_means, diff_squares = (
-                [diff_means_gathered[i] for i in original_indices],
-                [diff_squares_gathered[i] for i in original_indices],
-            )
+            diff_means = [diff_means_gathered[:n_original_windows]]
+            diff_squares = [diff_squares_gathered[:n_original_windows]]
 
     diff_means = [torch.cat(diff_means, dim=0)]  # (N_batch', d_features,)
     diff_squares = [torch.cat(diff_squares, dim=0)]  # (N_batch', d_features,)

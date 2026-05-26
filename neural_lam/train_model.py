@@ -14,32 +14,42 @@ from loguru import logger
 # Local
 from . import metrics, utils
 from .config import load_config_and_datastore
-from .models import GraphLAM, HiLAM, HiLAMParallel
+from .gnn_layers import GNN_TYPES
+from .models import MODELS, ARForecaster, ForecasterModule
 from .weather_dataset import WeatherDataModule
 
-MODELS = {
-    "graph_lam": GraphLAM,
-    "hi_lam": HiLAM,
-    "hi_lam_parallel": HiLAMParallel,
-}
 
+def load_forecaster_module_from_checkpoint(ckpt_path, config, datastore):
+    """
+    Reconstruct a ForecasterModule from a checkpoint without requiring the
+    caller to know the original architecture kwargs.
 
-def get_loss_output_std_compatibility_error(loss, output_std):
-    """Return an actionable config error for invalid output-std/loss combos."""
-    if not output_std:
-        return None
-
-    if not metrics.is_defined_metric(loss):
-        return None
-
-    if metrics.metric_supports_output_std(loss):
-        return None
-
-    supported_losses = ", ".join(metrics.get_output_std_compatible_metrics())
-    return (
-        "Training with --output_std requires a loss that incorporates "
-        f"predicted std-dev. The current choice of --loss '{loss}' does not. "
-        f"Supported losses: {supported_losses}."
+    The checkpoint must have been saved with args in hyper_parameters (i.e.
+    created via train_model.main), so that model class and architecture kwargs
+    can be recovered automatically.
+    """
+    ckpt = torch.load(ckpt_path, weights_only=False)
+    args = ckpt["hyper_parameters"]["args"]
+    predictor_class = MODELS[args.model]
+    predictor = predictor_class(
+        datastore=datastore,
+        graph_name=args.graph,
+        hidden_dim=args.hidden_dim,
+        hidden_layers=args.hidden_layers,
+        processor_layers=args.processor_layers,
+        mesh_aggr=args.mesh_aggr,
+        num_past_forcing_steps=args.num_past_forcing_steps,
+        num_future_forcing_steps=args.num_future_forcing_steps,
+        output_std=args.output_std,
+        output_clamping_lower=config.training.output_clamping.lower,
+        output_clamping_upper=config.training.output_clamping.upper,
+    )
+    forecaster = ARForecaster(predictor, datastore)
+    return ForecasterModule.load_from_checkpoint(
+        ckpt_path,
+        forecaster=forecaster,
+        datastore=datastore,
+        weights_only=False,
     )
 
 
@@ -147,6 +157,35 @@ def main(input_args=None):
         help="If models should additionally output std.-dev. per "
         "output dimensions",
     )
+    parser.add_argument(
+        "--g2m_gnn_type",
+        type=str,
+        default="InteractionNet",
+        choices=list(GNN_TYPES.keys()),
+        help="GNN type for grid-to-mesh encoding",
+    )
+    parser.add_argument(
+        "--m2g_gnn_type",
+        type=str,
+        default="InteractionNet",
+        choices=list(GNN_TYPES.keys()),
+        help="GNN type for mesh-to-grid decoding",
+    )
+    parser.add_argument(
+        "--mesh_up_gnn_type",
+        type=str,
+        default="InteractionNet",
+        choices=list(GNN_TYPES.keys()),
+        help="GNN type for upward mesh message passing in hierarchical models",
+    )
+    parser.add_argument(
+        "--mesh_down_gnn_type",
+        type=str,
+        default="InteractionNet",
+        choices=list(GNN_TYPES.keys()),
+        help="GNN type for downward mesh message passing in "
+        "hierarchical models",
+    )
 
     # Training options
     parser.add_argument(
@@ -159,6 +198,7 @@ def main(input_args=None):
         "--loss",
         type=str,
         default="wmse",
+        choices=list(metrics.DEFINED_METRICS.keys()),
         help=(
             "Loss function to use, see metric.py. When --output_std is set, "
             "only losses that support learned predictive std-dev are valid."
@@ -277,11 +317,15 @@ def main(input_args=None):
         int(k): v for k, v in json.loads(args.var_leads_metrics_watch).items()
     }
 
-    compatibility_error = get_loss_output_std_compatibility_error(
-        args.loss, args.output_std
-    )
-    if compatibility_error is not None:
-        parser.error(compatibility_error)
+    if args.output_std and not metrics.metric_supports_output_std(args.loss):
+        supported_losses = ", ".join(
+            metrics.get_output_std_compatible_metrics()
+        )
+        parser.error(
+            "Training with --output_std requires a loss that incorporates "
+            f"predicted std-dev. The current choice of --loss '{args.loss}' "
+            f"does not. Supported losses: {supported_losses}."
+        )
 
     # Check that config only specifies logging for lead times that exist
     # Check --val_steps_to_log
@@ -322,7 +366,6 @@ def main(input_args=None):
         datastore=datastore,
         ar_steps_train=args.ar_steps_train,
         ar_steps_eval=args.ar_steps_eval,
-        standardize=True,
         num_past_forcing_steps=args.num_past_forcing_steps,
         num_future_forcing_steps=args.num_future_forcing_steps,
         load_single_member=args.load_single_member,
@@ -349,9 +392,42 @@ def main(input_args=None):
         except ValueError:
             raise ValueError("devices should be 'auto' or a list of integers")
 
-    # Load model parameters Use new args for model
-    ModelClass = MODELS[args.model]
-    model = ModelClass(args, config=config, datastore=datastore)
+    # Build predictor and forecaster externally, then inject into
+    # ForecasterModule
+    predictor_class = MODELS[args.model]
+    predictor = predictor_class(
+        datastore=datastore,
+        graph_name=args.graph,
+        hidden_dim=args.hidden_dim,
+        hidden_layers=args.hidden_layers,
+        processor_layers=args.processor_layers,
+        mesh_aggr=args.mesh_aggr,
+        num_past_forcing_steps=args.num_past_forcing_steps,
+        num_future_forcing_steps=args.num_future_forcing_steps,
+        output_std=args.output_std,
+        output_clamping_lower=config.training.output_clamping.lower,
+        output_clamping_upper=config.training.output_clamping.upper,
+        g2m_gnn_type=args.g2m_gnn_type,
+        m2g_gnn_type=args.m2g_gnn_type,
+        mesh_up_gnn_type=args.mesh_up_gnn_type,
+        mesh_down_gnn_type=args.mesh_down_gnn_type,
+    )
+    forecaster = ARForecaster(predictor, datastore)
+
+    model = ForecasterModule(
+        forecaster=forecaster,
+        config=config,
+        datastore=datastore,
+        loss=args.loss,
+        lr=args.lr,
+        restore_opt=args.restore_opt,
+        n_example_pred=args.n_example_pred,
+        create_gif=args.create_gif,
+        val_steps_to_log=args.val_steps_to_log,
+        metrics_watch=args.metrics_watch,
+        var_leads_metrics_watch=args.var_leads_metrics_watch,
+        args=args,
+    )
 
     if args.eval:
         prefix = f"eval-{args.eval}-"
@@ -380,7 +456,7 @@ def main(input_args=None):
     trainer = pl.Trainer(
         max_epochs=args.epochs,
         deterministic=True,
-        strategy="ddp",
+        strategy="auto",
         accelerator=device_name,
         num_nodes=args.num_nodes,
         devices=devices,

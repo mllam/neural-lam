@@ -1,6 +1,6 @@
 # Standard library
+import warnings
 from pathlib import Path
-from types import SimpleNamespace
 
 # Third-party
 import pytest
@@ -13,10 +13,18 @@ from neural_lam import config as nlconfig
 from neural_lam.create_graph import create_graph_from_datastore
 from neural_lam.datastore import DATASTORES
 from neural_lam.datastore.base import BaseRegularGridDatastore
-from neural_lam.models.ar_model import ARModel
-from neural_lam.models.graph_lam import GraphLAM
+from neural_lam.models import ForecasterModule
 from neural_lam.weather_dataset import WeatherDataModule
 from tests.conftest import init_datastore_example
+
+# Model architecture defaults for tests
+GRAPH = "1level"
+HIDDEN_DIM = 4
+HIDDEN_LAYERS = 1
+PROCESSOR_LAYERS = 2
+MESH_AGGR = "sum"
+NUM_PAST_FORCING_STEPS = 1
+NUM_FUTURE_FORCING_STEPS = 1
 
 
 def run_simple_training(
@@ -24,8 +32,7 @@ def run_simple_training(
     set_output_std,
     loss,
     metrics_watch=None,
-    devices=None,
-    validate=True,
+    var_leads_metrics_watch=None,
 ):
     """
     Run one epoch of a simple model training setup using the given datastore.
@@ -40,33 +47,35 @@ def run_simple_training(
         Loss function to use during training
     metrics_watch : list[str] | None
         Optional metrics_watch configuration for evaluation
-    devices : int | None
-        Number of devices to use in the Lightning trainer. Defaults to a
-        single CPU device in CPU-only test environments and two devices when
-        CUDA is available, so the test remains cross-platform while still
-        exercising the multi-device path on GPU runners.
-    validate : bool
-        Whether validation should run during the training test
     """
+    if metrics_watch is None:
+        metrics_watch = []
+    if var_leads_metrics_watch is None:
+        var_leads_metrics_watch = {}
 
     if torch.cuda.is_available():
         device_name = "cuda"
         torch.set_float32_matmul_precision(
             "high"
         )  # Allows using Tensor Cores on A100s
+
+        if torch.cuda.device_count() < 2:
+            warnings.warn(
+                "Running test suite on a single CUDA device. "
+                "Multi-device testing still required.",
+                UserWarning,
+            )
+
     else:
         device_name = "cpu"
-
-    if devices is None:
-        devices = 2 if device_name == "cuda" else 1
 
     trainer = pl.Trainer(
         max_epochs=1,
         deterministic=True,
         accelerator=device_name,
-        devices=devices,
-        limit_val_batches=1 if validate else 0,
-        num_sanity_val_steps=2 if validate else 0,
+        # Dynamically allocate devices
+        # to support single-GPU machines
+        devices=2 if torch.cuda.device_count() >= 2 else 1,
         log_every_n_steps=1,
         # use `detect_anomaly` to ensure that we don't have NaNs popping up
         # during training
@@ -74,42 +83,7 @@ def run_simple_training(
     )
 
     graph_name = "1level"
-    ensure_graph_exists(datastore, graph_name)
 
-    data_module = WeatherDataModule(
-        datastore=datastore,
-        ar_steps_train=3,
-        ar_steps_eval=5,
-        standardize=True,
-        batch_size=2,
-        num_workers=1,
-        num_past_forcing_steps=1,
-        num_future_forcing_steps=1,
-    )
-
-    model_args = build_model_args(
-        set_output_std=set_output_std,
-        loss=loss,
-        graph_name=graph_name,
-        metrics_watch=metrics_watch,
-    )
-
-    config = nlconfig.NeuralLAMConfig(
-        datastore=nlconfig.DatastoreSelection(
-            kind=datastore.SHORT_NAME, config_path=datastore.root_path
-        )
-    )
-
-    model = GraphLAM(
-        args=model_args,
-        datastore=datastore,
-        config=config,
-    )
-    wandb.init(mode="disabled")  # Disable wandb for offline test run
-    trainer.fit(model=model, datamodule=data_module)
-
-
-def ensure_graph_exists(datastore, graph_name):
     graph_dir_path = Path(datastore.root_path) / "graph" / graph_name
 
     if not graph_dir_path.exists():
@@ -119,29 +93,57 @@ def ensure_graph_exists(datastore, graph_name):
             n_max_levels=1,
         )
 
-
-def build_model_args(set_output_std, loss, graph_name, metrics_watch=None):
-    watched_metrics = metrics_watch or []
-    watched_var_steps = {0: [1]} if watched_metrics else {}
-    return SimpleNamespace(
-        output_std=set_output_std,
-        loss=loss,
-        restore_opt=False,
-        n_example_pred=1,
-        # XXX: this should be superfluous when we have already defined the
-        # model object no?
-        graph=graph_name,
-        hidden_dim=4,
-        hidden_layers=1,
-        processor_layers=2,
-        mesh_aggr="sum",
-        lr=1.0e-3,
-        val_steps_to_log=[1, 3],
-        metrics_watch=watched_metrics,
-        var_leads_metrics_watch=watched_var_steps,
+    data_module = WeatherDataModule(
+        datastore=datastore,
+        ar_steps_train=3,
+        ar_steps_eval=5,
+        batch_size=2,
+        num_workers=1,
         num_past_forcing_steps=1,
         num_future_forcing_steps=1,
     )
+
+    config = nlconfig.NeuralLAMConfig(
+        datastore=nlconfig.DatastoreSelection(
+            kind=datastore.SHORT_NAME, config_path=datastore.root_path
+        )
+    )
+
+    # Build predictor and forecaster externally, then inject into
+    # ForecasterModule
+    # First-party
+    from neural_lam.models import MODELS, ARForecaster
+
+    predictor_class = MODELS["graph_lam"]
+    predictor = predictor_class(
+        datastore=datastore,
+        graph_name=graph_name,
+        hidden_dim=HIDDEN_DIM,
+        hidden_layers=HIDDEN_LAYERS,
+        processor_layers=PROCESSOR_LAYERS,
+        mesh_aggr=MESH_AGGR,
+        num_past_forcing_steps=NUM_PAST_FORCING_STEPS,
+        num_future_forcing_steps=NUM_FUTURE_FORCING_STEPS,
+        output_std=set_output_std,
+        output_clamping_lower=config.training.output_clamping.lower,
+        output_clamping_upper=config.training.output_clamping.upper,
+    )
+    forecaster = ARForecaster(predictor, datastore)
+
+    model = ForecasterModule(
+        forecaster=forecaster,
+        config=config,
+        datastore=datastore,
+        loss=loss,
+        lr=1.0e-3,
+        restore_opt=False,
+        n_example_pred=1,
+        val_steps_to_log=[1, 3],
+        metrics_watch=metrics_watch,
+        var_leads_metrics_watch=var_leads_metrics_watch,
+    )
+    wandb.init(mode="disabled")  # Disable wandb for offline test run
+    trainer.fit(model=model, datamodule=data_module)
 
 
 @pytest.mark.parametrize("datastore_name", DATASTORES.keys())
@@ -150,21 +152,19 @@ def test_training(datastore_name):
 
     if not isinstance(datastore, BaseRegularGridDatastore):
         pytest.skip(
-            f"Skipping test for {datastore_name} as it is not a regular "
-            "grid datastore."
+            f"Skipping test for {datastore_name} as "
+            f"it is not a regular grid datastore."
         )
 
     run_simple_training(datastore, set_output_std=False, loss="mse")
 
 
 def test_training_output_std():
-    datastore = init_datastore_example("dummydata")
+    datastore = init_datastore_example("mdp")  # Test only with mdp datastore
     run_simple_training(
         datastore,
         set_output_std=True,
         loss="nll",
-        devices=1,
-        validate=False,
     )
 
 
@@ -179,14 +179,20 @@ def test_all_gather_cat_single_device():
         """Minimal object with mocked single-device all_gather."""
 
         def all_gather(self, tensor_to_gather, sync_grads=False):
+            # Single-device behavior: return tensor unchanged
             return tensor_to_gather
 
     module = MockModule()
-    module.all_gather_cat = ARModel.all_gather_cat.__get__(module, MockModule)
+    # Bind the real ForecasterModule.all_gather_cat to our mock
+    module.all_gather_cat = ForecasterModule.all_gather_cat.__get__(
+        module, MockModule
+    )
 
+    # Simulate a 3D metric tensor: (N_eval, pred_steps, d_f)
     tensor = torch.randn(4, 3, 5)
     result = module.all_gather_cat(tensor)
 
+    # On single device, shape must be preserved
     assert result.shape == tensor.shape, (
         f"all_gather_cat changed shape on single device: "
         f"{tensor.shape} -> {result.shape}"
@@ -204,19 +210,25 @@ def test_all_gather_cat_multi_device_simulation():
         """Object with mocked multi-device all_gather."""
 
         def all_gather(self, tensor, sync_grads=False):
+            # Simulate 2-GPU all_gather: prepend a dim of size 2
             return torch.stack([tensor, tensor], dim=0)
 
     module = MockModule()
-    module.all_gather_cat = ARModel.all_gather_cat.__get__(module, MockModule)
+    # Bind the real ForecasterModule.all_gather_cat to our mock
+    module.all_gather_cat = ForecasterModule.all_gather_cat.__get__(
+        module, MockModule
+    )
 
-    tensor = torch.randn(4, 3, 5)
+    tensor = torch.randn(4, 3, 5)  # (N_eval, pred_steps, d_f)
     result = module.all_gather_cat(tensor)
 
+    # Should flatten (2, 4, 3, 5) -> (8, 3, 5)
     assert result.shape == (
         8,
         3,
         5,
     ), f"all_gather_cat wrong shape on multi-device: {result.shape}"
+    # Validate values match expected concatenation along dim 0
     expected = torch.cat([tensor, tensor], dim=0)
     assert torch.equal(result, expected), (
         "all_gather_cat produced incorrectly ordered/combined values "
