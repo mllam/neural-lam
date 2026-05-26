@@ -62,8 +62,8 @@ of which MUST be present:
 
 ### 2.2.1 Graph format versioning
 
-Graph directories SHOULD include the file `graph-spec-version`.
-When present, it MUST contain the graph storage spec version as plain text.
+Graph directories MUST include the file `graph-spec-version`.
+This file MUST contain the graph storage spec version as plain text.
 The current graph storage spec version is
 `0.1.0`.
 
@@ -250,6 +250,8 @@ performed inside `neural-lam` after graph loading.
 ### 3.4 Differences to legacy format graphs
 
 Legacy pre-spec graphs do not include `graph-spec-version`.
+When this file is absent, `neural-lam` will attempt to load the graph as a
+legacy pre-spec graph.
 Their `mesh_features.pt` files are assumed to already be normalized.
 
 Legacy pre-spec graphs store edge indices in one combined offset

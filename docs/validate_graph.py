@@ -1381,8 +1381,8 @@ def validate_graph_directory(
 
     ### 2.2.1 Graph format versioning
 
-    Graph directories SHOULD include the file `{GRAPH_SPEC_VERSION_FILENAME}`.
-    When present, it MUST contain the graph storage spec version as plain text.
+    Graph directories MUST include the file `{GRAPH_SPEC_VERSION_FILENAME}`.
+    This file MUST contain the graph storage spec version as plain text.
     The current graph storage spec version is
     `{CURRENT_GRAPH_FORMAT_SPEC_VERSION}`.
 
@@ -1940,6 +1940,8 @@ def validate_graph_directory(
     ### 3.4 Differences to legacy format graphs
 
     Legacy pre-spec graphs do not include `{GRAPH_SPEC_VERSION_FILENAME}`.
+    When this file is absent, `neural-lam` will attempt to load the graph as a
+    legacy pre-spec graph.
     Their `mesh_features.pt` files are assumed to already be normalized.
 
     Legacy pre-spec graphs store edge indices in one combined offset
