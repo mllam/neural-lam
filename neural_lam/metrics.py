@@ -195,10 +195,10 @@ class WMSE(BaseMetric):
 
 
 class WMAE(BaseMetric):
-    """
-    Weighted Mean Absolute Error (weighted by 1/pred_std).
-    Linear rescaling to physical units.
-    """
+"""
+Weighted Mean Absolute Error (weighted by 1/pred_std).
+Not rescaled, weighted metrics are dimensionless in normalized space.
+"""
 
     name = "wmae"
 
