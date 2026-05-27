@@ -14,6 +14,7 @@ from typing import Any, Iterator, Union, overload
 # Third-party
 import pytorch_lightning as pl
 import torch
+import torch_geometric as pyg
 from loguru import logger
 from pytorch_lightning.loggers import MLFlowLogger, WandbLogger
 from pytorch_lightning.utilities import rank_zero_only
@@ -469,6 +470,40 @@ def make_mlp(blueprint: list[int], layer_norm: bool = True) -> nn.Sequential:
         layers.append(nn.LayerNorm(blueprint[-1]))
 
     return nn.Sequential(*layers)
+
+
+class IdentityModule(nn.Module):
+    """Identity operator that accepts and returns multiple positional inputs."""
+
+    def forward(self, *args):
+        return args
+
+
+def make_gnn_seq(edge_index, num_gnn_layers, hidden_layers, hidden_dim):
+    """
+    Build a sequential stack of InteractionNet layers that propagates both
+    node and edge representations. Returns an IdentityModule if
+    num_gnn_layers is 0.
+    """
+    # First-party
+    from neural_lam.gnn_layers import InteractionNet
+
+    if num_gnn_layers == 0:
+        return IdentityModule()
+    return pyg.nn.Sequential(
+        "mesh_rep, edge_rep",
+        [
+            (
+                InteractionNet(
+                    edge_index,
+                    hidden_dim,
+                    hidden_layers=hidden_layers,
+                ),
+                "mesh_rep, mesh_rep, edge_rep -> mesh_rep, edge_rep",
+            )
+            for _ in range(num_gnn_layers)
+        ],
+    )
 
 
 @cache
