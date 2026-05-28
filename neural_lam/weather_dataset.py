@@ -349,29 +349,31 @@ class WeatherDataset(torch.utils.data.Dataset):
                     "forecast_step must be supplied when forcing/boundary "
                     "is in forecast mode."
                 )
-            # Choose a single analysis_time for this sample. We want it to
-            # be the latest analysis_time strictly less than the first
-            # target time (so the first target sits at lead >= 1, leaving
-            # room for past-window lookups), shifted further back if a
-            # larger num_past_steps requires more lead headroom.
+            # Choose a single analysis_time (launch) for this sample. We
+            # anchor on the model init time (the last input state), not the
+            # first target, so we never select a boundary forecast launched
+            # after init - that forecast would be unavailable operationally.
+            # A launch exactly at init is also rejected (strictly before),
+            # then shifted further back if a larger num_past_steps requires
+            # more lead headroom.
+            model_init_time = state_times[init_steps - 1].values
             first_target_time = state_times[init_steps].values
 
             analysis_index = da_forcing.analysis_time.get_index("analysis_time")
             forcing_at_idx = analysis_index.get_indexer(
-                [first_target_time], method="pad"
+                [model_init_time], method="pad"
             )[0]
             if forcing_at_idx < 0:
                 raise ValueError(
-                    "Boundary/forcing analysis times start after the first "
-                    f"target time ({first_target_time})."
+                    "Boundary/forcing analysis times start after the model "
+                    f"init time ({model_init_time})."
                 )
             forcing_at = da_forcing.analysis_time[forcing_at_idx]
-            if first_target_time == forcing_at.values:
+            if model_init_time == forcing_at.values:
                 if forcing_at_idx == 0:
                     raise ValueError(
-                        "No earlier boundary/forcing analysis time is "
-                        "available to provide lead headroom for target "
-                        f"time {first_target_time}."
+                        "No boundary/forcing analysis time strictly before "
+                        f"the model init time ({model_init_time}) is available."
                     )
                 forcing_at_idx -= 1
                 forcing_at = da_forcing.analysis_time[forcing_at_idx]
@@ -395,6 +397,11 @@ class WeatherDataset(torch.utils.data.Dataset):
                 target_time = state_times[init_steps + step_idx].values
                 lead = int(
                     np.floor((target_time - forcing_at.values) / forecast_step)
+                )
+                center_time = forcing_at.values + lead * forecast_step
+                assert center_time <= target_time, (
+                    "Boundary forecast valid time runs ahead of the interior "
+                    f"target time ({center_time} > {target_time})."
                 )
                 window_start = lead - num_past_steps
                 window_end = lead + num_future_steps + 1

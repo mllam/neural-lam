@@ -488,18 +488,84 @@ def test_analysis_interior_with_forecast_boundary():
 
     _, _, _, boundary, _ = [t.numpy() for t in dataset[0]]
     # Sample idx=0: state slice = interior[0:4] = times 2020-01-05..08.
-    # Targets are 2020-01-07 and 2020-01-08 (first_target=07). Boundary
-    # analysis_time pad-pick for 07 = idx 3 (07); equals first_target so
-    # decrement to idx 2 (06). lead_at_first_target = (07-06)/1d = 1,
+    # Model init is the last input state 2020-01-06; targets are 07 and 08.
+    # Boundary analysis_time pad-pick for the init 06 = idx 2 (06); equals
+    # init so decrement to idx 1 (05). lead_at_first_target = (07-05)/1d = 2,
     # which already covers num_past=1, so no further shift. Window at
-    # target 07: lead 1, [0..2]. Window at target 08: lead 2, [1..3].
+    # target 07: lead 2, [1..3]. Window at target 08: lead 3, [2..4].
+    expected_analysis_idx = 1
+    assert boundary.shape == (2, 1, 3)
+    np.testing.assert_array_equal(
+        boundary[0, 0, :], boundary_values[expected_analysis_idx, 1:4]
+    )
+    np.testing.assert_array_equal(
+        boundary[1, 0, :], boundary_values[expected_analysis_idx, 2:5]
+    )
+
+
+def test_forecast_boundary_anchors_on_init_not_target():
+    """A boundary forecast launched after model init (between the last
+    input state and the first target) must not be selected - operationally
+    it would be unavailable. The analysis_time is anchored on the model
+    init time, so the latest launch at or before init is used instead."""
+    # Interior analysis, 2h step. Sample idx=0 state = 00,02,04,06:
+    # model init = 02, first target = 04, second target = 06.
+    interior_times = np.datetime64("2020-01-01T00") + np.arange(
+        8
+    ) * np.timedelta64(2, "h")
+    interior_values = np.arange(8, dtype=float)
+    interior_datastore = SinglePointDummyDatastore(
+        state_data=interior_values,
+        forcing_data=interior_values,
+        time_values=interior_times,
+        is_forecast=False,
+        step_length=timedelta(hours=2),
+    )
+
+    # Boundary launches at odd hours (2019-12-31T21, 23, 01, 03, ...),
+    # spanning wide enough that no interior cropping is triggered. Launch
+    # 01 (idx 2) is the latest <= init (02); launch 03 (idx 3) sits
+    # strictly between init (02) and the first target (04). The buggy
+    # target-time anchor would pick 03 (a future launch); the fixed
+    # init-time anchor picks 01.
+    n_analysis = 9
+    n_leads = 16
+    boundary_analysis = np.datetime64("2019-12-31T21") + np.arange(
+        n_analysis
+    ) * np.timedelta64(2, "h")
+    boundary_leads = np.arange(n_leads) * np.timedelta64(1, "h")
+    boundary_values = (
+        np.arange(n_analysis).reshape(-1, 1) * 1000
+        + np.arange(n_leads).reshape(1, -1) * 10
+    ).astype(float)
+    boundary_datastore = BoundaryOnlyDummyDatastore(
+        forcing_data=boundary_values,
+        time_values=(boundary_analysis, boundary_leads),
+        is_forecast=True,
+        step_length=timedelta(hours=1),
+    )
+
+    dataset = WeatherDataset(
+        datastore=interior_datastore,
+        datastore_boundary=boundary_datastore,
+        ar_steps=2,
+        num_past_forcing_steps=0,
+        num_future_forcing_steps=0,
+        num_past_boundary_steps=1,
+        num_future_boundary_steps=1,
+    )
+
+    _, _, _, boundary, _ = [t.numpy() for t in dataset[0]]
+    # Launch at 01 = analysis idx 2 (not 03 = idx 3). From 01: target 04
+    # is lead (04-01)/1h = 3 -> window [2,5); target 06 is lead 5 ->
+    # window [4,7).
     expected_analysis_idx = 2
     assert boundary.shape == (2, 1, 3)
     np.testing.assert_array_equal(
-        boundary[0, 0, :], boundary_values[expected_analysis_idx, 0:3]
+        boundary[0, 0, :], boundary_values[expected_analysis_idx, 2:5]
     )
     np.testing.assert_array_equal(
-        boundary[1, 0, :], boundary_values[expected_analysis_idx, 1:4]
+        boundary[1, 0, :], boundary_values[expected_analysis_idx, 4:7]
     )
 
 
