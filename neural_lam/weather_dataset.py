@@ -11,6 +11,11 @@ import xarray as xr
 
 # First-party
 from neural_lam.datastore.base import BaseDatastore
+from neural_lam.utils import (
+    check_time_overlap,
+    crop_time_if_needed,
+    get_time_step,
+)
 
 
 class WeatherDataset(torch.utils.data.Dataset):
@@ -18,6 +23,10 @@ class WeatherDataset(torch.utils.data.Dataset):
 
     This class loads and processes weather data from a given datastore,
     with optional boundary forcing from a separate boundary datastore.
+    Boundary windowing is aligned to interior state times by
+    nearest-neighbor lookup, so the interior and boundary datastores may
+    differ in step length and either side may be analysis or forecast
+    data.
 
     Parameters
     ----------
@@ -52,6 +61,8 @@ class WeatherDataset(torch.utils.data.Dataset):
         sample. If `True`, only ensemble member 0 is used. Default is False,
         so all members are used when available.
     """
+
+    INIT_STEPS = 2
 
     def __init__(
         self,
@@ -88,13 +99,66 @@ class WeatherDataset(torch.utils.data.Dataset):
                 "The datastore must provide state data for the WeatherDataset."
             )
 
-        # Load boundary forcing from the boundary datastore
+        # Load boundary forcing from the boundary datastore. Alignment to
+        # interior state times is done in `_window_forcing_in_time` via
+        # nearest-neighbor (pad) lookup on time coordinates, so the
+        # boundary datastore can have a different step length than the
+        # interior, and either side may be analysis or forecast.
         if self.datastore_boundary is not None:
             self.da_boundary_forcing = self.datastore_boundary.get_dataarray(
                 category="forcing", split=self.split
             )
         else:
             self.da_boundary_forcing = None
+
+        # Within-sample time step for the state series: this is the step
+        # between consecutive state times that __getitem__ exposes, used
+        # below to advance the forcing/boundary window across AR steps.
+        if self.datastore.is_forecast:
+            self._time_step_state = get_time_step(
+                self.da_state.elapsed_forecast_duration.values
+            )
+        else:
+            self._time_step_state = get_time_step(self.da_state.time.values)
+
+        # Forecast lead-time step for forcing/boundary, only meaningful when
+        # the corresponding datastore is in forecast mode.
+        self._forecast_step_forcing = None
+        if self.da_forcing is not None and self.datastore.is_forecast:
+            self._forecast_step_forcing = get_time_step(
+                self.da_forcing.elapsed_forecast_duration.values
+            )
+        self._forecast_step_boundary = None
+        if self.datastore_boundary is not None:
+            datastore_boundary = self.datastore_boundary
+            if (
+                self.da_boundary_forcing is not None
+                and datastore_boundary.is_forecast
+            ):
+                self._forecast_step_boundary = get_time_step(
+                    self.da_boundary_forcing.elapsed_forecast_duration.values
+                )
+
+            # Validate that the boundary covers the windows we will request,
+            # and if necessary crop the analysis-mode interior so that the
+            # very first/last samples don't fall outside boundary coverage.
+            if self.da_boundary_forcing is not None:
+                self.da_state = crop_time_if_needed(
+                    self.da_state,
+                    self.da_boundary_forcing,
+                    da1_is_forecast=self.datastore.is_forecast,
+                    da2_is_forecast=datastore_boundary.is_forecast,
+                    num_past_steps=self.num_past_boundary_steps,
+                    num_future_steps=self.num_future_boundary_steps,
+                )
+                check_time_overlap(
+                    self.da_state,
+                    self.da_boundary_forcing,
+                    da1_is_forecast=self.datastore.is_forecast,
+                    da2_is_forecast=datastore_boundary.is_forecast,
+                    num_past_steps=self.num_past_boundary_steps,
+                    num_future_steps=self.num_future_boundary_steps,
+                )
 
         if self.datastore.is_ensemble and self.load_single_member:
             warnings.warn(
@@ -178,50 +242,28 @@ class WeatherDataset(torch.utils.data.Dataset):
         return base_len
 
     def _slice_state_time(self, da_state, idx, n_steps: int):
-        """
-        Produce a time slice of the given dataarray `da_state` (state) starting
-        at `idx` and with `n_steps` steps. An `offset`is calculated based on the
-        `num_past_forcing_steps` class attribute. `Offset` is used to offset the
-        start of the sample, to assert that enough previous time steps are
-        available for the 2 initial states and any corresponding forcings
-        (calculated in `_slice_forcing_time`).
+        """Slice ``da_state`` by integer ``idx`` into one training sample.
 
-        Parameters
-        ----------
-        da_state : xr.DataArray
-            The dataarray to slice. This is expected to have a `time` dimension
-            if the datastore is providing analysis only data, and a
-            `analysis_time` and `elapsed_forecast_duration` dimensions if the
-            datastore is providing forecast data.
-        idx : int
-            The index of the time step to start the sample from.
-        n_steps : int
-            The number of time steps to include in the sample.
+        For analysis data the sample's ``time`` is contiguous; for forecast
+        data we pick a single ``analysis_time`` and walk its lead times.
+        The leading offset accounts for ``num_past_forcing_steps`` so the
+        forcing window of the very first sample is in-bounds.
 
         Returns
         -------
         da_sliced : xr.DataArray
-            The sliced dataarray with dims ('time', 'grid_index',
-            'state_feature').
+            Sliced state with a single ``time`` dimension covering
+            ``INIT_STEPS + n_steps`` consecutive state times.
         """
-        # The current implementation requires at least 2 time steps for the
-        # initial state (see GraphCast).
-        init_steps = 2
-        # slice the dataarray to include the required number of time steps
+        init_steps = self.INIT_STEPS
+        n_total = init_steps + n_steps
+        offset = max(0, self.num_past_forcing_steps - init_steps)
+
         if self.datastore.is_forecast:
-            start_idx = max(0, self.num_past_forcing_steps - init_steps)
-            end_idx = max(init_steps, self.num_past_forcing_steps) + n_steps
-            # this implies that the data will have both `analysis_time` and
-            # `elapsed_forecast_duration` dimensions for forecasts. We for now
-            # simply select a analysis time and the first `n_steps` forecast
-            # times (given no offset). Note that this means that we get one
-            # sample per forecast, always starting at forecast time 2.
             da_sliced = da_state.isel(
                 analysis_time=idx,
-                elapsed_forecast_duration=slice(start_idx, end_idx),
+                elapsed_forecast_duration=slice(offset, offset + n_total),
             )
-            # create a new time dimension so that the produced sample has a
-            # `time` dimension, similarly to the analysis only data
             da_sliced["time"] = (
                 da_sliced.analysis_time + da_sliced.elapsed_forecast_duration
             )
@@ -229,136 +271,170 @@ class WeatherDataset(torch.utils.data.Dataset):
                 {"elapsed_forecast_duration": "time"}
             )
         else:
-            # For analysis data we slice the time dimension directly. The offset
-            # is only relevant for the very first (and last) samples in the
-            # dataset.
-            start_idx = idx + max(0, self.num_past_forcing_steps - init_steps)
-            end_idx = (
-                idx + max(init_steps, self.num_past_forcing_steps) + n_steps
+            start_idx = idx + offset
+            da_sliced = da_state.isel(
+                time=slice(start_idx, start_idx + n_total)
             )
-            da_sliced = da_state.isel(time=slice(start_idx, end_idx))
         return da_sliced
 
-    def _slice_forcing_time(
+    def _window_same_forecast_by_idx(
         self,
         da_forcing,
-        idx,
-        n_steps: int,
-        num_past_steps: Union[int, None] = None,
-        num_future_steps: Union[int, None] = None,
+        idx: int,
+        state_times,
+        num_past_steps: int,
+        num_future_steps: int,
     ):
-        """
-        Produce a time slice of the given dataarray `da_forcing` (forcing)
-        starting at `idx` and with `n_steps` steps. An `offset` is calculated
-        based on the `num_past_forcing_steps` class attribute. It is used to
-        offset the start of the sample, to ensure that enough previous time
-        steps are available for the forcing data. The forcing data is windowed
-        around the current autoregressive time step to include the past and
-        future forcings.
+        """Window forcing from the same forecast datastore as state.
 
-        Parameters
-        ----------
-        da_forcing : xr.DataArray
-            The forcing dataarray to slice. This is expected to have a `time`
-            dimension if the datastore is providing analysis only data, and a
-            `analysis_time` and `elapsed_forecast_duration` dimensions if the
-            datastore is providing forecast data.
-        idx : int
-            The index of the time step to start the sample from.
-        n_steps : int
-            The number of time steps to include in the sample.
+        Uses integer ``analysis_time=idx`` indexing so it tolerates
+        repeated analysis_time values (e.g. npyfilesmeps duplicates the
+        analysis_time series). Walks lead times in lockstep with the
+        state slice; each window is centered on the corresponding target
+        state time.
+        """
+        init_steps = self.INIT_STEPS
+        offset = max(0, self.num_past_forcing_steps - init_steps) + init_steps
+        da_list = []
+        for step in range(self.ar_steps):
+            start_lead = offset + step - num_past_steps
+            end_lead = offset + step + num_future_steps + 1
+            target_time = state_times[init_steps + step].values
+
+            da_sliced = da_forcing.isel(
+                analysis_time=idx,
+                elapsed_forecast_duration=slice(start_lead, end_lead),
+            ).rename({"elapsed_forecast_duration": "window"})
+            da_sliced = da_sliced.assign_coords(
+                window=np.arange(-num_past_steps, num_future_steps + 1)
+            )
+            da_sliced = da_sliced.expand_dims(dim={"time": [target_time]})
+            da_list.append(da_sliced)
+        return xr.concat(da_list, dim="time")
+
+    def _window_forcing_in_time(
+        self,
+        da_forcing,
+        state_times,
+        num_past_steps: int,
+        num_future_steps: int,
+        forecast_step,
+    ):
+        """Window forcing/boundary in time, aligned to interior state times.
+
+        ``state_times`` is the 1D ``time`` coordinate of the already-sliced
+        state sample. For each AR target step the matching forcing time is
+        picked by nearest-neighbor ``pad`` lookup (smallest forcing time
+        ``<=`` state time), and a window of
+        ``num_past_steps + num_future_steps + 1`` consecutive forcing
+        entries is taken around it.
+
+        When ``da_forcing`` has an ``analysis_time`` dimension the same
+        logic is applied to forecast forcing/boundary: an analysis time is
+        chosen such that the lead times cover the requested window for
+        every AR step, then windows are walked across lead times.
 
         Returns
         -------
-        da_concat : xr.DataArray
-            The sliced dataarray with dims ('time', 'grid_index',
-            'window', 'forcing_feature').
+        xr.DataArray
+            Concatenated windows with dims
+            ``('time', 'grid_index', 'window', 'forcing_feature')``.
         """
-        # The current implementation requires at least 2 time steps for the
-        # initial state (see GraphCast). The forcing data is windowed around the
-        # current autregressive time step. The two `init_steps` can also be used
-        # as past forcings.
-        init_steps = 2
+        init_steps = self.INIT_STEPS
         da_list = []
 
-        # Allow overriding the window size (used for boundary forcing)
-        if num_past_steps is None:
-            num_past_steps = self.num_past_forcing_steps
-        if num_future_steps is None:
-            num_future_steps = self.num_future_forcing_steps
-
-        if self.datastore.is_forecast:
-            # This implies that the data will have both `analysis_time` and
-            # `elapsed_forecast_duration` dimensions for forecasts. We for now
-            # simply select an analysis time and the first `n_steps` forecast
-            # times (given no offset). Note that this means that we get one
-            # sample per forecast.
-            # Add a 'time' dimension using the actual forecast times
-            offset = max(init_steps, num_past_steps)
-            for step in range(n_steps):
-                start_idx = offset + step - num_past_steps
-                end_idx = offset + step + num_future_steps
-
-                current_time = (
-                    da_forcing.analysis_time[idx]
-                    + da_forcing.elapsed_forecast_duration[offset + step]
+        if "analysis_time" in da_forcing.dims:
+            if forecast_step is None:
+                raise ValueError(
+                    "forecast_step must be supplied when forcing/boundary "
+                    "is in forecast mode."
                 )
+            # Choose a single analysis_time for this sample. We want it to
+            # be the latest analysis_time strictly less than the first
+            # target time (so the first target sits at lead >= 1, leaving
+            # room for past-window lookups), shifted further back if a
+            # larger num_past_steps requires more lead headroom.
+            first_target_time = state_times[init_steps].values
+
+            analysis_index = da_forcing.analysis_time.get_index("analysis_time")
+            forcing_at_idx = analysis_index.get_indexer(
+                [first_target_time], method="pad"
+            )[0]
+            if forcing_at_idx < 0:
+                raise ValueError(
+                    "Boundary/forcing analysis times start after the first "
+                    f"target time ({first_target_time})."
+                )
+            forcing_at = da_forcing.analysis_time[forcing_at_idx]
+            if first_target_time == forcing_at.values:
+                if forcing_at_idx == 0:
+                    raise ValueError(
+                        "No earlier boundary/forcing analysis time is "
+                        "available to provide lead headroom for target "
+                        f"time {first_target_time}."
+                    )
+                forcing_at_idx -= 1
+                forcing_at = da_forcing.analysis_time[forcing_at_idx]
+
+            lead_at_first_target = int(
+                np.floor(
+                    (first_target_time - forcing_at.values) / forecast_step
+                )
+            )
+            past_analysis_offset = num_past_steps - lead_at_first_target
+            if past_analysis_offset > 0:
+                forcing_at_idx -= past_analysis_offset
+                if forcing_at_idx < 0:
+                    raise ValueError(
+                        "Boundary/forcing analysis times do not extend far "
+                        "enough back to cover the requested past window."
+                    )
+                forcing_at = da_forcing.analysis_time[forcing_at_idx]
+
+            for step_idx in range(len(state_times) - init_steps):
+                target_time = state_times[init_steps + step_idx].values
+                lead = int(
+                    np.floor((target_time - forcing_at.values) / forecast_step)
+                )
+                window_start = lead - num_past_steps
+                window_end = lead + num_future_steps + 1
 
                 da_sliced = da_forcing.isel(
-                    analysis_time=idx,
-                    elapsed_forecast_duration=slice(start_idx, end_idx + 1),
-                )
-
-                da_sliced = da_sliced.rename(
-                    {"elapsed_forecast_duration": "window"}
-                )
-
-                # Assign the 'window' coordinate to be relative positions
+                    analysis_time=int(forcing_at_idx),
+                    elapsed_forecast_duration=slice(
+                        int(window_start), int(window_end)
+                    ),
+                ).rename({"elapsed_forecast_duration": "window"})
                 da_sliced = da_sliced.assign_coords(
-                    window=np.arange(len(da_sliced.window))
+                    window=np.arange(-num_past_steps, num_future_steps + 1)
                 )
-
-                da_sliced = da_sliced.expand_dims(
-                    dim={"time": [current_time.values]}
-                )
-
+                da_sliced = da_sliced.expand_dims(dim={"time": [target_time]})
                 da_list.append(da_sliced)
-
-            # Concatenate the list of DataArrays along the 'time' dimension
-            da_concat = xr.concat(da_list, dim="time")
-
         else:
-            # For analysis data, we slice the time dimension directly. The
-            # offset is only relevant for the very first (and last) samples in
-            # the dataset.
-            offset = idx + max(init_steps, num_past_steps)
-            for step in range(n_steps):
-                start_idx = offset + step - num_past_steps
-                end_idx = offset + step + num_future_steps
+            forcing_time_index = da_forcing.time.get_index("time")
+            for step_idx in range(init_steps, len(state_times)):
+                state_time = state_times[step_idx].values
+                forcing_time_idx = forcing_time_index.get_indexer(
+                    [state_time], method="pad"
+                )[0]
+                if forcing_time_idx < 0:
+                    raise ValueError(
+                        f"No boundary/forcing time at or before {state_time}."
+                    )
 
-                # Slice the data over the desired time window
-                da_sliced = da_forcing.isel(time=slice(start_idx, end_idx + 1))
+                window_start = forcing_time_idx - num_past_steps
+                window_end = forcing_time_idx + num_future_steps + 1
 
-                da_sliced = da_sliced.rename({"time": "window"})
-
-                # Assign the 'window' coordinate to be relative positions
-                da_sliced = da_sliced.assign_coords(
-                    window=np.arange(len(da_sliced.window))
+                da_window = da_forcing.isel(
+                    time=slice(int(window_start), int(window_end))
+                ).rename({"time": "window"})
+                da_window = da_window.assign_coords(
+                    window=np.arange(-num_past_steps, num_future_steps + 1)
                 )
+                da_window = da_window.expand_dims(dim={"time": [state_time]})
+                da_list.append(da_window)
 
-                # Add a 'time' dimension to keep track of steps using actual
-                # time coordinates
-                current_time = da_forcing.time[offset + step]
-                da_sliced = da_sliced.expand_dims(
-                    dim={"time": [current_time.values]}
-                )
-
-                da_list.append(da_sliced)
-
-            # Concatenate the list of DataArrays along the 'time' dimension
-            da_concat = xr.concat(da_list, dim="time")
-
-        return da_concat
+        return xr.concat(da_list, dim="time")
 
     def _build_item_dataarrays(self, idx):
         """
@@ -405,24 +481,43 @@ class WeatherDataset(torch.utils.data.Dataset):
         else:
             da_forcing = None
 
-        # handle time sampling in a way that is compatible with both analysis
-        # and forecast data
+        # Slice the state once, then window forcing and boundary against
+        # the resulting state times. Forcing is windowed by integer
+        # `analysis_time` index when it comes from the same forecast
+        # datastore as state (the analysis_time series can have repeats
+        # there, e.g. npyfilesmeps); boundary always comes from a
+        # different datastore so it is windowed by time-based
+        # nearest-neighbor lookup.
         da_state = self._slice_state_time(
             da_state=da_state, idx=sample_idx, n_steps=self.ar_steps
         )
-        if da_forcing is not None:
-            da_forcing_windowed = self._slice_forcing_time(
-                da_forcing=da_forcing, idx=sample_idx, n_steps=self.ar_steps
-            )
+        state_times = da_state["time"]
 
-        # Slice boundary forcing if available
+        if da_forcing is not None:
+            if self.datastore.is_forecast:
+                da_forcing_windowed = self._window_same_forecast_by_idx(
+                    da_forcing=da_forcing,
+                    idx=sample_idx,
+                    state_times=state_times,
+                    num_past_steps=self.num_past_forcing_steps,
+                    num_future_steps=self.num_future_forcing_steps,
+                )
+            else:
+                da_forcing_windowed = self._window_forcing_in_time(
+                    da_forcing=da_forcing,
+                    state_times=state_times,
+                    num_past_steps=self.num_past_forcing_steps,
+                    num_future_steps=self.num_future_forcing_steps,
+                    forecast_step=None,
+                )
+
         if self.da_boundary_forcing is not None:
-            da_boundary_windowed = self._slice_forcing_time(
+            da_boundary_windowed = self._window_forcing_in_time(
                 da_forcing=self.da_boundary_forcing,
-                idx=sample_idx,
-                n_steps=self.ar_steps,
+                state_times=state_times,
                 num_past_steps=self.num_past_boundary_steps,
                 num_future_steps=self.num_future_boundary_steps,
+                forecast_step=self._forecast_step_boundary,
             )
         else:
             da_boundary_windowed = None

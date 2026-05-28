@@ -10,8 +10,10 @@ from pathlib import Path
 from typing import Any, Iterator, Union
 
 # Third-party
+import numpy as np
 import pytorch_lightning as pl
 import torch
+import xarray as xr
 from loguru import logger
 from pytorch_lightning.loggers import MLFlowLogger, WandbLogger
 from pytorch_lightning.utilities import rank_zero_only
@@ -644,3 +646,185 @@ def get_integer_time(tdelta: datetime.timedelta) -> tuple[int, str]:
             return int(total_seconds / unit_in_seconds), unit
 
     return 1, "unknown"
+
+
+def get_time_step(times):
+    """Calculate the (constant) time step from a 1D time array.
+
+    Parameters
+    ----------
+    times : array-like
+        A 1D array of datetime64 (or timedelta64) values to compute the
+        step from.
+
+    Returns
+    -------
+    time_step : np.timedelta64
+        The constant spacing between successive values.
+
+    Raises
+    ------
+    ValueError
+        If the spacing is not constant.
+    """
+    time_diffs = np.diff(np.asarray(times))
+    if not np.all(time_diffs == time_diffs[0]):
+        raise ValueError(
+            "Inconsistent time steps in data. "
+            f"Found different time steps: {np.unique(time_diffs)}"
+        )
+    return time_diffs[0]
+
+
+def check_time_overlap(
+    da1: xr.DataArray,
+    da2: xr.DataArray,
+    da1_is_forecast: bool = False,
+    da2_is_forecast: bool = False,
+    num_past_steps: int = 1,
+    num_future_steps: int = 1,
+) -> None:
+    """Check that the time coverage of ``da2`` is wide enough to support
+    a windowed lookup driven by ``da1`` times with the given past/future
+    window sizes.
+
+    Parameters
+    ----------
+    da1 : xr.DataArray
+        Driving dataarray (typically interior state).
+    da2 : xr.DataArray
+        Dataarray to validate against (typically boundary forcing).
+    da1_is_forecast, da2_is_forecast : bool
+        Whether each side is in forecast mode (``analysis_time`` +
+        ``elapsed_forecast_duration`` dims) instead of plain ``time``.
+    num_past_steps, num_future_steps : int
+        Window size around each ``da1`` time, measured in ``da2`` steps.
+
+    Raises
+    ------
+    ValueError
+        If ``da2`` does not cover the required time range.
+    """
+    if da1_is_forecast:
+        times_da1 = da1.analysis_time
+    else:
+        times_da1 = da1.time
+    time_min_da1 = times_da1.min().values
+    time_max_da1 = times_da1.max().values
+
+    if da2_is_forecast:
+        times_da2 = da2.analysis_time
+        time_min_da2 = times_da2.min().values
+        time_max_da2 = times_da2.max().values
+
+        time_step_da2 = get_time_step(times_da2.values)
+        time_step_da1 = get_time_step(times_da1.values)
+
+        analysis_offset = max(time_step_da1, num_past_steps * time_step_da2)
+        da2_required_time_min = time_min_da1 - analysis_offset
+        da2_required_time_max = time_max_da1 - analysis_offset
+    else:
+        times_da2 = da2.time
+        time_min_da2 = times_da2.min().values
+        time_max_da2 = times_da2.max().values
+        time_step_da2 = get_time_step(times_da2.values)
+
+        da2_required_time_min = time_min_da1 - num_past_steps * time_step_da2
+        da2_required_time_max = time_max_da1 + num_future_steps * time_step_da2
+
+    if time_min_da2 > da2_required_time_min:
+        raise ValueError(
+            "The second DataArray (e.g. 'boundary forcing') starts too late. "
+            f"Required start: {da2_required_time_min}, "
+            f"but DataArray starts at {time_min_da2}."
+        )
+
+    if time_max_da2 < da2_required_time_max:
+        raise ValueError(
+            "The second DataArray (e.g. 'boundary forcing') ends too early. "
+            f"Required end: {da2_required_time_max}, "
+            f"but DataArray ends at {time_max_da2}."
+        )
+
+
+def crop_time_if_needed(
+    da1: xr.DataArray,
+    da2: xr.DataArray,
+    da1_is_forecast: bool = False,
+    da2_is_forecast: bool = False,
+    num_past_steps: int = 1,
+    num_future_steps: int = 1,
+) -> xr.DataArray:
+    """Trim the leading/trailing times from ``da1`` so that ``da2`` covers
+    every needed window. If ``check_time_overlap`` already passes, ``da1``
+    is returned unchanged. Cropping only applies to analysis-mode ``da1``;
+    for forecast-mode ``da1`` the input is returned as-is and overlap
+    failures will surface at sample-construction time.
+
+    Parameters mirror :func:`check_time_overlap`.
+
+    Returns
+    -------
+    xr.DataArray
+        Possibly cropped ``da1``.
+    """
+    if da1 is None or da2 is None:
+        return da1
+
+    try:
+        check_time_overlap(
+            da1,
+            da2,
+            da1_is_forecast,
+            da2_is_forecast,
+            num_past_steps,
+            num_future_steps,
+        )
+        return da1
+    except ValueError:
+        if da1_is_forecast:
+            # Cropping a forecast da1 by analysis time would change sample
+            # cardinality silently; leave alignment errors to surface later.
+            return da1
+
+        da1_tvals = da1.time.values
+        if da2_is_forecast:
+            da2_tvals = da2.analysis_time.values
+        else:
+            da2_tvals = da2.time.values
+
+        da2_dt = get_time_step(da2_tvals)
+        if da2_is_forecast:
+            da1_dt = get_time_step(da1_tvals)
+            analysis_offset = max(da1_dt, num_past_steps * da2_dt)
+            required_min = da2_tvals[0] + analysis_offset
+            required_max = da2_tvals[-1] + analysis_offset
+        else:
+            required_min = da2_tvals[0] + num_past_steps * da2_dt
+            required_max = da2_tvals[-1] - num_future_steps * da2_dt
+
+        begin_mask = da1_tvals >= required_min
+        if not begin_mask.any():
+            raise ValueError(
+                "Boundary forcing ends before any interior time satisfies "
+                f"required_min={required_min}; cannot align."
+            )
+        first_valid_idx = int(begin_mask.argmax())
+        n_removed_begin = first_valid_idx
+        if da1_tvals[-1] > required_max:
+            end_mask = da1_tvals > required_max
+            last_valid_idx_plus_one = int(end_mask.argmax())
+            n_removed_end = len(da1_tvals) - last_valid_idx_plus_one
+        else:
+            last_valid_idx_plus_one = None
+            n_removed_end = 0
+
+        if n_removed_begin > 0 or n_removed_end > 0:
+            log_on_rank_zero(
+                f"Cropping interior data to align with boundary: removed "
+                f"{n_removed_begin} steps at start and {n_removed_end} at "
+                "the end.",
+                level="warning",
+            )
+            da1 = da1.isel(time=slice(first_valid_idx, last_valid_idx_plus_one))
+        return da1

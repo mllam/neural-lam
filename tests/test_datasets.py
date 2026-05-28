@@ -516,10 +516,13 @@ def test_boundary_datastore_none_gives_empty_boundary():
     assert boundary.shape[-1] == 0
 
 
-def test_boundary_dataset_length_unchanged():
-    """Adding a boundary datastore should not change the dataset length."""
+def test_boundary_dataset_length_unchanged_when_boundary_covers():
+    """Adding a boundary datastore that covers the requested past/future
+    window does not change the dataset length."""
     n_timesteps = 20
     datastore = DummyDatastore(n_grid_points=100, n_timesteps=n_timesteps)
+    # num_past_boundary=num_future_boundary=0 means the boundary only
+    # needs to cover the interior times themselves, no padding.
     boundary_ds = BoundaryDummyDatastore(
         n_grid_points=25, n_timesteps=n_timesteps
     )
@@ -538,9 +541,41 @@ def test_boundary_dataset_length_unchanged():
         ar_steps=3,
         num_past_forcing_steps=1,
         num_future_forcing_steps=1,
+        num_past_boundary_steps=0,
+        num_future_boundary_steps=0,
+        datastore_boundary=boundary_ds,
+    )
+
+    assert len(dataset_no_boundary) == len(dataset_with_boundary)
+
+
+def test_boundary_crops_interior_when_window_overflows():
+    """When the boundary does not cover the requested past/future window,
+    interior is cropped at start/end and the dataset shrinks accordingly."""
+    n_timesteps = 20
+    datastore = DummyDatastore(n_grid_points=100, n_timesteps=n_timesteps)
+    boundary_ds = BoundaryDummyDatastore(
+        n_grid_points=25, n_timesteps=n_timesteps
+    )
+
+    dataset_no_boundary = WeatherDataset(
+        datastore=datastore,
+        split="train",
+        ar_steps=3,
+        num_past_forcing_steps=1,
+        num_future_forcing_steps=1,
+    )
+    dataset_with_boundary = WeatherDataset(
+        datastore=datastore,
+        split="train",
+        ar_steps=3,
+        num_past_forcing_steps=1,
+        num_future_forcing_steps=1,
         num_past_boundary_steps=1,
         num_future_boundary_steps=1,
         datastore_boundary=boundary_ds,
     )
 
-    assert len(dataset_no_boundary) == len(dataset_with_boundary)
+    # Boundary spans the same range as interior, so a (past=1, future=1)
+    # window forces 1 step of cropping at each end.
+    assert len(dataset_with_boundary) == len(dataset_no_boundary) - 2
