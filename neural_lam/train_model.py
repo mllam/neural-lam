@@ -422,6 +422,7 @@ def main(input_args=None):
         forecaster=forecaster,
         config=config,
         datastore=datastore,
+        datastore_boundary=datastore_boundary,
         loss=args.loss,
         lr=args.lr,
         restore_opt=args.restore_opt,
