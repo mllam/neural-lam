@@ -279,6 +279,8 @@ class ForecasterModule(pl.LightningModule):
             boundary_features,
             batch_times,
         ) = batch
+        # NOTE: boundary_features is not yet consumed here. Model-side
+        # boundary handling is implemented in a follow-up PR (see #108).
         prediction, pred_std = self.forecaster(
             init_states, forcing_features, target_states
         )
