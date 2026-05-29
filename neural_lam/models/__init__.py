@@ -3,6 +3,7 @@ from .forecasters.autoregressive import ARForecaster
 from .forecasters.base import Forecaster
 from .module import ForecasterModule
 from .step_predictors.base import StepPredictor
+from .step_predictors.cnn import CNNPredictor
 from .step_predictors.graph.base import BaseGraphModel
 from .step_predictors.graph.graph_lam import GraphLAM
 from .step_predictors.graph.hi_lam import HiLAM

@@ -59,6 +59,16 @@ def test_node_to_grid_rejects_wrong_node_count():
         node_to_grid(node_features, (3, 4))
 
 
+def test_node_to_grid_rejects_non_positive_grid_shape():
+    node_features = torch.randn(2, 0, 5)
+
+    with pytest.raises(ValueError, match="positive"):
+        node_to_grid(node_features, (0, 4))
+
+    with pytest.raises(ValueError, match="positive"):
+        node_to_grid(node_features, CartesianGridShape(x=0, y=4))
+
+
 def test_grid_to_node_rejects_wrong_grid_shape():
     grid_features = torch.randn(2, 5, 3, 4)
 
@@ -106,6 +116,23 @@ def test_film2d_applies_channel_affine_conditioning():
     assert torch.equal(y, expected)
 
 
+def test_film2d_rejects_shape_mismatch():
+    x = torch.ones(2, 2, 3, 4)
+    film = FiLM2d(context_dim=3, channels=2)
+
+    with pytest.raises(ValueError, match="context must have shape"):
+        film(x, torch.ones(2, 3, 1))
+
+    with pytest.raises(ValueError, match="same batch size"):
+        film(x, torch.ones(3, 3))
+
+    with pytest.raises(ValueError, match="feature dimension"):
+        film(x, torch.ones(2, 4))
+
+    with pytest.raises(ValueError, match="channel dimension"):
+        film(torch.ones(2, 3, 3, 4), torch.ones(2, 3))
+
+
 def test_reshrrr_block_preserves_shape_without_context():
     x = torch.randn(2, 8, 5, 4)
 
@@ -134,6 +161,14 @@ def test_reshrrr_block_requires_context_when_film_enabled():
 def test_reshrrr_block_rejects_even_kernel_size():
     with pytest.raises(ValueError, match="kernel_size"):
         ResHRRRBlock(channels=8, kernel_size=2)
+
+
+def test_reshrrr_block_rejects_non_positive_args():
+    with pytest.raises(ValueError, match="channels"):
+        ResHRRRBlock(channels=0)
+
+    with pytest.raises(ValueError, match="kernel_size"):
+        ResHRRRBlock(channels=8, kernel_size=0)
 
 
 def test_reshrrr_backbone_returns_output_channels_without_context():

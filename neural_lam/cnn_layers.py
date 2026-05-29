@@ -13,12 +13,16 @@ def _grid_shape_xy(grid_shape: GridShape) -> tuple[int, int]:
     Return ``(x, y)`` dimensions from a datastore or tuple grid shape.
     """
     if isinstance(grid_shape, CartesianGridShape):
-        return grid_shape.x, grid_shape.y
+        grid_x, grid_y = grid_shape.x, grid_shape.y
+    else:
+        if len(grid_shape) != 2:
+            raise ValueError("grid_shape must contain exactly two dimensions")
+        grid_x, grid_y = int(grid_shape[0]), int(grid_shape[1])
 
-    if len(grid_shape) != 2:
-        raise ValueError("grid_shape must contain exactly two dimensions")
+    if grid_x <= 0 or grid_y <= 0:
+        raise ValueError("grid_shape dimensions must be positive")
 
-    return int(grid_shape[0]), int(grid_shape[1])
+    return int(grid_x), int(grid_y)
 
 
 def node_to_grid(
@@ -162,6 +166,8 @@ class FiLM2d(nn.Module):
         if channels <= 0:
             raise ValueError("channels must be positive")
 
+        self.context_dim = context_dim
+        self.channels = channels
         self.proj = nn.Linear(context_dim, 2 * channels)
 
     def forward(
@@ -169,6 +175,26 @@ class FiLM2d(nn.Module):
         x: torch.Tensor,
         context: torch.Tensor,
     ) -> torch.Tensor:
+        if x.ndim != 4:
+            raise ValueError(f"x must have shape (B, C, H, W), got {x.shape}")
+        if context.ndim != 2:
+            raise ValueError(
+                "context must have shape (B, context_dim), "
+                f"got {tuple(context.shape)}"
+            )
+        if x.shape[0] != context.shape[0]:
+            raise ValueError("x and context must have the same batch size")
+        if x.shape[1] != self.channels:
+            raise ValueError(
+                f"x channel dimension must be {self.channels}, "
+                f"got {x.shape[1]}"
+            )
+        if context.shape[1] != self.context_dim:
+            raise ValueError(
+                f"context feature dimension must be {self.context_dim}, "
+                f"got {context.shape[1]}"
+            )
+
         gamma, beta = self.proj(context).chunk(2, dim=-1)
         gamma = gamma[:, :, None, None]
         beta = beta[:, :, None, None]
@@ -186,8 +212,10 @@ class ResHRRRBlock(nn.Module):
         context_dim: int | None = None,
     ):
         super().__init__()
-        if kernel_size % 2 == 0:
-            raise ValueError("kernel_size must be odd")
+        if channels <= 0:
+            raise ValueError("channels must be positive")
+        if kernel_size <= 0 or kernel_size % 2 == 0:
+            raise ValueError("kernel_size must be a positive odd integer")
 
         padding = kernel_size // 2
         self.conv1 = nn.Conv2d(
