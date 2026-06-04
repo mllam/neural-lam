@@ -70,6 +70,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Add comprehensive type hints to `neural_lam/create_graph.py` [\#618](https://github.com/mllam/neural-lam/pull/618) @GiGiKoneti
 
+- Add two-layer caching to install-and-test CI workflow (pip download cache + uv venv cache) to reduce build times by 80-95% [\#606](https://github.com/mllam/neural-lam/pull/606) @Sharkyii
+
 
 ## [v0.6.0](https://github.com/mllam/neural-lam/releases/tag/v0.6.0)
 
