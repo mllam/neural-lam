@@ -1,3 +1,6 @@
+# Standard library
+from typing import Optional, Type, Union
+
 # Third-party
 import torch
 import torch_geometric as pyg
@@ -18,15 +21,15 @@ class InteractionNet(pyg.nn.MessagePassing):
 
     def __init__(
         self,
-        edge_index,
-        input_dim,
-        update_edges=True,
-        hidden_layers=1,
-        hidden_dim=None,
-        edge_chunk_sizes=None,
-        aggr_chunk_sizes=None,
-        aggr="sum",
-    ):
+        edge_index: torch.Tensor,
+        input_dim: int,
+        update_edges: bool = True,
+        hidden_layers: int = 1,
+        hidden_dim: Optional[int] = None,
+        edge_chunk_sizes: Optional[list[int]] = None,
+        aggr_chunk_sizes: Optional[list[int]] = None,
+        aggr: str = "sum",
+    ) -> None:
         """
         Create a new InteractionNet.
 
@@ -99,7 +102,12 @@ class InteractionNet(pyg.nn.MessagePassing):
 
         self.update_edges = update_edges
 
-    def forward(self, send_rep, rec_rep, edge_rep):
+    def forward(
+        self,
+        send_rep: torch.Tensor,
+        rec_rep: torch.Tensor,
+        edge_rep: torch.Tensor,
+    ) -> Union[torch.Tensor, tuple[torch.Tensor, torch.Tensor]]:
         """
         Apply the interaction network to update receiver node
         representations, and optionally edge representations.
@@ -143,21 +151,31 @@ class InteractionNet(pyg.nn.MessagePassing):
 
         return rec_rep
 
-    def node_residual_target(self, rec_rep, edge_rep_aggr):
+    def node_residual_target(
+        self, rec_rep: torch.Tensor, edge_rep_aggr: torch.Tensor
+    ) -> torch.Tensor:
         """
         Return the base tensor for the node residual connection.
         InteractionNet uses the original receiver representation.
         """
         return rec_rep
 
-    def message(self, x_j, x_i, edge_attr):
+    def message(
+        self, x_j: torch.Tensor, x_i: torch.Tensor, edge_attr: torch.Tensor
+    ) -> torch.Tensor:
         """
         Compute messages from node j to node i.
         """
         return self.edge_mlp(torch.cat((edge_attr, x_j, x_i), dim=-1))
 
     # pylint: disable-next=signature-differs
-    def aggregate(self, inputs, index, ptr, dim_size):
+    def aggregate(
+        self,
+        inputs: torch.Tensor,
+        index: torch.Tensor,
+        ptr: Optional[torch.Tensor],
+        dim_size: Optional[int],
+    ) -> tuple[torch.Tensor, torch.Tensor]:
         """
         Overridden aggregation function to:
         * return both aggregated and original messages,
@@ -178,15 +196,15 @@ class PropagationNet(InteractionNet):
 
     def __init__(
         self,
-        edge_index,
-        input_dim,
-        update_edges=True,
-        hidden_layers=1,
-        hidden_dim=None,
-        edge_chunk_sizes=None,
-        aggr_chunk_sizes=None,
-        aggr="sum",
-    ):
+        edge_index: torch.Tensor,
+        input_dim: int,
+        update_edges: bool = True,
+        hidden_layers: int = 1,
+        hidden_dim: Optional[int] = None,
+        edge_chunk_sizes: Optional[list[int]] = None,
+        aggr_chunk_sizes: Optional[list[int]] = None,
+        aggr: str = "sum",
+    ) -> None:
         # Use mean aggregation in propagation version to avoid instability
         super().__init__(
             edge_index,
@@ -199,7 +217,9 @@ class PropagationNet(InteractionNet):
             aggr="mean",
         )
 
-    def node_residual_target(self, rec_rep, edge_rep_aggr):
+    def node_residual_target(
+        self, rec_rep: torch.Tensor, edge_rep_aggr: torch.Tensor
+    ) -> torch.Tensor:
         """
         Return the base tensor for the node residual connection.
         PropagationNet uses the aggregated edge messages, propagating
@@ -207,7 +227,9 @@ class PropagationNet(InteractionNet):
         """
         return edge_rep_aggr
 
-    def message(self, x_j, x_i, edge_attr):
+    def message(
+        self, x_j: torch.Tensor, x_i: torch.Tensor, edge_attr: torch.Tensor
+    ) -> torch.Tensor:
         """
         Compute messages from node j to node i.
         """
@@ -222,7 +244,7 @@ GNN_TYPES = {
 }
 
 
-def get_gnn_class(gnn_type: str):
+def get_gnn_class(gnn_type: str) -> Type[pyg.nn.MessagePassing]:
     """
     Look up a GNN class by name.
 
@@ -245,7 +267,7 @@ class SplitMLPs(nn.Module):
     each chunk through separate MLPs.
     """
 
-    def __init__(self, mlps, chunk_sizes):
+    def __init__(self, mlps: list[nn.Module], chunk_sizes: list[int]) -> None:
         super().__init__()
         assert len(mlps) == len(
             chunk_sizes
@@ -254,7 +276,7 @@ class SplitMLPs(nn.Module):
         self.mlps = nn.ModuleList(mlps)
         self.chunk_sizes = chunk_sizes
 
-    def forward(self, x):
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
         """
         Split input along dim -2 and feed each chunk through its MLP.
 
