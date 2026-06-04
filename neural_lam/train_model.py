@@ -286,9 +286,7 @@ def main(input_args=None):
           neural-lam's default format string is used)""",
     )
 
-    # Wandb-specific settings
-    wandb_group = parser.add_argument_group("WandB & Monitoring")
-    wandb_group.add_argument(
+    logger_group.add_argument(
         "--wandb_id",
         type=str,
         default=None,
@@ -298,20 +296,23 @@ def main(input_args=None):
         "runtimes or that may crash, allowing training to be continued "
         "across multiple job submissions.",
     )
-    wandb_group.add_argument(
+
+    # Metrics & Monitoring (logger-agnostic: applies to both wandb and mlflow)
+    metrics_group = parser.add_argument_group("Metrics & Monitoring")
+    metrics_group.add_argument(
         "--val_steps_to_log",
         nargs="+",
         type=int,
         default=[1, 2, 3, 5, 10],
         help="Steps to log val loss for",
     )
-    wandb_group.add_argument(
+    metrics_group.add_argument(
         "--metrics_watch",
         nargs="+",
         default=[],
         help="List of metrics to watch, including any prefix (e.g. val_rmse)",
     )
-    wandb_group.add_argument(
+    metrics_group.add_argument(
         "--var_leads_metrics_watch",
         type=str,
         default="{}",
@@ -319,21 +320,21 @@ def main(input_args=None):
              metrics (e.g. '{"1": [1, 2], "3": [3, 4]}')""",
     )
 
-    # Forcing Data Options
-    forcing_group = parser.add_argument_group("Forcing Data Options")
-    forcing_group.add_argument(
+    # Data Loading & Forcing
+    data_group = parser.add_argument_group("Data Loading & Forcing")
+    data_group.add_argument(
         "--num_past_forcing_steps",
         type=int,
         default=1,
         help="Number of past time steps to use as input for forcing data",
     )
-    forcing_group.add_argument(
+    data_group.add_argument(
         "--num_future_forcing_steps",
         type=int,
         default=1,
         help="Number of future time steps to use as input for forcing data",
     )
-    forcing_group.add_argument(
+    data_group.add_argument(
         "--load_single_member",
         action="store_true",
         help=(
