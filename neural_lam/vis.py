@@ -777,6 +777,7 @@ def plot_prediction(
     boundary_da: Optional[xr.DataArray] = None,
     boundary_datastore: Optional[BaseRegularGridDatastore] = None,
     boundary_margin_degrees: float = 1.0,
+    crop_to_interior: Optional[bool] = None,
 ) -> matplotlib.figure.Figure:
     """
     Plot an example prediction alongside the ground truth.
@@ -818,6 +819,16 @@ def plot_prediction(
     matplotlib.figure.Figure
         The completed two-panel prediction figure.
     """
+    if crop_to_interior is not None:
+        warnings.warn(
+            "`crop_to_interior` is deprecated and ignored. The interior is "
+            "always shown; pass `boundary_da` and `boundary_datastore` to "
+            "overlay boundary data, and use `boundary_margin_degrees` to "
+            "control the visible margin.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+
     if vrange is None:
         vmin = float(min(da_prediction.min(), da_target.min()))
         vmax = float(max(da_prediction.max(), da_target.max()))
@@ -881,6 +892,7 @@ def plot_spatial_error(
     vrange: Optional[tuple[float, float]] = None,
     boundary_alpha: float = 0.7,
     colorbar_label: str = "",
+    crop_to_interior: Optional[bool] = None,
 ) -> matplotlib.figure.Figure:
     """
     Plot a spatially resolved error map on a projection-aware axis.
@@ -908,6 +920,14 @@ def plot_spatial_error(
     matplotlib.figure.Figure
         Figure handle containing the plotted map.
     """
+    if crop_to_interior is not None:
+        warnings.warn(
+            "`crop_to_interior` is deprecated and ignored. The error map "
+            "is always cropped to the interior bbox.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+
     error_np = error.detach().cpu().numpy()
 
     if vrange is None:

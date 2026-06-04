@@ -135,8 +135,20 @@ def init_datastore_example(datastore_kind):
 
 
 def init_datastore_boundary_example(datastore_kind):
-    datastore_boundary = init_datastore(
-        datastore_kind=datastore_kind,
-        config_path=DATASTORES_BOUNDARY_EXAMPLES[datastore_kind],
-    )
+    # Resolve to absolute path before chdir, otherwise the relative
+    # `tests/datastore_examples/...` lookup would break.
+    config_path = DATASTORES_BOUNDARY_EXAMPLES[datastore_kind].resolve()
+    # mllam-data-prep resolves `interior_dataset_config_path` relative to
+    # the process cwd, not relative to the config file. Temporarily chdir
+    # to the config's directory so the relative `danra.datastore.yaml`
+    # reference resolves regardless of where pytest is invoked from.
+    cwd = Path.cwd()
+    try:
+        os.chdir(config_path.parent)
+        datastore_boundary = init_datastore(
+            datastore_kind=datastore_kind,
+            config_path=config_path,
+        )
+    finally:
+        os.chdir(cwd)
     return datastore_boundary

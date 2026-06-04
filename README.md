@@ -544,9 +544,10 @@ Some options specifically important for evaluation are:
 
 When a `datastore_boundary` is configured in `config.yaml`, evaluation plots
 will overlay the boundary forcing data underneath the interior prediction and
-ground truth panels, allowing visual inspection of the boundary conditions used
-during the forecast. The overlay is controlled by the optional `plotting`
-section in `config.yaml`:
+ground truth panels. Note that the boundary data is currently loaded
+separately for visualization only; model-side consumption of the boundary
+forcing in the forward pass is planned as a follow-up (see #108). The
+overlay is controlled by the optional `plotting` section in `config.yaml`:
 
 * `boundary_margin_degrees`: lat/lon margin (in projection degrees) drawn
   around the interior domain (default `1.0`).
