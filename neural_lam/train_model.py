@@ -171,28 +171,28 @@ def main(input_args=None):
         help="If models should additionally output std.-dev. per "
         "output dimensions",
     )
-    parser.add_argument(
+    arch_group.add_argument(
         "--g2m_gnn_type",
         type=str,
         default="InteractionNet",
         choices=list(GNN_TYPES.keys()),
         help="GNN type for grid-to-mesh encoding",
     )
-    parser.add_argument(
+    arch_group.add_argument(
         "--m2g_gnn_type",
         type=str,
         default="InteractionNet",
         choices=list(GNN_TYPES.keys()),
         help="GNN type for mesh-to-grid decoding",
     )
-    parser.add_argument(
+    arch_group.add_argument(
         "--mesh_up_gnn_type",
         type=str,
         default="InteractionNet",
         choices=list(GNN_TYPES.keys()),
         help="GNN type for upward mesh message passing in hierarchical models",
     )
-    parser.add_argument(
+    arch_group.add_argument(
         "--mesh_down_gnn_type",
         type=str,
         default="InteractionNet",

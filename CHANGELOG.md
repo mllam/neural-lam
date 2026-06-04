@@ -19,6 +19,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   [\#507](https://github.com/mllam/neural-lam/pull/507)
   @Sir-Sloth-The-Lazy
 
+- Group `train_model.py --help` output into logical sections (Core, Runtime, Model Architecture, Training, Evaluation, Logger, WandB & Monitoring, Forcing) with a terminal-width-aware formatter [\#641](https://github.com/mllam/neural-lam/pull/641) @varma1221
+
 ### Changed
 
 - Move data normalization from CPU (`WeatherDataset`) to GPU
