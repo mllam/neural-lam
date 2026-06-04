@@ -64,6 +64,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Add comprehensive type hints to `neural_lam/gnn_layers.py` [\#647](https://github.com/mllam/neural-lam/pull/647) @GiGiKoneti
 
+- Add comprehensive type hints to `neural_lam/weather_dataset.py` [\#631](https://github.com/mllam/neural-lam/pull/631) @GiGiKoneti
+
 - Add comprehensive type hints to `neural_lam/vis.py` [\#625](https://github.com/mllam/neural-lam/pull/625) @GiGiKoneti
 
 - Add comprehensive type hints to `neural_lam/datastore/mdp.py` and `neural_lam/plot_graph.py` [\#622](https://github.com/mllam/neural-lam/pull/622) @GiGiKoneti
