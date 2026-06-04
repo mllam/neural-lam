@@ -1,5 +1,5 @@
 # Standard library
-from typing import Type
+from typing import Optional, Type, Union
 
 # Third-party
 import torch
@@ -25,9 +25,9 @@ class InteractionNet(pyg.nn.MessagePassing):
         input_dim: int,
         update_edges: bool = True,
         hidden_layers: int = 1,
-        hidden_dim: int | None = None,
-        edge_chunk_sizes: list[int] | None = None,
-        aggr_chunk_sizes: list[int] | None = None,
+        hidden_dim: Optional[int] = None,
+        edge_chunk_sizes: Optional[list[int]] = None,
+        aggr_chunk_sizes: Optional[list[int]] = None,
         aggr: str = "sum",
     ) -> None:
         """
@@ -107,7 +107,7 @@ class InteractionNet(pyg.nn.MessagePassing):
         send_rep: torch.Tensor,
         rec_rep: torch.Tensor,
         edge_rep: torch.Tensor,
-    ) -> torch.Tensor | tuple[torch.Tensor, torch.Tensor]:
+    ) -> Union[torch.Tensor, tuple[torch.Tensor, torch.Tensor]]:
         """
         Apply the interaction network to update receiver node
         representations, and optionally edge representations.
@@ -173,8 +173,8 @@ class InteractionNet(pyg.nn.MessagePassing):
         self,
         inputs: torch.Tensor,
         index: torch.Tensor,
-        ptr: torch.Tensor | None,
-        dim_size: int | None,
+        ptr: Optional[torch.Tensor],
+        dim_size: Optional[int],
     ) -> tuple[torch.Tensor, torch.Tensor]:
         """
         Overridden aggregation function to:
@@ -200,9 +200,9 @@ class PropagationNet(InteractionNet):
         input_dim: int,
         update_edges: bool = True,
         hidden_layers: int = 1,
-        hidden_dim: int | None = None,
-        edge_chunk_sizes: list[int] | None = None,
-        aggr_chunk_sizes: list[int] | None = None,
+        hidden_dim: Optional[int] = None,
+        edge_chunk_sizes: Optional[list[int]] = None,
+        aggr_chunk_sizes: Optional[list[int]] = None,
         aggr: str = "sum",
     ) -> None:
         # Use mean aggregation in propagation version to avoid instability
