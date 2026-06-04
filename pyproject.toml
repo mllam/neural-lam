@@ -37,6 +37,7 @@ dependencies = [
     "mlflow>=2.16.2",
     "boto3>=1.35.32",
     "nvidia-ml-py>=13.580.82",
+    "pillow>=9.0.0",
 ]
 requires-python = ">=3.10"
 
@@ -85,7 +86,7 @@ skip = "requirements/*"
 # Pylint config
 [tool.pylint]
 ignore = [
-    "create_mesh.py", # Disable linting for now, as major rework is planned/expected
+    "create_graph.py", # Disable linting for now, as major rework is planned/expected
 ]
 # Temporary fix for import neural_lam statements until set up as proper package
 init-hook = 'import sys; sys.path.append(".")'
