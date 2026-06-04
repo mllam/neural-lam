@@ -68,6 +68,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Add comprehensive type hints to `neural_lam/create_graph.py` [\#618](https://github.com/mllam/neural-lam/pull/618) @GiGiKoneti
 
+- Modernize linting and formatting toolchain by migrating `black`/`isort`/`flake8` to Ruff and adding `pyproject-fmt`, `python-check-blanket-noqa`, and `no-commit-to-branch` pre-commit hooks [\#614](https://github.com/mllam/neural-lam/pull/614) @Shivampal157
+
 
 ## [v0.6.0](https://github.com/mllam/neural-lam/releases/tag/v0.6.0)
 

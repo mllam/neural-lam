@@ -114,9 +114,9 @@ class MDPDatastore(BaseRegularGridDatastore):
             if dim_order is None:
                 dim_order = dim_order_
             else:
-                assert (
-                    dim_order == dim_order_
-                ), "all inputs must have the same dimension order"
+                assert dim_order == dim_order_, (
+                    "all inputs must have the same dimension order"
+                )
 
         self.spatial_coordinates = dim_order
 
@@ -489,9 +489,9 @@ class MDPDatastore(BaseRegularGridDatastore):
         da_xs = ds_category[xdim]
         da_ys = ds_category[ydim]
 
-        assert (
-            da_xs.ndim == da_ys.ndim == 1
-        ), f"{xdim} and {ydim} coordinates must be 1D"
+        assert da_xs.ndim == da_ys.ndim == 1, (
+            f"{xdim} and {ydim} coordinates must be 1D"
+        )
 
         da_x, da_y = xr.broadcast(da_xs, da_ys)
         da_xy = xr.concat([da_x, da_y], dim="grid_coord")
