@@ -58,6 +58,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Fix `IndexError` in distributed flux stats gathering and silent diff stats shape corruption in `compute_standardization_stats.py` when running with `--distributed` and `world_size > 1` [\#411](https://github.com/mllam/neural-lam/pull/411) @RajdeepKushwaha5
 
+- Raise `ValueError` for unsupported `--logger` values in `setup_training_logger`, preventing a misleading `UnboundLocalError` on misconfigured logger types [\#463](https://github.com/mllam/neural-lam/pull/463) @Ritinikhil
+
 ### Maintenance
 
 - Fix GPU CI torch version resolution to query the target wheel index instead of PyPI [\#639](https://github.com/mllam/neural-lam/pull/639) @Sir-Sloth-The-Lazy

@@ -527,6 +527,11 @@ def setup_training_logger(datastore: Any, args: Any, run_name: str) -> Any:
     training_logger : pytorch_lightning.loggers.base
         Logger object.
 
+    Raises
+    ------
+    ValueError
+        If ``args.logger`` is not ``'wandb'`` or ``'mlflow'``.
+
     Notes
     -----
     When ``--wandb_id`` is given, ``resume="allow"`` is set automatically:
