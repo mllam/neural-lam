@@ -7,7 +7,7 @@ import tempfile
 import warnings
 from functools import cache
 from pathlib import Path
-from typing import Any, Iterator, Union
+from typing import Any, Iterator, Union, overload
 
 # Third-party
 import pytorch_lightning as pl
@@ -39,7 +39,27 @@ class BufferList(nn.Module):
         for buffer_i, tensor in enumerate(buffer_tensors):
             self.register_buffer(f"b{buffer_i}", tensor, persistent=persistent)
 
+    @overload
     def __getitem__(self, key: int) -> torch.Tensor:
+        pass
+
+    @overload
+    def __getitem__(self, key: slice) -> list[torch.Tensor]:
+        pass
+
+    def __getitem__(
+        self, key: Union[int, slice]
+    ) -> Union[torch.Tensor, list[torch.Tensor]]:
+        # Unpack slice indices and call recursively for each position
+        if isinstance(key, slice):
+            return [self[i] for i in range(*key.indices(len(self)))]
+        # Support negative indexing (e.g. buffer_list[-1] -> last element)
+        if key < 0:
+            key += len(self)
+        if not (0 <= key < len(self)):
+            raise IndexError(
+                f"index {key} out of range for BufferList of length {len(self)}"
+            )
         return getattr(self, f"b{key}")
 
     def __len__(self) -> int:

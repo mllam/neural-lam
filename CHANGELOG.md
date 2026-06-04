@@ -19,6 +19,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   [\#507](https://github.com/mllam/neural-lam/pull/507)
   @Sir-Sloth-The-Lazy
 
+- Extend `BufferList.__getitem__` with slice and negative-index support (Python sequence semantics); out-of-bounds integer access raises `IndexError`. [\#472](https://github.com/mllam/neural-lam/pull/472) @sudhansu-24
+
 ### Changed
 
 - Move data normalization from CPU (`WeatherDataset`) to GPU
