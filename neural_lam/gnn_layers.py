@@ -134,13 +134,20 @@ class InteractionNet(pyg.nn.MessagePassing):
         )
         rec_diff = self.aggr_mlp(torch.cat((rec_rep, edge_rep_aggr), dim=-1))
 
-        # Residual connections
-        rec_rep = rec_rep + rec_diff
+        # Residual connection for receiver nodes
+        rec_rep = self.node_residual_target(rec_rep, edge_rep_aggr) + rec_diff
 
         if self.update_edges:
             edge_rep = edge_rep + edge_diff
             return rec_rep, edge_rep
 
+        return rec_rep
+
+    def node_residual_target(self, rec_rep, edge_rep_aggr):
+        """
+        Return the base tensor for the node residual connection.
+        InteractionNet uses the original receiver representation.
+        """
         return rec_rep
 
     def message(self, x_j, x_i, edge_attr):
@@ -158,6 +165,77 @@ class InteractionNet(pyg.nn.MessagePassing):
         """
         aggr = super().aggregate(inputs, index, ptr, self.num_rec)
         return aggr, inputs
+
+
+class PropagationNet(InteractionNet):
+    """
+    Alternative version of InteractionNet that incentivizes the propagation
+    of information from sender nodes to receivers.
+    """
+
+    # pylint: disable=arguments-differ
+    # Disable to override args/kwargs from superclass
+
+    def __init__(
+        self,
+        edge_index,
+        input_dim,
+        update_edges=True,
+        hidden_layers=1,
+        hidden_dim=None,
+        edge_chunk_sizes=None,
+        aggr_chunk_sizes=None,
+        aggr="sum",
+    ):
+        # Use mean aggregation in propagation version to avoid instability
+        super().__init__(
+            edge_index,
+            input_dim,
+            update_edges=update_edges,
+            hidden_layers=hidden_layers,
+            hidden_dim=hidden_dim,
+            edge_chunk_sizes=edge_chunk_sizes,
+            aggr_chunk_sizes=aggr_chunk_sizes,
+            aggr="mean",
+        )
+
+    def node_residual_target(self, rec_rep, edge_rep_aggr):
+        """
+        Return the base tensor for the node residual connection.
+        PropagationNet uses the aggregated edge messages, propagating
+        sender information to receiver nodes.
+        """
+        return edge_rep_aggr
+
+    def message(self, x_j, x_i, edge_attr):
+        """
+        Compute messages from node j to node i.
+        """
+        # Residual connection is to sender node, propagating information
+        # to edge
+        return x_j + self.edge_mlp(torch.cat((edge_attr, x_j, x_i), dim=-1))
+
+
+GNN_TYPES = {
+    "InteractionNet": InteractionNet,
+    "PropagationNet": PropagationNet,
+}
+
+
+def get_gnn_class(gnn_type: str):
+    """
+    Look up a GNN class by name.
+
+    gnn_type: One of the keys in GNN_TYPES
+        (currently "InteractionNet" or "PropagationNet")
+    Returns the corresponding GNN class.
+    """
+    if gnn_type not in GNN_TYPES:
+        raise ValueError(
+            f"Unknown GNN type '{gnn_type}'. "
+            f"Available types: {list(GNN_TYPES.keys())}"
+        )
+    return GNN_TYPES[gnn_type]
 
 
 class SplitMLPs(nn.Module):
