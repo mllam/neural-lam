@@ -117,3 +117,20 @@ def test_wandb_id_ignored_with_mlflow_warns():
     warning_msg = mock_log.warning.call_args[0][0]
     assert "--wandb_id is set but logger is" in warning_msg
     assert "mlflow" in warning_msg
+
+
+def test_unsupported_logger_raises_value_error():
+    """Unsupported --logger values raise ValueError, not return None."""
+    # First-party
+    from neural_lam.utils import setup_training_logger
+
+    args = MagicMock()
+    args.logger = "tensorboard"
+    args.logger_project = "neural_lam"
+    args.wandb_id = None
+
+    datastore = MagicMock()
+    datastore._config = {}
+
+    with pytest.raises(ValueError, match="Unsupported logger type"):
+        setup_training_logger(datastore, args, run_name="my-run")
