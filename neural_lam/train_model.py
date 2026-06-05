@@ -1,10 +1,9 @@
 # Standard library
-import argparse
 import json
 import random
 import shutil
 import time
-from argparse import ArgumentParser
+from argparse import ArgumentDefaultsHelpFormatter, ArgumentParser
 
 # Third-party
 # for logging the model:
@@ -21,7 +20,7 @@ from .models import MODELS, ARForecaster, ForecasterModule
 from .weather_dataset import WeatherDataModule
 
 
-class AdaptiveHelpFormatter(argparse.ArgumentDefaultsHelpFormatter):
+class AdaptiveHelpFormatter(ArgumentDefaultsHelpFormatter):
     def __init__(self, prog):
         terminal_width = shutil.get_terminal_size(fallback=(100, 20)).columns
         width = max(80, min(terminal_width, 120))
