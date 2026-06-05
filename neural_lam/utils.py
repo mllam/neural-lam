@@ -654,22 +654,35 @@ def get_integer_time(tdelta: datetime.timedelta) -> tuple[int, str]:
     >>> get_integer_time(timedelta(milliseconds=1000))
     (1, 'seconds')
     >>> get_integer_time(timedelta(days=0.001))
-    (1, 'unknown')
+    (86400, 'milliseconds')
+    >>> get_integer_time(timedelta(0))
+    (0, 'seconds')
+    >>> get_integer_time(timedelta(days=-7))
+    (-1, 'weeks')
     """
-    total_seconds = tdelta.total_seconds()
+    # Use integer microseconds rather than tdelta.total_seconds() (a float)
+    # to avoid floating-point precision errors when checking divisibility.
+    total_microseconds = (
+        tdelta.days * 86400_000_000
+        + tdelta.seconds * 1_000_000
+        + tdelta.microseconds
+    )
+
+    if total_microseconds == 0:
+        return 0, "seconds"
 
     units = {
-        "weeks": 604800,
-        "days": 86400,
-        "hours": 3600,
-        "minutes": 60,
-        "seconds": 1,
-        "milliseconds": 0.001,
-        "microseconds": 0.000001,
+        "weeks": 604800_000_000,
+        "days": 86400_000_000,
+        "hours": 3600_000_000,
+        "minutes": 60_000_000,
+        "seconds": 1_000_000,
+        "milliseconds": 1_000,
+        "microseconds": 1,
     }
 
-    for unit, unit_in_seconds in units.items():
-        if total_seconds % unit_in_seconds == 0:
-            return int(total_seconds / unit_in_seconds), unit
+    for unit, unit_us in units.items():
+        if total_microseconds % unit_us == 0:
+            return total_microseconds // unit_us, unit
 
     return 1, "unknown"
