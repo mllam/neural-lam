@@ -62,6 +62,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Close the `PIL.Image` file handle and delete the temporary `.png` after upload in `CustomMLFlowLogger.log_image`, fixing a resource leak and temp-file accumulation in CWD; replace `sys.exit(1)` on `NoCredentialsError` with a re-raise so callers can handle the failure [\#496](https://github.com/mllam/neural-lam/pull/496) @Zrahay
 
+- Refactor `get_integer_time` to use integer microsecond arithmetic instead of `total_seconds()` floats, with explicit handling for `timedelta(0)` (now returns `(0, 'seconds')` instead of `(0, 'weeks')`) and correct support for sub-second and negative timedeltas. Current callers all pass whole-hour `datastore.step_length` so behaviour is unchanged in practice; this is a defensive correctness improvement [\#494](https://github.com/mllam/neural-lam/pull/494) @Saptami191
+
 ### Maintenance
 
 - Add comprehensive type hints to `neural_lam/metrics.py` [\#447](https://github.com/mllam/neural-lam/pull/447) @sidhantpande
