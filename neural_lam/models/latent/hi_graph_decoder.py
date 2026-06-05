@@ -3,7 +3,7 @@ from torch import nn
 
 # First-party
 from neural_lam import utils
-from neural_lam.gnn_layers import InteractionNet, PropagationNet
+from neural_lam.gnn_layers import get_gnn_class
 
 # Local
 from .base_decoder import BaseGraphLatentDecoder
@@ -16,7 +16,9 @@ class HiGraphLatentDecoder(BaseGraphLatentDecoder):
     *up* through the hierarchy (mixing in the latent at the top level), then
     *down* through the hierarchy with residual connections back to the
     intra-level reps from the upward pass, and finally maps back to grid
-    via a PropagationNet.
+    via an m2g GNN (type set by ``m2g_gnn_type``). The g2m, mesh-up and
+    mesh-down GNN types are set by ``g2m_gnn_type``, ``mesh_up_gnn_type``
+    and ``mesh_down_gnn_type`` respectively.
     """
 
     def __init__(
@@ -31,6 +33,10 @@ class HiGraphLatentDecoder(BaseGraphLatentDecoder):
         num_state_vars,
         intra_level_layers,
         hidden_layers=1,
+        g2m_gnn_type="InteractionNet",
+        m2g_gnn_type="PropagationNet",
+        mesh_up_gnn_type="InteractionNet",
+        mesh_down_gnn_type="PropagationNet",
         output_std=True,
     ):
         super().__init__(
@@ -47,22 +53,23 @@ class HiGraphLatentDecoder(BaseGraphLatentDecoder):
                 "flat graphs."
             )
 
-        self.g2m_gnn = InteractionNet(
+        self.g2m_gnn = get_gnn_class(g2m_gnn_type)(
             g2m_edge_index,
             hidden_dim,
             hidden_layers=hidden_layers,
             update_edges=False,
         )
-        self.m2g_gnn = PropagationNet(
+        self.m2g_gnn = get_gnn_class(m2g_gnn_type)(
             m2g_edge_index,
             hidden_dim,
             hidden_layers=hidden_layers,
             update_edges=False,
         )
 
+        mesh_up_class = get_gnn_class(mesh_up_gnn_type)
         self.mesh_up_gnns = nn.ModuleList(
             [
-                InteractionNet(
+                mesh_up_class(
                     edge_index,
                     hidden_dim,
                     hidden_layers=hidden_layers,
@@ -71,9 +78,10 @@ class HiGraphLatentDecoder(BaseGraphLatentDecoder):
                 for edge_index in mesh_up_edge_index
             ]
         )
+        mesh_down_class = get_gnn_class(mesh_down_gnn_type)
         self.mesh_down_gnns = nn.ModuleList(
             [
-                PropagationNet(
+                mesh_down_class(
                     edge_index,
                     hidden_dim,
                     hidden_layers=hidden_layers,
@@ -89,6 +97,8 @@ class HiGraphLatentDecoder(BaseGraphLatentDecoder):
                 utils.make_gnn_seq(
                     edge_index, intra_level_layers, hidden_layers, hidden_dim
                 )
+                if intra_level_layers > 0
+                else utils.IdentityModule()
                 for edge_index in m2m_edge_index
             ]
         )
@@ -97,6 +107,8 @@ class HiGraphLatentDecoder(BaseGraphLatentDecoder):
                 utils.make_gnn_seq(
                     edge_index, intra_level_layers, hidden_layers, hidden_dim
                 )
+                if intra_level_layers > 0
+                else utils.IdentityModule()
                 for edge_index in list(m2m_edge_index)[:-1]
                 # Top level (L) does not need a down intra-level GNN
             ]

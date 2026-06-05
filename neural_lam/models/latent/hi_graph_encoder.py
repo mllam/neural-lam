@@ -3,7 +3,7 @@ from torch import nn
 
 # First-party
 from neural_lam import utils
-from neural_lam.gnn_layers import PropagationNet
+from neural_lam.gnn_layers import get_gnn_class
 
 # Local
 from .base_encoder import BaseLatentEncoder
@@ -12,9 +12,10 @@ from .base_encoder import BaseLatentEncoder
 class HiGraphLatentEncoder(BaseLatentEncoder):
     """
     Latent encoder for a hierarchical mesh: grid -> bottom mesh level via a
-    PropagationNet, then propagates upward through mesh levels using
-    PropagationNets, with optional intra-level processing at each level.
-    The latent distribution is read out from the top mesh level.
+    g2m GNN (type set by ``g2m_gnn_type``), then propagates upward through
+    mesh levels using mesh-up GNNs (type set by ``mesh_up_gnn_type``), with
+    optional intra-level processing at each level. The latent distribution
+    is read out from the top mesh level.
     """
 
     def __init__(
@@ -26,6 +27,8 @@ class HiGraphLatentEncoder(BaseLatentEncoder):
         hidden_dim,
         intra_level_layers,
         hidden_layers=1,
+        g2m_gnn_type="PropagationNet",
+        mesh_up_gnn_type="PropagationNet",
         output_dist="isotropic",
     ):
         super().__init__(latent_dim, output_dist)
@@ -40,16 +43,17 @@ class HiGraphLatentEncoder(BaseLatentEncoder):
                 "flat graphs."
             )
 
-        self.g2m_gnn = PropagationNet(
+        self.g2m_gnn = get_gnn_class(g2m_gnn_type)(
             g2m_edge_index,
             hidden_dim,
             hidden_layers=hidden_layers,
             update_edges=False,
         )
 
+        mesh_up_class = get_gnn_class(mesh_up_gnn_type)
         self.mesh_up_gnns = nn.ModuleList(
             [
-                PropagationNet(
+                mesh_up_class(
                     edge_index,
                     hidden_dim,
                     hidden_layers=hidden_layers,
@@ -65,6 +69,8 @@ class HiGraphLatentEncoder(BaseLatentEncoder):
                 utils.make_gnn_seq(
                     edge_index, intra_level_layers, hidden_layers, hidden_dim
                 )
+                if intra_level_layers > 0
+                else utils.IdentityModule()
                 for edge_index in m2m_edge_index
             ]
         )

@@ -53,7 +53,7 @@ def flat_dims():
         "latent_dim": 4,
         "num_state_vars": 2,
         "hidden_layers": 1,
-        "processor_layers": 2,
+        "m2m_layers": 2,
     }
 
 
@@ -87,18 +87,14 @@ def test_identity_module_passes_args_through():
     assert out == (a, b, c)
 
 
-def test_make_gnn_seq_zero_layers_returns_identity():
+def test_make_gnn_seq_zero_layers_raises():
+    """make_gnn_seq must build a real sequence; the no-op (identity) case is
+    the caller's responsibility, exercised via the zero-intra-layer tests."""
     edge_index = _fully_connected_edge_index(3, 3)
-    seq = make_gnn_seq(
-        edge_index, num_gnn_layers=0, hidden_layers=1, hidden_dim=8
-    )
-    assert isinstance(seq, IdentityModule)
-
-    mesh_rep = torch.randn(2, 3, 8)
-    edge_rep = torch.randn(2, edge_index.shape[1], 8)
-    out_mesh, out_edge = seq(mesh_rep, edge_rep)
-    assert torch.equal(out_mesh, mesh_rep)
-    assert torch.equal(out_edge, edge_rep)
+    with pytest.raises(ValueError, match="num_gnn_layers >= 1"):
+        make_gnn_seq(
+            edge_index, num_gnn_layers=0, hidden_layers=1, hidden_dim=8
+        )
 
 
 def test_make_gnn_seq_positive_layers_runs():
@@ -164,6 +160,10 @@ def test_constant_encoder_is_input_independent():
     assert torch.equal(a.mean, b.mean)
     assert torch.equal(a.stddev, b.stddev)
     assert a.mean.shape == (2, 3, 4)
+    # Prior is a mean-0 standard normal (isotropic): fixes the prob_model_lam
+    # mean-1 bug, see ConstantLatentEncoder docstring.
+    assert torch.equal(a.mean, torch.zeros_like(a.mean))
+    assert torch.allclose(a.stddev, torch.ones_like(a.stddev))
 
 
 def test_graph_encoder_shapes_and_backprop(
@@ -174,7 +174,7 @@ def test_graph_encoder_shapes_and_backprop(
         g2m_edge_index=flat_edges["g2m"],
         m2m_edge_index=flat_edges["m2m"],
         hidden_dim=flat_dims["hidden_dim"],
-        processor_layers=flat_dims["processor_layers"],
+        m2m_layers=flat_dims["m2m_layers"],
         hidden_layers=flat_dims["hidden_layers"],
         output_dist="diagonal",
     )
@@ -204,7 +204,7 @@ def test_graph_decoder_shapes_with_output_std(
         hidden_dim=flat_dims["hidden_dim"],
         latent_dim=flat_dims["latent_dim"],
         num_state_vars=flat_dims["num_state_vars"],
-        processor_layers=flat_dims["processor_layers"],
+        m2m_layers=flat_dims["m2m_layers"],
         hidden_layers=flat_dims["hidden_layers"],
         output_std=True,
     )
@@ -241,7 +241,7 @@ def test_graph_decoder_no_output_std_returns_none(
         hidden_dim=flat_dims["hidden_dim"],
         latent_dim=flat_dims["latent_dim"],
         num_state_vars=flat_dims["num_state_vars"],
-        processor_layers=flat_dims["processor_layers"],
+        m2m_layers=flat_dims["m2m_layers"],
         hidden_layers=flat_dims["hidden_layers"],
         output_std=False,
     )
@@ -263,6 +263,56 @@ def test_graph_decoder_no_output_std_returns_none(
         flat_dims["num_state_vars"],
     )
     assert pred_std is None
+
+
+def test_flat_modules_zero_m2m_layers_use_identity(
+    flat_dims, flat_edges, flat_graph_emb
+):
+    """m2m_layers=0 routes on-mesh processing through IdentityModule at the
+    call site (make_gnn_seq itself rejects 0). Exercise both flat modules."""
+    enc = GraphLatentEncoder(
+        latent_dim=flat_dims["latent_dim"],
+        g2m_edge_index=flat_edges["g2m"],
+        m2m_edge_index=flat_edges["m2m"],
+        hidden_dim=flat_dims["hidden_dim"],
+        m2m_layers=0,
+        hidden_layers=flat_dims["hidden_layers"],
+    )
+    assert isinstance(enc.m2m_gnns, IdentityModule)
+
+    dec = GraphLatentDecoder(
+        g2m_edge_index=flat_edges["g2m"],
+        m2m_edge_index=flat_edges["m2m"],
+        m2g_edge_index=flat_edges["m2g"],
+        hidden_dim=flat_dims["hidden_dim"],
+        latent_dim=flat_dims["latent_dim"],
+        num_state_vars=flat_dims["num_state_vars"],
+        m2m_layers=0,
+        hidden_layers=flat_dims["hidden_layers"],
+    )
+    assert isinstance(dec.m2m_gnns, IdentityModule)
+
+    B = flat_dims["batch_size"]
+    grid_rep = torch.randn(B, flat_dims["num_grid"], flat_dims["hidden_dim"])
+    dist = enc(grid_rep, graph_emb=flat_graph_emb)
+    assert dist.mean.shape == (
+        B,
+        flat_dims["num_mesh"],
+        flat_dims["latent_dim"],
+    )
+
+    latent_samples = torch.randn(
+        B, flat_dims["num_mesh"], flat_dims["latent_dim"]
+    )
+    last_state = torch.randn(
+        B, flat_dims["num_grid"], flat_dims["num_state_vars"]
+    )
+    pred_mean, _ = dec(grid_rep, latent_samples, last_state, flat_graph_emb)
+    assert pred_mean.shape == (
+        B,
+        flat_dims["num_grid"],
+        flat_dims["num_state_vars"],
+    )
 
 
 # --- Hierarchical fixtures and tests ----------------------------------------

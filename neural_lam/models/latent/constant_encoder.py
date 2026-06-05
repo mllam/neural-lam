@@ -10,13 +10,14 @@ class ConstantLatentEncoder(BaseLatentEncoder):
     Latent encoder that returns a constant (input-independent) distribution.
 
     Used as a non-learned prior in ``GraphEFM`` when ``learn_prior`` is
-    disabled. ``compute_dist_params`` returns a tensor of ones, so the
-    resulting Normal is ``Normal(mean=1, std=1)`` for ``output_dist=
-    "isotropic"`` and ``Normal(mean=1, std=softplus(1)+eps)`` for
-    ``output_dist="diagonal"``. (Note: the ``train_model.py`` CLI help on
-    ``prob_model_lam`` describes this prior as "mean 0"; the code itself
-    has always produced mean 1. Preserved as-is during the port for
-    behavioral parity — open question for upstream.)
+    disabled. ``compute_dist_params`` returns a tensor of zeros, so the
+    resulting Normal is ``Normal(mean=0, std=1)`` for ``output_dist=
+    "isotropic"`` and ``Normal(mean=0, std=softplus(0)+eps)`` for
+    ``output_dist="diagonal"``. (Note: ``prob_model_lam`` returned a tensor
+    of ones here, giving mean 1, while its ``train_model.py`` CLI help
+    described the prior as "mean 0". The mean 1 was a bug -- it is only a
+    constant offset, but a mean-0 prior is what is intended, so the port
+    uses zeros.)
     """
 
     def __init__(self, latent_dim, num_mesh_nodes, output_dist="isotropic"):

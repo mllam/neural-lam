@@ -479,22 +479,37 @@ class IdentityModule(nn.Module):
         return args
 
 
-def make_gnn_seq(edge_index, num_gnn_layers, hidden_layers, hidden_dim):
+def make_gnn_seq(
+    edge_index,
+    num_gnn_layers,
+    hidden_layers,
+    hidden_dim,
+    gnn_type="InteractionNet",
+):
     """
-    Build a sequential stack of InteractionNet layers that propagates both
-    node and edge representations. Returns an IdentityModule if
-    num_gnn_layers is 0.
+    Build a sequential stack of GNN layers that propagates both node and
+    edge representations. The layer type is set by ``gnn_type`` (any key in
+    ``gnn_layers.GNN_TYPES``, default ``InteractionNet``); all such layers
+    share the ``(send, rec, edge) -> (rec, edge)`` interface.
+
+    ``num_gnn_layers`` must be at least 1. Callers that want a no-op stage
+    (e.g. zero intra-level layers) should substitute an ``IdentityModule``
+    themselves rather than calling this with 0.
     """
     # First-party
-    from neural_lam.gnn_layers import InteractionNet
+    from neural_lam.gnn_layers import get_gnn_class
 
-    if num_gnn_layers == 0:
-        return IdentityModule()
+    if num_gnn_layers < 1:
+        raise ValueError(
+            "make_gnn_seq requires num_gnn_layers >= 1 "
+            f"(got {num_gnn_layers}); use an IdentityModule for a no-op stage."
+        )
+    gnn_class = get_gnn_class(gnn_type)
     return pyg.nn.Sequential(
         "mesh_rep, edge_rep",
         [
             (
-                InteractionNet(
+                gnn_class(
                     edge_index,
                     hidden_dim,
                     hidden_layers=hidden_layers,
