@@ -27,7 +27,7 @@ class ConstantLatentEncoder(BaseLatentEncoder):
         """
         Return constant parameters of shape (B, num_mesh_nodes, output_dim).
         """
-        return torch.ones(
+        return torch.zeros(
             grid_rep.shape[0],
             self.num_mesh_nodes,
             self.output_dim,
