@@ -272,10 +272,17 @@ class BaseGraphModel(StepPredictor):
             pred_delta_mean, pred_std_raw = net_output.chunk(
                 2, dim=-1
             )  # both (B, num_grid_nodes, d_f)
-            # NOTE: The predicted std. is not scaled in any way here
+            # Scale predicted std. with one-step difference std. so that
+            # the initial pred_std is on the empirical scale of the data,
+            # mirroring the diff_std scaling of pred_delta_mean below.
+            # Without this, NLL/CRPS explode in early training for
+            # variables whose physical step-diff std is much greater than
+            # softplus(0) = ln(2).
             # linter for some reason does not think softplus is callable
             # pylint: disable-next=not-callable
-            pred_std = torch.nn.functional.softplus(pred_std_raw)
+            pred_std = (
+                torch.nn.functional.softplus(pred_std_raw) * self.diff_std
+            )
         else:
             pred_delta_mean = net_output
             pred_std = None

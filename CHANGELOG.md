@@ -64,6 +64,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Log every figure passed to `CustomMLFlowLogger.log_image` instead of silently dropping all but the first, using per-figure indexed keys (`{key}_{i}`) when more than one is supplied [\#499](https://github.com/mllam/neural-lam/pull/499) @Raj-Taware
 
+- Scale predicted `pred_std` by `self.diff_std` in `output_std=True` graph step-predictors so it starts on the empirical one-step difference scale, avoiding early-training NLL/CRPS blow-up for variables whose physical step-diff std is much larger than `softplus(0) = ln(2)` ([#347](https://github.com/mllam/neural-lam/issues/347)) [\#523](https://github.com/mllam/neural-lam/pull/523) @Debadri-das
+
 ### Maintenance
 
 - Add comprehensive type hints to `neural_lam/metrics.py` [\#447](https://github.com/mllam/neural-lam/pull/447) @sidhantpande
