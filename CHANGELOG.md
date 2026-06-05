@@ -66,6 +66,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Log every figure passed to `CustomMLFlowLogger.log_image` instead of silently dropping all but the first, using per-figure indexed keys (`{key}_{i}`) when more than one is supplied [\#499](https://github.com/mllam/neural-lam/pull/499) @Raj-Taware
 
+- Validate `--var_leads_metrics_watch` variable indices against the datastore in `train_model.py` so an out-of-range index raises a clear CLI error immediately, instead of an `IndexError` deep in the first validation epoch after potentially hours of training [\#306](https://github.com/mllam/neural-lam/pull/306) @Ayushhgit
+
 ### Maintenance
 
 - Add comprehensive type hints to `neural_lam/metrics.py` [\#447](https://github.com/mllam/neural-lam/pull/447) @sidhantpande
