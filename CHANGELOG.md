@@ -64,6 +64,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Add comprehensive type hints to `neural_lam/metrics.py` [\#447](https://github.com/mllam/neural-lam/pull/447) @sidhantpande
 
+- Add type hints to methods in `neural_lam/custom_loggers.py` [\#455](https://github.com/mllam/neural-lam/pull/455) @sidhantpande
+
 - Add comprehensive type hints to `neural_lam/gnn_layers.py` [\#647](https://github.com/mllam/neural-lam/pull/647) @GiGiKoneti
 
 - Add comprehensive type hints to `neural_lam/weather_dataset.py` [\#631](https://github.com/mllam/neural-lam/pull/631) @GiGiKoneti
