@@ -70,6 +70,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Add comprehensive type hints to `neural_lam/datastore/mdp.py` and `neural_lam/plot_graph.py` [\#622](https://github.com/mllam/neural-lam/pull/622) @GiGiKoneti
 
+- Group `train_model.py --help` output into logical sections (Core, Runtime, Model Architecture, Training, Evaluation, Logger, Metrics & Monitoring, Data Loading & Forcing) with a terminal-width-aware formatter [\#641](https://github.com/mllam/neural-lam/pull/641) @varma1221
+
 - Fix GPU CI torch version resolution to query the target wheel index instead of PyPI [\#639](https://github.com/mllam/neural-lam/pull/639) @Sir-Sloth-The-Lazy
 
 - Explicitly cleanup the temporary directory in `DummyDatastore` by adding a `__del__` method, preventing `ResourceWarning` during garbage collection in tests [\#487](https://github.com/mllam/neural-lam/pull/487) @sohampatil01-svg
