@@ -66,11 +66,16 @@ class HiGraphLatentEncoder(BaseLatentEncoder):
         # Identity mappings if intra_level_layers == 0
         self.intra_level_gnns = nn.ModuleList(
             [
-                utils.make_gnn_seq(
-                    edge_index, intra_level_layers, hidden_layers, hidden_dim
+                (
+                    utils.make_gnn_seq(
+                        edge_index,
+                        intra_level_layers,
+                        hidden_layers,
+                        hidden_dim,
+                    )
+                    if intra_level_layers > 0
+                    else utils.IdentityModule()
                 )
-                if intra_level_layers > 0
-                else utils.IdentityModule()
                 for edge_index in m2m_edge_index
             ]
         )

@@ -94,21 +94,31 @@ class HiGraphLatentDecoder(BaseGraphLatentDecoder):
         # Identity mappings if intra_level_layers == 0
         self.intra_up_gnns = nn.ModuleList(
             [
-                utils.make_gnn_seq(
-                    edge_index, intra_level_layers, hidden_layers, hidden_dim
+                (
+                    utils.make_gnn_seq(
+                        edge_index,
+                        intra_level_layers,
+                        hidden_layers,
+                        hidden_dim,
+                    )
+                    if intra_level_layers > 0
+                    else utils.IdentityModule()
                 )
-                if intra_level_layers > 0
-                else utils.IdentityModule()
                 for edge_index in m2m_edge_index
             ]
         )
         self.intra_down_gnns = nn.ModuleList(
             [
-                utils.make_gnn_seq(
-                    edge_index, intra_level_layers, hidden_layers, hidden_dim
+                (
+                    utils.make_gnn_seq(
+                        edge_index,
+                        intra_level_layers,
+                        hidden_layers,
+                        hidden_dim,
+                    )
+                    if intra_level_layers > 0
+                    else utils.IdentityModule()
                 )
-                if intra_level_layers > 0
-                else utils.IdentityModule()
                 for edge_index in list(m2m_edge_index)[:-1]
                 # Top level (L) does not need a down intra-level GNN
             ]
