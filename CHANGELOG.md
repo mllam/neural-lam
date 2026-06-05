@@ -60,6 +60,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Raise `ValueError` for unsupported `--logger` values in `setup_training_logger`, preventing a misleading `UnboundLocalError` on misconfigured logger types [\#463](https://github.com/mllam/neural-lam/pull/463) @Ritinikhil
 
+- Fix image overwriting in `plot_examples` for non-Wandb loggers by including the example index in the log key (the previous logic had the two branches inverted relative to its own comment) [\#205](https://github.com/mllam/neural-lam/pull/205) @Shristi-Goel
+
 ### Maintenance
 
 - Add comprehensive type hints to `neural_lam/metrics.py` [\#447](https://github.com/mllam/neural-lam/pull/447) @sidhantpande
