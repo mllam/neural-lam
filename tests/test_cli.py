@@ -134,3 +134,21 @@ def test_unsupported_logger_raises_value_error():
 
     with pytest.raises(ValueError, match="Unsupported logger type"):
         setup_training_logger(datastore, args, run_name="my-run")
+
+
+def test_load_training_state_requires_load():
+    """--load_training_state without --load must fail at the CLI argument
+    check, before reaching `load_config_and_datastore`. The assertion lives
+    in train_model.main and protects against the user expecting to resume
+    training state without supplying a checkpoint."""
+    with patch("neural_lam.train_model.load_config_and_datastore") as mock_load:
+        with pytest.raises(SystemExit, match="2"):
+            neural_lam.train_model.main.__wrapped__(
+                [
+                    "--config_path",
+                    "dummy.yaml",
+                    "--load_training_state",
+                ]
+            )
+
+    mock_load.assert_not_called()
