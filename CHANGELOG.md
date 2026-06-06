@@ -70,6 +70,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Fix `WeatherDataset.__len__` off-by-one in analysis mode (was undercounting by 1 sample), include `num_past_forcing_steps` in the forecast-mode minimum-horizon check, validate forcing-side forecast horizon when forcing is present, and use `min(n_state, n_forcing)` when both are present in analysis mode; raise `IndexError` for out-of-range indices in `WeatherDataset.__getitem__` (with Python-style negative indexing support) [\#312](https://github.com/mllam/neural-lam/pull/312) @kshirajahere
 
+- Fix `WeatherDataset.create_dataarray_from_tensor` to look up the feature coordinate dynamically (`{category}_feature`) instead of hardcoded `state_feature` and expose `WeatherDataset.da_static`, so the method works for `state`, `forcing`, and `static` categories without raising `AttributeError` [\#309](https://github.com/mllam/neural-lam/pull/309) @Jayant-kernel
+
 ### Maintenance
 
 - Group the existing Neural-LAM citation papers in the README under a `### Core Neural-LAM Publications` subheading for clearer structure [\#633](https://github.com/mllam/neural-lam/pull/633) @HetaviM29
