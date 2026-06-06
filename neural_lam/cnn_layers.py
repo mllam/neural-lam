@@ -210,6 +210,7 @@ class ResHRRRBlock(nn.Module):
         kernel_size: int = 3,
         reduction: int = 16,
         context_dim: int | None = None,
+        padding_mode: str = "zeros",
     ):
         super().__init__()
         if channels <= 0:
@@ -223,6 +224,7 @@ class ResHRRRBlock(nn.Module):
             channels,
             kernel_size=kernel_size,
             padding=padding,
+            padding_mode=padding_mode,
         )
         self.act = nn.SiLU()
         self.conv2 = nn.Conv2d(
@@ -230,6 +232,7 @@ class ResHRRRBlock(nn.Module):
             channels,
             kernel_size=kernel_size,
             padding=padding,
+            padding_mode=padding_mode,
         )
         self.se = SqueezeExcitation2d(channels, reduction=reduction)
         self.film = (
@@ -267,6 +270,7 @@ class ResHRRRBackbone(nn.Module):
         kernel_size: int = 3,
         reduction: int = 16,
         context_dim: int | None = None,
+        padding_mode: str = "zeros",
     ):
         super().__init__()
         if input_channels <= 0:
@@ -290,6 +294,7 @@ class ResHRRRBackbone(nn.Module):
                     kernel_size=kernel_size,
                     reduction=reduction,
                     context_dim=context_dim,
+                    padding_mode=padding_mode,
                 )
                 for _ in range(num_blocks)
             ]

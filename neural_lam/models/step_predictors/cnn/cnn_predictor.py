@@ -26,6 +26,7 @@ class CNNPredictor(StepPredictor):
         cnn_kernel_size: int = 3,
         cnn_se_reduction: int = 16,
         cnn_film: bool = False,
+        cnn_padding_mode: str = "zeros",
         num_past_forcing_steps: int = 1,
         num_future_forcing_steps: int = 1,
         output_std: bool = False,
@@ -89,6 +90,7 @@ class CNNPredictor(StepPredictor):
             kernel_size=cnn_kernel_size,
             reduction=cnn_se_reduction,
             context_dim=context_dim,
+            padding_mode=cnn_padding_mode,
         )
 
         self.cnn_film = cnn_film

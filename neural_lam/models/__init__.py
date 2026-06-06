@@ -11,6 +11,7 @@ from .step_predictors.graph.hi_lam_parallel import HiLAMParallel
 from .step_predictors.graph.hierarchical import BaseHiGraphModel
 
 MODELS = {
+    "cnn_predictor": CNNPredictor,
     "graph_lam": GraphLAM,
     "hi_lam": HiLAM,
     "hi_lam_parallel": HiLAMParallel,

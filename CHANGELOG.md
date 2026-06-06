@@ -9,9 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- Add an initial regular-grid `CNNPredictor` plus reusable CNN grid transforms,
-  FiLM conditioning, Squeeze-and-Excitation, and ResHRRR-style residual
-  backbone layers with validation coverage.
+- Add an initial regular-grid `CNNPredictor`, CLI model construction support,
+  reusable CNN grid transforms, FiLM conditioning, Squeeze-and-Excitation, and
+  ResHRRR-style residual backbone layers with validation coverage.
 
 - Add `PropagationNet` GNN layer that incentivises directional message
   propagation from sender to receiver nodes, and expose it alongside
