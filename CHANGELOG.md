@@ -76,6 +76,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Add unit tests for `inverse_softplus` covering roundtrip identity (parametrized over `beta`), near-zero clamping, and above-threshold linear passthrough [\#419](https://github.com/mllam/neural-lam/pull/419) @Riteesh-NITT
 
+- Add regression test that `datastore` and `forecaster` stay excluded from the saved Lightning hyperparameters (in-memory and on-disk after a checkpoint round-trip), so `load_from_checkpoint` continues to require them to be passed in explicitly ([#148](https://github.com/mllam/neural-lam/issues/148)) [\#232](https://github.com/mllam/neural-lam/pull/232) @Jayant-kernel
+
 - Add comprehensive type hints to `neural_lam/metrics.py` [\#447](https://github.com/mllam/neural-lam/pull/447) @sidhantpande
 
 - Add type hints to methods in `neural_lam/custom_loggers.py` [\#455](https://github.com/mllam/neural-lam/pull/455) @sidhantpande
