@@ -22,7 +22,7 @@ For a more in-depth scientific introduction to machine learning for LAM weather 
 As the code in the repository is continuously evolving, the latest version might feature some small differences to what was used for these publications.
 We retain some paper-specific branches for reproducibility purposes.
 
-
+### Core Neural-LAM Publications
 *If you use Neural-LAM in your work, please cite the relevant paper(s)*.
 
 #### [Graph-based Neural Weather Prediction for Limited Area Modeling](https://arxiv.org/abs/2309.17370)
