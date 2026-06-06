@@ -21,6 +21,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Extend `BufferList.__getitem__` with slice and negative-index support (Python sequence semantics); out-of-bounds integer access raises `IndexError`. [\#472](https://github.com/mllam/neural-lam/pull/472) @sudhansu-24
 
+- Split the training checkpoint setup into two callbacks: a validation-driven one that keeps the best `val_mean_loss` checkpoint (`min_val_loss.ckpt`) and a separate rescue callback that writes `last.ckpt` at every train-epoch end. Long HPC jobs that crash or time out between validation runs can resume from `last.ckpt` instead of losing all progress since the previous validation [\#250](https://github.com/mllam/neural-lam/pull/250) @Jayant-kernel
+
 ### Changed
 
 - Move data normalization from CPU (`WeatherDataset`) to GPU
