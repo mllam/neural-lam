@@ -83,7 +83,7 @@ def test_create_gif_forwarded_to_forecaster_module():
     ):
         main()
 
-    assert (
-        "create_gif" in captured_kwargs
-    ), "create_gif was not forwarded to ForecasterModule"
+    assert "create_gif" in captured_kwargs, (
+        "create_gif was not forwarded to ForecasterModule"
+    )
     assert captured_kwargs["create_gif"] is True

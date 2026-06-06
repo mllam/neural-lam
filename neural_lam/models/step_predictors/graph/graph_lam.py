@@ -51,9 +51,9 @@ class GraphLAM(BaseGraphModel):
             m2g_gnn_type=m2g_gnn_type,
         )
 
-        assert (
-            not self.hierarchical
-        ), "GraphLAM does not use a hierarchical mesh graph"
+        assert not self.hierarchical, (
+            "GraphLAM does not use a hierarchical mesh graph"
+        )
 
         # grid_dim from data + static + batch_static
         mesh_dim = self.mesh_static_features.shape[1]
