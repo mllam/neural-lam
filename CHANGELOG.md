@@ -64,6 +64,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Reset `plotted_examples` and clear `test_metrics` at the end of `on_test_epoch_end` so repeated `trainer.test()` calls on the same model instance regenerate example plots and start from a clean metric slate instead of silently skipping plots and accumulating tensors [\#437](https://github.com/mllam/neural-lam/pull/437) @RajdeepKushwaha5
 
+- Default the matplotlib backend to `Agg` (via `MPLBACKEND` env var, set at the top of `neural_lam/__init__.py`) to prevent `RuntimeError: main thread is not in main loop` in headless or multi-threaded contexts; uses `os.environ.setdefault` so users with a preferred backend (e.g. Jupyter inline) are not overridden [\#277](https://github.com/mllam/neural-lam/pull/277) @sahilkr31
+
 - Log every figure passed to `CustomMLFlowLogger.log_image` instead of silently dropping all but the first, using per-figure indexed keys (`{key}_{i}`) when more than one is supplied [\#499](https://github.com/mllam/neural-lam/pull/499) @Raj-Taware
 
 - Validate `--var_leads_metrics_watch` variable indices against the datastore in `train_model.py` so an out-of-range index raises a clear CLI error immediately, instead of an `IndexError` deep in the first validation epoch after potentially hours of training [\#306](https://github.com/mllam/neural-lam/pull/306) @Ayushhgit
