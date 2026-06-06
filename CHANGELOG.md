@@ -72,6 +72,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Maintenance
 
+- Add a root `CONTRIBUTING.md` walking a new contributor from fork to merged PR (issue triage, environment setup pointing at the README install section, pre-commit, code standards, the exact local test command CI runs, PR template / CHANGELOG expectations, Slack + issues for help) [\#407](https://github.com/mllam/neural-lam/pull/407) @ANANYA542
+
 - Group the existing Neural-LAM citation papers in the README under a `### Core Neural-LAM Publications` subheading for clearer structure [\#633](https://github.com/mllam/neural-lam/pull/633) @HetaviM29
 
 - Add unit tests for `inverse_softplus` covering roundtrip identity (parametrized over `beta`), near-zero clamping, and above-threshold linear passthrough [\#419](https://github.com/mllam/neural-lam/pull/419) @Riteesh-NITT
