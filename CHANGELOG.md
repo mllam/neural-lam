@@ -72,6 +72,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Maintenance
 
+- Group the existing Neural-LAM citation papers in the README under a `### Core Neural-LAM Publications` subheading for clearer structure [\#633](https://github.com/mllam/neural-lam/pull/633) @HetaviM29
+
 - Add unit tests for `inverse_softplus` covering roundtrip identity (parametrized over `beta`), near-zero clamping, and above-threshold linear passthrough [\#419](https://github.com/mllam/neural-lam/pull/419) @Riteesh-NITT
 
 - Add comprehensive type hints to `neural_lam/metrics.py` [\#447](https://github.com/mllam/neural-lam/pull/447) @sidhantpande
