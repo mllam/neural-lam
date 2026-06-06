@@ -121,35 +121,62 @@ class WeatherDataset(torch.utils.data.Dataset):
             # `load_single_member=False`, each ensemble member is exposed as an
             # independent sample by scaling the base dataset length below.
 
-            # check that there are enough forecast steps available to create
-            # samples given the number of autoregressive steps requested
+            # Check that there are enough forecast steps available to create
+            # samples. The required minimum is the larger of 2 (for the two
+            # initial states) and num_past_forcing_steps, plus ar_steps.
             n_forecast_steps = self.da_state.elapsed_forecast_duration.size
-            if n_forecast_steps < 2 + self.ar_steps:
+            required_state_steps = (
+                max(2, self.num_past_forcing_steps) + self.ar_steps
+            )
+            if n_forecast_steps < required_state_steps:
                 raise ValueError(
                     "The number of forecast steps available "
                     f"({n_forecast_steps}) is less than the required "
-                    f"2+ar_steps (2+{self.ar_steps}={2 + self.ar_steps}) for "
-                    "creating a sample with initial and target states."
+                    f"{required_state_steps} (max(2, "
+                    f"num_past_forcing_steps={self.num_past_forcing_steps})"
+                    f" + ar_steps={self.ar_steps}) for creating a sample "
+                    "with initial and target states."
                 )
+
+            if self.da_forcing is not None:
+                # When forcing is present, the forecast horizon must also
+                # cover num_future_forcing_steps beyond the last target step.
+                n_forcing_forecast_steps = (
+                    self.da_forcing.elapsed_forecast_duration.size
+                )
+                required_forcing_steps = (
+                    required_state_steps + self.num_future_forcing_steps
+                )
+                if n_forcing_forecast_steps < required_forcing_steps:
+                    raise ValueError(
+                        "The number of forcing forecast steps available "
+                        f"({n_forcing_forecast_steps}) is less than the "
+                        f"required {required_forcing_steps} "
+                        f"(max(2, num_past_forcing_steps="
+                        f"{self.num_past_forcing_steps}) + ar_steps="
+                        f"{self.ar_steps} + num_future_forcing_steps="
+                        f"{self.num_future_forcing_steps}) for "
+                        "constructing forcing windows."
+                    )
 
             base_len = self.da_state.analysis_time.size
         else:
-            # Calculate the number of samples in the dataset n_samples = total
-            # time steps - (autoregressive steps + past forcing + future
-            # forcing)
-            #:
-            # Where:
-            #   - total time steps: len(self.da_state.time)
-            #   - autoregressive steps: self.ar_steps
-            #   - past forcing: max(2, self.num_past_forcing_steps) (at least 2
-            #     time steps are required for the initial state)
-            #   - future forcing: self.num_future_forcing_steps
-            base_len = (
-                len(self.da_state.time)
-                - self.ar_steps
-                - max(2, self.num_past_forcing_steps)
-                - self.num_future_forcing_steps
+            # Number of valid sample start indices in a contiguous time
+            # series. With T total time steps and a per-sample window of
+            # W = max(2, num_past_forcing_steps) + ar_steps +
+            # num_future_forcing_steps, valid start indices are
+            # [0 .. T - W], i.e. (T - W + 1) samples in total.
+            window = (
+                max(2, self.num_past_forcing_steps)
+                + self.ar_steps
+                + self.num_future_forcing_steps
             )
+            n_state_samples = len(self.da_state.time) - window + 1
+            if self.da_forcing is not None:
+                n_forcing_samples = len(self.da_forcing.time) - window + 1
+                base_len = max(0, min(n_state_samples, n_forcing_samples))
+            else:
+                base_len = max(0, n_state_samples)
         if self.datastore.is_ensemble and not self.load_single_member:
             return base_len * self.da_state.ensemble_member.size
         return base_len
@@ -433,7 +460,8 @@ class WeatherDataset(torch.utils.data.Dataset):
         ----------
         idx : int
             The index of the sample to return, this will refer to the time of
-            the initial state.
+            the initial state. Negative indices follow Python sequence
+            convention. Out-of-range indices raise ``IndexError``.
 
         Returns
         -------
@@ -447,6 +475,15 @@ class WeatherDataset(torch.utils.data.Dataset):
             Times of the target steps, shape (ar_steps,).
 
         """
+        n_samples = len(self)
+        if idx < 0:
+            idx += n_samples
+        if not 0 <= idx < n_samples:
+            raise IndexError(
+                f"index {idx} out of range for WeatherDataset of length "
+                f"{n_samples}"
+            )
+
         (
             da_init_states,
             da_target_states,
