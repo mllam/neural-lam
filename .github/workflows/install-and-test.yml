@@ -128,7 +128,7 @@ jobs:
       - name: Run tests
         if: matrix.package_manager == 'uv'
         run: |
-          pytest -vv -s --doctest-modules
+          pytest -vv -s --doctest-modules --run-slow
 
       - name: Upload test figures
         if: matrix.package_manager == 'uv'
