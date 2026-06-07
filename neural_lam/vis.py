@@ -1,11 +1,15 @@
 # Standard library
 import warnings
+from typing import Optional, Union
 
 # Third-party
 import cartopy.crs as ccrs
 import cartopy.feature as cfeature
 import matplotlib
+import matplotlib.axes
+import matplotlib.collections
 import matplotlib.colors
+import matplotlib.figure
 import matplotlib.pyplot as plt
 import numpy as np
 import torch
@@ -224,16 +228,16 @@ def _get_annotation_text_color(
 
 
 def plot_on_axis(
-    ax,
-    da,
-    datastore,
-    vmin=None,
-    vmax=None,
-    ax_title=None,
-    cmap="plasma",
-    boundary_alpha=None,
-    crop_to_interior=False,
-):
+    ax: matplotlib.axes.Axes,
+    da: xr.DataArray,
+    datastore: BaseRegularGridDatastore,
+    vmin: Optional[float] = None,
+    vmax: Optional[float] = None,
+    ax_title: Optional[str] = None,
+    cmap: Union[str, matplotlib.colors.Colormap] = "plasma",
+    boundary_alpha: Optional[float] = None,
+    crop_to_interior: bool = False,
+) -> matplotlib.collections.QuadMesh:
     """Plot weather state on a projection-aware axis using datastore metadata.
 
     Parameters
@@ -350,11 +354,11 @@ def plot_on_axis(
 # by the explicit figsize= below but font family and usetex stay in effect.
 @matplotlib.rc_context(utils.fractional_plot_bundle(1))
 def plot_error_heatmap(
-    errors,
+    errors: torch.Tensor,
     datastore: BaseRegularGridDatastore,
-    title=None,
+    title: Optional[str] = None,
     normalization: str = "state_std",
-):
+) -> matplotlib.figure.Figure:
     """
     Plot a heatmap of errors across variables and prediction horizons.
 
@@ -465,7 +469,11 @@ def plot_error_heatmap(
     return fig
 
 
-def plot_error_map(errors, datastore: BaseRegularGridDatastore, title=None):
+def plot_error_map(
+    errors: torch.Tensor,
+    datastore: BaseRegularGridDatastore,
+    title: Optional[str] = None,
+) -> matplotlib.figure.Figure:
     """Deprecated: use :func:`plot_error_heatmap` instead."""
     warnings.warn(
         "plot_error_map is deprecated, use plot_error_heatmap instead",
@@ -480,12 +488,12 @@ def plot_prediction(
     datastore: BaseRegularGridDatastore,
     da_prediction: xr.DataArray,
     da_target: xr.DataArray,
-    title=None,
-    vrange=None,
-    boundary_alpha=0.7,
-    crop_to_interior=True,
+    title: Optional[str] = None,
+    vrange: Optional[tuple[float, float]] = None,
+    boundary_alpha: float = 0.7,
+    crop_to_interior: bool = True,
     colorbar_label: str = "",
-):
+) -> matplotlib.figure.Figure:
     """
     Plot an example prediction alongside the ground truth.
 
@@ -564,12 +572,12 @@ def plot_prediction(
 def plot_spatial_error(
     error: torch.Tensor,
     datastore: BaseRegularGridDatastore,
-    title=None,
-    vrange=None,
-    boundary_alpha=0.7,
-    crop_to_interior=True,
+    title: Optional[str] = None,
+    vrange: Optional[tuple[float, float]] = None,
+    boundary_alpha: float = 0.7,
+    crop_to_interior: bool = True,
     colorbar_label: str = "",
-):
+) -> matplotlib.figure.Figure:
     """
     Plot a spatially resolved error map on a projection-aware axis.
 

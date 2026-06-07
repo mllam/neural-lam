@@ -22,7 +22,7 @@ For a more in-depth scientific introduction to machine learning for LAM weather 
 As the code in the repository is continuously evolving, the latest version might feature some small differences to what was used for these publications.
 We retain some paper-specific branches for reproducibility purposes.
 
-
+### Core Neural-LAM Publications
 *If you use Neural-LAM in your work, please cite the relevant paper(s)*.
 
 #### [Graph-based Neural Weather Prediction for Limited Area Modeling](https://arxiv.org/abs/2309.17370)
@@ -510,6 +510,8 @@ srun -ul python -m neural_lam.train_model \
 ```
 
 When using on a system without SLURM, where all GPU's are visible, it is possible to select a subset of GPU's to use for training with the `devices` cli argument, e.g. `--devices 0 1` to use the first 2 GPU's.
+
+> **DGX Spark / container compatibility:** see [issue #163](https://github.com/mllam/neural-lam/issues/163) for a list of currently known-working and known-failing PyTorch / CUDA / container combinations on DGX Spark.
 
 ## Evaluate Models
 Evaluation is also done using `python -m neural_lam.train_model --config_path <config-path>`, but using the `--eval` option.

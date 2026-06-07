@@ -834,6 +834,18 @@ class ForecasterModule(pl.LightningModule):
         self.matched_metrics = set()
         self.spatial_loss_maps.clear()
 
+        # Clear stored test metrics so repeated `trainer.test()` calls on
+        # the same model instance start from a clean slate (otherwise the
+        # tensors accumulate and skew the aggregated metrics).
+        for metric_list in self.test_metrics.values():
+            metric_list.clear()
+
+        # Reset the example-plot counter so example prediction plots are
+        # generated again on every `trainer.test()` call, not just the
+        # first one (the guard `plotted_examples < n_example_pred` would
+        # otherwise stay permanently False).
+        self.plotted_examples = 0
+
     def on_load_checkpoint(self, checkpoint):
         loaded_state_dict = checkpoint["state_dict"]
 

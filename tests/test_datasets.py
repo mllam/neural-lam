@@ -264,12 +264,13 @@ def test_single_batch(datastore_name, split):
 @pytest.mark.parametrize(
     "dataset_config",
     [
-        {"past": 0, "future": 0, "ar_steps": 1, "exp_len_reduction": 3},
-        {"past": 2, "future": 0, "ar_steps": 1, "exp_len_reduction": 3},
-        {"past": 0, "future": 2, "ar_steps": 1, "exp_len_reduction": 5},
-        {"past": 4, "future": 0, "ar_steps": 1, "exp_len_reduction": 5},
-        {"past": 0, "future": 0, "ar_steps": 5, "exp_len_reduction": 7},
-        {"past": 3, "future": 3, "ar_steps": 2, "exp_len_reduction": 8},
+        # window = max(2, past) + ar_steps + future; samples = T - window + 1
+        {"past": 0, "future": 0, "ar_steps": 1, "exp_len_reduction": 2},
+        {"past": 2, "future": 0, "ar_steps": 1, "exp_len_reduction": 2},
+        {"past": 0, "future": 2, "ar_steps": 1, "exp_len_reduction": 4},
+        {"past": 4, "future": 0, "ar_steps": 1, "exp_len_reduction": 4},
+        {"past": 0, "future": 0, "ar_steps": 5, "exp_len_reduction": 6},
+        {"past": 3, "future": 3, "ar_steps": 2, "exp_len_reduction": 7},
     ],
 )
 def test_dataset_length(dataset_config):
@@ -298,6 +299,30 @@ def test_dataset_length(dataset_config):
     # Check that we can actually get last and first sample
     dataset[0]
     dataset[expected_len - 1]
+
+
+def test_dataset_out_of_range_raises_index_error():
+    """`WeatherDataset.__getitem__` raises IndexError for out-of-range indices
+    and supports Python-style negative indexing within bounds."""
+    datastore = DummyDatastore(n_timesteps=10)
+    dataset = WeatherDataset(
+        datastore=datastore,
+        split="train",
+        ar_steps=1,
+        num_past_forcing_steps=0,
+        num_future_forcing_steps=0,
+    )
+    n = len(dataset)
+
+    with pytest.raises(IndexError):
+        _ = dataset[n]
+    with pytest.raises(IndexError):
+        _ = dataset[-n - 1]
+
+    # Negative indexing within bounds resolves to the same sample as the
+    # corresponding positive index.
+    dataset[-1]
+    dataset[n - 1]
 
 
 def test_ensemble_len_scales_with_default_all_members():
