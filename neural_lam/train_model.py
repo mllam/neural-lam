@@ -488,6 +488,7 @@ def main(input_args=None):
         monitor="val_mean_loss",
         mode="min",
         save_top_k=1,
+        save_on_train_epoch_end=False,
     )
     latest_checkpoint = pl.callbacks.ModelCheckpoint(
         dirpath=f"saved_models/{run_name}",

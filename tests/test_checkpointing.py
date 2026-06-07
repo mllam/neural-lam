@@ -42,6 +42,7 @@ def test_last_checkpoint_saved_without_validation(tmp_path):
         monitor="val_mean_loss",
         mode="min",
         save_top_k=1,
+        save_on_train_epoch_end=False,
     )
     latest_checkpoint = pl.callbacks.ModelCheckpoint(
         dirpath=str(ckpt_dir),
