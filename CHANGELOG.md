@@ -72,6 +72,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Maintenance
 
+- Introduce a `slow` pytest marker and a matching `--run-slow` CLI flag so long-running tests (e.g. `test_training`, `test_training_output_std`) are skipped by default and opted into via `pytest --run-slow` [\#651](https://github.com/mllam/neural-lam/pull/651) @sadamov
+
 - Add a short README pointer to [\#163](https://github.com/mllam/neural-lam/issues/163) for DGX Spark / PyTorch container compatibility notes, so users hitting `torch_scatter` errors know where to find the known-working / known-failing combos [\#266](https://github.com/mllam/neural-lam/pull/266) @Jayant-kernel
 
 - Group the existing Neural-LAM citation papers in the README under a `### Core Neural-LAM Publications` subheading for clearer structure [\#633](https://github.com/mllam/neural-lam/pull/633) @HetaviM29
