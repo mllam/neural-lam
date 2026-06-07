@@ -127,9 +127,13 @@ def main(input_args=None):
         help="Path to load model parameters from",
     )
     runtime_group.add_argument(
-        "--restore_opt",
+        "--load_training_state",
         action="store_true",
-        help="If optimizer state should be restored with model",
+        help=(
+            "If the full training state (optimizer, epoch, LR scheduler, "
+            "callbacks) should be restored from the checkpoint passed to "
+            "--load. Without this flag, --load is weights-only."
+        ),
     )
 
     # Model architecture
@@ -371,6 +375,12 @@ def main(input_args=None):
             "Evaluation (--eval) without --load: no checkpoint will be loaded.",
         )
 
+    if args.load_training_state and not args.load:
+        parser.error(
+            "--load_training_state requires --load <checkpoint_path> to "
+            "specify which checkpoint to restore training state from."
+        )
+
     # Get an (actual) random run id as a unique identifier
     random_run_id = random.randint(0, 9999)
 
@@ -452,7 +462,7 @@ def main(input_args=None):
         datastore=datastore,
         loss=args.loss,
         lr=args.lr,
-        restore_opt=args.restore_opt,
+        restore_opt=args.load_training_state,
         n_example_pred=args.n_example_pred,
         create_gif=args.create_gif,
         val_steps_to_log=args.val_steps_to_log,
@@ -510,7 +520,19 @@ def main(input_args=None):
             datamodule=data_module,
             ckpt_path=args.load,
         )
+    elif args.load and not args.load_training_state:
+        # Weights-only restore: load model weights from the checkpoint but
+        # start a fresh training run (epoch/scheduler/optimizer/callbacks
+        # all reset). Passing `ckpt_path=args.load` to `trainer.fit` would
+        # also restore those, which is `--load_training_state` territory.
+        model = load_forecaster_module_from_checkpoint(
+            args.load, config=config, datastore=datastore
+        )
+        trainer.fit(model=model, datamodule=data_module)
     else:
+        # Either no checkpoint (`args.load is None`) or full resume
+        # (`--load_training_state`); in both cases Lightning handles the
+        # state.
         trainer.fit(model=model, datamodule=data_module, ckpt_path=args.load)
 
 

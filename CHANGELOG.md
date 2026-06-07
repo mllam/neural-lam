@@ -70,6 +70,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Fix `WeatherDataset.__len__` off-by-one in analysis mode (was undercounting by 1 sample), include `num_past_forcing_steps` in the forecast-mode minimum-horizon check, validate forcing-side forecast horizon when forcing is present, and use `min(n_state, n_forcing)` when both are present in analysis mode; raise `IndexError` for out-of-range indices in `WeatherDataset.__getitem__` (with Python-style negative indexing support) [\#312](https://github.com/mllam/neural-lam/pull/312) @kshirajahere
 
+- Fix `--load` to truly restore weights only by default: instead of overriding the optimizer state inside `on_load_checkpoint` (which left epoch / scheduler / callbacks inherited from the checkpoint), `train_model.py` now reconstructs the model via `ForecasterModule.load_from_checkpoint` and calls `trainer.fit(model)` with no `ckpt_path`, so all non-weight training state starts fresh. Also rename the CLI flag from `--restore_opt` to `--load_training_state` to reflect that it controls more than just the optimizer (epoch / scheduler / callbacks too), and assert it requires `--load` [\#240](https://github.com/mllam/neural-lam/pull/240) @Mani212005
+
 ### Maintenance
 
 - Add a short README pointer to [\#163](https://github.com/mllam/neural-lam/issues/163) for DGX Spark / PyTorch container compatibility notes, so users hitting `torch_scatter` errors know where to find the known-working / known-failing combos [\#266](https://github.com/mllam/neural-lam/pull/266) @Jayant-kernel

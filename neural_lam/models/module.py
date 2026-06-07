@@ -822,7 +822,3 @@ class ForecasterModule(pl.LightningModule):
                 )
                 loaded_state_dict[new_key] = loaded_state_dict[old_key]
                 del loaded_state_dict[old_key]
-
-        if not self.restore_opt:
-            opt = self.configure_optimizers()
-            checkpoint["optimizer_states"] = [opt.state_dict()]
