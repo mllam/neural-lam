@@ -44,6 +44,11 @@ requires-python = ">=3.10"
 [dependency-groups]
 dev = ["pre-commit>=3.8.0", "pytest>=8.3.2", "pooch>=1.8.2"]
 
+[tool.pytest.ini_options]
+markers = [
+    "slow: marks tests as slow (deselected by default, run with --run-slow)",
+]
+
 [tool.black]
 line-length = 80
 
