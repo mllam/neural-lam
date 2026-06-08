@@ -3,6 +3,26 @@
 Thank you for your interest in contributing to Neural-LAM!
 We welcome bug reports, bug fixes, documentation improvements, and new features.
 
+## Community
+
+Neural-LAM is developed in the open by a small, friendly group of researchers
+and engineers working on ML-based limited area modelling. We try hard to keep
+the community welcoming, open-minded, and constructive - whether you are
+opening your first issue or proposing a substantial new feature.
+
+A few things that help keep it that way:
+
+- **Assume good intent.** Reviewers and contributors are mostly volunteering
+  their time. If a comment feels blunt, read it as direct rather than hostile.
+- **Ask questions early.** It is always cheaper to discuss a design choice
+  before code is written. We would rather see a half-formed idea in an issue
+  than a finished PR going in the wrong direction.
+- **Credit each other.** When your work builds on someone else's PR or issue,
+  link it. When you review, thank the author for the time they invested.
+- **It is fine to be a beginner.** Several of the maintainers were
+  PhD students or first-time open-source contributors not long ago. Nobody
+  expects you to know everything about NWP, ML, or the codebase on day one.
+
 ## Getting started
 
 1. **Open or find an issue.** Before writing code, open a
@@ -55,7 +75,25 @@ pytest -vv -s --doctest-modules
    CHANGELOG entry format.
 3. A maintainer will review your PR. Small, focused PRs are reviewed faster.
 
+## Monthly development meetings
+
+The mllam team meets monthly to coordinate roadmaps across the three core
+projects (`neural-lam`, `weather-model-graphs`, `mllam-data-prep`), review
+proposed changes, and decide what lands in upcoming releases. The meeting is
+on the **second Monday of each month, 10:00-11:00 CEST**, on Zoom (the link
+is pinned in the
+[`#general` channel of the mllam Slack workspace](https://kutt.to/mllam)).
+
+Everyone is welcome - contributors, users, lurkers, and people who are just
+curious about ML-based weather forecasting. If you have a feature you would
+like to discuss before opening a PR, or a design question that does not fit
+neatly into a GitHub thread, the dev meeting is a good venue. It is also a
+good place to learn where these tools are heading.
+
 ## Getting help
 
-- Join the [mllam Slack workspace](https://kutt.to/mllam)
-- [Open a GitHub issue](https://github.com/mllam/neural-lam/issues)
+- Join the [mllam Slack workspace](https://kutt.to/mllam) - chat with
+  maintainers and other contributors, and find the Zoom link for the next
+  dev meeting in `#general`.
+- [Open a GitHub issue](https://github.com/mllam/neural-lam/issues) - best
+  for anything that benefits from a written, searchable record.
