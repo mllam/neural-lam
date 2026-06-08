@@ -380,6 +380,19 @@ def main(input_args=None):
     # Load neural-lam configuration and datastore to use
     config, datastore = load_config_and_datastore(config_path=args.config_path)
 
+    # Check --var_leads_metrics_watch variable indices against the datastore
+    # so users get an immediate error instead of an IndexError deep in the
+    # first validation epoch.
+    state_var_names = datastore.get_vars_names(category="state")
+    for var_i in args.var_leads_metrics_watch:
+        if not 0 <= var_i < len(state_var_names):
+            raise ValueError(
+                f"Invalid state variable index {var_i} in "
+                f"--var_leads_metrics_watch. Index must be between 0 and "
+                f"{len(state_var_names) - 1} (datastore has "
+                f"{len(state_var_names)} state variables)."
+            )
+
     # Create datamodule
     data_module = WeatherDataModule(
         datastore=datastore,
