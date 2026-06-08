@@ -71,8 +71,7 @@ pytest -vv -s --doctest-modules
 1. Push your branch and open a PR against `main`.
 2. Fill in the
    [pull request template](.github/pull_request_template.md) - it contains the
-   full checklists for authors, reviewers, and assignees, including the
-   CHANGELOG entry format.
+   full checklists for authors, reviewers, and assignees.
 3. Write commit messages in **imperative form** matching the existing
    `git log` style ("Add X" not "Added X"), and keep one concern per PR.
 4. PRs land via **squash-and-merge**: the PR title becomes the single commit
@@ -80,6 +79,27 @@ pytest -vv -s --doctest-modules
    before requesting review - per-commit history on your branch is not
    preserved in `main`.
 5. A maintainer will review your PR. Small, focused PRs are reviewed faster.
+
+## CHANGELOG entries
+
+**Every PR must add a line to [CHANGELOG.md](CHANGELOG.md)** under the
+section matching the change type (`Added`, `Changed`, `Fixed`, or
+`Maintenance`). Add a new section heading if it does not already exist
+under the current `[unreleased]` block.
+
+The entry references the **PR number, not the issue number**, and tags the
+author. Format:
+
+```markdown
+- Short description of the change [\#NNN](https://github.com/mllam/neural-lam/pull/NNN) @your-handle
+```
+
+Example (from a real merged PR):
+
+```markdown
+- Add bounds checking for `--var_leads_metrics_watch` indices to fail at
+  CLI parse time rather than mid-validation [\#306](https://github.com/mllam/neural-lam/pull/306) @your-handle
+```
 
 ## Monthly development meetings
 
