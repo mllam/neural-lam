@@ -23,23 +23,6 @@ from .dummy_datastore import DummyDatastore
 os.environ["WANDB_MODE"] = "disabled"
 
 
-def pytest_addoption(parser):
-    parser.addoption(
-        "--run-slow",
-        action="store_true",
-        default=False,
-        help="Run tests marked as slow",
-    )
-
-
-def pytest_collection_modifyitems(config, items):
-    if not config.getoption("--run-slow"):
-        skip_slow = pytest.mark.skip(reason="need --run-slow option to run")
-        for item in items:
-            if "slow" in item.keywords:
-                item.add_marker(skip_slow)
-
-
 @pytest.fixture(autouse=True)
 def ensure_rank_zero(monkeypatch):
     """Ensure rank_zero_only.rank == 0 so @rank_zero_only-decorated functions
