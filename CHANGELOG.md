@@ -72,6 +72,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Maintenance
 
+- Add a lychee pre-commit hook for Markdown links and a PR-template reminder
+  to keep contributor workflow docs current ([#654](https://github.com/mllam/neural-lam/issues/654)).
+
 - Add a short README pointer to [\#163](https://github.com/mllam/neural-lam/issues/163) for DGX Spark / PyTorch container compatibility notes, so users hitting `torch_scatter` errors know where to find the known-working / known-failing combos [\#266](https://github.com/mllam/neural-lam/pull/266) @Jayant-kernel
 
 - Group the existing Neural-LAM citation papers in the README under a `### Core Neural-LAM Publications` subheading for clearer structure [\#633](https://github.com/mllam/neural-lam/pull/633) @HetaviM29

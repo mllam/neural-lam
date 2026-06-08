@@ -239,7 +239,7 @@ in neural-lam, are done in a separate package called
 [mllam-data-prep](https://github.com/mllam/mllam-data-prep) rather than in
 neural-lam itself.
 Specifically, the `mllam-data-prep` datastore configuration (for example
-[danra.datastore.yaml](tests/datastore_examples/mdp/danra.datastore.yaml))
+[danra.datastore.yaml](tests/datastore_examples/mdp/danra_100m_winds/danra.datastore.yaml))
 specifies a) what source datasets to read from, b) what variables to select, c)
 what transformations of dimensions and variables to make, d) what statistics to
 calculate (for normalisation) and e) how to split the data into training,
