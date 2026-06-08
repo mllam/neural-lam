@@ -7,52 +7,26 @@ every contributor (open an issue, fork, set up the environment, run `pre-commit`
 fill in the PR template, add a CHANGELOG entry, monthly dev meeting). Everything there applies.
 This file adds the AI-specific rules on top.
 
----
+## Codebase reference
 
-## Codebase
+See the README architecture overview for the data flow and module map.
+`git log --stat -- neural_lam/` shows which files have moved recently - prefer that over any
+snapshot, which will rot.
 
-Neural-LAM: graph-based neural weather prediction for Limited Area Modeling. Models: `GraphLAM`,
-`HiLAM`, `HiLAMParallel`.
+## AI-specific entry-point commands
 
-**Data flow:** Raw zarr/numpy → `Datastore` → `WeatherDataset` → `WeatherDataModule` → Model →
-Predictions
-
-**Key modules:**
-- `datastore/` — `BaseDatastore` (abstract), `MDPDatastore` (zarr via mllam-data-prep)
-- `models/` — `ForecasterModule` (Lightning) → `Forecaster` (`ARForecaster`) →
-  `StepPredictor` (`GraphLAM` / `HiLAM` / `HiLAMParallel`)
-- `weather_dataset.py` — `WeatherDataset` + `WeatherDataModule`
-- `config.py` — YAML config via dataclass-wizard
-- `create_graph.py` — builds mesh graphs (must run before training)
-- `interaction_net.py` — `InteractionNet` GNN layer (PyG `MessagePassing`)
-- `utils.py` — `make_mlp`, normalization helpers
-
-Config examples: `tests/datastore_examples/`
-
-## Commands
-
-Prepend `uv run` or activate the venv first with `source .venv/bin/activate`:
+The standard install / lint / test commands are in
+[CONTRIBUTING.md > Before you push](CONTRIBUTING.md#before-you-push). The two CLI entry points
+agents most often need:
 
 ```bash
-# Install (PyTorch must be installed first for CUDA variant)
-uv pip install --group dev -e .
-
-# Lint
-pre-commit run --all-files    # black, isort, flake8, mypy, codespell
-
-# Test
-pytest -vv -s --doctest-modules            # all
-pytest tests/test_training.py -vv -s       # single file
-pytest tests/test_training.py::test_fn -vv # single function
-pytest -m "not slow"                       # skip long-running training tests
-
-# Run
 python -m neural_lam.create_graph --config_path <config> --name <graph>
 python -m neural_lam.train_model --config_path <config> --model graph_lam --graph <graph>
 python -m neural_lam.train_model --eval test --config_path <config> --load <ckpt>
 ```
 
-W&B auto-disabled in tests. `DummyDatastore` used; example data downloaded from S3 on first run.
+W&B is auto-disabled in tests. `DummyDatastore` is the in-memory test fixture; example data is
+downloaded from S3 on first run.
 
 ---
 
@@ -71,10 +45,9 @@ If a PR already exists for the same issue, contribute there rather than opening 
 
 ### Re-read the thread before every action
 
-- Re-read the entire issue / PR thread before every comment and every push. No exceptions.
-- After a context gap, reload it (`gh issue view <N>` / `gh pr view <N>` /
-  `gh api repos/mllam/neural-lam/pulls/<N>/comments`) before acting.
-- Never repeat a question already answered or an approach already rejected in the thread.
+Re-read the full issue / PR thread (including inline review comments via
+`gh api repos/mllam/neural-lam/pulls/<N>/comments`) before every comment and every push. Never
+repeat a question already answered or an approach already rejected.
 
 ### Communication
 
@@ -87,5 +60,9 @@ If a PR already exists for the same issue, contribute there rather than opening 
 
 ### Commits
 
-- AI attribution is mandatory. Add a `Co-authored-by: <tool> <noreply@...>` trailer to every
-  commit produced with AI assistance.
+AI attribution is mandatory. Add a `Co-authored-by:` trailer to every commit produced with AI
+assistance, e.g.:
+
+```
+Co-authored-by: Claude Opus 4.7 <noreply@anthropic.com>
+```
