@@ -73,7 +73,13 @@ pytest -vv -s --doctest-modules
    [pull request template](.github/pull_request_template.md) - it contains the
    full checklists for authors, reviewers, and assignees, including the
    CHANGELOG entry format.
-3. A maintainer will review your PR. Small, focused PRs are reviewed faster.
+3. Write commit messages in **imperative form** matching the existing
+   `git log` style ("Add X" not "Added X"), and keep one concern per PR.
+4. PRs land via **squash-and-merge**: the PR title becomes the single commit
+   message on `main` and the PR description becomes its body. Polish both
+   before requesting review - per-commit history on your branch is not
+   preserved in `main`.
+5. A maintainer will review your PR. Small, focused PRs are reviewed faster.
 
 ## Monthly development meetings
 
@@ -97,3 +103,9 @@ good place to learn where these tools are heading.
   dev meeting in `#general`.
 - [Open a GitHub issue](https://github.com/mllam/neural-lam/issues) - best
   for anything that benefits from a written, searchable record.
+
+## License
+
+Neural-LAM is released under the [MIT License](LICENSE.txt). By contributing
+to this repository, you agree that your contribution is licensed under the
+same terms.
