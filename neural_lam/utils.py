@@ -534,6 +534,11 @@ def setup_training_logger(
     training_logger : pytorch_lightning.loggers.base
         Logger object.
 
+    Raises
+    ------
+    ValueError
+        If ``args.logger`` is not ``'wandb'`` or ``'mlflow'``.
+
     Notes
     -----
     When ``--wandb_id`` is given, ``resume="allow"`` is set automatically:
@@ -581,8 +586,12 @@ def setup_training_logger(
         training_logger.log_hyperparams(
             dict(training=vars(args), datastore=datastore._config)
         )
-
-    return training_logger
+        return training_logger
+    else:
+        raise ValueError(
+            f"Unsupported logger type: {args.logger!r}. "
+            "Supported loggers are: 'wandb', 'mlflow'."
+        )
 
 
 def inverse_softplus(

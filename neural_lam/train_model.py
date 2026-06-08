@@ -2,6 +2,7 @@
 import json
 import os
 import random
+import shutil
 import time
 from argparse import ArgumentDefaultsHelpFormatter, ArgumentParser
 
@@ -18,6 +19,18 @@ from .config import load_config_and_datastore
 from .gnn_layers import GNN_TYPES
 from .models import MODELS, ARForecaster, ForecasterModule
 from .weather_dataset import WeatherDataModule
+
+
+class AdaptiveHelpFormatter(ArgumentDefaultsHelpFormatter):
+    def __init__(self, prog):
+        terminal_width = shutil.get_terminal_size(fallback=(100, 20)).columns
+        width = max(80, min(terminal_width, 120))
+        help_position = min(44, width // 3)
+        super().__init__(
+            prog,
+            max_help_position=help_position,
+            width=width,
+        )
 
 
 def load_forecaster_module_from_checkpoint(ckpt_path, config, datastore):
@@ -59,35 +72,41 @@ def main(input_args=None):
     """Main function for training and evaluating models."""
     parser = ArgumentParser(
         description="Train or evaluate MLWP models for LAM",
-        formatter_class=ArgumentDefaultsHelpFormatter,
+        formatter_class=AdaptiveHelpFormatter,
     )
-    parser.add_argument(
+
+    # Core Configuration
+    core_group = parser.add_argument_group("Core Configuration")
+    core_group.add_argument(
         "--config_path",
         type=str,
         help="Path to the configuration for neural-lam",
         required=True,
     )
-    parser.add_argument(
+    core_group.add_argument(
         "--model",
         type=str,
         default="graph_lam",
         help="Model architecture to train/evaluate",
         choices=MODELS.keys(),
     )
-    parser.add_argument("--seed", type=int, default=42, help="random seed")
-    parser.add_argument(
+    core_group.add_argument("--seed", type=int, default=42, help="random seed")
+
+    # Runtime & Device Settings
+    runtime_group = parser.add_argument_group("Runtime & Device Settings")
+    runtime_group.add_argument(
         "--num_workers",
         type=int,
         default=4,
         help="Number of workers in data loader",
     )
-    parser.add_argument(
+    runtime_group.add_argument(
         "--num_nodes",
         type=int,
         default=1,
         help="Number of nodes to use in DDP",
     )
-    parser.add_argument(
+    runtime_group.add_argument(
         "--devices",
         nargs="+",
         type=str,
@@ -97,89 +116,83 @@ def main(input_args=None):
         "'--devices 0 1'. Note that this cannot be used with SLURM, instead "
         "set 'ntasks-per-node' in the slurm setup",
     )
-    parser.add_argument(
-        "--epochs",
-        type=int,
-        default=200,
-        help="upper epoch limit",
-    )
-    parser.add_argument("--batch_size", type=int, default=4, help="batch size")
-    parser.add_argument(
-        "--load",
-        type=str,
-        help="Path to load model parameters from",
-    )
-    parser.add_argument(
-        "--restore_opt",
-        action="store_true",
-        help="If optimizer state should be restored with model",
-    )
-    parser.add_argument(
+    runtime_group.add_argument(
         "--precision",
         type=str,
         default=32,
         help="Numerical precision to use for model (32/16/bf16)",
     )
+    runtime_group.add_argument(
+        "--load",
+        type=str,
+        help="Path to load model parameters from",
+    )
+    runtime_group.add_argument(
+        "--restore_opt",
+        action="store_true",
+        help="If optimizer state should be restored with model",
+    )
 
     # Model architecture
-    parser.add_argument(
+    arch_group = parser.add_argument_group("Model Architecture")
+    arch_group.add_argument(
         "--graph",
         type=str,
         default="multiscale",
         help="Graph to load and use in graph-based model",
     )
-    parser.add_argument(
+    arch_group.add_argument(
         "--hidden_dim",
         type=int,
         default=64,
         help="Dimensionality of all hidden representations",
     )
-    parser.add_argument(
+    arch_group.add_argument(
         "--hidden_layers",
         type=int,
         default=1,
         help="Number of hidden layers in all MLPs",
     )
-    parser.add_argument(
+    arch_group.add_argument(
         "--processor_layers",
         type=int,
         default=4,
         help="Number of GNN layers in processor GNN",
     )
-    parser.add_argument(
+    arch_group.add_argument(
         "--mesh_aggr",
         type=str,
         default="sum",
         help="Aggregation to use for m2m processor GNN layers (sum/mean)",
     )
-    parser.add_argument(
+    arch_group.add_argument(
         "--output_std",
         action="store_true",
         help="If models should additionally output std.-dev. per "
         "output dimensions",
     )
-    parser.add_argument(
+    arch_group.add_argument(
         "--g2m_gnn_type",
         type=str,
         default="InteractionNet",
         choices=list(GNN_TYPES.keys()),
         help="GNN type for grid-to-mesh encoding",
     )
-    parser.add_argument(
+    arch_group.add_argument(
         "--m2g_gnn_type",
         type=str,
         default="InteractionNet",
         choices=list(GNN_TYPES.keys()),
         help="GNN type for mesh-to-grid decoding",
     )
-    parser.add_argument(
+    arch_group.add_argument(
         "--mesh_up_gnn_type",
         type=str,
         default="InteractionNet",
         choices=list(GNN_TYPES.keys()),
         help="GNN type for upward mesh message passing in hierarchical models",
     )
-    parser.add_argument(
+    arch_group.add_argument(
         "--mesh_down_gnn_type",
         type=str,
         default="InteractionNet",
@@ -189,20 +202,33 @@ def main(input_args=None):
     )
 
     # Training options
-    parser.add_argument(
+    train_group = parser.add_argument_group("Training Options")
+    train_group.add_argument(
+        "--epochs",
+        type=int,
+        default=200,
+        help="upper epoch limit",
+    )
+    train_group.add_argument(
+        "--batch_size", type=int, default=4, help="batch size"
+    )
+
+    train_group.add_argument(
         "--ar_steps_train",
         type=int,
         default=1,
         help="Number of steps to unroll prediction for in loss function",
     )
-    parser.add_argument(
+    train_group.add_argument(
         "--loss",
         type=str,
         default="wmse",
         help="Loss function to use, see metric.py",
     )
-    parser.add_argument("--lr", type=float, default=1e-3, help="learning rate")
-    parser.add_argument(
+    train_group.add_argument(
+        "--lr", type=float, default=1e-3, help="learning rate"
+    )
+    train_group.add_argument(
         "--val_interval",
         type=int,
         default=1,
@@ -210,26 +236,27 @@ def main(input_args=None):
     )
 
     # Evaluation options
-    parser.add_argument(
+    eval_group = parser.add_argument_group("Evaluation Options")
+    eval_group.add_argument(
         "--eval",
         type=str,
         help="Eval model on given data split (val/test). If not given, "
         "train model.",
         choices=["val", "test"],
     )
-    parser.add_argument(
+    eval_group.add_argument(
         "--ar_steps_eval",
         type=int,
         default=10,
         help="Number of steps to unroll prediction for during evaluation",
     )
-    parser.add_argument(
+    eval_group.add_argument(
         "--n_example_pred",
         type=int,
         default=1,
         help="Number of example predictions to plot during evaluation",
     )
-    parser.add_argument(
+    eval_group.add_argument(
         "--create_gif",
         action="store_true",
         help="If set, create GIF animations from prediction PNG frames and "
@@ -237,20 +264,21 @@ def main(input_args=None):
     )
 
     # Logger Settings
-    parser.add_argument(
+    logger_group = parser.add_argument_group("Logger Settings")
+    logger_group.add_argument(
         "--logger",
         type=str,
         default="wandb",
         choices=["wandb", "mlflow"],
         help="Logger to use for training (wandb/mlflow)",
     )
-    parser.add_argument(
+    logger_group.add_argument(
         "--logger-project",
         type=str,
         default="neural_lam",
         help="Logger project name, for eg. Wandb",
     )
-    parser.add_argument(
+    logger_group.add_argument(
         "--logger_run_name",
         type=str,
         default=None,
@@ -265,8 +293,7 @@ def main(input_args=None):
         "logger files, plots) are written as `<runs_root>/<run_name>/`",
     )
 
-    # Wandb-specific settings
-    parser.add_argument(
+    logger_group.add_argument(
         "--wandb_id",
         type=str,
         default=None,
@@ -276,39 +303,45 @@ def main(input_args=None):
         "runtimes or that may crash, allowing training to be continued "
         "across multiple job submissions.",
     )
-    parser.add_argument(
+
+    # Metrics & Monitoring (logger-agnostic: applies to both wandb and mlflow)
+    metrics_group = parser.add_argument_group("Metrics & Monitoring")
+    metrics_group.add_argument(
         "--val_steps_to_log",
         nargs="+",
         type=int,
         default=[1, 2, 3, 5, 10],
         help="Steps to log val loss for",
     )
-    parser.add_argument(
+    metrics_group.add_argument(
         "--metrics_watch",
         nargs="+",
         default=[],
         help="List of metrics to watch, including any prefix (e.g. val_rmse)",
     )
-    parser.add_argument(
+    metrics_group.add_argument(
         "--var_leads_metrics_watch",
         type=str,
         default="{}",
         help="""JSON string with variable-IDs and lead times to log watched
              metrics (e.g. '{"1": [1, 2], "3": [3, 4]}')""",
     )
-    parser.add_argument(
+
+    # Data Loading & Forcing
+    data_group = parser.add_argument_group("Data Loading & Forcing")
+    data_group.add_argument(
         "--num_past_forcing_steps",
         type=int,
         default=1,
         help="Number of past time steps to use as input for forcing data",
     )
-    parser.add_argument(
+    data_group.add_argument(
         "--num_future_forcing_steps",
         type=int,
         default=1,
         help="Number of future time steps to use as input for forcing data",
     )
-    parser.add_argument(
+    data_group.add_argument(
         "--load_single_member",
         action="store_true",
         help=(
@@ -354,6 +387,19 @@ def main(input_args=None):
 
     # Load neural-lam configuration and datastore to use
     config, datastore = load_config_and_datastore(config_path=args.config_path)
+
+    # Check --var_leads_metrics_watch variable indices against the datastore
+    # so users get an immediate error instead of an IndexError deep in the
+    # first validation epoch.
+    state_var_names = datastore.get_vars_names(category="state")
+    for var_i in args.var_leads_metrics_watch:
+        if not 0 <= var_i < len(state_var_names):
+            raise ValueError(
+                f"Invalid state variable index {var_i} in "
+                f"--var_leads_metrics_watch. Index must be between 0 and "
+                f"{len(state_var_names) - 1} (datastore has "
+                f"{len(state_var_names)} state variables)."
+            )
 
     # Create datamodule
     data_module = WeatherDataModule(
