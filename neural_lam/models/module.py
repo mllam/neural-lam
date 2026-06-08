@@ -564,9 +564,6 @@ class ForecasterModule(pl.LightningModule):
                 for var_name, fig in zip(
                     self.datastore.get_vars_names("state"), var_figs
                 ):
-                    # WandbLogger can log multiple images to the same key
-                    # (carousel); other loggers (e.g. MLFlow) overwrite, so
-                    # they need the example index baked into the key.
                     if isinstance(self.logger, pl.loggers.WandbLogger):
                         key = f"{var_name}_example"
                     else:
