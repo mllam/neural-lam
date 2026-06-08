@@ -504,6 +504,8 @@ srun -ul python -m neural_lam.train_model \
 
 When using on a system without SLURM, where all GPU's are visible, it is possible to select a subset of GPU's to use for training with the `devices` cli argument, e.g. `--devices 0 1` to use the first 2 GPU's.
 
+> **DGX Spark / container compatibility:** see [issue #163](https://github.com/mllam/neural-lam/issues/163) for a list of currently known-working and known-failing PyTorch / CUDA / container combinations on DGX Spark.
+
 ## Evaluate Models
 Evaluation is also done using `python -m neural_lam.train_model --config_path <config-path>`, but using the `--eval` option.
 Use `--eval val` to evaluate the model on the validation set and `--eval test` to evaluate on test data.

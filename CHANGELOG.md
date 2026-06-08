@@ -74,9 +74,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Maintenance
 
+- Add a short README pointer to [\#163](https://github.com/mllam/neural-lam/issues/163) for DGX Spark / PyTorch container compatibility notes, so users hitting `torch_scatter` errors know where to find the known-working / known-failing combos [\#266](https://github.com/mllam/neural-lam/pull/266) @Jayant-kernel
+
 - Group the existing Neural-LAM citation papers in the README under a `### Core Neural-LAM Publications` subheading for clearer structure [\#633](https://github.com/mllam/neural-lam/pull/633) @HetaviM29
 
 - Add unit tests for `inverse_softplus` covering roundtrip identity (parametrized over `beta`), near-zero clamping, and above-threshold linear passthrough [\#419](https://github.com/mllam/neural-lam/pull/419) @Riteesh-NITT
+
+- Add regression test that `datastore` and `forecaster` stay excluded from the saved Lightning hyperparameters (in-memory and on-disk after a checkpoint round-trip), so `load_from_checkpoint` continues to require them to be passed in explicitly ([#148](https://github.com/mllam/neural-lam/issues/148)) [\#232](https://github.com/mllam/neural-lam/pull/232) @Jayant-kernel
 
 - Add comprehensive type hints to `neural_lam/metrics.py` [\#447](https://github.com/mllam/neural-lam/pull/447) @sidhantpande
 
