@@ -33,6 +33,7 @@ class DatastoreSelection:
     """
 
     kind: str
+    config_path: str
 
     def __post_init__(self):
         """
@@ -45,8 +46,6 @@ class DatastoreSelection:
         """
         if self.kind not in DATASTORES:
             raise ValueError(f"Datastore kind {self.kind} is not implemented")
-
-    config_path: str
 
 
 @dataclasses.dataclass
@@ -103,6 +102,9 @@ class TrainingConfig:
         The method to use for weighting the state features in the loss
         function. Defaults to uniform weighting (`UniformFeatureWeighting`, i.e.
         all features are weighted equally).
+    output_clamping : OutputClamping
+        Per-feature lower / upper clamping bounds applied to the model output.
+        Defaults to an empty ``OutputClamping`` (no clamping).
     """
 
     state_feature_weighting: Union[

@@ -3,7 +3,6 @@ Parallel hierarchical graph-based LAM model.
 """
 
 # Standard library
-from typing import Dict, Optional
 
 # Third-party
 import torch
@@ -11,7 +10,7 @@ import torch_geometric as pyg
 
 # Local
 from ....datastore import BaseDatastore
-from ....interaction_net import InteractionNet
+from ....gnn_layers import InteractionNet
 from .hierarchical import BaseHiGraphModel
 
 
@@ -35,8 +34,12 @@ class HiLAMParallel(BaseHiGraphModel):
         num_past_forcing_steps: int = 1,
         num_future_forcing_steps: int = 1,
         output_std: bool = False,
-        output_clamping_lower: Optional[Dict[str, float]] = None,
-        output_clamping_upper: Optional[Dict[str, float]] = None,
+        output_clamping_lower: dict[str, float] | None = None,
+        output_clamping_upper: dict[str, float] | None = None,
+        g2m_gnn_type: str = "InteractionNet",
+        m2g_gnn_type: str = "InteractionNet",
+        mesh_up_gnn_type: str = "InteractionNet",
+        mesh_down_gnn_type: str = "InteractionNet",
     ):
         """
         Initialize the HiLAMParallel model.
@@ -78,6 +81,10 @@ class HiLAMParallel(BaseHiGraphModel):
             output_std=output_std,
             output_clamping_lower=output_clamping_lower,
             output_clamping_upper=output_clamping_upper,
+            g2m_gnn_type=g2m_gnn_type,
+            m2g_gnn_type=m2g_gnn_type,
+            mesh_up_gnn_type=mesh_up_gnn_type,
+            mesh_down_gnn_type=mesh_down_gnn_type,
         )
 
         # Processor GNNs
@@ -121,19 +128,21 @@ class HiLAMParallel(BaseHiGraphModel):
         Parameters
         ----------
         mesh_rep_levels : list of torch.Tensor
-            One tensor per level, each of shape ``(B, num_mesh_nodes[l], d_h)``.
-            Node representations at each hierarchy level. Dims: ``B`` is
-            batch size, ``num_mesh_nodes[l]`` is the node count at level ``l``,
-            and ``d_h`` is the hidden dimension.
+            One tensor per level, each of shape
+            ``(B, num_mesh_nodes[l], hidden_dim)``. Node representations at
+            each hierarchy level. Dims: ``B`` is batch size,
+            ``num_mesh_nodes[l]`` is the node count at level ``l``, and
+            ``hidden_dim`` is the hidden dimension.
         mesh_same_rep : list of torch.Tensor
-            One tensor per level, each of shape ``(B, M_same[l], d_h)``.
-            Same-level edge representations.
+            One tensor per level, each of shape
+            ``(B, num_edges[l], hidden_dim)``. Same-level edge
+            representations.
         mesh_up_rep : list of torch.Tensor
             One tensor per inter-level gap, each of shape
-            ``(B, M_up[l], d_h)``. Upward edge representations.
+            ``(B, num_edges[l], hidden_dim)``. Upward edge representations.
         mesh_down_rep : list of torch.Tensor
             One tensor per inter-level gap, each of shape
-            ``(B, M_down[l], d_h)``. Downward edge representations.
+            ``(B, num_edges[l], hidden_dim)``. Downward edge representations.
 
         Returns
         -------
@@ -143,10 +152,12 @@ class HiLAMParallel(BaseHiGraphModel):
         """
 
         # First join all node and edge representations to single tensors
-        mesh_rep = torch.cat(mesh_rep_levels, dim=1)  # (B, num_mesh_nodes, d_h)
+        mesh_rep = torch.cat(
+            mesh_rep_levels, dim=1
+        )  # (B, num_mesh_nodes, hidden_dim)
         mesh_edge_rep = torch.cat(
             mesh_same_rep + mesh_up_rep + mesh_down_rep, axis=1
-        )  # (B, M_mesh, d_h)
+        )  # (B, num_edges, hidden_dim)
 
         # Here, update mesh_*_rep and mesh_rep
         mesh_rep, mesh_edge_rep = self.processor(mesh_rep, mesh_edge_rep)

@@ -1,11 +1,9 @@
-"""
-Lightning module handling training, validation and testing loops.
-"""
+"""Lightning module handling training, validation and testing loops."""
 
 # Standard library
 import os
 import warnings
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 # Third-party
 import matplotlib.pyplot as plt
@@ -45,9 +43,9 @@ class ForecasterModule(pl.LightningModule):
         restore_opt: bool = False,
         n_example_pred: int = 1,
         create_gif: bool = False,
-        val_steps_to_log: Optional[List[int]] = None,
-        metrics_watch: Optional[List[str]] = None,
-        var_leads_metrics_watch: Optional[Dict[int, List[int]]] = None,
+        val_steps_to_log: list[int] | None = None,
+        metrics_watch: list[str] | None = None,
+        var_leads_metrics_watch: dict[int, list[int]] | None = None,
         args=None,
     ):
         """
@@ -75,13 +73,20 @@ class ForecasterModule(pl.LightningModule):
             Specific rollout steps to log during validation/testing.
         metrics_watch : list of str, optional
             List of metrics to watch and log specifically.
-        var_leads_metrics_watch : dict, optional
-            Dictionary mapping variable indices to lead times for watching.
+        var_leads_metrics_watch : dict of {int: list of int}, optional
+            Mapping from variable index to a list of rollout steps to log
+            individually for the configured metrics.
         args : argparse.Namespace, optional
-            Legacy arguments for backward compatibility.
+            Pre-refactor ``ARModel`` checkpoint hyperparameters. When
+            provided, attributes on ``args`` take precedence over the
+            corresponding explicit kwargs (``loss``, ``lr``, ``restore_opt``,
+            ``n_example_pred``, ``create_gif``, ``val_steps_to_log``,
+            ``metrics_watch``, ``var_leads_metrics_watch``) so legacy
+            checkpoints round-trip through ``load_from_checkpoint``
+            correctly.
         """
         super().__init__()
-        # Pre-refactor ARModel checkpoints saved every hyperparameter nested
+        # Pre-refactor ``ARModel`` checkpoints saved every hyperparameter nested
         # inside an argparse Namespace under the single key 'args'. When
         # Lightning calls __init__ during load_from_checkpoint it would
         # otherwise drop 'args' (not in the new signature) and silently fall
@@ -111,11 +116,11 @@ class ForecasterModule(pl.LightningModule):
         if var_leads_metrics_watch is None:
             var_leads_metrics_watch = {}
 
-        # datastore and forecaster are excluded from saved hparams and must be
-        # provided explicitly when calling load_from_checkpoint. Saving args
-        # makes the checkpoint self-describing: it carries model, graph_name,
-        # hidden_dim, etc. so the caller can reconstruct the exact forecaster
-        # architecture from the checkpoint alone.
+        # datastore and forecaster are excluded from saved hparams and must
+        # be provided explicitly when calling load_from_checkpoint. Saving
+        # args makes the checkpoint self-describing: it carries model,
+        # graph_name, hidden_dim, etc. so the caller can reconstruct the
+        # exact forecaster architecture from the checkpoint alone.
         self.save_hyperparameters(ignore=["datastore", "forecaster"])
         self.datastore = datastore
         self.forecaster = forecaster
@@ -157,13 +162,58 @@ class ForecasterModule(pl.LightningModule):
         else:
             self.per_var_std = None
 
+        # Standardization statistics used to normalize each batch on-device in
+        # `on_after_batch_transfer`. WeatherDataset returns unstandardized
+        # data, so state and forcing are normalized here rather than on CPU.
+        eps = torch.finfo(torch.float32).eps
+        da_state_stats = datastore.get_standardization_dataarray(
+            category="state"
+        )
+        self.register_buffer(
+            "state_mean",
+            torch.tensor(da_state_stats.state_mean.values, dtype=torch.float32),
+            persistent=False,
+        )
+        self.register_buffer(
+            "state_std",
+            self._safe_std(da_state_stats.state_std.values, eps, "state"),
+            persistent=False,
+        )
+
+        if datastore.get_num_data_vars(category="forcing") > 0:
+            da_forcing_stats = datastore.get_standardization_dataarray(
+                category="forcing"
+            )
+            self.register_buffer(
+                "forcing_mean",
+                torch.tensor(
+                    da_forcing_stats.forcing_mean.values, dtype=torch.float32
+                ),
+                persistent=False,
+            )
+            self.register_buffer(
+                "forcing_std",
+                self._safe_std(
+                    da_forcing_stats.forcing_std.values, eps, "forcing"
+                ),
+                persistent=False,
+            )
+            # The windowed forcing width is only known once the first batch
+            # arrives, so the tiled mean/std are built and cached then (in
+            # on_after_batch_transfer) instead of recomputed every batch.
+            self.register_buffer("forcing_mean_tiled", None, persistent=False)
+            self.register_buffer("forcing_std_tiled", None, persistent=False)
+        else:
+            self.forcing_mean = None
+            self.forcing_std = None
+
         # Instantiate loss function
         self.loss = metrics.get_metric(loss)
 
-        self.val_metrics: Dict[str, List] = {
+        self.val_metrics: dict[str, list] = {
             "mse": [],
         }
-        self.test_metrics: Dict[str, List] = {
+        self.test_metrics: dict[str, list] = {
             "mse": [],
             "mae": [],
         }
@@ -179,7 +229,7 @@ class ForecasterModule(pl.LightningModule):
         self.plotted_examples = 0
 
         # For storing spatial loss maps during evaluation
-        self.spatial_loss_maps: List[Any] = []
+        self.spatial_loss_maps: list[Any] = []
 
         # Warn once per phase if val_steps_to_log exceeds the actual rollout
         self._val_steps_warn_issued = False
@@ -235,6 +285,56 @@ class ForecasterModule(pl.LightningModule):
             self.parameters(), lr=self.hparams.lr, betas=(0.9, 0.95)
         )
         return opt
+
+    @staticmethod
+    def _safe_std(std_values, eps, category):
+        """Build a float32 std tensor, clamping near-zero values to `eps`.
+
+        Mirrors the previous CPU-side WeatherDataset behavior: features with
+        near-zero std are clamped to machine epsilon to avoid division-by-zero
+        NaNs, and a single warning is emitted naming the affected category.
+        """
+        std = torch.tensor(std_values, dtype=torch.float32)
+        if bool((std <= eps).any()):
+            warnings.warn(
+                f"Some {category} features have near-zero std and will be "
+                "standardized using machine epsilon to avoid NaN.",
+                UserWarning,
+                stacklevel=2,
+            )
+        return torch.clamp(std, min=eps)
+
+    def on_after_batch_transfer(self, batch, dataloader_idx):
+        """Standardize a batch on-device after transfer to the accelerator.
+
+        Lightning calls this for every train/val/test/predict batch.
+        WeatherDataset returns unstandardized state and forcing; both are
+        normalized here so the work runs on the accelerator.
+        """
+        init_states, target_states, forcing, batch_times = batch
+
+        init_states = (init_states - self.state_mean) / self.state_std
+        target_states = (target_states - self.state_mean) / self.state_std
+
+        if forcing.shape[-1] > 0:
+            if self.forcing_mean_tiled is None:
+                # Forcing is (..., num_forcing_vars * window_size).
+                # WeatherDataset stacks (forcing_feature, window)
+                # feature-major, so each per-feature mean/std is repeated
+                # window_size times. Tile once and cache as buffers rather
+                # than recomputing every batch.
+                window_size = forcing.shape[-1] // self.forcing_mean.shape[-1]
+                self.forcing_mean_tiled = self.forcing_mean.repeat_interleave(
+                    window_size
+                )
+                self.forcing_std_tiled = self.forcing_std.repeat_interleave(
+                    window_size
+                )
+            forcing = (
+                forcing - self.forcing_mean_tiled
+            ) / self.forcing_std_tiled
+
+        return init_states, target_states, forcing, batch_times
 
     def common_step(self, batch):
         """
@@ -577,7 +677,7 @@ class ForecasterModule(pl.LightningModule):
                     f"example_plots_{example_i}",
                 )
                 os.makedirs(plot_dir_path, exist_ok=True)
-                png_frames: Dict[str, List[str]] = {
+                png_frames: dict[str, list[str]] = {
                     var_name: []
                     for var_name in self.datastore.get_vars_names("state")
                 }
@@ -849,6 +949,18 @@ class ForecasterModule(pl.LightningModule):
         self.matched_metrics = set()
         self.spatial_loss_maps.clear()
 
+        # Clear stored test metrics so repeated `trainer.test()` calls on
+        # the same model instance start from a clean slate (otherwise the
+        # tensors accumulate and skew the aggregated metrics).
+        for metric_list in self.test_metrics.values():
+            metric_list.clear()
+
+        # Reset the example-plot counter so example prediction plots are
+        # generated again on every `trainer.test()` call, not just the
+        # first one (the guard `plotted_examples < n_example_pred` would
+        # otherwise stay permanently False).
+        self.plotted_examples = 0
+
     def on_load_checkpoint(self, checkpoint):
         """
         Perform actions when loading a checkpoint.
@@ -862,8 +974,9 @@ class ForecasterModule(pl.LightningModule):
         loaded_state_dict = checkpoint["state_dict"]
 
         # 1. Broad namespace remap: for pre-refactor checkpoints
-        # The old ARModel was a flat LightningModule. Everything that belonged
-        # to the predictor needs to be moved to 'forecaster.predictor.'
+        # The old ``ARModel`` was a flat LightningModule. Everything that
+        # belonged to the predictor needs to be moved to
+        # 'forecaster.predictor.'
         old_keys = list(loaded_state_dict.keys())
         for key in old_keys:
             if not key.startswith("forecaster.") and key not in (

@@ -1,10 +1,14 @@
 """Evaluation metrics shared across training and validation routines."""
 
+# Standard library
+from collections.abc import Callable
+from typing import Optional
+
 # Third-party
 import torch
 
 
-def get_metric(metric_name):
+def get_metric(metric_name: str) -> Callable[..., torch.Tensor]:
     """
     Get a metric function by name.
 
@@ -17,6 +21,12 @@ def get_metric(metric_name):
     -------
     callable
         Function implementing the requested metric.
+
+    Raises
+    ------
+    AssertionError
+        If ``metric_name`` (case-insensitive) is not a key in
+        ``DEFINED_METRICS``.
     """
     metric_name_lower = metric_name.lower()
     assert (
@@ -25,30 +35,35 @@ def get_metric(metric_name):
     return DEFINED_METRICS[metric_name_lower]
 
 
-def mask_and_reduce_metric(metric_entry_vals, mask, average_grid, sum_vars):
+def mask_and_reduce_metric(
+    metric_entry_vals: torch.Tensor,
+    mask: Optional[torch.Tensor],
+    average_grid: bool,
+    sum_vars: bool,
+) -> torch.Tensor:
     """
     Apply a boolean mask and optionally reduce a per-entry metric tensor.
 
     Parameters
     ----------
     metric_entry_vals : torch.Tensor
-        Shape ``(..., N, d_state)``. Per-entry metric values. ``(...)``
+        Shape ``(..., N, num_variables)``. Per-entry metric values. ``(...)``
         denotes any number of broadcastable batch dimensions, ``N`` is
-        the number of grid nodes, and ``d_state`` is the number of state
-        variables.
+        the number of grid nodes, and ``num_variables`` is the number of
+        variables in the gridded representation (e.g. state features).
     mask : torch.Tensor or None
         Shape ``(N,)``. Boolean mask selecting which grid nodes to
         include. ``None`` means all nodes are used.
     average_grid : bool
         If True, average over the grid dimension ``N``.
     sum_vars : bool
-        If True, sum over the variable dimension ``d_state``.
+        If True, sum over the variable dimension ``num_variables``.
 
     Returns
     -------
     torch.Tensor
         Reduced metric values. Shape is one of ``(...,)``,
-        ``(..., d_state)``, ``(..., N)``, or ``(..., N, d_state)``
+        ``(..., num_variables)``, ``(..., N)``, or ``(..., N, num_variables)``
         depending on ``average_grid`` and ``sum_vars``.
     """
     # Only keep grid nodes in mask
@@ -70,21 +85,28 @@ def mask_and_reduce_metric(metric_entry_vals, mask, average_grid, sum_vars):
     return metric_entry_vals
 
 
-def wmse(pred, target, pred_std, mask=None, average_grid=True, sum_vars=True):
+def wmse(
+    pred: torch.Tensor,
+    target: torch.Tensor,
+    pred_std: torch.Tensor,
+    mask: Optional[torch.Tensor] = None,
+    average_grid: bool = True,
+    sum_vars: bool = True,
+) -> torch.Tensor:
     """
     Weighted Mean Squared Error.
 
     Parameters
     ----------
     pred : torch.Tensor
-        Shape ``(..., N, d_state)``. Model prediction. ``(...)`` denotes
+        Shape ``(..., N, num_variables)``. Model prediction. ``(...)`` denotes
         any number of broadcastable batch dimensions, ``N`` is the number
-        of grid nodes, and ``d_state`` is the number of state variables.
+        of grid nodes, and ``num_variables`` is the number of state variables.
     target : torch.Tensor
-        Shape ``(..., N, d_state)``. Ground-truth target. Dims: same as
+        Shape ``(..., N, num_variables)``. Ground-truth target. Dims: same as
         ``pred``.
     pred_std : torch.Tensor
-        Shape ``(..., N, d_state)`` or ``(d_state,)``. Predicted
+        Shape ``(..., N, num_variables)`` or ``(num_variables,)``. Predicted
         standard deviation used as per-entry weight.
     mask : torch.Tensor or None, optional
         Shape ``(N,)``. Boolean mask over grid nodes. ``None`` uses all
@@ -98,7 +120,7 @@ def wmse(pred, target, pred_std, mask=None, average_grid=True, sum_vars=True):
     -------
     torch.Tensor
         Reduced metric values. Shape is one of ``(...,)``,
-        ``(..., d_state)``, ``(..., N)``, or ``(..., N, d_state)``
+        ``(..., num_variables)``, ``(..., N)``, or ``(..., N, num_variables)``
         depending on ``average_grid`` and ``sum_vars``.
     """
     entry_mse = torch.nn.functional.mse_loss(
@@ -116,21 +138,28 @@ def wmse(pred, target, pred_std, mask=None, average_grid=True, sum_vars=True):
     )
 
 
-def mse(pred, target, pred_std, mask=None, average_grid=True, sum_vars=True):
+def mse(
+    pred: torch.Tensor,
+    target: torch.Tensor,
+    pred_std: torch.Tensor,
+    mask: Optional[torch.Tensor] = None,
+    average_grid: bool = True,
+    sum_vars: bool = True,
+) -> torch.Tensor:
     """
     (Unweighted) Mean Squared Error.
 
     Parameters
     ----------
     pred : torch.Tensor
-        Shape ``(..., N, d_state)``. Model prediction. ``(...)`` denotes
+        Shape ``(..., N, num_variables)``. Model prediction. ``(...)`` denotes
         any number of broadcastable batch dimensions, ``N`` is the number
-        of grid nodes, and ``d_state`` is the number of state variables.
+        of grid nodes, and ``num_variables`` is the number of state variables.
     target : torch.Tensor
-        Shape ``(..., N, d_state)``. Ground-truth target. Dims: same as
+        Shape ``(..., N, num_variables)``. Ground-truth target. Dims: same as
         ``pred``.
     pred_std : torch.Tensor
-        Shape ``(..., N, d_state)`` or ``(d_state,)``. Predicted
+        Shape ``(..., N, num_variables)`` or ``(num_variables,)``. Predicted
         standard deviation (unused; ``pred_std`` is replaced by ones
         internally).
     mask : torch.Tensor or None, optional
@@ -145,7 +174,7 @@ def mse(pred, target, pred_std, mask=None, average_grid=True, sum_vars=True):
     -------
     torch.Tensor
         Reduced metric values. Shape is one of ``(...,)``,
-        ``(..., d_state)``, ``(..., N)``, or ``(..., N, d_state)``
+        ``(..., num_variables)``, ``(..., N)``, or ``(..., N, num_variables)``
         depending on ``average_grid`` and ``sum_vars``.
     """
     # Replace pred_std with constant ones
@@ -154,21 +183,28 @@ def mse(pred, target, pred_std, mask=None, average_grid=True, sum_vars=True):
     )
 
 
-def wmae(pred, target, pred_std, mask=None, average_grid=True, sum_vars=True):
+def wmae(
+    pred: torch.Tensor,
+    target: torch.Tensor,
+    pred_std: torch.Tensor,
+    mask: Optional[torch.Tensor] = None,
+    average_grid: bool = True,
+    sum_vars: bool = True,
+) -> torch.Tensor:
     """
     Weighted Mean Absolute Error.
 
     Parameters
     ----------
     pred : torch.Tensor
-        Shape ``(..., N, d_state)``. Model prediction. ``(...)`` denotes
+        Shape ``(..., N, num_variables)``. Model prediction. ``(...)`` denotes
         any number of broadcastable batch dimensions, ``N`` is the number
-        of grid nodes, and ``d_state`` is the number of state variables.
+        of grid nodes, and ``num_variables`` is the number of state variables.
     target : torch.Tensor
-        Shape ``(..., N, d_state)``. Ground-truth target. Dims: same as
+        Shape ``(..., N, num_variables)``. Ground-truth target. Dims: same as
         ``pred``.
     pred_std : torch.Tensor
-        Shape ``(..., N, d_state)`` or ``(d_state,)``. Predicted
+        Shape ``(..., N, num_variables)`` or ``(num_variables,)``. Predicted
         standard deviation used as per-entry weight.
     mask : torch.Tensor or None, optional
         Shape ``(N,)``. Boolean mask over grid nodes. ``None`` uses all
@@ -182,7 +218,7 @@ def wmae(pred, target, pred_std, mask=None, average_grid=True, sum_vars=True):
     -------
     torch.Tensor
         Reduced metric values. Shape is one of ``(...,)``,
-        ``(..., d_state)``, ``(..., N)``, or ``(..., N, d_state)``
+        ``(..., num_variables)``, ``(..., N)``, or ``(..., N, num_variables)``
         depending on ``average_grid`` and ``sum_vars``.
     """
     entry_mae = torch.nn.functional.l1_loss(
@@ -200,21 +236,28 @@ def wmae(pred, target, pred_std, mask=None, average_grid=True, sum_vars=True):
     )
 
 
-def mae(pred, target, pred_std, mask=None, average_grid=True, sum_vars=True):
+def mae(
+    pred: torch.Tensor,
+    target: torch.Tensor,
+    pred_std: torch.Tensor,
+    mask: Optional[torch.Tensor] = None,
+    average_grid: bool = True,
+    sum_vars: bool = True,
+) -> torch.Tensor:
     """
     (Unweighted) Mean Absolute Error.
 
     Parameters
     ----------
     pred : torch.Tensor
-        Shape ``(..., N, d_state)``. Model prediction. ``(...)`` denotes
+        Shape ``(..., N, num_variables)``. Model prediction. ``(...)`` denotes
         any number of broadcastable batch dimensions, ``N`` is the number
-        of grid nodes, and ``d_state`` is the number of state variables.
+        of grid nodes, and ``num_variables`` is the number of state variables.
     target : torch.Tensor
-        Shape ``(..., N, d_state)``. Ground-truth target. Dims: same as
+        Shape ``(..., N, num_variables)``. Ground-truth target. Dims: same as
         ``pred``.
     pred_std : torch.Tensor
-        Shape ``(..., N, d_state)`` or ``(d_state,)``. Predicted
+        Shape ``(..., N, num_variables)`` or ``(num_variables,)``. Predicted
         standard deviation (unused; ``pred_std`` is replaced by ones
         internally).
     mask : torch.Tensor or None, optional
@@ -229,7 +272,7 @@ def mae(pred, target, pred_std, mask=None, average_grid=True, sum_vars=True):
     -------
     torch.Tensor
         Reduced metric values. Shape is one of ``(...,)``,
-        ``(..., d_state)``, ``(..., N)``, or ``(..., N, d_state)``
+        ``(..., num_variables)``, ``(..., N)``, or ``(..., N, num_variables)``
         depending on ``average_grid`` and ``sum_vars``.
     """
     # Replace pred_std with constant ones
@@ -238,21 +281,28 @@ def mae(pred, target, pred_std, mask=None, average_grid=True, sum_vars=True):
     )
 
 
-def nll(pred, target, pred_std, mask=None, average_grid=True, sum_vars=True):
+def nll(
+    pred: torch.Tensor,
+    target: torch.Tensor,
+    pred_std: torch.Tensor,
+    mask: Optional[torch.Tensor] = None,
+    average_grid: bool = True,
+    sum_vars: bool = True,
+) -> torch.Tensor:
     """
     Negative Log Likelihood loss for an isotropic Gaussian likelihood.
 
     Parameters
     ----------
     pred : torch.Tensor
-        Shape ``(..., N, d_state)``. Predicted mean. ``(...)`` denotes
+        Shape ``(..., N, num_variables)``. Predicted mean. ``(...)`` denotes
         any number of broadcastable batch dimensions, ``N`` is the number
-        of grid nodes, and ``d_state`` is the number of state variables.
+        of grid nodes, and ``num_variables`` is the number of state variables.
     target : torch.Tensor
-        Shape ``(..., N, d_state)``. Ground-truth target. Dims: same as
+        Shape ``(..., N, num_variables)``. Ground-truth target. Dims: same as
         ``pred``.
     pred_std : torch.Tensor
-        Shape ``(..., N, d_state)`` or ``(d_state,)``. Predicted
+        Shape ``(..., N, num_variables)`` or ``(num_variables,)``. Predicted
         standard deviation of the Gaussian.
     mask : torch.Tensor or None, optional
         Shape ``(N,)``. Boolean mask over grid nodes. ``None`` uses all
@@ -266,7 +316,7 @@ def nll(pred, target, pred_std, mask=None, average_grid=True, sum_vars=True):
     -------
     torch.Tensor
         Reduced metric values. Shape is one of ``(...,)``,
-        ``(..., d_state)``, ``(..., N)``, or ``(..., N, d_state)``
+        ``(..., num_variables)``, ``(..., N)``, or ``(..., N, num_variables)``
         depending on ``average_grid`` and ``sum_vars``.
     """
     # Broadcast pred_std if shaped (num_variables,) via distribution internals
@@ -281,8 +331,13 @@ def nll(pred, target, pred_std, mask=None, average_grid=True, sum_vars=True):
 
 
 def crps_gauss(
-    pred, target, pred_std, mask=None, average_grid=True, sum_vars=True
-):
+    pred: torch.Tensor,
+    target: torch.Tensor,
+    pred_std: torch.Tensor,
+    mask: Optional[torch.Tensor] = None,
+    average_grid: bool = True,
+    sum_vars: bool = True,
+) -> torch.Tensor:
     """
     Continuous Ranked Probability Score (CRPS) for a Gaussian predictive
     distribution (closed-form expression, negated for minimisation).
@@ -290,14 +345,14 @@ def crps_gauss(
     Parameters
     ----------
     pred : torch.Tensor
-        Shape ``(..., N, d_state)``. Predicted mean. ``(...)`` denotes
+        Shape ``(..., N, num_variables)``. Predicted mean. ``(...)`` denotes
         any number of broadcastable batch dimensions, ``N`` is the number
-        of grid nodes, and ``d_state`` is the number of state variables.
+        of grid nodes, and ``num_variables`` is the number of state variables.
     target : torch.Tensor
-        Shape ``(..., N, d_state)``. Ground-truth target. Dims: same as
+        Shape ``(..., N, num_variables)``. Ground-truth target. Dims: same as
         ``pred``.
     pred_std : torch.Tensor
-        Shape ``(..., N, d_state)`` or ``(d_state,)``. Predicted
+        Shape ``(..., N, num_variables)`` or ``(num_variables,)``. Predicted
         standard deviation of the Gaussian.
     mask : torch.Tensor or None, optional
         Shape ``(N,)``. Boolean mask over grid nodes. ``None`` uses all
@@ -311,7 +366,7 @@ def crps_gauss(
     -------
     torch.Tensor
         Reduced metric values. Shape is one of ``(...,)``,
-        ``(..., d_state)``, ``(..., N)``, or ``(..., N, d_state)``
+        ``(..., num_variables)``, ``(..., N)``, or ``(..., N, num_variables)``
         depending on ``average_grid`` and ``sum_vars``.
     """
     std_normal = torch.distributions.Normal(

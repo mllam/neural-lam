@@ -64,22 +64,22 @@ class NpyFilesDatastoreMEPS(BaseRegularGridDatastore):
     """
     Represents a dataset stored as numpy files on disk. The dataset is assumed
     to be stored in a directory structure where each sample is stored in a
-    separate file. The file-name format is assumed to be described by
-    ``STATE_FILENAME_FORMAT``.
+    separate file. The file-name format is assumed to be
+    `nwp_{analysis_time:%Y%m%d%H}_mbr{member_id:03d}.npy`.
 
     The MEPS dataset is organised into three splits: train, val, and test. Each
     split has a set of files which are:
 
-    - ``STATE_FILENAME_FORMAT``:
+    - `nwp_{analysis_time:%Y%m%d%H}_mbr{member_id:03d}.npy`:
         The state variables for a forecast started at `analysis_time` with
         member id `member_id`. The dimensions of the array are
         `[forecast_timestep, y, x, feature]`.
 
-    - ``TOA_SW_DOWN_FLUX_FILENAME_FORMAT``:
+    - `nwp_toa_downwelling_shortwave_flux_{analysis_time:%Y%m%d%H}.npy`:
         The top-of-atmosphere downwelling shortwave flux at `time`. The
         dimensions of the array are `[forecast_timestep, y, x]`.
 
-    - ``OPEN_WATER_FILENAME_FORMAT``:
+    - `wtr_{analysis_time:%Y%m%d%H}.npy`:
         The open water fraction at `time`. The dimensions of the array are
         `[y, x]`.
 
@@ -139,23 +139,51 @@ class NpyFilesDatastoreMEPS(BaseRegularGridDatastore):
         ├── parameter_weights.npy
         └── surface_geopotential.npy
 
+    Notes
+    -----
+    Folder structure::
+
+        meps_example_reduced
+        ├── data_config.yaml
+        ├── samples
+        │   ├── test
+        │   │   ├── nwp_2022090100_mbr000.npy
+        │   │   ├── ...
+        │   ├── train
+        │   │   ├── nwp_2022040100_mbr000.npy
+        │   │   ├── ...
+        │   └── val
+        │       ├── nwp_2022060500_mbr000.npy
+        │       └── ...
+        └── static
+            ├── border_mask.npy
+            ├── diff_mean.pt
+            ├── diff_std.pt
+            ├── flux_stats.pt
+            ├── grid_features.pt
+            ├── nwp_xy.npy
+            ├── parameter_mean.pt
+            ├── parameter_std.pt
+            ├── parameter_weights.npy
+            └── surface_geopotential.npy
+
     For the MEPS dataset:
     N_t' = 65
     N_t = 65//subsample_step (= 21 for 3h steps)
     dim_y = 268
     dim_x = 238
-    N_grid = 268x238 = 63784
-    d_features = 17 (d_features' = 18)
-    d_forcing = 5
+    num_grid_nodes = 268x238 = 63784
+    num_state_vars = 17 (num_state_vars' = 18)
+    num_forcing_vars = 5
 
     For the MEPS reduced dataset:
     N_t' = 65
     N_t = 65//subsample_step (= 21 for 3h steps)
     dim_y = 134
     dim_x = 119
-    N_grid = 134x119 = 15946
-    d_features = 8
-    d_forcing = 1
+    num_grid_nodes = 134x119 = 15946
+    num_state_vars = 8
+    num_forcing_vars = 1
     """
 
     SHORT_NAME = "npyfilesmeps"
@@ -670,7 +698,7 @@ class NpyFilesDatastoreMEPS(BaseRegularGridDatastore):
             The x, y coordinates of the dataset (with x first then y second),
             returned differently based on the value of `stacked`:
             - `stacked==True`: shape `(n_grid_points, 2)` where
-                                      n_grid_points=N_x*N_y.
+                                n_grid_points=N_x*N_y.
             - `stacked==False`: shape `(N_x, N_y, 2)`
 
         """

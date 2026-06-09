@@ -27,6 +27,12 @@ def get_manual_state_feature_weights(
     -------
     list[float]
         List of floats containing the state feature weights.
+
+    Raises
+    ------
+    ValueError
+        If the set of feature names in ``weighting_config.weights`` does
+        not match the state feature names in the datastore.
     """
     state_feature_names = datastore.get_vars_names(category="state")
     feature_weight_names = weighting_config.weights.keys()
@@ -40,7 +46,7 @@ def get_manual_state_feature_weights(
         missing_features = set(state_feature_names) - set(feature_weight_names)
         raise ValueError(
             f"State feature weights must be provided for each state feature"
-            f"in the datastore ({state_feature_names}). {missing_features}"
+            f" in the datastore ({state_feature_names}). {missing_features}"
             " are missing and weights are defined for the features "
             f"{additional_features} which are not in the datastore."
         )
@@ -92,6 +98,12 @@ def get_state_feature_weighting(
     -------
     list[float]
         List of floats containing the state feature weights.
+
+    Raises
+    ------
+    NotImplementedError
+        If ``config.training.state_feature_weighting`` is not a
+        recognised weighting configuration type.
     """
     weighting_config = config.training.state_feature_weighting
 

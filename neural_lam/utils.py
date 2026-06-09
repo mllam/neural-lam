@@ -9,7 +9,7 @@ import tempfile
 import warnings
 from functools import cache
 from pathlib import Path
-from typing import Any, Iterator, Union
+from typing import Any, Iterator, Union, overload
 
 # Third-party
 import pytorch_lightning as pl
@@ -51,8 +51,37 @@ class BufferList(nn.Module):
         for buffer_i, tensor in enumerate(buffer_tensors):
             self.register_buffer(f"b{buffer_i}", tensor, persistent=persistent)
 
+    @overload
     def __getitem__(self, key: int) -> torch.Tensor:
-        """Return the buffer at ``key`` (0-indexed)."""
+        """Integer-indexed access overload; see the implementation below."""
+
+    @overload
+    def __getitem__(self, key: slice) -> list[torch.Tensor]:
+        """Slice-indexed access overload; see the implementation below."""
+
+    def __getitem__(
+        self, key: Union[int, slice]
+    ) -> Union[torch.Tensor, list[torch.Tensor]]:
+        """Return the buffer(s) at ``key``.
+
+        Supports integer indexing (with Python-style negative indices)
+        and slice indexing (which returns a list of tensors).
+
+        Raises
+        ------
+        IndexError
+            If ``key`` is an out-of-range integer.
+        """
+        # Unpack slice indices and call recursively for each position
+        if isinstance(key, slice):
+            return [self[i] for i in range(*key.indices(len(self)))]
+        # Support negative indexing (e.g. buffer_list[-1] -> last element)
+        if key < 0:
+            key += len(self)
+        if not (0 <= key < len(self)):
+            raise IndexError(
+                f"index {key} out of range for BufferList of length {len(self)}"
+            )
         return getattr(self, f"b{key}")
 
     def __len__(self) -> int:
@@ -106,7 +135,7 @@ def zero_index_edge_index(edge_index: torch.Tensor) -> torch.Tensor:
     Parameters
     ----------
     edge_index : torch.Tensor
-        Edge index tensor of shape (2, N_edges).
+        Edge index tensor of shape (2, num_edges).
 
     Returns
     -------
@@ -130,7 +159,7 @@ def zero_index_m2g(
     Parameters
     ----------
     m2g_edge_index : torch.Tensor
-        Edge index tensor of shape (2, N_edges).
+        Edge index tensor of shape (2, num_edges).
     mesh_static_features : list of torch.Tensor
         Mesh node feature tensors.
     mesh_first : bool
@@ -147,8 +176,10 @@ def zero_index_m2g(
     sign = 1 if restore else -1
 
     if mesh_first:
-        # Mesh has the first indices, adjust grid indices (row 1)
-        num_mesh_nodes = mesh_static_features[0].shape[0]
+        # Mesh has the first indices, adjust grid indices (row 1).
+        # Use the total number of mesh nodes across all levels because
+        # create_graph offsets grid nodes by the full mesh node count.
+        num_mesh_nodes = sum(sf.shape[0] for sf in mesh_static_features)
         return torch.stack(
             (
                 m2g_edge_index[0],
@@ -182,7 +213,7 @@ def zero_index_g2m(
     Parameters
     ----------
     g2m_edge_index : torch.Tensor
-        Edge index tensor of shape (2, N_edges).
+        Edge index tensor of shape (2, num_edges).
     mesh_static_features : list of torch.Tensor
         Mesh node feature tensors.
     mesh_first : bool
@@ -199,8 +230,10 @@ def zero_index_g2m(
     sign = 1 if restore else -1
 
     if mesh_first:
-        # Mesh has the first indices, adjust grid indices (row 0)
-        num_mesh_nodes = mesh_static_features[0].shape[0]
+        # Mesh has the first indices, adjust grid indices (row 0).
+        # Use the total number of mesh nodes across all levels because
+        # create_graph offsets grid nodes by the full mesh node count.
+        num_mesh_nodes = sum(sf.shape[0] for sf in mesh_static_features)
         return torch.stack(
             (
                 g2m_edge_index[0] + sign * num_mesh_nodes,
@@ -299,8 +332,8 @@ def load_graph(
         [zero_index_edge_index(ei) for ei in loads_file("m2m_edge_index.pt")],
         persistent=False,
     )  # List of (2, M_m2m[l])
-    g2m_edge_index = loads_file("g2m_edge_index.pt")  # (2, M_g2m)
-    m2g_edge_index = loads_file("m2g_edge_index.pt")  # (2, M_m2g)
+    g2m_edge_index = loads_file("g2m_edge_index.pt")  # (2, num_edges)
+    m2g_edge_index = loads_file("m2g_edge_index.pt")  # (2, num_edges)
 
     # Change first indices to 0
     # m2g and g2m has to be handled specially as not all mesh nodes
@@ -321,10 +354,10 @@ def load_graph(
     hierarchical = n_levels > 1  # Not just single level mesh graph
 
     # Load static edge features
-    # List of (M_m2m[l], d_edge_f)
+    # List of (M_m2m[l], input_dim)
     m2m_features = loads_file("m2m_features.pt")
-    g2m_features = loads_file("g2m_features.pt")  # (M_g2m, d_edge_f)
-    m2g_features = loads_file("m2g_features.pt")  # (M_m2g, d_edge_f)
+    g2m_features = loads_file("g2m_features.pt")  # (num_edges, input_dim)
+    m2g_features = loads_file("m2g_features.pt")  # (num_edges, input_dim)
 
     # Normalize by dividing with longest edge (found in m2m)
     longest_edge = max(
@@ -352,21 +385,21 @@ def load_graph(
                 for ei in loads_file("mesh_up_edge_index.pt")
             ],
             persistent=False,
-        )  # List of (2, M_up[l])
+        )  # List of (2, num_edges[l])
         mesh_down_edge_index = BufferList(
             [
                 zero_index_edge_index(ei)
                 for ei in loads_file("mesh_down_edge_index.pt")
             ],
             persistent=False,
-        )  # List of (2, M_down[l])
+        )  # List of (2, num_edges[l])
 
         mesh_up_features = loads_file(
             "mesh_up_features.pt"
-        )  # List of (M_up[l], d_edge_f)
+        )  # List of (num_edges[l], input_dim)
         mesh_down_features = loads_file(
             "mesh_down_features.pt"
-        )  # List of (M_down[l], d_edge_f)
+        )  # List of (num_edges[l], input_dim)
 
         # Rescale
         mesh_up_features = BufferList(mesh_up_features, persistent=False)
@@ -582,7 +615,9 @@ def init_training_logger_metrics(
 
 
 @rank_zero_only
-def setup_training_logger(datastore: Any, args: Any, run_name: str) -> Any:
+def setup_training_logger(
+    datastore: Any, args: Any, run_name: str, run_dir: str
+) -> Any:
     """
     Set up the training logger (WandB or MLFlow).
 
@@ -595,10 +630,20 @@ def setup_training_logger(datastore: Any, args: Any, run_name: str) -> Any:
     run_name : str
         Name of the run.
 
+    run_dir : str
+        Directory under which all artifacts for this run are written
+        (logger ``save_dir``, checkpoints, Lightning ``default_root_dir``).
+        Typically ``runs/<run_name>``.
+
     Returns
     -------
     Any
         The initialized logger object.
+
+    Raises
+    ------
+    ValueError
+        If ``args.logger`` is not ``'wandb'`` or ``'mlflow'``.
 
     Notes
     -----
@@ -624,6 +669,7 @@ def setup_training_logger(datastore: Any, args: Any, run_name: str) -> Any:
             config=dict(training=vars(args), datastore=datastore._config),
             resume=wandb_resume,
             id=args.wandb_id,
+            save_dir=run_dir,
         )
     elif args.logger == "mlflow":
         if args.wandb_id is not None:
@@ -640,12 +686,17 @@ def setup_training_logger(datastore: Any, args: Any, run_name: str) -> Any:
             experiment_name=args.logger_project,
             tracking_uri=url,
             run_name=run_name,
+            save_dir=run_dir,
         )
         training_logger.log_hyperparams(
             dict(training=vars(args), datastore=datastore._config)
         )
-
-    return training_logger
+        return training_logger
+    else:
+        raise ValueError(
+            f"Unsupported logger type: {args.logger!r}. "
+            "Supported loggers are: 'wandb', 'mlflow'."
+        )
 
 
 def inverse_softplus(
