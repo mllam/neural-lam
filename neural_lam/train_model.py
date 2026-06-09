@@ -2,6 +2,7 @@
 
 # Standard library
 import json
+import os
 import random
 import shutil
 import time
@@ -289,6 +290,13 @@ def main(input_args=None):
         help="""Logger run name, for e.g. MLFlow (with default value `None`
           neural-lam's default format string is used)""",
     )
+    parser.add_argument(
+        "--runs_root",
+        type=str,
+        default="runs",
+        help="Root directory under which per-run output dirs (checkpoints, "
+        "logger files, plots) are written as `<runs_root>/<run_name>/`",
+    )
 
     logger_group.add_argument(
         "--wandb_id",
@@ -479,12 +487,14 @@ def main(input_args=None):
             f"{time.strftime('%m_%d_%H')}-{random_run_id:04d}"
         )
 
+    run_dir = os.path.join(args.runs_root, run_name)
+
     training_logger = utils.setup_training_logger(
-        datastore=datastore, args=args, run_name=run_name
+        datastore=datastore, args=args, run_name=run_name, run_dir=run_dir
     )
 
     checkpoint_callback = pl.callbacks.ModelCheckpoint(
-        dirpath=f"saved_models/{run_name}",
+        dirpath=os.path.join(run_dir, "checkpoints"),
         filename="min_val_loss",
         monitor="val_mean_loss",
         mode="min",
@@ -493,6 +503,7 @@ def main(input_args=None):
     trainer = pl.Trainer(
         max_epochs=args.epochs,
         deterministic=True,
+        default_root_dir=run_dir,
         strategy="auto",
         accelerator=device_name,
         num_nodes=args.num_nodes,

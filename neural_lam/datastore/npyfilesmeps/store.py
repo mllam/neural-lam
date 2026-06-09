@@ -698,7 +698,7 @@ class NpyFilesDatastoreMEPS(BaseRegularGridDatastore):
             The x, y coordinates of the dataset (with x first then y second),
             returned differently based on the value of `stacked`:
             - `stacked==True`: shape `(n_grid_points, 2)` where
-                                      n_grid_points=N_x*N_y.
+                                n_grid_points=N_x*N_y.
             - `stacked==False`: shape `(N_x, N_y, 2)`
 
         """
