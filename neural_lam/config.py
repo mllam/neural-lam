@@ -1,7 +1,7 @@
 # Standard library
 import dataclasses
 from pathlib import Path
-from typing import Dict, List, Optional, Union
+from typing import Dict, Union
 
 # Third-party
 import dataclass_wizard
@@ -18,8 +18,7 @@ from .datastore import (
 @dataclasses.dataclass
 class DatastoreSelection:
     """
-    Configuration for selecting a datastore and declaring how its variables
-    are consumed by the model.
+    Configuration for selecting a datastore to use with neural-lam.
 
     Attributes
     ----------
@@ -29,31 +28,10 @@ class DatastoreSelection:
     config_path : str
         The path to the configuration file for the selected datastore, this
         is assumed to be relative to the configuration file for neural-lam.
-    inputs : Dict[str, List[str] or None] or None, optional
-        Per-category lists of variable names this datastore contributes as
-        model inputs. Categories are typically ``state``, ``forcing``,
-        ``static``. If the whole field is ``None`` (the default), every
-        variable in every category that the datastore exposes is treated
-        as an input. If a category key is present with a ``null`` / ``None``
-        value, all variables in that category are used. An explicit empty
-        list excludes the category.
-    outputs : Dict[str, List[str] or None] or None, optional
-        Per-category lists of variable names this datastore contributes as
-        model outputs (prediction targets). Categories may include ``state``
-        for prognostic outputs (those that are fed back as input in the
-        next autoregressive step) and ``diagnostic`` for predict-only
-        outputs. Prognostic outputs are the intersection of
-        ``inputs["state"]`` and ``outputs["state"]``; everything in
-        ``outputs`` that is not also in ``inputs["state"]`` is diagnostic.
-        If ``None`` (the default), this datastore is treated as input-only
-        (no contribution to predictions). ``null`` per-category values
-        follow the same "all available" convention as ``inputs``.
     """
 
     kind: str
     config_path: str
-    inputs: Optional[Dict[str, Optional[List[str]]]] = None
-    outputs: Optional[Dict[str, Optional[List[str]]]] = None
 
     def __post_init__(self):
         if self.kind not in DATASTORES:
@@ -134,11 +112,11 @@ class NeuralLAMConfig(dataclass_wizard.JSONWizard, dataclass_wizard.YAMLWizard):
     Attributes
     ----------
     datastores : Dict[str, DatastoreSelection]
-        Mapping from user-chosen datastore name to its selection and role
-        declaration. The dict key becomes the canonical source name used
-        throughout the pipeline (e.g. as keys in future per-source
-        ``ForecastBatch`` field dicts, or to disambiguate weight / clamping
-        config when variable names collide between sources).
+        Mapping from user-chosen datastore name to its selection. The dict
+        key becomes the canonical source name used throughout the pipeline.
+        This PR ships only the dict shape; multi-source support (more than
+        one entry) lands together with the per-category `inputs`/`outputs`
+        filtering follow-up - see mllam/neural-lam#652.
     training : TrainingConfig
         The configuration for training the model.
     """
@@ -179,44 +157,6 @@ class InvalidConfigError(Exception):
     pass
 
 
-def _validate_output_name_collisions(
-    datastores: Dict[str, Union[MDPDatastore, NpyFilesDatastoreMEPS]],
-    selections: Dict[str, DatastoreSelection],
-) -> None:
-    """Raise :class:`InvalidConfigError` if two datastores would contribute
-    a variable with the same name to the model's output set, since
-    downstream sites (weight dicts, metric keys, saved zarr coords) cannot
-    disambiguate.
-
-    Fix is to give the colliding variable a unique name in one of the
-    contributing zarrs (mdp's ``dim_mapping.name_format`` for new builds,
-    or for an existing zarr overwrite the small ``{category}_feature``
-    coord array directly with zarr-python:
-    ``zarr.open_group(path, mode="r+")["{category}_feature"][:] = new_names``).
-    """
-    seen: Dict[str, str] = {}
-    for ds_name, sel in selections.items():
-        if sel.outputs is None:
-            continue
-        for category, var_list in sel.outputs.items():
-            if var_list is None:
-                var_list = datastores[ds_name].get_vars_names(category)
-            for var in var_list:
-                if var in seen:
-                    raise InvalidConfigError(
-                        f"Variable '{var}' is declared as an output in "
-                        f"both datastores '{seen[var]}' and '{ds_name}'. "
-                        "Rename the variable in one of the source zarrs "
-                        "(via mdp's `dim_mapping.name_format` for new "
-                        "builds, or by overwriting the `{category}_feature` "
-                        "coord array in the existing zarr with zarr-python: "
-                        '`zarr.open_group(path, mode="r+")'
-                        '["{category}_feature"][:] = new_names`). '
-                        "See mllam/neural-lam#652."
-                    )
-                seen[var] = ds_name
-
-
 def load_config_and_datastore(
     config_path: str,
 ) -> tuple[
@@ -226,7 +166,10 @@ def load_config_and_datastore(
     """Load the neural-lam configuration and instantiate each datastore.
 
     The configuration uses the multi-datastore schema introduced for #652:
-    a top-level ``datastores`` mapping with one entry per source.
+    a top-level ``datastores`` mapping with one entry per source. This PR
+    accepts the dict shape but enforces exactly one entry; multi-source
+    support lands together with per-category variable filtering in a
+    follow-up.
 
     Parameters
     ----------
@@ -254,6 +197,13 @@ def load_config_and_datastore(
             f"Configuration at {config_path} declares no datastores. "
             "Add at least one entry under the top-level `datastores:` key."
         )
+    if len(config.datastores) != 1:
+        raise InvalidConfigError(
+            "This release accepts exactly one datastore under "
+            "`datastores:`. Multi-source support lands together with the "
+            "per-category `inputs`/`outputs` filtering follow-up "
+            "(see mllam/neural-lam#652)."
+        )
 
     config_dir = Path(config_path).parent
     loaded: Dict[str, Union[MDPDatastore, NpyFilesDatastoreMEPS]] = {}
@@ -264,5 +214,4 @@ def load_config_and_datastore(
             config_path=datastore_config_path,
         )
 
-    _validate_output_name_collisions(loaded, config.datastores)
     return config, loaded

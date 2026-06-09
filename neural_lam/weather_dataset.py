@@ -10,73 +10,16 @@ import torch
 import xarray as xr
 
 # First-party
-from neural_lam.config import DatastoreSelection, InvalidConfigError
+from neural_lam.config import DatastoreSelection
 from neural_lam.datastore.base import BaseDatastore
 
 
-def _resolve_datastore_roles(
-    selections: Dict[str, DatastoreSelection],
-) -> tuple[str, Optional[str]]:
-    """Identify the unique output-producing (interior) datastore and an
-    optional input-only (boundary) datastore from the multi-source
-    selections.
-
-    Multi-source prediction (more than one output-producing datastore) and
-    multi-source inputs (more than one input-only datastore) are tracked in
-    `mllam/neural-lam#652
-    <https://github.com/mllam/neural-lam/issues/652>`_ and are not
-    supported in this release; this function raises with a clear error
-    message if the configuration goes beyond the supported single-interior
-    + optional-single-boundary shape.
-
-    Parameters
-    ----------
-    selections : Dict[str, DatastoreSelection]
-        The datastore selections from ``NeuralLAMConfig.datastores``,
-        keyed by user-chosen names.
-
-    Returns
-    -------
-    interior_name : str
-        The name of the output-producing datastore.
-    boundary_name : str or None
-        The name of the input-only datastore, or ``None`` if no boundary
-        is configured.
-    """
-    output_names = [
-        name for name, sel in selections.items() if sel.outputs is not None
-    ]
-    if not output_names and len(selections) == 1:
-        # Single-source convenience: omitted `outputs` implies the lone
-        # datastore is the interior with all its state vars as outputs.
-        return next(iter(selections)), None
-    if len(output_names) != 1:
-        raise InvalidConfigError(
-            "Exactly one datastore must declare `outputs` in the current "
-            "release (the prognostic source). Multi-source prediction is "
-            f"tracked in #652. Got output-producing datastores: {output_names}."
-        )
-    interior_name = output_names[0]
-    input_only = [n for n in selections if n != interior_name]
-    if len(input_only) > 1:
-        raise InvalidConfigError(
-            "At most one input-only (boundary) datastore is supported in "
-            "the current release. Multi-source inputs are tracked in #652. "
-            f"Got input-only datastores: {input_only}."
-        )
-    return interior_name, (input_only[0] if input_only else None)
-
-
 class WeatherDataset(torch.utils.data.Dataset):
-    """Dataset class for weather data with multi-datastore inputs.
+    """Dataset class for weather data.
 
-    The dataset takes a dict of loaded datastores and a parallel dict of
-    :class:`DatastoreSelection` configs declaring how each one is consumed.
-    Exactly one datastore must produce outputs (the "interior" /
-    prognostic source); zero or more may contribute inputs only. This
-    release still operates on the interior datastore only and ignores any
-    input-only datastores in the per-sample return - boundary forcing and
-    other auxiliary sources land on the model side via
+    The dataset takes a single-entry dict of loaded datastores keyed by the
+    user-chosen name. Multi-source consumption (more than one datastore)
+    lands together with the per-category variable-filtering follow-up - see
     `mllam/neural-lam#652
     <https://github.com/mllam/neural-lam/issues/652>`_.
 
@@ -85,11 +28,11 @@ class WeatherDataset(torch.utils.data.Dataset):
     datastores : Dict[str, BaseDatastore]
         The loaded datastores, keyed by their user-chosen names. Typically
         the return value of
-        :func:`neural_lam.config.load_config_and_datastore`.
+        :func:`neural_lam.config.load_config_and_datastore`. Must contain
+        exactly one entry today.
     selections : Dict[str, DatastoreSelection]
         The matching :class:`DatastoreSelection` configs, with the same
-        keys. The ``outputs`` field on each selection determines which
-        datastore is the interior; the others are input-only.
+        keys.
     split : str, optional
         The data split to use ("train", "val" or "test"). Default is "train".
     ar_steps : int, optional
@@ -123,17 +66,19 @@ class WeatherDataset(torch.utils.data.Dataset):
     ) -> None:
         super().__init__()
 
+        if len(datastores) != 1:
+            raise ValueError(
+                "WeatherDataset expects exactly one datastore in the dict; "
+                "multi-source support lands together with the per-category "
+                "`inputs`/`outputs` filtering follow-up (mllam/neural-lam#652)."
+            )
+
         self._datastores = datastores
         self._selections = selections
-        self._interior_name, self._boundary_name = _resolve_datastore_roles(
-            selections
-        )
-
-        # The legacy single-source ``self.datastore`` attribute is kept as
-        # the interior alias so the within-class slicing/windowing code and
-        # external callers (model side, plotting) keep working unchanged.
-        # Multi-source consumption is the #652 follow-up.
-        datastore = datastores[self._interior_name]
+        # Take the only datastore as the interior alias used by the
+        # within-class slicing/windowing code and external callers (model
+        # side, plotting).
+        datastore = next(iter(datastores.values()))
 
         self.split = split
         self.ar_steps = ar_steps

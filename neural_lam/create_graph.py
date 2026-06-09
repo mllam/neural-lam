@@ -603,15 +603,11 @@ def cli(input_args: Optional[list[str]] = None) -> None:
     if args.config_path is None:
         raise ValueError("Specify your config with --config_path")
 
-    # Load neural-lam configuration and datastore to use. The graph is
-    # built from the interior (output-producing) datastore; auxiliary
-    # input-only sources do not contribute graph nodes today.
-    # Local
-    from .weather_dataset import _resolve_datastore_roles
-
-    config, datastores = load_config_and_datastore(config_path=args.config_path)
-    interior_name, _ = _resolve_datastore_roles(config.datastores)
-    datastore = datastores[interior_name]
+    # Load neural-lam configuration and datastore to use. This PR enforces
+    # a single-entry `datastores` dict; take the only one for graph
+    # building.
+    _, datastores = load_config_and_datastore(config_path=args.config_path)
+    datastore = next(iter(datastores.values()))
 
     create_graph_from_datastore(
         datastore=datastore,

@@ -93,3 +93,6 @@ build/
 *.egg-info/
 
 tests/test_outputs/
+
+# Local-only drafts for GitHub comments / reviews; not part of the repo.
+.github/draft-*.md

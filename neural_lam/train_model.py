@@ -377,17 +377,12 @@ def main(input_args=None):
     # Set seed
     seed.seed_everything(args.seed)
 
-    # Load neural-lam configuration and datastores to use
+    # Load neural-lam configuration and datastore to use. The schema is
+    # the multi-datastore dict from #652 but this PR enforces exactly one
+    # entry (single-source); take the only datastore as the legacy
+    # single-source view for ForecasterModule and the predictor.
     config, datastores = load_config_and_datastore(config_path=args.config_path)
-
-    # Resolve the interior (output-producing) datastore for legacy
-    # single-source consumers (ForecasterModule, predictor). Multi-source
-    # consumption on the model side is tracked in #652.
-    # Local
-    from .weather_dataset import _resolve_datastore_roles
-
-    interior_name, _boundary_name = _resolve_datastore_roles(config.datastores)
-    datastore = datastores[interior_name]
+    datastore = next(iter(datastores.values()))
 
     # Check --var_leads_metrics_watch variable indices against the datastore
     # so users get an immediate error instead of an IndexError deep in the
