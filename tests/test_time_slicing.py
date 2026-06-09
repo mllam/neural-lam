@@ -10,9 +10,11 @@ import xarray as xr
 # First-party
 from neural_lam.datastore.base import BaseDatastore
 from neural_lam.weather_dataset import WeatherDataset
+from tests.conftest import make_single_source_args
 
 
 class SinglePointDummyDatastore(BaseDatastore):
+    SHORT_NAME = "dummydata"
     config = {}
     coords_projection = None
     num_grid_points = 1
@@ -106,8 +108,10 @@ def test_time_slicing_analysis(
         is_forecast=False,
     )
 
+    datastores, selections = make_single_source_args(datastore)
     dataset = WeatherDataset(
-        datastore=datastore,
+        datastores=datastores,
+        selections=selections,
         ar_steps=ar_steps,
         num_future_forcing_steps=num_future_forcing_steps,
         num_past_forcing_steps=num_past_forcing_steps,
@@ -181,8 +185,10 @@ def test_step_length_timedeltas(step_length):
     assert datastore.step_length == step_length
 
     # Test that WeatherDataset can be created with this datastore
+    datastores, selections = make_single_source_args(datastore)
     dataset = WeatherDataset(
-        datastore=datastore,
+        datastores=datastores,
+        selections=selections,
         ar_steps=3,
         num_future_forcing_steps=0,
         num_past_forcing_steps=0,

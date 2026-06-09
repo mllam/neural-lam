@@ -88,8 +88,12 @@ def run_simple_training(
             n_max_levels=1,
         )
 
+    selection = nlconfig.DatastoreSelection(
+        kind=datastore.SHORT_NAME, config_path=datastore.root_path
+    )
     data_module = WeatherDataModule(
-        datastore=datastore,
+        datastores={"interior": datastore},
+        selections={"interior": selection},
         ar_steps_train=3,
         ar_steps_eval=5,
         batch_size=2,
@@ -98,11 +102,7 @@ def run_simple_training(
         num_future_forcing_steps=1,
     )
 
-    config = nlconfig.NeuralLAMConfig(
-        datastore=nlconfig.DatastoreSelection(
-            kind=datastore.SHORT_NAME, config_path=datastore.root_path
-        )
-    )
+    config = nlconfig.NeuralLAMConfig(datastores={"interior": selection})
 
     # Build predictor and forecaster externally, then inject into
     # ForecasterModule

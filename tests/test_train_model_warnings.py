@@ -8,6 +8,21 @@ import pytest
 from neural_lam.train_model import main
 
 
+def _make_fake_config_and_datastores():
+    """Build a return value for ``load_config_and_datastore`` that survives
+    the multi-source role resolution in ``train_model.main`` without
+    needing a real datastore on disk.
+    """
+    config = MagicMock()
+    selection = MagicMock()
+    selection.outputs = None
+    # Single source: ``_resolve_datastore_roles`` returns ("interior", None)
+    # without needing ``outputs`` to be declared explicitly.
+    config.datastores = {"interior": selection}
+    datastores = {"interior": MagicMock()}
+    return config, datastores
+
+
 @pytest.mark.parametrize(
     "eval_val,load_val,expect_warning",
     [
@@ -70,7 +85,7 @@ def test_create_gif_forwarded_to_forecaster_module():
         ),
         patch(
             "neural_lam.train_model.load_config_and_datastore",
-            return_value=(MagicMock(), MagicMock()),
+            return_value=_make_fake_config_and_datastores(),
         ),
         patch("neural_lam.train_model.WeatherDataModule"),
         patch("neural_lam.train_model.MODELS", {"graph_lam": MagicMock()}),

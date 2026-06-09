@@ -23,6 +23,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Adopt the multi-datastore configuration schema from #652: replace the
+  single `datastore:` top-level field with a `datastores:` mapping of
+  named selections, each carrying optional `inputs:` / `outputs:`
+  declarations. `WeatherDataset` and `WeatherDataModule` now take
+  `datastores` and `selections` dicts; `load_config_and_datastore`
+  returns `(config, Dict[str, BaseDatastore])`. A config-time validator
+  rejects name collisions between datastores' declared outputs. Boundary
+  forcing and multi-source consumption land on the model side in a
+  follow-up that does not require changes to the config or
+  dataset shape introduced here.
+  [\#656](https://github.com/mllam/neural-lam/pull/656) @sadamov
+
 - Move data normalization from CPU (`WeatherDataset`) to GPU
   (`ForecasterModule.on_after_batch_transfer`) for improved performance and
   multi-GPU compatibility. `WeatherDataset` / `WeatherDataModule` no longer

@@ -31,10 +31,12 @@ def test_saved_checkpoint_excludes_datastore_and_forecaster(tmp_path):
         )
 
     config = nlconfig.NeuralLAMConfig(
-        datastore=nlconfig.DatastoreSelection(
-            kind=datastore.SHORT_NAME,
-            config_path=datastore.root_path,
-        ),
+        datastores={
+            "interior": nlconfig.DatastoreSelection(
+                kind=datastore.SHORT_NAME,
+                config_path=datastore.root_path,
+            ),
+        },
     )
 
     predictor = GraphLAM(

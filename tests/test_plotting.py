@@ -20,7 +20,7 @@ from neural_lam import vis
 from neural_lam.create_graph import create_graph_from_datastore
 from neural_lam.models import ARForecaster, ForecasterModule, GraphLAM
 from neural_lam.weather_dataset import WeatherDataset
-from tests.conftest import init_datastore_example
+from tests.conftest import init_datastore_example, make_single_source_args
 from tests.dummy_datastore import DummyDatastore
 
 # Create output directory for test figures
@@ -442,10 +442,12 @@ def model_and_batch(tmp_path, time_step, time_unit):
 
     # Create config.
     config = nlconfig.NeuralLAMConfig(
-        datastore=nlconfig.DatastoreSelection(
-            kind=datastore.SHORT_NAME,
-            config_path=datastore.root_path,
-        ),
+        datastores={
+            "interior": nlconfig.DatastoreSelection(
+                kind=datastore.SHORT_NAME,
+                config_path=datastore.root_path,
+            ),
+        },
     )
 
     # Create model
@@ -483,8 +485,10 @@ def model_and_batch(tmp_path, time_step, time_unit):
     )
 
     # Create dataset to get a sample batch.
+    datastores, selections = make_single_source_args(datastore)
     dataset = WeatherDataset(
-        datastore=datastore,
+        datastores=datastores,
+        selections=selections,
         split="train",
         ar_steps=2,
         num_past_forcing_steps=0,
@@ -551,7 +555,12 @@ def test_plot_examples_integration_saves_figure(
     time_slice = batch[3][0]
 
     # Create DataArrays.
-    dataset = WeatherDataset(datastore=datastore, split="train")
+    plot_datastores, plot_selections = make_single_source_args(datastore)
+    dataset = WeatherDataset(
+        datastores=plot_datastores,
+        selections=plot_selections,
+        split="train",
+    )
 
     time = np.array(time_slice.cpu(), dtype="datetime64[ns]")
 
@@ -715,10 +724,12 @@ def test_create_metric_log_dict_with_metrics_watch(tmp_path):
         )
 
     config = nlconfig.NeuralLAMConfig(
-        datastore=nlconfig.DatastoreSelection(
-            kind=datastore.SHORT_NAME,
-            config_path=datastore.root_path,
-        ),
+        datastores={
+            "interior": nlconfig.DatastoreSelection(
+                kind=datastore.SHORT_NAME,
+                config_path=datastore.root_path,
+            ),
+        },
     )
 
     model = _build_metrics_watch_module(datastore, config)
@@ -774,10 +785,12 @@ def test_aggregate_and_plot_metrics_with_metrics_watch(tmp_path):
         )
 
     config = nlconfig.NeuralLAMConfig(
-        datastore=nlconfig.DatastoreSelection(
-            kind=datastore.SHORT_NAME,
-            config_path=datastore.root_path,
-        ),
+        datastores={
+            "interior": nlconfig.DatastoreSelection(
+                kind=datastore.SHORT_NAME,
+                config_path=datastore.root_path,
+            ),
+        },
     )
 
     model = _build_metrics_watch_module(datastore, config)

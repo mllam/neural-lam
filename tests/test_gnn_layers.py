@@ -94,10 +94,12 @@ def _get_datastore_and_config(graph_name):
     """Create a datastore with graph already built."""
     datastore = init_datastore_example("mdp")
     config = nlconfig.NeuralLAMConfig(
-        datastore=nlconfig.DatastoreSelection(
-            kind=datastore.SHORT_NAME,
-            config_path=datastore.root_path,
-        )
+        datastores={
+            "interior": nlconfig.DatastoreSelection(
+                kind=datastore.SHORT_NAME,
+                config_path=datastore.root_path,
+            ),
+        }
     )
 
     # Ensure graph exists

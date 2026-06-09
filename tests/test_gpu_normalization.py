@@ -6,7 +6,7 @@ import torch
 from neural_lam import config as nlconfig
 from neural_lam.models import ARForecaster, ForecasterModule, StepPredictor
 from neural_lam.weather_dataset import WeatherDataModule
-from tests.conftest import init_datastore_example
+from tests.conftest import init_datastore_example, make_single_source_args
 
 NUM_PAST_FORCING_STEPS = 1
 NUM_FUTURE_FORCING_STEPS = 1
@@ -21,9 +21,11 @@ class _MockStepPredictor(StepPredictor):
 
 def _build_module(datastore):
     config = nlconfig.NeuralLAMConfig(
-        datastore=nlconfig.DatastoreSelection(
-            kind=datastore.SHORT_NAME, config_path=datastore.root_path
-        )
+        datastores={
+            "interior": nlconfig.DatastoreSelection(
+                kind=datastore.SHORT_NAME, config_path=datastore.root_path
+            ),
+        }
     )
     predictor = _MockStepPredictor(datastore=datastore, output_std=False)
     forecaster = ARForecaster(predictor, datastore)
@@ -81,8 +83,10 @@ def test_normalization_applied_exactly_once():
     datastore = init_datastore_example("mdp")
     model = _build_module(datastore)
 
+    datastores, selections = make_single_source_args(datastore)
     data_module = WeatherDataModule(
-        datastore=datastore,
+        datastores=datastores,
+        selections=selections,
         ar_steps_train=2,
         ar_steps_eval=2,
         batch_size=2,

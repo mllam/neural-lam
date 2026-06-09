@@ -75,9 +75,11 @@ def test_forecaster_module_checkpoint(tmp_path):
     datastore = init_datastore_example("mdp")
 
     config = nlconfig.NeuralLAMConfig(
-        datastore=nlconfig.DatastoreSelection(
-            kind=datastore.SHORT_NAME, config_path=datastore.root_path
-        )
+        datastores={
+            "interior": nlconfig.DatastoreSelection(
+                kind=datastore.SHORT_NAME, config_path=datastore.root_path
+            ),
+        }
     )
 
     # Build predictor and forecaster externally, then inject into
@@ -173,9 +175,11 @@ def test_forecaster_module_old_checkpoint(tmp_path):
     datastore = init_datastore_example("mdp")
 
     config = nlconfig.NeuralLAMConfig(
-        datastore=nlconfig.DatastoreSelection(
-            kind=datastore.SHORT_NAME, config_path=datastore.root_path
-        )
+        datastores={
+            "interior": nlconfig.DatastoreSelection(
+                kind=datastore.SHORT_NAME, config_path=datastore.root_path
+            ),
+        }
     )
 
     # First-party
