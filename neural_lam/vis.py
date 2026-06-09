@@ -2,7 +2,6 @@
 
 # Standard library
 import warnings
-from typing import Optional, Union
 
 # Third-party
 import cartopy.crs as ccrs
@@ -11,7 +10,6 @@ import matplotlib
 import matplotlib.axes
 import matplotlib.collections
 import matplotlib.colors
-import matplotlib.figure
 import matplotlib.pyplot as plt
 import numpy as np
 import torch
@@ -343,11 +341,11 @@ def plot_on_axis(
     ax: matplotlib.axes.Axes,
     da: xr.DataArray,
     datastore: BaseRegularGridDatastore,
-    vmin: Optional[float] = None,
-    vmax: Optional[float] = None,
-    ax_title: Optional[str] = None,
-    cmap: Union[str, matplotlib.colors.Colormap] = "plasma",
-    boundary_alpha: Optional[float] = None,
+    vmin: float | None = None,
+    vmax: float | None = None,
+    ax_title: str | None = None,
+    cmap: str | matplotlib.colors.Colormap = "plasma",
+    boundary_alpha: float | None = None,
     crop_to_interior: bool = False,
 ) -> matplotlib.collections.QuadMesh:
     """

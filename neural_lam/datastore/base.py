@@ -8,7 +8,6 @@ import functools
 from datetime import timedelta
 from functools import cached_property
 from pathlib import Path
-from typing import List, Optional, Union
 
 # Third-party
 import cartopy.crs as ccrs
@@ -75,7 +74,6 @@ class BaseDatastore(abc.ABC):
             The root path to the datastore.
 
         """
-        pass
 
     @property
     @abc.abstractmethod
@@ -89,7 +87,6 @@ class BaseDatastore(abc.ABC):
             returned.
 
         """
-        pass
 
     @property
     @abc.abstractmethod
@@ -102,10 +99,9 @@ class BaseDatastore(abc.ABC):
             The step length of the dataset.
 
         """
-        pass
 
     @abc.abstractmethod
-    def get_vars_units(self, category: str) -> List[str]:
+    def get_vars_units(self, category: str) -> list[str]:
         """Get the units of the variables in the given category.
 
         Parameters
@@ -119,10 +115,9 @@ class BaseDatastore(abc.ABC):
             The units of the variables.
 
         """
-        pass
 
     @abc.abstractmethod
-    def get_vars_names(self, category: str) -> List[str]:
+    def get_vars_names(self, category: str) -> list[str]:
         """Get the names of the variables in the given category.
 
         Parameters
@@ -136,10 +131,9 @@ class BaseDatastore(abc.ABC):
             The names of the variables.
 
         """
-        pass
 
     @abc.abstractmethod
-    def get_vars_long_names(self, category: str) -> List[str]:
+    def get_vars_long_names(self, category: str) -> list[str]:
         """Get the long names of the variables in the given category.
 
         Parameters
@@ -153,7 +147,6 @@ class BaseDatastore(abc.ABC):
             The long names of the variables.
 
         """
-        pass
 
     @abc.abstractmethod
     def get_num_data_vars(self, category: str) -> int:
@@ -170,7 +163,6 @@ class BaseDatastore(abc.ABC):
             The number of data variables.
 
         """
-        pass
 
     @abc.abstractmethod
     def get_standardization_dataarray(self, category: str) -> xr.Dataset:
@@ -199,7 +191,6 @@ class BaseDatastore(abc.ABC):
             differences for state variables).
 
         """
-        pass
 
     def _standardize_datarray(
         self, da: xr.DataArray, category: str
@@ -233,9 +224,9 @@ class BaseDatastore(abc.ABC):
     def get_dataarray(
         self,
         category: str,
-        split: Optional[str],
+        split: str | None,
         standardize: bool = False,
-    ) -> Union[xr.DataArray, None]:
+    ) -> xr.DataArray | None:
         """
         Return the processed data (as a single `xr.DataArray`) for the given
         category of data and test/train/val-split that covers all the data (in
@@ -277,7 +268,6 @@ class BaseDatastore(abc.ABC):
             The xarray DataArray object with processed dataset.
 
         """
-        pass
 
     @cached_property
     @abc.abstractmethod
@@ -294,7 +284,6 @@ class BaseDatastore(abc.ABC):
             `('grid_index',)`.
 
         """
-        pass
 
     @abc.abstractmethod
     def get_xy(self, category: str, stacked: bool) -> np.ndarray:
@@ -329,10 +318,9 @@ class BaseDatastore(abc.ABC):
             The projection object.
 
         """
-        pass
 
     @functools.lru_cache
-    def get_xy_extent(self, category: str) -> List[float]:
+    def get_xy_extent(self, category: str) -> list[float]:
         """
         Return the extent of the x, y coordinates for a given category of data.
         The extent should be returned as a list of 4 floats with `[xmin, xmax,
@@ -386,11 +374,10 @@ class BaseDatastore(abc.ABC):
             The number of grid points in the dataset.
 
         """
-        pass
 
     @cached_property
     @abc.abstractmethod
-    def state_feature_weights_values(self) -> List[float]:
+    def state_feature_weights_values(self) -> list[float]:
         """
         Return the weights for each state feature as a list of floats.
 
@@ -404,12 +391,11 @@ class BaseDatastore(abc.ABC):
         list of float
             The weight for each state feature.
         """
-        pass
 
     @functools.lru_cache
     def expected_dim_order(
         self,
-        category: Optional[str] = None,
+        category: str | None = None,
     ) -> tuple[str, ...]:
         """
         Return the expected dimension order for the dataarray or dataset
@@ -447,15 +433,19 @@ class BaseDatastore(abc.ABC):
             if category != "static":
                 # static data does not vary in time
                 if self.is_forecast:
-                    dim_order.extend(
-                        ["analysis_time", "elapsed_forecast_duration"]
-                    )
+                    dim_order.extend([
+                        "analysis_time",
+                        "elapsed_forecast_duration",
+                    ])
                 elif not self.is_forecast:
                     dim_order.append("time")
 
-            if category == "state" and self.is_ensemble:
-                dim_order.append("ensemble_member")
-            elif category == "forcing" and self.has_ensemble_forcing:
+            if (
+                category == "state"
+                and self.is_ensemble
+                or category == "forcing"
+                and self.has_ensemble_forcing
+            ):
                 dim_order.append("ensemble_member")
 
         dim_order.append("grid_index")
@@ -518,7 +508,6 @@ class BaseRegularGridDatastore(BaseDatastore):
             `y` attributes.
 
         """
-        pass
 
     @abc.abstractmethod
     def get_xy(self, category: str, stacked: bool) -> np.ndarray:
@@ -540,11 +529,10 @@ class BaseRegularGridDatastore(BaseDatastore):
                                n_grid_points=N_x*N_y.
             - `stacked==False`: shape `(N_x, N_y, 2)`
         """
-        pass
 
     def unstack_grid_coords(
-        self, da_or_ds: Union[xr.DataArray, xr.Dataset]
-    ) -> Union[xr.DataArray, xr.Dataset]:
+        self, da_or_ds: xr.DataArray | xr.Dataset
+    ) -> xr.DataArray | xr.Dataset:
         """
         Unstack the spatial grid coordinates from `grid_index` into separate `x`
         and `y` dimensions to create a 2D grid (if the spatial coordinates have
@@ -598,8 +586,8 @@ class BaseRegularGridDatastore(BaseDatastore):
         return da_or_ds_unstacked
 
     def stack_grid_coords(
-        self, da_or_ds: Union[xr.DataArray, xr.Dataset]
-    ) -> Union[xr.DataArray, xr.Dataset]:
+        self, da_or_ds: xr.DataArray | xr.Dataset
+    ) -> xr.DataArray | xr.Dataset:
         """
         Stack the spatial grid coordinates (x and y) into a single `grid_index`
         dimension. Only performs stacking if the data is currently unstacked

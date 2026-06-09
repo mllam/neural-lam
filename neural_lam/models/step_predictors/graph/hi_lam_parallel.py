@@ -3,7 +3,6 @@ Parallel hierarchical graph-based LAM model.
 """
 
 # Standard library
-from typing import Dict, Optional
 
 # Third-party
 import torch
@@ -35,8 +34,8 @@ class HiLAMParallel(BaseHiGraphModel):
         num_past_forcing_steps: int = 1,
         num_future_forcing_steps: int = 1,
         output_std: bool = False,
-        output_clamping_lower: Optional[Dict[str, float]] = None,
-        output_clamping_upper: Optional[Dict[str, float]] = None,
+        output_clamping_lower: dict[str, float] | None = None,
+        output_clamping_upper: dict[str, float] | None = None,
     ):
         """
         Initialize the HiLAMParallel model.

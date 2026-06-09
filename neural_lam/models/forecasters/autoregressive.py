@@ -1,7 +1,6 @@
 """Forecaster that uses an auto-regressive strategy to unroll a forecast."""
 
 # Standard library
-from typing import Optional
 
 # Third-party
 import torch
@@ -34,7 +33,8 @@ class ARForecaster(Forecaster):
 
         # Register boundary/interior masks on the forecaster, not the predictor
         boundary_mask = (
-            torch.tensor(datastore.boundary_mask.values, dtype=torch.float32)
+            torch
+            .tensor(datastore.boundary_mask.values, dtype=torch.float32)
             .unsqueeze(0)
             .unsqueeze(-1)
         )
@@ -61,7 +61,7 @@ class ARForecaster(Forecaster):
         init_states: torch.Tensor,
         forcing_features: torch.Tensor,
         boundary_states: torch.Tensor,
-    ) -> tuple[torch.Tensor, Optional[torch.Tensor]]:
+    ) -> tuple[torch.Tensor, torch.Tensor | None]:
         """
         Unroll the autoregressive model: at each step ``i`` call
         ``self.predictor`` to produce the next state, then overwrite boundary

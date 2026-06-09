@@ -3,7 +3,7 @@
 # Standard library
 import os
 import warnings
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 # Third-party
 import matplotlib.pyplot as plt
@@ -43,9 +43,9 @@ class ForecasterModule(pl.LightningModule):
         restore_opt: bool = False,
         n_example_pred: int = 1,
         create_gif: bool = False,
-        val_steps_to_log: Optional[List[int]] = None,
-        metrics_watch: Optional[List[str]] = None,
-        var_leads_metrics_watch: Optional[Dict[int, List[int]]] = None,
+        val_steps_to_log: list[int] | None = None,
+        metrics_watch: list[str] | None = None,
+        var_leads_metrics_watch: dict[int, list[int]] | None = None,
         args=None,
     ):
         """
@@ -128,7 +128,8 @@ class ForecasterModule(pl.LightningModule):
 
         # Compute interior_mask_bool directly from datastore
         boundary_mask = (
-            torch.tensor(datastore.boundary_mask.values, dtype=torch.float32)
+            torch
+            .tensor(datastore.boundary_mask.values, dtype=torch.float32)
             .unsqueeze(0)
             .unsqueeze(-1)
         )  # (1, num_grid_nodes, 1)
@@ -165,10 +166,10 @@ class ForecasterModule(pl.LightningModule):
         # Instantiate loss function
         self.loss = metrics.get_metric(loss)
 
-        self.val_metrics: Dict[str, List] = {
+        self.val_metrics: dict[str, list] = {
             "mse": [],
         }
-        self.test_metrics: Dict[str, List] = {
+        self.test_metrics: dict[str, list] = {
             "mse": [],
             "mae": [],
         }
@@ -184,7 +185,7 @@ class ForecasterModule(pl.LightningModule):
         self.plotted_examples = 0
 
         # For storing spatial loss maps during evaluation
-        self.spatial_loss_maps: List[Any] = []
+        self.spatial_loss_maps: list[Any] = []
 
         # Warn once per phase if val_steps_to_log exceeds the actual rollout
         self._val_steps_warn_issued = False
@@ -557,7 +558,8 @@ class ForecasterModule(pl.LightningModule):
             ).unstack("grid_index")
 
             var_vmin = (
-                torch.minimum(
+                torch
+                .minimum(
                     pred_slice.flatten(0, 1).min(dim=0)[0],
                     target_slice.flatten(0, 1).min(dim=0)[0],
                 )
@@ -565,7 +567,8 @@ class ForecasterModule(pl.LightningModule):
                 .numpy()
             )
             var_vmax = (
-                torch.maximum(
+                torch
+                .maximum(
                     pred_slice.flatten(0, 1).max(dim=0)[0],
                     target_slice.flatten(0, 1).max(dim=0)[0],
                 )
@@ -582,7 +585,7 @@ class ForecasterModule(pl.LightningModule):
                     f"example_plots_{example_i}",
                 )
                 os.makedirs(plot_dir_path, exist_ok=True)
-                png_frames: Dict[str, List[str]] = {
+                png_frames: dict[str, list[str]] = {
                     var_name: []
                     for var_name in self.datastore.get_vars_names("state")
                 }

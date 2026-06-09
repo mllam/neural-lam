@@ -1,7 +1,6 @@
 """Base implementations for hierarchical (multi-level) graph models."""
 
 # Standard library
-from typing import Dict, Optional
 
 # Third-party
 from torch import nn
@@ -29,8 +28,8 @@ class BaseHiGraphModel(BaseGraphModel):
         num_past_forcing_steps: int = 1,
         num_future_forcing_steps: int = 1,
         output_std: bool = False,
-        output_clamping_lower: Optional[Dict[str, float]] = None,
-        output_clamping_upper: Optional[Dict[str, float]] = None,
+        output_clamping_lower: dict[str, float] | None = None,
+        output_clamping_upper: dict[str, float] | None = None,
     ):
         """Extend :class:`BaseGraphModel` with hierarchical mesh structures."""
         super().__init__(
@@ -80,56 +79,44 @@ class BaseHiGraphModel(BaseGraphModel):
         mesh_down_dim = self.mesh_down_features[0].shape[1]
 
         # Separate mesh node embedders for each level
-        self.mesh_embedders = nn.ModuleList(
-            [
-                utils.make_mlp([mesh_dim] + self.mlp_blueprint_end)
-                for _ in range(self.num_levels)
-            ]
-        )
-        self.mesh_same_embedders = nn.ModuleList(
-            [
-                utils.make_mlp([mesh_same_dim] + self.mlp_blueprint_end)
-                for _ in range(self.num_levels)
-            ]
-        )
-        self.mesh_up_embedders = nn.ModuleList(
-            [
-                utils.make_mlp([mesh_up_dim] + self.mlp_blueprint_end)
-                for _ in range(self.num_levels - 1)
-            ]
-        )
-        self.mesh_down_embedders = nn.ModuleList(
-            [
-                utils.make_mlp([mesh_down_dim] + self.mlp_blueprint_end)
-                for _ in range(self.num_levels - 1)
-            ]
-        )
+        self.mesh_embedders = nn.ModuleList([
+            utils.make_mlp([mesh_dim] + self.mlp_blueprint_end)
+            for _ in range(self.num_levels)
+        ])
+        self.mesh_same_embedders = nn.ModuleList([
+            utils.make_mlp([mesh_same_dim] + self.mlp_blueprint_end)
+            for _ in range(self.num_levels)
+        ])
+        self.mesh_up_embedders = nn.ModuleList([
+            utils.make_mlp([mesh_up_dim] + self.mlp_blueprint_end)
+            for _ in range(self.num_levels - 1)
+        ])
+        self.mesh_down_embedders = nn.ModuleList([
+            utils.make_mlp([mesh_down_dim] + self.mlp_blueprint_end)
+            for _ in range(self.num_levels - 1)
+        ])
 
         # Instantiate GNNs
         # Init GNNs
-        self.mesh_init_gnns = nn.ModuleList(
-            [
-                InteractionNet(
-                    edge_index,
-                    hidden_dim,
-                    hidden_layers=hidden_layers,
-                )
-                for edge_index in self.mesh_up_edge_index
-            ]
-        )
+        self.mesh_init_gnns = nn.ModuleList([
+            InteractionNet(
+                edge_index,
+                hidden_dim,
+                hidden_layers=hidden_layers,
+            )
+            for edge_index in self.mesh_up_edge_index
+        ])
 
         # Read out GNNs
-        self.mesh_read_gnns = nn.ModuleList(
-            [
-                InteractionNet(
-                    edge_index,
-                    hidden_dim,
-                    hidden_layers=hidden_layers,
-                    update_edges=False,
-                )
-                for edge_index in self.mesh_down_edge_index
-            ]
-        )
+        self.mesh_read_gnns = nn.ModuleList([
+            InteractionNet(
+                edge_index,
+                hidden_dim,
+                hidden_layers=hidden_layers,
+                update_edges=False,
+            )
+            for edge_index in self.mesh_down_edge_index
+        ])
 
     def get_num_mesh(self):
         """

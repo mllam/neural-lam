@@ -2,7 +2,6 @@
 
 # Standard library
 from abc import ABC, abstractmethod
-from typing import Optional
 
 # Third-party
 import torch
@@ -35,7 +34,7 @@ class Forecaster(nn.Module, ABC):
         init_states: torch.Tensor,
         forcing_features: torch.Tensor,
         boundary_states: torch.Tensor,
-    ) -> tuple[torch.Tensor, Optional[torch.Tensor]]:
+    ) -> tuple[torch.Tensor, torch.Tensor | None]:
         """
         Produce a forecast of length ``pred_steps`` from two initial states,
         the per-step forcing features, and the per-step true boundary states.
@@ -80,4 +79,3 @@ class Forecaster(nn.Module, ABC):
             per-variable std is substituted upstream by
             ``ForecasterModule``. Dims: same as ``prediction``.
         """
-        pass

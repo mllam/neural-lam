@@ -2,7 +2,6 @@
 
 # Standard library
 from abc import ABC, abstractmethod
-from typing import Dict, Optional
 
 # Third-party
 import torch
@@ -23,8 +22,8 @@ class StepPredictor(nn.Module, ABC):
         self,
         datastore: BaseDatastore,
         output_std: bool = False,
-        output_clamping_lower: Optional[Dict[str, float]] = None,
-        output_clamping_upper: Optional[Dict[str, float]] = None,
+        output_clamping_lower: dict[str, float] | None = None,
+        output_clamping_upper: dict[str, float] | None = None,
     ):
         """
         Initialize the StepPredictor.
@@ -41,10 +40,10 @@ class StepPredictor(nn.Module, ABC):
             Upper clamping limits for state variables.
         """
         super().__init__()
-        self._output_clamping_lower: Dict[str, float] = (
+        self._output_clamping_lower: dict[str, float] = (
             dict(output_clamping_lower) if output_clamping_lower else {}
         )
-        self._output_clamping_upper: Dict[str, float] = (
+        self._output_clamping_upper: dict[str, float] = (
             dict(output_clamping_upper) if output_clamping_upper else {}
         )
 
@@ -132,7 +131,7 @@ class StepPredictor(nn.Module, ABC):
         prev_state: torch.Tensor,
         prev_prev_state: torch.Tensor,
         forcing: torch.Tensor,
-    ) -> tuple[torch.Tensor, Optional[torch.Tensor]]:
+    ) -> tuple[torch.Tensor, torch.Tensor | None]:
         """
         Advance the state by one step:
         ``(X_{t-1}, X_t, forcing_t) -> X_{t+1}``.
@@ -165,7 +164,6 @@ class StepPredictor(nn.Module, ABC):
             is True, otherwise ``None``. Per-feature predicted standard
             deviation. Dims: same as ``prev_state``.
         """
-        pass
 
     def prepare_clamping_params(self, datastore: BaseDatastore):
         """
@@ -206,9 +204,8 @@ class StepPredictor(nn.Module, ABC):
         sigmoid_center = 0
         softplus_center = 0
 
-        normalize_clamping_lim = (
-            lambda x, feature_idx: (x - self.state_mean[feature_idx])
-            / self.state_std[feature_idx]
+        normalize_clamping_lim = lambda x, feature_idx: (
+            (x - self.state_mean[feature_idx]) / self.state_std[feature_idx]
         )
 
         # Check which clamping functions to use for each feature
@@ -224,11 +221,11 @@ class StepPredictor(nn.Module, ABC):
 
         for feature_idx, feature in enumerate(state_feature_names):
             if feature in lower_lims and feature in upper_lims:
-                assert (
-                    lower_lims[feature] < upper_lims[feature]
-                ), f'Invalid clamping limits for feature "{feature}",\
+                assert lower_lims[feature] < upper_lims[feature], (
+                    f'Invalid clamping limits for feature "{feature}",\
                      lower: {lower_lims[feature]}, larger than\
                      upper: {upper_lims[feature]}'
+                )
                 sigmoid_lower_upper_idx.append(feature_idx)
                 sigmoid_lower_lims.append(
                     normalize_clamping_lim(lower_lims[feature], feature_idx)

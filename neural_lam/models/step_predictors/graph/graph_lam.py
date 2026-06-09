@@ -1,7 +1,6 @@
 """Graph-based LAM model with a flat mesh."""
 
 # Standard library
-from typing import Dict, Optional
 
 # Third-party
 import torch_geometric as pyg
@@ -32,8 +31,8 @@ class GraphLAM(BaseGraphModel):
         num_past_forcing_steps: int = 1,
         num_future_forcing_steps: int = 1,
         output_std: bool = False,
-        output_clamping_lower: Optional[Dict[str, float]] = None,
-        output_clamping_upper: Optional[Dict[str, float]] = None,
+        output_clamping_lower: dict[str, float] | None = None,
+        output_clamping_upper: dict[str, float] | None = None,
     ):
         """
         Initialize the GraphLAM model.
@@ -77,9 +76,9 @@ class GraphLAM(BaseGraphModel):
             output_clamping_upper=output_clamping_upper,
         )
 
-        assert (
-            not self.hierarchical
-        ), "GraphLAM does not use a hierarchical mesh graph"
+        assert not self.hierarchical, (
+            "GraphLAM does not use a hierarchical mesh graph"
+        )
 
         # grid_dim from data + static + batch_static
         mesh_dim = self.mesh_static_features.shape[1]
