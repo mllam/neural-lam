@@ -190,9 +190,9 @@ def _validate_output_name_collisions(
 
     Fix is to give the colliding variable a unique name in one of the
     contributing zarrs (mdp's ``dim_mapping.name_format`` for new builds,
-    or ``xr.Dataset.assign_coords`` on the small ``{category}_feature``
-    coord array of an existing zarr - a milliseconds operation regardless
-    of zarr size).
+    or for an existing zarr overwrite the small ``{category}_feature``
+    coord array directly with zarr-python:
+    ``zarr.open_group(path, mode="r+")["{category}_feature"][:] = new_names``).
     """
     seen: Dict[str, str] = {}
     for ds_name, sel in selections.items():
@@ -208,9 +208,10 @@ def _validate_output_name_collisions(
                         f"both datastores '{seen[var]}' and '{ds_name}'. "
                         "Rename the variable in one of the source zarrs "
                         "(via mdp's `dim_mapping.name_format` for new "
-                        "builds, or via `xr.Dataset.assign_coords` on the "
-                        "existing zarr's `{category}_feature` coord - a "
-                        "milliseconds operation regardless of zarr size). "
+                        "builds, or by overwriting the `{category}_feature` "
+                        "coord array in the existing zarr with zarr-python: "
+                        '`zarr.open_group(path, mode="r+")'
+                        '["{category}_feature"][:] = new_names`). '
                         "See mllam/neural-lam#652."
                     )
                 seen[var] = ds_name
