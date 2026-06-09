@@ -30,25 +30,28 @@ class BaseDatastore(abc.ABC):
     `weather_dataset.WeatherDataset` class (which inherits from
     `torch.utils.data.Dataset` and uses the datastore to access the data).
 
-    # Forecast vs analysis data
+    Forecast vs analysis data
+    -------------------------
     If the datastore is used to represent forecast rather than analysis data,
-    then the `is_forecast` attribute should be set to True, and returned data
-    from `get_dataarray` is assumed to have `analysis_time` and `forecast_time`
+    then the ``is_forecast`` attribute should be set to True, and returned data
+    from ``get_dataarray`` is assumed to have `analysis_time` and `forecast_time`
     dimensions (rather than just `time`).
 
-    # Ensemble vs deterministic data
+    Ensemble vs deterministic data
+    ------------------------------
     If the datastore is used to present an ensemble of state realisations, for
     example for forecast ensembles, then the `is_ensemble` attribute should be
-    set to `True` and returned state data from `get_dataarray` is expected to
+    set to `True` and returned state data from ``get_dataarray`` is expected to
     have an `ensemble_member` dimension. If each ensemble member has its own
     forcing values, then `has_ensemble_forcing` should be set to `True`, and
-    returned forcing data from `get_dataarray` is expected to have an
+    returned forcing data from ``get_dataarray`` is expected to have an
     `ensemble_member` dimension; otherwise forcing data is expected not to have
     one.
 
-    # Grid index
+    Grid index
+    ----------
     All methods that return data specific to a grid point (like
-    `get_dataarray`) should have a single dimension named `grid_index` that
+    ``get_dataarray``) should have a single dimension named `grid_index` that
     represents the spatial grid index of the data. The actual x, y coordinates
     of the grid points should be stored in the `x` and `y` coordinates of the
     dataarray or dataset with the `grid_index` dimension as the coordinate for

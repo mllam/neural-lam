@@ -150,24 +150,36 @@ def save_stats(
     static_dir_path : str or pathlib.Path
         Directory where ``*.pt`` files should be written.
     means : Sequence[torch.Tensor]
-        Batch-wise means with shape ``(N_batch, d_features)``.
-    squares : Sequence[torch.Tensor]
-        Batch-wise second moments with shape ``(N_batch, d_features)``.
-    flux_means : Sequence[torch.Tensor]
-        Flux means of shape ``(N_batch,)``; pass an empty sequence to skip
+        Shape ``(B, num_state_vars)``. Batch-wise means. Sequence of one or
+        more tensors each of shape ``(B_i, num_state_vars)``; concatenated /
+        stacked along the batch dim before reduction. Typical callers pass a
+        single already-gathered tensor. The list can have length 0 to skip
         saving.
+    squares : Sequence[torch.Tensor]
+        Shape ``(B, num_state_vars)``. Batch-wise second moments. Sequence of
+        one or more tensors each of shape ``(B_i, num_state_vars)``;
+        concatenated / stacked along the batch dim before reduction. Typical
+        callers pass a single already-gathered tensor. The list can have
+        length 0 to skip saving.
+    flux_means : Sequence[torch.Tensor]
+        Shape ``(B,)``. Flux means. Sequence of one or more tensors each of
+        shape ``(B_i,)``; concatenated / stacked along the batch dim before
+        reduction. Typical callers pass a single already-gathered tensor.
+        The list can have length 0 to skip saving.
     flux_squares : Sequence[torch.Tensor]
-        Flux second moments of shape ``(N_batch,)``; pass an empty sequence to
-        skip saving.
+        Shape ``(B,)``. Flux second moments. Sequence of one or more tensors
+        each of shape ``(B_i,)``; concatenated / stacked along the batch dim
+        before reduction. Typical callers pass a single already-gathered
+        tensor. The list can have length 0 to skip saving.
     filename_prefix : str
         Prefix (e.g., ``"parameter"`` or ``"diff"``) for saved tensors.
     """
     means = (
         torch.stack(means) if len(means) > 1 else means[0]
-    )  # (N_batch, d_features,)
+    )  # (B, d_features,)
     squares = (
         torch.stack(squares) if len(squares) > 1 else squares[0]
-    )  # (N_batch, d_features,)
+    )  # (B, d_features,)
     mean = torch.mean(means, dim=0)  # (d_features,)
     second_moment = torch.mean(squares, dim=0)  # (d_features,)
     std = torch.sqrt(second_moment - mean**2)  # (d_features,)
@@ -186,10 +198,10 @@ def save_stats(
         return
     flux_means = (
         torch.stack(flux_means) if len(flux_means) > 1 else flux_means[0]
-    )  # (N_batch,)
+    )  # (B,)
     flux_squares = (
         torch.stack(flux_squares) if len(flux_squares) > 1 else flux_squares[0]
-    )  # (N_batch,)
+    )  # (B,)
     flux_mean = torch.mean(flux_means)  # (,)
     flux_second_moment = torch.mean(flux_squares)  # (,)
     flux_std = torch.sqrt(flux_second_moment - flux_mean**2)  # (,)
@@ -277,15 +289,15 @@ def main(
                 target_batch.to(device),
                 forcing_batch.to(device),
             )
-        # (N_batch, N_t, N_grid, d_features)
+        # (B, N_t, num_grid_nodes, d_features)
         batch = torch.cat((init_batch, target_batch), dim=1)
         # Flux at 1st windowed position is index 0 in forcing
         flux_batch = forcing_batch[:, :, :, 0]
-        # (N_batch, d_features,)
+        # (B, d_features,)
         means.append(torch.mean(batch, dim=(1, 2)).cpu())
         squares.append(
             torch.mean(batch**2, dim=(1, 2)).cpu()
-        )  # (N_batch, d_features,)
+        )  # (B, d_features,)
         flux_means.append(torch.mean(flux_batch).cpu())  # (,)
         flux_squares.append(torch.mean(flux_batch**2).cpu())  # (,)
 
@@ -330,10 +342,10 @@ def main(
                 )
             ]
     else:
-        means = [torch.cat(means, dim=0)]  # (N_batch, d_features,)
-        squares = [torch.cat(squares, dim=0)]  # (N_batch, d_features,)
-        flux_means = [torch.tensor(flux_means)]  # (N_batch,)
-        flux_squares = [torch.tensor(flux_squares)]  # (N_batch,)
+        means = [torch.cat(means, dim=0)]  # (B, d_features,)
+        squares = [torch.cat(squares, dim=0)]  # (B, d_features,)
+        flux_means = [torch.tensor(flux_means)]  # (B,)
+        flux_squares = [torch.tensor(flux_squares)]  # (B,)
 
     if rank == 0:
         save_stats(
@@ -391,7 +403,7 @@ def main(
             init_batch, target_batch = init_batch.to(device), target_batch.to(
                 device
             )
-        # (N_batch, N_t', N_grid, d_features)
+        # (B, N_t', num_grid_nodes, d_features)
         batch = torch.cat((init_batch, target_batch), dim=1)
         # Note: batch contains only 1h-steps
         stepped_batch = torch.cat(
@@ -401,14 +413,14 @@ def main(
             ],
             dim=0,
         )
-        # (N_batch', N_t, N_grid, d_features),
-        # N_batch' = step_length*N_batch
+        # (B', N_t, num_grid_nodes, d_features),
+        # B' = step_length*B
         batch_diffs = stepped_batch[:, 1:] - stepped_batch[:, :-1]
-        # (N_batch', N_t-1, N_grid, d_features)
+        # (B', N_t-1, num_grid_nodes, d_features)
         diff_means.append(torch.mean(batch_diffs, dim=(1, 2)).cpu())
-        # (N_batch', d_features,)
+        # (B', d_features,)
         diff_squares.append(torch.mean(batch_diffs**2, dim=(1, 2)).cpu())
-        # (N_batch', d_features,)
+        # (B', d_features,)
 
     if distributed and world_size > 1:
         dist.barrier()
@@ -432,8 +444,8 @@ def main(
             diff_means = [diff_means_gathered[:n_original_windows]]
             diff_squares = [diff_squares_gathered[:n_original_windows]]
 
-    diff_means = [torch.cat(diff_means, dim=0)]  # (N_batch', d_features,)
-    diff_squares = [torch.cat(diff_squares, dim=0)]  # (N_batch', d_features,)
+    diff_means = [torch.cat(diff_means, dim=0)]  # (B', d_features,)
+    diff_squares = [torch.cat(diff_squares, dim=0)]  # (B', d_features,)
 
     if rank == 0:
         save_stats(static_dir_path, diff_means, diff_squares, [], [], "diff")

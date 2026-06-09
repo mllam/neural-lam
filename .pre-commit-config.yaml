@@ -42,7 +42,7 @@ repos:
       - id: interrogate
         description: Ensure documentation coverage stays perfect
         pass_filenames: false
-        args: ["--fail-under=100", "neural_lam"]
+        args: ["-c", "pyproject.toml", "neural_lam"]
   - repo: https://github.com/pre-commit/mirrors-mypy
     rev: v1.19.0
     hooks:

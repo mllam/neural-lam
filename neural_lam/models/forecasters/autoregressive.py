@@ -1,6 +1,4 @@
-"""
-Forecaster that uses an auto-regressive strategy to unroll a forecast.
-"""
+"""Forecaster that uses an auto-regressive strategy to unroll a forecast."""
 
 # Standard library
 from typing import Optional
@@ -53,7 +51,7 @@ class ARForecaster(Forecaster):
         Returns
         -------
         bool
-            True if the forecaster predicts standard deviation, False otherwise.
+            ``True`` if the forecaster predicts standard deviation, ``False`` otherwise.
         """
         return self.predictor.predicts_std
 
@@ -71,36 +69,36 @@ class ARForecaster(Forecaster):
         Parameters
         ----------
         init_states : torch.Tensor
-            Shape ``(B, 2, num_grid_nodes, d_f)``. The two initial states
-            ``[X_{t-1}, X_t]`` used to start the rollout from. Dims: ``B`` is
-            batch size, ``2`` is the time index, ``num_grid_nodes`` is the
-            number of spatial nodes, and ``d_f`` is the state feature
-            dimension.
+            Shape ``(B, 2, num_grid_nodes, num_state_vars)``. The two initial
+            states ``[X_{t-1}, X_t]`` used to start the rollout from. Dims:
+            ``B`` is batch size, ``2`` initial time steps (``X_{t-1}, X_t``),
+            ``num_grid_nodes`` is the number of spatial nodes, and
+            ``num_state_vars`` is the number of state variables.
         forcing_features : torch.Tensor
-            Shape ``(B, pred_steps, num_grid_nodes, d_forcing)``. Forcing
-            features for each predicted step; ``pred_steps`` defines the
-            rollout length. Dims: ``B`` is batch size, ``pred_steps`` is
+            Shape ``(B, pred_steps, num_grid_nodes, num_forcing_vars)``.
+            Forcing features for each predicted step; ``pred_steps`` defines
+            the rollout length. Dims: ``B`` is batch size, ``pred_steps`` is
             the number of predicted steps, ``num_grid_nodes`` is the
-            number of spatial nodes, and ``d_forcing`` is the forcing
-            feature dimension (already concatenated past/current/future
+            number of spatial nodes, and ``num_forcing_vars`` is the number
+            of forcing variables (already concatenated past/current/future
             windows).
         boundary_states : torch.Tensor
-            Shape ``(B, pred_steps, num_grid_nodes, d_f)``. True state
+            Shape ``(B, pred_steps, num_grid_nodes, num_state_vars)``. True state
             values used ONLY to overwrite boundary nodes at each AR step.
             The interior prediction at step ``i`` must not depend on
             ``boundary_states[:, i]`` in any other way. Dims: ``B`` is
             batch size, ``pred_steps`` is the number of predicted steps,
             ``num_grid_nodes`` is the number of spatial nodes, and
-            ``d_f`` is the state feature dimension.
+            ``num_state_vars`` is the state feature dimension.
 
         Returns
         -------
         prediction : torch.Tensor
-            Shape ``(B, pred_steps, num_grid_nodes, d_f)``. Stacked
+            Shape ``(B, pred_steps, num_grid_nodes, num_state_vars)``. Stacked
             per-step forecasts (with boundary overwritten by the true
             value). Dims: same as ``boundary_states``.
         pred_std : torch.Tensor or None
-            Shape ``(B, pred_steps, num_grid_nodes, d_f)`` when the
+            Shape ``(B, pred_steps, num_grid_nodes, num_state_vars)`` when the
             wrapped predictor outputs an std, otherwise ``None`` (in which
             case ``ForecasterModule`` substitutes the constant
             per-variable std). Dims: same as ``prediction``.

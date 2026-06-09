@@ -1,6 +1,4 @@
-"""
-Base class for graph-based step predictors.
-"""
+"""Base class for graph-based step predictors."""
 
 # Standard library
 from typing import Dict, Optional
@@ -41,7 +39,8 @@ class BaseGraphModel(StepPredictor):
         Parameters
         ----------
         datastore : BaseDatastore
-            The datastore providing grid metadata and data access.
+            Datastore supplying data and information about dataset and
+            forecast region.
         graph_name : str, default "multiscale"
             The name of the graph to load.
         hidden_dim : int, default 64
@@ -189,9 +188,9 @@ class BaseGraphModel(StepPredictor):
         Returns
         -------
         torch.Tensor
-            Shape ``(num_mesh_nodes, d_h)``. Embedded mesh node
+            Shape ``(num_mesh_nodes, hidden_dim)``. Embedded mesh node
             representations. Dims: ``num_mesh_nodes`` is the number of
-            mesh nodes and ``d_h`` is the hidden dimension.
+            mesh nodes and ``hidden_dim`` is the hidden dimension.
         """
         raise NotImplementedError("embedd_mesh_nodes not implemented")
 
@@ -203,15 +202,15 @@ class BaseGraphModel(StepPredictor):
         Parameters
         ----------
         mesh_rep : torch.Tensor
-            Shape ``(B, num_mesh_nodes, d_h)``. Current mesh node
+            Shape ``(B, num_mesh_nodes, hidden_dim)``. Current mesh node
             representations. Dims: ``B`` is batch size,
-            ``num_mesh_nodes`` is the number of mesh nodes, and ``d_h``
+            ``num_mesh_nodes`` is the number of mesh nodes, and ``hidden_dim``
             is the hidden dimension.
 
         Returns
         -------
         torch.Tensor
-            Shape ``(B, num_mesh_nodes, d_h)``. Updated mesh node
+            Shape ``(B, num_mesh_nodes, hidden_dim)``. Updated mesh node
             representations. Dims: same as ``mesh_rep``.
         """
         raise NotImplementedError("process_step not implemented")
@@ -228,29 +227,29 @@ class BaseGraphModel(StepPredictor):
         Parameters
         ----------
         prev_state : torch.Tensor
-            Shape ``(B, num_grid_nodes, d_f)``. The current state
+            Shape ``(B, num_grid_nodes, num_state_vars)``. The current state
             ``X_t``. Dims: ``B`` is batch size, ``num_grid_nodes`` is the
-            number of spatial grid nodes, and ``d_f`` is the number of
+            number of spatial grid nodes, and ``num_state_vars`` is the number of
             state variables.
         prev_prev_state : torch.Tensor
-            Shape ``(B, num_grid_nodes, d_f)``. The previous state
+            Shape ``(B, num_grid_nodes, num_state_vars)``. The previous state
             ``X_{t-1}``, used as additional conditioning. Dims: same as
             ``prev_state``.
         forcing : torch.Tensor
-            Shape ``(B, num_grid_nodes, d_forcing)``. External forcings
+            Shape ``(B, num_grid_nodes, num_forcing_vars)``. External forcings
             for this step (already concatenated past/current/future
             windows). Dims: ``B`` is batch size, ``num_grid_nodes`` is
-            the number of spatial grid nodes, and ``d_forcing`` is the
+            the number of spatial grid nodes, and ``num_forcing_vars`` is the
             forcing feature dimension.
 
         Returns
         -------
         new_state : torch.Tensor
-            Shape ``(B, num_grid_nodes, d_f)``. The predicted next state
+            Shape ``(B, num_grid_nodes, num_state_vars)``. The predicted next state
             ``X_{t+1}`` after delta-add and clamping. Dims: same as
             ``prev_state``.
         pred_std : torch.Tensor or None
-            Shape ``(B, num_grid_nodes, d_f)`` when ``output_std`` is
+            Shape ``(B, num_grid_nodes, num_state_vars)`` when ``output_std`` is
             True, otherwise ``None``. Per-feature predicted standard
             deviation (raw softplus output, not rescaled by diff
             statistics). Dims: same as ``prev_state``.
@@ -269,25 +268,25 @@ class BaseGraphModel(StepPredictor):
         )
 
         # Embed all features
-        grid_emb = self.grid_embedder(grid_features)  # (B, num_grid_nodes, d_h)
-        g2m_emb = self.g2m_embedder(self.g2m_features)  # (M_g2m, d_h)
-        m2g_emb = self.m2g_embedder(self.m2g_features)  # (M_m2g, d_h)
+        grid_emb = self.grid_embedder(grid_features)  # (B, num_grid_nodes, hidden_dim)
+        g2m_emb = self.g2m_embedder(self.g2m_features)  # (num_edges, hidden_dim)
+        m2g_emb = self.m2g_embedder(self.m2g_features)  # (num_edges, hidden_dim)
         mesh_emb = self.embedd_mesh_nodes()
 
         # Map from grid to mesh
         mesh_emb_expanded = self.expand_to_batch(
             mesh_emb, batch_size
-        )  # (B, num_mesh_nodes, d_h)
+        )  # (B, num_mesh_nodes, hidden_dim)
         g2m_emb_expanded = self.expand_to_batch(g2m_emb, batch_size)
 
         # This also splits representation into grid and mesh
         mesh_rep = self.g2m_gnn(
             grid_emb, mesh_emb_expanded, g2m_emb_expanded
-        )  # (B, num_mesh_nodes, d_h)
+        )  # (B, num_mesh_nodes, hidden_dim)
         # Also MLP with residual for grid representation
         grid_rep = grid_emb + self.encoding_grid_mlp(
             grid_emb
-        )  # (B, num_grid_nodes, d_h)
+        )  # (B, num_grid_nodes, hidden_dim)
 
         # Run processor step
         mesh_rep = self.process_step(mesh_rep)
@@ -296,7 +295,7 @@ class BaseGraphModel(StepPredictor):
         m2g_emb_expanded = self.expand_to_batch(m2g_emb, batch_size)
         grid_rep = self.m2g_gnn(
             mesh_rep, grid_rep, m2g_emb_expanded
-        )  # (B, num_grid_nodes, d_h)
+        )  # (B, num_grid_nodes, hidden_dim)
 
         # Map to output dimension, only for grid
         net_output = self.output_map(
@@ -306,7 +305,7 @@ class BaseGraphModel(StepPredictor):
         if self.output_std:
             pred_delta_mean, pred_std_raw = net_output.chunk(
                 2, dim=-1
-            )  # both (B, num_grid_nodes, d_f)
+            )  # both (B, num_grid_nodes, num_state_vars)
             # NOTE: The predicted std. is not scaled in any way here
             # linter for some reason does not think softplus is callable
             # pylint: disable-next=not-callable

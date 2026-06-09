@@ -1,6 +1,4 @@
-"""
-Base class for step predictors.
-"""
+"""Base class for step predictors."""
 
 # Standard library
 from abc import ABC, abstractmethod
@@ -104,7 +102,7 @@ class StepPredictor(nn.Module, ABC):
         Returns
         -------
         bool
-            True if the predictor predicts standard deviation, False otherwise.
+            ``True`` if the predictor predicts standard deviation, ``False`` otherwise.
         """
         return self.output_std
 
@@ -141,28 +139,28 @@ class StepPredictor(nn.Module, ABC):
         Parameters
         ----------
         prev_state : torch.Tensor
-            Shape ``(B, num_grid_nodes, d_f)``. The current state
+            Shape ``(B, num_grid_nodes, num_state_vars)``. The current state
             ``X_t``. Dims: ``B`` is batch size, ``num_grid_nodes`` is the
-            number of spatial nodes, and ``d_f`` is the number of state
+            number of spatial nodes, and ``num_state_vars`` is the number of state
             variables.
         prev_prev_state : torch.Tensor
-            Shape ``(B, num_grid_nodes, d_f)``. The previous state
+            Shape ``(B, num_grid_nodes, num_state_vars)``. The previous state
             ``X_{t-1}``, used as additional conditioning. Dims: same as
             ``prev_state``.
         forcing : torch.Tensor
-            Shape ``(B, num_grid_nodes, d_forcing)``. External forcings
+            Shape ``(B, num_grid_nodes, num_forcing_vars)``. External forcings
             for this step (already concatenated past/current/future
             windows). Dims: ``B`` is batch size, ``num_grid_nodes`` is
-            the number of spatial nodes, and ``d_forcing`` is the
+            the number of spatial nodes, and ``num_forcing_vars`` is the
             forcing feature dimension.
 
         Returns
         -------
         pred_state : torch.Tensor
-            Shape ``(B, num_grid_nodes, d_f)``. The predicted next
+            Shape ``(B, num_grid_nodes, num_state_vars)``. The predicted next
             state ``X_{t+1}``. Dims: same as ``prev_state``.
         pred_std : torch.Tensor or None
-            Shape ``(B, num_grid_nodes, d_f)`` when ``output_std``
+            Shape ``(B, num_grid_nodes, num_state_vars)`` when ``output_std``
             is True, otherwise ``None``. Per-feature predicted standard
             deviation. Dims: same as ``prev_state``.
         """
@@ -324,19 +322,19 @@ class StepPredictor(nn.Module, ABC):
         Parameters
         ----------
         state_delta : torch.Tensor
-            Shape ``(B, num_grid_nodes, d_f)``. Raw predicted state
+            Shape ``(B, num_grid_nodes, num_state_vars)``. Raw predicted state
             increment (network output, already rescaled). Dims: ``B`` is
             batch size, ``num_grid_nodes`` is the number of spatial nodes,
-            and ``d_f`` is the number of state variables.
+            and ``num_state_vars`` is the number of state variables.
         prev_state : torch.Tensor
-            Shape ``(B, num_grid_nodes, d_f)``. Current state ``X_t``
+            Shape ``(B, num_grid_nodes, num_state_vars)``. Current state ``X_t``
             used as the base for the clamped update. Dims: same as
             ``state_delta``.
 
         Returns
         -------
         torch.Tensor
-            Shape ``(B, num_grid_nodes, d_f)``. Clamped next state.
+            Shape ``(B, num_grid_nodes, num_state_vars)``. Clamped next state.
             Dims: same as ``state_delta``.
         """
 

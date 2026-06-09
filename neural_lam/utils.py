@@ -106,7 +106,7 @@ def zero_index_edge_index(edge_index: torch.Tensor) -> torch.Tensor:
     Parameters
     ----------
     edge_index : torch.Tensor
-        Edge index tensor of shape (2, N_edges).
+        Edge index tensor of shape (2, num_edges).
 
     Returns
     -------
@@ -130,7 +130,7 @@ def zero_index_m2g(
     Parameters
     ----------
     m2g_edge_index : torch.Tensor
-        Edge index tensor of shape (2, N_edges).
+        Edge index tensor of shape (2, num_edges).
     mesh_static_features : list of torch.Tensor
         Mesh node feature tensors.
     mesh_first : bool
@@ -182,7 +182,7 @@ def zero_index_g2m(
     Parameters
     ----------
     g2m_edge_index : torch.Tensor
-        Edge index tensor of shape (2, N_edges).
+        Edge index tensor of shape (2, num_edges).
     mesh_static_features : list of torch.Tensor
         Mesh node feature tensors.
     mesh_first : bool
@@ -299,8 +299,8 @@ def load_graph(
         [zero_index_edge_index(ei) for ei in loads_file("m2m_edge_index.pt")],
         persistent=False,
     )  # List of (2, M_m2m[l])
-    g2m_edge_index = loads_file("g2m_edge_index.pt")  # (2, M_g2m)
-    m2g_edge_index = loads_file("m2g_edge_index.pt")  # (2, M_m2g)
+    g2m_edge_index = loads_file("g2m_edge_index.pt")  # (2, num_edges)
+    m2g_edge_index = loads_file("m2g_edge_index.pt")  # (2, num_edges)
 
     # Change first indices to 0
     # m2g and g2m has to be handled specially as not all mesh nodes
@@ -321,10 +321,10 @@ def load_graph(
     hierarchical = n_levels > 1  # Not just single level mesh graph
 
     # Load static edge features
-    # List of (M_m2m[l], d_edge_f)
+    # List of (M_m2m[l], input_dim)
     m2m_features = loads_file("m2m_features.pt")
-    g2m_features = loads_file("g2m_features.pt")  # (M_g2m, d_edge_f)
-    m2g_features = loads_file("m2g_features.pt")  # (M_m2g, d_edge_f)
+    g2m_features = loads_file("g2m_features.pt")  # (num_edges, input_dim)
+    m2g_features = loads_file("m2g_features.pt")  # (num_edges, input_dim)
 
     # Normalize by dividing with longest edge (found in m2m)
     longest_edge = max(
@@ -352,21 +352,21 @@ def load_graph(
                 for ei in loads_file("mesh_up_edge_index.pt")
             ],
             persistent=False,
-        )  # List of (2, M_up[l])
+        )  # List of (2, num_edges[l])
         mesh_down_edge_index = BufferList(
             [
                 zero_index_edge_index(ei)
                 for ei in loads_file("mesh_down_edge_index.pt")
             ],
             persistent=False,
-        )  # List of (2, M_down[l])
+        )  # List of (2, num_edges[l])
 
         mesh_up_features = loads_file(
             "mesh_up_features.pt"
-        )  # List of (M_up[l], d_edge_f)
+        )  # List of (num_edges[l], input_dim)
         mesh_down_features = loads_file(
             "mesh_down_features.pt"
-        )  # List of (M_down[l], d_edge_f)
+        )  # List of (num_edges[l], input_dim)
 
         # Rescale
         mesh_up_features = BufferList(mesh_up_features, persistent=False)

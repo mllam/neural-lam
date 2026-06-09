@@ -1,6 +1,4 @@
-"""
-Lightning module handling training, validation and testing loops.
-"""
+"""Lightning module handling training, validation and testing loops."""
 
 # Standard library
 import os
@@ -75,13 +73,20 @@ class ForecasterModule(pl.LightningModule):
             Specific rollout steps to log during validation/testing.
         metrics_watch : list of str, optional
             List of metrics to watch and log specifically.
-        var_leads_metrics_watch : dict, optional
-            Dictionary mapping variable indices to lead times for watching.
+        var_leads_metrics_watch : dict of {int: list of int}, optional
+            Mapping from variable index to a list of rollout steps to log
+            individually for the configured metrics.
         args : argparse.Namespace, optional
-            Legacy arguments for backward compatibility.
+            Pre-refactor ``ARModel`` checkpoint hyperparameters. When
+            provided, attributes on ``args`` take precedence over the
+            corresponding explicit kwargs (``loss``, ``lr``, ``restore_opt``,
+            ``n_example_pred``, ``create_gif``, ``val_steps_to_log``,
+            ``metrics_watch``, ``var_leads_metrics_watch``) so legacy
+            checkpoints round-trip through ``load_from_checkpoint``
+            correctly.
         """
         super().__init__()
-        # Pre-refactor ARModel checkpoints saved every hyperparameter nested
+        # Pre-refactor ``ARModel`` checkpoints saved every hyperparameter nested
         # inside an argparse Namespace under the single key 'args'. When
         # Lightning calls __init__ during load_from_checkpoint it would
         # otherwise drop 'args' (not in the new signature) and silently fall
@@ -862,7 +867,7 @@ class ForecasterModule(pl.LightningModule):
         loaded_state_dict = checkpoint["state_dict"]
 
         # 1. Broad namespace remap: for pre-refactor checkpoints
-        # The old ARModel was a flat LightningModule. Everything that belonged
+        # The old ``ARModel`` was a flat LightningModule. Everything that belonged
         # to the predictor needs to be moved to 'forecaster.predictor.'
         old_keys = list(loaded_state_dict.keys())
         for key in old_keys:

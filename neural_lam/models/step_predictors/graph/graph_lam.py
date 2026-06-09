@@ -1,6 +1,4 @@
-"""
-Graph-based LAM model with a flat mesh.
-"""
+"""Graph-based LAM model with a flat mesh."""
 
 # Standard library
 from typing import Dict, Optional
@@ -136,13 +134,13 @@ class GraphLAM(BaseGraphModel):
         Returns
         -------
         torch.Tensor
-            Shape ``(num_mesh_nodes, d_h)``. Embedded mesh node representations.
-            Dims: ``num_mesh_nodes`` is the number of mesh nodes and ``d_h`` is
+            Shape ``(num_mesh_nodes, hidden_dim)``. Embedded mesh node representations.
+            Dims: ``num_mesh_nodes`` is the number of mesh nodes and ``hidden_dim`` is
             the hidden dimension.
         """
         return self.mesh_embedder(
             self.mesh_static_features
-        )  # (num_mesh_nodes, d_h)
+        )  # (num_mesh_nodes, hidden_dim)
 
     def process_step(self, mesh_rep):
         """
@@ -152,25 +150,25 @@ class GraphLAM(BaseGraphModel):
         Parameters
         ----------
         mesh_rep : torch.Tensor
-            Shape ``(B, num_mesh_nodes, d_h)``. Current mesh node
+            Shape ``(B, num_mesh_nodes, hidden_dim)``. Current mesh node
             representations. Dims: ``B`` is batch size, ``num_mesh_nodes`` is
-            the number of mesh nodes, and ``d_h`` is the hidden
+            the number of mesh nodes, and ``hidden_dim`` is the hidden
             dimension.
 
         Returns
         -------
         torch.Tensor
-            Shape ``(B, num_mesh_nodes, d_h)``. Updated mesh node
+            Shape ``(B, num_mesh_nodes, hidden_dim)``. Updated mesh node
             representations. Dims: same as ``mesh_rep``.
         """
         # Embed m2m here first
         batch_size = mesh_rep.shape[0]
-        m2m_emb = self.m2m_embedder(self.m2m_features)  # (M_mesh, d_h)
+        m2m_emb = self.m2m_embedder(self.m2m_features)  # (num_edges, hidden_dim)
         m2m_emb_expanded = self.expand_to_batch(
             m2m_emb, batch_size
-        )  # (B, M_mesh, d_h)
+        )  # (B, num_edges, hidden_dim)
 
         mesh_rep, _ = self.processor(
             mesh_rep, m2m_emb_expanded
-        )  # (B, num_mesh_nodes, d_h)
+        )  # (B, num_mesh_nodes, hidden_dim)
         return mesh_rep

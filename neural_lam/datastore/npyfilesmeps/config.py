@@ -38,6 +38,11 @@ class Dataset:
         var_units: A list of units for each variable.
         var_longnames: A list of long, descriptive names for each variable.
         num_forcing_features: The number of forcing features in the dataset.
+        num_timesteps: The number of timesteps per analysis sample.
+        step_length: The time delta between consecutive timesteps.
+        num_ensemble_members: The number of ensemble members in the dataset.
+        remove_state_features_with_index: Indices of state features to drop
+        when loading the dataset.
 
     """
 

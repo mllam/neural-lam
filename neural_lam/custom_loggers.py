@@ -29,6 +29,11 @@ class CustomMLFlowLogger(pl.loggers.MLFlowLogger):
             MLflow tracking server URI.
         run_name : str
             Human-readable run name stored as ``mlflow.runName``.
+
+        Notes
+        -----
+        Starts the MLflow run with ``log_system_metrics=True`` and also
+        records ``run_id`` as an MLflow param.
         """
         super().__init__(
             experiment_name=experiment_name, tracking_uri=tracking_uri
@@ -65,6 +70,7 @@ class CustomMLFlowLogger(pl.loggers.MLFlowLogger):
         step : int or None, optional
             Step to associate with the log entry. ``None`` logs without
             a step suffix.
+
         Raises
         ------
         SystemExit

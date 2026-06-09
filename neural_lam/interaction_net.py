@@ -36,8 +36,7 @@ class InteractionNet(pyg.nn.MessagePassing):
         ----------
         edge_index : torch.Tensor
             Edge connectivity tensor in PyG format.
-
-            * **Shape**: ``(2, num_edges)``
+            Shape ``(2, num_edges)``.
         input_dim : int
             Dimensionality of both node and edge input representations.
         update_edges : bool, optional
@@ -58,7 +57,7 @@ class InteractionNet(pyg.nn.MessagePassing):
 
         Raises
         ------
-        AssertionError
+        ValueError
             If ``aggr`` is not one of ``"sum"`` or ``"mean"``.
         """
         if aggr not in ("sum", "mean"):
@@ -114,23 +113,23 @@ class InteractionNet(pyg.nn.MessagePassing):
         Parameters
         ----------
         send_rep : torch.Tensor
-            Shape ``(B, N_send, d_h)``. Sender node representations.
-            Dims: ``B`` is batch size, ``N_send`` is the number of
-            sender nodes, and ``d_h`` is the hidden dimension.
+            Sender node representations.
+            Shape ``(num_send, input_dim)``.
         rec_rep : torch.Tensor
-            Shape ``(B, N_rec, d_h)``. Receiver node representations.
-            Dims: ``N_rec`` is the number of receiver nodes.
+            Receiver node representations.
+            Shape ``(num_rec, input_dim)``.
         edge_rep : torch.Tensor
-            Shape ``(B, M, d_h)``. Edge representations. Dims: ``M``
-            is the number of edges.
+            Edge representations.
+            Shape ``(num_edges, input_dim)``.
 
         Returns
         -------
         rec_rep : torch.Tensor
-            Shape ``(B, N_rec, d_h)``. Updated receiver node
-            representations.
+            Updated receiver node representations.
+            Shape ``(num_rec, input_dim)``.
         edge_rep : torch.Tensor
-            Shape ``(B, M, d_h)``. Updated edge representations.
+            Updated edge representations.
+            Shape ``(num_edges, input_dim)``.
             Only returned when ``update_edges=True``.
         """
         # Always concatenate to [rec_nodes, send_nodes] for propagation,

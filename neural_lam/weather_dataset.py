@@ -19,33 +19,8 @@ from neural_lam.datastore.base import BaseDatastore
 class WeatherDataset(torch.utils.data.Dataset):
     """Dataset class for weather data.
 
-    This class loads and processes weather data from a given datastore.
-
-    Parameters
-    ----------
-    datastore : BaseDatastore
-        The datastore to load the data from (e.g. mdp).
-    split : str, optional
-        The data split to use ("train", "val" or "test"). Default is "train".
-    ar_steps : int, optional
-        The number of autoregressive steps. Default is 3.
-    num_past_forcing_steps: int, optional
-        Number of past time steps to include in forcing input. If set to i,
-        forcing from times t-i, t-i+1, ..., t-1, t (and potentially beyond,
-        given num_future_forcing_steps) are included as forcing inputs at time t
-        Default is 1.
-    num_future_forcing_steps: int, optional
-        Number of future time steps to include in forcing input. If set to j,
-        forcing from times t, t+1, ..., t+j-1, t+j (and potentially times before
-        t, given num_past_forcing_steps) are included as forcing inputs at time
-        t. Default is 1.
-    load_single_member : bool, optional
-        If `False` and the datastore returns an ensemble of state
-        realisations, treat each state ensemble member as an independent
-        sample. If `True`, only ensemble member 0 is used. Default is False,
-        so all members are used when available.
-    standardize : bool, optional
-        Whether to standardize the data. Default is True.
+    Loads and processes weather data from a given datastore. See
+    :meth:`__init__` for the full parameter list.
     """
 
     def __init__(
@@ -74,8 +49,22 @@ class WeatherDataset(torch.utils.data.Dataset):
         num_future_forcing_steps : int, optional
             Future forcing window length ``j`` so that ``[t, ..., t+j]``
             forcings are available. Default ``1``.
+        load_single_member : bool, optional
+            If ``False`` and the datastore returns an ensemble of state
+            realisations, treat each state ensemble member as an independent
+            sample. If ``True``, only ensemble member 0 is used. Default
+            ``False``.
         standardize : bool, optional
             If ``True``, normalize state/forcing arrays via datastore stats.
+            Default ``True``.
+
+        Raises
+        ------
+        ValueError
+            If the datastore does not provide state data, if the configured
+            ``ar_steps`` and forcing windows leave zero samples in ``split``,
+            or if the state/forcing dimension order does not match the
+            datastore's expected dimension order.
         """
 
         super().__init__()
@@ -568,9 +557,9 @@ class WeatherDataset(torch.utils.data.Dataset):
 
         forcing = torch.tensor(da_forcing_windowed.values, dtype=tensor_dtype)
 
-        # init_states: (2, N_grid, d_features)
-        # target_states: (ar_steps, N_grid, d_features)
-        # forcing: (ar_steps, N_grid, d_windowed_forcing)
+        # init_states: (2, num_grid_nodes, d_features)
+        # target_states: (ar_steps, num_grid_nodes, d_features)
+        # forcing: (ar_steps, num_grid_nodes, d_windowed_forcing)
         # target_times: (ar_steps,)
 
         return init_states, target_states, forcing, target_times

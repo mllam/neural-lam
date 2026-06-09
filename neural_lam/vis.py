@@ -2,12 +2,16 @@
 
 # Standard library
 import warnings
+from typing import Optional, Union
 
 # Third-party
 import cartopy.crs as ccrs
 import cartopy.feature as cfeature
 import matplotlib
+import matplotlib.axes
+import matplotlib.collections
 import matplotlib.colors
+import matplotlib.figure
 import matplotlib.pyplot as plt
 import numpy as np
 import torch
@@ -120,21 +124,24 @@ def _get_heatmap_var_labels(datastore: BaseRegularGridDatastore) -> list[str]:
 
 def _to_heatmap_matrix(values) -> np.ndarray:
     """
-    Convert heatmap inputs to a `(d_f, pred_steps)` matrix.
+    Convert heatmap inputs to a ``(num_state_vars, pred_steps)`` matrix.
 
-    A single-step tensor may arrive as one-dimensional `(d_f,)`, especially in
-    single-GPU or focused metric logging paths. In that case we first treat it
-    as one row of `(pred_steps=1, d_f)` before transposing.
+    A single-step tensor may arrive as one-dimensional ``(num_state_vars,)``,
+    especially in single-GPU or focused metric logging paths. In that case we
+    first treat it as one row of ``(pred_steps=1, num_state_vars)`` before
+    transposing.
 
     Parameters
     ----------
     values : array-like
         The input values to convert.
+        Shape ``(num_state_vars,)`` or ``(pred_steps, num_state_vars)``.
 
     Returns
     -------
     np.ndarray
-        The converted heatmap matrix with shape `(d_f, pred_steps)`.
+        The converted heatmap matrix with shape
+        ``(num_state_vars, pred_steps)``.
     """
     if hasattr(values, "detach"):
         values = values.detach().cpu().numpy()
@@ -214,6 +221,11 @@ def _get_heatmap_color_values(
         - color_values: The normalized values for the colormap.
         - colorbar_label: The label for the colorbar.
         - cmap: The colormap to use.
+
+    Raises
+    ------
+    ValueError
+        If ``normalization`` is not one of ``'state_std'`` or ``'diff_std'``.
     """
 
     def _per_var_fallback():
@@ -328,24 +340,25 @@ def _get_annotation_text_color(
 
 
 def plot_on_axis(
-    ax,
-    da,
-    datastore,
-    vmin=None,
-    vmax=None,
-    ax_title=None,
-    cmap="plasma",
-    boundary_alpha=None,
-    crop_to_interior=False,
-):
-    """Plot weather state on a projection-aware axis using datastore metadata.
+    ax: matplotlib.axes.Axes,
+    da: xr.DataArray,
+    datastore: BaseRegularGridDatastore,
+    vmin: Optional[float] = None,
+    vmax: Optional[float] = None,
+    ax_title: Optional[str] = None,
+    cmap: Union[str, matplotlib.colors.Colormap] = "plasma",
+    boundary_alpha: Optional[float] = None,
+    crop_to_interior: bool = False,
+) -> matplotlib.collections.QuadMesh:
+    """
+    Plot weather state on a projection-aware axis using datastore metadata.
 
     Parameters
     ----------
     ax : matplotlib.axes.Axes
         The axis to plot on. Should have a cartopy projection.
     da : xarray.DataArray
-        The data to plot. Should have shape (N_grid,).
+        The data to plot. Should have shape (num_grid_nodes,).
     datastore : BaseRegularGridDatastore
         The datastore containing metadata about the grid.
     vmin : float, optional
@@ -465,7 +478,7 @@ def plot_error_heatmap(
     Parameters
     ----------
     errors : torch.Tensor
-        Shape ``(pred_steps, d_f)``. Per-step, per-variable errors. These
+        Shape ``(pred_steps, num_state_vars)``. Per-step, per-variable errors. These
         values are used for the numeric annotations in each cell.
     datastore : BaseRegularGridDatastore
         Datastore providing variable names, units, and step length.
@@ -614,9 +627,9 @@ def plot_prediction(
     datastore : BaseRegularGridDatastore
        Datastore providing grid metadata and projection.
     da_prediction : xarray.DataArray
-        Shape ``(N_grid,)``. Predicted field values.
+        Shape ``(num_grid_nodes,)``. Predicted field values.
     da_target : xarray.DataArray
-        Shape ``(N_grid,)``. Ground-truth field values.
+        Shape ``(num_grid_nodes,)``. Ground-truth field values.
     title : str, optional
         Overall figure title.
     vrange : tuple of (float, float), optional
@@ -697,7 +710,7 @@ def plot_spatial_error(
     ----------
     error : torch.Tensor
         Error magnitudes on the flattened grid.
-        * **Shape**: ``(N_grid,)``
+        * **Shape**: ``(num_grid_nodes,)``
     datastore : BaseRegularGridDatastore
         Datastore providing coordinate metadata and boundary masks.
     title : str or None, optional
