@@ -83,16 +83,23 @@ def test_wandb_logger_kwargs(
     datastore = MagicMock()
     datastore._config = {}
 
-    setup_training_logger(datastore, args, run_name="my-run")
+    setup_training_logger(
+        datastore, args, run_name="my-run", run_dir="runs/my-run"
+    )
 
     _, kwargs = mock_wandb.call_args
     assert kwargs["resume"] == expected_resume
     assert kwargs["id"] == expected_id
     assert kwargs["name"] == expected_name
+    assert kwargs["save_dir"] == "runs/my-run"
 
 
 def test_wandb_id_ignored_with_mlflow_warns():
-    """--wandb_id is ignored when logger=mlflow and a warning is emitted."""
+    """--wandb_id is ignored when logger=mlflow and a warning is emitted.
+
+    Also asserts that `run_dir` is forwarded to `CustomMLFlowLogger` as
+    `save_dir`.
+    """
     # First-party
     from neural_lam.utils import setup_training_logger
 
@@ -105,18 +112,23 @@ def test_wandb_id_ignored_with_mlflow_warns():
     datastore._config = {}
 
     with (
-        patch("neural_lam.utils.CustomMLFlowLogger"),
+        patch("neural_lam.utils.CustomMLFlowLogger") as mock_mlflow,
         patch.dict(
             "os.environ", {"MLFLOW_TRACKING_URI": "http://localhost:5000"}
         ),
         patch("neural_lam.utils.logger") as mock_log,
     ):
-        setup_training_logger(datastore, args, run_name="my-run")
+        setup_training_logger(
+            datastore, args, run_name="my-run", run_dir="runs/my-run"
+        )
 
     mock_log.warning.assert_called_once()
     warning_msg = mock_log.warning.call_args[0][0]
     assert "--wandb_id is set but logger is" in warning_msg
     assert "mlflow" in warning_msg
+
+    _, kwargs = mock_mlflow.call_args
+    assert kwargs["save_dir"] == "runs/my-run"
 
 
 def test_unsupported_logger_raises_value_error():
@@ -133,4 +145,6 @@ def test_unsupported_logger_raises_value_error():
     datastore._config = {}
 
     with pytest.raises(ValueError, match="Unsupported logger type"):
-        setup_training_logger(datastore, args, run_name="my-run")
+        setup_training_logger(
+            datastore, args, run_name="my-run", run_dir="runs/my-run"
+        )
