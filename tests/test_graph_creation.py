@@ -1,4 +1,5 @@
 # Standard library
+import importlib.util
 import tempfile
 from pathlib import Path
 
@@ -17,6 +18,23 @@ from neural_lam.datastore.base import BaseRegularGridDatastore
 from tests.conftest import init_datastore_example
 
 
+def _load_validator_module():
+    script_path = (
+        Path(__file__).resolve().parents[1] / "docs" / "validate_graph.py"
+    )
+    spec = importlib.util.spec_from_file_location(
+        "validate_graph_script", script_path
+    )
+    module = importlib.util.module_from_spec(spec)
+    # Standard library
+    import sys
+
+    sys.modules["validate_graph_script"] = module
+    assert spec.loader is not None
+    spec.loader.exec_module(module)
+    return module
+
+
 @pytest.mark.parametrize("graph_name", ["1level", "multiscale", "hierarchical"])
 @pytest.mark.parametrize("datastore_name", DATASTORES.keys())
 def test_graph_creation(datastore_name, graph_name):
@@ -25,12 +43,12 @@ def test_graph_creation(datastore_name, graph_name):
     And that the graph is created in the correct location.
 
     """
+    validator = _load_validator_module()
     datastore = init_datastore_example(datastore_name)
 
     if not isinstance(datastore, BaseRegularGridDatastore):
         pytest.skip(
-            f"Skipping test for {datastore_name} as it is not a regular "
-            "grid datastore."
+            f"Skipping test for {datastore_name} as it is not a regular grid datastore."  # noqa: E501
         )
 
     if graph_name == "hierarchical":
@@ -89,6 +107,9 @@ def test_graph_creation(datastore_name, graph_name):
         assert (graph_dir_path / GRAPH_SPEC_VERSION_FILENAME).read_text(
             encoding="utf-8"
         ).strip() == CURRENT_GRAPH_SPEC_VERSION
+
+        report, _, _ = validator.validate_graph_directory(graph_dir_path)
+        assert not report.has_fails(), report.summarize()
 
         # try to load each and ensure they have the right shape
         for file_name in required_graph_files:
