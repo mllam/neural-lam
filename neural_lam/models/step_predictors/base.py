@@ -204,9 +204,10 @@ class StepPredictor(nn.Module, ABC):
         sigmoid_center = 0
         softplus_center = 0
 
-        normalize_clamping_lim = lambda x, feature_idx: (
-            (x - self.state_mean[feature_idx]) / self.state_std[feature_idx]
-        )
+        def normalize_clamping_lim(x, feature_idx):
+            return (x - self.state_mean[feature_idx]) / self.state_std[
+                feature_idx
+            ]
 
         # Check which clamping functions to use for each feature
         sigmoid_lower_upper_idx = []

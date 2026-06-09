@@ -433,10 +433,12 @@ class BaseDatastore(abc.ABC):
             if category != "static":
                 # static data does not vary in time
                 if self.is_forecast:
-                    dim_order.extend([
-                        "analysis_time",
-                        "elapsed_forecast_duration",
-                    ])
+                    dim_order.extend(
+                        [
+                            "analysis_time",
+                            "elapsed_forecast_duration",
+                        ]
+                    )
                 elif not self.is_forecast:
                     dim_order.append("time")
 

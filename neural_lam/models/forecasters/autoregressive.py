@@ -33,8 +33,7 @@ class ARForecaster(Forecaster):
 
         # Register boundary/interior masks on the forecaster, not the predictor
         boundary_mask = (
-            torch
-            .tensor(datastore.boundary_mask.values, dtype=torch.float32)
+            torch.tensor(datastore.boundary_mask.values, dtype=torch.float32)
             .unsqueeze(0)
             .unsqueeze(-1)
         )

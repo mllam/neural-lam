@@ -77,20 +77,20 @@ class HiLAM(BaseHiGraphModel):
         )
 
         # Make down GNNs, both for down edges and same level
-        self.mesh_down_gnns = nn.ModuleList([
-            self.make_down_gnns() for _ in range(processor_layers)
-        ])  # Nested lists (proc_steps, num_levels-1)
-        self.mesh_down_same_gnns = nn.ModuleList([
-            self.make_same_gnns() for _ in range(processor_layers)
-        ])  # Nested lists (proc_steps, num_levels)
+        self.mesh_down_gnns = nn.ModuleList(
+            [self.make_down_gnns() for _ in range(processor_layers)]
+        )  # Nested lists (proc_steps, num_levels-1)
+        self.mesh_down_same_gnns = nn.ModuleList(
+            [self.make_same_gnns() for _ in range(processor_layers)]
+        )  # Nested lists (proc_steps, num_levels)
 
         # Make up GNNs, both for up edges and same level
-        self.mesh_up_gnns = nn.ModuleList([
-            self.make_up_gnns() for _ in range(processor_layers)
-        ])  # Nested lists (proc_steps, num_levels-1)
-        self.mesh_up_same_gnns = nn.ModuleList([
-            self.make_same_gnns() for _ in range(processor_layers)
-        ])  # Nested lists (proc_steps, num_levels)
+        self.mesh_up_gnns = nn.ModuleList(
+            [self.make_up_gnns() for _ in range(processor_layers)]
+        )  # Nested lists (proc_steps, num_levels-1)
+        self.mesh_up_same_gnns = nn.ModuleList(
+            [self.make_same_gnns() for _ in range(processor_layers)]
+        )  # Nested lists (proc_steps, num_levels)
 
     def make_same_gnns(self):
         """
@@ -101,14 +101,16 @@ class HiLAM(BaseHiGraphModel):
         nn.ModuleList
             List of GNNs for each level.
         """
-        return nn.ModuleList([
-            InteractionNet(
-                edge_index,
-                self.hidden_dim,
-                hidden_layers=self.hidden_layers,
-            )
-            for edge_index in self.m2m_edge_index
-        ])
+        return nn.ModuleList(
+            [
+                InteractionNet(
+                    edge_index,
+                    self.hidden_dim,
+                    hidden_layers=self.hidden_layers,
+                )
+                for edge_index in self.m2m_edge_index
+            ]
+        )
 
     def make_up_gnns(self):
         """
@@ -119,14 +121,16 @@ class HiLAM(BaseHiGraphModel):
         nn.ModuleList
             List of GNNs for each inter-level gap (upwards).
         """
-        return nn.ModuleList([
-            InteractionNet(
-                edge_index,
-                self.hidden_dim,
-                hidden_layers=self.hidden_layers,
-            )
-            for edge_index in self.mesh_up_edge_index
-        ])
+        return nn.ModuleList(
+            [
+                InteractionNet(
+                    edge_index,
+                    self.hidden_dim,
+                    hidden_layers=self.hidden_layers,
+                )
+                for edge_index in self.mesh_up_edge_index
+            ]
+        )
 
     def make_down_gnns(self):
         """
@@ -137,14 +141,16 @@ class HiLAM(BaseHiGraphModel):
         nn.ModuleList
             List of GNNs for each inter-level gap (downwards).
         """
-        return nn.ModuleList([
-            InteractionNet(
-                edge_index,
-                self.hidden_dim,
-                hidden_layers=self.hidden_layers,
-            )
-            for edge_index in self.mesh_down_edge_index
-        ])
+        return nn.ModuleList(
+            [
+                InteractionNet(
+                    edge_index,
+                    self.hidden_dim,
+                    hidden_layers=self.hidden_layers,
+                )
+                for edge_index in self.mesh_down_edge_index
+            ]
+        )
 
     def mesh_down_step(
         self,
