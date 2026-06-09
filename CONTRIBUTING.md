@@ -51,7 +51,12 @@ Code quality is enforced automatically by
 Codespell and others). In addition:
 
 - Add **NumPy-style docstrings** and **type annotations** to every public
-  function and class.
+  function and class. The
+  [numpydoc style guide](https://numpydoc.readthedocs.io/en/latest/format.html)
+  is the authoritative reference;
+  [`neural_lam/datastore/base.py`](neural_lam/datastore/base.py) is a good
+  in-repo example of the conventions we follow (sectioned `Parameters` /
+  `Returns`, types in the signature line, prose first).
 - Keep new code consistent with the patterns already in the codebase.
 
 ## Before you push
@@ -79,6 +84,17 @@ pytest -vv -s --doctest-modules
    before requesting review - per-commit history on your branch is not
    preserved in `main`.
 5. A maintainer will review your PR. Small, focused PRs are reviewed faster.
+6. After review, iterate on the feedback. Once the review is resolved and
+   CI is green:
+   - **Bugfixes and maintenance PRs** are merged directly by the assignee.
+   - **Feature PRs** (anything labelled `enhancement`) are added to the
+     next release milestone as **proposed**, then discussed at the next
+     [monthly dev meeting](#monthly-development-meetings) so the team can
+     align on roadmap and scope. Once the team confirms the PR for the
+     release, the milestone is updated to **confirmed**.
+7. **Confirmed feature PRs** are merged when the milestone closes (or
+   sooner if the feature is self-contained and the maintainers agree).
+   Bugfix and maintenance PRs are merged as soon as step 6 completes.
 
 ## CHANGELOG entries
 
