@@ -493,7 +493,7 @@ def main(input_args=None):
     # between validations can still resume from a recent train-epoch
     # checkpoint instead of losing all progress since the last validation.
     val_checkpoint = pl.callbacks.ModelCheckpoint(
-        dirpath=f"saved_models/{run_name}",
+        dirpath=os.path.join(run_dir, "checkpoints"),
         filename="min_val_loss",
         monitor="val_mean_loss",
         mode="min",
@@ -501,7 +501,7 @@ def main(input_args=None):
         save_on_train_epoch_end=False,
     )
     latest_checkpoint = pl.callbacks.ModelCheckpoint(
-        dirpath=f"saved_models/{run_name}",
+        dirpath=os.path.join(run_dir, "checkpoints"),
         filename="last",
         monitor=None,
         save_top_k=1,
