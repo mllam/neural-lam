@@ -1,7 +1,7 @@
 # Standard library
 import datetime
 import warnings
-from typing import Union
+from typing import Iterator, Optional, Union
 
 # Third-party
 import numpy as np
@@ -51,7 +51,7 @@ class WeatherDataset(torch.utils.data.Dataset):
         num_past_forcing_steps: int = 1,
         num_future_forcing_steps: int = 1,
         load_single_member: bool = False,
-    ):
+    ) -> None:
         super().__init__()
 
         self.split = split
@@ -112,7 +112,8 @@ class WeatherDataset(torch.utils.data.Dataset):
                         "transpose the data in `BaseDatastore.get_dataarray`?"
                     )
 
-    def __len__(self):
+    def __len__(self) -> int:
+        assert self.da_state is not None
         if self.datastore.is_forecast:
             # for now we simply create a single sample for each analysis time
             # and then take the first (2 + ar_steps) forecast times.
@@ -120,40 +121,69 @@ class WeatherDataset(torch.utils.data.Dataset):
             # `load_single_member=False`, each ensemble member is exposed as an
             # independent sample by scaling the base dataset length below.
 
-            # check that there are enough forecast steps available to create
-            # samples given the number of autoregressive steps requested
+            # Check that there are enough forecast steps available to create
+            # samples. The required minimum is the larger of 2 (for the two
+            # initial states) and num_past_forcing_steps, plus ar_steps.
             n_forecast_steps = self.da_state.elapsed_forecast_duration.size
-            if n_forecast_steps < 2 + self.ar_steps:
+            required_state_steps = (
+                max(2, self.num_past_forcing_steps) + self.ar_steps
+            )
+            if n_forecast_steps < required_state_steps:
                 raise ValueError(
                     "The number of forecast steps available "
                     f"({n_forecast_steps}) is less than the required "
-                    f"2+ar_steps (2+{self.ar_steps}={2 + self.ar_steps}) for "
-                    "creating a sample with initial and target states."
+                    f"{required_state_steps} (max(2, "
+                    f"num_past_forcing_steps={self.num_past_forcing_steps})"
+                    f" + ar_steps={self.ar_steps}) for creating a sample "
+                    "with initial and target states."
                 )
+
+            if self.da_forcing is not None:
+                # When forcing is present, the forecast horizon must also
+                # cover num_future_forcing_steps beyond the last target step.
+                n_forcing_forecast_steps = (
+                    self.da_forcing.elapsed_forecast_duration.size
+                )
+                required_forcing_steps = (
+                    required_state_steps + self.num_future_forcing_steps
+                )
+                if n_forcing_forecast_steps < required_forcing_steps:
+                    raise ValueError(
+                        "The number of forcing forecast steps available "
+                        f"({n_forcing_forecast_steps}) is less than the "
+                        f"required {required_forcing_steps} "
+                        f"(max(2, num_past_forcing_steps="
+                        f"{self.num_past_forcing_steps}) + ar_steps="
+                        f"{self.ar_steps} + num_future_forcing_steps="
+                        f"{self.num_future_forcing_steps}) for "
+                        "constructing forcing windows."
+                    )
 
             base_len = self.da_state.analysis_time.size
         else:
-            # Calculate the number of samples in the dataset n_samples = total
-            # time steps - (autoregressive steps + past forcing + future
-            # forcing)
-            #:
-            # Where:
-            #   - total time steps: len(self.da_state.time)
-            #   - autoregressive steps: self.ar_steps
-            #   - past forcing: max(2, self.num_past_forcing_steps) (at least 2
-            #     time steps are required for the initial state)
-            #   - future forcing: self.num_future_forcing_steps
-            base_len = (
-                len(self.da_state.time)
-                - self.ar_steps
-                - max(2, self.num_past_forcing_steps)
-                - self.num_future_forcing_steps
+            # Number of valid sample start indices in a contiguous time
+            # series. With T total time steps and a per-sample window of
+            # W = max(2, num_past_forcing_steps) + ar_steps +
+            # num_future_forcing_steps, valid start indices are
+            # [0 .. T - W], i.e. (T - W + 1) samples in total.
+            window = (
+                max(2, self.num_past_forcing_steps)
+                + self.ar_steps
+                + self.num_future_forcing_steps
             )
+            n_state_samples = len(self.da_state.time) - window + 1
+            if self.da_forcing is not None:
+                n_forcing_samples = len(self.da_forcing.time) - window + 1
+                base_len = max(0, min(n_state_samples, n_forcing_samples))
+            else:
+                base_len = max(0, n_state_samples)
         if self.datastore.is_ensemble and not self.load_single_member:
             return base_len * self.da_state.ensemble_member.size
         return base_len
 
-    def _slice_state_time(self, da_state, idx, n_steps: int):
+    def _slice_state_time(
+        self, da_state: xr.DataArray, idx: int, n_steps: int
+    ) -> xr.DataArray:
         """
         Produce a time slice of the given dataarray `da_state` (state) starting
         at `idx` and with `n_steps` steps. An `offset`is calculated based on the
@@ -215,7 +245,9 @@ class WeatherDataset(torch.utils.data.Dataset):
             da_sliced = da_state.isel(time=slice(start_idx, end_idx))
         return da_sliced
 
-    def _slice_forcing_time(self, da_forcing, idx, n_steps: int):
+    def _slice_forcing_time(
+        self, da_forcing: xr.DataArray, idx: int, n_steps: int
+    ) -> xr.DataArray:
         """
         Produce a time slice of the given dataarray `da_forcing` (forcing)
         starting at `idx` and with `n_steps` steps. An `offset` is calculated
@@ -323,7 +355,9 @@ class WeatherDataset(torch.utils.data.Dataset):
 
         return da_concat
 
-    def _build_item_dataarrays(self, idx):
+    def _build_item_dataarrays(
+        self, idx: int
+    ) -> tuple[xr.DataArray, xr.DataArray, xr.DataArray, xr.DataArray]:
         """
         Create the dataarrays for the initial states, target states and forcing
         data for the sample at index `idx`.
@@ -348,6 +382,7 @@ class WeatherDataset(torch.utils.data.Dataset):
         # has an ensemble dimension, we select the same member below.
         sample_idx = idx
         i_ensemble = 0
+        assert self.da_state is not None
 
         if self.datastore.is_ensemble:
             n_ensemble_members = self.da_state.ensemble_member.size
@@ -411,7 +446,9 @@ class WeatherDataset(torch.utils.data.Dataset):
             da_target_times,
         )
 
-    def __getitem__(self, idx):
+    def __getitem__(
+        self, idx: int
+    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, np.ndarray]:
         """
         Return a single training sample, which consists of the initial states,
         target states, forcing and batch times.
@@ -423,7 +460,8 @@ class WeatherDataset(torch.utils.data.Dataset):
         ----------
         idx : int
             The index of the sample to return, this will refer to the time of
-            the initial state.
+            the initial state. Negative indices follow Python sequence
+            convention. Out-of-range indices raise ``IndexError``.
 
         Returns
         -------
@@ -437,6 +475,15 @@ class WeatherDataset(torch.utils.data.Dataset):
             Times of the target steps, shape (ar_steps,).
 
         """
+        n_samples = len(self)
+        if idx < 0:
+            idx += n_samples
+        if not 0 <= idx < n_samples:
+            raise IndexError(
+                f"index {idx} out of range for WeatherDataset of length "
+                f"{n_samples}"
+            )
+
         (
             da_init_states,
             da_target_states,
@@ -465,7 +512,9 @@ class WeatherDataset(torch.utils.data.Dataset):
 
         return init_states, target_states, forcing, target_times
 
-    def __iter__(self):
+    def __iter__(
+        self,
+    ) -> Iterator[tuple[torch.Tensor, torch.Tensor, torch.Tensor, np.ndarray]]:
         """
         Convenience method to iterate over the dataset.
 
@@ -584,7 +633,7 @@ class WeatherDataModule(pl.LightningDataModule):
         batch_size: int = 4,
         num_workers: int = 16,
         eval_split: str = "test",
-    ):
+    ) -> None:
         super().__init__()
         self._datastore = datastore
         self.num_past_forcing_steps = num_past_forcing_steps
@@ -594,9 +643,9 @@ class WeatherDataModule(pl.LightningDataModule):
         self.load_single_member = load_single_member
         self.batch_size = batch_size
         self.num_workers: int = num_workers
-        self.train_dataset = None
-        self.val_dataset = None
-        self.test_dataset = None
+        self.train_dataset: Optional[WeatherDataset] = None
+        self.val_dataset: Optional[WeatherDataset] = None
+        self.test_dataset: Optional[WeatherDataset] = None
         self.multiprocessing_context: Union[str, None] = None
         self.eval_split = eval_split
         if num_workers > 0:
@@ -604,7 +653,7 @@ class WeatherDataModule(pl.LightningDataModule):
             # when using dask (which the npyfilesmeps datastore uses)
             self.multiprocessing_context = "spawn"
 
-    def setup(self, stage=None):
+    def setup(self, stage: Optional[str] = None) -> None:
         if stage == "fit" or stage is None:
             self.train_dataset = WeatherDataset(
                 datastore=self._datastore,
@@ -633,7 +682,7 @@ class WeatherDataModule(pl.LightningDataModule):
                 load_single_member=self.load_single_member,
             )
 
-    def train_dataloader(self):
+    def train_dataloader(self) -> torch.utils.data.DataLoader:
         """Load train dataset."""
         return torch.utils.data.DataLoader(
             self.train_dataset,
@@ -645,7 +694,7 @@ class WeatherDataModule(pl.LightningDataModule):
             pin_memory=torch.cuda.is_available(),
         )
 
-    def val_dataloader(self):
+    def val_dataloader(self) -> torch.utils.data.DataLoader:
         """Load validation dataset."""
         return torch.utils.data.DataLoader(
             self.val_dataset,
@@ -657,7 +706,7 @@ class WeatherDataModule(pl.LightningDataModule):
             pin_memory=torch.cuda.is_available(),
         )
 
-    def test_dataloader(self):
+    def test_dataloader(self) -> torch.utils.data.DataLoader:
         """Load test dataset."""
         return torch.utils.data.DataLoader(
             self.test_dataset,
