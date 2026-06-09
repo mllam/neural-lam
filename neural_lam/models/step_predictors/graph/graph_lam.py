@@ -8,7 +8,7 @@ import torch_geometric as pyg
 # Local
 from .... import utils
 from ....datastore import BaseDatastore
-from ....interaction_net import InteractionNet
+from ....gnn_layers import InteractionNet
 from .base import BaseGraphModel
 
 
@@ -33,6 +33,8 @@ class GraphLAM(BaseGraphModel):
         output_std: bool = False,
         output_clamping_lower: dict[str, float] | None = None,
         output_clamping_upper: dict[str, float] | None = None,
+        g2m_gnn_type: str = "InteractionNet",
+        m2g_gnn_type: str = "InteractionNet",
     ):
         """
         Initialize the GraphLAM model.
@@ -74,6 +76,8 @@ class GraphLAM(BaseGraphModel):
             output_std=output_std,
             output_clamping_lower=output_clamping_lower,
             output_clamping_upper=output_clamping_upper,
+            g2m_gnn_type=g2m_gnn_type,
+            m2g_gnn_type=m2g_gnn_type,
         )
 
         assert (

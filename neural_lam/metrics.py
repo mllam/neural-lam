@@ -1,10 +1,14 @@
 """Evaluation metrics shared across training and validation routines."""
 
+# Standard library
+from collections.abc import Callable
+from typing import Optional
+
 # Third-party
 import torch
 
 
-def get_metric(metric_name):
+def get_metric(metric_name: str) -> Callable[..., torch.Tensor]:
     """
     Get a metric function by name.
 
@@ -31,7 +35,12 @@ def get_metric(metric_name):
     return DEFINED_METRICS[metric_name_lower]
 
 
-def mask_and_reduce_metric(metric_entry_vals, mask, average_grid, sum_vars):
+def mask_and_reduce_metric(
+    metric_entry_vals: torch.Tensor,
+    mask: Optional[torch.Tensor],
+    average_grid: bool,
+    sum_vars: bool,
+) -> torch.Tensor:
     """
     Apply a boolean mask and optionally reduce a per-entry metric tensor.
 
@@ -76,7 +85,14 @@ def mask_and_reduce_metric(metric_entry_vals, mask, average_grid, sum_vars):
     return metric_entry_vals
 
 
-def wmse(pred, target, pred_std, mask=None, average_grid=True, sum_vars=True):
+def wmse(
+    pred: torch.Tensor,
+    target: torch.Tensor,
+    pred_std: torch.Tensor,
+    mask: Optional[torch.Tensor] = None,
+    average_grid: bool = True,
+    sum_vars: bool = True,
+) -> torch.Tensor:
     """
     Weighted Mean Squared Error.
 
@@ -122,7 +138,14 @@ def wmse(pred, target, pred_std, mask=None, average_grid=True, sum_vars=True):
     )
 
 
-def mse(pred, target, pred_std, mask=None, average_grid=True, sum_vars=True):
+def mse(
+    pred: torch.Tensor,
+    target: torch.Tensor,
+    pred_std: torch.Tensor,
+    mask: Optional[torch.Tensor] = None,
+    average_grid: bool = True,
+    sum_vars: bool = True,
+) -> torch.Tensor:
     """
     (Unweighted) Mean Squared Error.
 
@@ -160,7 +183,14 @@ def mse(pred, target, pred_std, mask=None, average_grid=True, sum_vars=True):
     )
 
 
-def wmae(pred, target, pred_std, mask=None, average_grid=True, sum_vars=True):
+def wmae(
+    pred: torch.Tensor,
+    target: torch.Tensor,
+    pred_std: torch.Tensor,
+    mask: Optional[torch.Tensor] = None,
+    average_grid: bool = True,
+    sum_vars: bool = True,
+) -> torch.Tensor:
     """
     Weighted Mean Absolute Error.
 
@@ -206,7 +236,14 @@ def wmae(pred, target, pred_std, mask=None, average_grid=True, sum_vars=True):
     )
 
 
-def mae(pred, target, pred_std, mask=None, average_grid=True, sum_vars=True):
+def mae(
+    pred: torch.Tensor,
+    target: torch.Tensor,
+    pred_std: torch.Tensor,
+    mask: Optional[torch.Tensor] = None,
+    average_grid: bool = True,
+    sum_vars: bool = True,
+) -> torch.Tensor:
     """
     (Unweighted) Mean Absolute Error.
 
@@ -244,7 +281,14 @@ def mae(pred, target, pred_std, mask=None, average_grid=True, sum_vars=True):
     )
 
 
-def nll(pred, target, pred_std, mask=None, average_grid=True, sum_vars=True):
+def nll(
+    pred: torch.Tensor,
+    target: torch.Tensor,
+    pred_std: torch.Tensor,
+    mask: Optional[torch.Tensor] = None,
+    average_grid: bool = True,
+    sum_vars: bool = True,
+) -> torch.Tensor:
     """
     Negative Log Likelihood loss for an isotropic Gaussian likelihood.
 
@@ -287,8 +331,13 @@ def nll(pred, target, pred_std, mask=None, average_grid=True, sum_vars=True):
 
 
 def crps_gauss(
-    pred, target, pred_std, mask=None, average_grid=True, sum_vars=True
-):
+    pred: torch.Tensor,
+    target: torch.Tensor,
+    pred_std: torch.Tensor,
+    mask: Optional[torch.Tensor] = None,
+    average_grid: bool = True,
+    sum_vars: bool = True,
+) -> torch.Tensor:
     """
     Continuous Ranked Probability Score (CRPS) for a Gaussian predictive
     distribution (closed-form expression, negated for minimisation).

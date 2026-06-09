@@ -162,6 +162,51 @@ class ForecasterModule(pl.LightningModule):
         else:
             self.per_var_std = None
 
+        # Standardization statistics used to normalize each batch on-device in
+        # `on_after_batch_transfer`. WeatherDataset returns unstandardized
+        # data, so state and forcing are normalized here rather than on CPU.
+        eps = torch.finfo(torch.float32).eps
+        da_state_stats = datastore.get_standardization_dataarray(
+            category="state"
+        )
+        self.register_buffer(
+            "state_mean",
+            torch.tensor(da_state_stats.state_mean.values, dtype=torch.float32),
+            persistent=False,
+        )
+        self.register_buffer(
+            "state_std",
+            self._safe_std(da_state_stats.state_std.values, eps, "state"),
+            persistent=False,
+        )
+
+        if datastore.get_num_data_vars(category="forcing") > 0:
+            da_forcing_stats = datastore.get_standardization_dataarray(
+                category="forcing"
+            )
+            self.register_buffer(
+                "forcing_mean",
+                torch.tensor(
+                    da_forcing_stats.forcing_mean.values, dtype=torch.float32
+                ),
+                persistent=False,
+            )
+            self.register_buffer(
+                "forcing_std",
+                self._safe_std(
+                    da_forcing_stats.forcing_std.values, eps, "forcing"
+                ),
+                persistent=False,
+            )
+            # The windowed forcing width is only known once the first batch
+            # arrives, so the tiled mean/std are built and cached then (in
+            # on_after_batch_transfer) instead of recomputed every batch.
+            self.register_buffer("forcing_mean_tiled", None, persistent=False)
+            self.register_buffer("forcing_std_tiled", None, persistent=False)
+        else:
+            self.forcing_mean = None
+            self.forcing_std = None
+
         # Instantiate loss function
         self.loss = metrics.get_metric(loss)
 
@@ -240,6 +285,56 @@ class ForecasterModule(pl.LightningModule):
             self.parameters(), lr=self.hparams.lr, betas=(0.9, 0.95)
         )
         return opt
+
+    @staticmethod
+    def _safe_std(std_values, eps, category):
+        """Build a float32 std tensor, clamping near-zero values to `eps`.
+
+        Mirrors the previous CPU-side WeatherDataset behavior: features with
+        near-zero std are clamped to machine epsilon to avoid division-by-zero
+        NaNs, and a single warning is emitted naming the affected category.
+        """
+        std = torch.tensor(std_values, dtype=torch.float32)
+        if bool((std <= eps).any()):
+            warnings.warn(
+                f"Some {category} features have near-zero std and will be "
+                "standardized using machine epsilon to avoid NaN.",
+                UserWarning,
+                stacklevel=2,
+            )
+        return torch.clamp(std, min=eps)
+
+    def on_after_batch_transfer(self, batch, dataloader_idx):
+        """Standardize a batch on-device after transfer to the accelerator.
+
+        Lightning calls this for every train/val/test/predict batch.
+        WeatherDataset returns unstandardized state and forcing; both are
+        normalized here so the work runs on the accelerator.
+        """
+        init_states, target_states, forcing, batch_times = batch
+
+        init_states = (init_states - self.state_mean) / self.state_std
+        target_states = (target_states - self.state_mean) / self.state_std
+
+        if forcing.shape[-1] > 0:
+            if self.forcing_mean_tiled is None:
+                # Forcing is (..., num_forcing_vars * window_size).
+                # WeatherDataset stacks (forcing_feature, window)
+                # feature-major, so each per-feature mean/std is repeated
+                # window_size times. Tile once and cache as buffers rather
+                # than recomputing every batch.
+                window_size = forcing.shape[-1] // self.forcing_mean.shape[-1]
+                self.forcing_mean_tiled = self.forcing_mean.repeat_interleave(
+                    window_size
+                )
+                self.forcing_std_tiled = self.forcing_std.repeat_interleave(
+                    window_size
+                )
+            forcing = (
+                forcing - self.forcing_mean_tiled
+            ) / self.forcing_std_tiled
+
+        return init_states, target_states, forcing, batch_times
 
     def common_step(self, batch):
         """
@@ -853,6 +948,18 @@ class ForecasterModule(pl.LightningModule):
 
         self.matched_metrics = set()
         self.spatial_loss_maps.clear()
+
+        # Clear stored test metrics so repeated `trainer.test()` calls on
+        # the same model instance start from a clean slate (otherwise the
+        # tensors accumulate and skew the aggregated metrics).
+        for metric_list in self.test_metrics.values():
+            metric_list.clear()
+
+        # Reset the example-plot counter so example prediction plots are
+        # generated again on every `trainer.test()` call, not just the
+        # first one (the guard `plotted_examples < n_example_pred` would
+        # otherwise stay permanently False).
+        self.plotted_examples = 0
 
     def on_load_checkpoint(self, checkpoint):
         """
