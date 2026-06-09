@@ -404,7 +404,7 @@ The graph-related files are stored in a directory called `graphs`.
 ### Weights & Biases Integration
 The project is fully integrated with [Weights & Biases](https://www.wandb.ai/) (W&B) for logging and visualization, but can just as easily be used without it.
 When W&B is used, training configuration, training/test statistics and plots are sent to the W&B servers and made available in an interactive web interface.
-If W&B is turned off, logging instead saves everything locally to a directory like `wandb/dryrun...`.
+If W&B is turned off, logging instead saves everything locally under the run directory (e.g. `runs/<run-name>/wandb/`).
 The W&B project name is set to `neural-lam`, but this can be changed in the flags of `python -m neural_lam.train_model` (using argsparse).
 See the [W&B documentation](https://docs.wandb.ai/) for details.
 
@@ -437,7 +437,7 @@ A few of the key ones are outlined below:
 * `--ar_steps_train`: Number of time steps to unroll for when making predictions and computing the loss
 * `--ar_steps_eval`: Number of time steps to unroll for during validation steps
 
-Checkpoints of trained models are stored in the `saved_models` directory.
+Checkpoints of trained models are stored under `runs/<run-name>/checkpoints/`, alongside Lightning and logger outputs for the same run.
 The implemented models are:
 
 ### Graph-LAM
@@ -491,8 +491,8 @@ Using SLURM, the job can be started with `sbatch slurm_job.sh` with a shell scri
 #SBATCH --mem=444G
 #SBATCH --no-requeue
 #SBATCH --exclusive
-#SBATCH --output=lightning_logs/neurallam_out_%j.log
-#SBATCH --error=lightning_logs/neurallam_err_%j.log
+#SBATCH --output=runs/slurm_logs/neurallam_out_%j.log
+#SBATCH --error=runs/slurm_logs/neurallam_err_%j.log
 
 # Load necessary modules or activate environment, for example:
 conda activate neural-lam
@@ -503,6 +503,8 @@ srun -ul python -m neural_lam.train_model \
 ```
 
 When using on a system without SLURM, where all GPU's are visible, it is possible to select a subset of GPU's to use for training with the `devices` cli argument, e.g. `--devices 0 1` to use the first 2 GPU's.
+
+> **DGX Spark / container compatibility:** see [issue #163](https://github.com/mllam/neural-lam/issues/163) for a list of currently known-working and known-failing PyTorch / CUDA / container combinations on DGX Spark.
 
 ## Evaluate Models
 Evaluation is also done using `python -m neural_lam.train_model --config_path <config-path>`, but using the `--eval` option.

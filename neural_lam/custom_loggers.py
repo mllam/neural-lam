@@ -22,10 +22,18 @@ class CustomMLFlowLogger(pl.loggers.MLFlowLogger):
         experiment_name: str,
         tracking_uri: str,
         run_name: str,
+        save_dir: str,
     ) -> None:
+        """Initialize the logger and ensure ``save_dir`` exists on disk.
+
+        ``save_dir`` is created eagerly (with ``exist_ok=True``) so that
+        subsequent ``log_image`` calls can write temporary files there.
+        """
         super().__init__(
             experiment_name=experiment_name, tracking_uri=tracking_uri
         )
+        self._save_dir = save_dir
+        os.makedirs(self._save_dir, exist_ok=True)
 
         mlflow.start_run(run_id=self.run_id, log_system_metrics=True)
         mlflow.set_tag("mlflow.runName", run_name)
@@ -42,7 +50,7 @@ class CustomMLFlowLogger(pl.loggers.MLFlowLogger):
         str
             Path to the directory where the artifacts are saved.
         """
-        return "mlruns"
+        return self._save_dir
 
     def log_image(
         self,
@@ -79,7 +87,7 @@ class CustomMLFlowLogger(pl.loggers.MLFlowLogger):
         # mlflow.log_image should do this automatically, but is buggy
         for i, fig in enumerate(images):
             img_key = f"{key}_{i}" if len(images) > 1 else key
-            temporary_image = f"{img_key}.png"
+            temporary_image = os.path.join(self.save_dir, f"{img_key}.png")
             try:
                 fig.savefig(temporary_image)
                 with Image.open(temporary_image) as img:
