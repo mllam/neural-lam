@@ -102,7 +102,8 @@ class StepPredictor(nn.Module, ABC):
         Returns
         -------
         bool
-            ``True`` if the predictor predicts standard deviation, ``False`` otherwise.
+            ``True`` if the predictor predicts standard deviation,
+            ``False`` otherwise.
         """
         return self.output_std
 
@@ -113,8 +114,8 @@ class StepPredictor(nn.Module, ABC):
         Parameters
         ----------
         x : torch.Tensor
-            Shape ``(N, d)``. Tensor to expand. Dims: ``N`` is the number
-            of nodes and ``d`` is the feature dimension.
+            Shape ``(N, d)``. Tensor to expand. Dims: ``N`` is the number of
+            nodes and ``d`` is the feature dimension.
         batch_size : int
             Target batch size ``B``.
 
@@ -141,8 +142,8 @@ class StepPredictor(nn.Module, ABC):
         prev_state : torch.Tensor
             Shape ``(B, num_grid_nodes, num_state_vars)``. The current state
             ``X_t``. Dims: ``B`` is batch size, ``num_grid_nodes`` is the
-            number of spatial nodes, and ``num_state_vars`` is the number of state
-            variables.
+            number of spatial nodes, and ``num_state_vars`` is the number of
+            state variables.
         prev_prev_state : torch.Tensor
             Shape ``(B, num_grid_nodes, num_state_vars)``. The previous state
             ``X_{t-1}``, used as additional conditioning. Dims: same as

@@ -108,7 +108,10 @@ class GraphLAM(BaseGraphModel):
         self.processor = pyg.nn.Sequential(
             "mesh_rep, edge_rep",
             [
-                (net, "mesh_rep, mesh_rep, edge_rep -> mesh_rep, edge_rep")
+                (
+                    net,
+                    "mesh_rep, mesh_rep, edge_rep -> mesh_rep, edge_rep",
+                )
                 for net in processor_nets
             ],
         )
@@ -134,9 +137,9 @@ class GraphLAM(BaseGraphModel):
         Returns
         -------
         torch.Tensor
-            Shape ``(num_mesh_nodes, hidden_dim)``. Embedded mesh node representations.
-            Dims: ``num_mesh_nodes`` is the number of mesh nodes and ``hidden_dim`` is
-            the hidden dimension.
+            Shape ``(num_mesh_nodes, hidden_dim)``. Embedded mesh node
+            representations. Dims: ``num_mesh_nodes`` is the number of
+            mesh nodes and ``hidden_dim`` is the hidden dimension.
         """
         return self.mesh_embedder(
             self.mesh_static_features
@@ -163,7 +166,9 @@ class GraphLAM(BaseGraphModel):
         """
         # Embed m2m here first
         batch_size = mesh_rep.shape[0]
-        m2m_emb = self.m2m_embedder(self.m2m_features)  # (num_edges, hidden_dim)
+        m2m_emb = self.m2m_embedder(
+            self.m2m_features
+        )  # (num_edges, hidden_dim)
         m2m_emb_expanded = self.expand_to_batch(
             m2m_emb, batch_size
         )  # (B, num_edges, hidden_dim)

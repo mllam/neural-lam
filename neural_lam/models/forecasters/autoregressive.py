@@ -51,7 +51,8 @@ class ARForecaster(Forecaster):
         Returns
         -------
         bool
-            ``True`` if the forecaster predicts standard deviation, ``False`` otherwise.
+            ``True`` if the forecaster predicts standard deviation,
+            ``False`` otherwise.
         """
         return self.predictor.predicts_std
 
@@ -63,8 +64,8 @@ class ARForecaster(Forecaster):
     ) -> tuple[torch.Tensor, Optional[torch.Tensor]]:
         """
         Unroll the autoregressive model: at each step ``i`` call
-        ``self.predictor`` to produce the next state, then overwrite
-        boundary nodes with the true value from ``boundary_states[:, i]``.
+        ``self.predictor`` to produce the next state, then overwrite boundary
+        nodes with the true value from ``boundary_states[:, i]``.
 
         Parameters
         ----------
@@ -83,12 +84,13 @@ class ARForecaster(Forecaster):
             of forcing variables (already concatenated past/current/future
             windows).
         boundary_states : torch.Tensor
-            Shape ``(B, pred_steps, num_grid_nodes, num_state_vars)``. True state
-            values used ONLY to overwrite boundary nodes at each AR step.
-            The interior prediction at step ``i`` must not depend on
-            ``boundary_states[:, i]`` in any other way. Dims: ``B`` is
-            batch size, ``pred_steps`` is the number of predicted steps,
-            ``num_grid_nodes`` is the number of spatial nodes, and
+            Shape ``(B, pred_steps, num_grid_nodes, num_state_vars)``.
+            True state values used ONLY to overwrite boundary nodes at
+            each AR step. The interior prediction at step ``i`` must not
+            depend on ``boundary_states[:, i]`` in any other way. Dims:
+            ``B`` is batch size, ``pred_steps`` is the number of
+            predicted steps, ``num_grid_nodes`` is the number of spatial
+            nodes, and
             ``num_state_vars`` is the state feature dimension.
 
         Returns

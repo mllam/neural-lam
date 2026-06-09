@@ -32,10 +32,10 @@ class BaseDatastore(abc.ABC):
 
     Forecast vs analysis data
     -------------------------
-    If the datastore is used to represent forecast rather than analysis data,
-    then the ``is_forecast`` attribute should be set to True, and returned data
-    from ``get_dataarray`` is assumed to have `analysis_time` and `forecast_time`
-    dimensions (rather than just `time`).
+    If the datastore is used to represent forecast rather than analysis
+    data, then the ``is_forecast`` attribute should be set to True, and
+    returned data from ``get_dataarray`` is assumed to have `analysis_time`
+    and `forecast_time` dimensions (rather than just `time`).
 
     Ensemble vs deterministic data
     ------------------------------

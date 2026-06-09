@@ -227,10 +227,10 @@ class BaseGraphModel(StepPredictor):
         Parameters
         ----------
         prev_state : torch.Tensor
-            Shape ``(B, num_grid_nodes, num_state_vars)``. The current state
-            ``X_t``. Dims: ``B`` is batch size, ``num_grid_nodes`` is the
-            number of spatial grid nodes, and ``num_state_vars`` is the number of
-            state variables.
+            Shape ``(B, num_grid_nodes, num_state_vars)``. The current
+            state ``X_t``. Dims: ``B`` is batch size,
+            ``num_grid_nodes`` is the number of spatial grid nodes, and
+            ``num_state_vars`` is the number of state variables.
         prev_prev_state : torch.Tensor
             Shape ``(B, num_grid_nodes, num_state_vars)``. The previous state
             ``X_{t-1}``, used as additional conditioning. Dims: same as
@@ -245,9 +245,9 @@ class BaseGraphModel(StepPredictor):
         Returns
         -------
         new_state : torch.Tensor
-            Shape ``(B, num_grid_nodes, num_state_vars)``. The predicted next state
-            ``X_{t+1}`` after delta-add and clamping. Dims: same as
-            ``prev_state``.
+            Shape ``(B, num_grid_nodes, num_state_vars)``. The predicted
+            next state ``X_{t+1}`` after delta-add and clamping. Dims:
+            same as ``prev_state``.
         pred_std : torch.Tensor or None
             Shape ``(B, num_grid_nodes, num_state_vars)`` when ``output_std`` is
             True, otherwise ``None``. Per-feature predicted standard
@@ -268,9 +268,15 @@ class BaseGraphModel(StepPredictor):
         )
 
         # Embed all features
-        grid_emb = self.grid_embedder(grid_features)  # (B, num_grid_nodes, hidden_dim)
-        g2m_emb = self.g2m_embedder(self.g2m_features)  # (num_edges, hidden_dim)
-        m2g_emb = self.m2g_embedder(self.m2g_features)  # (num_edges, hidden_dim)
+        grid_emb = self.grid_embedder(
+            grid_features
+        )  # (B, num_grid_nodes, hidden_dim)
+        g2m_emb = self.g2m_embedder(
+            self.g2m_features
+        )  # (num_edges, hidden_dim)
+        m2g_emb = self.m2g_embedder(
+            self.m2g_features
+        )  # (num_edges, hidden_dim)
         mesh_emb = self.embedd_mesh_nodes()
 
         # Map from grid to mesh

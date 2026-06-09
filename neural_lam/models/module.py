@@ -116,11 +116,11 @@ class ForecasterModule(pl.LightningModule):
         if var_leads_metrics_watch is None:
             var_leads_metrics_watch = {}
 
-        # datastore and forecaster are excluded from saved hparams and must be
-        # provided explicitly when calling load_from_checkpoint. Saving args
-        # makes the checkpoint self-describing: it carries model, graph_name,
-        # hidden_dim, etc. so the caller can reconstruct the exact forecaster
-        # architecture from the checkpoint alone.
+        # datastore and forecaster are excluded from saved hparams and must
+        # be provided explicitly when calling load_from_checkpoint. Saving
+        # args makes the checkpoint self-describing: it carries model,
+        # graph_name, hidden_dim, etc. so the caller can reconstruct the
+        # exact forecaster architecture from the checkpoint alone.
         self.save_hyperparameters(ignore=["datastore", "forecaster"])
         self.datastore = datastore
         self.forecaster = forecaster
@@ -867,8 +867,9 @@ class ForecasterModule(pl.LightningModule):
         loaded_state_dict = checkpoint["state_dict"]
 
         # 1. Broad namespace remap: for pre-refactor checkpoints
-        # The old ``ARModel`` was a flat LightningModule. Everything that belonged
-        # to the predictor needs to be moved to 'forecaster.predictor.'
+        # The old ``ARModel`` was a flat LightningModule. Everything that
+        # belonged to the predictor needs to be moved to
+        # 'forecaster.predictor.'
         old_keys = list(loaded_state_dict.keys())
         for key in old_keys:
             if not key.startswith("forecaster.") and key not in (

@@ -478,8 +478,9 @@ def plot_error_heatmap(
     Parameters
     ----------
     errors : torch.Tensor
-        Shape ``(pred_steps, num_state_vars)``. Per-step, per-variable errors. These
-        values are used for the numeric annotations in each cell.
+        Shape ``(pred_steps, num_state_vars)``. Per-step, per-variable
+        errors. These values are used for the numeric annotations in each
+        cell.
     datastore : BaseRegularGridDatastore
         Datastore providing variable names, units, and step length.
     title : str, optional
