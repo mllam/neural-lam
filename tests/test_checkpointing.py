@@ -2,6 +2,7 @@
 from pathlib import Path
 
 # Third-party
+import pytest
 import pytorch_lightning as pl
 import torch
 from torch.utils.data import DataLoader, TensorDataset
@@ -25,6 +26,7 @@ class TinyModule(pl.LightningModule):
         return torch.optim.SGD(self.parameters(), lr=0.1)
 
 
+@pytest.mark.slow
 def test_last_checkpoint_saved_without_validation(tmp_path):
     """The rescue (`last`) checkpoint is written at train-epoch end even
     when validation is skipped entirely, which is the whole point of
