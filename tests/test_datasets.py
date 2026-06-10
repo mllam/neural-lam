@@ -14,7 +14,7 @@ from neural_lam.datastore import DATASTORES
 from neural_lam.datastore.base import BaseRegularGridDatastore
 from neural_lam.models import ForecasterModule
 from neural_lam.weather_dataset import WeatherDataset
-from tests.conftest import init_datastore_example
+from tests.conftest import init_datastore_example, make_single_source_args
 from tests.dummy_datastore import DummyDatastore, EnsembleDummyDatastore
 
 
@@ -36,8 +36,10 @@ def test_dataset_item_shapes(datastore_name):
     N_pred_steps = 4
     num_past_forcing_steps = 1
     num_future_forcing_steps = 1
+    datastores, selections = make_single_source_args(datastore)
     dataset = WeatherDataset(
-        datastore=datastore,
+        datastores=datastores,
+        selections=selections,
         split="train",
         ar_steps=N_pred_steps,
         num_past_forcing_steps=num_past_forcing_steps,
@@ -87,8 +89,10 @@ def test_dataset_item_create_dataarray_from_tensor(datastore_name):
     N_pred_steps = 4
     num_past_forcing_steps = 1
     num_future_forcing_steps = 1
+    datastores, selections = make_single_source_args(datastore)
     dataset = WeatherDataset(
-        datastore=datastore,
+        datastores=datastores,
+        selections=selections,
         split="train",
         ar_steps=N_pred_steps,
         num_past_forcing_steps=num_past_forcing_steps,
@@ -210,13 +214,15 @@ def test_single_batch(datastore_name, split):
 
     _create_graph()
 
-    config = nlconfig.NeuralLAMConfig(
-        datastore=nlconfig.DatastoreSelection(
-            kind=datastore.SHORT_NAME, config_path=datastore.root_path
-        )
-    )
+    datastores, selections = make_single_source_args(datastore)
+    config = nlconfig.NeuralLAMConfig(datastores=selections)
 
-    dataset = WeatherDataset(datastore=datastore, split=split, ar_steps=2)
+    dataset = WeatherDataset(
+        datastores=datastores,
+        selections=selections,
+        split=split,
+        ar_steps=2,
+    )
 
     # First-party
     from neural_lam.models import MODELS, ARForecaster
@@ -278,8 +284,10 @@ def test_dataset_length(dataset_config):
     ds_len = 10
     datastore = DummyDatastore(n_timesteps=ds_len)
 
+    datastores, selections = make_single_source_args(datastore)
     dataset = WeatherDataset(
-        datastore=datastore,
+        datastores=datastores,
+        selections=selections,
         split="train",
         ar_steps=dataset_config["ar_steps"],
         num_past_forcing_steps=dataset_config["past"],
@@ -301,8 +309,10 @@ def test_dataset_out_of_range_raises_index_error():
     """`WeatherDataset.__getitem__` raises IndexError for out-of-range indices
     and supports Python-style negative indexing within bounds."""
     datastore = DummyDatastore(n_timesteps=10)
+    datastores, selections = make_single_source_args(datastore)
     dataset = WeatherDataset(
-        datastore=datastore,
+        datastores=datastores,
+        selections=selections,
         split="train",
         ar_steps=1,
         num_past_forcing_steps=0,
@@ -329,8 +339,10 @@ def test_ensemble_len_scales_with_default_all_members():
         n_timesteps=10,
     )
 
+    datastores, selections = make_single_source_args(datastore)
     dataset_all = WeatherDataset(
-        datastore=datastore,
+        datastores=datastores,
+        selections=selections,
         split="train",
         ar_steps=2,
         num_past_forcing_steps=1,
@@ -338,7 +350,8 @@ def test_ensemble_len_scales_with_default_all_members():
     )
 
     dataset_single = WeatherDataset(
-        datastore=datastore,
+        datastores=datastores,
+        selections=selections,
         split="train",
         ar_steps=2,
         num_past_forcing_steps=1,
@@ -387,8 +400,10 @@ def test_ensemble_index_mapping_is_time_major():
         n_ensemble_members=3,
         n_timesteps=10,
     )
+    datastores, selections = make_single_source_args(datastore)
     dataset = WeatherDataset(
-        datastore=datastore,
+        datastores=datastores,
+        selections=selections,
         split="train",
         ar_steps=2,
         num_past_forcing_steps=1,
@@ -411,8 +426,10 @@ def test_ensemble_forcing_uses_same_member_when_available():
         n_ensemble_members=3,
         n_timesteps=10,
     )
+    datastores, selections = make_single_source_args(datastore)
     dataset = WeatherDataset(
-        datastore=datastore,
+        datastores=datastores,
+        selections=selections,
         split="train",
         ar_steps=2,
         num_past_forcing_steps=1,
@@ -434,8 +451,10 @@ def test_ensemble_forcing_without_member_dim_is_shared():
         n_ensemble_members=3,
         n_timesteps=10,
     )
+    datastores, selections = make_single_source_args(datastore)
     dataset = WeatherDataset(
-        datastore=datastore,
+        datastores=datastores,
+        selections=selections,
         split="train",
         ar_steps=2,
         num_past_forcing_steps=1,
@@ -460,8 +479,10 @@ def test_forecast_ensemble_len_scales_with_default_all_members():
         n_forecast_steps=6,
     )
 
+    datastores, selections = make_single_source_args(datastore)
     dataset_all = WeatherDataset(
-        datastore=datastore,
+        datastores=datastores,
+        selections=selections,
         split="train",
         ar_steps=2,
         num_past_forcing_steps=1,
@@ -470,7 +491,8 @@ def test_forecast_ensemble_len_scales_with_default_all_members():
 
     with pytest.warns(UserWarning, match="only using first ensemble member"):
         dataset_single = WeatherDataset(
-            datastore=datastore,
+            datastores=datastores,
+            selections=selections,
             split="train",
             ar_steps=2,
             num_past_forcing_steps=1,

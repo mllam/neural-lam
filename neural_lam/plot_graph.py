@@ -260,9 +260,10 @@ def main() -> None:
     )
 
     args = parser.parse_args()
-    _, datastore = load_config_and_datastore(
+    _, datastores = load_config_and_datastore(
         config_path=args.datastore_config_path
     )
+    datastore = next(iter(datastores.values()))
 
     xy = datastore.get_xy("state", stacked=True)  # (N_grid, 2)
     pos_max = np.max(np.abs(xy))

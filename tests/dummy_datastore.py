@@ -489,6 +489,7 @@ class EnsembleDummyDatastore(BaseDatastore):
     assert exact numeric expectations.
     """
 
+    SHORT_NAME = "dummydata"
     T0 = np.datetime64("2021-01-01T00:00:00")
 
     def __init__(

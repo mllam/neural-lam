@@ -385,8 +385,12 @@ def main(input_args=None):
     # Set seed
     seed.seed_everything(args.seed)
 
-    # Load neural-lam configuration and datastore to use
-    config, datastore = load_config_and_datastore(config_path=args.config_path)
+    # Load neural-lam configuration and datastore to use. The schema is
+    # the multi-datastore dict from #652 but this PR enforces exactly one
+    # entry (single-source); take the only datastore as the legacy
+    # single-source view for ForecasterModule and the predictor.
+    config, datastores = load_config_and_datastore(config_path=args.config_path)
+    datastore = next(iter(datastores.values()))
 
     # Check --var_leads_metrics_watch variable indices against the datastore
     # so users get an immediate error instead of an IndexError deep in the
@@ -401,9 +405,13 @@ def main(input_args=None):
                 f"{len(state_var_names)} state variables)."
             )
 
-    # Create datamodule
+    # Create datamodule - takes the full multi-source dicts so the
+    # follow-up that surfaces non-interior datastores in the per-sample
+    # tuple (mllam/neural-lam#652) only touches WeatherDataset / model
+    # internals, not this call site.
     data_module = WeatherDataModule(
-        datastore=datastore,
+        datastores=datastores,
+        selections=config.datastores,
         ar_steps_train=args.ar_steps_train,
         ar_steps_eval=args.ar_steps_eval,
         num_past_forcing_steps=args.num_past_forcing_steps,

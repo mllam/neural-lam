@@ -10,6 +10,7 @@ import yaml
 from pytorch_lightning.utilities import rank_zero_only
 
 # First-party
+from neural_lam.config import DatastoreSelection
 from neural_lam.datastore import DATASTORES, init_datastore
 from neural_lam.datastore.npyfilesmeps import (
     compute_standardization_stats as compute_standardization_stats_meps,
@@ -123,3 +124,17 @@ def init_datastore_example(datastore_kind):
     )
 
     return datastore
+
+
+def make_single_source_args(datastore, name="interior"):
+    """Wrap a single datastore in the multi-source dicts that
+    ``WeatherDataset`` / ``WeatherDataModule`` now expect.
+
+    Returns ``(datastores, selections)`` ready to splat into the
+    constructors.
+    """
+    selection = DatastoreSelection(
+        kind=datastore.SHORT_NAME,
+        config_path=str(datastore.root_path),
+    )
+    return {name: datastore}, {name: selection}

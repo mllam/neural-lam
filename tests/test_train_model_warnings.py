@@ -8,6 +8,17 @@ import pytest
 from neural_lam.train_model import main
 
 
+def _make_fake_config_and_datastores():
+    """Build a return value for ``load_config_and_datastore`` that train_model
+    can consume without needing a real datastore on disk. The single-entry
+    dict matches the single-source enforcement on this branch.
+    """
+    config = MagicMock()
+    config.datastores = {"interior": MagicMock()}
+    datastores = {"interior": MagicMock()}
+    return config, datastores
+
+
 @pytest.mark.parametrize(
     "eval_val,load_val,expect_warning",
     [
@@ -70,7 +81,7 @@ def test_create_gif_forwarded_to_forecaster_module():
         ),
         patch(
             "neural_lam.train_model.load_config_and_datastore",
-            return_value=(MagicMock(), MagicMock()),
+            return_value=_make_fake_config_and_datastores(),
         ),
         patch("neural_lam.train_model.WeatherDataModule"),
         patch("neural_lam.train_model.MODELS", {"graph_lam": MagicMock()}),

@@ -1,7 +1,7 @@
 # Standard library
 import datetime
 import warnings
-from typing import Iterator, Optional, Union
+from typing import Any, Dict, Iterator, Optional, Union
 
 # Third-party
 import numpy as np
@@ -10,18 +10,29 @@ import torch
 import xarray as xr
 
 # First-party
+from neural_lam.config import DatastoreSelection
 from neural_lam.datastore.base import BaseDatastore
 
 
 class WeatherDataset(torch.utils.data.Dataset):
     """Dataset class for weather data.
 
-    This class loads and processes weather data from a given datastore.
+    The dataset takes a single-entry dict of loaded datastores keyed by the
+    user-chosen name. Multi-source consumption (more than one datastore)
+    lands together with the per-category variable-filtering follow-up - see
+    `mllam/neural-lam#652
+    <https://github.com/mllam/neural-lam/issues/652>`_.
 
     Parameters
     ----------
-    datastore : BaseDatastore
-        The datastore to load the data from (e.g. mdp).
+    datastores : Dict[str, BaseDatastore]
+        The loaded datastores, keyed by their user-chosen names. Typically
+        the return value of
+        :func:`neural_lam.config.load_config_and_datastore`. Must contain
+        exactly one entry today.
+    selections : Dict[str, DatastoreSelection]
+        The matching :class:`DatastoreSelection` configs, with the same
+        keys.
     split : str, optional
         The data split to use ("train", "val" or "test"). Default is "train".
     ar_steps : int, optional
@@ -45,7 +56,8 @@ class WeatherDataset(torch.utils.data.Dataset):
 
     def __init__(
         self,
-        datastore: BaseDatastore,
+        datastores: Dict[str, BaseDatastore],
+        selections: Dict[str, DatastoreSelection],
         split: str = "train",
         ar_steps: int = 3,
         num_past_forcing_steps: int = 1,
@@ -53,6 +65,20 @@ class WeatherDataset(torch.utils.data.Dataset):
         load_single_member: bool = False,
     ) -> None:
         super().__init__()
+
+        if len(datastores) != 1:
+            raise ValueError(
+                "WeatherDataset expects exactly one datastore in the dict; "
+                "multi-source support lands together with the per-category "
+                "`inputs`/`outputs` filtering follow-up (mllam/neural-lam#652)."
+            )
+
+        self._datastores = datastores
+        self._selections = selections
+        # Take the only datastore as the interior alias used by the
+        # within-class slicing/windowing code and external callers (model
+        # side, plotting).
+        datastore = next(iter(datastores.values()))
 
         self.split = split
         self.ar_steps = ar_steps
@@ -531,33 +557,57 @@ class WeatherDataset(torch.utils.data.Dataset):
         time: Union[datetime.datetime, list[datetime.datetime]],
         category: str,
     ):
+        """Instance-method wrapper around :meth:`build_dataarray_from_tensor`
+        that uses this dataset's already-loaded ``da_{category}`` reference
+        as the coord source.
         """
-        Construct a xarray.DataArray from a `pytorch.Tensor` with coordinates
-        for `grid_index`, `time` and `{category}_feature` matching the shape
-        and number of times provided and add the x/y coordinates from the
-        datastore.
+        return self.build_dataarray_from_tensor(
+            reference_dataarray=getattr(self, f"da_{category}"),
+            tensor=tensor,
+            time=time,
+            category=category,
+        )
 
-        The number if times provided is expected to match the shape of the
-        tensor. For a 2D tensor, the dimensions are assumed to be (grid_index,
-        {category}_feature) and only a single time should be provided. For a 3D
-        tensor, the dimensions are assumed to be (time, grid_index,
-        {category}_feature) and a list of times should be provided.
+    @staticmethod
+    def build_dataarray_from_tensor(
+        reference_dataarray: xr.DataArray,
+        tensor: torch.Tensor,
+        time: Union[datetime.datetime, list[datetime.datetime]],
+        category: str,
+    ):
+        """Construct an :class:`xr.DataArray` from a :class:`torch.Tensor`
+        with coordinates for ``grid_index``, ``time`` and
+        ``{category}_feature`` matching the shape and number of times
+        provided, taking the per-grid coords from ``reference_dataarray``.
+
+        Exposed as a staticmethod so callers that have a datastore but not
+        a full :class:`WeatherDataset` (e.g. the model in
+        :mod:`neural_lam.models.module`) can build dataarrays without
+        instantiating the dataset.
 
         Parameters
         ----------
+        reference_dataarray : xr.DataArray
+            Source for ``grid_index``, ``{category}_feature``, and the
+            optional ``x``/``y`` coords. Typically what the datastore
+            returned from ``get_dataarray(category=...)``.
         tensor : torch.Tensor
-            The tensor to construct the DataArray from, this assumed to have
-            the same dimension ordering as returned by the __getitem__ method
-            (i.e. time, grid_index, {category}_feature). The tensor will be
+            The tensor to construct the DataArray from. For a 2D tensor
+            the dimensions are assumed to be
+            ``(grid_index, {category}_feature)`` and a single ``time``
+            should be provided. For a 3D tensor the dimensions are
+            assumed to be ``(time, grid_index, {category}_feature)`` and
+            a list of times should be provided. The tensor will be
             copied to the CPU before constructing the DataArray.
         time : datetime.datetime or list[datetime.datetime]
             The time or times of the tensor.
         category : str
-            The category of the tensor, either "state", "forcing" or "static".
+            The category of the tensor, either ``"state"``, ``"forcing"``
+            or ``"static"``.
 
         Returns
         -------
-        da : xr.DataArray
+        xr.DataArray
             The constructed DataArray.
         """
 
@@ -589,9 +639,8 @@ class WeatherDataset(torch.utils.data.Dataset):
                 f"{len(tensor.shape)}"
             )
 
-        da_datastore_state = getattr(self, f"da_{category}")
-        da_grid_index = da_datastore_state.grid_index
-        da_state_feature = da_datastore_state.state_feature
+        da_grid_index = reference_dataarray.grid_index
+        da_state_feature = reference_dataarray.state_feature
 
         coords = {
             f"{category}_feature": da_state_feature,
@@ -608,10 +657,10 @@ class WeatherDataset(torch.utils.data.Dataset):
 
         for grid_coord in ["x", "y"]:
             if (
-                grid_coord in da_datastore_state.coords
+                grid_coord in reference_dataarray.coords
                 and grid_coord not in da.coords
             ):
-                da.coords[grid_coord] = da_datastore_state[grid_coord]
+                da.coords[grid_coord] = reference_dataarray[grid_coord]
 
         if not add_time_as_dim:
             da.coords["time"] = time
@@ -624,7 +673,8 @@ class WeatherDataModule(pl.LightningDataModule):
 
     def __init__(
         self,
-        datastore: BaseDatastore,
+        datastores: Dict[str, BaseDatastore],
+        selections: Dict[str, DatastoreSelection],
         ar_steps_train: int = 3,
         ar_steps_eval: int = 25,
         num_past_forcing_steps: int = 1,
@@ -635,7 +685,8 @@ class WeatherDataModule(pl.LightningDataModule):
         eval_split: str = "test",
     ) -> None:
         super().__init__()
-        self._datastore = datastore
+        self._datastores = datastores
+        self._selections = selections
         self.num_past_forcing_steps = num_past_forcing_steps
         self.num_future_forcing_steps = num_future_forcing_steps
         self.ar_steps_train = ar_steps_train
@@ -654,32 +705,30 @@ class WeatherDataModule(pl.LightningDataModule):
             self.multiprocessing_context = "spawn"
 
     def setup(self, stage: Optional[str] = None) -> None:
+        shared_kwargs: dict[str, Any] = dict(
+            datastores=self._datastores,
+            selections=self._selections,
+            num_past_forcing_steps=self.num_past_forcing_steps,
+            num_future_forcing_steps=self.num_future_forcing_steps,
+            load_single_member=self.load_single_member,
+        )
         if stage == "fit" or stage is None:
             self.train_dataset = WeatherDataset(
-                datastore=self._datastore,
                 split="train",
                 ar_steps=self.ar_steps_train,
-                num_past_forcing_steps=self.num_past_forcing_steps,
-                num_future_forcing_steps=self.num_future_forcing_steps,
-                load_single_member=self.load_single_member,
+                **shared_kwargs,
             )
             self.val_dataset = WeatherDataset(
-                datastore=self._datastore,
                 split="val",
                 ar_steps=self.ar_steps_eval,
-                num_past_forcing_steps=self.num_past_forcing_steps,
-                num_future_forcing_steps=self.num_future_forcing_steps,
-                load_single_member=self.load_single_member,
+                **shared_kwargs,
             )
 
         if stage == "test" or stage is None:
             self.test_dataset = WeatherDataset(
-                datastore=self._datastore,
                 split=self.eval_split,
                 ar_steps=self.ar_steps_eval,
-                num_past_forcing_steps=self.num_past_forcing_steps,
-                num_future_forcing_steps=self.num_future_forcing_steps,
-                load_single_member=self.load_single_member,
+                **shared_kwargs,
             )
 
     def train_dataloader(self) -> torch.utils.data.DataLoader:

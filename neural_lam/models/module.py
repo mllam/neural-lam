@@ -207,10 +207,17 @@ class ForecasterModule(pl.LightningModule):
         split: str,
         category: str,
     ) -> xr.DataArray:
-        weather_dataset = WeatherDataset(datastore=self.datastore, split=split)
+        # Use the staticmethod variant so we don't instantiate a full
+        # WeatherDataset (which requires the multi-datastore dict from
+        # #652) just to build a single DataArray. The reference dataarray
+        # only needs the per-grid coords from the datastore.
+        reference = self.datastore.get_dataarray(category=category, split=split)
         time = np.array(time.cpu(), dtype="datetime64[ns]")
-        da = weather_dataset.create_dataarray_from_tensor(
-            tensor=tensor, time=time, category=category
+        da = WeatherDataset.build_dataarray_from_tensor(
+            reference_dataarray=reference,
+            tensor=tensor,
+            time=time,
+            category=category,
         )
         return da
 
