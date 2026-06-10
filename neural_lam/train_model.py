@@ -262,6 +262,14 @@ def main(input_args=None):
         help="If set, create GIF animations from prediction PNG frames and "
         "save to disk. PNGs are always created and logged to wandb/mlflow.",
     )
+    eval_group.add_argument(
+        "--save-eval-to-zarr-path",
+        type=str,
+        default=None,
+        dest="save_eval_to_zarr_path",
+        help="If set, save evaluation predictions in original data scale "
+        "to a Zarr store at this path.",
+    )
 
     # Logger Settings
     logger_group = parser.add_argument_group("Logger Settings")

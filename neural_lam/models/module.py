@@ -6,9 +6,11 @@ from typing import Any, Dict, List, Optional
 # Third-party
 import matplotlib.pyplot as plt
 import numpy as np
+import pandas as pd
 import pytorch_lightning as pl
 import torch
 import xarray as xr
+from loguru import logger
 from PIL import Image
 
 # First-party
@@ -188,6 +190,9 @@ class ForecasterModule(pl.LightningModule):
         self.n_example_pred = n_example_pred
         self.create_gif = create_gif
         self.plotted_examples = 0
+        self.save_eval_to_zarr_path = getattr(
+            args, "save_eval_to_zarr_path", None
+        )
 
         # For storing spatial loss maps during evaluation
         self.spatial_loss_maps: List[Any] = []
@@ -386,9 +391,89 @@ class ForecasterModule(pl.LightningModule):
         for metric_list in self.val_metrics.values():
             metric_list.clear()
 
+    def _save_predictions_to_zarr(
+        self,
+        batch_times: torch.Tensor,
+        batch_predictions: torch.Tensor,
+        batch_idx: int,
+        zarr_output_path: str,
+    ):
+        """Save one batch of rescaled state predictions to a Zarr dataset."""
+        batch_predictions = batch_predictions.cpu()
+        batch_times_cpu = batch_times.cpu()
+        batch_size = batch_predictions.shape[0]
+
+        step_ns = int(pd.Timedelta(self.datastore.step_length).value)
+        analysis_times_ns = (
+            batch_times_cpu[:, 0].numpy().astype("int64") - step_ns
+        )
+        analysis_times = analysis_times_ns.astype("datetime64[ns]")
+
+        pred_steps = batch_times_cpu.shape[1]
+        offsets_ns = np.arange(1, pred_steps + 1, dtype="int64") * step_ns
+        elapsed = offsets_ns.astype("timedelta64[ns]")
+
+        time_encoding = {
+            "start_time": {
+                "units": "Seconds since 1970-01-01 00:00:00",
+                "dtype": "int64",
+            },
+            "elapsed_forecast_duration": {
+                "units": "seconds",
+                "dtype": "int64",
+            },
+        }
+
+        das = []
+        for i in range(batch_size):
+            da_i = self._create_dataarray_from_tensor(
+                tensor=batch_predictions[i],
+                time=batch_times_cpu[i],
+                split="test",
+                category="state",
+            )
+            da_i = da_i.assign_coords(
+                elapsed_forecast_duration=("time", elapsed)
+            )
+            da_i = da_i.swap_dims({"time": "elapsed_forecast_duration"})
+            da_i = da_i.drop_vars("time", errors="ignore")
+            da_i.name = "state"
+            das.append(da_i)
+
+        da_batch = xr.concat(das, dim="start_time")
+        da_batch = da_batch.assign_coords(
+            start_time=("start_time", analysis_times)
+        )
+        da_batch = da_batch.chunk({"start_time": batch_size})
+        ds_batch = da_batch.to_dataset(name="state")
+
+        if self.trainer.is_global_zero and batch_idx == 0:
+            logger.info(f"Creating Zarr store at {zarr_output_path}")
+            state_da = self.datastore.get_dataarray(
+                category="state", split="test"
+            )
+            assert state_da is not None
+            all_times = state_da.coords["time"].values
+            template_da = da_batch.reindex(
+                start_time=all_times, fill_value=np.nan
+            )
+            template_ds = template_da.to_dataset(name="state")
+            template_ds.to_zarr(
+                zarr_output_path,
+                compute=False,
+                mode="w",
+                encoding=time_encoding,
+                consolidated=True,
+            )
+
+        self.trainer.strategy.barrier()
+        ds_batch.to_zarr(zarr_output_path, region="auto")
+
     # pylint: disable-next=unused-argument
     def test_step(self, batch, batch_idx):
-        prediction, target_states, pred_std, _ = self.common_step(batch)
+        prediction, target_states, pred_std, batch_times = self.common_step(
+            batch
+        )
 
         if pred_std is not None:
             mean_pred_std = torch.mean(
@@ -449,6 +534,15 @@ class ForecasterModule(pl.LightningModule):
             ],
         ]
         self.spatial_loss_maps.append(log_spatial_losses)
+
+        if self.save_eval_to_zarr_path:
+            prediction_rescaled = prediction * self.state_std + self.state_mean
+            self._save_predictions_to_zarr(
+                batch_times=batch_times,
+                batch_predictions=prediction_rescaled,
+                batch_idx=batch_idx,
+                zarr_output_path=self.save_eval_to_zarr_path,
+            )
 
         if (
             self.trainer.is_global_zero
