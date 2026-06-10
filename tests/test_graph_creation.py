@@ -10,7 +10,7 @@ import torch
 # First-party
 from neural_lam.create_graph import (
     CURRENT_GRAPH_SPEC_VERSION,
-    GRAPH_SPEC_VERSION_FILENAME,
+    METAINFO_FILENAME,
     create_graph_from_datastore,
 )
 from neural_lam.datastore import DATASTORES
@@ -71,7 +71,7 @@ def test_graph_creation(datastore_name, graph_name):
         "g2m_features.pt",
         "m2g_features.pt",
         "mesh_features.pt",
-        GRAPH_SPEC_VERSION_FILENAME,
+        METAINFO_FILENAME,
     ]
     if hierarchical:
         required_graph_files.extend(
@@ -104,16 +104,21 @@ def test_graph_creation(datastore_name, graph_name):
         for file_name in required_graph_files:
             assert (graph_dir_path / file_name).exists()
 
-        assert (graph_dir_path / GRAPH_SPEC_VERSION_FILENAME).read_text(
-            encoding="utf-8"
-        ).strip() == CURRENT_GRAPH_SPEC_VERSION
+        # Third-party
+        import yaml
+
+        meta = yaml.safe_load(
+            (graph_dir_path / METAINFO_FILENAME).read_text(encoding="utf-8")
+        )
+        assert meta is not None
+        assert meta["spec_version"] == CURRENT_GRAPH_SPEC_VERSION
 
         report, _, _ = validator.validate_graph_directory(graph_dir_path)
         assert not report.has_fails(), report.summarize()
 
         # try to load each and ensure they have the right shape
         for file_name in required_graph_files:
-            if file_name == GRAPH_SPEC_VERSION_FILENAME:
+            if file_name == METAINFO_FILENAME:
                 continue
             file_id = Path(file_name).stem  # remove the extension
             result = torch.load(graph_dir_path / file_name, weights_only=True)

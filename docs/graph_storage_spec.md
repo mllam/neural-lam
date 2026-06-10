@@ -62,8 +62,9 @@ of which MUST be present:
 
 ### 2.2.1 Graph format versioning
 
-Graph directories MUST include the file `graph-spec-version`.
-This file MUST contain the graph storage spec version as plain text.
+Graph directories MUST include the file `metainfo.yaml`.
+This file MUST be a YAML document containing the key `spec_version` with
+the graph storage spec version as its value.
 The current graph storage spec version is
 `0.1.0`.
 
@@ -249,8 +250,8 @@ performed inside `neural-lam` after graph loading.
 
 ### 3.4 Differences to legacy format graphs
 
-Legacy pre-spec graphs do not include `graph-spec-version`.
-When this file is absent, `neural-lam` will attempt to load the graph as a
+Legacy pre-spec graphs do not include `metainfo.yaml`.
+When that file is absent, `neural-lam` will attempt to load the graph as a
 legacy pre-spec graph.
 Their `mesh_features.pt` files are assumed to already be normalized.
 
@@ -263,8 +264,9 @@ source and destination node set starts at `0`.
 This validator does not validate legacy pre-spec graphs; regenerate or
 migrate them to the current graph storage spec first.
 
-Current-format graphs include `graph-spec-version` with value
-`0.1.0`. Their `mesh_features.pt` files are
+Current-format graphs include `metainfo.yaml` with a
+`spec_version` of `0.1.0`. Their
+`mesh_features.pt` files are
 normalized on load, and their edge-index tensors are expected to already
 use the zero-based per-node-set index space required by this
 specification.

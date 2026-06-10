@@ -10,6 +10,7 @@ Run with:
 # dependencies = [
 #   "torch>=2.3.0",
 #   "rich>=13.0.0",
+#   "pyyaml>=6.0",
 # ]
 # ///
 
@@ -26,6 +27,9 @@ from dataclasses import asdict, dataclass, field
 from functools import wraps
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Tuple
+
+# Third-party
+import yaml
 
 try:
     # Third-party
@@ -45,7 +49,7 @@ except ImportError:
 
 ALLOWED_EDGE_FEATURE_DIMS = (3, 4)
 MESH_FEATURE_DIM = 2
-GRAPH_SPEC_VERSION_FILENAME = "graph-spec-version"
+METAINFO_FILENAME = "metainfo.yaml"
 CURRENT_GRAPH_FORMAT_SPEC_VERSION = "0.1.0"
 
 # -------------------------
@@ -1348,17 +1352,36 @@ def validate_graph_directory(
 
     graph_format_spec_version: Optional[str] = None
     if graph_dir is not None:
-        version_file = graph_dir / GRAPH_SPEC_VERSION_FILENAME
-        if version_file.exists():
-            graph_format_spec_version = version_file.read_text(
-                encoding="utf-8"
-            ).strip()
+        metainfo_file = graph_dir / METAINFO_FILENAME
+        if metainfo_file.exists():
+            try:
+                meta = yaml.safe_load(metainfo_file.read_text(encoding="utf-8"))
+                graph_format_spec_version = (
+                    None if meta is None else meta.get("spec_version")
+                )
+            except yaml.YAMLError:
+                graph_format_spec_version = None
+
+            if graph_format_spec_version is None:
+                report.add(
+                    "2.2.1 Graph format versioning",
+                    "Graph spec version",
+                    "FAIL",
+                    f"{METAINFO_FILENAME}: missing or invalid 'spec_version' entry",  # noqa: E501
+                )
+                return (
+                    report,
+                    spec_text,
+                    GraphProperties(
+                        graph_format_spec_version=graph_format_spec_version
+                    ),
+                )
             if graph_format_spec_version != CURRENT_GRAPH_FORMAT_SPEC_VERSION:
                 report.add(
                     "2.2.1 Graph format versioning",
                     "Graph spec version",
                     "FAIL",
-                    f"{GRAPH_SPEC_VERSION_FILENAME}: unsupported spec version "
+                    f"{METAINFO_FILENAME}: unsupported spec version "
                     f"{graph_format_spec_version!r}",
                 )
                 return (
@@ -1373,15 +1396,14 @@ def validate_graph_directory(
                     "2.2.1 Graph format versioning",
                     "Graph spec version",
                     "PASS",
-                    f"{GRAPH_SPEC_VERSION_FILENAME}: version is "
-                    f"{graph_format_spec_version}",
+                    f"{METAINFO_FILENAME}: spec_version is {graph_format_spec_version}",  # noqa: E501
                 )
         else:
             report.add(
                 "2.2.1 Graph format versioning",
                 "Graph spec version",
                 "FAIL",
-                f"{GRAPH_SPEC_VERSION_FILENAME} is missing; legacy pre-spec "
+                f"{METAINFO_FILENAME} is missing; legacy pre-spec "
                 "graphs cannot be validated against this specification.",
             )
             return report, spec_text, GraphProperties()
@@ -1446,8 +1468,9 @@ def validate_graph_directory(
 
     ### 2.2.1 Graph format versioning
 
-    Graph directories MUST include the file `{GRAPH_SPEC_VERSION_FILENAME}`.
-    This file MUST contain the graph storage spec version as plain text.
+    Graph directories MUST include the file `{METAINFO_FILENAME}`.
+    This file MUST be a YAML document containing the key `spec_version` with
+    the graph storage spec version as its value.
     The current graph storage spec version is
     `{CURRENT_GRAPH_FORMAT_SPEC_VERSION}`.
 
@@ -2018,8 +2041,8 @@ def validate_graph_directory(
 
     ### 3.4 Differences to legacy format graphs
 
-    Legacy pre-spec graphs do not include `{GRAPH_SPEC_VERSION_FILENAME}`.
-    When this file is absent, `neural-lam` will attempt to load the graph as a
+    Legacy pre-spec graphs do not include `{METAINFO_FILENAME}`.
+    When that file is absent, `neural-lam` will attempt to load the graph as a
     legacy pre-spec graph.
     Their `mesh_features.pt` files are assumed to already be normalized.
 
@@ -2032,8 +2055,9 @@ def validate_graph_directory(
     This validator does not validate legacy pre-spec graphs; regenerate or
     migrate them to the current graph storage spec first.
 
-    Current-format graphs include `{GRAPH_SPEC_VERSION_FILENAME}` with value
-    `{CURRENT_GRAPH_FORMAT_SPEC_VERSION}`. Their `mesh_features.pt` files are
+    Current-format graphs include `{METAINFO_FILENAME}` with a
+    `spec_version` of `{CURRENT_GRAPH_FORMAT_SPEC_VERSION}`. Their
+    `mesh_features.pt` files are
     normalized on load, and their edge-index tensors are expected to already
     use the zero-based per-node-set index space required by this
     specification.

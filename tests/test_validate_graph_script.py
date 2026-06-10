@@ -5,6 +5,7 @@ from pathlib import Path
 
 # Third-party
 import torch
+import yaml
 
 
 def _load_validator_module():
@@ -38,9 +39,8 @@ def _write_graph(
     graph_dir_path.mkdir(parents=True)
 
     if version is not None:
-        (graph_dir_path / "graph-spec-version").write_text(
-            version, encoding="utf-8"
-        )
+        with open(graph_dir_path / "metainfo.yaml", "w", encoding="utf-8") as f:
+            yaml.dump({"spec_version": version}, f)
 
     mesh_features = [
         torch.tensor([[0.0, 0.0], [1.0, 0.0], [0.0, 1.0]], dtype=torch.float32)
@@ -184,7 +184,7 @@ def test_validate_graph_script_requires_graph_spec_version():
 
     assert report.has_fails()
     assert not report.ok
-    assert any("graph-spec-version is missing" in d for d in _details(report))
+    assert any("metainfo.yaml is missing" in d for d in _details(report))
 
 
 def test_validate_graph_script_rejects_unsupported_graph_spec_version():

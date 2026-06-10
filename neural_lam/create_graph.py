@@ -11,6 +11,7 @@ import numpy as np
 import scipy.spatial
 import torch
 import torch_geometric as pyg
+import yaml
 from loguru import logger
 from torch_geometric.utils.convert import from_networkx
 
@@ -19,7 +20,7 @@ from .config import load_config_and_datastore
 from .datastore.base import BaseRegularGridDatastore
 
 # Stores the graph storage spec version the graph conforms to.
-GRAPH_SPEC_VERSION_FILENAME = "graph-spec-version"
+METAINFO_FILENAME = "metainfo.yaml"
 CURRENT_GRAPH_SPEC_VERSION = "0.1.0"
 
 
@@ -767,11 +768,11 @@ def create_graph(
     save_edges(pyg_m2g, "m2g", graph_dir_path)
 
     with open(
-        os.path.join(graph_dir_path, GRAPH_SPEC_VERSION_FILENAME),
+        os.path.join(graph_dir_path, METAINFO_FILENAME),
         "w",
         encoding="utf-8",
     ) as fp:
-        fp.write(CURRENT_GRAPH_SPEC_VERSION)
+        yaml.dump({"spec_version": CURRENT_GRAPH_SPEC_VERSION}, fp)
 
 
 def create_graph_from_datastore(

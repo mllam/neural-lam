@@ -12,6 +12,7 @@ from typing import Any, Iterator, Union
 # Third-party
 import pytorch_lightning as pl
 import torch
+import yaml
 from loguru import logger
 from pytorch_lightning.loggers import MLFlowLogger, WandbLogger
 from pytorch_lightning.utilities import rank_zero_only
@@ -236,14 +237,14 @@ def load_graph(
     # Local
     from .create_graph import (  # Local import avoids circular imports.
         CURRENT_GRAPH_SPEC_VERSION,
-        GRAPH_SPEC_VERSION_FILENAME,
+        METAINFO_FILENAME,
     )
 
     def load_graph_spec_version() -> str:
-        version_path = Path(graph_dir_path) / GRAPH_SPEC_VERSION_FILENAME
-        if not version_path.exists():
+        metainfo_path = Path(graph_dir_path) / METAINFO_FILENAME
+        if not metainfo_path.exists():
             warnings.warn(
-                "Graph spec version file is missing; assuming this graph uses "
+                "Graph metainfo file is missing; assuming this graph uses "
                 "the legacy pre-spec format. Mesh node feature normalization "
                 "will be skipped because legacy mesh node features are assumed "
                 "to already be normalized. Edge indices will be zero-offset on "
@@ -254,7 +255,19 @@ def load_graph(
             )
             return LEGACY_GRAPH_SPEC_VERSION
 
-        return version_path.read_text(encoding="utf-8").strip()
+        try:
+            meta = yaml.safe_load(metainfo_path.read_text(encoding="utf-8"))
+        except yaml.YAMLError as exc:
+            raise ValueError(
+                f"Failed to parse {METAINFO_FILENAME}: {exc}"
+            ) from exc
+
+        spec_version = None if meta is None else meta.get("spec_version")
+        if spec_version is None:
+            raise ValueError(
+                f"{METAINFO_FILENAME} is missing 'spec_version' entry"
+            )
+        return spec_version
 
     # Load static node features
     mesh_static_features = loads_file(
@@ -268,7 +281,7 @@ def load_graph(
     }:
         raise ValueError(
             "Unsupported graph spec version "
-            f"{graph_spec_version!r} in {GRAPH_SPEC_VERSION_FILENAME}"
+            f"{graph_spec_version!r} in {METAINFO_FILENAME}"
         )
 
     should_normalize_mesh_features = (
@@ -603,8 +616,7 @@ def setup_training_logger(datastore: Any, args: Any, run_name: str) -> Any:
     elif args.logger == "mlflow":
         if args.wandb_id is not None:
             warnings.warn(
-                "--wandb_id is only used with --logger=wandb and will be "
-                "ignored."
+                "--wandb_id is only used with --logger=wandb and will be ignored."  # noqa: E501
             )
         url = os.getenv("MLFLOW_TRACKING_URI")
         if url is None:
