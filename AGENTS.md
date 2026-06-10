@@ -63,6 +63,4 @@ repeat a question already answered or an approach already rejected.
 AI attribution is mandatory. Add a `Co-authored-by:` trailer to every commit produced with AI
 assistance, e.g.:
 
-```
-Co-authored-by: Claude Opus 4.7 <noreply@anthropic.com>
-```
+Every PR must add a line to `CHANGELOG.md` in the section matching the change type (`Added` / `Changed` / `Fixed` / `Maintenance`).
