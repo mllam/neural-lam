@@ -82,12 +82,12 @@ milestone.
 
 The process for putting issues or PRs on the roadmap is:
 
-1. **Propose** — label your issue or PR with a milestone in the form
+1. **Propose** - label your issue or PR with a milestone in the form
    `vX.Y.Z (proposed)` (e.g. `v0.9.2 (proposed)`).
-2. **Discuss** — at a development meeting the assignee explains the purpose
+2. **Discuss** - at a development meeting the assignee explains the purpose
    and how it fits the current roadmap. The group decides whether to accept
    it and which revision it targets (it may be moved to a later release).
-3. **Accept** — once accepted the `(proposed)` suffix is removed and the
+3. **Accept** - once accepted the `(proposed)` suffix is removed and the
    issue or PR is placed on the milestone for that version.
 
 To propose something for the roadmap, all you need to do is add a milestone
