@@ -139,34 +139,6 @@ class NpyFilesDatastoreMEPS(BaseRegularGridDatastore):
         ├── parameter_weights.npy
         └── surface_geopotential.npy
 
-    Notes
-    -----
-    Folder structure::
-
-        meps_example_reduced
-        ├── data_config.yaml
-        ├── samples
-        │   ├── test
-        │   │   ├── nwp_2022090100_mbr000.npy
-        │   │   ├── ...
-        │   ├── train
-        │   │   ├── nwp_2022040100_mbr000.npy
-        │   │   ├── ...
-        │   └── val
-        │       ├── nwp_2022060500_mbr000.npy
-        │       └── ...
-        └── static
-            ├── border_mask.npy
-            ├── diff_mean.pt
-            ├── diff_std.pt
-            ├── flux_stats.pt
-            ├── grid_features.pt
-            ├── nwp_xy.npy
-            ├── parameter_mean.pt
-            ├── parameter_std.pt
-            ├── parameter_weights.npy
-            └── surface_geopotential.npy
-
     For the MEPS dataset:
     N_t' = 65
     N_t = 65//subsample_step (= 21 for 3h steps)
