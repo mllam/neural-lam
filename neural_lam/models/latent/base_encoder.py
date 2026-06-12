@@ -1,3 +1,5 @@
+"""Abstract base class for latent encoders."""
+
 # Third-party
 import torch
 from torch import distributions as tdists
@@ -16,6 +18,17 @@ class BaseLatentEncoder(nn.Module):
     """
 
     def __init__(self, latent_dim, output_dist="isotropic"):
+        """
+        Set up output dimensionality for the chosen distribution type.
+
+        Parameters
+        ----------
+        latent_dim : int
+            Dimensionality of the latent variable at each mesh node.
+        output_dist : str
+            Type of output distribution: ``"isotropic"`` (mean only, unit
+            variance) or ``"diagonal"`` (mean and per-dimension std).
+        """
         super().__init__()
 
         self.output_dist = output_dist

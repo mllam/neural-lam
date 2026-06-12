@@ -1,3 +1,6 @@
+"""Constant (input-independent) latent encoder, used as a non-learned
+prior."""
+
 # Third-party
 import torch
 
@@ -21,6 +24,18 @@ class ConstantLatentEncoder(BaseLatentEncoder):
     """
 
     def __init__(self, latent_dim, num_mesh_nodes, output_dist="isotropic"):
+        """
+        Store the number of mesh nodes to produce parameters for.
+
+        Parameters
+        ----------
+        latent_dim : int
+            Dimensionality of the latent variable at each mesh node.
+        num_mesh_nodes : int
+            Number of mesh nodes the latent variable is defined on.
+        output_dist : str
+            Type of output distribution: ``"isotropic"`` or ``"diagonal"``.
+        """
         super().__init__(latent_dim, output_dist)
         self.num_mesh_nodes = num_mesh_nodes
 

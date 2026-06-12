@@ -1,3 +1,5 @@
+"""Latent decoder for flat (non-hierarchical) graphs."""
+
 # First-party
 from neural_lam import utils
 from neural_lam.gnn_layers import get_gnn_class
@@ -29,6 +31,38 @@ class GraphLatentDecoder(BaseGraphLatentDecoder):
         m2g_gnn_type="InteractionNet",
         output_std=True,
     ):
+        """
+        Set up the g2m, on-mesh and m2g GNNs.
+
+        Parameters
+        ----------
+        g2m_edge_index : torch.Tensor
+            Shape ``(2, M_g2m)``. Edge index of grid-to-mesh edges.
+        m2m_edge_index : torch.Tensor
+            Shape ``(2, M_m2m)``. Edge index of mesh-to-mesh edges.
+        m2g_edge_index : torch.Tensor
+            Shape ``(2, M_m2g)``. Edge index of mesh-to-grid edges.
+        hidden_dim : int
+            Dimensionality of internal node and edge representations.
+        latent_dim : int
+            Dimensionality of the latent variable at each mesh node.
+        num_state_vars : int
+            Number of state variables predicted at each grid node.
+        m2m_layers : int
+            Number of on-mesh (m2m) GNN layers; 0 disables on-mesh
+            processing.
+        hidden_layers : int
+            Number of hidden layers in internal MLPs.
+        g2m_gnn_type : str
+            GNN type for the grid-to-mesh step (key in
+            ``gnn_layers.GNN_TYPES``).
+        m2g_gnn_type : str
+            GNN type for the mesh-to-grid step (key in
+            ``gnn_layers.GNN_TYPES``).
+        output_std : bool
+            If True, the decoder outputs both mean and std of the next-state
+            distribution; if False, only the mean.
+        """
         super().__init__(
             hidden_dim, latent_dim, num_state_vars, hidden_layers, output_std
         )

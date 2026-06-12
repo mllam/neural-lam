@@ -1,3 +1,7 @@
+"""Latent encoder and decoder modules for latent-variable models such as
+GraphEFM, mapping between grid representations and distributions over
+latent variables on mesh nodes."""
+
 # Local
 from .base_decoder import BaseGraphLatentDecoder
 from .base_encoder import BaseLatentEncoder

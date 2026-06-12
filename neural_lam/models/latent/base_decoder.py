@@ -1,3 +1,5 @@
+"""Abstract base class for graph-based latent decoders."""
+
 # Third-party
 from torch import nn
 
@@ -25,6 +27,23 @@ class BaseGraphLatentDecoder(nn.Module):
         hidden_layers=1,
         output_std=True,
     ):
+        """
+        Set up the latent embedder, grid-residual MLP and output param map.
+
+        Parameters
+        ----------
+        hidden_dim : int
+            Dimensionality of internal node and edge representations.
+        latent_dim : int
+            Dimensionality of the latent variable at each mesh node.
+        num_state_vars : int
+            Number of state variables predicted at each grid node.
+        hidden_layers : int
+            Number of hidden layers in the internal MLPs.
+        output_std : bool
+            If True, the decoder outputs both mean and std of the next-state
+            distribution; if False, only the mean.
+        """
         super().__init__()
 
         self.grid_update_mlp = utils.make_mlp(

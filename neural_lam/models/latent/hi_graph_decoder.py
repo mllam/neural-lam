@@ -1,3 +1,5 @@
+"""Latent decoder for hierarchical graphs."""
+
 # Third-party
 from torch import nn
 
@@ -41,6 +43,47 @@ class HiGraphLatentDecoder(BaseGraphLatentDecoder):
         m2g_gnn_type="InteractionNet",
         output_std=True,
     ):
+        """
+        Set up the g2m, m2g, mesh-up/-down and intra-level GNNs.
+
+        Parameters
+        ----------
+        g2m_edge_index : torch.Tensor
+            Shape ``(2, M_g2m)``. Edge index of grid-to-mesh edges.
+        m2m_edge_index : BufferList
+            Per-level edge indices of intra-level mesh edges, each of shape
+            ``(2, M_m2m[l])``.
+        m2g_edge_index : torch.Tensor
+            Shape ``(2, M_m2g)``. Edge index of mesh-to-grid edges.
+        mesh_up_edge_index : BufferList
+            Per-level edge indices of upward inter-level mesh edges, each of
+            shape ``(2, M_up[l])``.
+        mesh_down_edge_index : BufferList
+            Per-level edge indices of downward inter-level mesh edges, each
+            of shape ``(2, M_down[l])``.
+        hidden_dim : int
+            Dimensionality of internal node and edge representations.
+        latent_dim : int
+            Dimensionality of the latent variable at each mesh node.
+        num_state_vars : int
+            Number of state variables predicted at each grid node.
+        intra_level_layers : int
+            Number of intra-level GNN layers at each mesh level; 0 disables
+            intra-level processing.
+        hidden_layers : int
+            Number of hidden layers in internal MLPs.
+        g2m_gnn_type : str
+            GNN type for the grid-to-mesh step (key in
+            ``gnn_layers.GNN_TYPES``).
+        m2g_gnn_type : str
+            GNN type for the mesh-to-grid step (key in
+            ``gnn_layers.GNN_TYPES``). Inter-level edges are not
+            configurable; mesh-up edges always use ``InteractionNet`` and
+            mesh-down edges always use ``PropagationNet``.
+        output_std : bool
+            If True, the decoder outputs both mean and std of the next-state
+            distribution; if False, only the mean.
+        """
         super().__init__(
             hidden_dim, latent_dim, num_state_vars, hidden_layers, output_std
         )

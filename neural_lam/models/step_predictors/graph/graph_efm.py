@@ -1,3 +1,6 @@
+"""Graph-based Ensemble Forecasting Model (GraphEFM) single-step
+predictor."""
+
 # Standard library
 from typing import Callable, Dict, Optional
 
@@ -61,6 +64,63 @@ class GraphEFM(StepPredictor):
         output_clamping_lower: Optional[Dict[str, float]] = None,
         output_clamping_upper: Optional[Dict[str, float]] = None,
     ):
+        """
+        Build the prior, variational encoder and latent decoder sub-models.
+
+        Parameters
+        ----------
+        config : NeuralLAMConfig
+            Full Neural-LAM configuration; used for the state feature
+            weighting that enters the constant per-variable std.
+        datastore : BaseDatastore
+            Datastore providing static features, standardization statistics
+            and variable counts.
+        graph_name : str
+            Name of the graph directory (under ``<root>/graph``) to load.
+            Both flat and hierarchical graphs are supported; which latent
+            modules are built is resolved from the loaded graph.
+        hidden_dim : int
+            Dimensionality of internal node and edge representations.
+        hidden_layers : int
+            Number of hidden layers in internal MLPs.
+        latent_dim : int, optional
+            Dimensionality of the latent variable at each mesh node;
+            defaults to ``hidden_dim`` when None.
+        prior_processor_layers : int
+            Number of processor GNN layers in the (learned) prior.
+        encoder_processor_layers : int
+            Number of processor GNN layers in the variational encoder.
+        processor_layers : int
+            Number of processor GNN layers in the latent decoder.
+        learn_prior : bool
+            If True, the prior is a graph encoder conditioned on the
+            previous state; if False, a constant ``Normal(0, 1)`` prior is
+            used.
+        prior_dist : str
+            Output distribution of the prior: ``"isotropic"`` or
+            ``"diagonal"``.
+        num_past_forcing_steps : int
+            Number of past forcing steps included in the input window.
+        num_future_forcing_steps : int
+            Number of future forcing steps included in the input window.
+        g2m_gnn_type : str
+            GNN type for the grid-to-mesh steps of the prior, encoder and
+            decoder (key in ``gnn_layers.GNN_TYPES``).
+        m2g_gnn_type : str
+            GNN type for the mesh-to-grid step of the decoder (key in
+            ``gnn_layers.GNN_TYPES``).
+        output_std : bool
+            If True, the decoder outputs a per-variable std alongside the
+            mean; if False, a constant per-variable std is used as
+            likelihood scale.
+        sample_obs_noise : bool
+            If True, sample observation noise when rolling out; if False,
+            ``sample_next_state`` returns the predicted mean.
+        output_clamping_lower : dict of str to float, optional
+            Lower clamping limits per output variable.
+        output_clamping_upper : dict of str to float, optional
+            Upper clamping limits per output variable.
+        """
         super().__init__(
             datastore=datastore,
             output_std=output_std,

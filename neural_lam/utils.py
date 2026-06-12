@@ -476,6 +476,19 @@ class IdentityModule(nn.Module):
     """Identity operator that accepts and returns multiple positional inputs."""
 
     def forward(self, *args):
+        """
+        Return all positional inputs unchanged.
+
+        Parameters
+        ----------
+        *args : tuple
+            Any positional arguments.
+
+        Returns
+        -------
+        tuple
+            The inputs, unchanged.
+        """
         return args
 
 

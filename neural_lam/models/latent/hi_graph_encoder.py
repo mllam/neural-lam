@@ -1,3 +1,5 @@
+"""Latent encoder for hierarchical graphs."""
+
 # Third-party
 from torch import nn
 
@@ -30,6 +32,35 @@ class HiGraphLatentEncoder(BaseLatentEncoder):
         g2m_gnn_type="InteractionNet",
         output_dist="isotropic",
     ):
+        """
+        Set up the g2m, mesh-up and intra-level GNNs and latent param map.
+
+        Parameters
+        ----------
+        latent_dim : int
+            Dimensionality of the latent variable at each mesh node.
+        g2m_edge_index : torch.Tensor
+            Shape ``(2, M_g2m)``. Edge index of grid-to-mesh edges.
+        m2m_edge_index : BufferList
+            Per-level edge indices of intra-level mesh edges, each of shape
+            ``(2, M_m2m[l])``.
+        mesh_up_edge_index : BufferList
+            Per-level edge indices of upward inter-level mesh edges, each of
+            shape ``(2, M_up[l])``.
+        hidden_dim : int
+            Dimensionality of internal node and edge representations.
+        intra_level_layers : int
+            Number of intra-level GNN layers at each mesh level; 0 disables
+            intra-level processing.
+        hidden_layers : int
+            Number of hidden layers in internal MLPs.
+        g2m_gnn_type : str
+            GNN type for the grid-to-mesh step (key in
+            ``gnn_layers.GNN_TYPES``). Mesh-up edges are not configurable;
+            they always use ``PropagationNet``.
+        output_dist : str
+            Type of output distribution: ``"isotropic"`` or ``"diagonal"``.
+        """
         super().__init__(latent_dim, output_dist)
 
         # Hierarchical encoder needs at least 2 mesh levels; with a single
