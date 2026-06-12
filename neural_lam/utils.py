@@ -501,13 +501,38 @@ def make_gnn_seq(
 ):
     """
     Build a sequential stack of GNN layers that propagates both node and
-    edge representations. The layer type is set by ``gnn_type`` (any key in
-    ``gnn_layers.GNN_TYPES``, default ``InteractionNet``); all such layers
-    share the ``(send, rec, edge) -> (rec, edge)`` interface.
+    edge representations.
 
-    ``num_gnn_layers`` must be at least 1. Callers that want a no-op stage
-    (e.g. zero intra-level layers) should substitute an ``IdentityModule``
-    themselves rather than calling this with 0.
+    All layer types share the ``(send, rec, edge) -> (rec, edge)``
+    interface, so the stack can be applied as a single module.
+
+    Parameters
+    ----------
+    edge_index : torch.Tensor
+        Shape ``(2, M)``. Edge index of the edges that the GNN layers
+        operate on.
+    num_gnn_layers : int
+        Number of stacked GNN layers; must be at least 1. Callers that
+        want a no-op stage (e.g. zero intra-level layers) should
+        substitute an ``IdentityModule`` themselves rather than calling
+        this with 0.
+    hidden_layers : int
+        Number of hidden layers in the MLPs of each GNN layer.
+    hidden_dim : int
+        Dimensionality of node and edge representations.
+    gnn_type : str
+        GNN layer type, any key in ``gnn_layers.GNN_TYPES``.
+
+    Returns
+    -------
+    pyg.nn.Sequential
+        Sequential module mapping ``(mesh_rep, edge_rep)`` to updated
+        ``(mesh_rep, edge_rep)``.
+
+    Raises
+    ------
+    ValueError
+        If ``num_gnn_layers`` is less than 1.
     """
     # First-party
     from neural_lam.gnn_layers import get_gnn_class

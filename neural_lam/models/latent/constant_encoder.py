@@ -34,7 +34,20 @@ class ConstantLatentEncoder(BaseLatentEncoder):
 
     def compute_dist_params(self, grid_rep, **kwargs):
         """
-        Return constant parameters of shape (B, num_mesh_nodes, output_dim).
+        Return constant (zero) distribution parameters.
+
+        Parameters
+        ----------
+        grid_rep : torch.Tensor
+            Shape ``(B, num_grid_nodes, d_h)``. Used only to determine
+            batch size and device; the values do not affect the output.
+        **kwargs
+            Ignored.
+
+        Returns
+        -------
+        torch.Tensor
+            Shape ``(B, num_mesh_nodes, output_dim)``. All zeros.
         """
         return torch.zeros(
             grid_rep.shape[0],

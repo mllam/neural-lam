@@ -179,19 +179,30 @@ class HiGraphLatentDecoder(BaseGraphLatentDecoder):
         """
         Hierarchical up-then-down fusion of grid and latent reps.
 
-        original_grid_rep: (B, num_grid_nodes, d_h)
-        latent_rep: (B, num_mesh_nodes[L], d_h)
-        residual_grid_rep: (B, num_grid_nodes, d_h)
-        graph_emb: dict with at least
-            - ``mesh``: list of (B, num_mesh_nodes[l], d_h)
-            - ``g2m``: (B, M_g2m, d_h)
-            - ``m2m``: list of (B, M_m2m[l], d_h)
-            - ``mesh_up``: list of (B, M_up[l], d_h)
-            - ``mesh_down``: list of (B, M_down[l], d_h)
-            - ``m2g``: (B, M_m2g, d_h)
+        Parameters
+        ----------
+        original_grid_rep : torch.Tensor
+            Shape ``(B, num_grid_nodes, d_h)``. Grid representation.
+        latent_rep : torch.Tensor
+            Shape ``(B, num_mesh_nodes[L], d_h)``. Embedded latent sample
+            on the top mesh level ``L``.
+        residual_grid_rep : torch.Tensor
+            Shape ``(B, num_grid_nodes, d_h)``. Grid representation used
+            as receiver in the mesh-to-grid step.
+        graph_emb : dict
+            Embedded graph node and edge features, with at least entries
+            ``mesh``: list of ``(B, num_mesh_nodes[l], d_h)``,
+            ``g2m``: ``(B, M_g2m, d_h)``,
+            ``m2m``: list of ``(B, M_m2m[l], d_h)``,
+            ``mesh_up``: list of ``(B, M_up[l], d_h)``,
+            ``mesh_down``: list of ``(B, M_down[l], d_h)`` and
+            ``m2g``: ``(B, M_m2g, d_h)``.
 
-        Returns:
-        grid_rep: (B, num_grid_nodes, d_h)
+        Returns
+        -------
+        torch.Tensor
+            Shape ``(B, num_grid_nodes, d_h)``. Combined grid
+            representation.
         """
         current_mesh_rep = self.g2m_gnn(
             original_grid_rep, graph_emb["mesh"][0], graph_emb["g2m"]

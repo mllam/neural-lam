@@ -70,13 +70,23 @@ class BaseGraphLatentDecoder(nn.Module):
         """
         Fuse grid and latent representations and return a grid-shaped output.
 
-        original_grid_rep: (B, num_grid_nodes, d_h)
-        latent_rep: (B, num_mesh_nodes, d_h)
-        residual_grid_rep: (B, num_grid_nodes, d_h)
-        graph_emb: dict of graph edge / node embeddings
+        Parameters
+        ----------
+        original_grid_rep : torch.Tensor
+            Shape ``(B, num_grid_nodes, d_h)``. Grid representation.
+        latent_rep : torch.Tensor
+            Shape ``(B, num_mesh_nodes, d_h)``. Embedded latent sample.
+        residual_grid_rep : torch.Tensor
+            Shape ``(B, num_grid_nodes, d_h)``. Grid representation to use
+            for residual connections.
+        graph_emb : dict
+            Embedded graph node and edge features.
 
-        Returns:
-        combined_grid_rep: (B, num_grid_nodes, d_h)
+        Returns
+        -------
+        torch.Tensor
+            Shape ``(B, num_grid_nodes, d_h)``. Combined grid
+            representation.
         """
         raise NotImplementedError("combine_with_latent not implemented")
 
@@ -84,14 +94,30 @@ class BaseGraphLatentDecoder(nn.Module):
         """
         Predict mean (and optionally std) of the next weather state.
 
-        grid_rep: (B, num_grid_nodes, d_h)
-        latent_samples: (B, num_mesh_nodes, latent_dim)
-        last_state: (B, num_grid_nodes, num_state_vars)
-        graph_emb: dict with at least ``g2m``, ``m2m``, ``m2g`` entries
+        Parameters
+        ----------
+        grid_rep : torch.Tensor
+            Shape ``(B, num_grid_nodes, d_h)``. Grid input representation.
+        latent_samples : torch.Tensor
+            Shape ``(B, num_mesh_nodes, latent_dim)``. Sample of the
+            latent variable.
+        last_state : torch.Tensor
+            Shape ``(B, num_grid_nodes, num_state_vars)``. State at the
+            current time step, used as the base of the residual
+            prediction.
+        graph_emb : dict
+            Embedded graph node and edge features, with at least ``g2m``,
+            ``m2m`` and ``m2g`` entries.
 
-        Returns:
-        pred_mean: (B, num_grid_nodes, num_state_vars)
-        pred_std: (B, num_grid_nodes, num_state_vars) or ``None``
+        Returns
+        -------
+        pred_mean : torch.Tensor
+            Shape ``(B, num_grid_nodes, num_state_vars)``. Predicted mean
+            of the next state.
+        pred_std : torch.Tensor or None
+            Shape ``(B, num_grid_nodes, num_state_vars)`` when
+            ``output_std`` is True, otherwise None. Predicted std of the
+            next state.
         """
         latent_emb = self.latent_embedder(latent_samples)
 

@@ -78,14 +78,22 @@ class GraphLatentEncoder(BaseLatentEncoder):
         """
         Compute distribution parameters on mesh from grid features.
 
-        grid_rep: (B, num_grid_nodes, d_h)
-        graph_emb: dict with at least
-            - ``mesh``: (B, num_mesh_nodes, d_h)
-            - ``g2m``: (B, M_g2m, d_h)
-            - ``m2m``: (B, M_m2m, d_h)
+        Parameters
+        ----------
+        grid_rep : torch.Tensor
+            Shape ``(B, num_grid_nodes, d_h)``. Grid input representation.
+        graph_emb : dict
+            Embedded graph node and edge features, with at least entries
+            ``mesh``: ``(B, num_mesh_nodes, d_h)``,
+            ``g2m``: ``(B, M_g2m, d_h)`` and ``m2m``: ``(B, M_m2m, d_h)``.
+        **kwargs
+            Ignored.
 
-        Returns:
-        parameters: (B, num_mesh_nodes, output_dim)
+        Returns
+        -------
+        torch.Tensor
+            Shape ``(B, num_mesh_nodes, output_dim)``. Raw parameters of
+            the latent distribution.
         """
         mesh_rep = self.g2m_gnn(grid_rep, graph_emb["mesh"], graph_emb["g2m"])
         mesh_rep, _ = self.m2m_gnns(mesh_rep, graph_emb["m2m"])

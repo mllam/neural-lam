@@ -123,15 +123,24 @@ class HiGraphLatentEncoder(BaseLatentEncoder):
         """
         Compute distribution parameters on the top mesh level.
 
-        grid_rep: (B, num_grid_nodes, d_h)
-        graph_emb: dict with at least
-            - ``mesh``: list of (B, num_mesh_nodes[l], d_h)
-            - ``g2m``: (B, M_g2m, d_h)
-            - ``m2m``: list of (B, M_m2m[l], d_h)
-            - ``mesh_up``: list of (B, M_up[l], d_h)
+        Parameters
+        ----------
+        grid_rep : torch.Tensor
+            Shape ``(B, num_grid_nodes, d_h)``. Grid input representation.
+        graph_emb : dict
+            Embedded graph node and edge features, with at least entries
+            ``mesh``: list of ``(B, num_mesh_nodes[l], d_h)``,
+            ``g2m``: ``(B, M_g2m, d_h)``,
+            ``m2m``: list of ``(B, M_m2m[l], d_h)`` and
+            ``mesh_up``: list of ``(B, M_up[l], d_h)``.
+        **kwargs
+            Ignored.
 
-        Returns:
-        parameters: (B, num_mesh_nodes[L], output_dim)
+        Returns
+        -------
+        torch.Tensor
+            Shape ``(B, num_mesh_nodes[L], output_dim)``. Raw parameters
+            of the latent distribution on the top mesh level ``L``.
         """
         current_mesh_rep = self.g2m_gnn(
             grid_rep, graph_emb["mesh"][0], graph_emb["g2m"]

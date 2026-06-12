@@ -95,12 +95,24 @@ class GraphLatentDecoder(BaseGraphLatentDecoder):
         """
         Fuse grid and latent reps via g2m -> m2m -> m2g.
 
-        original_grid_rep: (B, num_grid_nodes, d_h)
-        latent_rep: (B, num_mesh_nodes, d_h)
-        residual_grid_rep: (B, num_grid_nodes, d_h)
+        Parameters
+        ----------
+        original_grid_rep : torch.Tensor
+            Shape ``(B, num_grid_nodes, d_h)``. Grid representation.
+        latent_rep : torch.Tensor
+            Shape ``(B, num_mesh_nodes, d_h)``. Embedded latent sample.
+        residual_grid_rep : torch.Tensor
+            Shape ``(B, num_grid_nodes, d_h)``. Grid representation used
+            as receiver in the mesh-to-grid step.
+        graph_emb : dict
+            Embedded graph node and edge features, with at least ``g2m``,
+            ``m2m`` and ``m2g`` entries.
 
-        Returns:
-        grid_rep: (B, num_grid_nodes, d_h)
+        Returns
+        -------
+        torch.Tensor
+            Shape ``(B, num_grid_nodes, d_h)``. Combined grid
+            representation.
         """
         mesh_rep = self.g2m_gnn(original_grid_rep, latent_rep, graph_emb["g2m"])
 

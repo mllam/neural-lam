@@ -47,10 +47,19 @@ class BaseLatentEncoder(nn.Module):
         """
         Compute raw distribution parameters from the grid representation.
 
-        grid_rep: (B, num_grid_nodes, d_h)
+        Parameters
+        ----------
+        grid_rep : torch.Tensor
+            Shape ``(B, num_grid_nodes, d_h)``. Grid input representation.
+        **kwargs
+            Additional inputs used by concrete encoders (e.g. graph
+            embeddings).
 
-        Returns:
-        parameters: (B, num_mesh_nodes, output_dim)
+        Returns
+        -------
+        torch.Tensor
+            Shape ``(B, num_mesh_nodes, output_dim)``. Raw parameters of
+            the latent distribution.
         """
         raise NotImplementedError("compute_dist_params not implemented")
 
@@ -58,11 +67,18 @@ class BaseLatentEncoder(nn.Module):
         """
         Compute the Gaussian distribution over the latent variable.
 
-        grid_rep: (B, num_grid_nodes, d_h)
+        Parameters
+        ----------
+        grid_rep : torch.Tensor
+            Shape ``(B, num_grid_nodes, d_h)``. Grid input representation.
+        **kwargs
+            Additional inputs forwarded to :meth:`compute_dist_params`.
 
-        Returns:
-        distribution: ``torch.distributions.Normal`` of shape
-            (B, num_mesh_nodes, latent_dim)
+        Returns
+        -------
+        torch.distributions.Normal
+            Distribution over the latent variable, with batch shape
+            ``(B, num_mesh_nodes, latent_dim)``.
         """
         latent_dist_params = self.compute_dist_params(grid_rep, **kwargs)
 
