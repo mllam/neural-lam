@@ -22,7 +22,7 @@ class GraphLatentEncoder(BaseLatentEncoder):
         hidden_dim,
         m2m_layers,
         hidden_layers=1,
-        g2m_gnn_type="PropagationNet",
+        g2m_gnn_type="InteractionNet",
         output_dist="isotropic",
     ):
         super().__init__(latent_dim, output_dist)

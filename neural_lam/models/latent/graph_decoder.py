@@ -26,7 +26,7 @@ class GraphLatentDecoder(BaseGraphLatentDecoder):
         m2m_layers,
         hidden_layers=1,
         g2m_gnn_type="InteractionNet",
-        m2g_gnn_type="PropagationNet",
+        m2g_gnn_type="InteractionNet",
         output_std=True,
     ):
         super().__init__(

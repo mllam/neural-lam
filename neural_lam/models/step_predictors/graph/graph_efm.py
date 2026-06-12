@@ -54,6 +54,8 @@ class GraphEFM(StepPredictor):
         prior_dist: str = "isotropic",
         num_past_forcing_steps: int = 1,
         num_future_forcing_steps: int = 1,
+        g2m_gnn_type: str = "InteractionNet",
+        m2g_gnn_type: str = "InteractionNet",
         output_std: bool = False,
         sample_obs_noise: bool = False,
         output_clamping_lower: Optional[Dict[str, float]] = None,
@@ -210,6 +212,7 @@ class GraphEFM(StepPredictor):
                     hidden_dim=hidden_dim,
                     intra_level_layers=prior_processor_layers,
                     hidden_layers=hidden_layers,
+                    g2m_gnn_type=g2m_gnn_type,
                     output_dist=prior_dist,
                 )
             else:
@@ -220,6 +223,7 @@ class GraphEFM(StepPredictor):
                     hidden_dim=hidden_dim,
                     m2m_layers=prior_processor_layers,
                     hidden_layers=hidden_layers,
+                    g2m_gnn_type=g2m_gnn_type,
                     output_dist=prior_dist,
                 )
         else:
@@ -240,6 +244,7 @@ class GraphEFM(StepPredictor):
                 hidden_dim=hidden_dim,
                 intra_level_layers=encoder_processor_layers,
                 hidden_layers=hidden_layers,
+                g2m_gnn_type=g2m_gnn_type,
                 output_dist="diagonal",
             )
             self.decoder = HiGraphLatentDecoder(
@@ -253,6 +258,8 @@ class GraphEFM(StepPredictor):
                 num_state_vars=num_state_vars,
                 intra_level_layers=processor_layers,
                 hidden_layers=hidden_layers,
+                g2m_gnn_type=g2m_gnn_type,
+                m2g_gnn_type=m2g_gnn_type,
                 output_std=bool(output_std),
             )
         else:
@@ -263,6 +270,7 @@ class GraphEFM(StepPredictor):
                 hidden_dim=hidden_dim,
                 m2m_layers=encoder_processor_layers,
                 hidden_layers=hidden_layers,
+                g2m_gnn_type=g2m_gnn_type,
                 output_dist="diagonal",
             )
             self.decoder = GraphLatentDecoder(
@@ -274,6 +282,8 @@ class GraphEFM(StepPredictor):
                 num_state_vars=num_state_vars,
                 m2m_layers=processor_layers,
                 hidden_layers=hidden_layers,
+                g2m_gnn_type=g2m_gnn_type,
+                m2g_gnn_type=m2g_gnn_type,
                 output_std=bool(output_std),
             )
 
