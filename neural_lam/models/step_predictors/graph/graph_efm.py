@@ -588,14 +588,21 @@ class GraphEFM(BaseGraphEFM):
         """
         Build the mesh embedders and hierarchical latent modules.
 
-        See :meth:`BaseGraphEFM.__init__` for the shared parameters
-        (``config``, ``datastore``, ``graph_name``, ``hidden_dim``,
-        ``hidden_layers``, ``num_past_forcing_steps``,
-        ``num_future_forcing_steps``, ``output_std``, ``sample_obs_noise``
-        and the clamping limits).
-
         Parameters
         ----------
+        config : NeuralLAMConfig
+            Full Neural-LAM configuration; used for the state feature
+            weighting that enters the constant per-variable std.
+        datastore : BaseDatastore
+            Datastore providing static features, standardization statistics
+            and variable counts.
+        graph_name : str
+            Name of the graph directory (under ``<root>/graph``) to load.
+            Must be a hierarchical graph.
+        hidden_dim : int
+            Dimensionality of internal node and edge representations.
+        hidden_layers : int
+            Number of hidden layers in internal MLPs.
         latent_dim : int, optional
             Dimensionality of the latent variable at each top-level mesh
             node; defaults to ``hidden_dim`` when None.
@@ -612,12 +619,27 @@ class GraphEFM(BaseGraphEFM):
         prior_dist : str
             Output distribution of the prior: ``"isotropic"`` or
             ``"diagonal"``.
+        num_past_forcing_steps : int
+            Number of past forcing steps included in the input window.
+        num_future_forcing_steps : int
+            Number of future forcing steps included in the input window.
         g2m_gnn_type : str
             GNN type for the grid-to-mesh steps of the prior, encoder and
             decoder (key in ``gnn_layers.GNN_TYPES``).
         m2g_gnn_type : str
             GNN type for the mesh-to-grid step of the decoder (key in
             ``gnn_layers.GNN_TYPES``).
+        output_std : bool
+            If True, the decoder outputs a per-variable std alongside the
+            mean; if False, a constant per-variable std is used as
+            likelihood scale.
+        sample_obs_noise : bool
+            If True, sample observation noise when rolling out; if False,
+            ``sample_next_state`` returns the predicted mean.
+        output_clamping_lower : dict of str to float, optional
+            Lower clamping limits per output variable.
+        output_clamping_upper : dict of str to float, optional
+            Upper clamping limits per output variable.
         """
         super().__init__(
             config=config,
@@ -835,14 +857,21 @@ class GraphEFMMS(BaseGraphEFM):
         """
         Build the mesh embedders and flat-graph latent modules.
 
-        See :meth:`BaseGraphEFM.__init__` for the shared parameters
-        (``config``, ``datastore``, ``graph_name``, ``hidden_dim``,
-        ``hidden_layers``, ``num_past_forcing_steps``,
-        ``num_future_forcing_steps``, ``output_std``, ``sample_obs_noise``
-        and the clamping limits).
-
         Parameters
         ----------
+        config : NeuralLAMConfig
+            Full Neural-LAM configuration; used for the state feature
+            weighting that enters the constant per-variable std.
+        datastore : BaseDatastore
+            Datastore providing static features, standardization statistics
+            and variable counts.
+        graph_name : str
+            Name of the graph directory (under ``<root>/graph``) to load.
+            Must be a flat graph.
+        hidden_dim : int
+            Dimensionality of internal node and edge representations.
+        hidden_layers : int
+            Number of hidden layers in internal MLPs.
         latent_dim : int, optional
             Dimensionality of the latent variable at each mesh node;
             defaults to ``hidden_dim`` when None.
@@ -859,12 +888,27 @@ class GraphEFMMS(BaseGraphEFM):
         prior_dist : str
             Output distribution of the prior: ``"isotropic"`` or
             ``"diagonal"``.
+        num_past_forcing_steps : int
+            Number of past forcing steps included in the input window.
+        num_future_forcing_steps : int
+            Number of future forcing steps included in the input window.
         g2m_gnn_type : str
             GNN type for the grid-to-mesh steps of the prior, encoder and
             decoder (key in ``gnn_layers.GNN_TYPES``).
         m2g_gnn_type : str
             GNN type for the mesh-to-grid step of the decoder (key in
             ``gnn_layers.GNN_TYPES``).
+        output_std : bool
+            If True, the decoder outputs a per-variable std alongside the
+            mean; if False, a constant per-variable std is used as
+            likelihood scale.
+        sample_obs_noise : bool
+            If True, sample observation noise when rolling out; if False,
+            ``sample_next_state`` returns the predicted mean.
+        output_clamping_lower : dict of str to float, optional
+            Lower clamping limits per output variable.
+        output_clamping_upper : dict of str to float, optional
+            Upper clamping limits per output variable.
         """
         super().__init__(
             config=config,
