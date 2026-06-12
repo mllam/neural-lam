@@ -1,3 +1,5 @@
+"""Interaction Network and PropagationNet GNN layers used by Neural-LAM."""
+
 # Standard library
 from typing import Optional, Type, Union
 
@@ -36,26 +38,30 @@ class InteractionNet(pyg.nn.MessagePassing):
         Parameters
         ----------
         edge_index : torch.Tensor
-            Shape ``(2, M)``. Edges in PyG format; both sender and receiver
-            node indices start at 0. Dims: ``M`` is the number of edges.
+            Edge connectivity tensor in PyG format.
+            Shape ``(2, num_edges)``.
         input_dim : int
-            Dimensionality of input representations for both nodes and
-            edges.
+            Dimensionality of both node and edge input representations.
         update_edges : bool, optional
-            If True, compute and return updated edge representations.
+            If ``True``, compute and return updated edge representations in
+            addition to node representations. Default is ``True``.
         hidden_layers : int, optional
-            Number of hidden layers in each MLP.
-        hidden_dim : int, optional
-            Dimensionality of hidden layers. Defaults to ``input_dim``.
-        edge_chunk_sizes : list of int, optional
-            Chunk sizes to split edge representations into, each fed
-            through a separate MLP. ``None`` means a single shared MLP.
-        aggr_chunk_sizes : list of int, optional
-            Chunk sizes to split aggregated node representations into,
-            each fed through a separate MLP. ``None`` means a single
-            shared MLP.
-        aggr : str, optional
-            Message aggregation method (``'sum'`` or ``'mean'``).
+            Number of hidden layers in each MLP. Default is ``1``.
+        hidden_dim : int or None, optional
+            Width of hidden layers. If ``None``, defaults to ``input_dim``.
+        edge_chunk_sizes : list[int] or None, optional
+            Chunk sizes for splitting edge representations across separate
+            MLPs. ``None`` uses a single shared MLP.
+        aggr_chunk_sizes : list[int] or None, optional
+            Chunk sizes for splitting aggregated node representations across
+            separate MLPs. ``None`` uses a single shared MLP.
+        aggr : {"sum", "mean"}, optional
+            Message aggregation method. Default is ``"sum"``.
+
+        Raises
+        ------
+        ValueError
+            If ``aggr`` is not one of ``"sum"`` or ``"mean"``.
         """
         if aggr not in ("sum", "mean"):
             raise ValueError(f"Unknown aggregation method: {aggr}")
@@ -115,23 +121,23 @@ class InteractionNet(pyg.nn.MessagePassing):
         Parameters
         ----------
         send_rep : torch.Tensor
-            Shape ``(B, N_send, d_h)``. Sender node representations.
-            Dims: ``B`` is batch size, ``N_send`` is the number of
-            sender nodes, and ``d_h`` is the hidden dimension.
+            Sender node representations.
+            Shape ``(num_send, input_dim)``.
         rec_rep : torch.Tensor
-            Shape ``(B, N_rec, d_h)``. Receiver node representations.
-            Dims: ``N_rec`` is the number of receiver nodes.
+            Receiver node representations.
+            Shape ``(num_rec, input_dim)``.
         edge_rep : torch.Tensor
-            Shape ``(B, M, d_h)``. Edge representations. Dims: ``M``
-            is the number of edges.
+            Edge representations.
+            Shape ``(num_edges, input_dim)``.
 
         Returns
         -------
         rec_rep : torch.Tensor
-            Shape ``(B, N_rec, d_h)``. Updated receiver node
-            representations.
+            Updated receiver node representations.
+            Shape ``(num_rec, input_dim)``.
         edge_rep : torch.Tensor
-            Shape ``(B, M, d_h)``. Updated edge representations.
+            Updated edge representations.
+            Shape ``(num_edges, input_dim)``.
             Only returned when ``update_edges=True``.
         """
         # Always concatenate to [rec_nodes, send_nodes] for propagation,
@@ -163,9 +169,7 @@ class InteractionNet(pyg.nn.MessagePassing):
     def message(
         self, x_j: torch.Tensor, x_i: torch.Tensor, edge_attr: torch.Tensor
     ) -> torch.Tensor:
-        """
-        Compute messages from node j to node i.
-        """
+        """Compute messages from node ``j`` to ``i``."""
         return self.edge_mlp(torch.cat((edge_attr, x_j, x_i), dim=-1))
 
     # pylint: disable-next=signature-differs
@@ -178,8 +182,9 @@ class InteractionNet(pyg.nn.MessagePassing):
     ) -> tuple[torch.Tensor, torch.Tensor]:
         """
         Overridden aggregation function to:
-        * return both aggregated and original messages,
-        * only aggregate to number of receiver nodes.
+        * return both aggregated and per-edge messages,
+        * only aggregate to the number of receiver nodes (``self.num_rec``)
+          rather than to ``dim_size``.
         """
         aggr = super().aggregate(inputs, index, ptr, self.num_rec)
         return aggr, inputs
@@ -205,6 +210,13 @@ class PropagationNet(InteractionNet):
         aggr_chunk_sizes: Optional[list[int]] = None,
         aggr: str = "sum",
     ) -> None:
+        """Initialise the :class:`PropagationNet` layer.
+
+        Parameters share the meaning of :class:`InteractionNet.__init__`; see
+        that class for the full description. The propagation variant overrides
+        ``aggr`` defaults internally to favour stability of the propagation
+        residual.
+        """
         # Use mean aggregation in propagation version to avoid instability
         super().__init__(
             edge_index,
@@ -268,6 +280,21 @@ class SplitMLPs(nn.Module):
     """
 
     def __init__(self, mlps: list[nn.Module], chunk_sizes: list[int]) -> None:
+        """
+        Create a module that dispatches chunks of the input to separate MLPs.
+
+        Parameters
+        ----------
+        mlps : list of nn.Module
+            Sequence of MLPs to apply to each chunk.
+        chunk_sizes : list of int
+            Sizes used when splitting the input along ``dim=-2``.
+
+        Raises
+        ------
+        AssertionError
+            If the number of ``mlps`` and ``chunk_sizes`` differ.
+        """
         super().__init__()
         assert len(mlps) == len(
             chunk_sizes

@@ -1,3 +1,5 @@
+"""Custom logging utilities (e.g., MLFlow wrappers) used in Neural-LAM."""
+
 # Standard library
 import os
 from typing import Optional
@@ -24,10 +26,26 @@ class CustomMLFlowLogger(pl.loggers.MLFlowLogger):
         run_name: str,
         save_dir: str,
     ) -> None:
-        """Initialize the logger and ensure ``save_dir`` exists on disk.
+        """
+        Initialize the logger, ensure ``save_dir`` exists, and start the
+        MLflow run.
 
-        ``save_dir`` is created eagerly (with ``exist_ok=True``) so that
-        subsequent ``log_image`` calls can write temporary files there.
+        Parameters
+        ----------
+        experiment_name : str
+            Target MLflow experiment.
+        tracking_uri : str
+            MLflow tracking server URI.
+        run_name : str
+            Human-readable run name stored as ``mlflow.runName``.
+        save_dir : str
+            Directory where ``log_image`` writes temporary figure files.
+            Created eagerly with ``exist_ok=True``.
+
+        Notes
+        -----
+        Starts the MLflow run with ``log_system_metrics=True`` and also
+        records ``run_id`` as an MLflow param.
         """
         super().__init__(
             experiment_name=experiment_name, tracking_uri=tracking_uri
@@ -75,6 +93,11 @@ class CustomMLFlowLogger(pl.loggers.MLFlowLogger):
         step : int or None, optional
             Step to associate with the log entry. ``None`` logs without
             a step suffix.
+
+        Raises
+        ------
+        SystemExit
+            If AWS credentials for the MLflow artifact store are missing.
         """
         # Third-party
         from botocore.exceptions import NoCredentialsError

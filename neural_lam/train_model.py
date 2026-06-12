@@ -1,3 +1,5 @@
+"""CLI entry point for training Neural-LAM models."""
+
 # Standard library
 import json
 import os
@@ -22,7 +24,10 @@ from .weather_dataset import WeatherDataModule
 
 
 class AdaptiveHelpFormatter(ArgumentDefaultsHelpFormatter):
+    """``--help`` formatter that scales the column width to the terminal."""
+
     def __init__(self, prog):
+        """Pick a help-column width based on the current terminal size."""
         terminal_width = shutil.get_terminal_size(fallback=(100, 20)).columns
         width = max(80, min(terminal_width, 120))
         help_position = min(44, width // 3)

@@ -146,6 +146,18 @@ allow-any-import-level = "neural_lam"
 [tool.pylint.SIMILARITIES]
 min-similarity-lines = 10
 
+[tool.interrogate]
+fail-under = 100
+verbose = 1
+quiet = false
+ignore-init-method = false
+ignore-init-module = false
+ignore-magic = false
+ignore-private = false
+ignore-nested-functions = false
+ignore-property-decorators = false
+exclude = ["tests", "docs", "build"]
+
 [tool.pytest.ini_options]
 markers = [
     "slow: marks tests as slow (deselected by default, run with -m slow)",
