@@ -22,7 +22,7 @@ For a more in-depth scientific introduction to machine learning for LAM weather 
 As the code in the repository is continuously evolving, the latest version might feature some small differences to what was used for these publications.
 We retain some paper-specific branches for reproducibility purposes.
 
-
+### Core Neural-LAM Publications
 *If you use Neural-LAM in your work, please cite the relevant paper(s)*.
 
 #### [Graph-based Neural Weather Prediction for Limited Area Modeling](https://arxiv.org/abs/2309.17370)
@@ -70,10 +70,7 @@ keeping versions consistent (it automatically updates the `pyproject.toml`
 file), makes it easy to handle virtual environments and includes the
 development toolchain packages installation too.
 
-**regarding `torch` installation**: because `torch` creates different package
-variants for different CUDA versions and cpu-only support you will need to install
-`torch` separately if you don't want the most recent GPU variant that also
-expects the most recent version of CUDA on your system.
+**regarding `torch` installation**: `torch` is a required dependency, but it ships separate variants for CPU-only and each CUDA version. With `uv`, the correct PyTorch index is chosen automatically via `[tool.uv.sources]`. With `pip`, you must pass `--index-url` explicitly (see instructions below).
 
 We cover all the installation options in our [github actions ci/cd
 setup](.github/workflows/) which you can use as a reference.
@@ -90,16 +87,28 @@ python -m pip install neural_lam
 
 1. Clone this repository and navigate to the root directory.
 2. Install `uv` if you don't have it installed on your system (either with `pip install uv` or [following the install instructions](https://docs.astral.sh/uv/getting-started/installation)).
-> If you are happy using the latest version of `torch` with GPU support (expecting the latest version of CUDA is installed on your system) you can skip to step 5.
-3. Create a virtual environment for uv to use with `uv venv --no-project`.
-4. Install a specific version of `torch` with `uv pip install torch --index-url https://download.pytorch.org/whl/cpu` for a CPU-only version or `uv pip install torch --index-url https://download.pytorch.org/whl/cu111` for CUDA 11.1 support (you can find the correct URL for the variant you want on [PyTorch webpage](https://pytorch.org/get-started/locally/)).
-5. Install the dependencies with `uv pip install .`. If you will be developing `neural-lam` we recommend to install the development dependencies with `uv pip install --group dev -e .`. This installs the `neural-lam` package in editable mode, so you can make changes to the code and see the effects immediately.
+3. Install with the CPU or GPU extra:
+   ```bash
+   uv sync --extra cpu        --group dev  # CPU-only
+   uv sync --extra gpu        --group dev  # GPU, CUDA 13.0 (default)
+   uv sync --extra gpu-cu128  --group dev  # GPU, CUDA 12.8
+   ```
+   This creates a virtual environment, installs `torch` from the correct
+   PyTorch index, and installs all other dependencies (including dev tools)
+   in one step.
+
+   If you need a different CUDA version, install with the `cpu` extra first (smaller download) and then swap `torch` to your CUDA variant:
+   ```bash
+   uv sync --extra cpu --group dev              # create env (small torch wheel)
+   uv pip install torch --torch-backend auto    # replace torch with your CUDA variant
+   ```
+   Note: this swap is venv-local and will be reverted by the next `uv sync`.
 
 #### Using `pip`
 
 1. Clone this repository and navigate to the root directory.
 > If you are happy using the latest version of `torch` with GPU support (expecting the latest version of CUDA is installed on your system) you can skip to step 3.
-2. Install a specific version of `torch` with `python -m pip install torch --index-url https://download.pytorch.org/whl/cpu` for a CPU-only version or `python -m pip install torch --index-url https://download.pytorch.org/whl/cu111` for CUDA 11.1 support (you can find the correct URL for the variant you want on [PyTorch webpage](https://pytorch.org/get-started/locally/)).
+2. Install a specific version of `torch` with `python -m pip install torch --index-url https://download.pytorch.org/whl/cpu` for a CPU-only version or `python -m pip install torch --index-url https://download.pytorch.org/whl/cu130` for CUDA 13.0 support (use `.../whl/cu128` for CUDA 12.8; you can find the correct URL for the variant you want on [PyTorch webpage](https://pytorch.org/get-started/locally/)).
 3. Install the dependencies with `python -m pip install .`. If you will be developing `neural-lam` we recommend to install in editable mode and install the development dependencies with `python -m pip install --group dev -e .` so you can make changes to the code and see the effects immediately.
 
 
@@ -404,7 +413,7 @@ The graph-related files are stored in a directory called `graphs`.
 ### Weights & Biases Integration
 The project is fully integrated with [Weights & Biases](https://www.wandb.ai/) (W&B) for logging and visualization, but can just as easily be used without it.
 When W&B is used, training configuration, training/test statistics and plots are sent to the W&B servers and made available in an interactive web interface.
-If W&B is turned off, logging instead saves everything locally to a directory like `wandb/dryrun...`.
+If W&B is turned off, logging instead saves everything locally under the run directory (e.g. `runs/<run-name>/wandb/`).
 The W&B project name is set to `neural-lam`, but this can be changed in the flags of `python -m neural_lam.train_model` (using argsparse).
 See the [W&B documentation](https://docs.wandb.ai/) for details.
 
@@ -437,7 +446,7 @@ A few of the key ones are outlined below:
 * `--ar_steps_train`: Number of time steps to unroll for when making predictions and computing the loss
 * `--ar_steps_eval`: Number of time steps to unroll for during validation steps
 
-Checkpoints of trained models are stored in the `saved_models` directory.
+Checkpoints of trained models are stored under `runs/<run-name>/checkpoints/`, alongside Lightning and logger outputs for the same run.
 The implemented models are:
 
 ### Graph-LAM
@@ -491,8 +500,8 @@ Using SLURM, the job can be started with `sbatch slurm_job.sh` with a shell scri
 #SBATCH --mem=444G
 #SBATCH --no-requeue
 #SBATCH --exclusive
-#SBATCH --output=lightning_logs/neurallam_out_%j.log
-#SBATCH --error=lightning_logs/neurallam_err_%j.log
+#SBATCH --output=runs/slurm_logs/neurallam_out_%j.log
+#SBATCH --error=runs/slurm_logs/neurallam_err_%j.log
 
 # Load necessary modules or activate environment, for example:
 conda activate neural-lam
@@ -503,6 +512,8 @@ srun -ul python -m neural_lam.train_model \
 ```
 
 When using on a system without SLURM, where all GPU's are visible, it is possible to select a subset of GPU's to use for training with the `devices` cli argument, e.g. `--devices 0 1` to use the first 2 GPU's.
+
+> **DGX Spark / container compatibility:** see [issue #163](https://github.com/mllam/neural-lam/issues/163) for a list of currently known-working and known-failing PyTorch / CUDA / container combinations on DGX Spark.
 
 ## Evaluate Models
 Evaluation is also done using `python -m neural_lam.train_model --config_path <config-path>`, but using the `--eval` option.
@@ -566,6 +577,23 @@ In addition, hierarchical mesh graphs (`L > 1`) feature a few additional files w
 ```
 These files have the same list format as the ones above, but each list has length `L-1` (as these edges describe connections between levels).
 Entries 0 in these lists describe edges between the lowest levels 1 and 2.
+
+## Dimension Glossary
+
+Canonical dimension names used in tensor shape annotations throughout the codebase:
+
+- `B` - batch size
+- `pred_steps` - number of autoregressive prediction steps
+- `num_grid_nodes` - number of nodes in the flattened spatial grid
+- `num_mesh_nodes` - number of mesh nodes; indexed as `num_mesh_nodes[l]` for hierarchical level `l`
+- `num_state_vars` - number of atmospheric state variables
+- `num_forcing_vars` - number of forcing input variables
+- `num_variables` - generic variable dimension used in metric functions
+- `hidden_dim` - internal hidden representation size in GNN layers and MLPs
+- `input_dim` - input feature dimensionality to a layer before transformation
+- `num_edges` - number of edges in a graph (g2m, m2g, same-level, up, down)
+- `num_send` - number of sender nodes in a message-passing step
+- `num_rec` - number of receiver nodes in a message-passing step
 
 # Development and Contributing
 Any push or Pull-Request to the main branch will trigger a selection of pre-commit hooks.
