@@ -160,6 +160,11 @@ class BaseGraphLatentDecoder(nn.Module):
         state_params = self.param_map(combined_grid_rep)
 
         if self.output_std:
+            # When outputting std the param map produces 2 * num_state_vars
+            # features per grid node. Split these along the feature dim into
+            # the first half (mean delta) and second half (unconstrained std
+            # parameters), then map the latter through a softplus to get
+            # positive std values.
             mean_delta, std_raw = state_params.chunk(2, dim=-1)
             pred_std = nn.functional.softplus(std_raw)
         else:
