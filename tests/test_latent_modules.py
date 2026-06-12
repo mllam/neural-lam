@@ -160,8 +160,7 @@ def test_constant_encoder_is_input_independent():
     assert torch.equal(a.mean, b.mean)
     assert torch.equal(a.stddev, b.stddev)
     assert a.mean.shape == (2, 3, 4)
-    # Prior is a mean-0 standard normal (isotropic): fixes the prob_model_lam
-    # mean-1 bug, see ConstantLatentEncoder docstring.
+    # Isotropic output is a mean-0 standard normal
     assert torch.equal(a.mean, torch.zeros_like(a.mean))
     assert torch.allclose(a.stddev, torch.ones_like(a.stddev))
 

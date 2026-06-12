@@ -27,16 +27,15 @@ class GraphEFM(StepPredictor):
     """
     Graph-based Ensemble Forecasting Model -- single-step predictor.
 
-    Port of ``prob_model_lam``'s ``GraphEFM`` (``forward`` is the source's
-    ``predict_step``) onto the ``StepPredictor`` interface. The predictor owns
-    its own conditional-prior / variational-encoder / latent-decoder, each of
-    which carries its own g2m/processor/m2g GNNs, so the encode-process-decode
-    backbone of ``BaseGraphModel`` does not apply -- this extends
-    ``StepPredictor`` directly. It is self-contained: besides ``forward`` it
-    exposes the per-step ELBO pieces (``compute_step_loss`` ->
-    ``(likelihood_term, kl_term, pred_mean, pred_std)``) and the sampling
-    helpers used by a future rollout/ensemble module. Rollout, ELBO assembly,
-    ensemble logic and logging live outside the predictor.
+    A latent-variable step predictor consisting of a conditional prior, a
+    variational encoder and a latent decoder, each of which carries its own
+    g2m/processor/m2g GNNs. The encode-process-decode backbone of
+    ``BaseGraphModel`` therefore does not apply -- this extends
+    ``StepPredictor`` directly. Besides ``forward`` (sampling a single step
+    from the prior) it exposes the per-step ELBO pieces
+    (``compute_step_loss`` -> ``(likelihood_term, kl_term, pred_mean,
+    pred_std)``) and sampling helpers. Rollout, ELBO assembly, ensemble
+    logic and logging live outside the predictor.
 
     One class handles both flat and hierarchical meshes, resolved at
     construction from ``self.hierarchical`` (set by ``utils.load_graph``).
@@ -146,14 +145,13 @@ class GraphEFM(StepPredictor):
             else:
                 setattr(self, name, attr_value)
 
-        # Specify dimensions of data (datastore-driven; replaces source's
-        # constants.GRID_STATE_DIM / GRID_FORCING_DIM).
+        # Specify dimensions of data
         num_state_vars = datastore.get_num_data_vars(category="state")
         num_forcing_vars = datastore.get_num_data_vars(category="forcing")
         grid_static_dim = self.grid_static_features.shape[1]
-        # grid_dim: total grid input dim, same formula as BaseGraphModel. The
-        # cat ORDER in embedd_all/embedd_current follows source
-        # (prev_prev, prev, forcing, static[, current]); the size is unchanged.
+        # grid_dim: total grid input dim, same formula as BaseGraphModel,
+        # matching the cat order in embedd_all/embedd_current
+        # (prev_prev, prev, forcing, static[, current]).
         self.grid_dim = (
             2 * num_state_vars
             + grid_static_dim
@@ -293,8 +291,7 @@ class GraphEFM(StepPredictor):
                 output_dist=prior_dist,
             )
 
-        # Encoder (variational posterior) + Decoder. The latent modules take
-        # num_state_vars (datastore-driven) where source used GRID_STATE_DIM.
+        # Encoder (variational posterior) + Decoder
         if self.hierarchical:
             self.encoder = HiGraphLatentEncoder(
                 latent_dim=latent_dim,
@@ -706,9 +703,8 @@ class GraphEFM(StepPredictor):
         forcing: torch.Tensor,
     ) -> tuple[torch.Tensor, Optional[torch.Tensor]]:
         """
-        Sample one time step prediction (source's ``predict_step``):
-        embed features, sample the latent from the prior, decode, and return
-        the sampled next state.
+        Sample one time step prediction: embed features, sample the latent
+        from the prior, decode, and return the sampled next state.
 
         Parameters
         ----------

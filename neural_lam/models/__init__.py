@@ -13,12 +13,11 @@ from .step_predictors.graph.hi_lam_parallel import HiLAMParallel
 from .step_predictors.graph.hierarchical import BaseHiGraphModel
 
 # NOTE: GraphEFM is intentionally NOT registered in MODELS yet. The shared
-# construction call in train_model.py (e.g. line 34) instantiates the chosen
-# model with a fixed deterministic kwarg set -- datastore-first, no ``config``,
-# and with ``mesh_aggr`` -- whereas GraphEFM requires ``config`` (for its
-# per_var_std weighting) and takes no ``mesh_aggr``. Registering it now would
-# break that call. Wiring up config-aware assembly is deferred to the
-# ensemble-forecaster PR (see open question Q3).
+# construction call in train_model.py instantiates the chosen model with a
+# fixed deterministic kwarg set -- datastore-first, no ``config``, and with
+# ``mesh_aggr`` -- whereas GraphEFM requires ``config`` (for its per_var_std
+# weighting) and takes no ``mesh_aggr``. Registering it requires config-aware
+# model assembly in train_model.py.
 MODELS = {
     "graph_lam": GraphLAM,
     "hi_lam": HiLAM,
