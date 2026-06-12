@@ -34,15 +34,23 @@ class BaseGraphLatentDecoder(nn.Module):
         ----------
         hidden_dim : int
             Dimensionality of internal node and edge representations.
+            Latent samples are embedded to this dimensionality before
+            being fused with the grid representation.
         latent_dim : int
-            Dimensionality of the latent variable at each mesh node.
+            Dimensionality of the latent variable at each mesh node, i.e.
+            the feature dimension of the ``latent_samples`` given to
+            ``forward``.
         num_state_vars : int
-            Number of state variables predicted at each grid node.
+            Number of state variables predicted at each grid node, i.e.
+            the feature dimension of the predicted mean (and std).
         hidden_layers : int
-            Number of hidden layers in the internal MLPs.
+            Number of hidden layers in the internal MLPs (latent embedder,
+            grid-residual MLP and output parameter map).
         output_std : bool
-            If True, the decoder outputs both mean and std of the next-state
-            distribution; if False, only the mean.
+            If True, the decoder outputs both mean and std of the
+            next-state distribution (the output parameter map produces
+            ``2 * num_state_vars`` features per grid node); if False, only
+            the mean.
         """
         super().__init__()
 
@@ -73,20 +81,29 @@ class BaseGraphLatentDecoder(nn.Module):
         Parameters
         ----------
         original_grid_rep : torch.Tensor
-            Shape ``(B, num_grid_nodes, d_h)``. Grid representation.
+            Shape ``(B, num_grid_nodes, d_h)``. Embedded grid input
+            features, used as the sender representation when encoding the
+            grid onto the mesh.
         latent_rep : torch.Tensor
-            Shape ``(B, num_mesh_nodes, d_h)``. Embedded latent sample.
+            Shape ``(B, num_mesh_nodes, d_h)``. Latent sample embedded to
+            the internal dimensionality ``d_h``. Where this enters the
+            message passing is up to the concrete decoder.
         residual_grid_rep : torch.Tensor
-            Shape ``(B, num_grid_nodes, d_h)``. Grid representation to use
-            for residual connections.
+            Shape ``(B, num_grid_nodes, d_h)``. Residually updated grid
+            representation, used as the receiver representation when
+            decoding the mesh back to the grid. This keeps a direct path
+            from the grid input to the output.
         graph_emb : dict
-            Embedded graph node and edge features.
+            Embedded static graph node and edge features. The required
+            entries depend on the concrete decoder, but include at least
+            the ``g2m``, ``m2m`` and ``m2g`` edge embeddings.
 
         Returns
         -------
         torch.Tensor
             Shape ``(B, num_grid_nodes, d_h)``. Combined grid
-            representation.
+            representation, incorporating both the grid input and the
+            latent sample.
         """
         raise NotImplementedError("combine_with_latent not implemented")
 
@@ -94,20 +111,28 @@ class BaseGraphLatentDecoder(nn.Module):
         """
         Predict mean (and optionally std) of the next weather state.
 
+        The latent samples are embedded to the internal dimensionality and
+        fused with the grid representation by ``combine_with_latent``; the
+        result is mapped to distribution parameters. The mean is predicted
+        as a residual on top of ``last_state``.
+
         Parameters
         ----------
         grid_rep : torch.Tensor
-            Shape ``(B, num_grid_nodes, d_h)``. Grid input representation.
+            Shape ``(B, num_grid_nodes, d_h)``. Embedded grid input
+            features (states, forcing and static features).
         latent_samples : torch.Tensor
             Shape ``(B, num_mesh_nodes, latent_dim)``. Sample of the
-            latent variable.
+            latent variable on the mesh nodes, e.g. drawn from the prior
+            or the variational distribution.
         last_state : torch.Tensor
             Shape ``(B, num_grid_nodes, num_state_vars)``. State at the
-            current time step, used as the base of the residual
+            current time step, used as the base of the residual mean
             prediction.
         graph_emb : dict
-            Embedded graph node and edge features, with at least ``g2m``,
-            ``m2m`` and ``m2g`` entries.
+            Embedded static graph node and edge features, forwarded to
+            ``combine_with_latent``; includes at least the ``g2m``,
+            ``m2m`` and ``m2g`` edge embeddings.
 
         Returns
         -------
@@ -117,7 +142,8 @@ class BaseGraphLatentDecoder(nn.Module):
         pred_std : torch.Tensor or None
             Shape ``(B, num_grid_nodes, num_state_vars)`` when
             ``output_std`` is True, otherwise None. Predicted std of the
-            next state.
+            next state, obtained from the output parameter map through a
+            softplus.
         """
         latent_emb = self.latent_embedder(latent_samples)
 

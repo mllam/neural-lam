@@ -100,21 +100,29 @@ class GraphLatentDecoder(BaseGraphLatentDecoder):
         Parameters
         ----------
         original_grid_rep : torch.Tensor
-            Shape ``(B, num_grid_nodes, d_h)``. Grid representation.
+            Shape ``(B, num_grid_nodes, d_h)``. Embedded grid input
+            features, used as the sender representation in the
+            grid-to-mesh step.
         latent_rep : torch.Tensor
-            Shape ``(B, num_mesh_nodes, d_h)``. Embedded latent sample.
+            Shape ``(B, num_mesh_nodes, d_h)``. Latent sample embedded to
+            ``d_h``, used as the initial mesh node representation (the
+            receiver in the grid-to-mesh step), so all mesh processing
+            starts from the latent.
         residual_grid_rep : torch.Tensor
-            Shape ``(B, num_grid_nodes, d_h)``. Grid representation used
-            as receiver in the mesh-to-grid step.
+            Shape ``(B, num_grid_nodes, d_h)``. Residually updated grid
+            representation, used as the receiver representation in the
+            mesh-to-grid step.
         graph_emb : dict
-            Embedded graph node and edge features, with at least ``g2m``,
-            ``m2m`` and ``m2g`` entries.
+            Embedded static graph node and edge features, with at least
+            the entries ``g2m``: ``(B, M_g2m, d_h)``,
+            ``m2m``: ``(B, M_m2m, d_h)`` and ``m2g``: ``(B, M_m2g, d_h)``.
 
         Returns
         -------
         torch.Tensor
             Shape ``(B, num_grid_nodes, d_h)``. Combined grid
-            representation.
+            representation, incorporating both the grid input and the
+            latent sample.
         """
         mesh_rep = self.g2m_gnn(original_grid_rep, latent_rep, graph_emb["g2m"])
 

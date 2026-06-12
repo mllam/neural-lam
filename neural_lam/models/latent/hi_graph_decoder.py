@@ -183,27 +183,35 @@ class HiGraphLatentDecoder(BaseGraphLatentDecoder):
         Parameters
         ----------
         original_grid_rep : torch.Tensor
-            Shape ``(B, num_grid_nodes, d_h)``. Grid representation.
+            Shape ``(B, num_grid_nodes, d_h)``. Embedded grid input
+            features, used as the sender representation in the
+            grid-to-mesh step that initializes the bottom mesh level.
         latent_rep : torch.Tensor
-            Shape ``(B, num_mesh_nodes[L], d_h)``. Embedded latent sample
-            on the top mesh level ``L``.
+            Shape ``(B, num_mesh_nodes[L], d_h)``. Latent sample embedded
+            to ``d_h``, defined on the top mesh level ``L``. It is used as
+            the receiver representation of the last upward step, fusing
+            the latent in at the top of the hierarchy.
         residual_grid_rep : torch.Tensor
-            Shape ``(B, num_grid_nodes, d_h)``. Grid representation used
-            as receiver in the mesh-to-grid step.
+            Shape ``(B, num_grid_nodes, d_h)``. Residually updated grid
+            representation, used as the receiver representation in the
+            mesh-to-grid step.
         graph_emb : dict
-            Embedded graph node and edge features, with at least entries
+            Embedded static graph node and edge features, with at least
+            the entries
             ``mesh``: list of ``(B, num_mesh_nodes[l], d_h)``,
             ``g2m``: ``(B, M_g2m, d_h)``,
             ``m2m``: list of ``(B, M_m2m[l], d_h)``,
             ``mesh_up``: list of ``(B, M_up[l], d_h)``,
             ``mesh_down``: list of ``(B, M_down[l], d_h)`` and
-            ``m2g``: ``(B, M_m2g, d_h)``.
+            ``m2g``: ``(B, M_m2g, d_h)``, where ``l`` indexes the mesh
+            levels from bottom (0) to top (``L``).
 
         Returns
         -------
         torch.Tensor
             Shape ``(B, num_grid_nodes, d_h)``. Combined grid
-            representation.
+            representation, incorporating both the grid input and the
+            latent sample.
         """
         current_mesh_rep = self.g2m_gnn(
             original_grid_rep, graph_emb["mesh"][0], graph_emb["g2m"]
