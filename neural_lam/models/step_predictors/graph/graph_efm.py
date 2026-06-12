@@ -1,5 +1,6 @@
-"""Graph-based Ensemble Forecasting Model (GraphEFM) single-step
-predictor."""
+"""Graph-based Ensemble Forecasting Model (Graph-EFM) single-step
+predictors, for hierarchical (GraphEFM) and flat (GraphEFMMS) mesh
+graphs."""
 
 # Standard library
 from typing import Callable, Dict, Optional
@@ -23,9 +24,10 @@ from ...latent import (
 from ..base import StepPredictor
 
 
-class GraphEFM(StepPredictor):
+class BaseGraphEFM(StepPredictor):
     """
-    Graph-based Ensemble Forecasting Model -- single-step predictor.
+    Base class for Graph-based Ensemble Forecasting Model single-step
+    predictors.
 
     A latent-variable step predictor consisting of a conditional prior, a
     variational encoder and a latent decoder, each of which carries its own
@@ -37,34 +39,38 @@ class GraphEFM(StepPredictor):
     pred_std)``) and sampling helpers. Rollout, ELBO assembly, ensemble
     logic and logging live outside the predictor.
 
-    One class handles both flat and hierarchical meshes, resolved at
-    construction from ``self.hierarchical`` (set by ``utils.load_graph``).
+    This base class sets up everything that is independent of the mesh
+    graph type. Concrete subclasses are specific to a graph type (declared
+    by ``requires_hierarchical``): their constructors build the mesh
+    embedders and the prior/encoder/decoder latent modules, and they
+    implement :meth:`embedd_mesh`. See :class:`GraphEFM` (hierarchical
+    graph) and :class:`GraphEFMMS` (flat graph).
     """
+
+    # Whether the concrete subclass requires a hierarchical mesh graph
+    requires_hierarchical: bool
 
     def __init__(
         self,
         config: NeuralLAMConfig,
         datastore: BaseDatastore,
-        graph_name: str = "hierarchical",
+        graph_name: str,
         hidden_dim: int = 64,
         hidden_layers: int = 1,
-        latent_dim: Optional[int] = None,
-        prior_processor_layers: int = 2,
-        encoder_processor_layers: int = 2,
-        processor_layers: int = 4,
-        learn_prior: bool = True,
-        prior_dist: str = "isotropic",
         num_past_forcing_steps: int = 1,
         num_future_forcing_steps: int = 1,
-        g2m_gnn_type: str = "InteractionNet",
-        m2g_gnn_type: str = "InteractionNet",
         output_std: bool = False,
         sample_obs_noise: bool = False,
         output_clamping_lower: Optional[Dict[str, float]] = None,
         output_clamping_upper: Optional[Dict[str, float]] = None,
     ):
         """
-        Build the prior, variational encoder and latent decoder sub-models.
+        Set up the graph-type independent parts of the predictor.
+
+        Loads the graph, builds the grid embedders, the grid-mesh edge
+        embedders and the constant per-variable std. Building the mesh
+        embedders and the prior/encoder/decoder latent modules is left to
+        the subclass constructor.
 
         Parameters
         ----------
@@ -76,38 +82,16 @@ class GraphEFM(StepPredictor):
             and variable counts.
         graph_name : str
             Name of the graph directory (under ``<root>/graph``) to load.
-            Both flat and hierarchical graphs are supported; which latent
-            modules are built is resolved from the loaded graph.
+            Must be of the graph type required by the concrete subclass
+            (``requires_hierarchical``).
         hidden_dim : int
             Dimensionality of internal node and edge representations.
         hidden_layers : int
             Number of hidden layers in internal MLPs.
-        latent_dim : int, optional
-            Dimensionality of the latent variable at each mesh node;
-            defaults to ``hidden_dim`` when None.
-        prior_processor_layers : int
-            Number of processor GNN layers in the (learned) prior.
-        encoder_processor_layers : int
-            Number of processor GNN layers in the variational encoder.
-        processor_layers : int
-            Number of processor GNN layers in the latent decoder.
-        learn_prior : bool
-            If True, the prior is a graph encoder conditioned on the
-            previous state; if False, a constant ``Normal(0, 1)`` prior is
-            used.
-        prior_dist : str
-            Output distribution of the prior: ``"isotropic"`` or
-            ``"diagonal"``.
         num_past_forcing_steps : int
             Number of past forcing steps included in the input window.
         num_future_forcing_steps : int
             Number of future forcing steps included in the input window.
-        g2m_gnn_type : str
-            GNN type for the grid-to-mesh steps of the prior, encoder and
-            decoder (key in ``gnn_layers.GNN_TYPES``).
-        m2g_gnn_type : str
-            GNN type for the mesh-to-grid step of the decoder (key in
-            ``gnn_layers.GNN_TYPES``).
         output_std : bool
             If True, the decoder outputs a per-variable std alongside the
             mean; if False, a constant per-variable std is used as
@@ -138,6 +122,15 @@ class GraphEFM(StepPredictor):
         self.hierarchical, graph_ldict = utils.load_graph(
             graph_dir_path=graph_dir_path
         )
+        if self.hierarchical != self.requires_hierarchical:
+            required_type = (
+                "hierarchical" if self.requires_hierarchical else "flat"
+            )
+            loaded_type = "hierarchical" if self.hierarchical else "flat"
+            raise ValueError(
+                f"{type(self).__name__} requires a {required_type} mesh "
+                f"graph, but graph '{graph_name}' is {loaded_type}"
+            )
         for name, attr_value in graph_ldict.items():
             # Make BufferLists module members and register tensors as buffers
             if isinstance(attr_value, torch.Tensor):
@@ -146,7 +139,8 @@ class GraphEFM(StepPredictor):
                 setattr(self, name, attr_value)
 
         # Specify dimensions of data
-        num_state_vars = datastore.get_num_data_vars(category="state")
+        self.num_state_vars = datastore.get_num_data_vars(category="state")
+        num_state_vars = self.num_state_vars
         num_forcing_vars = datastore.get_num_data_vars(category="forcing")
         grid_static_dim = self.grid_static_features.shape[1]
         # grid_dim: total grid input dim, same formula as BaseGraphModel,
@@ -174,175 +168,6 @@ class GraphEFM(StepPredictor):
         # Embedders for mesh edges
         self.g2m_embedder = utils.make_mlp([g2m_dim] + self.mlp_blueprint_end)
         self.m2g_embedder = utils.make_mlp([m2g_dim] + self.mlp_blueprint_end)
-
-        if self.hierarchical:
-            level_mesh_sizes = [
-                mesh_feat.shape[0] for mesh_feat in self.mesh_static_features
-            ]
-            self.num_mesh_nodes = level_mesh_sizes[-1]
-            num_levels = len(self.mesh_static_features)
-            utils.log_on_rank_zero("Loaded hierarchical graph with structure:")
-            for level_index, level_mesh_size in enumerate(level_mesh_sizes):
-                same_level_edges = self.m2m_features[level_index].shape[0]
-                utils.log_on_rank_zero(
-                    f"level {level_index} - {level_mesh_size} nodes, "
-                    f"{same_level_edges} same-level edges"
-                )
-                if level_index < (num_levels - 1):
-                    up_edges = self.mesh_up_features[level_index].shape[0]
-                    down_edges = self.mesh_down_features[level_index].shape[0]
-                    utils.log_on_rank_zero(
-                        f"  {level_index}<->{level_index + 1}"
-                    )
-                    utils.log_on_rank_zero(
-                        f" - {up_edges} up edges, {down_edges} down edges"
-                    )
-
-            # Embedders. Assume all levels share static feature dimensionality.
-            mesh_dim = self.mesh_static_features[0].shape[1]
-            m2m_dim = self.m2m_features[0].shape[1]
-            mesh_up_dim = self.mesh_up_features[0].shape[1]
-            mesh_down_dim = self.mesh_down_features[0].shape[1]
-
-            # Separate mesh node embedders for each level
-            self.mesh_embedders = nn.ModuleList(
-                [
-                    utils.make_mlp([mesh_dim] + self.mlp_blueprint_end)
-                    for _ in range(num_levels)
-                ]
-            )
-            self.mesh_up_embedders = nn.ModuleList(
-                [
-                    utils.make_mlp([mesh_up_dim] + self.mlp_blueprint_end)
-                    for _ in range(num_levels - 1)
-                ]
-            )
-            self.mesh_down_embedders = nn.ModuleList(
-                [
-                    utils.make_mlp([mesh_down_dim] + self.mlp_blueprint_end)
-                    for _ in range(num_levels - 1)
-                ]
-            )
-            # If not using any processor layers, no need to embed m2m
-            self.embedd_m2m = (
-                max(
-                    prior_processor_layers,
-                    encoder_processor_layers,
-                    processor_layers,
-                )
-                > 0
-            )
-            if self.embedd_m2m:
-                self.m2m_embedders = nn.ModuleList(
-                    [
-                        utils.make_mlp([m2m_dim] + self.mlp_blueprint_end)
-                        for _ in range(num_levels)
-                    ]
-                )
-        else:
-            self.num_mesh_nodes = self.mesh_static_features.shape[0]
-            utils.log_on_rank_zero(
-                f"Loaded graph with "
-                f"{self.num_grid_nodes + self.num_mesh_nodes} nodes "
-                f"({self.num_grid_nodes} grid, {self.num_mesh_nodes} mesh)"
-            )
-            mesh_static_dim = self.mesh_static_features.shape[1]
-            self.mesh_embedder = utils.make_mlp(
-                [mesh_static_dim] + self.mlp_blueprint_end
-            )
-            m2m_dim = self.m2m_features.shape[1]
-            self.m2m_embedder = utils.make_mlp(
-                [m2m_dim] + self.mlp_blueprint_end
-            )
-
-        latent_dim = latent_dim if latent_dim is not None else hidden_dim
-
-        # Prior. When learn_prior, the prior is a graph encoder mapping the
-        # previous state to a latent distribution; otherwise it is a constant
-        # (input-independent) Normal.
-        if learn_prior:
-            if self.hierarchical:
-                self.prior_model = HiGraphLatentEncoder(
-                    latent_dim=latent_dim,
-                    g2m_edge_index=self.g2m_edge_index,
-                    m2m_edge_index=self.m2m_edge_index,
-                    mesh_up_edge_index=self.mesh_up_edge_index,
-                    hidden_dim=hidden_dim,
-                    intra_level_layers=prior_processor_layers,
-                    hidden_layers=hidden_layers,
-                    g2m_gnn_type=g2m_gnn_type,
-                    output_dist=prior_dist,
-                )
-            else:
-                self.prior_model = GraphLatentEncoder(
-                    latent_dim=latent_dim,
-                    g2m_edge_index=self.g2m_edge_index,
-                    m2m_edge_index=self.m2m_edge_index,
-                    hidden_dim=hidden_dim,
-                    m2m_layers=prior_processor_layers,
-                    hidden_layers=hidden_layers,
-                    g2m_gnn_type=g2m_gnn_type,
-                    output_dist=prior_dist,
-                )
-        else:
-            self.prior_model = ConstantLatentEncoder(
-                latent_dim=latent_dim,
-                num_mesh_nodes=self.num_mesh_nodes,
-                output_dist=prior_dist,
-            )
-
-        # Encoder (variational posterior) + Decoder
-        if self.hierarchical:
-            self.encoder = HiGraphLatentEncoder(
-                latent_dim=latent_dim,
-                g2m_edge_index=self.g2m_edge_index,
-                m2m_edge_index=self.m2m_edge_index,
-                mesh_up_edge_index=self.mesh_up_edge_index,
-                hidden_dim=hidden_dim,
-                intra_level_layers=encoder_processor_layers,
-                hidden_layers=hidden_layers,
-                g2m_gnn_type=g2m_gnn_type,
-                output_dist="diagonal",
-            )
-            self.decoder = HiGraphLatentDecoder(
-                g2m_edge_index=self.g2m_edge_index,
-                m2m_edge_index=self.m2m_edge_index,
-                m2g_edge_index=self.m2g_edge_index,
-                mesh_up_edge_index=self.mesh_up_edge_index,
-                mesh_down_edge_index=self.mesh_down_edge_index,
-                hidden_dim=hidden_dim,
-                latent_dim=latent_dim,
-                num_state_vars=num_state_vars,
-                intra_level_layers=processor_layers,
-                hidden_layers=hidden_layers,
-                g2m_gnn_type=g2m_gnn_type,
-                m2g_gnn_type=m2g_gnn_type,
-                output_std=bool(output_std),
-            )
-        else:
-            self.encoder = GraphLatentEncoder(
-                latent_dim=latent_dim,
-                g2m_edge_index=self.g2m_edge_index,
-                m2m_edge_index=self.m2m_edge_index,
-                hidden_dim=hidden_dim,
-                m2m_layers=encoder_processor_layers,
-                hidden_layers=hidden_layers,
-                g2m_gnn_type=g2m_gnn_type,
-                output_dist="diagonal",
-            )
-            self.decoder = GraphLatentDecoder(
-                g2m_edge_index=self.g2m_edge_index,
-                m2m_edge_index=self.m2m_edge_index,
-                m2g_edge_index=self.m2g_edge_index,
-                hidden_dim=hidden_dim,
-                latent_dim=latent_dim,
-                num_state_vars=num_state_vars,
-                m2m_layers=processor_layers,
-                hidden_layers=hidden_layers,
-                g2m_gnn_type=g2m_gnn_type,
-                m2g_gnn_type=m2g_gnn_type,
-                output_std=bool(output_std),
-            )
 
         # Constant per-variable std used as the (homoscedastic) likelihood
         # scale when the decoder does not output its own std. Mirrors
@@ -445,6 +270,25 @@ class GraphEFM(StepPredictor):
             grid_current_features
         )  # (B, num_grid_nodes, d_h)
 
+    def embedd_mesh(self, batch_size):
+        """
+        Embed static mesh node and intra-mesh edge features.
+
+        Parameters
+        ----------
+        batch_size : int
+            Batch size to expand the embeddings to.
+
+        Returns
+        -------
+        dict
+            Mesh-related entries of the graph embedding (``mesh``, ``m2m``
+            and, for hierarchical graphs, ``mesh_up`` and ``mesh_down``).
+            Entries are tensors of shape ``(B, *, d_h)`` for flat graphs
+            and per-level lists of such tensors for hierarchical graphs.
+        """
+        raise NotImplementedError("embedd_mesh not implemented")
+
     def embedd_all(self, prev_state, prev_prev_state, forcing):
         """
         Embed all node and edge representations.
@@ -492,46 +336,7 @@ class GraphEFM(StepPredictor):
                 self.m2g_embedder(self.m2g_features), batch_size
             ),  # (B, M_m2g, d_h)
         }
-
-        if self.hierarchical:
-            graph_emb["mesh"] = [
-                self.expand_to_batch(emb(node_static_features), batch_size)
-                for emb, node_static_features in zip(
-                    self.mesh_embedders,
-                    self.mesh_static_features,
-                )
-            ]  # each (B, num_mesh_nodes[l], d_h)
-
-            if self.embedd_m2m:
-                graph_emb["m2m"] = [
-                    self.expand_to_batch(emb(edge_feat), batch_size)
-                    for emb, edge_feat in zip(
-                        self.m2m_embedders, self.m2m_features
-                    )
-                ]
-            else:
-                # Need a placeholder otherwise, just use raw features
-                graph_emb["m2m"] = list(self.m2m_features)
-
-            graph_emb["mesh_up"] = [
-                self.expand_to_batch(emb(edge_feat), batch_size)
-                for emb, edge_feat in zip(
-                    self.mesh_up_embedders, self.mesh_up_features
-                )
-            ]
-            graph_emb["mesh_down"] = [
-                self.expand_to_batch(emb(edge_feat), batch_size)
-                for emb, edge_feat in zip(
-                    self.mesh_down_embedders, self.mesh_down_features
-                )
-            ]
-        else:
-            graph_emb["mesh"] = self.expand_to_batch(
-                self.mesh_embedder(self.mesh_static_features), batch_size
-            )  # (B, num_mesh_nodes, d_h)
-            graph_emb["m2m"] = self.expand_to_batch(
-                self.m2m_embedder(self.m2m_features), batch_size
-            )  # (B, M_m2m, d_h)
+        graph_emb.update(self.embedd_mesh(batch_size))
 
         return grid_emb, graph_emb
 
@@ -744,3 +549,419 @@ class GraphEFM(StepPredictor):
         )  # (B, num_grid_nodes, d_state)
 
         return self.sample_next_state(pred_mean, pred_std), pred_std
+
+
+class GraphEFM(BaseGraphEFM):
+    """
+    Graph-based Ensemble Forecasting Model on a hierarchical mesh graph.
+
+    The latent variable lives on the top level of the mesh hierarchy. The
+    prior and variational encoder are ``HiGraphLatentEncoder``s and the
+    decoder is a ``HiGraphLatentDecoder``.
+    """
+
+    requires_hierarchical = True
+
+    def __init__(
+        self,
+        config: NeuralLAMConfig,
+        datastore: BaseDatastore,
+        graph_name: str = "hierarchical",
+        hidden_dim: int = 64,
+        hidden_layers: int = 1,
+        latent_dim: Optional[int] = None,
+        prior_processor_layers: int = 2,
+        encoder_processor_layers: int = 2,
+        processor_layers: int = 4,
+        learn_prior: bool = True,
+        prior_dist: str = "isotropic",
+        num_past_forcing_steps: int = 1,
+        num_future_forcing_steps: int = 1,
+        g2m_gnn_type: str = "InteractionNet",
+        m2g_gnn_type: str = "InteractionNet",
+        output_std: bool = False,
+        sample_obs_noise: bool = False,
+        output_clamping_lower: Optional[Dict[str, float]] = None,
+        output_clamping_upper: Optional[Dict[str, float]] = None,
+    ):
+        """
+        Build the mesh embedders and hierarchical latent modules.
+
+        See :meth:`BaseGraphEFM.__init__` for the shared parameters
+        (``config``, ``datastore``, ``graph_name``, ``hidden_dim``,
+        ``hidden_layers``, ``num_past_forcing_steps``,
+        ``num_future_forcing_steps``, ``output_std``, ``sample_obs_noise``
+        and the clamping limits).
+
+        Parameters
+        ----------
+        latent_dim : int, optional
+            Dimensionality of the latent variable at each top-level mesh
+            node; defaults to ``hidden_dim`` when None.
+        prior_processor_layers : int
+            Number of intra-level GNN layers in the (learned) prior.
+        encoder_processor_layers : int
+            Number of intra-level GNN layers in the variational encoder.
+        processor_layers : int
+            Number of intra-level GNN layers in the latent decoder.
+        learn_prior : bool
+            If True, the prior is a hierarchical graph encoder conditioned
+            on the previous state; if False, a constant ``Normal(0, 1)``
+            prior is used.
+        prior_dist : str
+            Output distribution of the prior: ``"isotropic"`` or
+            ``"diagonal"``.
+        g2m_gnn_type : str
+            GNN type for the grid-to-mesh steps of the prior, encoder and
+            decoder (key in ``gnn_layers.GNN_TYPES``).
+        m2g_gnn_type : str
+            GNN type for the mesh-to-grid step of the decoder (key in
+            ``gnn_layers.GNN_TYPES``).
+        """
+        super().__init__(
+            config=config,
+            datastore=datastore,
+            graph_name=graph_name,
+            hidden_dim=hidden_dim,
+            hidden_layers=hidden_layers,
+            num_past_forcing_steps=num_past_forcing_steps,
+            num_future_forcing_steps=num_future_forcing_steps,
+            output_std=output_std,
+            sample_obs_noise=sample_obs_noise,
+            output_clamping_lower=output_clamping_lower,
+            output_clamping_upper=output_clamping_upper,
+        )
+
+        level_mesh_sizes = [
+            mesh_feat.shape[0] for mesh_feat in self.mesh_static_features
+        ]
+        # The latent variable lives on the top mesh level
+        self.num_mesh_nodes = level_mesh_sizes[-1]
+        num_levels = len(self.mesh_static_features)
+        utils.log_on_rank_zero("Loaded hierarchical graph with structure:")
+        for level_index, level_mesh_size in enumerate(level_mesh_sizes):
+            same_level_edges = self.m2m_features[level_index].shape[0]
+            utils.log_on_rank_zero(
+                f"level {level_index} - {level_mesh_size} nodes, "
+                f"{same_level_edges} same-level edges"
+            )
+            if level_index < (num_levels - 1):
+                up_edges = self.mesh_up_features[level_index].shape[0]
+                down_edges = self.mesh_down_features[level_index].shape[0]
+                utils.log_on_rank_zero(f"  {level_index}<->{level_index + 1}")
+                utils.log_on_rank_zero(
+                    f" - {up_edges} up edges, {down_edges} down edges"
+                )
+
+        # Embedders. Assume all levels share static feature dimensionality.
+        mesh_dim = self.mesh_static_features[0].shape[1]
+        m2m_dim = self.m2m_features[0].shape[1]
+        mesh_up_dim = self.mesh_up_features[0].shape[1]
+        mesh_down_dim = self.mesh_down_features[0].shape[1]
+
+        # Separate mesh node embedders for each level
+        self.mesh_embedders = nn.ModuleList(
+            [
+                utils.make_mlp([mesh_dim] + self.mlp_blueprint_end)
+                for _ in range(num_levels)
+            ]
+        )
+        self.mesh_up_embedders = nn.ModuleList(
+            [
+                utils.make_mlp([mesh_up_dim] + self.mlp_blueprint_end)
+                for _ in range(num_levels - 1)
+            ]
+        )
+        self.mesh_down_embedders = nn.ModuleList(
+            [
+                utils.make_mlp([mesh_down_dim] + self.mlp_blueprint_end)
+                for _ in range(num_levels - 1)
+            ]
+        )
+        # If not using any processor layers, no need to embed m2m
+        self.embedd_m2m = (
+            max(
+                prior_processor_layers,
+                encoder_processor_layers,
+                processor_layers,
+            )
+            > 0
+        )
+        if self.embedd_m2m:
+            self.m2m_embedders = nn.ModuleList(
+                [
+                    utils.make_mlp([m2m_dim] + self.mlp_blueprint_end)
+                    for _ in range(num_levels)
+                ]
+            )
+
+        latent_dim = latent_dim if latent_dim is not None else hidden_dim
+
+        # Prior. When learn_prior, the prior is a graph encoder mapping the
+        # previous state to a latent distribution; otherwise it is a constant
+        # (input-independent) Normal.
+        if learn_prior:
+            self.prior_model = HiGraphLatentEncoder(
+                latent_dim=latent_dim,
+                g2m_edge_index=self.g2m_edge_index,
+                m2m_edge_index=self.m2m_edge_index,
+                mesh_up_edge_index=self.mesh_up_edge_index,
+                hidden_dim=hidden_dim,
+                intra_level_layers=prior_processor_layers,
+                hidden_layers=hidden_layers,
+                g2m_gnn_type=g2m_gnn_type,
+                output_dist=prior_dist,
+            )
+        else:
+            self.prior_model = ConstantLatentEncoder(
+                latent_dim=latent_dim,
+                num_mesh_nodes=self.num_mesh_nodes,
+                output_dist=prior_dist,
+            )
+
+        # Encoder (variational posterior) + Decoder
+        self.encoder = HiGraphLatentEncoder(
+            latent_dim=latent_dim,
+            g2m_edge_index=self.g2m_edge_index,
+            m2m_edge_index=self.m2m_edge_index,
+            mesh_up_edge_index=self.mesh_up_edge_index,
+            hidden_dim=hidden_dim,
+            intra_level_layers=encoder_processor_layers,
+            hidden_layers=hidden_layers,
+            g2m_gnn_type=g2m_gnn_type,
+            output_dist="diagonal",
+        )
+        self.decoder = HiGraphLatentDecoder(
+            g2m_edge_index=self.g2m_edge_index,
+            m2m_edge_index=self.m2m_edge_index,
+            m2g_edge_index=self.m2g_edge_index,
+            mesh_up_edge_index=self.mesh_up_edge_index,
+            mesh_down_edge_index=self.mesh_down_edge_index,
+            hidden_dim=hidden_dim,
+            latent_dim=latent_dim,
+            num_state_vars=self.num_state_vars,
+            intra_level_layers=processor_layers,
+            hidden_layers=hidden_layers,
+            g2m_gnn_type=g2m_gnn_type,
+            m2g_gnn_type=m2g_gnn_type,
+            output_std=bool(output_std),
+        )
+
+    def embedd_mesh(self, batch_size):
+        """
+        Embed static mesh node and intra-mesh edge features per level.
+
+        Parameters
+        ----------
+        batch_size : int
+            Batch size to expand the embeddings to.
+
+        Returns
+        -------
+        dict
+            Entries ``mesh``, ``m2m``, ``mesh_up`` and ``mesh_down``, each
+            a list with one ``(B, *, d_h)`` tensor per mesh level (or
+            inter-level connection).
+        """
+        mesh_emb = {
+            "mesh": [
+                self.expand_to_batch(emb(node_static_features), batch_size)
+                for emb, node_static_features in zip(
+                    self.mesh_embedders,
+                    self.mesh_static_features,
+                )
+            ],  # each (B, num_mesh_nodes[l], d_h)
+            "mesh_up": [
+                self.expand_to_batch(emb(edge_feat), batch_size)
+                for emb, edge_feat in zip(
+                    self.mesh_up_embedders, self.mesh_up_features
+                )
+            ],
+            "mesh_down": [
+                self.expand_to_batch(emb(edge_feat), batch_size)
+                for emb, edge_feat in zip(
+                    self.mesh_down_embedders, self.mesh_down_features
+                )
+            ],
+        }
+
+        if self.embedd_m2m:
+            mesh_emb["m2m"] = [
+                self.expand_to_batch(emb(edge_feat), batch_size)
+                for emb, edge_feat in zip(self.m2m_embedders, self.m2m_features)
+            ]
+        else:
+            # Need a placeholder otherwise, just use raw features
+            mesh_emb["m2m"] = list(self.m2m_features)
+
+        return mesh_emb
+
+
+class GraphEFMMS(BaseGraphEFM):
+    """
+    Graph-based Ensemble Forecasting Model on a flat mesh graph
+    (Graph-EFM-MS, e.g. for multi-scale graphs).
+
+    The latent variable lives on the mesh nodes. The prior and variational
+    encoder are ``GraphLatentEncoder``s and the decoder is a
+    ``GraphLatentDecoder``.
+    """
+
+    requires_hierarchical = False
+
+    def __init__(
+        self,
+        config: NeuralLAMConfig,
+        datastore: BaseDatastore,
+        graph_name: str = "multiscale",
+        hidden_dim: int = 64,
+        hidden_layers: int = 1,
+        latent_dim: Optional[int] = None,
+        prior_processor_layers: int = 2,
+        encoder_processor_layers: int = 2,
+        processor_layers: int = 4,
+        learn_prior: bool = True,
+        prior_dist: str = "isotropic",
+        num_past_forcing_steps: int = 1,
+        num_future_forcing_steps: int = 1,
+        g2m_gnn_type: str = "InteractionNet",
+        m2g_gnn_type: str = "InteractionNet",
+        output_std: bool = False,
+        sample_obs_noise: bool = False,
+        output_clamping_lower: Optional[Dict[str, float]] = None,
+        output_clamping_upper: Optional[Dict[str, float]] = None,
+    ):
+        """
+        Build the mesh embedders and flat-graph latent modules.
+
+        See :meth:`BaseGraphEFM.__init__` for the shared parameters
+        (``config``, ``datastore``, ``graph_name``, ``hidden_dim``,
+        ``hidden_layers``, ``num_past_forcing_steps``,
+        ``num_future_forcing_steps``, ``output_std``, ``sample_obs_noise``
+        and the clamping limits).
+
+        Parameters
+        ----------
+        latent_dim : int, optional
+            Dimensionality of the latent variable at each mesh node;
+            defaults to ``hidden_dim`` when None.
+        prior_processor_layers : int
+            Number of on-mesh (m2m) GNN layers in the (learned) prior.
+        encoder_processor_layers : int
+            Number of on-mesh (m2m) GNN layers in the variational encoder.
+        processor_layers : int
+            Number of on-mesh (m2m) GNN layers in the latent decoder.
+        learn_prior : bool
+            If True, the prior is a graph encoder conditioned on the
+            previous state; if False, a constant ``Normal(0, 1)`` prior is
+            used.
+        prior_dist : str
+            Output distribution of the prior: ``"isotropic"`` or
+            ``"diagonal"``.
+        g2m_gnn_type : str
+            GNN type for the grid-to-mesh steps of the prior, encoder and
+            decoder (key in ``gnn_layers.GNN_TYPES``).
+        m2g_gnn_type : str
+            GNN type for the mesh-to-grid step of the decoder (key in
+            ``gnn_layers.GNN_TYPES``).
+        """
+        super().__init__(
+            config=config,
+            datastore=datastore,
+            graph_name=graph_name,
+            hidden_dim=hidden_dim,
+            hidden_layers=hidden_layers,
+            num_past_forcing_steps=num_past_forcing_steps,
+            num_future_forcing_steps=num_future_forcing_steps,
+            output_std=output_std,
+            sample_obs_noise=sample_obs_noise,
+            output_clamping_lower=output_clamping_lower,
+            output_clamping_upper=output_clamping_upper,
+        )
+
+        self.num_mesh_nodes = self.mesh_static_features.shape[0]
+        utils.log_on_rank_zero(
+            f"Loaded graph with "
+            f"{self.num_grid_nodes + self.num_mesh_nodes} nodes "
+            f"({self.num_grid_nodes} grid, {self.num_mesh_nodes} mesh)"
+        )
+
+        # Embedders
+        mesh_static_dim = self.mesh_static_features.shape[1]
+        self.mesh_embedder = utils.make_mlp(
+            [mesh_static_dim] + self.mlp_blueprint_end
+        )
+        m2m_dim = self.m2m_features.shape[1]
+        self.m2m_embedder = utils.make_mlp([m2m_dim] + self.mlp_blueprint_end)
+
+        latent_dim = latent_dim if latent_dim is not None else hidden_dim
+
+        # Prior. When learn_prior, the prior is a graph encoder mapping the
+        # previous state to a latent distribution; otherwise it is a constant
+        # (input-independent) Normal.
+        if learn_prior:
+            self.prior_model = GraphLatentEncoder(
+                latent_dim=latent_dim,
+                g2m_edge_index=self.g2m_edge_index,
+                m2m_edge_index=self.m2m_edge_index,
+                hidden_dim=hidden_dim,
+                m2m_layers=prior_processor_layers,
+                hidden_layers=hidden_layers,
+                g2m_gnn_type=g2m_gnn_type,
+                output_dist=prior_dist,
+            )
+        else:
+            self.prior_model = ConstantLatentEncoder(
+                latent_dim=latent_dim,
+                num_mesh_nodes=self.num_mesh_nodes,
+                output_dist=prior_dist,
+            )
+
+        # Encoder (variational posterior) + Decoder
+        self.encoder = GraphLatentEncoder(
+            latent_dim=latent_dim,
+            g2m_edge_index=self.g2m_edge_index,
+            m2m_edge_index=self.m2m_edge_index,
+            hidden_dim=hidden_dim,
+            m2m_layers=encoder_processor_layers,
+            hidden_layers=hidden_layers,
+            g2m_gnn_type=g2m_gnn_type,
+            output_dist="diagonal",
+        )
+        self.decoder = GraphLatentDecoder(
+            g2m_edge_index=self.g2m_edge_index,
+            m2m_edge_index=self.m2m_edge_index,
+            m2g_edge_index=self.m2g_edge_index,
+            hidden_dim=hidden_dim,
+            latent_dim=latent_dim,
+            num_state_vars=self.num_state_vars,
+            m2m_layers=processor_layers,
+            hidden_layers=hidden_layers,
+            g2m_gnn_type=g2m_gnn_type,
+            m2g_gnn_type=m2g_gnn_type,
+            output_std=bool(output_std),
+        )
+
+    def embedd_mesh(self, batch_size):
+        """
+        Embed static mesh node and intra-mesh edge features.
+
+        Parameters
+        ----------
+        batch_size : int
+            Batch size to expand the embeddings to.
+
+        Returns
+        -------
+        dict
+            Entries ``mesh``: ``(B, num_mesh_nodes, d_h)`` and
+            ``m2m``: ``(B, M_m2m, d_h)``.
+        """
+        return {
+            "mesh": self.expand_to_batch(
+                self.mesh_embedder(self.mesh_static_features), batch_size
+            ),  # (B, num_mesh_nodes, d_h)
+            "m2m": self.expand_to_batch(
+                self.m2m_embedder(self.m2m_features), batch_size
+            ),  # (B, M_m2m, d_h)
+        }

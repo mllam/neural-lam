@@ -1,9 +1,10 @@
-"""Unit tests for the GraphEFM single-step probabilistic predictor.
+"""Unit tests for the Graph-EFM single-step probabilistic predictors.
 
 These mirror the smoke-test pattern used for the deterministic predictors
-(see ``tests/test_gnn_layers.py``): build flat and hierarchical variants on the
-real example datastore with a freshly created graph, then exercise ``forward``,
-``compute_step_loss`` and the sampling helpers on synthetic tensors.
+(see ``tests/test_gnn_layers.py``): build the flat (GraphEFMMS) and
+hierarchical (GraphEFM) variants on the real example datastore with a freshly
+created graph, then exercise ``forward``, ``compute_step_loss`` and the
+sampling helpers on synthetic tensors.
 """
 
 # Standard library
@@ -18,7 +19,10 @@ from neural_lam import config as nlconfig
 from neural_lam import metrics
 from neural_lam.create_graph import create_graph_from_datastore
 from neural_lam.loss_weighting import get_state_feature_weighting
-from neural_lam.models.step_predictors.graph.graph_efm import GraphEFM
+from neural_lam.models.step_predictors.graph.graph_efm import (
+    GraphEFM,
+    GraphEFMMS,
+)
 from tests.conftest import init_datastore_example
 
 NUM_PAST_FORCING_STEPS = 1
@@ -55,7 +59,8 @@ def _datastore_and_config_with_graph(graph_name):
 
 def _build_predictor(graph_name, output_std=False, sample_obs_noise=False):
     datastore, config = _datastore_and_config_with_graph(graph_name)
-    predictor = GraphEFM(
+    predictor_class = GraphEFM if graph_name == "hierarchical" else GraphEFMMS
+    predictor = predictor_class(
         config=config,
         datastore=datastore,
         graph_name=graph_name,
@@ -253,3 +258,21 @@ def test_per_var_std_none_when_output_std():
     and left as None (mirrors ForecasterModule)."""
     predictor, _, _ = _build_predictor("1level", output_std=True)
     assert predictor.per_var_std is None
+
+
+@pytest.mark.parametrize(
+    "predictor_class, graph_name",
+    [(GraphEFM, "1level"), (GraphEFMMS, "hierarchical")],
+)
+def test_graph_type_mismatch_raises(predictor_class, graph_name):
+    """GraphEFM requires a hierarchical graph and GraphEFMMS a flat one;
+    constructing with the wrong graph type raises ValueError."""
+    datastore, config = _datastore_and_config_with_graph(graph_name)
+    with pytest.raises(ValueError, match="mesh graph"):
+        predictor_class(
+            config=config,
+            datastore=datastore,
+            graph_name=graph_name,
+            hidden_dim=4,
+            hidden_layers=1,
+        )
