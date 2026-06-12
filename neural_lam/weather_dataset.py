@@ -12,6 +12,7 @@ import torch
 import xarray as xr
 
 # First-party
+from neural_lam.batch import ForecastBatch
 from neural_lam.datastore.base import BaseDatastore
 
 
@@ -463,9 +464,7 @@ class WeatherDataset(torch.utils.data.Dataset):
             da_target_times,
         )
 
-    def __getitem__(
-        self, idx: int
-    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, np.ndarray]:
+    def __getitem__(self, idx: int) -> ForecastBatch:
         """
         Return a single training sample, which consists of the initial states,
         target states, forcing and batch times.
@@ -482,17 +481,9 @@ class WeatherDataset(torch.utils.data.Dataset):
 
         Returns
         -------
-        init_states : torch.Tensor
-            Initial states, shape ``(2, num_grid_nodes, num_state_vars)``.
-        target_states : torch.Tensor
-            Target states, shape ``(ar_steps, num_grid_nodes, num_state_vars)``.
-        forcing : torch.Tensor
-            Windowed forcing, shape ``(ar_steps, num_grid_nodes, F)`` where
-            ``F = num_forcing_vars * (num_past_forcing_steps``
-            ``+ num_future_forcing_steps + 1)``.
-        target_times : torch.Tensor
-            Times of the target steps, shape ``(ar_steps,)``.
-
+        ForecastBatch
+            A named training sample containing the initial states, target
+            states, forcing, boundary placeholder, and target times.
         """
         n_samples = len(self)
         if idx < 0:
@@ -523,17 +514,23 @@ class WeatherDataset(torch.utils.data.Dataset):
         )
 
         forcing = torch.tensor(da_forcing_windowed.values, dtype=tensor_dtype)
+        boundary = torch.zeros_like(forcing)
 
         # init_states: (2, num_grid_nodes, num_state_vars)
         # target_states: (ar_steps, num_grid_nodes, num_state_vars)
         # forcing: (ar_steps, num_grid_nodes, num_forcing_vars * window)
+        # boundary: (ar_steps, num_grid_nodes, num_forcing_vars * window)
         # target_times: (ar_steps,)
 
-        return init_states, target_states, forcing, target_times
+        return ForecastBatch(
+            init_states=init_states,
+            target_states=target_states,
+            forcing=forcing,
+            boundary=boundary,
+            target_times=target_times,
+        )
 
-    def __iter__(
-        self,
-    ) -> Iterator[tuple[torch.Tensor, torch.Tensor, torch.Tensor, np.ndarray]]:
+    def __iter__(self) -> Iterator[ForecastBatch]:
         """
         Convenience method to iterate over the dataset.
 

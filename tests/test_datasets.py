@@ -9,6 +9,7 @@ from torch.utils.data import DataLoader
 
 # First-party
 from neural_lam import config as nlconfig
+from neural_lam.batch import ForecastBatch
 from neural_lam.create_graph import create_graph_from_datastore
 from neural_lam.datastore import DATASTORES
 from neural_lam.datastore.base import BaseRegularGridDatastore
@@ -46,9 +47,12 @@ def test_dataset_item_shapes(datastore_name):
 
     item = dataset[0]
 
-    # unpack the item, this is the current return signature for
-    # WeatherDataset.__getitem__
-    init_states, target_states, forcing, target_times = item
+    assert isinstance(item, ForecastBatch)
+    init_states = item.init_states
+    target_states = item.target_states
+    forcing = item.forcing
+    boundary = item.boundary
+    target_times = item.target_times
 
     # initial states
     assert init_states.ndim == 3
@@ -70,6 +74,11 @@ def test_dataset_item_shapes(datastore_name):
         num_past_forcing_steps + num_future_forcing_steps + 1
     )
 
+    # boundary
+    assert boundary.ndim == 3
+    assert boundary.shape == forcing.shape
+    assert torch.count_nonzero(boundary) == 0
+
     # batch times
     assert target_times.ndim == 1
     assert target_times.shape[0] == N_pred_steps
@@ -78,6 +87,35 @@ def test_dataset_item_shapes(datastore_name):
     # operations are working as expected and are consistent with the dataset
     # length
     dataset[len(dataset) - 1]
+
+
+def test_forecast_batch_collates_with_default_dataloader():
+    datastore = DummyDatastore(n_timesteps=10)
+    dataset = WeatherDataset(
+        datastore=datastore,
+        split="train",
+        ar_steps=2,
+    )
+
+    item = dataset[0]
+    init_states, target_states, forcing, boundary, target_times = item
+
+    assert isinstance(item, ForecastBatch)
+    assert init_states is item.init_states
+    assert target_states is item.target_states
+    assert forcing is item.forcing
+    assert boundary is item.boundary
+    assert target_times is item.target_times
+
+    batch = next(iter(DataLoader(dataset, batch_size=2)))
+
+    assert isinstance(batch, ForecastBatch)
+    assert batch.init_states.shape[0] == 2
+    assert batch.target_states.shape[0] == 2
+    assert batch.forcing.shape[0] == 2
+    assert batch.boundary.shape[0] == 2
+    assert batch.boundary.shape == batch.forcing.shape
+    assert batch.target_times.shape[0] == 2
 
 
 @pytest.mark.parametrize("datastore_name", DATASTORES.keys())
@@ -97,18 +135,16 @@ def test_dataset_item_create_dataarray_from_tensor(datastore_name):
 
     idx = 0
 
-    # unpack the item, this is the current return signature for
-    # WeatherDataset.__getitem__
-    _, target_states, _, target_times_arr = dataset[idx]
+    item = dataset[idx]
     _, da_target_true, _, da_target_times_true = dataset._build_item_dataarrays(
         idx=idx
     )
 
-    target_times = np.array(target_times_arr, dtype="datetime64[ns]")
+    target_times = np.array(item.target_times, dtype="datetime64[ns]")
     np.testing.assert_equal(target_times, da_target_times_true.values)
 
     da_target = dataset.create_dataarray_from_tensor(
-        tensor=target_states, category="state", time=target_times
+        tensor=item.target_states, category="state", time=target_times
     )
 
     # conversion to torch.float32 may lead to loss of precision
@@ -131,7 +167,7 @@ def test_dataset_item_create_dataarray_from_tensor(datastore_name):
 
     # check construction of a single time
     da_target_single = dataset.create_dataarray_from_tensor(
-        tensor=target_states[0], category="state", time=target_times[0]
+        tensor=item.target_states[0], category="state", time=target_times[0]
     )
 
     # check that the content is the same
@@ -253,7 +289,8 @@ def test_single_batch(datastore_name, split):
     model_device = model.to(device_name)
     data_loader = DataLoader(dataset, batch_size=2)
     batch = next(iter(data_loader))
-    batch_device = [part.to(device_name) for part in batch]
+    assert isinstance(batch, ForecastBatch)
+    batch_device = batch.to(device_name)
     model_device.training_step(batch_device)
 
 
@@ -396,12 +433,12 @@ def test_ensemble_index_mapping_is_time_major():
         load_single_member=False,
     )
 
-    init_states_0, _, _, target_times_0 = dataset[0]
-    init_states_1, _, _, target_times_1 = dataset[1]
+    sample_0 = dataset[0]
+    sample_1 = dataset[1]
 
     # Adjacent flat indices correspond to same sample_idx and different member.
-    assert torch.equal(target_times_0, target_times_1)
-    assert not torch.equal(init_states_0, init_states_1)
+    assert torch.equal(sample_0.target_times, sample_1.target_times)
+    assert not torch.equal(sample_0.init_states, sample_1.init_states)
 
 
 def test_ensemble_forcing_uses_same_member_when_available():
@@ -420,11 +457,11 @@ def test_ensemble_forcing_uses_same_member_when_available():
         load_single_member=False,
     )
 
-    _, _, forcing_0, target_times_0 = dataset[0]
-    _, _, forcing_1, target_times_1 = dataset[1]
+    sample_0 = dataset[0]
+    sample_1 = dataset[1]
 
-    assert torch.equal(target_times_0, target_times_1)
-    assert not torch.equal(forcing_0, forcing_1)
+    assert torch.equal(sample_0.target_times, sample_1.target_times)
+    assert not torch.equal(sample_0.forcing, sample_1.forcing)
 
 
 def test_ensemble_forcing_without_member_dim_is_shared():
@@ -443,12 +480,12 @@ def test_ensemble_forcing_without_member_dim_is_shared():
         load_single_member=False,
     )
 
-    init_states_0, _, forcing_0, target_times_0 = dataset[0]
-    init_states_1, _, forcing_1, target_times_1 = dataset[1]
+    sample_0 = dataset[0]
+    sample_1 = dataset[1]
 
-    assert torch.equal(target_times_0, target_times_1)
-    assert not torch.equal(init_states_0, init_states_1)
-    assert torch.equal(forcing_0, forcing_1)
+    assert torch.equal(sample_0.target_times, sample_1.target_times)
+    assert not torch.equal(sample_0.init_states, sample_1.init_states)
+    assert torch.equal(sample_0.forcing, sample_1.forcing)
 
 
 def test_forecast_ensemble_len_scales_with_default_all_members():

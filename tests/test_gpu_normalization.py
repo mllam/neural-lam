@@ -49,18 +49,21 @@ def test_on_after_batch_transfer():
     forcing = torch.randn(
         1, ar_steps, num_grid_nodes, num_forcing_vars * window_size
     )
+    boundary = torch.zeros_like(forcing)
     target_times = torch.randint(0, 1000000, (1, ar_steps))
 
-    norm_init, norm_target, norm_forcing, norm_times = (
+    norm_init, norm_target, norm_forcing, norm_boundary, norm_times = (
         model.on_after_batch_transfer(
-            (init_states, target_states, forcing, target_times), 0
+            (init_states, target_states, forcing, boundary, target_times), 0
         )
     )
 
     assert norm_init.shape == init_states.shape
     assert norm_target.shape == target_states.shape
     assert norm_forcing.shape == forcing.shape
+    assert norm_boundary.shape == boundary.shape
     assert torch.equal(norm_times, target_times)
+    assert torch.equal(norm_boundary, boundary)
 
     expected_init = (init_states - model.state_mean) / model.state_std
     expected_target = (target_states - model.state_mean) / model.state_std
@@ -93,8 +96,8 @@ def test_normalization_applied_exactly_once():
     data_module.setup(stage="fit")
     batch = next(iter(data_module.train_dataloader()))
 
-    raw_init = batch[0]
-    norm_init = model.on_after_batch_transfer(batch, 0)[0]
+    raw_init = batch.init_states
+    norm_init = model.on_after_batch_transfer(batch, 0).init_states
 
     once = (raw_init - model.state_mean) / model.state_std
     twice = (once - model.state_mean) / model.state_std

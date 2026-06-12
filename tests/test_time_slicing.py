@@ -8,6 +8,7 @@ import pytest
 import xarray as xr
 
 # First-party
+from neural_lam.batch import ForecastBatch
 from neural_lam.datastore.base import BaseDatastore
 from neural_lam.weather_dataset import WeatherDataset
 
@@ -115,9 +116,11 @@ def test_time_slicing_analysis(
 
     sample = dataset[0]
 
-    init_states, target_states, forcing, _ = [
-        tensor.numpy() for tensor in sample
-    ]
+    assert isinstance(sample, ForecastBatch)
+    init_states = sample.init_states.numpy()
+    target_states = sample.target_states.numpy()
+    forcing = sample.forcing.numpy()
+    boundary = sample.boundary.numpy()
 
     expected_init_states = [0, 1]
     if ar_steps == 3:
@@ -158,6 +161,7 @@ def test_time_slicing_analysis(
         1 + num_past_forcing_steps + num_future_forcing_steps,
     )
     np.testing.assert_equal(forcing[:, 0, :], np.array(expected_forcing_values))
+    np.testing.assert_equal(boundary, np.zeros_like(forcing))
 
 
 @pytest.mark.parametrize(
@@ -190,4 +194,5 @@ def test_step_length_timedeltas(step_length):
 
     # Test that we can get a sample
     sample = dataset[0]
-    assert len(sample) == 4  # init_states, target_states, forcing, target_times
+    assert isinstance(sample, ForecastBatch)
+    assert sample.boundary.shape == sample.forcing.shape

@@ -11,6 +11,7 @@ import neural_lam.utils
 import neural_lam.vis
 
 # Local
+from .batch import ForecastBatch
 from .weather_dataset import WeatherDataset
 
 try:

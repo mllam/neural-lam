@@ -74,6 +74,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Maintenance
 
+- Add a named `ForecastBatch` contract for `WeatherDataset` batches and update
+  internal consumers to use field access [\#637](https://github.com/mllam/neural-lam/pull/637) @kshirajahere
+
 - Establish 100% docstring coverage across `neural_lam/` via an `interrogate` pre-commit hook, add a Dimension Glossary to the README for canonical tensor-shape names, and rewrite public docstrings in NumPy style to serve as the entry point for the autoapi pipeline (#196 / #272). [\#252](https://github.com/mllam/neural-lam/pull/252) @Mohit-Lakra
 
 - Register a `slow` pytest marker and apply it to `test_training` and `test_training_output_std` so contributors can skip long-running training tests during local iteration via `pytest -m "not slow"`. [\#651](https://github.com/mllam/neural-lam/pull/651) @sadamov
