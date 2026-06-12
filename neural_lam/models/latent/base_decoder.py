@@ -15,7 +15,7 @@ class BaseGraphLatentDecoder(nn.Module):
     Subclasses implement :meth:`combine_with_latent`, which fuses the latent
     representation with the grid representation. The resulting features are
     mapped to either ``num_state_vars`` outputs (mean only) or
-    ``2 * num_state_vars`` outputs (mean + softplus std) depending on
+    ``2 * num_state_vars`` outputs (mean, std) depending on
     ``output_std``.
     """
 
