@@ -74,12 +74,14 @@ class GraphLatentDecoder(BaseGraphLatentDecoder):
             update_edges=False,
         )
 
+        # None if m2m_layers == 0, in which case no on-mesh processing is
+        # done in combine_with_latent
         self.m2m_gnns = (
             utils.make_gnn_seq(
                 m2m_edge_index, m2m_layers, hidden_layers, hidden_dim
             )
             if m2m_layers > 0
-            else utils.IdentityModule()
+            else None
         )
 
         self.m2g_gnn = get_gnn_class(m2g_gnn_type)(
@@ -116,7 +118,8 @@ class GraphLatentDecoder(BaseGraphLatentDecoder):
         """
         mesh_rep = self.g2m_gnn(original_grid_rep, latent_rep, graph_emb["g2m"])
 
-        mesh_rep, _ = self.m2m_gnns(mesh_rep, graph_emb["m2m"])
+        if self.m2m_gnns is not None:
+            mesh_rep, _ = self.m2m_gnns(mesh_rep, graph_emb["m2m"])
 
         grid_rep = self.m2g_gnn(mesh_rep, residual_grid_rep, graph_emb["m2g"])
 

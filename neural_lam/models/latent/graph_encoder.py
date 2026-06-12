@@ -60,12 +60,14 @@ class GraphLatentEncoder(BaseLatentEncoder):
             update_edges=False,
         )
 
+        # None if m2m_layers == 0, in which case no on-mesh processing is
+        # done in compute_dist_params
         self.m2m_gnns = (
             utils.make_gnn_seq(
                 m2m_edge_index, m2m_layers, hidden_layers, hidden_dim
             )
             if m2m_layers > 0
-            else utils.IdentityModule()
+            else None
         )
 
         self.latent_param_map = utils.make_mlp(
@@ -96,5 +98,6 @@ class GraphLatentEncoder(BaseLatentEncoder):
             the latent distribution.
         """
         mesh_rep = self.g2m_gnn(grid_rep, graph_emb["mesh"], graph_emb["g2m"])
-        mesh_rep, _ = self.m2m_gnns(mesh_rep, graph_emb["m2m"])
+        if self.m2m_gnns is not None:
+            mesh_rep, _ = self.m2m_gnns(mesh_rep, graph_emb["m2m"])
         return self.latent_param_map(mesh_rep)

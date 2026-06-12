@@ -472,26 +472,6 @@ def make_mlp(blueprint: list[int], layer_norm: bool = True) -> nn.Sequential:
     return nn.Sequential(*layers)
 
 
-class IdentityModule(nn.Module):
-    """Identity operator that accepts and returns multiple positional inputs."""
-
-    def forward(self, *args):
-        """
-        Return all positional inputs unchanged.
-
-        Parameters
-        ----------
-        *args : tuple
-            Any positional arguments.
-
-        Returns
-        -------
-        tuple
-            The inputs, unchanged.
-        """
-        return args
-
-
 def make_gnn_seq(
     edge_index,
     num_gnn_layers,
@@ -513,9 +493,8 @@ def make_gnn_seq(
         operate on.
     num_gnn_layers : int
         Number of stacked GNN layers; must be at least 1. Callers that
-        want a no-op stage (e.g. zero intra-level layers) should
-        substitute an ``IdentityModule`` themselves rather than calling
-        this with 0.
+        want a no-op stage (e.g. zero intra-level layers) should skip
+        building and applying the stack rather than calling this with 0.
     hidden_layers : int
         Number of hidden layers in the MLPs of each GNN layer.
     hidden_dim : int
@@ -540,7 +519,7 @@ def make_gnn_seq(
     if num_gnn_layers < 1:
         raise ValueError(
             "make_gnn_seq requires num_gnn_layers >= 1 "
-            f"(got {num_gnn_layers}); use an IdentityModule for a no-op stage."
+            f"(got {num_gnn_layers}); skip the stage for a no-op."
         )
     gnn_class = get_gnn_class(gnn_type)
     return pyg.nn.Sequential(

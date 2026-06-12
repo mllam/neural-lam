@@ -96,21 +96,22 @@ class HiGraphLatentEncoder(BaseLatentEncoder):
             ]
         )
 
-        # Identity mappings if intra_level_layers == 0
-        self.intra_level_gnns = nn.ModuleList(
-            [
-                (
+        # None if intra_level_layers == 0, in which case no intra-level
+        # processing is done in compute_dist_params
+        self.intra_level_gnns = (
+            nn.ModuleList(
+                [
                     utils.make_gnn_seq(
                         edge_index,
                         intra_level_layers,
                         hidden_layers,
                         hidden_dim,
                     )
-                    if intra_level_layers > 0
-                    else utils.IdentityModule()
-                )
-                for edge_index in m2m_edge_index
-            ]
+                    for edge_index in m2m_edge_index
+                ]
+            )
+            if intra_level_layers > 0
+            else None
         )
 
         self.latent_param_map = utils.make_mlp(
@@ -147,27 +148,26 @@ class HiGraphLatentEncoder(BaseLatentEncoder):
         )
 
         # Same-level processing on level 0
-        current_mesh_rep, _ = self.intra_level_gnns[0](
-            current_mesh_rep, graph_emb["m2m"][0]
-        )
+        if self.intra_level_gnns is not None:
+            current_mesh_rep, _ = self.intra_level_gnns[0](
+                current_mesh_rep, graph_emb["m2m"][0]
+            )
 
         # Walk up levels 1..L
-        for (
-            up_gnn,
-            intra_gnn_seq,
-            mesh_up_level_rep,
-            m2m_level_rep,
-            mesh_level_rep,
-        ) in zip(
-            self.mesh_up_gnns,
-            self.intra_level_gnns[1:],
-            graph_emb["mesh_up"],
-            graph_emb["m2m"][1:],
-            graph_emb["mesh"][1:],
+        for level, (up_gnn, mesh_up_level_rep, mesh_level_rep) in enumerate(
+            zip(
+                self.mesh_up_gnns,
+                graph_emb["mesh_up"],
+                graph_emb["mesh"][1:],
+            ),
+            start=1,
         ):
-            new_node_rep = up_gnn(
+            current_mesh_rep = up_gnn(
                 current_mesh_rep, mesh_level_rep, mesh_up_level_rep
             )
-            current_mesh_rep, _ = intra_gnn_seq(new_node_rep, m2m_level_rep)
+            if self.intra_level_gnns is not None:
+                current_mesh_rep, _ = self.intra_level_gnns[level](
+                    current_mesh_rep, graph_emb["m2m"][level]
+                )
 
         return self.latent_param_map(current_mesh_rep)

@@ -19,7 +19,7 @@ from neural_lam.models.latent import (
     HiGraphLatentDecoder,
     HiGraphLatentEncoder,
 )
-from neural_lam.utils import IdentityModule, make_gnn_seq
+from neural_lam.utils import make_gnn_seq
 
 
 def _fully_connected_edge_index(n_send, n_rec):
@@ -80,16 +80,9 @@ def flat_graph_emb(flat_dims, flat_edges):
     }
 
 
-def test_identity_module_passes_args_through():
-    module = IdentityModule()
-    a, b, c = torch.randn(3), torch.randn(2), torch.randn(1)
-    out = module(a, b, c)
-    assert out == (a, b, c)
-
-
 def test_make_gnn_seq_zero_layers_raises():
-    """make_gnn_seq must build a real sequence; the no-op (identity) case is
-    the caller's responsibility, exercised via the zero-intra-layer tests."""
+    """make_gnn_seq must build a real sequence; the no-op case is the
+    caller's responsibility, exercised via the zero-intra-layer tests."""
     edge_index = _fully_connected_edge_index(3, 3)
     with pytest.raises(ValueError, match="num_gnn_layers >= 1"):
         make_gnn_seq(
@@ -264,11 +257,11 @@ def test_graph_decoder_no_output_std_returns_none(
     assert pred_std is None
 
 
-def test_flat_modules_zero_m2m_layers_use_identity(
+def test_flat_modules_zero_m2m_layers_skip_processing(
     flat_dims, flat_edges, flat_graph_emb
 ):
-    """m2m_layers=0 routes on-mesh processing through IdentityModule at the
-    call site (make_gnn_seq itself rejects 0). Exercise both flat modules."""
+    """m2m_layers=0 builds no on-mesh GNNs and skips on-mesh processing in
+    the forward pass. Exercise both flat modules."""
     enc = GraphLatentEncoder(
         latent_dim=flat_dims["latent_dim"],
         g2m_edge_index=flat_edges["g2m"],
@@ -277,7 +270,7 @@ def test_flat_modules_zero_m2m_layers_use_identity(
         m2m_layers=0,
         hidden_layers=flat_dims["hidden_layers"],
     )
-    assert isinstance(enc.m2m_gnns, IdentityModule)
+    assert enc.m2m_gnns is None
 
     dec = GraphLatentDecoder(
         g2m_edge_index=flat_edges["g2m"],
@@ -289,7 +282,7 @@ def test_flat_modules_zero_m2m_layers_use_identity(
         m2m_layers=0,
         hidden_layers=flat_dims["hidden_layers"],
     )
-    assert isinstance(dec.m2m_gnns, IdentityModule)
+    assert dec.m2m_gnns is None
 
     B = flat_dims["batch_size"]
     grid_rep = torch.randn(B, flat_dims["num_grid"], flat_dims["hidden_dim"])
@@ -537,8 +530,8 @@ def test_hi_graph_modules_reject_single_level():
 
 
 def test_hi_graph_decoder_zero_intra_layers(hi_dims, hi_edges, hi_graph_emb):
-    """intra_level_layers=0 routes intra-processing through IdentityModule
-    (the make_gnn_seq branch). Exercise that path end-to-end."""
+    """intra_level_layers=0 builds no intra-level GNNs and skips
+    intra-level processing in the forward pass. Exercise end-to-end."""
     dec = HiGraphLatentDecoder(
         g2m_edge_index=hi_edges["g2m"],
         m2m_edge_index=hi_edges["m2m"],

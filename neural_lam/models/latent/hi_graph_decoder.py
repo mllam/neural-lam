@@ -140,37 +140,38 @@ class HiGraphLatentDecoder(BaseGraphLatentDecoder):
             ]
         )
 
-        # Identity mappings if intra_level_layers == 0
-        self.intra_up_gnns = nn.ModuleList(
-            [
-                (
+        # None if intra_level_layers == 0, in which case no intra-level
+        # processing is done in combine_with_latent
+        self.intra_up_gnns = (
+            nn.ModuleList(
+                [
                     utils.make_gnn_seq(
                         edge_index,
                         intra_level_layers,
                         hidden_layers,
                         hidden_dim,
                     )
-                    if intra_level_layers > 0
-                    else utils.IdentityModule()
-                )
-                for edge_index in m2m_edge_index
-            ]
+                    for edge_index in m2m_edge_index
+                ]
+            )
+            if intra_level_layers > 0
+            else None
         )
-        self.intra_down_gnns = nn.ModuleList(
-            [
-                (
+        self.intra_down_gnns = (
+            nn.ModuleList(
+                [
                     utils.make_gnn_seq(
                         edge_index,
                         intra_level_layers,
                         hidden_layers,
                         hidden_dim,
                     )
-                    if intra_level_layers > 0
-                    else utils.IdentityModule()
-                )
-                for edge_index in list(m2m_edge_index)[:-1]
-                # Top level (L) does not need a down intra-level GNN
-            ]
+                    for edge_index in list(m2m_edge_index)[:-1]
+                    # Top level (L) does not need a down intra-level GNN
+                ]
+            )
+            if intra_level_layers > 0
+            else None
         )
 
     def combine_with_latent(
@@ -213,23 +214,21 @@ class HiGraphLatentDecoder(BaseGraphLatentDecoder):
         # so the latent is fused in at the top of the hierarchy.
         mesh_level_reps = []
         m2m_level_reps = []
-        for (
-            up_gnn,
-            intra_gnn_seq,
-            mesh_up_level_rep,
-            m2m_level_rep,
-            mesh_level_rep,
-        ) in zip(
-            self.mesh_up_gnns,
-            self.intra_up_gnns[:-1],
-            graph_emb["mesh_up"],
-            graph_emb["m2m"][:-1],
-            graph_emb["mesh"][1:-1] + [latent_rep],
-        ):
-            new_mesh_rep, new_m2m_rep = intra_gnn_seq(
-                current_mesh_rep, m2m_level_rep
+        for level, (up_gnn, mesh_up_level_rep, mesh_level_rep) in enumerate(
+            zip(
+                self.mesh_up_gnns,
+                graph_emb["mesh_up"],
+                graph_emb["mesh"][1:-1] + [latent_rep],
             )
+        ):
+            new_mesh_rep = current_mesh_rep
+            new_m2m_rep = graph_emb["m2m"][level]
+            if self.intra_up_gnns is not None:
+                new_mesh_rep, new_m2m_rep = self.intra_up_gnns[level](
+                    new_mesh_rep, new_m2m_rep
+                )
 
+            # Saved for residual connections in the downward pass
             mesh_level_reps.append(new_mesh_rep)
             m2m_level_reps.append(new_m2m_rep)
 
@@ -238,29 +237,23 @@ class HiGraphLatentDecoder(BaseGraphLatentDecoder):
             )
 
         # Top level processing
-        current_mesh_rep, _ = self.intra_up_gnns[-1](
-            current_mesh_rep, graph_emb["m2m"][-1]
-        )
+        if self.intra_up_gnns is not None:
+            current_mesh_rep, _ = self.intra_up_gnns[-1](
+                current_mesh_rep, graph_emb["m2m"][-1]
+            )
 
         # Downward pass: down GNN, then intra-level processing. Residual
         # connections feed back the intra-level reps from the upward pass.
-        for (
-            down_gnn,
-            intra_gnn_seq,
-            mesh_down_level_rep,
-            m2m_level_rep,
-            mesh_level_rep,
-        ) in zip(
-            reversed(self.mesh_down_gnns),
-            reversed(self.intra_down_gnns),
-            reversed(graph_emb["mesh_down"]),
-            reversed(m2m_level_reps),
-            reversed(mesh_level_reps),
-        ):
-            new_mesh_rep = down_gnn(
-                current_mesh_rep, mesh_level_rep, mesh_down_level_rep
+        for level in reversed(range(len(self.mesh_down_gnns))):
+            current_mesh_rep = self.mesh_down_gnns[level](
+                current_mesh_rep,
+                mesh_level_reps[level],
+                graph_emb["mesh_down"][level],
             )
-            current_mesh_rep, _ = intra_gnn_seq(new_mesh_rep, m2m_level_rep)
+            if self.intra_down_gnns is not None:
+                current_mesh_rep, _ = self.intra_down_gnns[level](
+                    current_mesh_rep, m2m_level_reps[level]
+                )
 
         grid_rep = self.m2g_gnn(
             current_mesh_rep, residual_grid_rep, graph_emb["m2g"]
