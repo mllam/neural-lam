@@ -1,3 +1,5 @@
+"""Batch containers for weather forecast samples."""
+
 # Standard library
 from typing import NamedTuple, Sequence
 
@@ -15,6 +17,7 @@ class ForecastBatch(NamedTuple):
     init_states: torch.Tensor
     target_states: torch.Tensor
     forcing: torch.Tensor
+    boundary: torch.Tensor
     target_times: torch.Tensor
 
     def to(self, device: torch.device | str) -> "ForecastBatch":
@@ -23,6 +26,7 @@ class ForecastBatch(NamedTuple):
             init_states=self.init_states.to(device),
             target_states=self.target_states.to(device),
             forcing=self.forcing.to(device),
+            boundary=self.boundary.to(device),
             target_times=self.target_times.to(device),
         )
 
@@ -32,14 +36,14 @@ def coerce_forecast_batch(
 ) -> ForecastBatch:
     """Return batch as ForecastBatch.
 
-    Legacy 4-element batch tuples are accepted during the migration.
+    Legacy 5-element batch tuples are accepted during the migration.
     """
     if isinstance(batch, ForecastBatch):
         return batch
 
     if len(batch) != len(ForecastBatch._fields):
         raise ValueError(
-            "Expected a ForecastBatch or 4-element legacy batch tuple, "
+            "Expected a ForecastBatch or 5-element legacy batch tuple, "
             f"got {len(batch)} elements."
         )
 
@@ -47,5 +51,6 @@ def coerce_forecast_batch(
         init_states=batch[0],
         target_states=batch[1],
         forcing=batch[2],
-        target_times=batch[3],
+        boundary=batch[3],
+        target_times=batch[4],
     )

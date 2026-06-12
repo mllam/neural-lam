@@ -498,6 +498,7 @@ def model_and_batch(tmp_path, time_step, time_unit):
         init_states=torch.stack([sample.init_states]),
         target_states=torch.stack([sample.target_states]),
         forcing=torch.stack([sample.forcing]),
+        boundary=torch.stack([sample.boundary]),
         target_times=torch.stack([sample.target_times]),
     )
 

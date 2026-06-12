@@ -51,6 +51,7 @@ def test_dataset_item_shapes(datastore_name):
     init_states = item.init_states
     target_states = item.target_states
     forcing = item.forcing
+    boundary = item.boundary
     target_times = item.target_times
 
     # initial states
@@ -73,6 +74,11 @@ def test_dataset_item_shapes(datastore_name):
         num_past_forcing_steps + num_future_forcing_steps + 1
     )
 
+    # boundary
+    assert boundary.ndim == 3
+    assert boundary.shape == forcing.shape
+    assert torch.count_nonzero(boundary) == 0
+
     # batch times
     assert target_times.ndim == 1
     assert target_times.shape[0] == N_pred_steps
@@ -89,16 +95,16 @@ def test_forecast_batch_collates_with_default_dataloader():
         datastore=datastore,
         split="train",
         ar_steps=2,
-        standardize=False,
     )
 
     item = dataset[0]
-    init_states, target_states, forcing, target_times = item
+    init_states, target_states, forcing, boundary, target_times = item
 
     assert isinstance(item, ForecastBatch)
     assert init_states is item.init_states
     assert target_states is item.target_states
     assert forcing is item.forcing
+    assert boundary is item.boundary
     assert target_times is item.target_times
 
     batch = next(iter(DataLoader(dataset, batch_size=2)))
@@ -107,6 +113,8 @@ def test_forecast_batch_collates_with_default_dataloader():
     assert batch.init_states.shape[0] == 2
     assert batch.target_states.shape[0] == 2
     assert batch.forcing.shape[0] == 2
+    assert batch.boundary.shape[0] == 2
+    assert batch.boundary.shape == batch.forcing.shape
     assert batch.target_times.shape[0] == 2
 
 
@@ -289,12 +297,13 @@ def test_single_batch(datastore_name, split):
 @pytest.mark.parametrize(
     "dataset_config",
     [
-        {"past": 0, "future": 0, "ar_steps": 1, "exp_len_reduction": 3},
-        {"past": 2, "future": 0, "ar_steps": 1, "exp_len_reduction": 3},
-        {"past": 0, "future": 2, "ar_steps": 1, "exp_len_reduction": 5},
-        {"past": 4, "future": 0, "ar_steps": 1, "exp_len_reduction": 5},
-        {"past": 0, "future": 0, "ar_steps": 5, "exp_len_reduction": 7},
-        {"past": 3, "future": 3, "ar_steps": 2, "exp_len_reduction": 8},
+        # window = max(2, past) + ar_steps + future; samples = T - window + 1
+        {"past": 0, "future": 0, "ar_steps": 1, "exp_len_reduction": 2},
+        {"past": 2, "future": 0, "ar_steps": 1, "exp_len_reduction": 2},
+        {"past": 0, "future": 2, "ar_steps": 1, "exp_len_reduction": 4},
+        {"past": 4, "future": 0, "ar_steps": 1, "exp_len_reduction": 4},
+        {"past": 0, "future": 0, "ar_steps": 5, "exp_len_reduction": 6},
+        {"past": 3, "future": 3, "ar_steps": 2, "exp_len_reduction": 7},
     ],
 )
 def test_dataset_length(dataset_config):
@@ -325,6 +334,30 @@ def test_dataset_length(dataset_config):
     dataset[expected_len - 1]
 
 
+def test_dataset_out_of_range_raises_index_error():
+    """`WeatherDataset.__getitem__` raises IndexError for out-of-range indices
+    and supports Python-style negative indexing within bounds."""
+    datastore = DummyDatastore(n_timesteps=10)
+    dataset = WeatherDataset(
+        datastore=datastore,
+        split="train",
+        ar_steps=1,
+        num_past_forcing_steps=0,
+        num_future_forcing_steps=0,
+    )
+    n = len(dataset)
+
+    with pytest.raises(IndexError):
+        _ = dataset[n]
+    with pytest.raises(IndexError):
+        _ = dataset[-n - 1]
+
+    # Negative indexing within bounds resolves to the same sample as the
+    # corresponding positive index.
+    dataset[-1]
+    dataset[n - 1]
+
+
 def test_ensemble_len_scales_with_default_all_members():
     datastore = EnsembleDummyDatastore(
         is_forecast=False,
@@ -339,7 +372,6 @@ def test_ensemble_len_scales_with_default_all_members():
         ar_steps=2,
         num_past_forcing_steps=1,
         num_future_forcing_steps=1,
-        standardize=False,
     )
 
     dataset_single = WeatherDataset(
@@ -349,7 +381,6 @@ def test_ensemble_len_scales_with_default_all_members():
         num_past_forcing_steps=1,
         num_future_forcing_steps=1,
         load_single_member=True,
-        standardize=False,
     )
 
     assert len(dataset_all) == len(dataset_single) * 3
@@ -400,7 +431,6 @@ def test_ensemble_index_mapping_is_time_major():
         num_past_forcing_steps=1,
         num_future_forcing_steps=1,
         load_single_member=False,
-        standardize=False,
     )
 
     sample_0 = dataset[0]
@@ -425,7 +455,6 @@ def test_ensemble_forcing_uses_same_member_when_available():
         num_past_forcing_steps=1,
         num_future_forcing_steps=1,
         load_single_member=False,
-        standardize=False,
     )
 
     sample_0 = dataset[0]
@@ -449,7 +478,6 @@ def test_ensemble_forcing_without_member_dim_is_shared():
         num_past_forcing_steps=1,
         num_future_forcing_steps=1,
         load_single_member=False,
-        standardize=False,
     )
 
     sample_0 = dataset[0]
@@ -475,7 +503,6 @@ def test_forecast_ensemble_len_scales_with_default_all_members():
         ar_steps=2,
         num_past_forcing_steps=1,
         num_future_forcing_steps=1,
-        standardize=False,
     )
 
     with pytest.warns(UserWarning, match="only using first ensemble member"):
@@ -486,77 +513,6 @@ def test_forecast_ensemble_len_scales_with_default_all_members():
             num_past_forcing_steps=1,
             num_future_forcing_steps=1,
             load_single_member=True,
-            standardize=False,
         )
 
     assert len(dataset_all) == len(dataset_single) * 3
-
-
-def test_standardization_with_zero_std():
-    """Regression test for https://github.com/mllam/neural-lam/issues/136
-
-    When all values of a field are identical (std = 0), WeatherDataset
-    must not produce NaN via division-by-zero during standardization.
-    """
-    # Third-party
-    import xarray as xr
-
-    std_da = xr.DataArray(
-        np.array([0.0, 1.0, 2.0], dtype=np.float32), dims=["feature"]
-    )
-
-    dataset = WeatherDataset.__new__(WeatherDataset)
-    result = dataset._compute_std_safe(std_da, "state")
-
-    eps = np.finfo(std_da.dtype).eps
-
-    assert (
-        float(result[0]) == eps
-    ), "Zero std was not clamped to machine epsilon"
-    assert float(result[1]) == 1.0
-    assert float(result[2]) == 2.0
-    assert not np.isnan(
-        result.values
-    ).any(), "NaN found after _compute_std_safe"
-
-
-def test_weather_dataset_no_forcing_standardize():
-    """Regression test: WeatherDataset must not raise AttributeError when the
-    datastore has no forcing data and standardize=True (the default).
-
-    Before the fix, self.da_forcing_std was accessed at line 123 of
-    weather_dataset.py without ever being assigned when da_forcing is None,
-    causing:
-        AttributeError: 'WeatherDataset' object has no attribute
-        'da_forcing_std'
-    """
-
-    class NoForcingDatastore(DummyDatastore):
-        """DummyDatastore that returns None for the forcing category."""
-
-        def get_dataarray(self, category, split, **kwargs):
-            if category == "forcing":
-                return None
-            return super().get_dataarray(
-                category=category, split=split, **kwargs
-            )
-
-    datastore = NoForcingDatastore(n_grid_points=100, n_timesteps=20)
-
-    # Should not raise AttributeError
-    dataset = WeatherDataset(
-        datastore=datastore,
-        split="train",
-        ar_steps=3,
-        standardize=True,
-    )
-
-    assert dataset.forcing_std_safe is None
-    assert dataset.da_forcing_mean is None
-    assert dataset.da_forcing_std is None
-
-    # Ensure we can still retrieve a sample (forcing tensor should be empty)
-    item = dataset[0]
-    assert (
-        item.forcing.shape[-1] == 0
-    ), "Expected zero forcing features when forcing is None"

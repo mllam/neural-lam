@@ -112,7 +112,6 @@ def test_time_slicing_analysis(
         ar_steps=ar_steps,
         num_future_forcing_steps=num_future_forcing_steps,
         num_past_forcing_steps=num_past_forcing_steps,
-        standardize=False,
     )
 
     sample = dataset[0]
@@ -121,6 +120,7 @@ def test_time_slicing_analysis(
     init_states = sample.init_states.numpy()
     target_states = sample.target_states.numpy()
     forcing = sample.forcing.numpy()
+    boundary = sample.boundary.numpy()
 
     expected_init_states = [0, 1]
     if ar_steps == 3:
@@ -161,6 +161,7 @@ def test_time_slicing_analysis(
         1 + num_past_forcing_steps + num_future_forcing_steps,
     )
     np.testing.assert_equal(forcing[:, 0, :], np.array(expected_forcing_values))
+    np.testing.assert_equal(boundary, np.zeros_like(forcing))
 
 
 @pytest.mark.parametrize(
@@ -189,9 +190,9 @@ def test_step_length_timedeltas(step_length):
         ar_steps=3,
         num_future_forcing_steps=0,
         num_past_forcing_steps=0,
-        standardize=False,
     )
 
     # Test that we can get a sample
     sample = dataset[0]
     assert isinstance(sample, ForecastBatch)
+    assert sample.boundary.shape == sample.forcing.shape
