@@ -59,7 +59,20 @@ def _datastore_and_config_with_graph(graph_name):
 
 def _build_predictor(graph_name, output_std=False, sample_obs_noise=False):
     datastore, config = _datastore_and_config_with_graph(graph_name)
-    predictor_class = GraphEFM if graph_name == "hierarchical" else GraphEFMMS
+    if graph_name == "hierarchical":
+        predictor_class = GraphEFM
+        layer_kwargs = {
+            "prior_intra_level_layers": 1,
+            "encoder_intra_level_layers": 1,
+            "decoder_intra_level_layers": 1,
+        }
+    else:
+        predictor_class = GraphEFMMS
+        layer_kwargs = {
+            "prior_m2m_layers": 1,
+            "encoder_m2m_layers": 1,
+            "decoder_m2m_layers": 1,
+        }
     predictor = predictor_class(
         config=config,
         datastore=datastore,
@@ -67,15 +80,13 @@ def _build_predictor(graph_name, output_std=False, sample_obs_noise=False):
         hidden_dim=4,
         hidden_layers=1,
         latent_dim=4,
-        prior_processor_layers=1,
-        encoder_processor_layers=1,
-        processor_layers=1,
         learn_prior=True,
         prior_dist="isotropic",
         num_past_forcing_steps=NUM_PAST_FORCING_STEPS,
         num_future_forcing_steps=NUM_FUTURE_FORCING_STEPS,
         output_std=output_std,
         sample_obs_noise=sample_obs_noise,
+        **layer_kwargs,
     )
     return predictor, datastore, config
 

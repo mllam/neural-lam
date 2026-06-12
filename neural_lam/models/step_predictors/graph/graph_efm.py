@@ -31,7 +31,8 @@ class BaseGraphEFM(StepPredictor):
 
     A latent-variable step predictor consisting of a conditional prior, a
     variational encoder and a latent decoder, each of which carries its own
-    g2m/processor/m2g GNNs. The encode-process-decode backbone of
+    grid-to-mesh, on-mesh and mesh-to-grid GNNs. The
+    encode-process-decode backbone of
     ``BaseGraphModel`` therefore does not apply -- this extends
     ``StepPredictor`` directly. Besides ``forward`` (sampling a single step
     from the prior) it exposes the per-step ELBO pieces
@@ -570,9 +571,9 @@ class GraphEFM(BaseGraphEFM):
         hidden_dim: int = 64,
         hidden_layers: int = 1,
         latent_dim: Optional[int] = None,
-        prior_processor_layers: int = 2,
-        encoder_processor_layers: int = 2,
-        processor_layers: int = 4,
+        prior_intra_level_layers: int = 2,
+        encoder_intra_level_layers: int = 2,
+        decoder_intra_level_layers: int = 4,
         learn_prior: bool = True,
         prior_dist: str = "isotropic",
         num_past_forcing_steps: int = 1,
@@ -598,11 +599,11 @@ class GraphEFM(BaseGraphEFM):
         latent_dim : int, optional
             Dimensionality of the latent variable at each top-level mesh
             node; defaults to ``hidden_dim`` when None.
-        prior_processor_layers : int
+        prior_intra_level_layers : int
             Number of intra-level GNN layers in the (learned) prior.
-        encoder_processor_layers : int
+        encoder_intra_level_layers : int
             Number of intra-level GNN layers in the variational encoder.
-        processor_layers : int
+        decoder_intra_level_layers : int
             Number of intra-level GNN layers in the latent decoder.
         learn_prior : bool
             If True, the prior is a hierarchical graph encoder conditioned
@@ -678,12 +679,12 @@ class GraphEFM(BaseGraphEFM):
                 for _ in range(num_levels - 1)
             ]
         )
-        # If not using any processor layers, no need to embed m2m
+        # If not using any intra-level layers, no need to embed m2m
         self.embedd_m2m = (
             max(
-                prior_processor_layers,
-                encoder_processor_layers,
-                processor_layers,
+                prior_intra_level_layers,
+                encoder_intra_level_layers,
+                decoder_intra_level_layers,
             )
             > 0
         )
@@ -707,7 +708,7 @@ class GraphEFM(BaseGraphEFM):
                 m2m_edge_index=self.m2m_edge_index,
                 mesh_up_edge_index=self.mesh_up_edge_index,
                 hidden_dim=hidden_dim,
-                intra_level_layers=prior_processor_layers,
+                intra_level_layers=prior_intra_level_layers,
                 hidden_layers=hidden_layers,
                 g2m_gnn_type=g2m_gnn_type,
                 output_dist=prior_dist,
@@ -726,7 +727,7 @@ class GraphEFM(BaseGraphEFM):
             m2m_edge_index=self.m2m_edge_index,
             mesh_up_edge_index=self.mesh_up_edge_index,
             hidden_dim=hidden_dim,
-            intra_level_layers=encoder_processor_layers,
+            intra_level_layers=encoder_intra_level_layers,
             hidden_layers=hidden_layers,
             g2m_gnn_type=g2m_gnn_type,
             output_dist="diagonal",
@@ -740,7 +741,7 @@ class GraphEFM(BaseGraphEFM):
             hidden_dim=hidden_dim,
             latent_dim=latent_dim,
             num_state_vars=self.num_state_vars,
-            intra_level_layers=processor_layers,
+            intra_level_layers=decoder_intra_level_layers,
             hidden_layers=hidden_layers,
             g2m_gnn_type=g2m_gnn_type,
             m2g_gnn_type=m2g_gnn_type,
@@ -817,9 +818,9 @@ class GraphEFMMS(BaseGraphEFM):
         hidden_dim: int = 64,
         hidden_layers: int = 1,
         latent_dim: Optional[int] = None,
-        prior_processor_layers: int = 2,
-        encoder_processor_layers: int = 2,
-        processor_layers: int = 4,
+        prior_m2m_layers: int = 2,
+        encoder_m2m_layers: int = 2,
+        decoder_m2m_layers: int = 4,
         learn_prior: bool = True,
         prior_dist: str = "isotropic",
         num_past_forcing_steps: int = 1,
@@ -845,11 +846,11 @@ class GraphEFMMS(BaseGraphEFM):
         latent_dim : int, optional
             Dimensionality of the latent variable at each mesh node;
             defaults to ``hidden_dim`` when None.
-        prior_processor_layers : int
+        prior_m2m_layers : int
             Number of on-mesh (m2m) GNN layers in the (learned) prior.
-        encoder_processor_layers : int
+        encoder_m2m_layers : int
             Number of on-mesh (m2m) GNN layers in the variational encoder.
-        processor_layers : int
+        decoder_m2m_layers : int
             Number of on-mesh (m2m) GNN layers in the latent decoder.
         learn_prior : bool
             If True, the prior is a graph encoder conditioned on the
@@ -905,7 +906,7 @@ class GraphEFMMS(BaseGraphEFM):
                 g2m_edge_index=self.g2m_edge_index,
                 m2m_edge_index=self.m2m_edge_index,
                 hidden_dim=hidden_dim,
-                m2m_layers=prior_processor_layers,
+                m2m_layers=prior_m2m_layers,
                 hidden_layers=hidden_layers,
                 g2m_gnn_type=g2m_gnn_type,
                 output_dist=prior_dist,
@@ -923,7 +924,7 @@ class GraphEFMMS(BaseGraphEFM):
             g2m_edge_index=self.g2m_edge_index,
             m2m_edge_index=self.m2m_edge_index,
             hidden_dim=hidden_dim,
-            m2m_layers=encoder_processor_layers,
+            m2m_layers=encoder_m2m_layers,
             hidden_layers=hidden_layers,
             g2m_gnn_type=g2m_gnn_type,
             output_dist="diagonal",
@@ -935,7 +936,7 @@ class GraphEFMMS(BaseGraphEFM):
             hidden_dim=hidden_dim,
             latent_dim=latent_dim,
             num_state_vars=self.num_state_vars,
-            m2m_layers=processor_layers,
+            m2m_layers=decoder_m2m_layers,
             hidden_layers=hidden_layers,
             g2m_gnn_type=g2m_gnn_type,
             m2g_gnn_type=m2g_gnn_type,
