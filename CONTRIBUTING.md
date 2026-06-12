@@ -57,6 +57,9 @@ Codespell and others). In addition:
   [`neural_lam/datastore/base.py`](neural_lam/datastore/base.py) is a good
   in-repo example of the conventions we follow (sectioned `Parameters` /
   `Returns`, types in the signature line, prose first).
+- When annotating tensor shapes, use the canonical dimension names from the
+  [Dimension Glossary](README.md#dimension-glossary) so shapes stay consistent
+  across the codebase.
 - Keep new code consistent with the patterns already in the codebase.
 
 ## Before you push
