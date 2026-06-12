@@ -147,6 +147,10 @@ class BaseGraphLatentDecoder(nn.Module):
         """
         latent_emb = self.latent_embedder(latent_samples)
 
+        # Residually update the grid rep with a node-wise MLP. This gives a
+        # direct path from grid input to output that bypasses the mesh, used
+        # as the receiver (base) representation that mesh information is
+        # added onto in the final mesh-to-grid step of combine_with_latent.
         residual_grid_rep = grid_rep + self.grid_update_mlp(grid_rep)
 
         combined_grid_rep = self.combine_with_latent(
