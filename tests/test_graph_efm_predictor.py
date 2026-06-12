@@ -57,7 +57,7 @@ def _datastore_and_config_with_graph(graph_name):
     return datastore, config
 
 
-def _build_predictor(graph_name, output_std=False, sample_obs_noise=False):
+def _build_predictor(graph_name, output_std=False):
     datastore, config = _datastore_and_config_with_graph(graph_name)
     if graph_name == "hierarchical":
         predictor_class = GraphEFM
@@ -85,7 +85,6 @@ def _build_predictor(graph_name, output_std=False, sample_obs_noise=False):
         num_past_forcing_steps=NUM_PAST_FORCING_STEPS,
         num_future_forcing_steps=NUM_FUTURE_FORCING_STEPS,
         output_std=output_std,
-        sample_obs_noise=sample_obs_noise,
         **layer_kwargs,
     )
     return predictor, datastore, config
@@ -221,27 +220,6 @@ def test_forward_member_stochasticity(graph_name):
     out_b, _ = predictor(prev_state, prev_prev_state, forcing)
 
     assert not torch.allclose(out_a, out_b)
-
-
-def test_sample_next_state_respects_sample_obs_noise():
-    """sample_next_state returns the mean when sample_obs_noise is False and a
-    stochastic draw (different from the mean) when True."""
-    deterministic, datastore, _ = _build_predictor(
-        "1level", sample_obs_noise=False
-    )
-    d_state = datastore.get_num_data_vars(category="state")
-    # Last dim must match per_var_std (d_state,) for the obs-noise broadcast.
-    pred_mean = torch.randn(2, 5, d_state)
-
-    out_mean = deterministic.sample_next_state(pred_mean, pred_std=None)
-    assert torch.equal(out_mean, pred_mean)
-
-    stochastic, _, _ = _build_predictor("1level", sample_obs_noise=True)
-    # per_var_std is registered (output_std=False); the draw should differ
-    # from the mean.
-    out_sampled = stochastic.sample_next_state(pred_mean, pred_std=None)
-    assert out_sampled.shape == pred_mean.shape
-    assert not torch.allclose(out_sampled, pred_mean)
 
 
 def test_per_var_std_matches_module_formula():

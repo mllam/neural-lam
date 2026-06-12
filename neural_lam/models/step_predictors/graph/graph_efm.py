@@ -37,8 +37,8 @@ class BaseGraphEFM(StepPredictor):
     ``StepPredictor`` directly. Besides ``forward`` (sampling a single step
     from the prior) it exposes the per-step ELBO pieces
     (``compute_step_loss`` -> ``(likelihood_term, kl_term, pred_mean,
-    pred_std)``) and sampling helpers. Rollout, ELBO assembly, ensemble
-    logic and logging live outside the predictor.
+    pred_std)``). Rollout, ELBO assembly, ensemble logic and logging live
+    outside the predictor.
 
     This base class sets up everything that is independent of the mesh
     graph type. Concrete subclasses are specific to a graph type (declared
@@ -61,7 +61,6 @@ class BaseGraphEFM(StepPredictor):
         num_past_forcing_steps: int = 1,
         num_future_forcing_steps: int = 1,
         output_std: bool = False,
-        sample_obs_noise: bool = False,
         output_clamping_lower: Optional[Dict[str, float]] = None,
         output_clamping_upper: Optional[Dict[str, float]] = None,
     ):
@@ -97,9 +96,6 @@ class BaseGraphEFM(StepPredictor):
             If True, the decoder outputs a per-variable std alongside the
             mean; if False, a constant per-variable std is used as
             likelihood scale.
-        sample_obs_noise : bool
-            If True, sample observation noise when rolling out; if False,
-            ``sample_next_state`` returns the predicted mean.
         output_clamping_lower : dict of str to float, optional
             Lower clamping limits per output variable.
         output_clamping_upper : dict of str to float, optional
@@ -111,10 +107,6 @@ class BaseGraphEFM(StepPredictor):
             output_clamping_lower=output_clamping_lower,
             output_clamping_upper=output_clamping_upper,
         )
-
-        # Whether to sample observation noise during rollout. When False,
-        # sample_next_state returns the predicted mean.
-        self.sample_obs_noise = bool(sample_obs_noise)
 
         # Load graph with static features (same pattern as BaseGraphModel).
         # NOTE: (IMPORTANT!) mesh nodes MUST have the first
@@ -199,33 +191,6 @@ class BaseGraphEFM(StepPredictor):
         # never clamps (the decoder outputs the full next state), so these are
         # inert -- accepted for interface parity with other StepPredictors.
         self.prepare_clamping_params(datastore)
-
-    def sample_next_state(self, pred_mean, pred_std):
-        """
-        Sample state at next time step given a Gaussian observation model.
-        If ``self.sample_obs_noise`` is False, only return the mean.
-
-        Parameters
-        ----------
-        pred_mean : torch.Tensor
-            Shape ``(B, num_grid_nodes, d_state)``. Predicted mean.
-        pred_std : torch.Tensor or None
-            Shape ``(B, num_grid_nodes, d_state)``, or None when the decoder
-            does not output a std (``output_std=False``).
-
-        Returns
-        -------
-        torch.Tensor
-            Shape ``(B, num_grid_nodes, d_state)``. Next state.
-        """
-        if not self.output_std:
-            pred_std = self.per_var_std  # (d_f,)
-
-        if self.sample_obs_noise:
-            return torch.distributions.Normal(pred_mean, pred_std).rsample()
-            # (B, num_grid_nodes, d_state)
-
-        return pred_mean  # (B, num_grid_nodes, d_state)
 
     def embedd_current(
         self,
@@ -510,7 +475,9 @@ class BaseGraphEFM(StepPredictor):
     ) -> tuple[torch.Tensor, Optional[torch.Tensor]]:
         """
         Sample one time step prediction: embed features, sample the latent
-        from the prior, decode, and return the sampled next state.
+        from the prior, decode, and return the predicted next state. The
+        prediction is stochastic only through the latent sample; no
+        observation noise is added.
 
         Parameters
         ----------
@@ -524,7 +491,8 @@ class BaseGraphEFM(StepPredictor):
         Returns
         -------
         new_state : torch.Tensor
-            Shape ``(B, num_grid_nodes, d_state)``. Sampled ``X_{t+1}``.
+            Shape ``(B, num_grid_nodes, d_state)``. Predicted ``X_{t+1}``
+            (the decoder mean, given the sampled latent).
         pred_std : torch.Tensor or None
             Shape ``(B, num_grid_nodes, d_state)`` when ``output_std`` is True,
             otherwise None.
@@ -549,7 +517,7 @@ class BaseGraphEFM(StepPredictor):
             grid_prev_emb, latent_samples, last_state, graph_emb
         )  # (B, num_grid_nodes, d_state)
 
-        return self.sample_next_state(pred_mean, pred_std), pred_std
+        return pred_mean, pred_std
 
 
 class GraphEFM(BaseGraphEFM):
@@ -581,7 +549,6 @@ class GraphEFM(BaseGraphEFM):
         g2m_gnn_type: str = "InteractionNet",
         m2g_gnn_type: str = "InteractionNet",
         output_std: bool = False,
-        sample_obs_noise: bool = False,
         output_clamping_lower: Optional[Dict[str, float]] = None,
         output_clamping_upper: Optional[Dict[str, float]] = None,
     ):
@@ -633,9 +600,6 @@ class GraphEFM(BaseGraphEFM):
             If True, the decoder outputs a per-variable std alongside the
             mean; if False, a constant per-variable std is used as
             likelihood scale.
-        sample_obs_noise : bool
-            If True, sample observation noise when rolling out; if False,
-            ``sample_next_state`` returns the predicted mean.
         output_clamping_lower : dict of str to float, optional
             Lower clamping limits per output variable.
         output_clamping_upper : dict of str to float, optional
@@ -650,7 +614,6 @@ class GraphEFM(BaseGraphEFM):
             num_past_forcing_steps=num_past_forcing_steps,
             num_future_forcing_steps=num_future_forcing_steps,
             output_std=output_std,
-            sample_obs_noise=sample_obs_noise,
             output_clamping_lower=output_clamping_lower,
             output_clamping_upper=output_clamping_upper,
         )
@@ -850,7 +813,6 @@ class GraphEFMMS(BaseGraphEFM):
         g2m_gnn_type: str = "InteractionNet",
         m2g_gnn_type: str = "InteractionNet",
         output_std: bool = False,
-        sample_obs_noise: bool = False,
         output_clamping_lower: Optional[Dict[str, float]] = None,
         output_clamping_upper: Optional[Dict[str, float]] = None,
     ):
@@ -902,9 +864,6 @@ class GraphEFMMS(BaseGraphEFM):
             If True, the decoder outputs a per-variable std alongside the
             mean; if False, a constant per-variable std is used as
             likelihood scale.
-        sample_obs_noise : bool
-            If True, sample observation noise when rolling out; if False,
-            ``sample_next_state`` returns the predicted mean.
         output_clamping_lower : dict of str to float, optional
             Lower clamping limits per output variable.
         output_clamping_upper : dict of str to float, optional
@@ -919,7 +878,6 @@ class GraphEFMMS(BaseGraphEFM):
             num_past_forcing_steps=num_past_forcing_steps,
             num_future_forcing_steps=num_future_forcing_steps,
             output_std=output_std,
-            sample_obs_noise=sample_obs_noise,
             output_clamping_lower=output_clamping_lower,
             output_clamping_upper=output_clamping_upper,
         )
