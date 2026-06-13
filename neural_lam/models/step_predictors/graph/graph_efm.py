@@ -501,10 +501,10 @@ class BaseGraphEFM(StepPredictor):
         latent_samples = prior_dist.rsample()
         # (B, num_mesh_nodes, d_latent)
 
-        # Compute reconstruction (decoder)
-        last_state = prev_state
+        # Compute reconstruction (decoder). prev_state (X_t) is the state the
+        # decoder adds its predicted residual onto.
         pred_mean, pred_std = self.decoder(
-            grid_prev_emb, latent_samples, last_state, graph_emb
+            grid_prev_emb, latent_samples, prev_state, graph_emb
         )  # (B, num_grid_nodes, d_state)
 
         return pred_mean, pred_std
