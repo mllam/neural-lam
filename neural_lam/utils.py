@@ -9,7 +9,7 @@ import tempfile
 import warnings
 from functools import cache
 from pathlib import Path
-from typing import Any, Iterator, Union, overload
+from typing import TYPE_CHECKING, Any, Iterator, Union, overload
 
 # Third-party
 import pytorch_lightning as pl
@@ -23,6 +23,11 @@ from tueplots import bundles, figsizes
 
 # Local
 from .custom_loggers import CustomMLFlowLogger
+
+if TYPE_CHECKING:
+    # Imported only for type checking to avoid a runtime import cycle
+    # Local
+    from .datastore import BaseDatastore
 
 
 class BufferList(nn.Module):
@@ -435,6 +440,83 @@ def load_graph(
         "mesh_down_features": mesh_down_features,
         "mesh_static_features": mesh_static_features,
     }
+
+
+def load_and_register_graph(
+    module: nn.Module,
+    datastore: "BaseDatastore",
+    graph_name: str,
+) -> bool:
+    """
+    Load a graph and register its tensors on ``module``.
+
+    Loads the graph ``graph_name`` from the datastore's graph directory via
+    :func:`load_graph`, then registers each tensor as a non-persistent
+    buffer and each non-tensor (e.g. ``BufferList``) as a plain attribute on
+    ``module``.
+
+    Parameters
+    ----------
+    module : torch.nn.Module
+        Module to register the graph tensors and attributes on, in place.
+    datastore : BaseDatastore
+        Datastore whose ``root_path`` holds the ``graph`` directory.
+    graph_name : str
+        Name of the graph directory (under ``<root>/graph``) to load.
+
+    Returns
+    -------
+    bool
+        Whether the loaded graph is hierarchical.
+    """
+    graph_dir_path = datastore.root_path / "graph" / graph_name
+    hierarchical, graph_ldict = load_graph(graph_dir_path=graph_dir_path)
+    for name, attr_value in graph_ldict.items():
+        # Make BufferLists module members and register tensors as buffers
+        if isinstance(attr_value, torch.Tensor):
+            module.register_buffer(name, attr_value, persistent=False)
+        else:
+            setattr(module, name, attr_value)
+    return hierarchical
+
+
+def grid_input_dim(
+    datastore: "BaseDatastore",
+    grid_static_dim: int,
+    num_past_forcing_steps: int,
+    num_future_forcing_steps: int,
+) -> int:
+    """
+    Compute the total grid input dimensionality of a graph step predictor.
+
+    The grid input concatenates the two previous states, the grid static
+    features and the windowed forcing
+    (past + current + future forcing steps).
+
+    Parameters
+    ----------
+    datastore : BaseDatastore
+        Datastore providing the number of state and forcing variables.
+    grid_static_dim : int
+        Number of static features per grid node.
+    num_past_forcing_steps : int
+        Number of past forcing steps included in the input window.
+    num_future_forcing_steps : int
+        Number of future forcing steps included in the input window.
+
+    Returns
+    -------
+    int
+        Total grid input dimensionality.
+    """
+    num_state_vars = datastore.get_num_data_vars(category="state")
+    num_forcing_vars = datastore.get_num_data_vars(category="forcing")
+    return (
+        2 * num_state_vars
+        + grid_static_dim
+        + num_forcing_vars
+        * (num_past_forcing_steps + num_future_forcing_steps + 1)
+    )
 
 
 def make_mlp(blueprint: list[int], layer_norm: bool = True) -> nn.Sequential:
