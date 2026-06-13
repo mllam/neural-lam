@@ -182,7 +182,7 @@ class BaseGraphEFM(StepPredictor):
         # inert -- accepted for interface parity with other StepPredictors.
         self.prepare_clamping_params(datastore)
 
-    def embedd_current(
+    def embedd_grid_with_target(
         self,
         prev_state,
         prev_prev_state,
@@ -245,9 +245,9 @@ class BaseGraphEFM(StepPredictor):
         """
         raise NotImplementedError("embedd_mesh not implemented")
 
-    def embedd_all(self, prev_state, prev_prev_state, forcing):
+    def embedd_grid_and_graph(self, prev_state, prev_prev_state, forcing):
         """
-        Embed all node and edge representations.
+        Embed the grid (states up to t-1) and the full graph.
 
         Parameters
         ----------
@@ -324,9 +324,9 @@ class BaseGraphEFM(StepPredictor):
             Shape ``(B, num_grid_nodes, d_state)``. ``X_t``.
         grid_prev_emb : torch.Tensor
             Shape ``(B, num_grid_nodes, d_h)``. Grid embedding from
-            ``embedd_all``.
+            ``embedd_grid_and_graph``.
         graph_emb : dict
-            Edge/mesh embeddings from ``embedd_all``.
+            Edge/mesh embeddings from ``embedd_grid_and_graph``.
         loss_fn : Callable
             Per-entry loss (e.g. ``metrics.nll``); likelihood is its negative.
         interior_mask : torch.Tensor
@@ -411,13 +411,13 @@ class BaseGraphEFM(StepPredictor):
             Shape ``(B, num_grid_nodes, d_state)`` or ``(d_state,)``.
         """
         # embed all features
-        grid_prev_emb, graph_emb = self.embedd_all(
+        grid_prev_emb, graph_emb = self.embedd_grid_and_graph(
             prev_states[:, 1],
             prev_states[:, 0],
             forcing_features,
         )
         # embed also including current grid state, for encoder
-        grid_current_emb = self.embedd_current(
+        grid_current_emb = self.embedd_grid_with_target(
             prev_states[:, 1],
             prev_states[:, 0],
             forcing_features,
@@ -488,7 +488,7 @@ class BaseGraphEFM(StepPredictor):
             otherwise None.
         """
         # embed all features
-        grid_prev_emb, graph_emb = self.embedd_all(
+        grid_prev_emb, graph_emb = self.embedd_grid_and_graph(
             prev_state, prev_prev_state, forcing
         )
 
