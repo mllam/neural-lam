@@ -28,6 +28,19 @@ def test_config_serialization(state_weighting_config):
     assert c == c.from_yaml(c.to_yaml())
 
 
+def test_plotting_config_boundary_datastore_roundtrip():
+    c = nlconfig.NeuralLAMConfig(
+        datastores={
+            "danra": nlconfig.DatastoreSelection(kind="mdp", config_path=""),
+            "era5": nlconfig.DatastoreSelection(kind="mdp", config_path=""),
+        },
+        plotting=nlconfig.PlottingConfig(boundary_datastore="era5"),
+    )
+
+    assert c.plotting.boundary_datastore == "era5"
+    assert c == c.from_yaml(c.to_yaml())
+
+
 yaml_training_defaults = """
 datastores:
   main:

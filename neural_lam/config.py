@@ -3,7 +3,7 @@
 # Standard library
 import dataclasses
 from pathlib import Path
-from typing import Dict, Union
+from typing import Dict, Optional, Union
 
 # Third-party
 import dataclass_wizard
@@ -123,6 +123,10 @@ class PlottingConfig:
 
     Attributes
     ----------
+    boundary_datastore : str, optional
+        Name of the entry in `datastores` to use as the boundary forcing
+        source for the overlay. When unset, the single datastore without
+        `state` data is used. Must name a datastore without `state` data.
     boundary_margin_degrees : float
         Lat/lon margin (in projection degrees) drawn around the interior
         domain when a boundary datastore is configured. Defaults to 1.0.
@@ -132,6 +136,7 @@ class PlottingConfig:
         fall back to matching a boundary forcing feature of the same name.
     """
 
+    boundary_datastore: Optional[str] = None
     boundary_margin_degrees: float = 1.0
     boundary_var_mapping: Dict[str, str] = dataclasses.field(
         default_factory=dict
@@ -264,6 +269,19 @@ def load_config_and_datastore(
         )
 
     (datastore,) = interior_datastores.values()
-    datastore_boundary = next(iter(boundary_datastores.values()), None)
+
+    # The boundary overlay source can be named explicitly in the plotting
+    # config; otherwise fall back to the single datastore without `state`.
+    boundary_name = config.plotting.boundary_datastore
+    if boundary_name is not None:
+        if boundary_name not in boundary_datastores:
+            raise InvalidConfigError(
+                f"plotting.boundary_datastore {boundary_name!r} must name a "
+                "datastore without `state` data; found "
+                f"{sorted(boundary_datastores)} in {config_path}."
+            )
+        datastore_boundary = boundary_datastores[boundary_name]
+    else:
+        datastore_boundary = next(iter(boundary_datastores.values()), None)
 
     return config, datastore, datastore_boundary
