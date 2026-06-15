@@ -1,6 +1,9 @@
+"""Command-line utility for plotting saved Neural-LAM graphs."""
+
 # Standard library
 import os
 from argparse import ArgumentDefaultsHelpFormatter, ArgumentParser
+from typing import Any, Optional
 
 # Third-party
 import numpy as np
@@ -17,18 +20,18 @@ GRID_HEIGHT = 0
 
 
 def plot_graph(
-    grid_pos,
-    hierarchical,
-    graph_ldict,
-    show_axis=False,
-    save=None,
-):
+    grid_pos: np.ndarray,
+    hierarchical: bool,
+    graph_ldict: dict[str, Any],
+    show_axis: bool = False,
+    save: Optional[str] = None,
+) -> go.Figure:
     """Build a 3D plotly figure of the graph structure.
 
     Parameters
     ----------
     grid_pos : np.ndarray
-        Grid node positions, shape (N_grid, 2).
+        Grid node positions, shape (num_grid_nodes, 2).
     hierarchical : bool
         Whether the loaded graph is hierarchical.
     graph_ldict : dict
@@ -229,7 +232,7 @@ def plot_graph(
     return fig
 
 
-def main():
+def main() -> None:
     """Plot graph structure in 3D using plotly."""
     parser = ArgumentParser(
         description="Plot graph",
@@ -263,7 +266,7 @@ def main():
         config_path=args.datastore_config_path
     )
 
-    xy = datastore.get_xy("state", stacked=True)  # (N_grid, 2)
+    xy = datastore.get_xy("state", stacked=True)  # (num_grid_nodes, 2)
     grid_xy_extent = datastore.get_xy_extent(category="state")
     grid_xy_max_span = max(
         grid_xy_extent[1] - grid_xy_extent[0],
