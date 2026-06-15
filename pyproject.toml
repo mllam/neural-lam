@@ -148,7 +148,7 @@ min-similarity-lines = 10
 
 [tool.interrogate]
 fail-under = 100
-verbose = 1
+verbose = 2
 quiet = false
 ignore-init-method = false
 ignore-init-module = false
@@ -157,6 +157,7 @@ ignore-private = false
 ignore-nested-functions = false
 ignore-property-decorators = false
 exclude = ["tests", "docs", "build"]
+omit-covered-files = true
 
 [tool.pytest.ini_options]
 markers = [
