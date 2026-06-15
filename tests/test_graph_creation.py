@@ -201,7 +201,16 @@ def test_loaded_g2m_m2g_indices_in_bounds(datastore_name, graph_name):
             n_max_levels=n_max_levels,
         )
 
-        is_hierarchical, graph = load_graph(graph_dir_path=graph_dir_path)
+        grid_xy_extent = datastore.get_xy_extent(category="state")
+        grid_xy_max_span = max(
+            grid_xy_extent[1] - grid_xy_extent[0],
+            grid_xy_extent[3] - grid_xy_extent[2],
+        )
+
+        is_hierarchical, graph = load_graph(
+            graph_dir_path=graph_dir_path,
+            mesh_node_features_scaling=grid_xy_max_span,
+        )
 
         mesh_static_features = graph["mesh_static_features"]
         if is_hierarchical:
