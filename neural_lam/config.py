@@ -112,14 +112,19 @@ class NeuralLAMConfig(dataclass_wizard.JSONWizard, dataclass_wizard.YAMLWizard):
 
     Attributes
     ----------
-    datastore : DatastoreSelection
-        The configuration for the datastore to use.
+    datastores : Dict[str, DatastoreSelection]
+        Mapping from a user-chosen datastore name to its selection config. The
+        role of each datastore is implied by the categories of data it
+        provides rather than by a dedicated config key: a datastore that
+        contains `state` data is used for both model input and output (the
+        interior domain), while a datastore without `state` data is used for
+        input only (e.g. boundary forcing from a separate domain). At least
+        one datastore must provide `state` data.
     training : TrainingConfig
         The configuration for training the model.
     """
 
-    datastore: DatastoreSelection
-    datastore_boundary: Union[DatastoreSelection, None] = None
+    datastores: Dict[str, DatastoreSelection]
     training: TrainingConfig = dataclasses.field(default_factory=TrainingConfig)
 
     class _(dataclass_wizard.JSONWizard.Meta):
@@ -173,8 +178,9 @@ def load_config_and_datastore(
     Returns
     -------
     tuple[NeuralLAMConfig, datastore, datastore_boundary]
-        The Neural-LAM configuration, the loaded (interior) datastore,
-        and the boundary datastore (or None if not configured).
+        The Neural-LAM configuration, the loaded interior datastore (the one
+        providing `state` data), and the boundary datastore (the one without
+        `state` data, or None if no such datastore is configured).
     """
     try:
         config = NeuralLAMConfig.from_yaml_file(config_path)
@@ -183,22 +189,38 @@ def load_config_and_datastore(
             "There was an error loading the configuration file at "
             f"{config_path}. "
         ) from ex
-    # datastore config is assumed to be relative to the config file
-    datastore_config_path = (
-        Path(config_path).parent / config.datastore.config_path
-    )
-    datastore = init_datastore(
-        datastore_kind=config.datastore.kind, config_path=datastore_config_path
-    )
 
-    datastore_boundary = None
-    if config.datastore_boundary is not None:
-        datastore_boundary_config_path = (
-            Path(config_path).parent / config.datastore_boundary.config_path
+    # datastore configs are assumed to be relative to the config file. The
+    # role of each datastore is implied by the categories of data it provides:
+    # a datastore with `state` data is the interior (input and output), one
+    # without `state` data is used for input only (e.g. boundary forcing).
+    config_dir = Path(config_path).parent
+    interior_datastores = {}
+    boundary_datastores = {}
+    for name, selection in config.datastores.items():
+        datastore = init_datastore(
+            datastore_kind=selection.kind,
+            config_path=config_dir / selection.config_path,
         )
-        datastore_boundary = init_datastore(
-            datastore_kind=config.datastore_boundary.kind,
-            config_path=datastore_boundary_config_path,
+        if datastore.get_num_data_vars(category="state") > 0:
+            interior_datastores[name] = datastore
+        else:
+            boundary_datastores[name] = datastore
+
+    if len(interior_datastores) != 1:
+        raise InvalidConfigError(
+            "Exactly one datastore must provide `state` data (the interior "
+            f"domain), but {len(interior_datastores)} were found in "
+            f"{config_path}: {sorted(interior_datastores)}."
         )
+    if len(boundary_datastores) > 1:
+        raise InvalidConfigError(
+            "At most one boundary datastore (a datastore without `state` "
+            f"data) is currently supported, but {len(boundary_datastores)} "
+            f"were found in {config_path}: {sorted(boundary_datastores)}."
+        )
+
+    (datastore,) = interior_datastores.values()
+    datastore_boundary = next(iter(boundary_datastores.values()), None)
 
     return config, datastore, datastore_boundary

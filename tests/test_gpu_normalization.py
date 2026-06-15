@@ -22,9 +22,11 @@ class _MockStepPredictor(StepPredictor):
 
 def _build_module(datastore, datastore_boundary=None):
     config = nlconfig.NeuralLAMConfig(
-        datastore=nlconfig.DatastoreSelection(
-            kind=datastore.SHORT_NAME, config_path=datastore.root_path
-        )
+        datastores={
+            "main": nlconfig.DatastoreSelection(
+                kind=datastore.SHORT_NAME, config_path=datastore.root_path
+            )
+        }
     )
     predictor = _MockStepPredictor(datastore=datastore, output_std=False)
     forecaster = ARForecaster(predictor, datastore)

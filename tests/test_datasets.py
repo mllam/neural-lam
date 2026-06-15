@@ -215,9 +215,11 @@ def test_single_batch(datastore_name, split):
     _create_graph()
 
     config = nlconfig.NeuralLAMConfig(
-        datastore=nlconfig.DatastoreSelection(
-            kind=datastore.SHORT_NAME, config_path=datastore.root_path
-        )
+        datastores={
+            "main": nlconfig.DatastoreSelection(
+                kind=datastore.SHORT_NAME, config_path=datastore.root_path
+            )
+        }
     )
 
     dataset = WeatherDataset(datastore=datastore, split=split, ar_steps=2)

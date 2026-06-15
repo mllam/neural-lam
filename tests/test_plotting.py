@@ -442,10 +442,12 @@ def model_and_batch(tmp_path, time_step, time_unit):
 
     # Create config.
     config = nlconfig.NeuralLAMConfig(
-        datastore=nlconfig.DatastoreSelection(
-            kind=datastore.SHORT_NAME,
-            config_path=datastore.root_path,
-        ),
+        datastores={
+            "main": nlconfig.DatastoreSelection(
+                kind=datastore.SHORT_NAME,
+                config_path=datastore.root_path,
+            )
+        },
     )
 
     # Create model
@@ -715,10 +717,12 @@ def test_create_metric_log_dict_with_metrics_watch(tmp_path):
         )
 
     config = nlconfig.NeuralLAMConfig(
-        datastore=nlconfig.DatastoreSelection(
-            kind=datastore.SHORT_NAME,
-            config_path=datastore.root_path,
-        ),
+        datastores={
+            "main": nlconfig.DatastoreSelection(
+                kind=datastore.SHORT_NAME,
+                config_path=datastore.root_path,
+            )
+        },
     )
 
     model = _build_metrics_watch_module(datastore, config)
@@ -774,10 +778,12 @@ def test_aggregate_and_plot_metrics_with_metrics_watch(tmp_path):
         )
 
     config = nlconfig.NeuralLAMConfig(
-        datastore=nlconfig.DatastoreSelection(
-            kind=datastore.SHORT_NAME,
-            config_path=datastore.root_path,
-        ),
+        datastores={
+            "main": nlconfig.DatastoreSelection(
+                kind=datastore.SHORT_NAME,
+                config_path=datastore.root_path,
+            )
+        },
     )
 
     model = _build_metrics_watch_module(datastore, config)

@@ -145,12 +145,13 @@ data/
 
 And the content of `config.yaml` could in this case look like:
 ```yaml
-datastore:
-  kind: mdp
-  config_path: danra.datastore.yaml
-datastore_boundary:  # optional, for boundary forcing from a separate domain
-  kind: mdp
-  config_path: era5_boundary.datastore.yaml
+datastores:
+  danra:
+    kind: mdp
+    config_path: danra.datastore.yaml
+  era5_boundary:  # optional; no `state` data, so used for input (boundary) only
+    kind: mdp
+    config_path: era5_boundary.datastore.yaml
 training:
   state_feature_weighting:
     __config_class__: ManualStateFeatureWeighting
@@ -169,15 +170,18 @@ training:
 
 For now the neural-lam config only defines few things:
 
-1. The kind of datastore and the path to its config
-2. (Optional) A boundary datastore (`datastore_boundary`) providing boundary
-   forcing from a separate domain (e.g. ERA5 for a LAM domain). When set, the
-   boundary forcing is windowed and included as an additional tensor in each
-   training sample.
-3. The weighting of different features in
+1. A named mapping of datastores (`datastores`), each giving the kind of
+   datastore and the path to its config. The role of each datastore is implied
+   by the categories of data it provides: a datastore that contains `state`
+   data is used for both model input and output (the interior domain), while a
+   datastore without `state` data is used for input only (e.g. boundary forcing
+   from a separate domain such as ERA5 for a LAM domain). At least one datastore
+   must provide `state` data. When a boundary datastore is present its forcing
+   is windowed and included as an additional tensor in each training sample.
+2. The weighting of different features in
 the loss function. If you don't define the state feature weighting it will default to
 weighting all features equally.
-4. Valid numerical range for output of each feature. The numerical range of all features default to $]-\infty, \infty[$.
+3. Valid numerical range for output of each feature. The numerical range of all features default to $]-\infty, \infty[$.
 
 (This example is taken from the `tests/datastore_examples/mdp` directory.)
 
@@ -378,9 +382,10 @@ Which you can then use in a neural-lam configuration file like this:
 
 ```yaml
 # config.yaml
-datastore:
-  kind: npyfilesmeps
-  config_path: meps.datastore.yaml
+datastores:
+  meps:
+    kind: npyfilesmeps
+    config_path: meps.datastore.yaml
 training:
   state_feature_weighting:
     __config_class__: ManualStateFeatureWeighting
