@@ -100,7 +100,8 @@ features MUST be stored separately in `mesh_features.pt`.
 
 All files MUST be serialized with `torch.save(...)`.
 
-> **NOTE**: Rather than the inter-level tensors files being prefixed with
+> **NOTE**: Rather than the files defining inter-level edges being
+> prefixed with
 > `m2m`, they are prefixed with `mesh`, even though they are part of the
 > mesh-to-mesh message passing.
 
@@ -113,13 +114,18 @@ The content of the files depend on the number of mesh levels, denoted as
 - Hierarchical graphs `L > 1`.
 - Entry `0` MUST always be the bottom mesh level.
 
-Every tensors MUST stored in a manner ameanable to load with
+Every tensor MUST stored in a manner ameanable to load with
 `torch.load(...)` (this can most easily be support by using
 `torch.save(...)` to store tensors to disk) and satisfy the requirements
 below.
 ### 3.1 Nodes
 
-The `neural-lam` graph format on disk does not explicitly store node
+The nodes in the graph are implicitly defined by the node indices appearing
+in the edge index tensors, and by the mesh node features stored in
+`mesh_features.pt`. Both are covered in the requirements below.
+
+> *NOTE*: The `neural-lam` graph format on disk does not explicitly
+> store node
 features for grid nodes, as these are expected to be dynamic and stored
 separately in the dataset. However, static features for mesh nodes MUST
 be stored in `mesh_features.pt` files (as described below).
@@ -132,16 +138,17 @@ destination nodes (where the edges connect to) should be denoted by
 indices running from `0` to `N_src-1` and `0` to `N_dst-1` respectively,
 where `N_src` and `N_dst` are the total number of source and destination
 nodes being connected. This means that the node indices in the edge index
-tensors are numbered separately, and the nodes in each set are only
-numbered identically if the set of nodes being connect from and to are the
-same set (as would be the case for mesh-to-mesh connections in
-non-hierarchical graphs).
+tensors are numbered separately (for the source and destination node sets),
+and the nodes in each set are only numbered identically if the set of nodes
+being connect from and to are the same set (as would be the case for
+mesh-to-mesh connections in non-hierarchical graphs).
 
 > **NOTE**: Although the integers used to label a given set of source or
 > destination nodes must be contiguous from `0` to `N-1` (where `N` is
 > the number of nodes) it is not a requirement that all node indexes are
 > actually present in the edge index tensors, i.e. it is not a
-> requirement that all nodes in either set source or destination nodes has
+> requirement that all nodes in either the source or destination set
+> of nodes has
 > edges connecting to them (this is for example used when decoding to only
 > a subset in the grid nodes when training in a limited-area setting where
 > predictions are not required on the boundary)
