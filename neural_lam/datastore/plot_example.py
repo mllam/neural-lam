@@ -1,3 +1,5 @@
+"""CLI helper to plot slices from datastores for manual inspection."""
+
 # Third-party
 import matplotlib.pyplot as plt
 
@@ -80,7 +82,7 @@ def plot_example_from_datastore(
         transform=crs,
         size=4,
     )
-    for ax in g.axes.flat:
+    for ax in (g.axs if hasattr(g, "axs") else g.axes).flat:
         ax.coastlines()
         ax.gridlines(draw_labels=["left", "bottom"])
         ax.set_extent(datastore.get_xy_extent(category=category), crs=crs)
@@ -93,6 +95,7 @@ if __name__ == "__main__":
     import argparse
 
     def _parse_dict(arg_str):
+        """Parse ``key=value`` CLI arguments into typed dictionary entries."""
         key, value = arg_str.split("=")
         for op in [int, float]:
             try:

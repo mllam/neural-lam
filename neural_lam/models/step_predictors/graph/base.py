@@ -1,0 +1,332 @@
+"""Base class for graph-based step predictors."""
+
+# Standard library
+
+# Third-party
+import torch
+
+# Local
+from .... import utils
+from ....datastore import BaseDatastore
+from ....gnn_layers import get_gnn_class
+from ..base import StepPredictor
+
+
+class BaseGraphModel(StepPredictor):
+    """
+    Base (abstract) class for graph-based models building on
+    the encode-process-decode idea.
+    """
+
+    def __init__(
+        self,
+        datastore: BaseDatastore,
+        graph_name: str = "multiscale",
+        hidden_dim: int = 64,
+        hidden_layers: int = 1,
+        processor_layers: int = 4,
+        mesh_aggr: str = "sum",
+        num_past_forcing_steps: int = 1,
+        num_future_forcing_steps: int = 1,
+        output_std: bool = False,
+        output_clamping_lower: dict[str, float] | None = None,
+        output_clamping_upper: dict[str, float] | None = None,
+        g2m_gnn_type: str = "InteractionNet",
+        m2g_gnn_type: str = "InteractionNet",
+    ):
+        """
+        Initialize the BaseGraphModel.
+
+        Parameters
+        ----------
+        datastore : BaseDatastore
+            Datastore supplying data and information about dataset and
+            forecast region.
+        graph_name : str, default "multiscale"
+            The name of the graph to load.
+        hidden_dim : int, default 64
+            The dimension of the hidden representations.
+        hidden_layers : int, default 1
+            The number of hidden layers in the MLPs.
+        processor_layers : int, default 4
+            The number of processor layers in the GNN.
+        mesh_aggr : str, default "sum"
+            The aggregation method for mesh nodes.
+        num_past_forcing_steps : int, default 1
+            The number of past forcing steps to include.
+        num_future_forcing_steps : int, default 1
+            The number of future forcing steps to include.
+        output_std : bool, default False
+            Whether to output a predicted standard deviation.
+        output_clamping_lower : dict, optional
+            Lower clamping limits for state variables.
+        output_clamping_upper : dict, optional
+            Upper clamping limits for state variables.
+        """
+        super().__init__(
+            datastore=datastore,
+            output_std=output_std,
+            output_clamping_lower=output_clamping_lower,
+            output_clamping_upper=output_clamping_upper,
+        )
+        self.g2m_gnn_type = g2m_gnn_type
+        self.m2g_gnn_type = m2g_gnn_type
+
+        # Retrieve difference statistics for rescaling in forward pass
+        da_state_stats = datastore.get_standardization_dataarray("state")
+        self.register_buffer(
+            "diff_mean",
+            torch.tensor(
+                da_state_stats.state_diff_mean_standardized.values,
+                dtype=torch.float32,
+            ),
+            persistent=False,
+        )
+        self.register_buffer(
+            "diff_std",
+            torch.tensor(
+                da_state_stats.state_diff_std_standardized.values,
+                dtype=torch.float32,
+            ),
+            persistent=False,
+        )
+
+        # Store architecture hyperparameters for subclass use
+        self.hidden_dim = hidden_dim
+        self.hidden_layers = hidden_layers
+        self.processor_layers = processor_layers
+        self.mesh_aggr = mesh_aggr
+
+        # Load graph with static features
+        # NOTE: (IMPORTANT!) mesh nodes MUST have the first
+        # num_mesh_nodes indices,
+        graph_dir_path = datastore.root_path / "graph" / graph_name
+        self.hierarchical, graph_ldict = utils.load_graph(
+            graph_dir_path=graph_dir_path
+        )
+        for name, attr_value in graph_ldict.items():
+            # Make BufferLists module members and register tensors as buffers
+            if isinstance(attr_value, torch.Tensor):
+                self.register_buffer(name, attr_value, persistent=False)
+            else:
+                setattr(self, name, attr_value)
+
+        # Specify dimensions of data
+        self.num_mesh_nodes, _ = self.get_num_mesh()
+        utils.log_on_rank_zero(
+            f"Loaded graph with {self.num_grid_nodes + self.num_mesh_nodes} "
+            f"nodes ({self.num_grid_nodes} grid, {self.num_mesh_nodes} mesh)"
+        )
+
+        # Compute grid_input_dim: total input dimensionality on the grid
+        num_state_vars = datastore.get_num_data_vars(category="state")
+        num_forcing_vars = datastore.get_num_data_vars(category="forcing")
+        grid_static_dim = self.grid_static_features.shape[1]
+        self.grid_input_dim = (
+            2 * num_state_vars
+            + grid_static_dim
+            + num_forcing_vars
+            * (num_past_forcing_steps + num_future_forcing_steps + 1)
+        )
+
+        self.g2m_edges, g2m_dim = self.g2m_features.shape
+        self.m2g_edges, m2g_dim = self.m2g_features.shape
+
+        # Define sub-models
+        # Feature embedders for grid
+        self.mlp_blueprint_end = [hidden_dim] * (hidden_layers + 1)
+        self.grid_embedder = utils.make_mlp(
+            [self.grid_input_dim] + self.mlp_blueprint_end
+        )
+        self.g2m_embedder = utils.make_mlp([g2m_dim] + self.mlp_blueprint_end)
+        self.m2g_embedder = utils.make_mlp([m2g_dim] + self.mlp_blueprint_end)
+
+        # GNNs
+        # encoder
+        self.g2m_gnn = get_gnn_class(g2m_gnn_type)(
+            self.g2m_edge_index,
+            hidden_dim,
+            hidden_layers=hidden_layers,
+            update_edges=False,
+        )
+        self.encoding_grid_mlp = utils.make_mlp(
+            [hidden_dim] + self.mlp_blueprint_end
+        )
+
+        # decoder
+        self.m2g_gnn = get_gnn_class(m2g_gnn_type)(
+            self.m2g_edge_index,
+            hidden_dim,
+            hidden_layers=hidden_layers,
+            update_edges=False,
+        )
+
+        # Output mapping (hidden_dim -> output_dim)
+        self.output_map = utils.make_mlp(
+            [hidden_dim] * (hidden_layers + 1) + [self.grid_output_dim],
+            layer_norm=False,
+        )  # No layer norm on this one
+
+        # Compute indices and define clamping functions
+        self.prepare_clamping_params(datastore)
+
+    def get_num_mesh(self):
+        """
+        Compute number of mesh nodes from loaded features,
+        and number of mesh nodes that should be ignored in encoding/decoding.
+
+        Returns
+        -------
+        num_mesh_nodes : int
+            The number of mesh nodes.
+        num_ignore_mesh_nodes : int
+            The number of mesh nodes to ignore.
+        """
+        raise NotImplementedError("get_num_mesh not implemented")
+
+    def embedd_mesh_nodes(self):
+        """
+        Embed static mesh node features.
+
+        Returns
+        -------
+        torch.Tensor
+            Shape ``(num_mesh_nodes, hidden_dim)``. Embedded mesh node
+            representations. Dims: ``num_mesh_nodes`` is the number of
+            mesh nodes and ``hidden_dim`` is the hidden dimension.
+        """
+        raise NotImplementedError("embedd_mesh_nodes not implemented")
+
+    def process_step(self, mesh_rep):
+        """
+        Process the mesh representation in the encode-process-decode
+        framework, running one or more message-passing steps.
+
+        Parameters
+        ----------
+        mesh_rep : torch.Tensor
+            Shape ``(B, num_mesh_nodes, hidden_dim)``. Current mesh node
+            representations. Dims: ``B`` is batch size,
+            ``num_mesh_nodes`` is the number of mesh nodes, and ``hidden_dim``
+            is the hidden dimension.
+
+        Returns
+        -------
+        torch.Tensor
+            Shape ``(B, num_mesh_nodes, hidden_dim)``. Updated mesh node
+            representations. Dims: same as ``mesh_rep``.
+        """
+        raise NotImplementedError("process_step not implemented")
+
+    def forward(self, prev_state, prev_prev_state, forcing):
+        """
+        Advance the state by one step using the encode-process-decode
+        graph pipeline: embed grid + edge features, map grid -> mesh via
+        the g2m GNN, run the (subclass-defined) processor on the mesh,
+        decode mesh -> grid via the m2g GNN, project to a state delta,
+        rescale with difference statistics, and add to ``prev_state``
+        (with optional clamping). Returns ``(X_{t+1}, optional std)``.
+
+        Parameters
+        ----------
+        prev_state : torch.Tensor
+            Shape ``(B, num_grid_nodes, num_state_vars)``. The current
+            state ``X_t``. Dims: ``B`` is batch size,
+            ``num_grid_nodes`` is the number of spatial grid nodes, and
+            ``num_state_vars`` is the number of state variables.
+        prev_prev_state : torch.Tensor
+            Shape ``(B, num_grid_nodes, num_state_vars)``. The previous state
+            ``X_{t-1}``, used as additional conditioning. Dims: same as
+            ``prev_state``.
+        forcing : torch.Tensor
+            Shape ``(B, num_grid_nodes, num_forcing_vars)``. External forcings
+            for this step (already concatenated past/current/future
+            windows). Dims: ``B`` is batch size, ``num_grid_nodes`` is
+            the number of spatial grid nodes, and ``num_forcing_vars`` is the
+            forcing feature dimension.
+
+        Returns
+        -------
+        new_state : torch.Tensor
+            Shape ``(B, num_grid_nodes, num_state_vars)``. The predicted
+            next state ``X_{t+1}`` after delta-add and clamping. Dims:
+            same as ``prev_state``.
+        pred_std : torch.Tensor or None
+            Shape ``(B, num_grid_nodes, num_state_vars)`` when ``output_std`` is
+            True, otherwise ``None``. Per-feature predicted standard
+            deviation (raw softplus output, not rescaled by diff
+            statistics). Dims: same as ``prev_state``.
+        """
+        batch_size = prev_state.shape[0]
+
+        # Create full grid node features of shape (B, num_grid_nodes, grid_dim)
+        grid_features = torch.cat(
+            (
+                prev_state,
+                prev_prev_state,
+                forcing,
+                self.expand_to_batch(self.grid_static_features, batch_size),
+            ),
+            dim=-1,
+        )
+
+        # Embed all features
+        grid_emb = self.grid_embedder(
+            grid_features
+        )  # (B, num_grid_nodes, hidden_dim)
+        g2m_emb = self.g2m_embedder(
+            self.g2m_features
+        )  # (num_edges, hidden_dim)
+        m2g_emb = self.m2g_embedder(
+            self.m2g_features
+        )  # (num_edges, hidden_dim)
+        mesh_emb = self.embedd_mesh_nodes()
+
+        # Map from grid to mesh
+        mesh_emb_expanded = self.expand_to_batch(
+            mesh_emb, batch_size
+        )  # (B, num_mesh_nodes, hidden_dim)
+        g2m_emb_expanded = self.expand_to_batch(g2m_emb, batch_size)
+
+        # This also splits representation into grid and mesh
+        mesh_rep = self.g2m_gnn(
+            grid_emb, mesh_emb_expanded, g2m_emb_expanded
+        )  # (B, num_mesh_nodes, hidden_dim)
+        # Also MLP with residual for grid representation
+        grid_rep = grid_emb + self.encoding_grid_mlp(
+            grid_emb
+        )  # (B, num_grid_nodes, hidden_dim)
+
+        # Run processor step
+        mesh_rep = self.process_step(mesh_rep)
+
+        # Map back from mesh to grid
+        m2g_emb_expanded = self.expand_to_batch(m2g_emb, batch_size)
+        grid_rep = self.m2g_gnn(
+            mesh_rep, grid_rep, m2g_emb_expanded
+        )  # (B, num_grid_nodes, hidden_dim)
+
+        # Map to output dimension, only for grid
+        net_output = self.output_map(
+            grid_rep
+        )  # (B, num_grid_nodes, d_grid_out)
+
+        if self.output_std:
+            pred_delta_mean, pred_std_raw = net_output.chunk(
+                2, dim=-1
+            )  # both (B, num_grid_nodes, num_state_vars)
+            # NOTE: The predicted std. is not scaled in any way here
+            # linter for some reason does not think softplus is callable
+            # pylint: disable-next=not-callable
+            pred_std = torch.nn.functional.softplus(pred_std_raw)
+        else:
+            pred_delta_mean = net_output
+            pred_std = None
+
+        # Rescale with one-step difference statistics
+        rescaled_delta_mean = pred_delta_mean * self.diff_std + self.diff_mean
+
+        # Clamp values to valid range (also add the delta to the previous state)
+        new_state = self.get_clamped_new_state(rescaled_delta_mean, prev_state)
+
+        return new_state, pred_std

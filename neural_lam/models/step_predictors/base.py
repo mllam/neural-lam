@@ -1,0 +1,381 @@
+"""Base class for step predictors."""
+
+# Standard library
+from abc import ABC, abstractmethod
+
+# Third-party
+import torch
+from torch import nn
+
+# Local
+from ... import utils
+from ...datastore import BaseDatastore
+
+
+class StepPredictor(nn.Module, ABC):
+    """
+    Abstract base class for step predictors mapping from the two previous
+    time steps plus forcing into a prediction of the next state.
+    """
+
+    def __init__(
+        self,
+        datastore: BaseDatastore,
+        output_std: bool = False,
+        output_clamping_lower: dict[str, float] | None = None,
+        output_clamping_upper: dict[str, float] | None = None,
+    ):
+        """
+        Initialize the StepPredictor.
+
+        Parameters
+        ----------
+        datastore : BaseDatastore
+            The datastore providing grid metadata and data access.
+        output_std : bool, default False
+            Whether to output a predicted standard deviation.
+        output_clamping_lower : dict, optional
+            Lower clamping limits for state variables.
+        output_clamping_upper : dict, optional
+            Upper clamping limits for state variables.
+        """
+        super().__init__()
+        self._output_clamping_lower: dict[str, float] = (
+            dict(output_clamping_lower) if output_clamping_lower else {}
+        )
+        self._output_clamping_upper: dict[str, float] = (
+            dict(output_clamping_upper) if output_clamping_upper else {}
+        )
+
+        num_state_vars = datastore.get_num_data_vars(category="state")
+
+        # Load static features standardized
+        da_static_features = datastore.get_dataarray(
+            category="static", split=None, standardize=True
+        )
+        if da_static_features is None:
+            # Create empty static features of the correct shape
+            num_grid_nodes = datastore.num_grid_points
+            grid_static_features = torch.empty(
+                (num_grid_nodes, 0), dtype=torch.float32
+            )
+        else:
+            grid_static_features = torch.tensor(
+                da_static_features.values, dtype=torch.float32
+            )
+
+        self.register_buffer(
+            "grid_static_features",
+            grid_static_features,
+            persistent=False,
+        )
+
+        da_state_stats = datastore.get_standardization_dataarray(
+            category="state"
+        )
+
+        self.register_buffer(
+            "state_mean",
+            torch.tensor(da_state_stats.state_mean.values, dtype=torch.float32),
+            persistent=False,
+        )
+        self.register_buffer(
+            "state_std",
+            torch.tensor(da_state_stats.state_std.values, dtype=torch.float32),
+            persistent=False,
+        )
+
+        self.output_std = bool(output_std)
+        if self.output_std:
+            self.grid_output_dim = 2 * num_state_vars
+        else:
+            self.grid_output_dim = num_state_vars
+
+        (self.num_grid_nodes, _) = self.grid_static_features.shape
+
+    @property
+    def predicts_std(self) -> bool:
+        """
+        Whether this predictor outputs a predicted standard deviation.
+
+        Returns
+        -------
+        bool
+            ``True`` if the predictor predicts standard deviation,
+            ``False`` otherwise.
+        """
+        return self.output_std
+
+    def expand_to_batch(self, x: torch.Tensor, batch_size: int) -> torch.Tensor:
+        """
+        Expand a shared node-feature tensor into a batch of copies.
+
+        Parameters
+        ----------
+        x : torch.Tensor
+            Shape ``(N, d)``. Tensor to expand. Dims: ``N`` is the number of
+            nodes and ``d`` is the feature dimension.
+        batch_size : int
+            Target batch size ``B``.
+
+        Returns
+        -------
+        torch.Tensor
+            Shape ``(B, N, d)``. Batch-expanded view of ``x``.
+        """
+        return x.unsqueeze(0).expand(batch_size, -1, -1)
+
+    @abstractmethod
+    def forward(
+        self,
+        prev_state: torch.Tensor,
+        prev_prev_state: torch.Tensor,
+        forcing: torch.Tensor,
+    ) -> tuple[torch.Tensor, torch.Tensor | None]:
+        """
+        Advance the state by one step:
+        ``(X_{t-1}, X_t, forcing_t) -> X_{t+1}``.
+
+        Parameters
+        ----------
+        prev_state : torch.Tensor
+            Shape ``(B, num_grid_nodes, num_state_vars)``. The current state
+            ``X_t``. Dims: ``B`` is batch size, ``num_grid_nodes`` is the
+            number of spatial nodes, and ``num_state_vars`` is the number of
+            state variables.
+        prev_prev_state : torch.Tensor
+            Shape ``(B, num_grid_nodes, num_state_vars)``. The previous state
+            ``X_{t-1}``, used as additional conditioning. Dims: same as
+            ``prev_state``.
+        forcing : torch.Tensor
+            Shape ``(B, num_grid_nodes, num_forcing_vars)``. External forcings
+            for this step (already concatenated past/current/future
+            windows). Dims: ``B`` is batch size, ``num_grid_nodes`` is
+            the number of spatial nodes, and ``num_forcing_vars`` is the
+            forcing feature dimension.
+
+        Returns
+        -------
+        pred_state : torch.Tensor
+            Shape ``(B, num_grid_nodes, num_state_vars)``. The predicted next
+            state ``X_{t+1}``. Dims: same as ``prev_state``.
+        pred_std : torch.Tensor or None
+            Shape ``(B, num_grid_nodes, num_state_vars)`` when ``output_std``
+            is True, otherwise ``None``. Per-feature predicted standard
+            deviation. Dims: same as ``prev_state``.
+        """
+
+    def prepare_clamping_params(self, datastore: BaseDatastore):
+        """
+        Prepare parameters for clamping predicted values to valid range.
+
+        Reads the per-feature lower/upper limits from
+        ``self._output_clamping_lower`` and ``self._output_clamping_upper``
+        (set in ``__init__``) and registers the buffers and clamping
+        functions used by ``get_clamped_new_state``.
+
+        Parameters
+        ----------
+        datastore : BaseDatastore
+            The datastore providing variable names.
+        """
+
+        # Read clamping limits stored on self
+        state_feature_names = datastore.get_vars_names(category="state")
+        lower_lims = self._output_clamping_lower
+        upper_lims = self._output_clamping_upper
+
+        # Check that limits are for valid features
+        unknown_features_lower = set(lower_lims.keys()) - set(
+            state_feature_names
+        )
+        unknown_features_upper = set(upper_lims.keys()) - set(
+            state_feature_names
+        )
+        if unknown_features_lower or unknown_features_upper:
+            raise ValueError(
+                "State feature limits were provided for unknown features: "
+                f"{unknown_features_lower.union(unknown_features_upper)}"
+            )
+
+        # Constant parameters for clamping
+        sigmoid_sharpness = 1
+        softplus_sharpness = 1
+        sigmoid_center = 0
+        softplus_center = 0
+
+        def normalize_clamping_lim(x, feature_idx):
+            """Normalize a clamping limit from the original feature space to the
+            standardized space of the model's output.
+
+            Parameters
+            ----------
+            x : float
+                The clamping limit in the original feature space.
+            feature_idx : int
+                The index of the feature this limit applies to, used to look up
+                the mean and std for normalization.
+            """
+            return (x - self.state_mean[feature_idx]) / self.state_std[
+                feature_idx
+            ]
+
+        # Check which clamping functions to use for each feature
+        sigmoid_lower_upper_idx = []
+        sigmoid_lower_lims = []
+        sigmoid_upper_lims = []
+
+        softplus_lower_idx = []
+        softplus_lower_lims = []
+
+        softplus_upper_idx = []
+        softplus_upper_lims = []
+
+        for feature_idx, feature in enumerate(state_feature_names):
+            if feature in lower_lims and feature in upper_lims:
+                assert (
+                    lower_lims[feature] < upper_lims[feature]
+                ), f'Invalid clamping limits for feature "{feature}",\
+                     lower: {lower_lims[feature]}, larger than\
+                     upper: {upper_lims[feature]}'
+                sigmoid_lower_upper_idx.append(feature_idx)
+                sigmoid_lower_lims.append(
+                    normalize_clamping_lim(lower_lims[feature], feature_idx)
+                )
+                sigmoid_upper_lims.append(
+                    normalize_clamping_lim(upper_lims[feature], feature_idx)
+                )
+            elif feature in lower_lims and feature not in upper_lims:
+                softplus_lower_idx.append(feature_idx)
+                softplus_lower_lims.append(
+                    normalize_clamping_lim(lower_lims[feature], feature_idx)
+                )
+            elif feature not in lower_lims and feature in upper_lims:
+                softplus_upper_idx.append(feature_idx)
+                softplus_upper_lims.append(
+                    normalize_clamping_lim(upper_lims[feature], feature_idx)
+                )
+
+        self.register_buffer(
+            "sigmoid_lower_lims", torch.tensor(sigmoid_lower_lims)
+        )
+        self.register_buffer(
+            "sigmoid_upper_lims", torch.tensor(sigmoid_upper_lims)
+        )
+        self.register_buffer(
+            "softplus_lower_lims", torch.tensor(softplus_lower_lims)
+        )
+        self.register_buffer(
+            "softplus_upper_lims", torch.tensor(softplus_upper_lims)
+        )
+
+        self.register_buffer(
+            "clamp_lower_upper_idx", torch.tensor(sigmoid_lower_upper_idx)
+        )
+        self.register_buffer(
+            "clamp_lower_idx", torch.tensor(softplus_lower_idx)
+        )
+        self.register_buffer(
+            "clamp_upper_idx", torch.tensor(softplus_upper_idx)
+        )
+
+        # Define clamping functions
+        self.clamp_lower_upper = lambda x: (
+            self.sigmoid_lower_lims
+            + (self.sigmoid_upper_lims - self.sigmoid_lower_lims)
+            * torch.sigmoid(sigmoid_sharpness * (x - sigmoid_center))
+        )
+        self.clamp_lower = lambda x: (
+            self.softplus_lower_lims
+            + torch.nn.functional.softplus(
+                x - softplus_center, beta=softplus_sharpness
+            )
+        )
+        self.clamp_upper = lambda x: (
+            self.softplus_upper_lims
+            - torch.nn.functional.softplus(
+                softplus_center - x, beta=softplus_sharpness
+            )
+        )
+
+        self.inverse_clamp_lower_upper = lambda x: (
+            sigmoid_center
+            + utils.inverse_sigmoid(
+                (x - self.sigmoid_lower_lims)
+                / (self.sigmoid_upper_lims - self.sigmoid_lower_lims)
+            )
+            / sigmoid_sharpness
+        )
+        self.inverse_clamp_lower = lambda x: (
+            utils.inverse_softplus(
+                x - self.softplus_lower_lims, beta=softplus_sharpness
+            )
+            + softplus_center
+        )
+        self.inverse_clamp_upper = lambda x: (
+            -utils.inverse_softplus(
+                self.softplus_upper_lims - x, beta=softplus_sharpness
+            )
+            + softplus_center
+        )
+
+    def get_clamped_new_state(self, state_delta, prev_state):
+        """
+        Clamp the next-state prediction to its valid feature range.
+
+        Instead of the plain residual update
+        ``X_{t+1} = X_t + delta``, the clamped form is
+        ``X_{t+1} = f(f^{-1}(X_t) + delta)``
+        so the model learns to output increments in the domain of the
+        inverse clamping function.
+
+        Parameters
+        ----------
+        state_delta : torch.Tensor
+            Shape ``(B, num_grid_nodes, num_state_vars)``. Raw predicted state
+            increment (network output, already rescaled). Dims: ``B`` is
+            batch size, ``num_grid_nodes`` is the number of spatial nodes,
+            and ``num_state_vars`` is the number of state variables.
+        prev_state : torch.Tensor
+            Shape ``(B, num_grid_nodes, num_state_vars)``. Current state ``X_t``
+            used as the base for the clamped update. Dims: same as
+            ``state_delta``.
+
+        Returns
+        -------
+        torch.Tensor
+            Shape ``(B, num_grid_nodes, num_state_vars)``. Clamped next state.
+            Dims: same as ``state_delta``.
+        """
+
+        # Assign new state, but overwrite clamped values of each type later
+        new_state = prev_state + state_delta
+
+        # Sigmoid/logistic clamps between ]a,b[
+        if self.clamp_lower_upper_idx.numel() > 0:
+            idx = self.clamp_lower_upper_idx
+
+            new_state[:, :, idx] = self.clamp_lower_upper(
+                self.inverse_clamp_lower_upper(prev_state[:, :, idx])
+                + state_delta[:, :, idx]
+            )
+
+        # Softplus clamps between ]a,infty[
+        if self.clamp_lower_idx.numel() > 0:
+            idx = self.clamp_lower_idx
+
+            new_state[:, :, idx] = self.clamp_lower(
+                self.inverse_clamp_lower(prev_state[:, :, idx])
+                + state_delta[:, :, idx]
+            )
+
+        # Softplus clamps between ]-infty,b[
+        if self.clamp_upper_idx.numel() > 0:
+            idx = self.clamp_upper_idx
+
+            new_state[:, :, idx] = self.clamp_upper(
+                self.inverse_clamp_upper(prev_state[:, :, idx])
+                + state_delta[:, :, idx]
+            )
+
+        return new_state

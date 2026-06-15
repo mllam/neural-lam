@@ -41,9 +41,17 @@ dependencies = [
 ]
 requires-python = ">=3.10"
 
+# The torch variant is selected at install time via these mutually-exclusive
+# extras (see [tool.uv]). Versions are pinned per CUDA build because not every
+# torch release ships wheels for every CUDA version, e.g. cu128 wheels were
+# dropped in torch 2.12, so the cu128 extra stays on the 2.11 series.
+[project.optional-dependencies]
+cpu = ["torch>=2.12,<2.13"]
+gpu = ["torch>=2.12,<2.13"]        # CUDA 13.0, default GPU build
+gpu-cu128 = ["torch>=2.11,<2.12"]  # CUDA 12.8, last torch series with cu128 wheels
+
 [dependency-groups]
 dev = ["pre-commit>=3.8.0", "pytest>=8.3.2", "pooch>=1.8.2"]
-
 
 [tool.setuptools]
 py-modules = ["neural_lam"]
@@ -111,6 +119,23 @@ max-statements = 100 # Allow for some more involved functions
 allow-any-import-level = "neural_lam"
 [tool.pylint.SIMILARITIES]
 min-similarity-lines = 10
+
+[tool.interrogate]
+fail-under = 100
+verbose = 1
+quiet = false
+ignore-init-method = false
+ignore-init-module = false
+ignore-magic = false
+ignore-private = false
+ignore-nested-functions = false
+ignore-property-decorators = false
+exclude = ["tests", "docs", "build"]
+
+[tool.pytest.ini_options]
+markers = [
+    "slow: marks tests as slow (deselected by default, run with -m slow)",
+]
 
 [build-system]
 requires = ["hatchling>=1.27.0", "hatch-vcs"]
