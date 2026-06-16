@@ -7,6 +7,7 @@ from typing import Dict, Union
 
 # Third-party
 import dataclass_wizard
+import yaml
 
 # Local
 from .datastore import (
@@ -200,6 +201,23 @@ def load_config_and_datastore(
         providing `state` data), and the boundary datastore (the one without
         `state` data, or None if no such datastore is configured).
     """
+    with open(config_path, encoding="utf-8") as f:
+        raw_config = yaml.safe_load(f)
+    if isinstance(raw_config, dict) and (
+        "datastore" in raw_config and "datastores" not in raw_config
+    ):
+        raise InvalidConfigError(
+            "The `datastore:` config key has been replaced by a named "
+            "`datastores:` mapping (the role of each datastore is now implied "
+            "by the categories it provides). Move your datastore under a "
+            "named entry, e.g.:\n"
+            "datastores:\n"
+            "  <name>:\n"
+            "    kind: ...\n"
+            "    config_path: ...\n"
+            "See the README and CHANGELOG for details."
+        )
+
     try:
         config = NeuralLAMConfig.from_yaml_file(config_path)
     except dataclass_wizard.errors.UnknownJSONKey as ex:

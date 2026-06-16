@@ -78,3 +78,12 @@ yaml_samples = zip(
 def test_config_load_from_yaml(yaml_str, config_expected):
     c = nlconfig.NeuralLAMConfig.from_yaml(yaml_str)
     assert c == config_expected
+
+
+def test_legacy_datastore_key_raises_migration_error(tmp_path):
+    config_path = tmp_path / "config.yaml"
+    config_path.write_text(
+        "datastore:\n  kind: mdp\n  config_path: ''\n", encoding="utf-8"
+    )
+    with pytest.raises(nlconfig.InvalidConfigError, match="datastores:"):
+        nlconfig.load_config_and_datastore(str(config_path))
