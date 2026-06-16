@@ -1,3 +1,5 @@
+"""Dataset helpers wrapping Neural-LAM datastores for PyTorch Lightning."""
+
 # Standard library
 import datetime
 import warnings
@@ -76,6 +78,36 @@ class WeatherDataset(torch.utils.data.Dataset):
         datastore_boundary: Union[BaseDatastore, None] = None,
         load_single_member: bool = False,
     ) -> None:
+        """
+        Parameters
+        ----------
+        datastore : BaseDatastore
+            Datastore providing access to state/forcing/static arrays.
+        split : str, optional
+            Data split (``"train"``, ``"val"``, or ``"test"``).
+            Default ``"train"``.
+        ar_steps : int, optional
+            Number of autoregressive steps per training sample. Default ``3``.
+        num_past_forcing_steps : int, optional
+            Past forcing window length ``i`` so that ``[t-i, ..., t]`` forcings
+            are concatenated. Default ``1``.
+        num_future_forcing_steps : int, optional
+            Future forcing window length ``j`` so that ``[t, ..., t+j]``
+            forcings are available. Default ``1``.
+        load_single_member : bool, optional
+            If ``False`` and the datastore returns an ensemble of state
+            realisations, treat each state ensemble member as an independent
+            sample. If ``True``, only ensemble member 0 is used. Default
+            ``False``.
+
+        Raises
+        ------
+        ValueError
+            If the datastore does not provide state data, if the configured
+            ``ar_steps`` and forcing windows leave zero samples in ``split``,
+            or if the state/forcing dimension order does not match the
+            datastore's expected dimension order.
+        """
         super().__init__()
 
         self.split = split
@@ -201,6 +233,14 @@ class WeatherDataset(torch.utils.data.Dataset):
                     )
 
     def __len__(self) -> int:
+        """
+        Return the number of autoregressive training samples available.
+
+        Returns
+        -------
+        int
+            Number of (init, target) pairs derivable from the datastore.
+        """
         assert self.da_state is not None
         if self.datastore.is_forecast:
             # for now we simply create a single sample for each analysis time
@@ -657,16 +697,18 @@ class WeatherDataset(torch.utils.data.Dataset):
         Returns
         -------
         init_states : torch.Tensor
-            Initial states, shape (2, N_grid, d_features).
+            Initial states, shape ``(2, num_grid_nodes, num_state_vars)``.
         target_states : torch.Tensor
-            Target states, shape (ar_steps, N_grid, d_features).
+            Target states, shape ``(ar_steps, num_grid_nodes, num_state_vars)``.
         forcing : torch.Tensor
-            Windowed forcing, shape (ar_steps, N_grid, d_windowed_forcing).
+            Windowed forcing, shape ``(ar_steps, num_grid_nodes, F)`` where
+            ``F = num_forcing_vars * (num_past_forcing_steps``
+            ``+ num_future_forcing_steps + 1)``.
         boundary : torch.Tensor
             Windowed boundary forcing, shape
-            (ar_steps, N_boundary_grid, d_windowed_boundary).
+            ``(ar_steps, N_boundary_grid, d_windowed_boundary)``.
         target_times : torch.Tensor
-            Times of the target steps, shape (ar_steps,).
+            Times of the target steps, shape ``(ar_steps,)``.
 
         """
         n_samples = len(self)
@@ -763,7 +805,7 @@ class WeatherDataset(torch.utils.data.Dataset):
         """
 
         def _is_listlike(obj):
-            # match list, tuple, numpy array
+            """Return ``True`` for list/tuple/ndarray-like containers."""
             return hasattr(obj, "__iter__") and not isinstance(obj, str)
 
         add_time_as_dim = False
@@ -838,6 +880,30 @@ class WeatherDataModule(pl.LightningDataModule):
         num_workers: int = 16,
         eval_split: str = "test",
     ) -> None:
+        """
+        Parameters
+        ----------
+        datastore : BaseDatastore
+            Datastore used for all splits.
+        ar_steps_train : int, optional
+            Number of autoregressive steps for training batches. Default ``3``.
+        ar_steps_eval : int, optional
+            Number of autoregressive steps for validation/test batches.
+            Default ``25``.
+        num_past_forcing_steps : int, optional
+            Number of past forcing steps to include. Default ``1``.
+        num_future_forcing_steps : int, optional
+            Number of future forcing steps to include. Default ``1``.
+        load_single_member : bool, optional
+            If ``True``, load only a single ensemble member per sample.
+            Default ``False``.
+        batch_size : int, optional
+            Mini-batch size for dataloaders. Default ``4``.
+        num_workers : int, optional
+            Number of background workers per dataloader. Default ``16``.
+        eval_split : str, optional
+            Dataset split to use for ``test_dataloader``. Default ``"test"``.
+        """
         super().__init__()
         self._datastore = datastore
         self._datastore_boundary = datastore_boundary
@@ -861,6 +927,16 @@ class WeatherDataModule(pl.LightningDataModule):
             self.multiprocessing_context = "spawn"
 
     def setup(self, stage: Optional[str] = None) -> None:
+        """
+        Instantiate datasets for the requested trainer stage.
+
+        Parameters
+        ----------
+        stage : str or None, optional
+            Trainer stage identifier (``"fit"``/``"test"``/``None``). When
+            ``None``, both the training split and the validation/test
+            evaluation splits are prepared.
+        """
         shared_kwargs: dict[str, Any] = dict(
             num_past_forcing_steps=self.num_past_forcing_steps,
             num_future_forcing_steps=self.num_future_forcing_steps,

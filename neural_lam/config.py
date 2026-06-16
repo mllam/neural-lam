@@ -1,3 +1,5 @@
+"""Configuration dataclasses and helpers for Neural-LAM experiments."""
+
 # Standard library
 import dataclasses
 from pathlib import Path
@@ -31,12 +33,19 @@ class DatastoreSelection:
     """
 
     kind: str
+    config_path: str
 
     def __post_init__(self):
+        """
+        Validate that the selected datastore kind is implemented.
+
+        Raises
+        ------
+        ValueError
+            If the provided ``kind`` is not part of :data:`DATASTORES`.
+        """
         if self.kind not in DATASTORES:
             raise ValueError(f"Datastore kind {self.kind} is not implemented")
-
-    config_path: str
 
 
 @dataclasses.dataclass
@@ -89,10 +98,13 @@ class TrainingConfig:
     Attributes
     ----------
     state_feature_weighting : Union[ManualStateFeatureWeighting,
-                                    UnformFeatureWeighting]
+                                    UniformFeatureWeighting]
         The method to use for weighting the state features in the loss
-        function. Defaults to uniform weighting (`UnformFeatureWeighting`, i.e.
+        function. Defaults to uniform weighting (`UniformFeatureWeighting`, i.e.
         all features are weighted equally).
+    output_clamping : OutputClamping
+        Per-feature lower / upper clamping bounds applied to the model output.
+        Defaults to an empty ``OutputClamping`` (no clamping).
     """
 
     state_feature_weighting: Union[
@@ -107,8 +119,11 @@ class TrainingConfig:
 @dataclasses.dataclass
 class NeuralLAMConfig(dataclass_wizard.JSONWizard, dataclass_wizard.YAMLWizard):
     """
-    Dataclass for Neural-LAM configuration. This class is used to load and
-    store the configuration for using Neural-LAM.
+    Configuration for the Neural-LAM model and training pipeline.
+
+    Loads and stores all settings needed to run Neural-LAM, including
+    datastore selection and training hyperparameters. Serialisation and
+    deserialisation from YAML/JSON is handled via ``dataclass_wizard``.
 
     Attributes
     ----------
@@ -121,7 +136,8 @@ class NeuralLAMConfig(dataclass_wizard.JSONWizard, dataclass_wizard.YAMLWizard):
         input only (e.g. boundary forcing from a separate domain). At least
         one datastore must provide `state` data.
     training : TrainingConfig
-        The configuration for training the model.
+        Configuration for training the model, including loss function and
+        feature-weighting strategy. Defaults to ``TrainingConfig()``.
     """
 
     datastores: Dict[str, DatastoreSelection]
@@ -156,6 +172,8 @@ class NeuralLAMConfig(dataclass_wizard.JSONWizard, dataclass_wizard.YAMLWizard):
 
 
 class InvalidConfigError(Exception):
+    """Raised when the Neural-LAM configuration file is invalid or malformed."""
+
     pass
 
 

@@ -143,6 +143,7 @@ def run_simple_training(
     trainer.fit(model=model, datamodule=data_module)
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize("datastore_name", DATASTORES.keys())
 def test_training(datastore_name):
     datastore = init_datastore_example(datastore_name)
@@ -156,6 +157,7 @@ def test_training(datastore_name):
     run_simple_training(datastore, set_output_std=False)
 
 
+@pytest.mark.slow
 def test_training_output_std():
     datastore = init_datastore_example("mdp")  # Test only with mdp datastore
     run_simple_training(datastore, set_output_std=True)

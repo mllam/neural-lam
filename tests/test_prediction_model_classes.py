@@ -319,7 +319,7 @@ def test_forecaster_module_old_checkpoint(tmp_path):
 
 def test_graph_lam_no_static_features():
     """GraphLAM (real GNN) should run a forward pass when the datastore has
-    no static features — verifying that the empty static tensor flows through
+    no static features - verifying that the empty static tensor flows through
     the graph encoder/processor/decoder without error."""
     base_datastore = init_datastore_example("mdp")
 

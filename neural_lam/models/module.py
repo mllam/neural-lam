@@ -1,7 +1,9 @@
+"""Lightning module handling training, validation and testing loops."""
+
 # Standard library
 import os
 import warnings
-from typing import Any, Dict, List, Optional
+from typing import Any, Optional
 
 # Third-party
 import matplotlib.pyplot as plt
@@ -42,13 +44,50 @@ class ForecasterModule(pl.LightningModule):
         restore_opt: bool = False,
         n_example_pred: int = 1,
         create_gif: bool = False,
-        val_steps_to_log: Optional[List[int]] = None,
-        metrics_watch: Optional[List[str]] = None,
-        var_leads_metrics_watch: Optional[Dict[int, List[int]]] = None,
+        val_steps_to_log: list[int] | None = None,
+        metrics_watch: list[str] | None = None,
+        var_leads_metrics_watch: dict[int, list[int]] | None = None,
         args=None,
     ):
+        """
+        Initialize the ForecasterModule.
+
+        Parameters
+        ----------
+        forecaster : Forecaster
+            The forecaster model to use for predictions.
+        config : NeuralLAMConfig
+            Configuration object for the neural LAM model.
+        datastore : BaseDatastore
+            Datastore providing grid metadata and data access.
+        loss : str, default "wmse"
+            The loss function to use.
+        lr : float, default 1e-3
+            Learning rate for the optimizer.
+        restore_opt : bool, default False
+            Whether to restore optimizer state from checkpoint.
+        n_example_pred : int, default 1
+            Number of example predictions to plot during testing.
+        create_gif : bool, default False
+            Whether to create GIFs of example predictions.
+        val_steps_to_log : list of int, optional
+            Specific rollout steps to log during validation/testing.
+        metrics_watch : list of str, optional
+            List of metrics to watch and log specifically.
+        var_leads_metrics_watch : dict of {int: list of int}, optional
+            Mapping from variable index to a list of rollout steps to log
+            individually for the configured metrics.
+        args : argparse.Namespace, optional
+            Pre-refactor ``ARModel`` checkpoint hyperparameters. When
+            provided, attributes on ``args`` take precedence over the
+            corresponding explicit kwargs (``loss``, ``lr``, ``restore_opt``,
+            ``n_example_pred``, ``create_gif``, ``val_steps_to_log``,
+            ``metrics_watch``, ``var_leads_metrics_watch``) so legacy
+            checkpoints round-trip through ``load_from_checkpoint``
+            correctly.
+        """
         super().__init__()
-        # Pre-refactor ARModel checkpoints saved every hyperparameter nested
+        # Pre-refactor ``ARModel`` checkpoints saved every hyperparameter nested
         # inside an argparse Namespace under the single key 'args'. When
         # Lightning calls __init__ during load_from_checkpoint it would
         # otherwise drop 'args' (not in the new signature) and silently fall
@@ -207,10 +246,10 @@ class ForecasterModule(pl.LightningModule):
         # Instantiate loss function
         self.loss = metrics.get_metric(loss)
 
-        self.val_metrics: Dict[str, List] = {
+        self.val_metrics: dict[str, list] = {
             "mse": [],
         }
-        self.test_metrics: Dict[str, List] = {
+        self.test_metrics: dict[str, list] = {
             "mse": [],
             "mae": [],
         }
@@ -226,7 +265,7 @@ class ForecasterModule(pl.LightningModule):
         self.plotted_examples = 0
 
         # For storing spatial loss maps during evaluation
-        self.spatial_loss_maps: List[Any] = []
+        self.spatial_loss_maps: list[Any] = []
 
         # Warn once per phase if val_steps_to_log exceeds the actual rollout
         self._val_steps_warn_issued = False
@@ -243,6 +282,25 @@ class ForecasterModule(pl.LightningModule):
         split: str,
         category: str,
     ) -> xr.DataArray:
+        """
+        Create an xarray DataArray from a torch tensor.
+
+        Parameters
+        ----------
+        tensor : torch.Tensor
+            The tensor to convert.
+        time : torch.Tensor
+            The time coordinates for the data.
+        split : str
+            The data split (e.g., 'train', 'val', 'test').
+        category : str
+            The category of data (e.g., 'state', 'forcing').
+
+        Returns
+        -------
+        xr.DataArray
+            The resulting xarray DataArray.
+        """
         weather_dataset = WeatherDataset(datastore=self.datastore, split=split)
         time = np.array(time.cpu(), dtype="datetime64[ns]")
         da = weather_dataset.create_dataarray_from_tensor(
@@ -251,6 +309,14 @@ class ForecasterModule(pl.LightningModule):
         return da
 
     def configure_optimizers(self):
+        """
+        Configure the optimizers and learning rate schedulers.
+
+        Returns
+        -------
+        torch.optim.Optimizer
+            The configured optimizer.
+        """
         opt = torch.optim.AdamW(
             self.parameters(), lr=self.hparams.lr, betas=(0.9, 0.95)
         )
@@ -323,6 +389,21 @@ class ForecasterModule(pl.LightningModule):
         return init_states, target_states, forcing, boundary, batch_times
 
     def common_step(self, batch):
+        """
+        Perform a common prediction step for training, validation, and testing.
+
+        Parameters
+        ----------
+        batch : tuple
+            The batch of data containing initial states, target states,
+            forcing features, boundary forcing features, and batch times.
+
+        Returns
+        -------
+        tuple
+            A tuple containing prediction, target states, predicted standard
+            deviation, and batch times.
+        """
         (
             init_states,
             target_states,
@@ -339,6 +420,19 @@ class ForecasterModule(pl.LightningModule):
         return prediction, target_states, pred_std, batch_times
 
     def training_step(self, batch):
+        """
+        Perform a single training step.
+
+        Parameters
+        ----------
+        batch : tuple
+            The batch of data.
+
+        Returns
+        -------
+        torch.Tensor
+            The computed loss for the training step.
+        """
         prediction, target_states, pred_std, _ = self.common_step(batch)
         if pred_std is None:
             pred_std = self.per_var_std
@@ -364,6 +458,19 @@ class ForecasterModule(pl.LightningModule):
         return batch_loss
 
     def all_gather_cat(self, tensor_to_gather):
+        """
+        Gather tensors from all GPUs and concatenate them.
+
+        Parameters
+        ----------
+        tensor_to_gather : torch.Tensor
+            The tensor to gather from all processes.
+
+        Returns
+        -------
+        torch.Tensor
+            The concatenated tensor from all processes.
+        """
         gathered = self.all_gather(tensor_to_gather)
         # all_gather adds dim 0 only on multi-device; on single
         # device it returns the same tensor unchanged.
@@ -390,6 +497,16 @@ class ForecasterModule(pl.LightningModule):
         setattr(self, flag, True)
 
     def validation_step(self, batch, batch_idx):
+        """
+        Perform a single validation step.
+
+        Parameters
+        ----------
+        batch : tuple
+            The batch of data.
+        batch_idx : int
+            The index of the batch.
+        """
         prediction, target_states, pred_std, _ = self.common_step(batch)
         if pred_std is None:
             pred_std = self.per_var_std
@@ -430,6 +547,10 @@ class ForecasterModule(pl.LightningModule):
         self.val_metrics["mse"].append(entry_mses)
 
     def on_validation_epoch_end(self):
+        """
+        Perform actions at the end of the validation epoch.
+        Aggregates and plots validation metrics.
+        """
         self.aggregate_and_plot_metrics(self.val_metrics, prefix="val")
 
         if self.trainer.is_global_zero and self.hparams.metrics_watch:
@@ -449,6 +570,16 @@ class ForecasterModule(pl.LightningModule):
 
     # pylint: disable-next=unused-argument
     def test_step(self, batch, batch_idx):
+        """
+        Perform a single test step.
+
+        Parameters
+        ----------
+        batch : tuple
+            The batch of data.
+        batch_idx : int
+            The index of the batch.
+        """
         prediction, target_states, pred_std, _ = self.common_step(batch)
 
         if pred_std is not None:
@@ -528,6 +659,20 @@ class ForecasterModule(pl.LightningModule):
             )
 
     def plot_examples(self, batch, n_examples, split, prediction):
+        """
+        Plot example predictions.
+
+        Parameters
+        ----------
+        batch : tuple
+            The batch of data.
+        n_examples : int
+            Number of examples to plot.
+        split : str
+            The data split.
+        prediction : torch.Tensor
+            The model predictions.
+        """
 
         target = batch[1]
         time = batch[4]
@@ -593,7 +738,7 @@ class ForecasterModule(pl.LightningModule):
                     f"example_plots_{example_i}",
                 )
                 os.makedirs(plot_dir_path, exist_ok=True)
-                png_frames: Dict[str, List[str]] = {
+                png_frames: dict[str, list[str]] = {
                     var_name: []
                     for var_name in self.datastore.get_vars_names("state")
                 }
@@ -684,6 +829,23 @@ class ForecasterModule(pl.LightningModule):
             )
 
     def create_metric_log_dict(self, metric_tensor, prefix, metric_name):
+        """
+        Create a dictionary of metrics to log.
+
+        Parameters
+        ----------
+        metric_tensor : torch.Tensor
+            The metric values.
+        prefix : str
+            Prefix for the log names (e.g., 'val', 'test').
+        metric_name : str
+            The name of the metric.
+
+        Returns
+        -------
+        dict
+            Dictionary of logged metrics and figures.
+        """
         log_dict = {}
         metric_fig = vis.plot_error_heatmap(
             errors=metric_tensor,
@@ -717,6 +879,16 @@ class ForecasterModule(pl.LightningModule):
         return log_dict
 
     def aggregate_and_plot_metrics(self, metrics_dict, prefix):
+        """
+        Aggregate metrics from all GPUs and plot them.
+
+        Parameters
+        ----------
+        metrics_dict : dict
+            Dictionary of metrics lists.
+        prefix : str
+            Prefix for the log names.
+        """
         log_dict = {}
         for metric_name, metric_val_list in metrics_dict.items():
             metric_tensor = self.all_gather_cat(
@@ -774,6 +946,10 @@ class ForecasterModule(pl.LightningModule):
             plt.close("all")
 
     def on_test_epoch_end(self):
+        """
+        Perform actions at the end of the test epoch.
+        Aggregates and plots test metrics and spatial loss maps.
+        """
         self.aggregate_and_plot_metrics(self.test_metrics, prefix="test")
 
         spatial_loss_tensor = self.all_gather_cat(
@@ -847,11 +1023,21 @@ class ForecasterModule(pl.LightningModule):
         self.plotted_examples = 0
 
     def on_load_checkpoint(self, checkpoint):
+        """
+        Perform actions when loading a checkpoint.
+        Handles backward compatibility for older checkpoints.
+
+        Parameters
+        ----------
+        checkpoint : dict
+            The loaded checkpoint dictionary.
+        """
         loaded_state_dict = checkpoint["state_dict"]
 
         # 1. Broad namespace remap: for pre-refactor checkpoints
-        # The old ARModel was a flat LightningModule. Everything that belonged
-        # to the predictor needs to be moved to 'forecaster.predictor.'
+        # The old ``ARModel`` was a flat LightningModule. Everything that
+        # belonged to the predictor needs to be moved to
+        # 'forecaster.predictor.'
         old_keys = list(loaded_state_dict.keys())
         for key in old_keys:
             if not key.startswith("forecaster.") and key not in (

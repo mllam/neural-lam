@@ -23,6 +23,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Extend `BufferList.__getitem__` with slice and negative-index support (Python sequence semantics); out-of-bounds integer access raises `IndexError`. [\#472](https://github.com/mllam/neural-lam/pull/472) @sudhansu-24
 
+- Split the training checkpoint setup into two callbacks: a validation-driven one that keeps the best `val_mean_loss` checkpoint (`min_val_loss.ckpt`) and a separate rescue callback that writes `last.ckpt` at every train-epoch end. Long HPC jobs that crash or time out between validation runs can resume from `last.ckpt` instead of losing all progress since the previous validation [\#250](https://github.com/mllam/neural-lam/pull/250) @Jayant-kernel
+
 ### Changed
 
 - Replace the single `datastore` (and optional `datastore_boundary`) keys in the neural-lam config with a named `datastores` mapping. Each datastore's role is now implied by the categories it provides rather than by a dedicated config key. Existing configs must move their datastore under a named entry in `datastores:`. [\#635](https://github.com/mllam/neural-lam/pull/635) @sadamov
@@ -76,6 +78,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Maintenance
 
+- Establish 100% docstring coverage across `neural_lam/` via an `interrogate` pre-commit hook, add a Dimension Glossary to the README for canonical tensor-shape names, and rewrite public docstrings in NumPy style to serve as the entry point for the autoapi pipeline (#196 / #272). [\#252](https://github.com/mllam/neural-lam/pull/252) @Mohit-Lakra
+
+- Register a `slow` pytest marker and apply it to `test_training` and `test_training_output_std` so contributors can skip long-running training tests during local iteration via `pytest -m "not slow"`. [\#651](https://github.com/mllam/neural-lam/pull/651) @sadamov
+
 - Add a short README pointer to [\#163](https://github.com/mllam/neural-lam/issues/163) for DGX Spark / PyTorch container compatibility notes, so users hitting `torch_scatter` errors know where to find the known-working / known-failing combos [\#266](https://github.com/mllam/neural-lam/pull/266) @Jayant-kernel
 
 - Group the existing Neural-LAM citation papers in the README under a `### Core Neural-LAM Publications` subheading for clearer structure [\#633](https://github.com/mllam/neural-lam/pull/633) @HetaviM29
@@ -108,6 +114,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Add comprehensive type hints to `neural_lam/create_graph.py` [\#618](https://github.com/mllam/neural-lam/pull/618) @GiGiKoneti
 
+- Select the torch build via mutually-exclusive `cpu`, `gpu` (CUDA 13.0) and
+  `gpu-cu128` (CUDA 12.8) extras routed through `[tool.uv.sources]`, with torch
+  versions pinned per CUDA build and a committed `uv.lock`. CI now installs and
+  tests only with `uv` (CPU + CUDA 13.0); the `pip` install path is still
+  documented in the README. The default GPU build moves from CUDA 12.8 to 13.0;
+  users on other CUDA versions install the matching `torch` variant manually
+  (see README) [\#604](https://github.com/mllam/neural-lam/pull/604) @RajdeepKushwaha5
 
 ## [v0.6.0](https://github.com/mllam/neural-lam/releases/tag/v0.6.0)
 
@@ -129,6 +142,7 @@ This release introduces new features including GIF animation support, wandb run 
 
 ### Changed
 
+- Consolidate all training/evaluation run outputs (checkpoints, logger files, plots) into a single `runs/<run-name>/` directory instead of scattering across `saved_models/`, `lightning_logs/`, `wandb/`, and `mlruns/` [\#293](https://github.com/mllam/neural-lam/issues/293) @sudhansu-24
 - Change the default ensemble-loading behavior in `WeatherDataset` / `WeatherDataModule` to use all ensemble members as independent samples for ensemble datastores (with matching ensemble-member selection for forcing when available); single-member behavior now requires explicitly opting in via `--load_single_member` [\#332](https://github.com/mllam/neural-lam/pull/332) @kshirajahere
 
 - Refactor graph loading: move zero-indexing out of the model and update plotting to prepare using the research-branch graph I/O [\#184](https://github.com/mllam/neural-lam/pull/184) @zweihuehner
