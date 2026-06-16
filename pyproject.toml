@@ -160,7 +160,7 @@ exclude = ["tests", "docs", "build"]
 
 [tool.pytest.ini_options]
 markers = [
-    "slow: marks tests as slow (deselected by default, run with -m slow)",
+    "slow: marks tests as slow (run by default; skip with -m 'not slow')",
 ]
 
 [build-system]
