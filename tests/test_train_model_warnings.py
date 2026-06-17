@@ -117,5 +117,11 @@ def test_train_steps_to_log_validation():
         "neural_lam.train_model.ArgumentParser.parse_args",
         return_value=mock_args,
     ):
-        with pytest.raises(ValueError, match="Can not log training step 15"):
-            main()
+        with patch(
+            "neural_lam.train_model.load_config_and_datastore",
+            return_value=(MagicMock(), MagicMock()),
+        ):
+            with pytest.raises(
+                ValueError, match="Can not log training step 15"
+            ):
+                main()
