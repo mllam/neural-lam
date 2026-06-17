@@ -319,6 +319,13 @@ def main(input_args=None):
         help="Steps to log val loss for",
     )
     metrics_group.add_argument(
+        "--train_steps_to_log",
+        nargs="+",
+        type=int,
+        default=[],
+        help="Steps to log train loss for during training (optional)",
+    )
+    metrics_group.add_argument(
         "--metrics_watch",
         nargs="+",
         default=[],
@@ -367,6 +374,14 @@ def main(input_args=None):
                 f"Can not log validation step {step} when validation is "
                 f"only unrolled {args.ar_steps_eval} steps. Adjust "
                 "--val_steps_to_log."
+            )
+    # Check --train_steps_to_log
+    for step in args.train_steps_to_log:
+        if step > args.ar_steps_train:
+            raise ValueError(
+                f"Can not log training step {step} when training is "
+                f"only unrolled {args.ar_steps_train} steps. Adjust "
+                "--train_steps_to_log."
             )
     # Check --var_leads_metric_watch
     for var_i, leads in args.var_leads_metrics_watch.items():
@@ -469,6 +484,7 @@ def main(input_args=None):
         n_example_pred=args.n_example_pred,
         create_gif=args.create_gif,
         val_steps_to_log=args.val_steps_to_log,
+        train_steps_to_log=args.train_steps_to_log,
         metrics_watch=args.metrics_watch,
         var_leads_metrics_watch=args.var_leads_metrics_watch,
         args=args,
