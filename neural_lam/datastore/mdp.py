@@ -74,6 +74,19 @@ class MDPDatastore(BaseRegularGridDatastore):
             ".yaml", ".zarr"
         )
 
+        # `domain_cropping.interior_dataset_config_path` references a sibling
+        # config and is written relative to this config file, but
+        # mllam-data-prep resolves it against the process CWD. Make only that
+        # path absolute so cropped datastores build from any directory while
+        # all other (CWD-relative) input paths keep their default behaviour.
+        domain_cropping = self._config.output.domain_cropping
+        if domain_cropping is not None:
+            interior_path = Path(domain_cropping.interior_dataset_config_path)
+            if not interior_path.is_absolute():
+                domain_cropping.interior_dataset_config_path = str(
+                    self._root_path / interior_path
+                )
+
         _ds = None
         if reuse_existing and fp_ds.exists():
             # check that the zarr directory is newer than the config file

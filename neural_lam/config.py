@@ -134,8 +134,10 @@ class NeuralLAMConfig(dataclass_wizard.JSONWizard, dataclass_wizard.YAMLWizard):
         provides rather than by a dedicated config key: a datastore that
         contains `state` data is used for both model input and output (the
         interior domain), while a datastore without `state` data is used for
-        input only (e.g. boundary forcing from a separate domain). At least
-        one datastore must provide `state` data.
+        input only (e.g. boundary forcing from a separate domain). Exactly
+        one datastore must provide `state` data, and at most one datastore
+        may omit it (the boundary); both constraints are enforced in
+        :func:`load_config_and_datastore`.
     training : TrainingConfig
         Configuration for training the model, including loss function and
         feature-weighting strategy. Defaults to ``TrainingConfig()``.
@@ -200,6 +202,13 @@ def load_config_and_datastore(
         The Neural-LAM configuration, the loaded interior datastore (the one
         providing `state` data), and the boundary datastore (the one without
         `state` data, or None if no such datastore is configured).
+
+    Raises
+    ------
+    InvalidConfigError
+        If not exactly one datastore provides `state` data, or if more than
+        one datastore omits it (only a single boundary datastore is currently
+        supported).
     """
     with open(config_path, encoding="utf-8") as f:
         raw_config = yaml.safe_load(f)

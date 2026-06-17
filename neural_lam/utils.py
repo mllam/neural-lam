@@ -327,13 +327,13 @@ def load_graph(
     # Load static node features
     mesh_static_features = loads_file(
         "mesh_features.pt"
-    )  # List of (N_mesh[l], d_mesh_static)
+    )  # List of (num_mesh_nodes[l], d_mesh_static)
 
     # Load edges (edge_index)
     m2m_edge_index = BufferList(
         [zero_index_edge_index(ei) for ei in loads_file("m2m_edge_index.pt")],
         persistent=False,
-    )  # List of (2, M_m2m[l])
+    )  # List of (2, num_edges[l])
     g2m_edge_index = loads_file("g2m_edge_index.pt")  # (2, num_edges)
     m2g_edge_index = loads_file("m2g_edge_index.pt")  # (2, num_edges)
 
@@ -356,7 +356,7 @@ def load_graph(
     hierarchical = n_levels > 1  # Not just single level mesh graph
 
     # Load static edge features
-    # List of (M_m2m[l], input_dim)
+    # List of (num_edges[l], input_dim)
     m2m_features = loads_file("m2m_features.pt")
     g2m_features = loads_file("g2m_features.pt")  # (num_edges, input_dim)
     m2g_features = loads_file("m2g_features.pt")  # (num_edges, input_dim)

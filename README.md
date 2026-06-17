@@ -184,7 +184,7 @@ For now the neural-lam config only defines few things:
    by the categories of data it provides: a datastore that contains `state`
    data is used for both model input and output (the interior domain), while a
    datastore without `state` data is used for input only (e.g. boundary forcing
-   from a separate domain such as ERA5 for a LAM domain). At least one datastore
+   from a separate domain such as ERA5 for a LAM domain). Exactly one datastore
    must provide `state` data. When a boundary datastore is present its forcing
    is windowed and included as an additional tensor in each training sample.
 2. The weighting of different features in
@@ -596,13 +596,18 @@ Canonical dimension names used in tensor shape annotations throughout the codeba
 
 - `B` - batch size
 - `pred_steps` - number of autoregressive prediction steps
+- `num_times` - number of time steps along the time axis of a raw or batched timeseries (a trailing `'`, e.g. `num_times'`, denotes a pre-subsampling / pre-differencing variant)
 - `num_grid_nodes` - number of nodes in the flattened spatial grid
+- `num_boundary_grid_nodes` - number of nodes in the flattened boundary spatial grid
 - `num_mesh_nodes` - number of mesh nodes; indexed as `num_mesh_nodes[l]` for hierarchical level `l`
 - `num_state_vars` - number of atmospheric state variables
 - `num_forcing_vars` - number of forcing input variables
+- `num_windowed_forcing_vars` - forcing variables stacked over the past/future forcing window
+- `num_windowed_boundary_vars` - boundary forcing variables stacked over the past/future boundary window
 - `num_variables` - generic variable dimension used in metric functions
 - `hidden_dim` - internal hidden representation size in GNN layers and MLPs
 - `input_dim` - input feature dimensionality to a layer before transformation
+- `d_mesh_static` - number of static features per mesh node
 - `num_edges` - number of edges in a graph (g2m, m2g, same-level, up, down)
 - `num_send` - number of sender nodes in a message-passing step
 - `num_rec` - number of receiver nodes in a message-passing step
