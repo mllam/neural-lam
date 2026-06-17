@@ -124,4 +124,4 @@ def test_train_steps_to_log_validation():
             with pytest.raises(
                 ValueError, match="Can not log training step 15"
             ):
-                main()
+                getattr(main, "__wrapped__", main)()
