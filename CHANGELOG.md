@@ -74,6 +74,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Maintenance
 
+- Replace the `mypy` pre-commit hook with Astral's `ty` hook for static type checking.
+
 - Add comprehensive type hints to StepPredictor in `neural_lam/models/step_predictors/base.py` [\#665](https://github.com/mllam/neural-lam/pull/665) @GiGiKoneti
 
 - Add comprehensive type hints to BaseGraphModel in `neural_lam/models/step_predictors/graph/base.py` [\#667](https://github.com/mllam/neural-lam/pull/667) @GiGiKoneti

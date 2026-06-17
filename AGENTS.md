@@ -39,7 +39,7 @@ The remaining commands need to be prepended with `uv run` or the virtual env act
 
 ```bash
 # Lint
-pre-commit run --all-files    # black, isort, flake8, mypy, codespell
+pre-commit run --all-files    # black, isort, flake8, ty, codespell
 
 # Test
 pytest -vv -s --doctest-modules            # all

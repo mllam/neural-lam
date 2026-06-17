@@ -43,9 +43,8 @@ repos:
         description: Ensure documentation coverage stays perfect
         pass_filenames: false
         args: ["-c", "pyproject.toml", "neural_lam"]
-  - repo: https://github.com/pre-commit/mirrors-mypy
-    rev: v1.19.0
+  - repo: https://github.com/astral-sh/ty-pre-commit
+    rev: v0.0.49
     hooks:
-      - id: mypy
-        additional_dependencies: [types-PyYAML, types-Pillow, types-tqdm]
+      - id: ty
         description: Check for type errors
