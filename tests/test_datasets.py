@@ -14,7 +14,10 @@ from neural_lam.datastore import DATASTORES
 from neural_lam.datastore.base import BaseRegularGridDatastore
 from neural_lam.models import ForecasterModule
 from neural_lam.weather_dataset import WeatherDataset
-from tests.conftest import init_datastore_example
+from tests.conftest import (
+    init_datastore_boundary_example,
+    init_datastore_example,
+)
 from tests.dummy_datastore import (
     BoundaryDummyDatastore,
     DummyDatastore,
@@ -606,3 +609,38 @@ def test_boundary_crops_interior_when_window_overflows():
     # Boundary spans the same range as interior, so a (past=1, future=1)
     # window forces 1 step of cropping at each end.
     assert len(dataset_with_boundary) == len(dataset_no_boundary) - 2
+
+
+@pytest.mark.slow
+def test_boundary_datastore_example_shapes():
+    """Build the real MDP interior (DANRA) and ERA5 boundary example
+    datastores and check WeatherDataset returns a coherent windowed boundary
+    tensor for a temporally overlapping interior/boundary pair."""
+    datastore = init_datastore_example("mdp")
+    datastore_boundary = init_datastore_boundary_example("mdp")
+
+    ar_steps = 3
+    num_past_boundary = 1
+    num_future_boundary = 1
+    boundary_window = num_past_boundary + num_future_boundary + 1
+
+    dataset = WeatherDataset(
+        datastore=datastore,
+        datastore_boundary=datastore_boundary,
+        split="train",
+        ar_steps=ar_steps,
+        num_past_forcing_steps=1,
+        num_future_forcing_steps=1,
+        num_past_boundary_steps=num_past_boundary,
+        num_future_boundary_steps=num_future_boundary,
+    )
+
+    _, _, _, boundary, target_times = dataset[0]
+
+    n_boundary_forcing = datastore_boundary.get_num_data_vars("forcing")
+    assert boundary.ndim == 3
+    assert boundary.shape[0] == ar_steps
+    assert boundary.shape[1] == datastore_boundary.num_grid_points
+    assert boundary.shape[2] == n_boundary_forcing * boundary_window
+    assert target_times.shape == (ar_steps,)
+    assert not torch.isnan(boundary).any()

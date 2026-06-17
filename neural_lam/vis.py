@@ -593,11 +593,11 @@ def plot_error_heatmap(
     unavailable the colorbar label includes "[fallback]".
     """
     errors_np = _to_heatmap_matrix(errors)
-    d_f, pred_steps = errors_np.shape
+    num_variables, pred_steps = errors_np.shape
     step_length = datastore.step_length
 
     time_step_int, time_step_unit = utils.get_integer_time(step_length)
-    layout = _compute_heatmap_layout(n_rows=d_f, n_cols=pred_steps)
+    layout = _compute_heatmap_layout(n_rows=num_variables, n_cols=pred_steps)
     color_values_np, colorbar_label, heatmap_cmap = _get_heatmap_color_values(
         errors_np, datastore, normalization
     )
@@ -662,7 +662,7 @@ def plot_error_heatmap(
         f"Lead time ({time_step_unit[0]})", size=layout["tick_label_size"]
     )
 
-    ax.set_yticks(np.arange(d_f))
+    ax.set_yticks(np.arange(num_variables))
     ax.set_yticklabels(
         _get_heatmap_var_labels(datastore=datastore),
         size=layout["tick_label_size"],

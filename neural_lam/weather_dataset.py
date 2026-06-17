@@ -79,26 +79,8 @@ class WeatherDataset(torch.utils.data.Dataset):
         load_single_member: bool = False,
     ) -> None:
         """
-        Parameters
-        ----------
-        datastore : BaseDatastore
-            Datastore providing access to state/forcing/static arrays.
-        split : str, optional
-            Data split (``"train"``, ``"val"``, or ``"test"``).
-            Default ``"train"``.
-        ar_steps : int, optional
-            Number of autoregressive steps per training sample. Default ``3``.
-        num_past_forcing_steps : int, optional
-            Past forcing window length ``i`` so that ``[t-i, ..., t]`` forcings
-            are concatenated. Default ``1``.
-        num_future_forcing_steps : int, optional
-            Future forcing window length ``j`` so that ``[t, ..., t+j]``
-            forcings are available. Default ``1``.
-        load_single_member : bool, optional
-            If ``False`` and the datastore returns an ensemble of state
-            realisations, treat each state ensemble member as an independent
-            sample. If ``True``, only ensemble member 0 is used. Default
-            ``False``.
+        Construct a ``WeatherDataset``. See the class docstring for the
+        constructor parameters.
 
         Raises
         ------
@@ -699,16 +681,19 @@ class WeatherDataset(torch.utils.data.Dataset):
         init_states : torch.Tensor
             Initial states, shape ``(2, num_grid_nodes, num_state_vars)``.
         target_states : torch.Tensor
-            Target states, shape ``(ar_steps, num_grid_nodes, num_state_vars)``.
+            Target states, shape
+            ``(pred_steps, num_grid_nodes, num_state_vars)``.
         forcing : torch.Tensor
-            Windowed forcing, shape ``(ar_steps, num_grid_nodes, F)`` where
-            ``F = num_forcing_vars * (num_past_forcing_steps``
-            ``+ num_future_forcing_steps + 1)``.
+            Windowed forcing, shape
+            ``(pred_steps, num_grid_nodes, num_windowed_forcing_vars)`` where
+            ``num_windowed_forcing_vars = num_forcing_vars``
+            ``* (num_past_forcing_steps + num_future_forcing_steps + 1)``.
         boundary : torch.Tensor
             Windowed boundary forcing, shape
-            ``(ar_steps, N_boundary_grid, d_windowed_boundary)``.
+            ``(pred_steps, num_boundary_grid_nodes,``
+            ``num_windowed_boundary_vars)``.
         target_times : torch.Tensor
-            Times of the target steps, shape ``(ar_steps,)``.
+            Times of the target steps, shape ``(pred_steps,)``.
 
         """
         n_samples = len(self)
@@ -743,11 +728,12 @@ class WeatherDataset(torch.utils.data.Dataset):
         forcing = torch.tensor(da_forcing_windowed.values, dtype=tensor_dtype)
         boundary = torch.tensor(da_boundary_windowed.values, dtype=tensor_dtype)
 
-        # init_states: (2, N_grid, d_features)
-        # target_states: (ar_steps, N_grid, d_features)
-        # forcing: (ar_steps, N_grid, d_windowed_forcing)
-        # boundary: (ar_steps, N_boundary_grid, d_windowed_boundary)
-        # target_times: (ar_steps,)
+        # init_states: (2, num_grid_nodes, num_state_vars)
+        # target_states: (pred_steps, num_grid_nodes, num_state_vars)
+        # forcing: (pred_steps, num_grid_nodes, num_windowed_forcing_vars)
+        # boundary: (pred_steps, num_boundary_grid_nodes,
+        #            num_windowed_boundary_vars)
+        # target_times: (pred_steps,)
 
         return init_states, target_states, forcing, boundary, target_times
 
@@ -937,14 +923,14 @@ class WeatherDataModule(pl.LightningDataModule):
             ``None``, both the training split and the validation/test
             evaluation splits are prepared.
         """
-        shared_kwargs: dict[str, Any] = dict(
-            num_past_forcing_steps=self.num_past_forcing_steps,
-            num_future_forcing_steps=self.num_future_forcing_steps,
-            num_past_boundary_steps=self.num_past_boundary_steps,
-            num_future_boundary_steps=self.num_future_boundary_steps,
-            datastore_boundary=self._datastore_boundary,
-            load_single_member=self.load_single_member,
-        )
+        shared_kwargs: dict[str, Any] = {
+            "num_past_forcing_steps": self.num_past_forcing_steps,
+            "num_future_forcing_steps": self.num_future_forcing_steps,
+            "num_past_boundary_steps": self.num_past_boundary_steps,
+            "num_future_boundary_steps": self.num_future_boundary_steps,
+            "datastore_boundary": self._datastore_boundary,
+            "load_single_member": self.load_single_member,
+        }
         if stage == "fit" or stage is None:
             self.train_dataset = WeatherDataset(
                 datastore=self._datastore,

@@ -140,8 +140,8 @@ class NpyFilesDatastoreMEPS(BaseRegularGridDatastore):
         └── surface_geopotential.npy
 
     For the MEPS dataset:
-    N_t' = 65
-    N_t = 65//subsample_step (= 21 for 3h steps)
+    num_times' = 65
+    num_times = 65//subsample_step (= 21 for 3h steps)
     dim_y = 268
     dim_x = 238
     num_grid_nodes = 268x238 = 63784
@@ -149,8 +149,8 @@ class NpyFilesDatastoreMEPS(BaseRegularGridDatastore):
     num_forcing_vars = 5
 
     For the MEPS reduced dataset:
-    N_t' = 65
-    N_t = 65//subsample_step (= 21 for 3h steps)
+    num_times' = 65
+    num_times = 65//subsample_step (= 21 for 3h steps)
     dim_y = 134
     dim_x = 119
     num_grid_nodes = 134x119 = 15946

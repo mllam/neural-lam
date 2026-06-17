@@ -7,6 +7,7 @@ from typing import Dict, Optional, Union
 
 # Third-party
 import dataclass_wizard
+import yaml
 
 # Local
 from .datastore import (
@@ -160,8 +161,10 @@ class NeuralLAMConfig(dataclass_wizard.JSONWizard, dataclass_wizard.YAMLWizard):
         provides rather than by a dedicated config key: a datastore that
         contains `state` data is used for both model input and output (the
         interior domain), while a datastore without `state` data is used for
-        input only (e.g. boundary forcing from a separate domain). At least
-        one datastore must provide `state` data.
+        input only (e.g. boundary forcing from a separate domain). Exactly
+        one datastore must provide `state` data, and at most one datastore
+        may omit it (the boundary); both constraints are enforced in
+        :func:`load_config_and_datastore`.
     training : TrainingConfig
         Configuration for training the model, including loss function and
         feature-weighting strategy. Defaults to ``TrainingConfig()``.
@@ -229,7 +232,31 @@ def load_config_and_datastore(
         The Neural-LAM configuration, the loaded interior datastore (the one
         providing `state` data), and the boundary datastore (the one without
         `state` data, or None if no such datastore is configured).
+
+    Raises
+    ------
+    InvalidConfigError
+        If not exactly one datastore provides `state` data, or if more than
+        one datastore omits it (only a single boundary datastore is currently
+        supported).
     """
+    with open(config_path, encoding="utf-8") as f:
+        raw_config = yaml.safe_load(f)
+    if isinstance(raw_config, dict) and (
+        "datastore" in raw_config and "datastores" not in raw_config
+    ):
+        raise InvalidConfigError(
+            "The `datastore:` config key has been replaced by a named "
+            "`datastores:` mapping (the role of each datastore is now implied "
+            "by the categories it provides). Move your datastore under a "
+            "named entry, e.g.:\n"
+            "datastores:\n"
+            "  <name>:\n"
+            "    kind: ...\n"
+            "    config_path: ...\n"
+            "See the README and CHANGELOG for details."
+        )
+
     try:
         config = NeuralLAMConfig.from_yaml_file(config_path)
     except dataclass_wizard.errors.UnknownJSONKey as ex:

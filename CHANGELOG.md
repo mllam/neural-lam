@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- Add optional boundary datastore support: `NeuralLAMConfig` now takes a named `datastores` mapping where each datastore's role is implied by the categories it provides (a datastore with `state` data is the interior input/output domain, one without `state` data is used for input only, e.g. boundary forcing from a separate domain). `WeatherDataset` loads boundary forcing from such a datastore and `__getitem__` returns a 5-tuple `(init_states, target_states, forcing, boundary, target_times)`. New CLI args `--num_past_boundary_steps` / `--num_future_boundary_steps` control the boundary forcing window. `MDPDatastore` and `NpyFilesDatastoreMEPS` now support boundary-only datastores (forcing + static, no state variables). [\#635](https://github.com/mllam/neural-lam/pull/635) @sadamov
+- Add optional boundary datastore support: `NeuralLAMConfig` now takes a named `datastores` dict. `WeatherDataset` loads boundary forcing from such a datastore and `__getitem__` returns a 5-tuple `(init_states, target_states, forcing, boundary, target_times)`. New CLI args `--num_past_boundary_steps` / `--num_future_boundary_steps` control the boundary forcing window. `MDPDatastore` and `NpyFilesDatastoreMEPS` now support boundary-only datastores. [\#635](https://github.com/mllam/neural-lam/pull/635) @sadamov
 
 - Add `PropagationNet` GNN layer that incentivises directional message
   propagation from sender to receiver nodes, and expose it alongside
@@ -29,7 +29,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- Replace the single `datastore` (and optional `datastore_boundary`) keys in the neural-lam config with a named `datastores` mapping. Each datastore's role is now implied by the categories it provides rather than by a dedicated config key. Existing configs must move their datastore under a named entry in `datastores:`. [\#635](https://github.com/mllam/neural-lam/pull/635) @sadamov
+- Replace the single `datastore` (and optional `datastore_boundary`) keys in the neural-lam config with a named `datastores` mapping. Each datastore's role is now implied by the categories it provides rather than by a dedicated config key. Existing configs must move their datastore under a named entry in `datastores:` [\#635](https://github.com/mllam/neural-lam/pull/635) @sadamov
 
 - Move data normalization from CPU (`WeatherDataset`) to GPU
   (`ForecasterModule.on_after_batch_transfer`) for improved performance and
