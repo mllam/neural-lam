@@ -226,6 +226,21 @@ the input-data representation is split into two parts:
    `WeatherDataset` class is also responsible for normalising the values and
    returning `torch.Tensor`-objects.
 
+Each variable in a datastore is assigned to one of three data *categories*,
+which fix whether it is fed to the model as input, predicted as output, or both:
+
+| Category  | Model input | Model output | Description |
+|-----------|:-----------:|:------------:|-------------|
+| `state`   | ✓           | ✓            | Prognostic variables the model both reads and predicts (autoregressed forward in time). |
+| `forcing` | ✓           |              | Time-varying inputs known in advance (e.g. solar radiation, boundary forcing). |
+| `static`  | ✓           |              | Time-invariant inputs (e.g. orography, land-sea mask). |
+
+(A `diagnostic` category, predicted but not fed back as input, is not used at
+present but fits naturally as an output-only category.) These categories are
+also what determine a datastore's role: a datastore that provides `state` data
+is the interior domain (model input and output), while one without `state` data
+is used for input only, e.g. boundary forcing from a separate domain.
+
 There are currently two different datastores implemented in the codebase:
 
 1. `neural_lam.datastore.MDPDatastore` which represents loading of
