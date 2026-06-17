@@ -1,7 +1,6 @@
 """Base class for graph-based step predictors."""
 
 # Standard library
-from typing import Optional
 
 # Third-party
 import torch
@@ -224,7 +223,7 @@ class BaseGraphModel(StepPredictor):
         prev_state: torch.Tensor,
         prev_prev_state: torch.Tensor,
         forcing: torch.Tensor,
-    ) -> tuple[torch.Tensor, Optional[torch.Tensor]]:
+    ) -> tuple[torch.Tensor, torch.Tensor | None]:
         """
         Advance the state by one step using the encode-process-decode
         graph pipeline: embed grid + edge features, map grid -> mesh via
