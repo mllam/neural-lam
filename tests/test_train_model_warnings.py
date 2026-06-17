@@ -101,14 +101,21 @@ def test_create_gif_forwarded_to_forecaster_module():
     assert captured_kwargs["train_steps_to_log"] == [2]
 
 
-def test_train_steps_to_log_validation():
-    """ValueError must be raised if steps exceed ar_steps_train."""
+@pytest.mark.parametrize(
+    "train_steps,val_steps,match_err",
+    [
+        ([15], [], "Can not log training step 15"),
+        ([], [15], "Can not log validation step 15"),
+    ],
+)
+def test_steps_to_log_validation(train_steps, val_steps, match_err):
+    """ValueError must be raised if steps exceed the rollout length."""
     mock_args = MagicMock()
     mock_args.eval = None
     mock_args.load = None
     mock_args.config_path = "dummy.yaml"
-    mock_args.val_steps_to_log = []
-    mock_args.train_steps_to_log = [15]  # 15 > 10 (ar_steps_train)
+    mock_args.val_steps_to_log = val_steps
+    mock_args.train_steps_to_log = train_steps
     mock_args.var_leads_metrics_watch = "{}"
     mock_args.ar_steps_eval = 10
     mock_args.ar_steps_train = 10
@@ -121,7 +128,5 @@ def test_train_steps_to_log_validation():
             "neural_lam.train_model.load_config_and_datastore",
             return_value=(MagicMock(), MagicMock()),
         ):
-            with pytest.raises(
-                ValueError, match="Can not log training step 15"
-            ):
+            with pytest.raises(ValueError, match=match_err):
                 getattr(main, "__wrapped__", main)()
