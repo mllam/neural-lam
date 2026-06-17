@@ -74,7 +74,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Maintenance
 
-- Add comprehensive type hints to StepPredictor in `neural_lam/models/step_predictors/base.py` [\#664](https://github.com/mllam/neural-lam/issues/664) @GiGiKoneti
+- Add comprehensive type hints to StepPredictor in `neural_lam/models/step_predictors/base.py` [\#665](https://github.com/mllam/neural-lam/pull/665) @GiGiKoneti
 
 - Establish 100% docstring coverage across `neural_lam/` via an `interrogate` pre-commit hook, add a Dimension Glossary to the README for canonical tensor-shape names, and rewrite public docstrings in NumPy style to serve as the entry point for the autoapi pipeline (#196 / #272). [\#252](https://github.com/mllam/neural-lam/pull/252) @Mohit-Lakra
 
