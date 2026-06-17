@@ -700,10 +700,7 @@ class ForecasterModule(pl.LightningModule):
         # for state variable ``var_name`` when its mapped boundary feature is a
         # forcing feature on the boundary datastore. State variables absent from
         # the mapping fall back to matching a boundary forcing feature of the
-        # same name (e.g. DANRA ``u100m`` overlays ERA5 ``u100m``); to overlay
-        # differently named fields add an explicit entry such as
-        # ``u100m: u_component_of_wind1000hPa``. Unmatched state variables plot
-        # without a boundary overlay.
+        # same name (e.g. DANRA ``u100m`` overlays ERA5 ``u100m``);
         plotting_cfg = self.config.plotting
         boundary_var_mapping = plotting_cfg.boundary_var_mapping
         da_boundary_forcing = None

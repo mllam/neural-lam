@@ -1,11 +1,10 @@
 # Standard library
+from collections.abc import Iterator
 from datetime import timedelta
 from pathlib import Path
-from typing import Iterator
 from unittest.mock import MagicMock, patch
 
 # Third-party
-import matplotlib
 import matplotlib.figure
 import matplotlib.pyplot as plt
 import numpy as np

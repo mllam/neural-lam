@@ -381,8 +381,8 @@ def plot_on_axis(
         If provided, overlay boundary mask with given alpha transparency.
     boundary_da : xarray.DataArray, optional
         Boundary data from a separate boundary datastore. Shape
-        ``(N_boundary,)``. Plotted underneath the interior data with
-        reduced opacity.
+        ``(num_boundary_grid_nodes,)``. Plotted underneath the interior data
+        with reduced opacity.
     boundary_datastore : BaseRegularGridDatastore, optional
         Datastore providing grid metadata for the boundary data.
         Required when ``boundary_da`` is given.
@@ -412,17 +412,14 @@ def plot_on_axis(
 
     # Plot boundary data underneath interior data when provided
     if boundary_da is not None and boundary_datastore is not None:
-        # Use "forcing" category because boundary datastores may not have
+        # Use "forcing" category because boundary datastores will not have
         # state variables (e.g. ERA5 boundary with only forcing + static).
         b_xy = boundary_datastore.get_xy("forcing", stacked=False)
         b_grid_shape = (b_xy.shape[0], b_xy.shape[1])
         b_lats_lons = boundary_datastore.get_lat_lon("forcing")
 
         # Prefer per-point lat/lon carried on the boundary DataArray when
-        # available (e.g. after a convex-hull crop the boundary is no
-        # longer a full rectangular grid, so the datastore-level regular
-        # grid would not align with the data). Fall back to the datastore
-        # regular grid otherwise.
+        # available. Fall back to the datastore regular grid otherwise.
         per_point_lats_lons = None
         for lon_name, lat_name in (("longitude", "latitude"), ("lon", "lat")):
             if (
@@ -453,9 +450,7 @@ def plot_on_axis(
             # After convex-hull cropping the boundary is no longer a full
             # rectangular grid. Recover a regular (lon, lat) grid by
             # rebuilding a multi-index from the per-point lat/lon aux
-            # coords and unstacking; missing cells come back as NaN, so
-            # pcolormesh just leaves them transparent and we get the
-            # boundary "donut" around the interior.
+            # coords and unstacking;
             lon_name = (
                 "longitude" if "longitude" in boundary_da.coords else "lon"
             )
@@ -537,11 +532,6 @@ def plot_on_axis(
         )
 
     # Crop axes to the interior bbox in the datastore's own projection.
-    # When boundary data is shown expand the bbox by
-    # `boundary_margin_degrees` on each side, converted to projection
-    # units at the interior's center so the margin is geometrically
-    # symmetric (otherwise lon/lat padding looks lopsided in projections
-    # where lon-distance shrinks with latitude).
     margin_deg = boundary_margin_degrees if boundary_da is not None else 0.0
     xmin, xmax, ymin, ymax = _interior_padded_projected_bbox(
         datastore, margin_deg
@@ -806,7 +796,8 @@ def plot_prediction(
         Label for the shared colorbar.
     boundary_da : xarray.DataArray, optional
         Boundary field from a separate boundary datastore. Shape
-        ``(N_boundary,)``. Plotted underneath with reduced opacity.
+        ``(num_boundary_grid_nodes,)``. Plotted underneath with reduced
+        opacity.
     boundary_datastore : BaseRegularGridDatastore, optional
         Datastore providing grid metadata for the boundary data.
         Required when ``boundary_da`` is given.
