@@ -76,6 +76,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Add comprehensive type hints to GraphLAM in `neural_lam/models/step_predictors/graph/graph_lam.py` [\#669](https://github.com/mllam/neural-lam/pull/669) @GiGiKoneti
 
+- Add comprehensive type hints to ARForecaster in `neural_lam/models/forecasters/autoregressive.py` [\#663](https://github.com/mllam/neural-lam/pull/663) @GiGiKoneti
+
+- Add comprehensive type hints to StepPredictor in `neural_lam/models/step_predictors/base.py` [\#665](https://github.com/mllam/neural-lam/pull/665) @GiGiKoneti
+
+- Add comprehensive type hints to BaseGraphModel in `neural_lam/models/step_predictors/graph/base.py` [\#667](https://github.com/mllam/neural-lam/pull/667) @GiGiKoneti
+
 - Establish 100% docstring coverage across `neural_lam/` via an `interrogate` pre-commit hook, add a Dimension Glossary to the README for canonical tensor-shape names, and rewrite public docstrings in NumPy style to serve as the entry point for the autoapi pipeline (#196 / #272). [\#252](https://github.com/mllam/neural-lam/pull/252) @Mohit-Lakra
 
 - Register a `slow` pytest marker and apply it to `test_training` and `test_training_output_std` so contributors can skip long-running training tests during local iteration via `pytest -m "not slow"`. [\#651](https://github.com/mllam/neural-lam/pull/651) @sadamov
