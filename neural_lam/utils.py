@@ -480,7 +480,7 @@ def load_and_register_graph(
     return hierarchical
 
 
-def grid_input_dim(
+def compute_grid_input_dim(
     datastore: "BaseDatastore",
     grid_static_dim: int,
     num_past_forcing_steps: int,
