@@ -361,7 +361,7 @@ class NpyFilesDatastoreMEPS(BaseRegularGridDatastore):
 
         Parameters
         ----------
-        features : List[str]
+        features : list[str]
             The list of features to load the data for. For the 'state'
             category, this should be the result of
             `self.get_vars_names(category="state")`, for the 'forcing' category
@@ -563,7 +563,7 @@ class NpyFilesDatastoreMEPS(BaseRegularGridDatastore):
 
         Returns
         -------
-        List[dt.datetime]
+        list[dt.datetime]
             The analysis times for the given split, sorted in ascending order.
 
         """

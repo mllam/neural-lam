@@ -185,7 +185,7 @@ class MDPDatastore(BaseRegularGridDatastore):
 
         Returns
         -------
-        List[str]
+        list[str]
             The units of the variables in the given category.
 
         """
@@ -204,7 +204,7 @@ class MDPDatastore(BaseRegularGridDatastore):
 
         Returns
         -------
-        List[str]
+        list[str]
             The names of the variables in the given category.
 
         """
@@ -224,7 +224,7 @@ class MDPDatastore(BaseRegularGridDatastore):
 
         Returns
         -------
-        List[str]
+        list[str]
             The long names of the variables in the given category.
 
         """
