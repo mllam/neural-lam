@@ -19,7 +19,7 @@ from neural_lam.utils import get_integer_time
 # Local
 from .. import metrics, vis
 from ..config import NeuralLAMConfig
-from ..datastore import BaseDatastore
+from ..datastore.base import BaseRegularGridDatastore
 from ..loss_weighting import get_state_feature_weighting
 from ..weather_dataset import WeatherDataset
 from .forecasters.base import Forecaster
@@ -33,11 +33,20 @@ class ForecasterModule(pl.LightningModule):
 
     # pylint: disable=arguments-differ
 
+    interior_mask_bool: torch.Tensor
+    per_var_std: torch.Tensor | None
+    state_mean: torch.Tensor
+    state_std: torch.Tensor
+    forcing_mean: torch.Tensor | None
+    forcing_std: torch.Tensor | None
+    forcing_mean_tiled: torch.Tensor | None
+    forcing_std_tiled: torch.Tensor | None
+
     def __init__(
         self,
         forecaster: Forecaster,
         config: NeuralLAMConfig,
-        datastore: BaseDatastore,
+        datastore: BaseRegularGridDatastore,
         loss: str = "wmse",
         lr: float = 1e-3,
         restore_opt: bool = False,
@@ -46,8 +55,8 @@ class ForecasterModule(pl.LightningModule):
         val_steps_to_log: list[int] | None = None,
         metrics_watch: list[str] | None = None,
         var_leads_metrics_watch: dict[int, list[int]] | None = None,
-        args=None,
-    ):
+        args: Any | None = None,
+    ) -> None:
         """
         Initialize the ForecasterModule.
 
@@ -266,13 +275,13 @@ class ForecasterModule(pl.LightningModule):
             The resulting xarray DataArray.
         """
         weather_dataset = WeatherDataset(datastore=self.datastore, split=split)
-        time = np.array(time.cpu(), dtype="datetime64[ns]")
+        time_np = np.array(time.cpu(), dtype="datetime64[ns]")
         da = weather_dataset.create_dataarray_from_tensor(
-            tensor=tensor, time=time, category=category
+            tensor=tensor, time=time_np, category=category
         )
         return da
 
-    def configure_optimizers(self):
+    def configure_optimizers(self) -> torch.optim.Optimizer:
         """
         Configure the optimizers and learning rate schedulers.
 
@@ -281,13 +290,14 @@ class ForecasterModule(pl.LightningModule):
         torch.optim.Optimizer
             The configured optimizer.
         """
-        opt = torch.optim.AdamW(
-            self.parameters(), lr=self.hparams.lr, betas=(0.9, 0.95)
-        )
+        lr = self.hparams.lr  # type: ignore[attr-defined]
+        opt = torch.optim.AdamW(self.parameters(), lr=lr, betas=(0.9, 0.95))
         return opt
 
     @staticmethod
-    def _safe_std(std_values, eps, category):
+    def _safe_std(
+        std_values: np.ndarray | torch.Tensor, eps: float, category: str
+    ) -> torch.Tensor:
         """Build a float32 std tensor, clamping near-zero values to `eps`.
 
         Mirrors the previous CPU-side WeatherDataset behavior: features with
@@ -304,7 +314,11 @@ class ForecasterModule(pl.LightningModule):
             )
         return torch.clamp(std, min=eps)
 
-    def on_after_batch_transfer(self, batch, dataloader_idx):
+    def on_after_batch_transfer(
+        self,
+        batch: tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor],
+        dataloader_idx: int,
+    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
         """Standardize a batch on-device after transfer to the accelerator.
 
         Lightning calls this for every train/val/test/predict batch.
@@ -317,6 +331,9 @@ class ForecasterModule(pl.LightningModule):
         target_states = (target_states - self.state_mean) / self.state_std
 
         if forcing.shape[-1] > 0:
+            assert (
+                self.forcing_mean is not None and self.forcing_std is not None
+            )
             if self.forcing_mean_tiled is None:
                 # Forcing is (..., num_forcing_vars * window_size).
                 # WeatherDataset stacks (forcing_feature, window)
@@ -330,13 +347,20 @@ class ForecasterModule(pl.LightningModule):
                 self.forcing_std_tiled = self.forcing_std.repeat_interleave(
                     window_size
                 )
+            assert (
+                self.forcing_mean_tiled is not None
+                and self.forcing_std_tiled is not None
+            )
             forcing = (
                 forcing - self.forcing_mean_tiled
             ) / self.forcing_std_tiled
 
         return init_states, target_states, forcing, batch_times
 
-    def common_step(self, batch):
+    def common_step(
+        self,
+        batch: tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor],
+    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor | None, torch.Tensor]:
         """
         Perform a common prediction step for training, validation, and testing.
 
@@ -358,7 +382,10 @@ class ForecasterModule(pl.LightningModule):
         )
         return prediction, target_states, pred_std, batch_times
 
-    def training_step(self, batch):
+    def training_step(
+        self,
+        batch: tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor],
+    ) -> torch.Tensor:
         """
         Perform a single training step.
 
@@ -396,7 +423,7 @@ class ForecasterModule(pl.LightningModule):
         )
         return batch_loss
 
-    def all_gather_cat(self, tensor_to_gather):
+    def all_gather_cat(self, tensor_to_gather: torch.Tensor) -> torch.Tensor:
         """
         Gather tensors from all GPUs and concatenate them.
 
@@ -411,6 +438,7 @@ class ForecasterModule(pl.LightningModule):
             The concatenated tensor from all processes.
         """
         gathered = self.all_gather(tensor_to_gather)
+        assert isinstance(gathered, torch.Tensor)
         # all_gather adds dim 0 only on multi-device; on single
         # device it returns the same tensor unchanged.
         if gathered.dim() > tensor_to_gather.dim():
@@ -423,7 +451,11 @@ class ForecasterModule(pl.LightningModule):
         flag = f"_{phase}_steps_warn_issued"
         if getattr(self, flag):
             return
-        invalid = [s for s in self.hparams.val_steps_to_log if s > pred_steps]
+        invalid = [
+            s
+            for s in self.hparams.val_steps_to_log  # type: ignore[attr-defined]
+            if s > pred_steps
+        ]
         if invalid:
             warnings.warn(
                 f"val_steps_to_log contains steps {invalid} that exceed "
@@ -435,7 +467,11 @@ class ForecasterModule(pl.LightningModule):
             )
         setattr(self, flag, True)
 
-    def validation_step(self, batch, batch_idx):
+    def validation_step(
+        self,
+        batch: tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor],
+        batch_idx: int,
+    ) -> None:
         """
         Perform a single validation step.
 
@@ -449,6 +485,7 @@ class ForecasterModule(pl.LightningModule):
         prediction, target_states, pred_std, _ = self.common_step(batch)
         if pred_std is None:
             pred_std = self.per_var_std
+        assert pred_std is not None
 
         time_step_loss = torch.mean(
             self.loss(
@@ -462,9 +499,13 @@ class ForecasterModule(pl.LightningModule):
         mean_loss = torch.mean(time_step_loss)
         self._warn_skipped_val_steps(len(time_step_loss), "val")
 
+        hparams = self.hparams
+        val_steps_to_log = (
+            hparams.val_steps_to_log  # type: ignore[attr-defined]
+        )
         val_log_dict = {
             f"val_loss_unroll{step}": time_step_loss[step - 1]
-            for step in self.hparams.val_steps_to_log
+            for step in val_steps_to_log
             if step <= len(time_step_loss)
         }
         val_log_dict["val_mean_loss"] = mean_loss
@@ -485,15 +526,21 @@ class ForecasterModule(pl.LightningModule):
         )
         self.val_metrics["mse"].append(entry_mses)
 
-    def on_validation_epoch_end(self):
+    def on_validation_epoch_end(self) -> None:
         """
         Perform actions at the end of the validation epoch.
         Aggregates and plots validation metrics.
         """
         self.aggregate_and_plot_metrics(self.val_metrics, prefix="val")
 
-        if self.trainer.is_global_zero and self.hparams.metrics_watch:
-            unmatched = set(self.hparams.metrics_watch) - self.matched_metrics
+        if (
+            self.trainer.is_global_zero
+            and self.hparams.metrics_watch  # type: ignore[attr-defined]
+        ):
+            unmatched = (
+                set(self.hparams.metrics_watch)  # type: ignore[attr-defined]
+                - self.matched_metrics
+            )
             if unmatched:
                 warnings.warn(
                     "The following metrics in --metrics_watch "
@@ -508,7 +555,11 @@ class ForecasterModule(pl.LightningModule):
             metric_list.clear()
 
     # pylint: disable-next=unused-argument
-    def test_step(self, batch, batch_idx):
+    def test_step(
+        self,
+        batch: tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor],
+        batch_idx: int,
+    ) -> None:
         """
         Perform a single test step.
 
@@ -529,6 +580,7 @@ class ForecasterModule(pl.LightningModule):
 
         if pred_std is None:
             pred_std = self.per_var_std
+        assert pred_std is not None
 
         time_step_loss = torch.mean(
             self.loss(
@@ -542,9 +594,13 @@ class ForecasterModule(pl.LightningModule):
         mean_loss = torch.mean(time_step_loss)
         self._warn_skipped_val_steps(len(time_step_loss), "test")
 
+        hparams = self.hparams
+        val_steps_to_log = (
+            hparams.val_steps_to_log  # type: ignore[attr-defined]
+        )
         test_log_dict = {
             f"test_loss_unroll{step}": time_step_loss[step - 1]
-            for step in self.hparams.val_steps_to_log
+            for step in val_steps_to_log
             if step <= len(time_step_loss)
         }
         test_log_dict["test_mean_loss"] = mean_loss
@@ -575,7 +631,7 @@ class ForecasterModule(pl.LightningModule):
             :,
             [
                 step - 1
-                for step in self.hparams.val_steps_to_log
+                for step in val_steps_to_log
                 if step <= spatial_loss.shape[1]
             ],
         ]
@@ -585,19 +641,25 @@ class ForecasterModule(pl.LightningModule):
             self.trainer.is_global_zero
             and self.plotted_examples < self.n_example_pred
         ):
-            n_additional_examples = min(
+            n_examples = min(
                 prediction.shape[0],
                 self.n_example_pred - self.plotted_examples,
             )
 
             self.plot_examples(
                 batch,
-                n_additional_examples,
+                n_examples,
                 prediction=prediction,
                 split="test",
             )
 
-    def plot_examples(self, batch, n_examples, split, prediction):
+    def plot_examples(
+        self,
+        batch: tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor],
+        n_examples: int,
+        split: str,
+        prediction: torch.Tensor,
+    ) -> None:
         """
         Plot example predictions.
 
@@ -673,7 +735,7 @@ class ForecasterModule(pl.LightningModule):
 
             if self.create_gif:
                 plot_dir_path = os.path.join(
-                    self.logger.save_dir,
+                    self.logger.save_dir,  # type: ignore[union-attr]
                     f"example_plots_{example_i}",
                 )
                 os.makedirs(plot_dir_path, exist_ok=True)
@@ -715,7 +777,9 @@ class ForecasterModule(pl.LightningModule):
                         key = f"{var_name}_example"
 
                     if hasattr(self.logger, "log_image"):
-                        self.logger.log_image(key=key, images=[fig], step=t_i)
+                        self.logger.log_image(  # type: ignore[union-attr]
+                            key=key, images=[fig], step=t_i
+                        )
                     else:
                         warnings.warn(
                             f"{self.logger} does not support image logging."
@@ -755,19 +819,21 @@ class ForecasterModule(pl.LightningModule):
             torch.save(
                 pred_slice.cpu(),
                 os.path.join(
-                    self.logger.save_dir,
+                    self.logger.save_dir,  # type: ignore[union-attr]
                     f"example_pred_{self.plotted_examples}.pt",
                 ),
             )
             torch.save(
                 target_slice.cpu(),
                 os.path.join(
-                    self.logger.save_dir,
+                    self.logger.save_dir,  # type: ignore[union-attr]
                     f"example_target_{self.plotted_examples}.pt",
                 ),
             )
 
-    def create_metric_log_dict(self, metric_tensor, prefix, metric_name):
+    def create_metric_log_dict(
+        self, metric_tensor: torch.Tensor, prefix: str, metric_name: str
+    ) -> dict[str, Any]:
         """
         Create a dictionary of metrics to log.
 
@@ -785,7 +851,7 @@ class ForecasterModule(pl.LightningModule):
         dict
             Dictionary of logged metrics and figures.
         """
-        log_dict = {}
+        log_dict: dict[str, Any] = {}
         metric_fig = vis.plot_error_heatmap(
             errors=metric_tensor,
             datastore=self.datastore,
@@ -795,21 +861,29 @@ class ForecasterModule(pl.LightningModule):
 
         if prefix == "test":
             metric_fig.savefig(
-                os.path.join(self.logger.save_dir, f"{full_log_name}.pdf")
+                os.path.join(
+                    self.logger.save_dir,  # type: ignore[union-attr]
+                    f"{full_log_name}.pdf",
+                )
             )
             np.savetxt(
-                os.path.join(self.logger.save_dir, f"{full_log_name}.csv"),
+                os.path.join(
+                    self.logger.save_dir,  # type: ignore[union-attr]
+                    f"{full_log_name}.csv",
+                ),
                 metric_tensor.cpu().numpy(),
                 delimiter=",",
             )
 
         var_names = self.datastore.get_vars_names(category="state")
-        if full_log_name in self.hparams.metrics_watch:
+        hparams = self.hparams
+        metrics_watch = hparams.metrics_watch  # type: ignore[attr-defined]
+        if full_log_name in metrics_watch:
             self.matched_metrics.add(full_log_name)
-            for (
-                var_i,
-                timesteps,
-            ) in self.hparams.var_leads_metrics_watch.items():
+            var_leads_metrics_watch = (
+                hparams.var_leads_metrics_watch  # type: ignore[attr-defined]
+            )
+            for var_i, timesteps in var_leads_metrics_watch.items():
                 var_name = var_names[var_i]
                 for step in timesteps:
                     key = f"{full_log_name}_{var_name}_step_{step}"
@@ -817,7 +891,9 @@ class ForecasterModule(pl.LightningModule):
 
         return log_dict
 
-    def aggregate_and_plot_metrics(self, metrics_dict, prefix):
+    def aggregate_and_plot_metrics(
+        self, metrics_dict: dict[str, list[torch.Tensor]], prefix: str
+    ) -> None:
         """
         Aggregate metrics from all GPUs and plot them.
 
@@ -880,11 +956,13 @@ class ForecasterModule(pl.LightningModule):
                     key = f"{key}-{current_epoch}"
 
                 if hasattr(self.logger, "log_image"):
-                    self.logger.log_image(key=key, images=[figure])
+                    self.logger.log_image(  # type: ignore[union-attr]
+                        key=key, images=[figure]
+                    )
 
             plt.close("all")
 
-    def on_test_epoch_end(self):
+    def on_test_epoch_end(self) -> None:
         """
         Perform actions at the end of the test epoch.
         Aggregates and plots test metrics and spatial loss maps.
@@ -896,6 +974,11 @@ class ForecasterModule(pl.LightningModule):
         )
         if self.trainer.is_global_zero:
             mean_spatial_loss = torch.mean(spatial_loss_tensor, dim=0)
+            hparams = self.hparams
+            val_steps_to_log = (
+                hparams.val_steps_to_log  # type: ignore[attr-defined]
+            )
+            logger_save_dir = self.logger.save_dir  # type: ignore[union-attr]
 
             loss_map_figs = [
                 vis.plot_spatial_error(
@@ -905,7 +988,8 @@ class ForecasterModule(pl.LightningModule):
                     f"({(self.time_step_int * t_i)} {self.time_step_unit})",
                 )
                 for t_i, loss_map in zip(
-                    self.hparams.val_steps_to_log, mean_spatial_loss
+                    val_steps_to_log,
+                    mean_spatial_loss,
                 )
             ]
 
@@ -914,30 +998,35 @@ class ForecasterModule(pl.LightningModule):
                 if not isinstance(self.logger, pl.loggers.WandbLogger):
                     key = f"{key}_{i}"
                 if hasattr(self.logger, "log_image"):
-                    self.logger.log_image(key=key, images=[fig])
+                    self.logger.log_image(  # type: ignore[union-attr]
+                        key=key, images=[fig]
+                    )
 
             pdf_loss_map_figs = [
                 vis.plot_spatial_error(error=loss_map, datastore=self.datastore)
                 for loss_map in mean_spatial_loss
             ]
             pdf_loss_maps_dir = os.path.join(
-                self.logger.save_dir, "spatial_loss_maps"
+                logger_save_dir, "spatial_loss_maps"
             )
             os.makedirs(pdf_loss_maps_dir, exist_ok=True)
             for t_i, fig in zip(
-                self.hparams.val_steps_to_log, pdf_loss_map_figs
+                val_steps_to_log,
+                pdf_loss_map_figs,
             ):
                 fig.savefig(os.path.join(pdf_loss_maps_dir, f"loss_t{t_i}.pdf"))
 
             torch.save(
                 mean_spatial_loss.cpu(),
-                os.path.join(self.logger.save_dir, "mean_spatial_loss.pt"),
+                os.path.join(
+                    logger_save_dir,
+                    "mean_spatial_loss.pt",
+                ),
             )
 
-            if self.hparams.metrics_watch:
-                unmatched = (
-                    set(self.hparams.metrics_watch) - self.matched_metrics
-                )
+            metrics_watch = hparams.metrics_watch  # type: ignore[attr-defined]
+            if metrics_watch:
+                unmatched = set(metrics_watch) - self.matched_metrics
                 if unmatched:
                     warnings.warn(
                         "The following metrics in --metrics_watch "
@@ -961,7 +1050,7 @@ class ForecasterModule(pl.LightningModule):
         # otherwise stay permanently False).
         self.plotted_examples = 0
 
-    def on_load_checkpoint(self, checkpoint):
+    def on_load_checkpoint(self, checkpoint: dict[str, Any]) -> None:
         """
         Perform actions when loading a checkpoint.
         Handles backward compatibility for older checkpoints.

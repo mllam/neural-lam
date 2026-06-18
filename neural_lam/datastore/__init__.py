@@ -1,5 +1,8 @@
 """Datastore backends for loading and serving weather model data."""
 
+# Standard library
+from pathlib import Path
+
 # Local
 from .base import BaseDatastore  # noqa
 from .mdp import MDPDatastore  # noqa
@@ -16,7 +19,9 @@ DATASTORES = {
 }
 
 
-def init_datastore(datastore_kind, config_path):
+def init_datastore(
+    datastore_kind: str, config_path: str | Path
+) -> BaseDatastore:
     """
     Instantiate a datastore based on its short-name identifier.
 

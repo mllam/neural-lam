@@ -7,7 +7,6 @@ import warnings
 from datetime import timedelta
 from functools import cached_property
 from pathlib import Path
-from typing import List, Optional, Union
 
 # Third-party
 import cartopy.crs as ccrs
@@ -36,7 +35,7 @@ class MDPDatastore(BaseRegularGridDatastore):
 
     def __init__(
         self,
-        config_path: Union[str, Path],
+        config_path: str | Path,
         n_boundary_points: int = 30,
         reuse_existing: bool = True,
     ) -> None:
@@ -176,7 +175,7 @@ class MDPDatastore(BaseRegularGridDatastore):
         total_sec = da_dt.dt.total_seconds().isel(time=0).astype(int)
         return timedelta(seconds=int(total_sec.item()))
 
-    def get_vars_units(self, category: str) -> List[str]:
+    def get_vars_units(self, category: str) -> list[str]:
         """Return the units of the variables in the given category.
 
         Parameters
@@ -195,7 +194,7 @@ class MDPDatastore(BaseRegularGridDatastore):
             return []
         return self._ds[f"{category}_feature_units"].values.tolist()
 
-    def get_vars_names(self, category: str) -> List[str]:
+    def get_vars_names(self, category: str) -> list[str]:
         """Return the names of the variables in the given category.
 
         Parameters
@@ -214,7 +213,7 @@ class MDPDatastore(BaseRegularGridDatastore):
             return []
         return self._ds[f"{category}_feature"].values.tolist()
 
-    def get_vars_long_names(self, category: str) -> List[str]:
+    def get_vars_long_names(self, category: str) -> list[str]:
         """
         Return the long names of the variables in the given category.
 
@@ -253,9 +252,9 @@ class MDPDatastore(BaseRegularGridDatastore):
     def get_dataarray(
         self,
         category: str,
-        split: Optional[str],
+        split: str | None,
         standardize: bool = False,
-    ) -> Union[xr.DataArray, None]:
+    ) -> xr.DataArray | None:
         """
         Return the processed data (as a single `xr.DataArray`) for the given
         category of data and test/train/val-split that covers all the data (in
@@ -364,7 +363,7 @@ class MDPDatastore(BaseRegularGridDatastore):
         # Add standardized state diff stats
         if category == "state":
             ds_stats = ds_stats.assign(
-                **{
+                {
                     f"state_diff_{op}_standardized": self._ds[
                         f"state__{split}__diff_{op}"
                     ]
@@ -404,7 +403,11 @@ class MDPDatastore(BaseRegularGridDatastore):
         ds_unstacked["boundary_mask"] = ds_unstacked.boundary_mask.fillna(
             1
         ).astype(int)
-        return self.stack_grid_coords(da_or_ds=ds_unstacked.boundary_mask)
+        boundary_mask = self.stack_grid_coords(
+            da_or_ds=ds_unstacked.boundary_mask
+        )
+        assert isinstance(boundary_mask, xr.DataArray)
+        return boundary_mask
 
     @property
     def coords_projection(self) -> ccrs.Projection:

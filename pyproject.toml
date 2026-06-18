@@ -51,7 +51,15 @@ gpu = ["torch>=2.12,<2.13"]        # CUDA 13.0, default GPU build
 gpu-cu128 = ["torch>=2.11,<2.12"]  # CUDA 12.8, last torch series with cu128 wheels
 
 [dependency-groups]
-dev = ["pre-commit>=3.8.0", "pytest>=8.3.2", "pooch>=1.8.2"]
+dev = [
+    "pre-commit>=3.8.0",
+    "pytest>=8.3.2",
+    "pooch>=1.8.2",
+    "mypy>=2.1.0",
+    "types-pyyaml",
+    "types-pillow",
+    "types-tqdm",
+]
 
 [tool.uv]
 # uv-specific configuration for PyTorch CPU/GPU variant selection.
@@ -120,6 +128,13 @@ per-file-ignores = [
 
 [tool.codespell]
 skip = "requirements/*"
+
+[tool.mypy]
+python_version = "3.10"
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
+ignore_missing_imports = true
+exclude = ["^tests/", "^docs/", "^build/"]
 
 # Pylint config
 [tool.pylint]

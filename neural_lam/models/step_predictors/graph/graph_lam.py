@@ -21,6 +21,10 @@ class GraphLAM(BaseGraphModel):
     Oskarsson et al. (2023).
     """
 
+    mesh_static_features: torch.Tensor
+    m2m_features: torch.Tensor
+    m2m_edge_index: torch.Tensor
+
     def __init__(
         self,
         datastore: BaseDatastore,

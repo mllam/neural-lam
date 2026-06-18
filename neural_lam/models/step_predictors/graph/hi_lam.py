@@ -5,6 +5,7 @@ Hierarchical graph-based LAM model.
 # Standard library
 
 # Third-party
+import torch
 from torch import nn
 
 # Local
@@ -37,7 +38,7 @@ class HiLAM(BaseHiGraphModel):
         m2g_gnn_type: str = "InteractionNet",
         mesh_up_gnn_type: str = "InteractionNet",
         mesh_down_gnn_type: str = "InteractionNet",
-    ):
+    ) -> None:
         """
         Initialize the HiLAM model.
 
@@ -100,7 +101,7 @@ class HiLAM(BaseHiGraphModel):
             [self.make_same_gnns() for _ in range(processor_layers)]
         )  # Nested lists (proc_steps, num_levels)
 
-    def make_same_gnns(self):
+    def make_same_gnns(self) -> nn.ModuleList:
         """
         Make intra-level GNNs.
 
@@ -120,7 +121,7 @@ class HiLAM(BaseHiGraphModel):
             ]
         )
 
-    def make_up_gnns(self):
+    def make_up_gnns(self) -> nn.ModuleList:
         """
         Make GNNs for processing steps up through the hierarchy.
 
@@ -141,7 +142,7 @@ class HiLAM(BaseHiGraphModel):
             ]
         )
 
-    def make_down_gnns(self):
+    def make_down_gnns(self) -> nn.ModuleList:
         """
         Make GNNs for processing steps down through the hierarchy.
 
@@ -164,12 +165,12 @@ class HiLAM(BaseHiGraphModel):
 
     def mesh_down_step(
         self,
-        mesh_rep_levels,
-        mesh_same_rep,
-        mesh_down_rep,
-        down_gnns,
-        same_gnns,
-    ):
+        mesh_rep_levels: list[torch.Tensor],
+        mesh_same_rep: list[torch.Tensor],
+        mesh_down_rep: list[torch.Tensor],
+        down_gnns: nn.ModuleList,
+        same_gnns: nn.ModuleList,
+    ) -> tuple[list[torch.Tensor], list[torch.Tensor], list[torch.Tensor]]:
         """
         Run the downward pass of vertical processing, alternating between
         down-edges and same-level edges from the top to the bottom level.
@@ -234,8 +235,13 @@ class HiLAM(BaseHiGraphModel):
         return mesh_rep_levels, mesh_same_rep, mesh_down_rep
 
     def mesh_up_step(
-        self, mesh_rep_levels, mesh_same_rep, mesh_up_rep, up_gnns, same_gnns
-    ):
+        self,
+        mesh_rep_levels: list[torch.Tensor],
+        mesh_same_rep: list[torch.Tensor],
+        mesh_up_rep: list[torch.Tensor],
+        up_gnns: nn.ModuleList,
+        same_gnns: nn.ModuleList,
+    ) -> tuple[list[torch.Tensor], list[torch.Tensor], list[torch.Tensor]]:
         """
         Run the upward pass of vertical processing, alternating between
         up-edges and same-level edges from the bottom to the top level.
@@ -300,8 +306,17 @@ class HiLAM(BaseHiGraphModel):
         return mesh_rep_levels, mesh_same_rep, mesh_up_rep
 
     def hi_processor_step(
-        self, mesh_rep_levels, mesh_same_rep, mesh_up_rep, mesh_down_rep
-    ):
+        self,
+        mesh_rep_levels: list[torch.Tensor],
+        mesh_same_rep: list[torch.Tensor],
+        mesh_up_rep: list[torch.Tensor],
+        mesh_down_rep: list[torch.Tensor],
+    ) -> tuple[
+        list[torch.Tensor],
+        list[torch.Tensor],
+        list[torch.Tensor],
+        list[torch.Tensor],
+    ]:
         """
         Run all processor steps (down then up at each layer depth) over
         the hierarchical mesh.
@@ -337,6 +352,11 @@ class HiLAM(BaseHiGraphModel):
             self.mesh_up_gnns,
             self.mesh_up_same_gnns,
         ):
+            assert isinstance(down_gnns, nn.ModuleList)
+            assert isinstance(down_same_gnns, nn.ModuleList)
+            assert isinstance(up_gnns, nn.ModuleList)
+            assert isinstance(up_same_gnns, nn.ModuleList)
+
             # Down
             mesh_rep_levels, mesh_same_rep, mesh_down_rep = self.mesh_down_step(
                 mesh_rep_levels,
