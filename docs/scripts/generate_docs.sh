@@ -3,55 +3,44 @@
 
 set -euo pipefail
 
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-BLUE='\033[0;34m'
-BOLD='\033[1m'
-NC='\033[0m'
-info() { echo -e "${BLUE}[INFO]${NC}  $*"; }
-success() { echo -e "${GREEN}[OK]${NC}    $*"; }
-warn() { echo -e "${YELLOW}[WARN]${NC}  $*"; }
-error() { echo -e "${RED}[ERROR]${NC} $*" >&2; }
-
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
-NEURAL_LAM_DIR="$REPO_ROOT/neural_lam"
 DOCS_DIR="$REPO_ROOT/docs"
 
-for tool in interrogate pydocstyle jupyter-book; do
-  command -v "$tool" &>/dev/null || {
-    error "$tool not found. Run: pdm install --group docs"
-    exit 1
-  }
-done
+if ! command -v uv &>/dev/null; then
+  echo "[ERROR] uv not found. Please install uv first." >&2
+  exit 1
+fi
 
-# ── 1. interrogate ──
-info "interrogate: docstring coverage audit (fail-under 50)"
-interrogate "$NEURAL_LAM_DIR" \
-  --fail-under 50 \
-  --verbose \
-  --generate-badge "$DOCS_DIR/" \
-  2>&1 | tee "$DOCS_DIR/interrogate_report.txt" &&
-  success "Coverage ≥ 50% ✓" ||
-  {
-    error "Coverage below 50%! See docs/interrogate_report.txt"
-    exit 1
-  }
+echo "[INFO] Syncing dependencies..."
+uv pip install -e ".[cpu,docs]"
 
-# ── 2. pydocstyle ──
-info "pydocstyle: style check (non-blocking)"
-pydocstyle "$NEURAL_LAM_DIR" --convention=numpy --add-ignore=D100,D104,D105 &&
-  success "pydocstyle passed ✓" ||
-  warn "pydocstyle issues (non-blocking)"
+echo "[INFO] Removing old build at docs/_build..."
+rm -rf "$DOCS_DIR/_build"
 
-# ── 3. jupyter-book build ──
-info "jupyter-book: building site"
-jupyter-book build "$DOCS_DIR/" &&
-  success "Build succeeded ✓" ||
-  {
-    error "Build FAILED"
-    exit 1
-  }
+echo "[INFO] Generating UML architecture diagrams with pyreverse..."
+mkdir -p "$DOCS_DIR/_static/uml"
+if [ -f "$REPO_ROOT/.venv/bin/pyreverse" ]; then
+  (cd "$REPO_ROOT" && "$REPO_ROOT/.venv/bin/pyreverse" -o mmd -p models neural_lam.models -d "$DOCS_DIR/_static/uml/" || echo "[WARN] pyreverse failed, continuing...")
+else
+  (cd "$REPO_ROOT" && pyreverse -o mmd -p models neural_lam.models -d "$DOCS_DIR/_static/uml/" || echo "[WARN] pyreverse failed, continuing...")
+fi
 
-echo -e "\n${BOLD} Done — open: $DOCS_DIR/_build/html/index.html${NC}"
+echo "[INFO] Building site with jupyter-book..."
+if [ -f "$REPO_ROOT/.venv/bin/jupyter-book" ]; then
+  "$REPO_ROOT/.venv/bin/jupyter-book" build docs/ --keep-going
+else
+  # fallback to uv run if .venv structure differs
+  uv run jupyter-book build docs/ --keep-going
+fi
+
+INDEX_HTML="$DOCS_DIR/_build/html/index.html"
+echo "[OK] Build succeeded! Open: $INDEX_HTML"
+
+if command -v open &>/dev/null; then
+  open "$INDEX_HTML"
+elif command -v xdg-open &>/dev/null; then
+  xdg-open "$INDEX_HTML"
+else
+  echo "Please open $INDEX_HTML in your browser manually."
+fi

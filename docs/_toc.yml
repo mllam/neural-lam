@@ -1,8 +1,35 @@
-# docs/_toc.yml
 format: jb-book
 root: intro
 
 parts:
-  - caption: API Reference
+  - caption: Getting Started
     chapters:
-      - file: autoapi/index
+      - file: getting-started/installation
+      - file: getting-started/quickstart
+
+  - caption: Tutorials
+    chapters:
+      - file: notebooks/create_reduced_meps_dataset
+
+  - caption: Architecture
+    chapters:
+      - file: architecture/overview
+      - file: architecture/theory
+      - file: architecture/data-flow
+      - file: architecture/models
+      - file: architecture/graph-construction
+
+  - caption: Resources
+    chapters:
+      - file: guides/configuration
+      - file: api/index
+
+  - caption: Contributing
+    chapters:
+      - file: contributing/development-setup
+      - file: contributing/coding-standards
+
+  - caption: About
+    chapters:
+      - file: about/changelog
+      - file: about/glossary
