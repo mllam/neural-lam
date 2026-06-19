@@ -385,7 +385,6 @@ class ForecasterModule(pl.LightningModule):
         batch_loss = torch.mean(time_step_loss)
         batch_size = batch[0].shape[0]
 
-        self._warn_skipped_steps(len(time_step_loss), "train")
         self._log_step_loss(time_step_loss, batch_loss, "train", batch_size)
 
         return batch_loss
@@ -416,13 +415,9 @@ class ForecasterModule(pl.LightningModule):
         """Warn once per phase if any log steps exceed pred_steps."""
         if self._steps_warn_issued[phase]:
             return
-        log_hparams = {
-            "train": "train_steps_to_log",
-            "val": "val_steps_to_log",
-            "test": "val_steps_to_log",
-        }
-        hparam_name = log_hparams[phase]
-        arg_name = f"--{hparam_name}"
+        hparam_name = (
+            "train_steps_to_log" if phase == "train" else "val_steps_to_log"
+        )
         steps_to_log = getattr(self.hparams, hparam_name, [])
 
         invalid = [s for s in steps_to_log if s > pred_steps]
@@ -431,7 +426,7 @@ class ForecasterModule(pl.LightningModule):
                 f"{hparam_name} contains steps {invalid} that exceed "
                 f"the {phase} rollout length ({pred_steps}). "
                 "These steps will be skipped from logging. "
-                f"Adjust {arg_name} or the ar_steps.",
+                f"Adjust --{hparam_name} or the ar_steps.",
                 UserWarning,
                 stacklevel=2,
             )
@@ -453,13 +448,17 @@ class ForecasterModule(pl.LightningModule):
         Returns
         -------
         prediction : torch.Tensor
-            Model predictions.
+            Model predictions, shape
+            `(B, pred_steps, num_grid_nodes, num_state_vars)`.
         target_states : torch.Tensor
-            Target states.
+            Target states, shape
+            `(B, pred_steps, num_grid_nodes, num_state_vars)`.
         pred_std : torch.Tensor
-            Predicted or pre-defined standard deviation.
+            Predicted or pre-defined standard deviation, shape
+            `(B, pred_steps, num_grid_nodes, num_state_vars)` or
+            `(num_state_vars,)`.
         time_step_loss : torch.Tensor
-            Loss for each unroll step.
+            Loss for each unroll step, shape `(pred_steps,)`.
         """
         prediction, target_states, pred_std, _ = self.common_step(batch)
         if pred_std is None:
@@ -490,19 +489,14 @@ class ForecasterModule(pl.LightningModule):
         batch_size: int,
     ) -> None:
         """Log mean and step-wise losses for a given phase."""
-        prefixes = {
-            "train": "train_loss",
-            "val": "val_mean_loss",
-            "test": "test_mean_loss",
-        }
-        log_dict = {prefixes[phase]: mean_loss}
+        self._warn_skipped_steps(len(time_step_loss), phase)
 
-        log_hparams = {
-            "train": "train_steps_to_log",
-            "val": "val_steps_to_log",
-            "test": "val_steps_to_log",
-        }
-        hparam_name = log_hparams[phase]
+        loss_key = "train_loss" if phase == "train" else f"{phase}_mean_loss"
+        log_dict = {loss_key: mean_loss}
+
+        hparam_name = (
+            "train_steps_to_log" if phase == "train" else "val_steps_to_log"
+        )
         steps_to_log = getattr(self.hparams, hparam_name, [])
 
         for step in steps_to_log:
@@ -538,7 +532,6 @@ class ForecasterModule(pl.LightningModule):
         mean_loss = torch.mean(time_step_loss)
         batch_size = batch[0].shape[0]
 
-        self._warn_skipped_steps(len(time_step_loss), "val")
         self._log_step_loss(time_step_loss, mean_loss, "val", batch_size)
 
         entry_mses = metrics.mse(
@@ -597,7 +590,6 @@ class ForecasterModule(pl.LightningModule):
         mean_loss = torch.mean(time_step_loss)
         batch_size = batch[0].shape[0]
 
-        self._warn_skipped_steps(len(time_step_loss), "test")
         self._log_step_loss(time_step_loss, mean_loss, "test", batch_size)
 
         hparams = self.hparams
