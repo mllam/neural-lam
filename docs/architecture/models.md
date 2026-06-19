@@ -14,7 +14,7 @@ sequenceDiagram
     participant AR as ARModel
     participant F as Forecaster
     participant SP as StepPredictor
-    
+
     Trainer->>AR: training_step(batch)
     loop for each timestep
         AR->>F: forward(prev_state)

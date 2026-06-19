@@ -37,10 +37,12 @@ fi
 INDEX_HTML="$DOCS_DIR/_build/html/index.html"
 echo "[OK] Build succeeded! Open: $INDEX_HTML"
 
-if command -v open &>/dev/null; then
-  open "$INDEX_HTML"
-elif command -v xdg-open &>/dev/null; then
-  xdg-open "$INDEX_HTML"
-else
-  echo "Please open $INDEX_HTML in your browser manually."
+if [ "${CI:-false}" != "true" ]; then
+  if command -v open &>/dev/null; then
+    open "$INDEX_HTML" || true
+  elif command -v xdg-open &>/dev/null; then
+    xdg-open "$INDEX_HTML" || true
+  else
+    echo "Please open $INDEX_HTML in your browser manually."
+  fi
 fi
