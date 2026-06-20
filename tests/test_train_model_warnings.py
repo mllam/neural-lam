@@ -104,8 +104,8 @@ def test_create_gif_forwarded_to_forecaster_module():
 @pytest.mark.parametrize(
     "train_steps,val_steps,match_err",
     [
-        ([15], [], "Can not log training step 15"),
-        ([], [15], "Can not log validation step 15"),
+        ([15], [], "Can not log train step 15"),
+        ([], [15], "Can not log val step 15"),
     ],
 )
 def test_steps_to_log_validation(train_steps, val_steps, match_err):

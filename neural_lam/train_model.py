@@ -367,16 +367,16 @@ def main(input_args=None):
     }
 
     # Check that config only specifies logging for lead times that exist
-    for steps, max_steps, phase_name, flag_prefix in [
-        (args.val_steps_to_log, args.ar_steps_eval, "validation", "val"),
-        (args.train_steps_to_log, args.ar_steps_train, "training", "train"),
+    for phase, max_steps in [
+        ("train", args.ar_steps_train),
+        ("val", args.ar_steps_eval),
     ]:
-        for step in steps:
+        for step in getattr(args, f"{phase}_steps_to_log"):
             if step > max_steps:
                 raise ValueError(
-                    f"Can not log {phase_name} step {step} when {phase_name} "
-                    f"is only unrolled {max_steps} steps. Adjust "
-                    f"--{flag_prefix}_steps_to_log."
+                    f"Can not log {phase} step {step} when only "
+                    f"unrolling {max_steps} steps during {phase} phase. "
+                    f"Adjust --{phase}_steps_to_log."
                 )
     # Check --var_leads_metric_watch
     for var_i, leads in args.var_leads_metrics_watch.items():
