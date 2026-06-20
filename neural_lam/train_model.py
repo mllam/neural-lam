@@ -355,6 +355,11 @@ def main(input_args=None):
         ),
     )
     args = parser.parse_args(input_args)
+    if not args.eval and args.model == "persistence":
+        raise ValueError(
+            "The persistence model cannot be trained. Run with "
+            "--eval <val/test> to evaluate a persistence baseline."
+        )
     args.var_leads_metrics_watch = {
         int(k): v for k, v in json.loads(args.var_leads_metrics_watch).items()
     }
