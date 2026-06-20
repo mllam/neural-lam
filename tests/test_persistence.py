@@ -86,7 +86,10 @@ def test_persistence_predicts_std_false():
 
 def test_persistence_training_error():
     """ValueError must be raised if trying to train the persistence model."""
+    # Standard library
     from unittest.mock import MagicMock, patch
+
+    # First-party
     from neural_lam.train_model import main
 
     mock_args = MagicMock()

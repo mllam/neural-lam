@@ -2,7 +2,6 @@
 
 # Third-party
 import torch
-from torch import nn
 
 # Local
 from ...datastore import BaseDatastore
