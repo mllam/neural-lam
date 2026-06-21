@@ -42,8 +42,10 @@ jobs:
       - name: Install docs dependencies
         run: uv sync --extra cpu --extra docs --group dev --no-cache
 
-      - name: Build docs with pyreverse and jupyter-book
-        run: bash docs/scripts/generate_docs.sh
+
+
+      - name: Build docs with sphinx
+        run: uv run sphinx-build -W --keep-going -b html docs/ docs/_build/html/
 
       - name: Upload docs artifact
         uses: actions/upload-artifact@v4
@@ -72,41 +74,7 @@ jobs:
       - name: Install docs dependencies
         run: uv sync --extra cpu --extra docs --group dev --no-cache
 
-      - name: Generate UML diagrams
-        run: |
-          mkdir -p docs/_static/uml
-          uv run pyreverse -o mmd -p models neural_lam.models -d docs/_static/uml/ || true
+
 
       - name: Run linkcheck
-        run: uv run jupyter-book build docs/ --builder linkcheck || true
-
-  deploy-docs:
-    name: Deploy to GitHub Pages
-    runs-on: ubuntu-latest
-    needs: build-docs
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    permissions:
-      contents: read
-      pages: write
-      id-token: write
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-    steps:
-      - name: Setup Pages
-        uses: actions/configure-pages@v4
-
-      - name: Download artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: docs-html
-          path: docs/_build/html/
-
-      - name: Upload pages artifact
-        uses: actions/upload-pages-artifact@v3
-        with:
-          path: docs/_build/html/
-
-      - name: Deploy to GitHub Pages
-        id: deployment
-        uses: actions/deploy-pages@v4
+        run: uv run sphinx-build -W --keep-going -b linkcheck docs/ docs/_build/linkcheck/

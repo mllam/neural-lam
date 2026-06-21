@@ -27,7 +27,7 @@ Before training, you must construct a graph mesh for your data.
 python -m neural_lam.create_graph --config_path <path-to-config> --name <graph-name>
 ```
 
-This script builds the mesh graph required by the GNN models. For more details, see {doc}`../architecture/graph-construction`.
+This script builds the mesh graph required by the GNN models.
 
 ## Step 3: Train a Model
 
@@ -37,7 +37,7 @@ Now you can train a model using the graph and configuration.
 python -m neural_lam.train_model --config_path <path-to-config> --model graph_lam --graph <graph-name>
 ```
 
-Neural-LAM supports several models like `graph_lam`, `hilam`, and `hilam_parallel`. For more information on the available models, see {doc}`../architecture/models`.
+Neural-LAM supports several models like `graph_lam`, `hilam`, and `hilam_parallel`.
 
 ## Step 4: Evaluate
 
@@ -51,7 +51,4 @@ python -m neural_lam.train_model --eval test --config_path <path-to-config> --lo
 
 Neural-LAM uses a YAML configuration system powered by `dataclass-wizard`. The configuration defines the dataset paths, training parameters, and model hyperparameters. For complete details, see the API reference for {py:class}`neural_lam.config.NeuralLAMConfig`.
 
-## Next Steps
-
-- {doc}`../architecture/overview` to understand the system design
 - {doc}`../api/index` for complete API reference

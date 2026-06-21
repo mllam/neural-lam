@@ -60,7 +60,7 @@ python -c "import neural_lam; print('Neural-LAM OK')"
 uv sync --extra cpu --extra docs --group dev
 
 # Build the documentation
-jupyter-book build docs/
+sphinx-build -b html docs/ docs/_build/html/
 
 # Open in browser
 open docs/_build/html/index.html  # macOS
