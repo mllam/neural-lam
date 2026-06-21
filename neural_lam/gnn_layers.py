@@ -182,7 +182,7 @@ class InteractionNet(pyg.nn.MessagePassing):
     ) -> tuple[torch.Tensor, torch.Tensor]:
         """
         Overridden aggregation function to:
-        
+
         * return both aggregated and per-edge messages,
         * only aggregate to the number of receiver nodes (``self.num_rec``)
           rather than to ``dim_size``.
@@ -264,7 +264,8 @@ def get_gnn_class(gnn_type: str) -> Type[pyg.nn.MessagePassing]:
     Parameters
     ----------
     gnn_type : str
-        One of the keys in GNN_TYPES (currently "InteractionNet" or "PropagationNet")
+        One of the keys in GNN_TYPES (currently "InteractionNet" or
+        "PropagationNet")
 
     Returns
     -------

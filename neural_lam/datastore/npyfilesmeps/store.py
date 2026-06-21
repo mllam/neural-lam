@@ -244,9 +244,11 @@ class NpyFilesDatastoreMEPS(BaseRegularGridDatastore):
         xr.DataArray
             The data array for the given category and split, with dimensions
             per category:
-            
-            * state: ``[elapsed_forecast_duration, analysis_time, grid_index, feature, ensemble_member]``
-            * forcing: ``[elapsed_forecast_duration, analysis_time, grid_index, feature]``
+
+            * state: ``[elapsed_forecast_duration, analysis_time, grid_index,``
+              ``feature, ensemble_member]``
+            * forcing: ``[elapsed_forecast_duration, analysis_time,``
+              ``grid_index, feature]``
             * static: ``[grid_index, feature]``
 
         """
@@ -668,7 +670,7 @@ class NpyFilesDatastoreMEPS(BaseRegularGridDatastore):
         np.ndarray
             The x, y coordinates of the dataset (with x first then y second),
             returned differently based on the value of `stacked`:
-            
+
             * `stacked==True`: shape `(n_grid_points, 2)` where
               n_grid_points=N_x*N_y.
             * `stacked==False`: shape `(N_x, N_y, 2)`
