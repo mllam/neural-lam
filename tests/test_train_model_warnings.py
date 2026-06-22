@@ -24,6 +24,7 @@ def test_eval_without_load_warning(eval_val, load_val, expect_warning):
     mock_args.val_steps_to_log = []
     mock_args.var_leads_metrics_watch = "{}"
     mock_args.ar_steps_eval = 10
+    mock_args.model = "graph_lam"
 
     with patch(
         "neural_lam.train_model.ArgumentParser.parse_args",
@@ -34,13 +35,21 @@ def test_eval_without_load_warning(eval_val, load_val, expect_warning):
             side_effect=SystemExit(0),
         ):
             with patch("neural_lam.train_model.logger.warning") as mock_warning:
-                with pytest.raises(SystemExit):
-                    main()
-                if expect_warning:
-                    mock_warning.assert_called_once()
-                    assert "--load" in mock_warning.call_args[0][0]
-                else:
-                    mock_warning.assert_not_called()
+                with patch("neural_lam.train_model.WeatherDataModule"):
+                    # Add this patch to prevent further execution
+                    mock_model_class = MagicMock()
+                    mock_model_class.trainable = True
+                    with patch(
+                        "neural_lam.train_model.MODELS",
+                        {"graph_lam": mock_model_class},
+                    ):
+                        with pytest.raises(SystemExit):
+                            main()
+                        if expect_warning:
+                            mock_warning.assert_called_once()
+                            assert "--load" in mock_warning.call_args[0][0]
+                        else:
+                            mock_warning.assert_not_called()
 
 
 def test_create_gif_forwarded_to_forecaster_module():
