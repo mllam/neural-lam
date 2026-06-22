@@ -93,9 +93,6 @@ torch = [
     { index = "pytorch-cu128", extra = "gpu-cu128" },
 ]
 
-[tool.setuptools]
-py-modules = ["neural_lam"]
-
 [tool.black]
 line-length = 80
 

@@ -13,8 +13,8 @@ This guide walks through the minimum steps to get started with Neural-LAM:
 When running tests for the first time, example data is automatically downloaded from S3. You can trigger this download by running a minimal test.
 
 ```{code-block} bash
-# Run a minimal test to trigger data download
-pytest tests/test_training.py -vv -s -k "test_training" --co
+# Run a minimal test to trigger the data download
+pytest tests/test_training.py -vv -s -k "test_training"
 ```
 
 Alternatively, you can use the `DummyDatastore` for quick testing without downloading real data.

@@ -9,6 +9,9 @@ project = "Neural-LAM"
 copyright = "2024–2026, MLLAM Community"
 author = "MLLAM Community"
 
+# General Sphinx configuration
+exclude_patterns = ["_build", "Thumbs.db", ".DS_Store"]
+
 extensions = [
     "autoapi.extension",
     "myst_nb",
@@ -78,9 +81,7 @@ nb_execution_mode = "off"
 # HTML Theme
 html_theme = "sphinx_book_theme"
 html_logo = "_static/logo.png"
-html_favicon = "_static/favicon.ico"
 html_static_path = ["_static"]
-html_css_files = ["custom.css"]
 
 html_theme_options = {
     "repository_url": "https://github.com/mllam/neural-lam",
@@ -99,7 +100,7 @@ html_theme_options = {
 }
 
 # OpenGraph settings
-ogp_site_url = "https://mllam.github.io/neural-lam/"
+ogp_site_url = "https://neural-lam.readthedocs.io/en/latest/"
 ogp_image = "_static/logo.png"
 ogp_use_first_image = True
 
@@ -107,7 +108,10 @@ ogp_use_first_image = True
 mermaid_d3_zoom = False
 mermaid_version = "11"
 
-suppress_warnings = ["autoapi.python_import_resolution"]
+suppress_warnings = [
+    "autoapi.python_import_resolution",
+    "myst.xref_missing",
+]
 
 # Linkcheck settings
 linkcheck_ignore = [
