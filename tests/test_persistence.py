@@ -65,16 +65,19 @@ def test_persistence_forecaster_unroll():
     assert prediction.shape == (B, pred_steps, num_grid_nodes, d_state)
     assert pred_std is None
 
-    # Interior nodes should equal init_states[:, 1] (persistence),
-    # boundary nodes should equal boundary_states
+    # Persistence keeps every interior node at init_states[:, 1] for all
+    # steps, while boundary nodes are overwritten with boundary_states.
     interior_mask = forecaster.interior_mask.squeeze(0).squeeze(-1).bool()
+    boundary_mask = forecaster.boundary_mask.squeeze(0).squeeze(-1).bool()
     for t in range(pred_steps):
-        interior_pred = prediction[:, t, interior_mask, :]
-        # After first step interior is init_states[:, 1], then persists
-        interior_boundary = boundary_states[:, t, interior_mask, :]
-        # Verify interior nodes are NOT equal to boundary_states
-        # (they should be the persisted initial state)
-        assert interior_pred.shape == interior_boundary.shape
+        assert torch.equal(
+            prediction[:, t, interior_mask, :],
+            init_states[:, 1, interior_mask, :],
+        )
+        assert torch.equal(
+            prediction[:, t, boundary_mask, :],
+            boundary_states[:, t, boundary_mask, :],
+        )
 
 
 def test_persistence_predicts_std_false():

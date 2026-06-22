@@ -18,6 +18,9 @@ class PersistencePredictor(StepPredictor):
     ``ForecasterModule`` / ``ARForecaster`` pipeline.
     """
 
+    trainable: bool = False
+    """Persistence predictors have no learnable parameters."""
+
     def __init__(
         self,
         datastore: BaseDatastore,

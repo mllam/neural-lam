@@ -18,6 +18,9 @@ class StepPredictor(nn.Module, ABC):
     time steps plus forcing into a prediction of the next state.
     """
 
+    trainable: bool = True
+    """Whether the predictor has learnable parameters and can be trained."""
+
     def __init__(
         self,
         datastore: BaseDatastore,
