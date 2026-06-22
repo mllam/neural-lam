@@ -3,7 +3,7 @@
 # Standard library
 import datetime
 import warnings
-from typing import Iterator, Optional, Union
+from typing import Iterator
 
 # Third-party
 import numpy as np
@@ -689,17 +689,17 @@ class WeatherDataModule(pl.LightningDataModule):
         self.load_single_member = load_single_member
         self.batch_size = batch_size
         self.num_workers: int = num_workers
-        self.train_dataset: Optional[WeatherDataset] = None
-        self.val_dataset: Optional[WeatherDataset] = None
-        self.test_dataset: Optional[WeatherDataset] = None
-        self.multiprocessing_context: Union[str, None] = None
+        self.train_dataset: WeatherDataset | None = None
+        self.val_dataset: WeatherDataset | None = None
+        self.test_dataset: WeatherDataset | None = None
+        self.multiprocessing_context: str | None = None
         self.eval_split = eval_split
         if num_workers > 0:
             # default to spawn for now, as the default on linux "fork" hangs
             # when using dask (which the npyfilesmeps datastore uses)
             self.multiprocessing_context = "spawn"
 
-    def setup(self, stage: Optional[str] = None) -> None:
+    def setup(self, stage: str | None = None) -> None:
         """
         Instantiate datasets for the requested trainer stage.
 

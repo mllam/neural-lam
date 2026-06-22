@@ -111,7 +111,7 @@ class BaseDatastore(abc.ABC):
 
         Returns
         -------
-        List[str]
+        list[str]
             The units of the variables.
 
         """
@@ -127,7 +127,7 @@ class BaseDatastore(abc.ABC):
 
         Returns
         -------
-        List[str]
+        list[str]
             The names of the variables.
 
         """
@@ -143,7 +143,7 @@ class BaseDatastore(abc.ABC):
 
         Returns
         -------
-        List[str]
+        list[str]
             The long names of the variables.
 
         """
@@ -333,7 +333,7 @@ class BaseDatastore(abc.ABC):
 
         Returns
         -------
-        List[float]
+        list[float]
             The extent of the x, y coordinates.
 
         """
@@ -423,7 +423,7 @@ class BaseDatastore(abc.ABC):
             The category of the dataset (state/forcing/static).
         Returns
         -------
-        List[str]
+        list[str]
             The expected dimension order for the dataarray or dataset.
 
         """

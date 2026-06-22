@@ -3,7 +3,7 @@
 # Standard library
 import os
 from argparse import ArgumentDefaultsHelpFormatter, ArgumentParser
-from typing import Any, Optional
+from typing import Any
 
 # Third-party
 import numpy as np
@@ -24,7 +24,7 @@ def plot_graph(
     hierarchical: bool,
     graph_ldict: dict[str, Any],
     show_axis: bool = False,
-    save: Optional[str] = None,
+    save: str | None = None,
 ) -> go.Figure:
     """Build a 3D plotly figure of the graph structure.
 
