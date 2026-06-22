@@ -33,7 +33,7 @@ class BaseGraphModel(StepPredictor):
         output_clamping_upper: dict[str, float] | None = None,
         g2m_gnn_type: str = "InteractionNet",
         m2g_gnn_type: str = "InteractionNet",
-    ):
+    ) -> None:
         """
         Initialize the BaseGraphModel.
 
@@ -177,7 +177,7 @@ class BaseGraphModel(StepPredictor):
         # Compute indices and define clamping functions
         self.prepare_clamping_params(datastore)
 
-    def get_num_mesh(self):
+    def get_num_mesh(self) -> tuple[int, int]:
         """
         Compute number of mesh nodes from loaded features,
         and number of mesh nodes that should be ignored in encoding/decoding.
@@ -191,7 +191,7 @@ class BaseGraphModel(StepPredictor):
         """
         raise NotImplementedError("get_num_mesh not implemented")
 
-    def embedd_mesh_nodes(self):
+    def embedd_mesh_nodes(self) -> torch.Tensor:
         """
         Embed static mesh node features.
 
@@ -204,7 +204,7 @@ class BaseGraphModel(StepPredictor):
         """
         raise NotImplementedError("embedd_mesh_nodes not implemented")
 
-    def process_step(self, mesh_rep):
+    def process_step(self, mesh_rep: torch.Tensor) -> torch.Tensor:
         """
         Process the mesh representation in the encode-process-decode
         framework, running one or more message-passing steps.
@@ -225,7 +225,12 @@ class BaseGraphModel(StepPredictor):
         """
         raise NotImplementedError("process_step not implemented")
 
-    def forward(self, prev_state, prev_prev_state, forcing):
+    def forward(
+        self,
+        prev_state: torch.Tensor,
+        prev_prev_state: torch.Tensor,
+        forcing: torch.Tensor,
+    ) -> tuple[torch.Tensor, torch.Tensor | None]:
         """
         Advance the state by one step using the encode-process-decode
         graph pipeline: embed grid + edge features, map grid -> mesh via
