@@ -355,11 +355,6 @@ def main(input_args=None):
         ),
     )
     args = parser.parse_args(input_args)
-    if not args.eval and not MODELS[args.model].trainable:
-        raise ValueError(
-            f"The {args.model} model cannot be trained. Run with "
-            "--eval <val/test> to evaluate a baseline."
-        )
     args.var_leads_metrics_watch = {
         int(k): v for k, v in json.loads(args.var_leads_metrics_watch).items()
     }
@@ -463,10 +458,10 @@ def main(input_args=None):
         mesh_down_gnn_type=args.mesh_down_gnn_type,
     )
 
-    if args.output_std and not predictor.predicts_std:
-        logger.warning(
-            f"Model '{args.model}' does not support predicting "
-            "standard deviation. The --output_std flag will be ignored."
+    if not args.eval and not predictor.trainable:
+        raise ValueError(
+            f"The {args.model} model cannot be trained. Run with "
+            "--eval <val/test> to evaluate a baseline."
         )
 
     forecaster = ARForecaster(predictor, datastore)

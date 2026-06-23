@@ -2,6 +2,7 @@
 
 # Third-party
 import torch
+from loguru import logger
 
 # Local
 from ...datastore import BaseDatastore
@@ -17,9 +18,6 @@ class PersistencePredictor(StepPredictor):
     no-change) baseline that can be evaluated through the standard
     ``ForecasterModule`` / ``ARForecaster`` pipeline.
     """
-
-    trainable: bool = False
-    """Persistence predictors have no learnable parameters."""
 
     def __init__(
         self,
@@ -46,6 +44,12 @@ class PersistencePredictor(StepPredictor):
             Absorbed so that the standard CLI kwargs (``graph_name``,
             ``hidden_dim``, etc.) do not cause errors.
         """
+        if output_std:
+            logger.warning(
+                "Persistence predictor does not support predicting "
+                "standard deviation. The output_std parameter will be ignored."
+            )
+
         super().__init__(
             datastore=datastore,
             output_std=False,

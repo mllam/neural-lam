@@ -18,8 +18,18 @@ class StepPredictor(nn.Module, ABC):
     time steps plus forcing into a prediction of the next state.
     """
 
-    trainable: bool = True
-    """Whether the predictor has learnable parameters and can be trained."""
+    @property
+    def trainable(self) -> bool:
+        """
+        Whether the predictor has learnable parameters and can be trained.
+
+        Returns
+        -------
+        bool
+            ``True`` if the predictor has trainable parameters,
+            ``False`` otherwise.
+        """
+        return any(p.requires_grad for p in self.parameters())
 
     def __init__(
         self,

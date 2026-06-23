@@ -81,10 +81,24 @@ def test_persistence_forecaster_unroll():
 
 
 def test_persistence_predicts_std_false():
-    """PersistencePredictor.predicts_std is always False."""
+    """
+    PersistencePredictor.predicts_std is always False and logs warning
+    when output_std is True.
+    """
+    # Standard library
+    from unittest.mock import patch
+
     datastore = init_datastore_example("mdp")
-    predictor = PersistencePredictor(datastore=datastore, output_std=True)
-    assert not predictor.predicts_std
+    target_patch = (
+        "neural_lam.models.step_predictors.persistence.logger.warning"
+    )
+    with patch(target_patch) as mock_warn:
+        predictor = PersistencePredictor(datastore=datastore, output_std=True)
+        assert not predictor.predicts_std
+        mock_warn.assert_called_once_with(
+            "Persistence predictor does not support predicting "
+            "standard deviation. The output_std parameter will be ignored."
+        )
 
 
 def test_persistence_training_error():
@@ -97,14 +111,34 @@ def test_persistence_training_error():
 
     mock_args = MagicMock()
     mock_args.eval = None  # training mode
+    mock_args.load = None
+    mock_args.config_path = "dummy.yaml"
+    mock_args.val_steps_to_log = []
+    mock_args.var_leads_metrics_watch = "{}"
+    mock_args.ar_steps_eval = 10
     mock_args.model = "persistence"
+    mock_args.devices = ["auto"]
 
-    with patch(
-        "neural_lam.train_model.ArgumentParser.parse_args",
-        return_value=mock_args,
-    ):
-        with pytest.raises(
+    mock_predictor = MagicMock()
+    mock_predictor.trainable = False
+
+    with (
+        patch(
+            "neural_lam.train_model.ArgumentParser.parse_args",
+            return_value=mock_args,
+        ),
+        patch(
+            "neural_lam.train_model.load_config_and_datastore",
+            return_value=(MagicMock(), MagicMock()),
+        ),
+        patch("neural_lam.train_model.WeatherDataModule"),
+        patch(
+            "neural_lam.train_model.MODELS",
+            {"persistence": MagicMock(return_value=mock_predictor)},
+        ),
+        pytest.raises(
             ValueError,
             match="The persistence model cannot be trained",
-        ):
-            getattr(main, "__wrapped__", main)()
+        ),
+    ):
+        getattr(main, "__wrapped__", main)()
