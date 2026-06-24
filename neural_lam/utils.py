@@ -482,7 +482,6 @@ def load_and_register_graph(
 
 def compute_grid_input_dim(
     datastore: "BaseDatastore",
-    grid_static_dim: int,
     num_past_forcing_steps: int,
     num_future_forcing_steps: int,
 ) -> int:
@@ -496,9 +495,7 @@ def compute_grid_input_dim(
     Parameters
     ----------
     datastore : BaseDatastore
-        Datastore providing the number of state and forcing variables.
-    grid_static_dim : int
-        Number of static features per grid node.
+        Datastore providing the number of state, static and forcing variables.
     num_past_forcing_steps : int
         Number of past forcing steps included in the input window.
     num_future_forcing_steps : int
@@ -510,10 +507,11 @@ def compute_grid_input_dim(
         Total grid input dimensionality.
     """
     num_state_vars = datastore.get_num_data_vars(category="state")
+    num_static_vars = datastore.get_num_data_vars(category="static")
     num_forcing_vars = datastore.get_num_data_vars(category="forcing")
     return (
         2 * num_state_vars
-        + grid_static_dim
+        + num_static_vars
         + num_forcing_vars
         * (num_past_forcing_steps + num_future_forcing_steps + 1)
     )

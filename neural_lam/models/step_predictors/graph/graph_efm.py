@@ -116,7 +116,6 @@ class BaseGraphEFM(StepPredictor):
         # includes the target state, for the encoder input.
         self.grid_dim = utils.compute_grid_input_dim(
             datastore,
-            self.grid_static_features.shape[1],
             num_past_forcing_steps,
             num_future_forcing_steps,
         )

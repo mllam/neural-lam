@@ -114,7 +114,6 @@ class BaseGraphModel(StepPredictor):
         # Compute grid_input_dim: total input dimensionality on the grid
         self.grid_input_dim = utils.compute_grid_input_dim(
             datastore,
-            self.grid_static_features.shape[1],
             num_past_forcing_steps,
             num_future_forcing_steps,
         )
