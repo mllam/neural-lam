@@ -1565,22 +1565,21 @@ def validate_graph_directory(
     `mesh_features.pt`. Both are covered in the requirements below.
 
     > *NOTE*: The `neural-lam` graph format on disk does not explicitly
-    > store node
-    features for grid nodes, as these are expected to be dynamic and stored
-    separately in the dataset. However, static features for mesh nodes MUST
-    be stored in `mesh_features.pt` files (as described below).
+    > store node features for grid nodes, as these are expected to be dynamic
+    > and stored separately in the dataset. However, static features for mesh
+    > nodes MUST be stored in `mesh_features.pt` files (as described below).
 
     #### 3.1.1 Node index space
 
     The node indices in edge index tensors MUST be defined so that for both
     the set of source nodes (where the edges connect from) and the set of
-    destination nodes (where the edges connect to) should be denoted by
-    indices running from `0` to `N_src-1` and `0` to `N_dst-1` respectively,
-    where `N_src` and `N_dst` are the total number of source and destination
-    nodes being connected. This means that the node indices in the edge index
-    tensors are numbered separately (for the source and destination node sets),
-    and the nodes in each set are only numbered identically if the set of nodes
-    being connect from and to are the same set (as would be the case for
+    destination nodes (where the edges connect to) the node indices being used
+    should run from `0` to `N_src-1` and `0` to `N_dst-1` respectively, where
+    `N_src` and `N_dst` are the total number of source and destination nodes
+    being connected. This means that the node indices in the edge index tensors
+    are numbered separately (for the source and destination node sets), and the
+    nodes in each set MUST be labelled identically if and only if the set of
+    nodes being connect from and to are the same set (as would be the case for
     mesh-to-mesh connections in non-hierarchical graphs).
 
     > **NOTE**: Although the integers used to label a given set of source or
@@ -1596,9 +1595,9 @@ def validate_graph_directory(
     > **NOTE**: There is no requirement that the node indices for different
     > nodesets be non-overlapping, in fact they should be overlapping, as the
     > node indices for each nodeset are defined to run from `0` to `N-1` for
-    > that nodeset. The key requirement is that the node indices for each
-    > nodeset are contiguous and defined in a consistent manner across all
-    > edge index tensors.
+    > that nodeset (with N nodes). The key requirement is that the node indices
+    > for each nodeset are contiguous and defined in a consistent manner across
+    > all edge index tensors.
     """
     )
     # Index-space contiguity is implicitly enforced later by check_edge_indices range assertions.  # noqa: E501
