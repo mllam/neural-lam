@@ -507,8 +507,16 @@ def compute_grid_input_dim(
         Total grid input dimensionality.
     """
     num_state_vars = datastore.get_num_data_vars(category="state")
-    num_static_vars = datastore.get_num_data_vars(category="static")
     num_forcing_vars = datastore.get_num_data_vars(category="forcing")
+    # The static category is optional: when the datastore provides no static
+    # data array the grid carries no static features, mirroring the empty
+    # (N, 0) static buffer the step predictor builds in that case.
+    da_static = datastore.get_dataarray(category="static", split=None)
+    num_static_vars = (
+        0
+        if da_static is None
+        else datastore.get_num_data_vars(category="static")
+    )
     return (
         2 * num_state_vars
         + num_static_vars
