@@ -41,15 +41,12 @@ class BaseGraphEFM(StepPredictor):
     outside the predictor.
 
     This base class sets up everything that is independent of the mesh
-    graph type. Concrete subclasses are specific to a graph type (declared
-    by ``requires_hierarchical``): their constructors build the mesh
-    embedders and the prior/encoder/decoder latent modules, and they
+    graph type. Concrete subclasses are specific to a graph type: their
+    constructors verify the loaded graph is of the expected type, build the
+    mesh embedders and the prior/encoder/decoder latent modules, and they
     implement :meth:`embedd_mesh`. See :class:`GraphEFM` (hierarchical
     graph) and :class:`GraphEFMMS` (flat graph).
     """
-
-    # Whether the concrete subclass requires a hierarchical mesh graph
-    requires_hierarchical: bool
 
     def __init__(
         self,
@@ -82,8 +79,7 @@ class BaseGraphEFM(StepPredictor):
             and variable counts.
         graph_name : str
             Name of the graph directory (under ``<root>/graph``) to load.
-            Must be of the graph type required by the concrete subclass
-            (``requires_hierarchical``).
+            Must be of the graph type required by the concrete subclass.
         hidden_dim : int
             Dimensionality of internal node and edge representations.
         hidden_layers : int
@@ -114,22 +110,13 @@ class BaseGraphEFM(StepPredictor):
         self.hierarchical = utils.load_and_register_graph(
             self, datastore, graph_name
         )
-        if self.hierarchical != self.requires_hierarchical:
-            required_type = (
-                "hierarchical" if self.requires_hierarchical else "flat"
-            )
-            loaded_type = "hierarchical" if self.hierarchical else "flat"
-            raise ValueError(
-                f"{type(self).__name__} requires a {required_type} mesh "
-                f"graph, but graph '{graph_name}' is {loaded_type}"
-            )
 
         # Specify dimensions of data
         self.num_state_vars = datastore.get_num_data_vars(category="state")
         num_state_vars = self.num_state_vars
         # grid_dim: total grid input dim. grid_current_dim additionally
         # includes the target state, for the encoder input.
-        self.grid_dim = utils.grid_input_dim(
+        self.grid_dim = utils.compute_grid_input_dim(
             datastore,
             self.grid_static_features.shape[1],
             num_past_forcing_steps,
@@ -519,8 +506,6 @@ class GraphEFM(BaseGraphEFM):
     decoder is a ``HiGraphLatentDecoder``.
     """
 
-    requires_hierarchical = True
-
     def __init__(
         self,
         config: NeuralLAMConfig,
@@ -607,6 +592,12 @@ class GraphEFM(BaseGraphEFM):
             output_clamping_lower=output_clamping_lower,
             output_clamping_upper=output_clamping_upper,
         )
+
+        if not self.hierarchical:
+            raise ValueError(
+                f"{type(self).__name__} requires a hierarchical mesh graph, "
+                f"but graph '{graph_name}' is flat"
+            )
 
         level_mesh_sizes = [
             mesh_feat.shape[0] for mesh_feat in self.mesh_static_features
@@ -783,8 +774,6 @@ class GraphEFMMS(BaseGraphEFM):
     ``GraphLatentDecoder``.
     """
 
-    requires_hierarchical = False
-
     def __init__(
         self,
         config: NeuralLAMConfig,
@@ -871,6 +860,12 @@ class GraphEFMMS(BaseGraphEFM):
             output_clamping_lower=output_clamping_lower,
             output_clamping_upper=output_clamping_upper,
         )
+
+        if self.hierarchical:
+            raise ValueError(
+                f"{type(self).__name__} requires a flat mesh graph, "
+                f"but graph '{graph_name}' is hierarchical"
+            )
 
         self.num_mesh_nodes = self.mesh_static_features.shape[0]
         utils.log_on_rank_zero(
