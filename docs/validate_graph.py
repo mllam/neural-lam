@@ -18,6 +18,7 @@ from __future__ import annotations
 
 # Standard library
 import json
+import platform
 import sys
 import textwrap
 import warnings
@@ -2088,6 +2089,17 @@ def cli(input_args=None):
     int
         Process exit code (`0` if validation passes, `1` otherwise).
     """
+    # On Windows the default console encoding (e.g. cp1252) cannot render the
+    # status emojis used in the report, which raises a UnicodeEncodeError.
+    # Reconfigure the output streams to UTF-8 so the report prints correctly.
+    # (PYTHONIOENCODING cannot be used here because Python only reads it at
+    # interpreter startup, not when set from within the running script.)
+    if platform.system() == "Windows":
+        for stream in (sys.stdout, sys.stderr):
+            reconfigure = getattr(stream, "reconfigure", None)
+            if reconfigure is not None:
+                reconfigure(encoding="utf-8")
+
     parser = ArgumentParser(
         description="Validate on-disk neural-lam graph components and view the spec",  # noqa: E501
         formatter_class=ArgumentDefaultsHelpFormatter,
