@@ -167,6 +167,101 @@ class BaseGraphEFM(StepPredictor):
         # inert -- accepted for interface parity with other StepPredictors.
         self.prepare_clamping_params(datastore)
 
+    def build_prior(
+        self,
+        learn_prior,
+        latent_dim,
+        hidden_dim,
+        hidden_layers,
+        g2m_gnn_type,
+        prior_dist,
+        prior_layers,
+    ):
+        """
+        Build the prior over the latent variable.
+
+        When ``learn_prior`` is True the (graph-type specific) learnable prior
+        is delegated to :meth:`build_learnable_prior`; otherwise the constant
+        ``Normal(0, 1)`` prior, which is identical for every graph type, is
+        built here. Must be called after ``self.num_mesh_nodes`` is set.
+
+        Parameters
+        ----------
+        learn_prior : bool
+            If True, build a learnable prior conditioned on the previous
+            state; if False, build a constant (input-independent) prior.
+        latent_dim : int
+            Dimensionality of the latent variable at each mesh node.
+        hidden_dim : int
+            Dimensionality of internal node and edge representations.
+        hidden_layers : int
+            Number of hidden layers in internal MLPs.
+        g2m_gnn_type : str
+            GNN type for the grid-to-mesh step of the learnable prior.
+        prior_dist : str
+            Output distribution of the prior: ``"isotropic"`` or
+            ``"diagonal"``.
+        prior_layers : int
+            Number of on-mesh GNN layers in the learnable prior.
+
+        Returns
+        -------
+        torch.nn.Module
+            The prior latent encoder.
+        """
+        if learn_prior:
+            return self.build_learnable_prior(
+                latent_dim=latent_dim,
+                hidden_dim=hidden_dim,
+                hidden_layers=hidden_layers,
+                g2m_gnn_type=g2m_gnn_type,
+                prior_dist=prior_dist,
+                prior_layers=prior_layers,
+            )
+        return ConstantLatentEncoder(
+            latent_dim=latent_dim,
+            num_mesh_nodes=self.num_mesh_nodes,
+            output_dist=prior_dist,
+        )
+
+    def build_learnable_prior(
+        self,
+        latent_dim,
+        hidden_dim,
+        hidden_layers,
+        g2m_gnn_type,
+        prior_dist,
+        prior_layers,
+    ):
+        """
+        Build the graph-type specific learnable prior encoder.
+
+        Implemented by the concrete subclass, which knows the mesh graph type
+        and therefore the appropriate latent encoder class.
+
+        Parameters
+        ----------
+        latent_dim : int
+            Dimensionality of the latent variable at each mesh node.
+        hidden_dim : int
+            Dimensionality of internal node and edge representations.
+        hidden_layers : int
+            Number of hidden layers in internal MLPs.
+        g2m_gnn_type : str
+            GNN type for the grid-to-mesh step of the prior.
+        prior_dist : str
+            Output distribution of the prior: ``"isotropic"`` or
+            ``"diagonal"``.
+        prior_layers : int
+            Number of on-mesh GNN layers in the prior.
+
+        Returns
+        -------
+        torch.nn.Module
+            The learnable prior latent encoder.
+        """
+        raise NotImplementedError("build_learnable_prior not implemented")
+
     def embedd_grid_with_target(
         self,
         prev_state,
@@ -662,27 +757,16 @@ class GraphEFM(BaseGraphEFM):
 
         latent_dim = latent_dim if latent_dim is not None else hidden_dim
 
-        # Prior. When learn_prior, the prior is a graph encoder mapping the
-        # previous state to a latent distribution; otherwise it is a constant
-        # (input-independent) Normal.
-        if learn_prior:
-            self.prior_model = HiGraphLatentEncoder(
-                latent_dim=latent_dim,
-                g2m_edge_index=self.g2m_edge_index,
-                m2m_edge_index=self.m2m_edge_index,
-                mesh_up_edge_index=self.mesh_up_edge_index,
-                hidden_dim=hidden_dim,
-                intra_level_layers=prior_intra_level_layers,
-                hidden_layers=hidden_layers,
-                g2m_gnn_type=g2m_gnn_type,
-                output_dist=prior_dist,
-            )
-        else:
-            self.prior_model = ConstantLatentEncoder(
-                latent_dim=latent_dim,
-                num_mesh_nodes=self.num_mesh_nodes,
-                output_dist=prior_dist,
-            )
+        # Prior (constant prior shared via the base class)
+        self.prior_model = self.build_prior(
+            learn_prior=learn_prior,
+            latent_dim=latent_dim,
+            hidden_dim=hidden_dim,
+            hidden_layers=hidden_layers,
+            g2m_gnn_type=g2m_gnn_type,
+            prior_dist=prior_dist,
+            prior_layers=prior_intra_level_layers,
+        )
 
         # Encoder (variational posterior) + Decoder
         self.encoder = HiGraphLatentEncoder(
@@ -710,6 +794,51 @@ class GraphEFM(BaseGraphEFM):
             g2m_gnn_type=g2m_gnn_type,
             m2g_gnn_type=m2g_gnn_type,
             output_std=bool(output_std),
+        )
+
+    def build_learnable_prior(
+        self,
+        latent_dim,
+        hidden_dim,
+        hidden_layers,
+        g2m_gnn_type,
+        prior_dist,
+        prior_layers,
+    ):
+        """
+        Build the hierarchical learnable prior encoder.
+
+        Parameters
+        ----------
+        latent_dim : int
+            Dimensionality of the latent variable at each top-level mesh node.
+        hidden_dim : int
+            Dimensionality of internal node and edge representations.
+        hidden_layers : int
+            Number of hidden layers in internal MLPs.
+        g2m_gnn_type : str
+            GNN type for the grid-to-mesh step of the prior.
+        prior_dist : str
+            Output distribution of the prior: ``"isotropic"`` or
+            ``"diagonal"``.
+        prior_layers : int
+            Number of intra-level GNN layers in the prior.
+
+        Returns
+        -------
+        HiGraphLatentEncoder
+            The learnable prior latent encoder.
+        """
+        return HiGraphLatentEncoder(
+            latent_dim=latent_dim,
+            g2m_edge_index=self.g2m_edge_index,
+            m2m_edge_index=self.m2m_edge_index,
+            mesh_up_edge_index=self.mesh_up_edge_index,
+            hidden_dim=hidden_dim,
+            intra_level_layers=prior_layers,
+            hidden_layers=hidden_layers,
+            g2m_gnn_type=g2m_gnn_type,
+            output_dist=prior_dist,
         )
 
     def embedd_mesh(self, batch_size):
@@ -882,26 +1011,16 @@ class GraphEFMMS(BaseGraphEFM):
 
         latent_dim = latent_dim if latent_dim is not None else hidden_dim
 
-        # Prior. When learn_prior, the prior is a graph encoder mapping the
-        # previous state to a latent distribution; otherwise it is a constant
-        # (input-independent) Normal.
-        if learn_prior:
-            self.prior_model = GraphLatentEncoder(
-                latent_dim=latent_dim,
-                g2m_edge_index=self.g2m_edge_index,
-                m2m_edge_index=self.m2m_edge_index,
-                hidden_dim=hidden_dim,
-                m2m_layers=prior_m2m_layers,
-                hidden_layers=hidden_layers,
-                g2m_gnn_type=g2m_gnn_type,
-                output_dist=prior_dist,
-            )
-        else:
-            self.prior_model = ConstantLatentEncoder(
-                latent_dim=latent_dim,
-                num_mesh_nodes=self.num_mesh_nodes,
-                output_dist=prior_dist,
-            )
+        # Prior (constant prior shared via the base class)
+        self.prior_model = self.build_prior(
+            learn_prior=learn_prior,
+            latent_dim=latent_dim,
+            hidden_dim=hidden_dim,
+            hidden_layers=hidden_layers,
+            g2m_gnn_type=g2m_gnn_type,
+            prior_dist=prior_dist,
+            prior_layers=prior_m2m_layers,
+        )
 
         # Encoder (variational posterior) + Decoder
         self.encoder = GraphLatentEncoder(
@@ -926,6 +1045,50 @@ class GraphEFMMS(BaseGraphEFM):
             g2m_gnn_type=g2m_gnn_type,
             m2g_gnn_type=m2g_gnn_type,
             output_std=bool(output_std),
+        )
+
+    def build_learnable_prior(
+        self,
+        latent_dim,
+        hidden_dim,
+        hidden_layers,
+        g2m_gnn_type,
+        prior_dist,
+        prior_layers,
+    ):
+        """
+        Build the flat-graph learnable prior encoder.
+
+        Parameters
+        ----------
+        latent_dim : int
+            Dimensionality of the latent variable at each mesh node.
+        hidden_dim : int
+            Dimensionality of internal node and edge representations.
+        hidden_layers : int
+            Number of hidden layers in internal MLPs.
+        g2m_gnn_type : str
+            GNN type for the grid-to-mesh step of the prior.
+        prior_dist : str
+            Output distribution of the prior: ``"isotropic"`` or
+            ``"diagonal"``.
+        prior_layers : int
+            Number of on-mesh (m2m) GNN layers in the prior.
+
+        Returns
+        -------
+        GraphLatentEncoder
+            The learnable prior latent encoder.
+        """
+        return GraphLatentEncoder(
+            latent_dim=latent_dim,
+            g2m_edge_index=self.g2m_edge_index,
+            m2m_edge_index=self.m2m_edge_index,
+            hidden_dim=hidden_dim,
+            m2m_layers=prior_layers,
+            hidden_layers=hidden_layers,
+            g2m_gnn_type=g2m_gnn_type,
+            output_dist=prior_dist,
         )
 
     def embedd_mesh(self, batch_size):
