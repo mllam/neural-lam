@@ -68,7 +68,7 @@ the graph storage spec version as its value.
 The current graph storage spec version is
 `0.1.0`.
 
-See `3.4 Differences to legacy format graphs` for the legacy-specific
+See `4. Differences to legacy format graphs` for the legacy-specific
 behavior.
 
 ### 2.3 Graph Components and File Suffixes
@@ -114,7 +114,7 @@ The content of the files depend on the number of mesh levels, denoted as
 - Hierarchical graphs `L > 1`.
 - Entry `0` MUST always be the bottom mesh level.
 
-Every tensor MUST stored in a manner ameanable to load with
+Every tensor MUST stored in a manner amenable to load with
 `torch.load(...)` (this can most easily be support by using
 `torch.save(...)` to store tensors to disk) and satisfy the requirements
 below.
@@ -255,7 +255,7 @@ the x-, y-, and z-displacements respectively.
 performed inside `neural-lam` after graph loading.
 - Dtype MUST be `torch.float32`.
 
-### 3.4 Differences to legacy format graphs
+## 4. Differences to legacy format graphs
 
 Legacy pre-spec graphs do not include `metainfo.yaml`.
 When that file is absent, `neural-lam` will attempt to load the graph as a

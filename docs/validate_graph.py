@@ -1475,7 +1475,7 @@ def validate_graph_directory(
     The current graph storage spec version is
     `{CURRENT_GRAPH_FORMAT_SPEC_VERSION}`.
 
-    See `3.4 Differences to legacy format graphs` for the legacy-specific
+    See `4. Differences to legacy format graphs` for the legacy-specific
     behavior.
     """
     )
@@ -1547,7 +1547,7 @@ def validate_graph_directory(
     - Hierarchical graphs `L > 1`.
     - Entry `0` MUST always be the bottom mesh level.
 
-    Every tensor MUST stored in a manner ameanable to load with
+    Every tensor MUST stored in a manner amenable to load with
     `torch.load(...)` (this can most easily be support by using
     `torch.save(...)` to store tensors to disk) and satisfy the requirements
     below.
@@ -2047,7 +2047,7 @@ def validate_graph_directory(
     spec_text += textwrap.dedent(
         f"""\
 
-    ### 3.4 Differences to legacy format graphs
+    ## 4. Differences to legacy format graphs
 
     Legacy pre-spec graphs do not include `{METAINFO_FILENAME}`.
     When that file is absent, `neural-lam` will attempt to load the graph as a
