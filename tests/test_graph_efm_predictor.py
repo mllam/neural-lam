@@ -1,7 +1,7 @@
 """Unit tests for the Graph-EFM single-step probabilistic predictors.
 
 These mirror the smoke-test pattern used for the deterministic predictors
-(see ``tests/test_gnn_layers.py``): build the flat (GraphEFMMS) and
+(see ``tests/test_gnn_layers.py``): build the flat (GraphEFMMultiScale) and
 hierarchical (GraphEFM) variants on the real example datastore with a freshly
 created graph, then exercise ``forward``, ``compute_step_loss`` and the
 sampling helpers on synthetic tensors.
@@ -21,7 +21,7 @@ from neural_lam.create_graph import create_graph_from_datastore
 from neural_lam.loss_weighting import get_state_feature_weighting
 from neural_lam.models.step_predictors.graph.graph_efm import (
     GraphEFM,
-    GraphEFMMS,
+    GraphEFMMultiScale,
 )
 from tests.conftest import init_datastore_example
 
@@ -67,7 +67,7 @@ def _build_predictor(graph_name, output_std=False):
             "decoder_intra_level_layers": 1,
         }
     else:
-        predictor_class = GraphEFMMS
+        predictor_class = GraphEFMMultiScale
         layer_kwargs = {
             "prior_m2m_layers": 1,
             "encoder_m2m_layers": 1,
@@ -251,10 +251,10 @@ def test_per_var_std_none_when_output_std():
 
 @pytest.mark.parametrize(
     "predictor_class, graph_name",
-    [(GraphEFM, "1level"), (GraphEFMMS, "hierarchical")],
+    [(GraphEFM, "1level"), (GraphEFMMultiScale, "hierarchical")],
 )
 def test_graph_type_mismatch_raises(predictor_class, graph_name):
-    """GraphEFM requires a hierarchical graph and GraphEFMMS a flat one;
+    """GraphEFM requires a hierarchical graph and GraphEFMMultiScale a flat one;
     constructing with the wrong graph type raises ValueError."""
     datastore, config = _datastore_and_config_with_graph(graph_name)
     with pytest.raises(ValueError, match="mesh graph"):

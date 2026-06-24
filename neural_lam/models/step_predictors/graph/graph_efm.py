@@ -1,5 +1,5 @@
 """Graph-based Ensemble Forecasting Model (Graph-EFM) single-step
-predictors, for hierarchical (GraphEFM) and flat (GraphEFMMS) mesh
+predictors, for hierarchical (GraphEFM) and flat (GraphEFMMultiScale) mesh
 graphs."""
 
 # Standard library
@@ -45,7 +45,7 @@ class BaseGraphEFM(StepPredictor):
     constructors verify the loaded graph is of the expected type, build the
     mesh embedders and the prior/encoder/decoder latent modules, and they
     implement :meth:`embedd_mesh`. See :class:`GraphEFM` (hierarchical
-    graph) and :class:`GraphEFMMS` (flat graph).
+    graph) and :class:`GraphEFMMultiScale` (flat graph).
     """
 
     def __init__(
@@ -891,10 +891,10 @@ class GraphEFM(BaseGraphEFM):
         return mesh_emb
 
 
-class GraphEFMMS(BaseGraphEFM):
+class GraphEFMMultiScale(BaseGraphEFM):
     """
     Graph-based Ensemble Forecasting Model on a flat mesh graph
-    (Graph-EFM-MS, e.g. for multi-scale graphs).
+    (e.g. a multi-scale graph).
 
     The latent variable lives on the mesh nodes. The prior and variational
     encoder are ``GraphLatentEncoder``s and the decoder is a
