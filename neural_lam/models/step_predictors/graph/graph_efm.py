@@ -105,8 +105,6 @@ class BaseGraphEFM(StepPredictor):
         )
 
         # Load graph with static features.
-        # NOTE: (IMPORTANT!) mesh nodes MUST have the first
-        # num_mesh_nodes indices.
         self.hierarchical = utils.load_and_register_graph(
             self, datastore, graph_name
         )
