@@ -74,6 +74,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Maintenance
 
+- Split the monolithic `neural_lam/utils.py` into a `neural_lam/utils/` package with one module per concern (`buffer_list`, `graph`, `networks`, `plot`, `logging`, `tensor`, `time`); `utils/__init__.py` re-exports the full public API so existing imports are unaffected. Pure code movement, no behavioural change. [\#682](https://github.com/mllam/neural-lam/pull/682) @Sir-Sloth-The-Lazy
+
 - Add comprehensive type hints to GraphLAM in `neural_lam/models/step_predictors/graph/graph_lam.py` [\#669](https://github.com/mllam/neural-lam/pull/669) @GiGiKoneti
 
 - Add comprehensive type hints to ARForecaster in `neural_lam/models/forecasters/autoregressive.py` [\#663](https://github.com/mllam/neural-lam/pull/663) @GiGiKoneti
