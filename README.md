@@ -185,8 +185,10 @@ For now the neural-lam config only defines few things:
    data is used for both model input and output (the interior domain), while a
    datastore without `state` data is used for input only (e.g. boundary forcing
    from a separate domain such as ERA5 for a LAM domain). Exactly one datastore
-   must provide `state` data. When a boundary datastore is present its forcing
-   is windowed and included as an additional tensor in each training sample.
+   must provide `state` data, and at most one datastore may omit it, so there is
+   a single interior and a single (optional) boundary datastore. When a boundary
+   datastore is present its forcing is windowed and included as an additional
+   tensor in each training sample.
 2. The weighting of different features in
 the loss function. If you don't define the state feature weighting it will default to
 weighting all features equally.
