@@ -903,12 +903,15 @@ def check_time_overlap(
 
         time_step_available = get_time_step(times_available.values)
         time_step_requested = get_time_step(times_requested.values)
+        max_lead = da_available.elapsed_forecast_duration.values.max()
 
         analysis_offset = max(
             time_step_requested, num_past_steps * time_step_available
         )
         required_time_min = time_min_requested - analysis_offset
-        required_time_max = time_max_requested - analysis_offset
+        required_time_max = time_max_requested - (
+            max_lead - num_future_steps * time_step_available
+        )
     else:
         times_available = da_available.time
         time_min_available = times_available.min().values
@@ -983,9 +986,12 @@ def crop_time_if_needed(
         available_dt = get_time_step(available_tvals)
         if da_available_is_forecast:
             requested_dt = get_time_step(requested_tvals)
+            max_lead = da_available.elapsed_forecast_duration.values.max()
             analysis_offset = max(requested_dt, num_past_steps * available_dt)
             required_min = available_tvals[0] + analysis_offset
-            required_max = available_tvals[-1] + analysis_offset
+            required_max = (
+                available_tvals[-1] + max_lead - num_future_steps * available_dt
+            )
         else:
             required_min = available_tvals[0] + num_past_steps * available_dt
             required_max = available_tvals[-1] - num_future_steps * available_dt
