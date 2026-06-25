@@ -996,21 +996,19 @@ def crop_time_if_needed(
             required_min = available_tvals[0] + num_past_steps * available_dt
             required_max = available_tvals[-1] - num_future_steps * available_dt
 
-        begin_mask = requested_tvals >= required_min
-        if not begin_mask.any():
+        first_valid_idx = int(
+            np.searchsorted(requested_tvals, required_min, side="left")
+        )
+        if first_valid_idx == len(requested_tvals):
             raise ValueError(
                 "`da_available` covers no `da_requested` time at or after "
                 f"required_min={required_min}; cannot align."
             )
-        first_valid_idx = int(begin_mask.argmax())
+        last_valid_idx_plus_one = int(
+            np.searchsorted(requested_tvals, required_max, side="right")
+        )
         n_removed_begin = first_valid_idx
-        if requested_tvals[-1] > required_max:
-            end_mask = requested_tvals > required_max
-            last_valid_idx_plus_one = int(end_mask.argmax())
-            n_removed_end = len(requested_tvals) - last_valid_idx_plus_one
-        else:
-            last_valid_idx_plus_one = None
-            n_removed_end = 0
+        n_removed_end = len(requested_tvals) - last_valid_idx_plus_one
 
         if n_removed_begin > 0 or n_removed_end > 0:
             log_on_rank_zero(
