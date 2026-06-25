@@ -422,10 +422,12 @@ class WeatherDataset(torch.utils.data.Dataset):
                     np.floor((target_time - forcing_at.values) / forecast_step)
                 )
                 center_time = forcing_at.values + lead * forecast_step
-                assert center_time <= target_time, (
-                    "Boundary forecast valid time runs ahead of the interior "
-                    f"target time ({center_time} > {target_time})."
-                )
+                if center_time > target_time:
+                    raise ValueError(
+                        "Boundary forecast valid time runs ahead of the "
+                        f"interior target time ({center_time} > "
+                        f"{target_time})."
+                    )
                 window_start = lead - num_past_steps
                 window_end = lead + num_future_steps + 1
 
