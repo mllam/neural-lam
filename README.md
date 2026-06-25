@@ -235,8 +235,7 @@ which fix whether it is fed to the model as input, predicted as output, or both:
 | `forcing` | ✓           |              | Time-varying inputs known in advance (e.g. solar radiation, boundary forcing). |
 | `static`  | ✓           |              | Time-invariant inputs (e.g. orography, land-sea mask). |
 
-(A `diagnostic` category, predicted but not fed back as input, is not used at
-present but fits naturally as an output-only category.) These categories are
+These categories are
 also what determine a datastore's role: a datastore that provides `state` data
 is the interior domain (model input and output), while one without `state` data
 is used for input only, e.g. boundary forcing from a separate domain.
