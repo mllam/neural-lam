@@ -468,6 +468,38 @@ class WeatherDataset(torch.utils.data.Dataset):
 
         return xr.concat(da_list, dim="time")
 
+    def _empty_windowed_dataarray(
+        self, grid_index: xr.DataArray, target_times: xr.DataArray
+    ) -> xr.DataArray:
+        """Build an empty windowed forcing/boundary dataarray.
+
+        Used when no forcing (or no boundary) is configured: the feature
+        dimension has size 0 so downstream code can unpack a stable 5-tuple.
+
+        Parameters
+        ----------
+        grid_index : xr.DataArray
+            The ``grid_index`` coordinate to use (interior or boundary grid).
+        target_times : xr.DataArray
+            The ``time`` coordinate spanning the autoregressive target steps.
+
+        Returns
+        -------
+        xr.DataArray
+            Empty array with dims
+            ``("time", "grid_index", "forcing_feature")`` and a zero-length
+            feature dimension.
+        """
+        return xr.DataArray(
+            data=np.empty((self.ar_steps, grid_index.size, 0)),
+            dims=("time", "grid_index", "forcing_feature"),
+            coords={
+                "time": target_times,
+                "grid_index": grid_index,
+                "forcing_feature": [],
+            },
+        )
+
     def _build_item_dataarrays(
         self, idx: int
     ) -> tuple[
@@ -577,17 +609,8 @@ class WeatherDataset(torch.utils.data.Dataset):
                 forcing_feature_windowed=("forcing_feature", "window")
             )
         else:
-            # create an empty forcing tensor with the right shape
-            da_forcing_windowed = xr.DataArray(
-                data=np.empty(
-                    (self.ar_steps, da_state.grid_index.size, 0),
-                ),
-                dims=("time", "grid_index", "forcing_feature"),
-                coords={
-                    "time": da_target_times,
-                    "grid_index": da_state.grid_index,
-                    "forcing_feature": [],
-                },
+            da_forcing_windowed = self._empty_windowed_dataarray(
+                da_state.grid_index, da_target_times
             )
 
         if da_boundary_windowed is not None:
@@ -595,7 +618,6 @@ class WeatherDataset(torch.utils.data.Dataset):
                 forcing_feature_windowed=("forcing_feature", "window")
             )
         else:
-            # create an empty boundary tensor with the right shape
             # Use the boundary datastore's grid_index if available, otherwise
             # fall back to state grid_index (for the no-boundary case the
             # last dim is 0 anyway)
@@ -610,16 +632,8 @@ class WeatherDataset(torch.utils.data.Dataset):
                 )
             else:
                 boundary_grid_index = da_state.grid_index
-            da_boundary_windowed = xr.DataArray(
-                data=np.empty(
-                    (self.ar_steps, boundary_grid_index.size, 0),
-                ),
-                dims=("time", "grid_index", "forcing_feature"),
-                coords={
-                    "time": da_target_times,
-                    "grid_index": boundary_grid_index,
-                    "forcing_feature": [],
-                },
+            da_boundary_windowed = self._empty_windowed_dataarray(
+                boundary_grid_index, da_target_times
             )
 
         return (
