@@ -924,16 +924,16 @@ def check_time_overlap(
 
     if time_min_available > required_time_min:
         raise ValueError(
-            "The second DataArray (e.g. 'boundary forcing') starts too late. "
+            "`da_available` starts too late to cover the requested window. "
             f"Required start: {required_time_min}, "
-            f"but DataArray starts at {time_min_available}."
+            f"but `da_available` starts at {time_min_available}."
         )
 
     if time_max_available < required_time_max:
         raise ValueError(
-            "The second DataArray (e.g. 'boundary forcing') ends too early. "
+            "`da_available` ends too early to cover the requested window. "
             f"Required end: {required_time_max}, "
-            f"but DataArray ends at {time_max_available}."
+            f"but `da_available` ends at {time_max_available}."
         )
 
 
@@ -993,7 +993,7 @@ def crop_time_if_needed(
         begin_mask = requested_tvals >= required_min
         if not begin_mask.any():
             raise ValueError(
-                "Boundary forcing ends before any interior time satisfies "
+                "`da_available` covers no `da_requested` time at or after "
                 f"required_min={required_min}; cannot align."
             )
         first_valid_idx = int(begin_mask.argmax())
@@ -1008,8 +1008,8 @@ def crop_time_if_needed(
 
         if n_removed_begin > 0 or n_removed_end > 0:
             log_on_rank_zero(
-                f"Cropping interior data to align with boundary: removed "
-                f"{n_removed_begin} {crop_dim} steps at start and "
+                f"Cropping `da_requested` to align with `da_available`: "
+                f"removed {n_removed_begin} {crop_dim} steps at start and "
                 f"{n_removed_end} at the end.",
                 level="warning",
             )
