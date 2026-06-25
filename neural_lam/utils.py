@@ -858,133 +858,144 @@ def get_time_step(times):
 
 
 def check_time_overlap(
-    da1: xr.DataArray,
-    da2: xr.DataArray,
-    da1_is_forecast: bool = False,
-    da2_is_forecast: bool = False,
+    da_requested: xr.DataArray,
+    da_available: xr.DataArray,
+    da_requested_is_forecast: bool = False,
+    da_available_is_forecast: bool = False,
     num_past_steps: int = 1,
     num_future_steps: int = 1,
 ) -> None:
-    """Check that the time coverage of ``da2`` is wide enough to support
-    a windowed lookup driven by ``da1`` times with the given past/future
-    window sizes.
+    """Check that the time coverage of ``da_available`` is wide enough to
+    support a windowed lookup driven by ``da_requested`` times with the
+    given past/future window sizes.
 
     Parameters
     ----------
-    da1 : xr.DataArray
-        Driving dataarray (typically interior state).
-    da2 : xr.DataArray
-        Dataarray to validate against (typically boundary forcing).
-    da1_is_forecast, da2_is_forecast : bool
+    da_requested : xr.DataArray
+        Driving dataarray whose times must be supported (typically interior
+        state).
+    da_available : xr.DataArray
+        Dataarray that must cover the requested windows (typically boundary
+        forcing).
+    da_requested_is_forecast, da_available_is_forecast : bool
         Whether each side is in forecast mode (``analysis_time`` +
         ``elapsed_forecast_duration`` dims) instead of plain ``time``.
     num_past_steps, num_future_steps : int
-        Window size around each ``da1`` time, measured in ``da2`` steps.
+        Window size around each ``da_requested`` time, measured in
+        ``da_available`` steps.
 
     Raises
     ------
     ValueError
-        If ``da2`` does not cover the required time range.
+        If ``da_available`` does not cover the required time range.
     """
-    if da1_is_forecast:
-        times_da1 = da1.analysis_time
+    if da_requested_is_forecast:
+        times_requested = da_requested.analysis_time
     else:
-        times_da1 = da1.time
-    time_min_da1 = times_da1.min().values
-    time_max_da1 = times_da1.max().values
+        times_requested = da_requested.time
+    time_min_requested = times_requested.min().values
+    time_max_requested = times_requested.max().values
 
-    if da2_is_forecast:
-        times_da2 = da2.analysis_time
-        time_min_da2 = times_da2.min().values
-        time_max_da2 = times_da2.max().values
+    if da_available_is_forecast:
+        times_available = da_available.analysis_time
+        time_min_available = times_available.min().values
+        time_max_available = times_available.max().values
 
-        time_step_da2 = get_time_step(times_da2.values)
-        time_step_da1 = get_time_step(times_da1.values)
+        time_step_available = get_time_step(times_available.values)
+        time_step_requested = get_time_step(times_requested.values)
 
-        analysis_offset = max(time_step_da1, num_past_steps * time_step_da2)
-        da2_required_time_min = time_min_da1 - analysis_offset
-        da2_required_time_max = time_max_da1 - analysis_offset
+        analysis_offset = max(
+            time_step_requested, num_past_steps * time_step_available
+        )
+        required_time_min = time_min_requested - analysis_offset
+        required_time_max = time_max_requested - analysis_offset
     else:
-        times_da2 = da2.time
-        time_min_da2 = times_da2.min().values
-        time_max_da2 = times_da2.max().values
-        time_step_da2 = get_time_step(times_da2.values)
+        times_available = da_available.time
+        time_min_available = times_available.min().values
+        time_max_available = times_available.max().values
+        time_step_available = get_time_step(times_available.values)
 
-        da2_required_time_min = time_min_da1 - num_past_steps * time_step_da2
-        da2_required_time_max = time_max_da1 + num_future_steps * time_step_da2
-
-    if time_min_da2 > da2_required_time_min:
-        raise ValueError(
-            "The second DataArray (e.g. 'boundary forcing') starts too late. "
-            f"Required start: {da2_required_time_min}, "
-            f"but DataArray starts at {time_min_da2}."
+        required_time_min = (
+            time_min_requested - num_past_steps * time_step_available
+        )
+        required_time_max = (
+            time_max_requested + num_future_steps * time_step_available
         )
 
-    if time_max_da2 < da2_required_time_max:
+    if time_min_available > required_time_min:
+        raise ValueError(
+            "The second DataArray (e.g. 'boundary forcing') starts too late. "
+            f"Required start: {required_time_min}, "
+            f"but DataArray starts at {time_min_available}."
+        )
+
+    if time_max_available < required_time_max:
         raise ValueError(
             "The second DataArray (e.g. 'boundary forcing') ends too early. "
-            f"Required end: {da2_required_time_max}, "
-            f"but DataArray ends at {time_max_da2}."
+            f"Required end: {required_time_max}, "
+            f"but DataArray ends at {time_max_available}."
         )
 
 
 def crop_time_if_needed(
-    da1: xr.DataArray,
-    da2: xr.DataArray,
-    da1_is_forecast: bool = False,
-    da2_is_forecast: bool = False,
+    da_requested: xr.DataArray,
+    da_available: xr.DataArray,
+    da_requested_is_forecast: bool = False,
+    da_available_is_forecast: bool = False,
     num_past_steps: int = 1,
     num_future_steps: int = 1,
 ) -> xr.DataArray:
-    """Trim the leading/trailing times from ``da1`` so that ``da2`` covers
-    every needed window. If ``check_time_overlap`` already passes, ``da1``
-    is returned unchanged. Cropping only applies to analysis-mode ``da1``;
-    for forecast-mode ``da1`` the input is returned as-is and overlap
-    failures will surface at sample-construction time.
+    """Trim the leading/trailing times from ``da_requested`` so that
+    ``da_available`` covers every needed window. If ``check_time_overlap``
+    already passes, ``da_requested`` is returned unchanged. Cropping only
+    applies to analysis-mode ``da_requested``; for forecast-mode
+    ``da_requested`` the input is returned as-is and overlap failures will
+    surface at sample-construction time.
 
     Parameters mirror :func:`check_time_overlap`.
 
     Returns
     -------
     xr.DataArray
-        Possibly cropped ``da1``.
+        Possibly cropped ``da_requested``.
     """
-    if da1 is None or da2 is None:
-        return da1
+    if da_requested is None or da_available is None:
+        return da_requested
 
     try:
         check_time_overlap(
-            da1,
-            da2,
-            da1_is_forecast,
-            da2_is_forecast,
+            da_requested,
+            da_available,
+            da_requested_is_forecast,
+            da_available_is_forecast,
             num_past_steps,
             num_future_steps,
         )
-        return da1
+        return da_requested
     except ValueError:
-        if da1_is_forecast:
-            # Cropping a forecast da1 by analysis time would change sample
-            # cardinality silently; leave alignment errors to surface later.
-            return da1
+        if da_requested_is_forecast:
+            # Cropping a forecast da_requested by analysis time would change
+            # sample cardinality silently; leave alignment errors to surface
+            # later.
+            return da_requested
 
-        da1_tvals = da1.time.values
-        if da2_is_forecast:
-            da2_tvals = da2.analysis_time.values
+        requested_tvals = da_requested.time.values
+        if da_available_is_forecast:
+            available_tvals = da_available.analysis_time.values
         else:
-            da2_tvals = da2.time.values
+            available_tvals = da_available.time.values
 
-        da2_dt = get_time_step(da2_tvals)
-        if da2_is_forecast:
-            da1_dt = get_time_step(da1_tvals)
-            analysis_offset = max(da1_dt, num_past_steps * da2_dt)
-            required_min = da2_tvals[0] + analysis_offset
-            required_max = da2_tvals[-1] + analysis_offset
+        available_dt = get_time_step(available_tvals)
+        if da_available_is_forecast:
+            requested_dt = get_time_step(requested_tvals)
+            analysis_offset = max(requested_dt, num_past_steps * available_dt)
+            required_min = available_tvals[0] + analysis_offset
+            required_max = available_tvals[-1] + analysis_offset
         else:
-            required_min = da2_tvals[0] + num_past_steps * da2_dt
-            required_max = da2_tvals[-1] - num_future_steps * da2_dt
+            required_min = available_tvals[0] + num_past_steps * available_dt
+            required_max = available_tvals[-1] - num_future_steps * available_dt
 
-        begin_mask = da1_tvals >= required_min
+        begin_mask = requested_tvals >= required_min
         if not begin_mask.any():
             raise ValueError(
                 "Boundary forcing ends before any interior time satisfies "
@@ -992,10 +1003,10 @@ def crop_time_if_needed(
             )
         first_valid_idx = int(begin_mask.argmax())
         n_removed_begin = first_valid_idx
-        if da1_tvals[-1] > required_max:
-            end_mask = da1_tvals > required_max
+        if requested_tvals[-1] > required_max:
+            end_mask = requested_tvals > required_max
             last_valid_idx_plus_one = int(end_mask.argmax())
-            n_removed_end = len(da1_tvals) - last_valid_idx_plus_one
+            n_removed_end = len(requested_tvals) - last_valid_idx_plus_one
         else:
             last_valid_idx_plus_one = None
             n_removed_end = 0
@@ -1007,5 +1018,7 @@ def crop_time_if_needed(
                 "the end.",
                 level="warning",
             )
-            da1 = da1.isel(time=slice(first_valid_idx, last_valid_idx_plus_one))
-        return da1
+            da_requested = da_requested.isel(
+                time=slice(first_valid_idx, last_valid_idx_plus_one)
+            )
+        return da_requested

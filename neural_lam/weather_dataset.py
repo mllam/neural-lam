@@ -160,16 +160,16 @@ class WeatherDataset(torch.utils.data.Dataset):
                 self.da_state = crop_time_if_needed(
                     self.da_state,
                     self.da_boundary_forcing,
-                    da1_is_forecast=self.datastore.is_forecast,
-                    da2_is_forecast=datastore_boundary.is_forecast,
+                    da_requested_is_forecast=self.datastore.is_forecast,
+                    da_available_is_forecast=datastore_boundary.is_forecast,
                     num_past_steps=self.num_past_boundary_steps,
                     num_future_steps=self.num_future_boundary_steps,
                 )
                 check_time_overlap(
                     self.da_state,
                     self.da_boundary_forcing,
-                    da1_is_forecast=self.datastore.is_forecast,
-                    da2_is_forecast=datastore_boundary.is_forecast,
+                    da_requested_is_forecast=self.datastore.is_forecast,
+                    da_available_is_forecast=datastore_boundary.is_forecast,
                     num_past_steps=self.num_past_boundary_steps,
                     num_future_steps=self.num_future_boundary_steps,
                 )
