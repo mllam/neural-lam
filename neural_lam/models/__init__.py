@@ -1,3 +1,5 @@
+"""Neural-LAM model architectures including GraphLAM, HiLAM, and variants."""
+
 # Local
 from .forecasters.autoregressive import ARForecaster
 from .forecasters.base import Forecaster

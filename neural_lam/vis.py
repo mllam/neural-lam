@@ -1,11 +1,17 @@
+"""Visualization helpers for analysing Neural-LAM predictions and errors."""
+
 # Standard library
 import warnings
+from typing import Optional
 
 # Third-party
 import cartopy.crs as ccrs
 import cartopy.feature as cfeature
 import matplotlib
+import matplotlib.axes
+import matplotlib.collections
 import matplotlib.colors
+import matplotlib.figure
 import matplotlib.pyplot as plt
 import numpy as np
 import torch
@@ -31,10 +37,21 @@ _HEATMAP_CMAP = matplotlib.colors.LinearSegmentedColormap.from_list(
 
 
 def _tex_safe(s: str) -> str:
-    """Escape TeX special characters in s if TeX rendering is currently active.
+    """
+    Escape TeX special characters in s if TeX rendering is active.
 
     Needed because % is a TeX comment character; without escaping it would
     silently truncate any text that follows it (e.g. the title for r2m (%)).
+
+    Parameters
+    ----------
+    s : str
+        The string to escape.
+
+    Returns
+    -------
+    str
+        The escaped string.
     """
     if plt.rcParams.get("text.usetex", False):
         s = s.replace("%", r"\%")
@@ -42,7 +59,21 @@ def _tex_safe(s: str) -> str:
 
 
 def _compute_heatmap_layout(n_rows: int, n_cols: int) -> dict[str, float]:
-    """Choose figure and font sizes from the heatmap dimensions."""
+    """
+    Choose figure and font sizes from the heatmap dimensions.
+
+    Parameters
+    ----------
+    n_rows : int
+        Number of rows in the heatmap.
+    n_cols : int
+        Number of columns in the heatmap.
+
+    Returns
+    -------
+    dict[str, float]
+        Dictionary containing figure width, figure height, font sizes, etc.
+    """
     max_dim = max(n_rows, n_cols)
 
     # Size the figure so each cell gets ~0.8 x 0.5 inches; floor at 8 x 4.5.
@@ -70,7 +101,19 @@ def _compute_heatmap_layout(n_rows: int, n_cols: int) -> dict[str, float]:
 
 
 def _get_heatmap_var_labels(datastore: BaseRegularGridDatastore) -> list[str]:
-    """Build state-variable labels from datastore metadata."""
+    """
+    Build state-variable labels from datastore metadata.
+
+    Parameters
+    ----------
+    datastore : BaseRegularGridDatastore
+        The datastore containing metadata about the grid.
+
+    Returns
+    -------
+    list[str]
+        List of formatted variable labels.
+    """
     var_names = datastore.get_vars_names(category="state")
     var_units = datastore.get_vars_units(category="state")
     return [
@@ -81,11 +124,24 @@ def _get_heatmap_var_labels(datastore: BaseRegularGridDatastore) -> list[str]:
 
 def _to_heatmap_matrix(values) -> np.ndarray:
     """
-    Convert heatmap inputs to a `(d_f, pred_steps)` matrix.
+    Convert heatmap inputs to a ``(num_state_vars, pred_steps)`` matrix.
 
-    A single-step tensor may arrive as one-dimensional `(d_f,)`, especially in
-    single-GPU or focused metric logging paths. In that case we first treat it
-    as one row of `(pred_steps=1, d_f)` before transposing.
+    A single-step tensor may arrive as one-dimensional ``(num_state_vars,)``,
+    especially in single-GPU or focused metric logging paths. In that case we
+    first treat it as one row of ``(pred_steps=1, num_state_vars)`` before
+    transposing.
+
+    Parameters
+    ----------
+    values : array-like
+        The input values to convert.
+        Shape ``(num_state_vars,)`` or ``(pred_steps, num_state_vars)``.
+
+    Returns
+    -------
+    np.ndarray
+        The converted heatmap matrix with shape
+        ``(num_state_vars, pred_steps)``.
     """
     if hasattr(values, "detach"):
         values = values.detach().cpu().numpy()
@@ -98,7 +154,23 @@ def _to_heatmap_matrix(values) -> np.ndarray:
 def _get_feature_scale(
     ds_stats: xr.Dataset, var_name: str, n_vars: int
 ) -> np.ndarray | None:
-    """Extract a 1D per-feature scale, averaging over any extra dims."""
+    """
+    Extract a 1D per-feature scale, averaging over any extra dims.
+
+    Parameters
+    ----------
+    ds_stats : xr.Dataset
+        The standardization statistics dataset.
+    var_name : str
+        The name of the variable to extract scale for.
+    n_vars : int
+        The number of variables expected.
+
+    Returns
+    -------
+    np.ndarray or None
+        The extracted scale as a 1D array, or None if unavailable.
+    """
     if var_name not in ds_stats:
         return None
 
@@ -132,9 +204,39 @@ def _get_heatmap_color_values(
 
     Both modes fall back to per-variable max normalization when their required
     stat is unavailable, appending "[fallback]" to the colorbar label.
+
+    Parameters
+    ----------
+    errors_np : np.ndarray
+        The error values to normalize.
+    datastore : BaseRegularGridDatastore
+        The datastore containing standardization stats.
+    normalization : str
+        The normalization mode to use ('state_std' or 'diff_std').
+
+    Returns
+    -------
+    tuple[np.ndarray, str, matplotlib.colors.Colormap]
+        A 3-tuple containing:
+        - color_values: The normalized values for the colormap.
+        - colorbar_label: The label for the colorbar.
+        - cmap: The colormap to use.
+
+    Raises
+    ------
+    ValueError
+        If ``normalization`` is not one of ``'state_std'`` or ``'diff_std'``.
     """
 
     def _per_var_fallback():
+        """
+        Normalize errors by per-variable maximum value.
+
+        Returns
+        -------
+        tuple[np.ndarray, str, matplotlib.colors.Colormap]
+            Normalized errors, fallback label, and colormap.
+        """
         max_err = errors_np.max(axis=1, keepdims=True)
         safe = np.where(max_err > np.finfo(float).eps, max_err, 1.0)
         return (
@@ -214,7 +316,21 @@ def _get_heatmap_color_values(
 def _get_annotation_text_color(
     value: float, image: matplotlib.image.AxesImage
 ) -> str:
-    """Choose a readable annotation color from the rendered background."""
+    """
+    Choose a readable annotation color from the rendered background.
+
+    Parameters
+    ----------
+    value : float
+        The numeric value at the cell.
+    image : matplotlib.image.AxesImage
+        The rendered image object to determine background color.
+
+    Returns
+    -------
+    str
+        'white' or 'black' depending on the background luminance.
+    """
     if not np.isfinite(value):
         return "black"
 
@@ -224,24 +340,25 @@ def _get_annotation_text_color(
 
 
 def plot_on_axis(
-    ax,
-    da,
-    datastore,
-    vmin=None,
-    vmax=None,
-    ax_title=None,
-    cmap="plasma",
-    boundary_alpha=None,
-    crop_to_interior=False,
-):
-    """Plot weather state on a projection-aware axis using datastore metadata.
+    ax: matplotlib.axes.Axes,
+    da: xr.DataArray,
+    datastore: BaseRegularGridDatastore,
+    vmin: float | None = None,
+    vmax: float | None = None,
+    ax_title: str | None = None,
+    cmap: str | matplotlib.colors.Colormap = "plasma",
+    boundary_alpha: float | None = None,
+    crop_to_interior: bool = False,
+) -> matplotlib.collections.QuadMesh:
+    """
+    Plot weather state on a projection-aware axis using datastore metadata.
 
     Parameters
     ----------
     ax : matplotlib.axes.Axes
         The axis to plot on. Should have a cartopy projection.
     da : xarray.DataArray
-        The data to plot. Should have shape (N_grid,).
+        The data to plot. Should have shape (num_grid_nodes,).
     datastore : BaseRegularGridDatastore
         The datastore containing metadata about the grid.
     vmin : float, optional
@@ -350,19 +467,20 @@ def plot_on_axis(
 # by the explicit figsize= below but font family and usetex stay in effect.
 @matplotlib.rc_context(utils.fractional_plot_bundle(1))
 def plot_error_heatmap(
-    errors,
+    errors: torch.Tensor,
     datastore: BaseRegularGridDatastore,
-    title=None,
+    title: Optional[str] = None,
     normalization: str = "state_std",
-):
+) -> matplotlib.figure.Figure:
     """
     Plot a heatmap of errors across variables and prediction horizons.
 
     Parameters
     ----------
     errors : torch.Tensor
-        Shape ``(pred_steps, d_f)``. Per-step, per-variable errors. These
-        values are used for the numeric annotations in each cell.
+        Shape ``(pred_steps, num_state_vars)``. Per-step, per-variable
+        errors. These values are used for the numeric annotations in each
+        cell.
     datastore : BaseRegularGridDatastore
         Datastore providing variable names, units, and step length.
     title : str, optional
@@ -465,8 +583,28 @@ def plot_error_heatmap(
     return fig
 
 
-def plot_error_map(errors, datastore: BaseRegularGridDatastore, title=None):
-    """Deprecated: use :func:`plot_error_heatmap` instead."""
+def plot_error_map(
+    errors: torch.Tensor,
+    datastore: BaseRegularGridDatastore,
+    title: Optional[str] = None,
+) -> matplotlib.figure.Figure:
+    """
+    Deprecated: use :func:`plot_error_heatmap` instead.
+
+    Parameters
+    ----------
+    errors : torch.Tensor
+        The error values to plot.
+    datastore : BaseRegularGridDatastore
+        The datastore containing grid metadata.
+    title : str, optional
+        The title for the plot.
+
+    Returns
+    -------
+    matplotlib.figure.Figure
+        The completed heatmap figure.
+    """
     warnings.warn(
         "plot_error_map is deprecated, use plot_error_heatmap instead",
         DeprecationWarning,
@@ -480,23 +618,23 @@ def plot_prediction(
     datastore: BaseRegularGridDatastore,
     da_prediction: xr.DataArray,
     da_target: xr.DataArray,
-    title=None,
-    vrange=None,
-    boundary_alpha=0.7,
-    crop_to_interior=True,
+    title: Optional[str] = None,
+    vrange: Optional[tuple[float, float]] = None,
+    boundary_alpha: float = 0.7,
+    crop_to_interior: bool = True,
     colorbar_label: str = "",
-):
+) -> matplotlib.figure.Figure:
     """
     Plot an example prediction alongside the ground truth.
 
     Parameters
     ----------
     datastore : BaseRegularGridDatastore
-        Datastore providing grid metadata and projection.
+       Datastore providing grid metadata and projection.
     da_prediction : xarray.DataArray
-        Shape ``(N_grid,)``. Predicted field values.
+        Shape ``(num_grid_nodes,)``. Predicted field values.
     da_target : xarray.DataArray
-        Shape ``(N_grid,)``. Ground-truth field values.
+        Shape ``(num_grid_nodes,)``. Ground-truth field values.
     title : str, optional
         Overall figure title.
     vrange : tuple of (float, float), optional
@@ -564,27 +702,26 @@ def plot_prediction(
 def plot_spatial_error(
     error: torch.Tensor,
     datastore: BaseRegularGridDatastore,
-    title=None,
-    vrange=None,
-    boundary_alpha=0.7,
-    crop_to_interior=True,
+    title: Optional[str] = None,
+    vrange: Optional[tuple[float, float]] = None,
+    boundary_alpha: float = 0.7,
+    crop_to_interior: bool = True,
     colorbar_label: str = "",
-):
+) -> matplotlib.figure.Figure:
     """
     Plot a spatially resolved error map on a projection-aware axis.
 
     Parameters
     ----------
     error : torch.Tensor
-        Shape ``(N_grid,)``. Per-node error values. Dims: ``N_grid`` is
-        the number of grid nodes.
+        Error magnitudes on the flattened grid.
+        * **Shape**: ``(num_grid_nodes,)``
     datastore : BaseRegularGridDatastore
-        Datastore providing grid metadata and projection.
-    title : str, optional
-        Figure title.
-    vrange : tuple of (float, float), optional
-        ``(vmin, vmax)`` for the colour scale. Inferred from data if not
-        given.
+        Datastore providing coordinate metadata and boundary masks.
+    title : str or None, optional
+        Optional figure title.
+    vrange : tuple[float, float] or None, optional
+        Explicit value range ``(vmin, vmax)`` for the color scale.
     boundary_alpha : float, optional
         Alpha transparency for the boundary overlay (default 0.7).
     crop_to_interior : bool, optional
@@ -595,9 +732,8 @@ def plot_spatial_error(
     Returns
     -------
     matplotlib.figure.Figure
-        The completed spatial error figure.
+        Figure handle containing the plotted map.
     """
-
     error_np = error.detach().cpu().numpy()
 
     if vrange is None:
