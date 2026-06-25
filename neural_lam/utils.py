@@ -999,14 +999,14 @@ def crop_time_if_needed(
         first_valid_idx = int(
             np.searchsorted(requested_tvals, required_min, side="left")
         )
-        if first_valid_idx == len(requested_tvals):
-            raise ValueError(
-                "`da_available` covers no `da_requested` time at or after "
-                f"required_min={required_min}; cannot align."
-            )
         last_valid_idx_plus_one = int(
             np.searchsorted(requested_tvals, required_max, side="right")
         )
+        if first_valid_idx >= last_valid_idx_plus_one:
+            raise ValueError(
+                "`da_available` covers no `da_requested` time in "
+                f"[{required_min}, {required_max}]; cannot align."
+            )
         n_removed_begin = first_valid_idx
         n_removed_end = len(requested_tvals) - last_valid_idx_plus_one
 

@@ -13,11 +13,7 @@ import xarray as xr
 
 # First-party
 from neural_lam.datastore.base import BaseDatastore
-from neural_lam.utils import (
-    check_time_overlap,
-    crop_time_if_needed,
-    get_time_step,
-)
+from neural_lam.utils import crop_time_if_needed, get_time_step
 
 
 class WeatherDataset(torch.utils.data.Dataset):
@@ -138,19 +134,9 @@ class WeatherDataset(torch.utils.data.Dataset):
                     self.da_boundary_forcing.elapsed_forecast_duration.values
                 )
 
-            # Validate that the boundary covers the windows we will request,
-            # and if necessary crop the analysis-mode interior so that the
-            # very first/last samples don't fall outside boundary coverage.
+            # Crop the interior so the first/last samples stay within boundary.
             if self.da_boundary_forcing is not None:
                 self.da_state = crop_time_if_needed(
-                    self.da_state,
-                    self.da_boundary_forcing,
-                    da_requested_is_forecast=self.datastore.is_forecast,
-                    da_available_is_forecast=datastore_boundary.is_forecast,
-                    num_past_steps=self.num_past_boundary_steps,
-                    num_future_steps=self.num_future_boundary_steps,
-                )
-                check_time_overlap(
                     self.da_state,
                     self.da_boundary_forcing,
                     da_requested_is_forecast=self.datastore.is_forecast,
