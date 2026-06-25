@@ -125,23 +125,8 @@ class WeatherDataset(torch.utils.data.Dataset):
         else:
             self.da_boundary_forcing = None
 
-        # Within-sample time step for the state series: this is the step
-        # between consecutive state times that __getitem__ exposes, used
-        # below to advance the forcing/boundary window across AR steps.
-        if self.datastore.is_forecast:
-            self._time_step_state = get_time_step(
-                self.da_state.elapsed_forecast_duration.values
-            )
-        else:
-            self._time_step_state = get_time_step(self.da_state.time.values)
-
-        # Forecast lead-time step for forcing/boundary, only meaningful when
-        # the corresponding datastore is in forecast mode.
-        self._forecast_step_forcing = None
-        if self.da_forcing is not None and self.datastore.is_forecast:
-            self._forecast_step_forcing = get_time_step(
-                self.da_forcing.elapsed_forecast_duration.values
-            )
+        # Forecast lead-time step for the boundary, only meaningful when the
+        # boundary datastore is in forecast mode.
         self._forecast_step_boundary = None
         if self.datastore_boundary is not None:
             datastore_boundary = self.datastore_boundary
