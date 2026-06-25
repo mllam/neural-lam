@@ -350,14 +350,15 @@ def main(input_args=None):
         "--num_past_boundary_steps",
         type=int,
         default=1,
-        help="Number of past time steps to use as input for boundary forcing",
+        help="Number of past time steps to use as input for boundary forcing, "
+        "when present",
     )
     data_group.add_argument(
         "--num_future_boundary_steps",
         type=int,
         default=1,
         help="Number of future time steps to use as input for boundary "
-        "forcing",
+        "forcing, when present",
     )
     data_group.add_argument(
         "--load_single_member",
