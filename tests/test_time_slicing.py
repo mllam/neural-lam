@@ -597,3 +597,60 @@ def test_check_time_overlap_insufficient_raises():
             num_past_boundary_steps=20,
             num_future_boundary_steps=20,
         )
+
+
+def test_forecast_interior_cropped_along_analysis_time():
+    """A forecast interior whose earliest launches fall outside the boundary
+    coverage is cropped along ``analysis_time`` (whole launches dropped), so
+    fewer samples remain and the survivors still build a boundary window."""
+    n_analysis = 6
+    n_leads = 5
+    interior_analysis = np.datetime64("2020-01-01") + np.arange(
+        n_analysis
+    ) * np.timedelta64(1, "D")
+    interior_leads = np.arange(n_leads) * np.timedelta64(1, "D")
+    interior_values = (
+        np.arange(n_analysis).reshape(-1, 1) * 100
+        + np.arange(n_leads).reshape(1, -1)
+    ).astype(float)
+    interior_datastore = SinglePointDummyDatastore(
+        state_data=interior_values,
+        forcing_data=interior_values,
+        time_values=(interior_analysis, interior_leads),
+        is_forecast=True,
+        step_length=timedelta(days=1),
+    )
+
+    # Analysis boundary starts only at 2020-01-04, so the launches at
+    # analysis_time 01-01..01-03 have no boundary coverage and are dropped.
+    boundary_times = np.datetime64("2020-01-04") + np.arange(
+        10
+    ) * np.timedelta64(1, "D")
+    boundary_values = np.arange(300, 310, dtype=float)
+    boundary_datastore = BoundaryOnlyDummyDatastore(
+        forcing_data=boundary_values,
+        time_values=boundary_times,
+        is_forecast=False,
+        step_length=timedelta(days=1),
+    )
+
+    full = WeatherDataset(
+        datastore=interior_datastore,
+        datastore_boundary=None,
+        ar_steps=2,
+        num_past_forcing_steps=0,
+        num_future_forcing_steps=0,
+    )
+    cropped = WeatherDataset(
+        datastore=interior_datastore,
+        datastore_boundary=boundary_datastore,
+        ar_steps=2,
+        num_past_forcing_steps=0,
+        num_future_forcing_steps=0,
+        num_past_boundary_steps=1,
+        num_future_boundary_steps=1,
+    )
+
+    assert len(cropped) < len(full)
+    _, _, _, boundary, _ = cropped[0]
+    assert boundary.shape[-1] == 3

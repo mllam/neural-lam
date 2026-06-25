@@ -947,10 +947,10 @@ def crop_time_if_needed(
 ) -> xr.DataArray:
     """Trim the leading/trailing times from ``da_requested`` so that
     ``da_available`` covers every needed window. If ``check_time_overlap``
-    already passes, ``da_requested`` is returned unchanged. Cropping only
-    applies to analysis-mode ``da_requested``; for forecast-mode
-    ``da_requested`` the input is returned as-is and overlap failures will
-    surface at sample-construction time.
+    already passes, ``da_requested`` is returned unchanged. A forecast-mode
+    ``da_requested`` is cropped along ``analysis_time`` (dropping whole
+    launches), an analysis-mode one along ``time``; either way the removal
+    is logged.
 
     Parameters mirror :func:`check_time_overlap`.
 
@@ -973,13 +973,8 @@ def crop_time_if_needed(
         )
         return da_requested
     except ValueError:
-        if da_requested_is_forecast:
-            # Cropping a forecast da_requested by analysis time would change
-            # sample cardinality silently; leave alignment errors to surface
-            # later.
-            return da_requested
-
-        requested_tvals = da_requested.time.values
+        crop_dim = "analysis_time" if da_requested_is_forecast else "time"
+        requested_tvals = da_requested[crop_dim].values
         if da_available_is_forecast:
             available_tvals = da_available.analysis_time.values
         else:
@@ -1014,11 +1009,11 @@ def crop_time_if_needed(
         if n_removed_begin > 0 or n_removed_end > 0:
             log_on_rank_zero(
                 f"Cropping interior data to align with boundary: removed "
-                f"{n_removed_begin} steps at start and {n_removed_end} at "
-                "the end.",
+                f"{n_removed_begin} {crop_dim} steps at start and "
+                f"{n_removed_end} at the end.",
                 level="warning",
             )
             da_requested = da_requested.isel(
-                time=slice(first_valid_idx, last_valid_idx_plus_one)
+                {crop_dim: slice(first_valid_idx, last_valid_idx_plus_one)}
             )
         return da_requested
