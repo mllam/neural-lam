@@ -64,6 +64,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Raise `ValueError` for unsupported `--logger` values in `setup_training_logger`, preventing a misleading `UnboundLocalError` on misconfigured logger types [\#463](https://github.com/mllam/neural-lam/pull/463) @Ritinikhil
 
+- Fix image overwriting in `plot_examples` for non-Wandb loggers by including the example index in the log key (the previous logic had the two branches inverted relative to its own comment) [\#205](https://github.com/mllam/neural-lam/pull/205) @Shristi-Goel
+
 - Close the `PIL.Image` file handle and delete the temporary `.png` after upload in `CustomMLFlowLogger.log_image`, fixing a resource leak and temp-file accumulation in CWD; replace `sys.exit(1)` on `NoCredentialsError` with a re-raise so callers can handle the failure [\#496](https://github.com/mllam/neural-lam/pull/496) @Zrahay
 
 - Reset `plotted_examples` and clear `test_metrics` at the end of `on_test_epoch_end` so repeated `trainer.test()` calls on the same model instance regenerate example plots and start from a clean metric slate instead of silently skipping plots and accumulating tensors [\#437](https://github.com/mllam/neural-lam/pull/437) @RajdeepKushwaha5

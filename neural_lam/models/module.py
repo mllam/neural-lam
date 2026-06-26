@@ -710,9 +710,9 @@ class ForecasterModule(pl.LightningModule):
                     self.datastore.get_vars_names("state"), var_figs
                 ):
                     if isinstance(self.logger, pl.loggers.WandbLogger):
-                        key = f"{var_name}_example_{example_i}"
-                    else:
                         key = f"{var_name}_example"
+                    else:
+                        key = f"{var_name}_example_{example_i}"
 
                     if hasattr(self.logger, "log_image"):
                         self.logger.log_image(key=key, images=[fig], step=t_i)
