@@ -100,16 +100,9 @@ class BaseGraphModel(StepPredictor):
         # Load graph with static features
         # NOTE: (IMPORTANT!) mesh nodes MUST have the first
         # num_mesh_nodes indices,
-        graph_dir_path = datastore.root_path / "graph" / graph_name
-        self.hierarchical, graph_ldict = utils.load_graph(
-            graph_dir_path=graph_dir_path
+        self.hierarchical = utils.load_and_register_graph(
+            self, datastore, graph_name
         )
-        for name, attr_value in graph_ldict.items():
-            # Make BufferLists module members and register tensors as buffers
-            if isinstance(attr_value, torch.Tensor):
-                self.register_buffer(name, attr_value, persistent=False)
-            else:
-                setattr(self, name, attr_value)
 
         # Specify dimensions of data
         self.num_mesh_nodes, _ = self.get_num_mesh()
@@ -119,14 +112,11 @@ class BaseGraphModel(StepPredictor):
         )
 
         # Compute grid_input_dim: total input dimensionality on the grid
-        num_state_vars = datastore.get_num_data_vars(category="state")
-        num_forcing_vars = datastore.get_num_data_vars(category="forcing")
-        grid_static_dim = self.grid_static_features.shape[1]
-        self.grid_input_dim = (
-            2 * num_state_vars
-            + grid_static_dim
-            + num_forcing_vars
-            * (num_past_forcing_steps + num_future_forcing_steps + 1)
+        self.grid_input_dim = utils.grid_input_dim(
+            datastore,
+            self.grid_static_features.shape[1],
+            num_past_forcing_steps,
+            num_future_forcing_steps,
         )
 
         self.g2m_edges, g2m_dim = self.g2m_features.shape

@@ -387,6 +387,80 @@ def crps_gauss(
     )
 
 
+def crps_ens(
+    pred: torch.Tensor,
+    target: torch.Tensor,
+    pred_std: Optional[torch.Tensor] = None,
+    mask: Optional[torch.Tensor] = None,
+    average_grid: bool = True,
+    sum_vars: bool = True,
+    ens_dim: int = 1,
+) -> torch.Tensor:
+    """
+    (Negative) Continuous Ranked Probability Score from ensemble samples.
+
+    Unbiased ("fair") estimator of the CRPS computed directly from a set of
+    ensemble members, following Zamo and Naveau / WeatherBench 2.
+
+    Parameters
+    ----------
+    pred : torch.Tensor
+        Shape ``(..., M, ..., N, num_variables)``. Ensemble predictions, with
+        the ``M`` ensemble members laid out along ``ens_dim``.
+    target : torch.Tensor
+        Shape ``(..., N, num_variables)``. Ground-truth target (no ensemble
+        dimension).
+    pred_std : torch.Tensor or None, optional
+        Unused; accepted so the signature matches the other metrics.
+    mask : torch.Tensor or None, optional
+        Shape ``(N,)``. Boolean mask selecting grid nodes. ``None`` uses all.
+    average_grid : bool, optional
+        If True, average over the grid dimension ``N``.
+    sum_vars : bool, optional
+        If True, sum over the variable dimension ``num_variables``.
+    ens_dim : int, optional
+        Batch dimension along which the ensemble members are laid out and
+        reduced. Default ``1``.
+
+    Returns
+    -------
+    torch.Tensor
+        Reduced CRPS values; shape depends on ``average_grid`` and
+        ``sum_vars``.
+    """
+    del pred_std  # unused; present for a uniform metric signature
+    num_ens = pred.shape[ens_dim]
+    if num_ens == 1:
+        # With a single sample the CRPS reduces to the MAE
+        return mae(
+            pred.squeeze(ens_dim),
+            target,
+            None,
+            mask=mask,
+            average_grid=average_grid,
+            sum_vars=sum_vars,
+        )
+
+    mean_mae = torch.mean(
+        torch.abs(pred - target.unsqueeze(ens_dim)), dim=ens_dim
+    )  # (..., N, num_variables)
+    if num_ens == 2:
+        # Cheap exact estimator for a two-member ensemble
+        pair_diffs_term = -0.5 * torch.abs(
+            pred.select(ens_dim, 0) - pred.select(ens_dim, 1)
+        )
+    else:
+        # Rank-based estimator, O(M log M) compute and O(M) memory.
+        # Ranks start at 1; two argsorts give the per-entry ranks.
+        ranks = pred.argsort(dim=ens_dim).argsort(ens_dim) + 1
+        pair_diffs_term = (1 / (num_ens - 1)) * torch.mean(
+            (num_ens + 1 - 2 * ranks) * pred, dim=ens_dim
+        )
+    crps_estimator = mean_mae + pair_diffs_term  # (..., N, num_variables)
+
+    return mask_and_reduce_metric(crps_estimator, mask, average_grid, sum_vars)
+
+
 DEFINED_METRICS = {
     "mse": mse,
     "mae": mae,
