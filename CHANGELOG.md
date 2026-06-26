@@ -74,6 +74,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Fix `WeatherDataset.__len__` off-by-one in analysis mode (was undercounting by 1 sample), include `num_past_forcing_steps` in the forecast-mode minimum-horizon check, validate forcing-side forecast horizon when forcing is present, and use `min(n_state, n_forcing)` when both are present in analysis mode; raise `IndexError` for out-of-range indices in `WeatherDataset.__getitem__` (with Python-style negative indexing support) [\#312](https://github.com/mllam/neural-lam/pull/312) @kshirajahere
 
+- Add float32 epsilon to the `sqrt(feature_weights)` denominator when computing `per_var_std` in `ForecasterModule`, so a zero feature weight no longer produces `inf` / `NaN` in the loss; emit a `UserWarning` listing the zero-weighted indices since those variables are then excluded from the loss ([#526](https://github.com/mllam/neural-lam/issues/526)) [\#253](https://github.com/mllam/neural-lam/pull/253) @Ayushhgit
+
 ### Maintenance
 
 - Add comprehensive type hints to GraphLAM in `neural_lam/models/step_predictors/graph/graph_lam.py` [\#669](https://github.com/mllam/neural-lam/pull/669) @GiGiKoneti

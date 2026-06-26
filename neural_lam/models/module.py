@@ -154,9 +154,32 @@ class ForecasterModule(pl.LightningModule):
             feature_weights_t = torch.tensor(
                 state_feature_weights, dtype=torch.float32
             )
+
+            # Warn if any feature weight is exactly 0: that variable is then
+            # completely excluded from the loss, which is almost certainly
+            # unintentional. The small epsilon below keeps `sqrt` finite so
+            # the division does not produce `inf`/`NaN` for those variables.
+            zero_weight_mask = feature_weights_t == 0.0
+            if zero_weight_mask.any().item():
+                zero_indices = zero_weight_mask.nonzero(as_tuple=False).squeeze(
+                    -1
+                )
+                warnings.warn(
+                    f"Feature weight(s) at indices {zero_indices.tolist()} "
+                    "are set to 0.0. These state variables will contribute "
+                    "nothing to the loss and effectively be ignored during "
+                    "training. If this is intentional, you can disregard "
+                    "this warning.",
+                    UserWarning,
+                    stacklevel=2,
+                )
+
             self.register_buffer(
                 "per_var_std",
-                diff_std / torch.sqrt(feature_weights_t),
+                diff_std
+                / torch.sqrt(
+                    feature_weights_t + torch.finfo(torch.float32).eps
+                ),
                 persistent=False,
             )
         else:
