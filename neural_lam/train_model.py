@@ -1,5 +1,8 @@
+"""CLI entry point for training Neural-LAM models."""
+
 # Standard library
 import json
+import os
 import random
 import shutil
 import time
@@ -21,7 +24,10 @@ from .weather_dataset import WeatherDataModule
 
 
 class AdaptiveHelpFormatter(ArgumentDefaultsHelpFormatter):
+    """``--help`` formatter that scales the column width to the terminal."""
+
     def __init__(self, prog):
+        """Pick a help-column width based on the current terminal size."""
         terminal_width = shutil.get_terminal_size(fallback=(100, 20)).columns
         width = max(80, min(terminal_width, 120))
         help_position = min(44, width // 3)
@@ -284,6 +290,13 @@ def main(input_args=None):
         help="""Logger run name, for e.g. MLFlow (with default value `None`
           neural-lam's default format string is used)""",
     )
+    parser.add_argument(
+        "--runs_root",
+        type=str,
+        default="runs",
+        help="Root directory under which per-run output dirs (checkpoints, "
+        "logger files, plots) are written as `<runs_root>/<run_name>/`",
+    )
 
     logger_group.add_argument(
         "--wandb_id",
@@ -474,27 +487,44 @@ def main(input_args=None):
             f"{time.strftime('%m_%d_%H')}-{random_run_id:04d}"
         )
 
+    run_dir = os.path.join(args.runs_root, run_name)
+
     training_logger = utils.setup_training_logger(
-        datastore=datastore, args=args, run_name=run_name
+        datastore=datastore, args=args, run_name=run_name, run_dir=run_dir
     )
 
-    checkpoint_callback = pl.callbacks.ModelCheckpoint(
-        dirpath=f"saved_models/{run_name}",
+    # Two separate callbacks decouple "best validated model" from
+    # "rescue / resume" snapshots: long HPC jobs that crash or time out
+    # between validations can still resume from a recent train-epoch
+    # checkpoint instead of losing all progress since the last validation.
+    val_checkpoint = pl.callbacks.ModelCheckpoint(
+        dirpath=os.path.join(run_dir, "checkpoints"),
         filename="min_val_loss",
         monitor="val_mean_loss",
         mode="min",
-        save_last=True,
+        save_top_k=1,
+        save_on_train_epoch_end=False,
+    )
+    latest_checkpoint = pl.callbacks.ModelCheckpoint(
+        dirpath=os.path.join(run_dir, "checkpoints"),
+        filename="last",
+        monitor=None,
+        save_top_k=1,
+        every_n_epochs=1,
+        save_on_train_epoch_end=True,
+        enable_version_counter=False,
     )
     trainer = pl.Trainer(
         max_epochs=args.epochs,
         deterministic=True,
+        default_root_dir=run_dir,
         strategy="auto",
         accelerator=device_name,
         num_nodes=args.num_nodes,
         devices=devices,
         logger=training_logger,
         log_every_n_steps=1,
-        callbacks=[checkpoint_callback],
+        callbacks=[val_checkpoint, latest_checkpoint],
         check_val_every_n_epoch=args.val_interval,
         precision=args.precision,
     )

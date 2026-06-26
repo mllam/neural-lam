@@ -1,3 +1,5 @@
+"""Command-line utility for plotting saved Neural-LAM graphs."""
+
 # Standard library
 import os
 from argparse import ArgumentDefaultsHelpFormatter, ArgumentParser
@@ -29,7 +31,7 @@ def plot_graph(
     Parameters
     ----------
     grid_pos : np.ndarray
-        Grid node positions, shape (N_grid, 2).
+        Grid node positions, shape (num_grid_nodes, 2).
     hierarchical : bool
         Whether the loaded graph is hierarchical.
     graph_ldict : dict
@@ -264,7 +266,7 @@ def main() -> None:
         config_path=args.datastore_config_path
     )
 
-    xy = datastore.get_xy("state", stacked=True)  # (N_grid, 2)
+    xy = datastore.get_xy("state", stacked=True)  # (num_grid_nodes, 2)
     pos_max = np.max(np.abs(xy))
     grid_pos = xy / pos_max  # Divide by maximum coordinate
 
