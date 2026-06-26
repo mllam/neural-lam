@@ -1878,7 +1878,8 @@ def validate_graph_directory(
         """\
     For every edge feature tensor above:
 
-    - The shape MUST be `[E_component, N_f]`.
+    - The shape MUST be `[E, N_f]` where `E` is the number of edges in a given
+      subgraph (e.g. g2m, m2g or a inter/intra-level edgeset in m2m)
     """
     )
     # enforced inside check_edge_features (shape check) + matching row count argument  # noqa: E501

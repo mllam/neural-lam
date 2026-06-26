@@ -231,7 +231,8 @@ shape `[E_interlevel, N_f]`, where `E_interlevel` matches the edge count
 in entry `i` of the corresponding `mesh_*_edge_index.pt` file.
 For every edge feature tensor above:
 
-- The shape MUST be `[E_component, N_f]`.
+- The shape MUST be `[E, N_f]` where `E` is the number of edges in a given
+  subgraph (e.g. g2m, m2g or a inter/intra-level edgeset in m2m)
 - `N_f` MUST be exactly `3` (for 2D edges) or exactly `4` (for 3D
 edges). The value of `N_f` MUST be consistent across all edge feature
 tensors in the graph.
