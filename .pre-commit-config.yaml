@@ -54,7 +54,8 @@ repos:
     hooks:
       - id: graph-storage-spec
         name: Regenerate graph storage spec from validator
-        entry: uv run docs/validate_graph.py --write-spec-to-path docs/graph_storage_spec.md
-        language: system
+        entry: python docs/validate_graph.py --write-spec-to-path docs/graph_storage_spec.md
+        language: python
+        additional_dependencies: [PyYAML]
         pass_filenames: false
         files: ^docs/(validate_graph\.py|graph_storage_spec\.md)$
