@@ -40,7 +40,7 @@ jobs:
           python-version: "3.11"
 
       - name: Install docs dependencies
-        run: uv sync --extra cpu --extra docs --group dev --no-cache
+        run: uv sync --extra docs --group dev --no-cache
 
 
 
@@ -72,7 +72,7 @@ jobs:
           python-version: "3.11"
 
       - name: Install docs dependencies
-        run: uv sync --extra cpu --extra docs --group dev --no-cache
+        run: uv sync --extra docs --group dev --no-cache
 
 
 

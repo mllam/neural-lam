@@ -91,7 +91,6 @@ html_theme_options = {
     "path_to_docs": "docs",
     "show_navbar_depth": 2,
     "show_toc_level": 2,
-    "logo": {"text": "Neural-LAM"},
     "extra_footer": (
         '<p>Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> | '
         '<a href="https://github.com/mllam/neural-lam">Source</a></p>'
