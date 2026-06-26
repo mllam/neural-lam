@@ -19,7 +19,6 @@ extensions = [
     "sphinx.ext.viewcode",
     "sphinx.ext.intersphinx",
     "sphinx_copybutton",
-    "sphinxcontrib.mermaid",
     "sphinxext.opengraph",
 ]
 
@@ -104,10 +103,6 @@ ogp_site_url = "https://neural-lam.readthedocs.io/en/latest/"
 ogp_image = "_static/logo.png"
 ogp_use_first_image = True
 
-# Mermaid settings
-mermaid_d3_zoom = False
-mermaid_version = "11"
-
 suppress_warnings = [
     "autoapi.python_import_resolution",
     "myst.xref_missing",
@@ -115,6 +110,6 @@ suppress_warnings = [
 
 # Linkcheck settings
 linkcheck_ignore = [
-    r"https://kutt\.it/mllam",  # Returns 403 Forbidden for bots
+    r"https://kutt\.to/mllam",  # Returns 403 Forbidden for bots
     r"https://docs\.pytorch\.org/.*",  # Flaky anchors in intersphinx
 ]

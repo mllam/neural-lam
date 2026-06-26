@@ -17,8 +17,6 @@ When running tests for the first time, example data is automatically downloaded 
 pytest tests/test_training.py -vv -s -k "test_training"
 ```
 
-Alternatively, you can use the `DummyDatastore` for quick testing without downloading real data.
-
 ## Step 2: Create a Graph
 
 Before training, you must construct a graph mesh for your data.
@@ -37,7 +35,7 @@ Now you can train a model using the graph and configuration.
 python -m neural_lam.train_model --config_path <path-to-config> --model graph_lam --graph <graph-name>
 ```
 
-Neural-LAM supports several models like `graph_lam`, `hilam`, and `hilam_parallel`.
+Neural-LAM supports several models like `graph_lam`, `hilam`, and `hi_lam_parallel`.
 
 ## Step 4: Evaluate
 
