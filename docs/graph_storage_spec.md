@@ -191,8 +191,8 @@ The following edge index files MUST be defined:
 - `mesh_down_edge_index.pt` (hierarchical graphs only, `L > 1`)
 
 `g2m_edge_index.pt` and `m2g_edge_index.pt` MUST each contain a single
-tensor with shape `[2, E]`, where `E` is the number of edges in that
-component.
+tensor with shape `[2, E]`, where `E` is the number of edges in each of the
+`g2m` (grid-to-mesh) and `m2g` (mesh-to-grid) graph components.
 `m2m_edge_index.pt` MUST contain a list of tensors of length `L`, i.e. one
 edge-index tensor per mesh level. Each entry MUST have shape `[2, E_level]`,
 where `E_level` is the number of edges at that level.

@@ -1690,8 +1690,8 @@ def validate_graph_directory(
     - `mesh_down_edge_index.pt` (hierarchical graphs only, `L > 1`)
 
     `g2m_edge_index.pt` and `m2g_edge_index.pt` MUST each contain a single
-    tensor with shape `[2, E]`, where `E` is the number of edges in that
-    component.
+    tensor with shape `[2, E]`, where `E` is the number of edges in each of the
+    `g2m` (grid-to-mesh) and `m2g` (mesh-to-grid) graph components.
     """
     )
     # enforced below where g2m and m2g are checked directly
