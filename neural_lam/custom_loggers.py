@@ -2,7 +2,6 @@
 
 # Standard library
 import os
-from typing import Optional
 
 # Third-party
 import matplotlib.pyplot as plt
@@ -74,7 +73,7 @@ class CustomMLFlowLogger(pl.loggers.MLFlowLogger):
         self,
         key: str,
         images: list[plt.Figure],
-        step: Optional[int] = None,
+        step: int | None = None,
     ) -> None:
         """
         Log one or more matplotlib figures as images to MLFlow.

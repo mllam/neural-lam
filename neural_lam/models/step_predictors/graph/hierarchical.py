@@ -3,6 +3,7 @@
 # Standard library
 
 # Third-party
+import torch
 from torch import nn
 
 # Local
@@ -16,6 +17,15 @@ class BaseHiGraphModel(BaseGraphModel):
     """
     Base class for hierarchical graph models.
     """
+
+    # Buffers or graph features that are lists of tensors in hierarchical models
+    mesh_static_features: list[torch.Tensor]
+    m2m_features: list[torch.Tensor]
+    mesh_up_features: list[torch.Tensor]
+    mesh_down_features: list[torch.Tensor]
+    m2m_edge_index: list[torch.Tensor]
+    mesh_up_edge_index: list[torch.Tensor]
+    mesh_down_edge_index: list[torch.Tensor]
 
     def __init__(
         self,
@@ -34,7 +44,7 @@ class BaseHiGraphModel(BaseGraphModel):
         m2g_gnn_type: str = "InteractionNet",
         mesh_up_gnn_type: str = "InteractionNet",
         mesh_down_gnn_type: str = "InteractionNet",
-    ):
+    ) -> None:
         """Extend :class:`BaseGraphModel` with hierarchical mesh structures."""
         super().__init__(
             datastore=datastore,
@@ -140,7 +150,7 @@ class BaseHiGraphModel(BaseGraphModel):
             ]
         )
 
-    def get_num_mesh(self):
+    def get_num_mesh(self) -> tuple[int, int]:
         """
         Compute mesh node counts used for encoding and decoding.
 
@@ -158,7 +168,7 @@ class BaseHiGraphModel(BaseGraphModel):
         )
         return num_mesh_nodes, num_mesh_nodes_ignore
 
-    def embedd_mesh_nodes(self):
+    def embedd_mesh_nodes(self) -> torch.Tensor:
         """
         Embed static mesh node features for the bottom level only;
         remaining levels are embedded at the start of ``process_step``.
@@ -173,7 +183,7 @@ class BaseHiGraphModel(BaseGraphModel):
         """
         return self.mesh_embedders[0](self.mesh_static_features[0])
 
-    def process_step(self, mesh_rep):
+    def process_step(self, mesh_rep: torch.Tensor) -> torch.Tensor:
         """
         Process the mesh representation across all hierarchy levels,
         implementing the full init-process-readout cycle.
@@ -282,8 +292,17 @@ class BaseHiGraphModel(BaseGraphModel):
         return mesh_rep_levels[0]  # (B, num_mesh_nodes[0], hidden_dim)
 
     def hi_processor_step(
-        self, mesh_rep_levels, mesh_same_rep, mesh_up_rep, mesh_down_rep
-    ):
+        self,
+        mesh_rep_levels: list[torch.Tensor],
+        mesh_same_rep: list[torch.Tensor],
+        mesh_up_rep: list[torch.Tensor],
+        mesh_down_rep: list[torch.Tensor],
+    ) -> tuple[
+        list[torch.Tensor],
+        list[torch.Tensor],
+        list[torch.Tensor],
+        list[torch.Tensor],
+    ]:
         """
         Internal processor step between mesh init and read-out.
 

@@ -17,7 +17,8 @@ from loguru import logger
 
 # Local
 from . import utils
-from .config import load_config_and_datastore
+from .config import NeuralLAMConfig, load_config_and_datastore
+from .datastore.base import BaseDatastore
 from .gnn_layers import GNN_TYPES
 from .models import MODELS, ARForecaster, ForecasterModule
 from .weather_dataset import WeatherDataModule
@@ -26,7 +27,7 @@ from .weather_dataset import WeatherDataModule
 class AdaptiveHelpFormatter(ArgumentDefaultsHelpFormatter):
     """``--help`` formatter that scales the column width to the terminal."""
 
-    def __init__(self, prog):
+    def __init__(self, prog: str) -> None:
         """Pick a help-column width based on the current terminal size."""
         terminal_width = shutil.get_terminal_size(fallback=(100, 20)).columns
         width = max(80, min(terminal_width, 120))
@@ -38,7 +39,11 @@ class AdaptiveHelpFormatter(ArgumentDefaultsHelpFormatter):
         )
 
 
-def load_forecaster_module_from_checkpoint(ckpt_path, config, datastore):
+def load_forecaster_module_from_checkpoint(
+    ckpt_path: str,
+    config: NeuralLAMConfig,
+    datastore: BaseDatastore,
+) -> ForecasterModule:
     """
     Reconstruct a ForecasterModule from a checkpoint without requiring the
     caller to know the original architecture kwargs.
@@ -73,7 +78,7 @@ def load_forecaster_module_from_checkpoint(ckpt_path, config, datastore):
 
 
 @logger.catch
-def main(input_args=None):
+def main(input_args: list[str] | None = None) -> None:
     """Main function for training and evaluating models."""
     parser = ArgumentParser(
         description="Train or evaluate MLWP models for LAM",
@@ -429,6 +434,7 @@ def main(input_args=None):
         device_name = "cpu"
 
     # Set devices to use
+    devices: str | list[int]
     if args.devices == ["auto"]:
         devices = "auto"
     else:

@@ -18,6 +18,16 @@ class BaseGraphModel(StepPredictor):
     the encode-process-decode idea.
     """
 
+    diff_mean: torch.Tensor
+    diff_std: torch.Tensor
+    g2m_features: torch.Tensor
+    m2g_features: torch.Tensor
+    g2m_edge_index: torch.Tensor
+    m2g_edge_index: torch.Tensor
+    mesh_static_features: torch.Tensor | list[torch.Tensor]
+    m2m_features: torch.Tensor | list[torch.Tensor]
+    m2m_edge_index: torch.Tensor | list[torch.Tensor]
+
     def __init__(
         self,
         datastore: BaseDatastore,

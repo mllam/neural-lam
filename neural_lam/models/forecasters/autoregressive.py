@@ -17,6 +17,9 @@ class ARForecaster(Forecaster):
     unroll a forecast. Makes use of a StepPredictor at each AR step.
     """
 
+    boundary_mask: torch.Tensor
+    interior_mask: torch.Tensor
+
     def __init__(
         self, predictor: StepPredictor, datastore: BaseDatastore
     ) -> None:

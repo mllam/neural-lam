@@ -3,7 +3,6 @@
 # Standard library
 import os
 from argparse import ArgumentDefaultsHelpFormatter, ArgumentParser
-from typing import Optional
 
 # Third-party
 import matplotlib
@@ -22,7 +21,7 @@ from .datastore.base import BaseRegularGridDatastore
 
 
 def plot_graph(
-    graph: pyg.data.Data, title: Optional[str] = None
+    graph: pyg.data.Data, title: str | None = None
 ) -> tuple[matplotlib.figure.Figure, matplotlib.axes.Axes]:
     """
     Render a PyTorch Geometric graph using stored node coordinates.
@@ -266,10 +265,10 @@ def prepend_node_index(graph: networkx.Graph, new_index: int) -> networkx.Graph:
 def create_graph(
     graph_dir_path: str,
     xy: np.ndarray,
-    n_max_levels: Optional[int] = None,
-    hierarchical: Optional[bool] = False,
-    create_plot: Optional[bool] = False,
-):
+    n_max_levels: int | None = None,
+    hierarchical: bool = False,
+    create_plot: bool = False,
+) -> None:
     """
     Create graph components from `xy` grid coordinates and store in
     `graph_dir_path`.
@@ -488,8 +487,10 @@ def create_graph(
                 .reshape((n, n, 2))[1::nx, 1::nx, :]
                 .reshape(int(n / nx) ** 2, 2)
             )
-            ij = [tuple(x) for x in ij]
-            G[lev] = networkx.relabel_nodes(G[lev], dict(zip(G[lev].nodes, ij)))
+            ij_tuples = [tuple(x) for x in ij]
+            G[lev] = networkx.relabel_nodes(
+                G[lev], dict(zip(G[lev].nodes, ij_tuples))
+            )
             G_tot = networkx.compose(G_tot, G[lev])
 
         # Relabel mesh nodes to start with 0
@@ -647,10 +648,10 @@ def create_graph(
 def create_graph_from_datastore(
     datastore: BaseRegularGridDatastore,
     output_root_path: str,
-    n_max_levels: Optional[int] = None,
+    n_max_levels: int | None = None,
     hierarchical: bool = False,
     create_plot: bool = False,
-):
+) -> None:
     """
     Generate graph components for ``datastore`` and persist them on disk.
 
@@ -683,7 +684,7 @@ def create_graph_from_datastore(
     )
 
 
-def cli(input_args: Optional[list[str]] = None) -> None:
+def cli(input_args: list[str] | None = None) -> None:
     """
     Parse CLI arguments and call :func:`create_graph_from_datastore`.
 

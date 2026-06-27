@@ -48,4 +48,5 @@ repos:
     hooks:
       - id: mypy
         additional_dependencies: [types-PyYAML, types-Pillow, types-tqdm]
+        files: ^neural_lam/
         description: Check for type errors

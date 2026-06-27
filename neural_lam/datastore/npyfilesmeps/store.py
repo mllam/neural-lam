@@ -10,7 +10,7 @@ import warnings
 from datetime import timedelta
 from functools import cached_property
 from pathlib import Path
-from typing import List, Optional
+from typing import Any, cast
 
 # Third-party
 import cartopy.crs as ccrs
@@ -34,7 +34,11 @@ TOA_SW_DOWN_FLUX_FILENAME_FORMAT = (
 OPEN_WATER_FILENAME_FORMAT = "wtr_{analysis_time:%Y%m%d%H}.npy"
 
 
-def _load_np(fp, add_feature_dim, feature_dim_mask=None):
+def _load_np(
+    fp: str | Path,
+    add_feature_dim: bool,
+    feature_dim_mask: np.ndarray | None = None,
+) -> np.ndarray:
     """
     Load an ``.npy`` file and optionally expand/mask the feature axis.
 
@@ -162,10 +166,18 @@ class NpyFilesDatastoreMEPS(BaseRegularGridDatastore):
 
     is_forecast = True
 
+    _config_path: Path
+    _root_path: Path
+    _config: NpyDatastoreConfig
+    _num_ensemble_members: int
+    _num_timesteps: int
+    _step_length: timedelta
+    _remove_state_features_with_index: list[int] | None
+
     def __init__(
         self,
-        config_path,
-    ):
+        config_path: str | Path,
+    ) -> None:
         """
         Create a new NpyFilesDatastore using the configuration file at the
         given path. The config file should be a YAML file and will be loaded
@@ -220,7 +232,7 @@ class NpyFilesDatastoreMEPS(BaseRegularGridDatastore):
         return self._config
 
     def get_dataarray(
-        self, category: str, split: Optional[str], standardize: bool = False
+        self, category: str, split: str | None, standardize: bool = False
     ) -> DataArray:
         """
         Get the data array for the given category and split of data. If the
@@ -314,7 +326,9 @@ class NpyFilesDatastoreMEPS(BaseRegularGridDatastore):
         da = da.rename(dict(feature=f"{category}_feature"))
 
         # stack the [x, y] dimensions into a `grid_index` dimension
-        da = self.stack_grid_coords(da)
+        da_stacked = self.stack_grid_coords(da)
+        assert isinstance(da_stacked, xr.DataArray)
+        da = da_stacked
 
         # check that we have the right features
         actual_features = da[f"{category}_feature"].values.tolist()
@@ -334,9 +348,9 @@ class NpyFilesDatastoreMEPS(BaseRegularGridDatastore):
 
     def _get_single_timeseries_dataarray(
         self,
-        features: List[str],
-        split: Optional[str] = None,
-        member: Optional[int] = None,
+        features: list[str],
+        split: str | None = None,
+        member: int | None = None,
     ) -> DataArray:
         """
         Get the data array spanning the complete time series for a given set of
@@ -347,7 +361,7 @@ class NpyFilesDatastoreMEPS(BaseRegularGridDatastore):
 
         Parameters
         ----------
-        features : List[str]
+        features : list[str]
             The list of features to load the data for. For the 'state'
             category, this should be the result of
             `self.get_vars_names(category="state")`, for the 'forcing' category
@@ -473,9 +487,11 @@ class NpyFilesDatastoreMEPS(BaseRegularGridDatastore):
         x = xs[:, 0]  # Unique x-coordinates (changes along the first axis)
         y = ys[0, :]  # Unique y-coordinates (changes along the second axis)
         for d in dims:
+            coord_values: Any
             if d == "elapsed_forecast_duration":
                 coord_values = self.step_length * np.arange(self._num_timesteps)
             elif d == "analysis_time":
+                assert split is not None
                 coord_values = self._get_analysis_times(split=split)
             elif d == "y":
                 coord_values = y
@@ -536,7 +552,7 @@ class NpyFilesDatastoreMEPS(BaseRegularGridDatastore):
 
         return da
 
-    def _get_analysis_times(self, split) -> List[np.datetime64]:
+    def _get_analysis_times(self, split: str) -> list[np.datetime64]:
         """Get the analysis times for the given split by parsing the filenames
         of all the files found for the given split.
 
@@ -547,7 +563,7 @@ class NpyFilesDatastoreMEPS(BaseRegularGridDatastore):
 
         Returns
         -------
-        List[dt.datetime]
+        list[dt.datetime]
             The analysis times for the given split, sorted in ascending order.
 
         """
@@ -568,7 +584,9 @@ class NpyFilesDatastoreMEPS(BaseRegularGridDatastore):
 
         return sorted(times)
 
-    def _calc_datetime_forcing_features(self, da_time: xr.DataArray):
+    def _calc_datetime_forcing_features(
+        self, da_time: xr.DataArray
+    ) -> xr.DataArray:
         """
         Compute sinusoidal encodings of hour-of-day and day-of-year.
 
@@ -586,11 +604,14 @@ class NpyFilesDatastoreMEPS(BaseRegularGridDatastore):
         da_year_angle = da_time.dt.dayofyear / 365 * 2 * np.pi
 
         da_datetime_forcing = xr.concat(
-            (
-                np.sin(da_hour_angle),
-                np.cos(da_hour_angle),
-                np.sin(da_year_angle),
-                np.cos(da_year_angle),
+            cast(
+                list[xr.DataArray],
+                [
+                    np.sin(da_hour_angle),
+                    np.cos(da_hour_angle),
+                    np.sin(da_year_angle),
+                    np.cos(da_year_angle),
+                ],
             ),
             dim="feature",
         )
@@ -604,7 +625,7 @@ class NpyFilesDatastoreMEPS(BaseRegularGridDatastore):
 
         return da_datetime_forcing
 
-    def get_vars_units(self, category: str) -> List[str]:
+    def get_vars_units(self, category: str) -> list[str]:
         """Return unit strings for the variables in ``category``."""
         if category == "state":
             return self.config.dataset.var_units
@@ -622,7 +643,7 @@ class NpyFilesDatastoreMEPS(BaseRegularGridDatastore):
         else:
             raise NotImplementedError(f"Category {category} not supported")
 
-    def get_vars_names(self, category: str) -> List[str]:
+    def get_vars_names(self, category: str) -> list[str]:
         """Return canonical short names for the variables in ``category``."""
         if category == "state":
             return self.config.dataset.var_names
@@ -642,7 +663,7 @@ class NpyFilesDatastoreMEPS(BaseRegularGridDatastore):
         else:
             raise NotImplementedError(f"Category {category} not supported")
 
-    def get_vars_long_names(self, category: str) -> List[str]:
+    def get_vars_long_names(self, category: str) -> list[str]:
         """Return descriptive names for the variables in ``category``."""
         if category == "state":
             return self.config.dataset.var_longnames
@@ -742,6 +763,7 @@ class NpyFilesDatastoreMEPS(BaseRegularGridDatastore):
             values, dims=["y", "x"], coords=dict(x=x, y=y), name="boundary_mask"
         )
         da_mask_stacked_xy = self.stack_grid_coords(da_mask).astype(int)
+        assert isinstance(da_mask_stacked_xy, xr.DataArray)
         return da_mask_stacked_xy
 
     def get_standardization_dataarray(self, category: str) -> xr.Dataset:
@@ -766,7 +788,7 @@ class NpyFilesDatastoreMEPS(BaseRegularGridDatastore):
 
         """
 
-        def load_pickled_tensor(fn):
+        def load_pickled_tensor(fn: str) -> np.ndarray:
             """Load a serialized tensor from ``static`` and convert to numpy."""
             return torch.load(
                 self.root_path / "static" / fn, weights_only=True

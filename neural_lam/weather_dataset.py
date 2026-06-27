@@ -3,7 +3,7 @@
 # Standard library
 import datetime
 import warnings
-from typing import Iterator, Optional, Union
+from typing import Iterator
 
 # Third-party
 import numpy as np
@@ -70,16 +70,17 @@ class WeatherDataset(torch.utils.data.Dataset):
         self.num_future_forcing_steps = num_future_forcing_steps
         self.load_single_member = load_single_member
 
-        self.da_state = self.datastore.get_dataarray(
+        da_state = self.datastore.get_dataarray(
             category="state", split=self.split
         )
-        self.da_forcing = self.datastore.get_dataarray(
-            category="forcing", split=self.split
-        )
-        if self.da_state is None:
+        if da_state is None:
             raise ValueError(
                 "The datastore must provide state data for the WeatherDataset."
             )
+        self.da_state = da_state
+        self.da_forcing = self.datastore.get_dataarray(
+            category="forcing", split=self.split
+        )
 
         if self.datastore.is_ensemble and self.load_single_member:
             warnings.warn(
@@ -465,7 +466,7 @@ class WeatherDataset(torch.utils.data.Dataset):
 
     def __getitem__(
         self, idx: int
-    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, np.ndarray]:
+    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
         """
         Return a single training sample, which consists of the initial states,
         target states, forcing and batch times.
@@ -533,7 +534,9 @@ class WeatherDataset(torch.utils.data.Dataset):
 
     def __iter__(
         self,
-    ) -> Iterator[tuple[torch.Tensor, torch.Tensor, torch.Tensor, np.ndarray]]:
+    ) -> Iterator[
+        tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]
+    ]:
         """
         Convenience method to iterate over the dataset.
 
@@ -547,9 +550,9 @@ class WeatherDataset(torch.utils.data.Dataset):
     def create_dataarray_from_tensor(
         self,
         tensor: torch.Tensor,
-        time: Union[datetime.datetime, list[datetime.datetime]],
+        time: datetime.datetime | list[datetime.datetime] | np.ndarray,
         category: str,
-    ):
+    ) -> xr.DataArray:
         """
         Construct a xarray.DataArray from a `pytorch.Tensor` with coordinates
         for `grid_index`, `time` and `{category}_feature` matching the shape
@@ -580,7 +583,7 @@ class WeatherDataset(torch.utils.data.Dataset):
             The constructed DataArray.
         """
 
-        def _is_listlike(obj):
+        def _is_listlike(obj: object) -> bool:
             """Return ``True`` for list/tuple/ndarray-like containers."""
             return hasattr(obj, "__iter__") and not isinstance(obj, str)
 
@@ -686,17 +689,17 @@ class WeatherDataModule(pl.LightningDataModule):
         self.load_single_member = load_single_member
         self.batch_size = batch_size
         self.num_workers: int = num_workers
-        self.train_dataset: Optional[WeatherDataset] = None
-        self.val_dataset: Optional[WeatherDataset] = None
-        self.test_dataset: Optional[WeatherDataset] = None
-        self.multiprocessing_context: Union[str, None] = None
+        self.train_dataset: WeatherDataset | None = None
+        self.val_dataset: WeatherDataset | None = None
+        self.test_dataset: WeatherDataset | None = None
+        self.multiprocessing_context: str | None = None
         self.eval_split = eval_split
         if num_workers > 0:
             # default to spawn for now, as the default on linux "fork" hangs
             # when using dask (which the npyfilesmeps datastore uses)
             self.multiprocessing_context = "spawn"
 
-    def setup(self, stage: Optional[str] = None) -> None:
+    def setup(self, stage: str | None = None) -> None:
         """
         Instantiate datasets for the requested trainer stage.
 
@@ -737,6 +740,7 @@ class WeatherDataModule(pl.LightningDataModule):
 
     def train_dataloader(self) -> torch.utils.data.DataLoader:
         """Load train dataset."""
+        assert self.train_dataset is not None
         return torch.utils.data.DataLoader(
             self.train_dataset,
             batch_size=self.batch_size,
@@ -749,6 +753,7 @@ class WeatherDataModule(pl.LightningDataModule):
 
     def val_dataloader(self) -> torch.utils.data.DataLoader:
         """Load validation dataset."""
+        assert self.val_dataset is not None
         return torch.utils.data.DataLoader(
             self.val_dataset,
             batch_size=self.batch_size,
@@ -761,6 +766,7 @@ class WeatherDataModule(pl.LightningDataModule):
 
     def test_dataloader(self) -> torch.utils.data.DataLoader:
         """Load test dataset."""
+        assert self.test_dataset is not None
         return torch.utils.data.DataLoader(
             self.test_dataset,
             batch_size=self.batch_size,

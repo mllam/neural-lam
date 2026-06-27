@@ -1,6 +1,7 @@
 """Utility helpers shared across Neural-LAM training and evaluation."""
 
 # Standard library
+import argparse
 import datetime
 import os
 import shutil
@@ -9,7 +10,10 @@ import tempfile
 import warnings
 from functools import cache
 from pathlib import Path
-from typing import Any, Iterator, Union, overload
+from typing import TYPE_CHECKING, Any, Iterator, overload
+
+if TYPE_CHECKING:
+    from .datastore.base import BaseDatastore
 
 # Third-party
 import pytorch_lightning as pl
@@ -60,8 +64,8 @@ class BufferList(nn.Module):
         """Slice-indexed access overload; see the implementation below."""
 
     def __getitem__(
-        self, key: Union[int, slice]
-    ) -> Union[torch.Tensor, list[torch.Tensor]]:
+        self, key: int | slice
+    ) -> torch.Tensor | list[torch.Tensor]:
         """Return the buffer(s) at ``key``.
 
         Supports integer indexing (with Python-style negative indices)
@@ -92,13 +96,13 @@ class BufferList(nn.Module):
         """Iterate over the registered buffers in ascending index order."""
         return (self[i] for i in range(len(self)))
 
-    def __itruediv__(self, other: float) -> "BufferList":
+    def __itruediv__(self, other: float | torch.Tensor) -> "BufferList":
         """
         Divide each element in list with other.
 
         Parameters
         ----------
-        other : float
+        other : float or torch.Tensor
             The value to divide by.
 
         Returns
@@ -108,13 +112,13 @@ class BufferList(nn.Module):
         """
         return self.__imul__(1.0 / other)
 
-    def __imul__(self, other: float) -> "BufferList":
+    def __imul__(self, other: float | torch.Tensor) -> "BufferList":
         """
         Multiply each element in list with other.
 
         Parameters
         ----------
-        other : float
+        other : float or torch.Tensor
             The value to multiply by.
 
         Returns
@@ -254,7 +258,7 @@ def zero_index_g2m(
 
 
 def load_graph(
-    graph_dir_path: Union[str, Path], device: str = "cpu"
+    graph_dir_path: str | Path, device: str = "cpu"
 ) -> tuple[bool, dict[str, Any]]:
     """Load all tensors representing the graph from `graph_dir_path`.
 
@@ -377,6 +381,9 @@ def load_graph(
         len(mesh_static_features) == n_levels
     ), "Inconsistent number of levels in mesh"
 
+    m2m_edge_index_out: Any
+    m2m_features_out: Any
+    mesh_static_features_out: Any
     if hierarchical:
         # Load up and down edges and features
         mesh_up_edge_index = BufferList(
@@ -407,14 +414,16 @@ def load_graph(
         mesh_down_features = BufferList(mesh_down_features, persistent=False)
         mesh_down_features /= longest_edge
 
-        mesh_static_features = BufferList(
+        mesh_static_features_out = BufferList(
             mesh_static_features, persistent=False
         )
+        m2m_edge_index_out = m2m_edge_index
+        m2m_features_out = m2m_features
     else:
         # Extract single mesh level
-        m2m_edge_index = m2m_edge_index[0]
-        m2m_features = m2m_features[0]
-        mesh_static_features = mesh_static_features[0]
+        m2m_edge_index_out = m2m_edge_index[0]
+        m2m_features_out = m2m_features[0]
+        mesh_static_features_out = mesh_static_features[0]
 
         mesh_up_edge_index = BufferList([], persistent=False)
         mesh_down_edge_index = BufferList([], persistent=False)
@@ -424,15 +433,15 @@ def load_graph(
     return hierarchical, {
         "g2m_edge_index": g2m_edge_index,
         "m2g_edge_index": m2g_edge_index,
-        "m2m_edge_index": m2m_edge_index,
+        "m2m_edge_index": m2m_edge_index_out,
         "mesh_up_edge_index": mesh_up_edge_index,
         "mesh_down_edge_index": mesh_down_edge_index,
         "g2m_features": g2m_features,
         "m2g_features": m2g_features,
-        "m2m_features": m2m_features,
+        "m2m_features": m2m_features_out,
         "mesh_up_features": mesh_up_features,
         "mesh_down_features": mesh_down_features,
-        "mesh_static_features": mesh_static_features,
+        "mesh_static_features": mesh_static_features_out,
     }
 
 
@@ -458,7 +467,7 @@ def make_mlp(blueprint: list[int], layer_norm: bool = True) -> nn.Sequential:
     hidden_layers = len(blueprint) - 2
     assert hidden_layers >= 0, "Invalid MLP blueprint"
 
-    layers = []
+    layers: list[nn.Module] = []
     for layer_i, (dim1, dim2) in enumerate(zip(blueprint[:-1], blueprint[1:])):
         layers.append(nn.Linear(dim1, dim2))
         if layer_i != hidden_layers:
@@ -616,8 +625,11 @@ def init_training_logger_metrics(
 
 @rank_zero_only
 def setup_training_logger(
-    datastore: Any, args: Any, run_name: str, run_dir: str
-) -> Any:
+    datastore: "BaseDatastore",
+    args: argparse.Namespace,
+    run_name: str,
+    run_dir: str,
+) -> pl.loggers.Logger:
     """
     Set up the training logger (WandB or MLFlow).
 
@@ -666,7 +678,7 @@ def setup_training_logger(
         return pl.loggers.WandbLogger(
             project=args.logger_project,
             name=None if args.wandb_id else run_name,
-            config=dict(training=vars(args), datastore=datastore._config),
+            config=dict(training=vars(args), datastore=datastore.config),
             resume=wandb_resume,
             id=args.wandb_id,
             save_dir=run_dir,
@@ -689,7 +701,7 @@ def setup_training_logger(
             save_dir=run_dir,
         )
         training_logger.log_hyperparams(
-            dict(training=vars(args), datastore=datastore._config)
+            dict(training=vars(args), datastore=datastore.config)
         )
         return training_logger
     else:

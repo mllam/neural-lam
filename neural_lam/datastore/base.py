@@ -111,7 +111,7 @@ class BaseDatastore(abc.ABC):
 
         Returns
         -------
-        List[str]
+        list[str]
             The units of the variables.
 
         """
@@ -127,7 +127,7 @@ class BaseDatastore(abc.ABC):
 
         Returns
         -------
-        List[str]
+        list[str]
             The names of the variables.
 
         """
@@ -143,7 +143,7 @@ class BaseDatastore(abc.ABC):
 
         Returns
         -------
-        List[str]
+        list[str]
             The long names of the variables.
 
         """
@@ -333,7 +333,7 @@ class BaseDatastore(abc.ABC):
 
         Returns
         -------
-        List[float]
+        list[float]
             The extent of the x, y coordinates.
 
         """
@@ -423,7 +423,7 @@ class BaseDatastore(abc.ABC):
             The category of the dataset (state/forcing/static).
         Returns
         -------
-        List[str]
+        list[str]
             The expected dimension order for the dataarray or dataset.
 
         """
@@ -496,7 +496,7 @@ class BaseRegularGridDatastore(BaseDatastore):
     `stack_grid_coords` and `unstack_grid_coords` respectively).
     """
 
-    spatial_coordinates = ("x", "y")
+    spatial_coordinates: tuple[str, str] = ("x", "y")
 
     @cached_property
     @abc.abstractmethod
@@ -562,7 +562,7 @@ class BaseRegularGridDatastore(BaseDatastore):
         da_or_ds_unstacked = da_or_ds.unstack("grid_index")
 
         # Ensure that the x, y dimensions are in the correct order
-        dims = da_or_ds_unstacked.dims
+        dims = list(da_or_ds_unstacked.dims)
         xy_dim_order = [d for d in dims if d in self.spatial_coordinates]
 
         if xy_dim_order != self.spatial_coordinates:
@@ -615,7 +615,7 @@ class BaseRegularGridDatastore(BaseDatastore):
         # dimension named in the format `{category}_feature`
         category = None
         for dim in da_or_ds_stacked.dims:
-            if dim.endswith("_feature"):
+            if isinstance(dim, str) and dim.endswith("_feature"):
                 if category is not None:
                     raise ValueError(
                         "Multiple dimensions ending with '_feature' found in "
