@@ -9,11 +9,12 @@ import tempfile
 import warnings
 from functools import cache
 from pathlib import Path
-from typing import Any, Iterator, Union, overload
+from typing import TYPE_CHECKING, Any, Iterator, Union, overload
 
 # Third-party
 import pytorch_lightning as pl
 import torch
+import torch_geometric as pyg
 from loguru import logger
 from pytorch_lightning.loggers import MLFlowLogger, WandbLogger
 from pytorch_lightning.utilities import rank_zero_only
@@ -22,6 +23,11 @@ from tueplots import bundles, figsizes
 
 # Local
 from .custom_loggers import CustomMLFlowLogger
+
+if TYPE_CHECKING:
+    # Imported only for type checking to avoid a runtime import cycle
+    # Local
+    from .datastore import BaseDatastore
 
 
 class BufferList(nn.Module):
@@ -436,6 +442,89 @@ def load_graph(
     }
 
 
+def load_and_register_graph(
+    module: nn.Module,
+    datastore: "BaseDatastore",
+    graph_name: str,
+) -> bool:
+    """
+    Load a graph and register its tensors on ``module``.
+
+    Loads the graph ``graph_name`` from the datastore's graph directory via
+    :func:`load_graph`, then registers each tensor as a non-persistent
+    buffer and each non-tensor (e.g. ``BufferList``) as a plain attribute on
+    ``module``.
+
+    Parameters
+    ----------
+    module : torch.nn.Module
+        Module to register the graph tensors and attributes on, in place.
+    datastore : BaseDatastore
+        Datastore whose ``root_path`` holds the ``graph`` directory.
+    graph_name : str
+        Name of the graph directory (under ``<root>/graph``) to load.
+
+    Returns
+    -------
+    bool
+        Whether the loaded graph is hierarchical.
+    """
+    graph_dir_path = datastore.root_path / "graph" / graph_name
+    hierarchical, graph_ldict = load_graph(graph_dir_path=graph_dir_path)
+    for name, attr_value in graph_ldict.items():
+        # Make BufferLists module members and register tensors as buffers
+        if isinstance(attr_value, torch.Tensor):
+            module.register_buffer(name, attr_value, persistent=False)
+        else:
+            setattr(module, name, attr_value)
+    return hierarchical
+
+
+def compute_grid_input_dim(
+    datastore: "BaseDatastore",
+    num_past_forcing_steps: int,
+    num_future_forcing_steps: int,
+) -> int:
+    """
+    Compute the total grid input dimensionality of a graph step predictor.
+
+    The grid input concatenates the two previous states, the grid static
+    features and the windowed forcing
+    (past + current + future forcing steps).
+
+    Parameters
+    ----------
+    datastore : BaseDatastore
+        Datastore providing the number of state, static and forcing variables.
+    num_past_forcing_steps : int
+        Number of past forcing steps included in the input window.
+    num_future_forcing_steps : int
+        Number of future forcing steps included in the input window.
+
+    Returns
+    -------
+    int
+        Total grid input dimensionality.
+    """
+    num_state_vars = datastore.get_num_data_vars(category="state")
+    num_forcing_vars = datastore.get_num_data_vars(category="forcing")
+    # The static category is optional: when the datastore provides no static
+    # data array the grid carries no static features, mirroring the empty
+    # (N, 0) static buffer the step predictor builds in that case.
+    da_static = datastore.get_dataarray(category="static", split=None)
+    num_static_vars = (
+        0
+        if da_static is None
+        else datastore.get_num_data_vars(category="static")
+    )
+    return (
+        2 * num_state_vars
+        + num_static_vars
+        + num_forcing_vars
+        * (num_past_forcing_steps + num_future_forcing_steps + 1)
+    )
+
+
 def make_mlp(blueprint: list[int], layer_norm: bool = True) -> nn.Sequential:
     """
     Construct a multilayer perceptron from a blueprint of layer widths.
@@ -469,6 +558,72 @@ def make_mlp(blueprint: list[int], layer_norm: bool = True) -> nn.Sequential:
         layers.append(nn.LayerNorm(blueprint[-1]))
 
     return nn.Sequential(*layers)
+
+
+def make_gnn_seq(
+    edge_index,
+    num_gnn_layers,
+    hidden_layers,
+    hidden_dim,
+    gnn_type="InteractionNet",
+):
+    """
+    Build a sequential stack of GNN layers that propagates both node and
+    edge representations.
+
+    All layer types share the ``(send, rec, edge) -> (rec, edge)``
+    interface, so the stack can be applied as a single module.
+
+    Parameters
+    ----------
+    edge_index : torch.Tensor
+        Shape ``(2, M)``. Edge index of the edges that the GNN layers
+        operate on.
+    num_gnn_layers : int
+        Number of stacked GNN layers; must be at least 1. Callers that
+        want a no-op stage (e.g. zero intra-level layers) should skip
+        building and applying the stack rather than calling this with 0.
+    hidden_layers : int
+        Number of hidden layers in the MLPs of each GNN layer.
+    hidden_dim : int
+        Dimensionality of node and edge representations.
+    gnn_type : str
+        GNN layer type, any key in ``gnn_layers.GNN_TYPES``.
+
+    Returns
+    -------
+    pyg.nn.Sequential
+        Sequential module mapping ``(mesh_rep, edge_rep)`` to updated
+        ``(mesh_rep, edge_rep)``.
+
+    Raises
+    ------
+    ValueError
+        If ``num_gnn_layers`` is less than 1.
+    """
+    # First-party
+    from neural_lam.gnn_layers import get_gnn_class
+
+    if num_gnn_layers < 1:
+        raise ValueError(
+            "make_gnn_seq requires num_gnn_layers >= 1 "
+            f"(got {num_gnn_layers}); skip the stage for a no-op."
+        )
+    gnn_class = get_gnn_class(gnn_type)
+    return pyg.nn.Sequential(
+        "mesh_rep, edge_rep",
+        [
+            (
+                gnn_class(
+                    edge_index,
+                    hidden_dim,
+                    hidden_layers=hidden_layers,
+                ),
+                "mesh_rep, mesh_rep, edge_rep -> mesh_rep, edge_rep",
+            )
+            for _ in range(num_gnn_layers)
+        ],
+    )
 
 
 @cache
