@@ -36,6 +36,7 @@ class GraphLAM(BaseGraphModel):
         output_clamping_upper: dict[str, float] | None = None,
         g2m_gnn_type: str = "InteractionNet",
         m2g_gnn_type: str = "InteractionNet",
+        **_kwargs: object,
     ) -> None:
         """
         Initialize the GraphLAM model.

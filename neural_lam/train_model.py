@@ -62,6 +62,12 @@ def load_forecaster_module_from_checkpoint(ckpt_path, config, datastore):
         output_std=args.output_std,
         output_clamping_lower=config.training.output_clamping.lower,
         output_clamping_upper=config.training.output_clamping.upper,
+        g2m_gnn_type=getattr(args, "g2m_gnn_type", "InteractionNet"),
+        m2g_gnn_type=getattr(args, "m2g_gnn_type", "InteractionNet"),
+        mesh_up_gnn_type=getattr(args, "mesh_up_gnn_type", "InteractionNet"),
+        mesh_down_gnn_type=getattr(
+            args, "mesh_down_gnn_type", "InteractionNet"
+        ),
     )
     forecaster = ARForecaster(predictor, datastore)
     return ForecasterModule.load_from_checkpoint(
