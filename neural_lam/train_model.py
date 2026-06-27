@@ -319,6 +319,13 @@ def main(input_args=None):
         help="Steps to log val loss for",
     )
     metrics_group.add_argument(
+        "--train_steps_to_log",
+        nargs="+",
+        type=int,
+        default=[],
+        help="Steps to log train loss for during training (optional)",
+    )
+    metrics_group.add_argument(
         "--metrics_watch",
         nargs="+",
         default=[],
@@ -360,14 +367,17 @@ def main(input_args=None):
     }
 
     # Check that config only specifies logging for lead times that exist
-    # Check --val_steps_to_log
-    for step in args.val_steps_to_log:
-        if step > args.ar_steps_eval:
-            raise ValueError(
-                f"Can not log validation step {step} when validation is "
-                f"only unrolled {args.ar_steps_eval} steps. Adjust "
-                "--val_steps_to_log."
-            )
+    for phase, max_steps in [
+        ("train", args.ar_steps_train),
+        ("val", args.ar_steps_eval),
+    ]:
+        for step in getattr(args, f"{phase}_steps_to_log"):
+            if step > max_steps:
+                raise ValueError(
+                    f"Can not log {phase} step {step} when only "
+                    f"unrolling {max_steps} steps during {phase} phase. "
+                    f"Adjust --{phase}_steps_to_log."
+                )
     # Check --var_leads_metric_watch
     for var_i, leads in args.var_leads_metrics_watch.items():
         for step in leads:
@@ -469,6 +479,7 @@ def main(input_args=None):
         n_example_pred=args.n_example_pred,
         create_gif=args.create_gif,
         val_steps_to_log=args.val_steps_to_log,
+        train_steps_to_log=args.train_steps_to_log,
         metrics_watch=args.metrics_watch,
         var_leads_metrics_watch=args.var_leads_metrics_watch,
         args=args,
