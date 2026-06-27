@@ -74,6 +74,19 @@ class MDPDatastore(BaseRegularGridDatastore):
             ".yaml", ".zarr"
         )
 
+        # `domain_cropping.interior_dataset_config_path` references a sibling
+        # config and is written relative to this config file, but
+        # mllam-data-prep resolves it against the process CWD. Make only that
+        # path absolute so cropped datastores build from any directory while
+        # all other (CWD-relative) input paths keep their default behaviour.
+        domain_cropping = self._config.output.domain_cropping
+        if domain_cropping is not None:
+            interior_path = Path(domain_cropping.interior_dataset_config_path)
+            if not interior_path.is_absolute():
+                domain_cropping.interior_dataset_config_path = str(
+                    self._root_path / interior_path
+                )
+
         _ds = None
         if reuse_existing and fp_ds.exists():
             # check that the zarr directory is newer than the config file
@@ -89,9 +102,19 @@ class MDPDatastore(BaseRegularGridDatastore):
             _ds = mdp.create_dataset(config=self._config)
             _ds.to_zarr(fp_ds)
 
+        # A valid datastore must provide at least state or forcing data;
+        # otherwise downstream code has nothing to slice or grid-shape against.
+        if "state" not in _ds and "forcing" not in _ds:
+            raise ValueError(
+                f"Datastore at {self._config_path} contains neither 'state' "
+                "nor 'forcing' data. At least one is required."
+            )
+
         self._ds = _ds
         self._n_boundary_points = n_boundary_points
-        self.is_ensemble = "ensemble_member" in self._ds["state"].dims
+        self.is_ensemble = (
+            "state" in self._ds and "ensemble_member" in self._ds["state"].dims
+        )
         self.has_ensemble_forcing = (
             "forcing" in self._ds
             and "ensemble_member" in self._ds["forcing"].dims
@@ -209,10 +232,12 @@ class MDPDatastore(BaseRegularGridDatastore):
             The names of the variables in the given category.
 
         """
-        if category not in self._ds and category == "forcing":
-            warnings.warn("no forcing data found in datastore")
+        feature_key = f"{category}_feature"
+        if feature_key not in self._ds:
+            if category == "forcing":
+                warnings.warn("no forcing data found in datastore")
             return []
-        return self._ds[f"{category}_feature"].values.tolist()
+        return self._ds[feature_key].values.tolist()
 
     def get_vars_long_names(self, category: str) -> List[str]:
         """
@@ -229,10 +254,12 @@ class MDPDatastore(BaseRegularGridDatastore):
             The long names of the variables in the given category.
 
         """
-        if category not in self._ds and category == "forcing":
-            warnings.warn("no forcing data found in datastore")
+        long_name_key = f"{category}_feature_long_name"
+        if long_name_key not in self._ds:
+            if category == "forcing":
+                warnings.warn("no forcing data found in datastore")
             return []
-        return self._ds[f"{category}_feature_long_name"].values.tolist()
+        return self._ds[long_name_key].values.tolist()
 
     def get_num_data_vars(self, category: str) -> int:
         """Return the number of variables in the given category.
@@ -300,10 +327,23 @@ class MDPDatastore(BaseRegularGridDatastore):
 
         da_category = self._ds[category]
 
-        # set units on x y coordinates if missing
-        for coord in ["x", "y"]:
+        # Set units on spatial coordinates if missing. Use the dim names
+        # actually declared in the config's grid_index stacking (so this
+        # works for both projected (x, y) and geographic (longitude,
+        # latitude) source datasets like ERA5).
+        _UNITS_BY_COORD = {
+            "x": "m",
+            "y": "m",
+            "longitude": "degrees_east",
+            "latitude": "degrees_north",
+            "lon": "degrees_east",
+            "lat": "degrees_north",
+        }
+        for coord in self.spatial_coordinates:
             if "units" not in da_category[coord].attrs:
-                da_category[coord].attrs["units"] = "m"
+                da_category[coord].attrs["units"] = _UNITS_BY_COORD.get(
+                    coord, ""
+                )
 
         # set multi-index for grid-index
         da_category = da_category.set_index(grid_index=self.spatial_coordinates)
@@ -477,9 +517,13 @@ class MDPDatastore(BaseRegularGridDatastore):
             The shape of the cartesian grid for the state variables.
 
         """
-        ds_state = self.unstack_grid_coords(self._ds["state"])
+        # Use state if available, otherwise fall back to forcing (for
+        # boundary-only datastores with no state variables). The presence
+        # of at least one is guaranteed by __init__.
+        category = "state" if "state" in self._ds else "forcing"
+        ds_cat = self.unstack_grid_coords(self._ds[category])
         xdim, ydim = self.spatial_coordinates
-        da_x, da_y = ds_state[xdim], ds_state[ydim]
+        da_x, da_y = ds_cat[xdim], ds_cat[ydim]
         assert da_x.ndim == da_y.ndim == 1
         return CartesianGridShape(x=da_x.size, y=da_y.size)
 
@@ -567,3 +611,14 @@ class MDPDatastore(BaseRegularGridDatastore):
 
         coords = np.stack((lon.values, lat.values), axis=1)
         return coords
+
+    @property
+    def num_grid_points(self) -> int:
+        """Return the number of grid points in the dataset.
+
+        Returns
+        -------
+        int
+            The number of grid points in the dataset.
+        """
+        return len(self._ds.grid_index)

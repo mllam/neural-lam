@@ -15,7 +15,10 @@ from neural_lam.datastore import DATASTORES
 from neural_lam.datastore.base import BaseRegularGridDatastore
 from neural_lam.models import ForecasterModule
 from neural_lam.weather_dataset import WeatherDataModule
-from tests.conftest import init_datastore_example
+from tests.conftest import (
+    init_datastore_boundary_example,
+    init_datastore_example,
+)
 
 # Model architecture defaults for tests
 GRAPH = "1level"
@@ -32,6 +35,7 @@ def run_simple_training(
     set_output_std,
     metrics_watch=None,
     var_leads_metrics_watch=None,
+    datastore_boundary=None,
 ):
     """
     Run one epoch of a simple model training setup using the given datastore.
@@ -42,6 +46,8 @@ def run_simple_training(
         Datastore to load data from for training
     set_output_std : bool
         If --output_std should be set during training
+    datastore_boundary : BaseDatastore, optional
+        Boundary datastore to load boundary forcing from during training
     """
     if metrics_watch is None:
         metrics_watch = []
@@ -90,6 +96,7 @@ def run_simple_training(
 
     data_module = WeatherDataModule(
         datastore=datastore,
+        datastore_boundary=datastore_boundary,
         ar_steps_train=3,
         ar_steps_eval=5,
         batch_size=2,
@@ -99,9 +106,11 @@ def run_simple_training(
     )
 
     config = nlconfig.NeuralLAMConfig(
-        datastore=nlconfig.DatastoreSelection(
-            kind=datastore.SHORT_NAME, config_path=datastore.root_path
-        )
+        datastores={
+            "main": nlconfig.DatastoreSelection(
+                kind=datastore.SHORT_NAME, config_path=datastore.root_path
+            )
+        }
     )
 
     # Build predictor and forecaster externally, then inject into
@@ -129,6 +138,7 @@ def run_simple_training(
         forecaster=forecaster,
         config=config,
         datastore=datastore,
+        datastore_boundary=datastore_boundary,
         loss="mse",
         lr=1.0e-3,
         restore_opt=False,
@@ -159,6 +169,19 @@ def test_training(datastore_name):
 def test_training_output_std():
     datastore = init_datastore_example("mdp")  # Test only with mdp datastore
     run_simple_training(datastore, set_output_std=True)
+
+
+@pytest.mark.slow
+def test_training_with_boundary():
+    """One epoch of training with a boundary datastore, exercising boundary
+    loading and standardization through the full Lightning training loop."""
+    datastore = init_datastore_example("mdp")
+    datastore_boundary = init_datastore_boundary_example("mdp")
+    run_simple_training(
+        datastore,
+        set_output_std=False,
+        datastore_boundary=datastore_boundary,
+    )
 
 
 def test_all_gather_cat_single_device():

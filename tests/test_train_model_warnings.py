@@ -70,7 +70,7 @@ def test_create_gif_forwarded_to_forecaster_module():
         ),
         patch(
             "neural_lam.train_model.load_config_and_datastore",
-            return_value=(MagicMock(), MagicMock()),
+            return_value=(MagicMock(), MagicMock(), None),
         ),
         patch("neural_lam.train_model.WeatherDataModule"),
         patch("neural_lam.train_model.MODELS", {"graph_lam": MagicMock()}),

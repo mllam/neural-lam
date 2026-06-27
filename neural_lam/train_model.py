@@ -347,6 +347,20 @@ def main(input_args=None):
         help="Number of future time steps to use as input for forcing data",
     )
     data_group.add_argument(
+        "--num_past_boundary_steps",
+        type=int,
+        default=1,
+        help="Number of past time steps to use as input for boundary forcing, "
+        "when present",
+    )
+    data_group.add_argument(
+        "--num_future_boundary_steps",
+        type=int,
+        default=1,
+        help="Number of future time steps to use as input for boundary "
+        "forcing, when present",
+    )
+    data_group.add_argument(
         "--load_single_member",
         action="store_true",
         help=(
@@ -390,8 +404,10 @@ def main(input_args=None):
     # Set seed
     seed.seed_everything(args.seed)
 
-    # Load neural-lam configuration and datastore to use
-    config, datastore = load_config_and_datastore(config_path=args.config_path)
+    # Load neural-lam configuration and datastores to use
+    config, datastore, datastore_boundary = load_config_and_datastore(
+        config_path=args.config_path
+    )
 
     # Check --var_leads_metrics_watch variable indices against the datastore
     # so users get an immediate error instead of an IndexError deep in the
@@ -413,6 +429,9 @@ def main(input_args=None):
         ar_steps_eval=args.ar_steps_eval,
         num_past_forcing_steps=args.num_past_forcing_steps,
         num_future_forcing_steps=args.num_future_forcing_steps,
+        num_past_boundary_steps=args.num_past_boundary_steps,
+        num_future_boundary_steps=args.num_future_boundary_steps,
+        datastore_boundary=datastore_boundary,
         load_single_member=args.load_single_member,
         batch_size=args.batch_size,
         num_workers=args.num_workers,
@@ -463,6 +482,7 @@ def main(input_args=None):
         forecaster=forecaster,
         config=config,
         datastore=datastore,
+        datastore_boundary=datastore_boundary,
         loss=args.loss,
         lr=args.lr,
         restore_opt=args.restore_opt,
