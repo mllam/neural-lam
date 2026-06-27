@@ -325,8 +325,7 @@ def load_graph(
     # Load static node features
     mesh_static_features = loads_file(
         "mesh_features.pt"
-    )  # List of (N_mesh[l], d_mesh_static)
-
+) # List of (N_mesh[l], num_mesh_static_vars)
     # Load edges (edge_index)
     m2m_edge_index = BufferList(
         [zero_index_edge_index(ei) for ei in loads_file("m2m_edge_index.pt")],
