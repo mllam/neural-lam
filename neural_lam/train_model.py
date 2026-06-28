@@ -240,6 +240,13 @@ def main(input_args=None):
         help="Number of epochs training between each validation run",
     )
 
+    train_group.add_argument(
+        "--num_sanity_val_steps",
+        type=int,
+        default=2,
+        help="Number of sanity validation steps to run before training",
+    )
+
     # Evaluation options
     eval_group = parser.add_argument_group("Evaluation Options")
     eval_group.add_argument(
@@ -527,6 +534,7 @@ def main(input_args=None):
         callbacks=[val_checkpoint, latest_checkpoint],
         check_val_every_n_epoch=args.val_interval,
         precision=args.precision,
+        num_sanity_val_steps=args.num_sanity_val_steps,
     )
 
     # Only init once, on rank 0 only
