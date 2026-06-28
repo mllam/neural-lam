@@ -284,7 +284,17 @@ class ForecasterModule(pl.LightningModule):
         opt = torch.optim.AdamW(
             self.parameters(), lr=self.hparams.lr, betas=(0.9, 0.95)
         )
-        return opt
+        scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
+            opt,
+            T_max=self.trainer.max_epochs,
+        )
+        return {
+            "optimizer": opt,
+            "lr_scheduler": {
+                "scheduler": scheduler,
+                "interval": "epoch",
+            },
+        }
 
     @staticmethod
     def _safe_std(std_values, eps, category):
