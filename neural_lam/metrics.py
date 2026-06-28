@@ -335,7 +335,10 @@ def ensemble_spread(
     ens_dim=1,
 ):
     """
-   Ensemble spread (standard deviation across ensemble members).
+    (Squared) spread of ensemble.
+    Similarly to RMSE, we want to take sqrt after spatial and sample averaging,
+    so we need to average the squared spread.
+
     (..., M, ...,) is any number of batch dimensions, including ensemble
         dimension M
     pred: (..., M, ..., N, d_state), prediction
@@ -350,7 +353,7 @@ def ensemble_spread(
     Returns:
     metric_val: One of (...,), (..., d_state) depending on reduction arguments.
     """
-   entry_spread = torch.std(pred, dim=ens_dim)  # (..., N, d_state)
+    entry_spread = torch.std(pred, dim=ens_dim)  # (..., N, d_state)
 return mask_and_reduce_metric(entry_spread, mask, average_grid, sum_vars)
 
 
