@@ -1,3 +1,9 @@
+"""Regular-grid CNN predictor using a ResHRRR-inspired backbone.
+
+The backbone follows the residual CNN, Squeeze-and-Excitation, and FiLM
+conditioning ideas from HRRRCast: https://arxiv.org/abs/2507.05658.
+"""
+
 # Standard library
 from typing import Dict, Optional
 
@@ -33,6 +39,38 @@ class CNNPredictor(StepPredictor):
         output_clamping_lower: Optional[Dict[str, float]] = None,
         output_clamping_upper: Optional[Dict[str, float]] = None,
     ):
+        """
+        Initialize a CNN predictor for regular-grid datastores.
+
+        Parameters
+        ----------
+        datastore : BaseDatastore
+            Datastore providing state, forcing, static features, and grid
+            shape metadata.
+        cnn_channels : int
+            Number of hidden channels in the CNN backbone.
+        cnn_blocks : int
+            Number of residual CNN blocks.
+        cnn_kernel_size : int
+            Odd convolution kernel size used by residual blocks.
+        cnn_se_reduction : int
+            Channel reduction ratio for Squeeze-and-Excitation blocks.
+        cnn_film : bool
+            Whether to condition residual blocks with averaged forcing via
+            FiLM.
+        cnn_padding_mode : str
+            Padding mode passed to convolution layers.
+        num_past_forcing_steps : int
+            Number of past forcing steps in the forcing window.
+        num_future_forcing_steps : int
+            Number of future forcing steps in the forcing window.
+        output_std : bool
+            Whether to predict a positive per-feature standard deviation.
+        output_clamping_lower : dict[str, float], optional
+            Lower physical output clamps by state feature name.
+        output_clamping_upper : dict[str, float], optional
+            Upper physical output clamps by state feature name.
+        """
         if not isinstance(datastore, BaseRegularGridDatastore):
             raise TypeError("CNNPredictor requires a BaseRegularGridDatastore")
 
@@ -102,6 +140,23 @@ class CNNPredictor(StepPredictor):
         prev_prev_state: torch.Tensor,
         forcing: torch.Tensor,
     ) -> tuple[torch.Tensor, Optional[torch.Tensor]]:
+        """
+        Predict the next state from two previous states and forcing.
+
+        Parameters
+        ----------
+        prev_state : torch.Tensor
+            Current state tensor with shape ``(B, N, d_state)``.
+        prev_prev_state : torch.Tensor
+            Previous state tensor with shape ``(B, N, d_state)``.
+        forcing : torch.Tensor
+            Windowed forcing tensor with shape ``(B, N, d_forcing)``.
+
+        Returns
+        -------
+        tuple[torch.Tensor, torch.Tensor | None]
+            Predicted next state and optional predicted standard deviation.
+        """
         self._validate_inputs(prev_state, prev_prev_state, forcing)
         batch_size = prev_state.shape[0]
 
@@ -138,6 +193,7 @@ class CNNPredictor(StepPredictor):
         prev_prev_state: torch.Tensor,
         forcing: torch.Tensor,
     ) -> None:
+        """Validate state and forcing tensors before grid conversion."""
         if prev_state.ndim != 3:
             raise ValueError(
                 "prev_state must have shape (B, N, d_state), "

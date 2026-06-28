@@ -1,3 +1,9 @@
+"""CNN layers and node/grid transforms for regular-grid predictors.
+
+The residual backbone is inspired by the ResHRRR model in HRRRCast:
+https://arxiv.org/abs/2507.05658.
+"""
+
 # Third-party
 import torch
 from torch import nn
@@ -113,10 +119,12 @@ class NodeToGrid(nn.Module):
     """Layer wrapper for ``node_to_grid``."""
 
     def __init__(self, grid_shape: GridShape):
+        """Initialize the transform with a fixed regular grid shape."""
         super().__init__()
         self.grid_shape = _grid_shape_xy(grid_shape)
 
     def forward(self, node_features: torch.Tensor) -> torch.Tensor:
+        """Convert node features from ``(B, N, C)`` to ``(B, C, x, y)``."""
         return node_to_grid(node_features, self.grid_shape)
 
 
@@ -124,12 +132,14 @@ class GridToNode(nn.Module):
     """Layer wrapper for ``grid_to_node``."""
 
     def __init__(self, grid_shape: GridShape | None = None):
+        """Initialize the transform with an optional expected grid shape."""
         super().__init__()
         self.grid_shape = (
             None if grid_shape is None else _grid_shape_xy(grid_shape)
         )
 
     def forward(self, grid_features: torch.Tensor) -> torch.Tensor:
+        """Convert grid features from ``(B, C, x, y)`` to ``(B, N, C)``."""
         return grid_to_node(grid_features, self.grid_shape)
 
 
@@ -137,6 +147,7 @@ class SqueezeExcitation2d(nn.Module):
     """Channel attention for 2D feature maps."""
 
     def __init__(self, channels: int, reduction: int = 16):
+        """Initialize channel attention with a bottleneck reduction ratio."""
         super().__init__()
         if channels <= 0:
             raise ValueError("channels must be positive")
@@ -153,6 +164,7 @@ class SqueezeExcitation2d(nn.Module):
         )
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Apply channel-wise gates to a 2D feature map."""
         return x * self.net(x)
 
 
@@ -160,6 +172,7 @@ class FiLM2d(nn.Module):
     """Feature-wise affine conditioning for 2D feature maps."""
 
     def __init__(self, context_dim: int, channels: int):
+        """Initialize a context projection for per-channel affine factors."""
         super().__init__()
         if context_dim <= 0:
             raise ValueError("context_dim must be positive")
@@ -175,6 +188,7 @@ class FiLM2d(nn.Module):
         x: torch.Tensor,
         context: torch.Tensor,
     ) -> torch.Tensor:
+        """Apply context-conditioned affine modulation to feature maps."""
         if x.ndim != 4:
             raise ValueError(f"x must have shape (B, C, H, W), got {x.shape}")
         if context.ndim != 2:
@@ -212,6 +226,7 @@ class ResHRRRBlock(nn.Module):
         context_dim: int | None = None,
         padding_mode: str = "zeros",
     ):
+        """Initialize a shape-preserving residual convolution block."""
         super().__init__()
         if channels <= 0:
             raise ValueError("channels must be positive")
@@ -244,6 +259,7 @@ class ResHRRRBlock(nn.Module):
         x: torch.Tensor,
         context: torch.Tensor | None = None,
     ) -> torch.Tensor:
+        """Run the residual block with optional FiLM conditioning."""
         residual = x
         x = self.conv1(x)
         x = self.act(x)
@@ -272,6 +288,7 @@ class ResHRRRBackbone(nn.Module):
         context_dim: int | None = None,
         padding_mode: str = "zeros",
     ):
+        """Initialize input projection, residual blocks, and output head."""
         super().__init__()
         if input_channels <= 0:
             raise ValueError("input_channels must be positive")
@@ -310,6 +327,7 @@ class ResHRRRBackbone(nn.Module):
         x: torch.Tensor,
         context: torch.Tensor | None = None,
     ) -> torch.Tensor:
+        """Map input grid features to output grid features."""
         x = self.input_proj(x)
 
         for block in self.blocks:
