@@ -194,7 +194,9 @@ This release introduces new features including GIF animation support, wandb run 
 
 ### Changed
 
-- Refactored `ARModel`: Extracted plotting logic into stateless functions in `vis.py` [\#209](https://github.com/mllam/neural-lam/pull/209) @oleeviyababu
+- Refactored `ForecasterModule`: extracted example-plotting logic into a
+  standalone `plot_examples` function in `vis.py`, with the model now
+  delegating to it [\#209](https://github.com/mllam/neural-lam/pull/209) @oleeviyababu
 
 ### Maintenance
 

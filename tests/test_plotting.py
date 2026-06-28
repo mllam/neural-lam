@@ -613,7 +613,6 @@ def test_plot_examples_integration_saves_figure(
     assert output_path.exists()
 
 
-
 @pytest.mark.parametrize(
     "time_step,time_unit",
     [(1, "hours")],
@@ -830,6 +829,7 @@ def test_aggregate_and_plot_metrics_with_metrics_watch(tmp_path):
         f"Expected key '{expected_key}' in logged scalars, "
         f"got keys: {list(logged_scalars.keys())}"
     )
+
 
 @pytest.mark.parametrize("n_examples", [1, 2])
 @pytest.mark.parametrize("n_pred_steps", [1, 3])

@@ -462,17 +462,41 @@ class BaseDatastore(abc.ABC):
     def create_dataarray_from_tensor(
         self,
         tensor: torch.Tensor,
-        time: Union[datetime.datetime, list[datetime.datetime]],
+        time: datetime.datetime | list[datetime.datetime],
         category: str,
     ) -> xr.DataArray:
         """
-        Construct a xarray.DataArray from a `pytorch.Tensor` with coordinates
-        for `grid_index`, `time` and `{category}_feature` matching the shape
-        and number of times provided and add the x/y coordinates from the
-        datastore.
+        Construct an xarray.DataArray from a torch.Tensor.
+
+        The tensor shape determines how ``time`` is interpreted:
+
+        - 2-D ``(grid_index, {category}_feature)``: ``time`` must be a
+          single timestamp, stored as a scalar coordinate.
+        - 3-D ``(n_timesteps, grid_index, {category}_feature)``: ``time``
+          must be a list of ``n_timesteps`` timestamps, stored as a
+          dimension.
+
+        The x/y coordinates from the datastore are attached to
+        ``grid_index`` so the DataArray can be unstacked into a 2-D grid.
+
+        Parameters
+        ----------
+        tensor : torch.Tensor
+            2-D or 3-D tensor to convert.
+        time : datetime.datetime or list of datetime.datetime
+            Timestamp(s) aligned with the tensor's time dimension.
+        category : str
+            Data category (``"state"``, ``"forcing"``, or ``"static"``).
+
+        Returns
+        -------
+        xarray.DataArray
+            DataArray with coordinates for grid_index, time, and
+            {category}_feature, plus attached x/y coordinates.
         """
 
         def _is_listlike(obj):
+            """Return ``True`` for list/tuple/ndarray-like containers."""
             return hasattr(obj, "__iter__") and not isinstance(obj, str)
 
         add_time_as_dim = False

@@ -1,6 +1,7 @@
 """Visualization helpers for analysing Neural-LAM predictions and errors."""
 
 # Standard library
+import os
 import warnings
 from typing import Optional
 
@@ -14,9 +15,10 @@ import matplotlib.colors
 import matplotlib.figure
 import matplotlib.pyplot as plt
 import numpy as np
-
+import pytorch_lightning as pl
 import torch
 import xarray as xr
+from PIL import Image
 
 # Local
 from . import utils
@@ -26,11 +28,6 @@ from .datastore.base import BaseRegularGridDatastore
 _TITLE_SIZE = 13  # suptitle and per-axes titles
 _LABEL_SIZE = 11  # axis / colorbar labels
 _TICK_SIZE = 11  # tick labels
-
-import os
-import warnings
-import torch
-import pytorch_lightning as pl
 
 # Annotations become unreadable when cells are smaller than this (in points)
 # or when the total number of cells exceeds a readable count.
@@ -790,17 +787,28 @@ def plot_examples(
     target: torch.Tensor,
     time_batch: torch.Tensor,
     first_example_idx: int = 0,
+    create_gif: bool = False,
 ) -> None:
     """
     Plot example forecasts from provided tensors.
 
-    Args:
-        datastore: The object containing dataset metadata.
-        logger: The logger instance used to save the images.
-        prediction: Output tensors predicted from the model.
-        target: Ground truth tensors.
-        time_batch: Time timestamps corresponding to the data.
-        first_example_idx: Starting index for naming saved files/logs.
+    Parameters
+    ----------
+    datastore : BaseRegularGridDatastore
+        The object containing dataset metadata.
+    logger : pl.loggers.Logger
+        The logger instance used to save the images.
+    prediction : torch.Tensor
+        Output tensors predicted from the model.
+    target : torch.Tensor
+        Ground truth tensors.
+    time_batch : torch.Tensor
+        Time timestamps corresponding to the data.
+    first_example_idx : int, optional
+        Starting index for naming saved files/logs.
+    create_gif : bool, optional
+        If True, save per-variable animated GIFs (one frame per prediction
+        step) alongside the logged figures.
     """
     time_step_int, time_step_unit = utils.get_integer_time(
         datastore.step_length
@@ -843,6 +851,15 @@ def plot_examples(
         )
         var_vranges = list(zip(var_vmin, var_vmax))
 
+        if create_gif:
+            plot_dir_path = os.path.join(
+                logger.save_dir, f"example_plots_{example_i}"
+            )
+            os.makedirs(plot_dir_path, exist_ok=True)
+            png_frames: dict[str, list[str]] = {
+                var_name: [] for var_name in datastore.get_vars_names("state")
+            }
+
         for t_i, _ in enumerate(zip(pred_slice, target_slice), start=1):
             var_figs = [
                 plot_prediction(
@@ -880,7 +897,36 @@ def plot_examples(
                 else:
                     warnings.warn(f"{logger} does not support image logging.")
 
+                if create_gif:
+                    png_path = os.path.join(
+                        plot_dir_path,
+                        f"{var_name}_example_{example_i}"
+                        f"_prediction_t_{t_i:02d}.png",
+                    )
+                    fig.savefig(png_path, dpi=100, bbox_inches="tight")
+                    png_frames[var_name].append(png_path)
+
             plt.close("all")
+
+        if create_gif:
+            for var_name, frames_for_var in png_frames.items():
+                if frames_for_var:
+                    gif_path = os.path.join(
+                        plot_dir_path,
+                        f"{var_name}_example_{example_i}_prediction.gif",
+                    )
+                    frames = [Image.open(f) for f in frames_for_var]
+                    try:
+                        frames[0].save(
+                            gif_path,
+                            save_all=True,
+                            append_images=frames[1:],
+                            loop=0,
+                            duration=1000,
+                        )
+                    finally:
+                        for frame in frames:
+                            frame.close()
 
         pred_filename = f"example_pred_{example_i}.pt"
         torch.save(
