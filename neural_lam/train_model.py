@@ -22,6 +22,63 @@ from .gnn_layers import GNN_TYPES
 from .models import MODELS, ARForecaster, ForecasterModule
 from .weather_dataset import WeatherDataModule
 
+CNN_PADDING_MODES = ("zeros", "reflect", "replicate", "circular")
+
+
+def get_predictor_kwargs(args, config):
+    """Return architecture kwargs for the selected predictor."""
+    clamping_kwargs = {
+        "output_clamping_lower": config.training.output_clamping.lower,
+        "output_clamping_upper": config.training.output_clamping.upper,
+    }
+
+    common_kwargs = {
+        "num_past_forcing_steps": args.num_past_forcing_steps,
+        "num_future_forcing_steps": args.num_future_forcing_steps,
+        "output_std": args.output_std,
+        **clamping_kwargs,
+    }
+
+    if args.model == "cnn_predictor":
+        return {
+            **common_kwargs,
+            "cnn_channels": args.cnn_channels,
+            "cnn_blocks": args.cnn_blocks,
+            "cnn_kernel_size": args.cnn_kernel_size,
+            "cnn_se_reduction": args.cnn_se_reduction,
+            "cnn_film": args.cnn_film,
+            "cnn_padding_mode": args.cnn_padding_mode,
+        }
+
+    graph_kwargs = {
+        **common_kwargs,
+        "graph_name": args.graph,
+        "hidden_dim": args.hidden_dim,
+        "hidden_layers": args.hidden_layers,
+        "processor_layers": args.processor_layers,
+        "mesh_aggr": args.mesh_aggr,
+        "g2m_gnn_type": args.g2m_gnn_type,
+        "m2g_gnn_type": args.m2g_gnn_type,
+    }
+    if args.model in {"hi_lam", "hi_lam_parallel"}:
+        graph_kwargs.update(
+            {
+                "mesh_up_gnn_type": args.mesh_up_gnn_type,
+                "mesh_down_gnn_type": args.mesh_down_gnn_type,
+            }
+        )
+
+    return graph_kwargs
+
+
+def build_predictor(args, config, datastore):
+    """Build the selected predictor from parsed CLI or checkpoint args."""
+    predictor_class = MODELS[args.model]
+    return predictor_class(
+        datastore=datastore,
+        **get_predictor_kwargs(args, config),
+    )
+
 
 class AdaptiveHelpFormatter(ArgumentDefaultsHelpFormatter):
     """``--help`` formatter that scales the column width to the terminal."""
@@ -49,20 +106,7 @@ def load_forecaster_module_from_checkpoint(ckpt_path, config, datastore):
     """
     ckpt = torch.load(ckpt_path, weights_only=False)
     args = ckpt["hyper_parameters"]["args"]
-    predictor_class = MODELS[args.model]
-    predictor = predictor_class(
-        datastore=datastore,
-        graph_name=args.graph,
-        hidden_dim=args.hidden_dim,
-        hidden_layers=args.hidden_layers,
-        processor_layers=args.processor_layers,
-        mesh_aggr=args.mesh_aggr,
-        num_past_forcing_steps=args.num_past_forcing_steps,
-        num_future_forcing_steps=args.num_future_forcing_steps,
-        output_std=args.output_std,
-        output_clamping_lower=config.training.output_clamping.lower,
-        output_clamping_upper=config.training.output_clamping.upper,
-    )
+    predictor = build_predictor(args, config, datastore)
     forecaster = ARForecaster(predictor, datastore)
     return ForecasterModule.load_from_checkpoint(
         ckpt_path,
@@ -204,6 +248,42 @@ def main(input_args=None):
         choices=list(GNN_TYPES.keys()),
         help="GNN type for downward mesh message passing in "
         "hierarchical models",
+    )
+    parser.add_argument(
+        "--cnn_channels",
+        type=int,
+        default=128,
+        help="Number of hidden channels in CNN predictor layers",
+    )
+    parser.add_argument(
+        "--cnn_blocks",
+        type=int,
+        default=8,
+        help="Number of residual blocks in CNN predictor",
+    )
+    parser.add_argument(
+        "--cnn_kernel_size",
+        type=int,
+        default=3,
+        help="Convolution kernel size in CNN predictor",
+    )
+    parser.add_argument(
+        "--cnn_se_reduction",
+        type=int,
+        default=16,
+        help="Squeeze-and-Excitation reduction ratio in CNN predictor",
+    )
+    parser.add_argument(
+        "--cnn_film",
+        action="store_true",
+        help="Use global forcing FiLM conditioning in CNN predictor",
+    )
+    parser.add_argument(
+        "--cnn_padding_mode",
+        type=str,
+        default="zeros",
+        choices=CNN_PADDING_MODES,
+        help="Padding mode for CNN predictor convolutions",
     )
 
     # Training options
@@ -439,24 +519,7 @@ def main(input_args=None):
 
     # Build predictor and forecaster externally, then inject into
     # ForecasterModule
-    predictor_class = MODELS[args.model]
-    predictor = predictor_class(
-        datastore=datastore,
-        graph_name=args.graph,
-        hidden_dim=args.hidden_dim,
-        hidden_layers=args.hidden_layers,
-        processor_layers=args.processor_layers,
-        mesh_aggr=args.mesh_aggr,
-        num_past_forcing_steps=args.num_past_forcing_steps,
-        num_future_forcing_steps=args.num_future_forcing_steps,
-        output_std=args.output_std,
-        output_clamping_lower=config.training.output_clamping.lower,
-        output_clamping_upper=config.training.output_clamping.upper,
-        g2m_gnn_type=args.g2m_gnn_type,
-        m2g_gnn_type=args.m2g_gnn_type,
-        mesh_up_gnn_type=args.mesh_up_gnn_type,
-        mesh_down_gnn_type=args.mesh_down_gnn_type,
-    )
+    predictor = build_predictor(args, config, datastore)
     forecaster = ARForecaster(predictor, datastore)
 
     model = ForecasterModule(
