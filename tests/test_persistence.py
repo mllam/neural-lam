@@ -14,6 +14,7 @@ def test_persistence_predictor_returns_prev_state():
     """PersistencePredictor.forward returns prev_state unchanged."""
     datastore = init_datastore_example("mdp")
     predictor = PersistencePredictor(datastore=datastore)
+    assert predictor.trainable is False
 
     B = 2
     num_grid_nodes = predictor.num_grid_nodes
