@@ -16,7 +16,9 @@ import neural_lam.config as nlconfig
 )
 def test_config_serialization(state_weighting_config):
     c = nlconfig.NeuralLAMConfig(
-        datastore=nlconfig.DatastoreSelection(kind="mdp", config_path=""),
+        datastores={
+            "main": nlconfig.DatastoreSelection(kind="mdp", config_path="")
+        },
         training=nlconfig.TrainingConfig(
             state_feature_weighting=state_weighting_config
         ),
@@ -26,23 +28,40 @@ def test_config_serialization(state_weighting_config):
     assert c == c.from_yaml(c.to_yaml())
 
 
+def test_plotting_config_boundary_datastore_roundtrip():
+    c = nlconfig.NeuralLAMConfig(
+        datastores={
+            "danra": nlconfig.DatastoreSelection(kind="mdp", config_path=""),
+            "era5": nlconfig.DatastoreSelection(kind="mdp", config_path=""),
+        },
+        plotting=nlconfig.PlottingConfig(boundary_datastore="era5"),
+    )
+
+    assert c.plotting.boundary_datastore == "era5"
+    assert c == c.from_yaml(c.to_yaml())
+
+
 yaml_training_defaults = """
-datastore:
-  kind: mdp
-  config_path: ""
+datastores:
+  main:
+    kind: mdp
+    config_path: ""
 """
 
 default_config = nlconfig.NeuralLAMConfig(
-    datastore=nlconfig.DatastoreSelection(kind="mdp", config_path=""),
+    datastores={
+        "main": nlconfig.DatastoreSelection(kind="mdp", config_path="")
+    },
     training=nlconfig.TrainingConfig(
         state_feature_weighting=nlconfig.UniformFeatureWeighting()
     ),
 )
 
 yaml_training_manual_weights = """
-datastore:
-  kind: mdp
-  config_path: ""
+datastores:
+  main:
+    kind: mdp
+    config_path: ""
 training:
   state_feature_weighting:
     __config_class__: ManualStateFeatureWeighting
@@ -52,7 +71,9 @@ training:
 """
 
 manual_weights_config = nlconfig.NeuralLAMConfig(
-    datastore=nlconfig.DatastoreSelection(kind="mdp", config_path=""),
+    datastores={
+        "main": nlconfig.DatastoreSelection(kind="mdp", config_path="")
+    },
     training=nlconfig.TrainingConfig(
         state_feature_weighting=nlconfig.ManualStateFeatureWeighting(
             weights=dict(u100m=1.0, v100m=1.0)
@@ -70,3 +91,12 @@ yaml_samples = zip(
 def test_config_load_from_yaml(yaml_str, config_expected):
     c = nlconfig.NeuralLAMConfig.from_yaml(yaml_str)
     assert c == config_expected
+
+
+def test_legacy_datastore_key_raises_migration_error(tmp_path):
+    config_path = tmp_path / "config.yaml"
+    config_path.write_text(
+        "datastore:\n  kind: mdp\n  config_path: ''\n", encoding="utf-8"
+    )
+    with pytest.raises(nlconfig.InvalidConfigError, match="datastores:"):
+        nlconfig.load_config_and_datastore(str(config_path))

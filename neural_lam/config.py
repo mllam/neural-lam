@@ -3,10 +3,11 @@
 # Standard library
 import dataclasses
 from pathlib import Path
-from typing import Dict, Union
+from typing import Dict, Optional, Union
 
 # Third-party
 import dataclass_wizard
+import yaml
 
 # Local
 from .datastore import (
@@ -117,6 +118,33 @@ class TrainingConfig:
 
 
 @dataclasses.dataclass
+class PlottingConfig:
+    """
+    Configuration related to evaluation plotting.
+
+    Attributes
+    ----------
+    boundary_datastore : str, optional
+        Name of the entry in `datastores` to use as the boundary forcing
+        source for the overlay. When unset, the single datastore without
+        `state` data is used. Must name a datastore without `state` data.
+    boundary_margin_degrees : float
+        Lat/lon margin (in projection degrees) drawn around the interior
+        domain when a boundary datastore is configured. Defaults to 1.0.
+    boundary_var_mapping : Dict[str, str]
+        Optional mapping from interior state variable name to boundary
+        forcing feature name for the overlay. State variables not listed
+        fall back to matching a boundary forcing feature of the same name.
+    """
+
+    boundary_datastore: Optional[str] = None
+    boundary_margin_degrees: float = 1.0
+    boundary_var_mapping: Dict[str, str] = dataclasses.field(
+        default_factory=dict
+    )
+
+
+@dataclasses.dataclass
 class NeuralLAMConfig(dataclass_wizard.JSONWizard, dataclass_wizard.YAMLWizard):
     """
     Configuration for the Neural-LAM model and training pipeline.
@@ -127,16 +155,26 @@ class NeuralLAMConfig(dataclass_wizard.JSONWizard, dataclass_wizard.YAMLWizard):
 
     Attributes
     ----------
-    datastore : DatastoreSelection
-        Configuration specifying which datastore backend to use and its
-        associated settings.
+    datastores : Dict[str, DatastoreSelection]
+        Mapping from a user-chosen datastore name to its selection config. The
+        role of each datastore is implied by the categories of data it
+        provides rather than by a dedicated config key: a datastore that
+        contains `state` data is used for both model input and output (the
+        interior domain), while a datastore without `state` data is used for
+        input only (e.g. boundary forcing from a separate domain). Exactly
+        one datastore must provide `state` data, and at most one datastore
+        may omit it (the boundary); both constraints are enforced in
+        :func:`load_config_and_datastore`.
     training : TrainingConfig
         Configuration for training the model, including loss function and
         feature-weighting strategy. Defaults to ``TrainingConfig()``.
+    plotting : PlottingConfig
+        The configuration for evaluation plotting.
     """
 
-    datastore: DatastoreSelection
+    datastores: Dict[str, DatastoreSelection]
     training: TrainingConfig = dataclasses.field(default_factory=TrainingConfig)
+    plotting: PlottingConfig = dataclasses.field(default_factory=PlottingConfig)
 
     class _(dataclass_wizard.JSONWizard.Meta):
         """
@@ -174,9 +212,13 @@ class InvalidConfigError(Exception):
 
 def load_config_and_datastore(
     config_path: str,
-) -> tuple[NeuralLAMConfig, Union[MDPDatastore, NpyFilesDatastoreMEPS]]:
+) -> tuple[
+    NeuralLAMConfig,
+    Union[MDPDatastore, NpyFilesDatastoreMEPS],
+    Union[MDPDatastore, NpyFilesDatastoreMEPS, None],
+]:
     """
-    Load the neural-lam configuration and the datastore specified in the
+    Load the neural-lam configuration and the datastores specified in the
     configuration.
 
     Parameters
@@ -186,9 +228,35 @@ def load_config_and_datastore(
 
     Returns
     -------
-    tuple[NeuralLAMConfig, Union[MDPDatastore, NpyFilesDatastoreMEPS]]
-        The Neural-LAM configuration and the loaded datastore.
+    tuple[NeuralLAMConfig, datastore, datastore_boundary]
+        The Neural-LAM configuration, the loaded interior datastore (the one
+        providing `state` data), and the boundary datastore (the one without
+        `state` data, or None if no such datastore is configured).
+
+    Raises
+    ------
+    InvalidConfigError
+        If not exactly one datastore provides `state` data, or if more than
+        one datastore omits it (only a single boundary datastore is currently
+        supported).
     """
+    with open(config_path, encoding="utf-8") as f:
+        raw_config = yaml.safe_load(f)
+    if isinstance(raw_config, dict) and (
+        "datastore" in raw_config and "datastores" not in raw_config
+    ):
+        raise InvalidConfigError(
+            "The `datastore:` config key has been replaced by a named "
+            "`datastores:` mapping (the role of each datastore is now implied "
+            "by the categories it provides). Move your datastore under a "
+            "named entry, e.g.:\n"
+            "datastores:\n"
+            "  <name>:\n"
+            "    kind: ...\n"
+            "    config_path: ...\n"
+            "See the README and CHANGELOG for details."
+        )
+
     try:
         config = NeuralLAMConfig.from_yaml_file(config_path)
     except dataclass_wizard.errors.UnknownJSONKey as ex:
@@ -196,12 +264,51 @@ def load_config_and_datastore(
             "There was an error loading the configuration file at "
             f"{config_path}. "
         ) from ex
-    # datastore config is assumed to be relative to the config file
-    datastore_config_path = (
-        Path(config_path).parent / config.datastore.config_path
-    )
-    datastore = init_datastore(
-        datastore_kind=config.datastore.kind, config_path=datastore_config_path
-    )
 
-    return config, datastore
+    # datastore configs are assumed to be relative to the config file. The
+    # role of each datastore is implied by the categories of data it provides:
+    # a datastore with `state` data is the interior (input and output), one
+    # without `state` data is used for input only (e.g. boundary forcing).
+    config_dir = Path(config_path).parent
+    interior_datastores = {}
+    boundary_datastores = {}
+    for name, selection in config.datastores.items():
+        datastore = init_datastore(
+            datastore_kind=selection.kind,
+            config_path=config_dir / selection.config_path,
+        )
+        if datastore.get_num_data_vars(category="state") > 0:
+            interior_datastores[name] = datastore
+        else:
+            boundary_datastores[name] = datastore
+
+    if len(interior_datastores) != 1:
+        raise InvalidConfigError(
+            "Exactly one datastore must provide `state` data (the interior "
+            f"domain), but {len(interior_datastores)} were found in "
+            f"{config_path}: {sorted(interior_datastores)}."
+        )
+    if len(boundary_datastores) > 1:
+        raise InvalidConfigError(
+            "At most one boundary datastore (a datastore without `state` "
+            f"data) is currently supported, but {len(boundary_datastores)} "
+            f"were found in {config_path}: {sorted(boundary_datastores)}."
+        )
+
+    (datastore,) = interior_datastores.values()
+
+    # The boundary overlay source can be named explicitly in the plotting
+    # config; otherwise fall back to the single datastore without `state`.
+    boundary_name = config.plotting.boundary_datastore
+    if boundary_name is not None:
+        if boundary_name not in boundary_datastores:
+            raise InvalidConfigError(
+                f"plotting.boundary_datastore {boundary_name!r} must name a "
+                "datastore without `state` data; found "
+                f"{sorted(boundary_datastores)} in {config_path}."
+            )
+        datastore_boundary = boundary_datastores[boundary_name]
+    else:
+        datastore_boundary = next(iter(boundary_datastores.values()), None)
+
+    return config, datastore, datastore_boundary

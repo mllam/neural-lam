@@ -154,9 +154,13 @@ data/
 
 And the content of `config.yaml` could in this case look like:
 ```yaml
-datastore:
-  kind: mdp
-  config_path: danra.datastore.yaml
+datastores:
+  danra:
+    kind: mdp
+    config_path: danra.datastore.yaml
+  era5_boundary:  # optional; no `state` data, so used for input (boundary) only
+    kind: mdp
+    config_path: era5_boundary.datastore.yaml
 training:
   state_feature_weighting:
     __config_class__: ManualStateFeatureWeighting
@@ -171,11 +175,23 @@ training:
       r2m: 0
     upper:
       r2m: 1.0
+plotting:  # optional, controls the boundary overlay in evaluation plots
+  boundary_margin_degrees: 1.0
+  boundary_var_mapping:  # interior state var -> boundary forcing feature
+    u100m: u_component_of_wind1000hPa
+    v100m: v_component_of_wind1000hPa
 ```
 
 For now the neural-lam config only defines few things:
 
-1. The kind of datastore and the path to its config
+1. A named mapping of datastores (`datastores`), each giving the kind of
+   datastore and the path to its config. The role of each datastore is implied
+   by the categories of data it provides: a datastore that contains `state`
+   data is used for both model input and output (the interior domain), while a
+   datastore without `state` data is used for input only (e.g. boundary forcing
+   from a separate domain such as ERA5 for a LAM domain). Exactly one datastore
+   must provide `state` data. When a boundary datastore is present its forcing
+   is windowed and included as an additional tensor in each training sample.
 2. The weighting of different features in
 the loss function. If you don't define the state feature weighting it will default to
 weighting all features equally.
@@ -214,6 +230,21 @@ the input-data representation is split into two parts:
    time to create individual samples for training, validation and testing. The
    `WeatherDataset` class is also responsible for normalising the values and
    returning `torch.Tensor`-objects.
+
+Each variable in a datastore is assigned to one of three data *categories*,
+which fix whether it is fed to the model as input, predicted as output, or both:
+
+| Category  | Model input | Model output | Description |
+|-----------|:-----------:|:------------:|-------------|
+| `state`   | ✓           | ✓            | Prognostic variables the model both reads and predicts (autoregressed forward in time). |
+| `forcing` | ✓           |              | Time-varying inputs known in advance (e.g. solar radiation, boundary forcing). |
+| `static`  | ✓           |              | Time-invariant inputs (e.g. orography, land-sea mask). |
+
+(A `diagnostic` category, predicted but not fed back as input, is not used at
+present but fits naturally as an output-only category.) These categories are
+also what determine a datastore's role: a datastore that provides `state` data
+is the interior domain (model input and output), while one without `state` data
+is used for input only, e.g. boundary forcing from a separate domain.
 
 There are currently two different datastores implemented in the codebase:
 
@@ -380,9 +411,10 @@ Which you can then use in a neural-lam configuration file like this:
 
 ```yaml
 # config.yaml
-datastore:
-  kind: npyfilesmeps
-  config_path: meps.datastore.yaml
+datastores:
+  meps:
+    kind: npyfilesmeps
+    config_path: meps.datastore.yaml
 training:
   state_feature_weighting:
     __config_class__: ManualStateFeatureWeighting
@@ -525,6 +557,24 @@ Some options specifically important for evaluation are:
 * `--n_example_pred`: Number of example predictions to plot during evaluation.
 * `--ar_steps_eval`: Number of time steps to unroll for during evaluation
 
+When a `datastore_boundary` is configured in `config.yaml`, evaluation plots
+will overlay the boundary forcing data underneath the interior prediction and
+ground truth panels. Note that the boundary data is currently loaded
+separately for visualization only; model-side consumption of the boundary
+forcing in the forward pass is planned as a follow-up (see #108). The
+overlay is controlled by the optional `plotting` section in `config.yaml`:
+
+* `boundary_margin_degrees`: lat/lon margin (in projection degrees) drawn
+  around the interior domain (default `1.0`).
+* `boundary_var_mapping`: maps interior state variable names to boundary
+  forcing feature names for the overlay.
+
+For each state variable plotted (e.g. `u100m`), the overlay is drawn only when
+its mapped boundary feature is a forcing feature on the boundary datastore.
+State variables absent from `boundary_var_mapping` fall back to matching a
+boundary forcing feature of the same name, so datastores that share variable
+names need no explicit mapping.
+
 **Note:** While it is technically possible to use multiple GPUs for running evaluation, this is strongly discouraged. If using multiple devices the `DistributedSampler` will replicate some samples to make sure all devices have the same batch size, meaning that evaluation metrics will be unreliable.
 A possible workaround is to just use batch size 1 during evaluation.
 This issue stems from PyTorch Lightning. See for example [this PR](https://github.com/Lightning-AI/torchmetrics/pull/1886) for more discussion.
@@ -584,13 +634,18 @@ Canonical dimension names used in tensor shape annotations throughout the codeba
 
 - `B` - batch size
 - `pred_steps` - number of autoregressive prediction steps
+- `num_times` - number of time steps along the time axis of a raw or batched timeseries (a trailing `'`, e.g. `num_times'`, denotes a pre-subsampling / pre-differencing variant)
 - `num_grid_nodes` - number of nodes in the flattened spatial grid
+- `num_boundary_grid_nodes` - number of nodes in the flattened boundary spatial grid
 - `num_mesh_nodes` - number of mesh nodes; indexed as `num_mesh_nodes[l]` for hierarchical level `l`
 - `num_state_vars` - number of atmospheric state variables
 - `num_forcing_vars` - number of forcing input variables
+- `num_windowed_forcing_vars` - forcing variables stacked over the past/future forcing window
+- `num_windowed_boundary_vars` - boundary forcing variables stacked over the past/future boundary window
 - `num_variables` - generic variable dimension used in metric functions
 - `hidden_dim` - internal hidden representation size in GNN layers and MLPs
 - `input_dim` - input feature dimensionality to a layer before transformation
+- `d_mesh_static` - number of static features per mesh node
 - `num_edges` - number of edges in a graph (g2m, m2g, same-level, up, down)
 - `num_send` - number of sender nodes in a message-passing step
 - `num_rec` - number of receiver nodes in a message-passing step

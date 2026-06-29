@@ -2,6 +2,9 @@ datastores:
   danra:
     kind: mdp
     config_path: danra.datastore.yaml
+  era5:
+    kind: mdp
+    config_path: era5.datastore.yaml
 training:
   state_feature_weighting:
     __config_class__: ManualStateFeatureWeighting

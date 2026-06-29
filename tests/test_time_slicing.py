@@ -13,6 +13,17 @@ from neural_lam.weather_dataset import WeatherDataset
 
 
 class SinglePointDummyDatastore(BaseDatastore):
+    """One-grid-point datastore in either analysis or forecast mode.
+
+    Analysis mode: ``time_values`` is a 1D datetime array, ``state_data``
+    and ``forcing_data`` are 1D arrays aligned to it.
+
+    Forecast mode: ``time_values`` is the pair
+    ``(analysis_times, elapsed_forecast_durations)``, and ``state_data``
+    / ``forcing_data`` are 2D arrays shaped
+    ``(n_analysis_times, n_forecast_steps)``.
+    """
+
     config = {}
     coords_projection = None
     num_grid_points = 1
@@ -27,14 +38,16 @@ class SinglePointDummyDatastore(BaseDatastore):
         step_length=timedelta(hours=1),
     ):
         self._step_length = step_length
-        self._time_values = np.array(time_values)
         self._state_data = np.array(state_data)
         self._forcing_data = np.array(forcing_data)
         self.is_forecast = is_forecast
 
         if is_forecast:
+            self._analysis_times = np.array(time_values[0])
+            self._forecast_times = np.array(time_values[1])
             assert self._state_data.ndim == 2
         else:
+            self._time_values = np.array(time_values)
             assert self._state_data.ndim == 1
 
     @property
@@ -53,12 +66,18 @@ class SinglePointDummyDatastore(BaseDatastore):
             raise NotImplementedError(category)
 
         if self.is_forecast:
-            raise NotImplementedError()
+            da = xr.DataArray(
+                values,
+                dims=["analysis_time", "elapsed_forecast_duration"],
+                coords={
+                    "analysis_time": self._analysis_times,
+                    "elapsed_forecast_duration": self._forecast_times,
+                },
+            )
         else:
             da = xr.DataArray(
                 values, dims=["time"], coords={"time": self._time_values}
             )
-            # add `{category}_feature` and `grid_index` dimensions
 
         da = da.expand_dims("grid_index")
         da = da.expand_dims(f"{category}_feature")
@@ -84,6 +103,56 @@ class SinglePointDummyDatastore(BaseDatastore):
 
 ANALYSIS_STATE_VALUES = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
 FORCING_VALUES = [10, 11, 12, 13, 14, 15, 16, 17, 18, 19]
+# Boundary spans 4 extra steps on each side of the interior so windowing
+# with up to num_past/num_future = 4 can be tested without cropping.
+BOUNDARY_PAD = 4
+BOUNDARY_FORCING_VALUES = list(range(20, 20 + 10 + 2 * BOUNDARY_PAD))
+
+FORECAST_STATE_VALUES = [
+    [0, 1, 2, 3, 4, 5, 6, 7, 8, 9],
+    [10, 11, 12, 13, 14, 15, 16, 17, 18, 19],
+    [20, 21, 22, 23, 24, 25, 26, 27, 28, 29],
+    [30, 31, 32, 33, 34, 35, 36, 37, 38, 39],
+]
+FORECAST_FORCING_VALUES = [
+    [100, 101, 102, 103, 104, 105, 106, 107, 108, 109],
+    [110, 111, 112, 113, 114, 115, 116, 117, 118, 119],
+    [120, 121, 122, 123, 124, 125, 126, 127, 128, 129],
+    [130, 131, 132, 133, 134, 135, 136, 137, 138, 139],
+]
+
+
+class BoundaryOnlyDummyDatastore(SinglePointDummyDatastore):
+    """Boundary-only variant providing forcing but no state.
+
+    State-keyed lookups raise KeyError to mirror real boundary datastores
+    (e.g. ERA5) and to catch any path that accidentally asks the boundary
+    for state.
+    """
+
+    def __init__(
+        self,
+        time_values,
+        forcing_data,
+        is_forecast=False,
+        step_length=timedelta(hours=1),
+    ):
+        # state_data is a dummy zeros array of the right shape so the
+        # parent constructor accepts it; the override below blocks state
+        # access.
+        forcing_arr = np.asarray(forcing_data)
+        super().__init__(
+            time_values=time_values,
+            state_data=np.zeros_like(forcing_arr),
+            forcing_data=forcing_arr,
+            is_forecast=is_forecast,
+            step_length=step_length,
+        )
+
+    def get_dataarray(self, category, split):
+        if category == "state":
+            raise KeyError("BoundaryOnlyDummyDatastore has no state category.")
+        return super().get_dataarray(category=category, split=split)
 
 
 @pytest.mark.parametrize(
@@ -115,7 +184,7 @@ def test_time_slicing_analysis(
 
     sample = dataset[0]
 
-    init_states, target_states, forcing, _ = [
+    init_states, target_states, forcing, _boundary, _ = [
         tensor.numpy() for tensor in sample
     ]
 
@@ -190,4 +259,341 @@ def test_step_length_timedeltas(step_length):
 
     # Test that we can get a sample
     sample = dataset[0]
-    assert len(sample) == 4  # init_states, target_states, forcing, target_times
+    assert (
+        len(sample) == 5
+    )  # init_states, target_states, forcing, boundary, target_times
+
+
+def _interior_times():
+    return np.datetime64("2020-01-01") + np.arange(len(ANALYSIS_STATE_VALUES))
+
+
+def _boundary_times_aligned():
+    """Boundary times surrounding the interior on both sides so that
+    windows up to BOUNDARY_PAD steps don't trigger cropping."""
+    return (
+        np.datetime64("2020-01-01")
+        - BOUNDARY_PAD
+        + np.arange(len(BOUNDARY_FORCING_VALUES))
+    )
+
+
+@pytest.mark.parametrize(
+    "ar_steps,num_past_boundary_steps,num_future_boundary_steps",
+    [
+        [3, 0, 0],
+        [3, 1, 0],
+        [3, 0, 1],
+        [3, 1, 1],
+        [3, 2, 2],
+        [3, 3, 1],
+        [3, 1, 3],
+    ],
+)
+def test_time_slicing_boundary_analysis(
+    ar_steps, num_past_boundary_steps, num_future_boundary_steps
+):
+    """Boundary windowing for analysis-interior + analysis-boundary.
+
+    Boundary spans BOUNDARY_PAD extra steps on each side of the interior
+    so no cropping kicks in; the exact window values around each state
+    time are checked."""
+    interior_datastore = SinglePointDummyDatastore(
+        state_data=ANALYSIS_STATE_VALUES,
+        forcing_data=FORCING_VALUES,
+        time_values=_interior_times(),
+        is_forecast=False,
+    )
+    boundary_datastore = BoundaryOnlyDummyDatastore(
+        forcing_data=BOUNDARY_FORCING_VALUES,
+        time_values=_boundary_times_aligned(),
+        is_forecast=False,
+    )
+
+    dataset = WeatherDataset(
+        datastore=interior_datastore,
+        datastore_boundary=boundary_datastore,
+        ar_steps=ar_steps,
+        num_past_forcing_steps=0,
+        num_future_forcing_steps=0,
+        num_past_boundary_steps=num_past_boundary_steps,
+        num_future_boundary_steps=num_future_boundary_steps,
+    )
+
+    _, _, _, boundary, _ = [tensor.numpy() for tensor in dataset[0]]
+
+    # Interior sample idx=0 has state slice [t_0..t_4] (no past-forcing
+    # offset since num_past_forcing=0). Target states start at t_2; the
+    # boundary index for t_2 in BOUNDARY_FORCING_VALUES is BOUNDARY_PAD+2.
+    boundary_center = BOUNDARY_PAD + 2
+    window_size = num_past_boundary_steps + num_future_boundary_steps + 1
+    assert boundary.shape == (ar_steps, 1, window_size)
+    for i in range(ar_steps):
+        start = boundary_center + i - num_past_boundary_steps
+        end = boundary_center + i + num_future_boundary_steps + 1
+        expected = BOUNDARY_FORCING_VALUES[start:end]
+        np.testing.assert_array_equal(boundary[i, 0, :], expected)
+
+
+def test_boundary_step_length_mismatch_supported():
+    """Interior and boundary with different step lengths align by time:
+    a 6h boundary still produces correctly-windowed slices around the
+    1h interior times."""
+    interior_times = np.datetime64("2020-01-01") + np.arange(
+        24
+    ) * np.timedelta64(1, "h")
+    interior_values = np.arange(24, dtype=float)
+
+    # Boundary every 6h, covering the same calendar span plus a 6h pad
+    # on each end so the past/future window stays in-bounds.
+    boundary_times = np.datetime64("2019-12-31T18:00") + np.arange(
+        7
+    ) * np.timedelta64(6, "h")
+    boundary_values = np.arange(100, 107, dtype=float)
+
+    interior_datastore = SinglePointDummyDatastore(
+        state_data=interior_values,
+        forcing_data=interior_values,
+        time_values=interior_times,
+        is_forecast=False,
+        step_length=timedelta(hours=1),
+    )
+    boundary_datastore = BoundaryOnlyDummyDatastore(
+        forcing_data=boundary_values,
+        time_values=boundary_times,
+        is_forecast=False,
+        step_length=timedelta(hours=6),
+    )
+
+    dataset = WeatherDataset(
+        datastore=interior_datastore,
+        datastore_boundary=boundary_datastore,
+        ar_steps=2,
+        num_past_forcing_steps=0,
+        num_future_forcing_steps=0,
+        num_past_boundary_steps=1,
+        num_future_boundary_steps=1,
+    )
+
+    _, _, _, boundary, _ = [tensor.numpy() for tensor in dataset[0]]
+    # First target state is at hour 2; nearest boundary <= hour 2 is hour 0
+    # (= boundary_values[1] = 101). Window [past=1, future=1] takes
+    # boundary_values[0], boundary_values[1], boundary_values[2].
+    assert boundary.shape == (2, 1, 3)
+    np.testing.assert_array_equal(boundary[0, 0, :], [100, 101, 102])
+    np.testing.assert_array_equal(boundary[1, 0, :], [100, 101, 102])
+
+
+def test_forecast_interior_with_analysis_boundary():
+    """Forecast-mode interior + analysis-mode boundary: boundary windows
+    around each lead-time of the forecast pick the corresponding boundary
+    times."""
+    analysis_times = np.datetime64("2020-01-01") + np.arange(
+        len(FORECAST_STATE_VALUES)
+    ) * np.timedelta64(1, "D")
+    forecast_durations = np.arange(
+        len(FORECAST_STATE_VALUES[0])
+    ) * np.timedelta64(1, "D")
+
+    interior_datastore = SinglePointDummyDatastore(
+        state_data=FORECAST_STATE_VALUES,
+        forcing_data=FORECAST_FORCING_VALUES,
+        time_values=(analysis_times, forecast_durations),
+        is_forecast=True,
+        step_length=timedelta(days=1),
+    )
+
+    # Boundary covers analysis_time[0] + leads, padded on both sides.
+    boundary_times = np.datetime64("2019-12-30") + np.arange(
+        12
+    ) * np.timedelta64(1, "D")
+    boundary_values = np.arange(200, 212, dtype=float)
+    boundary_datastore = BoundaryOnlyDummyDatastore(
+        forcing_data=boundary_values,
+        time_values=boundary_times,
+        is_forecast=False,
+        step_length=timedelta(days=1),
+    )
+
+    dataset = WeatherDataset(
+        datastore=interior_datastore,
+        datastore_boundary=boundary_datastore,
+        ar_steps=3,
+        num_past_forcing_steps=0,
+        num_future_forcing_steps=0,
+        num_past_boundary_steps=1,
+        num_future_boundary_steps=1,
+    )
+
+    init_states, target_states, _, boundary, _ = [t.numpy() for t in dataset[0]]
+    # Sample idx=0: pick analysis_time[0] (2020-01-01), state at lead
+    # 0..4 = [0,1,2,3,4]. Init=[0,1], target=[2,3,4]. State times are
+    # 2020-01-01 + (0..4) days = 01..05.
+    np.testing.assert_array_equal(init_states[:, 0, 0], [0, 1])
+    np.testing.assert_array_equal(target_states[:, 0, 0], [2, 3, 4])
+    # Boundary starts at 2019-12-30 (idx 0). Target state times 03..05
+    # correspond to boundary idx 4..6, with past/future windows of 1.
+    assert boundary.shape == (3, 1, 3)
+    np.testing.assert_array_equal(boundary[0, 0, :], [203, 204, 205])
+    np.testing.assert_array_equal(boundary[1, 0, :], [204, 205, 206])
+    np.testing.assert_array_equal(boundary[2, 0, :], [205, 206, 207])
+
+
+def test_analysis_interior_with_forecast_boundary():
+    """Analysis-mode interior + forecast-mode boundary: an analysis time
+    of the boundary forecast is picked so the requested past/future
+    window around each target state time stays in lead-range, then
+    lead-time windows are walked across AR steps."""
+    interior_times = np.datetime64("2020-01-05") + np.arange(
+        8
+    ) * np.timedelta64(1, "D")
+    interior_values = np.arange(8, dtype=float)
+    interior_datastore = SinglePointDummyDatastore(
+        state_data=interior_values,
+        forcing_data=interior_values,
+        time_values=interior_times,
+        is_forecast=False,
+        step_length=timedelta(days=1),
+    )
+
+    # Boundary: 6 analysis times, 8 lead-day steps each. Analysis times
+    # 2020-01-04..09 so coverage extends past the latest interior
+    # target times after cropping.
+    n_analysis = 6
+    n_leads = 8
+    boundary_analysis = np.datetime64("2020-01-04") + np.arange(
+        n_analysis
+    ) * np.timedelta64(1, "D")
+    boundary_leads = np.arange(n_leads) * np.timedelta64(1, "D")
+    boundary_values = (
+        np.arange(n_analysis).reshape(-1, 1) * 1000
+        + np.arange(n_leads).reshape(1, -1) * 10
+    ).astype(float)
+    boundary_datastore = BoundaryOnlyDummyDatastore(
+        forcing_data=boundary_values,
+        time_values=(boundary_analysis, boundary_leads),
+        is_forecast=True,
+        step_length=timedelta(days=1),
+    )
+
+    dataset = WeatherDataset(
+        datastore=interior_datastore,
+        datastore_boundary=boundary_datastore,
+        ar_steps=2,
+        num_past_forcing_steps=0,
+        num_future_forcing_steps=0,
+        num_past_boundary_steps=1,
+        num_future_boundary_steps=1,
+    )
+
+    _, _, _, boundary, _ = [t.numpy() for t in dataset[0]]
+    # Sample idx=0: state slice = interior[0:4] = times 2020-01-05..08.
+    # Model init is the last input state 2020-01-06; targets are 07 and 08.
+    # Boundary analysis_time pad-pick for the init 06 = idx 2 (06); equals
+    # init so decrement to idx 1 (05). lead_at_first_target = (07-05)/1d = 2,
+    # which already covers num_past=1, so no further shift. Window at
+    # target 07: lead 2, [1..3]. Window at target 08: lead 3, [2..4].
+    expected_analysis_idx = 1
+    assert boundary.shape == (2, 1, 3)
+    np.testing.assert_array_equal(
+        boundary[0, 0, :], boundary_values[expected_analysis_idx, 1:4]
+    )
+    np.testing.assert_array_equal(
+        boundary[1, 0, :], boundary_values[expected_analysis_idx, 2:5]
+    )
+
+
+def test_forecast_boundary_anchors_on_init_not_target():
+    """A boundary forecast launched after model init (between the last
+    input state and the first target) must not be selected - operationally
+    it would be unavailable. The analysis_time is anchored on the model
+    init time, so the latest launch at or before init is used instead."""
+    # Interior analysis, 2h step. Sample idx=0 state = 00,02,04,06:
+    # model init = 02, first target = 04, second target = 06.
+    interior_times = np.datetime64("2020-01-01T00") + np.arange(
+        8
+    ) * np.timedelta64(2, "h")
+    interior_values = np.arange(8, dtype=float)
+    interior_datastore = SinglePointDummyDatastore(
+        state_data=interior_values,
+        forcing_data=interior_values,
+        time_values=interior_times,
+        is_forecast=False,
+        step_length=timedelta(hours=2),
+    )
+
+    # Boundary launches at odd hours (2019-12-31T21, 23, 01, 03, ...),
+    # spanning wide enough that no interior cropping is triggered. Launch
+    # 01 (idx 2) is the latest <= init (02); launch 03 (idx 3) sits
+    # strictly between init (02) and the first target (04). The buggy
+    # target-time anchor would pick 03 (a future launch); the fixed
+    # init-time anchor picks 01.
+    n_analysis = 9
+    n_leads = 16
+    boundary_analysis = np.datetime64("2019-12-31T21") + np.arange(
+        n_analysis
+    ) * np.timedelta64(2, "h")
+    boundary_leads = np.arange(n_leads) * np.timedelta64(1, "h")
+    boundary_values = (
+        np.arange(n_analysis).reshape(-1, 1) * 1000
+        + np.arange(n_leads).reshape(1, -1) * 10
+    ).astype(float)
+    boundary_datastore = BoundaryOnlyDummyDatastore(
+        forcing_data=boundary_values,
+        time_values=(boundary_analysis, boundary_leads),
+        is_forecast=True,
+        step_length=timedelta(hours=1),
+    )
+
+    dataset = WeatherDataset(
+        datastore=interior_datastore,
+        datastore_boundary=boundary_datastore,
+        ar_steps=2,
+        num_past_forcing_steps=0,
+        num_future_forcing_steps=0,
+        num_past_boundary_steps=1,
+        num_future_boundary_steps=1,
+    )
+
+    _, _, _, boundary, _ = [t.numpy() for t in dataset[0]]
+    # Launch at 01 = analysis idx 2 (not 03 = idx 3). From 01: target 04
+    # is lead (04-01)/1h = 3 -> window [2,5); target 06 is lead 5 ->
+    # window [4,7).
+    expected_analysis_idx = 2
+    assert boundary.shape == (2, 1, 3)
+    np.testing.assert_array_equal(
+        boundary[0, 0, :], boundary_values[expected_analysis_idx, 2:5]
+    )
+    np.testing.assert_array_equal(
+        boundary[1, 0, :], boundary_values[expected_analysis_idx, 4:7]
+    )
+
+
+def test_check_time_overlap_insufficient_raises():
+    """If the boundary cannot be cropped enough to cover the requested
+    past-window, ``check_time_overlap`` surfaces a clear error."""
+    interior_datastore = SinglePointDummyDatastore(
+        state_data=ANALYSIS_STATE_VALUES,
+        forcing_data=FORCING_VALUES,
+        time_values=_interior_times(),
+        is_forecast=False,
+    )
+    # Boundary covers the same range as interior but no padding, so
+    # any non-zero past/future window forces cropping; with a huge past
+    # window the boundary cannot cover even a single sample.
+    boundary_datastore = BoundaryOnlyDummyDatastore(
+        forcing_data=BOUNDARY_FORCING_VALUES[:10],
+        time_values=_interior_times(),
+        is_forecast=False,
+    )
+
+    with pytest.raises(ValueError):
+        WeatherDataset(
+            datastore=interior_datastore,
+            datastore_boundary=boundary_datastore,
+            ar_steps=3,
+            num_past_forcing_steps=0,
+            num_future_forcing_steps=0,
+            num_past_boundary_steps=20,
+            num_future_boundary_steps=20,
+        )

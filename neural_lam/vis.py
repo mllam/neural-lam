@@ -348,10 +348,18 @@ def plot_on_axis(
     ax_title: str | None = None,
     cmap: str | matplotlib.colors.Colormap = "plasma",
     boundary_alpha: float | None = None,
-    crop_to_interior: bool = False,
+    boundary_da: Optional[xr.DataArray] = None,
+    boundary_datastore: Optional[BaseRegularGridDatastore] = None,
+    boundary_margin_degrees: float = 1.0,
 ) -> matplotlib.collections.QuadMesh:
     """
     Plot weather state on a projection-aware axis using datastore metadata.
+
+    The axes extent is always cropped to the interior lat/lon bounding box.
+    When ``boundary_da`` is given the bbox is expanded by
+    ``boundary_margin_degrees`` on each side so the surrounding boundary
+    cells are visible as a thin ring; without boundary data the crop is
+    tight to the interior.
 
     Parameters
     ----------
@@ -371,8 +379,17 @@ def plot_on_axis(
         Colormap to use for plotting.
     boundary_alpha : float, optional
         If provided, overlay boundary mask with given alpha transparency.
-    crop_to_interior : bool, optional
-        If True, crop the plot to the interior region.
+    boundary_da : xarray.DataArray, optional
+        Boundary data from a separate boundary datastore. Shape
+        ``(num_boundary_grid_nodes,)``. Plotted underneath the interior data
+        with reduced opacity.
+    boundary_datastore : BaseRegularGridDatastore, optional
+        Datastore providing grid metadata for the boundary data.
+        Required when ``boundary_da`` is given.
+    boundary_margin_degrees : float, optional
+        Degrees of lat/lon to extend the axes extent beyond the interior
+        bbox when ``boundary_da`` is provided (default 1.0). Ignored when
+        no boundary data is shown.
 
     Returns
     -------
@@ -392,6 +409,83 @@ def plot_on_axis(
     gl.right_labels = False
     gl.xlabel_style = {"size": _TICK_SIZE}
     gl.ylabel_style = {"size": _TICK_SIZE}
+
+    # Plot boundary data underneath interior data when provided
+    if boundary_da is not None and boundary_datastore is not None:
+        # Use "forcing" category because boundary datastores will not have
+        # state variables (e.g. ERA5 boundary with only forcing + static).
+        b_xy = boundary_datastore.get_xy("forcing", stacked=False)
+        b_grid_shape = (b_xy.shape[0], b_xy.shape[1])
+        b_lats_lons = boundary_datastore.get_lat_lon("forcing")
+
+        # Prefer per-point lat/lon carried on the boundary DataArray when
+        # available. Fall back to the datastore regular grid otherwise.
+        per_point_lats_lons = None
+        for lon_name, lat_name in (("longitude", "latitude"), ("lon", "lat")):
+            if (
+                lon_name in boundary_da.coords
+                and lat_name in boundary_da.coords
+            ):
+                per_point_lats_lons = (
+                    np.asarray(boundary_da[lon_name].values),
+                    np.asarray(boundary_da[lat_name].values),
+                )
+                break
+
+        if (
+            isinstance(boundary_da, xr.DataArray)
+            and "x" in boundary_da.dims
+            and "y" in boundary_da.dims
+        ):
+            boundary_da = boundary_da.transpose("x", "y")
+
+        b_values_flat = np.asarray(boundary_da.values).ravel()
+        regular_grid = b_values_flat.size == int(np.prod(b_grid_shape))
+
+        if regular_grid:
+            b_lons = b_lats_lons[:, 0].reshape(b_grid_shape)
+            b_lats = b_lats_lons[:, 1].reshape(b_grid_shape)
+            b_values = b_values_flat.reshape(b_grid_shape)
+        elif per_point_lats_lons is not None:
+            # After convex-hull cropping the boundary is no longer a full
+            # rectangular grid. Recover a regular (lon, lat) grid by
+            # rebuilding a multi-index from the per-point lat/lon aux
+            # coords and unstacking;
+            lon_name = (
+                "longitude" if "longitude" in boundary_da.coords else "lon"
+            )
+            lat_name = "latitude" if "latitude" in boundary_da.coords else "lat"
+            grid_dim = boundary_da.dims[-1]
+            da_unstacked = boundary_da.set_index(
+                {grid_dim: [lon_name, lat_name]}
+            ).unstack(grid_dim)
+            b_lons, b_lats = np.meshgrid(
+                da_unstacked[lon_name].values,
+                da_unstacked[lat_name].values,
+                indexing="ij",
+            )
+            b_values = da_unstacked.transpose(lon_name, lat_name).values
+        else:
+            raise ValueError(
+                "Boundary has irregular grid shape "
+                f"({b_values_flat.size} != {int(np.prod(b_grid_shape))}) "
+                "but no per-point latitude/longitude coords are present "
+                "on the boundary DataArray. Cropped boundary datastores "
+                "must carry `latitude`/`longitude` (or `lat`/`lon`) "
+                "auxiliary coordinates."
+            )
+
+        ax.pcolormesh(
+            b_lons,
+            b_lats,
+            b_values,
+            transform=ccrs.PlateCarree(),
+            vmin=vmin,
+            vmax=vmax,
+            cmap=cmap,
+            shading="auto",
+            alpha=0.5,
+        )
 
     lats_lons = datastore.get_lat_lon("state")
     grid_shape = (
@@ -437,25 +531,12 @@ def plot_on_axis(
             shading="auto",
         )
 
-    if crop_to_interior:
-        # Calculate extent of interior
-        mask_da = datastore.boundary_mask
-        mask_values = mask_da.values
-        if mask_values.ndim == 2 and mask_values.shape[1] == 1:
-            mask_values = mask_values[:, 0]
-        mask_2d = mask_values.reshape(grid_shape)
-
-        interior_points = mask_2d == 0
-        if np.any(interior_points):
-            interior_lons = lons[interior_points]
-            interior_lats = lats[interior_points]
-
-            min_lon, max_lon = interior_lons.min(), interior_lons.max()
-            min_lat, max_lat = interior_lats.min(), interior_lats.max()
-
-            ax.set_extent(
-                [min_lon, max_lon, min_lat, max_lat], crs=ccrs.PlateCarree()
-            )
+    # Crop axes to the interior bbox in the datastore's own projection.
+    margin_deg = boundary_margin_degrees if boundary_da is not None else 0.0
+    xmin, xmax, ymin, ymax = _interior_padded_projected_bbox(
+        datastore, margin_deg
+    )
+    ax.set_extent([xmin, xmax, ymin, ymax], crs=datastore.coords_projection)
 
     if ax_title:
         ax.set_title(ax_title, size=_TITLE_SIZE)
@@ -502,11 +583,11 @@ def plot_error_heatmap(
     unavailable the colorbar label includes "[fallback]".
     """
     errors_np = _to_heatmap_matrix(errors)
-    d_f, pred_steps = errors_np.shape
+    num_variables, pred_steps = errors_np.shape
     step_length = datastore.step_length
 
     time_step_int, time_step_unit = utils.get_integer_time(step_length)
-    layout = _compute_heatmap_layout(n_rows=d_f, n_cols=pred_steps)
+    layout = _compute_heatmap_layout(n_rows=num_variables, n_cols=pred_steps)
     color_values_np, colorbar_label, heatmap_cmap = _get_heatmap_color_values(
         errors_np, datastore, normalization
     )
@@ -571,7 +652,7 @@ def plot_error_heatmap(
         f"Lead time ({time_step_unit[0]})", size=layout["tick_label_size"]
     )
 
-    ax.set_yticks(np.arange(d_f))
+    ax.set_yticks(np.arange(num_variables))
     ax.set_yticklabels(
         _get_heatmap_var_labels(datastore=datastore),
         size=layout["tick_label_size"],
@@ -613,6 +694,67 @@ def plot_error_map(
     return plot_error_heatmap(errors, datastore=datastore, title=title)
 
 
+def _interior_padded_projected_bbox(
+    datastore: BaseRegularGridDatastore, margin_degrees: float
+) -> tuple:
+    """Return ``(xmin, xmax, ymin, ymax)`` for the interior cells in the
+    datastore's own projection, expanded by ``margin_degrees`` worth of
+    latitude on each side (converted to projection units at the interior
+    center). Padding in projection units yields a geometrically symmetric
+    margin regardless of projection or latitude.
+    """
+    lats_lons = datastore.get_lat_lon("state")
+    grid_shape = (datastore.grid_shape_state.x, datastore.grid_shape_state.y)
+    lons = lats_lons[:, 0].reshape(grid_shape)
+    lats = lats_lons[:, 1].reshape(grid_shape)
+
+    mask = datastore.boundary_mask.values
+    if mask.ndim == 2 and mask.shape[1] == 1:
+        mask = mask[:, 0]
+    mask_2d = mask.reshape(grid_shape)
+    interior = mask_2d == 0
+    if not np.any(interior):
+        interior = np.ones_like(mask_2d, dtype=bool)
+
+    interior_lons = np.asarray(lons[interior])
+    interior_lats = np.asarray(lats[interior])
+
+    proj = datastore.coords_projection
+    xyz = proj.transform_points(
+        ccrs.PlateCarree(), interior_lons, interior_lats
+    )
+    xs, ys = xyz[:, 0], xyz[:, 1]
+
+    # 1 deg of latitude in projection units, sampled at the interior
+    # center. For LambertConformal/PlateCarree-style projections this is
+    # locally well defined.
+    ref_lon = float(interior_lons.mean())
+    ref_lat = float(interior_lats.mean())
+    p0 = proj.transform_point(ref_lon, ref_lat, ccrs.PlateCarree())
+    p1 = proj.transform_point(ref_lon, ref_lat + 1.0, ccrs.PlateCarree())
+    margin_proj = margin_degrees * abs(p1[1] - p0[1])
+
+    return (
+        float(xs.min() - margin_proj),
+        float(xs.max() + margin_proj),
+        float(ys.min() - margin_proj),
+        float(ys.max() + margin_proj),
+    )
+
+
+def _interior_extent_aspect(
+    datastore: BaseRegularGridDatastore, margin_degrees: float
+) -> float:
+    """Width/height ratio of the interior bbox in projected units,
+    with ``margin_degrees`` of padding (converted to projection units)."""
+    xmin, xmax, ymin, ymax = _interior_padded_projected_bbox(
+        datastore, margin_degrees
+    )
+    width = xmax - xmin
+    height = ymax - ymin
+    return float(width / height) if height > 0 else 1.0
+
+
 @matplotlib.rc_context(utils.fractional_plot_bundle(1))
 def plot_prediction(
     datastore: BaseRegularGridDatastore,
@@ -621,11 +763,19 @@ def plot_prediction(
     title: Optional[str] = None,
     vrange: Optional[tuple[float, float]] = None,
     boundary_alpha: float = 0.7,
-    crop_to_interior: bool = True,
     colorbar_label: str = "",
+    boundary_da: Optional[xr.DataArray] = None,
+    boundary_datastore: Optional[BaseRegularGridDatastore] = None,
+    boundary_margin_degrees: float = 1.0,
+    crop_to_interior: Optional[bool] = None,
 ) -> matplotlib.figure.Figure:
     """
     Plot an example prediction alongside the ground truth.
+
+    The figure is sized to match the interior domain's projected aspect
+    ratio. When ``boundary_da`` is provided the panels include the
+    boundary forcing as a thin ring around the interior, controlled by
+    ``boundary_margin_degrees`` (default 1 deg on each side).
 
     Parameters
     ----------
@@ -641,34 +791,59 @@ def plot_prediction(
         ``(vmin, vmax)`` for the shared colour scale. Inferred from data
         if not given.
     boundary_alpha : float, optional
-        Alpha transparency for the boundary overlay (default 0.7).
-    crop_to_interior : bool, optional
-        If True, crop the axes to the interior region (default True).
+        Alpha transparency for the boundary mask overlay (default 0.7).
     colorbar_label : str, optional
         Label for the shared colorbar.
+    boundary_da : xarray.DataArray, optional
+        Boundary field from a separate boundary datastore. Shape
+        ``(num_boundary_grid_nodes,)``. Plotted underneath with reduced
+        opacity.
+    boundary_datastore : BaseRegularGridDatastore, optional
+        Datastore providing grid metadata for the boundary data.
+        Required when ``boundary_da`` is given.
+    boundary_margin_degrees : float, optional
+        Degrees of lat/lon margin around the interior bbox when boundary
+        data is shown (default 1.0). Ignored when no boundary is given.
 
     Returns
     -------
     matplotlib.figure.Figure
         The completed two-panel prediction figure.
     """
+    if crop_to_interior is not None:
+        warnings.warn(
+            "`crop_to_interior` is deprecated and ignored. The interior is "
+            "always shown; pass `boundary_da` and `boundary_datastore` to "
+            "overlay boundary data, and use `boundary_margin_degrees` to "
+            "control the visible margin.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+
     if vrange is None:
         vmin = float(min(da_prediction.min(), da_target.min()))
         vmax = float(max(da_prediction.max(), da_target.max()))
     else:
         vmin, vmax = vrange
 
+    # Size the figure so each panel matches the interior's projected
+    # aspect (with boundary margin added when applicable).
+    margin = boundary_margin_degrees if boundary_da is not None else 0.0
+    panel_aspect = _interior_extent_aspect(datastore, margin)
+    panel_height = 6.0
+    panel_width = max(3.0, panel_height * panel_aspect)
     fig, axes = plt.subplots(
         1,
         2,
-        figsize=(13, 6),
+        figsize=(2 * panel_width + 1.0, panel_height + 1.2),
         subplot_kw={"projection": datastore.coords_projection},
     )
 
+    interior_mesh = None
     for ax, da, subtitle in zip(
         axes, (da_target, da_prediction), ("Ground Truth", "Prediction")
     ):
-        plot_on_axis(
+        interior_mesh = plot_on_axis(
             ax=ax,
             da=da,
             datastore=datastore,
@@ -677,14 +852,16 @@ def plot_prediction(
             ax_title=subtitle,
             cmap="viridis",
             boundary_alpha=boundary_alpha,
-            crop_to_interior=crop_to_interior,
+            boundary_da=boundary_da,
+            boundary_datastore=boundary_datastore,
+            boundary_margin_degrees=boundary_margin_degrees,
         )
 
     if title:
         fig.suptitle(title, size=_TITLE_SIZE)
 
     cbar = fig.colorbar(
-        axes[0].collections[0],
+        interior_mesh,
         ax=axes,
         orientation="horizontal",
         location="bottom",
@@ -705,11 +882,13 @@ def plot_spatial_error(
     title: Optional[str] = None,
     vrange: Optional[tuple[float, float]] = None,
     boundary_alpha: float = 0.7,
-    crop_to_interior: bool = True,
     colorbar_label: str = "",
+    crop_to_interior: Optional[bool] = None,
 ) -> matplotlib.figure.Figure:
     """
     Plot a spatially resolved error map on a projection-aware axis.
+
+    Always cropped to the interior bbox (no boundary overlay).
 
     Parameters
     ----------
@@ -724,8 +903,6 @@ def plot_spatial_error(
         Explicit value range ``(vmin, vmax)`` for the color scale.
     boundary_alpha : float, optional
         Alpha transparency for the boundary overlay (default 0.7).
-    crop_to_interior : bool, optional
-        If True, crop the axes to the interior region (default True).
     colorbar_label : str, optional
         Label for the colorbar.
 
@@ -734,6 +911,14 @@ def plot_spatial_error(
     matplotlib.figure.Figure
         Figure handle containing the plotted map.
     """
+    if crop_to_interior is not None:
+        warnings.warn(
+            "`crop_to_interior` is deprecated and ignored. The error map "
+            "is always cropped to the interior bbox.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+
     error_np = error.detach().cpu().numpy()
 
     if vrange is None:
@@ -742,8 +927,11 @@ def plot_spatial_error(
     else:
         vmin, vmax = vrange
 
+    aspect = _interior_extent_aspect(datastore, margin_degrees=0.0)
+    height = 6.0
+    width = max(3.0, height * aspect)
     fig, ax = plt.subplots(
-        figsize=(6.5, 6),
+        figsize=(width, height),
         subplot_kw={"projection": datastore.coords_projection},
     )
 
@@ -755,7 +943,6 @@ def plot_spatial_error(
         vmax=vmax,
         cmap="OrRd",
         boundary_alpha=boundary_alpha,
-        crop_to_interior=crop_to_interior,
     )
 
     cbar = fig.colorbar(

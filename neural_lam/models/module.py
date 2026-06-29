@@ -3,7 +3,7 @@
 # Standard library
 import os
 import warnings
-from typing import Any
+from typing import Any, Optional
 
 # Third-party
 import matplotlib.pyplot as plt
@@ -38,6 +38,7 @@ class ForecasterModule(pl.LightningModule):
         forecaster: Forecaster,
         config: NeuralLAMConfig,
         datastore: BaseDatastore,
+        datastore_boundary: Optional[BaseDatastore] = None,
         loss: str = "wmse",
         lr: float = 1e-3,
         restore_opt: bool = False,
@@ -116,13 +117,17 @@ class ForecasterModule(pl.LightningModule):
         if var_leads_metrics_watch is None:
             var_leads_metrics_watch = {}
 
-        # datastore and forecaster are excluded from saved hparams and must
-        # be provided explicitly when calling load_from_checkpoint. Saving
-        # args makes the checkpoint self-describing: it carries model,
-        # graph_name, hidden_dim, etc. so the caller can reconstruct the
-        # exact forecaster architecture from the checkpoint alone.
-        self.save_hyperparameters(ignore=["datastore", "forecaster"])
+        # datastore and forecaster are excluded from saved hparams and must be
+        # provided explicitly when calling load_from_checkpoint. Saving args
+        # makes the checkpoint self-describing: it carries model, graph_name,
+        # hidden_dim, etc. so the caller can reconstruct the exact forecaster
+        # architecture from the checkpoint alone.
+        self.save_hyperparameters(
+            ignore=["datastore", "datastore_boundary", "forecaster"]
+        )
+        self.config = config
         self.datastore = datastore
+        self.datastore_boundary = datastore_boundary
         self.forecaster = forecaster
         self.matched_metrics: set = set()
 
@@ -206,6 +211,38 @@ class ForecasterModule(pl.LightningModule):
         else:
             self.forcing_mean = None
             self.forcing_std = None
+
+        # Boundary standardization: registered only when a boundary
+        # datastore is wired in. The same feature-major window tiling as
+        # forcing applies, so we cache the tiled mean/std on first batch.
+        if (
+            datastore_boundary is not None
+            and datastore_boundary.get_num_data_vars(category="forcing") > 0
+        ):
+            da_boundary_stats = (
+                datastore_boundary.get_standardization_dataarray(
+                    category="forcing"
+                )
+            )
+            self.register_buffer(
+                "boundary_mean",
+                torch.tensor(
+                    da_boundary_stats.forcing_mean.values, dtype=torch.float32
+                ),
+                persistent=False,
+            )
+            self.register_buffer(
+                "boundary_std",
+                self._safe_std(
+                    da_boundary_stats.forcing_std.values, eps, "boundary"
+                ),
+                persistent=False,
+            )
+            self.register_buffer("boundary_mean_tiled", None, persistent=False)
+            self.register_buffer("boundary_std_tiled", None, persistent=False)
+        else:
+            self.boundary_mean = None
+            self.boundary_std = None
 
         # Instantiate loss function
         self.loss = metrics.get_metric(loss)
@@ -308,10 +345,13 @@ class ForecasterModule(pl.LightningModule):
         """Standardize a batch on-device after transfer to the accelerator.
 
         Lightning calls this for every train/val/test/predict batch.
-        WeatherDataset returns unstandardized state and forcing; both are
-        normalized here so the work runs on the accelerator.
+        WeatherDataset returns unstandardized state, forcing and boundary;
+        all three are normalized here so the work runs on the accelerator.
+        Forcing and boundary share the same feature-major
+        ``(feature, window)`` stacking, so per-feature mean/std are tiled
+        once and cached.
         """
-        init_states, target_states, forcing, batch_times = batch
+        init_states, target_states, forcing, boundary, batch_times = batch
 
         init_states = (init_states - self.state_mean) / self.state_std
         target_states = (target_states - self.state_mean) / self.state_std
@@ -334,7 +374,20 @@ class ForecasterModule(pl.LightningModule):
                 forcing - self.forcing_mean_tiled
             ) / self.forcing_std_tiled
 
-        return init_states, target_states, forcing, batch_times
+        if boundary.shape[-1] > 0 and self.boundary_mean is not None:
+            if self.boundary_mean_tiled is None:
+                window_size = boundary.shape[-1] // self.boundary_mean.shape[-1]
+                self.boundary_mean_tiled = self.boundary_mean.repeat_interleave(
+                    window_size
+                )
+                self.boundary_std_tiled = self.boundary_std.repeat_interleave(
+                    window_size
+                )
+            boundary = (
+                boundary - self.boundary_mean_tiled
+            ) / self.boundary_std_tiled
+
+        return init_states, target_states, forcing, boundary, batch_times
 
     def common_step(self, batch):
         """
@@ -344,7 +397,7 @@ class ForecasterModule(pl.LightningModule):
         ----------
         batch : tuple
             The batch of data containing initial states, target states,
-            forcing features, and batch times.
+            forcing features, boundary forcing features, and batch times.
 
         Returns
         -------
@@ -352,7 +405,16 @@ class ForecasterModule(pl.LightningModule):
             A tuple containing prediction, target states, predicted standard
             deviation, and batch times.
         """
-        init_states, target_states, forcing_features, batch_times = batch
+        (
+            init_states,
+            target_states,
+            forcing_features,
+            boundary_features,
+            batch_times,
+        ) = batch
+        # NOTE: boundary_features is standardized in
+        # `on_after_batch_transfer` but not yet consumed by the forecaster.
+        # The model-side boundary handling lands in a follow-up PR (#108).
         prediction, pred_std = self.forecaster(
             init_states, forcing_features, target_states
         )
@@ -614,7 +676,7 @@ class ForecasterModule(pl.LightningModule):
         """
 
         target = batch[1]
-        time = batch[3]
+        time = batch[4]
 
         da_state_stats = self.datastore.get_standardization_dataarray("state")
         state_std = torch.tensor(
@@ -630,6 +692,27 @@ class ForecasterModule(pl.LightningModule):
 
         prediction_rescaled = prediction * state_std + state_mean
         target_rescaled = target * state_std + state_mean
+
+        # Load boundary forcing for plotting (raw, unstandardized).
+        #
+        # Interior state variables are matched to boundary forcing fields via
+        # ``config.plotting.boundary_var_mapping``: a boundary overlay is drawn
+        # for state variable ``var_name`` when its mapped boundary feature is a
+        # forcing feature on the boundary datastore. State variables absent from
+        # the mapping fall back to matching a boundary forcing feature of the
+        # same name (e.g. DANRA ``u100m`` overlays ERA5 ``u100m``);
+        plotting_cfg = self.config.plotting
+        boundary_var_mapping = plotting_cfg.boundary_var_mapping
+        da_boundary_forcing = None
+        boundary_feature_names: set = set()
+        if self.datastore_boundary is not None:
+            da_boundary_forcing = self.datastore_boundary.get_dataarray(
+                category="forcing", split=split, standardize=False
+            )
+            if da_boundary_forcing is not None:
+                boundary_feature_names = set(
+                    self.datastore_boundary.get_vars_names("forcing")
+                )
 
         for pred_slice, target_slice, time_slice in zip(
             prediction_rescaled[:n_examples],
@@ -683,6 +766,38 @@ class ForecasterModule(pl.LightningModule):
                 }
 
             for t_i, _ in enumerate(zip(pred_slice, target_slice), start=1):
+                # Select boundary field for this timestep (if available).
+                # Use ``method="nearest"`` because the boundary cadence is
+                # often coarser than the interior (e.g. ERA5 6h vs DANRA
+                # 1h) and we want every interior step to show the closest
+                # available boundary state, not skip frames.
+                boundary_da_t = None
+                if (
+                    da_boundary_forcing is not None
+                    and "time" in da_boundary_forcing.dims
+                ):
+                    target_time = np.array(
+                        time_slice[t_i - 1].cpu(), dtype="datetime64[ns]"
+                    )
+                    boundary_da_t = da_boundary_forcing.sel(
+                        time=target_time, method="nearest"
+                    )
+
+                def _boundary_for(var_name: str):
+                    """Return the boundary field for ``var_name`` if the
+                    boundary datastore exposes the mapped forcing feature
+                    (``boundary_var_mapping``, defaulting to the same name),
+                    else ``None``."""
+                    boundary_var = boundary_var_mapping.get(var_name, var_name)
+                    if (
+                        boundary_da_t is None
+                        or boundary_var not in boundary_feature_names
+                    ):
+                        return None
+                    return boundary_da_t.sel(
+                        forcing_feature=boundary_var
+                    ).squeeze()
+
                 var_figs = [
                     vis.plot_prediction(
                         datastore=self.datastore,
@@ -696,6 +811,15 @@ class ForecasterModule(pl.LightningModule):
                         da_target=da_target.isel(
                             state_feature=var_i, time=t_i - 1
                         ).squeeze(),
+                        boundary_da=boundary_field,
+                        boundary_datastore=(
+                            self.datastore_boundary
+                            if boundary_field is not None
+                            else None
+                        ),
+                        boundary_margin_degrees=(
+                            plotting_cfg.boundary_margin_degrees
+                        ),
                     )
                     for var_i, (var_name, var_unit, var_vrange) in enumerate(
                         zip(
@@ -704,6 +828,7 @@ class ForecasterModule(pl.LightningModule):
                             var_vranges,
                         )
                     )
+                    for boundary_field in (_boundary_for(var_name),)
                 ]
 
                 for var_name, fig in zip(

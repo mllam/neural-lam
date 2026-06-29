@@ -176,13 +176,13 @@ def save_stats(
     """
     means = (
         torch.stack(means) if len(means) > 1 else means[0]
-    )  # (B, d_features,)
+    )  # (B, num_state_vars,)
     squares = (
         torch.stack(squares) if len(squares) > 1 else squares[0]
-    )  # (B, d_features,)
-    mean = torch.mean(means, dim=0)  # (d_features,)
-    second_moment = torch.mean(squares, dim=0)  # (d_features,)
-    std = torch.sqrt(second_moment - mean**2)  # (d_features,)
+    )  # (B, num_state_vars,)
+    mean = torch.mean(means, dim=0)  # (num_state_vars,)
+    second_moment = torch.mean(squares, dim=0)  # (num_state_vars,)
+    std = torch.sqrt(second_moment - mean**2)  # (num_state_vars,)
     print(
         f"Saving {filename_prefix} mean and std.-dev. to "
         f"{filename_prefix}_mean.pt and {filename_prefix}_std.pt"
@@ -289,15 +289,15 @@ def main(
                 target_batch.to(device),
                 forcing_batch.to(device),
             )
-        # (B, N_t, num_grid_nodes, d_features)
+        # (B, num_times, num_grid_nodes, num_state_vars)
         batch = torch.cat((init_batch, target_batch), dim=1)
         # Flux at 1st windowed position is index 0 in forcing
         flux_batch = forcing_batch[:, :, :, 0]
-        # (B, d_features,)
+        # (B, num_state_vars,)
         means.append(torch.mean(batch, dim=(1, 2)).cpu())
         squares.append(
             torch.mean(batch**2, dim=(1, 2)).cpu()
-        )  # (B, d_features,)
+        )  # (B, num_state_vars,)
         flux_means.append(torch.mean(flux_batch).cpu())  # (,)
         flux_squares.append(torch.mean(flux_batch**2).cpu())  # (,)
 
@@ -342,8 +342,8 @@ def main(
                 )
             ]
     else:
-        means = [torch.cat(means, dim=0)]  # (B, d_features,)
-        squares = [torch.cat(squares, dim=0)]  # (B, d_features,)
+        means = [torch.cat(means, dim=0)]  # (B, num_state_vars,)
+        squares = [torch.cat(squares, dim=0)]  # (B, num_state_vars,)
         flux_means = [torch.tensor(flux_means)]  # (B,)
         flux_squares = [torch.tensor(flux_squares)]  # (B,)
 
@@ -417,7 +417,7 @@ def main(
             )
         init_batch = (init_batch - state_mean) / state_std
         target_batch = (target_batch - state_mean) / state_std
-        # (B, N_t', num_grid_nodes, num_state_vars)
+        # (B, num_times', num_grid_nodes, num_state_vars)
         batch = torch.cat((init_batch, target_batch), dim=1)
         # Note: batch contains only 1h-steps
         stepped_batch = torch.cat(
@@ -427,14 +427,14 @@ def main(
             ],
             dim=0,
         )
-        # (B', N_t, num_grid_nodes, d_features),
+        # (B', num_times, num_grid_nodes, num_state_vars),
         # B' = step_length*B
         batch_diffs = stepped_batch[:, 1:] - stepped_batch[:, :-1]
-        # (B', N_t-1, num_grid_nodes, d_features)
+        # (B', num_times-1, num_grid_nodes, num_state_vars)
         diff_means.append(torch.mean(batch_diffs, dim=(1, 2)).cpu())
-        # (B', d_features,)
+        # (B', num_state_vars,)
         diff_squares.append(torch.mean(batch_diffs**2, dim=(1, 2)).cpu())
-        # (B', d_features,)
+        # (B', num_state_vars,)
 
     if distributed and world_size > 1:
         dist.barrier()
@@ -458,8 +458,8 @@ def main(
             diff_means = [diff_means_gathered[:n_original_windows]]
             diff_squares = [diff_squares_gathered[:n_original_windows]]
 
-    diff_means = [torch.cat(diff_means, dim=0)]  # (B', d_features,)
-    diff_squares = [torch.cat(diff_squares, dim=0)]  # (B', d_features,)
+    diff_means = [torch.cat(diff_means, dim=0)]  # (B', num_state_vars,)
+    diff_squares = [torch.cat(diff_squares, dim=0)]  # (B', num_state_vars,)
 
     if rank == 0:
         save_stats(static_dir_path, diff_means, diff_squares, [], [], "diff")
