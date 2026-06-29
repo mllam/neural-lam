@@ -88,12 +88,38 @@ class HiLAMParallel(BaseHiGraphModel):
         )
 
         # Processor GNNs
-        # Create the complete edge_index combining all edges for processing
-        total_edge_index_list = (
-            list(self.m2m_edge_index)
-            + list(self.mesh_up_edge_index)
-            + list(self.mesh_down_edge_index)
-        )
+        # Compute start index of each level in the flattened mesh
+        first_index_level = [0]
+        for size in self.level_mesh_sizes[:-1]:
+            first_index_level.append(first_index_level[-1] + size)
+
+        # Offset node indices of edges to the global mesh index space
+        offset_m2m = [
+            ei + offset
+            for ei, offset in zip(self.m2m_edge_index, first_index_level)
+        ]
+        offset_up = [
+            torch.stack(
+                (
+                    ei[0] + first_index_level[level_idx],
+                    ei[1] + first_index_level[level_idx + 1],
+                ),
+                dim=0,
+            )
+            for level_idx, ei in enumerate(self.mesh_up_edge_index)
+        ]
+        offset_down = [
+            torch.stack(
+                (
+                    ei[0] + first_index_level[level_idx + 1],
+                    ei[1] + first_index_level[level_idx],
+                ),
+                dim=0,
+            )
+            for level_idx, ei in enumerate(self.mesh_down_edge_index)
+        ]
+
+        total_edge_index_list = offset_m2m + offset_up + offset_down
         total_edge_index = torch.cat(total_edge_index_list, dim=1)
         self.edge_split_sections = [ei.shape[1] for ei in total_edge_index_list]
 
