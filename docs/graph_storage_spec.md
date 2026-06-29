@@ -30,7 +30,7 @@ document are to be interpreted as described in RFC 2119.
 
 ### 2.1 Directory Structure
 
-Each graph MUST identified by a unique `name` and stored within the
+Each graph MUST be identified by a unique `name` and stored within the
 directory `graph/<name>/` that in turn MUST be placed within the same
 directory as the datastore configuration from which the graph was derived
 (i.e. the spatial coordinates defining the `grid` coordinates are
@@ -114,7 +114,7 @@ The content of the files depend on the number of mesh levels, denoted as
 - Hierarchical graphs `L > 1`.
 - Entry `0` MUST always be the bottom mesh level.
 
-Every tensor MUST stored in a manner amenable to load with
+Every tensor MUST be stored in a manner amenable to load with
 `torch.load(...)` (this can most easily be support by using
 `torch.save(...)` to store tensors to disk) and satisfy the requirements
 below.
