@@ -14,7 +14,7 @@
 
 ```{code-block} bash
 # Install docs dependencies
-uv sync --extra cpu --extra docs --group dev
+uv sync --extra docs --group dev
 
 # Build the documentation
 sphinx-build -b html docs/ docs/_build/html/
