@@ -49,6 +49,15 @@ requires-python = ">=3.10"
 cpu = ["torch>=2.12,<2.13"]
 gpu = ["torch>=2.12,<2.13"]        # CUDA 13.0, default GPU build
 gpu-cu128 = ["torch>=2.11,<2.12"]  # CUDA 12.8, last torch series with cu128 wheels
+docs = [
+    "sphinx-autoapi>=3.0.0",
+    "sphinx-copybutton>=0.5.2",
+    "sphinx-book-theme>=1.1.0",
+    "sphinx>=7.2.6",
+    "myst-nb>=1.0.0",
+    "sphinxext-opengraph>=0.9.0",
+    "linkify-it-py>=2.0.0",
+]
 
 [dependency-groups]
 dev = ["pre-commit>=3.8.0", "pytest>=8.3.2", "pooch>=1.8.2"]
@@ -162,6 +171,7 @@ exclude = ["tests", "docs", "build"]
 markers = [
     "slow: marks tests as slow (deselected by default, run with -m slow)",
 ]
+norecursedirs = ["docs"]
 
 [build-system]
 requires = ["hatchling>=1.27.0", "hatch-vcs"]
