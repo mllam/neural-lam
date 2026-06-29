@@ -35,7 +35,7 @@ Now you can train a model using the graph and configuration.
 python -m neural_lam.train_model --config_path <path-to-config> --model graph_lam --graph <graph-name>
 ```
 
-Neural-LAM supports several models like `graph_lam`, `hilam`, and `hi_lam_parallel`.
+Neural-LAM supports several models like `graph_lam`, `hi_lam`, and `hi_lam_parallel`.
 
 ## Step 4: Evaluate
 
