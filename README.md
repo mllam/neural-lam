@@ -1,4 +1,4 @@
-[![slack](https://img.shields.io/badge/slack-join-brightgreen.svg?logo=slack)](https://kutt.to/mllam)
+[![slack](https://img.shields.io/badge/slack-join-brightgreen.svg?logo=slack)]
 [![Linting](https://github.com/mllam/neural-lam/actions/workflows/pre-commit.yml/badge.svg?branch=main)](https://github.com/mllam/neural-lam/actions/workflows/pre-commit.yml)
 [![CPU+GPU testing](https://github.com/mllam/neural-lam/actions/workflows/install-and-test.yml/badge.svg?branch=main)](https://github.com/mllam/neural-lam/actions/workflows/install-and-test.yml)
 
@@ -9,7 +9,7 @@
 Neural-LAM is a repository of graph-based neural weather prediction models for Limited Area Modeling (LAM).
 Also global forecasting is possible, but currently on a [different branch](https://github.com/mllam/neural-lam/tree/prob_model_global) ([planned to be merged with main](https://github.com/mllam/neural-lam/issues/63)).
 The code uses [PyTorch](https://pytorch.org/) and [PyTorch Lightning](https://lightning.ai/pytorch-lightning).
-Graph Neural Networks are implemented using [PyG](https://pyg.org/) and logging is set up through [Weights & Biases](https://wandb.ai/).
+Graph Neural Networks are implemented using [PyG](https://github.com/pyg-team/pytorch_geometric) and logging is set up through [Weights & Biases](https://wandb.ai/).
 
 The repository contains LAM versions of:
 
@@ -248,7 +248,7 @@ in neural-lam, are done in a separate package called
 [mllam-data-prep](https://github.com/mllam/mllam-data-prep) rather than in
 neural-lam itself.
 Specifically, the `mllam-data-prep` datastore configuration (for example
-[danra.datastore.yaml](tests/datastore_examples/mdp/danra.datastore.yaml))
+'tests/datastore_examples/mdp/dana_100m_winds/dana.datastore.yaml')
 specifies a) what source datasets to read from, b) what variables to select, c)
 what transformations of dimensions and variables to make, d) what statistics to
 calculate (for normalisation) and e) how to split the data into training,
@@ -400,7 +400,7 @@ python -m neural_lam.datastore.npyfilesmeps.compute_standardization_stats <path-
 ### Graph creation
 
 Run `python -m neural_lam.create_graph` with suitable options to generate the graph you want to use (see `python -m neural_lam.create_graph --help` for a list of options).
-The graphs used for the different models in the [paper](#graph-based-neural-weather-prediction-for-limited-area-modeling) can be created as:
+The graphs used for the different models in the [paper] can be created as:
 
 * **GC-LAM**: `python -m neural_lam.create_graph --config_path <neural-lam-config-path> --name multiscale`
 * **Hi-LAM**: `python -m neural_lam.create_graph --config_path <neural-lam-config-path> --name hierarchical --hierarchical` (also works for Hi-LAM-Parallel)
@@ -452,7 +452,7 @@ The implemented models are:
 ### Graph-LAM
 This is the basic graph-based LAM model.
 The encode-process-decode framework is used with a mesh graph in order to make one-step pedictions.
-This model class is used both for the L1-LAM and GC-LAM models from the [paper](#graph-based-neural-weather-prediction-for-limited-area-modeling), only with different graphs.
+This model class is used both for the L1-LAM and GC-LAM models from the [paper], only with different graphs.
 
 To train 1L-LAM use
 ```
@@ -609,5 +609,5 @@ Furthermore, all tests in the ```tests``` directory will be run upon pushing cha
 
 # Contact
 If you are interested in machine learning models for LAM, have questions about the implementation or ideas for extending it, feel free to get in touch.
-There is an open [mllam slack channel](https://join.slack.com/t/ml-lam/shared_invite/zt-2t112zvm8-Vt6aBvhX7nYa6Kbj_LkCBQ) that anyone can join (after following the link you have to request to join, this is to avoid spam bots).
+There is an open [mllam slack channel] that anyone can join (after following the link you have to request to join, this is to avoid spam bots).
 You can also open a github issue on this page.
