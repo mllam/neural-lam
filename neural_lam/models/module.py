@@ -10,8 +10,6 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pytorch_lightning as pl
 import torch
-import xarray as xr
-from PIL import Image
 
 # First-party
 from neural_lam.utils import get_integer_time
@@ -21,7 +19,6 @@ from .. import metrics, vis
 from ..config import NeuralLAMConfig
 from ..datastore import BaseDatastore
 from ..loss_weighting import get_state_feature_weighting
-from ..weather_dataset import WeatherDataset
 from .forecasters.base import Forecaster
 
 
@@ -238,39 +235,6 @@ class ForecasterModule(pl.LightningModule):
         self.time_step_int, self.time_step_unit = get_integer_time(
             self.datastore.step_length
         )
-
-    def _create_dataarray_from_tensor(
-        self,
-        tensor: torch.Tensor,
-        time: torch.Tensor,
-        split: str,
-        category: str,
-    ) -> xr.DataArray:
-        """
-        Create an xarray DataArray from a torch tensor.
-
-        Parameters
-        ----------
-        tensor : torch.Tensor
-            The tensor to convert.
-        time : torch.Tensor
-            The time coordinates for the data.
-        split : str
-            The data split (e.g., 'train', 'val', 'test').
-        category : str
-            The category of data (e.g., 'state', 'forcing').
-
-        Returns
-        -------
-        xr.DataArray
-            The resulting xarray DataArray.
-        """
-        weather_dataset = WeatherDataset(datastore=self.datastore, split=split)
-        time = np.array(time.cpu(), dtype="datetime64[ns]")
-        da = weather_dataset.create_dataarray_from_tensor(
-            tensor=tensor, time=time, category=category
-        )
-        return da
 
     def configure_optimizers(self):
         """
@@ -616,6 +580,9 @@ class ForecasterModule(pl.LightningModule):
         target = batch[1]
         time = batch[3]
 
+        # Rescaling is a model concern: convert standardized predictions and
+        # targets back to physical units before handing them to the
+        # normalization-agnostic vis.plot_examples function.
         da_state_stats = self.datastore.get_standardization_dataarray("state")
         state_std = torch.tensor(
             da_state_stats.state_std.values,
@@ -631,141 +598,16 @@ class ForecasterModule(pl.LightningModule):
         prediction_rescaled = prediction * state_std + state_mean
         target_rescaled = target * state_std + state_mean
 
-        for pred_slice, target_slice, time_slice in zip(
-            prediction_rescaled[:n_examples],
-            target_rescaled[:n_examples],
-            time[:n_examples],
-        ):
-            self.plotted_examples += 1
-
-            da_prediction = self._create_dataarray_from_tensor(
-                tensor=pred_slice,
-                time=time_slice,
-                split=split,
-                category="state",
-            ).unstack("grid_index")
-            da_target = self._create_dataarray_from_tensor(
-                tensor=target_slice,
-                time=time_slice,
-                split=split,
-                category="state",
-            ).unstack("grid_index")
-
-            var_vmin = (
-                torch.minimum(
-                    pred_slice.flatten(0, 1).min(dim=0)[0],
-                    target_slice.flatten(0, 1).min(dim=0)[0],
-                )
-                .cpu()
-                .numpy()
-            )
-            var_vmax = (
-                torch.maximum(
-                    pred_slice.flatten(0, 1).max(dim=0)[0],
-                    target_slice.flatten(0, 1).max(dim=0)[0],
-                )
-                .cpu()
-                .numpy()
-            )
-            var_vranges = list(zip(var_vmin, var_vmax))
-
-            example_i = self.plotted_examples
-
-            if self.create_gif:
-                plot_dir_path = os.path.join(
-                    self.logger.save_dir,
-                    f"example_plots_{example_i}",
-                )
-                os.makedirs(plot_dir_path, exist_ok=True)
-                png_frames: dict[str, list[str]] = {
-                    var_name: []
-                    for var_name in self.datastore.get_vars_names("state")
-                }
-
-            for t_i, _ in enumerate(zip(pred_slice, target_slice), start=1):
-                var_figs = [
-                    vis.plot_prediction(
-                        datastore=self.datastore,
-                        title=f"{var_name} ({var_unit}), "
-                        f"t={t_i} ({(self.time_step_int * t_i)}"
-                        f"{self.time_step_unit})",
-                        vrange=var_vrange,
-                        da_prediction=da_prediction.isel(
-                            state_feature=var_i, time=t_i - 1
-                        ).squeeze(),
-                        da_target=da_target.isel(
-                            state_feature=var_i, time=t_i - 1
-                        ).squeeze(),
-                    )
-                    for var_i, (var_name, var_unit, var_vrange) in enumerate(
-                        zip(
-                            self.datastore.get_vars_names("state"),
-                            self.datastore.get_vars_units("state"),
-                            var_vranges,
-                        )
-                    )
-                ]
-
-                for var_name, fig in zip(
-                    self.datastore.get_vars_names("state"), var_figs
-                ):
-                    if isinstance(self.logger, pl.loggers.WandbLogger):
-                        key = f"{var_name}_example_{example_i}"
-                    else:
-                        key = f"{var_name}_example"
-
-                    if hasattr(self.logger, "log_image"):
-                        self.logger.log_image(key=key, images=[fig], step=t_i)
-                    else:
-                        warnings.warn(
-                            f"{self.logger} does not support image logging."
-                        )
-
-                    if self.create_gif:
-                        png_path = os.path.join(
-                            plot_dir_path,
-                            f"{var_name}_example_{example_i}"
-                            f"_prediction_t_{t_i:02d}.png",
-                        )
-                        fig.savefig(png_path, dpi=100, bbox_inches="tight")
-                        png_frames[var_name].append(png_path)
-
-                plt.close("all")
-
-            if self.create_gif:
-                for var_name, frames_for_var in png_frames.items():
-                    if frames_for_var:
-                        gif_path = os.path.join(
-                            plot_dir_path,
-                            f"{var_name}_example_{example_i}_prediction.gif",
-                        )
-                        frames = [Image.open(f) for f in frames_for_var]
-                        try:
-                            frames[0].save(
-                                gif_path,
-                                save_all=True,
-                                append_images=frames[1:],
-                                loop=0,
-                                duration=1000,
-                            )
-                        finally:
-                            for frame in frames:
-                                frame.close()
-
-            torch.save(
-                pred_slice.cpu(),
-                os.path.join(
-                    self.logger.save_dir,
-                    f"example_pred_{self.plotted_examples}.pt",
-                ),
-            )
-            torch.save(
-                target_slice.cpu(),
-                os.path.join(
-                    self.logger.save_dir,
-                    f"example_target_{self.plotted_examples}.pt",
-                ),
-            )
+        vis.plot_examples(
+            datastore=self.datastore,
+            logger=self.logger,
+            prediction=prediction_rescaled[:n_examples],
+            target=target_rescaled[:n_examples],
+            time_batch=time[:n_examples],
+            first_example_idx=self.plotted_examples + 1,
+            create_gif=self.create_gif,
+        )
+        self.plotted_examples += n_examples
 
     def create_metric_log_dict(self, metric_tensor, prefix, metric_name):
         """

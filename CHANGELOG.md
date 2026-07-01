@@ -192,6 +192,12 @@ This release introduces new features including GIF animation support, wandb run 
 
 - Fix Slack domain link [\#288](https://github.com/mllam/neural-lam/pull/288) @sadamov
 
+### Changed
+
+- Refactored `ForecasterModule`: extracted example-plotting logic into a
+  standalone `plot_examples` function in `vis.py`, with the model now
+  delegating to it [\#209](https://github.com/mllam/neural-lam/pull/209) @oleeviyababu
+
 ### Maintenance
 
 - Update PR template to clarify milestone/roadmap requirement and maintenance changes [\#186](https://github.com/mllam/neural-lam/pull/186) @joeloskarsson

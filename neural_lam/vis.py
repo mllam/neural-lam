@@ -1,6 +1,7 @@
 """Visualization helpers for analysing Neural-LAM predictions and errors."""
 
 # Standard library
+import os
 import warnings
 from typing import Optional
 
@@ -14,8 +15,10 @@ import matplotlib.colors
 import matplotlib.figure
 import matplotlib.pyplot as plt
 import numpy as np
+import pytorch_lightning as pl
 import torch
 import xarray as xr
+from PIL import Image
 
 # Local
 from . import utils
@@ -775,3 +778,164 @@ def plot_spatial_error(
         fig.suptitle(title, size=_TITLE_SIZE)
 
     return fig
+
+
+def plot_examples(
+    datastore: BaseRegularGridDatastore,
+    logger: pl.loggers.Logger,
+    prediction: torch.Tensor,
+    target: torch.Tensor,
+    time_batch: torch.Tensor,
+    first_example_idx: int = 0,
+    create_gif: bool = False,
+) -> None:
+    """
+    Plot example forecasts from provided tensors.
+
+    Parameters
+    ----------
+    datastore : BaseRegularGridDatastore
+        The object containing dataset metadata.
+    logger : pl.loggers.Logger
+        The logger instance used to save the images.
+    prediction : torch.Tensor
+        Output tensors predicted from the model.
+    target : torch.Tensor
+        Ground truth tensors.
+    time_batch : torch.Tensor
+        Time timestamps corresponding to the data.
+    first_example_idx : int, optional
+        Starting index for naming saved files/logs.
+    create_gif : bool, optional
+        If True, save per-variable animated GIFs (one frame per prediction
+        step) alongside the logged figures.
+    """
+    time_step_int, time_step_unit = utils.get_integer_time(
+        datastore.step_length
+    )
+
+    for i, (pred_slice, target_slice, time_slice) in enumerate(
+        zip(prediction, target, time_batch)
+    ):
+        example_i = first_example_idx + i
+
+        # Detach tensors to safely separate from autograd graph
+        pred_slice = pred_slice.detach()
+        target_slice = target_slice.detach()
+
+        time_arr = np.array(time_slice.cpu(), dtype="datetime64[ns]")
+
+        da_prediction = datastore.create_dataarray_from_tensor(
+            tensor=pred_slice, time=time_arr, category="state"
+        ).unstack("grid_index")
+
+        da_target = datastore.create_dataarray_from_tensor(
+            tensor=target_slice, time=time_arr, category="state"
+        ).unstack("grid_index")
+
+        var_vmin = (
+            torch.minimum(
+                pred_slice.flatten(0, 1).min(dim=0)[0],
+                target_slice.flatten(0, 1).min(dim=0)[0],
+            )
+            .cpu()
+            .numpy()
+        )
+        var_vmax = (
+            torch.maximum(
+                pred_slice.flatten(0, 1).max(dim=0)[0],
+                target_slice.flatten(0, 1).max(dim=0)[0],
+            )
+            .cpu()
+            .numpy()
+        )
+        var_vranges = list(zip(var_vmin, var_vmax))
+
+        if create_gif:
+            plot_dir_path = os.path.join(
+                logger.save_dir, f"example_plots_{example_i}"
+            )
+            os.makedirs(plot_dir_path, exist_ok=True)
+            png_frames: dict[str, list[str]] = {
+                var_name: [] for var_name in datastore.get_vars_names("state")
+            }
+
+        for t_i, _ in enumerate(zip(pred_slice, target_slice), start=1):
+            var_figs = [
+                plot_prediction(
+                    datastore=datastore,
+                    title=f"{var_name} ({var_unit}), "
+                    f"t={t_i} ({(time_step_int * t_i)}"
+                    f"{time_step_unit})",
+                    vrange=var_vrange,
+                    da_prediction=da_prediction.isel(
+                        state_feature=var_i, time=t_i - 1
+                    ).squeeze(),
+                    da_target=da_target.isel(
+                        state_feature=var_i, time=t_i - 1
+                    ).squeeze(),
+                )
+                for var_i, (var_name, var_unit, var_vrange) in enumerate(
+                    zip(
+                        datastore.get_vars_names("state"),
+                        datastore.get_vars_units("state"),
+                        var_vranges,
+                    )
+                )
+            ]
+
+            for var_name, fig in zip(
+                datastore.get_vars_names("state"), var_figs
+            ):
+                if isinstance(logger, pl.loggers.WandbLogger):
+                    key = f"{var_name}_example_{example_i}"
+                else:
+                    key = f"{var_name}_example"
+
+                if hasattr(logger, "log_image"):
+                    logger.log_image(key=key, images=[fig], step=t_i)
+                else:
+                    warnings.warn(f"{logger} does not support image logging.")
+
+                if create_gif:
+                    png_path = os.path.join(
+                        plot_dir_path,
+                        f"{var_name}_example_{example_i}"
+                        f"_prediction_t_{t_i:02d}.png",
+                    )
+                    fig.savefig(png_path, dpi=100, bbox_inches="tight")
+                    png_frames[var_name].append(png_path)
+
+            plt.close("all")
+
+        if create_gif:
+            for var_name, frames_for_var in png_frames.items():
+                if frames_for_var:
+                    gif_path = os.path.join(
+                        plot_dir_path,
+                        f"{var_name}_example_{example_i}_prediction.gif",
+                    )
+                    frames = [Image.open(f) for f in frames_for_var]
+                    try:
+                        frames[0].save(
+                            gif_path,
+                            save_all=True,
+                            append_images=frames[1:],
+                            loop=0,
+                            duration=1000,
+                        )
+                    finally:
+                        for frame in frames:
+                            frame.close()
+
+        pred_filename = f"example_pred_{example_i}.pt"
+        torch.save(
+            pred_slice.cpu(),
+            os.path.join(logger.save_dir, pred_filename),
+        )
+
+        target_filename = f"example_target_{example_i}.pt"
+        torch.save(
+            target_slice.cpu(),
+            os.path.join(logger.save_dir, target_filename),
+        )

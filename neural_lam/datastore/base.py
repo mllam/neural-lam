@@ -4,6 +4,7 @@
 import abc
 import collections
 import dataclasses
+import datetime
 import functools
 from datetime import timedelta
 from functools import cached_property
@@ -12,6 +13,7 @@ from pathlib import Path
 # Third-party
 import cartopy.crs as ccrs
 import numpy as np
+import torch
 import xarray as xr
 from pandas.core.indexes.multi import MultiIndex
 
@@ -456,6 +458,93 @@ class BaseDatastore(abc.ABC):
             dim_order.append(f"{category}_feature")
 
         return tuple(dim_order)
+
+    def create_dataarray_from_tensor(
+        self,
+        tensor: torch.Tensor,
+        time: datetime.datetime | list[datetime.datetime],
+        category: str,
+    ) -> xr.DataArray:
+        """
+        Construct an xarray.DataArray from a torch.Tensor.
+
+        The tensor shape determines how ``time`` is interpreted:
+
+        - 2-D ``(grid_index, {category}_feature)``: ``time`` must be a
+          single timestamp, stored as a scalar coordinate.
+        - 3-D ``(n_timesteps, grid_index, {category}_feature)``: ``time``
+          must be a list of ``n_timesteps`` timestamps, stored as a
+          dimension.
+
+        The x/y coordinates from the datastore are attached to
+        ``grid_index`` so the DataArray can be unstacked into a 2-D grid.
+
+        Parameters
+        ----------
+        tensor : torch.Tensor
+            2-D or 3-D tensor to convert.
+        time : datetime.datetime or list of datetime.datetime
+            Timestamp(s) aligned with the tensor's time dimension.
+        category : str
+            Data category (``"state"``, ``"forcing"``, or ``"static"``).
+
+        Returns
+        -------
+        xarray.DataArray
+            DataArray with coordinates for grid_index, time, and
+            {category}_feature, plus attached x/y coordinates.
+        """
+
+        def _is_listlike(obj):
+            """Return ``True`` for list/tuple/ndarray-like containers."""
+            return hasattr(obj, "__iter__") and not isinstance(obj, str)
+
+        add_time_as_dim = False
+        if len(tensor.shape) == 2:
+            dims = ["grid_index", f"{category}_feature"]
+            if _is_listlike(time):
+                raise ValueError(
+                    "Expected a single time for a 2D tensor with assumed "
+                    f"dimensions (grid_index, {category}_feature), but got "
+                    f"{len(time)} times"  # type: ignore
+                )
+        elif len(tensor.shape) == 3:
+            add_time_as_dim = True
+            dims = ["time", "grid_index", f"{category}_feature"]
+            if not _is_listlike(time):
+                raise ValueError(
+                    "Expected a list of times for a 3D tensor with assumed "
+                    f"dimensions (time, grid_index, {category}_feature), but "
+                    "got a single time"
+                )
+        else:
+            raise ValueError(
+                "Expected tensor to have 2 or 3 dimensions, but got "
+                f"{len(tensor.shape)}"
+            )
+
+        # Safely fetch the correct feature category
+        feature_names = self.get_vars_names(category)
+        grid_index = np.arange(self.num_grid_points)
+        coords: dict = {
+            f"{category}_feature": feature_names,
+            "grid_index": grid_index,
+        }
+        if add_time_as_dim:
+            coords["time"] = time
+        da = xr.DataArray(
+            tensor.cpu().numpy(),
+            dims=dims,
+            coords=coords,
+        )
+        # Attach x, y coordinates so the DataArray can later be unstacked
+        # into a 2D spatial grid via unstack("grid_index")
+        xy = self.get_xy(category, stacked=True)
+        da.coords["x"] = xr.DataArray(xy[:, 0], dims=["grid_index"])
+        da.coords["y"] = xr.DataArray(xy[:, 1], dims=["grid_index"])
+        if not add_time_as_dim:
+            da.coords["time"] = time
+        return da
 
 
 @dataclasses.dataclass
