@@ -21,6 +21,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Extend `BufferList.__getitem__` with slice and negative-index support (Python sequence semantics); out-of-bounds integer access raises `IndexError`. [\#472](https://github.com/mllam/neural-lam/pull/472) @sudhansu-24
 
+- Split the training checkpoint setup into two callbacks: a validation-driven one that keeps the best `val_mean_loss` checkpoint (`min_val_loss.ckpt`) and a separate rescue callback that writes `last.ckpt` at every train-epoch end. Long HPC jobs that crash or time out between validation runs can resume from `last.ckpt` instead of losing all progress since the previous validation [\#250](https://github.com/mllam/neural-lam/pull/250) @Jayant-kernel
+
+- Graph storage specification (`docs/graph_storage_spec.md`), PEP 723–compliant validator script (`docs/validate_graph.py`), and pre-commit hook keeping the spec in sync with the validator for the torch-tensors-on-disk graph format currently used in neural-lam [\#323](https://github.com/mllam/neural-lam/pull/323) @leifdenby
+
 ### Changed
 
 - Move data normalization from CPU (`WeatherDataset`) to GPU
@@ -41,6 +45,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Fix `RuntimeError` in `HiLAMParallel` forward pass on hierarchical graphs by offsetting edge indices into the global mesh node index space ([#679](https://github.com/mllam/neural-lam/issues/679))
+
 - Fix `IndexError` in HiLAM forward pass by offsetting grid nodes in `zero_index_g2m`/`zero_index_m2g` by the total mesh-node count across all levels ([#642](https://github.com/mllam/neural-lam/issues/642)) @Sir-Sloth-The-Lazy
 
 - Change metric heatmap (`plot_error_map`, now `plot_error_heatmap`) to use a
@@ -58,7 +64,53 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Fix `IndexError` in distributed flux stats gathering and silent diff stats shape corruption in `compute_standardization_stats.py` when running with `--distributed` and `world_size > 1` [\#411](https://github.com/mllam/neural-lam/pull/411) @RajdeepKushwaha5
 
+- Raise `ValueError` for unsupported `--logger` values in `setup_training_logger`, preventing a misleading `UnboundLocalError` on misconfigured logger types [\#463](https://github.com/mllam/neural-lam/pull/463) @Ritinikhil
+
+- Close the `PIL.Image` file handle and delete the temporary `.png` after upload in `CustomMLFlowLogger.log_image`, fixing a resource leak and temp-file accumulation in CWD; replace `sys.exit(1)` on `NoCredentialsError` with a re-raise so callers can handle the failure [\#496](https://github.com/mllam/neural-lam/pull/496) @Zrahay
+
+- Reset `plotted_examples` and clear `test_metrics` at the end of `on_test_epoch_end` so repeated `trainer.test()` calls on the same model instance regenerate example plots and start from a clean metric slate instead of silently skipping plots and accumulating tensors [\#437](https://github.com/mllam/neural-lam/pull/437) @RajdeepKushwaha5
+
+- Log every figure passed to `CustomMLFlowLogger.log_image` instead of silently dropping all but the first, using per-figure indexed keys (`{key}_{i}`) when more than one is supplied [\#499](https://github.com/mllam/neural-lam/pull/499) @Raj-Taware
+
+- Validate `--var_leads_metrics_watch` variable indices against the datastore in `train_model.py` so an out-of-range index raises a clear CLI error immediately, instead of an `IndexError` deep in the first validation epoch after potentially hours of training [\#306](https://github.com/mllam/neural-lam/pull/306) @Ayushhgit
+
+- Fix `WeatherDataset.__len__` off-by-one in analysis mode (was undercounting by 1 sample), include `num_past_forcing_steps` in the forecast-mode minimum-horizon check, validate forcing-side forecast horizon when forcing is present, and use `min(n_state, n_forcing)` when both are present in analysis mode; raise `IndexError` for out-of-range indices in `WeatherDataset.__getitem__` (with Python-style negative indexing support) [\#312](https://github.com/mllam/neural-lam/pull/312) @kshirajahere
+
 ### Maintenance
+
+- Add comprehensive type hints to GraphLAM in `neural_lam/models/step_predictors/graph/graph_lam.py` [\#669](https://github.com/mllam/neural-lam/pull/669) @GiGiKoneti
+
+- Add comprehensive type hints to ARForecaster in `neural_lam/models/forecasters/autoregressive.py` [\#663](https://github.com/mllam/neural-lam/pull/663) @GiGiKoneti
+
+- Add comprehensive type hints to StepPredictor in `neural_lam/models/step_predictors/base.py` [\#665](https://github.com/mllam/neural-lam/pull/665) @GiGiKoneti
+
+- Add comprehensive type hints to BaseGraphModel in `neural_lam/models/step_predictors/graph/base.py` [\#667](https://github.com/mllam/neural-lam/pull/667) @GiGiKoneti
+
+- Establish 100% docstring coverage across `neural_lam/` via an `interrogate` pre-commit hook, add a Dimension Glossary to the README for canonical tensor-shape names, and rewrite public docstrings in NumPy style to serve as the entry point for the autoapi pipeline (#196 / #272). [\#252](https://github.com/mllam/neural-lam/pull/252) @Mohit-Lakra
+
+- Register a `slow` pytest marker and apply it to `test_training` and `test_training_output_std` so contributors can skip long-running training tests during local iteration via `pytest -m "not slow"`. [\#651](https://github.com/mllam/neural-lam/pull/651) @sadamov
+
+- Add a short README pointer to [\#163](https://github.com/mllam/neural-lam/issues/163) for DGX Spark / PyTorch container compatibility notes, so users hitting `torch_scatter` errors know where to find the known-working / known-failing combos [\#266](https://github.com/mllam/neural-lam/pull/266) @Jayant-kernel
+
+- Group the existing Neural-LAM citation papers in the README under a `### Core Neural-LAM Publications` subheading for clearer structure [\#633](https://github.com/mllam/neural-lam/pull/633) @HetaviM29
+
+- Add unit tests for `inverse_softplus` covering roundtrip identity (parametrized over `beta`), near-zero clamping, and above-threshold linear passthrough [\#419](https://github.com/mllam/neural-lam/pull/419) @Riteesh-NITT
+
+- Add regression test that `datastore` and `forecaster` stay excluded from the saved Lightning hyperparameters (in-memory and on-disk after a checkpoint round-trip), so `load_from_checkpoint` continues to require them to be passed in explicitly ([#148](https://github.com/mllam/neural-lam/issues/148)) [\#232](https://github.com/mllam/neural-lam/pull/232) @Jayant-kernel
+
+- Add comprehensive type hints to `neural_lam/metrics.py` [\#447](https://github.com/mllam/neural-lam/pull/447) @sidhantpande
+
+- Add type hints to methods in `neural_lam/custom_loggers.py` [\#455](https://github.com/mllam/neural-lam/pull/455) @sidhantpande
+
+- Add comprehensive type hints to `neural_lam/gnn_layers.py` [\#647](https://github.com/mllam/neural-lam/pull/647) @GiGiKoneti
+
+- Add comprehensive type hints to `neural_lam/weather_dataset.py` [\#631](https://github.com/mllam/neural-lam/pull/631) @GiGiKoneti
+
+- Add comprehensive type hints to `neural_lam/vis.py` [\#625](https://github.com/mllam/neural-lam/pull/625) @GiGiKoneti
+
+- Add comprehensive type hints to `neural_lam/datastore/mdp.py` and `neural_lam/plot_graph.py` [\#622](https://github.com/mllam/neural-lam/pull/622) @GiGiKoneti
+
+- Group `train_model.py --help` output into logical sections (Core, Runtime, Model Architecture, Training, Evaluation, Logger, Metrics & Monitoring, Data Loading & Forcing) with a terminal-width-aware formatter [\#641](https://github.com/mllam/neural-lam/pull/641) @varma1221
 
 - Fix GPU CI torch version resolution to query the target wheel index instead of PyPI [\#639](https://github.com/mllam/neural-lam/pull/639) @Sir-Sloth-The-Lazy
 
@@ -72,6 +124,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Add two-layer caching to install-and-test CI workflow (pip download cache + uv venv cache) to reduce build times by 80-95% [\#606](https://github.com/mllam/neural-lam/pull/606) @Sharkyii
 
+- Select the torch build via mutually-exclusive `cpu`, `gpu` (CUDA 13.0) and
+  `gpu-cu128` (CUDA 12.8) extras routed through `[tool.uv.sources]`, with torch
+  versions pinned per CUDA build and a committed `uv.lock`. CI now installs and
+  tests only with `uv` (CPU + CUDA 13.0); the `pip` install path is still
+  documented in the README. The default GPU build moves from CUDA 12.8 to 13.0;
+  users on other CUDA versions install the matching `torch` variant manually
+  (see README) [\#604](https://github.com/mllam/neural-lam/pull/604) @RajdeepKushwaha5
 
 ## [v0.6.0](https://github.com/mllam/neural-lam/releases/tag/v0.6.0)
 
@@ -93,6 +152,7 @@ This release introduces new features including GIF animation support, wandb run 
 
 ### Changed
 
+- Consolidate all training/evaluation run outputs (checkpoints, logger files, plots) into a single `runs/<run-name>/` directory instead of scattering across `saved_models/`, `lightning_logs/`, `wandb/`, and `mlruns/` [\#293](https://github.com/mllam/neural-lam/issues/293) @sudhansu-24
 - Change the default ensemble-loading behavior in `WeatherDataset` / `WeatherDataModule` to use all ensemble members as independent samples for ensemble datastores (with matching ensemble-member selection for forcing when available); single-member behavior now requires explicitly opting in via `--load_single_member` [\#332](https://github.com/mllam/neural-lam/pull/332) @kshirajahere
 
 - Refactor graph loading: move zero-indexing out of the model and update plotting to prepare using the research-branch graph I/O [\#184](https://github.com/mllam/neural-lam/pull/184) @zweihuehner
