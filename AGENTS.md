@@ -2,100 +2,65 @@
 
 Mandatory rules for AI coding agents. Violations will result in rejected PRs.
 
----
+**Read [CONTRIBUTING.md](CONTRIBUTING.md) first.** It covers the general workflow that applies to
+every contributor (open an issue, fork, set up the environment, run `pre-commit` and `pytest`,
+fill in the PR template, add a CHANGELOG entry, monthly dev meeting). Everything there applies.
+This file adds the AI-specific rules on top.
 
-## Codebase
+## Codebase reference
 
-Neural-LAM: graph-based neural weather prediction for Limited Area Modeling. Models: `GraphLAM`,
-`HiLAM`, `HiLAMParallel`.
+See the README architecture overview for the data flow and module map.
+`git log --stat -- neural_lam/` shows which files have moved recently - prefer that over any
+snapshot, which will rot.
 
-**Data flow:** Raw zarr/numpy → `Datastore` → `WeatherDataset` → `WeatherDataModule` → Model →
-Predictions
+## AI-specific entry-point commands
 
-**Key modules:**
-- `datastore/` — `BaseDatastore` (abstract), `MDPDatastore` (zarr via mllam-data-prep)
-- `models/` — `ARModel` (autoregressive base, Lightning) → `BaseGraphModel` (encode-process-decode)
-  → `GraphLAM` / `HiLAM` / `HiLAMParallel`
-- `weather_dataset.py` — `WeatherDataset` + `WeatherDataModule`
-- `config.py` — YAML config via dataclass-wizard
-- `create_graph.py` — builds mesh graphs (must run before training)
-- `interaction_net.py` — `InteractionNet` GNN layer (PyG `MessagePassing`)
-- `utils.py` — `make_mlp`, normalization helpers
-
-Config examples: `tests/datastore_examples/`
-
-## Commands
+The standard install / lint / test commands are in
+[CONTRIBUTING.md > Before you push](CONTRIBUTING.md#before-you-push). The two CLI entry points
+agents most often need:
 
 ```bash
-# Install (torch variant selected via mutually-exclusive extras; uv.lock is committed)
-uv sync --extra cpu        --group dev --locked  # CPU-only
-uv sync --extra gpu        --group dev --locked  # GPU, CUDA 13.0 (default)
-uv sync --extra gpu-cu128  --group dev --locked  # GPU, CUDA 12.8
-```
-
-The `cpu`/`gpu`/`gpu-cu128` extras route `torch` to the matching PyTorch index via `[tool.uv.sources]` in `pyproject.toml`. CI uses `uv` only (CPU + CUDA 13.0); the `pip` install path is still documented in the README for users who prefer it.
-
-The remaining commands need to be prepended with `uv run` or the virtual env activated with `source .venv/bin/activate` first:
-
-```bash
-# Lint
-pre-commit run --all-files    # black, isort, flake8, mypy, codespell
-
-# Test
-pytest -vv -s --doctest-modules            # all
-pytest tests/test_training.py -vv -s       # single file
-pytest tests/test_training.py::test_fn -vv # single function
-
-# Run
 python -m neural_lam.create_graph --config_path <config> --name <graph>
 python -m neural_lam.train_model --config_path <config> --model graph_lam --graph <graph>
 python -m neural_lam.train_model --eval test --config_path <config> --load <ckpt>
 ```
 
-W&B auto-disabled in tests. `DummyDatastore` used; example data downloaded from S3 on first run.
+W&B is auto-disabled in tests. `DummyDatastore` is the in-memory test fixture; example data is
+downloaded from S3 on first run.
 
 ---
 
-## Rules
+## AI-specific rules
 
-### Issues
+### Search before creating
 
-1. **Search before creating.** Use any of: GitHub UI search, `gh issue list --state all --search "<keywords>"`, or `curl "https://api.github.com/search/issues?q=<keywords>+repo:mllam/neural-lam+type:issue"`. Duplicate issues will be closed.
-2. **Every PR requires an issue.** No exceptions. Open one first if none exists.
-3. **Include minimal example.** Each issue should include a minimal, reproducible example on how to easily recreate a bug, including all necessary module imports and data. Include full traceback if it is a bug-report.
+Duplicate issues and PRs from AI agents are a recurring problem. Search before opening anything:
 
-### Pull Requests
+```bash
+gh issue list --state all --search "<keywords>"
+gh pr list --state all --search "<keywords>"
+```
 
-1. **Search before creating.** Use any of: GitHub UI search, `gh pr list --state all --search "<keywords>"`, or `curl "https://api.github.com/search/issues?q=<keywords>+repo:mllam/neural-lam+type:pr"`. If a PR exists for the same issue, contribute there.
-2. **Link the issue.** PR body must contain `closes #<N>` or `refs #<N>`. Unlinked PRs will be
-   rejected.
-3. **Use the PR template.** Fill in every section of `.github/pull_request_template.md`. Do not
-   delete or skip sections.
-4. **Read the full issue thread before writing code.** Rejected approaches and prior decisions are
-   there. Ignoring them wastes everyone's time.
-5. **Run pre-commit hooks locally.** Linting needs to be done locally before each new commit with e.g. `uvx pre-commit run --all`
-6. **Testing Mandate.** Run `pytest tests/` before opening a PR and if tests fail do not open the PR, fix the failure first.
+If a PR already exists for the same issue, contribute there rather than opening a competing one.
+
+### Re-read the thread before every action
+
+Re-read the full issue / PR thread (including inline review comments via
+`gh api repos/mllam/neural-lam/pulls/<N>/comments`) before every comment and every push. Never
+repeat a question already answered or an approach already rejected.
 
 ### Communication
 
 - **Terse.** One sentence per point. No preamble. No summaries of visible diffs.
-- **No filler.** Ban list: "Great question", "As mentioned above", "I hope this helps", "Let me know
-  if you have questions", "Happy to help".
+- **No filler.** Ban list: "Great question", "As mentioned above", "I hope this helps", "Let me
+  know if you have questions", "Happy to help".
 - **No obvious narration.** Do not explain what self-explanatory code does.
 - **PR descriptions: what changed and why.** Nothing else.
 - **One question at a time.** No shotgun lists of open-ended questions.
 
-### Context
-
-- **Re-read the entire thread** before every comment and every push. No exceptions.
-- **After a context gap**, reload the full thread (GitHub UI, `gh issue view <N>` / `gh pr view <N>`, or `curl "https://api.github.com/repos/mllam/neural-lam/issues/<N>"`) before acting.
-- **Never repeat** a question already answered or an approach already rejected in the thread.
-
 ### Commits
 
-- Imperative form, matching existing `git log` style.
-- One concern per PR. No unrelated changes.
-- AI attribution of tool names is mandatory if used and should be mentioned in the commit message trailer as `Co-authored-by <tool>`
+AI attribution is mandatory. Add a `Co-authored-by:` trailer to every commit produced with AI assistance, e.g. `Co-authored-by: Claude Opus 4.8 <noreply@anthropic.com>`.
 
 ### Changelog
 

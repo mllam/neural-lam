@@ -78,6 +78,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Maintenance
 
+- Add a root `CONTRIBUTING.md` walking a new contributor from fork to merged PR (issue triage, environment setup pointing at the README install section, pre-commit, code standards, the exact local test command CI runs, PR template / CHANGELOG expectations, monthly dev-meeting pointer, Slack + issues for help) [\#407](https://github.com/mllam/neural-lam/pull/407) @ANANYA542
+
 - Add comprehensive type hints to GraphLAM in `neural_lam/models/step_predictors/graph/graph_lam.py` [\#669](https://github.com/mllam/neural-lam/pull/669) @GiGiKoneti
 
 - Add comprehensive type hints to ARForecaster in `neural_lam/models/forecasters/autoregressive.py` [\#663](https://github.com/mllam/neural-lam/pull/663) @GiGiKoneti
