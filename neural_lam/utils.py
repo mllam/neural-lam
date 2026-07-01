@@ -1,3 +1,5 @@
+"""Utility helpers shared across Neural-LAM training and evaluation."""
+
 # Standard library
 import datetime
 import os
@@ -7,11 +9,12 @@ import tempfile
 import warnings
 from functools import cache
 from pathlib import Path
-from typing import Any, Iterator, Union
+from typing import Any, Iterator, Union, overload
 
 # Third-party
 import pytorch_lightning as pl
 import torch
+import yaml
 from loguru import logger
 from pytorch_lightning.loggers import MLFlowLogger, WandbLogger
 from pytorch_lightning.utilities import rank_zero_only
@@ -20,6 +23,8 @@ from tueplots import bundles, figsizes
 
 # Local
 from .custom_loggers import CustomMLFlowLogger
+
+LEGACY_GRAPH_SPEC_VERSION = "legacy"
 
 
 class BufferList(nn.Module):
@@ -34,26 +39,92 @@ class BufferList(nn.Module):
     def __init__(
         self, buffer_tensors: list[torch.Tensor], persistent: bool = True
     ) -> None:
+        """
+        Register a collection of tensors as buffers inside a module.
+
+        Parameters
+        ----------
+        buffer_tensors : Sequence[torch.Tensor]
+            Buffers to register in the order they should be indexed.
+        persistent : bool, optional
+            If ``True``, buffers are saved in checkpoints. Default ``True``.
+        """
         super().__init__()
         self.n_buffers = len(buffer_tensors)
         for buffer_i, tensor in enumerate(buffer_tensors):
             self.register_buffer(f"b{buffer_i}", tensor, persistent=persistent)
 
+    @overload
     def __getitem__(self, key: int) -> torch.Tensor:
+        """Integer-indexed access overload; see the implementation below."""
+
+    @overload
+    def __getitem__(self, key: slice) -> list[torch.Tensor]:
+        """Slice-indexed access overload; see the implementation below."""
+
+    def __getitem__(
+        self, key: Union[int, slice]
+    ) -> Union[torch.Tensor, list[torch.Tensor]]:
+        """Return the buffer(s) at ``key``.
+
+        Supports integer indexing (with Python-style negative indices)
+        and slice indexing (which returns a list of tensors).
+
+        Raises
+        ------
+        IndexError
+            If ``key`` is an out-of-range integer.
+        """
+        # Unpack slice indices and call recursively for each position
+        if isinstance(key, slice):
+            return [self[i] for i in range(*key.indices(len(self)))]
+        # Support negative indexing (e.g. buffer_list[-1] -> last element)
+        if key < 0:
+            key += len(self)
+        if not (0 <= key < len(self)):
+            raise IndexError(
+                f"index {key} out of range for BufferList of length {len(self)}"
+            )
         return getattr(self, f"b{key}")
 
     def __len__(self) -> int:
+        """Return the number of registered buffers."""
         return self.n_buffers
 
     def __iter__(self) -> Iterator[torch.Tensor]:
+        """Iterate over the registered buffers in ascending index order."""
         return (self[i] for i in range(len(self)))
 
     def __itruediv__(self, other: float) -> "BufferList":
-        """Divide each element in list with other"""
+        """
+        Divide each element in list with other.
+
+        Parameters
+        ----------
+        other : float
+            The value to divide by.
+
+        Returns
+        -------
+        BufferList
+            The modified BufferList.
+        """
         return self.__imul__(1.0 / other)
 
     def __imul__(self, other: float) -> "BufferList":
-        """Multiply each element in list with other"""
+        """
+        Multiply each element in list with other.
+
+        Parameters
+        ----------
+        other : float
+            The value to multiply by.
+
+        Returns
+        -------
+        BufferList
+            The modified BufferList.
+        """
         for buffer_tensor in self:
             buffer_tensor *= other
 
@@ -62,7 +133,17 @@ class BufferList(nn.Module):
 
 def zero_index_edge_index(edge_index: torch.Tensor) -> torch.Tensor:
     """
-    Make both sender and receiver indices of edge_index start at 0
+    Make both sender and receiver indices of edge_index start at 0.
+
+    Parameters
+    ----------
+    edge_index : torch.Tensor
+        Edge index tensor of shape (2, num_edges).
+
+    Returns
+    -------
+    torch.Tensor
+        Edge index tensor with indices starting at 0.
     """
     return edge_index - edge_index.min(dim=1, keepdim=True)[0]
 
@@ -81,7 +162,7 @@ def zero_index_m2g(
     Parameters
     ----------
     m2g_edge_index : torch.Tensor
-        Edge index tensor of shape (2, N_edges).
+        Edge index tensor of shape (2, num_edges).
     mesh_static_features : list of torch.Tensor
         Mesh node feature tensors.
     mesh_first : bool
@@ -98,8 +179,10 @@ def zero_index_m2g(
     sign = 1 if restore else -1
 
     if mesh_first:
-        # Mesh has the first indices, adjust grid indices (row 1)
-        num_mesh_nodes = mesh_static_features[0].shape[0]
+        # Mesh has the first indices, adjust grid indices (row 1).
+        # Use the total number of mesh nodes across all levels because
+        # create_graph offsets grid nodes by the full mesh node count.
+        num_mesh_nodes = sum(sf.shape[0] for sf in mesh_static_features)
         return torch.stack(
             (
                 m2g_edge_index[0],
@@ -133,7 +216,7 @@ def zero_index_g2m(
     Parameters
     ----------
     g2m_edge_index : torch.Tensor
-        Edge index tensor of shape (2, N_edges).
+        Edge index tensor of shape (2, num_edges).
     mesh_static_features : list of torch.Tensor
         Mesh node feature tensors.
     mesh_first : bool
@@ -150,8 +233,10 @@ def zero_index_g2m(
     sign = 1 if restore else -1
 
     if mesh_first:
-        # Mesh has the first indices, adjust grid indices (row 0)
-        num_mesh_nodes = mesh_static_features[0].shape[0]
+        # Mesh has the first indices, adjust grid indices (row 0).
+        # Use the total number of mesh nodes across all levels because
+        # create_graph offsets grid nodes by the full mesh node count.
+        num_mesh_nodes = sum(sf.shape[0] for sf in mesh_static_features)
         return torch.stack(
             (
                 g2m_edge_index[0] + sign * num_mesh_nodes,
@@ -172,7 +257,9 @@ def zero_index_g2m(
 
 
 def load_graph(
-    graph_dir_path: Union[str, Path], device: str = "cpu"
+    graph_dir_path: Union[str, Path],
+    mesh_node_features_scaling: float,
+    device: str = "cpu",
 ) -> tuple[bool, dict[str, Any]]:
     """Load all tensors representing the graph from `graph_dir_path`.
 
@@ -195,6 +282,9 @@ def load_graph(
     ----------
     graph_dir_path : str
         Path to directory containing the graph files.
+    mesh_node_features_scaling : float
+        Scalar used to normalize mesh node coordinate features for graphs in
+        the current on-disk format.
     device : str
         Device to load tensors to.
 
@@ -219,48 +309,148 @@ def load_graph(
     """
 
     def loads_file(fn: str) -> Any:
+        """
+        Load ``torch.load`` data from ``graph_dir_path``.
+
+        Applies ``map_location`` so tensors land on the requested device.
+
+        Parameters
+        ----------
+        fn : str
+            The filename to load.
+
+        Returns
+        -------
+        Any
+            The loaded data.
+        """
         return torch.load(
             os.path.join(graph_dir_path, fn),
             map_location=device,
             weights_only=True,
         )
 
+    # TODO: move graph creation/loading/versioning into its own submodule.
+    # Local
+    from .create_graph import (  # Local import avoids circular imports.
+        CURRENT_GRAPH_SPEC_VERSION,
+        METAINFO_FILENAME,
+    )
+
+    def load_graph_spec_version() -> str:
+        """
+        Return the graph spec version for the graph at ``graph_dir_path`` by
+        reading the ``METAINFO_FILENAME`` file and extracting the
+        ``spec_version`` entry.
+
+        Returns
+        -------
+        str
+            The graph spec version, or ``LEGACY_GRAPH_SPEC_VERSION`` if the
+            metainfo file is missing (with a warning).
+        """
+        metainfo_path = Path(graph_dir_path) / METAINFO_FILENAME
+        if not metainfo_path.exists():
+            warnings.warn(
+                "Graph metainfo file is missing; assuming this graph uses "
+                "the legacy pre-spec format. Mesh node feature normalization "
+                "will be skipped because legacy mesh node features are assumed "
+                "to already be normalized. Edge indices will be zero-offset on "
+                "load to convert legacy offset node labels to the per-node-set "
+                "zero-based index spaces required by the current graph spec.",
+                RuntimeWarning,
+                stacklevel=2,
+            )
+            return LEGACY_GRAPH_SPEC_VERSION
+
+        try:
+            meta = yaml.safe_load(metainfo_path.read_text(encoding="utf-8"))
+        except yaml.YAMLError as exc:
+            raise ValueError(
+                f"Failed to parse {METAINFO_FILENAME}: {exc}"
+            ) from exc
+
+        spec_version = None if meta is None else meta.get("spec_version")
+        if spec_version is None:
+            raise ValueError(
+                f"{METAINFO_FILENAME} is missing 'spec_version' entry"
+            )
+        return spec_version
+
     # Load static node features
     mesh_static_features = loads_file(
         "mesh_features.pt"
     )  # List of (N_mesh[l], d_mesh_static)
 
+    graph_spec_version = load_graph_spec_version()
+    if graph_spec_version not in {
+        LEGACY_GRAPH_SPEC_VERSION,
+        CURRENT_GRAPH_SPEC_VERSION,
+    }:
+        raise ValueError(
+            "Unsupported graph spec version "
+            f"{graph_spec_version!r} in {METAINFO_FILENAME}"
+        )
+
+    should_normalize_mesh_features = (
+        graph_spec_version == CURRENT_GRAPH_SPEC_VERSION
+    )
+    should_zero_index_edge_indices = (
+        graph_spec_version == LEGACY_GRAPH_SPEC_VERSION
+    )
+
+    # Normalize static mesh features for the current on-disk graph format.
+    # Legacy graphs already store normalized mesh coordinates.
+    if should_normalize_mesh_features:
+        if mesh_node_features_scaling == 0:
+            warnings.warn(
+                "Mesh node feature scaling is zero; falling back to 1.0 so "
+                "mesh node coordinates are left unchanged after graph "
+                "loading.",
+                RuntimeWarning,
+                stacklevel=2,
+            )
+            mesh_node_features_scaling = 1.0
+
+        for m in mesh_static_features:
+            m[:, :2] /= mesh_node_features_scaling
+
     # Load edges (edge_index)
     m2m_edge_index = BufferList(
-        [zero_index_edge_index(ei) for ei in loads_file("m2m_edge_index.pt")],
-        persistent=False,
+        loads_file("m2m_edge_index.pt"), persistent=False
     )  # List of (2, M_m2m[l])
-    g2m_edge_index = loads_file("g2m_edge_index.pt")  # (2, M_g2m)
-    m2g_edge_index = loads_file("m2g_edge_index.pt")  # (2, M_m2g)
+    g2m_edge_index = loads_file("g2m_edge_index.pt")  # (2, num_edges)
+    m2g_edge_index = loads_file("m2g_edge_index.pt")  # (2, num_edges)
 
-    # Change first indices to 0
-    # m2g and g2m has to be handled specially as not all mesh nodes
-    # might be indexed
-    m2g_min_indices = m2g_edge_index.min(dim=1, keepdim=True)[0]
-    mesh_first = m2g_min_indices[0] < m2g_min_indices[1]
-    g2m_edge_index = zero_index_g2m(
-        g2m_edge_index, mesh_static_features, mesh_first=mesh_first
-    )
-    m2g_edge_index = zero_index_m2g(
-        m2g_edge_index, mesh_static_features, mesh_first=mesh_first
-    )
+    if should_zero_index_edge_indices:
+        # Legacy graphs used a shifted node-index layout; normalize it on load.
+        m2m_edge_index = BufferList(
+            [zero_index_edge_index(ei) for ei in m2m_edge_index],
+            persistent=False,
+        )
+
+        # m2g and g2m has to be handled specially as not all mesh nodes
+        # might be indexed.
+        m2g_min_indices = m2g_edge_index.min(dim=1, keepdim=True)[0]
+        mesh_first = m2g_min_indices[0] < m2g_min_indices[1]
+        g2m_edge_index = zero_index_g2m(
+            g2m_edge_index, mesh_static_features, mesh_first=mesh_first
+        )
+        m2g_edge_index = zero_index_m2g(
+            m2g_edge_index, mesh_static_features, mesh_first=mesh_first
+        )
 
     assert m2g_edge_index.min() >= 0, "Negative node index in m2g"
     assert g2m_edge_index.min() >= 0, "Negative node index in g2m"
 
     n_levels = len(m2m_edge_index)
-    hierarchical = n_levels > 1  # Nor just single level mesh graph
+    hierarchical = n_levels > 1  # Not just single level mesh graph
 
     # Load static edge features
-    # List of (M_m2m[l], d_edge_f)
+    # List of (M_m2m[l], input_dim)
     m2m_features = loads_file("m2m_features.pt")
-    g2m_features = loads_file("g2m_features.pt")  # (M_g2m, d_edge_f)
-    m2g_features = loads_file("m2g_features.pt")  # (M_m2g, d_edge_f)
+    g2m_features = loads_file("g2m_features.pt")  # (num_edges, input_dim)
+    m2g_features = loads_file("m2g_features.pt")  # (num_edges, input_dim)
 
     # Normalize by dividing with longest edge (found in m2m)
     longest_edge = max(
@@ -282,27 +472,33 @@ def load_graph(
 
     if hierarchical:
         # Load up and down edges and features
+        mesh_up_edge_index_aslist = loads_file("mesh_up_edge_index.pt")
+        mesh_down_edge_index_aslist = loads_file("mesh_down_edge_index.pt")
+
+        # Legacy graphs used a shifted node-index layout; but internally in
+        # neural-lam we expect edge indices to be zero-indexed within their
+        # respective node sets, so we need to zero-index these edges indexes.
+        if should_zero_index_edge_indices:
+            mesh_up_edge_index_aslist = [
+                zero_index_edge_index(ei) for ei in mesh_up_edge_index_aslist
+            ]
+            mesh_down_edge_index_aslist = [
+                zero_index_edge_index(ei) for ei in mesh_down_edge_index_aslist
+            ]
+
         mesh_up_edge_index = BufferList(
-            [
-                zero_index_edge_index(ei)
-                for ei in loads_file("mesh_up_edge_index.pt")
-            ],
-            persistent=False,
-        )  # List of (2, M_up[l])
+            mesh_up_edge_index_aslist, persistent=False
+        )
         mesh_down_edge_index = BufferList(
-            [
-                zero_index_edge_index(ei)
-                for ei in loads_file("mesh_down_edge_index.pt")
-            ],
-            persistent=False,
-        )  # List of (2, M_down[l])
+            mesh_down_edge_index_aslist, persistent=False
+        )
 
         mesh_up_features = loads_file(
             "mesh_up_features.pt"
-        )  # List of (M_up[l], d_edge_f)
+        )  # List of (num_edges[l], input_dim)
         mesh_down_features = loads_file(
             "mesh_down_features.pt"
-        )  # List of (M_down[l], d_edge_f)
+        )  # List of (num_edges[l], input_dim)
 
         # Rescale
         mesh_up_features = BufferList(mesh_up_features, persistent=False)
@@ -341,13 +537,22 @@ def load_graph(
 
 def make_mlp(blueprint: list[int], layer_norm: bool = True) -> nn.Sequential:
     """
-    Create MLP from list blueprint, with
-    input dimensionality: blueprint[0]
-    output dimensionality: blueprint[-1] and
-    hidden layers of dimensions: blueprint[1], ..., blueprint[-2]
+    Construct a multilayer perceptron from a blueprint of layer widths.
 
-    if layer_norm is True, includes a LayerNorm layer at
-    the output (as used in GraphCast)
+    Parameters
+    ----------
+    blueprint : list[int]
+        Sequence of layer dimensions where ``blueprint[0]`` is the input size,
+        ``blueprint[-1]`` is the output size, the intermediate entries specify
+        the hidden layer widths, and ``len(blueprint) - 2`` is the number of
+        hidden layers.
+    layer_norm : bool, optional
+        If ``True``, append a ``LayerNorm`` to the output as in GraphCast.
+
+    Returns
+    -------
+    torch.nn.Sequential
+        Sequential module implementing the specified MLP.
     """
     hidden_layers = len(blueprint) - 2
     assert hidden_layers >= 0, "Invalid MLP blueprint"
@@ -368,7 +573,12 @@ def make_mlp(blueprint: list[int], layer_norm: bool = True) -> nn.Sequential:
 @cache
 def has_working_latex() -> bool:
     """
-    Check if LaTeX is available or its toolchain
+    Check whether a LaTeX toolchain is available on the system.
+
+    Returns
+    -------
+    bool
+        ``True`` if ``latex`` and the required auxiliary tools are callable.
     """
     # If latex/toolchain is not available, some visualizations might not render
     # correctly, but will at least not raise an error. Alternatively, use
@@ -430,10 +640,18 @@ $E=mc^2$ \LaTeX\ ok
 
 def fractional_plot_bundle(fraction: float) -> dict[str, Any]:
     """
-    Get the tueplots bundle, but with figure width as a fraction of
-    the page width.
-    """
+    Return a ``tueplots`` bundle scaled to a fraction of the page width.
 
+    Parameters
+    ----------
+    fraction : float
+        Denominator applied to the default NeurIPS figure width.
+
+    Returns
+    -------
+    dict
+        Matplotlib rcParams bundle with updated ``figure.figsize``.
+    """
     usetex = has_working_latex()
     bundle = bundles.neurips2023(usetex=usetex, family="serif")
     bundle.update(figsizes.neurips2023())
@@ -449,14 +667,19 @@ def fractional_plot_bundle(fraction: float) -> dict[str, Any]:
 def log_on_rank_zero(
     msg: str, level: str = "info", *args: Any, **kwargs: Any
 ) -> None:
-    """Log a message only on rank zero using loguru logger.
+    """
+    Log a message only on rank zero using loguru logger.
 
     Parameters
     ----------
     msg : str
         The message to log.
-    level : str, optional
-        The logging level (e.g. "info", "warning", "error"). Default is "info".
+    level : str, default "info"
+        The logging level (e.g. "info", "warning", "error").
+    *args : Any
+        Positional arguments passed to the logger.
+    **kwargs : Any
+        Keyword arguments passed to the logger.
     """
     if rank_zero_only.rank == 0:
         log_fn = getattr(logger, level, logger.info)
@@ -467,7 +690,14 @@ def init_training_logger_metrics(
     training_logger: Any, val_steps: list[int]
 ) -> None:
     """
-    Set up logger metrics to track
+    Configure validation metric aggregation for the active training logger.
+
+    Parameters
+    ----------
+    training_logger : Any
+        Logger instance used during training.
+    val_steps : list of int
+        Autoregressive rollout lengths to log as separate metrics.
     """
     experiment = training_logger.experiment
     if isinstance(training_logger, WandbLogger):
@@ -484,24 +714,35 @@ def init_training_logger_metrics(
 
 
 @rank_zero_only
-def setup_training_logger(datastore: Any, args: Any, run_name: str) -> Any:
-    """Set up the training logger (WandB or MLFlow).
+def setup_training_logger(
+    datastore: Any, args: Any, run_name: str, run_dir: str
+) -> Any:
+    """
+    Set up the training logger (WandB or MLFlow).
 
     Parameters
     ----------
-    datastore : Datastore
-        Datastore object.
-
+    datastore : Any
+        Datastore providing metadata for logging configuration.
     args : argparse.Namespace
-        Arguments from command line.
-
+        Parsed training arguments controlling the logger backend.
     run_name : str
         Name of the run.
 
+    run_dir : str
+        Directory under which all artifacts for this run are written
+        (logger ``save_dir``, checkpoints, Lightning ``default_root_dir``).
+        Typically ``runs/<run_name>``.
+
     Returns
     -------
-    training_logger : pytorch_lightning.loggers.base
-        Logger object.
+    Any
+        The initialized logger object.
+
+    Raises
+    ------
+    ValueError
+        If ``args.logger`` is not ``'wandb'`` or ``'mlflow'``.
 
     Notes
     -----
@@ -510,7 +751,6 @@ def setup_training_logger(datastore: Any, args: Any, run_name: str) -> Any:
     This allows the same job script to be safely resubmitted on HPC systems.
     The run name is set to ``None`` when resuming to preserve the existing name.
     """
-
     if args.wandb_id and args.logger != "wandb":
         logger.warning(
             f"--wandb_id is set but logger is {args.logger!r}; "
@@ -528,12 +768,12 @@ def setup_training_logger(datastore: Any, args: Any, run_name: str) -> Any:
             config=dict(training=vars(args), datastore=datastore._config),
             resume=wandb_resume,
             id=args.wandb_id,
+            save_dir=run_dir,
         )
     elif args.logger == "mlflow":
         if args.wandb_id is not None:
             warnings.warn(
-                "--wandb_id is only used with --logger=wandb and will be "
-                "ignored."
+                "--wandb_id is only used with --logger=wandb and will be ignored."  # noqa: E501
             )
         url = os.getenv("MLFLOW_TRACKING_URI")
         if url is None:
@@ -544,25 +784,51 @@ def setup_training_logger(datastore: Any, args: Any, run_name: str) -> Any:
             experiment_name=args.logger_project,
             tracking_uri=url,
             run_name=run_name,
+            save_dir=run_dir,
         )
         training_logger.log_hyperparams(
             dict(training=vars(args), datastore=datastore._config)
         )
-
-    return training_logger
+        return training_logger
+    else:
+        raise ValueError(
+            f"Unsupported logger type: {args.logger!r}. "
+            "Supported loggers are: 'wandb', 'mlflow'."
+        )
 
 
 def inverse_softplus(
     x: torch.Tensor, beta: float = 1.0, threshold: float = 20.0
 ) -> torch.Tensor:
     """
-    Inverse of torch.nn.functional.softplus
+    Inverse of :func:`torch.nn.functional.softplus`.
 
-    Input is clamped to approximately positive values of x, and the function is
-    linear for inputs above x*beta for numerical stability.
+    For most inputs this function is exact up to numerical precision. The
+    input is clamped to ensure numerical stability: values above
+    ``threshold / beta`` are treated as linear (which is exact in that
+    regime), and values near zero are clamped to avoid ``log`` of
+    non-positive numbers. Only near the lower clamping bound does the
+    result deviate from the true inverse.
 
-    Note that this torch.clamp will make gradients 0, but this is not a
-    problem as values of x that are this close to 0 have gradients of 0 anyhow.
+    Parameters
+    ----------
+    x : torch.Tensor
+        Input tensor whose softplus inverse should be computed.
+    beta : float, optional
+        Softplus ``beta`` parameter that controls the sharpness. Default ``1``.
+    threshold : float, optional
+        Threshold above which the function is treated as linear for numerical
+        stability. Default ``20``.
+
+    Returns
+    -------
+    torch.Tensor
+        Tensor containing the inverse-softplus values.
+
+    Notes
+    -----
+    ``torch.clamp`` will zero the gradients near the bounds, but values this
+    close to zero or ``threshold / beta`` already have negligible gradients.
     """
     x_clamped = torch.clamp(
         x, min=torch.log(torch.tensor(1e-6 + 1)) / beta, max=threshold / beta
@@ -579,12 +845,30 @@ def inverse_softplus(
 
 def inverse_sigmoid(x: torch.Tensor) -> torch.Tensor:
     """
-    Inverse of torch.sigmoid
+    Inverse of ``torch.sigmoid`` with clamping for numerical stability.
 
-    Sigmoid output takes values in [0,1], this makes sure input is just within
-    this interval.
-    Note that this torch.clamp will make gradients 0, but this is not a problem
-    as values of x that are this close to 0 or 1 have gradients of 0 anyhow.
+    Sigmoid output takes values in ``[0, 1]``; we clamp the input slightly
+    within that open interval before applying ``log(x / (1 - x))``.
+
+    Note that ``torch.clamp`` will make gradients 0 near the bounds, but
+    this is not a problem as values of x that are this close to 0 or 1
+    have gradients of 0 anyhow.
+
+    Parameters
+    ----------
+    x : torch.Tensor
+        Input tensor assumed to contain logits after a sigmoid.
+
+    Returns
+    -------
+    torch.Tensor
+        Tensor containing ``log(x / (1 - x))`` after clamping away from the
+        saturation limits.
+
+    Notes
+    -----
+    ``torch.clamp`` zeroes gradients for values at the bounds, but values this
+    close to 0 or 1 already have negligible gradients.
     """
     x_clamped = torch.clamp(x, min=1e-6, max=1 - 1e-6)
     return torch.log(x_clamped / (1 - x_clamped))
@@ -592,26 +876,35 @@ def inverse_sigmoid(x: torch.Tensor) -> torch.Tensor:
 
 def get_integer_time(tdelta: datetime.timedelta) -> tuple[int, str]:
     """
-    Get the largest time unit that can represent the given timedelta as an
-    integer.
+    Express a :class:`datetime.timedelta` as an integer number of time units.
 
-    Returns:
-        int: The integer value of the timedelta in the largest time unit, or
-                1 if no such unit exists.
-        str: The time unit as a string ('weeks', 'days', 'hours', 'minutes',
-                'seconds', 'milliseconds', 'microseconds'). If no unit can
-                represent the timedelta as an integer, returns 'unknown'.
+    Parameters
+    ----------
+    tdelta : datetime.timedelta
+        The time interval to convert.
 
-    Examples:
-        >>> from datetime import timedelta
-        >>> get_integer_time(timedelta(days=14))
-        (2, 'weeks')
-        >>> get_integer_time(timedelta(hours=5))
-        (5, 'hours')
-        >>> get_integer_time(timedelta(milliseconds=1000))
-        (1, 'seconds')
-        >>> get_integer_time(timedelta(days=0.001))
-        (1, 'unknown')
+    Returns
+    -------
+    int
+        Integer value of the timedelta in the largest unit that divides
+        it exactly, or ``1`` if no such unit exists.
+    str
+        The time unit as a string (``'weeks'``, ``'days'``, ``'hours'``,
+        ``'minutes'``, ``'seconds'``, ``'milliseconds'``,
+        ``'microseconds'``). Returns ``'unknown'`` if no unit divides
+        evenly.
+
+    Examples
+    --------
+    >>> from datetime import timedelta
+    >>> get_integer_time(timedelta(days=14))
+    (2, 'weeks')
+    >>> get_integer_time(timedelta(hours=5))
+    (5, 'hours')
+    >>> get_integer_time(timedelta(milliseconds=1000))
+    (1, 'seconds')
+    >>> get_integer_time(timedelta(days=0.001))
+    (1, 'unknown')
     """
     total_seconds = tdelta.total_seconds()
 
