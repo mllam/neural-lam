@@ -6,7 +6,11 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 # First-party
-from neural_lam.train_model import load_forecaster_module_from_checkpoint, main
+from neural_lam.train_model import (
+    build_predictor,
+    load_forecaster_module_from_checkpoint,
+    main,
+)
 
 
 @pytest.mark.parametrize(
@@ -142,3 +146,38 @@ def test_checkpoint_loader_restores_gnn_type_kwargs():
     assert captured_kwargs["m2g_gnn_type"] == "PropagationNet"
     assert captured_kwargs["mesh_up_gnn_type"] == "PropagationNet"
     assert captured_kwargs["mesh_down_gnn_type"] == "InteractionNet"
+
+
+def test_build_predictor_omits_hierarchical_gnn_kwargs_for_graph_lam():
+    """GraphLAM must not receive hierarchical-only GNN constructor kwargs."""
+    args = SimpleNamespace(
+        model="graph_lam",
+        graph="multiscale",
+        hidden_dim=4,
+        hidden_layers=1,
+        processor_layers=1,
+        mesh_aggr="sum",
+        num_past_forcing_steps=1,
+        num_future_forcing_steps=1,
+        output_std=False,
+        g2m_gnn_type="PropagationNet",
+        m2g_gnn_type="InteractionNet",
+        mesh_up_gnn_type="PropagationNet",
+        mesh_down_gnn_type="PropagationNet",
+    )
+    config = SimpleNamespace(
+        training=SimpleNamespace(
+            output_clamping=SimpleNamespace(lower={}, upper={})
+        )
+    )
+    captured_kwargs = {}
+
+    class DummyGraphLAM:
+        def __init__(self, **kwargs):
+            captured_kwargs.update(kwargs)
+
+    build_predictor(DummyGraphLAM, args, config, MagicMock())
+
+    assert "mesh_up_gnn_type" not in captured_kwargs
+    assert "mesh_down_gnn_type" not in captured_kwargs
+    assert captured_kwargs["g2m_gnn_type"] == "PropagationNet"

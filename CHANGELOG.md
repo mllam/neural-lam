@@ -45,7 +45,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Allow `graph_lam` training and checkpoint reloads to accept the full set of
   GNN type CLI options without passing hierarchical-only options to unsupported
-  constructors ([#686](https://github.com/mllam/neural-lam/issues/686)).
+  constructors via a shared `build_predictor` helper ([#686](https://github.com/mllam/neural-lam/issues/686)).
 
 - Fix `RuntimeError` in `HiLAMParallel` forward pass on hierarchical graphs by offsetting edge indices into the global mesh node index space ([#679](https://github.com/mllam/neural-lam/issues/679))
 
