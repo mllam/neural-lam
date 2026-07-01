@@ -457,6 +457,13 @@ def main(input_args=None):
         mesh_up_gnn_type=args.mesh_up_gnn_type,
         mesh_down_gnn_type=args.mesh_down_gnn_type,
     )
+
+    if not args.eval and not predictor.trainable:
+        raise ValueError(
+            f"The {args.model} model cannot be trained. Run with "
+            "--eval <val/test> to evaluate a baseline."
+        )
+
     forecaster = ARForecaster(predictor, datastore)
 
     model = ForecasterModule(
