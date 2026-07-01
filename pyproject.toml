@@ -51,7 +51,7 @@ gpu = ["torch>=2.12,<2.13"]        # CUDA 13.0, default GPU build
 gpu-cu128 = ["torch>=2.11,<2.12"]  # CUDA 12.8, last torch series with cu128 wheels
 
 [dependency-groups]
-dev = ["pre-commit>=3.8.0", "pytest>=8.3.2", "pooch>=1.8.2"]
+dev = ["pre-commit>=3.8.0", "pytest>=8.3.2", "pooch>=1.8.2", "nbmake>=1.5.0", "ipykernel>=6.0.0"]
 
 [tool.uv]
 # uv-specific configuration for PyTorch CPU/GPU variant selection.
@@ -119,7 +119,7 @@ per-file-ignores = [
 ]
 
 [tool.codespell]
-skip = "requirements/*"
+skip = "requirements/*,docs/notebooks/hello_world_danra.ipynb"
 
 # Pylint config
 [tool.pylint]
@@ -158,11 +158,6 @@ ignore-nested-functions = false
 ignore-property-decorators = false
 exclude = ["tests", "docs", "build"]
 
-[tool.pytest.ini_options]
-markers = [
-    "slow: marks tests as slow (deselected by default, run with -m slow)",
-]
-
 [build-system]
 requires = ["hatchling>=1.27.0", "hatch-vcs"]
 build-backend = "hatchling.build"
@@ -174,11 +169,12 @@ core-metadata-version = "2.4"
 source = "vcs"
 fallback-version = "0.0.0"
 
-[tool.hatch.build.targets.sdist]
-exclude = [
-  ".venv/",
-  "venv/",
+[tool.pytest.ini_options]
+markers = [
+    "slow: marks tests as slow (deselected by default, run with -m slow)",
 ]
+testpaths = ["neural_lam", "tests"]
+addopts = "--doctest-modules -vv -s"
 
 [tool.hatch.build.targets.wheel]
 exclude = [

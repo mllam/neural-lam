@@ -1,6 +1,7 @@
 """CLI entry point for training Neural-LAM models."""
 
 # Standard library
+import argparse
 import json
 import os
 import random
@@ -17,10 +18,42 @@ from loguru import logger
 
 # Local
 from . import utils
-from .config import load_config_and_datastore
+from .config import (
+    DatastoreSelection,
+    ManualStateFeatureWeighting,
+    NeuralLAMConfig,
+    OutputClamping,
+    TrainingConfig,
+    UniformFeatureWeighting,
+    load_config_and_datastore,
+)
 from .gnn_layers import GNN_TYPES
-from .models import MODELS, ARForecaster, ForecasterModule
+from .models import (
+    ARForecaster,
+    ForecasterModule,
+    GraphLAM,
+    HiLAM,
+    HiLAMParallel,
+)
 from .weather_dataset import WeatherDataModule
+
+torch.serialization.add_safe_globals(
+    [
+        argparse.Namespace,
+        DatastoreSelection,
+        ManualStateFeatureWeighting,
+        NeuralLAMConfig,
+        OutputClamping,
+        TrainingConfig,
+        UniformFeatureWeighting,
+    ]
+)
+
+MODELS = {
+    "graph_lam": GraphLAM,
+    "hi_lam": HiLAM,
+    "hi_lam_parallel": HiLAMParallel,
+}
 
 
 class AdaptiveHelpFormatter(ArgumentDefaultsHelpFormatter):
