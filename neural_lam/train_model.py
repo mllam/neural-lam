@@ -457,7 +457,18 @@ def main(input_args=None):
         mesh_up_gnn_type=args.mesh_up_gnn_type,
         mesh_down_gnn_type=args.mesh_down_gnn_type,
     )
-    forecaster = ARForecaster(predictor, datastore)
+    diagnostic_indices = []
+    if config.training.diagnostic_vars:
+    
+        feature_names = datastore.get_vars_names("state")
+
+        for var in config.training.diagnostic_vars:
+            if var in feature_names:
+                diagnostic_indices.append(feature_names.index(var))
+            else:
+                print(f"Warning: Diagnostic variable {var} not found in state features! Available: {feature_names}") 
+
+    forecaster = ARForecaster(predictor, datastore,diagnostic_indices=diagnostic_indices if diagnostic_indices else None)
 
     model = ForecasterModule(
         forecaster=forecaster,

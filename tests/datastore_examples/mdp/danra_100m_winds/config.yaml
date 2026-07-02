@@ -16,3 +16,6 @@ training:
     upper:
       r2m: 1.0
       u100m: 100.0
+  # Adding the line:
+  diagnostic_vars:
+    - precipitation_rate
