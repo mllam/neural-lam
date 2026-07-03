@@ -370,6 +370,7 @@ def test_wmg_graph_creation(datastore_name, archetype):
         "g2m_features.pt",
         "m2g_features.pt",
         "mesh_features.pt",
+        METAINFO_FILENAME,
     ]
     if hierarchical:
         required_graph_files.extend(
@@ -399,8 +400,28 @@ def test_wmg_graph_creation(datastore_name, archetype):
         for file_name in required_graph_files:
             assert (graph_dir_path / file_name).exists()
 
+        # Third-party
+        import yaml
+
+        meta = yaml.safe_load(
+            (graph_dir_path / METAINFO_FILENAME).read_text(encoding="utf-8")
+        )
+        assert meta is not None
+        assert meta["spec_version"] == CURRENT_GRAPH_SPEC_VERSION
+
+        # Validate the wmg-created graph on disk against the graph-storage
+        # spec and validator introduced in #323. This is the end-to-end
+        # contract check: a graph built through create_graph_with_wmg (using
+        # weather-model-graphs' to_torch_tensors_on_disk) must pass the same
+        # validator neural-lam ships for the on-disk graph format.
+        validator = _load_validator_module()
+        report, _, _ = validator.validate_graph_directory(graph_dir_path)
+        assert not report.has_fails(), report.summarize()
+
         # try to load each and ensure they have the right shape
         for file_name in required_graph_files:
+            if file_name == METAINFO_FILENAME:
+                continue
             file_id = Path(file_name).stem
             result = torch.load(graph_dir_path / file_name, weights_only=True)
 

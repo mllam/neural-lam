@@ -1,3 +1,10 @@
+"""Create neural-lam graphs by delegating construction to weather-model-graphs.
+
+Builds the g2m/m2m/m2g graph components with weather-model-graphs (wmg) and
+saves them to disk in neural-lam's tensor-on-disk format, replacing the
+duplicated logic in ``create_graph.py``.
+"""
+
 # Standard library
 import os
 from argparse import ArgumentDefaultsHelpFormatter, ArgumentParser
