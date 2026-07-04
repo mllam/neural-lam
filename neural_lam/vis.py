@@ -799,11 +799,14 @@ def plot_examples(
     logger : pl.loggers.Logger
         The logger instance used to save the images.
     prediction : torch.Tensor
-        Output tensors predicted from the model.
+        Output tensors predicted from the model, with shape
+        ``(num_examples, pred_steps, num_grid_points, num_state_features)``.
     target : torch.Tensor
-        Ground truth tensors.
+        Ground truth tensors, with the same shape as ``prediction``:
+        ``(num_examples, pred_steps, num_grid_points, num_state_features)``.
     time_batch : torch.Tensor
-        Time timestamps corresponding to the data.
+        Timestamps for each example and prediction step, with shape
+        ``(num_examples, pred_steps)``.
     first_example_idx : int, optional
         Starting index for naming saved files/logs.
     create_gif : bool, optional
