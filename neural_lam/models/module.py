@@ -390,7 +390,7 @@ class ForecasterModule(pl.LightningModule):
             init_states,
             forcing_features,
             target_states,
-            score_fn=self.loss,
+            score_metric=self.loss,
             interior_mask_bool=self.interior_mask_bool,
             per_var_std=self.per_var_std,
         )

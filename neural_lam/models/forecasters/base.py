@@ -87,7 +87,7 @@ class Forecaster(nn.Module, ABC):
         init_states: torch.Tensor,
         forcing_features: torch.Tensor,
         target_states: torch.Tensor,
-        score_fn: Callable[..., torch.Tensor],
+        score_metric: Callable[..., torch.Tensor],
         interior_mask_bool: torch.Tensor,
         per_var_std: torch.Tensor | None = None,
     ) -> tuple[torch.Tensor, dict[str, torch.Tensor]]:
@@ -120,12 +120,12 @@ class Forecaster(nn.Module, ABC):
             states at each predicted step, used both as the prediction
             targets and to overwrite boundary nodes during forecasting.
             Dims: same as the prediction.
-        score_fn : Callable
+        score_metric : Callable
             The configured scoring rule from ``neural_lam.metrics``, called
-            as ``score_fn(prediction, target, pred_std, mask=...)``.
+            as ``score_metric(prediction, target, pred_std, mask=...)``.
         interior_mask_bool : torch.Tensor
             Shape ``(num_grid_nodes,)``, boolean. ``True`` for interior
-            nodes; passed as ``mask`` to ``score_fn`` so that only interior
+            nodes; passed as ``mask`` to ``score_metric`` so that only interior
             nodes are scored.
         per_var_std : torch.Tensor or None
             Shape ``(num_state_vars,)``. Constant per-variable standard

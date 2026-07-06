@@ -81,8 +81,9 @@ class ProbabilisticARForecaster(ARForecaster, ProbabilisticForecaster):
     state, so the inherited ``ARForecaster.forward`` unrolls one sampled
     trajectory. This class adds ensemble forecasting on top: unrolling
     several trajectories and stacking them along an ensemble dimension.
-    The default training objective scores the ensemble mean with the
-    injected scoring rule; forecasters with model-specific objectives
+    The default training objective scores the ensemble mean using the
+    scoring rule passed to ``compute_training_loss`` (from
+    ``neural_lam.metrics``); forecasters with model-specific objectives
     (ensemble scoring rules, variational objectives) override
     ``compute_training_loss``.
     """
@@ -186,12 +187,12 @@ class ProbabilisticARForecaster(ARForecaster, ProbabilisticForecaster):
         init_states: torch.Tensor,
         forcing_features: torch.Tensor,
         target_states: torch.Tensor,
-        score_fn: Callable[..., torch.Tensor],
+        score_metric: Callable[..., torch.Tensor],
         interior_mask_bool: torch.Tensor,
         per_var_std: torch.Tensor | None = None,
     ) -> tuple[torch.Tensor, dict[str, torch.Tensor]]:
         """
-        Score the ensemble mean with the injected scoring rule.
+        Score the ensemble mean with the given ``score_metric``.
 
         Samples an ensemble of ``self.ensemble_size`` forecasts, averages
         the members into an ensemble mean forecast, scores it against the
@@ -217,12 +218,12 @@ class ProbabilisticARForecaster(ARForecaster, ProbabilisticForecaster):
             states at each predicted step, used both as the prediction
             targets and to overwrite boundary nodes during the rollouts.
             Dims: same as one ensemble member.
-        score_fn : Callable
+        score_metric : Callable
             The configured scoring rule from ``neural_lam.metrics``, called
-            as ``score_fn(prediction, target, pred_std, mask=...)``.
+            as ``score_metric(prediction, target, pred_std, mask=...)``.
         interior_mask_bool : torch.Tensor
             Shape ``(num_grid_nodes,)``, boolean. ``True`` for interior
-            nodes; passed as ``mask`` to ``score_fn`` so that only interior
+            nodes; passed as ``mask`` to ``score_metric`` so that only interior
             nodes are scored.
         per_var_std : torch.Tensor or None
             Shape ``(num_state_vars,)``. Constant per-variable standard
@@ -247,7 +248,7 @@ class ProbabilisticARForecaster(ARForecaster, ProbabilisticForecaster):
             pred_std = per_var_std
 
         batch_loss = torch.mean(
-            score_fn(
+            score_metric(
                 ensemble_mean,
                 target_states,
                 pred_std,

@@ -58,7 +58,7 @@ def test_ar_forecaster_training_loss_matches_direct_score():
     forecaster = ARForecaster(predictor, datastore)
 
     init_states, forcing_features, target_states = _example_batch(datastore)
-    score_fn = metrics.get_metric("mse")
+    score_metric = metrics.get_metric("mse")
     interior_mask_bool = forecaster.interior_mask[0, :, 0].to(torch.bool)
     d_state = target_states.shape[-1]
     per_var_std = torch.ones(d_state)
@@ -67,14 +67,14 @@ def test_ar_forecaster_training_loss_matches_direct_score():
         init_states,
         forcing_features,
         target_states,
-        score_fn=score_fn,
+        score_metric=score_metric,
         interior_mask_bool=interior_mask_bool,
         per_var_std=per_var_std,
     )
 
     prediction, _ = forecaster(init_states, forcing_features, target_states)
     expected_loss = torch.mean(
-        score_fn(
+        score_metric(
             prediction,
             target_states,
             per_var_std,
@@ -151,7 +151,7 @@ def test_probabilistic_training_loss_gradient_flow():
         init_states,
         forcing_features,
         target_states,
-        score_fn=metrics.get_metric("mse"),
+        score_metric=metrics.get_metric("mse"),
         interior_mask_bool=interior_mask_bool,
         per_var_std=torch.ones(d_state),
     )
@@ -200,7 +200,7 @@ def test_module_training_step_delegates_to_forecaster():
         init_states,
         forcing_features,
         target_states,
-        score_fn=model.loss,
+        score_metric=model.loss,
         interior_mask_bool=model.interior_mask_bool,
         per_var_std=model.per_var_std,
     )
