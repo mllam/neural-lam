@@ -26,7 +26,7 @@ def _build_forecaster_module(datastore: DummyDatastore) -> ForecasterModule:
     config = nlconfig.NeuralLAMConfig(
         datastore=nlconfig.DatastoreSelection(
             kind=datastore.SHORT_NAME,
-            config_path=datastore.root_path,
+            config_path=str(datastore.root_path),
         ),
     )
 
