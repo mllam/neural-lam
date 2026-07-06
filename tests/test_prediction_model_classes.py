@@ -255,6 +255,8 @@ def test_forecaster_module_old_checkpoint(tmp_path):
         ),
         "config": ckpt["hyper_parameters"]["config"],
     }
+    # Remove the version stamp so the checkpoint looks pre-versioning (v0)
+    ckpt.pop("neural_lam_checkpoint_version", None)
     torch.save(ckpt, ckpt_path)
 
     # Build a fresh forecaster structure for loading weights into
