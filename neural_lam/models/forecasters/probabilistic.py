@@ -23,6 +23,14 @@ class ProbabilisticForecaster(Forecaster):
     members are produced (auto-regressive sampling, diffusion, ...) is
     left to subclasses; consumers only rely on the shape of the returned
     ensemble.
+
+    When ``sample_ensemble`` returns a ``per_member_std``, it is each
+    member's own predicted std, not a std describing the spread across
+    members. The predictive distribution is then a mixture of ``S``
+    Gaussians, one per member: ``p(x) = mean_s N(x; ensemble[:, s],
+    per_member_std[:, s]**2)``, not a single Gaussian. In particular, the
+    variance of that mixture is not the average of the per-member
+    variances: it also includes the spread between the member means.
     """
 
     @abstractmethod
@@ -66,10 +74,12 @@ class ProbabilisticForecaster(Forecaster):
             Shape ``(B, S, pred_steps, num_grid_nodes, num_state_vars)``.
             The sampled forecasts, stacked along the ensemble dimension
             ``S``.
-        ensemble_std : torch.Tensor or None
-            Shape ``(B, S, pred_steps, num_grid_nodes, num_state_vars)``
-            when the forecaster predicts an std, otherwise ``None``. Dims:
-            same as ``ensemble``.
+        per_member_std : torch.Tensor or None
+            Shape ``(B, S, pred_steps, num_grid_nodes, num_state_vars)``.
+            Each member's own predicted std (see the class docstring for
+            why the ensemble is then a mixture, not this averaged with the
+            others), when the forecaster predicts an std, otherwise
+            ``None``. Dims: same as ``ensemble``.
         """
 
 
@@ -168,10 +178,12 @@ class ProbabilisticARForecaster(ARForecaster, ProbabilisticForecaster):
             Shape ``(B, S, pred_steps, num_grid_nodes, num_state_vars)``.
             The sampled forecasts, stacked along the ensemble dimension
             ``S``.
-        ensemble_std : torch.Tensor or None
-            Shape ``(B, S, pred_steps, num_grid_nodes, num_state_vars)``
-            when the wrapped predictor outputs an std, otherwise ``None``.
-            Dims: same as ``ensemble``.
+        per_member_std : torch.Tensor or None
+            Shape ``(B, S, pred_steps, num_grid_nodes, num_state_vars)``.
+            Each member's own predicted std (see the class docstring for
+            why the ensemble is then a mixture, not this averaged with the
+            others), when the wrapped predictor outputs an std, otherwise
+            ``None``. Dims: same as ``ensemble``.
         """
         if num_members is None:
             num_members = self.ensemble_size
@@ -187,10 +199,10 @@ class ProbabilisticARForecaster(ARForecaster, ProbabilisticForecaster):
                 member_std_list.append(pred_std)
 
         ensemble = torch.stack(member_list, dim=1)
-        ensemble_std = (
+        per_member_std = (
             torch.stack(member_std_list, dim=1) if member_std_list else None
         )
-        return ensemble, ensemble_std
+        return ensemble, per_member_std
 
     def compute_training_loss(
         self,
@@ -205,6 +217,11 @@ class ProbabilisticARForecaster(ARForecaster, ProbabilisticForecaster):
         Samples an ensemble of ``self.ensemble_size`` forecasts, averages
         the members into an ensemble mean forecast, scores it against the
         target states on interior nodes and averages over batch and time.
+        When members predict their own std, the std passed to ``self.loss``
+        is the plain average of the per-member stds; this is a
+        simplification of the true mixture predictive variance, which
+        would also include the spread between the member means (see the
+        ``ProbabilisticForecaster`` class docstring).
 
         Parameters
         ----------
@@ -239,12 +256,12 @@ class ProbabilisticARForecaster(ARForecaster, ProbabilisticForecaster):
         loss_components : dict of {str: torch.Tensor}
             Empty; this objective has no separate components.
         """
-        ensemble, ensemble_std = self.sample_ensemble(
+        ensemble, per_member_std = self.sample_ensemble(
             init_states, forcing_features, target_states
         )
         ensemble_mean = ensemble.mean(dim=1)
-        if ensemble_std is not None:
-            pred_std = ensemble_std.mean(dim=1)
+        if per_member_std is not None:
+            pred_std = per_member_std.mean(dim=1)
         else:
             pred_std = self.per_var_std
 

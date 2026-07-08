@@ -107,7 +107,7 @@ def test_sample_ensemble_shapes_and_member_variability():
     d_state = target_states.shape[-1]
 
     torch.manual_seed(42)
-    ensemble, ensemble_std = forecaster.sample_ensemble(
+    ensemble, per_member_std = forecaster.sample_ensemble(
         init_states,
         forcing_features,
         target_states,
@@ -121,7 +121,7 @@ def test_sample_ensemble_shapes_and_member_variability():
         num_grid_nodes,
         d_state,
     )
-    assert ensemble_std is None
+    assert per_member_std is None
 
     # Members carry independent samples on the interior node
     assert not torch.allclose(ensemble[:, 0, :, 0], ensemble[:, 1, :, 0])
