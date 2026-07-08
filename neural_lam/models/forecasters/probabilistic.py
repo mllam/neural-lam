@@ -91,11 +91,17 @@ class ProbabilisticARForecaster(ARForecaster, ProbabilisticForecaster):
     state, so the inherited ``ARForecaster.forward`` unrolls one sampled
     trajectory. This class adds ensemble forecasting on top: unrolling
     several trajectories and stacking them along an ensemble dimension.
-    The default training objective scores the ensemble mean using the
-    scoring rule passed to ``compute_training_loss`` (from
-    ``neural_lam.metrics``); forecasters with model-specific objectives
-    (ensemble scoring rules, variational objectives) override
-    ``compute_training_loss``.
+
+    ``compute_training_loss`` is intentionally left abstract here (it does
+    not fall back to ``ARForecaster``'s single-rollout objective, which
+    would silently train on one stochastic sample). There is no default
+    objective that fits every stochastic model: scoring the ensemble mean
+    with a pointwise metric only rewards the mean being right, giving the
+    model no incentive to keep a calibrated spread, and risks training it
+    to collapse the ensemble to a point estimate. Concrete subclasses must
+    define an objective appropriate to how they are meant to be trained
+    (e.g. an ensemble scoring rule such as CRPS, or a variational
+    objective).
     """
 
     def __init__(
@@ -199,12 +205,14 @@ class ProbabilisticARForecaster(ARForecaster, ProbabilisticForecaster):
                 member_std_list.append(pred_std)
 
         ensemble = torch.stack(member_list, dim=1)
-        # After stacking shape of ensemble is (B, S, pred_steps, num_grid_nodes, num_state_vars)
+        # After stacking, ensemble has shape
+        # (B, S, pred_steps, num_grid_nodes, num_state_vars)
         per_member_std = (
             torch.stack(member_std_list, dim=1) if member_std_list else None
         )
         return ensemble, per_member_std
 
+    @abstractmethod
     def compute_training_loss(
         self,
         init_states: torch.Tensor,
@@ -213,65 +221,11 @@ class ProbabilisticARForecaster(ARForecaster, ProbabilisticForecaster):
         interior_mask_bool: torch.Tensor,
     ) -> tuple[torch.Tensor, dict[str, torch.Tensor]]:
         """
-        Score the ensemble mean with ``self.loss``.
+        Compute the training objective for one batch.
 
-        Samples an ensemble of ``self.ensemble_size`` forecasts, averages
-        the members into an ensemble mean forecast, scores it against the
-        target states on interior nodes and averages over batch and time.
-        When members predict their own std, the std passed to ``self.loss``
-        is the plain average of the per-member stds; this is a
-        simplification of the true mixture predictive variance, which
-        would also include the spread between the member means (see the
-        ``ProbabilisticForecaster`` class docstring).
-
-        Parameters
-        ----------
-        init_states : torch.Tensor
-            Shape ``(B, 2, num_grid_nodes, num_state_vars)``. The two initial
-            states ``[X_{t-1}, X_t]`` used to start each rollout from. Dims:
-            ``B`` is batch size, ``2`` is the time index (``[X_{t-1}, X_t]``),
-            ``num_grid_nodes`` is the number of spatial nodes, and
-            ``num_state_vars`` is the state feature dimension.
-        forcing_features : torch.Tensor
-            Shape ``(B, pred_steps, num_grid_nodes, num_forcing_vars)``.
-            External forcings provided at each predicted step. Dims: ``B``
-            is batch size, ``pred_steps`` is the rollout length,
-            ``num_grid_nodes`` is the number of spatial nodes, and
-            ``num_forcing_vars`` is the forcing feature dimension (already
-            concatenated past/current/future windows).
-        target_states : torch.Tensor
-            Shape ``(B, pred_steps, num_grid_nodes, num_state_vars)``. True
-            states at each predicted step, used both as the prediction
-            targets and to overwrite boundary nodes during the rollouts.
-            Dims: same as one ensemble member.
-        interior_mask_bool : torch.Tensor
-            Shape ``(num_grid_nodes,)``, boolean. ``True`` for interior
-            nodes; passed as ``mask`` to ``self.loss`` so that only interior
-            nodes are scored.
-
-        Returns
-        -------
-        batch_loss : torch.Tensor
-            Scalar. The scoring rule applied to the ensemble mean, averaged
-            over batch and time.
-        loss_components : dict of {str: torch.Tensor}
-            Empty; this objective has no separate components.
+        Left abstract; see the class docstring for why there is no default
+        objective. Concrete subclasses typically call ``sample_ensemble``
+        and score the resulting members with an objective appropriate to
+        the model (see ``Forecaster.compute_training_loss`` for the
+        signature and general contract).
         """
-        ensemble, per_member_std = self.sample_ensemble(
-            init_states, forcing_features, target_states
-        )
-        ensemble_mean = ensemble.mean(dim=1)
-        if per_member_std is not None:
-            pred_std = per_member_std.mean(dim=1)
-        else:
-            pred_std = self.per_var_std
-
-        batch_loss = torch.mean(
-            self.loss(
-                ensemble_mean,
-                target_states,
-                pred_std,
-                mask=interior_mask_bool,
-            )
-        )
-        return batch_loss, {}

@@ -37,6 +37,43 @@ class NoisyStepPredictor(StepPredictor):
         return pred_state, None
 
 
+class ConcreteProbabilisticARForecaster(ProbabilisticARForecaster):
+    """
+    Test-only concrete ``ProbabilisticARForecaster``.
+
+    ``ProbabilisticARForecaster`` leaves ``compute_training_loss`` abstract
+    (no single default objective fits every stochastic model), so tests
+    that only need a working forecaster to instantiate use this example
+    ensemble-mean objective rather than the base class directly.
+    """
+
+    def compute_training_loss(
+        self,
+        init_states,
+        forcing_features,
+        target_states,
+        interior_mask_bool,
+    ):
+        ensemble, per_member_std = self.sample_ensemble(
+            init_states, forcing_features, target_states
+        )
+        ensemble_mean = ensemble.mean(dim=1)
+        pred_std = (
+            per_member_std.mean(dim=1)
+            if per_member_std is not None
+            else self.per_var_std
+        )
+        batch_loss = torch.mean(
+            self.loss(
+                ensemble_mean,
+                target_states,
+                pred_std,
+                mask=interior_mask_bool,
+            )
+        )
+        return batch_loss, {}
+
+
 def _example_batch(datastore, B=2, pred_steps=3):
     """Create constant example input tensors matching the datastore dims."""
     num_grid_nodes = datastore.num_grid_points
@@ -90,7 +127,7 @@ def test_ar_forecaster_training_loss_matches_direct_score():
 def test_sample_ensemble_shapes_and_member_variability():
     datastore = init_datastore_example("mdp")
     predictor = NoisyStepPredictor(datastore=datastore, output_std=False)
-    forecaster = ProbabilisticARForecaster(
+    forecaster = ConcreteProbabilisticARForecaster(
         predictor, datastore, ensemble_size=2
     )
 
@@ -138,7 +175,7 @@ def test_sample_ensemble_shapes_and_member_variability():
 def test_probabilistic_training_loss_gradient_flow():
     datastore = init_datastore_example("mdp")
     predictor = NoisyStepPredictor(datastore=datastore, output_std=False)
-    forecaster = ProbabilisticARForecaster(
+    forecaster = ConcreteProbabilisticARForecaster(
         predictor, datastore, ensemble_size=2, loss="mse"
     )
 
@@ -171,7 +208,18 @@ def test_probabilistic_forecaster_rejects_empty_ensemble():
     predictor = NoisyStepPredictor(datastore=datastore, output_std=False)
 
     with pytest.raises(ValueError, match="ensemble_size"):
-        ProbabilisticARForecaster(predictor, datastore, ensemble_size=0)
+        ConcreteProbabilisticARForecaster(predictor, datastore, ensemble_size=0)
+
+
+def test_probabilistic_ar_forecaster_is_abstract():
+    """ProbabilisticARForecaster leaves compute_training_loss abstract, so
+    it cannot be instantiated directly; only a subclass that defines an
+    objective can."""
+    datastore = init_datastore_example("mdp")
+    predictor = NoisyStepPredictor(datastore=datastore, output_std=False)
+
+    with pytest.raises(TypeError, match="abstract"):
+        ProbabilisticARForecaster(predictor, datastore, ensemble_size=2)
 
 
 def test_module_training_step_delegates_to_forecaster():
@@ -206,7 +254,7 @@ def test_module_training_step_delegates_to_forecaster():
     torch.testing.assert_close(batch_loss, expected_loss)
 
 
-class MemberCountRecordingForecaster(ProbabilisticARForecaster):
+class MemberCountRecordingForecaster(ConcreteProbabilisticARForecaster):
     """ProbabilisticARForecaster recording the requested member count."""
 
     def sample_ensemble(self, *args, **kwargs):
@@ -261,7 +309,7 @@ def test_probabilistic_module_rejects_empty_eval_ensemble():
             kind=datastore.SHORT_NAME, config_path=datastore.root_path
         )
     )
-    forecaster = ProbabilisticARForecaster(
+    forecaster = ConcreteProbabilisticARForecaster(
         predictor, datastore, ensemble_size=2, config=config
     )
 
@@ -282,7 +330,7 @@ def test_probabilistic_module_test_step_not_implemented():
             kind=datastore.SHORT_NAME, config_path=datastore.root_path
         )
     )
-    forecaster = ProbabilisticARForecaster(
+    forecaster = ConcreteProbabilisticARForecaster(
         predictor, datastore, ensemble_size=2, config=config
     )
     model = ProbabilisticForecasterModule(
