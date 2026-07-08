@@ -25,7 +25,7 @@ class ProbabilisticForecasterModule(ForecasterModule):
     # The wrapped forecaster must be able to sample ensemble forecasts
     forecaster: ProbabilisticForecaster
 
-    def __init__(self, *args, eval_ensemble_size: int | None = None, **kwargs):
+    def __init__(self, *args, eval_ensemble_size: int, **kwargs):
         """
         Initialize the module and store the evaluation ensemble size.
 
@@ -35,15 +35,14 @@ class ProbabilisticForecasterModule(ForecasterModule):
             Positional arguments forwarded to
             ``ForecasterModule.__init__`` (``forecaster``, ``config``,
             ``datastore``, ...).
-        eval_ensemble_size : int or None
-            Number of ensemble members sampled during validation. ``None``
-            uses the forecaster's configured ensemble size.
+        eval_ensemble_size : int
+            Number of ensemble members sampled during validation.
         **kwargs
             Keyword arguments forwarded to ``ForecasterModule.__init__``
             (``lr``, ...).
         """
         super().__init__(*args, **kwargs)
-        if eval_ensemble_size is not None and eval_ensemble_size < 1:
+        if eval_ensemble_size < 1:
             raise ValueError(
                 "eval_ensemble_size must be at least 1, "
                 f"got {eval_ensemble_size}"

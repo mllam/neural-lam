@@ -45,7 +45,13 @@ class ConcreteProbabilisticARForecaster(ProbabilisticARForecaster):
     (no single default objective fits every stochastic model), so tests
     that only need a working forecaster to instantiate use this example
     ensemble-mean objective rather than the base class directly.
+    ``sample_ensemble`` always requires an explicit member count, so this
+    class takes its own ``train_num_members`` for the training objective.
     """
+
+    def __init__(self, *args, train_num_members: int = 2, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.train_num_members = train_num_members
 
     def compute_training_loss(
         self,
@@ -55,7 +61,10 @@ class ConcreteProbabilisticARForecaster(ProbabilisticARForecaster):
         interior_mask_bool,
     ):
         ensemble, per_member_std = self.sample_ensemble(
-            init_states, forcing_features, target_states
+            init_states,
+            forcing_features,
+            target_states,
+            num_members=self.train_num_members,
         )
         ensemble_mean = ensemble.mean(dim=1)
         pred_std = (
@@ -127,9 +136,7 @@ def test_ar_forecaster_training_loss_matches_direct_score():
 def test_sample_ensemble_shapes_and_member_variability():
     datastore = init_datastore_example("mdp")
     predictor = NoisyStepPredictor(datastore=datastore, output_std=False)
-    forecaster = ConcreteProbabilisticARForecaster(
-        predictor, datastore, ensemble_size=2
-    )
+    forecaster = ConcreteProbabilisticARForecaster(predictor, datastore)
 
     # Override masks to test boundary masking behaviour
     forecaster.interior_mask = torch.zeros_like(forecaster.interior_mask)
@@ -165,18 +172,12 @@ def test_sample_ensemble_shapes_and_member_variability():
     # Boundary nodes are overwritten with the true state in every member
     assert torch.all(ensemble[:, :, :, 1:] == 5.0)
 
-    # Without an explicit member count the configured ensemble_size is used
-    default_ensemble, _ = forecaster.sample_ensemble(
-        init_states, forcing_features, target_states
-    )
-    assert default_ensemble.shape[1] == forecaster.ensemble_size
-
 
 def test_probabilistic_training_loss_gradient_flow():
     datastore = init_datastore_example("mdp")
     predictor = NoisyStepPredictor(datastore=datastore, output_std=False)
     forecaster = ConcreteProbabilisticARForecaster(
-        predictor, datastore, ensemble_size=2, loss="mse"
+        predictor, datastore, loss="mse", train_num_members=2
     )
 
     init_states, forcing_features, target_states = _example_batch(datastore)
@@ -203,12 +204,16 @@ def test_probabilistic_training_loss_gradient_flow():
     assert predictor.noise_scale.grad != 0.0
 
 
-def test_probabilistic_forecaster_rejects_empty_ensemble():
+def test_sample_ensemble_rejects_empty_member_count():
     datastore = init_datastore_example("mdp")
     predictor = NoisyStepPredictor(datastore=datastore, output_std=False)
+    forecaster = ConcreteProbabilisticARForecaster(predictor, datastore)
+    init_states, forcing_features, target_states = _example_batch(datastore)
 
-    with pytest.raises(ValueError, match="ensemble_size"):
-        ConcreteProbabilisticARForecaster(predictor, datastore, ensemble_size=0)
+    with pytest.raises(ValueError, match="num_members"):
+        forecaster.sample_ensemble(
+            init_states, forcing_features, target_states, num_members=0
+        )
 
 
 def test_probabilistic_ar_forecaster_is_abstract():
@@ -219,7 +224,7 @@ def test_probabilistic_ar_forecaster_is_abstract():
     predictor = NoisyStepPredictor(datastore=datastore, output_std=False)
 
     with pytest.raises(TypeError, match="abstract"):
-        ProbabilisticARForecaster(predictor, datastore, ensemble_size=2)
+        ProbabilisticARForecaster(predictor, datastore)
 
 
 def test_module_training_step_delegates_to_forecaster():
@@ -272,7 +277,7 @@ def test_probabilistic_module_validation_scores_ensemble_mean():
         )
     )
     forecaster = MemberCountRecordingForecaster(
-        predictor, datastore, ensemble_size=2, config=config
+        predictor, datastore, config=config
     )
     model = ProbabilisticForecasterModule(
         forecaster=forecaster,
@@ -310,7 +315,7 @@ def test_probabilistic_module_rejects_empty_eval_ensemble():
         )
     )
     forecaster = ConcreteProbabilisticARForecaster(
-        predictor, datastore, ensemble_size=2, config=config
+        predictor, datastore, config=config
     )
 
     with pytest.raises(ValueError, match="eval_ensemble_size"):
@@ -331,12 +336,13 @@ def test_probabilistic_module_test_step_not_implemented():
         )
     )
     forecaster = ConcreteProbabilisticARForecaster(
-        predictor, datastore, ensemble_size=2, config=config
+        predictor, datastore, config=config
     )
     model = ProbabilisticForecasterModule(
         forecaster=forecaster,
         config=config,
         datastore=datastore,
+        eval_ensemble_size=2,
     )
 
     init_states, forcing_features, target_states = _example_batch(datastore)

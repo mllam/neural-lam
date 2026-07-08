@@ -39,7 +39,7 @@ class ProbabilisticForecaster(Forecaster):
         init_states: torch.Tensor,
         forcing_features: torch.Tensor,
         boundary_states: torch.Tensor,
-        num_members: int | None = None,
+        num_members: int,
     ) -> tuple[torch.Tensor, torch.Tensor | None]:
         """
         Sample an ensemble of forecasts.
@@ -64,9 +64,8 @@ class ProbabilisticForecaster(Forecaster):
             state values used only to overwrite boundary nodes at each
             predicted step, identically in every member. Dims: same as one
             member.
-        num_members : int or None
-            Number of ensemble members ``S`` to sample. When ``None``, the
-            forecaster's configured ensemble size is used.
+        num_members : int
+            Number of ensemble members ``S`` to sample.
 
         Returns
         -------
@@ -108,7 +107,6 @@ class ProbabilisticARForecaster(ARForecaster, ProbabilisticForecaster):
         self,
         predictor: StepPredictor,
         datastore: BaseDatastore,
-        ensemble_size: int,
         config: NeuralLAMConfig | None = None,
         loss: str = "wmse",
     ) -> None:
@@ -122,9 +120,6 @@ class ProbabilisticARForecaster(ARForecaster, ProbabilisticForecaster):
             fresh sample of the next state.
         datastore : BaseDatastore
             The datastore providing grid metadata and boundary masks.
-        ensemble_size : int
-            Number of ensemble members to sample when no explicit member
-            count is given, in particular for the training objective.
         config : NeuralLAMConfig or None
             Configuration used to compute the constant per-variable std
             substituted for ``pred_std`` when ``predictor`` does not output
@@ -135,18 +130,13 @@ class ProbabilisticARForecaster(ARForecaster, ProbabilisticForecaster):
             ``compute_training_loss`` and stored as ``self.loss``.
         """
         super().__init__(predictor, datastore, config=config, loss=loss)
-        if ensemble_size < 1:
-            raise ValueError(
-                f"ensemble_size must be at least 1, got {ensemble_size}"
-            )
-        self.ensemble_size = ensemble_size
 
     def sample_ensemble(
         self,
         init_states: torch.Tensor,
         forcing_features: torch.Tensor,
         boundary_states: torch.Tensor,
-        num_members: int | None = None,
+        num_members: int,
     ) -> tuple[torch.Tensor, torch.Tensor | None]:
         """
         Sample an ensemble of forecasts.
@@ -174,9 +164,8 @@ class ProbabilisticARForecaster(ARForecaster, ProbabilisticForecaster):
             Shape ``(B, pred_steps, num_grid_nodes, num_state_vars)``. True
             state values used only to overwrite boundary nodes at each AR
             step, identically in every member. Dims: same as one member.
-        num_members : int or None
-            Number of ensemble members ``S`` to sample. When ``None``,
-            ``self.ensemble_size`` is used.
+        num_members : int
+            Number of ensemble members ``S`` to sample.
 
         Returns
         -------
@@ -190,9 +179,16 @@ class ProbabilisticARForecaster(ARForecaster, ProbabilisticForecaster):
             why the ensemble is then a mixture, not this averaged with the
             others), when the wrapped predictor outputs an std, otherwise
             ``None``. Dims: same as ``ensemble``.
+
+        Raises
+        ------
+        ValueError
+            If ``num_members`` is less than 1.
         """
-        if num_members is None:
-            num_members = self.ensemble_size
+        if num_members < 1:
+            raise ValueError(
+                f"num_members must be at least 1, got {num_members}"
+            )
 
         member_list = []
         member_std_list = []
