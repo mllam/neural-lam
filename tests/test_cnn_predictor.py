@@ -96,6 +96,16 @@ def test_cnn_predictor_forward_shape_with_film():
     assert pred_std is None
 
 
+def test_cnn_predictor_global_film_context_averages_nodes():
+    datastore = DummyDatastore(n_grid_points=16)
+    predictor = _make_predictor(datastore, cnn_film=True)
+    _, _, forcing, *_ = _make_inputs(datastore)
+
+    context = predictor._get_global_forcing_context(forcing)
+
+    assert torch.equal(context, forcing.mean(dim=1))
+
+
 def test_cnn_predictor_no_static_features():
     datastore = NoStaticDummyDatastore(n_grid_points=16)
     predictor = _make_predictor(datastore)
@@ -133,6 +143,16 @@ def test_cnn_predictor_ar_forecaster_rollout_shape():
 def test_cnn_predictor_rejects_non_regular_datastore():
     with pytest.raises(TypeError, match="BaseRegularGridDatastore"):
         CNNPredictor(datastore=object())
+
+
+def test_cnn_predictor_rejects_unsafe_reflect_padding():
+    datastore = DummyDatastore(n_grid_points=1)
+
+    with pytest.raises(ValueError, match="reflect padding"):
+        CNNPredictor(
+            datastore=datastore,
+            cnn_padding_mode="reflect",
+        )
 
 
 def test_cnn_predictor_rejects_wrong_forcing_size():

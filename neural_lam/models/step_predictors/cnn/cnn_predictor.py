@@ -11,7 +11,12 @@ from typing import Dict, Optional
 import torch
 
 # Local
-from ....cnn_layers import ResHRRRBackbone, grid_to_node, node_to_grid
+from ....cnn_layers import (
+    ResHRRRBackbone,
+    grid_to_node,
+    node_to_grid,
+    validate_padding_mode_for_grid,
+)
 from ....datastore.base import BaseDatastore, BaseRegularGridDatastore
 from ..base import StepPredictor
 
@@ -56,8 +61,7 @@ class CNNPredictor(StepPredictor):
         cnn_se_reduction : int
             Channel reduction ratio for Squeeze-and-Excitation blocks.
         cnn_film : bool
-            Whether to condition residual blocks with averaged forcing via
-            FiLM.
+            Whether to condition residual blocks with global forcing FiLM.
         cnn_padding_mode : str
             Padding mode passed to convolution layers.
         num_past_forcing_steps : int
@@ -89,24 +93,6 @@ class CNNPredictor(StepPredictor):
                 f"got {expected_nodes}, expected {self.num_grid_nodes}"
             )
 
-        da_state_stats = datastore.get_standardization_dataarray("state")
-        self.register_buffer(
-            "diff_mean",
-            torch.tensor(
-                da_state_stats.state_diff_mean_standardized.values,
-                dtype=torch.float32,
-            ),
-            persistent=False,
-        )
-        self.register_buffer(
-            "diff_std",
-            torch.tensor(
-                da_state_stats.state_diff_std_standardized.values,
-                dtype=torch.float32,
-            ),
-            persistent=False,
-        )
-
         self.num_state_vars = datastore.get_num_data_vars(category="state")
         num_forcing_vars = datastore.get_num_data_vars(category="forcing")
         forcing_window_steps = (
@@ -119,6 +105,11 @@ class CNNPredictor(StepPredictor):
             2 * self.num_state_vars + self.forcing_input_dim + grid_static_dim
         )
         context_dim = self.forcing_input_dim if cnn_film else None
+        validate_padding_mode_for_grid(
+            grid_shape=self.grid_shape,
+            kernel_size=cnn_kernel_size,
+            padding_mode=cnn_padding_mode,
+        )
 
         self.backbone = ResHRRRBackbone(
             input_channels=self.grid_input_dim,
@@ -171,7 +162,9 @@ class CNNPredictor(StepPredictor):
         )
         grid_features = node_to_grid(grid_features, self.grid_shape)
 
-        context = forcing.mean(dim=1) if self.cnn_film else None
+        context = (
+            self._get_global_forcing_context(forcing) if self.cnn_film else None
+        )
         net_output = self.backbone(grid_features, context=context)
         net_output = grid_to_node(net_output, self.grid_shape)
 
@@ -186,6 +179,18 @@ class CNNPredictor(StepPredictor):
         new_state = self.get_clamped_new_state(rescaled_delta_mean, prev_state)
 
         return new_state, pred_std
+
+    def _get_global_forcing_context(
+        self,
+        forcing: torch.Tensor,
+    ) -> torch.Tensor:
+        """
+        Average node-wise forcing into the global context used by FiLM.
+
+        Spatially varying forcing is still included in ``grid_features`` before
+        the CNN backbone; this context only controls global channel modulation.
+        """
+        return forcing.mean(dim=1)
 
     def _validate_inputs(
         self,

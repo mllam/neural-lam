@@ -84,6 +84,22 @@ class StepPredictor(nn.Module, ABC):
             torch.tensor(da_state_stats.state_std.values, dtype=torch.float32),
             persistent=False,
         )
+        self.register_buffer(
+            "diff_mean",
+            torch.tensor(
+                da_state_stats.state_diff_mean_standardized.values,
+                dtype=torch.float32,
+            ),
+            persistent=False,
+        )
+        self.register_buffer(
+            "diff_std",
+            torch.tensor(
+                da_state_stats.state_diff_std_standardized.values,
+                dtype=torch.float32,
+            ),
+            persistent=False,
+        )
 
         self.output_std = bool(output_std)
         if self.output_std:
@@ -91,7 +107,7 @@ class StepPredictor(nn.Module, ABC):
         else:
             self.grid_output_dim = num_state_vars
 
-        (self.num_grid_nodes, _) = self.grid_static_features.shape
+        self.num_grid_nodes, _ = self.grid_static_features.shape
 
     @property
     def predicts_std(self) -> bool:

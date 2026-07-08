@@ -12,6 +12,7 @@ from neural_lam.cnn_layers import (
     SqueezeExcitation2d,
     grid_to_node,
     node_to_grid,
+    validate_padding_mode_for_grid,
 )
 from neural_lam.datastore.base import CartesianGridShape
 
@@ -74,6 +75,35 @@ def test_grid_to_node_rejects_wrong_grid_shape():
 
     with pytest.raises(ValueError, match="spatial dimensions"):
         grid_to_node(grid_features, (4, 3))
+
+
+def test_validate_padding_mode_for_grid_rejects_unsafe_reflect_padding():
+    with pytest.raises(ValueError, match="reflect padding"):
+        validate_padding_mode_for_grid(
+            (1, 4), kernel_size=3, padding_mode="reflect"
+        )
+
+
+def test_validate_padding_mode_for_grid_rejects_unsafe_circular_padding():
+    with pytest.raises(ValueError, match="circular padding"):
+        validate_padding_mode_for_grid(
+            (4, 4),
+            kernel_size=11,
+            padding_mode="circular",
+        )
+
+
+def test_validate_padding_mode_for_grid_accepts_safe_padding_modes():
+    validate_padding_mode_for_grid((1, 1), kernel_size=3, padding_mode="zeros")
+    validate_padding_mode_for_grid(
+        (1, 1), kernel_size=3, padding_mode="replicate"
+    )
+    validate_padding_mode_for_grid(
+        (2, 2), kernel_size=3, padding_mode="reflect"
+    )
+    validate_padding_mode_for_grid(
+        (1, 1), kernel_size=3, padding_mode="circular"
+    )
 
 
 def test_squeeze_excitation_preserves_shape():

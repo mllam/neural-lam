@@ -72,25 +72,6 @@ class BaseGraphModel(StepPredictor):
         self.g2m_gnn_type = g2m_gnn_type
         self.m2g_gnn_type = m2g_gnn_type
 
-        # Retrieve difference statistics for rescaling in forward pass
-        da_state_stats = datastore.get_standardization_dataarray("state")
-        self.register_buffer(
-            "diff_mean",
-            torch.tensor(
-                da_state_stats.state_diff_mean_standardized.values,
-                dtype=torch.float32,
-            ),
-            persistent=False,
-        )
-        self.register_buffer(
-            "diff_std",
-            torch.tensor(
-                da_state_stats.state_diff_std_standardized.values,
-                dtype=torch.float32,
-            ),
-            persistent=False,
-        )
-
         # Store architecture hyperparameters for subclass use
         self.hidden_dim = hidden_dim
         self.hidden_layers = hidden_layers

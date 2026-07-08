@@ -12,6 +12,7 @@ from torch import nn
 from .datastore.base import CartesianGridShape
 
 GridShape = CartesianGridShape | tuple[int, int]
+PADDING_MODES = {"zeros", "reflect", "replicate", "circular"}
 
 
 def _grid_shape_xy(grid_shape: GridShape) -> tuple[int, int]:
@@ -113,6 +114,44 @@ def grid_to_node(
         .reshape(batch_size, grid_x * grid_y, num_channels)
         .contiguous()
     )
+
+
+def validate_padding_mode_for_grid(
+    grid_shape: GridShape,
+    kernel_size: int,
+    padding_mode: str,
+) -> None:
+    """
+    Validate that a CNN padding mode is safe for a fixed regular grid.
+
+    PyTorch reflection padding requires each spatial padding width to be
+    smaller than the corresponding input dimension. Circular padding cannot
+    wrap around an axis more than once.
+    """
+    if kernel_size <= 0 or kernel_size % 2 == 0:
+        raise ValueError("kernel_size must be a positive odd integer")
+    if padding_mode not in PADDING_MODES:
+        raise ValueError(
+            f"padding_mode must be one of {sorted(PADDING_MODES)}, "
+            f"got {padding_mode}"
+        )
+
+    padding = kernel_size // 2
+    grid_x, grid_y = _grid_shape_xy(grid_shape)
+    min_grid_dim = min(grid_x, grid_y)
+
+    if padding_mode == "reflect" and padding >= min_grid_dim:
+        raise ValueError(
+            "reflect padding requires kernel_size // 2 to be smaller than "
+            "each grid dimension: "
+            f"got padding={padding}, grid_shape={(grid_x, grid_y)}"
+        )
+    if padding_mode == "circular" and padding > min_grid_dim:
+        raise ValueError(
+            "circular padding requires kernel_size // 2 to be no larger than "
+            "each grid dimension: "
+            f"got padding={padding}, grid_shape={(grid_x, grid_y)}"
+        )
 
 
 class NodeToGrid(nn.Module):
