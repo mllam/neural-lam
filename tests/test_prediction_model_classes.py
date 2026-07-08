@@ -132,7 +132,9 @@ def test_forecaster_module_checkpoint(tmp_path):
         num_future_forcing_steps=1,
         output_std=False,
     )
-    load_forecaster = ARForecaster(load_predictor, datastore)
+    load_forecaster = ARForecaster(
+        load_predictor, datastore, config=config, loss="mse"
+    )
 
     # Load from checkpoint
     loaded_model = ForecasterModule.load_from_checkpoint(

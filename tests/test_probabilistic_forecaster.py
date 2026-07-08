@@ -217,14 +217,14 @@ class MemberCountRecordingForecaster(ProbabilisticARForecaster):
 def test_probabilistic_module_validation_scores_ensemble_mean():
     datastore = init_datastore_example("mdp")
     predictor = NoisyStepPredictor(datastore=datastore, output_std=False)
-    forecaster = MemberCountRecordingForecaster(
-        predictor, datastore, ensemble_size=2
-    )
 
     config = nlconfig.NeuralLAMConfig(
         datastore=nlconfig.DatastoreSelection(
             kind=datastore.SHORT_NAME, config_path=datastore.root_path
         )
+    )
+    forecaster = MemberCountRecordingForecaster(
+        predictor, datastore, ensemble_size=2, config=config
     )
     model = ProbabilisticForecasterModule(
         forecaster=forecaster,
@@ -256,13 +256,13 @@ def test_probabilistic_module_validation_scores_ensemble_mean():
 def test_probabilistic_module_rejects_empty_eval_ensemble():
     datastore = init_datastore_example("mdp")
     predictor = NoisyStepPredictor(datastore=datastore, output_std=False)
-    forecaster = ProbabilisticARForecaster(
-        predictor, datastore, ensemble_size=2
-    )
     config = nlconfig.NeuralLAMConfig(
         datastore=nlconfig.DatastoreSelection(
             kind=datastore.SHORT_NAME, config_path=datastore.root_path
         )
+    )
+    forecaster = ProbabilisticARForecaster(
+        predictor, datastore, ensemble_size=2, config=config
     )
 
     with pytest.raises(ValueError, match="eval_ensemble_size"):
@@ -277,13 +277,13 @@ def test_probabilistic_module_rejects_empty_eval_ensemble():
 def test_probabilistic_module_test_step_not_implemented():
     datastore = init_datastore_example("mdp")
     predictor = NoisyStepPredictor(datastore=datastore, output_std=False)
-    forecaster = ProbabilisticARForecaster(
-        predictor, datastore, ensemble_size=2
-    )
     config = nlconfig.NeuralLAMConfig(
         datastore=nlconfig.DatastoreSelection(
             kind=datastore.SHORT_NAME, config_path=datastore.root_path
         )
+    )
+    forecaster = ProbabilisticARForecaster(
+        predictor, datastore, ensemble_size=2, config=config
     )
     model = ProbabilisticForecasterModule(
         forecaster=forecaster,
