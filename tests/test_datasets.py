@@ -235,13 +235,14 @@ def test_single_batch(datastore_name, split):
         output_clamping_lower=config.training.output_clamping.lower,
         output_clamping_upper=config.training.output_clamping.upper,
     )
-    forecaster = ARForecaster(predictor, datastore=datastore)
+    forecaster = ARForecaster(
+        predictor, datastore=datastore, config=config, loss=args.loss
+    )
 
     model = ForecasterModule(
         forecaster=forecaster,
         config=config,
         datastore=datastore,
-        loss=args.loss,
         restore_opt=args.restore_opt,
         n_example_pred=args.n_example_pred,
         val_steps_to_log=args.val_steps_to_log,

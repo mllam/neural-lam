@@ -14,20 +14,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Add `--train_steps_to_log` CLI option to log training loss for individual unroll steps, and deduplicate common prediction and loss computation steps across loops [\#674](https://github.com/mllam/neural-lam/issues/674) @GiGiKoneti
 
-- Add a general probabilistic forecasting interface: an abstract
-  `ProbabilisticForecaster` capable of sampling ensemble forecasts
-  (`sample_ensemble`, members stacked along a new dimension after batch),
-  its auto-regressive implementation `ProbabilisticARForecaster` (samples
-  independent trajectories through a stochastic step predictor and by
-  default trains on the configured scoring rule applied to the ensemble
-  mean) and a `ProbabilisticForecasterModule` whose validation samples an
-  ensemble and logs the RMSE of the ensemble mean. Move ownership of the
-  training objective from `ForecasterModule` onto the `Forecaster`: the
-  new abstract `Forecaster.compute_training_loss` returns a finished
-  `(loss, loss_components)` pair and `ForecasterModule.training_step` only
-  injects the configured scoring rule and interior mask and logs the
-  result. The deterministic `ARForecaster` training loss is unchanged in
-  value, only computed by the forecaster itself.
+- Add a general probabilistic forecasting interface (`ProbabilisticForecaster`,
+  `ProbabilisticARForecaster`, `ProbabilisticForecasterModule`) and move
+  ownership of the training objective, scoring rule and per-variable std
+  from `ForecasterModule` onto the `Forecaster`.
   [\#685](https://github.com/mllam/neural-lam/issues/685)
   @Sir-Sloth-The-Lazy
 

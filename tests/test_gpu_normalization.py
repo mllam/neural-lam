@@ -26,7 +26,7 @@ def _build_module(datastore):
         )
     )
     predictor = _MockStepPredictor(datastore=datastore, output_std=False)
-    forecaster = ARForecaster(predictor, datastore)
+    forecaster = ARForecaster(predictor, datastore, config=config)
     return ForecasterModule(
         forecaster=forecaster, config=config, datastore=datastore
     )

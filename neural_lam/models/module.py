@@ -20,7 +20,6 @@ from neural_lam.utils import get_integer_time
 from .. import metrics, vis
 from ..config import NeuralLAMConfig
 from ..datastore import BaseDatastore
-from ..loss_weighting import get_state_feature_weighting
 from ..weather_dataset import WeatherDataset
 from .forecasters.base import Forecaster
 
@@ -38,7 +37,6 @@ class ForecasterModule(pl.LightningModule):
         forecaster: Forecaster,
         config: NeuralLAMConfig,
         datastore: BaseDatastore,
-        loss: str = "wmse",
         lr: float = 1e-3,
         restore_opt: bool = False,
         n_example_pred: int = 1,
@@ -55,13 +53,14 @@ class ForecasterModule(pl.LightningModule):
         Parameters
         ----------
         forecaster : Forecaster
-            The forecaster model to use for predictions.
+            The forecaster model to use for predictions. Owns the scoring
+            rule (``forecaster.loss``) and the constant per-variable std
+            fallback (``forecaster.per_var_std``) used for training and for
+            validation/test loss reporting here.
         config : NeuralLAMConfig
             Configuration object for the neural LAM model.
         datastore : BaseDatastore
             Datastore providing grid metadata and data access.
-        loss : str, default "wmse"
-            The loss function to use.
         lr : float, default 1e-3
             Learning rate for the optimizer.
         restore_opt : bool, default False
@@ -80,7 +79,7 @@ class ForecasterModule(pl.LightningModule):
         args : argparse.Namespace, optional
             Pre-refactor ``ARModel`` checkpoint hyperparameters. When
             provided, attributes on ``args`` take precedence over the
-            corresponding explicit kwargs (``loss``, ``lr``, ``restore_opt``,
+            corresponding explicit kwargs (``lr``, ``restore_opt``,
             ``n_example_pred``, ``create_gif``, ``val_steps_to_log``,
             ``metrics_watch``, ``var_leads_metrics_watch``) so legacy
             checkpoints round-trip through ``load_from_checkpoint``
@@ -91,10 +90,9 @@ class ForecasterModule(pl.LightningModule):
         # inside an argparse Namespace under the single key 'args'. When
         # Lightning calls __init__ during load_from_checkpoint it would
         # otherwise drop 'args' (not in the new signature) and silently fall
-        # back to defaults for loss/lr/create_gif/etc. Unpack the namespace
-        # here so legacy checkpoints round-trip correctly.
+        # back to defaults for lr/create_gif/etc. Unpack the namespace here
+        # so legacy checkpoints round-trip correctly.
         if args is not None:
-            loss = getattr(args, "loss", loss)
             lr = getattr(args, "lr", lr)
             restore_opt = getattr(args, "restore_opt", restore_opt)
             n_example_pred = getattr(args, "n_example_pred", n_example_pred)
@@ -145,29 +143,6 @@ class ForecasterModule(pl.LightningModule):
             persistent=False,
         )
 
-        # Store per_var_std here if predictor does not output std
-        if not self.forecaster.predicts_std:
-            da_state_stats = datastore.get_standardization_dataarray(
-                category="state"
-            )
-            state_feature_weights = get_state_feature_weighting(
-                config=config, datastore=datastore
-            )
-            diff_std = torch.tensor(
-                da_state_stats.state_diff_std_standardized.values,
-                dtype=torch.float32,
-            )
-            feature_weights_t = torch.tensor(
-                state_feature_weights, dtype=torch.float32
-            )
-            self.register_buffer(
-                "per_var_std",
-                diff_std / torch.sqrt(feature_weights_t),
-                persistent=False,
-            )
-        else:
-            self.per_var_std = None
-
         # Standardization statistics used to normalize each batch on-device in
         # `on_after_batch_transfer`. WeatherDataset returns unstandardized
         # data, so state and forcing are normalized here rather than on CPU.
@@ -212,9 +187,6 @@ class ForecasterModule(pl.LightningModule):
         else:
             self.forcing_mean = None
             self.forcing_std = None
-
-        # Instantiate loss function
-        self.loss = metrics.get_metric(loss)
 
         self.val_metrics: dict[str, list] = {
             "mse": [],
@@ -371,9 +343,10 @@ class ForecasterModule(pl.LightningModule):
         """
         Perform a single training step.
 
-        The training objective is fully assembled by the wrapped forecaster;
-        this method injects the configured scoring rule and interior mask,
-        then logs the loss and any loss components the forecaster returns.
+        The training objective is fully assembled by the wrapped forecaster,
+        which owns its own scoring rule; this method injects the interior
+        mask, then logs the loss and any loss components the forecaster
+        returns.
 
         Parameters
         ----------
@@ -390,9 +363,7 @@ class ForecasterModule(pl.LightningModule):
             init_states,
             forcing_features,
             target_states,
-            score_metric=self.loss,
             interior_mask_bool=self.interior_mask_bool,
-            per_var_std=self.per_var_std,
         )
 
         log_dict = {
@@ -546,8 +517,18 @@ class ForecasterModule(pl.LightningModule):
         batch_idx : int
             The index of the batch.
         """
-        prediction, target_states, pred_std, time_step_loss = (
-            self._compute_prediction_and_loss(batch)
+        prediction, target_states, pred_std, _ = self.common_step(batch)
+        if pred_std is None:
+            pred_std = self.forecaster.per_var_std
+
+        time_step_loss = torch.mean(
+            self.forecaster.loss(
+                prediction,
+                target_states,
+                pred_std,
+                mask=self.interior_mask_bool,
+            ),
+            dim=0,
         )
         mean_loss = torch.mean(time_step_loss)
         batch_size = batch[0].shape[0]
@@ -597,9 +578,7 @@ class ForecasterModule(pl.LightningModule):
         batch_idx : int
             The index of the batch.
         """
-        prediction, target_states, pred_std, time_step_loss = (
-            self._compute_prediction_and_loss(batch)
-        )
+        prediction, target_states, pred_std, _ = self.common_step(batch)
 
         if self.forecaster.predicts_std:
             mean_pred_std = torch.mean(
@@ -607,6 +586,18 @@ class ForecasterModule(pl.LightningModule):
             )
             self.test_metrics["output_std"].append(mean_pred_std)
 
+        if pred_std is None:
+            pred_std = self.forecaster.per_var_std
+
+        time_step_loss = torch.mean(
+            self.forecaster.loss(
+                prediction,
+                target_states,
+                pred_std,
+                mask=self.interior_mask_bool,
+            ),
+            dim=0,
+        )
         mean_loss = torch.mean(time_step_loss)
         batch_size = batch[0].shape[0]
 
@@ -628,7 +619,7 @@ class ForecasterModule(pl.LightningModule):
             )
             self.test_metrics[metric_name].append(batch_metric_vals)
 
-        spatial_loss = self.loss(
+        spatial_loss = self.forecaster.loss(
             prediction, target_states, pred_std, average_grid=False
         )
         spatial_loss[..., ~self.interior_mask_bool] = float("nan")
@@ -1038,15 +1029,20 @@ class ForecasterModule(pl.LightningModule):
         # 1. Broad namespace remap: for pre-refactor checkpoints
         # The old ``ARModel`` was a flat LightningModule. Everything that
         # belonged to the predictor needs to be moved to
-        # 'forecaster.predictor.'
+        # 'forecaster.predictor.', while 'per_var_std' (now owned by the
+        # forecaster itself) moves to 'forecaster.per_var_std' and
+        # 'interior_mask_bool' (still owned by the module) stays as-is.
         old_keys = list(loaded_state_dict.keys())
         for key in old_keys:
-            if not key.startswith("forecaster.") and key not in (
-                "interior_mask_bool",
-                "per_var_std",
-            ):
-                new_key = f"forecaster.predictor.{key}"
-                loaded_state_dict[new_key] = loaded_state_dict.pop(key)
+            if key.startswith("forecaster.") or key == "interior_mask_bool":
+                continue
+            if key == "per_var_std":
+                loaded_state_dict["forecaster.per_var_std"] = (
+                    loaded_state_dict.pop(key)
+                )
+                continue
+            new_key = f"forecaster.predictor.{key}"
+            loaded_state_dict[new_key] = loaded_state_dict.pop(key)
 
         # 2. Specific rename from g2m_gnn.grid_mlp -> encoding_grid_mlp
         # Will be under forecaster.predictor due to the remap above, or

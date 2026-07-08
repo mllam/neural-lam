@@ -40,7 +40,7 @@ class ProbabilisticForecasterModule(ForecasterModule):
             uses the forecaster's configured ensemble size.
         **kwargs
             Keyword arguments forwarded to ``ForecasterModule.__init__``
-            (``loss``, ``lr``, ...).
+            (``lr``, ...).
         """
         super().__init__(*args, **kwargs)
         if eval_ensemble_size is not None and eval_ensemble_size < 1:

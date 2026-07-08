@@ -97,13 +97,12 @@ def test_forecaster_module_checkpoint(tmp_path):
         num_future_forcing_steps=1,
         output_std=False,
     )
-    forecaster = ARForecaster(predictor, datastore)
+    forecaster = ARForecaster(predictor, datastore, config=config, loss="mse")
 
     model = ForecasterModule(
         forecaster=forecaster,
         config=config,
         datastore=datastore,
-        loss="mse",
         lr=1e-3,
         restore_opt=False,
         n_example_pred=1,
@@ -193,8 +192,6 @@ def test_forecaster_module_old_checkpoint(tmp_path):
         num_future_forcing_steps=1,
         output_std=False,
     )
-    forecaster = ARForecaster(predictor, datastore)
-
     # Use distinctive non-default values so we can detect silent fallback
     # to ForecasterModule's defaults during load.
     saved_loss = "mse"
@@ -203,11 +200,14 @@ def test_forecaster_module_old_checkpoint(tmp_path):
     saved_val_steps = [2]
     saved_n_example_pred = 7
 
+    forecaster = ARForecaster(
+        predictor, datastore, config=config, loss=saved_loss
+    )
+
     model = ForecasterModule(
         forecaster=forecaster,
         config=config,
         datastore=datastore,
-        loss=saved_loss,
         lr=saved_lr,
         restore_opt=False,
         n_example_pred=saved_n_example_pred,
@@ -269,7 +269,9 @@ def test_forecaster_module_old_checkpoint(tmp_path):
         num_future_forcing_steps=1,
         output_std=False,
     )
-    load_forecaster = ARForecaster(load_predictor, datastore)
+    load_forecaster = ARForecaster(
+        load_predictor, datastore, config=config, loss=saved_loss
+    )
 
     # Load from hacked old checkpoint
     loaded_model = ForecasterModule.load_from_checkpoint(
@@ -284,7 +286,6 @@ def test_forecaster_module_old_checkpoint(tmp_path):
 
     # Hyperparameters nested in the legacy 'args' namespace must round-trip
     # rather than silently falling back to ForecasterModule defaults.
-    assert loaded_model.hparams.loss == saved_loss
     assert loaded_model.hparams.lr == saved_lr
     assert loaded_model.hparams.val_steps_to_log == saved_val_steps
     assert loaded_model.create_gif is saved_create_gif

@@ -63,7 +63,9 @@ def load_forecaster_module_from_checkpoint(ckpt_path, config, datastore):
         output_clamping_lower=config.training.output_clamping.lower,
         output_clamping_upper=config.training.output_clamping.upper,
     )
-    forecaster = ARForecaster(predictor, datastore)
+    forecaster = ARForecaster(
+        predictor, datastore, config=config, loss=args.loss
+    )
     return ForecasterModule.load_from_checkpoint(
         ckpt_path,
         forecaster=forecaster,
@@ -479,13 +481,14 @@ def main(input_args=None):
         mesh_up_gnn_type=args.mesh_up_gnn_type,
         mesh_down_gnn_type=args.mesh_down_gnn_type,
     )
-    forecaster = ARForecaster(predictor, datastore)
+    forecaster = ARForecaster(
+        predictor, datastore, config=config, loss=args.loss
+    )
 
     model = ForecasterModule(
         forecaster=forecaster,
         config=config,
         datastore=datastore,
-        loss=args.loss,
         lr=args.lr,
         restore_opt=args.restore_opt,
         n_example_pred=args.n_example_pred,

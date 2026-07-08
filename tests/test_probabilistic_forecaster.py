@@ -55,21 +55,21 @@ def _example_batch(datastore, B=2, pred_steps=3):
 def test_ar_forecaster_training_loss_matches_direct_score():
     datastore = init_datastore_example("mdp")
     predictor = ZeroStepPredictor(datastore=datastore, output_std=False)
-    forecaster = ARForecaster(predictor, datastore)
+    forecaster = ARForecaster(predictor, datastore, loss="mse")
 
     init_states, forcing_features, target_states = _example_batch(datastore)
     score_metric = metrics.get_metric("mse")
     interior_mask_bool = forecaster.interior_mask[0, :, 0].to(torch.bool)
     d_state = target_states.shape[-1]
-    per_var_std = torch.ones(d_state)
+    # per_var_std is normally computed from config; override directly since
+    # this test only cares about the loss computation, not standardization.
+    forecaster.per_var_std = torch.ones(d_state)
 
     batch_loss, loss_components = forecaster.compute_training_loss(
         init_states,
         forcing_features,
         target_states,
-        score_metric=score_metric,
         interior_mask_bool=interior_mask_bool,
-        per_var_std=per_var_std,
     )
 
     prediction, _ = forecaster(init_states, forcing_features, target_states)
@@ -77,7 +77,7 @@ def test_ar_forecaster_training_loss_matches_direct_score():
         score_metric(
             prediction,
             target_states,
-            per_var_std,
+            forecaster.per_var_std,
             mask=interior_mask_bool,
         )
     )
@@ -139,21 +139,22 @@ def test_probabilistic_training_loss_gradient_flow():
     datastore = init_datastore_example("mdp")
     predictor = NoisyStepPredictor(datastore=datastore, output_std=False)
     forecaster = ProbabilisticARForecaster(
-        predictor, datastore, ensemble_size=2
+        predictor, datastore, ensemble_size=2, loss="mse"
     )
 
     init_states, forcing_features, target_states = _example_batch(datastore)
     interior_mask_bool = forecaster.interior_mask[0, :, 0].to(torch.bool)
     d_state = target_states.shape[-1]
+    # per_var_std is normally computed from config; override directly since
+    # this test only cares about the loss computation, not standardization.
+    forecaster.per_var_std = torch.ones(d_state)
 
     torch.manual_seed(42)
     batch_loss, loss_components = forecaster.compute_training_loss(
         init_states,
         forcing_features,
         target_states,
-        score_metric=metrics.get_metric("mse"),
         interior_mask_bool=interior_mask_bool,
-        per_var_std=torch.ones(d_state),
     )
 
     assert batch_loss.shape == ()
@@ -176,18 +177,17 @@ def test_probabilistic_forecaster_rejects_empty_ensemble():
 def test_module_training_step_delegates_to_forecaster():
     datastore = init_datastore_example("mdp")
     predictor = ZeroStepPredictor(datastore=datastore, output_std=False)
-    forecaster = ARForecaster(predictor, datastore)
 
     config = nlconfig.NeuralLAMConfig(
         datastore=nlconfig.DatastoreSelection(
             kind=datastore.SHORT_NAME, config_path=datastore.root_path
         )
     )
+    forecaster = ARForecaster(predictor, datastore, config=config, loss="mse")
     model = ForecasterModule(
         forecaster=forecaster,
         config=config,
         datastore=datastore,
-        loss="mse",
     )
 
     init_states, forcing_features, target_states = _example_batch(datastore)
@@ -200,9 +200,7 @@ def test_module_training_step_delegates_to_forecaster():
         init_states,
         forcing_features,
         target_states,
-        score_metric=model.loss,
         interior_mask_bool=model.interior_mask_bool,
-        per_var_std=model.per_var_std,
     )
 
     torch.testing.assert_close(batch_loss, expected_loss)
@@ -232,7 +230,6 @@ def test_probabilistic_module_validation_scores_ensemble_mean():
         forecaster=forecaster,
         config=config,
         datastore=datastore,
-        loss="mse",
         eval_ensemble_size=3,
     )
 
@@ -273,7 +270,6 @@ def test_probabilistic_module_rejects_empty_eval_ensemble():
             forecaster=forecaster,
             config=config,
             datastore=datastore,
-            loss="mse",
             eval_ensemble_size=0,
         )
 
@@ -293,7 +289,6 @@ def test_probabilistic_module_test_step_not_implemented():
         forecaster=forecaster,
         config=config,
         datastore=datastore,
-        loss="mse",
     )
 
     init_states, forcing_features, target_states = _example_batch(datastore)

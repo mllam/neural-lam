@@ -2,12 +2,12 @@
 
 # Standard library
 from abc import abstractmethod
-from typing import Callable
 
 # Third-party
 import torch
 
 # Local
+from ...config import NeuralLAMConfig
 from ...datastore import BaseDatastore
 from ..step_predictors.base import StepPredictor
 from .autoregressive import ARForecaster
@@ -93,6 +93,8 @@ class ProbabilisticARForecaster(ARForecaster, ProbabilisticForecaster):
         predictor: StepPredictor,
         datastore: BaseDatastore,
         ensemble_size: int,
+        config: NeuralLAMConfig | None = None,
+        loss: str = "wmse",
     ) -> None:
         """
         Initialize the ProbabilisticARForecaster.
@@ -107,8 +109,16 @@ class ProbabilisticARForecaster(ARForecaster, ProbabilisticForecaster):
         ensemble_size : int
             Number of ensemble members to sample when no explicit member
             count is given, in particular for the training objective.
+        config : NeuralLAMConfig or None
+            Configuration used to compute the constant per-variable std
+            substituted for ``pred_std`` when ``predictor`` does not output
+            its own (see ``per_var_std``). Only required for that case;
+            forecasters used purely for inference can omit it.
+        loss : str, default "wmse"
+            The scoring rule (from ``neural_lam.metrics``) used by
+            ``compute_training_loss`` and stored as ``self.loss``.
         """
-        super().__init__(predictor, datastore)
+        super().__init__(predictor, datastore, config=config, loss=loss)
         if ensemble_size < 1:
             raise ValueError(
                 f"ensemble_size must be at least 1, got {ensemble_size}"
@@ -187,12 +197,10 @@ class ProbabilisticARForecaster(ARForecaster, ProbabilisticForecaster):
         init_states: torch.Tensor,
         forcing_features: torch.Tensor,
         target_states: torch.Tensor,
-        score_metric: Callable[..., torch.Tensor],
         interior_mask_bool: torch.Tensor,
-        per_var_std: torch.Tensor | None = None,
     ) -> tuple[torch.Tensor, dict[str, torch.Tensor]]:
         """
-        Score the ensemble mean with the given ``score_metric``.
+        Score the ensemble mean with ``self.loss``.
 
         Samples an ensemble of ``self.ensemble_size`` forecasts, averages
         the members into an ensemble mean forecast, scores it against the
@@ -218,17 +226,10 @@ class ProbabilisticARForecaster(ARForecaster, ProbabilisticForecaster):
             states at each predicted step, used both as the prediction
             targets and to overwrite boundary nodes during the rollouts.
             Dims: same as one ensemble member.
-        score_metric : Callable
-            The configured scoring rule from ``neural_lam.metrics``, called
-            as ``score_metric(prediction, target, pred_std, mask=...)``.
         interior_mask_bool : torch.Tensor
             Shape ``(num_grid_nodes,)``, boolean. ``True`` for interior
-            nodes; passed as ``mask`` to ``score_metric`` so that only interior
+            nodes; passed as ``mask`` to ``self.loss`` so that only interior
             nodes are scored.
-        per_var_std : torch.Tensor or None
-            Shape ``(num_state_vars,)``. Constant per-variable standard
-            deviation to score with when the wrapped predictor does not
-            output an std, otherwise ``None``.
 
         Returns
         -------
@@ -245,10 +246,10 @@ class ProbabilisticARForecaster(ARForecaster, ProbabilisticForecaster):
         if ensemble_std is not None:
             pred_std = ensemble_std.mean(dim=1)
         else:
-            pred_std = per_var_std
+            pred_std = self.per_var_std
 
         batch_loss = torch.mean(
-            score_metric(
+            self.loss(
                 ensemble_mean,
                 target_states,
                 pred_std,

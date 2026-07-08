@@ -50,12 +50,11 @@ def test_saved_checkpoint_excludes_datastore_and_forecaster(tmp_path):
         output_clamping_lower=config.training.output_clamping.lower,
         output_clamping_upper=config.training.output_clamping.upper,
     )
-    forecaster = ARForecaster(predictor, datastore)
+    forecaster = ARForecaster(predictor, datastore, config=config, loss="mse")
     model = ForecasterModule(
         forecaster=forecaster,
         config=config,
         datastore=datastore,
-        loss="mse",
         lr=1.0e-3,
         n_example_pred=1,
         val_steps_to_log=[1],

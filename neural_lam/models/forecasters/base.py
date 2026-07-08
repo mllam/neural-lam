@@ -2,7 +2,6 @@
 
 # Standard library
 from abc import ABC, abstractmethod
-from typing import Callable
 
 # Third-party
 import torch
@@ -87,18 +86,17 @@ class Forecaster(nn.Module, ABC):
         init_states: torch.Tensor,
         forcing_features: torch.Tensor,
         target_states: torch.Tensor,
-        score_metric: Callable[..., torch.Tensor],
         interior_mask_bool: torch.Tensor,
-        per_var_std: torch.Tensor | None = None,
     ) -> tuple[torch.Tensor, dict[str, torch.Tensor]]:
         """
         Compute the training objective for one batch.
 
         The forecaster owns its complete training objective: which forecasts
         to produce from the batch, which loss terms to compute from them and
-        how to combine those terms into a single scalar. The wrapping
-        ``ForecasterModule`` only injects the configured scoring rule and
-        mask, logs the returned components and optimizes the returned loss.
+        how to combine those terms into a single scalar, using its own
+        ``self.loss`` scoring rule and ``self.per_var_std`` fallback std. The
+        wrapping ``ForecasterModule`` only injects the interior mask, logs
+        the returned components and optimizes the returned loss.
 
         Parameters
         ----------
@@ -120,17 +118,10 @@ class Forecaster(nn.Module, ABC):
             states at each predicted step, used both as the prediction
             targets and to overwrite boundary nodes during forecasting.
             Dims: same as the prediction.
-        score_metric : Callable
-            The configured scoring rule from ``neural_lam.metrics``, called
-            as ``score_metric(prediction, target, pred_std, mask=...)``.
         interior_mask_bool : torch.Tensor
             Shape ``(num_grid_nodes,)``, boolean. ``True`` for interior
-            nodes; passed as ``mask`` to ``score_metric`` so that only interior
+            nodes; passed as ``mask`` to ``self.loss`` so that only interior
             nodes are scored.
-        per_var_std : torch.Tensor or None
-            Shape ``(num_state_vars,)``. Constant per-variable standard
-            deviation to score with when the forecaster does not predict its
-            own std, otherwise ``None``.
 
         Returns
         -------
