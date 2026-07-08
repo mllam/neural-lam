@@ -1,5 +1,8 @@
 """Lightning module evaluating probabilistic forecasters as ensembles."""
 
+# Standard library
+import warnings
+
 # Third-party
 import torch
 
@@ -14,9 +17,9 @@ class ProbabilisticForecasterModule(ForecasterModule):
     Lightning module for forecasters that sample ensemble forecasts.
 
     Training is inherited unchanged from ``ForecasterModule``: the wrapped
-    forecaster assembles its own training loss. Validation is ensemble
-    based instead of deterministic: an ensemble is sampled from the
-    forecaster and scored through its ensemble mean (root-mean-squared
+    forecaster assembles its own training loss. Validation and testing are
+    ensemble based instead of deterministic: an ensemble is sampled from
+    the forecaster and scored through its ensemble mean (root-mean-squared
     error of the ensemble mean). The module only assumes that the
     forecaster can sample ensemble forecasts of the correct shape; it makes
     no assumption on how the members are produced.
@@ -36,7 +39,8 @@ class ProbabilisticForecasterModule(ForecasterModule):
             ``ForecasterModule.__init__`` (``forecaster``, ``config``,
             ``datastore``, ...).
         eval_ensemble_size : int
-            Number of ensemble members sampled during validation.
+            Number of ensemble members sampled during validation and
+            testing.
         **kwargs
             Keyword arguments forwarded to ``ForecasterModule.__init__``
             (``lr``, ...).
@@ -49,23 +53,30 @@ class ProbabilisticForecasterModule(ForecasterModule):
             )
         self.eval_ensemble_size = eval_ensemble_size
         self.val_metrics = {"ens_mse": []}
+        self.test_metrics = {"ens_mse": []}
 
-    def validation_step(self, batch, batch_idx):
+    def _ensemble_step(self, batch, phase: str):
         """
-        Perform a single ensemble validation step.
+        Sample an ensemble and score its mean against the target states.
 
-        Samples an ensemble from the forecaster and scores its ensemble
-        mean against the target states on interior nodes. Logs the
-        root-mean-squared error of the ensemble mean per configured rollout
-        step and averaged over the rollout, and collects per-variable
-        ensemble-mean MSE for epoch-end aggregation.
+        Shared by ``validation_step`` and ``test_step``: samples
+        ``self.eval_ensemble_size`` members, scores the ensemble mean with
+        plain (unweighted) MSE on interior nodes, logs the root-mean-squared
+        error per configured rollout step and averaged over the rollout
+        under the given phase's prefix.
 
         Parameters
         ----------
         batch : tuple
             The batch of data.
-        batch_idx : int
-            The index of the batch.
+        phase : str
+            Logging phase, either ``"val"`` or ``"test"``.
+
+        Returns
+        -------
+        torch.Tensor
+            Per-variable ensemble-mean MSE, shape
+            ``(B, pred_steps, num_state_vars)``, for epoch-end aggregation.
         """
         init_states, target_states, forcing_features, _ = batch
         ensemble, _ = self.forecaster.sample_ensemble(
@@ -91,34 +102,37 @@ class ProbabilisticForecasterModule(ForecasterModule):
         )
         time_step_rmse = torch.sqrt(time_step_mse)
         mean_rmse = torch.mean(time_step_rmse)
-        self._warn_skipped_val_steps(len(time_step_rmse), "val")
+        self._warn_skipped_val_steps(len(time_step_rmse), phase)
 
-        val_log_dict = {
-            f"val_loss_unroll{step}": time_step_rmse[step - 1]
+        log_dict = {
+            f"{phase}_loss_unroll{step}": time_step_rmse[step - 1]
             for step in self.hparams.val_steps_to_log
             if step <= len(time_step_rmse)
         }
-        val_log_dict["val_mean_loss"] = mean_rmse
+        log_dict[f"{phase}_mean_loss"] = mean_rmse
         self.log_dict(
-            val_log_dict,
+            log_dict,
             on_step=False,
             on_epoch=True,
             sync_dist=True,
             batch_size=batch[0].shape[0],
         )
 
-        entry_mses = metrics.mse(
+        return metrics.mse(
             ensemble_mean,
             target_states,
             std_placeholder,
             mask=self.interior_mask_bool,
             sum_vars=False,
         )
-        self.val_metrics["ens_mse"].append(entry_mses)
 
-    def test_step(self, batch, batch_idx):
+    def validation_step(self, batch, batch_idx):
         """
-        Not supported: ensemble test evaluation is not implemented.
+        Perform a single ensemble validation step.
+
+        Scores the ensemble mean against the target states (see
+        ``_ensemble_step``) and collects per-variable ensemble-mean MSE for
+        epoch-end aggregation.
 
         Parameters
         ----------
@@ -126,14 +140,50 @@ class ProbabilisticForecasterModule(ForecasterModule):
             The batch of data.
         batch_idx : int
             The index of the batch.
-
-        Raises
-        ------
-        NotImplementedError
-            Always; only training and ensemble validation are implemented
-            for probabilistic forecasters.
         """
-        raise NotImplementedError(
-            "Ensemble test evaluation is not implemented for "
-            "probabilistic forecasters."
-        )
+        entry_mses = self._ensemble_step(batch, "val")
+        self.val_metrics["ens_mse"].append(entry_mses)
+
+    def test_step(self, batch, batch_idx):
+        """
+        Perform a single ensemble test step.
+
+        Scores the ensemble mean against the target states (see
+        ``_ensemble_step``) and collects per-variable ensemble-mean MSE for
+        epoch-end aggregation.
+
+        Parameters
+        ----------
+        batch : tuple
+            The batch of data.
+        batch_idx : int
+            The index of the batch.
+        """
+        entry_mses = self._ensemble_step(batch, "test")
+        self.test_metrics["ens_mse"].append(entry_mses)
+
+    def on_test_epoch_end(self):
+        """
+        Perform actions at the end of the test epoch.
+
+        Aggregates ensemble test metrics. Overrides
+        ``ForecasterModule.on_test_epoch_end``, which also handles spatial
+        loss maps and example plots that ``test_step`` here does not
+        populate.
+        """
+        self.aggregate_and_plot_metrics(self.test_metrics, prefix="test")
+
+        if self.trainer.is_global_zero and self.hparams.metrics_watch:
+            unmatched = set(self.hparams.metrics_watch) - self.matched_metrics
+            if unmatched:
+                warnings.warn(
+                    "The following metrics in --metrics_watch "
+                    "were not found during test phase: "
+                    f"{sorted(unmatched)}. Ensure the metric prefix "
+                    "matches the evaluation mode (expected 'test_')."
+                )
+
+        self.matched_metrics = set()
+
+        for metric_list in self.test_metrics.values():
+            metric_list.clear()

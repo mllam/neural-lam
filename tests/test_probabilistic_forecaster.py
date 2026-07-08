@@ -327,27 +327,40 @@ def test_probabilistic_module_rejects_empty_eval_ensemble():
         )
 
 
-def test_probabilistic_module_test_step_not_implemented():
+def test_probabilistic_module_test_step_scores_ensemble_mean():
     datastore = init_datastore_example("mdp")
     predictor = NoisyStepPredictor(datastore=datastore, output_std=False)
+
     config = nlconfig.NeuralLAMConfig(
         datastore=nlconfig.DatastoreSelection(
             kind=datastore.SHORT_NAME, config_path=datastore.root_path
         )
     )
-    forecaster = ConcreteProbabilisticARForecaster(
+    forecaster = MemberCountRecordingForecaster(
         predictor, datastore, config=config
     )
     model = ProbabilisticForecasterModule(
         forecaster=forecaster,
         config=config,
         datastore=datastore,
-        eval_ensemble_size=2,
+        eval_ensemble_size=3,
     )
 
-    init_states, forcing_features, target_states = _example_batch(datastore)
-    batch_times = torch.zeros(init_states.shape[0], target_states.shape[1])
+    B, pred_steps = 2, 3
+    init_states, forcing_features, target_states = _example_batch(
+        datastore, B=B, pred_steps=pred_steps
+    )
+    batch_times = torch.zeros(B, pred_steps)
     batch = (init_states, target_states, forcing_features, batch_times)
 
-    with pytest.raises(NotImplementedError):
-        model.test_step(batch, 0)
+    torch.manual_seed(42)
+    model.test_step(batch, 0)
+
+    # Test samples the configured number of evaluation members
+    assert forecaster.last_num_members == 3
+
+    # Ensemble-mean MSE entries are collected for epoch-end aggregation
+    d_state = target_states.shape[-1]
+    (entry_mses,) = model.test_metrics["ens_mse"]
+    assert entry_mses.shape == (B, pred_steps, d_state)
+    assert torch.all(torch.isfinite(entry_mses))
