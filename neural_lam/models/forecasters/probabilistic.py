@@ -199,6 +199,7 @@ class ProbabilisticARForecaster(ARForecaster, ProbabilisticForecaster):
                 member_std_list.append(pred_std)
 
         ensemble = torch.stack(member_list, dim=1)
+        # After stacking shape of ensemble is (B, S, pred_steps, num_grid_nodes, num_state_vars)
         per_member_std = (
             torch.stack(member_std_list, dim=1) if member_std_list else None
         )
