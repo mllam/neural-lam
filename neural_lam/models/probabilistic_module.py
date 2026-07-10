@@ -63,7 +63,10 @@ class ProbabilisticForecasterModule(ForecasterModule):
         ``self.eval_ensemble_size`` members, scores the ensemble mean with
         plain (unweighted) MSE on interior nodes, logs the root-mean-squared
         error per configured rollout step and averaged over the rollout
-        under the given phase's prefix.
+        under the given phase's prefix. This RMSE is a diagnostic metric,
+        not the training loss: it always scores the ensemble mean with
+        plain MSE, regardless of what objective ``compute_training_loss``
+        actually trains on, which is not recomputed here.
 
         Parameters
         ----------
@@ -105,11 +108,11 @@ class ProbabilisticForecasterModule(ForecasterModule):
         self._warn_skipped_val_steps(len(time_step_rmse), phase)
 
         log_dict = {
-            f"{phase}_loss_unroll{step}": time_step_rmse[step - 1]
+            f"{phase}_ens_rmse_unroll{step}": time_step_rmse[step - 1]
             for step in self.hparams.val_steps_to_log
             if step <= len(time_step_rmse)
         }
-        log_dict[f"{phase}_mean_loss"] = mean_rmse
+        log_dict[f"{phase}_mean_ens_rmse"] = mean_rmse
         self.log_dict(
             log_dict,
             on_step=False,
