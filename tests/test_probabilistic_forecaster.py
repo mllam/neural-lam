@@ -107,8 +107,6 @@ def test_ar_forecaster_training_loss_matches_direct_score():
     score_metric = metrics.get_metric("mse")
     interior_mask_bool = forecaster.interior_mask[0, :, 0].to(torch.bool)
     d_state = target_states.shape[-1]
-    # per_var_std is normally computed from config; override directly since
-    # this test only cares about the loss computation, not standardization.
     forecaster.per_var_std = torch.ones(d_state)
 
     batch_loss, loss_components = forecaster.compute_training_loss(
@@ -183,8 +181,6 @@ def test_probabilistic_training_loss_gradient_flow():
     init_states, forcing_features, target_states = _example_batch(datastore)
     interior_mask_bool = forecaster.interior_mask[0, :, 0].to(torch.bool)
     d_state = target_states.shape[-1]
-    # per_var_std is normally computed from config; override directly since
-    # this test only cares about the loss computation, not standardization.
     forecaster.per_var_std = torch.ones(d_state)
 
     torch.manual_seed(42)
