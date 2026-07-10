@@ -7,22 +7,22 @@ import warnings
 import torch
 
 # Local
-from .. import metrics
-from .forecasters.probabilistic import ProbabilisticForecaster
-from .module import ForecasterModule
+from ... import metrics
+from .base_module import BaseForecasterModule
+from .probabilistic import ProbabilisticForecaster
 
 
-class ProbabilisticForecasterModule(ForecasterModule):
+class ProbabilisticForecasterModule(BaseForecasterModule):
     """
     Lightning module for forecasters that sample ensemble forecasts.
 
-    Training is inherited unchanged from ``ForecasterModule``: the wrapped
-    forecaster assembles its own training loss. Validation and testing are
-    ensemble based instead of deterministic: an ensemble is sampled from
-    the forecaster and scored through its ensemble mean (root-mean-squared
-    error of the ensemble mean). The module only assumes that the
-    forecaster can sample ensemble forecasts of the correct shape; it makes
-    no assumption on how the members are produced.
+    Training is inherited unchanged from ``BaseForecasterModule``: the
+    wrapped forecaster assembles its own training loss. Validation and
+    testing are ensemble based instead of deterministic: an ensemble is
+    sampled from the forecaster and scored through its ensemble mean
+    (root-mean-squared error of the ensemble mean). The module only assumes
+    that the forecaster can sample ensemble forecasts of the correct shape;
+    it makes no assumption on how the members are produced.
     """
 
     # The wrapped forecaster must be able to sample ensemble forecasts
@@ -36,13 +36,13 @@ class ProbabilisticForecasterModule(ForecasterModule):
         ----------
         *args
             Positional arguments forwarded to
-            ``ForecasterModule.__init__`` (``forecaster``, ``config``,
+            ``BaseForecasterModule.__init__`` (``forecaster``, ``config``,
             ``datastore``, ...).
         eval_ensemble_size : int
             Number of ensemble members sampled during validation and
             testing.
         **kwargs
-            Keyword arguments forwarded to ``ForecasterModule.__init__``
+            Keyword arguments forwarded to ``BaseForecasterModule.__init__``
             (``lr``, ...).
         """
         super().__init__(*args, **kwargs)
@@ -52,8 +52,8 @@ class ProbabilisticForecasterModule(ForecasterModule):
                 f"got {eval_ensemble_size}"
             )
         self.eval_ensemble_size = eval_ensemble_size
-        self.val_metrics = {"ens_mse": []}
-        self.test_metrics = {"ens_mse": []}
+        self.val_metrics: dict[str, list] = {"ens_mse": []}
+        self.test_metrics: dict[str, list] = {"ens_mse": []}
 
     def _ensemble_step(self, batch, phase: str):
         """
@@ -169,10 +169,10 @@ class ProbabilisticForecasterModule(ForecasterModule):
         """
         Perform actions at the end of the test epoch.
 
-        Aggregates ensemble test metrics. Overrides
-        ``ForecasterModule.on_test_epoch_end``, which also handles spatial
-        loss maps and example plots that ``test_step`` here does not
-        populate.
+        Aggregates ensemble test metrics. Implements
+        ``BaseForecasterModule.on_test_epoch_end`` without the spatial loss
+        maps and example plots that ``DeterministicForecasterModule`` adds,
+        since ``test_step`` here does not populate them.
         """
         self.aggregate_and_plot_metrics(self.test_metrics, prefix="test")
 

@@ -8,7 +8,7 @@ from neural_lam import config as nlconfig
 from neural_lam import metrics
 from neural_lam.models import (
     ARForecaster,
-    ForecasterModule,
+    DeterministicForecasterModule,
     ProbabilisticARForecaster,
     ProbabilisticForecasterModule,
     StepPredictor,
@@ -233,7 +233,7 @@ def test_module_training_step_delegates_to_forecaster():
         )
     )
     forecaster = ARForecaster(predictor, datastore, config=config, loss="mse")
-    model = ForecasterModule(
+    model = DeterministicForecasterModule(
         forecaster=forecaster,
         config=config,
         datastore=datastore,

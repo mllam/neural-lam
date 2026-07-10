@@ -3,12 +3,13 @@
 # Local
 from .forecasters.autoregressive import ARForecaster
 from .forecasters.base import Forecaster
+from .forecasters.base_module import BaseForecasterModule
+from .forecasters.deterministic_module import DeterministicForecasterModule
 from .forecasters.probabilistic import (
     ProbabilisticARForecaster,
     ProbabilisticForecaster,
 )
-from .module import ForecasterModule
-from .probabilistic_module import ProbabilisticForecasterModule
+from .forecasters.probabilistic_module import ProbabilisticForecasterModule
 from .step_predictors.base import StepPredictor
 from .step_predictors.graph.base import BaseGraphModel
 from .step_predictors.graph.graph_efm import GraphEFM, GraphEFMMultiScale

@@ -77,7 +77,7 @@ class Forecaster(nn.Module, ABC):
             ``predicts_std`` is True, otherwise ``None``. Per-feature
             predicted standard deviation; when ``None``, the constant
             per-variable std is substituted upstream by
-            ``ForecasterModule``. Dims: same as ``prediction``.
+            ``DeterministicForecasterModule``. Dims: same as ``prediction``.
         """
 
     @abstractmethod
@@ -95,8 +95,8 @@ class Forecaster(nn.Module, ABC):
         to produce from the batch, which loss terms to compute from them and
         how to combine those terms into a single scalar, using its own
         ``self.loss`` scoring rule and ``self.per_var_std`` fallback std. The
-        wrapping ``ForecasterModule`` only injects the interior mask, logs
-        the returned components and optimizes the returned loss.
+        wrapping ``BaseForecasterModule`` only injects the interior mask,
+        logs the returned components and optimizes the returned loss.
 
         Parameters
         ----------

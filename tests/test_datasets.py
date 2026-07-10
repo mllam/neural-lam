@@ -12,7 +12,7 @@ from neural_lam import config as nlconfig
 from neural_lam.create_graph import create_graph_from_datastore
 from neural_lam.datastore import DATASTORES
 from neural_lam.datastore.base import BaseRegularGridDatastore
-from neural_lam.models import ForecasterModule
+from neural_lam.models import DeterministicForecasterModule
 from neural_lam.weather_dataset import WeatherDataset
 from tests.conftest import init_datastore_example
 from tests.dummy_datastore import DummyDatastore, EnsembleDummyDatastore
@@ -239,7 +239,7 @@ def test_single_batch(datastore_name, split):
         predictor, datastore=datastore, config=config, loss=args.loss
     )
 
-    model = ForecasterModule(
+    model = DeterministicForecasterModule(
         forecaster=forecaster,
         config=config,
         datastore=datastore,

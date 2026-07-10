@@ -141,7 +141,7 @@ class ARForecaster(Forecaster):
         pred_std : torch.Tensor or None
             Shape ``(B, pred_steps, num_grid_nodes, num_state_vars)`` when the
             wrapped predictor outputs an std, otherwise ``None`` (in which
-            case ``ForecasterModule`` substitutes the constant
+            case ``DeterministicForecasterModule`` substitutes the constant
             per-variable std). Dims: same as ``prediction``.
         """
 
