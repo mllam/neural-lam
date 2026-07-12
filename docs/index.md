@@ -8,8 +8,6 @@ Neural-LAM is a PyTorch and PyTorch Lightning framework for high-resolution weat
 
 getting-started/installation
 getting-started/quickstart
-graph_storage_spec
-api/index
 ```
 
 ```{toctree}
@@ -18,6 +16,15 @@ api/index
 :hidden:
 
 notebooks/create_reduced_meps_dataset
+```
+
+```{toctree}
+:maxdepth: 2
+:caption: Reference
+:hidden:
+
+api/index
+graph_storage_spec
 ```
 
 - **[🚀 Getting Started](getting-started/installation.md)**: Installation guide and quickstart tutorial to get you up and running.
