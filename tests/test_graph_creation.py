@@ -1,4 +1,5 @@
 # Standard library
+import importlib.util
 import tempfile
 from pathlib import Path
 
@@ -7,11 +8,32 @@ import pytest
 import torch
 
 # First-party
-from neural_lam.create_graph import create_graph_from_datastore
+from neural_lam.create_graph import (
+    CURRENT_GRAPH_SPEC_VERSION,
+    METAINFO_FILENAME,
+    create_graph_from_datastore,
+)
 from neural_lam.datastore import DATASTORES
 from neural_lam.datastore.base import BaseRegularGridDatastore
 from neural_lam.utils import BufferList, load_graph
 from tests.conftest import init_datastore_example
+
+
+def _load_validator_module():
+    script_path = (
+        Path(__file__).resolve().parents[1] / "docs" / "validate_graph.py"
+    )
+    spec = importlib.util.spec_from_file_location(
+        "validate_graph_script", script_path
+    )
+    module = importlib.util.module_from_spec(spec)
+    # Standard library
+    import sys
+
+    sys.modules["validate_graph_script"] = module
+    assert spec.loader is not None
+    spec.loader.exec_module(module)
+    return module
 
 
 @pytest.mark.parametrize("graph_name", ["1level", "multiscale", "hierarchical"])
@@ -22,12 +44,12 @@ def test_graph_creation(datastore_name, graph_name):
     And that the graph is created in the correct location.
 
     """
+    validator = _load_validator_module()
     datastore = init_datastore_example(datastore_name)
 
     if not isinstance(datastore, BaseRegularGridDatastore):
         pytest.skip(
-            f"Skipping test for {datastore_name} as it is not a regular "
-            "grid datastore."
+            f"Skipping test for {datastore_name} as it is not a regular grid datastore."  # noqa: E501
         )
 
     if graph_name == "hierarchical":
@@ -50,6 +72,7 @@ def test_graph_creation(datastore_name, graph_name):
         "g2m_features.pt",
         "m2g_features.pt",
         "mesh_features.pt",
+        METAINFO_FILENAME,
     ]
     if hierarchical:
         required_graph_files.extend(
@@ -82,8 +105,22 @@ def test_graph_creation(datastore_name, graph_name):
         for file_name in required_graph_files:
             assert (graph_dir_path / file_name).exists()
 
+        # Third-party
+        import yaml
+
+        meta = yaml.safe_load(
+            (graph_dir_path / METAINFO_FILENAME).read_text(encoding="utf-8")
+        )
+        assert meta is not None
+        assert meta["spec_version"] == CURRENT_GRAPH_SPEC_VERSION
+
+        report, _, _ = validator.validate_graph_directory(graph_dir_path)
+        assert not report.has_fails(), report.summarize()
+
         # try to load each and ensure they have the right shape
         for file_name in required_graph_files:
+            if file_name == METAINFO_FILENAME:
+                continue
             file_id = Path(file_name).stem  # remove the extension
             result = torch.load(graph_dir_path / file_name, weights_only=True)
 
@@ -164,7 +201,16 @@ def test_loaded_g2m_m2g_indices_in_bounds(datastore_name, graph_name):
             n_max_levels=n_max_levels,
         )
 
-        is_hierarchical, graph = load_graph(graph_dir_path=graph_dir_path)
+        grid_xy_extent = datastore.get_xy_extent(category="state")
+        grid_xy_max_span = max(
+            grid_xy_extent[1] - grid_xy_extent[0],
+            grid_xy_extent[3] - grid_xy_extent[2],
+        )
+
+        is_hierarchical, graph = load_graph(
+            graph_dir_path=graph_dir_path,
+            mesh_node_features_scaling=grid_xy_max_span,
+        )
 
         mesh_static_features = graph["mesh_static_features"]
         if is_hierarchical:
