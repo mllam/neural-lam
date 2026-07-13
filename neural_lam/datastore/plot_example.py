@@ -79,7 +79,7 @@ def plot_example_from_datastore(
 
     crs = datastore.coords_projection
     col_wrap = min(4, int(da[col].count()))
-    g = da.plot(
+    g = da.plot(  # ty: ignore[missing-argument]
         x="x",
         y="y",
         col=col,

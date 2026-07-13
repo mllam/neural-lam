@@ -194,7 +194,9 @@ class NpyFilesDatastoreMEPS(BaseRegularGridDatastore):
         """
         self._config_path = Path(config_path)
         self._root_path = self._config_path.parent
-        self._config = NpyDatastoreConfig.from_yaml_file(self._config_path)
+        self._config = (  # ty: ignore[invalid-assignment]
+            NpyDatastoreConfig.from_yaml_file(self._config_path)
+        )
 
         self._num_ensemble_members = self.config.dataset.num_ensemble_members
         self._num_timesteps = self.config.dataset.num_timesteps
@@ -489,7 +491,10 @@ class NpyFilesDatastoreMEPS(BaseRegularGridDatastore):
         for d in dims:
             coord_values: Any
             if d == "elapsed_forecast_duration":
-                coord_values = self.step_length * np.arange(self._num_timesteps)
+                coord_values = (
+                    self.step_length  # ty: ignore[unsupported-operator]
+                    * np.arange(self._num_timesteps)
+                )
             elif d == "analysis_time":
                 assert split is not None
                 coord_values = self._get_analysis_times(split=split)
@@ -523,7 +528,7 @@ class NpyFilesDatastoreMEPS(BaseRegularGridDatastore):
         # done until the data is actually needed
         arrays = [
             dask.array.from_delayed(
-                dask.delayed(_load_np)(
+                dask.delayed(_load_np)(  # ty: ignore[call-non-callable]
                     fp=fp,
                     add_feature_dim=add_feature_dim,
                     feature_dim_mask=feature_dim_mask,

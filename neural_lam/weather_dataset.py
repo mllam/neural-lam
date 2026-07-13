@@ -464,7 +464,7 @@ class WeatherDataset(torch.utils.data.Dataset):
             da_target_times,
         )
 
-    def __getitem__(
+    def __getitem__(  # ty: ignore[invalid-method-override]
         self, idx: int
     ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
         """
@@ -594,7 +594,7 @@ class WeatherDataset(torch.utils.data.Dataset):
                 raise ValueError(
                     "Expected a single time for a 2D tensor with assumed "
                     "dimensions (grid_index, {category}_feature), but got "
-                    f"{len(time)} times"  # type: ignore
+                    f"{len(time)} times"  # ty: ignore[invalid-argument-type]
                 )
         elif len(tensor.shape) == 3:
             add_time_as_dim = True

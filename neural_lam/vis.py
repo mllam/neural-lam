@@ -753,7 +753,7 @@ def plot_spatial_error(
     )
 
     mesh = plot_on_axis(
-        ax=ax,
+        ax=ax,  # ty: ignore[invalid-argument-type]
         da=xr.DataArray(error_np),
         datastore=datastore,
         vmin=vmin,
@@ -772,7 +772,7 @@ def plot_spatial_error(
         pad=0.02,
     )
     cbar.ax.tick_params(labelsize=_TICK_SIZE)
-    cbar.formatter.set_powerlimits((-3, 3))  # type: ignore[attr-defined]
+    cbar.formatter.set_powerlimits((-3, 3))  # ty: ignore[unresolved-attribute]
     if colorbar_label:
         cbar.set_label(_tex_safe(colorbar_label), size=_LABEL_SIZE)
 

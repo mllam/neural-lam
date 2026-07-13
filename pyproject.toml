@@ -55,10 +55,7 @@ dev = [
     "pre-commit>=3.8.0",
     "pytest>=8.3.2",
     "pooch>=1.8.2",
-    "mypy>=2.1.0",
-    "types-pyyaml",
-    "types-pillow",
-    "types-tqdm",
+    "ty>=0.0.59",
 ]
 
 [tool.uv]
@@ -129,12 +126,11 @@ per-file-ignores = [
 [tool.codespell]
 skip = "requirements/*"
 
-[tool.mypy]
-python_version = "3.10"
-disallow_untyped_defs = true
-disallow_incomplete_defs = true
-ignore_missing_imports = true
-exclude = ["^tests/", "^docs/", "^build/"]
+[tool.ty.environment]
+python = ".venv"
+
+[tool.ty.rules]
+possibly-missing-submodule = "ignore"
 
 # Pylint config
 [tool.pylint]

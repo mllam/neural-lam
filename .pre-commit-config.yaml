@@ -43,13 +43,16 @@ repos:
         description: Ensure documentation coverage stays perfect
         pass_filenames: false
         args: ["-c", "pyproject.toml", "neural_lam"]
-  - repo: https://github.com/pre-commit/mirrors-mypy
-    rev: v1.19.0
+  - repo: local
     hooks:
-      - id: mypy
-        additional_dependencies: [types-PyYAML, types-Pillow, types-tqdm]
-        files: ^neural_lam/
+      - id: ty
+        name: ty
         description: Check for type errors
+        entry: uv run ty check neural_lam
+        language: system
+        pass_filenames: false
+        files: ^neural_lam/
+        types: [python]
 
   - repo: local
     hooks:

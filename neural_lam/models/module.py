@@ -290,7 +290,7 @@ class ForecasterModule(pl.LightningModule):
         torch.optim.Optimizer
             The configured optimizer.
         """
-        lr = self.hparams.lr  # type: ignore[attr-defined]
+        lr = self.hparams.lr  # ty: ignore[unresolved-attribute]
         opt = torch.optim.AdamW(self.parameters(), lr=lr, betas=(0.9, 0.95))
         return opt
 
@@ -451,11 +451,10 @@ class ForecasterModule(pl.LightningModule):
         flag = f"_{phase}_steps_warn_issued"
         if getattr(self, flag):
             return
-        invalid = [
-            s
-            for s in self.hparams.val_steps_to_log  # type: ignore[attr-defined]
-            if s > pred_steps
-        ]
+        val_steps_to_log = (
+            self.hparams.val_steps_to_log  # ty: ignore[unresolved-attribute]
+        )
+        invalid = [s for s in val_steps_to_log if s > pred_steps]
         if invalid:
             warnings.warn(
                 f"val_steps_to_log contains steps {invalid} that exceed "
@@ -501,7 +500,7 @@ class ForecasterModule(pl.LightningModule):
 
         hparams = self.hparams
         val_steps_to_log = (
-            hparams.val_steps_to_log  # type: ignore[attr-defined]
+            hparams.val_steps_to_log  # ty: ignore[unresolved-attribute]
         )
         val_log_dict = {
             f"val_loss_unroll{step}": time_step_loss[step - 1]
@@ -535,12 +534,12 @@ class ForecasterModule(pl.LightningModule):
 
         if (
             self.trainer.is_global_zero
-            and self.hparams.metrics_watch  # type: ignore[attr-defined]
+            and self.hparams.metrics_watch  # ty: ignore[unresolved-attribute]
         ):
-            unmatched = (
-                set(self.hparams.metrics_watch)  # type: ignore[attr-defined]
-                - self.matched_metrics
+            metrics_watch = (
+                self.hparams.metrics_watch  # ty: ignore[unresolved-attribute]
             )
+            unmatched = set(metrics_watch) - self.matched_metrics
             if unmatched:
                 warnings.warn(
                     "The following metrics in --metrics_watch "
@@ -596,7 +595,7 @@ class ForecasterModule(pl.LightningModule):
 
         hparams = self.hparams
         val_steps_to_log = (
-            hparams.val_steps_to_log  # type: ignore[attr-defined]
+            hparams.val_steps_to_log  # ty: ignore[unresolved-attribute]
         )
         test_log_dict = {
             f"test_loss_unroll{step}": time_step_loss[step - 1]
@@ -735,7 +734,7 @@ class ForecasterModule(pl.LightningModule):
 
             if self.create_gif:
                 plot_dir_path = os.path.join(
-                    self.logger.save_dir,  # type: ignore[union-attr]
+                    self.logger.save_dir,  # ty: ignore[unresolved-attribute]
                     f"example_plots_{example_i}",
                 )
                 os.makedirs(plot_dir_path, exist_ok=True)
@@ -777,7 +776,7 @@ class ForecasterModule(pl.LightningModule):
                         key = f"{var_name}_example"
 
                     if hasattr(self.logger, "log_image"):
-                        self.logger.log_image(  # type: ignore[union-attr]
+                        self.logger.log_image(  # ty: ignore[call-non-callable]
                             key=key, images=[fig], step=t_i
                         )
                     else:
@@ -819,14 +818,14 @@ class ForecasterModule(pl.LightningModule):
             torch.save(
                 pred_slice.cpu(),
                 os.path.join(
-                    self.logger.save_dir,  # type: ignore[union-attr]
+                    self.logger.save_dir,  # ty: ignore[unresolved-attribute]
                     f"example_pred_{self.plotted_examples}.pt",
                 ),
             )
             torch.save(
                 target_slice.cpu(),
                 os.path.join(
-                    self.logger.save_dir,  # type: ignore[union-attr]
+                    self.logger.save_dir,  # ty: ignore[unresolved-attribute]
                     f"example_target_{self.plotted_examples}.pt",
                 ),
             )
@@ -862,13 +861,13 @@ class ForecasterModule(pl.LightningModule):
         if prefix == "test":
             metric_fig.savefig(
                 os.path.join(
-                    self.logger.save_dir,  # type: ignore[union-attr]
+                    self.logger.save_dir,  # ty: ignore[unresolved-attribute]
                     f"{full_log_name}.pdf",
                 )
             )
             np.savetxt(
                 os.path.join(
-                    self.logger.save_dir,  # type: ignore[union-attr]
+                    self.logger.save_dir,  # ty: ignore[unresolved-attribute]
                     f"{full_log_name}.csv",
                 ),
                 metric_tensor.cpu().numpy(),
@@ -877,12 +876,14 @@ class ForecasterModule(pl.LightningModule):
 
         var_names = self.datastore.get_vars_names(category="state")
         hparams = self.hparams
-        metrics_watch = hparams.metrics_watch  # type: ignore[attr-defined]
+        metrics_watch = (
+            hparams.metrics_watch  # ty: ignore[unresolved-attribute]
+        )
+        var_leads_metrics_watch = (
+            hparams.var_leads_metrics_watch  # ty: ignore[unresolved-attribute]
+        )
         if full_log_name in metrics_watch:
             self.matched_metrics.add(full_log_name)
-            var_leads_metrics_watch = (
-                hparams.var_leads_metrics_watch  # type: ignore[attr-defined]
-            )
             for var_i, timesteps in var_leads_metrics_watch.items():
                 var_name = var_names[var_i]
                 for step in timesteps:
@@ -956,7 +957,7 @@ class ForecasterModule(pl.LightningModule):
                     key = f"{key}-{current_epoch}"
 
                 if hasattr(self.logger, "log_image"):
-                    self.logger.log_image(  # type: ignore[union-attr]
+                    self.logger.log_image(  # ty: ignore[call-non-callable]
                         key=key, images=[figure]
                     )
 
@@ -976,9 +977,11 @@ class ForecasterModule(pl.LightningModule):
             mean_spatial_loss = torch.mean(spatial_loss_tensor, dim=0)
             hparams = self.hparams
             val_steps_to_log = (
-                hparams.val_steps_to_log  # type: ignore[attr-defined]
+                hparams.val_steps_to_log  # ty: ignore[unresolved-attribute]
             )
-            logger_save_dir = self.logger.save_dir  # type: ignore[union-attr]
+            logger_save_dir = (
+                self.logger.save_dir  # ty: ignore[unresolved-attribute]
+            )
 
             loss_map_figs = [
                 vis.plot_spatial_error(
@@ -998,7 +1001,7 @@ class ForecasterModule(pl.LightningModule):
                 if not isinstance(self.logger, pl.loggers.WandbLogger):
                     key = f"{key}_{i}"
                 if hasattr(self.logger, "log_image"):
-                    self.logger.log_image(  # type: ignore[union-attr]
+                    self.logger.log_image(  # ty: ignore[call-non-callable]
                         key=key, images=[fig]
                     )
 
@@ -1024,7 +1027,9 @@ class ForecasterModule(pl.LightningModule):
                 ),
             )
 
-            metrics_watch = hparams.metrics_watch  # type: ignore[attr-defined]
+            metrics_watch = (
+                hparams.metrics_watch  # ty: ignore[unresolved-attribute]
+            )
             if metrics_watch:
                 unmatched = set(metrics_watch) - self.matched_metrics
                 if unmatched:

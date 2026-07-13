@@ -14,8 +14,7 @@ DATASTORE_CLASSES = [
 ]
 
 DATASTORES = {
-    datastore.SHORT_NAME: datastore  # type: ignore
-    for datastore in DATASTORE_CLASSES
+    datastore.SHORT_NAME: datastore for datastore in DATASTORE_CLASSES
 }
 
 

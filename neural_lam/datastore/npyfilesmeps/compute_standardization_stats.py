@@ -52,7 +52,7 @@ class PaddedWeatherDataset(torch.utils.data.Dataset):
             range(self.total_samples, self.total_samples + self.padded_samples)
         )
 
-    def __getitem__(
+    def __getitem__(  # ty: ignore[invalid-method-override]
         self, idx: int
     ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
         """Return an item, repeating the final sample for padded indices."""
