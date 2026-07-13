@@ -19,7 +19,12 @@ from loguru import logger
 from . import utils
 from .config import load_config_and_datastore
 from .gnn_layers import GNN_TYPES
-from .models import MODELS, ARForecaster, ForecasterModule
+from .models import (
+    MODELS,
+    ARForecaster,
+    BaseHiGraphModel,
+    ForecasterModule,
+)
 from .weather_dataset import WeatherDataModule
 
 
@@ -40,7 +45,12 @@ def build_predictor(predictor_class, args, config, datastore):
         g2m_gnn_type=getattr(args, "g2m_gnn_type", "InteractionNet"),
         m2g_gnn_type=getattr(args, "m2g_gnn_type", "InteractionNet"),
     )
-    if getattr(args, "model", None) in ("hi_lam", "hi_lam_parallel"):
+    # Gate on class hierarchy so future hierarchical models are covered
+    # without maintaining a model-name list. Non-class callables (e.g.
+    # MagicMock in unit tests) are treated as non-hierarchical.
+    if isinstance(predictor_class, type) and issubclass(
+        predictor_class, BaseHiGraphModel
+    ):
         kwargs["mesh_up_gnn_type"] = getattr(
             args, "mesh_up_gnn_type", "InteractionNet"
         )

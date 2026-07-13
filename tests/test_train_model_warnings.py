@@ -6,6 +6,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 # First-party
+from neural_lam.models import BaseHiGraphModel
 from neural_lam.train_model import (
     build_predictor,
     load_forecaster_module_from_checkpoint,
@@ -119,8 +120,9 @@ def test_checkpoint_loader_restores_gnn_type_kwargs():
     datastore = MagicMock()
     captured_kwargs = {}
 
-    class DummyPredictor:
+    class DummyHiPredictor(BaseHiGraphModel):
         def __init__(self, **kwargs):
+            # Capture constructor kwargs without running full model init.
             captured_kwargs.update(kwargs)
 
     loaded_module = MagicMock()
@@ -130,7 +132,7 @@ def test_checkpoint_loader_restores_gnn_type_kwargs():
             "neural_lam.train_model.torch.load",
             return_value={"hyper_parameters": {"args": args}},
         ),
-        patch("neural_lam.train_model.MODELS", {"hi_lam": DummyPredictor}),
+        patch("neural_lam.train_model.MODELS", {"hi_lam": DummyHiPredictor}),
         patch("neural_lam.train_model.ARForecaster"),
         patch(
             "neural_lam.train_model.ForecasterModule.load_from_checkpoint",
@@ -181,3 +183,37 @@ def test_build_predictor_omits_hierarchical_gnn_kwargs_for_graph_lam():
     assert "mesh_up_gnn_type" not in captured_kwargs
     assert "mesh_down_gnn_type" not in captured_kwargs
     assert captured_kwargs["g2m_gnn_type"] == "PropagationNet"
+
+
+def test_build_predictor_adds_hierarchical_kwargs_for_base_hi_graph_subclass():
+    """Future BaseHiGraphModel subclasses get hierarchical GNN kwargs."""
+    args = SimpleNamespace(
+        model="future_hi_model",
+        graph="hierarchical",
+        hidden_dim=4,
+        hidden_layers=1,
+        processor_layers=1,
+        mesh_aggr="sum",
+        num_past_forcing_steps=1,
+        num_future_forcing_steps=1,
+        output_std=False,
+        g2m_gnn_type="InteractionNet",
+        m2g_gnn_type="InteractionNet",
+        mesh_up_gnn_type="PropagationNet",
+        mesh_down_gnn_type="PropagationNet",
+    )
+    config = SimpleNamespace(
+        training=SimpleNamespace(
+            output_clamping=SimpleNamespace(lower={}, upper={})
+        )
+    )
+    captured_kwargs = {}
+
+    class DummyFutureHiModel(BaseHiGraphModel):
+        def __init__(self, **kwargs):
+            captured_kwargs.update(kwargs)
+
+    build_predictor(DummyFutureHiModel, args, config, MagicMock())
+
+    assert captured_kwargs["mesh_up_gnn_type"] == "PropagationNet"
+    assert captured_kwargs["mesh_down_gnn_type"] == "PropagationNet"
