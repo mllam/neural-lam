@@ -18,6 +18,14 @@ repos:
       - id: codespell
         description: Check for spelling errors
 
+  - repo: https://github.com/lycheeverse/lychee
+    rev: lychee-v0.24.2
+    hooks:
+      - id: lychee
+        description: Check Markdown links
+        args: ["--config", "lychee.toml"]
+        types: [markdown]
+
   - repo: https://github.com/psf/black
     rev: 25.11.0
     hooks:
