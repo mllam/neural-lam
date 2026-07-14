@@ -26,12 +26,18 @@ Config examples: `tests/datastore_examples/`
 
 ## Commands
 
-These commands need to be prepended with `uv run` or the virtual env activated with `source .venv/bin/activate` first:
+```bash
+# Install (torch variant selected via mutually-exclusive extras; uv.lock is committed)
+uv sync --extra cpu        --group dev --locked  # CPU-only
+uv sync --extra gpu        --group dev --locked  # GPU, CUDA 13.0 (default)
+uv sync --extra gpu-cu128  --group dev --locked  # GPU, CUDA 12.8
+```
+
+The `cpu`/`gpu`/`gpu-cu128` extras route `torch` to the matching PyTorch index via `[tool.uv.sources]` in `pyproject.toml`. CI uses `uv` only (CPU + CUDA 13.0); the `pip` install path is still documented in the README for users who prefer it.
+
+The remaining commands need to be prepended with `uv run` or the virtual env activated with `source .venv/bin/activate` first:
 
 ```bash
-# Install (PyTorch must be installed first for CUDA variant)
-uv pip install --group dev -e .
-
 # Lint
 pre-commit run --all-files    # black, isort, flake8, mypy, codespell
 
@@ -68,7 +74,7 @@ W&B auto-disabled in tests. `DummyDatastore` used; example data downloaded from 
 4. **Read the full issue thread before writing code.** Rejected approaches and prior decisions are
    there. Ignoring them wastes everyone's time.
 5. **Run pre-commit hooks locally.** Linting needs to be done locally before each new commit with e.g. `uvx pre-commit run --all`
-6. **Testing Mandate.** Run `pytests tests/` before opening a PR and if tests fail do not open the PR , fix the failure first.
+6. **Testing Mandate.** Run `pytest tests/` before opening a PR and if tests fail do not open the PR, fix the failure first.
 
 ### Communication
 
@@ -94,4 +100,3 @@ W&B auto-disabled in tests. `DummyDatastore` used; example data downloaded from 
 ### Changelog
 
 Every PR must add a line to `CHANGELOG.md` in the section matching the change type (`Added` / `Changed` / `Fixed` / `Maintenance`).
-`maintenance`).

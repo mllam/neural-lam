@@ -1,3 +1,5 @@
+"""Datastore backends for loading and serving weather model data."""
+
 # Local
 from .base import BaseDatastore  # noqa
 from .mdp import MDPDatastore  # noqa
@@ -15,6 +17,26 @@ DATASTORES = {
 
 
 def init_datastore(datastore_kind, config_path):
+    """
+    Instantiate a datastore based on its short-name identifier.
+
+    Parameters
+    ----------
+    datastore_kind : str
+        Key corresponding to one of :data:`DATASTORES`.
+    config_path : str | pathlib.Path
+        Path to the datastore-specific configuration file.
+
+    Returns
+    -------
+    BaseDatastore
+        Concrete datastore instance configured for ``config_path``.
+
+    Raises
+    ------
+    NotImplementedError
+        If ``datastore_kind`` is not registered.
+    """
     DatastoreClass = DATASTORES.get(datastore_kind)
 
     if DatastoreClass is None:

@@ -1,3 +1,5 @@
+"""Datastore implementation wrapping ``mllam-data-prep`` outputs."""
+
 # Standard library
 import copy
 import functools
@@ -57,6 +59,12 @@ class MDPDatastore(BaseRegularGridDatastore):
         reuse_existing : bool
             Whether to reuse an existing dataset zarr file if it exists and its
             creation date is newer than the configuration file.
+
+        Raises
+        ------
+        ValueError
+            If the dataset does not contain all of the required
+            train/val/test splits.
 
         """
         self._config_path = Path(config_path)
@@ -416,6 +424,12 @@ class MDPDatastore(BaseRegularGridDatastore):
         -------
         ccrs.Projection
             The projection of the coordinates.
+
+        Raises
+        ------
+        ValueError
+            If the `projection` entry is missing from the `extra` section of
+            the config, or if its `class_name` or `kwargs` keys are missing.
 
         """
         if "projection" not in self._config.extra:

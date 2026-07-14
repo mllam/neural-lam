@@ -1,6 +1,7 @@
+"""Base class for step predictors."""
+
 # Standard library
 from abc import ABC, abstractmethod
-from typing import Dict, Optional
 
 # Third-party
 import torch
@@ -21,14 +22,28 @@ class StepPredictor(nn.Module, ABC):
         self,
         datastore: BaseDatastore,
         output_std: bool = False,
-        output_clamping_lower: Optional[Dict[str, float]] = None,
-        output_clamping_upper: Optional[Dict[str, float]] = None,
-    ):
+        output_clamping_lower: dict[str, float] | None = None,
+        output_clamping_upper: dict[str, float] | None = None,
+    ) -> None:
+        """
+        Initialize the StepPredictor.
+
+        Parameters
+        ----------
+        datastore : BaseDatastore
+            The datastore providing grid metadata and data access.
+        output_std : bool, default False
+            Whether to output a predicted standard deviation.
+        output_clamping_lower : dict, optional
+            Lower clamping limits for state variables.
+        output_clamping_upper : dict, optional
+            Upper clamping limits for state variables.
+        """
         super().__init__()
-        self._output_clamping_lower: Dict[str, float] = (
+        self._output_clamping_lower: dict[str, float] = (
             dict(output_clamping_lower) if output_clamping_lower else {}
         )
-        self._output_clamping_upper: Dict[str, float] = (
+        self._output_clamping_upper: dict[str, float] = (
             dict(output_clamping_upper) if output_clamping_upper else {}
         )
 
@@ -80,7 +95,15 @@ class StepPredictor(nn.Module, ABC):
 
     @property
     def predicts_std(self) -> bool:
-        """Whether this predictor outputs a predicted standard deviation."""
+        """
+        Whether this predictor outputs a predicted standard deviation.
+
+        Returns
+        -------
+        bool
+            ``True`` if the predictor predicts standard deviation,
+            ``False`` otherwise.
+        """
         return self.output_std
 
     def expand_to_batch(self, x: torch.Tensor, batch_size: int) -> torch.Tensor:
@@ -90,8 +113,8 @@ class StepPredictor(nn.Module, ABC):
         Parameters
         ----------
         x : torch.Tensor
-            Shape ``(N, d)``. Tensor to expand. Dims: ``N`` is the number
-            of nodes and ``d`` is the feature dimension.
+            Shape ``(N, d)``. Tensor to expand. Dims: ``N`` is the number of
+            nodes and ``d`` is the feature dimension.
         batch_size : int
             Target batch size ``B``.
 
@@ -108,7 +131,7 @@ class StepPredictor(nn.Module, ABC):
         prev_state: torch.Tensor,
         prev_prev_state: torch.Tensor,
         forcing: torch.Tensor,
-    ) -> tuple[torch.Tensor, Optional[torch.Tensor]]:
+    ) -> tuple[torch.Tensor, torch.Tensor | None]:
         """
         Advance the state by one step:
         ``(X_{t-1}, X_t, forcing_t) -> X_{t+1}``.
@@ -116,34 +139,33 @@ class StepPredictor(nn.Module, ABC):
         Parameters
         ----------
         prev_state : torch.Tensor
-            Shape ``(B, num_grid_nodes, d_f)``. The current state
+            Shape ``(B, num_grid_nodes, num_state_vars)``. The current state
             ``X_t``. Dims: ``B`` is batch size, ``num_grid_nodes`` is the
-            number of spatial nodes, and ``d_f`` is the number of state
-            variables.
+            number of spatial nodes, and ``num_state_vars`` is the number of
+            state variables.
         prev_prev_state : torch.Tensor
-            Shape ``(B, num_grid_nodes, d_f)``. The previous state
+            Shape ``(B, num_grid_nodes, num_state_vars)``. The previous state
             ``X_{t-1}``, used as additional conditioning. Dims: same as
             ``prev_state``.
         forcing : torch.Tensor
-            Shape ``(B, num_grid_nodes, d_forcing)``. External forcings
+            Shape ``(B, num_grid_nodes, num_forcing_vars)``. External forcings
             for this step (already concatenated past/current/future
             windows). Dims: ``B`` is batch size, ``num_grid_nodes`` is
-            the number of spatial nodes, and ``d_forcing`` is the
+            the number of spatial nodes, and ``num_forcing_vars`` is the
             forcing feature dimension.
 
         Returns
         -------
         pred_state : torch.Tensor
-            Shape ``(B, num_grid_nodes, d_f)``. The predicted next
+            Shape ``(B, num_grid_nodes, num_state_vars)``. The predicted next
             state ``X_{t+1}``. Dims: same as ``prev_state``.
         pred_std : torch.Tensor or None
-            Shape ``(B, num_grid_nodes, d_f)`` when ``output_std``
+            Shape ``(B, num_grid_nodes, num_state_vars)`` when ``output_std``
             is True, otherwise ``None``. Per-feature predicted standard
             deviation. Dims: same as ``prev_state``.
         """
-        pass
 
-    def prepare_clamping_params(self, datastore: BaseDatastore):
+    def prepare_clamping_params(self, datastore: BaseDatastore) -> None:
         """
         Prepare parameters for clamping predicted values to valid range.
 
@@ -151,6 +173,11 @@ class StepPredictor(nn.Module, ABC):
         ``self._output_clamping_lower`` and ``self._output_clamping_upper``
         (set in ``__init__``) and registers the buffers and clamping
         functions used by ``get_clamped_new_state``.
+
+        Parameters
+        ----------
+        datastore : BaseDatastore
+            The datastore providing variable names.
         """
 
         # Read clamping limits stored on self
@@ -177,10 +204,21 @@ class StepPredictor(nn.Module, ABC):
         sigmoid_center = 0
         softplus_center = 0
 
-        normalize_clamping_lim = (
-            lambda x, feature_idx: (x - self.state_mean[feature_idx])
-            / self.state_std[feature_idx]
-        )
+        def normalize_clamping_lim(x: float, feature_idx: int) -> torch.Tensor:
+            """Normalize a clamping limit from the original feature space to the
+            standardized space of the model's output.
+
+            Parameters
+            ----------
+            x : float
+                The clamping limit in the original feature space.
+            feature_idx : int
+                The index of the feature this limit applies to, used to look up
+                the mean and std for normalization.
+            """
+            return (x - self.state_mean[feature_idx]) / self.state_std[
+                feature_idx
+            ]
 
         # Check which clamping functions to use for each feature
         sigmoid_lower_upper_idx = []
@@ -281,7 +319,9 @@ class StepPredictor(nn.Module, ABC):
             + softplus_center
         )
 
-    def get_clamped_new_state(self, state_delta, prev_state):
+    def get_clamped_new_state(
+        self, state_delta: torch.Tensor, prev_state: torch.Tensor
+    ) -> torch.Tensor:
         """
         Clamp the next-state prediction to its valid feature range.
 
@@ -294,19 +334,19 @@ class StepPredictor(nn.Module, ABC):
         Parameters
         ----------
         state_delta : torch.Tensor
-            Shape ``(B, num_grid_nodes, d_f)``. Raw predicted state
+            Shape ``(B, num_grid_nodes, num_state_vars)``. Raw predicted state
             increment (network output, already rescaled). Dims: ``B`` is
             batch size, ``num_grid_nodes`` is the number of spatial nodes,
-            and ``d_f`` is the number of state variables.
+            and ``num_state_vars`` is the number of state variables.
         prev_state : torch.Tensor
-            Shape ``(B, num_grid_nodes, d_f)``. Current state ``X_t``
+            Shape ``(B, num_grid_nodes, num_state_vars)``. Current state ``X_t``
             used as the base for the clamped update. Dims: same as
             ``state_delta``.
 
         Returns
         -------
         torch.Tensor
-            Shape ``(B, num_grid_nodes, d_f)``. Clamped next state.
+            Shape ``(B, num_grid_nodes, num_state_vars)``. Clamped next state.
             Dims: same as ``state_delta``.
         """
 

@@ -1,7 +1,9 @@
+"""Graph-based LAM model with a flat mesh."""
+
 # Standard library
-from typing import Dict, Optional
 
 # Third-party
+import torch
 import torch_geometric as pyg
 
 # Local
@@ -30,11 +32,39 @@ class GraphLAM(BaseGraphModel):
         num_past_forcing_steps: int = 1,
         num_future_forcing_steps: int = 1,
         output_std: bool = False,
-        output_clamping_lower: Optional[Dict[str, float]] = None,
-        output_clamping_upper: Optional[Dict[str, float]] = None,
+        output_clamping_lower: dict[str, float] | None = None,
+        output_clamping_upper: dict[str, float] | None = None,
         g2m_gnn_type: str = "InteractionNet",
         m2g_gnn_type: str = "InteractionNet",
-    ):
+    ) -> None:
+        """
+        Initialize the GraphLAM model.
+
+        Parameters
+        ----------
+        datastore : BaseDatastore
+            The datastore providing grid metadata and data access.
+        graph_name : str, default "multiscale"
+            The name of the graph to load.
+        hidden_dim : int, default 64
+            The dimension of the hidden representations.
+        hidden_layers : int, default 1
+            The number of hidden layers in the MLPs.
+        processor_layers : int, default 4
+            The number of processor layers in the GNN.
+        mesh_aggr : str, default "sum"
+            The aggregation method for mesh nodes.
+        num_past_forcing_steps : int, default 1
+            The number of past forcing steps to include.
+        num_future_forcing_steps : int, default 1
+            The number of future forcing steps to include.
+        output_std : bool, default False
+            Whether to output a predicted standard deviation.
+        output_clamping_lower : dict, optional
+            Lower clamping limits for state variables.
+        output_clamping_upper : dict, optional
+            Upper clamping limits for state variables.
+        """
         super().__init__(
             datastore=datastore,
             graph_name=graph_name,
@@ -82,34 +112,44 @@ class GraphLAM(BaseGraphModel):
         self.processor = pyg.nn.Sequential(
             "mesh_rep, edge_rep",
             [
-                (net, "mesh_rep, mesh_rep, edge_rep -> mesh_rep, edge_rep")
+                (
+                    net,
+                    "mesh_rep, mesh_rep, edge_rep -> mesh_rep, edge_rep",
+                )
                 for net in processor_nets
             ],
         )
 
-    def get_num_mesh(self):
+    def get_num_mesh(self) -> tuple[int, int]:
         """
         Compute number of mesh nodes from loaded features,
-        and number of mesh nodes that should be ignored in encoding/decoding
+        and number of mesh nodes that should be ignored in encoding/decoding.
+
+        Returns
+        -------
+        num_mesh_nodes : int
+            The number of mesh nodes.
+        num_ignore_mesh_nodes : int
+            The number of mesh nodes to ignore.
         """
         return self.mesh_static_features.shape[0], 0
 
-    def embedd_mesh_nodes(self):
+    def embedd_mesh_nodes(self) -> torch.Tensor:
         """
         Embed static mesh node features.
 
         Returns
         -------
         torch.Tensor
-            Shape ``(num_mesh_nodes, d_h)``. Embedded mesh node representations.
-            Dims: ``num_mesh_nodes`` is the number of mesh nodes and ``d_h`` is
-            the hidden dimension.
+            Shape ``(num_mesh_nodes, hidden_dim)``. Embedded mesh node
+            representations. Dims: ``num_mesh_nodes`` is the number of
+            mesh nodes and ``hidden_dim`` is the hidden dimension.
         """
         return self.mesh_embedder(
             self.mesh_static_features
-        )  # (num_mesh_nodes, d_h)
+        )  # (num_mesh_nodes, hidden_dim)
 
-    def process_step(self, mesh_rep):
+    def process_step(self, mesh_rep: torch.Tensor) -> torch.Tensor:
         """
         Process the mesh representation through the flat message-passing
         processor (all nodes at a single level).
@@ -117,25 +157,27 @@ class GraphLAM(BaseGraphModel):
         Parameters
         ----------
         mesh_rep : torch.Tensor
-            Shape ``(B, num_mesh_nodes, d_h)``. Current mesh node
+            Shape ``(B, num_mesh_nodes, hidden_dim)``. Current mesh node
             representations. Dims: ``B`` is batch size, ``num_mesh_nodes`` is
-            the number of mesh nodes, and ``d_h`` is the hidden
+            the number of mesh nodes, and ``hidden_dim`` is the hidden
             dimension.
 
         Returns
         -------
         torch.Tensor
-            Shape ``(B, num_mesh_nodes, d_h)``. Updated mesh node
+            Shape ``(B, num_mesh_nodes, hidden_dim)``. Updated mesh node
             representations. Dims: same as ``mesh_rep``.
         """
         # Embed m2m here first
         batch_size = mesh_rep.shape[0]
-        m2m_emb = self.m2m_embedder(self.m2m_features)  # (M_mesh, d_h)
+        m2m_emb = self.m2m_embedder(
+            self.m2m_features
+        )  # (num_edges, hidden_dim)
         m2m_emb_expanded = self.expand_to_batch(
             m2m_emb, batch_size
-        )  # (B, M_mesh, d_h)
+        )  # (B, num_edges, hidden_dim)
 
         mesh_rep, _ = self.processor(
             mesh_rep, m2m_emb_expanded
-        )  # (B, num_mesh_nodes, d_h)
+        )  # (B, num_mesh_nodes, hidden_dim)
         return mesh_rep

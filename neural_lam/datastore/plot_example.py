@@ -1,3 +1,5 @@
+"""CLI helper to plot slices from datastores for manual inspection."""
+
 # Third-party
 import matplotlib.pyplot as plt
 
@@ -93,6 +95,7 @@ if __name__ == "__main__":
     import argparse
 
     def _parse_dict(arg_str):
+        """Parse ``key=value`` CLI arguments into typed dictionary entries."""
         key, value = arg_str.split("=")
         for op in [int, float]:
             try:
