@@ -7,7 +7,9 @@ import loguru
 import pytest
 
 # Mock loguru.logger.catch before importing train_model
-loguru.logger.catch = lambda f: f
+loguru.logger.catch = lambda *args, **kwargs: (
+    args[0] if args and callable(args[0]) else (lambda f: f)
+)
 
 # First-party
 from neural_lam.train_model import (  # noqa: E402

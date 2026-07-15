@@ -108,7 +108,7 @@ def load_forecaster_module_from_checkpoint(ckpt_path, config, datastore):
     )
 
 
-@logger.catch
+@logger.catch(reraise=True)
 def main(input_args=None):
     """Main function for training and evaluating models."""
     parser = ArgumentParser(

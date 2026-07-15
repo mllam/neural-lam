@@ -1,0 +1,42 @@
+# Runs the docs/notebooks/ tutorials end-to-end with nbmake so that API drift
+# in neural_lam breaks the notebook loudly instead of letting it rot. CPU-only.
+# Scoped to PRs that touch code the notebooks depend on (plus every push to
+# main and manual dispatch), so unrelated PRs don't pay the ~3 min cost.
+name: Notebook tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    paths:
+      - "neural_lam/**"
+      - "docs/notebooks/**"
+      - "tests/datastore_examples/**"
+      - "pyproject.toml"
+      - "uv.lock"
+      - ".github/workflows/notebook-tests.yml"
+  workflow_dispatch:
+
+jobs:
+  notebooks:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.13
+        uses: actions/setup-python@v6
+        with:
+          python-version: 3.13
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v7
+
+      - name: Install with uv
+        run: |
+          uv sync --extra cpu --group dev --locked
+          echo "$PWD/.venv/bin" >> $GITHUB_PATH
+
+      - name: Run notebook tests
+        run: |
+          pytest -vv -s --nbmake --nbmake-timeout=600 docs/notebooks/
