@@ -13,12 +13,17 @@ import numpy as np
 import scipy.spatial
 import torch
 import torch_geometric as pyg
+import yaml
 from loguru import logger
 from torch_geometric.utils.convert import from_networkx
 
 # Local
 from .config import load_config_and_datastore
 from .datastore.base import BaseRegularGridDatastore
+
+# Stores the graph storage spec version the graph conforms to.
+METAINFO_FILENAME = "metainfo.yaml"
+CURRENT_GRAPH_SPEC_VERSION = "0.1.0"
 
 
 def plot_graph(
@@ -165,24 +170,110 @@ def save_edges_list(
 def from_networkx_with_start_index(
     nx_graph: networkx.Graph, start_index: int
 ) -> pyg.data.Data:
-    """
-    Convert a NetworkX graph to PyG and offset node indices.
+    """Convert a NetworkX graph to PyG and shift its edge indices.
+
+    ``from_networkx`` maps NetworkX node labels to contiguous PyG node indices
+    starting at 0. This helper shifts those indices into the combined
+    node-index space used internally while constructing graph components. The
+    known offsets are removed again before current-format graph tensors are
+    saved.
 
     Parameters
     ----------
     nx_graph : networkx.Graph
-        The NetworkX graph to convert.
+        Graph to convert.
     start_index : int
-        The value to add to each node index.
+        Offset added to both rows of the PyG edge-index tensor.
 
     Returns
     -------
     pyg.data.Data
-        The converted PyG graph.
+        Converted PyG graph with shifted edge indices.
     """
     pyg_graph = from_networkx(nx_graph)
     pyg_graph.edge_index += start_index
     return pyg_graph
+
+
+def assert_edge_index_in_range(
+    edge_index: torch.Tensor,
+    sender_range: tuple[int, int],
+    receiver_range: tuple[int, int],
+    name: str,
+) -> None:
+    """Assert that edge-index rows lie in expected half-open ranges.
+
+    Parameters
+    ----------
+    edge_index : torch.Tensor
+        Edge index tensor of shape ``[2, E]``.
+    sender_range : tuple[int, int]
+        Expected half-open range ``[start, stop)`` for sender indices in row 0.
+    receiver_range : tuple[int, int]
+        Expected half-open range ``[start, stop)`` for receiver indices in row
+        1.
+    name : str
+        Name used in assertion messages.
+
+    Returns
+    -------
+    None
+    """
+    assert (
+        edge_index.ndim == 2 and edge_index.shape[0] == 2
+    ), f"{name}: expected edge_index shape [2, E], got {tuple(edge_index.shape)}"  # noqa: E501
+    assert edge_index.shape[1] > 0, f"{name}: expected at least one edge"
+
+    sender_start, sender_stop = sender_range
+    receiver_start, receiver_stop = receiver_range
+    sender_min = int(edge_index[0].min().item())
+    sender_max = int(edge_index[0].max().item())
+    receiver_min = int(edge_index[1].min().item())
+    receiver_max = int(edge_index[1].max().item())
+
+    assert sender_min >= sender_start, (
+        f"{name}: sender min {sender_min} is below expected range "
+        f"[{sender_start}, {sender_stop})"
+    )
+    assert sender_max < sender_stop, (
+        f"{name}: sender max {sender_max} is above expected range "
+        f"[{sender_start}, {sender_stop})"
+    )
+    assert receiver_min >= receiver_start, (
+        f"{name}: receiver min {receiver_min} is below expected range "
+        f"[{receiver_start}, {receiver_stop})"
+    )
+    assert receiver_max < receiver_stop, (
+        f"{name}: receiver max {receiver_max} is above expected range "
+        f"[{receiver_start}, {receiver_stop})"
+    )
+
+
+def zero_offset_edge_index(
+    edge_index: torch.Tensor,
+    sender_offset: int,
+    receiver_offset: int,
+) -> torch.Tensor:
+    """Subtract known sender and receiver offsets from an edge index tensor.
+
+    Parameters
+    ----------
+    edge_index : torch.Tensor
+        Edge index tensor of shape ``[2, E]`` in the combined node-index space.
+    sender_offset : int
+        Offset to subtract from sender indices in row 0.
+    receiver_offset : int
+        Offset to subtract from receiver indices in row 1.
+
+    Returns
+    -------
+    torch.Tensor
+        Edge index tensor with row-wise offsets removed.
+    """
+    return torch.stack(
+        (edge_index[0] - sender_offset, edge_index[1] - receiver_offset),
+        dim=0,
+    )
 
 
 def mk_2d_graph(xy: np.ndarray, nx: int, ny: int) -> networkx.DiGraph:
@@ -340,9 +431,6 @@ def create_graph(
 
     logger.info(f"Writing graph components to {graph_dir_path}")
 
-    grid_xy = torch.tensor(xy)
-    pos_max = torch.max(torch.abs(grid_xy))
-
     #
     # Mesh
     #
@@ -383,74 +471,127 @@ def create_graph(
             (np.zeros(1, dtype=int), np.cumsum(num_nodes_level[:-1]))
         )
 
-        # Create inter-level mesh edges
+        # Create inter-level mesh edges from lower levels to upper levels.
         up_graphs = []
-        down_graphs = []
-        for from_level, to_level, G_from, G_to, start_index in zip(
-            range(1, mesh_levels),
-            range(0, mesh_levels - 1),
-            G[1:],
-            G[:-1],
-            first_index_level[: mesh_levels - 1],
+        for upper_level_index, lower_level_index, G_upper, G_lower in zip(
+            range(1, mesh_levels), range(mesh_levels - 1), G[1:], G[:-1]
         ):
-            # start out from graph at from level
-            G_down = G_from.copy()
-            G_down.clear_edges()
-            G_down = networkx.DiGraph(G_down)
+            G_up = G_lower.copy()
+            G_up.clear_edges()
+            G_up = networkx.DiGraph(G_up)
+            G_up.add_nodes_from(G_upper.nodes(data=True))
 
-            # Add nodes of to level
-            G_down.add_nodes_from(G_to.nodes(data=True))
+            upper_node_list = list(G_upper.nodes)
+            lower_node_list = list(G_lower.nodes)
+            upper_node_xy = np.array(
+                [xy for _, xy in G_upper.nodes.data("pos")]
+            )
+            kdt_m = scipy.spatial.KDTree(upper_node_xy)
 
-            # build kd tree for mesh point pos
-            # order in vm should be same as in vm_xy
-            v_to_list = list(G_to.nodes)
-            v_from_list = list(G_from.nodes)
-            v_from_xy = np.array([xy for _, xy in G_from.nodes.data("pos")])
-            kdt_m = scipy.spatial.KDTree(v_from_xy)
-
-            # add edges from mesh to grid
-            for v in v_to_list:
+            for lower_node in lower_node_list:
                 # find 1(?) nearest neighbours (index to vm_xy)
-                neigh_idx = kdt_m.query(G_down.nodes[v]["pos"], 1)[1]
-                u = v_from_list[neigh_idx]
+                neigh_idx = kdt_m.query(G_up.nodes[lower_node]["pos"], 1)[1]
+                upper_node = upper_node_list[neigh_idx]
 
-                # add edge from mesh to grid
-                G_down.add_edge(u, v)
+                G_up.add_edge(lower_node, upper_node)
                 d = np.sqrt(
                     np.sum(
-                        (G_down.nodes[u]["pos"] - G_down.nodes[v]["pos"]) ** 2
+                        (
+                            G_up.nodes[lower_node]["pos"]
+                            - G_up.nodes[upper_node]["pos"]
+                        )
+                        ** 2
                     )
                 )
-                G_down.edges[u, v]["len"] = d
-                G_down.edges[u, v]["vdiff"] = (
-                    G_down.nodes[u]["pos"] - G_down.nodes[v]["pos"]
+                G_up.edges[lower_node, upper_node]["len"] = d
+                G_up.edges[lower_node, upper_node]["vdiff"] = (
+                    G_up.nodes[lower_node]["pos"]
+                    - G_up.nodes[upper_node]["pos"]
                 )
 
-            # relabel nodes to integers (sorted)
-            G_down_int = networkx.convert_node_labels_to_integers(
-                G_down, first_label=start_index, ordering="sorted"
-            )  # Issue with sorting here
-            G_down_int = sort_nodes_internally(G_down_int)
-            pyg_down = from_networkx_with_start_index(G_down_int, start_index)
-
-            # Create up graph, invert downwards edges
-            up_edges = torch.stack(
-                (pyg_down.edge_index[1], pyg_down.edge_index[0]), dim=0
+            lower_level_node_index_offset = int(
+                first_index_level[lower_level_index]
             )
-            pyg_up = pyg_down.clone()
-            pyg_up.edge_index = up_edges
+            upper_level_node_index_offset = int(
+                first_index_level[upper_level_index]
+            )
+            lower_level_num_nodes = int(num_nodes_level[lower_level_index])
+            upper_level_num_nodes = int(num_nodes_level[upper_level_index])
+            lower_level_node_index_range = (
+                lower_level_node_index_offset,
+                lower_level_node_index_offset + lower_level_num_nodes,
+            )
+            upper_level_node_index_range = (
+                upper_level_node_index_offset,
+                upper_level_node_index_offset + upper_level_num_nodes,
+            )
+
+            G_up_int = networkx.convert_node_labels_to_integers(
+                G_up,
+                first_label=lower_level_node_index_offset,
+                ordering="sorted",
+            )
+            G_up_int = sort_nodes_internally(G_up_int)
+            pyg_up = from_networkx_with_start_index(
+                G_up_int, lower_level_node_index_offset
+            )
+
+            assert_edge_index_in_range(
+                pyg_up.edge_index,
+                sender_range=lower_level_node_index_range,
+                receiver_range=upper_level_node_index_range,
+                name=f"mesh_up_edge_index[{lower_level_index}] before offset",
+            )
+            pyg_up.edge_index = zero_offset_edge_index(
+                pyg_up.edge_index,
+                sender_offset=lower_level_node_index_offset,
+                receiver_offset=upper_level_node_index_offset,
+            )
+            assert_edge_index_in_range(
+                pyg_up.edge_index,
+                sender_range=(0, lower_level_num_nodes),
+                receiver_range=(0, upper_level_num_nodes),
+                name=f"mesh_up_edge_index[{lower_level_index}] after offset",
+            )
 
             up_graphs.append(pyg_up)
+
+            if create_plot:
+                plot_graph(
+                    pyg_up,
+                    title=(
+                        f"Up graph, {lower_level_index} -> {upper_level_index}"
+                    ),
+                )
+                plt.show()
+
+        down_graphs = []
+        for lower_level_index, pyg_up in enumerate(up_graphs):
+            upper_level_index = lower_level_index + 1
+            lower_level_num_nodes = int(num_nodes_level[lower_level_index])
+            upper_level_num_nodes = int(num_nodes_level[upper_level_index])
+
+            pyg_down = pyg_up.clone()
+            pyg_down.edge_index = torch.stack(
+                (pyg_up.edge_index[1], pyg_up.edge_index[0]), dim=0
+            )
+            pyg_down.vdiff = -pyg_up.vdiff
+
+            assert_edge_index_in_range(
+                pyg_down.edge_index,
+                sender_range=(0, upper_level_num_nodes),
+                receiver_range=(0, lower_level_num_nodes),
+                name=f"mesh_down_edge_index[{lower_level_index}] after offset",
+            )
+
             down_graphs.append(pyg_down)
 
             if create_plot:
                 plot_graph(
-                    pyg_down, title=f"Down graph, {from_level} -> {to_level}"
-                )
-                plt.show()
-
-                plot_graph(
-                    pyg_down, title=f"Up graph, {to_level} -> {from_level}"
+                    pyg_down,
+                    title=(
+                        f"Down graph, {upper_level_index} -> {lower_level_index}"  # noqa: E501
+                    ),
                 )
                 plt.show()
 
@@ -468,6 +609,30 @@ def create_graph(
             )
             for level_graph, start_index in zip(G, first_index_level)
         ]
+
+        for level_index, (graph, start_index, num_nodes) in enumerate(
+            zip(m2m_graphs, first_index_level, num_nodes_level)
+        ):
+            start_index = int(start_index)
+            num_nodes = int(num_nodes)
+            combined_range = (start_index, start_index + num_nodes)
+            assert_edge_index_in_range(
+                graph.edge_index,
+                sender_range=combined_range,
+                receiver_range=combined_range,
+                name=f"m2m_edge_index[{level_index}] before offset",
+            )
+            graph.edge_index = zero_offset_edge_index(
+                graph.edge_index,
+                sender_offset=start_index,
+                receiver_offset=start_index,
+            )
+            assert_edge_index_in_range(
+                graph.edge_index,
+                sender_range=(0, num_nodes),
+                receiver_range=(0, num_nodes),
+                name=f"m2m_edge_index[{level_index}] after offset",
+            )
 
         mesh_pos = [graph.pos.to(torch.float32) for graph in m2m_graphs]
 
@@ -494,6 +659,8 @@ def create_graph(
 
         # Relabel mesh nodes to start with 0
         G_tot = prepend_node_index(G_tot, 0)
+        num_nodes_level = np.array([len(G_tot.nodes)])
+        first_index_level = np.zeros(1, dtype=int)
 
         # relabel nodes to integers (sorted)
         G_int = networkx.convert_node_labels_to_integers(
@@ -515,9 +682,6 @@ def create_graph(
 
     # Save m2m edges
     save_edges_list(m2m_graphs, "m2m", graph_dir_path)
-
-    # Divide mesh node pos by max coordinate of grid cell
-    mesh_pos = [pos / pos_max for pos in mesh_pos]
 
     # Save mesh positions
     torch.save(
@@ -638,10 +802,63 @@ def create_graph(
         plt.show()
 
     # Save g2m and m2g everything
+    num_mesh_nodes_total = int(np.sum(num_nodes_level))
+    num_bottom_mesh_nodes = int(num_nodes_level[0])
+    num_grid_nodes = Nx * Ny
+
+    assert_edge_index_in_range(
+        pyg_g2m.edge_index,
+        sender_range=(
+            num_mesh_nodes_total,
+            num_mesh_nodes_total + num_grid_nodes,
+        ),
+        receiver_range=(0, num_bottom_mesh_nodes),
+        name="g2m_edge_index before offset",
+    )
+    pyg_g2m.edge_index = zero_offset_edge_index(
+        pyg_g2m.edge_index,
+        sender_offset=num_mesh_nodes_total,
+        receiver_offset=0,
+    )
+    assert_edge_index_in_range(
+        pyg_g2m.edge_index,
+        sender_range=(0, num_grid_nodes),
+        receiver_range=(0, num_bottom_mesh_nodes),
+        name="g2m_edge_index after offset",
+    )
+
+    assert_edge_index_in_range(
+        pyg_m2g.edge_index,
+        sender_range=(0, num_bottom_mesh_nodes),
+        receiver_range=(
+            num_mesh_nodes_total,
+            num_mesh_nodes_total + num_grid_nodes,
+        ),
+        name="m2g_edge_index before offset",
+    )
+    pyg_m2g.edge_index = zero_offset_edge_index(
+        pyg_m2g.edge_index,
+        sender_offset=0,
+        receiver_offset=num_mesh_nodes_total,
+    )
+    assert_edge_index_in_range(
+        pyg_m2g.edge_index,
+        sender_range=(0, num_bottom_mesh_nodes),
+        receiver_range=(0, num_grid_nodes),
+        name="m2g_edge_index after offset",
+    )
+
     # g2m
     save_edges(pyg_g2m, "g2m", graph_dir_path)
     # m2g
     save_edges(pyg_m2g, "m2g", graph_dir_path)
+
+    with open(
+        os.path.join(graph_dir_path, METAINFO_FILENAME),
+        "w",
+        encoding="utf-8",
+    ) as fp:
+        yaml.dump({"spec_version": CURRENT_GRAPH_SPEC_VERSION}, fp)
 
 
 def create_graph_from_datastore(
