@@ -176,6 +176,12 @@ markers = [
 testpaths = ["neural_lam", "tests"]
 addopts = "--doctest-modules -vv -s"
 
+[tool.hatch.build.targets.sdist]
+exclude = [
+  ".venv/",
+  "venv/",
+]
+
 [tool.hatch.build.targets.wheel]
 exclude = [
   ".venv/",

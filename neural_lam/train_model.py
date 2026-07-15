@@ -28,13 +28,7 @@ from .config import (
     load_config_and_datastore,
 )
 from .gnn_layers import GNN_TYPES
-from .models import (
-    ARForecaster,
-    ForecasterModule,
-    GraphLAM,
-    HiLAM,
-    HiLAMParallel,
-)
+from .models import MODELS, ARForecaster, ForecasterModule
 from .weather_dataset import WeatherDataModule
 
 torch.serialization.add_safe_globals(
@@ -48,12 +42,6 @@ torch.serialization.add_safe_globals(
         UniformFeatureWeighting,
     ]
 )
-
-MODELS = {
-    "graph_lam": GraphLAM,
-    "hi_lam": HiLAM,
-    "hi_lam_parallel": HiLAMParallel,
-}
 
 
 class AdaptiveHelpFormatter(ArgumentDefaultsHelpFormatter):
