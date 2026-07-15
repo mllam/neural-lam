@@ -2,9 +2,10 @@
 from datetime import timedelta
 from pathlib import Path
 from typing import Iterator
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 # Third-party
+import matplotlib
 import matplotlib.figure
 import matplotlib.pyplot as plt
 import numpy as np
@@ -17,7 +18,7 @@ from cartopy import crs as ccrs
 from neural_lam import config as nlconfig
 from neural_lam import vis
 from neural_lam.create_graph import create_graph_from_datastore
-from neural_lam.models.graph_lam import GraphLAM
+from neural_lam.models import ARForecaster, ForecasterModule, GraphLAM
 from neural_lam.weather_dataset import WeatherDataset
 from tests.conftest import init_datastore_example
 from tests.dummy_datastore import DummyDatastore
@@ -25,6 +26,12 @@ from tests.dummy_datastore import DummyDatastore
 # Create output directory for test figures
 TEST_OUTPUT_DIR = Path(__file__).parent / "test_outputs" / "plotting"
 TEST_OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+
+
+@pytest.fixture(scope="session", autouse=True)
+def _set_agg_backend():
+    """Use non-interactive backend for all plotting tests."""
+    plt.switch_backend("Agg")
 
 
 @pytest.fixture(autouse=True)
@@ -45,6 +52,50 @@ def close_all_figures_after_test() -> Iterator[None]:
     """Ensure test-created matplotlib figures are always cleaned up."""
     yield
     plt.close("all")
+
+
+class HeatmapDatastore:
+    """Minimal datastore stub for error-heatmap plotting tests."""
+
+    def __init__(
+        self,
+        n_vars,
+        step_length=timedelta(hours=1),
+        state_std=None,
+        state_diff_std_standardized=None,
+    ):
+        self._n_vars = n_vars
+        self.step_length = step_length
+        self._state_std = (
+            np.asarray(state_std, dtype=float)
+            if state_std is not None
+            else np.ones(n_vars, dtype=float)
+        )
+        self._state_diff_std_standardized = (
+            np.asarray(state_diff_std_standardized, dtype=float)
+            if state_diff_std_standardized is not None
+            else np.ones(n_vars, dtype=float)
+        )
+
+    def get_vars_names(self, category):
+        assert category == "state"
+        return [f"state_var_{i}" for i in range(self._n_vars)]
+
+    def get_vars_units(self, category):
+        assert category == "state"
+        return ["unit"] * self._n_vars
+
+    def get_standardization_dataarray(self, category):
+        assert category == "state"
+        return xr.Dataset(
+            {
+                "state_std": (("state_feature",), self._state_std),
+                "state_diff_std_standardized": (
+                    ("state_feature",),
+                    self._state_diff_std_standardized,
+                ),
+            }
+        )
 
 
 def test_plot_prediction() -> None:
@@ -86,7 +137,7 @@ def test_plot_prediction() -> None:
 
 
 def test_plot_error_map() -> None:
-    """Check error heatmap content, labels and annotations."""
+    """Check the deprecated error-heatmap wrapper still renders correctly."""
     datastore = init_datastore_example("dummydata")
     d_f = len(datastore.get_vars_names(category="state"))
     pred_steps = 4
@@ -95,16 +146,17 @@ def test_plot_error_map() -> None:
         pred_steps, d_f
     )
 
-    fig = vis.plot_error_map(
-        errors=errors,
-        datastore=datastore,
-        title="Test Error Map",
-    )
+    with pytest.warns(DeprecationWarning, match="plot_error_heatmap"):
+        fig = vis.plot_error_map(
+            errors=errors,
+            datastore=datastore,
+            title="Test Error Map",
+        )
 
     assert isinstance(fig, matplotlib.figure.Figure)
-    assert len(fig.axes) == 1
+    assert len(fig.axes) == 2
 
-    ax = fig.axes[0]
+    ax, colorbar_ax = fig.axes
     assert len(ax.images) == 1
     assert ax.images[0].get_array().shape == (d_f, pred_steps)
     assert ax.get_xlabel() == "Lead time (h)"
@@ -123,6 +175,165 @@ def test_plot_error_map() -> None:
     assert actual_y_ticklabels == expected_y_ticklabels
 
     assert len(ax.texts) == pred_steps * d_f
+    assert colorbar_ax.get_ylabel() != ""
+
+
+def test_plot_error_heatmap_state_std_normalization():
+    """state_std mode: colors are Error / state_std."""
+    errors = torch.tensor(
+        [
+            [1.0, 100.0, 10.0],
+            [2.0, 80.0, 5.0],
+            [3.0, 60.0, 2.5],
+        ]
+    )
+    datastore = HeatmapDatastore(
+        n_vars=errors.shape[1],
+        state_std=[1.0, 100.0, 10.0],
+        state_diff_std_standardized=[1.0, 2.0, 0.5],
+    )
+
+    fig = vis.plot_error_heatmap(
+        errors, datastore=datastore, normalization="state_std"
+    )
+    ax = fig.axes[0]
+    image = ax.images[0]
+    colorbar = fig.axes[1]
+
+    expected = errors.T.numpy() / np.array([[1.0], [100.0], [10.0]])
+    np.testing.assert_allclose(image.get_array(), expected)
+    assert colorbar.get_ylabel() == "Error / state_std"
+
+    plt.close(fig)
+
+
+def test_plot_error_heatmap_diff_std_normalization():
+    """diff_std mode: colors are Error / physical diff_std."""
+    errors = torch.tensor(
+        [
+            [1.0, 100.0, 10.0],
+            [2.0, 80.0, 5.0],
+            [3.0, 60.0, 2.5],
+        ]
+    )
+    datastore = HeatmapDatastore(
+        n_vars=errors.shape[1],
+        state_std=[1.0, 100.0, 10.0],
+        state_diff_std_standardized=[1.0, 2.0, 0.5],
+    )
+
+    fig = vis.plot_error_heatmap(
+        errors, datastore=datastore, normalization="diff_std"
+    )
+    ax = fig.axes[0]
+    image = ax.images[0]
+    colorbar = fig.axes[1]
+
+    # physical diff_std = state_std * state_diff_std_standardized = [1, 200, 5]
+    expected = errors.T.numpy() / np.array([[1.0], [200.0], [5.0]])
+    np.testing.assert_allclose(image.get_array(), expected)
+    assert colorbar.get_ylabel() == "Error / physical diff_std"
+
+    plt.close(fig)
+
+
+def test_plot_error_heatmap_falls_back_to_per_var_scale_without_stats():
+    """Colors fall back to per-variable max when stats are unavailable."""
+
+    class NoStatsHeatmapDatastore(HeatmapDatastore):
+        def get_standardization_dataarray(self, category):
+            raise KeyError("Missing standardization stats")
+
+    errors = torch.tensor([[1.0, 2.0], [3.0, 4.0]])
+    datastore = NoStatsHeatmapDatastore(n_vars=errors.shape[1])
+
+    with pytest.warns(UserWarning, match="falling back to per-variable scale"):
+        fig = vis.plot_error_heatmap(errors, datastore=datastore)
+    ax = fig.axes[0]
+    image = ax.images[0]
+    colorbar = fig.axes[1]
+
+    # errors_np after transpose: var0=[1,3], var1=[2,4]; max per var: [3,4]
+    expected = np.array([[1 / 3, 3 / 3], [2 / 4, 4 / 4]])
+    np.testing.assert_allclose(image.get_array(), expected)
+    assert "[fallback]" in colorbar.get_ylabel()
+
+    plt.close(fig)
+
+
+def test_plot_error_heatmap_diff_std_falls_back_when_diff_std_absent():
+    """diff_std mode falls back to per-var max when diff_std is missing."""
+
+    class StateStdOnlyDatastore(HeatmapDatastore):
+        def get_standardization_dataarray(self, category):
+            return (
+                super()
+                .get_standardization_dataarray(category)
+                .drop_vars("state_diff_std_standardized")
+            )
+
+    errors = torch.tensor([[1.0, 2.0], [3.0, 4.0]])
+    datastore = StateStdOnlyDatastore(n_vars=2, state_std=[2.0, 1.0])
+
+    with pytest.warns(UserWarning, match="falling back to per-variable scale"):
+        fig = vis.plot_error_heatmap(
+            errors, datastore=datastore, normalization="diff_std"
+        )
+    colorbar = fig.axes[1]
+    assert "[fallback]" in colorbar.get_ylabel()
+    plt.close(fig)
+
+
+def test_plot_error_heatmap_state_std_ignores_diff_std():
+    """state_std mode is unaffected by presence or absence of diff_std."""
+
+    class StateStdOnlyDatastore(HeatmapDatastore):
+        def get_standardization_dataarray(self, category):
+            return (
+                super()
+                .get_standardization_dataarray(category)
+                .drop_vars("state_diff_std_standardized")
+            )
+
+    errors = torch.tensor([[2.0, 4.0], [1.0, 3.0]])
+    datastore = StateStdOnlyDatastore(n_vars=2, state_std=[2.0, 1.0])
+    fig = vis.plot_error_heatmap(
+        errors, datastore=datastore, normalization="state_std"
+    )
+    ax = fig.axes[0]
+    image = ax.images[0]
+
+    # errors_np after transpose: var0=[2,1], var1=[4,3]; state_std=[2,1]
+    expected = np.array([[2 / 2, 1 / 2], [4 / 1, 3 / 1]])
+    np.testing.assert_allclose(image.get_array(), expected)
+    assert fig.axes[1].get_ylabel() == "Error / state_std"
+    plt.close(fig)
+
+
+def test_plot_error_heatmap_adapts_layout_for_grid_size():
+    """Dense heatmaps adapt size, font scale, and annotation density."""
+    small_fig = vis.plot_error_heatmap(
+        torch.ones((4, 5)), datastore=HeatmapDatastore(n_vars=5)
+    )
+    large_fig = vis.plot_error_heatmap(
+        torch.ones((20, 30)), datastore=HeatmapDatastore(n_vars=30)
+    )
+    dense_fig = vis.plot_error_heatmap(
+        torch.ones((40, 50)), datastore=HeatmapDatastore(n_vars=50)
+    )
+
+    assert large_fig.get_size_inches()[0] > small_fig.get_size_inches()[0]
+    assert (
+        large_fig.axes[0].get_yticklabels()[0].get_fontsize()
+        < small_fig.axes[0].get_yticklabels()[0].get_fontsize()
+    )
+    assert large_fig.axes[0].get_xticklabels()[0].get_rotation() == 45.0
+    assert len(dense_fig.axes[0].texts) == 0
+    assert dense_fig.get_size_inches()[0] > 18.0
+
+    plt.close(small_fig)
+    plt.close(large_fig)
+    plt.close(dense_fig)
 
 
 def test_plot_spatial_error() -> None:
@@ -141,14 +352,12 @@ def test_plot_spatial_error() -> None:
     )
 
     assert isinstance(fig, matplotlib.figure.Figure)
-    # GeoAxes + colorbar axes
     assert len(fig.axes) == 2
     assert fig.texts[0].get_text() == "Test Spatial Error"
 
 
 def test_plot_spatial_error_crop_to_interior_changes_extent() -> None:
-    """Check interior cropping forwards interior lon/lat bounds to
-    set_extent."""
+    """Check interior cropping forwards interior lon/lat bounds."""
     datastore = init_datastore_example("dummydata")
     n_grid = datastore.num_grid_points
     grid_shape = (datastore.grid_shape_state.x, datastore.grid_shape_state.y)
@@ -194,15 +403,15 @@ def test_plot_spatial_error_crop_to_interior_changes_extent() -> None:
 
 @pytest.fixture
 def model_and_batch(tmp_path, time_step, time_unit):
-    """Setup a model and dataset for testing plot_examples"""
-    # Create timedelta with specified step length
+    """Setup a model and dataset for testing plot_examples."""
+    # Create timedelta with specified step length.
     step_length_kwargs = {time_unit: time_step}
     step_length = timedelta(**step_length_kwargs)
 
-    # Create datastore with specified step_length
+    # Create datastore with specified step length.
     datastore = DummyDatastore(step_length=step_length)
 
-    # Create minimal model args
+    # Create minimal model args.
     class ModelArgs:
         output_std = False
         loss = "mse"
@@ -216,11 +425,13 @@ def model_and_batch(tmp_path, time_step, time_unit):
         mesh_aggr = "sum"
         lr = 1.0e-3
         val_steps_to_log = [1, 2]
+        ar_steps_eval = 2
         metrics_watch = []
         num_past_forcing_steps = 0
         num_future_forcing_steps = 0
         var_leads_metrics_watch = {}
 
+    # Create graph files if they do not already exist.
     graph_dir_path = Path(datastore.root_path) / "graph" / "1level"
     if not graph_dir_path.exists():
         create_graph_from_datastore(
@@ -229,7 +440,7 @@ def model_and_batch(tmp_path, time_step, time_unit):
             n_max_levels=1,
         )
 
-    # Create config
+    # Create config.
     config = nlconfig.NeuralLAMConfig(
         datastore=nlconfig.DatastoreSelection(
             kind=datastore.SHORT_NAME,
@@ -238,13 +449,40 @@ def model_and_batch(tmp_path, time_step, time_unit):
     )
 
     # Create model
-    model = GraphLAM(
-        args=ModelArgs(),
+    # First-party
+    from neural_lam.models import MODELS, ARForecaster
+
+    args = ModelArgs()
+    predictor_class = MODELS["graph_lam"]
+    predictor = predictor_class(
+        datastore=datastore,
+        graph_name=args.graph,
+        hidden_dim=args.hidden_dim,
+        hidden_layers=args.hidden_layers,
+        processor_layers=args.processor_layers,
+        mesh_aggr=args.mesh_aggr,
+        num_past_forcing_steps=args.num_past_forcing_steps,
+        num_future_forcing_steps=args.num_future_forcing_steps,
+        output_std=args.output_std,
+        output_clamping_lower=config.training.output_clamping.lower,
+        output_clamping_upper=config.training.output_clamping.upper,
+    )
+    forecaster = ARForecaster(predictor, datastore=datastore)
+
+    model = ForecasterModule(
+        forecaster=forecaster,
         config=config,
         datastore=datastore,
+        loss=args.loss,
+        restore_opt=args.restore_opt,
+        n_example_pred=args.n_example_pred,
+        val_steps_to_log=args.val_steps_to_log,
+        metrics_watch=args.metrics_watch,
+        var_leads_metrics_watch=args.var_leads_metrics_watch,
+        lr=args.lr,
     )
 
-    # Create dataset to get a sample batch
+    # Create dataset to get a sample batch.
     dataset = WeatherDataset(
         datastore=datastore,
         split="train",
@@ -253,9 +491,9 @@ def model_and_batch(tmp_path, time_step, time_unit):
         num_future_forcing_steps=0,
     )
 
-    # Get a batch (just use one sample)
+    # Get a batch (just use one sample).
     sample = dataset[0]
-    batch = tuple(torch.stack([item]) for item in sample)  # Add batch dimension
+    batch = tuple(torch.stack([item]) for item in sample)
 
     return model, batch, datastore, tmp_path
 
@@ -273,13 +511,13 @@ def model_and_batch(tmp_path, time_step, time_unit):
 def test_plot_examples_integration_saves_figure(
     model_and_batch, time_step, time_unit, t_i
 ):
-    """Integration test that saves actual figure for manual inspection"""
+    """Integration test that saves an actual figure for manual inspection."""
     model, batch, datastore, tmp_path = model_and_batch
 
-    # Reset plotted examples counter
+    # Reset plotted examples counter.
     model.plotted_examples = 0
 
-    # Verify that the model correctly inferred time step from datastore
+    # Verify that the model correctly inferred time step from the datastore.
     assert (
         model.time_step_int == time_step
     ), f"Expected time_step_int={time_step}, got {model.time_step_int}"
@@ -288,18 +526,31 @@ def test_plot_examples_integration_saves_figure(
     ), f"Expected time_step_unit={time_unit}, got {model.time_step_unit}"
 
     # Generate prediction
-    prediction, target, _, _ = model.common_step(batch)
+    (init_states, target, forcing_features, _batch_times) = batch
+    prediction, _ = model.forecaster(init_states, forcing_features, target)
 
     # Rescale to original data scale
-    prediction_rescaled = prediction * model.state_std + model.state_mean
-    target_rescaled = target * model.state_std + model.state_mean
+    da_state_stats = datastore.get_standardization_dataarray("state")
+    state_std = torch.tensor(
+        da_state_stats.state_std.values,
+        dtype=torch.float32,
+        device=prediction.device,
+    )
+    state_mean = torch.tensor(
+        da_state_stats.state_mean.values,
+        dtype=torch.float32,
+        device=prediction.device,
+    )
 
-    # Get first example
-    pred_slice = prediction_rescaled[0].detach()  # Detach from graph
+    prediction_rescaled = prediction * state_std + state_mean
+    target_rescaled = target * state_std + state_mean
+
+    # Get first example.
+    pred_slice = prediction_rescaled[0].detach()
     target_slice = target_rescaled[0].detach()
     time_slice = batch[3][0]
 
-    # Create DataArrays
+    # Create DataArrays.
     dataset = WeatherDataset(datastore=datastore, split="train")
 
     time = np.array(time_slice.cpu(), dtype="datetime64[ns]")
@@ -312,7 +563,7 @@ def test_plot_examples_integration_saves_figure(
         tensor=target_slice, time=time, category="state"
     ).unstack("grid_index")
 
-    # Get vranges
+    # Get vranges.
     var_vmin = (
         torch.minimum(
             pred_slice.flatten(0, 1).min(dim=0)[0],
@@ -331,10 +582,10 @@ def test_plot_examples_integration_saves_figure(
     )
     var_vranges = list(zip(var_vmin, var_vmax))
 
-    # Create plot for specified timestep and first variable
     var_names = datastore.get_vars_names("state")
     var_units = datastore.get_vars_units("state")
 
+    # Create plot for specified timestep and first variable.
     fig = vis.plot_prediction(
         datastore=datastore,
         title=f"{var_names[0]}, t={t_i} ({time_step * t_i} {time_unit})",
@@ -346,7 +597,7 @@ def test_plot_examples_integration_saves_figure(
         da_target=da_target.isel(state_feature=0, time=t_i - 1).squeeze(),
     )
 
-    # Save for inspection
+    # Save for inspection.
     output_path = (
         TEST_OUTPUT_DIR
         / f"ar_model_integration_t{t_i}_{time_step}{time_unit}.png"
@@ -356,7 +607,7 @@ def test_plot_examples_integration_saves_figure(
 
     plt.close(fig)
 
-    # Verify the figure was created
+    # Verify the figure was created.
     assert fig is not None
     assert isinstance(fig, plt.Figure)
     assert output_path.exists()
@@ -370,7 +621,7 @@ def test_plot_examples_gif_integration(model_and_batch, monkeypatch):
     model, batch, datastore, tmp_path = model_and_batch
 
     # Enable the GIF path and reset the example counter
-    model.args.create_gif = True
+    model.create_gif = True
     model.plotted_examples = 0
 
     # Minimal logger: plot_examples only reads save_dir and optionally calls
@@ -409,3 +660,174 @@ def test_plot_examples_gif_integration(model_and_batch, monkeypatch):
         gif = plot_dir / f"{var_name}_example_{example_i}_prediction.gif"
         assert gif.exists(), f"Missing GIF: {gif.name}"
         assert gif.read_bytes()[:3] == b"GIF", f"{gif.name} is not a valid GIF"
+
+
+# Shared ModelArgs for metrics_watch regression tests (issue #302).
+# Kept at module level to avoid copy-paste duplication across tests.
+def _build_metrics_watch_module(datastore, config):
+    """Build a ForecasterModule wired for metrics_watch tests."""
+    predictor = GraphLAM(
+        datastore=datastore,
+        graph_name="1level",
+        hidden_dim=4,
+        hidden_layers=1,
+        processor_layers=1,
+        mesh_aggr="sum",
+        num_past_forcing_steps=0,
+        num_future_forcing_steps=0,
+        output_std=False,
+        output_clamping_lower=config.training.output_clamping.lower,
+        output_clamping_upper=config.training.output_clamping.upper,
+    )
+    forecaster = ARForecaster(predictor, datastore)
+    return ForecasterModule(
+        forecaster=forecaster,
+        config=config,
+        datastore=datastore,
+        loss="mse",
+        lr=1.0e-3,
+        restore_opt=False,
+        n_example_pred=1,
+        val_steps_to_log=[1, 2],
+        metrics_watch=["val_rmse"],
+        var_leads_metrics_watch={0: [1]},
+    )
+
+
+def test_create_metric_log_dict_with_metrics_watch(tmp_path):
+    """
+    Regression test for issue #302: AssertionError when using --metrics_watch.
+
+    Previously, aggregate_and_plot_metrics asserted all log_dict values were
+    plt.Figure, which failed when --metrics_watch added scalar tensor values.
+    This test verifies that create_metric_log_dict correctly returns a single
+    dict containing both plt.Figure and scalar entries.
+    """
+    datastore = DummyDatastore()
+    num_state_vars = datastore.get_num_data_vars(category="state")
+
+    graph_dir_path = Path(datastore.root_path) / "graph" / "1level"
+    if not graph_dir_path.exists():
+        create_graph_from_datastore(
+            datastore=datastore,
+            output_root_path=str(graph_dir_path),
+            n_max_levels=1,
+        )
+
+    config = nlconfig.NeuralLAMConfig(
+        datastore=nlconfig.DatastoreSelection(
+            kind=datastore.SHORT_NAME,
+            config_path=datastore.root_path,
+        ),
+    )
+
+    model = _build_metrics_watch_module(datastore, config)
+
+    # Create a dummy metric tensor: (pred_steps=2, d_f=num_state_vars)
+    metric_tensor = torch.rand(2, num_state_vars)
+
+    # This call should not raise an AssertionError (the original bug)
+    log_dict = model.create_metric_log_dict(
+        metric_tensor, prefix="val", metric_name="rmse"
+    )
+
+    # Verify log_dict contains the error-map figure
+    assert "val_rmse" in log_dict
+    assert isinstance(log_dict["val_rmse"], plt.Figure)
+
+    # Verify log_dict also contains the watched scalar metric
+    var_names = datastore.get_vars_names(category="state")
+    expected_key = f"val_rmse_{var_names[0]}_step_1"
+    assert expected_key in log_dict, (
+        f"Expected key '{expected_key}' in log_dict, "
+        f"got keys: {list(log_dict.keys())}"
+    )
+
+    # Verify figure entries are plt.Figure and scalar entries are tensors
+    for key, value in log_dict.items():
+        assert isinstance(
+            value, (plt.Figure, torch.Tensor)
+        ), f"Unexpected value type for key '{key}': {type(value)}"
+
+    plt.close("all")
+
+
+def test_aggregate_and_plot_metrics_with_metrics_watch(tmp_path):
+    """
+    Integration test for issue #302: exercises the full watched-metrics path
+    through aggregate_and_plot_metrics(), which is the exact crash site of the
+    original AssertionError.
+
+    Previously, aggregate_and_plot_metrics asserted all values in the log dict
+    were plt.Figure objects, which failed when --metrics_watch added scalar
+    tensor values. This test ensures the full pipeline works without crashing.
+    """
+    datastore = DummyDatastore()
+    num_state_vars = datastore.get_num_data_vars(category="state")
+
+    graph_dir_path = Path(datastore.root_path) / "graph" / "1level"
+    if not graph_dir_path.exists():
+        create_graph_from_datastore(
+            datastore=datastore,
+            output_root_path=str(graph_dir_path),
+            n_max_levels=1,
+        )
+
+    config = nlconfig.NeuralLAMConfig(
+        datastore=nlconfig.DatastoreSelection(
+            kind=datastore.SHORT_NAME,
+            config_path=datastore.root_path,
+        ),
+    )
+
+    model = _build_metrics_watch_module(datastore, config)
+
+    # Mock the trainer to simulate rank-0 single-process execution
+    mock_trainer = MagicMock()
+    mock_trainer.is_global_zero = True
+    mock_trainer.sanity_checking = False
+    mock_trainer.current_epoch = 0
+    model._trainer = mock_trainer
+
+    # Mock logger so log_image calls don't fail.
+    # In Lightning, self.logger resolves to self._trainer.logger,
+    # so we must attach the mock there.
+    mock_logger = MagicMock()
+    mock_trainer.logger = mock_logger
+
+    # Patch all_gather_cat to be a no-op (single process)
+    model.all_gather_cat = lambda x: x
+
+    # Capture scalar metrics logged via self.log_dict()
+    logged_scalars = {}
+
+    def capture_log_dict(d, **kwargs):
+        logged_scalars.update(d)
+
+    model.log_dict = capture_log_dict
+
+    # Build a fake metrics_dict with MSE entries:
+    # shape (N_eval=2, pred_steps=2, d_f=num_state_vars)
+    metrics_dict = {"mse": [torch.rand(1, 2, num_state_vars) for _ in range(2)]}
+
+    # This is the exact crash site: should NOT raise AssertionError
+    model.aggregate_and_plot_metrics(metrics_dict, prefix="val")
+
+    # Verify that log_image was called (figures were logged)
+    mock_logger.log_image.assert_called()
+
+    # Verify that scalar metrics were captured via self.log_dict()
+    assert len(logged_scalars) > 0, (
+        "Expected scalar metrics to be logged via self.log_dict() "
+        "when metrics_watch is configured"
+    )
+
+    # Verify the expected watched-metric key is present
+    var_names = datastore.get_vars_names(category="state")
+    expected_key = f"val_rmse_{var_names[0]}_step_1"
+    assert expected_key in logged_scalars, (
+        f"Expected key '{expected_key}' in logged scalars, "
+        f"got keys: {list(logged_scalars.keys())}"
+    )
+
+    plt.close("all")
