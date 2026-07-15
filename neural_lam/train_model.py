@@ -45,7 +45,9 @@ torch.serialization.add_safe_globals(
 
 
 def build_predictor(predictor_class, args, config, datastore):
-    """Instantiate a step predictor with explicit GNN kwargs for its model family."""
+    """
+    Instantiate a step predictor with explicit GNN kwargs for its model family.
+    """
     kwargs = dict(
         datastore=datastore,
         graph_name=args.graph,
