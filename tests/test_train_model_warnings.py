@@ -1,11 +1,12 @@
 # Standard library
+from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 # Third-party
 import pytest
 
 # First-party
-from neural_lam.train_model import main
+from neural_lam.train_model import load_forecaster_module_from_checkpoint, main
 
 
 @pytest.mark.parametrize(
@@ -87,3 +88,57 @@ def test_create_gif_forwarded_to_forecaster_module():
         "create_gif" in captured_kwargs
     ), "create_gif was not forwarded to ForecasterModule"
     assert captured_kwargs["create_gif"] is True
+
+
+def test_checkpoint_loader_restores_gnn_type_kwargs():
+    """Checkpoint reload must preserve custom GNN choices from saved args."""
+    args = SimpleNamespace(
+        model="hi_lam",
+        graph="hierarchical",
+        hidden_dim=4,
+        hidden_layers=1,
+        processor_layers=1,
+        mesh_aggr="sum",
+        num_past_forcing_steps=1,
+        num_future_forcing_steps=1,
+        output_std=False,
+        g2m_gnn_type="PropagationNet",
+        m2g_gnn_type="PropagationNet",
+        mesh_up_gnn_type="PropagationNet",
+        mesh_down_gnn_type="InteractionNet",
+    )
+    config = SimpleNamespace(
+        training=SimpleNamespace(
+            output_clamping=SimpleNamespace(lower={}, upper={})
+        )
+    )
+    datastore = MagicMock()
+    captured_kwargs = {}
+
+    class DummyPredictor:
+        def __init__(self, **kwargs):
+            captured_kwargs.update(kwargs)
+
+    loaded_module = MagicMock()
+
+    with (
+        patch(
+            "neural_lam.train_model.torch.load",
+            return_value={"hyper_parameters": {"args": args}},
+        ),
+        patch("neural_lam.train_model.MODELS", {"hi_lam": DummyPredictor}),
+        patch("neural_lam.train_model.ARForecaster"),
+        patch(
+            "neural_lam.train_model.ForecasterModule.load_from_checkpoint",
+            return_value=loaded_module,
+        ),
+    ):
+        result = load_forecaster_module_from_checkpoint(
+            "model.ckpt", config, datastore
+        )
+
+    assert result is loaded_module
+    assert captured_kwargs["g2m_gnn_type"] == "PropagationNet"
+    assert captured_kwargs["m2g_gnn_type"] == "PropagationNet"
+    assert captured_kwargs["mesh_up_gnn_type"] == "PropagationNet"
+    assert captured_kwargs["mesh_down_gnn_type"] == "InteractionNet"
