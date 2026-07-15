@@ -636,7 +636,7 @@ class ForecasterModule(pl.LightningModule):
 
         hparams = self.hparams
         val_steps_to_log = (
-            hparams.val_steps_to_log  # type: ignore[attr-defined]
+            hparams.val_steps_to_log  # ty: ignore[unresolved-attribute]
         )
 
         for metric_name in ("mse", "mae"):
