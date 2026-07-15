@@ -152,6 +152,7 @@ def zero_index_m2g(
     m2g_edge_index: torch.Tensor,
     mesh_static_features: list[torch.Tensor],
     mesh_first: bool,
+    num_grid_nodes: int | None = None,
     restore: bool = False,
 ) -> torch.Tensor:
     """
@@ -167,6 +168,8 @@ def zero_index_m2g(
         Mesh node feature tensors.
     mesh_first : bool
         If True, mesh nodes are indexed before grid nodes.
+    num_grid_nodes : int, optional
+        The true number of grid nodes in the datastore.
     restore : bool
         If True, undo zero-indexing (restore original indices).
 
@@ -192,7 +195,11 @@ def zero_index_m2g(
         )
     else:
         # Grid (interior) has the first indices, adjust mesh indices (row 0)
-        num_interior_nodes = m2g_edge_index[1].max() + 1
+        num_interior_nodes = (
+            num_grid_nodes
+            if num_grid_nodes is not None
+            else m2g_edge_index[1].max().item() + 1
+        )
         return torch.stack(
             (
                 m2g_edge_index[0] + sign * num_interior_nodes,
@@ -206,6 +213,7 @@ def zero_index_g2m(
     g2m_edge_index: torch.Tensor,
     mesh_static_features: list[torch.Tensor],
     mesh_first: bool,
+    num_grid_nodes: int | None = None,
     restore: bool = False,
 ) -> torch.Tensor:
     """
@@ -221,6 +229,8 @@ def zero_index_g2m(
         Mesh node feature tensors.
     mesh_first : bool
         If True, mesh nodes are indexed before grid nodes.
+    num_grid_nodes : int, optional
+        The true number of grid nodes in the datastore.
     restore : bool
         If True, undo zero-indexing (restore original indices).
 
@@ -246,7 +256,8 @@ def zero_index_g2m(
         )
     else:
         # Grid has the first indices, adjust mesh indices (row 1)
-        num_grid_nodes = g2m_edge_index[0].max() + 1
+        if num_grid_nodes is None:
+            num_grid_nodes = g2m_edge_index[0].max().item() + 1
         return torch.stack(
             (
                 g2m_edge_index[0],
@@ -433,11 +444,33 @@ def load_graph(
         # might be indexed.
         m2g_min_indices = m2g_edge_index.min(dim=1, keepdim=True)[0]
         mesh_first = m2g_min_indices[0] < m2g_min_indices[1]
+
+        num_grid_nodes = None
+        if not mesh_first:
+            # Under legacy layout, mesh nodes are at indices:
+            # num_grid_nodes to num_grid_nodes + num_mesh_nodes - 1.
+            # We determine total number of nodes at the bottom level
+            # to find num_grid_nodes.
+            max_idx = max(
+                g2m_edge_index.max().item(),
+                m2g_edge_index.max().item(),
+                max(ei.max().item() for ei in m2m_edge_index),
+            )
+            total_nodes = max_idx + 1
+            num_mesh_nodes = mesh_static_features[0].shape[0]
+            num_grid_nodes = total_nodes - num_mesh_nodes
+
         g2m_edge_index = zero_index_g2m(
-            g2m_edge_index, mesh_static_features, mesh_first=mesh_first
+            g2m_edge_index,
+            mesh_static_features,
+            mesh_first=mesh_first,
+            num_grid_nodes=num_grid_nodes,
         )
         m2g_edge_index = zero_index_m2g(
-            m2g_edge_index, mesh_static_features, mesh_first=mesh_first
+            m2g_edge_index,
+            mesh_static_features,
+            mesh_first=mesh_first,
+            num_grid_nodes=num_grid_nodes,
         )
 
     assert m2g_edge_index.min() >= 0, "Negative node index in m2g"
