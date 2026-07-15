@@ -8,6 +8,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [unreleased](https://github.com/mllam/neural-lam/compare/v0.6.0...HEAD)
 
 ### Added
+- Add `--num_sanity_val_steps` CLI argument to control sanity validation steps before training (#694)
+
+- Add `--train_steps_to_log` CLI option to log training loss for individual unroll steps, and deduplicate common prediction and loss computation steps across loops [\#674](https://github.com/mllam/neural-lam/issues/674) @GiGiKoneti
 
 - Add `PropagationNet` GNN layer that incentivises directional message
   propagation from sender to receiver nodes, and expose it alongside
@@ -131,6 +134,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   documented in the README. The default GPU build moves from CUDA 12.8 to 13.0;
   users on other CUDA versions install the matching `torch` variant manually
   (see README) [\#604](https://github.com/mllam/neural-lam/pull/604) @RajdeepKushwaha5
+
+- Add edge count consistency check to `test_graph_creation.py` [#301](https://github.com/mllam/neural-lam/pull/301) @osten-antonio
 
 ## [v0.6.0](https://github.com/mllam/neural-lam/releases/tag/v0.6.0)
 
