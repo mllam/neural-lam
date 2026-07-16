@@ -28,13 +28,7 @@ from .config import (
     load_config_and_datastore,
 )
 from .gnn_layers import GNN_TYPES
-from .models import (
-    ARForecaster,
-    ForecasterModule,
-    GraphLAM,
-    HiLAM,
-    HiLAMParallel,
-)
+from .models import MODELS, ARForecaster, ForecasterModule
 from .weather_dataset import WeatherDataModule
 
 torch.serialization.add_safe_globals(
@@ -49,11 +43,34 @@ torch.serialization.add_safe_globals(
     ]
 )
 
-MODELS = {
-    "graph_lam": GraphLAM,
-    "hi_lam": HiLAM,
-    "hi_lam_parallel": HiLAMParallel,
-}
+
+def build_predictor(predictor_class, args, config, datastore):
+    """
+    Instantiate a step predictor with explicit GNN kwargs for its model family.
+    """
+    kwargs = dict(
+        datastore=datastore,
+        graph_name=args.graph,
+        hidden_dim=args.hidden_dim,
+        hidden_layers=args.hidden_layers,
+        processor_layers=args.processor_layers,
+        mesh_aggr=args.mesh_aggr,
+        num_past_forcing_steps=args.num_past_forcing_steps,
+        num_future_forcing_steps=args.num_future_forcing_steps,
+        output_std=args.output_std,
+        output_clamping_lower=config.training.output_clamping.lower,
+        output_clamping_upper=config.training.output_clamping.upper,
+        g2m_gnn_type=getattr(args, "g2m_gnn_type", "InteractionNet"),
+        m2g_gnn_type=getattr(args, "m2g_gnn_type", "InteractionNet"),
+    )
+    if getattr(args, "model", None) in ("hi_lam", "hi_lam_parallel"):
+        kwargs["mesh_up_gnn_type"] = getattr(
+            args, "mesh_up_gnn_type", "InteractionNet"
+        )
+        kwargs["mesh_down_gnn_type"] = getattr(
+            args, "mesh_down_gnn_type", "InteractionNet"
+        )
+    return predictor_class(**kwargs)
 
 
 class AdaptiveHelpFormatter(ArgumentDefaultsHelpFormatter):
@@ -83,19 +100,7 @@ def load_forecaster_module_from_checkpoint(ckpt_path, config, datastore):
     ckpt = torch.load(ckpt_path, weights_only=False)
     args = ckpt["hyper_parameters"]["args"]
     predictor_class = MODELS[args.model]
-    predictor = predictor_class(
-        datastore=datastore,
-        graph_name=args.graph,
-        hidden_dim=args.hidden_dim,
-        hidden_layers=args.hidden_layers,
-        processor_layers=args.processor_layers,
-        mesh_aggr=args.mesh_aggr,
-        num_past_forcing_steps=args.num_past_forcing_steps,
-        num_future_forcing_steps=args.num_future_forcing_steps,
-        output_std=args.output_std,
-        output_clamping_lower=config.training.output_clamping.lower,
-        output_clamping_upper=config.training.output_clamping.upper,
-    )
+    predictor = build_predictor(predictor_class, args, config, datastore)
     forecaster = ARForecaster(predictor, datastore)
     return ForecasterModule.load_from_checkpoint(
         ckpt_path,
@@ -105,7 +110,7 @@ def load_forecaster_module_from_checkpoint(ckpt_path, config, datastore):
     )
 
 
-@logger.catch
+@logger.catch(reraise=True)
 def main(input_args=None):
     """Main function for training and evaluating models."""
     parser = ArgumentParser(
@@ -490,23 +495,7 @@ def main(input_args=None):
     # Build predictor and forecaster externally, then inject into
     # ForecasterModule
     predictor_class = MODELS[args.model]
-    predictor = predictor_class(
-        datastore=datastore,
-        graph_name=args.graph,
-        hidden_dim=args.hidden_dim,
-        hidden_layers=args.hidden_layers,
-        processor_layers=args.processor_layers,
-        mesh_aggr=args.mesh_aggr,
-        num_past_forcing_steps=args.num_past_forcing_steps,
-        num_future_forcing_steps=args.num_future_forcing_steps,
-        output_std=args.output_std,
-        output_clamping_lower=config.training.output_clamping.lower,
-        output_clamping_upper=config.training.output_clamping.upper,
-        g2m_gnn_type=args.g2m_gnn_type,
-        m2g_gnn_type=args.m2g_gnn_type,
-        mesh_up_gnn_type=args.mesh_up_gnn_type,
-        mesh_down_gnn_type=args.mesh_down_gnn_type,
-    )
+    predictor = build_predictor(predictor_class, args, config, datastore)
     forecaster = ARForecaster(predictor, datastore)
 
     model = ForecasterModule(

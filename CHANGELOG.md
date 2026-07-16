@@ -8,6 +8,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [unreleased](https://github.com/mllam/neural-lam/compare/v0.6.0...HEAD)
 
 ### Added
+- Add `hello_world_danra.ipynb` end-to-end tutorial notebook for training on DANRA, with a dedicated path-filtered CI workflow that runs it end-to-end via `nbmake` [\#577](https://github.com/mllam/neural-lam/pull/577) @Sharkyii
+
 - Add `--num_sanity_val_steps` CLI argument to control sanity validation steps before training (#694)
 
 - Add `--train_steps_to_log` CLI option to log training loss for individual unroll steps, and deduplicate common prediction and loss computation steps across loops [\#674](https://github.com/mllam/neural-lam/issues/674) @GiGiKoneti
@@ -47,6 +49,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   @Sir-Sloth-The-Lazy
 
 ### Fixed
+
+- `train_model.main` now re-raises on error (`@logger.catch(reraise=True)`) instead of logging and exiting 0, so training/eval failures surface to callers and CI (e.g. the notebook `nbmake` run) rather than passing silently [\#577](https://github.com/mllam/neural-lam/pull/577)
+
+- Allow `graph_lam` training and checkpoint reloads to accept the full set of
+  GNN type CLI options without passing hierarchical-only options to unsupported
+  constructors via a shared `build_predictor` helper ([#686](https://github.com/mllam/neural-lam/issues/686)).
 
 - Fix `RuntimeError` in `HiLAMParallel` forward pass on hierarchical graphs by offsetting edge indices into the global mesh node index space ([#679](https://github.com/mllam/neural-lam/issues/679))
 
@@ -197,18 +205,7 @@ This release introduces new features including GIF animation support, wandb run 
 
 - Fix Slack domain link [\#288](https://github.com/mllam/neural-lam/pull/288) @sadamov
 
-### Added
-
-- Run notebooks in `docs/notebooks/` as pytest tests via `nbmake` in CI refs [\#69](https://github.com/mllam/neural-lam/issues/69)
-- Add 10-minute timeout for notebook cell execution via `--nbmake-timeout=600` [\#577](https://github.com/mllam/neural-lam/pull/577)
-
-### Changed
-
-- Notebook tests now run selectively: on push to main or when PR has `run-notebooks` label [\#577](https://github.com/mllam/neural-lam/pull/577)
-
 ### Maintenance
-
-- Fix notebook CI failure by adding pytest fixture to create required `danra.datastore.zarr` file and removing duplicate `[build-system]` section in `pyproject.toml` [\#577](https://github.com/mllam/neural-lam/pull/577)
 
 - Update PR template to clarify milestone/roadmap requirement and maintenance changes [\#186](https://github.com/mllam/neural-lam/pull/186) @joeloskarsson
 
