@@ -117,7 +117,7 @@ def setup_training_logger(
         return pl.loggers.WandbLogger(
             project=args.logger_project,
             name=None if args.wandb_id else run_name,
-            config=dict(training=vars(args), datastore=datastore._config),
+            config=dict(training=vars(args), datastore=getattr(datastore, "_config", None)),
             resume=wandb_resume,
             id=args.wandb_id,
             save_dir=run_dir,
@@ -140,7 +140,7 @@ def setup_training_logger(
             save_dir=run_dir,
         )
         training_logger.log_hyperparams(
-            dict(training=vars(args), datastore=datastore._config)
+            dict(training=vars(args), datastore=getattr(datastore, "_config", None))
         )
         return training_logger
     else:
