@@ -22,7 +22,7 @@ from ... import vis
 from ...config import NeuralLAMConfig
 from ...datastore import BaseDatastore
 from ...weather_dataset import WeatherDataset
-from .base import Forecaster
+from ..forecasters.base import Forecaster
 
 
 class BaseForecasterModule(pl.LightningModule, ABC):

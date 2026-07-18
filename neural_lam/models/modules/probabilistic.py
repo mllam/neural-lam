@@ -8,8 +8,8 @@ import torch
 
 # Local
 from ... import metrics
-from .base_module import BaseForecasterModule
-from .probabilistic import ProbabilisticForecaster
+from ..forecasters.probabilistic import ProbabilisticForecaster
+from .base import BaseForecasterModule
 
 
 class ProbabilisticForecasterModule(BaseForecasterModule):

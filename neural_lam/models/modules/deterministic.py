@@ -12,7 +12,7 @@ import torch
 
 # Local
 from ... import metrics, vis
-from .base_module import BaseForecasterModule
+from .base import BaseForecasterModule
 
 
 class DeterministicForecasterModule(BaseForecasterModule):
