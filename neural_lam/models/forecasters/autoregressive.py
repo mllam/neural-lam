@@ -1,5 +1,8 @@
 """Forecaster that uses an auto-regressive strategy to unroll a forecast."""
 
+# Standard library
+from typing import Callable, Optional
+
 # Third-party
 import torch
 
@@ -245,3 +248,63 @@ class ARForecaster(Forecaster):
             )
         )
         return batch_loss, {}
+
+    def score(
+        self,
+        prediction: torch.Tensor,
+        target_states: torch.Tensor,
+        pred_std: Optional[torch.Tensor],
+        metric: Optional[Callable[..., torch.Tensor]] = None,
+        mask: Optional[torch.Tensor] = None,
+        average_grid: bool = True,
+        sum_vars: bool = True,
+    ) -> torch.Tensor:
+        """
+        Score an already-produced prediction for reporting (not training).
+
+        Substitutes ``self.per_var_std`` for ``pred_std`` when the latter is
+        ``None`` (predictor does not output its own std), then applies
+        ``metric`` (defaulting to ``self.loss``, the configured scoring
+        rule).
+
+        Parameters
+        ----------
+        prediction : torch.Tensor
+            Shape ``(..., num_grid_nodes, num_state_vars)``. Forecast to
+            score.
+        target_states : torch.Tensor
+            Shape ``(..., num_grid_nodes, num_state_vars)``. True states to
+            score against. Dims: same as ``prediction``.
+        pred_std : torch.Tensor or None
+            Shape ``(..., num_grid_nodes, num_state_vars)``, or ``None``.
+            Predicted standard deviation for ``prediction``; ``None`` when
+            the wrapped predictor does not output one, in which case
+            ``self.per_var_std`` is substituted.
+        metric : callable or None, optional
+            Scoring function with the ``neural_lam.metrics`` signature
+            ``(pred, target, pred_std, mask=None, average_grid=True,
+            sum_vars=True) -> torch.Tensor``. Defaults to ``self.loss``.
+        mask : torch.Tensor or None, optional
+            Shape ``(num_grid_nodes,)``, boolean. Forwarded to ``metric``.
+        average_grid : bool, optional
+            Forwarded to ``metric``.
+        sum_vars : bool, optional
+            Forwarded to ``metric``.
+
+        Returns
+        -------
+        torch.Tensor
+            The metric's output; shape depends on ``average_grid`` and
+            ``sum_vars`` (see ``neural_lam.metrics``).
+        """
+        if pred_std is None:
+            pred_std = self.per_var_std
+        metric_fn = self.loss if metric is None else metric
+        return metric_fn(
+            prediction,
+            target_states,
+            pred_std,
+            mask=mask,
+            average_grid=average_grid,
+            sum_vars=sum_vars,
+        )

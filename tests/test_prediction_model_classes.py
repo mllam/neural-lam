@@ -7,6 +7,7 @@ import torch
 
 # First-party
 from neural_lam import config as nlconfig
+from neural_lam import metrics
 from neural_lam.models import (
     ARForecaster,
     DeterministicForecasterModule,
@@ -73,6 +74,51 @@ def test_ar_forecaster_unroll():
     # Interior (where interior_mask == 1) should equal predictor output (0.0)
     assert torch.all(prediction[:, :, 0, :] == 0.0)
     assert torch.all(prediction[:, :, 1:, :] == 5.0)
+
+
+def test_ar_forecaster_score():
+    datastore = init_datastore_example("mdp")
+    config = nlconfig.NeuralLAMConfig(
+        datastore=nlconfig.DatastoreSelection(
+            kind=datastore.SHORT_NAME, config_path=datastore.root_path
+        )
+    )
+    predictor = MockStepPredictor(datastore=datastore, output_std=False)
+    forecaster = ARForecaster(predictor, datastore, config=config, loss="mse")
+
+    B, num_grid_nodes = 2, predictor.num_grid_nodes
+    d_state = datastore.get_num_data_vars(category="state")
+    prediction = torch.zeros(B, num_grid_nodes, d_state)
+    target = torch.ones(B, num_grid_nodes, d_state)
+    mask = torch.ones(num_grid_nodes, dtype=torch.bool)
+
+    # pred_std=None falls back to forecaster.per_var_std and applies the
+    # forecaster's own configured scoring rule (self.loss)
+    scored = forecaster.score(prediction, target, None, mask=mask)
+    expected = forecaster.loss(
+        prediction, target, forecaster.per_var_std, mask=mask
+    )
+    assert torch.equal(scored, expected)
+
+    # An explicit metric overrides self.loss, still substituting the
+    # per_var_std fallback
+    scored_mse = forecaster.score(
+        prediction, target, None, metric=metrics.mse, mask=mask
+    )
+    expected_mse = metrics.mse(
+        prediction, target, forecaster.per_var_std, mask=mask
+    )
+    assert torch.equal(scored_mse, expected_mse)
+
+    # An explicit pred_std is used as-is, not overridden by per_var_std
+    explicit_std = torch.full((d_state,), 2.0)
+    scored_explicit = forecaster.score(
+        prediction, target, explicit_std, mask=mask
+    )
+    expected_explicit = forecaster.loss(
+        prediction, target, explicit_std, mask=mask
+    )
+    assert torch.equal(scored_explicit, expected_explicit)
 
 
 def test_forecaster_module_checkpoint(tmp_path):

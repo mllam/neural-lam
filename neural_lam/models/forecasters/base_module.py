@@ -63,10 +63,11 @@ class BaseForecasterModule(pl.LightningModule, ABC):
         Parameters
         ----------
         forecaster : Forecaster
-            The forecaster model to use for predictions. Owns the scoring
-            rule (``forecaster.loss``) and the constant per-variable std
-            fallback (``forecaster.per_var_std``) used for training and for
-            validation/test loss reporting here.
+            The forecaster model to use for predictions. Owns the training
+            objective (``compute_training_loss``) and validation/test
+            scoring (``score``); this module and its subclasses never
+            compute a loss themselves, only inject shared inputs (e.g. the
+            interior mask) and log what the forecaster returns.
         config : NeuralLAMConfig
             Configuration object for the neural LAM model.
         datastore : BaseDatastore

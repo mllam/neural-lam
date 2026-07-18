@@ -20,7 +20,7 @@ class DeterministicForecasterModule(BaseForecasterModule):
     Lightning module for a single deterministic forecast per batch.
 
     Validation and testing score the forecaster's own single-rollout
-    prediction directly with ``forecaster.loss``, as opposed to
+    prediction via ``forecaster.score``, as opposed to
     ``ProbabilisticForecasterModule``, which samples and scores an
     ensemble. Training is shared with that module unchanged (see
     ``BaseForecasterModule.training_step``).
@@ -66,11 +66,9 @@ class DeterministicForecasterModule(BaseForecasterModule):
             The index of the batch.
         """
         prediction, target_states, pred_std, _ = self.common_step(batch)
-        if pred_std is None:
-            pred_std = self.forecaster.per_var_std
 
         time_step_loss = torch.mean(
-            self.forecaster.loss(
+            self.forecaster.score(
                 prediction,
                 target_states,
                 pred_std,
@@ -95,10 +93,11 @@ class DeterministicForecasterModule(BaseForecasterModule):
             batch_size=batch[0].shape[0],
         )
 
-        entry_mses = metrics.mse(
+        entry_mses = self.forecaster.score(
             prediction,
             target_states,
             pred_std,
+            metric=metrics.mse,
             mask=self.interior_mask_bool,
             sum_vars=False,
         )
@@ -124,11 +123,8 @@ class DeterministicForecasterModule(BaseForecasterModule):
             )
             self.test_metrics["output_std"].append(mean_pred_std)
 
-        if pred_std is None:
-            pred_std = self.forecaster.per_var_std
-
         time_step_loss = torch.mean(
-            self.forecaster.loss(
+            self.forecaster.score(
                 prediction,
                 target_states,
                 pred_std,
@@ -155,17 +151,17 @@ class DeterministicForecasterModule(BaseForecasterModule):
         )
 
         for metric_name in ("mse", "mae"):
-            metric_func = metrics.get_metric(metric_name)
-            batch_metric_vals = metric_func(
+            batch_metric_vals = self.forecaster.score(
                 prediction,
                 target_states,
                 pred_std,
+                metric=metrics.get_metric(metric_name),
                 mask=self.interior_mask_bool,
                 sum_vars=False,
             )
             self.test_metrics[metric_name].append(batch_metric_vals)
 
-        spatial_loss = self.forecaster.loss(
+        spatial_loss = self.forecaster.score(
             prediction, target_states, pred_std, average_grid=False
         )
         log_spatial_losses = spatial_loss[
