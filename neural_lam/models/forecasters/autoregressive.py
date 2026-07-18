@@ -40,8 +40,11 @@ class ARForecaster(Forecaster):
         config : NeuralLAMConfig or None
             Configuration used to compute the constant per-variable std
             substituted for ``pred_std`` when ``predictor`` does not output
-            its own (see ``per_var_std``). Only required for that case;
-            forecasters used purely for inference can omit it.
+            its own (see ``per_var_std``). Required in that case for
+            ``score``/``compute_training_loss`` to work (they raise
+            ``ValueError`` via ``_resolve_pred_std`` otherwise); forecasters
+            used purely for inference (``forward``/``sample_ensemble``) can
+            omit it.
         loss : str, default "wmse"
             The scoring rule (from ``neural_lam.metrics``) used by
             ``compute_training_loss`` and stored as ``self.loss``.
@@ -232,12 +235,18 @@ class ARForecaster(Forecaster):
             batch and time.
         loss_components : dict of {str: torch.Tensor}
             Empty; the deterministic objective has no separate components.
+
+        Raises
+        ------
+        ValueError
+            If the predictor does not output its own std and no
+            ``per_var_std`` fallback is available; see
+            ``_resolve_pred_std``.
         """
         prediction, pred_std = self(
             init_states, forcing_features, target_states
         )
-        if pred_std is None:
-            pred_std = self.per_var_std
+        pred_std = self._resolve_pred_std(pred_std)
 
         batch_loss = torch.mean(
             self.loss(
@@ -248,6 +257,41 @@ class ARForecaster(Forecaster):
             )
         )
         return batch_loss, {}
+
+    def _resolve_pred_std(
+        self, pred_std: Optional[torch.Tensor]
+    ) -> torch.Tensor:
+        """
+        Return ``pred_std``, or the constant ``per_var_std`` fallback.
+
+        Parameters
+        ----------
+        pred_std : torch.Tensor or None
+            Predicted standard deviation as returned by ``forward``,
+            possibly ``None``.
+
+        Returns
+        -------
+        torch.Tensor
+            ``pred_std`` unchanged when given; otherwise ``self.per_var_std``.
+
+        Raises
+        ------
+        ValueError
+            If ``pred_std`` is ``None`` and no ``per_var_std`` fallback is
+            available (``predictor.predicts_std`` is False and this
+            forecaster was constructed without ``config``).
+        """
+        if pred_std is not None:
+            return pred_std
+        if self.per_var_std is None:
+            raise ValueError(
+                "No pred_std available for scoring: predictor.predicts_std "
+                "is False and this forecaster has no per_var_std fallback "
+                "(it was constructed without config). Pass config to the "
+                "constructor, or use a predictor that outputs its own std."
+            )
+        return self.per_var_std
 
     def score(
         self,
@@ -262,10 +306,9 @@ class ARForecaster(Forecaster):
         """
         Score an already-produced prediction for reporting (not training).
 
-        Substitutes ``self.per_var_std`` for ``pred_std`` when the latter is
-        ``None`` (predictor does not output its own std), then applies
-        ``metric`` (defaulting to ``self.loss``, the configured scoring
-        rule).
+        Resolves ``pred_std`` via ``_resolve_pred_std`` (substituting
+        ``self.per_var_std`` when ``None``), then applies ``metric``
+        (defaulting to ``self.loss``, the configured scoring rule).
 
         Parameters
         ----------
@@ -279,7 +322,8 @@ class ARForecaster(Forecaster):
             Shape ``(..., num_grid_nodes, num_state_vars)``, or ``None``.
             Predicted standard deviation for ``prediction``; ``None`` when
             the wrapped predictor does not output one, in which case
-            ``self.per_var_std`` is substituted.
+            ``self.per_var_std`` is substituted (see ``_resolve_pred_std``
+            for when this raises instead).
         metric : callable or None, optional
             Scoring function with the ``neural_lam.metrics`` signature
             ``(pred, target, pred_std, mask=None, average_grid=True,
@@ -296,9 +340,14 @@ class ARForecaster(Forecaster):
         torch.Tensor
             The metric's output; shape depends on ``average_grid`` and
             ``sum_vars`` (see ``neural_lam.metrics``).
+
+        Raises
+        ------
+        ValueError
+            If ``pred_std`` is ``None`` and no ``per_var_std`` fallback is
+            available; see ``_resolve_pred_std``.
         """
-        if pred_std is None:
-            pred_std = self.per_var_std
+        pred_std = self._resolve_pred_std(pred_std)
         metric_fn = self.loss if metric is None else metric
         return metric_fn(
             prediction,

@@ -2,6 +2,7 @@
 from argparse import Namespace
 
 # Third-party
+import pytest
 import pytorch_lightning as pl
 import torch
 
@@ -119,6 +120,47 @@ def test_ar_forecaster_score():
         prediction, target, explicit_std, mask=mask
     )
     assert torch.equal(scored_explicit, expected_explicit)
+
+
+def test_ar_forecaster_without_config_raises_on_use_not_construction():
+    """A predictor that doesn't output std plus no config is a valid,
+    unambiguous state at construction time (the forecaster may only ever
+    be used for inference), so ARForecaster must not raise there. It
+    should only raise once scoring is actually attempted and has no
+    std to use, and the error should come from the forecaster itself, not
+    a wrapping module."""
+    datastore = init_datastore_example("mdp")
+    predictor = MockStepPredictor(datastore=datastore, output_std=False)
+
+    # Construction succeeds even though predicts_std=False and config=None
+    forecaster = ARForecaster(predictor, datastore)
+    assert forecaster.per_var_std is None
+
+    B, num_grid_nodes = 2, predictor.num_grid_nodes
+    d_state = datastore.get_num_data_vars(category="state")
+    prediction = torch.zeros(B, num_grid_nodes, d_state)
+    target = torch.ones(B, num_grid_nodes, d_state)
+
+    with pytest.raises(ValueError, match="per_var_std fallback"):
+        forecaster.score(prediction, target, None)
+
+    num_past_forcing_steps = 1
+    num_future_forcing_steps = 1
+    d_forcing = datastore.get_num_data_vars(category="forcing") * (
+        num_past_forcing_steps + num_future_forcing_steps + 1
+    )
+    pred_steps = 3
+    init_states = torch.ones(B, 2, num_grid_nodes, d_state)
+    forcing_features = torch.ones(B, pred_steps, num_grid_nodes, d_forcing)
+    true_states = torch.ones(B, pred_steps, num_grid_nodes, d_state)
+
+    with pytest.raises(ValueError, match="per_var_std fallback"):
+        forecaster.compute_training_loss(
+            init_states,
+            forcing_features,
+            true_states,
+            interior_mask_bool=torch.ones(num_grid_nodes, dtype=torch.bool),
+        )
 
 
 def test_forecaster_module_checkpoint(tmp_path):

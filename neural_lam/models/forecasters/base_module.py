@@ -139,14 +139,6 @@ class BaseForecasterModule(pl.LightningModule, ABC):
         self.save_hyperparameters(ignore=["datastore", "forecaster"])
         self.datastore = datastore
         self.forecaster = forecaster
-        if forecaster.per_var_std is None and not forecaster.predicts_std:
-            raise ValueError(
-                "forecaster.per_var_std is None but the forecaster does "
-                "not predict its own std (forecaster.predicts_std is "
-                "False), so training/validation/test scoring has no std "
-                "to use. Pass config to the forecaster's constructor so "
-                "it can compute the constant per-variable std."
-            )
         self.matched_metrics: set = set()
 
         # Compute interior_mask_bool directly from datastore

@@ -123,8 +123,11 @@ class ProbabilisticARForecaster(ARForecaster, ProbabilisticForecaster):
         config : NeuralLAMConfig or None
             Configuration used to compute the constant per-variable std
             substituted for ``pred_std`` when ``predictor`` does not output
-            its own (see ``per_var_std``). Only required for that case;
-            forecasters used purely for inference can omit it.
+            its own (see ``per_var_std``). Required in that case for
+            ``score``/``compute_training_loss`` to work (they raise
+            ``ValueError`` via ``_resolve_pred_std`` otherwise); forecasters
+            used purely for inference (``forward``/``sample_ensemble``) can
+            omit it.
         loss : str, default "wmse"
             The scoring rule (from ``neural_lam.metrics``) used by
             ``compute_training_loss`` and stored as ``self.loss``.
