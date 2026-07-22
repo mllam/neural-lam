@@ -8,6 +8,10 @@ from .graph import (
     zero_index_g2m,
     zero_index_m2g,
 )
+from .heterodata import (
+    graph_dict_to_heterodata,
+    heterodata_to_graph_dict,
+)
 from .logging import (
     init_training_logger_metrics,
     log_on_rank_zero,
@@ -22,7 +26,9 @@ __all__ = [
     "BufferList",
     "fractional_plot_bundle",
     "get_integer_time",
+    "graph_dict_to_heterodata",
     "has_working_latex",
+    "heterodata_to_graph_dict",
     "init_training_logger_metrics",
     "inverse_sigmoid",
     "inverse_softplus",

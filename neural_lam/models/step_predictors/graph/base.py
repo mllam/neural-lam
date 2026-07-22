@@ -33,6 +33,7 @@ class BaseGraphModel(StepPredictor):
         output_clamping_upper: dict[str, float] | None = None,
         g2m_gnn_type: str = "InteractionNet",
         m2g_gnn_type: str = "InteractionNet",
+        use_heterodata: bool = False,
     ) -> None:
         """
         Initialize the BaseGraphModel.
@@ -62,6 +63,10 @@ class BaseGraphModel(StepPredictor):
             Lower clamping limits for state variables.
         output_clamping_upper : dict, optional
             Upper clamping limits for state variables.
+        use_heterodata : bool, default False
+            If True, represent the loaded graph as a ``pyg.HeteroData``
+            object and take the model's graph tensors from it. Only supported
+            for flat (non-hierarchical) graphs.
         """
         super().__init__(
             datastore=datastore,
@@ -110,6 +115,24 @@ class BaseGraphModel(StepPredictor):
             graph_dir_path=graph_dir_path,
             mesh_node_features_scaling=grid_xy_max_span,
         )
+
+        # Optionally represent the graph as a pyg.HeteroData object and take
+        # the model's graph tensors from it, so that everywhere the graph is
+        # used the data now originates from the HeteroData datastructure
+        # (issue #385). The extracted tensors are identical to the dict ones,
+        # so the model builds and trains identically either way.
+        self.use_heterodata = use_heterodata
+        if use_heterodata:
+            if self.hierarchical:
+                raise NotImplementedError(
+                    "use_heterodata is currently only supported for flat "
+                    "(non-hierarchical) graphs."
+                )
+            self.graph = utils.graph_dict_to_heterodata(
+                graph_ldict,
+                num_grid_nodes=self.num_grid_nodes,
+            )
+            graph_ldict = utils.heterodata_to_graph_dict(self.graph)
 
         for name, attr_value in graph_ldict.items():
             # Make BufferLists module members and register tensors as buffers

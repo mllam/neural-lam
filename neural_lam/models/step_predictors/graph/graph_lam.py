@@ -36,6 +36,7 @@ class GraphLAM(BaseGraphModel):
         output_clamping_upper: dict[str, float] | None = None,
         g2m_gnn_type: str = "InteractionNet",
         m2g_gnn_type: str = "InteractionNet",
+        use_heterodata: bool = False,
     ) -> None:
         """
         Initialize the GraphLAM model.
@@ -64,6 +65,10 @@ class GraphLAM(BaseGraphModel):
             Lower clamping limits for state variables.
         output_clamping_upper : dict, optional
             Upper clamping limits for state variables.
+        use_heterodata : bool, default False
+            If True, represent the loaded graph as a ``pyg.HeteroData``
+            object and take the model's graph tensors from it. Only supported
+            for flat (non-hierarchical) graphs.
         """
         super().__init__(
             datastore=datastore,
@@ -79,6 +84,7 @@ class GraphLAM(BaseGraphModel):
             output_clamping_upper=output_clamping_upper,
             g2m_gnn_type=g2m_gnn_type,
             m2g_gnn_type=m2g_gnn_type,
+            use_heterodata=use_heterodata,
         )
 
         assert (
