@@ -195,8 +195,9 @@ def test_graphlam_heterodata_equivalence(tmp_path):
 
     Directly addresses the issue #385 requirement that training proceed
     identically with the existing and the new HeteroData datastructure:
-    identical parameters, identical graph buffers, and identical forward
-    output for the same inputs.
+    identical parameters, identical graph buffers, identical forward output
+    for the same inputs, and, when trained with the same optimizer steps,
+    identical per-step losses and identical weights afterwards.
     """
     # First-party
     from tests.dummy_datastore import DummyDatastore
@@ -259,3 +260,27 @@ def test_graphlam_heterodata_equivalence(tmp_path):
         out_hd, _ = model_hd(prev_state, prev_prev_state, forcing)
 
     assert torch.equal(out_dict, out_hd)
+
+    # Training proceeds identically: running the same optimizer steps on both
+    # models yields identical losses at every step and identical weights
+    # afterwards.
+    model_dict.train()
+    model_hd.train()
+    target = torch.randn(1, num_grid, d_state)
+    opt_dict = torch.optim.SGD(model_dict.parameters(), lr=0.1)
+    opt_hd = torch.optim.SGD(model_hd.parameters(), lr=0.1)
+    for _ in range(3):
+        step_losses = []
+        for model, optimizer in ((model_dict, opt_dict), (model_hd, opt_hd)):
+            optimizer.zero_grad()
+            pred, _ = model(prev_state, prev_prev_state, forcing)
+            loss = torch.nn.functional.mse_loss(pred, target)
+            loss.backward()
+            optimizer.step()
+            step_losses.append(loss)
+        assert torch.equal(step_losses[0], step_losses[1])
+
+    trained_dict = dict(model_dict.named_parameters())
+    trained_hd = dict(model_hd.named_parameters())
+    for name in trained_dict:
+        assert torch.equal(trained_dict[name], trained_hd[name]), name
