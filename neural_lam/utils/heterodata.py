@@ -7,19 +7,26 @@ node/edge-feature tensors, see that function's docstring for the keys).
 The ``HeteroData`` representation uses the ``"grid"`` and ``"mesh"`` node
 types, matching the terminology used throughout the rest of ``neural-lam``
 (``grid_static_features``, ``mesh_static_features``, ``g2m``/``m2m``/``m2g``).
-The three graph components map onto typed edges:
+For a flat (single mesh level) graph the three graph components map onto typed
+edges:
 
 - ``g2m`` (grid-to-mesh)  -> ``("grid", "to", "mesh")``
 - ``m2m`` (mesh-to-mesh)  -> ``("mesh", "to", "mesh")``
 - ``m2g`` (mesh-to-grid)  -> ``("mesh", "to", "grid")``
 
-The node/edge-type names are defined as module-level constants so the naming
-convention can be changed in one place (the reference implementations in
-issue #385, ``leifdenby/weatherduck`` and ``matschreiner/equicast``, use
-``"data"``/``"hidden"`` instead).
+For a hierarchical graph (``L > 1`` mesh levels) each level is a distinct node
+type ``"mesh_0"`` .. ``"mesh_{L-1}"`` (levels have different node counts and
+their own embedders/GNNs in the model), and:
 
-Only flat (single mesh level) graphs are supported for now; hierarchical
-graphs raise :class:`NotImplementedError` and are handled in a follow-up.
+- ``g2m``/``m2g`` connect the grid to the bottom mesh level ``"mesh_0"``;
+- intra-level edges are ``("mesh_i", "to", "mesh_i")``;
+- inter-level edges are ``("mesh_i", "up", "mesh_{i+1}")`` and
+  ``("mesh_{i+1}", "down", "mesh_i")`` for each of the ``L-1`` level pairs.
+
+The node/edge-type names are defined as module-level constants / helpers so
+the naming convention can be changed in one place (the reference
+implementations in issue #385, ``leifdenby/weatherduck`` and
+``matschreiner/equicast``, use ``"data"``/``"hidden"`` instead).
 """
 
 from __future__ import annotations
@@ -50,6 +57,31 @@ _FLAT_EDGE_SPEC = (
 )
 
 
+def mesh_level_node_type(level: int) -> str:
+    """Return the node type for mesh ``level`` in a hierarchical graph."""
+    return f"{MESH_NODE_TYPE}_{level}"
+
+
+def _same_level_edge_type(level: int) -> tuple[str, str, str]:
+    """Return the intra-level ``m2m`` edge type for mesh ``level``."""
+    node_type = mesh_level_node_type(level)
+    return (node_type, "to", node_type)
+
+
+def _up_edge_type(level: int) -> tuple[str, str, str]:
+    """Return the inter-level up edge type from ``level`` to ``level + 1``."""
+    return (mesh_level_node_type(level), "up", mesh_level_node_type(level + 1))
+
+
+def _down_edge_type(level: int) -> tuple[str, str, str]:
+    """Return the inter-level down edge type from ``level + 1`` to ``level``."""
+    return (
+        mesh_level_node_type(level + 1),
+        "down",
+        mesh_level_node_type(level),
+    )
+
+
 def graph_dict_to_heterodata(
     graph_dict: Dict[str, Any],
     num_grid_nodes: int,
@@ -62,32 +94,26 @@ def graph_dict_to_heterodata(
     graph_dict : dict
         Graph tensors as returned by :func:`neural_lam.utils.load_graph`. For
         a flat graph ``m2m_edge_index``, ``m2m_features`` and
-        ``mesh_static_features`` are single tensors (not lists).
+        ``mesh_static_features`` are single tensors; for a hierarchical graph
+        they (and the ``mesh_up``/``mesh_down`` entries) are lists indexed by
+        mesh level.
     num_grid_nodes : int
         Number of grid nodes. Taken from the datastore rather than inferred
         from the edge indices, because the graph spec allows grid nodes that
         no edge connects to.
     hierarchical : bool, default False
-        Whether the graph is hierarchical. Only ``False`` is supported for
-        now.
+        Whether ``graph_dict`` describes a hierarchical (multi-level) graph.
 
     Returns
     -------
     torch_geometric.data.HeteroData
-        Typed graph with ``"grid"`` and ``"mesh"`` node types and the
-        ``g2m`` / ``m2m`` / ``m2g`` edge types. Mesh node features are stored
-        on ``graph["mesh"].x`` and edge features on ``edge_attr``. Tensors
-        are the same objects as in ``graph_dict`` (no copy).
-
-    Raises
-    ------
-    NotImplementedError
-        If ``hierarchical`` is ``True``.
+        Typed graph. Mesh node features are stored on the mesh node types'
+        ``.x`` and edge features on ``edge_attr``. Tensors are the same
+        objects as in ``graph_dict`` (no copy).
     """
     if hierarchical:
-        raise NotImplementedError(
-            "graph_dict_to_heterodata currently supports only flat "
-            "(single-level) graphs; hierarchical support is a follow-up."
+        return _hierarchical_graph_dict_to_heterodata(
+            graph_dict, num_grid_nodes
         )
 
     graph = HeteroData()
@@ -102,6 +128,67 @@ def graph_dict_to_heterodata(
     for edge_type, edge_index_key, edge_feature_key in _FLAT_EDGE_SPEC:
         graph[edge_type].edge_index = graph_dict[edge_index_key]
         graph[edge_type].edge_attr = graph_dict[edge_feature_key]
+
+    return graph
+
+
+def _hierarchical_graph_dict_to_heterodata(
+    graph_dict: Dict[str, Any],
+    num_grid_nodes: int,
+) -> HeteroData:
+    """Build a hierarchical ``HeteroData`` from a multi-level tensor-dict.
+
+    Parameters
+    ----------
+    graph_dict : dict
+        Hierarchical graph tensors from :func:`neural_lam.utils.load_graph`:
+        ``mesh_static_features``, ``m2m_edge_index`` and ``m2m_features`` are
+        length-``L`` lists and the ``mesh_up``/``mesh_down`` entries are
+        length-``(L-1)`` lists.
+    num_grid_nodes : int
+        Number of grid nodes.
+
+    Returns
+    -------
+    torch_geometric.data.HeteroData
+        Graph with per-level mesh node types and typed intra-/inter-level
+        edges.
+    """
+    graph = HeteroData()
+
+    graph[GRID_NODE_TYPE].num_nodes = int(num_grid_nodes)
+
+    mesh_static_features = graph_dict["mesh_static_features"]
+    num_levels = len(mesh_static_features)
+    for level in range(num_levels):
+        graph[mesh_level_node_type(level)].x = mesh_static_features[level]
+
+    # g2m/m2g connect the grid to the bottom mesh level only.
+    bottom = mesh_level_node_type(0)
+    graph[GRID_NODE_TYPE, "to", bottom].edge_index = graph_dict[
+        "g2m_edge_index"
+    ]
+    graph[GRID_NODE_TYPE, "to", bottom].edge_attr = graph_dict["g2m_features"]
+    graph[bottom, "to", GRID_NODE_TYPE].edge_index = graph_dict[
+        "m2g_edge_index"
+    ]
+    graph[bottom, "to", GRID_NODE_TYPE].edge_attr = graph_dict["m2g_features"]
+
+    # Intra-level (same-level) mesh edges, one entry per level.
+    for level in range(num_levels):
+        edge_type = _same_level_edge_type(level)
+        graph[edge_type].edge_index = graph_dict["m2m_edge_index"][level]
+        graph[edge_type].edge_attr = graph_dict["m2m_features"][level]
+
+    # Inter-level up/down mesh edges, one entry per (level, level+1) pair.
+    for level in range(num_levels - 1):
+        up_type = _up_edge_type(level)
+        graph[up_type].edge_index = graph_dict["mesh_up_edge_index"][level]
+        graph[up_type].edge_attr = graph_dict["mesh_up_features"][level]
+
+        down_type = _down_edge_type(level)
+        graph[down_type].edge_index = graph_dict["mesh_down_edge_index"][level]
+        graph[down_type].edge_attr = graph_dict["mesh_down_features"][level]
 
     return graph
 
@@ -125,25 +212,16 @@ def graph_tensors_from_heterodata(
     graph : torch_geometric.data.HeteroData
         Graph as produced by :func:`graph_dict_to_heterodata`.
     hierarchical : bool, default False
-        Whether the graph is hierarchical. Only ``False`` is supported for
-        now.
+        Whether ``graph`` is a hierarchical (multi-level) graph.
 
     Returns
     -------
     dict
         The model's graph tensors, keyed by the names used in
         :func:`neural_lam.utils.load_graph`.
-
-    Raises
-    ------
-    NotImplementedError
-        If ``hierarchical`` is ``True``.
     """
     if hierarchical:
-        raise NotImplementedError(
-            "graph_tensors_from_heterodata currently supports only flat "
-            "(single-level) graphs; hierarchical support is a follow-up."
-        )
+        return _hierarchical_graph_tensors_from_heterodata(graph)
 
     graph_dict: Dict[str, Any] = {
         "mesh_static_features": graph[MESH_NODE_TYPE].x,
@@ -156,5 +234,88 @@ def graph_tensors_from_heterodata(
     for edge_type, edge_index_key, edge_feature_key in _FLAT_EDGE_SPEC:
         graph_dict[edge_index_key] = graph[edge_type].edge_index
         graph_dict[edge_feature_key] = graph[edge_type].edge_attr
+
+    return graph_dict
+
+
+def _hierarchical_graph_tensors_from_heterodata(
+    graph: HeteroData,
+) -> Dict[str, Any]:
+    """Read the model's graph tensors out of a hierarchical ``HeteroData``.
+
+    Parameters
+    ----------
+    graph : torch_geometric.data.HeteroData
+        Graph as produced by :func:`_hierarchical_graph_dict_to_heterodata`.
+
+    Returns
+    -------
+    dict
+        The model's graph tensors, with the level-indexed entries collected
+        per level into :class:`~neural_lam.utils.buffer_list.BufferList`
+        objects, matching the hierarchical output of
+        :func:`neural_lam.utils.load_graph`.
+    """
+    # Recover the number of mesh levels by counting the mesh node types.
+    num_levels = 0
+    while mesh_level_node_type(num_levels) in graph.node_types:
+        num_levels += 1
+
+    bottom = mesh_level_node_type(0)
+    graph_dict: Dict[str, Any] = {
+        "g2m_edge_index": graph[GRID_NODE_TYPE, "to", bottom].edge_index,
+        "g2m_features": graph[GRID_NODE_TYPE, "to", bottom].edge_attr,
+        "m2g_edge_index": graph[bottom, "to", GRID_NODE_TYPE].edge_index,
+        "m2g_features": graph[bottom, "to", GRID_NODE_TYPE].edge_attr,
+        "mesh_static_features": BufferList(
+            [
+                graph[mesh_level_node_type(level)].x
+                for level in range(num_levels)
+            ],
+            persistent=False,
+        ),
+        "m2m_edge_index": BufferList(
+            [
+                graph[_same_level_edge_type(level)].edge_index
+                for level in range(num_levels)
+            ],
+            persistent=False,
+        ),
+        "m2m_features": BufferList(
+            [
+                graph[_same_level_edge_type(level)].edge_attr
+                for level in range(num_levels)
+            ],
+            persistent=False,
+        ),
+        "mesh_up_edge_index": BufferList(
+            [
+                graph[_up_edge_type(level)].edge_index
+                for level in range(num_levels - 1)
+            ],
+            persistent=False,
+        ),
+        "mesh_up_features": BufferList(
+            [
+                graph[_up_edge_type(level)].edge_attr
+                for level in range(num_levels - 1)
+            ],
+            persistent=False,
+        ),
+        "mesh_down_edge_index": BufferList(
+            [
+                graph[_down_edge_type(level)].edge_index
+                for level in range(num_levels - 1)
+            ],
+            persistent=False,
+        ),
+        "mesh_down_features": BufferList(
+            [
+                graph[_down_edge_type(level)].edge_attr
+                for level in range(num_levels - 1)
+            ],
+            persistent=False,
+        ),
+    }
 
     return graph_dict

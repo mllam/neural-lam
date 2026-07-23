@@ -65,8 +65,8 @@ class BaseGraphModel(StepPredictor):
             Upper clamping limits for state variables.
         use_heterodata : bool, default False
             If True, represent the loaded graph as a ``pyg.HeteroData``
-            object and take the model's graph tensors from it. Only supported
-            for flat (non-hierarchical) graphs.
+            object and take the model's graph tensors from it. Supported for
+            both flat and hierarchical graphs.
         """
         super().__init__(
             datastore=datastore,
@@ -124,16 +124,14 @@ class BaseGraphModel(StepPredictor):
         # trains identically either way.
         self.use_heterodata = use_heterodata
         if use_heterodata:
-            if self.hierarchical:
-                raise NotImplementedError(
-                    "use_heterodata is currently only supported for flat "
-                    "(non-hierarchical) graphs."
-                )
             self.graph = utils.graph_dict_to_heterodata(
                 graph_ldict,
                 num_grid_nodes=self.num_grid_nodes,
+                hierarchical=self.hierarchical,
             )
-            graph_ldict = utils.graph_tensors_from_heterodata(self.graph)
+            graph_ldict = utils.graph_tensors_from_heterodata(
+                self.graph, hierarchical=self.hierarchical
+            )
 
         for name, attr_value in graph_ldict.items():
             # Make BufferLists module members and register tensors as buffers

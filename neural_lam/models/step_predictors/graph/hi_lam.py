@@ -37,6 +37,7 @@ class HiLAM(BaseHiGraphModel):
         m2g_gnn_type: str = "InteractionNet",
         mesh_up_gnn_type: str = "InteractionNet",
         mesh_down_gnn_type: str = "InteractionNet",
+        use_heterodata: bool = False,
     ):
         """
         Initialize the HiLAM model.
@@ -65,6 +66,9 @@ class HiLAM(BaseHiGraphModel):
             Lower clamping limits for state variables.
         output_clamping_upper : dict, optional
             Upper clamping limits for state variables.
+        use_heterodata : bool, default False
+            If True, represent the loaded graph as a ``pyg.HeteroData``
+            object and take the model's graph tensors from it.
         """
         super().__init__(
             datastore=datastore,
@@ -82,6 +86,7 @@ class HiLAM(BaseHiGraphModel):
             m2g_gnn_type=m2g_gnn_type,
             mesh_up_gnn_type=mesh_up_gnn_type,
             mesh_down_gnn_type=mesh_down_gnn_type,
+            use_heterodata=use_heterodata,
         )
 
         # Make down GNNs, both for down edges and same level

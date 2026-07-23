@@ -16,6 +16,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   behaviour, and therefore training, unchanged. Flat (non-hierarchical) graphs
   only. [\#711](https://github.com/mllam/neural-lam/pull/711) @prajwal-tech07
 
+- Extend the `pyg.HeteroData` graph representation to hierarchical graphs and
+  the `HiLAM`/`HiLAMParallel` models. Each mesh level becomes its own node type
+  (`mesh_0` .. `mesh_{L-1}`), with intra-level edges per level and `up`/`down`
+  edges between neighbouring levels.
+  @prajwal-tech07
+
 - Add `--num_sanity_val_steps` CLI argument to control sanity validation steps before training (#694)
 
 - Add `--train_steps_to_log` CLI option to log training loss for individual unroll steps, and deduplicate common prediction and loss computation steps across loops [\#674](https://github.com/mllam/neural-lam/issues/674) @GiGiKoneti

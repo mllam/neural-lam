@@ -3,23 +3,24 @@
 Two layers of testing:
 
 - unit tests on ``graph_dict_to_heterodata`` / ``graph_tensors_from_heterodata``
-  with small hand-built tensor-dicts (no datastore/model needed);
-- a model-level equivalence test showing that a ``GraphLAM`` built with
-  ``use_heterodata=True`` is identical to one built the existing way, both in
-  its parameters/buffers and in its forward output.
+  with small hand-built tensor-dicts (no datastore/model needed), for both
+  flat and hierarchical graphs;
+- model-level equivalence tests showing that ``GraphLAM`` (flat) and
+  ``HiLAM`` (hierarchical) built with ``use_heterodata=True`` are identical to
+  ones built the existing way, in their parameters/buffers, forward output
+  and training.
 """
 
 # Standard library
 from pathlib import Path
 
 # Third-party
-import pytest
 import torch
 from torch_geometric.data import HeteroData
 
 # First-party
 from neural_lam.create_graph import create_graph_from_datastore
-from neural_lam.models import GraphLAM
+from neural_lam.models import GraphLAM, HiLAM
 from neural_lam.utils import (
     graph_dict_to_heterodata,
     graph_tensors_from_heterodata,
@@ -31,6 +32,7 @@ from neural_lam.utils.heterodata import (
     M2G_EDGE_TYPE,
     M2M_EDGE_TYPE,
     MESH_NODE_TYPE,
+    mesh_level_node_type,
 )
 
 # Keys that ``load_graph`` returns; used to assert the round-trip is exact.
@@ -161,16 +163,132 @@ def test_builder_grid_count_not_inferred_from_edges():
     assert graph[GRID_NODE_TYPE].num_nodes == 100
 
 
-def test_builder_rejects_hierarchical():
-    """Hierarchical graphs are explicitly not supported yet."""
-    graph_dict = _flat_graph_dict()
-    with pytest.raises(NotImplementedError):
-        graph_dict_to_heterodata(
-            graph_dict, num_grid_nodes=6, hierarchical=True
+def _hierarchical_graph_dict(num_levels: int = 3, edge_feature_dim: int = 3):
+    """Build a minimal hierarchical graph tensor-dict for the unit tests.
+
+    Level-indexed entries are :class:`BufferList` objects (as ``load_graph``
+    returns for hierarchical graphs), and each level's tensors carry a
+    level-dependent offset so the tests can detect any mislabelling of levels.
+
+    Parameters
+    ----------
+    num_levels : int, default 3
+        Number of mesh levels ``L``.
+    edge_feature_dim : int, default 3
+        Number of edge feature columns.
+
+    Returns
+    -------
+    dict
+        A tensor-dict with the same keys/structure as the hierarchical output
+        of :func:`neural_lam.utils.load_graph`.
+    """
+    mesh_counts = [4, 3, 2, 2][:num_levels]
+
+    def ei(n_edges):
+        cols = [[i % 2, (i + 1) % 2] for i in range(n_edges)]
+        return torch.tensor(cols, dtype=torch.int64).t().contiguous()
+
+    def ef(n_edges, tag):
+        base = torch.arange(n_edges * edge_feature_dim, dtype=torch.float32)
+        return (base + 100 * tag).reshape(n_edges, edge_feature_dim)
+
+    def mesh_x(n_nodes, tag):
+        base = torch.arange(n_nodes * 2, dtype=torch.float32)
+        return (base + 1000 * tag).reshape(n_nodes, 2)
+
+    def bl(tensors):
+        return BufferList(tensors, persistent=False)
+
+    return {
+        "g2m_edge_index": torch.tensor(
+            [[0, 1, 2], [0, 1, 2]], dtype=torch.int64
+        ),
+        "m2g_edge_index": torch.tensor(
+            [[0, 1, 2], [3, 4, 5]], dtype=torch.int64
+        ),
+        "g2m_features": ef(3, tag=1),
+        "m2g_features": ef(3, tag=2),
+        "mesh_static_features": bl(
+            [mesh_x(mesh_counts[lvl], tag=lvl) for lvl in range(num_levels)]
+        ),
+        "m2m_edge_index": bl([ei(3) for _ in range(num_levels)]),
+        "m2m_features": bl([ef(3, tag=10 + lvl) for lvl in range(num_levels)]),
+        "mesh_up_edge_index": bl([ei(2) for _ in range(num_levels - 1)]),
+        "mesh_up_features": bl(
+            [ef(2, tag=20 + lvl) for lvl in range(num_levels - 1)]
+        ),
+        "mesh_down_edge_index": bl([ei(2) for _ in range(num_levels - 1)]),
+        "mesh_down_features": bl(
+            [ef(2, tag=30 + lvl) for lvl in range(num_levels - 1)]
+        ),
+    }
+
+
+def test_builder_hierarchical_structure():
+    """The hierarchical builder produces per-level node/edge types."""
+    num_levels = 3
+    graph_dict = _hierarchical_graph_dict(num_levels=num_levels)
+    graph = graph_dict_to_heterodata(
+        graph_dict, num_grid_nodes=6, hierarchical=True
+    )
+
+    # One grid node type + one node type per mesh level.
+    expected_nodes = {GRID_NODE_TYPE} | {
+        mesh_level_node_type(lvl) for lvl in range(num_levels)
+    }
+    assert set(graph.node_types) == expected_nodes
+
+    # g2m/m2g connect the grid to the bottom mesh level only.
+    bottom = mesh_level_node_type(0)
+    assert (GRID_NODE_TYPE, "to", bottom) in graph.edge_types
+    assert (bottom, "to", GRID_NODE_TYPE) in graph.edge_types
+
+    # Per-level mesh features land on the right level, in order.
+    for lvl in range(num_levels):
+        assert torch.equal(
+            graph[mesh_level_node_type(lvl)].x,
+            graph_dict["mesh_static_features"][lvl],
         )
-    graph = graph_dict_to_heterodata(graph_dict, num_grid_nodes=6)
-    with pytest.raises(NotImplementedError):
-        graph_tensors_from_heterodata(graph, hierarchical=True)
+        same = (mesh_level_node_type(lvl), "to", mesh_level_node_type(lvl))
+        assert torch.equal(
+            graph[same].edge_attr, graph_dict["m2m_features"][lvl]
+        )
+
+    # Inter-level up/down edges for each of the L-1 pairs.
+    for lvl in range(num_levels - 1):
+        up = (mesh_level_node_type(lvl), "up", mesh_level_node_type(lvl + 1))
+        down = (
+            mesh_level_node_type(lvl + 1),
+            "down",
+            mesh_level_node_type(lvl),
+        )
+        assert torch.equal(
+            graph[up].edge_attr, graph_dict["mesh_up_features"][lvl]
+        )
+        assert torch.equal(
+            graph[down].edge_attr, graph_dict["mesh_down_features"][lvl]
+        )
+
+
+def test_builder_hierarchical_roundtrip_is_exact():
+    """dict -> HeteroData -> dict reproduces the hierarchical tensor-dict."""
+    graph_dict = _hierarchical_graph_dict(num_levels=3)
+    graph = graph_dict_to_heterodata(
+        graph_dict, num_grid_nodes=6, hierarchical=True
+    )
+    restored = graph_tensors_from_heterodata(graph, hierarchical=True)
+
+    assert set(restored.keys()) == _GRAPH_DICT_KEYS
+    for key in _GRAPH_DICT_KEYS:
+        original = graph_dict[key]
+        if isinstance(original, torch.Tensor):
+            assert torch.equal(restored[key], original), key
+        else:
+            # Level-indexed entries stay lists of the same length, per level.
+            assert len(restored[key]) == len(original), key
+            for lvl, (a, b) in enumerate(zip(restored[key], original)):
+                assert torch.equal(a, b), f"{key}[{lvl}]"
 
 
 def _build_graphlam(datastore, graph_name, use_heterodata):
@@ -240,7 +358,24 @@ def test_graphlam_heterodata_equivalence(tmp_path):
             getattr(model_dict, name), getattr(model_hd, name)
         ), name
 
-    # Identical forward output for the same inputs.
+    # Identical forward output and identical training.
+    _assert_forward_and_training_equivalent(model_dict, model_hd)
+
+
+def _assert_forward_and_training_equivalent(model_dict, model_hd):
+    """Assert two step-predictor models forward and train identically.
+
+    Runs an identical forward pass (identical output) and then a few identical
+    optimizer steps (identical per-step losses and identical weights
+    afterwards) on both models.
+
+    Parameters
+    ----------
+    model_dict : neural_lam.models.step_predictors.base.BaseStepPredictor
+        The reference model (dict-based graph).
+    model_hd : neural_lam.models.step_predictors.base.BaseStepPredictor
+        The HeteroData-based model to compare against.
+    """
     num_grid = model_dict.num_grid_nodes
     d_state = model_dict.grid_output_dim
     forcing_dim = (
@@ -284,3 +419,89 @@ def test_graphlam_heterodata_equivalence(tmp_path):
     trained_hd = dict(model_hd.named_parameters())
     for name in trained_dict:
         assert torch.equal(trained_dict[name], trained_hd[name]), name
+
+
+def _flatten_graph_attr(value):
+    """Return graph buffer(s) as a list of tensors (tensor or BufferList)."""
+    if isinstance(value, torch.Tensor):
+        return [value]
+    return list(value)
+
+
+def _build_hilam(datastore, graph_name, use_heterodata):
+    """Construct a small HiLAM with a fixed seed for equivalence tests."""
+    torch.manual_seed(0)
+    return HiLAM(
+        datastore=datastore,
+        graph_name=graph_name,
+        hidden_dim=4,
+        hidden_layers=1,
+        processor_layers=1,
+        mesh_aggr="sum",
+        num_past_forcing_steps=0,
+        num_future_forcing_steps=0,
+        output_std=False,
+        use_heterodata=use_heterodata,
+    )
+
+
+def test_hilam_heterodata_equivalence(tmp_path):
+    """HiLAM(use_heterodata=True) is identical to the dict-based model.
+
+    The hierarchical counterpart of the GraphLAM test: builds a multi-level
+    graph and asserts identical parameters, identical per-level graph buffers,
+    identical forward output and identical training (per-step losses and
+    weights) with and without the HeteroData datastructure.
+    """
+    # First-party
+    from tests.dummy_datastore import DummyDatastore
+
+    datastore = DummyDatastore()
+    graph_name = "hierarchical3"
+    graph_dir_path = Path(datastore.root_path) / "graph" / graph_name
+    if not graph_dir_path.exists():
+        create_graph_from_datastore(
+            datastore=datastore,
+            output_root_path=str(graph_dir_path),
+            n_max_levels=3,
+            hierarchical=True,
+        )
+
+    model_dict = _build_hilam(datastore, graph_name, use_heterodata=False)
+    model_hd = _build_hilam(datastore, graph_name, use_heterodata=True)
+
+    # The HeteroData model is hierarchical and exposes per-level mesh types.
+    assert model_dict.hierarchical and model_hd.hierarchical
+    assert isinstance(model_hd.graph, HeteroData)
+    for lvl in range(model_hd.num_levels):
+        assert mesh_level_node_type(lvl) in model_hd.graph.node_types
+
+    # Identical parameters.
+    params_dict = dict(model_dict.named_parameters())
+    params_hd = dict(model_hd.named_parameters())
+    assert params_dict.keys() == params_hd.keys()
+    for name in params_dict:
+        assert torch.equal(params_dict[name], params_hd[name]), name
+
+    # Identical graph buffers, including the per-level BufferList entries.
+    for name in (
+        "g2m_edge_index",
+        "m2g_edge_index",
+        "m2m_edge_index",
+        "g2m_features",
+        "m2g_features",
+        "m2m_features",
+        "mesh_static_features",
+        "mesh_up_edge_index",
+        "mesh_down_edge_index",
+        "mesh_up_features",
+        "mesh_down_features",
+    ):
+        tensors_dict = _flatten_graph_attr(getattr(model_dict, name))
+        tensors_hd = _flatten_graph_attr(getattr(model_hd, name))
+        assert len(tensors_dict) == len(tensors_hd), name
+        for lvl, (a, b) in enumerate(zip(tensors_dict, tensors_hd)):
+            assert torch.equal(a, b), f"{name}[{lvl}]"
+
+    # Identical forward output and identical training.
+    _assert_forward_and_training_equivalent(model_dict, model_hd)
