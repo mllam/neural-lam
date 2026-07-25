@@ -12,6 +12,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Add `--train_steps_to_log` CLI option to log training loss for individual unroll steps, and deduplicate common prediction and loss computation steps across loops [\#674](https://github.com/mllam/neural-lam/issues/674) @GiGiKoneti
 
+- Add a general probabilistic forecasting interface (`ProbabilisticForecaster`,
+  `ProbabilisticARForecaster`, `ProbabilisticForecasterModule`) and move
+  ownership of the training objective, scoring rule and per-variable std
+  from `ForecasterModule` onto the `Forecaster`.
+  [\#685](https://github.com/mllam/neural-lam/issues/685)
+  @Sir-Sloth-The-Lazy
+
 - Add `PropagationNet` GNN layer that incentivises directional message
   propagation from sender to receiver nodes, and expose it alongside
   `InteractionNet` through four new CLI arguments (`--g2m_gnn_type`,

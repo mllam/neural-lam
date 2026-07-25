@@ -13,7 +13,7 @@ from neural_lam import config as nlconfig
 from neural_lam.create_graph import create_graph_from_datastore
 from neural_lam.datastore import DATASTORES
 from neural_lam.datastore.base import BaseRegularGridDatastore
-from neural_lam.models import ForecasterModule
+from neural_lam.models import DeterministicForecasterModule
 from neural_lam.weather_dataset import WeatherDataModule
 from tests.conftest import init_datastore_example
 
@@ -105,7 +105,7 @@ def run_simple_training(
     )
 
     # Build predictor and forecaster externally, then inject into
-    # ForecasterModule
+    # DeterministicForecasterModule
     # First-party
     from neural_lam.models import MODELS, ARForecaster
 
@@ -123,13 +123,12 @@ def run_simple_training(
         output_clamping_lower=config.training.output_clamping.lower,
         output_clamping_upper=config.training.output_clamping.upper,
     )
-    forecaster = ARForecaster(predictor, datastore)
+    forecaster = ARForecaster(predictor, datastore, config=config, loss="mse")
 
-    model = ForecasterModule(
+    model = DeterministicForecasterModule(
         forecaster=forecaster,
         config=config,
         datastore=datastore,
-        loss="mse",
         lr=1.0e-3,
         restore_opt=False,
         n_example_pred=1,
@@ -176,9 +175,9 @@ def test_all_gather_cat_single_device():
             return tensor_to_gather
 
     module = MockModule()
-    # Bind the real ForecasterModule.all_gather_cat to our mock
-    module.all_gather_cat = ForecasterModule.all_gather_cat.__get__(
-        module, MockModule
+    # Bind the real DeterministicForecasterModule.all_gather_cat to our mock
+    module.all_gather_cat = (
+        DeterministicForecasterModule.all_gather_cat.__get__(module, MockModule)
     )
 
     # Simulate a 3D metric tensor: (N_eval, pred_steps, d_f)
@@ -207,9 +206,9 @@ def test_all_gather_cat_multi_device_simulation():
             return torch.stack([tensor, tensor], dim=0)
 
     module = MockModule()
-    # Bind the real ForecasterModule.all_gather_cat to our mock
-    module.all_gather_cat = ForecasterModule.all_gather_cat.__get__(
-        module, MockModule
+    # Bind the real DeterministicForecasterModule.all_gather_cat to our mock
+    module.all_gather_cat = (
+        DeterministicForecasterModule.all_gather_cat.__get__(module, MockModule)
     )
 
     tensor = torch.randn(4, 3, 5)  # (N_eval, pred_steps, d_f)

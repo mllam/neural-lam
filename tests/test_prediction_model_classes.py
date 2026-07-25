@@ -2,12 +2,18 @@
 from argparse import Namespace
 
 # Third-party
+import pytest
 import pytorch_lightning as pl
 import torch
 
 # First-party
 from neural_lam import config as nlconfig
-from neural_lam.models import ARForecaster, ForecasterModule, StepPredictor
+from neural_lam import metrics
+from neural_lam.models import (
+    ARForecaster,
+    DeterministicForecasterModule,
+    StepPredictor,
+)
 from tests.conftest import init_datastore_example
 from tests.dummy_datastore import DummyDatastore
 
@@ -71,6 +77,92 @@ def test_ar_forecaster_unroll():
     assert torch.all(prediction[:, :, 1:, :] == 5.0)
 
 
+def test_ar_forecaster_score():
+    datastore = init_datastore_example("mdp")
+    config = nlconfig.NeuralLAMConfig(
+        datastore=nlconfig.DatastoreSelection(
+            kind=datastore.SHORT_NAME, config_path=datastore.root_path
+        )
+    )
+    predictor = MockStepPredictor(datastore=datastore, output_std=False)
+    forecaster = ARForecaster(predictor, datastore, config=config, loss="mse")
+
+    B, num_grid_nodes = 2, predictor.num_grid_nodes
+    d_state = datastore.get_num_data_vars(category="state")
+    prediction = torch.zeros(B, num_grid_nodes, d_state)
+    target = torch.ones(B, num_grid_nodes, d_state)
+    mask = torch.ones(num_grid_nodes, dtype=torch.bool)
+
+    # pred_std=None falls back to forecaster.per_var_std and applies the
+    # forecaster's own configured scoring rule (self.loss)
+    scored = forecaster.score(prediction, target, None, mask=mask)
+    expected = forecaster.loss(
+        prediction, target, forecaster.per_var_std, mask=mask
+    )
+    assert torch.equal(scored, expected)
+
+    # An explicit metric overrides self.loss, still substituting the
+    # per_var_std fallback
+    scored_mse = forecaster.score(
+        prediction, target, None, metric=metrics.mse, mask=mask
+    )
+    expected_mse = metrics.mse(
+        prediction, target, forecaster.per_var_std, mask=mask
+    )
+    assert torch.equal(scored_mse, expected_mse)
+
+    # An explicit pred_std is used as-is, not overridden by per_var_std
+    explicit_std = torch.full((d_state,), 2.0)
+    scored_explicit = forecaster.score(
+        prediction, target, explicit_std, mask=mask
+    )
+    expected_explicit = forecaster.loss(
+        prediction, target, explicit_std, mask=mask
+    )
+    assert torch.equal(scored_explicit, expected_explicit)
+
+
+def test_ar_forecaster_without_config_raises_on_use_not_construction():
+    """A predictor that doesn't output std plus no config is a valid,
+    unambiguous state at construction time (the forecaster may only ever
+    be used for inference), so ARForecaster must not raise there. It
+    should only raise once scoring is actually attempted and has no
+    std to use, and the error should come from the forecaster itself, not
+    a wrapping module."""
+    datastore = init_datastore_example("mdp")
+    predictor = MockStepPredictor(datastore=datastore, output_std=False)
+
+    # Construction succeeds even though predicts_std=False and config=None
+    forecaster = ARForecaster(predictor, datastore)
+    assert forecaster.per_var_std is None
+
+    B, num_grid_nodes = 2, predictor.num_grid_nodes
+    d_state = datastore.get_num_data_vars(category="state")
+    prediction = torch.zeros(B, num_grid_nodes, d_state)
+    target = torch.ones(B, num_grid_nodes, d_state)
+
+    with pytest.raises(ValueError, match="per_var_std fallback"):
+        forecaster.score(prediction, target, None)
+
+    num_past_forcing_steps = 1
+    num_future_forcing_steps = 1
+    d_forcing = datastore.get_num_data_vars(category="forcing") * (
+        num_past_forcing_steps + num_future_forcing_steps + 1
+    )
+    pred_steps = 3
+    init_states = torch.ones(B, 2, num_grid_nodes, d_state)
+    forcing_features = torch.ones(B, pred_steps, num_grid_nodes, d_forcing)
+    true_states = torch.ones(B, pred_steps, num_grid_nodes, d_state)
+
+    with pytest.raises(ValueError, match="per_var_std fallback"):
+        forecaster.compute_training_loss(
+            init_states,
+            forcing_features,
+            true_states,
+            interior_mask_bool=torch.ones(num_grid_nodes, dtype=torch.bool),
+        )
+
+
 def test_forecaster_module_checkpoint(tmp_path):
     datastore = init_datastore_example("mdp")
 
@@ -81,7 +173,7 @@ def test_forecaster_module_checkpoint(tmp_path):
     )
 
     # Build predictor and forecaster externally, then inject into
-    # ForecasterModule
+    # DeterministicForecasterModule
     # First-party
     from neural_lam.models import MODELS
 
@@ -97,13 +189,12 @@ def test_forecaster_module_checkpoint(tmp_path):
         num_future_forcing_steps=1,
         output_std=False,
     )
-    forecaster = ARForecaster(predictor, datastore)
+    forecaster = ARForecaster(predictor, datastore, config=config, loss="mse")
 
-    model = ForecasterModule(
+    model = DeterministicForecasterModule(
         forecaster=forecaster,
         config=config,
         datastore=datastore,
-        loss="mse",
         lr=1e-3,
         restore_opt=False,
         n_example_pred=1,
@@ -133,10 +224,12 @@ def test_forecaster_module_checkpoint(tmp_path):
         num_future_forcing_steps=1,
         output_std=False,
     )
-    load_forecaster = ARForecaster(load_predictor, datastore)
+    load_forecaster = ARForecaster(
+        load_predictor, datastore, config=config, loss="mse"
+    )
 
     # Load from checkpoint
-    loaded_model = ForecasterModule.load_from_checkpoint(
+    loaded_model = DeterministicForecasterModule.load_from_checkpoint(
         ckpt_path,
         datastore=datastore,
         forecaster=load_forecaster,
@@ -193,21 +286,22 @@ def test_forecaster_module_old_checkpoint(tmp_path):
         num_future_forcing_steps=1,
         output_std=False,
     )
-    forecaster = ARForecaster(predictor, datastore)
-
     # Use distinctive non-default values so we can detect silent fallback
-    # to ForecasterModule's defaults during load.
+    # to DeterministicForecasterModule's defaults during load.
     saved_loss = "mse"
     saved_lr = 0.123
     saved_create_gif = True
     saved_val_steps = [2]
     saved_n_example_pred = 7
 
-    model = ForecasterModule(
+    forecaster = ARForecaster(
+        predictor, datastore, config=config, loss=saved_loss
+    )
+
+    model = DeterministicForecasterModule(
         forecaster=forecaster,
         config=config,
         datastore=datastore,
-        loss=saved_loss,
         lr=saved_lr,
         restore_opt=False,
         n_example_pred=saved_n_example_pred,
@@ -269,10 +363,12 @@ def test_forecaster_module_old_checkpoint(tmp_path):
         num_future_forcing_steps=1,
         output_std=False,
     )
-    load_forecaster = ARForecaster(load_predictor, datastore)
+    load_forecaster = ARForecaster(
+        load_predictor, datastore, config=config, loss=saved_loss
+    )
 
     # Load from hacked old checkpoint
-    loaded_model = ForecasterModule.load_from_checkpoint(
+    loaded_model = DeterministicForecasterModule.load_from_checkpoint(
         ckpt_path,
         datastore=datastore,
         forecaster=load_forecaster,
@@ -283,8 +379,8 @@ def test_forecaster_module_old_checkpoint(tmp_path):
     assert loaded_model.forecaster.predictor.__class__.__name__ == "GraphLAM"
 
     # Hyperparameters nested in the legacy 'args' namespace must round-trip
-    # rather than silently falling back to ForecasterModule defaults.
-    assert loaded_model.hparams.loss == saved_loss
+    # rather than silently falling back to DeterministicForecasterModule
+    # defaults.
     assert loaded_model.hparams.lr == saved_lr
     assert loaded_model.hparams.val_steps_to_log == saved_val_steps
     assert loaded_model.create_gif is saved_create_gif

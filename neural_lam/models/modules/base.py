@@ -1,9 +1,10 @@
-"""Lightning module handling training, validation and testing loops."""
+"""Abstract Lightning module shared by deterministic and probabilistic
+forecaster modules."""
 
 # Standard library
 import os
 import warnings
-from typing import Any
+from abc import ABC, abstractmethod
 
 # Third-party
 import matplotlib.pyplot as plt
@@ -17,18 +18,26 @@ from PIL import Image
 from neural_lam.utils import get_integer_time
 
 # Local
-from .. import metrics, vis
-from ..config import NeuralLAMConfig
-from ..datastore import BaseDatastore
-from ..loss_weighting import get_state_feature_weighting
-from ..weather_dataset import WeatherDataset
-from .forecasters.base import Forecaster
+from ... import vis
+from ...config import NeuralLAMConfig
+from ...datastore import BaseDatastore
+from ...weather_dataset import WeatherDataset
+from ..forecasters.base import Forecaster
 
 
-class ForecasterModule(pl.LightningModule):
+class BaseForecasterModule(pl.LightningModule, ABC):
     """
-    Lightning module handling training, validation and testing loops.
-    Wraps a Forecaster instance which performs the actual prediction.
+    Abstract Lightning module wrapping a ``Forecaster``.
+
+    Owns everything that does not depend on whether the wrapped forecaster
+    produces a single deterministic forecast or samples an ensemble:
+    batch standardization, the training loop, optimizer configuration,
+    checkpoint compatibility, and the plotting/aggregation helpers used by
+    validation and testing. ``validation_step``, ``test_step`` and
+    ``on_test_epoch_end`` differ enough between the two evaluation modes
+    that they are left abstract; concrete subclasses implement them
+    independently (see ``DeterministicForecasterModule`` and
+    ``ProbabilisticForecasterModule``) rather than overriding one another.
     """
 
     # pylint: disable=arguments-differ
@@ -38,7 +47,6 @@ class ForecasterModule(pl.LightningModule):
         forecaster: Forecaster,
         config: NeuralLAMConfig,
         datastore: BaseDatastore,
-        loss: str = "wmse",
         lr: float = 1e-3,
         restore_opt: bool = False,
         n_example_pred: int = 1,
@@ -50,18 +58,20 @@ class ForecasterModule(pl.LightningModule):
         args=None,
     ):
         """
-        Initialize the ForecasterModule.
+        Initialize the BaseForecasterModule.
 
         Parameters
         ----------
         forecaster : Forecaster
-            The forecaster model to use for predictions.
+            The forecaster model to use for predictions. Owns the training
+            objective (``compute_training_loss``) and validation/test
+            scoring (``score``); this module and its subclasses never
+            compute a loss themselves, only inject shared inputs (e.g. the
+            interior mask) and log what the forecaster returns.
         config : NeuralLAMConfig
             Configuration object for the neural LAM model.
         datastore : BaseDatastore
             Datastore providing grid metadata and data access.
-        loss : str, default "wmse"
-            The loss function to use.
         lr : float, default 1e-3
             Learning rate for the optimizer.
         restore_opt : bool, default False
@@ -72,6 +82,10 @@ class ForecasterModule(pl.LightningModule):
             Whether to create GIFs of example predictions.
         val_steps_to_log : list of int, optional
             Specific rollout steps to log during validation/testing.
+        train_steps_to_log : list of int, optional
+            Specific rollout steps to log during training. Accepted for CLI
+            and checkpoint compatibility; ``training_step`` only ever logs
+            the aggregate ``train_loss`` (see its docstring for why).
         metrics_watch : list of str, optional
             List of metrics to watch and log specifically.
         var_leads_metrics_watch : dict of {int: list of int}, optional
@@ -80,21 +94,20 @@ class ForecasterModule(pl.LightningModule):
         args : argparse.Namespace, optional
             Pre-refactor ``ARModel`` checkpoint hyperparameters. When
             provided, attributes on ``args`` take precedence over the
-            corresponding explicit kwargs (``loss``, ``lr``, ``restore_opt``,
+            corresponding explicit kwargs (``lr``, ``restore_opt``,
             ``n_example_pred``, ``create_gif``, ``val_steps_to_log``,
-            ``metrics_watch``, ``var_leads_metrics_watch``) so legacy
-            checkpoints round-trip through ``load_from_checkpoint``
-            correctly.
+            ``train_steps_to_log``, ``metrics_watch``,
+            ``var_leads_metrics_watch``) so legacy checkpoints round-trip
+            through ``load_from_checkpoint`` correctly.
         """
         super().__init__()
         # Pre-refactor ``ARModel`` checkpoints saved every hyperparameter nested
         # inside an argparse Namespace under the single key 'args'. When
         # Lightning calls __init__ during load_from_checkpoint it would
         # otherwise drop 'args' (not in the new signature) and silently fall
-        # back to defaults for loss/lr/create_gif/etc. Unpack the namespace
-        # here so legacy checkpoints round-trip correctly.
+        # back to defaults for lr/create_gif/etc. Unpack the namespace here
+        # so legacy checkpoints round-trip correctly.
         if args is not None:
-            loss = getattr(args, "loss", loss)
             lr = getattr(args, "lr", lr)
             restore_opt = getattr(args, "restore_opt", restore_opt)
             n_example_pred = getattr(args, "n_example_pred", n_example_pred)
@@ -145,29 +158,6 @@ class ForecasterModule(pl.LightningModule):
             persistent=False,
         )
 
-        # Store per_var_std here if predictor does not output std
-        if not self.forecaster.predicts_std:
-            da_state_stats = datastore.get_standardization_dataarray(
-                category="state"
-            )
-            state_feature_weights = get_state_feature_weighting(
-                config=config, datastore=datastore
-            )
-            diff_std = torch.tensor(
-                da_state_stats.state_diff_std_standardized.values,
-                dtype=torch.float32,
-            )
-            feature_weights_t = torch.tensor(
-                state_feature_weights, dtype=torch.float32
-            )
-            self.register_buffer(
-                "per_var_std",
-                diff_std / torch.sqrt(feature_weights_t),
-                persistent=False,
-            )
-        else:
-            self.per_var_std = None
-
         # Standardization statistics used to normalize each batch on-device in
         # `on_after_batch_transfer`. WeatherDataset returns unstandardized
         # data, so state and forcing are normalized here rather than on CPU.
@@ -213,19 +203,6 @@ class ForecasterModule(pl.LightningModule):
             self.forcing_mean = None
             self.forcing_std = None
 
-        # Instantiate loss function
-        self.loss = metrics.get_metric(loss)
-
-        self.val_metrics: dict[str, list] = {
-            "mse": [],
-        }
-        self.test_metrics: dict[str, list] = {
-            "mse": [],
-            "mae": [],
-        }
-        if self.forecaster.predicts_std:
-            self.test_metrics["output_std"] = []  # Treat as metric
-
         # For making restoring of optimizer state optional
         self.restore_opt = restore_opt
 
@@ -233,9 +210,6 @@ class ForecasterModule(pl.LightningModule):
         self.n_example_pred = n_example_pred
         self.create_gif = create_gif
         self.plotted_examples = 0
-
-        # For storing spatial loss maps during evaluation
-        self.spatial_loss_maps: list[Any] = []
 
         # Warn once per phase if steps_to_log exceeds the actual rollout
         self._steps_warn_issued = {
@@ -347,7 +321,7 @@ class ForecasterModule(pl.LightningModule):
 
     def common_step(self, batch):
         """
-        Perform a common prediction step for training, validation, and testing.
+        Perform a common prediction step for validation and testing.
 
         Parameters
         ----------
@@ -371,6 +345,15 @@ class ForecasterModule(pl.LightningModule):
         """
         Perform a single training step.
 
+        The training objective is fully assembled by the wrapped forecaster,
+        which owns its own scoring rule; this method injects the interior
+        mask, then logs the loss and any loss components the forecaster
+        returns. Unlike validation/test, no per-step ``train_loss_unroll{i}``
+        breakdown is logged here even when ``train_steps_to_log`` is set:
+        ``compute_training_loss`` intentionally returns only a scalar (a
+        forecaster's objective, e.g. an ELBO, may not decompose per rollout
+        step at all), so there is no per-step tensor to select from.
+
         Parameters
         ----------
         batch : tuple
@@ -381,12 +364,26 @@ class ForecasterModule(pl.LightningModule):
         torch.Tensor
             The computed loss for the training step.
         """
-        _, _, _, time_step_loss = self._compute_prediction_and_loss(batch)
-        batch_loss = torch.mean(time_step_loss)
-        batch_size = batch[0].shape[0]
+        init_states, target_states, forcing_features, _ = batch
+        batch_loss, loss_components = self.forecaster.compute_training_loss(
+            init_states,
+            forcing_features,
+            target_states,
+            interior_mask_bool=self.interior_mask_bool,
+        )
 
-        self._log_step_loss(time_step_loss, batch_loss, "train", batch_size)
-
+        log_dict = {
+            f"train_{name}": value for name, value in loss_components.items()
+        }
+        log_dict["train_loss"] = batch_loss
+        self.log_dict(
+            log_dict,
+            prog_bar=True,
+            on_step=True,
+            on_epoch=True,
+            sync_dist=True,
+            batch_size=batch[0].shape[0],
+        )
         return batch_loss
 
     def all_gather_cat(self, tensor_to_gather):
@@ -432,55 +429,6 @@ class ForecasterModule(pl.LightningModule):
             )
         self._steps_warn_issued[phase] = True
 
-    def _compute_prediction_and_loss(
-        self,
-        batch: tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor],
-    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
-        """
-        Compute predicted mean, standard deviation, and step-wise loss.
-        Also extract and return corresponding target from batch.
-
-        Parameters
-        ----------
-        batch : tuple of torch.Tensor
-            The batch of data.
-
-        Returns
-        -------
-        prediction : torch.Tensor
-            Model predictions, shape
-            `(B, pred_steps, num_grid_nodes, num_state_vars)`.
-        target_states : torch.Tensor
-            Target states, shape
-            `(B, pred_steps, num_grid_nodes, num_state_vars)`.
-        pred_std : torch.Tensor
-            Predicted or pre-defined standard deviation, shape
-            `(B, pred_steps, num_grid_nodes, num_state_vars)` or
-            `(num_state_vars,)`.
-        time_step_loss : torch.Tensor
-            Loss for each unroll step, shape `(pred_steps,)`.
-        """
-        prediction, target_states, pred_std, _ = self.common_step(batch)
-        if pred_std is None:
-            pred_std = self.per_var_std
-        assert pred_std is not None
-
-        time_step_loss = torch.mean(
-            self.loss(
-                prediction,
-                target_states,
-                pred_std,
-                mask=self.interior_mask_bool,
-            ),
-            dim=0,
-        )
-        return (
-            prediction,
-            target_states,
-            pred_std,
-            time_step_loss,
-        )
-
     def _log_step_loss(
         self,
         time_step_loss: torch.Tensor,
@@ -515,9 +463,14 @@ class ForecasterModule(pl.LightningModule):
             batch_size=batch_size,
         )
 
+    @abstractmethod
     def validation_step(self, batch, batch_idx):
         """
         Perform a single validation step.
+
+        Concrete subclasses must both score the batch and populate
+        ``self.val_metrics`` for epoch-end aggregation by
+        ``on_validation_epoch_end``.
 
         Parameters
         ----------
@@ -526,22 +479,6 @@ class ForecasterModule(pl.LightningModule):
         batch_idx : int
             The index of the batch.
         """
-        prediction, target_states, pred_std, time_step_loss = (
-            self._compute_prediction_and_loss(batch)
-        )
-        mean_loss = torch.mean(time_step_loss)
-        batch_size = batch[0].shape[0]
-
-        self._log_step_loss(time_step_loss, mean_loss, "val", batch_size)
-
-        entry_mses = metrics.mse(
-            prediction,
-            target_states,
-            pred_std,
-            mask=self.interior_mask_bool,
-            sum_vars=False,
-        )
-        self.val_metrics["mse"].append(entry_mses)
 
     def on_validation_epoch_end(self):
         """
@@ -565,10 +502,14 @@ class ForecasterModule(pl.LightningModule):
         for metric_list in self.val_metrics.values():
             metric_list.clear()
 
-    # pylint: disable-next=unused-argument
+    @abstractmethod
     def test_step(self, batch, batch_idx):
         """
         Perform a single test step.
+
+        Concrete subclasses must both score the batch and populate
+        ``self.test_metrics`` for epoch-end aggregation by
+        ``on_test_epoch_end``.
 
         Parameters
         ----------
@@ -577,65 +518,6 @@ class ForecasterModule(pl.LightningModule):
         batch_idx : int
             The index of the batch.
         """
-        prediction, target_states, pred_std, time_step_loss = (
-            self._compute_prediction_and_loss(batch)
-        )
-
-        if self.forecaster.predicts_std:
-            mean_pred_std = torch.mean(
-                pred_std[..., self.interior_mask_bool, :], dim=-2
-            )
-            self.test_metrics["output_std"].append(mean_pred_std)
-
-        mean_loss = torch.mean(time_step_loss)
-        batch_size = batch[0].shape[0]
-
-        self._log_step_loss(time_step_loss, mean_loss, "test", batch_size)
-
-        hparams = self.hparams
-        val_steps_to_log = (
-            hparams.val_steps_to_log  # type: ignore[attr-defined]
-        )
-
-        for metric_name in ("mse", "mae"):
-            metric_func = metrics.get_metric(metric_name)
-            batch_metric_vals = metric_func(
-                prediction,
-                target_states,
-                pred_std,
-                mask=self.interior_mask_bool,
-                sum_vars=False,
-            )
-            self.test_metrics[metric_name].append(batch_metric_vals)
-
-        spatial_loss = self.loss(
-            prediction, target_states, pred_std, average_grid=False
-        )
-        log_spatial_losses = spatial_loss[
-            :,
-            [
-                step - 1
-                for step in val_steps_to_log
-                if step <= spatial_loss.shape[1]
-            ],
-        ]
-        self.spatial_loss_maps.append(log_spatial_losses)
-
-        if (
-            self.trainer.is_global_zero
-            and self.plotted_examples < self.n_example_pred
-        ):
-            n_additional_examples = min(
-                prediction.shape[0],
-                self.n_example_pred - self.plotted_examples,
-            )
-
-            self.plot_examples(
-                batch,
-                n_additional_examples,
-                prediction=prediction,
-                split="test",
-            )
 
     def plot_examples(self, batch, n_examples, split, prediction):
         """
@@ -924,82 +806,16 @@ class ForecasterModule(pl.LightningModule):
 
             plt.close("all")
 
+    @abstractmethod
     def on_test_epoch_end(self):
         """
         Perform actions at the end of the test epoch.
-        Aggregates and plots test metrics and spatial loss maps.
+
+        Concrete subclasses must at least aggregate and plot
+        ``self.test_metrics`` (typically via ``aggregate_and_plot_metrics``)
+        and reset any epoch-scoped state they accumulate during
+        ``test_step``.
         """
-        self.aggregate_and_plot_metrics(self.test_metrics, prefix="test")
-
-        spatial_loss_tensor = self.all_gather_cat(
-            torch.cat(self.spatial_loss_maps, dim=0)
-        )
-        if self.trainer.is_global_zero:
-            mean_spatial_loss = torch.mean(spatial_loss_tensor, dim=0)
-
-            loss_map_figs = [
-                vis.plot_spatial_error(
-                    error=loss_map,
-                    datastore=self.datastore,
-                    title=f"Test loss, t={t_i} "
-                    f"({(self.time_step_int * t_i)} {self.time_step_unit})",
-                )
-                for t_i, loss_map in zip(
-                    self.hparams.val_steps_to_log, mean_spatial_loss
-                )
-            ]
-
-            for i, fig in enumerate(loss_map_figs):
-                key = "test_loss"
-                if not isinstance(self.logger, pl.loggers.WandbLogger):
-                    key = f"{key}_{i}"
-                if hasattr(self.logger, "log_image"):
-                    self.logger.log_image(key=key, images=[fig])
-
-            pdf_loss_map_figs = [
-                vis.plot_spatial_error(error=loss_map, datastore=self.datastore)
-                for loss_map in mean_spatial_loss
-            ]
-            pdf_loss_maps_dir = os.path.join(
-                self.logger.save_dir, "spatial_loss_maps"
-            )
-            os.makedirs(pdf_loss_maps_dir, exist_ok=True)
-            for t_i, fig in zip(
-                self.hparams.val_steps_to_log, pdf_loss_map_figs
-            ):
-                fig.savefig(os.path.join(pdf_loss_maps_dir, f"loss_t{t_i}.pdf"))
-
-            torch.save(
-                mean_spatial_loss.cpu(),
-                os.path.join(self.logger.save_dir, "mean_spatial_loss.pt"),
-            )
-
-            if self.hparams.metrics_watch:
-                unmatched = (
-                    set(self.hparams.metrics_watch) - self.matched_metrics
-                )
-                if unmatched:
-                    warnings.warn(
-                        "The following metrics in --metrics_watch "
-                        "were not found during test phase: "
-                        f"{sorted(unmatched)}. Ensure the metric prefix "
-                        "matches the evaluation mode (expected 'test_')."
-                    )
-
-        self.matched_metrics = set()
-        self.spatial_loss_maps.clear()
-
-        # Clear stored test metrics so repeated `trainer.test()` calls on
-        # the same model instance start from a clean slate (otherwise the
-        # tensors accumulate and skew the aggregated metrics).
-        for metric_list in self.test_metrics.values():
-            metric_list.clear()
-
-        # Reset the example-plot counter so example prediction plots are
-        # generated again on every `trainer.test()` call, not just the
-        # first one (the guard `plotted_examples < n_example_pred` would
-        # otherwise stay permanently False).
-        self.plotted_examples = 0
 
     def on_load_checkpoint(self, checkpoint):
         """
@@ -1016,15 +832,20 @@ class ForecasterModule(pl.LightningModule):
         # 1. Broad namespace remap: for pre-refactor checkpoints
         # The old ``ARModel`` was a flat LightningModule. Everything that
         # belonged to the predictor needs to be moved to
-        # 'forecaster.predictor.'
+        # 'forecaster.predictor.', while 'per_var_std' (now owned by the
+        # forecaster itself) moves to 'forecaster.per_var_std' and
+        # 'interior_mask_bool' (still owned by the module) stays as-is.
         old_keys = list(loaded_state_dict.keys())
         for key in old_keys:
-            if not key.startswith("forecaster.") and key not in (
-                "interior_mask_bool",
-                "per_var_std",
-            ):
-                new_key = f"forecaster.predictor.{key}"
-                loaded_state_dict[new_key] = loaded_state_dict.pop(key)
+            if key.startswith("forecaster.") or key == "interior_mask_bool":
+                continue
+            if key == "per_var_std":
+                loaded_state_dict["forecaster.per_var_std"] = (
+                    loaded_state_dict.pop(key)
+                )
+                continue
+            new_key = f"forecaster.predictor.{key}"
+            loaded_state_dict[new_key] = loaded_state_dict.pop(key)
 
         # 2. Specific rename from g2m_gnn.grid_mlp -> encoding_grid_mlp
         # Will be under forecaster.predictor due to the remap above, or

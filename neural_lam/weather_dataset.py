@@ -471,7 +471,7 @@ class WeatherDataset(torch.utils.data.Dataset):
         target states, forcing and batch times.
 
         The returned data is unstandardized; normalization is applied on-device
-        in `ForecasterModule.on_after_batch_transfer`.
+        in `BaseForecasterModule.on_after_batch_transfer`.
 
         Parameters
         ----------

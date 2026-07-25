@@ -73,7 +73,7 @@ def _build_model_and_data(
         output_clamping_upper=config.training.output_clamping.upper,
         **gnn_kwargs,
     )
-    forecaster = ARForecaster(predictor, datastore)
+    forecaster = ARForecaster(predictor, datastore, config=config)
 
     B = 2
     num_grid_nodes = predictor.num_grid_nodes
