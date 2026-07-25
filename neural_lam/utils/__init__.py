@@ -10,7 +10,7 @@ from .graph import (
 )
 from .heterodata import (
     graph_dict_to_heterodata,
-    heterodata_to_graph_dict,
+    graph_tensors_from_heterodata,
 )
 from .logging import (
     init_training_logger_metrics,
@@ -27,8 +27,8 @@ __all__ = [
     "fractional_plot_bundle",
     "get_integer_time",
     "graph_dict_to_heterodata",
+    "graph_tensors_from_heterodata",
     "has_working_latex",
-    "heterodata_to_graph_dict",
     "init_training_logger_metrics",
     "inverse_sigmoid",
     "inverse_softplus",

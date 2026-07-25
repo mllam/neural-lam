@@ -116,11 +116,12 @@ class BaseGraphModel(StepPredictor):
             mesh_node_features_scaling=grid_xy_max_span,
         )
 
-        # Optionally represent the graph as a pyg.HeteroData object and take
-        # the model's graph tensors from it, so that everywhere the graph is
-        # used the data now originates from the HeteroData datastructure
-        # (issue #385). The extracted tensors are identical to the dict ones,
-        # so the model builds and trains identically either way.
+        # Optionally represent the graph as a pyg.HeteroData object (issue
+        # #385). The loaded tensors are placed on the typed node/edge stores
+        # of that object, and every graph tensor the model uses below is then
+        # read back out of it, so the HeteroData is the source of the graph
+        # data. The tensors themselves are unchanged, so the model builds and
+        # trains identically either way.
         self.use_heterodata = use_heterodata
         if use_heterodata:
             if self.hierarchical:
@@ -132,7 +133,7 @@ class BaseGraphModel(StepPredictor):
                 graph_ldict,
                 num_grid_nodes=self.num_grid_nodes,
             )
-            graph_ldict = utils.heterodata_to_graph_dict(self.graph)
+            graph_ldict = utils.graph_tensors_from_heterodata(self.graph)
 
         for name, attr_value in graph_ldict.items():
             # Make BufferLists module members and register tensors as buffers

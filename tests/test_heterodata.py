@@ -2,7 +2,7 @@
 
 Two layers of testing:
 
-- unit tests on ``graph_dict_to_heterodata`` / ``heterodata_to_graph_dict``
+- unit tests on ``graph_dict_to_heterodata`` / ``graph_tensors_from_heterodata``
   with small hand-built tensor-dicts (no datastore/model needed);
 - a model-level equivalence test showing that a ``GraphLAM`` built with
   ``use_heterodata=True`` is identical to one built the existing way, both in
@@ -22,7 +22,7 @@ from neural_lam.create_graph import create_graph_from_datastore
 from neural_lam.models import GraphLAM
 from neural_lam.utils import (
     graph_dict_to_heterodata,
-    heterodata_to_graph_dict,
+    graph_tensors_from_heterodata,
 )
 from neural_lam.utils.buffer_list import BufferList
 from neural_lam.utils.heterodata import (
@@ -132,7 +132,7 @@ def test_builder_roundtrip_is_exact():
     """dict -> HeteroData -> dict reproduces the original tensor-dict."""
     graph_dict = _flat_graph_dict()
     graph = graph_dict_to_heterodata(graph_dict, num_grid_nodes=6)
-    restored = heterodata_to_graph_dict(graph)
+    restored = graph_tensors_from_heterodata(graph)
 
     assert set(restored.keys()) == _GRAPH_DICT_KEYS
     for key in _GRAPH_DICT_KEYS:
@@ -170,7 +170,7 @@ def test_builder_rejects_hierarchical():
         )
     graph = graph_dict_to_heterodata(graph_dict, num_grid_nodes=6)
     with pytest.raises(NotImplementedError):
-        heterodata_to_graph_dict(graph, hierarchical=True)
+        graph_tensors_from_heterodata(graph, hierarchical=True)
 
 
 def _build_graphlam(datastore, graph_name, use_heterodata):

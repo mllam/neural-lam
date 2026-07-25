@@ -8,6 +8,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [unreleased](https://github.com/mllam/neural-lam/compare/v0.6.0...HEAD)
 
 ### Added
+- Add `neural_lam.utils.heterodata` for representing the loaded graph as a
+  `pyg.HeteroData` object, with grid nodes as the `grid` node type, mesh nodes
+  as the `mesh` node type and `g2m`/`m2m`/`m2g` as typed edges.
+  `BaseGraphModel` reads its graph tensors out of that object when constructed
+  with `use_heterodata=True` (default `False`), which leaves the model's
+  behaviour, and therefore training, unchanged. Flat (non-hierarchical) graphs
+  only. [\#711](https://github.com/mllam/neural-lam/pull/711) @prajwal-tech07
+
 - Add `--num_sanity_val_steps` CLI argument to control sanity validation steps before training (#694)
 
 - Add `--train_steps_to_log` CLI option to log training loss for individual unroll steps, and deduplicate common prediction and loss computation steps across loops [\#674](https://github.com/mllam/neural-lam/issues/674) @GiGiKoneti

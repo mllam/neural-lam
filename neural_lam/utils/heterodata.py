@@ -106,18 +106,19 @@ def graph_dict_to_heterodata(
     return graph
 
 
-def heterodata_to_graph_dict(
+def graph_tensors_from_heterodata(
     graph: HeteroData,
     hierarchical: bool = False,
 ) -> Dict[str, Any]:
-    """Reconstruct a neural-lam graph tensor-dict from a ``HeteroData``.
+    """Read the model's graph tensors out of a ``HeteroData`` object.
 
-    Inverse of :func:`graph_dict_to_heterodata`. The returned dictionary has
-    the exact structure that :func:`neural_lam.utils.load_graph` produces for
-    a flat graph, so it can be consumed by the model unpacking logic
-    unchanged: single tensors for the mesh/edge entries and empty
-    :class:`~neural_lam.utils.buffer_list.BufferList` objects for the
-    (unused) hierarchical up/down entries.
+    This is how the model obtains its graph tensors when it represents the
+    graph as a ``HeteroData``: every tensor is looked up on the typed
+    node/edge stores of ``graph``. They are returned under the names the
+    model refers to them by (the same names
+    :func:`neural_lam.utils.load_graph` uses), so only the *source* of the
+    tensors changes, not the rest of the model's setup. It is also the exact
+    inverse of :func:`graph_dict_to_heterodata`.
 
     Parameters
     ----------
@@ -130,7 +131,7 @@ def heterodata_to_graph_dict(
     Returns
     -------
     dict
-        Graph tensor-dict with the same 11 keys as
+        The model's graph tensors, keyed by the names used in
         :func:`neural_lam.utils.load_graph`.
 
     Raises
@@ -140,7 +141,7 @@ def heterodata_to_graph_dict(
     """
     if hierarchical:
         raise NotImplementedError(
-            "heterodata_to_graph_dict currently supports only flat "
+            "graph_tensors_from_heterodata currently supports only flat "
             "(single-level) graphs; hierarchical support is a follow-up."
         )
 
