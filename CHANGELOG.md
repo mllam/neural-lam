@@ -20,7 +20,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the `HiLAM`/`HiLAMParallel` models. Each mesh level becomes its own node type
   (`mesh_0` .. `mesh_{L-1}`), with intra-level edges per level and `up`/`down`
   edges between neighbouring levels.
-  @prajwal-tech07
+  [\#713](https://github.com/mllam/neural-lam/pull/713) @prajwal-tech07
 
 - Add `--num_sanity_val_steps` CLI argument to control sanity validation steps before training (#694)
 
