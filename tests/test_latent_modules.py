@@ -205,21 +205,15 @@ def test_graph_decoder_shapes_with_output_std(
     latent_samples = torch.randn(
         B, flat_dims["num_mesh"], flat_dims["latent_dim"]
     )
-    last_state = torch.randn(
-        B, flat_dims["num_grid"], flat_dims["num_state_vars"]
-    )
-
-    pred_mean, pred_std = dec(
-        grid_rep, latent_samples, last_state, flat_graph_emb
-    )
+    mean_delta, pred_std = dec(grid_rep, latent_samples, flat_graph_emb)
 
     expected_shape = (B, flat_dims["num_grid"], flat_dims["num_state_vars"])
-    assert pred_mean.shape == expected_shape
+    assert mean_delta.shape == expected_shape
     assert pred_std is not None
     assert pred_std.shape == expected_shape
     assert (pred_std > 0).all()
 
-    (pred_mean.sum() + pred_std.sum()).backward()
+    (mean_delta.sum() + pred_std.sum()).backward()
     _assert_every_param_has_grad(dec)
 
 
@@ -242,14 +236,8 @@ def test_graph_decoder_no_output_std_returns_none(
     latent_samples = torch.randn(
         B, flat_dims["num_mesh"], flat_dims["latent_dim"]
     )
-    last_state = torch.randn(
-        B, flat_dims["num_grid"], flat_dims["num_state_vars"]
-    )
-
-    pred_mean, pred_std = dec(
-        grid_rep, latent_samples, last_state, flat_graph_emb
-    )
-    assert pred_mean.shape == (
+    mean_delta, pred_std = dec(grid_rep, latent_samples, flat_graph_emb)
+    assert mean_delta.shape == (
         B,
         flat_dims["num_grid"],
         flat_dims["num_state_vars"],
@@ -296,11 +284,8 @@ def test_flat_modules_zero_m2m_layers_skip_processing(
     latent_samples = torch.randn(
         B, flat_dims["num_mesh"], flat_dims["latent_dim"]
     )
-    last_state = torch.randn(
-        B, flat_dims["num_grid"], flat_dims["num_state_vars"]
-    )
-    pred_mean, _ = dec(grid_rep, latent_samples, last_state, flat_graph_emb)
-    assert pred_mean.shape == (
+    mean_delta, _ = dec(grid_rep, latent_samples, flat_graph_emb)
+    assert mean_delta.shape == (
         B,
         flat_dims["num_grid"],
         flat_dims["num_state_vars"],
@@ -400,13 +385,9 @@ def test_hi_graph_decoder_shape_back_to_grid(hi_dims, hi_edges, hi_graph_emb):
     top_n = hi_dims["mesh_per_level"][-1]
     grid_rep = torch.randn(B, hi_dims["num_grid"], hi_dims["hidden_dim"])
     latent_samples = torch.randn(B, top_n, hi_dims["latent_dim"])
-    last_state = torch.randn(B, hi_dims["num_grid"], hi_dims["num_state_vars"])
-
-    pred_mean, pred_std = dec(
-        grid_rep, latent_samples, last_state, hi_graph_emb
-    )
+    mean_delta, pred_std = dec(grid_rep, latent_samples, hi_graph_emb)
     expected_shape = (B, hi_dims["num_grid"], hi_dims["num_state_vars"])
-    assert pred_mean.shape == expected_shape
+    assert mean_delta.shape == expected_shape
     assert pred_std.shape == expected_shape
     assert (pred_std > 0).all()
 
@@ -465,13 +446,11 @@ def test_hi_graph_decoder_three_levels():
     grid_rep = torch.randn(B, num_grid, d_h)
     top_n = mesh_per_level[-1]
     latent_samples = torch.randn(B, top_n, latent_dim)
-    last_state = torch.randn(B, num_grid, num_state_vars)
-
-    pred_mean, pred_std = dec(grid_rep, latent_samples, last_state, graph_emb)
-    assert pred_mean.shape == (B, num_grid, num_state_vars)
+    mean_delta, pred_std = dec(grid_rep, latent_samples, graph_emb)
+    assert mean_delta.shape == (B, num_grid, num_state_vars)
     assert pred_std.shape == (B, num_grid, num_state_vars)
 
-    (pred_mean.sum() + pred_std.sum()).backward()
+    (mean_delta.sum() + pred_std.sum()).backward()
     _assert_every_param_has_grad(dec)
 
 
@@ -549,13 +528,9 @@ def test_hi_graph_decoder_zero_intra_layers(hi_dims, hi_edges, hi_graph_emb):
     top_n = hi_dims["mesh_per_level"][-1]
     grid_rep = torch.randn(B, hi_dims["num_grid"], hi_dims["hidden_dim"])
     latent_samples = torch.randn(B, top_n, hi_dims["latent_dim"])
-    last_state = torch.randn(B, hi_dims["num_grid"], hi_dims["num_state_vars"])
-
-    pred_mean, pred_std = dec(
-        grid_rep, latent_samples, last_state, hi_graph_emb
-    )
+    mean_delta, pred_std = dec(grid_rep, latent_samples, hi_graph_emb)
     expected_shape = (B, hi_dims["num_grid"], hi_dims["num_state_vars"])
-    assert pred_mean.shape == expected_shape
+    assert mean_delta.shape == expected_shape
     assert pred_std.shape == expected_shape
 
 

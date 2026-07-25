@@ -10,12 +10,12 @@ from neural_lam import utils
 class BaseGraphLatentDecoder(nn.Module):
     """
     Abstract decoder mapping a grid representation plus a latent sample on
-    mesh to the parameters of the next-state distribution on the grid.
+    mesh to the next-state increment (and optionally std) on the grid.
 
     Subclasses implement :meth:`combine_with_latent`, which fuses the latent
     representation with the grid representation. The resulting features are
-    mapped to either ``num_state_vars`` outputs (mean only) or
-    ``2 * num_state_vars`` outputs (mean, std) depending on
+    mapped to either ``num_state_vars`` outputs (mean increment only) or
+    ``2 * num_state_vars`` outputs (mean increment, std) depending on
     ``output_std``.
     """
 
@@ -107,14 +107,15 @@ class BaseGraphLatentDecoder(nn.Module):
         """
         raise NotImplementedError("combine_with_latent not implemented")
 
-    def forward(self, grid_rep, latent_samples, last_state, graph_emb):
+    def forward(self, grid_rep, latent_samples, graph_emb):
         """
-        Predict mean (and optionally std) of the next weather state.
+        Predict the next-state increment (and optionally std).
 
         The latent samples are embedded to the internal dimensionality and
         fused with the grid representation by ``combine_with_latent``; the
-        result is mapped to distribution parameters. The mean is predicted
-        as a residual on top of ``last_state``.
+        result is mapped to distribution parameters. The predicted mean is an
+        increment relative to the current state, which the caller adds onto
+        the current state (and clamps).
 
         Parameters
         ----------
@@ -125,10 +126,6 @@ class BaseGraphLatentDecoder(nn.Module):
             Shape ``(B, num_mesh_nodes, latent_dim)``. Sample of the
             latent variable on the mesh nodes, e.g. drawn from the prior
             or the variational distribution.
-        last_state : torch.Tensor
-            Shape ``(B, num_grid_nodes, num_state_vars)``. State at the
-            current time step, used as the base of the residual mean
-            prediction.
         graph_emb : dict
             Embedded static graph node and edge features, forwarded to
             ``combine_with_latent``; includes at least the ``g2m``,
@@ -136,9 +133,9 @@ class BaseGraphLatentDecoder(nn.Module):
 
         Returns
         -------
-        pred_mean : torch.Tensor
-            Shape ``(B, num_grid_nodes, num_state_vars)``. Predicted mean
-            of the next state.
+        mean_delta : torch.Tensor
+            Shape ``(B, num_grid_nodes, num_state_vars)``. Predicted
+            increment of the next state relative to the current state.
         pred_std : torch.Tensor or None
             Shape ``(B, num_grid_nodes, num_state_vars)`` when
             ``output_std`` is True, otherwise None. Predicted std of the
@@ -171,6 +168,4 @@ class BaseGraphLatentDecoder(nn.Module):
             mean_delta = state_params
             pred_std = None
 
-        pred_mean = last_state + mean_delta
-
-        return pred_mean, pred_std
+        return mean_delta, pred_std

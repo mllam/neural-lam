@@ -171,9 +171,8 @@ class BaseGraphEFM(StepPredictor):
         self.g2m_embedder = utils.make_mlp([g2m_dim] + self.mlp_blueprint_end)
         self.m2g_embedder = utils.make_mlp([m2g_dim] + self.mlp_blueprint_end)
 
-        # Compute indices and define clamping functions. GraphEFM's forward
-        # never clamps (the decoder outputs the full next state), so these are
-        # inert -- accepted for interface parity with other StepPredictors.
+        # Compute indices and define the clamping functions applied to the
+        # predicted next-state mean in forward.
         self.prepare_clamping_params(datastore)
 
         # Prior over the latent variable. When learn_prior is True the
@@ -433,11 +432,14 @@ class BaseGraphEFM(StepPredictor):
         latent_samples = prior_dist.rsample()
         # (B, num_mesh_nodes, d_latent)
 
-        # Compute reconstruction (decoder). prev_state (X_t) is the state the
-        # decoder adds its predicted residual onto.
-        pred_mean, pred_std = self.decoder(
-            grid_prev_emb, latent_samples, prev_state, graph_emb
-        )  # (B, num_grid_nodes, d_state)
+        # Decode the latent into a state increment, then add it onto prev_state
+        # (X_t) and clamp to the valid range (a no-op when no clamping limits
+        # are configured), as for the deterministic models.
+        mean_delta, pred_std = self.decoder(
+            grid_prev_emb, latent_samples, graph_emb
+        )
+        pred_mean = self.get_clamped_new_state(mean_delta, prev_state)
+        # (B, num_grid_nodes, d_state)
 
         return pred_mean, pred_std
 

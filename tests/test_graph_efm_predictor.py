@@ -153,3 +153,39 @@ def test_graph_type_mismatch_raises(predictor_class, graph_name):
             hidden_dim=4,
             hidden_layers=1,
         )
+
+
+def test_forward_clamps_predicted_mean():
+    """With output clamping configured for a feature, forward keeps the
+    prediction for that feature within the configured bounds, clamping it
+    like the deterministic models do."""
+    datastore = _datastore_with_graph("1level")
+    state_names = datastore.get_vars_names(category="state")
+    lower, upper = -0.5, 0.5
+    predictor = GraphEFMMultiScale(
+        datastore=datastore,
+        graph_name="1level",
+        hidden_dim=4,
+        hidden_layers=1,
+        latent_dim=4,
+        prior_m2m_layers=1,
+        encoder_m2m_layers=1,
+        decoder_m2m_layers=1,
+        output_clamping_lower={state_names[0]: lower},
+        output_clamping_upper={state_names[0]: upper},
+    )
+    # The first state feature has a two-sided (sigmoid) clamp registered
+    assert predictor.clamp_lower_upper_idx.tolist() == [0]
+    lower_n = (lower - predictor.state_mean[0]) / predictor.state_std[0]
+    upper_n = (upper - predictor.state_mean[0]) / predictor.state_std[0]
+
+    prev_state, prev_prev_state, forcing, _ = _make_inputs(predictor, datastore)
+    # The current value of the clamped feature must be within its bounds so
+    # the inverse clamp is finite; the midpoint is a safe choice.
+    prev_state[..., 0] = (lower_n + upper_n) / 2
+
+    pred_mean, _ = predictor(prev_state, prev_prev_state, forcing)
+
+    clamped_feature = pred_mean[..., 0]
+    assert torch.all(clamped_feature > lower_n)
+    assert torch.all(clamped_feature < upper_n)
