@@ -230,10 +230,10 @@ class HiGraphLatentDecoder(BaseGraphLatentDecoder):
             )
         ):
             new_mesh_rep = current_mesh_rep
-            new_m2m_rep = graph_emb["m2m"][level]
+            new_m2m_rep = None
             if self.intra_up_gnns is not None:
                 new_mesh_rep, new_m2m_rep = self.intra_up_gnns[level](
-                    new_mesh_rep, new_m2m_rep
+                    new_mesh_rep, graph_emb["m2m"][level]
                 )
 
             # Saved for residual connections in the downward pass

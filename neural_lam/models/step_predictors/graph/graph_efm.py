@@ -755,8 +755,8 @@ class GraphEFM(BaseGraphEFM):
                 for emb, edge_feat in zip(self.m2m_embedders, self.m2m_features)
             ]
         else:
-            # Need a placeholder otherwise, just use raw features
-            mesh_emb["m2m"] = list(self.m2m_features)
+            # No intra-level GNNs consume these, so no embedding is produced
+            mesh_emb["m2m"] = []
 
         return mesh_emb
 

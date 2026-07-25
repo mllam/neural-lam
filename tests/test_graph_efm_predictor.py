@@ -189,3 +189,26 @@ def test_forward_clamps_predicted_mean():
     clamped_feature = pred_mean[..., 0]
     assert torch.all(clamped_feature > lower_n)
     assert torch.all(clamped_feature < upper_n)
+
+
+def test_hierarchical_zero_intra_level_layers_runs():
+    """A hierarchical GraphEFM with no intra-level layers uses an empty m2m
+    placeholder; forward must still run (regression for m2m handling)."""
+    datastore = _datastore_with_graph("hierarchical")
+    predictor = GraphEFM(
+        datastore=datastore,
+        graph_name="hierarchical",
+        hidden_dim=4,
+        hidden_layers=1,
+        latent_dim=4,
+        prior_intra_level_layers=0,
+        encoder_intra_level_layers=0,
+        decoder_intra_level_layers=0,
+    )
+    assert not predictor.embedd_m2m
+
+    prev_state, prev_prev_state, forcing, d_state = _make_inputs(
+        predictor, datastore
+    )
+    pred_mean, _ = predictor(prev_state, prev_prev_state, forcing)
+    assert pred_mean.shape == (2, predictor.num_grid_nodes, d_state)
