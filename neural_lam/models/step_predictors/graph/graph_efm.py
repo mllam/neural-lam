@@ -171,9 +171,8 @@ class BaseGraphEFM(StepPredictor):
         self.g2m_embedder = utils.make_mlp([g2m_dim] + self.mlp_blueprint_end)
         self.m2g_embedder = utils.make_mlp([m2g_dim] + self.mlp_blueprint_end)
 
-        # Compute indices and define clamping functions. GraphEFM's forward
-        # never clamps (the decoder outputs the full next state), so these are
-        # inert -- accepted for interface parity with other StepPredictors.
+        # Compute indices and define the clamping functions applied to the
+        # predicted next-state mean in step_distributions.
         self.prepare_clamping_params(datastore)
 
         # Prior over the latent variable. When learn_prior is True the
@@ -338,9 +337,9 @@ class BaseGraphEFM(StepPredictor):
         """
         raise NotImplementedError("embedd_mesh not implemented")
 
-    def embedd_grid_and_graph(self, prev_state, prev_prev_state, forcing):
+    def embedd_grid(self, prev_state, prev_prev_state, forcing):
         """
-        Embed the grid (states up to t-1) and the full graph.
+        Embed the grid representation of the states up to t-1.
 
         Parameters
         ----------
@@ -353,10 +352,8 @@ class BaseGraphEFM(StepPredictor):
 
         Returns
         -------
-        grid_emb : torch.Tensor
+        torch.Tensor
             Shape ``(B, num_grid_nodes, d_h)``. Grid embedding.
-        graph_emb : dict
-            Edge/mesh embeddings, each entry of shape ``(B, *, d_h)``.
         """
         batch_size = prev_state.shape[0]
 
@@ -370,13 +367,27 @@ class BaseGraphEFM(StepPredictor):
             dim=-1,
         )  # (B, num_grid_nodes, grid_dim)
 
-        grid_emb = self.grid_prev_embedder(grid_features)
+        return self.grid_prev_embedder(grid_features)
         # (B, num_grid_nodes, d_h)
 
-        # Graph embedding. NOTE: this block depends only on static graph
-        # features, so it is constant across an autoregressive rollout. It is
-        # kept as a self-contained block so a future embedd_graph()/
-        # embedd_grid() split (hoisting it out of the AR loop) is mechanical.
+    def embedd_graph(self, batch_size):
+        """
+        Embed the static grid-mesh edge and mesh graph features.
+
+        The embedding depends only on static graph features and is therefore
+        constant across an autoregressive rollout, unlike :meth:`embedd_grid`.
+
+        Parameters
+        ----------
+        batch_size : int
+            Batch size to expand the embeddings to.
+
+        Returns
+        -------
+        dict
+            Edge/mesh embeddings, each entry of shape ``(B, *, d_h)`` (``g2m``,
+            ``m2g`` and the entries added by :meth:`embedd_mesh`).
+        """
         graph_emb = {
             "g2m": self.expand_to_batch(
                 self.g2m_embedder(self.g2m_features), batch_size
@@ -387,7 +398,90 @@ class BaseGraphEFM(StepPredictor):
         }
         graph_emb.update(self.embedd_mesh(batch_size))
 
-        return grid_emb, graph_emb
+        return graph_emb
+
+    def step_distributions(
+        self,
+        prev_state,
+        prev_prev_state,
+        forcing,
+        graph_emb,
+        target_state=None,
+        compute_prior=True,
+    ):
+        """
+        Compute the latent distributions and next-state prediction for a step.
+
+        Embeds the grid, then draws the latent either from the variational
+        posterior (when ``target_state`` is given -- the training path) or
+        from the prior (inference), and decodes that sample into the
+        next-state mean (and, when ``output_std``, std) as a residual on
+        ``prev_state``.
+
+        Parameters
+        ----------
+        prev_state : torch.Tensor
+            Shape ``(B, num_grid_nodes, d_state)``. ``X_t``.
+        prev_prev_state : torch.Tensor
+            Shape ``(B, num_grid_nodes, d_state)``. ``X_{t-1}``.
+        forcing : torch.Tensor
+            Shape ``(B, num_grid_nodes, d_forcing)``.
+        graph_emb : dict
+            Static graph embedding as returned by :meth:`embedd_graph`.
+        target_state : torch.Tensor, optional
+            Shape ``(B, num_grid_nodes, d_state)``. Target ``X_{t+1}``. When
+            given, the latent is sampled from the variational posterior
+            conditioned on it; when None, from the prior.
+        compute_prior : bool
+            On the posterior (training) path, whether to also compute the
+            prior distribution (needed for a KL term). Ignored on the
+            inference path, where the prior is always computed since it is the
+            sampling distribution.
+
+        Returns
+        -------
+        prior_dist : torch.distributions.Normal or None
+            The prior over the latent, or None on the posterior path when
+            ``compute_prior`` is False.
+        posterior_dist : torch.distributions.Normal or None
+            The variational posterior over the latent, or None on the
+            inference path (``target_state`` is None).
+        pred_mean : torch.Tensor
+            Shape ``(B, num_grid_nodes, d_state)``. Decoder mean of
+            ``X_{t+1}``.
+        pred_std : torch.Tensor or None
+            Shape ``(B, num_grid_nodes, d_state)`` when ``output_std`` is True,
+            otherwise None.
+        """
+        grid_prev_emb = self.embedd_grid(prev_state, prev_prev_state, forcing)
+
+        prior_dist = None
+        posterior_dist = None
+        if target_state is not None:
+            grid_current_emb = self.embedd_grid_with_target(
+                prev_state, prev_prev_state, forcing, target_state
+            )
+            posterior_dist = self.encoder(grid_current_emb, graph_emb=graph_emb)
+            latent_samples = posterior_dist.rsample()
+            if compute_prior:
+                prior_dist = self.prior_model(
+                    grid_prev_emb, graph_emb=graph_emb
+                )
+        else:
+            prior_dist = self.prior_model(grid_prev_emb, graph_emb=graph_emb)
+            latent_samples = prior_dist.rsample()
+        # (B, num_mesh_nodes, d_latent)
+
+        # Decode the latent into a state increment, then add it onto prev_state
+        # (X_t) and clamp to the valid range (a no-op when no clamping limits
+        # are configured), as for the deterministic models.
+        mean_delta, pred_std = self.decoder(
+            grid_prev_emb, latent_samples, graph_emb
+        )
+        pred_mean = self.get_clamped_new_state(mean_delta, prev_state)
+        # (B, num_grid_nodes, d_state)
+
+        return prior_dist, posterior_dist, pred_mean, pred_std
 
     def forward(
         self,
@@ -396,10 +490,11 @@ class BaseGraphEFM(StepPredictor):
         forcing: torch.Tensor,
     ) -> tuple[torch.Tensor, Optional[torch.Tensor]]:
         """
-        Sample one time step prediction: embed features, sample the latent
-        from the prior, decode, and return the predicted next state. The
-        prediction is stochastic only through the latent sample; no
-        observation noise is added.
+        Sample one time step prediction from the prior.
+
+        Embeds the graph and grid, samples the latent from the prior, decodes
+        it and returns the predicted next state. The prediction is stochastic
+        only through the latent sample; no observation noise is added.
 
         Parameters
         ----------
@@ -419,26 +514,10 @@ class BaseGraphEFM(StepPredictor):
             Shape ``(B, num_grid_nodes, d_state)`` when ``output_std`` is True,
             otherwise None.
         """
-        # embed all features
-        grid_prev_emb, graph_emb = self.embedd_grid_and_graph(
-            prev_state, prev_prev_state, forcing
+        graph_emb = self.embedd_graph(prev_state.shape[0])
+        _, _, pred_mean, pred_std = self.step_distributions(
+            prev_state, prev_prev_state, forcing, graph_emb, target_state=None
         )
-
-        # Compute prior
-        prior_dist = self.prior_model(
-            grid_prev_emb, graph_emb=graph_emb
-        )  # (B, num_mesh_nodes, d_latent)
-
-        # Sample from prior
-        latent_samples = prior_dist.rsample()
-        # (B, num_mesh_nodes, d_latent)
-
-        # Compute reconstruction (decoder). prev_state (X_t) is the state the
-        # decoder adds its predicted residual onto.
-        pred_mean, pred_std = self.decoder(
-            grid_prev_emb, latent_samples, prev_state, graph_emb
-        )  # (B, num_grid_nodes, d_state)
-
         return pred_mean, pred_std
 
 
@@ -753,8 +832,8 @@ class GraphEFM(BaseGraphEFM):
                 for emb, edge_feat in zip(self.m2m_embedders, self.m2m_features)
             ]
         else:
-            # Need a placeholder otherwise, just use raw features
-            mesh_emb["m2m"] = list(self.m2m_features)
+            # No intra-level GNNs consume these, so no embedding is produced
+            mesh_emb["m2m"] = []
 
         return mesh_emb
 

@@ -3,6 +3,7 @@
 # Local
 from .forecasters.autoregressive import ARForecaster
 from .forecasters.base import Forecaster
+from .forecasters.graph_efm import GraphEFMForecaster
 from .forecasters.probabilistic import (
     ProbabilisticARForecaster,
     ProbabilisticForecaster,
@@ -18,15 +19,16 @@ from .step_predictors.graph.hi_lam import HiLAM
 from .step_predictors.graph.hi_lam_parallel import HiLAMParallel
 from .step_predictors.graph.hierarchical import BaseHiGraphModel
 
-# NOTE: GraphEFM/GraphEFMMultiScale are intentionally NOT registered in
-# MODELS yet.
-# The shared construction call in train_model.py instantiates the chosen
-# model with a fixed deterministic kwarg set -- datastore-first, no
-# ``config``, and with ``mesh_aggr`` -- whereas the Graph-EFM models require
-# ``config`` (for their per_var_std weighting) and take no ``mesh_aggr``.
-# Registering them requires config-aware model assembly in train_model.py.
+# Graph-EFM models are probabilistic: train_model.py builds them with a
+# config-aware, probabilistic assembly path (GraphEFMForecaster wrapped in a
+# ProbabilisticForecasterModule), distinct from the deterministic models
+# above. ``PROBABILISTIC_MODELS`` marks which entries take that path.
 MODELS = {
     "graph_lam": GraphLAM,
     "hi_lam": HiLAM,
     "hi_lam_parallel": HiLAMParallel,
+    "graph_efm": GraphEFM,
+    "graph_efm_ms": GraphEFMMultiScale,
 }
+
+PROBABILISTIC_MODELS = {"graph_efm", "graph_efm_ms"}

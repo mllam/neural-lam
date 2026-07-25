@@ -19,7 +19,14 @@ from loguru import logger
 from . import utils
 from .config import load_config_and_datastore
 from .gnn_layers import GNN_TYPES
-from .models import MODELS, ARForecaster, DeterministicForecasterModule
+from .models import (
+    MODELS,
+    PROBABILISTIC_MODELS,
+    ARForecaster,
+    DeterministicForecasterModule,
+    GraphEFMForecaster,
+    ProbabilisticForecasterModule,
+)
 from .weather_dataset import WeatherDataModule
 
 
@@ -38,39 +45,155 @@ class AdaptiveHelpFormatter(ArgumentDefaultsHelpFormatter):
         )
 
 
-def load_forecaster_module_from_checkpoint(ckpt_path, config, datastore):
+def build_predictor(args, config, datastore):
     """
-    Reconstruct a DeterministicForecasterModule from a checkpoint without
-    requiring the caller to know the original architecture kwargs.
+    Construct the step predictor for ``args.model``.
 
-    The checkpoint must have been saved with args in hyper_parameters (i.e.
-    created via train_model.main), so that model class and architecture kwargs
-    can be recovered automatically.
+    Graph-EFM models (see ``PROBABILISTIC_MODELS``) are latent-variable
+    predictors whose constructor differs from the deterministic graph
+    models: they take ``latent_dim``/``learn_prior``/``prior_dist`` and
+    per-graph-type latent layer counts instead of ``processor_layers`` and
+    ``mesh_aggr``. This function supplies the right kwargs for each.
+
+    Parameters
+    ----------
+    args : argparse.Namespace
+        Parsed command-line arguments (see ``main``).
+    config : NeuralLAMConfig
+        Loaded neural-lam configuration, for the output-clamping limits.
+    datastore : BaseDatastore
+        Datastore providing static features and variable counts.
+
+    Returns
+    -------
+    StepPredictor
+        The constructed step predictor.
     """
-    ckpt = torch.load(ckpt_path, weights_only=False)
-    args = ckpt["hyper_parameters"]["args"]
     predictor_class = MODELS[args.model]
-    predictor = predictor_class(
+    common_kwargs = dict(
         datastore=datastore,
         graph_name=args.graph,
         hidden_dim=args.hidden_dim,
         hidden_layers=args.hidden_layers,
-        processor_layers=args.processor_layers,
-        mesh_aggr=args.mesh_aggr,
         num_past_forcing_steps=args.num_past_forcing_steps,
         num_future_forcing_steps=args.num_future_forcing_steps,
         output_std=args.output_std,
         output_clamping_lower=config.training.output_clamping.lower,
         output_clamping_upper=config.training.output_clamping.upper,
+        g2m_gnn_type=args.g2m_gnn_type,
+        m2g_gnn_type=args.m2g_gnn_type,
     )
+
+    if args.model in PROBABILISTIC_MODELS:
+        prob = config.probabilistic
+        # Graph-EFM latent layer counts are named per graph type:
+        # intra-level for the hierarchical model, m2m for the flat one.
+        if args.model == "graph_efm":
+            layer_kwargs = dict(
+                prior_intra_level_layers=prob.prior_layers,
+                encoder_intra_level_layers=prob.encoder_layers,
+                decoder_intra_level_layers=prob.decoder_layers,
+            )
+        else:
+            layer_kwargs = dict(
+                prior_m2m_layers=prob.prior_layers,
+                encoder_m2m_layers=prob.encoder_layers,
+                decoder_m2m_layers=prob.decoder_layers,
+            )
+        return predictor_class(
+            **common_kwargs,
+            latent_dim=prob.latent_dim,
+            learn_prior=prob.learn_prior,
+            prior_dist=prob.prior_dist,
+            **layer_kwargs,
+        )
+
+    return predictor_class(
+        **common_kwargs,
+        processor_layers=args.processor_layers,
+        mesh_aggr=args.mesh_aggr,
+        mesh_up_gnn_type=args.mesh_up_gnn_type,
+        mesh_down_gnn_type=args.mesh_down_gnn_type,
+    )
+
+
+def build_forecaster_module(args, config, datastore, predictor):
+    """
+    Wrap a predictor in its forecaster and pick the Lightning module class.
+
+    Graph-EFM models are trained probabilistically (``GraphEFMForecaster``
+    optimizing the ELBO, evaluated as an ensemble by
+    ``ProbabilisticForecasterModule``); the other models use the
+    deterministic ``ARForecaster``/``DeterministicForecasterModule`` path.
+    The best-checkpoint monitor differs accordingly.
+
+    Parameters
+    ----------
+    args : argparse.Namespace
+        Parsed command-line arguments (see ``main``).
+    config : NeuralLAMConfig
+        Loaded neural-lam configuration.
+    datastore : BaseDatastore
+        Datastore providing grid metadata and boundary masks.
+    predictor : StepPredictor
+        The step predictor to wrap, as built by ``build_predictor``.
+
+    Returns
+    -------
+    forecaster : Forecaster
+        The forecaster wrapping ``predictor``.
+    module_class : type
+        The ``BaseForecasterModule`` subclass to instantiate.
+    module_kwargs : dict
+        Extra keyword arguments for ``module_class`` beyond the shared ones
+        (e.g. ``eval_ensemble_size`` for the probabilistic module).
+    val_monitor : str
+        Name of the validation metric to monitor for the best checkpoint.
+    """
+    if args.model in PROBABILISTIC_MODELS:
+        forecaster = GraphEFMForecaster(
+            predictor,
+            datastore,
+            config=config,
+            loss=args.loss,
+            kl_beta=config.probabilistic.kl_beta,
+        )
+        return (
+            forecaster,
+            ProbabilisticForecasterModule,
+            {"eval_ensemble_size": config.probabilistic.eval_ensemble_size},
+            "val_mean_ens_rmse",
+        )
+
     forecaster = ARForecaster(
         predictor, datastore, config=config, loss=args.loss
     )
-    return DeterministicForecasterModule.load_from_checkpoint(
+    return forecaster, DeterministicForecasterModule, {}, "val_mean_loss"
+
+
+def load_forecaster_module_from_checkpoint(ckpt_path, config, datastore):
+    """
+    Reconstruct a forecaster module from a checkpoint without requiring the
+    caller to know the original architecture kwargs.
+
+    The checkpoint must have been saved with args in hyper_parameters (i.e.
+    created via train_model.main), so that model class and architecture kwargs
+    can be recovered automatically. Deterministic and Graph-EFM
+    (probabilistic) checkpoints are both supported; the correct forecaster
+    and module class are chosen from ``args.model``.
+    """
+    ckpt = torch.load(ckpt_path, weights_only=False)
+    args = ckpt["hyper_parameters"]["args"]
+    predictor = build_predictor(args, config, datastore)
+    forecaster, module_class, module_kwargs, _ = build_forecaster_module(
+        args, config, datastore, predictor
+    )
+    return module_class.load_from_checkpoint(
         ckpt_path,
         forecaster=forecaster,
         datastore=datastore,
         weights_only=False,
+        **module_kwargs,
     )
 
 
@@ -212,6 +335,11 @@ def main(input_args=None):
         "models. Only affects Hi-LAM; the probabilistic Graph-EFM model "
         "hard-codes its mesh-down GNN type",
     )
+
+    # Probabilistic / Graph-EFM hyperparameters (latent_dim, kl_beta,
+    # eval_ensemble_size, ...) are not CLI flags: they live in the
+    # ``probabilistic`` section of the neural-lam config (see
+    # ``ProbabilisticConfig``), read by build_predictor/build_forecaster_module.
 
     # Training options
     train_group = parser.add_argument_group("Training Options")
@@ -461,31 +589,15 @@ def main(input_args=None):
         except ValueError:
             raise ValueError("devices should be 'auto' or a list of integers")
 
-    # Build predictor and forecaster externally, then inject into
-    # DeterministicForecasterModule
-    predictor_class = MODELS[args.model]
-    predictor = predictor_class(
-        datastore=datastore,
-        graph_name=args.graph,
-        hidden_dim=args.hidden_dim,
-        hidden_layers=args.hidden_layers,
-        processor_layers=args.processor_layers,
-        mesh_aggr=args.mesh_aggr,
-        num_past_forcing_steps=args.num_past_forcing_steps,
-        num_future_forcing_steps=args.num_future_forcing_steps,
-        output_std=args.output_std,
-        output_clamping_lower=config.training.output_clamping.lower,
-        output_clamping_upper=config.training.output_clamping.upper,
-        g2m_gnn_type=args.g2m_gnn_type,
-        m2g_gnn_type=args.m2g_gnn_type,
-        mesh_up_gnn_type=args.mesh_up_gnn_type,
-        mesh_down_gnn_type=args.mesh_down_gnn_type,
-    )
-    forecaster = ARForecaster(
-        predictor, datastore, config=config, loss=args.loss
+    # Build predictor and forecaster externally, then inject into the
+    # forecaster module. Graph-EFM models take a probabilistic assembly path
+    # (see build_predictor/build_forecaster_module); the others deterministic.
+    predictor = build_predictor(args, config, datastore)
+    forecaster, module_class, module_kwargs, val_monitor = (
+        build_forecaster_module(args, config, datastore, predictor)
     )
 
-    model = DeterministicForecasterModule(
+    model = module_class(
         forecaster=forecaster,
         config=config,
         datastore=datastore,
@@ -498,6 +610,7 @@ def main(input_args=None):
         metrics_watch=args.metrics_watch,
         var_leads_metrics_watch=args.var_leads_metrics_watch,
         args=args,
+        **module_kwargs,
     )
 
     if args.eval:
@@ -525,8 +638,8 @@ def main(input_args=None):
     # checkpoint instead of losing all progress since the last validation.
     val_checkpoint = pl.callbacks.ModelCheckpoint(
         dirpath=os.path.join(run_dir, "checkpoints"),
-        filename="min_val_loss",
-        monitor="val_mean_loss",
+        filename=f"min_{val_monitor}",
+        monitor=val_monitor,
         mode="min",
         save_top_k=1,
         save_on_train_epoch_end=False,
@@ -540,11 +653,19 @@ def main(input_args=None):
         save_on_train_epoch_end=True,
         enable_version_counter=False,
     )
+    # With kl_beta == 0 the Graph-EFM prior network is never used in the loss,
+    # so multi-device DDP must be told to expect unused parameters.
+    strategy = (
+        "ddp_find_unused_parameters_true"
+        if args.model in PROBABILISTIC_MODELS
+        and config.probabilistic.kl_beta == 0
+        else "auto"
+    )
     trainer = pl.Trainer(
         max_epochs=args.epochs,
         deterministic=True,
         default_root_dir=run_dir,
-        strategy="auto",
+        strategy=strategy,
         accelerator=device_name,
         num_nodes=args.num_nodes,
         devices=devices,

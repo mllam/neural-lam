@@ -3,7 +3,7 @@
 # Standard library
 import dataclasses
 from pathlib import Path
-from typing import Dict, Union
+from typing import Dict, Optional, Union
 
 # Third-party
 import dataclass_wizard
@@ -117,6 +117,49 @@ class TrainingConfig:
 
 
 @dataclasses.dataclass
+class ProbabilisticConfig:
+    """
+    Configuration for the probabilistic (Graph-EFM) models.
+
+    Only used when training or evaluating a probabilistic model
+    (``--model graph_efm``/``graph_efm_ms``); ignored otherwise. Every field
+    has a default, so the ``probabilistic`` config section may be omitted
+    entirely for deterministic models.
+
+    Attributes
+    ----------
+    latent_dim : int, optional
+        Dimensionality of the latent variable at each latent-carrying mesh
+        node. Defaults to the model's ``hidden_dim`` when None.
+    prior_layers : int
+        Number of on-mesh GNN layers in the prior.
+    encoder_layers : int
+        Number of on-mesh GNN layers in the variational encoder.
+    decoder_layers : int
+        Number of on-mesh GNN layers in the latent decoder.
+    learn_prior : bool
+        If True, the prior is a learned encoder conditioned on the previous
+        state; if False, a constant ``Normal(0, 1)`` prior is used.
+    prior_dist : str
+        Output distribution of the prior: ``"isotropic"`` or ``"diagonal"``.
+    kl_beta : float
+        Weight of the KL term in the ELBO. When 0, the prior and KL are not
+        computed (pure auto-encoder training).
+    eval_ensemble_size : int
+        Number of ensemble members sampled during validation and testing.
+    """
+
+    latent_dim: Optional[int] = None
+    prior_layers: int = 2
+    encoder_layers: int = 2
+    decoder_layers: int = 4
+    learn_prior: bool = True
+    prior_dist: str = "isotropic"
+    kl_beta: float = 1.0
+    eval_ensemble_size: int = 5
+
+
+@dataclasses.dataclass
 class NeuralLAMConfig(dataclass_wizard.JSONWizard, dataclass_wizard.YAMLWizard):
     """
     Configuration for the Neural-LAM model and training pipeline.
@@ -133,10 +176,16 @@ class NeuralLAMConfig(dataclass_wizard.JSONWizard, dataclass_wizard.YAMLWizard):
     training : TrainingConfig
         Configuration for training the model, including loss function and
         feature-weighting strategy. Defaults to ``TrainingConfig()``.
+    probabilistic : ProbabilisticConfig
+        Configuration for the probabilistic (Graph-EFM) models. Defaults to
+        ``ProbabilisticConfig()`` and is ignored by deterministic models.
     """
 
     datastore: DatastoreSelection
     training: TrainingConfig = dataclasses.field(default_factory=TrainingConfig)
+    probabilistic: ProbabilisticConfig = dataclasses.field(
+        default_factory=ProbabilisticConfig
+    )
 
     class _(dataclass_wizard.JSONWizard.Meta):
         """
