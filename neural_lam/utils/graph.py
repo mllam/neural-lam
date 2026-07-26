@@ -37,8 +37,8 @@ def zero_index_m2g(
     m2g_edge_index: torch.Tensor,
     mesh_static_features: list[torch.Tensor],
     mesh_first: bool,
-    num_grid_nodes: int | None = None,
     restore: bool = False,
+    num_grid_nodes: int | None = None,
 ) -> torch.Tensor:
     """
     Zero-index the m2g (mesh-to-grid) edge index, or undo this operation.
@@ -53,10 +53,10 @@ def zero_index_m2g(
         Mesh node feature tensors.
     mesh_first : bool
         If True, mesh nodes are indexed before grid nodes.
-    num_grid_nodes : int, optional
-        The true number of grid nodes in the datastore.
     restore : bool
         If True, undo zero-indexing (restore original indices).
+    num_grid_nodes : int, optional
+        The true number of grid nodes in the datastore.
 
     Returns
     -------
@@ -98,8 +98,8 @@ def zero_index_g2m(
     g2m_edge_index: torch.Tensor,
     mesh_static_features: list[torch.Tensor],
     mesh_first: bool,
-    num_grid_nodes: int | None = None,
     restore: bool = False,
+    num_grid_nodes: int | None = None,
 ) -> torch.Tensor:
     """
     Zero-index the g2m (grid-to-mesh) edge index, or undo this operation.
@@ -114,10 +114,10 @@ def zero_index_g2m(
         Mesh node feature tensors.
     mesh_first : bool
         If True, mesh nodes are indexed before grid nodes.
-    num_grid_nodes : int, optional
-        The true number of grid nodes in the datastore.
     restore : bool
         If True, undo zero-indexing (restore original indices).
+    num_grid_nodes : int, optional
+        The true number of grid nodes in the datastore.
 
     Returns
     -------
