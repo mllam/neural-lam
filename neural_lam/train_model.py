@@ -72,9 +72,8 @@ def load_forecaster_module_from_checkpoint(ckpt_path, config, datastore):
     )
 
 
-@logger.catch
-def main(input_args=None):
-    """Main function for training and evaluating models."""
+def build_parser():
+    """Build the argument parser for training and evaluating models."""
     parser = ArgumentParser(
         description="Train or evaluate MLWP models for LAM",
         formatter_class=AdaptiveHelpFormatter,
@@ -368,7 +367,11 @@ def main(input_args=None):
             "ensemble members as independent samples."
         ),
     )
-    args = parser.parse_args(input_args)
+    return parser
+
+
+def run(args, config=None, datastore=None):
+    """Run the training or evaluation loop."""
     args.var_leads_metrics_watch = {
         int(k): v for k, v in json.loads(args.var_leads_metrics_watch).items()
     }
@@ -408,7 +411,12 @@ def main(input_args=None):
     seed.seed_everything(args.seed)
 
     # Load neural-lam configuration and datastore to use
-    config, datastore = load_config_and_datastore(config_path=args.config_path)
+    if config is None or datastore is None:
+        loaded_config, loaded_datastore = load_config_and_datastore(
+            config_path=args.config_path
+        )
+        config = config or loaded_config
+        datastore = datastore or loaded_datastore
 
     # Check --var_leads_metrics_watch variable indices against the datastore
     # so users get an immediate error instead of an IndexError deep in the
@@ -457,23 +465,26 @@ def main(input_args=None):
     # Build predictor and forecaster externally, then inject into
     # ForecasterModule
     predictor_class = MODELS[args.model]
-    predictor = predictor_class(
-        datastore=datastore,
-        graph_name=args.graph,
-        hidden_dim=args.hidden_dim,
-        hidden_layers=args.hidden_layers,
-        processor_layers=args.processor_layers,
-        mesh_aggr=args.mesh_aggr,
-        num_past_forcing_steps=args.num_past_forcing_steps,
-        num_future_forcing_steps=args.num_future_forcing_steps,
-        output_std=args.output_std,
-        output_clamping_lower=config.training.output_clamping.lower,
-        output_clamping_upper=config.training.output_clamping.upper,
-        g2m_gnn_type=args.g2m_gnn_type,
-        m2g_gnn_type=args.m2g_gnn_type,
-        mesh_up_gnn_type=args.mesh_up_gnn_type,
-        mesh_down_gnn_type=args.mesh_down_gnn_type,
-    )
+    predictor_kwargs = {
+        "datastore": datastore,
+        "graph_name": args.graph,
+        "hidden_dim": args.hidden_dim,
+        "hidden_layers": args.hidden_layers,
+        "processor_layers": args.processor_layers,
+        "mesh_aggr": args.mesh_aggr,
+        "num_past_forcing_steps": args.num_past_forcing_steps,
+        "num_future_forcing_steps": args.num_future_forcing_steps,
+        "output_std": args.output_std,
+        "output_clamping_lower": config.training.output_clamping.lower,
+        "output_clamping_upper": config.training.output_clamping.upper,
+        "g2m_gnn_type": args.g2m_gnn_type,
+        "m2g_gnn_type": args.m2g_gnn_type,
+    }
+    if args.model != "graph_lam":
+        predictor_kwargs["mesh_up_gnn_type"] = args.mesh_up_gnn_type
+        predictor_kwargs["mesh_down_gnn_type"] = args.mesh_down_gnn_type
+
+    predictor = predictor_class(**predictor_kwargs)
     forecaster = ARForecaster(predictor, datastore)
 
     model = ForecasterModule(
@@ -559,8 +570,31 @@ def main(input_args=None):
             datamodule=data_module,
             ckpt_path=args.load,
         )
+        checkpoint_path = args.load
     else:
         trainer.fit(model=model, datamodule=data_module, ckpt_path=args.load)
+        checkpoint_path = val_checkpoint.best_model_path or os.path.join(
+            run_dir, "checkpoints", "min_val_loss.ckpt"
+        )
+
+    # Standard library
+    from pathlib import Path
+
+    # Local
+    from .api import Run
+
+    return Run(
+        run_dir=Path(run_dir),
+        checkpoint_path=Path(checkpoint_path) if checkpoint_path else None,
+    )
+
+
+@logger.catch
+def main(input_args=None):
+    """Main function for training and evaluating models."""
+    parser = build_parser()
+    args = parser.parse_args(input_args)
+    run(args)
 
 
 if __name__ == "__main__":
