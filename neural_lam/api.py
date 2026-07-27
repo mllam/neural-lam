@@ -19,6 +19,21 @@ class Run:
     run_dir: Path
     checkpoint_path: Path
 
+    @property
+    def plot_dir(self) -> Path:
+        """Directory containing generated plots."""
+        return self.run_dir / "plots"
+
+    @property
+    def example_plots(self) -> Path:
+        """Directory containing example evaluation plots."""
+        return self.plot_dir / "example_plots"
+
+    @property
+    def rmse_plot(self) -> Path:
+        """Path to the generated RMSE map plot."""
+        return self.plot_dir / "rmse.png"
+
 
 def _inject_signature(target_func: Callable, parser_func: Callable) -> None:
     """
