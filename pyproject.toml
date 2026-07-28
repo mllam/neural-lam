@@ -38,7 +38,7 @@ dependencies = [
     "boto3>=1.35.32",
     "nvidia-ml-py>=13.580.82",
     "pillow>=9.0.0",
-    "weather-model-graphs",
+    "weather-model-graphs>=0.4.0",
 ]
 requires-python = ">=3.10"
 
@@ -85,7 +85,6 @@ torch = [
     { index = "pytorch-cu130", extra = "gpu" },
     { index = "pytorch-cu128", extra = "gpu-cu128" },
 ]
-weather-model-graphs = { git = "https://github.com/prajwal-tech07/weather-model-graphs", rev = "issue-384/to-neural-lam" }
 
 [tool.black]
 line-length = 80

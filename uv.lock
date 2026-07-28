@@ -2659,7 +2659,7 @@ requires-dist = [
     { name = "torch-geometric", specifier = "==2.3.1" },
     { name = "tueplots", specifier = ">=0.0.8" },
     { name = "wandb", specifier = ">=0.13.10" },
-    { name = "weather-model-graphs", git = "https://github.com/prajwal-tech07/weather-model-graphs?rev=issue-384%2Fto-neural-lam" },
+    { name = "weather-model-graphs", specifier = ">=0.4.0" },
 ]
 provides-extras = ["cpu", "gpu", "gpu-cu128"]
 
@@ -5569,8 +5569,8 @@ wheels = [
 
 [[package]]
 name = "weather-model-graphs"
-version = "0.3.0"
-source = { git = "https://github.com/prajwal-tech07/weather-model-graphs?rev=issue-384%2Fto-neural-lam#23fb3058b639935d3e59469b923138798dd4f841" }
+version = "0.4.0"
+source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "loguru" },
     { name = "networkx", version = "3.4.2", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11' or (extra == 'extra-10-neural-lam-cpu' and extra == 'extra-10-neural-lam-gpu') or (extra == 'extra-10-neural-lam-cpu' and extra == 'extra-10-neural-lam-gpu-cu128') or (extra == 'extra-10-neural-lam-gpu' and extra == 'extra-10-neural-lam-gpu-cu128')" },
@@ -5581,6 +5581,9 @@ dependencies = [
     { name = "pyproj", version = "3.7.2", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.11' or (extra == 'extra-10-neural-lam-cpu' and extra == 'extra-10-neural-lam-gpu') or (extra == 'extra-10-neural-lam-cpu' and extra == 'extra-10-neural-lam-gpu-cu128') or (extra == 'extra-10-neural-lam-gpu' and extra == 'extra-10-neural-lam-gpu-cu128')" },
     { name = "scipy", version = "1.15.3", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11' or (extra == 'extra-10-neural-lam-cpu' and extra == 'extra-10-neural-lam-gpu') or (extra == 'extra-10-neural-lam-cpu' and extra == 'extra-10-neural-lam-gpu-cu128') or (extra == 'extra-10-neural-lam-gpu' and extra == 'extra-10-neural-lam-gpu-cu128')" },
     { name = "scipy", version = "1.17.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.11' or (extra == 'extra-10-neural-lam-cpu' and extra == 'extra-10-neural-lam-gpu') or (extra == 'extra-10-neural-lam-cpu' and extra == 'extra-10-neural-lam-gpu-cu128') or (extra == 'extra-10-neural-lam-gpu' and extra == 'extra-10-neural-lam-gpu-cu128')" },
+]
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/10/fc/de383b841fb9fe75960d55102fd16108ea5d3b245471956eac2ec1899eee/weather_model_graphs-0.4.0-py3-none-any.whl", hash = "sha256:261cee5d72bac06b6f36f8e3d2f5c7850ba56976d5759923710353d9459639dc", size = 44677, upload-time = "2026-07-28T09:23:59.658Z" },
 ]
 
 [[package]]
