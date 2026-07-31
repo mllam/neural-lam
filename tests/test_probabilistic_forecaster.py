@@ -10,8 +10,9 @@ from torch import nn
 # First-party
 from neural_lam import config as nlconfig
 from neural_lam import metrics
+from neural_lam.loss_weighting import get_per_var_std
 from neural_lam.models import (
-    ARForecaster,
+    DeterministicARForecaster,
     DeterministicForecasterModule,
     ProbabilisticARForecaster,
     ProbabilisticForecasterModule,
@@ -45,16 +46,30 @@ class ConcreteProbabilisticARForecaster(ProbabilisticARForecaster):
     """
     Test-only concrete ``ProbabilisticARForecaster``.
 
-    ``ProbabilisticARForecaster`` leaves ``compute_training_loss`` abstract
-    (no single default objective fits every stochastic model), so tests
-    that only need a working forecaster to instantiate use this example
-    ensemble-mean objective rather than the base class directly.
-    ``sample_ensemble`` always requires an explicit member count, so this
-    class takes its own ``train_num_members`` for the training objective.
+    ``ProbabilisticARForecaster`` supplies no training objective (no single
+    default fits every stochastic model), so tests that only need a working
+    forecaster to instantiate use this example ensemble-mean objective
+    rather than the base class directly. Being the concrete class, it also
+    owns whatever that objective needs: the scoring rule, the constant
+    per-variable std, and the member count to train on (``sample_ensemble``
+    always requires an explicit one).
     """
 
-    def __init__(self, *args, train_num_members: int = 2, **kwargs):
-        super().__init__(*args, **kwargs)
+    def __init__(
+        self,
+        predictor,
+        datastore,
+        config=None,
+        loss: str = "wmse",
+        train_num_members: int = 2,
+    ):
+        super().__init__(predictor, datastore)
+        self.loss = metrics.get_metric(loss)
+        self.per_var_std = (
+            get_per_var_std(config=config, datastore=datastore)
+            if config is not None
+            else None
+        )
         self.train_num_members = train_num_members
 
     def compute_training_loss(
@@ -105,7 +120,7 @@ def _example_batch(datastore, B=2, pred_steps=3):
 def test_ar_forecaster_training_loss_matches_direct_score():
     datastore = init_datastore_example("mdp")
     predictor = ZeroStepPredictor(datastore=datastore, output_std=False)
-    forecaster = ARForecaster(predictor, datastore, loss="mse")
+    forecaster = DeterministicARForecaster(predictor, datastore, loss="mse")
 
     init_states, forcing_features, target_states = _example_batch(datastore)
     score_metric = metrics.get_metric("mse")
@@ -236,7 +251,9 @@ def test_module_training_step_delegates_to_forecaster():
             kind=datastore.SHORT_NAME, config_path=datastore.root_path
         )
     )
-    forecaster = ARForecaster(predictor, datastore, config=config, loss="mse")
+    forecaster = DeterministicARForecaster(
+        predictor, datastore, config=config, loss="mse"
+    )
     model = DeterministicForecasterModule(
         forecaster=forecaster,
         config=config,

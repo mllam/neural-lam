@@ -12,6 +12,7 @@ import torch
 
 # Local
 from ... import metrics, vis
+from ..forecasters.deterministic import DeterministicForecaster
 from .base import BaseForecasterModule
 
 
@@ -19,12 +20,14 @@ class DeterministicForecasterModule(BaseForecasterModule):
     """
     Lightning module for a single deterministic forecast per batch.
 
-    Validation and testing score the forecaster's own single-rollout
-    prediction via ``forecaster.score``, as opposed to
-    ``ProbabilisticForecasterModule``, which samples and scores an
-    ensemble. Training is shared with that module unchanged (see
-    ``BaseForecasterModule.training_step``).
+    Validation and testing score the forecaster's own single prediction via
+    ``forecaster.score``, as opposed to ``ProbabilisticForecasterModule``,
+    which samples and scores an ensemble. Training is shared with that
+    module unchanged (see ``BaseForecasterModule.training_step``).
     """
+
+    # score() is supplied by the deterministic objective mixin
+    forecaster: DeterministicForecaster
 
     def __init__(self, *args, **kwargs):
         """

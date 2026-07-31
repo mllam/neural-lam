@@ -1,5 +1,8 @@
 """Utility functions for configuring state-feature loss weighting."""
 
+# Third-party
+import torch
+
 # Local
 from .config import (
     ManualStateFeatureWeighting,
@@ -118,3 +121,38 @@ def get_state_feature_weighting(
         )
 
     return weights
+
+
+def get_per_var_std(
+    config: NeuralLAMConfig, datastore: BaseDatastore
+) -> torch.Tensor:
+    """
+    Return the constant per-variable standard deviation of the one-step
+    difference, weighted by the configured state feature weighting.
+
+    Forecasters whose predictor does not output its own standard deviation
+    substitute this for ``pred_std`` when applying a scoring rule.
+
+    Parameters
+    ----------
+    config : NeuralLAMConfig
+        Configuration object for neural-lam, supplying the state feature
+        weighting.
+    datastore : BaseDatastore
+        Datastore object containing the state standardization statistics.
+
+    Returns
+    -------
+    torch.Tensor
+        Shape ``(num_state_vars,)``. Per-variable standard deviation.
+    """
+    da_state_stats = datastore.get_standardization_dataarray(category="state")
+    diff_std = torch.tensor(
+        da_state_stats.state_diff_std_standardized.values,
+        dtype=torch.float32,
+    )
+    feature_weights = torch.tensor(
+        get_state_feature_weighting(config=config, datastore=datastore),
+        dtype=torch.float32,
+    )
+    return diff_std / torch.sqrt(feature_weights)

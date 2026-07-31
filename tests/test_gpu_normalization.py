@@ -5,7 +5,7 @@ import torch
 # First-party
 from neural_lam import config as nlconfig
 from neural_lam.models import (
-    ARForecaster,
+    DeterministicARForecaster,
     DeterministicForecasterModule,
     StepPredictor,
 )
@@ -31,7 +31,7 @@ def _build_module(datastore):
         )
     )
     predictor = _MockStepPredictor(datastore=datastore, output_std=False)
-    forecaster = ARForecaster(predictor, datastore, config=config)
+    forecaster = DeterministicARForecaster(predictor, datastore, config=config)
     return DeterministicForecasterModule(
         forecaster=forecaster, config=config, datastore=datastore
     )

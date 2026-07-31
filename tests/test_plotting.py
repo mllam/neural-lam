@@ -19,7 +19,7 @@ from neural_lam import config as nlconfig
 from neural_lam import vis
 from neural_lam.create_graph import create_graph_from_datastore
 from neural_lam.models import (
-    ARForecaster,
+    DeterministicARForecaster,
     DeterministicForecasterModule,
     GraphLAM,
 )
@@ -454,7 +454,7 @@ def model_and_batch(tmp_path, time_step, time_unit):
 
     # Create model
     # First-party
-    from neural_lam.models import MODELS, ARForecaster
+    from neural_lam.models import MODELS, DeterministicARForecaster
 
     args = ModelArgs()
     predictor_class = MODELS["graph_lam"]
@@ -471,7 +471,7 @@ def model_and_batch(tmp_path, time_step, time_unit):
         output_clamping_lower=config.training.output_clamping.lower,
         output_clamping_upper=config.training.output_clamping.upper,
     )
-    forecaster = ARForecaster(
+    forecaster = DeterministicARForecaster(
         predictor, datastore=datastore, config=config, loss=args.loss
     )
 
@@ -531,7 +531,7 @@ def test_plot_examples_integration_saves_figure(
     ), f"Expected time_step_unit={time_unit}, got {model.time_step_unit}"
 
     # Generate prediction
-    (init_states, target, forcing_features, _batch_times) = batch
+    init_states, target, forcing_features, _batch_times = batch
     prediction, _ = model.forecaster(init_states, forcing_features, target)
 
     # Rescale to original data scale
@@ -684,7 +684,9 @@ def _build_metrics_watch_module(datastore, config):
         output_clamping_lower=config.training.output_clamping.lower,
         output_clamping_upper=config.training.output_clamping.upper,
     )
-    forecaster = ARForecaster(predictor, datastore, config=config, loss="mse")
+    forecaster = DeterministicARForecaster(
+        predictor, datastore, config=config, loss="mse"
+    )
     return DeterministicForecasterModule(
         forecaster=forecaster,
         config=config,

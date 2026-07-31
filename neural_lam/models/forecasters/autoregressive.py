@@ -1,32 +1,32 @@
 """Forecaster that uses an auto-regressive strategy to unroll a forecast."""
 
-# Standard library
-from typing import Callable, Optional
-
 # Third-party
 import torch
 
 # Local
-from ... import metrics
-from ...config import NeuralLAMConfig
 from ...datastore import BaseDatastore
-from ...loss_weighting import get_state_feature_weighting
 from ..step_predictors.base import StepPredictor
 from .base import Forecaster
 
 
 class ARForecaster(Forecaster):
     """
-    Subclass of Forecaster that uses an auto-regressive strategy to
-    unroll a forecast. Makes use of a StepPredictor at each AR step.
+    Forecaster that produces a forecast by auto-regressive unrolling, using
+    a StepPredictor at each AR step.
+
+    This class fixes only *how forecasts are produced*, and deliberately says
+    nothing about how a training objective is computed from them: it leaves
+    ``compute_training_loss`` abstract. The two are orthogonal, so the
+    objective is mixed in separately (see ``DeterministicForecaster`` and
+    ``ProbabilisticForecaster``), which lets an auto-regressive forecaster be
+    trained deterministically or probabilistically, and equally lets a
+    non-auto-regressive forecaster reuse either objective.
     """
 
     def __init__(
         self,
         predictor: StepPredictor,
         datastore: BaseDatastore,
-        config: NeuralLAMConfig | None = None,
-        loss: str = "wmse",
     ) -> None:
         """
         Initialize the ARForecaster.
@@ -37,17 +37,6 @@ class ARForecaster(Forecaster):
             The predictor to use for each step.
         datastore : BaseDatastore
             The datastore providing grid metadata and boundary masks.
-        config : NeuralLAMConfig or None
-            Configuration used to compute the constant per-variable std
-            substituted for ``pred_std`` when ``predictor`` does not output
-            its own (see ``per_var_std``). Required in that case for
-            ``score``/``compute_training_loss`` to work (they raise
-            ``ValueError`` via ``_resolve_pred_std`` otherwise); forecasters
-            used purely for inference (``forward``/``sample_ensemble``) can
-            omit it.
-        loss : str, default "wmse"
-            The scoring rule (from ``neural_lam.metrics``) used by
-            ``compute_training_loss`` and stored as ``self.loss``.
         """
         super().__init__()
         self.predictor = predictor
@@ -62,31 +51,6 @@ class ARForecaster(Forecaster):
         self.register_buffer(
             "interior_mask", 1.0 - self.boundary_mask, persistent=False
         )
-
-        self.loss = metrics.get_metric(loss)
-
-        # Store per_var_std here if the predictor does not output its own std
-        if not self.predicts_std and config is not None:
-            da_state_stats = datastore.get_standardization_dataarray(
-                category="state"
-            )
-            state_feature_weights = get_state_feature_weighting(
-                config=config, datastore=datastore
-            )
-            diff_std = torch.tensor(
-                da_state_stats.state_diff_std_standardized.values,
-                dtype=torch.float32,
-            )
-            feature_weights_t = torch.tensor(
-                state_feature_weights, dtype=torch.float32
-            )
-            self.register_buffer(
-                "per_var_std",
-                diff_std / torch.sqrt(feature_weights_t),
-                persistent=False,
-            )
-        else:
-            self.per_var_std = None
 
     @property
     def predicts_std(self) -> bool:
@@ -188,172 +152,3 @@ class ARForecaster(Forecaster):
             pred_std = None
 
         return prediction, pred_std
-
-    def compute_training_loss(
-        self,
-        init_states: torch.Tensor,
-        forcing_features: torch.Tensor,
-        target_states: torch.Tensor,
-        interior_mask_bool: torch.Tensor,
-    ) -> tuple[torch.Tensor, dict[str, torch.Tensor]]:
-        """
-        Score the deterministic rollout with ``self.loss``.
-
-        Unrolls a single forecast over the full rollout, scores it against
-        the target states on interior nodes and averages over batch and
-        time.
-
-        Parameters
-        ----------
-        init_states : torch.Tensor
-            Shape ``(B, 2, num_grid_nodes, num_state_vars)``. The two initial
-            states ``[X_{t-1}, X_t]`` used to start the rollout from. Dims:
-            ``B`` is batch size, ``2`` is the time index (``[X_{t-1}, X_t]``),
-            ``num_grid_nodes`` is the number of spatial nodes, and
-            ``num_state_vars`` is the state feature dimension.
-        forcing_features : torch.Tensor
-            Shape ``(B, pred_steps, num_grid_nodes, num_forcing_vars)``.
-            External forcings provided at each predicted step. Dims: ``B``
-            is batch size, ``pred_steps`` is the rollout length,
-            ``num_grid_nodes`` is the number of spatial nodes, and
-            ``num_forcing_vars`` is the forcing feature dimension (already
-            concatenated past/current/future windows).
-        target_states : torch.Tensor
-            Shape ``(B, pred_steps, num_grid_nodes, num_state_vars)``. True
-            states at each predicted step, used both as the prediction
-            targets and to overwrite boundary nodes during the rollout.
-            Dims: same as the prediction.
-        interior_mask_bool : torch.Tensor
-            Shape ``(num_grid_nodes,)``, boolean. ``True`` for interior
-            nodes; passed as ``mask`` to ``self.loss`` so that only interior
-            nodes are scored.
-
-        Returns
-        -------
-        batch_loss : torch.Tensor
-            Scalar. The scoring rule applied to the rollout, averaged over
-            batch and time.
-        loss_components : dict of {str: torch.Tensor}
-            Empty; the deterministic objective has no separate components.
-
-        Raises
-        ------
-        ValueError
-            If the predictor does not output its own std and no
-            ``per_var_std`` fallback is available; see
-            ``_resolve_pred_std``.
-        """
-        prediction, pred_std = self(
-            init_states, forcing_features, target_states
-        )
-        pred_std = self._resolve_pred_std(pred_std)
-
-        batch_loss = torch.mean(
-            self.loss(
-                prediction,
-                target_states,
-                pred_std,
-                mask=interior_mask_bool,
-            )
-        )
-        return batch_loss, {}
-
-    def _resolve_pred_std(
-        self, pred_std: Optional[torch.Tensor]
-    ) -> torch.Tensor:
-        """
-        Return ``pred_std``, or the constant ``per_var_std`` fallback.
-
-        Parameters
-        ----------
-        pred_std : torch.Tensor or None
-            Predicted standard deviation as returned by ``forward``,
-            possibly ``None``.
-
-        Returns
-        -------
-        torch.Tensor
-            ``pred_std`` unchanged when given; otherwise ``self.per_var_std``.
-
-        Raises
-        ------
-        ValueError
-            If ``pred_std`` is ``None`` and no ``per_var_std`` fallback is
-            available (``predictor.predicts_std`` is False and this
-            forecaster was constructed without ``config``).
-        """
-        if pred_std is not None:
-            return pred_std
-        if self.per_var_std is None:
-            raise ValueError(
-                "No pred_std available for scoring: predictor.predicts_std "
-                "is False and this forecaster has no per_var_std fallback "
-                "(it was constructed without config). Pass config to the "
-                "constructor, or use a predictor that outputs its own std."
-            )
-        return self.per_var_std
-
-    def score(
-        self,
-        prediction: torch.Tensor,
-        target_states: torch.Tensor,
-        pred_std: Optional[torch.Tensor],
-        metric: Optional[Callable[..., torch.Tensor]] = None,
-        mask: Optional[torch.Tensor] = None,
-        average_grid: bool = True,
-        sum_vars: bool = True,
-    ) -> torch.Tensor:
-        """
-        Score an already-produced prediction for reporting (not training).
-
-        Resolves ``pred_std`` via ``_resolve_pred_std`` (substituting
-        ``self.per_var_std`` when ``None``), then applies ``metric``
-        (defaulting to ``self.loss``, the configured scoring rule).
-
-        Parameters
-        ----------
-        prediction : torch.Tensor
-            Shape ``(..., num_grid_nodes, num_state_vars)``. Forecast to
-            score.
-        target_states : torch.Tensor
-            Shape ``(..., num_grid_nodes, num_state_vars)``. True states to
-            score against. Dims: same as ``prediction``.
-        pred_std : torch.Tensor or None
-            Shape ``(..., num_grid_nodes, num_state_vars)``, or ``None``.
-            Predicted standard deviation for ``prediction``; ``None`` when
-            the wrapped predictor does not output one, in which case
-            ``self.per_var_std`` is substituted (see ``_resolve_pred_std``
-            for when this raises instead).
-        metric : callable or None, optional
-            Scoring function with the ``neural_lam.metrics`` signature
-            ``(pred, target, pred_std, mask=None, average_grid=True,
-            sum_vars=True) -> torch.Tensor``. Defaults to ``self.loss``.
-        mask : torch.Tensor or None, optional
-            Shape ``(num_grid_nodes,)``, boolean. Forwarded to ``metric``.
-        average_grid : bool, optional
-            Forwarded to ``metric``.
-        sum_vars : bool, optional
-            Forwarded to ``metric``.
-
-        Returns
-        -------
-        torch.Tensor
-            The metric's output; shape depends on ``average_grid`` and
-            ``sum_vars`` (see ``neural_lam.metrics``).
-
-        Raises
-        ------
-        ValueError
-            If ``pred_std`` is ``None`` and no ``per_var_std`` fallback is
-            available; see ``_resolve_pred_std``.
-        """
-        pred_std = self._resolve_pred_std(pred_std)
-        metric_fn = self.loss if metric is None else metric
-        return metric_fn(
-            prediction,
-            target_states,
-            pred_std,
-            mask=mask,
-            average_grid=average_grid,
-            sum_vars=sum_vars,
-        )

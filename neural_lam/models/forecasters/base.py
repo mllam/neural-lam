@@ -2,7 +2,6 @@
 
 # Standard library
 from abc import ABC, abstractmethod
-from typing import Callable, Optional
 
 # Third-party
 import torch
@@ -76,10 +75,9 @@ class Forecaster(nn.Module, ABC):
         pred_std : torch.Tensor or None
             Shape ``(B, pred_steps, num_grid_nodes, num_state_vars)`` when
             ``predicts_std`` is True, otherwise ``None``. Per-feature
-            predicted standard deviation; when ``None``, the forecaster's
-            own constant per-variable std fallback is substituted by
-            ``compute_training_loss``/``score``, not by the caller. Dims:
-            same as ``prediction``.
+            predicted standard deviation; when ``None``, substituting a
+            fallback std is left to whatever consumes the forecast, not to
+            the caller of ``forward``. Dims: same as ``prediction``.
         """
 
     @abstractmethod
@@ -95,10 +93,14 @@ class Forecaster(nn.Module, ABC):
 
         The forecaster owns its complete training objective: which forecasts
         to produce from the batch, which loss terms to compute from them and
-        how to combine those terms into a single scalar, using its own
-        ``self.loss`` scoring rule and ``self.per_var_std`` fallback std. The
-        wrapping ``BaseForecasterModule`` only injects the interior mask,
-        logs the returned components and optimizes the returned loss.
+        how to combine those terms into a single scalar. The wrapping
+        ``BaseForecasterModule`` only injects the interior mask, logs the
+        returned components and optimizes the returned loss.
+
+        How the objective is computed is orthogonal to how forecasts are
+        produced, so implementations are mixed in separately from the
+        ``forward`` implementation; see ``DeterministicForecaster`` for the
+        single-forecast scoring-rule objective.
 
         Parameters
         ----------
@@ -135,57 +137,4 @@ class Forecaster(nn.Module, ABC):
             by component name. The wrapping module prefixes the names with
             the training phase. Empty when the objective has no separate
             components worth logging.
-        """
-
-    @abstractmethod
-    def score(
-        self,
-        prediction: torch.Tensor,
-        target_states: torch.Tensor,
-        pred_std: Optional[torch.Tensor],
-        metric: Optional[Callable[..., torch.Tensor]] = None,
-        mask: Optional[torch.Tensor] = None,
-        average_grid: bool = True,
-        sum_vars: bool = True,
-    ) -> torch.Tensor:
-        """
-        Score an already-produced prediction for reporting (not training).
-
-        Wrapping ``BaseForecasterModule`` subclasses use this for
-        validation/test logging and diagnostics instead of computing a loss
-        themselves: the forecaster owns both its scoring rule and its
-        ``pred_std`` fallback, so it is the only place that knows how to
-        turn a raw ``pred_std`` (possibly ``None``) into a valid one and
-        apply a metric to it.
-
-        Parameters
-        ----------
-        prediction : torch.Tensor
-            Shape ``(..., num_grid_nodes, num_state_vars)``. Forecast to
-            score.
-        target_states : torch.Tensor
-            Shape ``(..., num_grid_nodes, num_state_vars)``. True states to
-            score against. Dims: same as ``prediction``.
-        pred_std : torch.Tensor or None
-            Shape ``(..., num_grid_nodes, num_state_vars)``, or ``None``.
-            Predicted standard deviation for ``prediction``, as returned
-            alongside it by ``forward``. When ``None``, implementations
-            substitute their own constant per-variable std fallback.
-        metric : callable or None, optional
-            Scoring function with the ``neural_lam.metrics`` signature
-            ``(pred, target, pred_std, mask=None, average_grid=True,
-            sum_vars=True) -> torch.Tensor``. Defaults to the forecaster's
-            own configured scoring rule when ``None``.
-        mask : torch.Tensor or None, optional
-            Shape ``(num_grid_nodes,)``, boolean. Forwarded to ``metric``.
-        average_grid : bool, optional
-            Forwarded to ``metric``.
-        sum_vars : bool, optional
-            Forwarded to ``metric``.
-
-        Returns
-        -------
-        torch.Tensor
-            The metric's output; shape depends on ``average_grid`` and
-            ``sum_vars`` (see ``neural_lam.metrics``).
         """

@@ -10,7 +10,7 @@ import torch
 from neural_lam import config as nlconfig
 from neural_lam import metrics
 from neural_lam.models import (
-    ARForecaster,
+    DeterministicARForecaster,
     DeterministicForecasterModule,
     StepPredictor,
 )
@@ -46,7 +46,7 @@ def test_ar_forecaster_unroll():
         output_std=False,
     )
 
-    forecaster = ARForecaster(predictor, datastore)
+    forecaster = DeterministicARForecaster(predictor, datastore)
 
     # Override masks to test boundary masking behaviour
     forecaster.interior_mask = torch.zeros_like(forecaster.interior_mask)
@@ -85,7 +85,9 @@ def test_ar_forecaster_score():
         )
     )
     predictor = MockStepPredictor(datastore=datastore, output_std=False)
-    forecaster = ARForecaster(predictor, datastore, config=config, loss="mse")
+    forecaster = DeterministicARForecaster(
+        predictor, datastore, config=config, loss="mse"
+    )
 
     B, num_grid_nodes = 2, predictor.num_grid_nodes
     d_state = datastore.get_num_data_vars(category="state")
@@ -125,15 +127,15 @@ def test_ar_forecaster_score():
 def test_ar_forecaster_without_config_raises_on_use_not_construction():
     """A predictor that doesn't output std plus no config is a valid,
     unambiguous state at construction time (the forecaster may only ever
-    be used for inference), so ARForecaster must not raise there. It
-    should only raise once scoring is actually attempted and has no
-    std to use, and the error should come from the forecaster itself, not
-    a wrapping module."""
+    be used for inference), so DeterministicARForecaster must not raise
+    there. It should only raise once scoring is actually attempted and has
+    no std to use, and the error should come from the forecaster itself,
+    not a wrapping module."""
     datastore = init_datastore_example("mdp")
     predictor = MockStepPredictor(datastore=datastore, output_std=False)
 
     # Construction succeeds even though predicts_std=False and config=None
-    forecaster = ARForecaster(predictor, datastore)
+    forecaster = DeterministicARForecaster(predictor, datastore)
     assert forecaster.per_var_std is None
 
     B, num_grid_nodes = 2, predictor.num_grid_nodes
@@ -189,7 +191,9 @@ def test_forecaster_module_checkpoint(tmp_path):
         num_future_forcing_steps=1,
         output_std=False,
     )
-    forecaster = ARForecaster(predictor, datastore, config=config, loss="mse")
+    forecaster = DeterministicARForecaster(
+        predictor, datastore, config=config, loss="mse"
+    )
 
     model = DeterministicForecasterModule(
         forecaster=forecaster,
@@ -224,7 +228,7 @@ def test_forecaster_module_checkpoint(tmp_path):
         num_future_forcing_steps=1,
         output_std=False,
     )
-    load_forecaster = ARForecaster(
+    load_forecaster = DeterministicARForecaster(
         load_predictor, datastore, config=config, loss="mse"
     )
 
@@ -294,7 +298,7 @@ def test_forecaster_module_old_checkpoint(tmp_path):
     saved_val_steps = [2]
     saved_n_example_pred = 7
 
-    forecaster = ARForecaster(
+    forecaster = DeterministicARForecaster(
         predictor, datastore, config=config, loss=saved_loss
     )
 
@@ -363,7 +367,7 @@ def test_forecaster_module_old_checkpoint(tmp_path):
         num_future_forcing_steps=1,
         output_std=False,
     )
-    load_forecaster = ARForecaster(
+    load_forecaster = DeterministicARForecaster(
         load_predictor, datastore, config=config, loss=saved_loss
     )
 
@@ -451,7 +455,7 @@ def test_graph_lam_no_static_features():
 
     assert predictor.grid_static_features.shape[1] == 0
 
-    forecaster = ARForecaster(predictor, datastore)
+    forecaster = DeterministicARForecaster(predictor, datastore)
     B = 2
     num_grid_nodes = predictor.num_grid_nodes
     d_state = base_datastore.get_num_data_vars(category="state")
@@ -485,8 +489,8 @@ def test_step_predictor_no_static_features():
         0,
     )
 
-    # Verify a forward pass works end-to-end via ARForecaster
-    forecaster = ARForecaster(predictor, datastore)
+    # Verify a forward pass works end-to-end via DeterministicARForecaster
+    forecaster = DeterministicARForecaster(predictor, datastore)
     B, num_grid_nodes = 2, predictor.num_grid_nodes
     d_state = datastore.get_num_data_vars(category="state")
     d_forcing = datastore.get_num_data_vars(category="forcing")

@@ -7,9 +7,6 @@ from abc import abstractmethod
 import torch
 
 # Local
-from ...config import NeuralLAMConfig
-from ...datastore import BaseDatastore
-from ..step_predictors.base import StepPredictor
 from .autoregressive import ARForecaster
 from .base import Forecaster
 
@@ -91,48 +88,16 @@ class ProbabilisticARForecaster(ARForecaster, ProbabilisticForecaster):
     trajectory. This class adds ensemble forecasting on top: unrolling
     several trajectories and stacking them along an ensemble dimension.
 
-    ``compute_training_loss`` is intentionally left abstract here (it does
-    not fall back to ``ARForecaster``'s single-rollout objective, which
-    would silently train on one stochastic sample). There is no default
-    objective that fits every stochastic model: scoring the ensemble mean
-    with a pointwise metric only rewards the mean being right, giving the
-    model no incentive to keep a calibrated spread, and risks training it
-    to collapse the ensemble to a point estimate. Concrete subclasses must
-    define an objective appropriate to how they are meant to be trained
-    (e.g. an ensemble scoring rule such as CRPS, or a variational
-    objective).
+    It supplies no training objective, and so remains abstract in
+    ``compute_training_loss``. There is no default that fits every
+    stochastic model: scoring the ensemble mean with a pointwise metric
+    only rewards the mean being right, giving the model no incentive to
+    keep a calibrated spread, and risks training it to collapse the
+    ensemble to a point estimate. Concrete subclasses define an objective
+    appropriate to how they are meant to be trained (e.g. an ensemble
+    scoring rule such as CRPS, or a variational objective), along with
+    whatever configuration that objective needs.
     """
-
-    def __init__(
-        self,
-        predictor: StepPredictor,
-        datastore: BaseDatastore,
-        config: NeuralLAMConfig | None = None,
-        loss: str = "wmse",
-    ) -> None:
-        """
-        Initialize the ProbabilisticARForecaster.
-
-        Parameters
-        ----------
-        predictor : StepPredictor
-            The predictor to use for each step. Each call should draw a
-            fresh sample of the next state.
-        datastore : BaseDatastore
-            The datastore providing grid metadata and boundary masks.
-        config : NeuralLAMConfig or None
-            Configuration used to compute the constant per-variable std
-            substituted for ``pred_std`` when ``predictor`` does not output
-            its own (see ``per_var_std``). Required in that case for
-            ``score``/``compute_training_loss`` to work (they raise
-            ``ValueError`` via ``_resolve_pred_std`` otherwise); forecasters
-            used purely for inference (``forward``/``sample_ensemble``) can
-            omit it.
-        loss : str, default "wmse"
-            The scoring rule (from ``neural_lam.metrics``) used by
-            ``compute_training_loss`` and stored as ``self.loss``.
-        """
-        super().__init__(predictor, datastore, config=config, loss=loss)
 
     def sample_ensemble(
         self,
@@ -210,21 +175,3 @@ class ProbabilisticARForecaster(ARForecaster, ProbabilisticForecaster):
             torch.stack(member_std_list, dim=1) if member_std_list else None
         )
         return ensemble, per_member_std
-
-    @abstractmethod
-    def compute_training_loss(
-        self,
-        init_states: torch.Tensor,
-        forcing_features: torch.Tensor,
-        target_states: torch.Tensor,
-        interior_mask_bool: torch.Tensor,
-    ) -> tuple[torch.Tensor, dict[str, torch.Tensor]]:
-        """
-        Compute the training objective for one batch.
-
-        Left abstract; see the class docstring for why there is no default
-        objective. Concrete subclasses typically call ``sample_ensemble``
-        and score the resulting members with an objective appropriate to
-        the model (see ``Forecaster.compute_training_loss`` for the
-        signature and general contract).
-        """

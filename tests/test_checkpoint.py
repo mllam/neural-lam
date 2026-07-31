@@ -9,7 +9,7 @@ import torch
 from neural_lam import config as nlconfig
 from neural_lam.create_graph import create_graph_from_datastore
 from neural_lam.models import (
-    ARForecaster,
+    DeterministicARForecaster,
     DeterministicForecasterModule,
     GraphLAM,
 )
@@ -54,7 +54,9 @@ def test_saved_checkpoint_excludes_datastore_and_forecaster(tmp_path):
         output_clamping_lower=config.training.output_clamping.lower,
         output_clamping_upper=config.training.output_clamping.upper,
     )
-    forecaster = ARForecaster(predictor, datastore, config=config, loss="mse")
+    forecaster = DeterministicARForecaster(
+        predictor, datastore, config=config, loss="mse"
+    )
     model = DeterministicForecasterModule(
         forecaster=forecaster,
         config=config,

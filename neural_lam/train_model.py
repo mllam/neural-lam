@@ -19,7 +19,11 @@ from loguru import logger
 from . import utils
 from .config import load_config_and_datastore
 from .gnn_layers import GNN_TYPES
-from .models import MODELS, ARForecaster, DeterministicForecasterModule
+from .models import (
+    MODELS,
+    DeterministicARForecaster,
+    DeterministicForecasterModule,
+)
 from .weather_dataset import WeatherDataModule
 
 
@@ -63,7 +67,7 @@ def load_forecaster_module_from_checkpoint(ckpt_path, config, datastore):
         output_clamping_lower=config.training.output_clamping.lower,
         output_clamping_upper=config.training.output_clamping.upper,
     )
-    forecaster = ARForecaster(
+    forecaster = DeterministicARForecaster(
         predictor, datastore, config=config, loss=args.loss
     )
     return DeterministicForecasterModule.load_from_checkpoint(
@@ -481,7 +485,7 @@ def main(input_args=None):
         mesh_up_gnn_type=args.mesh_up_gnn_type,
         mesh_down_gnn_type=args.mesh_down_gnn_type,
     )
-    forecaster = ARForecaster(
+    forecaster = DeterministicARForecaster(
         predictor, datastore, config=config, loss=args.loss
     )
 

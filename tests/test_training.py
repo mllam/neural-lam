@@ -112,7 +112,7 @@ def run_simple_training(
     # Build predictor and forecaster externally, then inject into
     # DeterministicForecasterModule
     # First-party
-    from neural_lam.models import MODELS, ARForecaster
+    from neural_lam.models import MODELS, DeterministicARForecaster
 
     predictor_class = MODELS["graph_lam"]
     predictor = predictor_class(
@@ -128,7 +128,9 @@ def run_simple_training(
         output_clamping_lower=config.training.output_clamping.lower,
         output_clamping_upper=config.training.output_clamping.upper,
     )
-    forecaster = ARForecaster(predictor, datastore, config=config, loss="mse")
+    forecaster = DeterministicARForecaster(
+        predictor, datastore, config=config, loss="mse"
+    )
 
     model = DeterministicForecasterModule(
         forecaster=forecaster,

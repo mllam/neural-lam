@@ -219,7 +219,7 @@ def test_single_batch(datastore_name, split):
     dataset = WeatherDataset(datastore=datastore, split=split, ar_steps=2)
 
     # First-party
-    from neural_lam.models import MODELS, ARForecaster
+    from neural_lam.models import MODELS, DeterministicARForecaster
 
     predictor_class = MODELS["graph_lam"]
     predictor = predictor_class(
@@ -235,7 +235,7 @@ def test_single_batch(datastore_name, split):
         output_clamping_lower=config.training.output_clamping.lower,
         output_clamping_upper=config.training.output_clamping.upper,
     )
-    forecaster = ARForecaster(
+    forecaster = DeterministicARForecaster(
         predictor, datastore=datastore, config=config, loss=args.loss
     )
 

@@ -3,6 +3,10 @@
 # Local
 from .forecasters.autoregressive import ARForecaster
 from .forecasters.base import Forecaster
+from .forecasters.deterministic import (
+    DeterministicARForecaster,
+    DeterministicForecaster,
+)
 from .forecasters.probabilistic import (
     ProbabilisticARForecaster,
     ProbabilisticForecaster,
