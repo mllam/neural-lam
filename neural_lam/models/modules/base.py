@@ -40,6 +40,12 @@ class BaseForecasterModule(pl.LightningModule, ABC):
     ``ProbabilisticForecasterModule``) rather than overriding one another.
     """
 
+    # Which metrics are collected differs per evaluation mode, so concrete
+    # subclasses create these in __init__; the epoch-end hooks here consume
+    # whatever they contain. Declared for the contract only, not assigned.
+    val_metrics: dict[str, list]
+    test_metrics: dict[str, list]
+
     # pylint: disable=arguments-differ
 
     def __init__(
@@ -517,9 +523,15 @@ class BaseForecasterModule(pl.LightningModule, ABC):
         """
         Perform a single validation step.
 
-        Concrete subclasses must both score the batch and populate
-        ``self.val_metrics`` for epoch-end aggregation by
-        ``on_validation_epoch_end``.
+        Concrete subclasses must both score the batch and populate the
+        ``val_metrics`` they created, which ``on_validation_epoch_end``
+        below aggregates.
+
+        Kept abstract even though ``LightningModule`` defines this method:
+        that definition is a no-op stub, not an abstract method, so without
+        this declaration a subclass that omitted it would instantiate
+        happily and silently skip validation. Declaring it abstract turns
+        that into a ``TypeError`` at construction.
 
         Parameters
         ----------
@@ -556,9 +568,14 @@ class BaseForecasterModule(pl.LightningModule, ABC):
         """
         Perform a single test step.
 
-        Concrete subclasses must both score the batch and populate
-        ``self.test_metrics`` for epoch-end aggregation by
-        ``on_test_epoch_end``.
+        Concrete subclasses must both score the batch and populate the
+        ``test_metrics`` they created, which their ``on_test_epoch_end``
+        aggregates.
+
+        Kept abstract for the same reason as ``validation_step``: the
+        ``LightningModule`` definition is a no-op stub rather than an
+        abstract method, so omitting it would silently skip testing instead
+        of failing at construction.
 
         Parameters
         ----------

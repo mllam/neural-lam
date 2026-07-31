@@ -12,6 +12,7 @@ from neural_lam import config as nlconfig
 from neural_lam import metrics
 from neural_lam.loss_weighting import get_per_var_std
 from neural_lam.models import (
+    BaseForecasterModule,
     DeterministicARForecaster,
     DeterministicForecasterModule,
     ProbabilisticARForecaster,
@@ -240,6 +241,26 @@ def test_probabilistic_ar_forecaster_is_abstract():
 
     with pytest.raises(TypeError, match="abstract"):
         ProbabilisticARForecaster(predictor, datastore)
+
+
+def test_forecaster_module_evaluation_steps_are_abstract():
+    """A module omitting validation_step/test_step fails at construction.
+
+    LightningModule defines both as no-op stubs rather than abstract
+    methods, so without BaseForecasterModule declaring them abstract such a
+    module would instantiate happily and silently skip evaluation.
+    """
+
+    class MissingEvaluationSteps(BaseForecasterModule):
+        pass
+
+    assert {
+        "validation_step",
+        "test_step",
+    } <= MissingEvaluationSteps.__abstractmethods__
+
+    with pytest.raises(TypeError, match="validation_step|test_step"):
+        MissingEvaluationSteps(forecaster=None, config=None, datastore=None)
 
 
 def test_module_training_step_delegates_to_forecaster():
