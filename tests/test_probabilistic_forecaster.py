@@ -276,6 +276,59 @@ def test_module_training_step_delegates_to_forecaster():
     torch.testing.assert_close(batch_loss, expected_loss)
 
 
+def test_deterministic_training_step_logs_per_step_losses():
+    """--train_steps_to_log selects per-step training losses to report,
+    which the deterministic objective can supply because it decomposes
+    over rollout steps."""
+    datastore = init_datastore_example("mdp")
+    predictor = ZeroStepPredictor(datastore=datastore, output_std=False)
+    config = nlconfig.NeuralLAMConfig(
+        datastore=nlconfig.DatastoreSelection(
+            kind=datastore.SHORT_NAME, config_path=datastore.root_path
+        )
+    )
+    forecaster = DeterministicARForecaster(
+        predictor, datastore, config=config, loss="mse"
+    )
+    model = DeterministicForecasterModule(
+        forecaster=forecaster,
+        config=config,
+        datastore=datastore,
+        train_steps_to_log=[1, 3],
+    )
+
+    pred_steps = 3
+    init_states, forcing_features, target_states = _example_batch(
+        datastore, pred_steps=pred_steps
+    )
+    batch_times = torch.zeros(init_states.shape[0], pred_steps)
+    batch = (init_states, target_states, forcing_features, batch_times)
+
+    captured = {}
+    model.log_dict = lambda log_dict, **kwargs: captured.update(log_dict)
+
+    batch_loss = model.training_step(batch)
+
+    assert set(captured) == {
+        "train_loss",
+        "train_loss_unroll1",
+        "train_loss_unroll3",
+    }
+    torch.testing.assert_close(captured["train_loss"], batch_loss)
+
+    # The reported steps are the corresponding entries of the same
+    # decomposition the logged train_loss averages
+    step_losses = forecaster.compute_step_losses(
+        init_states,
+        forcing_features,
+        target_states,
+        interior_mask_bool=model.interior_mask_bool,
+    )
+    torch.testing.assert_close(captured["train_loss_unroll1"], step_losses[0])
+    torch.testing.assert_close(captured["train_loss_unroll3"], step_losses[2])
+    torch.testing.assert_close(batch_loss, torch.mean(step_losses))
+
+
 class MemberCountRecordingForecaster(ConcreteProbabilisticARForecaster):
     """ProbabilisticARForecaster recording the requested member count."""
 

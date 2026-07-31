@@ -72,6 +72,66 @@ class DeterministicForecaster(Forecaster):
         else:
             self.per_var_std = None
 
+    def compute_step_losses(
+        self,
+        init_states: torch.Tensor,
+        forcing_features: torch.Tensor,
+        target_states: torch.Tensor,
+        interior_mask_bool: torch.Tensor,
+    ) -> torch.Tensor:
+        """
+        Score a single forecast with ``self.loss``, per predicted step.
+
+        This objective is a per-step scoring rule averaged over the rollout,
+        so it decomposes into the contribution of each predicted step, which
+        callers can report individually. ``compute_training_loss`` is the
+        mean of what this returns.
+
+        Parameters
+        ----------
+        init_states : torch.Tensor
+            Shape ``(B, 2, num_grid_nodes, num_state_vars)``. The two initial
+            states ``[X_{t-1}, X_t]`` used to start the forecast from.
+        forcing_features : torch.Tensor
+            Shape ``(B, pred_steps, num_grid_nodes, num_forcing_vars)``.
+            External forcings provided at each predicted step.
+        target_states : torch.Tensor
+            Shape ``(B, pred_steps, num_grid_nodes, num_state_vars)``. True
+            states at each predicted step, used both as the prediction
+            targets and to overwrite boundary nodes while forecasting.
+        interior_mask_bool : torch.Tensor
+            Shape ``(num_grid_nodes,)``, boolean. ``True`` for interior
+            nodes; passed as ``mask`` to ``self.loss`` so that only interior
+            nodes are scored.
+
+        Returns
+        -------
+        torch.Tensor
+            Shape ``(pred_steps,)``. The scoring rule at each predicted
+            step, averaged over the batch.
+
+        Raises
+        ------
+        ValueError
+            If the forecast carries no std of its own and no
+            ``per_var_std`` fallback is available; see
+            ``_resolve_pred_std``.
+        """
+        prediction, pred_std = self(
+            init_states, forcing_features, target_states
+        )
+        pred_std = self._resolve_pred_std(pred_std)
+
+        return torch.mean(
+            self.loss(
+                prediction,
+                target_states,
+                pred_std,
+                mask=interior_mask_bool,
+            ),
+            dim=0,
+        )
+
     def compute_training_loss(
         self,
         init_states: torch.Tensor,
@@ -84,6 +144,8 @@ class DeterministicForecaster(Forecaster):
 
         Produces one forecast over the full rollout, scores it against the
         target states on interior nodes and averages over batch and time.
+        Callers wanting the per-step breakdown of this same objective
+        should use ``compute_step_losses`` instead, which this averages.
 
         Parameters
         ----------
@@ -125,20 +187,13 @@ class DeterministicForecaster(Forecaster):
             ``per_var_std`` fallback is available; see
             ``_resolve_pred_std``.
         """
-        prediction, pred_std = self(
-            init_states, forcing_features, target_states
+        step_losses = self.compute_step_losses(
+            init_states,
+            forcing_features,
+            target_states,
+            interior_mask_bool,
         )
-        pred_std = self._resolve_pred_std(pred_std)
-
-        batch_loss = torch.mean(
-            self.loss(
-                prediction,
-                target_states,
-                pred_std,
-                mask=interior_mask_bool,
-            )
-        )
-        return batch_loss, {}
+        return torch.mean(step_losses), {}
 
     def _resolve_pred_std(
         self, pred_std: Optional[torch.Tensor]

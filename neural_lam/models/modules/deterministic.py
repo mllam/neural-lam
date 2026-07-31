@@ -57,6 +57,42 @@ class DeterministicForecasterModule(BaseForecasterModule):
         # For storing spatial loss maps during evaluation
         self.spatial_loss_maps: list[Any] = []
 
+    def training_step(self, batch):
+        """
+        Perform a single training step, logging the per-step breakdown.
+
+        Overrides ``BaseForecasterModule.training_step``, which logs only the
+        scalar objective because a forecaster's training loss need not
+        decompose over rollout steps. The deterministic objective is a
+        per-step scoring rule averaged over the rollout, so it does, and
+        ``--train_steps_to_log`` selects which of those steps to report as
+        ``train_loss_unroll{i}``. The logged ``train_loss`` is the mean of
+        the per-step losses, i.e. exactly
+        ``forecaster.compute_training_loss``.
+
+        Parameters
+        ----------
+        batch : tuple
+            The batch of data.
+
+        Returns
+        -------
+        torch.Tensor
+            The computed loss for the training step.
+        """
+        init_states, target_states, forcing_features, _ = batch
+        time_step_loss = self.forecaster.compute_step_losses(
+            init_states,
+            forcing_features,
+            target_states,
+            interior_mask_bool=self.interior_mask_bool,
+        )
+        batch_loss = torch.mean(time_step_loss)
+        self._log_step_loss(
+            time_step_loss, batch_loss, "train", batch[0].shape[0]
+        )
+        return batch_loss
+
     def validation_step(self, batch, batch_idx):
         """
         Perform a single validation step.
