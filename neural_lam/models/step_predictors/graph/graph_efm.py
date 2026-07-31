@@ -125,6 +125,28 @@ class BaseGraphEFM(StepPredictor):
             output_clamping_upper=output_clamping_upper,
         )
 
+        # Retrieve difference statistics for rescaling in forward pass, as
+        # for the deterministic models: this keeps the decoder's output
+        # (like the deterministic models' network output) at a similar
+        # scale regardless of a variable's own timescale.
+        da_state_stats = datastore.get_standardization_dataarray("state")
+        self.register_buffer(
+            "diff_mean",
+            torch.tensor(
+                da_state_stats.state_diff_mean_standardized.values,
+                dtype=torch.float32,
+            ),
+            persistent=False,
+        )
+        self.register_buffer(
+            "diff_std",
+            torch.tensor(
+                da_state_stats.state_diff_std_standardized.values,
+                dtype=torch.float32,
+            ),
+            persistent=False,
+        )
+
         # Load graph with static features.
         grid_xy_extent = datastore.get_xy_extent(category="state")
         grid_xy_max_span = max(
@@ -432,13 +454,15 @@ class BaseGraphEFM(StepPredictor):
         latent_samples = prior_dist.rsample()
         # (B, num_mesh_nodes, d_latent)
 
-        # Decode the latent into a state increment, then add it onto prev_state
-        # (X_t) and clamp to the valid range (a no-op when no clamping limits
-        # are configured), as for the deterministic models.
+        # Decode the latent into a state increment, rescale it with the
+        # one-step difference statistics, then add it onto prev_state (X_t)
+        # and clamp to the valid range (a no-op when no clamping limits are
+        # configured), as for the deterministic models.
         mean_delta, pred_std = self.decoder(
             grid_prev_emb, latent_samples, graph_emb
         )
-        pred_mean = self.get_clamped_new_state(mean_delta, prev_state)
+        rescaled_mean_delta = mean_delta * self.diff_std + self.diff_mean
+        pred_mean = self.get_clamped_new_state(rescaled_mean_delta, prev_state)
         # (B, num_grid_nodes, d_state)
 
         return pred_mean, pred_std
