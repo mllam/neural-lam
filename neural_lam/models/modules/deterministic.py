@@ -93,16 +93,39 @@ class DeterministicForecasterModule(BaseForecasterModule):
         )
         return batch_loss
 
-    def validation_step(self, batch, batch_idx):
+    def _compute_prediction_and_loss(
+        self,
+        batch: tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor],
+    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
         """
-        Perform a single validation step.
+        Compute predicted mean, standard deviation, and step-wise loss.
+        Also extract and return corresponding target from batch.
+
+        Shared by ``validation_step`` and ``test_step``. ``training_step``
+        deliberately does not use this: it goes through the forecaster's
+        training objective rather than the reporting scoring rule applied
+        here, and those are only interchangeable for this particular
+        objective.
 
         Parameters
         ----------
-        batch : tuple
+        batch : tuple of torch.Tensor
             The batch of data.
-        batch_idx : int
-            The index of the batch.
+
+        Returns
+        -------
+        prediction : torch.Tensor
+            Model predictions, shape
+            ``(B, pred_steps, num_grid_nodes, num_state_vars)``.
+        target_states : torch.Tensor
+            Target states, shape
+            ``(B, pred_steps, num_grid_nodes, num_state_vars)``.
+        pred_std : torch.Tensor
+            Predicted or pre-defined standard deviation, shape
+            ``(B, pred_steps, num_grid_nodes, num_state_vars)`` or
+            ``(num_state_vars,)``.
+        time_step_loss : torch.Tensor
+            Loss for each unroll step, shape ``(pred_steps,)``.
         """
         prediction, target_states, pred_std, _ = self.common_step(batch)
 
@@ -115,6 +138,23 @@ class DeterministicForecasterModule(BaseForecasterModule):
             ),
             dim=0,
         )
+        return prediction, target_states, pred_std, time_step_loss
+
+    def validation_step(self, batch, batch_idx):
+        """
+        Perform a single validation step.
+
+        Parameters
+        ----------
+        batch : tuple
+            The batch of data.
+        batch_idx : int
+            The index of the batch.
+        """
+        prediction, target_states, pred_std, time_step_loss = (
+            self._compute_prediction_and_loss(batch)
+        )
+
         mean_loss = torch.mean(time_step_loss)
         self._warn_skipped_val_steps(len(time_step_loss), "val")
 
@@ -154,7 +194,9 @@ class DeterministicForecasterModule(BaseForecasterModule):
         batch_idx : int
             The index of the batch.
         """
-        prediction, target_states, pred_std, _ = self.common_step(batch)
+        prediction, target_states, pred_std, time_step_loss = (
+            self._compute_prediction_and_loss(batch)
+        )
 
         if pred_std is not None:
             mean_pred_std = torch.mean(
@@ -162,15 +204,6 @@ class DeterministicForecasterModule(BaseForecasterModule):
             )
             self.test_metrics["output_std"].append(mean_pred_std)
 
-        time_step_loss = torch.mean(
-            self.forecaster.score(
-                prediction,
-                target_states,
-                pred_std,
-                mask=self.interior_mask_bool,
-            ),
-            dim=0,
-        )
         mean_loss = torch.mean(time_step_loss)
         self._warn_skipped_val_steps(len(time_step_loss), "test")
 
