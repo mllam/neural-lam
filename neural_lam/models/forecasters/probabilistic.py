@@ -113,6 +113,12 @@ class ProbabilisticARForecaster(ARForecaster, ProbabilisticForecaster):
         randomness at every step, and stacks them along a new ensemble
         dimension after the batch dimension.
 
+        This implementation draws the members sequentially, one full rollout
+        at a time, so cost grows linearly with ``num_members``. Members are
+        independent given the inputs, so this is only an implementation
+        choice: it could be batched by folding the member dimension into the
+        batch dimension, at proportionally higher peak memory.
+
         Parameters
         ----------
         init_states : torch.Tensor

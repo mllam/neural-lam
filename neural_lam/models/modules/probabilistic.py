@@ -8,6 +8,8 @@ import torch
 
 # Local
 from ... import metrics
+from ...config import NeuralLAMConfig
+from ...datastore import BaseDatastore
 from ..forecasters.probabilistic import ProbabilisticForecaster
 from .base import BaseForecasterModule
 
@@ -28,24 +30,84 @@ class ProbabilisticForecasterModule(BaseForecasterModule):
     # The wrapped forecaster must be able to sample ensemble forecasts
     forecaster: ProbabilisticForecaster
 
-    def __init__(self, *args, eval_ensemble_size: int, **kwargs):
+    def __init__(
+        self,
+        forecaster: ProbabilisticForecaster,
+        config: NeuralLAMConfig,
+        datastore: BaseDatastore,
+        *,
+        eval_ensemble_size: int,
+        lr: float = 1e-3,
+        restore_opt: bool = False,
+        n_example_pred: int = 1,
+        create_gif: bool = False,
+        val_steps_to_log: list[int] | None = None,
+        train_steps_to_log: list[int] | None = None,
+        metrics_watch: list[str] | None = None,
+        var_leads_metrics_watch: dict[int, list[int]] | None = None,
+        args=None,
+    ):
         """
         Initialize the module and store the evaluation ensemble size.
 
         Parameters
         ----------
-        *args
-            Positional arguments forwarded to
-            ``BaseForecasterModule.__init__`` (``forecaster``, ``config``,
-            ``datastore``, ...).
+        forecaster : ProbabilisticForecaster
+            The forecaster to evaluate. Must supply ``sample_ensemble``,
+            since validation and testing score a sampled ensemble.
+        config : NeuralLAMConfig
+            Configuration object for the neural LAM model.
+        datastore : BaseDatastore
+            Datastore providing grid metadata and data access.
         eval_ensemble_size : int
             Number of ensemble members sampled during validation and
-            testing.
-        **kwargs
-            Keyword arguments forwarded to ``BaseForecasterModule.__init__``
-            (``lr``, ...).
+            testing. Keyword-only and required: how many members to draw is
+            a choice this module cannot sensibly default.
+        lr : float, default 1e-3
+            Learning rate for the optimizer.
+        restore_opt : bool, default False
+            Whether to restore optimizer state from checkpoint.
+        n_example_pred : int, default 1
+            Number of example predictions to plot during testing. Unused
+            here, since ``test_step`` plots no examples.
+        create_gif : bool, default False
+            Whether to create GIFs of example predictions. Unused here, for
+            the same reason.
+        val_steps_to_log : list of int, optional
+            Specific predicted steps to log the ensemble-mean RMSE for,
+            during both validation and testing.
+        train_steps_to_log : list of int, optional
+            Specific predicted steps to log during training. Has no effect
+            unless the forecaster's objective decomposes per step; see
+            ``BaseForecasterModule.training_step``.
+        metrics_watch : list of str, optional
+            List of metrics to watch and log specifically.
+        var_leads_metrics_watch : dict of {int: list of int}, optional
+            Mapping from variable index to a list of predicted steps to log
+            individually for the configured metrics.
+        args : argparse.Namespace, optional
+            Pre-refactor ``ARModel`` checkpoint hyperparameters; see
+            ``BaseForecasterModule.__init__``.
+
+        Raises
+        ------
+        ValueError
+            If ``eval_ensemble_size`` is less than 1.
         """
-        super().__init__(*args, **kwargs)
+        super().__init__(
+            forecaster=forecaster,
+            config=config,
+            datastore=datastore,
+            lr=lr,
+            restore_opt=restore_opt,
+            n_example_pred=n_example_pred,
+            create_gif=create_gif,
+            val_steps_to_log=val_steps_to_log,
+            train_steps_to_log=train_steps_to_log,
+            metrics_watch=metrics_watch,
+            var_leads_metrics_watch=var_leads_metrics_watch,
+            args=args,
+        )
         if eval_ensemble_size < 1:
             raise ValueError(
                 "eval_ensemble_size must be at least 1, "

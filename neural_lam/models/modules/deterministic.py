@@ -12,6 +12,8 @@ import torch
 
 # Local
 from ... import metrics, vis
+from ...config import NeuralLAMConfig
+from ...datastore import BaseDatastore
 from ..forecasters.deterministic import DeterministicForecaster
 from .base import BaseForecasterModule
 
@@ -29,21 +31,70 @@ class DeterministicForecasterModule(BaseForecasterModule):
     # score() is supplied by the deterministic objective mixin
     forecaster: DeterministicForecaster
 
-    def __init__(self, *args, **kwargs):
+    def __init__(
+        self,
+        forecaster: DeterministicForecaster,
+        config: NeuralLAMConfig,
+        datastore: BaseDatastore,
+        lr: float = 1e-3,
+        restore_opt: bool = False,
+        n_example_pred: int = 1,
+        create_gif: bool = False,
+        val_steps_to_log: list[int] | None = None,
+        train_steps_to_log: list[int] | None = None,
+        metrics_watch: list[str] | None = None,
+        var_leads_metrics_watch: dict[int, list[int]] | None = None,
+        args=None,
+    ):
         """
         Initialize the module and its deterministic evaluation metrics.
 
         Parameters
         ----------
-        *args
-            Positional arguments forwarded to
-            ``BaseForecasterModule.__init__`` (``forecaster``, ``config``,
-            ``datastore``, ...).
-        **kwargs
-            Keyword arguments forwarded to ``BaseForecasterModule.__init__``
-            (``lr``, ...).
+        forecaster : DeterministicForecaster
+            The forecaster to evaluate. Must supply ``score``, i.e. carry
+            the deterministic objective, since validation and testing score
+            a single prediction through it.
+        config : NeuralLAMConfig
+            Configuration object for the neural LAM model.
+        datastore : BaseDatastore
+            Datastore providing grid metadata and data access.
+        lr : float, default 1e-3
+            Learning rate for the optimizer.
+        restore_opt : bool, default False
+            Whether to restore optimizer state from checkpoint.
+        n_example_pred : int, default 1
+            Number of example predictions to plot during testing.
+        create_gif : bool, default False
+            Whether to create GIFs of example predictions.
+        val_steps_to_log : list of int, optional
+            Specific predicted steps to log during validation/testing.
+        train_steps_to_log : list of int, optional
+            Specific predicted steps to log during training, reported as
+            ``train_loss_unroll{i}`` (see ``training_step``).
+        metrics_watch : list of str, optional
+            List of metrics to watch and log specifically.
+        var_leads_metrics_watch : dict of {int: list of int}, optional
+            Mapping from variable index to a list of predicted steps to log
+            individually for the configured metrics.
+        args : argparse.Namespace, optional
+            Pre-refactor ``ARModel`` checkpoint hyperparameters; see
+            ``BaseForecasterModule.__init__``.
         """
-        super().__init__(*args, **kwargs)
+        super().__init__(
+            forecaster=forecaster,
+            config=config,
+            datastore=datastore,
+            lr=lr,
+            restore_opt=restore_opt,
+            n_example_pred=n_example_pred,
+            create_gif=create_gif,
+            val_steps_to_log=val_steps_to_log,
+            train_steps_to_log=train_steps_to_log,
+            metrics_watch=metrics_watch,
+            var_leads_metrics_watch=var_leads_metrics_watch,
+            args=args,
+        )
         self.val_metrics: dict[str, list] = {
             "mse": [],
         }

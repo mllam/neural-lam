@@ -88,6 +88,11 @@ class BaseForecasterModule(pl.LightningModule, ABC):
             Whether to create GIFs of example predictions.
         val_steps_to_log : list of int, optional
             Specific rollout steps to log during validation/testing.
+        train_steps_to_log : list of int, optional
+            Specific predicted steps to log during training. Only has an
+            effect for a forecaster whose objective decomposes per step;
+            this class's ``training_step`` logs the aggregate ``train_loss``
+            alone (see its docstring for why).
         metrics_watch : list of str, optional
             List of metrics to watch and log specifically.
         var_leads_metrics_watch : dict of {int: list of int}, optional
@@ -143,6 +148,24 @@ class BaseForecasterModule(pl.LightningModule, ABC):
         # graph_name, hidden_dim, etc. so the caller can reconstruct the
         # exact forecaster architecture from the checkpoint alone.
         self.save_hyperparameters(ignore=["datastore", "forecaster"])
+        # save_hyperparameters collects the arguments of the __init__ frame
+        # it is called from, which for a subclass with its own explicit
+        # signature is that subclass's frame, holding the values as passed.
+        # Write back the ones resolved above (mutable defaults, and the args
+        # namespace unpacking) so hparams never disagrees with what this
+        # module actually uses.
+        for name, resolved in (
+            ("lr", lr),
+            ("restore_opt", restore_opt),
+            ("n_example_pred", n_example_pred),
+            ("create_gif", create_gif),
+            ("val_steps_to_log", val_steps_to_log),
+            ("train_steps_to_log", train_steps_to_log),
+            ("metrics_watch", metrics_watch),
+            ("var_leads_metrics_watch", var_leads_metrics_watch),
+        ):
+            self.hparams[name] = resolved
+
         self.datastore = datastore
         self.forecaster = forecaster
         self.matched_metrics: set = set()
