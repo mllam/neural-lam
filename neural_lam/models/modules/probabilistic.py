@@ -57,16 +57,18 @@ class ProbabilisticForecasterModule(BaseForecasterModule):
 
     def _ensemble_step(self, batch, phase: str):
         """
-        Sample an ensemble and score its mean against the target states.
+        Sample an ensemble and compute the per-variable MSE of its mean.
 
         Shared by ``validation_step`` and ``test_step``: samples
-        ``self.eval_ensemble_size`` members, scores the ensemble mean with
-        plain (unweighted) MSE on interior nodes, logs the root-mean-squared
-        error per configured rollout step and averaged over the rollout
-        under the given phase's prefix. This RMSE is a diagnostic metric,
-        not the training loss: it always scores the ensemble mean with
-        plain MSE, regardless of what objective ``compute_training_loss``
-        actually trains on, which is not recomputed here.
+        ``self.eval_ensemble_size`` members and scores the ensemble mean
+        with plain (unweighted) MSE on interior nodes. Only the squared
+        errors are computed here; they are reduced to an RMSE once per
+        epoch by ``_log_ensemble_rmse``, since the square root has to be
+        taken after averaging over every sample rather than per batch.
+
+        This is a diagnostic metric, not the training loss: it always
+        scores the ensemble mean with plain MSE, regardless of what
+        objective ``compute_training_loss`` actually trains on.
 
         Parameters
         ----------
@@ -94,40 +96,57 @@ class ProbabilisticForecasterModule(BaseForecasterModule):
             target_states.shape[-1], device=target_states.device
         )
 
-        time_step_mse = torch.mean(
-            metrics.mse(
-                ensemble_mean,
-                target_states,
-                std_placeholder,
-                mask=self.interior_mask_bool,
-            ),
-            dim=0,
-        )
-        time_step_rmse = torch.sqrt(time_step_mse)
-        mean_rmse = torch.mean(time_step_rmse)
-        self._warn_skipped_val_steps(len(time_step_rmse), phase)
+        entry_mses = metrics.mse(
+            ensemble_mean,
+            target_states,
+            std_placeholder,
+            mask=self.interior_mask_bool,
+            sum_vars=False,
+        )  # (B, pred_steps, num_state_vars)
+        self._warn_skipped_steps(entry_mses.shape[1], phase)
+
+        return entry_mses
+
+    def _log_ensemble_rmse(self, entry_mse_list, phase: str) -> None:
+        """
+        Log the ensemble-mean RMSE accumulated over a full epoch.
+
+        Averages the per-variable MSEs collected by ``_ensemble_step`` over
+        every sample of the epoch (across both batches and devices) and sums
+        them over variables, and only then takes the square root. Rooting
+        each batch's MSE and averaging those roots instead would report a
+        different quantity, since the square root does not commute with the
+        averaging.
+
+        Parameters
+        ----------
+        entry_mse_list : list of torch.Tensor
+            Per-batch per-variable ensemble-mean MSEs, each of shape
+            ``(B, pred_steps, num_state_vars)``, as returned by
+            ``_ensemble_step``.
+        phase : str
+            Logging phase, either ``"val"`` or ``"test"``.
+        """
+        # Collective: must be reached by every rank, so it precedes the
+        # rank-zero check below.
+        entry_mses = self.all_gather_cat(torch.cat(entry_mse_list, dim=0))
+        # (total_samples, pred_steps, num_state_vars)
+
+        if not self.trainer.is_global_zero:
+            return
+
+        time_step_rmse = torch.sqrt(entry_mses.sum(dim=-1).mean(dim=0))
+        # (pred_steps,)
 
         log_dict = {
             f"{phase}_ens_rmse_unroll{step}": time_step_rmse[step - 1]
             for step in self.hparams.val_steps_to_log
             if step <= len(time_step_rmse)
         }
-        log_dict[f"{phase}_mean_ens_rmse"] = mean_rmse
-        self.log_dict(
-            log_dict,
-            on_step=False,
-            on_epoch=True,
-            sync_dist=True,
-            batch_size=batch[0].shape[0],
-        )
-
-        return metrics.mse(
-            ensemble_mean,
-            target_states,
-            std_placeholder,
-            mask=self.interior_mask_bool,
-            sum_vars=False,
-        )
+        log_dict[f"{phase}_mean_ens_rmse"] = torch.mean(time_step_rmse)
+        # No sync_dist: the values are already gathered above and only rank
+        # zero reaches this point, so a collective here would hang DDP.
+        self.log_dict(log_dict, rank_zero_only=True)
 
     def validation_step(self, batch, batch_idx):
         """
@@ -165,15 +184,28 @@ class ProbabilisticForecasterModule(BaseForecasterModule):
         entry_mses = self._ensemble_step(batch, "test")
         self.test_metrics["ens_mse"].append(entry_mses)
 
+    def on_validation_epoch_end(self):
+        """
+        Perform actions at the end of the validation epoch.
+
+        Logs the epoch's ensemble-mean RMSE, then defers to
+        ``BaseForecasterModule.on_validation_epoch_end``, which aggregates
+        the same per-variable MSEs into heatmaps and clears them.
+        """
+        self._log_ensemble_rmse(self.val_metrics["ens_mse"], "val")
+        super().on_validation_epoch_end()
+
     def on_test_epoch_end(self):
         """
         Perform actions at the end of the test epoch.
 
-        Aggregates ensemble test metrics. Implements
-        ``BaseForecasterModule.on_test_epoch_end`` without the spatial loss
-        maps and example plots that ``DeterministicForecasterModule`` adds,
-        since ``test_step`` here does not populate them.
+        Logs the epoch's ensemble-mean RMSE and aggregates ensemble test
+        metrics. Implements ``BaseForecasterModule.on_test_epoch_end``
+        without the spatial loss maps and example plots that
+        ``DeterministicForecasterModule`` adds, since ``test_step`` here
+        does not populate them.
         """
+        self._log_ensemble_rmse(self.test_metrics["ens_mse"], "test")
         self.aggregate_and_plot_metrics(self.test_metrics, prefix="test")
 
         if self.trainer.is_global_zero and self.hparams.metrics_watch:

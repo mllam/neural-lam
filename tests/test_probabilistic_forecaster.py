@@ -1,3 +1,7 @@
+# Standard library
+import math
+from types import SimpleNamespace
+
 # Third-party
 import pytest
 import torch
@@ -360,3 +364,51 @@ def test_probabilistic_module_test_step_scores_ensemble_mean():
     (entry_mses,) = model.test_metrics["ens_mse"]
     assert entry_mses.shape == (B, pred_steps, d_state)
     assert torch.all(torch.isfinite(entry_mses))
+
+
+def test_ensemble_rmse_takes_root_after_averaging_all_samples():
+    """The epoch RMSE roots the mean MSE over every sample, rather than
+    averaging per-batch roots (the two differ whenever batches disagree)."""
+    datastore = init_datastore_example("mdp")
+    predictor = NoisyStepPredictor(datastore=datastore, output_std=False)
+    config = nlconfig.NeuralLAMConfig(
+        datastore=nlconfig.DatastoreSelection(
+            kind=datastore.SHORT_NAME, config_path=datastore.root_path
+        )
+    )
+    forecaster = ConcreteProbabilisticARForecaster(
+        predictor, datastore, config=config
+    )
+    model = ProbabilisticForecasterModule(
+        forecaster=forecaster,
+        config=config,
+        datastore=datastore,
+        eval_ensemble_size=2,
+    )
+
+    # Two batches of one sample and one rollout step, with deliberately
+    # different squared errors so the two aggregation orders disagree.
+    d_state = datastore.get_num_data_vars(category="state")
+    model.val_metrics["ens_mse"] = [
+        torch.full((1, 1, d_state), 1.0),
+        torch.full((1, 1, d_state), 9.0),
+    ]
+
+    captured = {}
+    model.all_gather_cat = lambda tensor: tensor
+    model.log_dict = lambda log_dict, **kwargs: captured.update(log_dict)
+    model._trainer = SimpleNamespace(is_global_zero=True)
+
+    model._log_ensemble_rmse(model.val_metrics["ens_mse"], "val")
+
+    # Summed over variables the batches give MSEs of d_state and 9 * d_state,
+    # so the correct RMSE roots their mean, 5 * d_state.
+    assert captured["val_mean_ens_rmse"] == pytest.approx(
+        math.sqrt(5.0 * d_state)
+    )
+    root_of_each_batch_averaged = (
+        math.sqrt(d_state) + math.sqrt(9.0 * d_state)
+    ) / 2
+    assert captured["val_mean_ens_rmse"] != pytest.approx(
+        root_of_each_batch_averaged
+    )
