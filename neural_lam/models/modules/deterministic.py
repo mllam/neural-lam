@@ -1,5 +1,5 @@
 """Lightning module evaluating forecasters through a single deterministic
-rollout per batch."""
+forecast per batch."""
 
 # Standard library
 import os
@@ -63,9 +63,9 @@ class DeterministicForecasterModule(BaseForecasterModule):
 
         Overrides ``BaseForecasterModule.training_step``, which logs only the
         scalar objective because a forecaster's training loss need not
-        decompose over rollout steps. The deterministic objective is a
-        per-step scoring rule averaged over the rollout, so it does, and
-        ``--train_steps_to_log`` selects which of those steps to report as
+        decompose over predicted steps. The deterministic objective is a
+        per-step scoring rule averaged over those steps, so it does, and
+        ``--train_steps_to_log`` selects which of them to report as
         ``train_loss_unroll{i}``. The logged ``train_loss`` is the mean of
         the per-step losses, i.e. exactly
         ``forecaster.compute_training_loss``.

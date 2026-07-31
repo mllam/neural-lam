@@ -82,10 +82,10 @@ class DeterministicForecaster(Forecaster):
         """
         Score a single forecast with ``self.loss``, per predicted step.
 
-        This objective is a per-step scoring rule averaged over the rollout,
-        so it decomposes into the contribution of each predicted step, which
-        callers can report individually. ``compute_training_loss`` is the
-        mean of what this returns.
+        This objective is a per-step scoring rule averaged over the
+        predicted steps, so it decomposes into the contribution of each of
+        them, which callers can report individually.
+        ``compute_training_loss`` is the mean of what this returns.
 
         Parameters
         ----------
@@ -142,9 +142,9 @@ class DeterministicForecaster(Forecaster):
         """
         Score a single forecast with ``self.loss``.
 
-        Produces one forecast over the full rollout, scores it against the
-        target states on interior nodes and averages over batch and time.
-        Callers wanting the per-step breakdown of this same objective
+        Produces one forecast over every predicted step, scores it against
+        the target states on interior nodes and averages over batch and
+        time. Callers wanting the per-step breakdown of this same objective
         should use ``compute_step_losses`` instead, which this averages.
 
         Parameters
@@ -158,7 +158,7 @@ class DeterministicForecaster(Forecaster):
         forcing_features : torch.Tensor
             Shape ``(B, pred_steps, num_grid_nodes, num_forcing_vars)``.
             External forcings provided at each predicted step. Dims: ``B``
-            is batch size, ``pred_steps`` is the rollout length,
+            is batch size, ``pred_steps`` is the number of predicted steps,
             ``num_grid_nodes`` is the number of spatial nodes, and
             ``num_forcing_vars`` is the forcing feature dimension (already
             concatenated past/current/future windows).

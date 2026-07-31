@@ -354,7 +354,7 @@ class BaseForecasterModule(pl.LightningModule, ABC):
 
         This general implementation logs only the scalar objective, since
         ``compute_training_loss`` returns only a scalar: a forecaster's
-        objective (e.g. an ELBO) need not decompose over rollout steps, so
+        objective (e.g. an ELBO) need not decompose over predicted steps, so
         there is no per-step tensor to select from with
         ``train_steps_to_log``. Subclasses whose forecaster does expose such
         a decomposition override this to log the breakdown as well; see
