@@ -3,6 +3,8 @@
 # Local
 from .buffer_list import BufferList
 from .graph import (
+    compute_grid_input_dim,
+    load_and_register_graph,
     load_graph,
     zero_index_edge_index,
     zero_index_g2m,
@@ -13,21 +15,24 @@ from .logging import (
     log_on_rank_zero,
     setup_training_logger,
 )
-from .networks import make_mlp
+from .networks import make_gnn_seq, make_mlp
 from .plot import fractional_plot_bundle, has_working_latex
 from .tensor import inverse_sigmoid, inverse_softplus
 from .time import get_integer_time
 
 __all__ = [
     "BufferList",
+    "compute_grid_input_dim",
     "fractional_plot_bundle",
     "get_integer_time",
     "has_working_latex",
     "init_training_logger_metrics",
     "inverse_sigmoid",
     "inverse_softplus",
+    "load_and_register_graph",
     "load_graph",
     "log_on_rank_zero",
+    "make_gnn_seq",
     "make_mlp",
     "setup_training_logger",
     "zero_index_edge_index",
