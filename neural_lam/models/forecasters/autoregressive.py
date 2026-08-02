@@ -18,8 +18,10 @@ class ARForecaster(Forecaster):
     """
 
     def __init__(
-        self, predictor: StepPredictor, datastore: BaseDatastore
+        self, predictor: StepPredictor, datastore: BaseDatastore,
+        diagnostic_indices: list[int] = None
     ) -> None:
+        
         """
         Initialize the ARForecaster.
 
@@ -32,7 +34,7 @@ class ARForecaster(Forecaster):
         """
         super().__init__()
         self.predictor = predictor
-
+        self.diagnostic_indices = diagnostic_indices 
         # Register boundary/interior masks on the forecaster, not the predictor
         boundary_mask = (
             torch.tensor(datastore.boundary_mask.values, dtype=torch.float32)
@@ -126,6 +128,8 @@ class ARForecaster(Forecaster):
                 self.boundary_mask * boundary_state
                 + self.interior_mask * pred_state
             )
+            if self.diagnostic_indices is not None:
+                new_state[:, :, self.diagnostic_indices] = boundary_state[:, :, self.diagnostic_indices]
 
             prediction_list.append(new_state)
             if pred_std is not None:

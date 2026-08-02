@@ -114,6 +114,8 @@ class TrainingConfig:
     output_clamping: OutputClamping = dataclasses.field(
         default_factory=OutputClamping
     )
+    # Adding the new Field:
+    diagnostic_vars: list[str] = dataclasses.field(default_factory=list)
 
 
 @dataclasses.dataclass
