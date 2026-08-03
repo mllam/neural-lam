@@ -142,29 +142,35 @@ class BaseForecasterModule(pl.LightningModule, ABC):
         if var_leads_metrics_watch is None:
             var_leads_metrics_watch = {}
 
-        # datastore and forecaster are excluded from saved hparams and must
-        # be provided explicitly when calling load_from_checkpoint. Saving
-        # args makes the checkpoint self-describing: it carries model,
+        # Hyperparameters are named explicitly rather than left to
+        # save_hyperparameters' default of inspecting the constructor chain.
+        # That inspection records the arguments of the most derived
+        # __init__, i.e. as a subclass received them, whereas the values
+        # this module runs on are the ones resolved just above (the args
+        # namespace, then the mutable defaults). Passing them keeps what is
+        # recorded equal to what is used, whatever a subclass's signature
+        # looks like. Subclasses add their own with a further
+        # save_hyperparameters call, which merges into these.
+        #
+        # datastore and forecaster are deliberately absent and must be
+        # provided explicitly when calling load_from_checkpoint. Saving args
+        # makes the checkpoint self-describing: it carries model,
         # graph_name, hidden_dim, etc. so the caller can reconstruct the
         # exact forecaster architecture from the checkpoint alone.
-        self.save_hyperparameters(ignore=["datastore", "forecaster"])
-        # save_hyperparameters collects the arguments of the __init__ frame
-        # it is called from, which for a subclass with its own explicit
-        # signature is that subclass's frame, holding the values as passed.
-        # Write back the ones resolved above (mutable defaults, and the args
-        # namespace unpacking) so hparams never disagrees with what this
-        # module actually uses.
-        for name, resolved in (
-            ("lr", lr),
-            ("restore_opt", restore_opt),
-            ("n_example_pred", n_example_pred),
-            ("create_gif", create_gif),
-            ("val_steps_to_log", val_steps_to_log),
-            ("train_steps_to_log", train_steps_to_log),
-            ("metrics_watch", metrics_watch),
-            ("var_leads_metrics_watch", var_leads_metrics_watch),
-        ):
-            self.hparams[name] = resolved
+        self.save_hyperparameters(
+            {
+                "config": config,
+                "lr": lr,
+                "restore_opt": restore_opt,
+                "n_example_pred": n_example_pred,
+                "create_gif": create_gif,
+                "val_steps_to_log": val_steps_to_log,
+                "train_steps_to_log": train_steps_to_log,
+                "metrics_watch": metrics_watch,
+                "var_leads_metrics_watch": var_leads_metrics_watch,
+                "args": args,
+            }
+        )
 
         self.datastore = datastore
         self.forecaster = forecaster

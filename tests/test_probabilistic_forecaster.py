@@ -243,6 +243,59 @@ def test_probabilistic_ar_forecaster_is_abstract():
         ProbabilisticARForecaster(predictor, datastore)
 
 
+def test_saved_hparams_hold_resolved_values():
+    """Saved hyperparameters are the values the module runs on.
+
+    ``save_hyperparameters`` defaults to inspecting the constructor chain
+    and recording the arguments of the most derived ``__init__``, which for
+    a subclass with its own signature are the values as passed, before
+    ``BaseForecasterModule`` resolves them. ``hparams_initial`` is asserted
+    alongside ``hparams`` because it is snapshotted inside
+    ``save_hyperparameters``: any attempt to correct the values after that
+    call returns reaches only ``hparams`` and would fail here.
+    """
+    datastore = init_datastore_example("mdp")
+    config = nlconfig.NeuralLAMConfig(
+        datastore=nlconfig.DatastoreSelection(
+            kind=datastore.SHORT_NAME, config_path=datastore.root_path
+        )
+    )
+    predictor = ZeroStepPredictor(datastore=datastore, output_std=False)
+    module = DeterministicForecasterModule(
+        forecaster=DeterministicARForecaster(
+            predictor, datastore, config=config
+        ),
+        config=config,
+        datastore=datastore,
+    )
+
+    # Defaults resolved by the base class, not the None it was called with
+    assert module.hparams.val_steps_to_log == [1]
+    assert module.hparams.train_steps_to_log == []
+    assert module.hparams.metrics_watch == []
+    assert module.hparams.var_leads_metrics_watch == {}
+    assert dict(module.hparams_initial) == dict(module.hparams)
+
+    # The forecaster and datastore are supplied on load, never saved
+    assert "forecaster" not in module.hparams
+    assert "datastore" not in module.hparams
+
+    # A subclass's own hyperparameters survive alongside the base's
+    prob_module = ProbabilisticForecasterModule(
+        forecaster=ConcreteProbabilisticARForecaster(
+            NoisyStepPredictor(datastore=datastore, output_std=False),
+            datastore,
+            config=config,
+        ),
+        config=config,
+        datastore=datastore,
+        eval_ensemble_size=3,
+    )
+    assert prob_module.hparams.eval_ensemble_size == 3
+    assert prob_module.hparams.val_steps_to_log == [1]
+    assert dict(prob_module.hparams_initial) == dict(prob_module.hparams)
+
+
 def test_forecaster_module_evaluation_steps_are_abstract():
     """A module omitting validation_step/test_step fails at construction.
 

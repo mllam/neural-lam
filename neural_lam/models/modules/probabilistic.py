@@ -113,6 +113,10 @@ class ProbabilisticForecasterModule(BaseForecasterModule):
                 "eval_ensemble_size must be at least 1, "
                 f"got {eval_ensemble_size}"
             )
+        # The base class names the hyperparameters it knows about; this one
+        # is ours, so record it here. A second call merges rather than
+        # replaces, so both end up saved.
+        self.save_hyperparameters({"eval_ensemble_size": eval_ensemble_size})
         self.eval_ensemble_size = eval_ensemble_size
         self.val_metrics: dict[str, list] = {"ens_mse": []}
         self.test_metrics: dict[str, list] = {"ens_mse": []}
