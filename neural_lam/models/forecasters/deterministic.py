@@ -1,7 +1,7 @@
 """Forecasters trained by scoring a single deterministic forecast."""
 
 # Standard library
-from typing import Callable, Optional
+from typing import Any, Callable, Optional
 
 # Third-party
 import torch
@@ -27,50 +27,52 @@ class DeterministicForecaster(Forecaster):
     about *how* that forecast is produced, so this composes with any way of
     implementing ``forward`` (see ``DeterministicARForecaster`` for the
     auto-regressive combination).
-
-    Concrete subclasses must call ``_configure_scoring`` from their
-    ``__init__`` to set up the scoring rule and the ``pred_std`` fallback.
     """
 
-    def _configure_scoring(
+    def __init__(
         self,
         datastore: BaseDatastore,
-        config: NeuralLAMConfig | None,
-        loss: str,
+        config: NeuralLAMConfig | None = None,
+        loss: str = "wmse",
+        **kwargs: Any,
     ) -> None:
         """
         Set up the scoring rule and the constant ``pred_std`` fallback.
-
-        Called by concrete subclasses from ``__init__``, after
-        ``torch.nn.Module`` initialization (buffers are registered here).
 
         Parameters
         ----------
         datastore : BaseDatastore
             The datastore providing the state standardization statistics
-            used to compute ``per_var_std``.
-        config : NeuralLAMConfig or None
+            used to compute ``per_var_std``. Also forwarded on, since
+            mix-ins later in the MRO need it too.
+        config : NeuralLAMConfig or None, optional
             Configuration used to compute the constant per-variable std
             substituted for ``pred_std`` when the forecast carries no std of
             its own. Required in that case for ``score`` and
             ``compute_training_loss`` to work (they raise ``ValueError`` via
             ``_resolve_pred_std`` otherwise); forecasters used purely for
-            inference can omit it.
-        loss : str
+            inference can omit it. Default ``None``.
+        loss : str, optional
             The scoring rule (from ``neural_lam.metrics``) applied by
-            ``compute_training_loss``, stored as ``self.loss``.
+            ``compute_training_loss``, stored as ``self.loss``. Default
+            ``"wmse"``.
+        **kwargs : Any
+            Arguments belonging to the mix-ins this is combined with,
+            forwarded unchanged along the MRO. See ``Forecaster``.
         """
+        super().__init__(datastore=datastore, **kwargs)
         self.loss = metrics.get_metric(loss)
 
-        # Store per_var_std only if the forecast carries no std of its own
-        if not self.predicts_std and config is not None:
-            self.register_buffer(
-                "per_var_std",
-                get_per_var_std(config=config, datastore=datastore),
-                persistent=False,
-            )
-        else:
-            self.per_var_std = None
+        # Registered whenever a config is given, rather than only when the
+        # forecast lacks its own std: that is settled per call in
+        # _resolve_pred_std, and checking it here would mean reading state a
+        # mix-in later in the MRO has yet to set up
+        per_var_std = (
+            get_per_var_std(config=config, datastore=datastore)
+            if config is not None
+            else None
+        )
+        self.register_buffer("per_var_std", per_var_std, persistent=False)
 
     def compute_step_losses(
         self,
@@ -216,16 +218,15 @@ class DeterministicForecaster(Forecaster):
         ------
         ValueError
             If ``pred_std`` is ``None`` and no ``per_var_std`` fallback is
-            available (``predicts_std`` is False and this forecaster was
-            constructed without ``config``).
+            available (this forecaster was constructed without ``config``).
         """
         if pred_std is not None:
             return pred_std
         if self.per_var_std is None:
             raise ValueError(
-                "No pred_std available for scoring: predictor.predicts_std "
-                "is False and this forecaster has no per_var_std fallback "
-                "(it was constructed without config). Pass config to the "
+                "No pred_std available for scoring: the forecast carries no "
+                "std and this forecaster has no per_var_std fallback (it was "
+                "constructed without config). Pass config to the "
                 "constructor, or use a predictor that outputs its own std."
             )
         return self.per_var_std
@@ -332,7 +333,11 @@ class DeterministicARForecaster(DeterministicForecaster, ARForecaster):
             The scoring rule (from ``neural_lam.metrics``) applied by
             ``compute_training_loss``.
         """
-        # DeterministicForecaster defines no __init__, so this initializes
-        # the AR half (and torch.nn.Module) before any buffer is registered
-        super().__init__(predictor, datastore)
-        self._configure_scoring(datastore, config=config, loss=loss)
+        # Named rather than positional: each argument is consumed by
+        # whichever half of the MRO declares it
+        super().__init__(
+            predictor=predictor,
+            datastore=datastore,
+            config=config,
+            loss=loss,
+        )

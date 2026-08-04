@@ -10,8 +10,11 @@ import torch
 from neural_lam import config as nlconfig
 from neural_lam import metrics
 from neural_lam.models import (
+    ARForecaster,
     DeterministicARForecaster,
+    DeterministicForecaster,
     DeterministicForecasterModule,
+    Forecaster,
     StepPredictor,
 )
 from tests.conftest import init_datastore_example
@@ -162,6 +165,92 @@ def test_ar_forecaster_without_config_raises_on_use_not_construction():
             forcing_features,
             true_states,
             interior_mask_bool=torch.ones(num_grid_nodes, dtype=torch.bool),
+        )
+
+
+class MeanAbsObjective(Forecaster):
+    """Test-only objective mix-in taking a constructor argument of its own.
+
+    Stands in for a future objective (CRPS, a variational loss, ...) to
+    check that adding one requires nothing beyond declaring its arguments
+    and forwarding the rest.
+    """
+
+    def __init__(self, datastore, scale: float = 1.0, **kwargs):
+        super().__init__(datastore=datastore, **kwargs)
+        self.scale = scale
+
+    def compute_training_loss(
+        self, init_states, forcing_features, target_states, interior_mask_bool
+    ):
+        prediction, _ = self(init_states, forcing_features, target_states)
+        loss = self.scale * torch.mean(torch.abs(prediction - target_states))
+        return loss, {}
+
+
+class MeanAbsARForecaster(MeanAbsObjective, ARForecaster):
+    """Auto-regressive forecast production plus the mean-abs objective."""
+
+
+def test_objective_mixin_composes_without_manual_wiring():
+    """A new objective mix-in only declares its own constructor arguments
+    and forwards the rest; combining it with ARForecaster initializes both
+    halves, with no setup call for the concrete class to remember."""
+    datastore = init_datastore_example("mdp")
+    predictor = MockStepPredictor(datastore=datastore, output_std=False)
+
+    forecaster = MeanAbsARForecaster(
+        predictor=predictor, datastore=datastore, scale=2.0
+    )
+
+    # Objective half
+    assert forecaster.scale == 2.0
+    # Forecast-production half, initialized before the objective's body ran
+    assert forecaster.predictor is predictor
+    assert forecaster.boundary_mask.shape[1] == predictor.num_grid_nodes
+    # Shared argument, consumed at the end of the chain
+    assert forecaster.datastore is datastore
+
+
+def test_objective_mixin_composes_in_either_order():
+    """Mix-in constructors must not read state another mix-in sets up.
+    DeterministicForecaster used to decide the per_var_std fallback from
+    predicts_std, which ARForecaster answers from the predictor it stores,
+    so it only worked when the objective was listed first."""
+    datastore = init_datastore_example("mdp")
+    config = nlconfig.NeuralLAMConfig(
+        datastore=nlconfig.DatastoreSelection(
+            kind=datastore.SHORT_NAME, config_path=datastore.root_path
+        )
+    )
+    predictor = MockStepPredictor(datastore=datastore, output_std=False)
+
+    class ObjectiveFirst(DeterministicForecaster, ARForecaster):
+        pass
+
+    class ProductionFirst(ARForecaster, DeterministicForecaster):
+        pass
+
+    for cls in (ObjectiveFirst, ProductionFirst):
+        forecaster = cls(
+            predictor=predictor,
+            datastore=datastore,
+            config=config,
+            loss="mse",
+        )
+        assert forecaster.predictor is predictor
+        assert forecaster.per_var_std is not None
+
+
+def test_unclaimed_constructor_argument_raises():
+    """An argument no mix-in in the MRO declares must not be swallowed by
+    the **kwargs forwarding."""
+    datastore = init_datastore_example("mdp")
+    predictor = MockStepPredictor(datastore=datastore, output_std=False)
+
+    with pytest.raises(TypeError, match="not_a_real_arg"):
+        MeanAbsARForecaster(
+            predictor=predictor, datastore=datastore, not_a_real_arg=1
         )
 
 

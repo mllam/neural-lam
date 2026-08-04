@@ -1,5 +1,8 @@
 """Forecaster that uses an auto-regressive strategy to unroll a forecast."""
 
+# Standard library
+from typing import Any
+
 # Third-party
 import torch
 
@@ -27,6 +30,7 @@ class ARForecaster(Forecaster):
         self,
         predictor: StepPredictor,
         datastore: BaseDatastore,
+        **kwargs: Any,
     ) -> None:
         """
         Initialize the ARForecaster.
@@ -36,9 +40,13 @@ class ARForecaster(Forecaster):
         predictor : StepPredictor
             The predictor to use for each step.
         datastore : BaseDatastore
-            The datastore providing grid metadata and boundary masks.
+            The datastore providing grid metadata and boundary masks. Also
+            forwarded on, since mix-ins later in the MRO need it too.
+        **kwargs : Any
+            Arguments belonging to the mix-ins this is combined with,
+            forwarded unchanged along the MRO. See ``Forecaster``.
         """
-        super().__init__()
+        super().__init__(datastore=datastore, **kwargs)
         self.predictor = predictor
 
         # Register boundary/interior masks on the forecaster, not the predictor
