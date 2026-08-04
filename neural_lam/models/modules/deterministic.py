@@ -22,10 +22,16 @@ class DeterministicForecasterModule(BaseForecasterModule):
     """
     Lightning module for a single deterministic forecast per batch.
 
-    Validation and testing score the forecaster's own single prediction via
-    ``forecaster.score``, as opposed to ``ProbabilisticForecasterModule``,
-    which samples and scores an ensemble. Training is shared with that
-    module unchanged (see ``BaseForecasterModule.training_step``).
+    Validation and testing evaluate the forecaster's own single prediction,
+    as opposed to ``ProbabilisticForecasterModule``, which samples and scores
+    an ensemble. Training is shared with that module unchanged (see
+    ``BaseForecasterModule.training_step``).
+
+    The reported loss comes from ``forecaster.score``, since only the
+    forecaster knows its objective. The reported metrics (mse, mae) are
+    computed here from ``neural_lam.metrics``: they are fixed regardless of
+    what the forecaster trains on, so routing them through it would add a
+    layer without adding meaning.
     """
 
     # score() is supplied by the deterministic objective mixin
@@ -223,11 +229,16 @@ class DeterministicForecasterModule(BaseForecasterModule):
             batch_size=batch[0].shape[0],
         )
 
-        entry_mses = self.forecaster.score(
+        # Reported independently of the training objective, so computed here
+        # rather than through the forecaster. metrics.mse ignores the std
+        # argument, but requires one
+        std_placeholder = torch.ones(
+            target_states.shape[-1], device=target_states.device
+        )
+        entry_mses = metrics.mse(
             prediction,
             target_states,
-            pred_std,
-            metric=metrics.mse,
+            std_placeholder,
             mask=self.interior_mask_bool,
             sum_vars=False,
         )
@@ -273,12 +284,17 @@ class DeterministicForecasterModule(BaseForecasterModule):
             batch_size=batch[0].shape[0],
         )
 
+        # Reported independently of the training objective, so computed here
+        # rather than through the forecaster. Both ignore the std argument,
+        # but require one
+        std_placeholder = torch.ones(
+            target_states.shape[-1], device=target_states.device
+        )
         for metric_name in ("mse", "mae"):
-            batch_metric_vals = self.forecaster.score(
+            batch_metric_vals = metrics.get_metric(metric_name)(
                 prediction,
                 target_states,
-                pred_std,
-                metric=metrics.get_metric(metric_name),
+                std_placeholder,
                 mask=self.interior_mask_bool,
                 sum_vars=False,
             )

@@ -8,7 +8,6 @@ import torch
 
 # First-party
 from neural_lam import config as nlconfig
-from neural_lam import metrics
 from neural_lam.models import (
     ARForecaster,
     DeterministicARForecaster,
@@ -105,16 +104,6 @@ def test_ar_forecaster_score():
         prediction, target, forecaster.per_var_std, mask=mask
     )
     assert torch.equal(scored, expected)
-
-    # An explicit metric overrides self.loss, still substituting the
-    # per_var_std fallback
-    scored_mse = forecaster.score(
-        prediction, target, None, metric=metrics.mse, mask=mask
-    )
-    expected_mse = metrics.mse(
-        prediction, target, forecaster.per_var_std, mask=mask
-    )
-    assert torch.equal(scored_mse, expected_mse)
 
     # An explicit pred_std is used as-is, not overridden by per_var_std
     explicit_std = torch.full((d_state,), 2.0)

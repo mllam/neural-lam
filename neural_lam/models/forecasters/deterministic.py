@@ -1,7 +1,7 @@
 """Forecasters trained by scoring a single deterministic forecast."""
 
 # Standard library
-from typing import Any, Callable, Optional
+from typing import Any, Optional
 
 # Third-party
 import torch
@@ -236,17 +236,22 @@ class DeterministicForecaster(Forecaster):
         prediction: torch.Tensor,
         target_states: torch.Tensor,
         pred_std: Optional[torch.Tensor],
-        metric: Optional[Callable[..., torch.Tensor]] = None,
         mask: Optional[torch.Tensor] = None,
         average_grid: bool = True,
         sum_vars: bool = True,
     ) -> torch.Tensor:
         """
-        Score an already-produced prediction for reporting (not training).
+        Apply this forecaster's scoring rule to an already-produced forecast.
 
         Resolves ``pred_std`` via ``_resolve_pred_std`` (substituting
-        ``self.per_var_std`` when ``None``), then applies ``metric``
-        (defaulting to ``self.loss``, the configured scoring rule).
+        ``self.per_var_std`` when ``None``), then applies ``self.loss``. Used
+        to report the loss on a forecast the caller already has, at a
+        reduction of its choosing, without recomputing it.
+
+        Only the loss goes through here. Metrics unrelated to the training
+        objective depend on nothing but the shapes of the three tensors
+        below, so callers compute those directly from
+        ``neural_lam.metrics``.
 
         Parameters
         ----------
@@ -262,21 +267,17 @@ class DeterministicForecaster(Forecaster):
             the forecast carries no std, in which case ``self.per_var_std``
             is substituted (see ``_resolve_pred_std`` for when this raises
             instead).
-        metric : callable or None, optional
-            Scoring function with the ``neural_lam.metrics`` signature
-            ``(pred, target, pred_std, mask=None, average_grid=True,
-            sum_vars=True) -> torch.Tensor``. Defaults to ``self.loss``.
         mask : torch.Tensor or None, optional
-            Shape ``(num_grid_nodes,)``, boolean. Forwarded to ``metric``.
+            Shape ``(num_grid_nodes,)``, boolean. Forwarded to ``self.loss``.
         average_grid : bool, optional
-            Forwarded to ``metric``.
+            Forwarded to ``self.loss``. Default ``True``.
         sum_vars : bool, optional
-            Forwarded to ``metric``.
+            Forwarded to ``self.loss``. Default ``True``.
 
         Returns
         -------
         torch.Tensor
-            The metric's output; shape depends on ``average_grid`` and
+            The scoring rule's output; shape depends on ``average_grid`` and
             ``sum_vars`` (see ``neural_lam.metrics``).
 
         Raises
@@ -286,8 +287,7 @@ class DeterministicForecaster(Forecaster):
             available; see ``_resolve_pred_std``.
         """
         pred_std = self._resolve_pred_std(pred_std)
-        metric_fn = self.loss if metric is None else metric
-        return metric_fn(
+        return self.loss(
             prediction,
             target_states,
             pred_std,
