@@ -40,12 +40,6 @@ class BaseForecasterModule(pl.LightningModule, ABC):
     ``ProbabilisticForecasterModule``) rather than overriding one another.
     """
 
-    # Which metrics are collected differs per evaluation mode, so concrete
-    # subclasses create these in __init__; the epoch-end hooks here consume
-    # whatever they contain. Declared for the contract only, not assigned.
-    val_metrics: dict[str, list]
-    test_metrics: dict[str, list]
-
     # pylint: disable=arguments-differ
 
     def __init__(
