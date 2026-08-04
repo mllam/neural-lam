@@ -127,6 +127,11 @@ class DeterministicForecasterModule(BaseForecasterModule):
         the per-step losses, i.e. exactly
         ``forecaster.compute_training_loss``.
 
+        Shares ``_compute_prediction_and_loss`` with the validation and test
+        steps: for this objective the per-step losses it returns are the same
+        ones ``forecaster.compute_step_losses`` produces, down to the
+        gradients.
+
         Parameters
         ----------
         batch : tuple
@@ -137,13 +142,7 @@ class DeterministicForecasterModule(BaseForecasterModule):
         torch.Tensor
             The computed loss for the training step.
         """
-        init_states, target_states, forcing_features, _ = batch
-        time_step_loss = self.forecaster.compute_step_losses(
-            init_states,
-            forcing_features,
-            target_states,
-            interior_mask_bool=self.interior_mask_bool,
-        )
+        _, _, _, time_step_loss = self._compute_prediction_and_loss(batch)
         batch_loss = torch.mean(time_step_loss)
         self._log_step_loss(
             time_step_loss, batch_loss, "train", batch[0].shape[0]
@@ -158,11 +157,12 @@ class DeterministicForecasterModule(BaseForecasterModule):
         Compute predicted mean, standard deviation, and step-wise loss.
         Also extract and return corresponding target from batch.
 
-        Shared by ``validation_step`` and ``test_step``. ``training_step``
-        deliberately does not use this: it goes through the forecaster's
-        training objective rather than the reporting scoring rule applied
-        here, and those are only interchangeable for this particular
-        objective.
+        Shared by ``training_step``, ``validation_step`` and ``test_step``.
+        The scoring rule applied here is the forecaster's own, so for this
+        objective the per-step losses match
+        ``forecaster.compute_step_losses`` exactly; a forecaster whose
+        objective is not a per-step scoring rule needs the plain
+        ``BaseForecasterModule.training_step`` instead.
 
         Parameters
         ----------
