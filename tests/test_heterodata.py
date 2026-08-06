@@ -292,18 +292,18 @@ def test_builder_hierarchical_roundtrip_is_exact():
                 assert torch.equal(a, b), f"{key}[{lvl}]"
 
 
-def test_load_and_register_graph_rejects_hierarchical():
-    """A hierarchical graph cannot be loaded as HeteroData yet.
+def test_load_and_register_graph_builds_hierarchical_heterodata():
+    """Loading a hierarchical graph gives a per-level ``HeteroData`` object.
 
-    The rejection has to happen in ``load_and_register_graph``, since that is
-    where the graph is loaded and the ``HeteroData`` object is built, and it
-    is only there that the graph is known to be hierarchical.
+    ``load_and_register_graph`` is where the graph is loaded and the
+    ``HeteroData`` object is built, and the only place that knows whether the
+    graph is hierarchical, so check the hierarchical case directly on it.
     """
     # First-party
     from tests.dummy_datastore import DummyDatastore
 
     datastore = DummyDatastore()
-    graph_name = "hierarchical_rejected"
+    graph_name = "hierarchical3"
     graph_dir_path = Path(datastore.root_path) / "graph" / graph_name
     if not graph_dir_path.exists():
         create_graph_from_datastore(
@@ -313,13 +313,25 @@ def test_load_and_register_graph_rejects_hierarchical():
             hierarchical=True,
         )
 
-    with pytest.raises(NotImplementedError, match="non-hierarchical"):
-        load_and_register_graph(
-            torch.nn.Module(),
-            datastore,
-            graph_name,
-            mesh_node_features_scaling=1.0,
-            use_heterodata=True,
+    module = torch.nn.Module()
+    hierarchical = load_and_register_graph(
+        module,
+        datastore,
+        graph_name,
+        mesh_node_features_scaling=1.0,
+        use_heterodata=True,
+    )
+
+    assert hierarchical
+    assert isinstance(module.graph, HeteroData)
+    # One node type per mesh level, and the registered per-level tensors
+    # match the levels held on the HeteroData object.
+    num_levels = len(module.mesh_static_features)
+    assert num_levels > 1
+    for level in range(num_levels):
+        assert torch.equal(
+            module.graph[mesh_level_node_type(level)].x,
+            module.mesh_static_features[level],
         )
 
 
