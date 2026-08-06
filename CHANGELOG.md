@@ -8,13 +8,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [unreleased](https://github.com/mllam/neural-lam/compare/v0.6.0...HEAD)
 
 ### Added
+- Add latent encoder/decoder modules and the `GraphEFM` (hierarchical) / `GraphEFMMultiScale` (flat) step predictors for the Graph-EFM ensemble forecasting model. [\#648](https://github.com/mllam/neural-lam/pull/648) @Sir-Sloth-The-Lazy
+
 - Add `neural_lam.utils.heterodata` for representing the loaded graph as a
   `pyg.HeteroData` object, with grid nodes as the `grid` node type, mesh nodes
   as the `mesh` node type and `g2m`/`m2m`/`m2g` as typed edges.
-  `BaseGraphModel` reads its graph tensors out of that object when constructed
-  with `use_heterodata=True` (default `False`), which leaves the model's
-  behaviour, and therefore training, unchanged. Flat (non-hierarchical) graphs
-  only. [\#711](https://github.com/mllam/neural-lam/pull/711) @prajwal-tech07
+  `load_and_register_graph` builds that object and reads the model's graph
+  tensors back out of it when called with `use_heterodata=True` (default
+  `False`), which leaves the models' behaviour, and therefore training,
+  unchanged. Flat (non-hierarchical) graphs only.
+  [\#711](https://github.com/mllam/neural-lam/pull/711) @prajwal-tech07
 
 - Extend the `pyg.HeteroData` graph representation to hierarchical graphs and
   the `HiLAM`/`HiLAMParallel` models. Each mesh level becomes its own node type
