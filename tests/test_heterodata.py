@@ -24,6 +24,7 @@ from neural_lam.models import GraphLAM, HiLAM
 from neural_lam.utils import (
     graph_dict_to_heterodata,
     graph_tensors_from_heterodata,
+    load_and_register_graph,
 )
 from neural_lam.utils.buffer_list import BufferList
 from neural_lam.utils.heterodata import (
@@ -289,6 +290,37 @@ def test_builder_hierarchical_roundtrip_is_exact():
             assert len(restored[key]) == len(original), key
             for lvl, (a, b) in enumerate(zip(restored[key], original)):
                 assert torch.equal(a, b), f"{key}[{lvl}]"
+
+
+def test_load_and_register_graph_rejects_hierarchical():
+    """A hierarchical graph cannot be loaded as HeteroData yet.
+
+    The rejection has to happen in ``load_and_register_graph``, since that is
+    where the graph is loaded and the ``HeteroData`` object is built, and it
+    is only there that the graph is known to be hierarchical.
+    """
+    # First-party
+    from tests.dummy_datastore import DummyDatastore
+
+    datastore = DummyDatastore()
+    graph_name = "hierarchical_rejected"
+    graph_dir_path = Path(datastore.root_path) / "graph" / graph_name
+    if not graph_dir_path.exists():
+        create_graph_from_datastore(
+            datastore=datastore,
+            output_root_path=str(graph_dir_path),
+            n_max_levels=3,
+            hierarchical=True,
+        )
+
+    with pytest.raises(NotImplementedError, match="non-hierarchical"):
+        load_and_register_graph(
+            torch.nn.Module(),
+            datastore,
+            graph_name,
+            mesh_node_features_scaling=1.0,
+            use_heterodata=True,
+        )
 
 
 def _build_graphlam(datastore, graph_name, use_heterodata):
