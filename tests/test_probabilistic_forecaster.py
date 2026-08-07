@@ -392,11 +392,17 @@ def test_deterministic_training_step_logs_per_step_losses():
 
     # The reported steps are the corresponding entries of the same
     # decomposition the logged train_loss averages
-    step_losses = forecaster.compute_step_losses(
-        init_states,
-        forcing_features,
-        target_states,
-        interior_mask_bool=model.interior_mask_bool,
+    prediction, pred_std = forecaster(
+        init_states, forcing_features, target_states
+    )
+    step_losses = torch.mean(
+        forecaster.score(
+            prediction,
+            target_states,
+            pred_std,
+            mask=model.interior_mask_bool,
+        ),
+        dim=0,
     )
     torch.testing.assert_close(captured["train_loss_unroll1"], step_losses[0])
     torch.testing.assert_close(captured["train_loss_unroll3"], step_losses[2])

@@ -120,17 +120,10 @@ class DeterministicForecasterModule(BaseForecasterModule):
 
         Overrides ``BaseForecasterModule.training_step``, which logs only the
         scalar objective because a forecaster's training loss need not
-        decompose over predicted steps. The deterministic objective is a
-        per-step scoring rule averaged over those steps, so it does, and
-        ``--train_steps_to_log`` selects which of them to report as
-        ``train_loss_unroll{i}``. The logged ``train_loss`` is the mean of
-        the per-step losses, i.e. exactly
-        ``forecaster.compute_training_loss``.
-
-        Shares ``_compute_prediction_and_loss`` with the validation and test
-        steps: for this objective the per-step losses it returns are the same
-        ones ``forecaster.compute_step_losses`` produces, down to the
-        gradients.
+        decompose over predicted steps. The deterministic objective does, so
+        ``--train_steps_to_log`` can report individual steps as
+        ``train_loss_unroll{i}`` and the logged ``train_loss`` is their mean,
+        equal to ``forecaster.compute_training_loss``.
 
         Parameters
         ----------
@@ -158,9 +151,8 @@ class DeterministicForecasterModule(BaseForecasterModule):
         Also extract and return corresponding target from batch.
 
         Shared by ``training_step``, ``validation_step`` and ``test_step``.
-        The scoring rule applied here is the forecaster's own, so for this
-        objective the per-step losses match
-        ``forecaster.compute_step_losses`` exactly; a forecaster whose
+        The scoring rule applied here is the forecaster's own, so the mean
+        of the per-step losses is its training objective; a forecaster whose
         objective is not a per-step scoring rule needs the plain
         ``BaseForecasterModule.training_step`` instead.
 
