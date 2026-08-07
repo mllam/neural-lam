@@ -1,7 +1,3 @@
-# Standard library
-import math
-from types import SimpleNamespace
-
 # Third-party
 import pytest
 import torch
@@ -417,6 +413,31 @@ class MemberCountRecordingForecaster(ConcreteProbabilisticARForecaster):
         return super().sample_ensemble(*args, **kwargs)
 
 
+class ComponentReportingForecaster(MemberCountRecordingForecaster):
+    """Forecaster splitting its objective into named loss components.
+
+    Records every requested member count in order, so that the objective's
+    own ensemble can be told apart from the evaluation one.
+    """
+
+    def __init__(self, *args, **kwargs):
+        """Initialize the forecaster and its recording state."""
+        super().__init__(*args, **kwargs)
+        self.num_members_seen: list[int] = []
+        self.last_batch_loss = None
+        self.last_components: dict[str, torch.Tensor] = {}
+
+    def sample_ensemble(self, *args, **kwargs):
+        self.num_members_seen.append(kwargs.get("num_members"))
+        return super().sample_ensemble(*args, **kwargs)
+
+    def compute_training_loss(self, *args, **kwargs):
+        batch_loss, _ = super().compute_training_loss(*args, **kwargs)
+        self.last_batch_loss = batch_loss
+        self.last_components = {"kl": torch.tensor(0.5)}
+        return batch_loss, self.last_components
+
+
 def test_probabilistic_module_validation_scores_ensemble_mean():
     datastore = init_datastore_example("mdp")
     predictor = NoisyStepPredictor(datastore=datastore, output_std=False)
@@ -516,9 +537,12 @@ def test_probabilistic_module_test_step_scores_ensemble_mean():
     assert torch.all(torch.isfinite(entry_mses))
 
 
-def test_ensemble_rmse_takes_root_after_averaging_all_samples():
-    """The epoch RMSE roots the mean MSE over every sample, rather than
-    averaging per-batch roots (the two differ whenever batches disagree)."""
+@pytest.mark.parametrize(
+    "step_name, phase", [("validation_step", "val"), ("test_step", "test")]
+)
+def test_probabilistic_module_logs_forecaster_objective(step_name, phase):
+    """Evaluation reports the forecaster's own training objective, giving
+    ModelCheckpoint a val_mean_loss to monitor."""
     datastore = init_datastore_example("mdp")
     predictor = NoisyStepPredictor(datastore=datastore, output_std=False)
     config = nlconfig.NeuralLAMConfig(
@@ -526,39 +550,38 @@ def test_ensemble_rmse_takes_root_after_averaging_all_samples():
             kind=datastore.SHORT_NAME, config_path=datastore.root_path
         )
     )
-    forecaster = ConcreteProbabilisticARForecaster(
-        predictor, datastore, config=config
+    forecaster = ComponentReportingForecaster(
+        predictor, datastore, config=config, train_num_members=2
     )
     model = ProbabilisticForecasterModule(
         forecaster=forecaster,
         config=config,
         datastore=datastore,
-        eval_ensemble_size=2,
+        eval_ensemble_size=3,
     )
 
-    # Two batches of one sample and one rollout step, with deliberately
-    # different squared errors so the two aggregation orders disagree.
-    d_state = datastore.get_num_data_vars(category="state")
-    model.val_metrics["ens_mse"] = [
-        torch.full((1, 1, d_state), 1.0),
-        torch.full((1, 1, d_state), 9.0),
-    ]
+    B, pred_steps = 2, 3
+    init_states, forcing_features, target_states = _example_batch(
+        datastore, B=B, pred_steps=pred_steps
+    )
+    batch = (
+        init_states,
+        target_states,
+        forcing_features,
+        torch.zeros(B, pred_steps),
+    )
 
     captured = {}
-    model.all_gather_cat = lambda tensor: tensor
     model.log_dict = lambda log_dict, **kwargs: captured.update(log_dict)
-    model._trainer = SimpleNamespace(is_global_zero=True)
 
-    model._log_ensemble_rmse(model.val_metrics["ens_mse"], "val")
+    torch.manual_seed(42)
+    getattr(model, step_name)(batch, 0)
 
-    # Summed over variables the batches give MSEs of d_state and 9 * d_state,
-    # so the correct RMSE roots their mean, 5 * d_state.
-    assert captured["val_mean_ens_rmse"] == pytest.approx(
-        math.sqrt(5.0 * d_state)
-    )
-    root_of_each_batch_averaged = (
-        math.sqrt(d_state) + math.sqrt(9.0 * d_state)
-    ) / 2
-    assert captured["val_mean_ens_rmse"] != pytest.approx(
-        root_of_each_batch_averaged
-    )
+    # The objective is the forecaster's own, reported under the same name
+    # the deterministic module uses, alongside any components it splits out
+    assert captured[f"{phase}_mean_loss"] is forecaster.last_batch_loss
+    assert captured[f"{phase}_kl"] is forecaster.last_components["kl"]
+
+    # The objective samples its own ensemble, with the member count it
+    # trains on, before the evaluation ensemble is drawn
+    assert forecaster.num_members_seen == [2, 3]
