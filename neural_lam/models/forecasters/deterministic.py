@@ -1,7 +1,7 @@
 """Forecasters trained by scoring a single deterministic forecast."""
 
 # Standard library
-from typing import Any, Optional
+from typing import Optional
 
 # Third-party
 import torch
@@ -21,12 +21,10 @@ class DeterministicForecaster(Forecaster):
     Forecaster whose training objective is a scoring rule applied to a
     single forecast.
 
-    Supplies the objective half of a forecaster: ``compute_training_loss``
-    produces one forecast and scores it, and ``score`` applies a metric to
-    an already-produced forecast for reporting. Neither makes any assumption
-    about *how* that forecast is produced, so this composes with any way of
-    implementing ``forward`` (see ``DeterministicARForecaster`` for the
-    auto-regressive combination).
+    ``compute_training_loss`` produces one forecast and scores it, and
+    ``score`` applies the same metric to an already-produced forecast for
+    reporting. ``forward`` is left abstract; see
+    ``DeterministicARForecaster`` for the auto-regressive combination.
     """
 
     def __init__(
@@ -34,7 +32,6 @@ class DeterministicForecaster(Forecaster):
         datastore: BaseDatastore,
         config: NeuralLAMConfig | None = None,
         loss: str = "wmse",
-        **kwargs: Any,
     ) -> None:
         """
         Set up the scoring rule and the constant ``pred_std`` fallback.
@@ -43,8 +40,7 @@ class DeterministicForecaster(Forecaster):
         ----------
         datastore : BaseDatastore
             The datastore providing the state standardization statistics
-            used to compute ``per_var_std``. Also forwarded on, since
-            mix-ins later in the MRO need it too.
+            used to compute ``per_var_std``.
         config : NeuralLAMConfig or None, optional
             Configuration used to compute the constant per-variable std
             substituted for ``pred_std`` when the forecast carries no std of
@@ -56,17 +52,12 @@ class DeterministicForecaster(Forecaster):
             The scoring rule (from ``neural_lam.metrics``) applied by
             ``compute_training_loss``, stored as ``self.loss``. Default
             ``"wmse"``.
-        **kwargs : Any
-            Arguments belonging to the mix-ins this is combined with,
-            forwarded unchanged along the MRO. See ``Forecaster``.
         """
-        super().__init__(datastore=datastore, **kwargs)
+        super().__init__(datastore=datastore)
         self.loss = metrics.get_metric(loss)
 
-        # Registered whenever a config is given, rather than only when the
-        # forecast lacks its own std: that is settled per call in
-        # _resolve_pred_std, and checking it here would mean reading state a
-        # mix-in later in the MRO has yet to set up
+        # Whether the fallback is needed is settled per call in
+        # _resolve_pred_std
         per_var_std = (
             get_per_var_std(config=config, datastore=datastore)
             if config is not None
@@ -297,7 +288,7 @@ class DeterministicForecaster(Forecaster):
         )
 
 
-class DeterministicARForecaster(DeterministicForecaster, ARForecaster):
+class DeterministicARForecaster(ARForecaster, DeterministicForecaster):
     """
     Auto-regressive forecaster trained by scoring its single rollout.
 
@@ -333,8 +324,6 @@ class DeterministicARForecaster(DeterministicForecaster, ARForecaster):
             The scoring rule (from ``neural_lam.metrics``) applied by
             ``compute_training_loss``.
         """
-        # Named rather than positional: each argument is consumed by
-        # whichever half of the MRO declares it
         super().__init__(
             predictor=predictor,
             datastore=datastore,

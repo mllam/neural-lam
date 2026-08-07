@@ -17,13 +17,11 @@ class ARForecaster(Forecaster):
     Forecaster that produces a forecast by auto-regressive unrolling, using
     a StepPredictor at each AR step.
 
-    This class fixes only *how forecasts are produced*, and deliberately says
-    nothing about how a training objective is computed from them: it leaves
-    ``compute_training_loss`` abstract. The two are orthogonal, so the
-    objective is mixed in separately (see ``DeterministicForecaster`` and
-    ``ProbabilisticForecaster``), which lets an auto-regressive forecaster be
-    trained deterministically or probabilistically, and equally lets a
-    non-auto-regressive forecaster reuse either objective.
+    This class fixes only *how forecasts are produced* and leaves the
+    training objective (``compute_training_loss``) abstract. It is a
+    mix-in: combine it with an objective class, listing it first so its
+    ``**kwargs`` forwarding reaches the objective's constructor, as in
+    ``DeterministicARForecaster(ARForecaster, DeterministicForecaster)``.
     """
 
     def __init__(
@@ -40,11 +38,10 @@ class ARForecaster(Forecaster):
         predictor : StepPredictor
             The predictor to use for each step.
         datastore : BaseDatastore
-            The datastore providing grid metadata and boundary masks. Also
-            forwarded on, since mix-ins later in the MRO need it too.
+            The datastore providing grid metadata and boundary masks.
         **kwargs : Any
-            Arguments belonging to the mix-ins this is combined with,
-            forwarded unchanged along the MRO. See ``Forecaster``.
+            Constructor arguments of the objective class this mix-in is
+            combined with, forwarded to it unchanged.
         """
         super().__init__(datastore=datastore, **kwargs)
         self.predictor = predictor

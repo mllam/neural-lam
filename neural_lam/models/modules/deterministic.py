@@ -34,7 +34,7 @@ class DeterministicForecasterModule(BaseForecasterModule):
     layer without adding meaning.
     """
 
-    # score() is supplied by the deterministic objective mixin
+    # Narrowed from Forecaster: this module calls forecaster.score()
     forecaster: DeterministicForecaster
 
     def __init__(

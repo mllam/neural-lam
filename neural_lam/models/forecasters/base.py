@@ -2,7 +2,6 @@
 
 # Standard library
 from abc import ABC, abstractmethod
-from typing import Any
 
 # Third-party
 import torch
@@ -18,42 +17,22 @@ class Forecaster(nn.Module, ABC):
     forcing and forces and previous states into a full forecast of the
     requested length.
 
-    Concrete forecasters are assembled from mix-ins that each configure one
-    aspect: how forecasts are produced (``ARForecaster``) and which training
-    objective is used (``DeterministicForecaster``). Their constructors
-    cooperate along the MRO: each consumes the keyword arguments it needs
-    and forwards the rest with ``super().__init__(**kwargs)``, so a mix-in
-    never has to know which others it is combined with.
-
-    Because each mix-in forwards *before* running its own setup, the bodies
-    run in reverse MRO order, so a mix-in reading another's attributes would
-    only work for one ordering of the bases. No mix-in does, and none
-    should: keeping their constructors independent is what lets them be
-    combined in any order.
+    Concrete forecasters combine a way of producing forecasts (the
+    ``ARForecaster`` mix-in) with a training objective
+    (``DeterministicForecaster``).
     """
 
-    def __init__(self, datastore: BaseDatastore, **kwargs: Any) -> None:
+    def __init__(self, datastore: BaseDatastore) -> None:
         """
-        Initialize the forecaster and end the cooperative ``__init__`` chain.
-
-        Runs before every mix-in body, since each forwards to
-        ``super().__init__`` ahead of its own setup.
-
-        ``datastore`` is taken here rather than by the mix-in that happens to
-        need it, because several of them do; each forwards it on so that the
-        ones after it in the MRO still receive it.
+        Initialize the forecaster.
 
         Parameters
         ----------
         datastore : BaseDatastore
             The datastore this forecaster is built for, providing grid
             metadata, boundary masks and standardization statistics.
-        **kwargs : Any
-            Forwarded to ``nn.Module``, which raises ``TypeError`` on
-            anything left, so an argument no mix-in claimed is not silently
-            dropped.
         """
-        super().__init__(**kwargs)
+        super().__init__()
         self.datastore = datastore
 
     @property
