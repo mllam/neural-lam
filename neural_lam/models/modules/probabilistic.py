@@ -5,7 +5,6 @@ import warnings
 
 # Third-party
 import torch
-from pytorch_lightning.utilities import rank_zero_only
 
 # Local
 from ... import metrics
@@ -178,9 +177,12 @@ class ProbabilisticForecasterModule(BaseForecasterModule):
         """
         Log the ensemble-mean RMSE accumulated over a full epoch.
 
-        Gathers across devices, which every rank must take part in, then
-        hands the result to ``_log_gathered_ensemble_rmse`` for the rank-zero
-        half.
+        Averages the per-variable MSEs collected by ``_ensemble_step`` over
+        every sample of the epoch (across both batches and devices) and sums
+        them over variables, and only then takes the square root. Rooting
+        each batch's MSE and averaging those roots instead would report a
+        different quantity, since the square root does not commute with the
+        averaging.
 
         Parameters
         ----------
@@ -191,31 +193,14 @@ class ProbabilisticForecasterModule(BaseForecasterModule):
         phase : str
             Logging phase, either ``"val"`` or ``"test"``.
         """
+        # Collective: must be reached by every rank, so it precedes the
+        # rank-zero check below.
         entry_mses = self.all_gather_cat(torch.cat(entry_mse_list, dim=0))
         # (total_samples, pred_steps, num_state_vars)
-        self._log_gathered_ensemble_rmse(entry_mses, phase)
 
-    @rank_zero_only
-    def _log_gathered_ensemble_rmse(
-        self, entry_mses: torch.Tensor, phase: str
-    ) -> None:
-        """
-        Reduce the gathered MSEs to an RMSE and log it, on rank zero only.
+        if not self.trainer.is_global_zero:
+            return
 
-        Averages the per-variable MSEs over every sample of the epoch (across
-        both batches and devices) and sums them over variables, and only then
-        takes the square root. Rooting each batch's MSE and averaging those
-        roots instead would report a different quantity, since the square
-        root does not commute with the averaging.
-
-        Parameters
-        ----------
-        entry_mses : torch.Tensor
-            Shape ``(total_samples, pred_steps, num_state_vars)``.
-            Per-variable ensemble-mean MSEs gathered over the whole epoch.
-        phase : str
-            Logging phase, either ``"val"`` or ``"test"``.
-        """
         time_step_rmse = torch.sqrt(entry_mses.sum(dim=-1).mean(dim=0))
         # (pred_steps,)
 
