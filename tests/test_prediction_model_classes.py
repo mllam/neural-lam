@@ -156,6 +156,25 @@ def test_ar_forecaster_without_config_raises_on_use_not_construction():
         )
 
 
+def test_ar_forecaster_without_config_scores_with_unweighted_loss():
+    """The std fallback is only needed by scoring rules that use a std, so
+    an unweighted loss must score without a config, rather than demanding a
+    per_var_std it would immediately ignore."""
+    datastore = init_datastore_example("mdp")
+    predictor = MockStepPredictor(datastore=datastore, output_std=False)
+
+    forecaster = DeterministicARForecaster(predictor, datastore, loss="mse")
+    assert forecaster.per_var_std is None
+
+    B, num_grid_nodes = 2, predictor.num_grid_nodes
+    d_state = datastore.get_num_data_vars(category="state")
+    prediction = torch.zeros(B, num_grid_nodes, d_state)
+    target = torch.ones(B, num_grid_nodes, d_state)
+
+    scored = forecaster.score(prediction, target, None)
+    torch.testing.assert_close(scored, torch.full((B,), float(d_state)))
+
+
 class MeanAbsObjective(Forecaster):
     """Test-only objective class taking a constructor argument of its own.
 

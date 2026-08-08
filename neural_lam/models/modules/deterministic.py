@@ -222,15 +222,10 @@ class DeterministicForecasterModule(BaseForecasterModule):
         )
 
         # Reported independently of the training objective, so computed here
-        # rather than through the forecaster. metrics.mse ignores the std
-        # argument, but requires one
-        std_placeholder = torch.ones(
-            target_states.shape[-1], device=target_states.device
-        )
+        # rather than through the forecaster
         entry_mses = metrics.mse(
             prediction,
             target_states,
-            std_placeholder,
             mask=self.interior_mask_bool,
             sum_vars=False,
         )
@@ -277,16 +272,11 @@ class DeterministicForecasterModule(BaseForecasterModule):
         )
 
         # Reported independently of the training objective, so computed here
-        # rather than through the forecaster. Both ignore the std argument,
-        # but require one
-        std_placeholder = torch.ones(
-            target_states.shape[-1], device=target_states.device
-        )
+        # rather than through the forecaster
         for metric_name in ("mse", "mae"):
             batch_metric_vals = metrics.get_metric(metric_name)(
                 prediction,
                 target_states,
-                std_placeholder,
                 mask=self.interior_mask_bool,
                 sum_vars=False,
             )

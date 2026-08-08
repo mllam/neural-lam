@@ -3,9 +3,6 @@
 # Standard library
 import warnings
 
-# Third-party
-import torch
-
 # Local
 from ... import metrics
 from ...config import NeuralLAMConfig
@@ -160,15 +157,10 @@ class ProbabilisticForecasterModule(BaseForecasterModule):
             num_members=self.eval_ensemble_size,
         )
         ensemble_mean = ensemble.mean(dim=1)
-        # metrics.mse ignores the std argument, but requires one
-        std_placeholder = torch.ones(
-            target_states.shape[-1], device=target_states.device
-        )
 
         entry_mses = metrics.mse(
             ensemble_mean,
             target_states,
-            std_placeholder,
             mask=self.interior_mask_bool,
             sum_vars=False,
         )  # (B, pred_steps, num_state_vars)

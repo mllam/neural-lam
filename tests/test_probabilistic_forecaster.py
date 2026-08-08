@@ -122,8 +122,6 @@ def test_ar_forecaster_training_loss_matches_direct_score():
     init_states, forcing_features, target_states = _example_batch(datastore)
     score_metric = metrics.get_metric("mse")
     interior_mask_bool = forecaster.interior_mask[0, :, 0].to(torch.bool)
-    d_state = target_states.shape[-1]
-    forecaster.per_var_std = torch.ones(d_state)
 
     batch_loss, loss_components = forecaster.compute_training_loss(
         init_states,
@@ -137,7 +135,6 @@ def test_ar_forecaster_training_loss_matches_direct_score():
         score_metric(
             prediction,
             target_states,
-            forecaster.per_var_std,
             mask=interior_mask_bool,
         )
     )

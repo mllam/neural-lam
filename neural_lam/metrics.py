@@ -35,6 +35,38 @@ def get_metric(metric_name: str) -> Callable[..., torch.Tensor]:
     return DEFINED_METRICS[metric_name_lower]
 
 
+def _require_pred_std(
+    pred_std: Optional[torch.Tensor], metric_name: str
+) -> torch.Tensor:
+    """
+    Return ``pred_std``, raising if a std-dependent metric was given none.
+
+    Parameters
+    ----------
+    pred_std : torch.Tensor or None
+        The standard deviation the metric was called with.
+    metric_name : str
+        Name of the calling metric, used in the error message.
+
+    Returns
+    -------
+    torch.Tensor
+        ``pred_std`` unchanged.
+
+    Raises
+    ------
+    ValueError
+        If ``pred_std`` is ``None``.
+    """
+    if pred_std is None:
+        raise ValueError(
+            f"{metric_name} scores a predicted distribution and so requires "
+            "pred_std, but got None. Only the unweighted metrics (mse, mae) "
+            "can be computed without one."
+        )
+    return pred_std
+
+
 def mask_and_reduce_metric(
     metric_entry_vals: torch.Tensor,
     mask: Optional[torch.Tensor],
@@ -88,7 +120,7 @@ def mask_and_reduce_metric(
 def wmse(
     pred: torch.Tensor,
     target: torch.Tensor,
-    pred_std: torch.Tensor,
+    pred_std: Optional[torch.Tensor] = None,
     mask: Optional[torch.Tensor] = None,
     average_grid: bool = True,
     sum_vars: bool = True,
@@ -105,9 +137,10 @@ def wmse(
     target : torch.Tensor
         Shape ``(..., N, num_variables)``. Ground-truth target. Dims: same as
         ``pred``.
-    pred_std : torch.Tensor
+    pred_std : torch.Tensor or None, optional
         Shape ``(..., N, num_variables)`` or ``(num_variables,)``. Predicted
-        standard deviation used as per-entry weight.
+        standard deviation used as per-entry weight. Required here; ``None``
+        raises. Default ``None``.
     mask : torch.Tensor or None, optional
         Shape ``(N,)``. Boolean mask over grid nodes. ``None`` uses all
         nodes.
@@ -122,7 +155,13 @@ def wmse(
         Reduced metric values. Shape is one of ``(...,)``,
         ``(..., num_variables)``, ``(..., N)``, or ``(..., N, num_variables)``
         depending on ``average_grid`` and ``sum_vars``.
+
+    Raises
+    ------
+    ValueError
+        If ``pred_std`` is ``None``.
     """
+    pred_std = _require_pred_std(pred_std, "wmse")
     entry_mse = torch.nn.functional.mse_loss(
         pred, target, reduction="none"
     )  # (..., num_grid_nodes, num_variables)
@@ -141,7 +180,7 @@ def wmse(
 def mse(
     pred: torch.Tensor,
     target: torch.Tensor,
-    pred_std: torch.Tensor,
+    pred_std: Optional[torch.Tensor] = None,
     mask: Optional[torch.Tensor] = None,
     average_grid: bool = True,
     sum_vars: bool = True,
@@ -158,10 +197,10 @@ def mse(
     target : torch.Tensor
         Shape ``(..., N, num_variables)``. Ground-truth target. Dims: same as
         ``pred``.
-    pred_std : torch.Tensor
-        Shape ``(..., N, num_variables)`` or ``(num_variables,)``. Predicted
-        standard deviation (unused; ``pred_std`` is replaced by ones
-        internally).
+    pred_std : torch.Tensor or None, optional
+        Unused. Accepted so that every metric in ``DEFINED_METRICS`` shares
+        one signature and callers can stay agnostic about which they got.
+        Default ``None``.
     mask : torch.Tensor or None, optional
         Shape ``(N,)``. Boolean mask over grid nodes. ``None`` uses all
         nodes.
@@ -177,16 +216,19 @@ def mse(
         ``(..., num_variables)``, ``(..., N)``, or ``(..., N, num_variables)``
         depending on ``average_grid`` and ``sum_vars``.
     """
-    # Replace pred_std with constant ones
-    return wmse(
-        pred, target, torch.ones_like(pred_std), mask, average_grid, sum_vars
+    entry_mse = torch.nn.functional.mse_loss(
+        pred, target, reduction="none"
+    )  # (..., num_grid_nodes, num_variables)
+
+    return mask_and_reduce_metric(
+        entry_mse, mask=mask, average_grid=average_grid, sum_vars=sum_vars
     )
 
 
 def wmae(
     pred: torch.Tensor,
     target: torch.Tensor,
-    pred_std: torch.Tensor,
+    pred_std: Optional[torch.Tensor] = None,
     mask: Optional[torch.Tensor] = None,
     average_grid: bool = True,
     sum_vars: bool = True,
@@ -203,9 +245,10 @@ def wmae(
     target : torch.Tensor
         Shape ``(..., N, num_variables)``. Ground-truth target. Dims: same as
         ``pred``.
-    pred_std : torch.Tensor
+    pred_std : torch.Tensor or None, optional
         Shape ``(..., N, num_variables)`` or ``(num_variables,)``. Predicted
-        standard deviation used as per-entry weight.
+        standard deviation used as per-entry weight. Required here; ``None``
+        raises. Default ``None``.
     mask : torch.Tensor or None, optional
         Shape ``(N,)``. Boolean mask over grid nodes. ``None`` uses all
         nodes.
@@ -220,7 +263,13 @@ def wmae(
         Reduced metric values. Shape is one of ``(...,)``,
         ``(..., num_variables)``, ``(..., N)``, or ``(..., N, num_variables)``
         depending on ``average_grid`` and ``sum_vars``.
+
+    Raises
+    ------
+    ValueError
+        If ``pred_std`` is ``None``.
     """
+    pred_std = _require_pred_std(pred_std, "wmae")
     entry_mae = torch.nn.functional.l1_loss(
         pred, target, reduction="none"
     )  # (..., num_grid_nodes, num_variables)
@@ -239,7 +288,7 @@ def wmae(
 def mae(
     pred: torch.Tensor,
     target: torch.Tensor,
-    pred_std: torch.Tensor,
+    pred_std: Optional[torch.Tensor] = None,
     mask: Optional[torch.Tensor] = None,
     average_grid: bool = True,
     sum_vars: bool = True,
@@ -256,10 +305,10 @@ def mae(
     target : torch.Tensor
         Shape ``(..., N, num_variables)``. Ground-truth target. Dims: same as
         ``pred``.
-    pred_std : torch.Tensor
-        Shape ``(..., N, num_variables)`` or ``(num_variables,)``. Predicted
-        standard deviation (unused; ``pred_std`` is replaced by ones
-        internally).
+    pred_std : torch.Tensor or None, optional
+        Unused. Accepted so that every metric in ``DEFINED_METRICS`` shares
+        one signature and callers can stay agnostic about which they got.
+        Default ``None``.
     mask : torch.Tensor or None, optional
         Shape ``(N,)``. Boolean mask over grid nodes. ``None`` uses all
         nodes.
@@ -275,16 +324,19 @@ def mae(
         ``(..., num_variables)``, ``(..., N)``, or ``(..., N, num_variables)``
         depending on ``average_grid`` and ``sum_vars``.
     """
-    # Replace pred_std with constant ones
-    return wmae(
-        pred, target, torch.ones_like(pred_std), mask, average_grid, sum_vars
+    entry_mae = torch.nn.functional.l1_loss(
+        pred, target, reduction="none"
+    )  # (..., num_grid_nodes, num_variables)
+
+    return mask_and_reduce_metric(
+        entry_mae, mask=mask, average_grid=average_grid, sum_vars=sum_vars
     )
 
 
 def nll(
     pred: torch.Tensor,
     target: torch.Tensor,
-    pred_std: torch.Tensor,
+    pred_std: Optional[torch.Tensor] = None,
     mask: Optional[torch.Tensor] = None,
     average_grid: bool = True,
     sum_vars: bool = True,
@@ -301,9 +353,10 @@ def nll(
     target : torch.Tensor
         Shape ``(..., N, num_variables)``. Ground-truth target. Dims: same as
         ``pred``.
-    pred_std : torch.Tensor
+    pred_std : torch.Tensor or None, optional
         Shape ``(..., N, num_variables)`` or ``(num_variables,)``. Predicted
-        standard deviation of the Gaussian.
+        standard deviation of the Gaussian. Required here; ``None`` raises.
+        Default ``None``.
     mask : torch.Tensor or None, optional
         Shape ``(N,)``. Boolean mask over grid nodes. ``None`` uses all
         nodes.
@@ -318,7 +371,13 @@ def nll(
         Reduced metric values. Shape is one of ``(...,)``,
         ``(..., num_variables)``, ``(..., N)``, or ``(..., N, num_variables)``
         depending on ``average_grid`` and ``sum_vars``.
+
+    Raises
+    ------
+    ValueError
+        If ``pred_std`` is ``None``.
     """
+    pred_std = _require_pred_std(pred_std, "nll")
     # Broadcast pred_std if shaped (num_variables,) via distribution internals
     dist = torch.distributions.Normal(
         pred, pred_std
@@ -333,7 +392,7 @@ def nll(
 def crps_gauss(
     pred: torch.Tensor,
     target: torch.Tensor,
-    pred_std: torch.Tensor,
+    pred_std: Optional[torch.Tensor] = None,
     mask: Optional[torch.Tensor] = None,
     average_grid: bool = True,
     sum_vars: bool = True,
@@ -351,9 +410,10 @@ def crps_gauss(
     target : torch.Tensor
         Shape ``(..., N, num_variables)``. Ground-truth target. Dims: same as
         ``pred``.
-    pred_std : torch.Tensor
+    pred_std : torch.Tensor or None, optional
         Shape ``(..., N, num_variables)`` or ``(num_variables,)``. Predicted
-        standard deviation of the Gaussian.
+        standard deviation of the Gaussian. Required here; ``None`` raises.
+        Default ``None``.
     mask : torch.Tensor or None, optional
         Shape ``(N,)``. Boolean mask over grid nodes. ``None`` uses all
         nodes.
@@ -368,7 +428,13 @@ def crps_gauss(
         Reduced metric values. Shape is one of ``(...,)``,
         ``(..., num_variables)``, ``(..., N)``, or ``(..., N, num_variables)``
         depending on ``average_grid`` and ``sum_vars``.
+
+    Raises
+    ------
+    ValueError
+        If ``pred_std`` is ``None``.
     """
+    pred_std = _require_pred_std(pred_std, "crps_gauss")
     std_normal = torch.distributions.Normal(
         torch.zeros((), device=pred.device), torch.ones((), device=pred.device)
     )
@@ -395,3 +461,30 @@ DEFINED_METRICS = {
     "nll": nll,
     "crps_gauss": crps_gauss,
 }
+
+# The metrics that weight by, or parameterize a distribution with, pred_std,
+# i.e. exactly those calling _require_pred_std. Kept in step with the guards
+# by test_pred_std_requirement_matches_declaration.
+_STD_DEPENDENT_METRICS = frozenset({wmse, wmae, nll, crps_gauss})
+
+
+def requires_pred_std(metric: Callable[..., torch.Tensor]) -> bool:
+    """
+    Return whether ``metric`` needs a ``pred_std`` to be computed.
+
+    Lets a caller holding a metric decide whether it has to come up with a
+    standard deviation at all, rather than assuming every metric uses one.
+
+    Parameters
+    ----------
+    metric : callable
+        A metric from ``DEFINED_METRICS``, e.g. as returned by
+        ``get_metric``.
+
+    Returns
+    -------
+    bool
+        True if calling ``metric`` without ``pred_std`` raises
+        ``ValueError``.
+    """
+    return metric in _STD_DEPENDENT_METRICS

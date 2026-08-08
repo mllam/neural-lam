@@ -44,10 +44,11 @@ class DeterministicForecaster(Forecaster):
         config : NeuralLAMConfig or None, optional
             Configuration used to compute the constant per-variable std
             substituted for ``pred_std`` when the forecast carries no std of
-            its own. Required in that case for ``score`` and
-            ``compute_training_loss`` to work (they raise ``ValueError`` via
-            ``_resolve_pred_std`` otherwise); forecasters used purely for
-            inference can omit it. Default ``None``.
+            its own. Needed only when ``loss`` is a scoring rule that uses a
+            std; without it in that case ``score`` and
+            ``compute_training_loss`` raise ``ValueError`` via
+            ``_resolve_pred_std``. Forecasters used purely for inference can
+            always omit it. Default ``None``.
         loss : str, optional
             The scoring rule (from ``neural_lam.metrics``) applied by
             ``compute_training_loss``, stored as ``self.loss``. Default
@@ -116,8 +117,8 @@ class DeterministicForecaster(Forecaster):
         Raises
         ------
         ValueError
-            If the forecast carries no std of its own and no
-            ``per_var_std`` fallback is available; see
+            If ``self.loss`` needs a std, the forecast carries none of its
+            own and no ``per_var_std`` fallback is available; see
             ``_resolve_pred_std``.
         """
         prediction, pred_std = self(
@@ -133,9 +134,9 @@ class DeterministicForecaster(Forecaster):
 
     def _resolve_pred_std(
         self, pred_std: Optional[torch.Tensor]
-    ) -> torch.Tensor:
+    ) -> Optional[torch.Tensor]:
         """
-        Return ``pred_std``, or the constant ``per_var_std`` fallback.
+        Return the std ``self.loss`` should be applied with.
 
         Parameters
         ----------
@@ -145,23 +146,30 @@ class DeterministicForecaster(Forecaster):
 
         Returns
         -------
-        torch.Tensor
-            ``pred_std`` unchanged when given; otherwise ``self.per_var_std``.
+        torch.Tensor or None
+            ``pred_std`` unchanged when given; otherwise
+            ``self.per_var_std``, or ``None`` if ``self.loss`` ignores the
+            std anyway.
 
         Raises
         ------
         ValueError
-            If ``pred_std`` is ``None`` and no ``per_var_std`` fallback is
-            available (this forecaster was constructed without ``config``).
+            If ``pred_std`` is ``None``, ``self.loss`` needs one, and no
+            ``per_var_std`` fallback is available (this forecaster was
+            constructed without ``config``).
         """
         if pred_std is not None:
             return pred_std
+        if not metrics.requires_pred_std(self.loss):
+            return None
         if self.per_var_std is None:
             raise ValueError(
-                "No pred_std available for scoring: the forecast carries no "
-                "std and this forecaster has no per_var_std fallback (it was "
-                "constructed without config). Pass config to the "
-                "constructor, or use a predictor that outputs its own std."
+                "No pred_std available for scoring: this forecaster's "
+                "scoring rule needs one, the forecast carries no std and "
+                "there is no per_var_std fallback (it was constructed "
+                "without config). Pass config to the constructor, use a "
+                "predictor that outputs its own std, or score with an "
+                "unweighted metric."
             )
         return self.per_var_std
 
@@ -178,9 +186,10 @@ class DeterministicForecaster(Forecaster):
         Apply this forecaster's scoring rule to an already-produced forecast.
 
         Resolves ``pred_std`` via ``_resolve_pred_std`` (substituting
-        ``self.per_var_std`` when ``None``), then applies ``self.loss``. Used
-        to report the loss on a forecast the caller already has, at a
-        reduction of its choosing, without recomputing it.
+        ``self.per_var_std`` when ``None`` and ``self.loss`` needs one), then
+        applies ``self.loss``. Used to report the loss on a forecast the
+        caller already has, at a reduction of its choosing, without
+        recomputing it.
 
         Only the loss goes through here. Metrics unrelated to the training
         objective depend on nothing but the shapes of the three tensors
@@ -199,8 +208,8 @@ class DeterministicForecaster(Forecaster):
             Shape ``(..., num_grid_nodes, num_state_vars)``, or ``None``.
             Predicted standard deviation for ``prediction``; ``None`` when
             the forecast carries no std, in which case ``self.per_var_std``
-            is substituted (see ``_resolve_pred_std`` for when this raises
-            instead).
+            is substituted if ``self.loss`` needs a std at all (see
+            ``_resolve_pred_std`` for when this raises instead).
         mask : torch.Tensor or None, optional
             Shape ``(num_grid_nodes,)``, boolean. Forwarded to ``self.loss``.
         average_grid : bool, optional
@@ -217,8 +226,8 @@ class DeterministicForecaster(Forecaster):
         Raises
         ------
         ValueError
-            If ``pred_std`` is ``None`` and no ``per_var_std`` fallback is
-            available; see ``_resolve_pred_std``.
+            If ``pred_std`` is ``None``, ``self.loss`` needs one and no
+            ``per_var_std`` fallback is available; see ``_resolve_pred_std``.
         """
         pred_std = self._resolve_pred_std(pred_std)
         return self.loss(
@@ -259,10 +268,10 @@ class DeterministicARForecaster(ARForecaster, DeterministicForecaster):
         config : NeuralLAMConfig or None
             Configuration used to compute the constant per-variable std
             substituted for ``pred_std`` when ``predictor`` does not output
-            its own. Required in that case for ``score`` and
-            ``compute_training_loss`` to work (they raise ``ValueError``
-            otherwise); forecasters used purely for inference (``forward``)
-            can omit it.
+            its own. Needed only when ``loss`` is a scoring rule that uses a
+            std; without it in that case ``score`` and
+            ``compute_training_loss`` raise ``ValueError``. Forecasters used
+            purely for inference (``forward``) can always omit it.
         loss : str, default "wmse"
             The scoring rule (from ``neural_lam.metrics``) applied by
             ``compute_training_loss``.

@@ -1,8 +1,19 @@
 # Third-party
+import pytest
 import torch
 
 # First-party
-from neural_lam.metrics import crps_gauss, nll, wmae, wmse
+from neural_lam.metrics import (
+    DEFINED_METRICS,
+    crps_gauss,
+    get_metric,
+    mae,
+    mse,
+    nll,
+    requires_pred_std,
+    wmae,
+    wmse,
+)
 
 
 def _single_residual_case(residual=1.0):
@@ -64,6 +75,30 @@ def test_crps_gauss_prefers_calibrated_std_to_extreme_scales():
 
     assert torch.all(residual_scale_loss < small_loss)
     assert torch.all(residual_scale_loss < large_loss)
+
+
+@pytest.mark.parametrize("metric", (mse, mae))
+def test_unweighted_metrics_ignore_pred_std(metric):
+    pred = torch.tensor([[[[0.0, 1.0], [2.0, 3.0]]]], dtype=torch.float32)
+    target = torch.tensor([[[[1.0, 0.0], [1.0, 5.0]]]], dtype=torch.float32)
+    pred_std = torch.tensor([1.5, 0.5], dtype=torch.float32)
+
+    torch.testing.assert_close(
+        metric(pred, target), metric(pred, target, pred_std)
+    )
+
+
+@pytest.mark.parametrize("metric_name", sorted(DEFINED_METRICS))
+def test_pred_std_requirement_matches_declaration(metric_name):
+    """Every metric raises without a pred_std iff it declares needing one."""
+    metric = get_metric(metric_name)
+    pred, target = _single_residual_case()
+
+    if requires_pred_std(metric):
+        with pytest.raises(ValueError, match="requires pred_std"):
+            metric(pred, target)
+    else:
+        metric(pred, target)
 
 
 def test_probabilistic_losses_support_pred_std_broadcasting():
