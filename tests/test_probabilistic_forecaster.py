@@ -537,12 +537,10 @@ def test_probabilistic_module_test_step_scores_ensemble_mean():
     assert torch.all(torch.isfinite(entry_mses))
 
 
-@pytest.mark.parametrize(
-    "step_name, phase", [("validation_step", "val"), ("test_step", "test")]
-)
-def test_probabilistic_module_logs_forecaster_objective(step_name, phase):
-    """Evaluation reports the forecaster's own training objective, giving
-    ModelCheckpoint a val_mean_loss to monitor."""
+def test_probabilistic_module_logs_forecaster_objective():
+    """Validation reports the forecaster's own training objective, giving
+    ModelCheckpoint a val_mean_loss to monitor. Testing does not: nothing
+    monitors it there, so the extra forward pass would buy nothing."""
     datastore = init_datastore_example("mdp")
     predictor = NoisyStepPredictor(datastore=datastore, output_std=False)
     config = nlconfig.NeuralLAMConfig(
@@ -575,13 +573,21 @@ def test_probabilistic_module_logs_forecaster_objective(step_name, phase):
     model.log_dict = lambda log_dict, **kwargs: captured.update(log_dict)
 
     torch.manual_seed(42)
-    getattr(model, step_name)(batch, 0)
+    model.validation_step(batch, 0)
 
     # The objective is the forecaster's own, reported under the same name
     # the deterministic module uses, alongside any components it splits out
-    assert captured[f"{phase}_mean_loss"] is forecaster.last_batch_loss
-    assert captured[f"{phase}_kl"] is forecaster.last_components["kl"]
+    assert captured["val_mean_loss"] is forecaster.last_batch_loss
+    assert captured["val_kl"] is forecaster.last_components["kl"]
 
     # The objective samples its own ensemble, with the member count it
     # trains on, before the evaluation ensemble is drawn
     assert forecaster.num_members_seen == [2, 3]
+
+    # Testing draws only the evaluation ensemble, and logs no loss
+    captured.clear()
+    forecaster.num_members_seen.clear()
+    model.test_step(batch, 0)
+
+    assert forecaster.num_members_seen == [3]
+    assert captured == {}

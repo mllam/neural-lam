@@ -22,9 +22,10 @@ class ProbabilisticForecasterModule(BaseForecasterModule):
     wrapped forecaster assembles its own training loss. Validation and
     testing are ensemble based instead of deterministic: an ensemble is
     sampled from the forecaster and its mean scored per lead time and
-    variable, alongside the forecaster's own objective. The module only
-    assumes that the forecaster can sample ensemble forecasts of the correct
-    shape; it makes no assumption on how the members are produced.
+    variable, with validation additionally reporting the forecaster's own
+    objective. The module only assumes that the forecaster can sample
+    ensemble forecasts of the correct shape; it makes no assumption on how
+    the members are produced.
     """
 
     # The wrapped forecaster must be able to sample ensemble forecasts
@@ -174,23 +175,22 @@ class ProbabilisticForecasterModule(BaseForecasterModule):
 
         return entry_mses
 
-    def _log_objective(self, batch, phase: str) -> None:
+    def _log_objective(self, batch) -> None:
         """
-        Log the forecaster's own training objective for a batch.
+        Log the forecaster's own training objective as ``val_mean_loss``.
 
-        Reported as ``{phase}_mean_loss``, mirroring
-        ``DeterministicForecasterModule``, so that ``ModelCheckpoint`` has a
-        scalar to monitor. What that objective is stays entirely up to the
-        forecaster, and it is recomputed here rather than derived from the
-        sampled ensemble, since the two need not agree on either the member
-        count or the scoring rule.
+        Named as ``DeterministicForecasterModule`` names it, so that
+        ``ModelCheckpoint`` has a scalar to monitor. What that objective is
+        stays entirely up to the forecaster, and it costs a forward pass of
+        its own rather than being derived from the sampled ensemble, since
+        the two need not agree on either the member count or the scoring
+        rule. Validation only: nothing monitors the test phase, so paying
+        that pass again there would buy nothing.
 
         Parameters
         ----------
         batch : tuple
             The batch of data.
-        phase : str
-            Logging phase, either ``"val"`` or ``"test"``.
         """
         init_states, target_states, forcing_features, _ = batch
         batch_loss, loss_components = self.forecaster.compute_training_loss(
@@ -201,9 +201,9 @@ class ProbabilisticForecasterModule(BaseForecasterModule):
         )
 
         log_dict = {
-            f"{phase}_{name}": value for name, value in loss_components.items()
+            f"val_{name}": value for name, value in loss_components.items()
         }
-        log_dict[f"{phase}_mean_loss"] = batch_loss
+        log_dict["val_mean_loss"] = batch_loss
         self.log_dict(
             log_dict,
             on_epoch=True,
@@ -226,7 +226,7 @@ class ProbabilisticForecasterModule(BaseForecasterModule):
         batch_idx : int
             The index of the batch.
         """
-        self._log_objective(batch, "val")
+        self._log_objective(batch)
         entry_mses = self._ensemble_step(batch)
         self.val_metrics["ens_mse"].append(entry_mses)
 
@@ -234,9 +234,9 @@ class ProbabilisticForecasterModule(BaseForecasterModule):
         """
         Perform a single ensemble test step.
 
-        Logs the forecaster's objective as ``test_mean_loss``, scores the
-        ensemble mean against the target states (see ``_ensemble_step``) and
-        collects per-variable ensemble-mean MSE for epoch-end aggregation.
+        Scores the ensemble mean against the target states (see
+        ``_ensemble_step``) and collects per-variable ensemble-mean MSE for
+        epoch-end aggregation.
 
         Parameters
         ----------
@@ -245,7 +245,6 @@ class ProbabilisticForecasterModule(BaseForecasterModule):
         batch_idx : int
             The index of the batch.
         """
-        self._log_objective(batch, "test")
         entry_mses = self._ensemble_step(batch)
         self.test_metrics["ens_mse"].append(entry_mses)
 
