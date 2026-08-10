@@ -4,6 +4,7 @@
 
 # Third-party
 import torch
+from torch_geometric.data import HeteroData
 
 # Local
 from .... import utils
@@ -176,6 +177,36 @@ class BaseGraphModel(StepPredictor):
 
         # Compute indices and define clamping functions
         self.prepare_clamping_params(datastore)
+
+    @property
+    def graph(self) -> HeteroData:
+        """The model's graph as a ``pyg.HeteroData`` object.
+
+        Built on access from the graph tensors currently registered on the
+        model, so it always agrees with their device and dtype. It is not
+        stored on the model, because a ``HeteroData`` attribute would not be
+        moved by ``.to(...)`` and would go stale.
+
+        Returns
+        -------
+        torch_geometric.data.HeteroData
+            Typed graph referencing the model's current graph tensors.
+
+        Raises
+        ------
+        AttributeError
+            If the model was not constructed with ``use_heterodata=True``.
+        """
+        if not self.use_heterodata:
+            raise AttributeError(
+                "graph is only available on models constructed with "
+                "use_heterodata=True"
+            )
+        return utils.heterodata_from_module(
+            self,
+            num_grid_nodes=self.num_grid_nodes,
+            hierarchical=self.hierarchical,
+        )
 
     def get_num_mesh(self) -> tuple[int, int]:
         """

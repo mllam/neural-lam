@@ -13,6 +13,7 @@ from .graph import (
 from .heterodata import (
     graph_dict_to_heterodata,
     graph_tensors_from_heterodata,
+    heterodata_from_module,
 )
 from .logging import (
     init_training_logger_metrics,
@@ -32,6 +33,7 @@ __all__ = [
     "graph_dict_to_heterodata",
     "graph_tensors_from_heterodata",
     "has_working_latex",
+    "heterodata_from_module",
     "init_training_logger_metrics",
     "inverse_sigmoid",
     "inverse_softplus",

@@ -438,12 +438,13 @@ def load_and_register_graph(
     buffer and each non-tensor (e.g. ``BufferList``) as a plain attribute on
     ``module``.
 
-    With ``use_heterodata`` the loaded tensors are first placed on the typed
-    node/edge stores of a ``pyg.HeteroData`` object (issue #385), which is
-    stored as ``module.graph``, and the tensors registered on ``module`` are
-    then read back out of that object, making it the source of the module's
-    graph data. The tensors themselves are unchanged, so the module behaves,
-    and therefore trains, identically either way.
+    With ``use_heterodata`` the loaded tensors are routed through a
+    ``pyg.HeteroData`` object (issue #385): they are placed on its typed
+    node/edge stores and the tensors registered on ``module`` are then read
+    back out of it. The object is not stored on ``module``; see
+    :func:`neural_lam.utils.heterodata_from_module` for building a view of
+    the registered tensors on demand. The tensors themselves are unchanged,
+    so the module behaves, and therefore trains, identically either way.
 
     Parameters
     ----------
@@ -457,9 +458,9 @@ def load_and_register_graph(
         Scalar used to normalize mesh node coordinate features for graphs in
         the current on-disk format; forwarded to :func:`load_graph`.
     use_heterodata : bool, default False
-        Whether to represent the graph as a ``pyg.HeteroData`` object on
-        ``module.graph`` and take the registered tensors from it. Only
-        supported for flat (non-hierarchical) graphs.
+        Whether to route the graph tensors through a ``pyg.HeteroData``
+        object and take the registered tensors from it. Only supported for
+        flat (non-hierarchical) graphs.
 
     Returns
     -------
@@ -483,11 +484,11 @@ def load_and_register_graph(
                 "use_heterodata is currently only supported for flat "
                 "(non-hierarchical) graphs."
             )
-        module.graph = graph_dict_to_heterodata(
+        graph = graph_dict_to_heterodata(
             graph_ldict,
             num_grid_nodes=datastore.num_grid_points,
         )
-        graph_ldict = graph_tensors_from_heterodata(module.graph)
+        graph_ldict = graph_tensors_from_heterodata(graph)
 
     for name, attr_value in graph_ldict.items():
         # Make BufferLists module members and register tensors as buffers

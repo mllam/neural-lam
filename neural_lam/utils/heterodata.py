@@ -28,6 +28,7 @@ from __future__ import annotations
 from typing import Any, Dict
 
 # Third-party
+import torch
 from torch_geometric.data import HeteroData
 
 # Local
@@ -47,6 +48,22 @@ _FLAT_EDGE_SPEC = (
     (G2M_EDGE_TYPE, "g2m_edge_index", "g2m_features"),
     (M2M_EDGE_TYPE, "m2m_edge_index", "m2m_features"),
     (M2G_EDGE_TYPE, "m2g_edge_index", "m2g_features"),
+)
+
+# Names the graph tensors are registered under on a module, i.e. the keys of
+# the tensor-dict returned by :func:`neural_lam.utils.load_graph`.
+GRAPH_TENSOR_NAMES = (
+    "g2m_edge_index",
+    "m2g_edge_index",
+    "m2m_edge_index",
+    "mesh_up_edge_index",
+    "mesh_down_edge_index",
+    "g2m_features",
+    "m2g_features",
+    "m2m_features",
+    "mesh_up_features",
+    "mesh_down_features",
+    "mesh_static_features",
 )
 
 
@@ -158,3 +175,42 @@ def graph_tensors_from_heterodata(
         graph_dict[edge_feature_key] = graph[edge_type].edge_attr
 
     return graph_dict
+
+
+def heterodata_from_module(
+    module: torch.nn.Module,
+    num_grid_nodes: int,
+    hierarchical: bool = False,
+) -> HeteroData:
+    """Build a ``HeteroData`` view of the graph tensors held by ``module``.
+
+    The object is built on demand from the graph tensors currently registered
+    on ``module``, rather than being stored on it. A stored ``HeteroData``
+    would not be moved by :meth:`torch.nn.Module._apply`, since it is neither
+    a tensor, parameter nor module, so it would keep referring to the
+    pre-move tensors after e.g. ``.to(device)`` and silently disagree with the
+    module's buffers. Building it on access keeps it consistent with whatever
+    device and dtype the module currently holds, and adds no copies: the
+    returned object references the module's tensors.
+
+    Parameters
+    ----------
+    module : torch.nn.Module
+        Module the graph tensors were registered on, e.g. by
+        :func:`neural_lam.utils.load_and_register_graph`.
+    num_grid_nodes : int
+        Number of grid nodes.
+    hierarchical : bool, default False
+        Whether the graph is hierarchical.
+
+    Returns
+    -------
+    torch_geometric.data.HeteroData
+        Typed graph referencing ``module``'s current graph tensors.
+    """
+    graph_dict = {name: getattr(module, name) for name in GRAPH_TENSOR_NAMES}
+    return graph_dict_to_heterodata(
+        graph_dict,
+        num_grid_nodes=num_grid_nodes,
+        hierarchical=hierarchical,
+    )

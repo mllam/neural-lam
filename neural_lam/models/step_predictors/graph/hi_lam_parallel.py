@@ -40,6 +40,7 @@ class HiLAMParallel(BaseHiGraphModel):
         m2g_gnn_type: str = "InteractionNet",
         mesh_up_gnn_type: str = "InteractionNet",
         mesh_down_gnn_type: str = "InteractionNet",
+        use_heterodata: bool = False,
     ):
         """
         Initialize the HiLAMParallel model.
@@ -85,6 +86,7 @@ class HiLAMParallel(BaseHiGraphModel):
             m2g_gnn_type=m2g_gnn_type,
             mesh_up_gnn_type=mesh_up_gnn_type,
             mesh_down_gnn_type=mesh_down_gnn_type,
+            use_heterodata=use_heterodata,
         )
 
         # Processor GNNs
