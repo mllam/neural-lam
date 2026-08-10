@@ -90,12 +90,12 @@ def test_unweighted_metrics_ignore_pred_std(metric):
 
 @pytest.mark.parametrize("metric_name", sorted(DEFINED_METRICS))
 def test_pred_std_requirement_matches_declaration(metric_name):
-    """Every metric raises without a pred_std iff it declares needing one."""
+    """A metric is callable without a pred_std iff it declares one optional."""
     metric = get_metric(metric_name)
     pred, target = _single_residual_case()
 
     if requires_pred_std(metric):
-        with pytest.raises(ValueError, match="requires pred_std"):
+        with pytest.raises(TypeError, match="pred_std"):
             metric(pred, target)
     else:
         metric(pred, target)
