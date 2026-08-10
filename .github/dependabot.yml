@@ -1,0 +1,34 @@
+version: 2
+updates:
+- package-ecosystem: github-actions
+  directory: /.github/workflows
+  schedule:
+    interval: quarterly
+  cooldown:
+    default-days: 7
+  groups:
+    gha-patches:
+      update-types:
+      - patch
+
+- package-ecosystem: uv
+  directory: /
+  schedule:
+    interval: quarterly
+  cooldown:
+    default-days: 7
+  groups:
+    uv.lock-patches:
+      update-types:
+      - patch
+
+- package-ecosystem: "pre-commit"
+  directory: "/"
+  schedule:
+    interval: "quarterly"
+  cooldown:
+    default-days: 7
+  groups:
+    pre-commit-all:
+      patterns:
+        - "*"
