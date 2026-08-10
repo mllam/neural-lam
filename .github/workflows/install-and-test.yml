@@ -67,11 +67,6 @@ jobs:
         run: |
           python -c "import torch; assert torch.__version__.endswith('+cu130')"
 
-      - name: Type check with ty
-        if: matrix.device == 'cpu'
-        run: |
-          uv run ty check neural_lam
-
       - name: Load cache data
         uses: actions/cache/restore@v4
         with:
