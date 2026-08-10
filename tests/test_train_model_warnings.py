@@ -1,5 +1,7 @@
 # Standard library
+from argparse import Namespace
 from types import SimpleNamespace
+from typing import cast
 from unittest.mock import MagicMock, patch
 
 # Third-party
@@ -7,9 +9,10 @@ import loguru
 import pytest
 
 # Mock loguru.logger.catch before importing train_model
-loguru.logger.catch = lambda f: f
+loguru.logger.catch = lambda f: f  # type: ignore[assignment]
 
 # First-party
+from neural_lam.config import NeuralLAMConfig  # noqa: E402
 from neural_lam.train_model import (  # noqa: E402
     build_predictor,
     load_forecaster_module_from_checkpoint,
@@ -150,7 +153,7 @@ def test_checkpoint_loader_restores_gnn_type_kwargs():
         ),
     ):
         result = load_forecaster_module_from_checkpoint(
-            "model.ckpt", config, datastore
+            "model.ckpt", cast("NeuralLAMConfig", config), datastore
         )
 
     assert result is loaded_module
@@ -188,7 +191,12 @@ def test_build_predictor_omits_hierarchical_gnn_kwargs_for_graph_lam():
         def __init__(self, **kwargs):
             captured_kwargs.update(kwargs)
 
-    build_predictor(DummyGraphLAM, args, config, MagicMock())
+    build_predictor(
+        DummyGraphLAM,
+        cast("Namespace", args),
+        cast("NeuralLAMConfig", config),
+        MagicMock(),
+    )
 
     assert "mesh_up_gnn_type" not in captured_kwargs
     assert "mesh_down_gnn_type" not in captured_kwargs

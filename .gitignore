@@ -11,6 +11,7 @@ sweeps
 *.html
 *.zarr
 *slurm*
+gigilocal/
 
 ### Python ###
 # Byte-compiled / optimized / DLL files

@@ -43,16 +43,10 @@ repos:
         description: Ensure documentation coverage stays perfect
         pass_filenames: false
         args: ["-c", "pyproject.toml", "neural_lam"]
-  - repo: local
+  - repo: https://github.com/astral-sh/ty-pre-commit
+    rev: v0.0.69
     hooks:
       - id: ty
-        name: ty
-        description: Check for type errors
-        entry: uv run ty check neural_lam
-        language: system
-        pass_filenames: false
-        files: ^neural_lam/
-        types: [python]
 
   - repo: local
     hooks:

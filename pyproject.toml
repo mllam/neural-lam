@@ -55,7 +55,6 @@ dev = [
     "pre-commit>=3.8.0",
     "pytest>=8.3.2",
     "pooch>=1.8.2",
-    "ty>=0.0.59",
 ]
 
 [tool.uv]
@@ -126,8 +125,8 @@ per-file-ignores = [
 [tool.codespell]
 skip = "requirements/*"
 
-[tool.ty.environment]
-python = ".venv"
+[tool.ty.src]
+exclude = ["tests/", "docs/"]
 
 [tool.ty.rules]
 possibly-missing-submodule = "ignore"
