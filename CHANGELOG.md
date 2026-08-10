@@ -10,6 +10,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - Add a high-level programmatic Python API (`neural_lam.api`) exposing `train`, `evaluate`, and `create_graph` with native IDE autocomplete support [\#707](https://github.com/mllam/neural-lam/issues/707)
 
+- Add latent encoder/decoder modules and the `GraphEFM` (hierarchical) / `GraphEFMMultiScale` (flat) step predictors for the Graph-EFM ensemble forecasting model. [\#648](https://github.com/mllam/neural-lam/pull/648) @Sir-Sloth-The-Lazy
+
 - Add `--num_sanity_val_steps` CLI argument to control sanity validation steps before training (#694)
 
 - Add `--train_steps_to_log` CLI option to log training loss for individual unroll steps, and deduplicate common prediction and loss computation steps across loops [\#674](https://github.com/mllam/neural-lam/issues/674) @GiGiKoneti
