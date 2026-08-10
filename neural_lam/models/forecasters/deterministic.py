@@ -22,9 +22,9 @@ class DeterministicForecaster(Forecaster):
     single forecast.
 
     ``compute_training_loss`` produces one forecast and scores it, and
-    ``score`` applies the same metric to an already-produced forecast for
-    reporting. ``forward`` is left abstract; see
-    ``DeterministicARForecaster`` for the auto-regressive combination.
+    ``compute_loss_from_forecast`` applies the same metric to an
+    already-produced forecast for reporting. ``forward`` is left abstract;
+    see ``DeterministicARForecaster`` for the auto-regressive combination.
     """
 
     def __init__(
@@ -45,7 +45,7 @@ class DeterministicForecaster(Forecaster):
             Configuration used to compute the constant per-variable std
             substituted for ``pred_std`` when the forecast carries no std of
             its own. Needed only when ``loss`` is a scoring rule that uses a
-            std; without it in that case ``score`` and
+            std; without it in that case ``compute_loss_from_forecast`` and
             ``compute_training_loss`` raise ``ValueError`` via
             ``_resolve_pred_std``. Forecasters used purely for inference can
             always omit it. Default ``None``.
@@ -79,7 +79,8 @@ class DeterministicForecaster(Forecaster):
         Produces one forecast over every predicted step, scores it against
         the target states on interior nodes and averages over batch and
         time. Callers that already hold a forecast should score that one
-        with ``score`` rather than producing another here.
+        with ``compute_loss_from_forecast`` rather than producing another
+        here.
 
         Parameters
         ----------
@@ -124,7 +125,7 @@ class DeterministicForecaster(Forecaster):
         prediction, pred_std = self(
             init_states, forcing_features, target_states
         )
-        step_losses = self.score(
+        step_losses = self.compute_loss_from_forecast(
             prediction,
             target_states,
             pred_std,
@@ -173,7 +174,7 @@ class DeterministicForecaster(Forecaster):
             )
         return self.per_var_std
 
-    def score(
+    def compute_loss_from_forecast(
         self,
         prediction: torch.Tensor,
         target_states: torch.Tensor,
@@ -246,7 +247,8 @@ class DeterministicARForecaster(ARForecaster, DeterministicForecaster):
 
     Combines the two orthogonal halves: ``ARForecaster`` supplies the
     auto-regressive ``forward``, ``DeterministicForecaster`` supplies the
-    single-forecast training objective and the reporting ``score``.
+    single-forecast training objective and the reporting
+    ``compute_loss_from_forecast``.
     """
 
     def __init__(
@@ -269,7 +271,7 @@ class DeterministicARForecaster(ARForecaster, DeterministicForecaster):
             Configuration used to compute the constant per-variable std
             substituted for ``pred_std`` when ``predictor`` does not output
             its own. Needed only when ``loss`` is a scoring rule that uses a
-            std; without it in that case ``score`` and
+            std; without it in that case ``compute_loss_from_forecast`` and
             ``compute_training_loss`` raise ``ValueError``. Forecasters used
             purely for inference (``forward``) can always omit it.
         loss : str, default "wmse"

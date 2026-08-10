@@ -389,7 +389,7 @@ def test_deterministic_training_step_logs_per_step_losses():
         init_states, forcing_features, target_states
     )
     step_losses = torch.mean(
-        forecaster.score(
+        forecaster.compute_loss_from_forecast(
             prediction,
             target_states,
             pred_std,

@@ -78,7 +78,7 @@ def test_ar_forecaster_unroll():
     assert torch.all(prediction[:, :, 1:, :] == 5.0)
 
 
-def test_ar_forecaster_score():
+def test_ar_forecaster_compute_loss_from_forecast():
     datastore = init_datastore_example("mdp")
     config = nlconfig.NeuralLAMConfig(
         datastore=nlconfig.DatastoreSelection(
@@ -98,7 +98,9 @@ def test_ar_forecaster_score():
 
     # pred_std=None falls back to forecaster.per_var_std and applies the
     # forecaster's own configured scoring rule (self.loss)
-    scored = forecaster.score(prediction, target, None, mask=mask)
+    scored = forecaster.compute_loss_from_forecast(
+        prediction, target, None, mask=mask
+    )
     expected = forecaster.loss(
         prediction, target, forecaster.per_var_std, mask=mask
     )
@@ -106,7 +108,7 @@ def test_ar_forecaster_score():
 
     # An explicit pred_std is used as-is, not overridden by per_var_std
     explicit_std = torch.full((d_state,), 2.0)
-    scored_explicit = forecaster.score(
+    scored_explicit = forecaster.compute_loss_from_forecast(
         prediction, target, explicit_std, mask=mask
     )
     expected_explicit = forecaster.loss(
@@ -135,7 +137,7 @@ def test_ar_forecaster_without_config_raises_on_use_not_construction():
     target = torch.ones(B, num_grid_nodes, d_state)
 
     with pytest.raises(ValueError, match="per_var_std fallback"):
-        forecaster.score(prediction, target, None)
+        forecaster.compute_loss_from_forecast(prediction, target, None)
 
     num_past_forcing_steps = 1
     num_future_forcing_steps = 1
@@ -171,7 +173,7 @@ def test_ar_forecaster_without_config_scores_with_unweighted_loss():
     prediction = torch.zeros(B, num_grid_nodes, d_state)
     target = torch.ones(B, num_grid_nodes, d_state)
 
-    scored = forecaster.score(prediction, target, None)
+    scored = forecaster.compute_loss_from_forecast(prediction, target, None)
     torch.testing.assert_close(scored, torch.full((B,), float(d_state)))
 
 

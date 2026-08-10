@@ -27,14 +27,16 @@ class DeterministicForecasterModule(BaseForecasterModule):
     an ensemble. Training is shared with that module unchanged (see
     ``BaseForecasterModule.training_step``).
 
-    The reported loss comes from ``forecaster.score``, since only the
-    forecaster knows its objective. The reported metrics (mse, mae) are
+    The reported loss comes from ``forecaster.compute_loss_from_forecast``,
+    since only the forecaster knows its objective. The reported metrics
+    (mse, mae) are
     computed here from ``neural_lam.metrics``: they are fixed regardless of
     what the forecaster trains on, so routing them through it would add a
     layer without adding meaning.
     """
 
-    # Narrowed from Forecaster: this module calls forecaster.score()
+    # Narrowed from Forecaster: this module calls
+    # forecaster.compute_loss_from_forecast()
     forecaster: DeterministicForecaster
 
     def __init__(
@@ -58,9 +60,10 @@ class DeterministicForecasterModule(BaseForecasterModule):
         Parameters
         ----------
         forecaster : DeterministicForecaster
-            The forecaster to evaluate. Must supply ``score``, i.e. carry
-            the deterministic objective, since validation and testing score
-            a single prediction through it.
+            The forecaster to evaluate. Must supply
+            ``compute_loss_from_forecast``, i.e. carry the deterministic
+            objective, since validation and testing score a single
+            prediction through it.
         config : NeuralLAMConfig
             Configuration object for the neural LAM model.
         datastore : BaseDatastore
@@ -179,7 +182,7 @@ class DeterministicForecasterModule(BaseForecasterModule):
         prediction, target_states, pred_std, _ = self.common_step(batch)
 
         time_step_loss = torch.mean(
-            self.forecaster.score(
+            self.forecaster.compute_loss_from_forecast(
                 prediction,
                 target_states,
                 pred_std,
@@ -282,7 +285,7 @@ class DeterministicForecasterModule(BaseForecasterModule):
             )
             self.test_metrics[metric_name].append(batch_metric_vals)
 
-        spatial_loss = self.forecaster.score(
+        spatial_loss = self.forecaster.compute_loss_from_forecast(
             prediction, target_states, pred_std, average_grid=False
         )
         log_spatial_losses = spatial_loss[
