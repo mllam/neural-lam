@@ -181,29 +181,34 @@ def main(input_args=None):
         type=str,
         default="InteractionNet",
         choices=list(GNN_TYPES.keys()),
-        help="GNN type for grid-to-mesh encoding",
+        help="GNN type for grid-to-mesh encoding. Applies to all models, "
+        "including the probabilistic Graph-EFM model",
     )
     arch_group.add_argument(
         "--m2g_gnn_type",
         type=str,
         default="InteractionNet",
         choices=list(GNN_TYPES.keys()),
-        help="GNN type for mesh-to-grid decoding",
+        help="GNN type for mesh-to-grid decoding. Applies to all models, "
+        "including the probabilistic Graph-EFM model",
     )
     arch_group.add_argument(
         "--mesh_up_gnn_type",
         type=str,
         default="InteractionNet",
         choices=list(GNN_TYPES.keys()),
-        help="GNN type for upward mesh message passing in hierarchical models",
+        help="GNN type for upward mesh message passing in hierarchical "
+        "models. Only affects Hi-LAM; the probabilistic Graph-EFM model "
+        "hard-codes its mesh-up GNN types",
     )
     arch_group.add_argument(
         "--mesh_down_gnn_type",
         type=str,
         default="InteractionNet",
         choices=list(GNN_TYPES.keys()),
-        help="GNN type for downward mesh message passing in "
-        "hierarchical models",
+        help="GNN type for downward mesh message passing in hierarchical "
+        "models. Only affects Hi-LAM; the probabilistic Graph-EFM model "
+        "hard-codes its mesh-down GNN type",
     )
 
     # Training options
