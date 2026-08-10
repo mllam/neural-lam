@@ -218,6 +218,9 @@ class ProbabilisticForecasterModule(BaseForecasterModule):
         batch_idx : int
             The index of the batch.
         """
+        # Note that we here do two forward passes: One for computing loss 
+        # and one for computing ensemble metrics. Required as computing loss 
+        # might not involve making a forecast the same way as during inference.
         self._log_objective(batch)
         entry_mses = self._ensemble_step(batch)
         self.val_metrics["ens_mse"].append(entry_mses)
