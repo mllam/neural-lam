@@ -190,10 +190,10 @@ def save_stats(
         Prefix (e.g., ``"parameter"`` or ``"diff"``) for saved tensors.
     """
     means_tensor = (
-        torch.stack(list(means)) if len(means) > 1 else means[0]
+        torch.stack(means) if len(means) > 1 else means[0]
     )  # (B, d_features,)
     squares_tensor = (
-        torch.stack(list(squares)) if len(squares) > 1 else squares[0]
+        torch.stack(squares) if len(squares) > 1 else squares[0]
     )  # (B, d_features,)
     mean = torch.mean(means_tensor, dim=0)  # (d_features,)
     second_moment = torch.mean(squares_tensor, dim=0)  # (d_features,)

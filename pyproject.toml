@@ -126,7 +126,7 @@ per-file-ignores = [
 skip = "requirements/*"
 
 [tool.ty.src]
-exclude = ["tests/", "docs/"]
+exclude = ["tests/", "docs/", "gigilocal/"]
 
 [tool.ty.rules]
 possibly-missing-submodule = "ignore"
