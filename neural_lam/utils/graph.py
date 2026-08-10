@@ -9,8 +9,10 @@ from typing import Any, Union
 # Third-party
 import torch
 import yaml
+from torch import nn
 
 # Local
+from ..datastore import BaseDatastore
 from .buffer_list import BufferList
 
 LEGACY_GRAPH_SPEC_VERSION = "legacy"
@@ -451,3 +453,93 @@ def load_graph(
         "mesh_down_features": mesh_down_features,
         "mesh_static_features": mesh_static_features,
     }
+
+
+def load_and_register_graph(
+    module: nn.Module,
+    datastore: BaseDatastore,
+    graph_name: str,
+    mesh_node_features_scaling: float,
+) -> bool:
+    """
+    Load a graph and register its tensors on ``module``.
+
+    Loads the graph ``graph_name`` from the datastore's graph directory via
+    :func:`load_graph`, then registers each tensor as a non-persistent
+    buffer and each non-tensor (e.g. ``BufferList``) as a plain attribute on
+    ``module``.
+
+    Parameters
+    ----------
+    module : torch.nn.Module
+        Module to register the graph tensors and attributes on, in place.
+    datastore : BaseDatastore
+        Datastore whose ``root_path`` holds the ``graph`` directory.
+    graph_name : str
+        Name of the graph directory (under ``<root>/graph``) to load.
+    mesh_node_features_scaling : float
+        Scalar used to normalize mesh node coordinate features for graphs in
+        the current on-disk format; forwarded to :func:`load_graph`.
+
+    Returns
+    -------
+    bool
+        Whether the loaded graph is hierarchical.
+    """
+    graph_dir_path = datastore.root_path / "graph" / graph_name
+    hierarchical, graph_ldict = load_graph(
+        graph_dir_path=graph_dir_path,
+        mesh_node_features_scaling=mesh_node_features_scaling,
+    )
+    for name, attr_value in graph_ldict.items():
+        # Make BufferLists module members and register tensors as buffers
+        if isinstance(attr_value, torch.Tensor):
+            module.register_buffer(name, attr_value, persistent=False)
+        else:
+            setattr(module, name, attr_value)
+    return hierarchical
+
+
+def compute_grid_input_dim(
+    datastore: BaseDatastore,
+    num_past_forcing_steps: int,
+    num_future_forcing_steps: int,
+) -> int:
+    """
+    Compute the total grid input dimensionality of a graph step predictor.
+
+    The grid input concatenates the two previous states, the grid static
+    features and the windowed forcing
+    (past + current + future forcing steps).
+
+    Parameters
+    ----------
+    datastore : BaseDatastore
+        Datastore providing the number of state, static and forcing variables.
+    num_past_forcing_steps : int
+        Number of past forcing steps included in the input window.
+    num_future_forcing_steps : int
+        Number of future forcing steps included in the input window.
+
+    Returns
+    -------
+    int
+        Total grid input dimensionality.
+    """
+    num_state_vars = datastore.get_num_data_vars(category="state")
+    num_forcing_vars = datastore.get_num_data_vars(category="forcing")
+    # The static category is optional: when the datastore provides no static
+    # data array the grid carries no static features, mirroring the empty
+    # (N, 0) static buffer the step predictor builds in that case.
+    da_static = datastore.get_dataarray(category="static", split=None)
+    num_static_vars = (
+        0
+        if da_static is None
+        else datastore.get_num_data_vars(category="static")
+    )
+    return (
+        2 * num_state_vars
+        + num_static_vars
+        + num_forcing_vars
+        * (num_past_forcing_steps + num_future_forcing_steps + 1)
+    )

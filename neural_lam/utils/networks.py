@@ -1,6 +1,7 @@
 """Constructors for neural-network building blocks."""
 
 # Third-party
+import torch_geometric as pyg
 from torch import nn
 
 
@@ -37,3 +38,69 @@ def make_mlp(blueprint: list[int], layer_norm: bool = True) -> nn.Sequential:
         layers.append(nn.LayerNorm(blueprint[-1]))
 
     return nn.Sequential(*layers)
+
+
+def make_gnn_seq(
+    edge_index,
+    num_gnn_layers,
+    hidden_layers,
+    hidden_dim,
+    gnn_type="InteractionNet",
+):
+    """
+    Build a sequential stack of GNN layers that propagates both node and
+    edge representations.
+
+    All layer types share the ``(send, rec, edge) -> (rec, edge)``
+    interface, so the stack can be applied as a single module.
+
+    Parameters
+    ----------
+    edge_index : torch.Tensor
+        Shape ``(2, M)``. Edge index of the edges that the GNN layers
+        operate on.
+    num_gnn_layers : int
+        Number of stacked GNN layers; must be at least 1. Callers that
+        want a no-op stage (e.g. zero intra-level layers) should skip
+        building and applying the stack rather than calling this with 0.
+    hidden_layers : int
+        Number of hidden layers in the MLPs of each GNN layer.
+    hidden_dim : int
+        Dimensionality of node and edge representations.
+    gnn_type : str
+        GNN layer type, any key in ``gnn_layers.GNN_TYPES``.
+
+    Returns
+    -------
+    pyg.nn.Sequential
+        Sequential module mapping ``(mesh_rep, edge_rep)`` to updated
+        ``(mesh_rep, edge_rep)``.
+
+    Raises
+    ------
+    ValueError
+        If ``num_gnn_layers`` is less than 1.
+    """
+    # First-party
+    from neural_lam.gnn_layers import get_gnn_class
+
+    if num_gnn_layers < 1:
+        raise ValueError(
+            "make_gnn_seq requires num_gnn_layers >= 1 "
+            f"(got {num_gnn_layers}); skip the stage for a no-op."
+        )
+    gnn_class = get_gnn_class(gnn_type)
+    return pyg.nn.Sequential(
+        "mesh_rep, edge_rep",
+        [
+            (
+                gnn_class(
+                    edge_index,
+                    hidden_dim,
+                    hidden_layers=hidden_layers,
+                ),
+                "mesh_rep, mesh_rep, edge_rep -> mesh_rep, edge_rep",
+            )
+            for _ in range(num_gnn_layers)
+        ],
+    )
