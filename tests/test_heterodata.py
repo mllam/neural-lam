@@ -24,6 +24,7 @@ from neural_lam.models import GraphLAM, HiLAM
 from neural_lam.utils import (
     graph_dict_to_heterodata,
     graph_tensors_from_heterodata,
+    heterodata_from_module,
     load_and_register_graph,
 )
 from neural_lam.utils.buffer_list import BufferList
@@ -323,15 +324,23 @@ def test_load_and_register_graph_builds_hierarchical_heterodata():
     )
 
     assert hierarchical
-    assert isinstance(module.graph, HeteroData)
-    # One node type per mesh level, and the registered per-level tensors
-    # match the levels held on the HeteroData object.
+    # The graph is not stored on the module; it is built on demand from the
+    # tensors registered on it, so it cannot go stale when the module moves.
+    assert not hasattr(module, "graph")
+
     num_levels = len(module.mesh_static_features)
     assert num_levels > 1
+    graph = heterodata_from_module(
+        module,
+        num_grid_nodes=datastore.num_grid_points,
+        hierarchical=True,
+    )
+    assert isinstance(graph, HeteroData)
+    # One node type per mesh level, referencing the registered tensors.
     for level in range(num_levels):
-        assert torch.equal(
-            module.graph[mesh_level_node_type(level)].x,
-            module.mesh_static_features[level],
+        assert (
+            graph[mesh_level_node_type(level)].x
+            is module.mesh_static_features[level]
         )
 
 
@@ -381,6 +390,9 @@ def test_graphlam_heterodata_equivalence(tmp_path):
     assert isinstance(model_hd.graph, HeteroData)
     assert not hasattr(model_dict, "graph")
 
+    # The graph is a view of the model's own tensors, not a second copy.
+    assert model_hd.graph[G2M_EDGE_TYPE].edge_attr is model_hd.g2m_features
+
     # Identical parameters.
     params_dict = dict(model_dict.named_parameters())
     params_hd = dict(model_hd.named_parameters())
@@ -401,6 +413,17 @@ def test_graphlam_heterodata_equivalence(tmp_path):
         assert torch.equal(
             getattr(model_dict, name), getattr(model_hd, name)
         ), name
+
+    # Moving the model must not leave the graph behind: a stored HeteroData
+    # attribute would not be touched by nn.Module._apply and would keep
+    # referring to the pre-move tensors.
+    model_hd.to(torch.float64)
+    assert (
+        model_hd.graph[G2M_EDGE_TYPE].edge_attr.dtype
+        == model_hd.g2m_features.dtype
+    )
+    assert model_hd.graph[MESH_NODE_TYPE].x.dtype == torch.float64
+    model_hd.to(torch.float32)
 
     # Identical forward output and identical training.
     _assert_forward_and_training_equivalent(model_dict, model_hd)
