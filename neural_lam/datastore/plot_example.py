@@ -3,7 +3,6 @@
 # Third-party
 import matplotlib.figure
 import matplotlib.pyplot as plt
-import xarray as xr
 
 # Local
 from . import DATASTORES, init_datastore
@@ -77,7 +76,7 @@ def plot_example_from_datastore(
 
     crs = datastore.coords_projection
     col_wrap = min(4, int(da[col].count()))
-    g = da.plot(  # ty: ignore[missing-argument] # xarray stub limitation for plot accessor call
+    g = da.plot(  # ty: ignore[missing-argument]
         x="x",
         y="y",
         col=col,
