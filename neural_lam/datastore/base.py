@@ -534,9 +534,13 @@ class BaseRegularGridDatastore(BaseDatastore):
         """
 
     @overload
-    def unstack_grid_coords(self, da_or_ds: xr.DataArray) -> xr.DataArray: ...
+    def unstack_grid_coords(self, da_or_ds: xr.DataArray) -> xr.DataArray:
+        """Unstack spatial grid coordinates of DataArray."""
+
     @overload
-    def unstack_grid_coords(self, da_or_ds: xr.Dataset) -> xr.Dataset: ...
+    def unstack_grid_coords(self, da_or_ds: xr.Dataset) -> xr.Dataset:
+        """Unstack spatial grid coordinates of Dataset."""
+
     def unstack_grid_coords(
         self, da_or_ds: xr.DataArray | xr.Dataset
     ) -> xr.DataArray | xr.Dataset:
@@ -593,9 +597,13 @@ class BaseRegularGridDatastore(BaseDatastore):
         return da_or_ds_unstacked
 
     @overload
-    def stack_grid_coords(self, da_or_ds: xr.DataArray) -> xr.DataArray: ...
+    def stack_grid_coords(self, da_or_ds: xr.DataArray) -> xr.DataArray:
+        """Stack spatial grid coordinates of DataArray."""
+
     @overload
-    def stack_grid_coords(self, da_or_ds: xr.Dataset) -> xr.Dataset: ...
+    def stack_grid_coords(self, da_or_ds: xr.Dataset) -> xr.Dataset:
+        """Stack spatial grid coordinates of Dataset."""
+
     def stack_grid_coords(
         self, da_or_ds: xr.DataArray | xr.Dataset
     ) -> xr.DataArray | xr.Dataset:
