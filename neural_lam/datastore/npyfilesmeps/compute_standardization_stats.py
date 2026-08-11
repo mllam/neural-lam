@@ -212,12 +212,10 @@ def save_stats(
     if len(flux_means) == 0:
         return
     flux_means_tensor = (
-        torch.stack(list(flux_means)) if len(flux_means) > 1 else flux_means[0]
+        torch.stack(flux_means) if len(flux_means) > 1 else flux_means[0]
     )  # (B,)
     flux_squares_tensor = (
-        torch.stack(list(flux_squares))
-        if len(flux_squares) > 1
-        else flux_squares[0]
+        torch.stack(flux_squares) if len(flux_squares) > 1 else flux_squares[0]
     )  # (B,)
     flux_mean = torch.mean(flux_means_tensor)  # (,)
     flux_second_moment = torch.mean(flux_squares_tensor)  # (,)
