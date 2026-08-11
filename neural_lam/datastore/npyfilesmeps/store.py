@@ -48,7 +48,7 @@ def _load_np(
         The file path to load.
     add_feature_dim : bool
         Whether to add a new feature dimension at the end.
-    feature_dim_mask : list of int or None, optional
+    feature_dim_mask : np.ndarray or None, optional
         Mask to apply to the feature dimension.
 
     Returns
@@ -188,7 +188,7 @@ class NpyFilesDatastoreMEPS(BaseRegularGridDatastore):
 
         Parameters
         ----------
-        config_path : str
+        config_path : str or Path
             The path to the configuration file for the datastore.
 
         """
@@ -247,9 +247,9 @@ class NpyFilesDatastoreMEPS(BaseRegularGridDatastore):
         category : str
             The category of the data to load. One of 'state', 'forcing', or
             'static'.
-        split : str
+        split : str or None
             The dataset split to load the data for. One of 'train', 'val', or
-            'test'.
+            'test'. Can be None for static data (which is shared across splits).
         standardize: bool
             If the dataarray should be returned standardized
 
@@ -328,9 +328,7 @@ class NpyFilesDatastoreMEPS(BaseRegularGridDatastore):
         da = da.rename(dict(feature=f"{category}_feature"))
 
         # stack the [x, y] dimensions into a `grid_index` dimension
-        da_stacked = self.stack_grid_coords(da)
-        assert isinstance(da_stacked, xr.DataArray)
-        da = da_stacked
+        da = self.stack_grid_coords(da)
 
         # check that we have the right features
         actual_features = da[f"{category}_feature"].values.tolist()
@@ -767,9 +765,7 @@ class NpyFilesDatastoreMEPS(BaseRegularGridDatastore):
         da_mask = xr.DataArray(
             values, dims=["y", "x"], coords=dict(x=x, y=y), name="boundary_mask"
         )
-        da_mask_stacked_xy = self.stack_grid_coords(da_mask).astype(int)
-        assert isinstance(da_mask_stacked_xy, xr.DataArray)
-        return da_mask_stacked_xy
+        return self.stack_grid_coords(da_mask).astype(int)
 
     def get_standardization_dataarray(self, category: str) -> xr.Dataset:
         """Return the standardization dataarray for the given category. This

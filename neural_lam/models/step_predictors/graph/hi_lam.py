@@ -3,6 +3,7 @@ Hierarchical graph-based LAM model.
 """
 
 # Standard library
+from typing import cast
 
 # Third-party
 import torch
@@ -352,18 +353,13 @@ class HiLAM(BaseHiGraphModel):
             self.mesh_up_gnns,
             self.mesh_up_same_gnns,
         ):
-            assert isinstance(down_gnns, nn.ModuleList)
-            assert isinstance(down_same_gnns, nn.ModuleList)
-            assert isinstance(up_gnns, nn.ModuleList)
-            assert isinstance(up_same_gnns, nn.ModuleList)
-
             # Down
             mesh_rep_levels, mesh_same_rep, mesh_down_rep = self.mesh_down_step(
                 mesh_rep_levels,
                 mesh_same_rep,
                 mesh_down_rep,
-                down_gnns,
-                down_same_gnns,
+                cast(nn.ModuleList, down_gnns),
+                cast(nn.ModuleList, down_same_gnns),
             )
 
             # Up
@@ -371,8 +367,8 @@ class HiLAM(BaseHiGraphModel):
                 mesh_rep_levels,
                 mesh_same_rep,
                 mesh_up_rep,
-                up_gnns,
-                up_same_gnns,
+                cast(nn.ModuleList, up_gnns),
+                cast(nn.ModuleList, up_same_gnns),
             )
 
         # NOTE: We return all, even though only down edges really are used

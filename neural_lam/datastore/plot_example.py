@@ -54,9 +54,7 @@ def plot_example_from_datastore(
     if standardize:
         da_stats = datastore.get_standardization_dataarray(category=category)
         da = (da - da_stats[f"{category}_mean"]) / da_stats[f"{category}_std"]
-    da_unstacked = datastore.unstack_grid_coords(da)
-    assert isinstance(da_unstacked, xr.DataArray)
-    da = da_unstacked
+    da = datastore.unstack_grid_coords(da)
 
     if len(selection) > 0:
         da = da.sel(**selection)
@@ -79,7 +77,7 @@ def plot_example_from_datastore(
 
     crs = datastore.coords_projection
     col_wrap = min(4, int(da[col].count()))
-    g = da.plot(  # ty: ignore[missing-argument]
+    g = da.plot(  # ty: ignore[missing-argument] # xarray stub limitation for plot accessor call
         x="x",
         y="y",
         col=col,
