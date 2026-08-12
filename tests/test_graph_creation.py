@@ -350,8 +350,8 @@ def test_buffer_list_iter(buffer_list_five):
 @pytest.mark.parametrize("archetype", ["keisler", "graphcast", "hierarchical"])
 @pytest.mark.parametrize("datastore_name", DATASTORES.keys())
 def test_wmg_graph_creation(datastore_name, archetype):
-    """Check that graph creation via weather-model-graphs produces the
-    expected .pt files with correct shapes and types."""
+    """Check that graph creation via weather-model-graphs produces a graph
+    that conforms to the graph storage specification."""
     datastore = init_datastore_example(datastore_name)
 
     if not isinstance(datastore, BaseRegularGridDatastore):
@@ -362,29 +362,6 @@ def test_wmg_graph_creation(datastore_name, archetype):
 
     hierarchical = archetype == "hierarchical"
 
-    required_graph_files = [
-        "m2m_edge_index.pt",
-        "g2m_edge_index.pt",
-        "m2g_edge_index.pt",
-        "m2m_features.pt",
-        "g2m_features.pt",
-        "m2g_features.pt",
-        "mesh_features.pt",
-        METAINFO_FILENAME,
-    ]
-    if hierarchical:
-        required_graph_files.extend(
-            [
-                "mesh_up_edge_index.pt",
-                "mesh_down_edge_index.pt",
-                "mesh_up_features.pt",
-                "mesh_down_features.pt",
-            ]
-        )
-
-    d_features = 3
-    d_mesh_static = 2
-
     with tempfile.TemporaryDirectory() as tmpdir:
         graph_dir_path = Path(tmpdir) / "graph" / archetype
 
@@ -394,57 +371,27 @@ def test_wmg_graph_creation(datastore_name, archetype):
             archetype=archetype,
         )
 
-        assert graph_dir_path.exists()
-
-        # check that all the required files are present
-        for file_name in required_graph_files:
-            assert (graph_dir_path / file_name).exists()
-
-        # Third-party
-        import yaml
-
-        meta = yaml.safe_load(
-            (graph_dir_path / METAINFO_FILENAME).read_text(encoding="utf-8")
-        )
-        assert meta is not None
-        assert meta["spec_version"] == CURRENT_GRAPH_SPEC_VERSION
-
         # Validate the wmg-created graph on disk against the graph-storage
         # spec and validator introduced in #323. This is the end-to-end
         # contract check: a graph built through create_graph_with_wmg (using
         # weather-model-graphs' to_torch_tensors_on_disk) must pass the same
-        # validator neural-lam ships for the on-disk graph format.
+        # validator neural-lam ships for the on-disk graph format. It covers
+        # file presence, spec version, container types, edge-index shapes and
+        # feature dimensions, so those are not re-checked here.
         validator = _load_validator_module()
         report, _, _ = validator.validate_graph_directory(graph_dir_path)
         assert not report.has_fails(), report.summarize()
 
-        # try to load each and ensure they have the right shape
-        for file_name in required_graph_files:
-            if file_name == METAINFO_FILENAME:
-                continue
-            file_id = Path(file_name).stem
-            result = torch.load(graph_dir_path / file_name, weights_only=True)
-
-            if file_id.startswith("g2m") or file_id.startswith("m2g"):
-                assert isinstance(result, torch.Tensor)
-
-                if file_id.endswith("_index"):
-                    assert result.shape[0] == 2
-                elif file_id.endswith("_features"):
-                    assert result.shape[1] == d_features
-
-            elif file_id.startswith("m2m") or file_id.startswith("mesh"):
-                assert isinstance(result, list)
-
-                for r in result:
-                    assert isinstance(r, torch.Tensor)
-
-                    if file_id == "mesh_features":
-                        assert r.shape[1] == d_mesh_static
-                    elif file_id.endswith("_index"):
-                        assert r.shape[0] == 2
-                    elif file_id.endswith("_features"):
-                        assert r.shape[1] == d_features
+        # The validator infers whether a graph is hierarchical from its
+        # contents, so it cannot tell whether the requested archetype was
+        # honoured. Check that separately.
+        for file_name in (
+            "mesh_up_edge_index.pt",
+            "mesh_down_edge_index.pt",
+            "mesh_up_features.pt",
+            "mesh_down_features.pt",
+        ):
+            assert (graph_dir_path / file_name).exists() == hierarchical
 
 
 @pytest.mark.parametrize("datastore_name", DATASTORES.keys())
