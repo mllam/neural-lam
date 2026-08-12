@@ -14,17 +14,13 @@ from neural_lam.plot_graph import (
 from tests.dummy_datastore import DummyDatastore
 
 
-@pytest.fixture(scope="module", params=["1level", "hierarchical"])
+@pytest.fixture(scope="module", params=["1level", "multiscale", "hierarchical"])
 def graph_fixture(request, tmp_path_factory):
     """Create a graph from a DummyDatastore and load it back.
 
-    Parametrized over graph types: 1level (flat, keisler archetype)
-    and hierarchical (multi-level with up/down edges).
-
-    Note: The graphcast archetype is not included here because it produces
-    multi-level m2m edges without up/down edges, which is not yet
-    compatible with ``utils.load_graph``. Graphcast graph creation is
-    tested separately in ``test_graph_creation.py``.
+    Parametrized over graph types: 1level (flat, keisler archetype),
+    multiscale (flat multi-level, graphcast archetype) and hierarchical
+    (multi-level with up/down edges).
 
     Returns
     -------
@@ -36,6 +32,9 @@ def graph_fixture(request, tmp_path_factory):
 
     if graph_name == "hierarchical":
         archetype = "hierarchical"
+        max_num_levels = 3
+    elif graph_name == "multiscale":
+        archetype = "graphcast"
         max_num_levels = 3
     elif graph_name == "1level":
         archetype = "keisler"
