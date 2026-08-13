@@ -12,6 +12,7 @@ from argparse import ArgumentDefaultsHelpFormatter, ArgumentParser
 # Third-party
 import numpy as np
 import weather_model_graphs as wmg
+from loguru import logger
 
 # Local
 from .config import load_config_and_datastore
@@ -24,8 +25,8 @@ ARCHETYPE_FUNCTIONS = {
 }
 
 
-def _estimate_grid_node_spacing(xy):
-    """Estimate the average grid node spacing from grid coordinates.
+def _estimate_grid_node_distance(xy):
+    """Estimate the average grid node distance from grid coordinates.
 
     Parameters
     ----------
@@ -35,12 +36,12 @@ def _estimate_grid_node_spacing(xy):
     Returns
     -------
     float
-        Estimated average grid node spacing in coordinate units.
+        Estimated average grid node distance in coordinate units.
     """
     x_range = np.ptp(xy[:, 0])
     y_range = np.ptp(xy[:, 1])
     n_points = len(xy)
-    # avg grid spacing ≈ sqrt(area / n_points)
+    # avg grid node distance ≈ sqrt(area / n_points)
     return float(np.sqrt(x_range * y_range / n_points))
 
 
@@ -49,7 +50,7 @@ def create_graph_from_datastore(
     output_root_path,
     archetype="keisler",
     mesh_node_distance=None,
-    grid_mesh_spacing_ratio=3.0,
+    mesh_grid_distance_ratio=3.0,
     level_refinement_factor=3,
     max_num_levels=None,
 ):
@@ -66,9 +67,10 @@ def create_graph_from_datastore(
         ``"hierarchical"``.
     mesh_node_distance : float or None
         Distance between created mesh nodes (in coordinate units). If None,
-        automatically estimated as ``grid_mesh_spacing_ratio * grid_spacing``.
-    grid_mesh_spacing_ratio : float
-        Ratio of mesh node distance to grid node spacing. Only used when
+        the grid node distance is estimated automatically from the grid
+        coordinates and multiplied by ``mesh_grid_distance_ratio``.
+    mesh_grid_distance_ratio : float
+        Ratio of mesh node distance to grid node distance. Only used when
         ``mesh_node_distance`` is None. Default is 3.0.
     level_refinement_factor : int
         Refinement factor between mesh hierarchy levels. Only used for
@@ -92,8 +94,14 @@ def create_graph_from_datastore(
     xy = np.array(xy)
 
     if mesh_node_distance is None:
-        grid_spacing = _estimate_grid_node_spacing(xy)
-        mesh_node_distance = grid_spacing * grid_mesh_spacing_ratio
+        grid_node_distance = _estimate_grid_node_distance(xy)
+        mesh_node_distance = grid_node_distance * mesh_grid_distance_ratio
+        logger.info(
+            f"mesh_node_distance not given; estimated grid node distance "
+            f"{grid_node_distance:.2f} x mesh_grid_distance_ratio "
+            f"{mesh_grid_distance_ratio} -> mesh_node_distance "
+            f"{mesh_node_distance:.2f}"
+        )
 
     # Build keyword arguments for the archetype function.
     # return_components=True is required because
@@ -153,14 +161,14 @@ def cli(input_args=None):
         type=float,
         default=None,
         help="Distance between mesh nodes (in coordinate units). "
-        "If not set, estimated automatically from grid spacing "
-        "and --grid_mesh_spacing_ratio.",
+        "If not set, estimated automatically from the grid node distance "
+        "and --mesh_grid_distance_ratio.",
     )
     parser.add_argument(
-        "--grid_mesh_spacing_ratio",
+        "--mesh_grid_distance_ratio",
         type=float,
         default=3.0,
-        help="Ratio of mesh node distance to grid node spacing. "
+        help="Ratio of mesh node distance to grid node distance. "
         "Only used when --mesh_node_distance is not set.",
     )
     parser.add_argument(
@@ -191,7 +199,7 @@ def cli(input_args=None):
         output_root_path=os.path.join(datastore.root_path, "graph", args.name),
         archetype=args.archetype,
         mesh_node_distance=args.mesh_node_distance,
-        grid_mesh_spacing_ratio=args.grid_mesh_spacing_ratio,
+        mesh_grid_distance_ratio=args.mesh_grid_distance_ratio,
         level_refinement_factor=args.level_refinement_factor,
         max_num_levels=args.max_num_levels,
     )
