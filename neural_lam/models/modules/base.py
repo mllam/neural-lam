@@ -1,5 +1,5 @@
 """Abstract Lightning module shared by deterministic and probabilistic
-forecaster modules."""
+forecasting modules."""
 
 # Standard library
 import os
@@ -25,7 +25,7 @@ from ...weather_dataset import WeatherDataset
 from ..forecasters.base import Forecaster
 
 
-class BaseForecasterModule(pl.LightningModule, ABC):
+class BaseForecastingModule(pl.LightningModule, ABC):
     """
     Abstract Lightning module wrapping a ``Forecaster``.
 
@@ -36,8 +36,8 @@ class BaseForecasterModule(pl.LightningModule, ABC):
     validation and testing. ``validation_step``, ``test_step`` and
     ``on_test_epoch_end`` differ enough between the two evaluation modes
     that they are left abstract; concrete subclasses implement them
-    independently (see ``DeterministicForecasterModule`` and
-    ``ProbabilisticForecasterModule``) rather than overriding one another.
+    independently (see ``DeterministicForecastingModule`` and
+    ``ProbabilisticForecastingModule``) rather than overriding one another.
     """
 
     # pylint: disable=arguments-differ
@@ -58,7 +58,7 @@ class BaseForecasterModule(pl.LightningModule, ABC):
         args=None,
     ):
         """
-        Initialize the BaseForecasterModule.
+        Initialize the BaseForecastingModule.
 
         Parameters
         ----------
@@ -382,7 +382,7 @@ class BaseForecasterModule(pl.LightningModule, ABC):
         there is no per-step tensor to select from with
         ``train_steps_to_log``. Subclasses whose forecaster does expose such
         a decomposition override this to log the breakdown as well; see
-        ``DeterministicForecasterModule.training_step``.
+        ``DeterministicForecastingModule.training_step``.
 
         Parameters
         ----------

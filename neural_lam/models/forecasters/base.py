@@ -114,7 +114,7 @@ class Forecaster(nn.Module, ABC):
         The forecaster owns its complete training objective: which forecasts
         to produce from the batch, which loss terms to compute from them and
         how to combine those terms into a single scalar. The wrapping
-        ``BaseForecasterModule`` only injects the interior mask, logs the
+        ``BaseForecastingModule`` only injects the interior mask, logs the
         returned components and optimizes the returned loss.
 
         How the objective is computed is orthogonal to how forecasts are

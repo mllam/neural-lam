@@ -11,7 +11,7 @@ from neural_lam import config as nlconfig
 from neural_lam.models import (
     ARForecaster,
     DeterministicARForecaster,
-    DeterministicForecasterModule,
+    DeterministicForecastingModule,
     Forecaster,
     StepPredictor,
 )
@@ -229,7 +229,7 @@ def test_unclaimed_constructor_argument_raises():
         )
 
 
-def test_forecaster_module_checkpoint(tmp_path):
+def test_forecasting_module_checkpoint(tmp_path):
     datastore = init_datastore_example("mdp")
 
     config = nlconfig.NeuralLAMConfig(
@@ -239,7 +239,7 @@ def test_forecaster_module_checkpoint(tmp_path):
     )
 
     # Build predictor and forecaster externally, then inject into
-    # DeterministicForecasterModule
+    # DeterministicForecastingModule
     # First-party
     from neural_lam.models import MODELS
 
@@ -259,7 +259,7 @@ def test_forecaster_module_checkpoint(tmp_path):
         predictor, datastore, config=config, loss="mse"
     )
 
-    model = DeterministicForecasterModule(
+    model = DeterministicForecastingModule(
         forecaster=forecaster,
         config=config,
         datastore=datastore,
@@ -297,7 +297,7 @@ def test_forecaster_module_checkpoint(tmp_path):
     )
 
     # Load from checkpoint
-    loaded_model = DeterministicForecasterModule.load_from_checkpoint(
+    loaded_model = DeterministicForecastingModule.load_from_checkpoint(
         ckpt_path,
         datastore=datastore,
         forecaster=load_forecaster,
@@ -330,7 +330,7 @@ def test_forecaster_module_checkpoint(tmp_path):
     assert torch.allclose(out_before[0], out_after[0])
 
 
-def test_forecaster_module_old_checkpoint(tmp_path):
+def test_forecasting_module_old_checkpoint(tmp_path):
     datastore = init_datastore_example("mdp")
 
     config = nlconfig.NeuralLAMConfig(
@@ -355,7 +355,7 @@ def test_forecaster_module_old_checkpoint(tmp_path):
         output_std=False,
     )
     # Use distinctive non-default values so we can detect silent fallback
-    # to DeterministicForecasterModule's defaults during load.
+    # to DeterministicForecastingModule's defaults during load.
     saved_loss = "mse"
     saved_lr = 0.123
     saved_create_gif = True
@@ -366,7 +366,7 @@ def test_forecaster_module_old_checkpoint(tmp_path):
         predictor, datastore, config=config, loss=saved_loss
     )
 
-    model = DeterministicForecasterModule(
+    model = DeterministicForecastingModule(
         forecaster=forecaster,
         config=config,
         datastore=datastore,
@@ -436,7 +436,7 @@ def test_forecaster_module_old_checkpoint(tmp_path):
     )
 
     # Load from hacked old checkpoint
-    loaded_model = DeterministicForecasterModule.load_from_checkpoint(
+    loaded_model = DeterministicForecastingModule.load_from_checkpoint(
         ckpt_path,
         datastore=datastore,
         forecaster=load_forecaster,
@@ -447,7 +447,7 @@ def test_forecaster_module_old_checkpoint(tmp_path):
     assert loaded_model.forecaster.predictor.__class__.__name__ == "GraphLAM"
 
     # Hyperparameters nested in the legacy 'args' namespace must round-trip
-    # rather than silently falling back to DeterministicForecasterModule
+    # rather than silently falling back to DeterministicForecastingModule
     # defaults.
     assert loaded_model.hparams.lr == saved_lr
     assert loaded_model.hparams.val_steps_to_log == saved_val_steps

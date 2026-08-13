@@ -10,7 +10,7 @@ from neural_lam import config as nlconfig
 from neural_lam.create_graph import create_graph_from_datastore
 from neural_lam.models import (
     DeterministicARForecaster,
-    DeterministicForecasterModule,
+    DeterministicForecastingModule,
     GraphLAM,
 )
 from tests.dummy_datastore import DummyDatastore
@@ -57,7 +57,7 @@ def test_saved_checkpoint_excludes_datastore_and_forecaster(tmp_path):
     forecaster = DeterministicARForecaster(
         predictor, datastore, config=config, loss="mse"
     )
-    model = DeterministicForecasterModule(
+    model = DeterministicForecastingModule(
         forecaster=forecaster,
         config=config,
         datastore=datastore,

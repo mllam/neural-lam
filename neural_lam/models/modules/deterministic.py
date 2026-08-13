@@ -15,17 +15,17 @@ from ... import metrics, vis
 from ...config import NeuralLAMConfig
 from ...datastore import BaseDatastore
 from ..forecasters.deterministic import DeterministicForecaster
-from .base import BaseForecasterModule
+from .base import BaseForecastingModule
 
 
-class DeterministicForecasterModule(BaseForecasterModule):
+class DeterministicForecastingModule(BaseForecastingModule):
     """
     Lightning module for a single deterministic forecast per batch.
 
     Validation and testing evaluate the forecaster's own single prediction,
-    as opposed to ``ProbabilisticForecasterModule``, which samples and scores
+    as opposed to ``ProbabilisticForecastingModule``, which samples and scores
     an ensemble. Training is shared with that module unchanged (see
-    ``BaseForecasterModule.training_step``).
+    ``BaseForecastingModule.training_step``).
 
     The reported loss comes from ``forecaster.compute_loss_from_forecast``,
     since only the forecaster knows its objective. The reported metrics
@@ -88,7 +88,7 @@ class DeterministicForecasterModule(BaseForecasterModule):
             individually for the configured metrics.
         args : argparse.Namespace, optional
             Pre-refactor ``ARModel`` checkpoint hyperparameters; see
-            ``BaseForecasterModule.__init__``.
+            ``BaseForecastingModule.__init__``.
         """
         super().__init__(
             forecaster=forecaster,
@@ -121,7 +121,7 @@ class DeterministicForecasterModule(BaseForecasterModule):
         """
         Perform a single training step, logging the per-step breakdown.
 
-        Overrides ``BaseForecasterModule.training_step``, which logs only the
+        Overrides ``BaseForecastingModule.training_step``, which logs only the
         scalar objective because a forecaster's training loss need not
         decompose over predicted steps. The deterministic objective does, so
         ``--train_steps_to_log`` can report individual steps as
@@ -157,7 +157,7 @@ class DeterministicForecasterModule(BaseForecasterModule):
         The scoring rule applied here is the forecaster's own, so the mean
         of the per-step losses is its training objective; a forecaster whose
         objective is not a per-step scoring rule needs the plain
-        ``BaseForecasterModule.training_step`` instead.
+        ``BaseForecastingModule.training_step`` instead.
 
         Parameters
         ----------

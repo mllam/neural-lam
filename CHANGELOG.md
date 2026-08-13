@@ -15,9 +15,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Add `--train_steps_to_log` CLI option to log training loss for individual unroll steps, and deduplicate common prediction and loss computation steps across loops [\#674](https://github.com/mllam/neural-lam/issues/674) @GiGiKoneti
 
 - Add a general probabilistic forecasting interface (`ProbabilisticForecaster`,
-  `ProbabilisticARForecaster`, `ProbabilisticForecasterModule`) and move
+  `ProbabilisticARForecaster`, `ProbabilisticForecastingModule`) and move
   ownership of the training objective, scoring rule and per-variable std
-  from `ForecasterModule` onto the `Forecaster`.
+  from `BaseForecastingModule` onto the `Forecaster`.
   [\#685](https://github.com/mllam/neural-lam/issues/685)
   @Sir-Sloth-The-Lazy
 
@@ -40,18 +40,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - Move data normalization from CPU (`WeatherDataset`) to GPU
-  (`ForecasterModule.on_after_batch_transfer`) for improved performance and
+  (`BaseForecastingModule.on_after_batch_transfer`) for improved performance and
   multi-GPU compatibility. `WeatherDataset` / `WeatherDataModule` no longer
   take a `standardize` argument.
   [\#239](https://github.com/mllam/neural-lam/pull/239) @Sharkyii
 
-- Split `ARModel` into `ForecasterModule`, `Forecaster` and
+- Split `ARModel` into `BaseForecastingModule`, `Forecaster` and
   `StepPredictor`, and reorganise `neural_lam.models` to mirror the new
   hierarchy (`forecasters/`, `step_predictors/`, `step_predictors/graph/`).
   Decouple `NeuralLAMConfig` from the predictor stack: `StepPredictor` and
   the graph-based predictors now take `output_clamping_lower` /
   `output_clamping_upper` dicts directly instead of the full config, so
-  `NeuralLAMConfig` no longer propagates below `ForecasterModule`.
+  `NeuralLAMConfig` no longer propagates below `BaseForecastingModule`.
   [\#208](https://github.com/mllam/neural-lam/pull/208)
   @Sir-Sloth-The-Lazy
 

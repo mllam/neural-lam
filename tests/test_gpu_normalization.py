@@ -6,7 +6,7 @@ import torch
 from neural_lam import config as nlconfig
 from neural_lam.models import (
     DeterministicARForecaster,
-    DeterministicForecasterModule,
+    DeterministicForecastingModule,
     StepPredictor,
 )
 from neural_lam.weather_dataset import WeatherDataModule
@@ -17,7 +17,7 @@ NUM_FUTURE_FORCING_STEPS = 1
 
 
 class _MockStepPredictor(StepPredictor):
-    """Minimal predictor so a DeterministicForecasterModule can be built
+    """Minimal predictor so a DeterministicForecastingModule can be built
     without a graph."""
 
     def forward(self, prev_state, prev_prev_state, forcing):
@@ -32,7 +32,7 @@ def _build_module(datastore):
     )
     predictor = _MockStepPredictor(datastore=datastore, output_std=False)
     forecaster = DeterministicARForecaster(predictor, datastore, config=config)
-    return DeterministicForecasterModule(
+    return DeterministicForecastingModule(
         forecaster=forecaster, config=config, datastore=datastore
     )
 
@@ -116,7 +116,7 @@ def test_safe_std_clamps_near_zero():
     eps = torch.finfo(torch.float32).eps
 
     with pytest.warns(UserWarning, match="near-zero std"):
-        std = DeterministicForecasterModule._safe_std(
+        std = DeterministicForecastingModule._safe_std(
             [0.0, 1.0, 2.0], eps, "state"
         )
 

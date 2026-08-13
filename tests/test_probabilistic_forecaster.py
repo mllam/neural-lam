@@ -8,11 +8,11 @@ from neural_lam import config as nlconfig
 from neural_lam import metrics
 from neural_lam.loss_weighting import get_per_var_std
 from neural_lam.models import (
-    BaseForecasterModule,
+    BaseForecastingModule,
     DeterministicARForecaster,
-    DeterministicForecasterModule,
+    DeterministicForecastingModule,
     ProbabilisticARForecaster,
-    ProbabilisticForecasterModule,
+    ProbabilisticForecastingModule,
     StepPredictor,
 )
 from tests.conftest import init_datastore_example
@@ -245,7 +245,7 @@ def test_saved_hparams_hold_resolved_values():
     ``save_hyperparameters`` defaults to inspecting the constructor chain
     and recording the arguments of the most derived ``__init__``, which for
     a subclass with its own signature are the values as passed, before
-    ``BaseForecasterModule`` resolves them. ``hparams_initial`` is asserted
+    ``BaseForecastingModule`` resolves them. ``hparams_initial`` is asserted
     alongside ``hparams`` because it is snapshotted inside
     ``save_hyperparameters``: any attempt to correct the values after that
     call returns reaches only ``hparams`` and would fail here.
@@ -257,7 +257,7 @@ def test_saved_hparams_hold_resolved_values():
         )
     )
     predictor = ZeroStepPredictor(datastore=datastore, output_std=False)
-    module = DeterministicForecasterModule(
+    module = DeterministicForecastingModule(
         forecaster=DeterministicARForecaster(
             predictor, datastore, config=config
         ),
@@ -277,7 +277,7 @@ def test_saved_hparams_hold_resolved_values():
     assert "datastore" not in module.hparams
 
     # A subclass's own hyperparameters survive alongside the base's
-    prob_module = ProbabilisticForecasterModule(
+    prob_module = ProbabilisticForecastingModule(
         forecaster=ConcreteProbabilisticARForecaster(
             NoisyStepPredictor(datastore=datastore, output_std=False),
             datastore,
@@ -292,15 +292,15 @@ def test_saved_hparams_hold_resolved_values():
     assert dict(prob_module.hparams_initial) == dict(prob_module.hparams)
 
 
-def test_forecaster_module_evaluation_steps_are_abstract():
+def test_forecasting_module_evaluation_steps_are_abstract():
     """A module omitting validation_step/test_step fails at construction.
 
     LightningModule defines both as no-op stubs rather than abstract
-    methods, so without BaseForecasterModule declaring them abstract such a
+    methods, so without BaseForecastingModule declaring them abstract such a
     module would instantiate happily and silently skip evaluation.
     """
 
-    class MissingEvaluationSteps(BaseForecasterModule):
+    class MissingEvaluationSteps(BaseForecastingModule):
         pass
 
     assert {
@@ -324,7 +324,7 @@ def test_module_training_step_delegates_to_forecaster():
     forecaster = DeterministicARForecaster(
         predictor, datastore, config=config, loss="mse"
     )
-    model = DeterministicForecasterModule(
+    model = DeterministicForecastingModule(
         forecaster=forecaster,
         config=config,
         datastore=datastore,
@@ -360,7 +360,7 @@ def test_deterministic_training_step_logs_per_step_losses():
     forecaster = DeterministicARForecaster(
         predictor, datastore, config=config, loss="mse"
     )
-    model = DeterministicForecasterModule(
+    model = DeterministicForecastingModule(
         forecaster=forecaster,
         config=config,
         datastore=datastore,
@@ -450,7 +450,7 @@ def test_probabilistic_module_validation_scores_ensemble_mean():
     forecaster = MemberCountRecordingForecaster(
         predictor, datastore, config=config
     )
-    model = ProbabilisticForecasterModule(
+    model = ProbabilisticForecastingModule(
         forecaster=forecaster,
         config=config,
         datastore=datastore,
@@ -490,7 +490,7 @@ def test_probabilistic_module_rejects_empty_eval_ensemble():
     )
 
     with pytest.raises(ValueError, match="eval_ensemble_size"):
-        ProbabilisticForecasterModule(
+        ProbabilisticForecastingModule(
             forecaster=forecaster,
             config=config,
             datastore=datastore,
@@ -510,7 +510,7 @@ def test_probabilistic_module_test_step_scores_ensemble_mean():
     forecaster = MemberCountRecordingForecaster(
         predictor, datastore, config=config
     )
-    model = ProbabilisticForecasterModule(
+    model = ProbabilisticForecastingModule(
         forecaster=forecaster,
         config=config,
         datastore=datastore,
@@ -551,7 +551,7 @@ def test_probabilistic_module_logs_forecaster_objective():
     forecaster = ComponentReportingForecaster(
         predictor, datastore, config=config, train_num_members=2
     )
-    model = ProbabilisticForecasterModule(
+    model = ProbabilisticForecastingModule(
         forecaster=forecaster,
         config=config,
         datastore=datastore,

@@ -20,7 +20,7 @@ from neural_lam import vis
 from neural_lam.create_graph import create_graph_from_datastore
 from neural_lam.models import (
     DeterministicARForecaster,
-    DeterministicForecasterModule,
+    DeterministicForecastingModule,
     GraphLAM,
 )
 from neural_lam.weather_dataset import WeatherDataset
@@ -475,7 +475,7 @@ def model_and_batch(tmp_path, time_step, time_unit):
         predictor, datastore=datastore, config=config, loss=args.loss
     )
 
-    model = DeterministicForecasterModule(
+    model = DeterministicForecastingModule(
         forecaster=forecaster,
         config=config,
         datastore=datastore,
@@ -670,7 +670,7 @@ def test_plot_examples_gif_integration(model_and_batch, monkeypatch):
 # Shared ModelArgs for metrics_watch regression tests (issue #302).
 # Kept at module level to avoid copy-paste duplication across tests.
 def _build_metrics_watch_module(datastore, config):
-    """Build a DeterministicForecasterModule wired for metrics_watch tests."""
+    """Build a DeterministicForecastingModule wired for metrics_watch tests."""
     predictor = GraphLAM(
         datastore=datastore,
         graph_name="1level",
@@ -687,7 +687,7 @@ def _build_metrics_watch_module(datastore, config):
     forecaster = DeterministicARForecaster(
         predictor, datastore, config=config, loss="mse"
     )
-    return DeterministicForecasterModule(
+    return DeterministicForecastingModule(
         forecaster=forecaster,
         config=config,
         datastore=datastore,

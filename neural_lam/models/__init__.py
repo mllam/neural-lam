@@ -11,9 +11,9 @@ from .forecasters.probabilistic import (
     ProbabilisticARForecaster,
     ProbabilisticForecaster,
 )
-from .modules.base import BaseForecasterModule
-from .modules.deterministic import DeterministicForecasterModule
-from .modules.probabilistic import ProbabilisticForecasterModule
+from .modules.base import BaseForecastingModule
+from .modules.deterministic import DeterministicForecastingModule
+from .modules.probabilistic import ProbabilisticForecastingModule
 from .step_predictors.base import StepPredictor
 from .step_predictors.graph.base import BaseGraphModel
 from .step_predictors.graph.graph_efm import GraphEFM, GraphEFMMultiScale

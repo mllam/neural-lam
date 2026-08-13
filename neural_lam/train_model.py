@@ -22,7 +22,7 @@ from .gnn_layers import GNN_TYPES
 from .models import (
     MODELS,
     DeterministicARForecaster,
-    DeterministicForecasterModule,
+    DeterministicForecastingModule,
 )
 from .weather_dataset import WeatherDataModule
 
@@ -42,9 +42,9 @@ class AdaptiveHelpFormatter(ArgumentDefaultsHelpFormatter):
         )
 
 
-def load_forecaster_module_from_checkpoint(ckpt_path, config, datastore):
+def load_forecasting_module_from_checkpoint(ckpt_path, config, datastore):
     """
-    Reconstruct a DeterministicForecasterModule from a checkpoint without
+    Reconstruct a DeterministicForecastingModule from a checkpoint without
     requiring the caller to know the original architecture kwargs.
 
     The checkpoint must have been saved with args in hyper_parameters (i.e.
@@ -70,7 +70,7 @@ def load_forecaster_module_from_checkpoint(ckpt_path, config, datastore):
     forecaster = DeterministicARForecaster(
         predictor, datastore, config=config, loss=args.loss
     )
-    return DeterministicForecasterModule.load_from_checkpoint(
+    return DeterministicForecastingModule.load_from_checkpoint(
         ckpt_path,
         forecaster=forecaster,
         datastore=datastore,
@@ -466,7 +466,7 @@ def main(input_args=None):
             raise ValueError("devices should be 'auto' or a list of integers")
 
     # Build predictor and forecaster externally, then inject into
-    # DeterministicForecasterModule
+    # DeterministicForecastingModule
     predictor_class = MODELS[args.model]
     predictor = predictor_class(
         datastore=datastore,
@@ -489,7 +489,7 @@ def main(input_args=None):
         predictor, datastore, config=config, loss=args.loss
     )
 
-    model = DeterministicForecasterModule(
+    model = DeterministicForecastingModule(
         forecaster=forecaster,
         config=config,
         datastore=datastore,

@@ -8,14 +8,14 @@ from ... import metrics
 from ...config import NeuralLAMConfig
 from ...datastore import BaseDatastore
 from ..forecasters.probabilistic import ProbabilisticForecaster
-from .base import BaseForecasterModule
+from .base import BaseForecastingModule
 
 
-class ProbabilisticForecasterModule(BaseForecasterModule):
+class ProbabilisticForecastingModule(BaseForecastingModule):
     """
     Lightning module for forecasters that sample ensemble forecasts.
 
-    Training is inherited unchanged from ``BaseForecasterModule``: the
+    Training is inherited unchanged from ``BaseForecastingModule``: the
     wrapped forecaster assembles its own training loss. Validation and
     testing are ensemble based instead of deterministic: an ensemble is
     sampled from the forecaster and its mean scored per lead time and
@@ -79,7 +79,7 @@ class ProbabilisticForecasterModule(BaseForecasterModule):
         train_steps_to_log : list of int, optional
             Specific predicted steps to log during training. Has no effect
             unless the forecaster's objective decomposes per step; see
-            ``BaseForecasterModule.training_step``.
+            ``BaseForecastingModule.training_step``.
         metrics_watch : list of str, optional
             List of metrics to watch and log specifically.
         var_leads_metrics_watch : dict of {int: list of int}, optional
@@ -87,7 +87,7 @@ class ProbabilisticForecasterModule(BaseForecasterModule):
             individually for the configured metrics.
         args : argparse.Namespace, optional
             Pre-refactor ``ARModel`` checkpoint hyperparameters; see
-            ``BaseForecasterModule.__init__``.
+            ``BaseForecastingModule.__init__``.
 
         Raises
         ------
@@ -171,7 +171,7 @@ class ProbabilisticForecasterModule(BaseForecasterModule):
         """
         Log the forecaster's own training objective as ``val_mean_loss``.
 
-        Named as ``DeterministicForecasterModule`` names it, so that
+        Named as ``DeterministicForecastingModule`` names it, so that
         ``ModelCheckpoint`` has a scalar to monitor. What that objective is
         stays entirely up to the forecaster, and it costs a forward pass of
         its own rather than being derived from the sampled ensemble, since
@@ -248,8 +248,8 @@ class ProbabilisticForecasterModule(BaseForecasterModule):
         Perform actions at the end of the test epoch.
 
         Aggregates the ensemble test metrics. Implements
-        ``BaseForecasterModule.on_test_epoch_end`` without the spatial loss
-        maps and example plots that ``DeterministicForecasterModule`` adds,
+        ``BaseForecastingModule.on_test_epoch_end`` without the spatial loss
+        maps and example plots that ``DeterministicForecastingModule`` adds,
         since ``test_step`` here does not populate them.
         """
         self.aggregate_and_plot_metrics(self.test_metrics, prefix="test")
