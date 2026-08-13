@@ -14,13 +14,15 @@ from neural_lam.create_graph import create_graph_from_datastore
 from neural_lam.datastore import DATASTORES
 from neural_lam.datastore.base import BaseRegularGridDatastore
 from neural_lam.models import (
-    ARForecaster,
     DeterministicForecasterModule,
-    GraphLAM,
+    ProbabilisticForecasterModule,
 )
 from neural_lam.weather_dataset import WeatherDataModule
 from tests.conftest import init_datastore_example
-from tests.dummy_datastore import DummyDatastore, set_framed_boundary
+from tests.test_probabilistic_forecaster import (
+    ConcreteProbabilisticARForecaster,
+    NoisyStepPredictor,
+)
 
 # Model architecture defaults for tests
 GRAPH = "1level"
@@ -32,27 +34,8 @@ NUM_PAST_FORCING_STEPS = 1
 NUM_FUTURE_FORCING_STEPS = 1
 
 
-def run_simple_training(
-    datastore,
-    set_output_std,
-    metrics_watch=None,
-    var_leads_metrics_watch=None,
-):
-    """
-    Run one epoch of a simple model training setup using the given datastore.
-
-    Parameters
-    ----------
-    datastore : BaseRegularGridDatastore
-        Datastore to load data from for training
-    set_output_std : bool
-        If --output_std should be set during training
-    """
-    if metrics_watch is None:
-        metrics_watch = []
-    if var_leads_metrics_watch is None:
-        var_leads_metrics_watch = {}
-
+def build_trainer():
+    """Build a one-epoch trainer on whatever devices are available."""
     if torch.cuda.is_available():
         device_name = "cuda"
         torch.set_float32_matmul_precision(
@@ -81,6 +64,53 @@ def run_simple_training(
         # during training
         detect_anomaly=True,
     )
+    return trainer
+
+
+def build_data_module(datastore):
+    """Build the data module the training tests train and validate on."""
+    return WeatherDataModule(
+        datastore=datastore,
+        ar_steps_train=3,
+        ar_steps_eval=5,
+        batch_size=2,
+        num_workers=1,
+        num_past_forcing_steps=NUM_PAST_FORCING_STEPS,
+        num_future_forcing_steps=NUM_FUTURE_FORCING_STEPS,
+    )
+
+
+def build_config(datastore):
+    """Build a default config pointing at the given datastore."""
+    return nlconfig.NeuralLAMConfig(
+        datastore=nlconfig.DatastoreSelection(
+            kind=datastore.SHORT_NAME, config_path=datastore.root_path
+        )
+    )
+
+
+def run_simple_training(
+    datastore,
+    set_output_std,
+    metrics_watch=None,
+    var_leads_metrics_watch=None,
+):
+    """
+    Run one epoch of a simple model training setup using the given datastore.
+
+    Parameters
+    ----------
+    datastore : BaseRegularGridDatastore
+        Datastore to load data from for training
+    set_output_std : bool
+        If --output_std should be set during training
+    """
+    if metrics_watch is None:
+        metrics_watch = []
+    if var_leads_metrics_watch is None:
+        var_leads_metrics_watch = {}
+
+    trainer = build_trainer()
 
     graph_name = "1level"
 
@@ -93,21 +123,9 @@ def run_simple_training(
             n_max_levels=1,
         )
 
-    data_module = WeatherDataModule(
-        datastore=datastore,
-        ar_steps_train=3,
-        ar_steps_eval=5,
-        batch_size=2,
-        num_workers=1,
-        num_past_forcing_steps=1,
-        num_future_forcing_steps=1,
-    )
+    data_module = build_data_module(datastore)
 
-    config = nlconfig.NeuralLAMConfig(
-        datastore=nlconfig.DatastoreSelection(
-            kind=datastore.SHORT_NAME, config_path=datastore.root_path
-        )
-    )
+    config = build_config(datastore)
 
     # Build predictor and forecaster externally, then inject into
     # DeterministicForecasterModule
@@ -165,6 +183,42 @@ def test_training(datastore_name):
 def test_training_output_std():
     datastore = init_datastore_example("mdp")  # Test only with mdp datastore
     run_simple_training(datastore, set_output_std=True)
+
+
+@pytest.mark.slow
+def test_probabilistic_training():
+    """Run one epoch through ProbabilisticForecasterModule.
+
+    There is no concrete probabilistic model in the repo yet, so this trains
+    the mock forecaster the probabilistic unit tests use, exercising the
+    training step, the ensemble validation step and the epoch-end
+    aggregation of the ensemble metrics.
+    """
+    datastore = init_datastore_example("mdp")  # Test only with mdp datastore
+    config = build_config(datastore)
+
+    predictor = NoisyStepPredictor(datastore=datastore, output_std=False)
+    forecaster = ConcreteProbabilisticARForecaster(
+        predictor, datastore, config=config, train_num_members=2
+    )
+    model = ProbabilisticForecasterModule(
+        forecaster=forecaster,
+        config=config,
+        datastore=datastore,
+        eval_ensemble_size=2,
+        lr=1.0e-3,
+    )
+
+    wandb.init(mode="disabled")  # Disable wandb for offline test run
+    trainer = build_trainer()
+    trainer.fit(model=model, datamodule=build_data_module(datastore))
+
+    # Both loops reported the forecaster's objective. The ensemble metrics
+    # are logged as figures rather than scalars, so they show up here only
+    # by their aggregation having run without error.
+    logged = trainer.callback_metrics
+    assert torch.isfinite(logged["train_loss"])
+    assert torch.isfinite(logged["val_mean_loss"])
 
 
 def test_all_gather_cat_single_device():

@@ -62,11 +62,14 @@ class ConcreteProbabilisticARForecaster(ProbabilisticARForecaster):
     ):
         super().__init__(predictor, datastore)
         self.loss = metrics.get_metric(loss)
-        self.per_var_std = (
+        per_var_std = (
             get_per_var_std(config=config, datastore=datastore)
             if config is not None
             else None
         )
+        # Buffer rather than plain attribute, as DeterministicForecaster
+        # does, so it follows the module onto the accelerator
+        self.register_buffer("per_var_std", per_var_std, persistent=False)
         self.train_num_members = train_num_members
 
     def compute_training_loss(
