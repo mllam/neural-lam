@@ -534,6 +534,44 @@ Except for training and pre-processing scripts all the source code can be found 
 Model classes, including abstract base classes, are located in `neural_lam/models`.
 Notebooks for visualization and analysis are located in `docs/notebooks`.
 
+The model code is split into three layers: a `StepPredictor` advancing the state one time step, a `Forecaster` unrolling that into a full forecast and owning the training objective, and a `BaseForecastingModule` running the Lightning training/evaluation loop.
+All of these are `torch.nn.Module` subclasses, and `*` marks a class that is abstract and meant to be subclassed:
+```
+nn.Module
+├── pl.LightningModule
+│   └── BaseForecastingModule*             - Optimizer, logging, plotting and batch standardization (neural_lam/models/modules)
+│       ├── DeterministicForecastingModule - Evaluates the single forecast the forecaster produces
+│       └── ProbabilisticForecastingModule - Samples an ensemble and scores its mean
+├── Forecaster*                            - Initial states + forcing -> full forecast; owns the training objective (neural_lam/models/forecasters)
+│   ├── ARForecaster*                      - How a forecast is produced: autoregressive unrolling of a StepPredictor
+│   ├── DeterministicForecaster*           - Training objective: a scoring rule applied to a single forecast
+│   ├── ProbabilisticForecaster*           - Adds sampling of an ensemble, leaving the objective open
+│   ├── DeterministicARForecaster          - (ARForecaster, DeterministicForecaster), what neural_lam.train_model builds
+│   └── ProbabilisticARForecaster*         - (ARForecaster, ProbabilisticForecaster), still without an objective
+├── StepPredictor*                         - (X_{t-1}, X_t, forcing_t) -> X_{t+1} (neural_lam/models/step_predictors)
+│   ├── BaseGraphModel*                    - Encode-process-decode over a mesh graph
+│   │   ├── GraphLAM
+│   │   └── BaseHiGraphModel*              - Requires a hierarchical mesh graph
+│   │       ├── HiLAM
+│   │       └── HiLAMParallel
+│   └── BaseGraphEFM*                      - Latent-variable predictors with their own prior, encoder and decoder
+│       ├── GraphEFM
+│       └── GraphEFMMultiScale
+├── BaseLatentEncoder*                     - Grid representation -> Gaussian over a latent on the mesh (neural_lam/models/latent)
+│   ├── ConstantLatentEncoder
+│   ├── GraphLatentEncoder
+│   └── HiGraphLatentEncoder
+├── BaseGraphLatentDecoder*                - Grid representation + latent sample -> next-state increment (neural_lam/models/latent)
+│   ├── GraphLatentDecoder
+│   └── HiGraphLatentDecoder
+├── pyg.nn.MessagePassing
+│   └── InteractionNet                     - GNN layer, chosen per edge type with --g2m_gnn_type, --m2g_gnn_type, --mesh_up_gnn_type, --mesh_down_gnn_type (neural_lam/gnn_layers.py)
+│       └── PropagationNet
+├── BufferList                             - List of tensor buffers held as a Module (neural_lam/utils/buffer_list.py)
+└── SplitMLPs                              - Feeds chunks of the input through separate MLPs (neural_lam/gnn_layers.py)
+```
+The `--model` values listed under [Train Models](#train-models) select the step predictor. `GraphEFM` and `GraphEFMMultiScale` are implemented but not yet selectable this way.
+
 ## Format of graph directory
 The `graphs` directory contains generated graph structures that can be used by different graph-based models.
 For a strict, machine-verifiable specification, see `docs/graph_storage_spec.md`.
