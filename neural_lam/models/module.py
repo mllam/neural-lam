@@ -611,6 +611,11 @@ class ForecasterModule(pl.LightningModule):
         spatial_loss = self.loss(
             prediction, target_states, pred_std, average_grid=False
         )
+        # Exclude boundary nodes, consistent with the loss used in
+        # training/validation. NaN-mask in place so the tensor keeps its
+        # (B, pred_steps, num_grid_nodes) shape for downstream plotting,
+        # and is reduced with `torch.nanmean` in `on_test_epoch_end`.
+        spatial_loss[..., ~self.interior_mask_bool] = float("nan")
         log_spatial_losses = spatial_loss[
             :,
             [
@@ -935,7 +940,8 @@ class ForecasterModule(pl.LightningModule):
             torch.cat(self.spatial_loss_maps, dim=0)
         )
         if self.trainer.is_global_zero:
-            mean_spatial_loss = torch.mean(spatial_loss_tensor, dim=0)
+            # `nanmean` because boundary nodes are NaN-masked in `test_step`
+            mean_spatial_loss = torch.nanmean(spatial_loss_tensor, dim=0)
 
             loss_map_figs = [
                 vis.plot_spatial_error(
