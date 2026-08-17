@@ -17,7 +17,9 @@ class ARForecaster(Forecaster):
     unroll a forecast. Makes use of a StepPredictor at each AR step.
     """
 
-    def __init__(self, predictor: StepPredictor, datastore: BaseDatastore):
+    def __init__(
+        self, predictor: StepPredictor, datastore: BaseDatastore
+    ) -> None:
         """
         Initialize the ARForecaster.
 

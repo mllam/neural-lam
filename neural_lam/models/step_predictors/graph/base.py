@@ -33,7 +33,7 @@ class BaseGraphModel(StepPredictor):
         output_clamping_upper: dict[str, float] | None = None,
         g2m_gnn_type: str = "InteractionNet",
         m2g_gnn_type: str = "InteractionNet",
-    ):
+    ) -> None:
         """
         Initialize the BaseGraphModel.
 
@@ -100,16 +100,17 @@ class BaseGraphModel(StepPredictor):
         # Load graph with static features
         # NOTE: (IMPORTANT!) mesh nodes MUST have the first
         # num_mesh_nodes indices,
-        graph_dir_path = datastore.root_path / "graph" / graph_name
-        self.hierarchical, graph_ldict = utils.load_graph(
-            graph_dir_path=graph_dir_path
+        grid_xy_extent = datastore.get_xy_extent(category="state")
+        grid_xy_max_span = max(
+            grid_xy_extent[1] - grid_xy_extent[0],
+            grid_xy_extent[3] - grid_xy_extent[2],
         )
-        for name, attr_value in graph_ldict.items():
-            # Make BufferLists module members and register tensors as buffers
-            if isinstance(attr_value, torch.Tensor):
-                self.register_buffer(name, attr_value, persistent=False)
-            else:
-                setattr(self, name, attr_value)
+        self.hierarchical = utils.load_and_register_graph(
+            self,
+            datastore,
+            graph_name,
+            mesh_node_features_scaling=grid_xy_max_span,
+        )
 
         # Specify dimensions of data
         self.num_mesh_nodes, _ = self.get_num_mesh()
@@ -119,14 +120,10 @@ class BaseGraphModel(StepPredictor):
         )
 
         # Compute grid_input_dim: total input dimensionality on the grid
-        num_state_vars = datastore.get_num_data_vars(category="state")
-        num_forcing_vars = datastore.get_num_data_vars(category="forcing")
-        grid_static_dim = self.grid_static_features.shape[1]
-        self.grid_input_dim = (
-            2 * num_state_vars
-            + grid_static_dim
-            + num_forcing_vars
-            * (num_past_forcing_steps + num_future_forcing_steps + 1)
+        self.grid_input_dim = utils.compute_grid_input_dim(
+            datastore,
+            num_past_forcing_steps,
+            num_future_forcing_steps,
         )
 
         self.g2m_edges, g2m_dim = self.g2m_features.shape
@@ -170,7 +167,7 @@ class BaseGraphModel(StepPredictor):
         # Compute indices and define clamping functions
         self.prepare_clamping_params(datastore)
 
-    def get_num_mesh(self):
+    def get_num_mesh(self) -> tuple[int, int]:
         """
         Compute number of mesh nodes from loaded features,
         and number of mesh nodes that should be ignored in encoding/decoding.
@@ -184,7 +181,7 @@ class BaseGraphModel(StepPredictor):
         """
         raise NotImplementedError("get_num_mesh not implemented")
 
-    def embedd_mesh_nodes(self):
+    def embedd_mesh_nodes(self) -> torch.Tensor:
         """
         Embed static mesh node features.
 
@@ -197,7 +194,7 @@ class BaseGraphModel(StepPredictor):
         """
         raise NotImplementedError("embedd_mesh_nodes not implemented")
 
-    def process_step(self, mesh_rep):
+    def process_step(self, mesh_rep: torch.Tensor) -> torch.Tensor:
         """
         Process the mesh representation in the encode-process-decode
         framework, running one or more message-passing steps.
@@ -218,7 +215,12 @@ class BaseGraphModel(StepPredictor):
         """
         raise NotImplementedError("process_step not implemented")
 
-    def forward(self, prev_state, prev_prev_state, forcing):
+    def forward(
+        self,
+        prev_state: torch.Tensor,
+        prev_prev_state: torch.Tensor,
+        forcing: torch.Tensor,
+    ) -> tuple[torch.Tensor, torch.Tensor | None]:
         """
         Advance the state by one step using the encode-process-decode
         graph pipeline: embed grid + edge features, map grid -> mesh via

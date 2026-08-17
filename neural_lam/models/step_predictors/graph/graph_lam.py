@@ -3,6 +3,7 @@
 # Standard library
 
 # Third-party
+import torch
 import torch_geometric as pyg
 
 # Local
@@ -35,7 +36,7 @@ class GraphLAM(BaseGraphModel):
         output_clamping_upper: dict[str, float] | None = None,
         g2m_gnn_type: str = "InteractionNet",
         m2g_gnn_type: str = "InteractionNet",
-    ):
+    ) -> None:
         """
         Initialize the GraphLAM model.
 
@@ -119,7 +120,7 @@ class GraphLAM(BaseGraphModel):
             ],
         )
 
-    def get_num_mesh(self):
+    def get_num_mesh(self) -> tuple[int, int]:
         """
         Compute number of mesh nodes from loaded features,
         and number of mesh nodes that should be ignored in encoding/decoding.
@@ -133,7 +134,7 @@ class GraphLAM(BaseGraphModel):
         """
         return self.mesh_static_features.shape[0], 0
 
-    def embedd_mesh_nodes(self):
+    def embedd_mesh_nodes(self) -> torch.Tensor:
         """
         Embed static mesh node features.
 
@@ -148,7 +149,7 @@ class GraphLAM(BaseGraphModel):
             self.mesh_static_features
         )  # (num_mesh_nodes, hidden_dim)
 
-    def process_step(self, mesh_rep):
+    def process_step(self, mesh_rep: torch.Tensor) -> torch.Tensor:
         """
         Process the mesh representation through the flat message-passing
         processor (all nodes at a single level).

@@ -24,7 +24,7 @@ class StepPredictor(nn.Module, ABC):
         output_std: bool = False,
         output_clamping_lower: dict[str, float] | None = None,
         output_clamping_upper: dict[str, float] | None = None,
-    ):
+    ) -> None:
         """
         Initialize the StepPredictor.
 
@@ -165,7 +165,7 @@ class StepPredictor(nn.Module, ABC):
             deviation. Dims: same as ``prev_state``.
         """
 
-    def prepare_clamping_params(self, datastore: BaseDatastore):
+    def prepare_clamping_params(self, datastore: BaseDatastore) -> None:
         """
         Prepare parameters for clamping predicted values to valid range.
 
@@ -204,7 +204,7 @@ class StepPredictor(nn.Module, ABC):
         sigmoid_center = 0
         softplus_center = 0
 
-        def normalize_clamping_lim(x, feature_idx):
+        def normalize_clamping_lim(x: float, feature_idx: int) -> torch.Tensor:
             """Normalize a clamping limit from the original feature space to the
             standardized space of the model's output.
 
@@ -319,7 +319,9 @@ class StepPredictor(nn.Module, ABC):
             + softplus_center
         )
 
-    def get_clamped_new_state(self, state_delta, prev_state):
+    def get_clamped_new_state(
+        self, state_delta: torch.Tensor, prev_state: torch.Tensor
+    ) -> torch.Tensor:
         """
         Clamp the next-state prediction to its valid feature range.
 
