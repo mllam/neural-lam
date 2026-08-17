@@ -1,15 +1,12 @@
 # Standard library
 import warnings
-from functools import cached_property
 from pathlib import Path
 
 # Third-party
-import numpy as np
 import pytest
 import pytorch_lightning as pl
 import torch
 import wandb
-import xarray as xr
 
 # First-party
 from neural_lam import config as nlconfig
@@ -19,7 +16,7 @@ from neural_lam.datastore.base import BaseRegularGridDatastore
 from neural_lam.models import ARForecaster, ForecasterModule, GraphLAM
 from neural_lam.weather_dataset import WeatherDataModule
 from tests.conftest import init_datastore_example
-from tests.dummy_datastore import DummyDatastore
+from tests.dummy_datastore import DummyDatastore, set_framed_boundary
 
 # Model architecture defaults for tests
 GRAPH = "1level"
@@ -233,27 +230,7 @@ def test_all_gather_cat_multi_device_simulation():
     )
 
 
-class _FramedBoundaryDummyDatastore(DummyDatastore):
-    """`DummyDatastore` with a deterministic boundary mask.
-
-    The base class draws its mask from an unseeded `np.random.choice`, which
-    is fine for smoke tests but cannot be used to assert exact NaN positions.
-    Here the boundary is the one-cell frame around the edge of the domain.
-    """
-
-    @cached_property
-    def boundary_mask(self) -> xr.DataArray:
-        n_points_1d = int(np.sqrt(self.num_grid_points))
-        mask_2d = np.zeros((n_points_1d, n_points_1d), dtype=int)
-        mask_2d[0, :] = 1
-        mask_2d[-1, :] = 1
-        mask_2d[:, 0] = 1
-        mask_2d[:, -1] = 1
-        # `grid_index` is the stacked ("x", "y") dimension, so a C-order
-        # flatten of an (x, y) array lines up with it.
-        return xr.DataArray(mask_2d.reshape(-1), dims=["grid_index"])
-
-
+@pytest.mark.slow
 def test_test_step_excludes_boundary_from_spatial_loss(tmp_path):
     """
     Regression test for issue #569.
@@ -268,7 +245,8 @@ def test_test_step_excludes_boundary_from_spatial_loss(tmp_path):
     """
     # 20x20 is the smallest grid `create_graph_from_datastore` still builds a
     # `1level` mesh for.
-    datastore = _FramedBoundaryDummyDatastore(n_grid_points=400, n_timesteps=10)
+    datastore = DummyDatastore(n_grid_points=400, n_timesteps=10)
+    set_framed_boundary(datastore)
 
     graph_dir_path = Path(datastore.root_path) / "graph" / GRAPH
     if not graph_dir_path.exists():
