@@ -410,7 +410,7 @@ def main(input_args=None):
     random_run_id = random.randint(0, 9999)
 
     # Set seed
-    seed.seed_everything(args.seed)
+    seed.seed_everything(args.seed, workers=True)
 
     # Load neural-lam configuration and datastore to use
     config, datastore = load_config_and_datastore(config_path=args.config_path)
