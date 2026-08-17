@@ -1,4 +1,5 @@
 # Standard library
+import inspect
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
@@ -6,7 +7,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 # First-party
-from neural_lam.models import BaseHiGraphModel
+from neural_lam.models import MODELS, BaseHiGraphModel
 from neural_lam.train_model import (
     build_predictor,
     load_forecaster_module_from_checkpoint,
@@ -79,7 +80,7 @@ def test_create_gif_forwarded_to_forecaster_module():
             return_value=(MagicMock(), MagicMock()),
         ),
         patch("neural_lam.train_model.WeatherDataModule"),
-        patch("neural_lam.train_model.MODELS", {"graph_lam": MagicMock()}),
+        patch("neural_lam.train_model.MODELS", {"graph_lam": MagicMock}),
         patch("neural_lam.train_model.ARForecaster"),
         patch(
             "neural_lam.models.module.ForecasterModule.__init__",
@@ -183,6 +184,43 @@ def test_build_predictor_omits_hierarchical_gnn_kwargs_for_graph_lam():
     assert "mesh_up_gnn_type" not in captured_kwargs
     assert "mesh_down_gnn_type" not in captured_kwargs
     assert captured_kwargs["g2m_gnn_type"] == "PropagationNet"
+    # The dummy swallows **kwargs, so also check against the real signature
+    graph_lam_params = inspect.signature(
+        MODELS["graph_lam"].__init__
+    ).parameters
+    assert set(captured_kwargs) <= set(graph_lam_params)
+
+
+def test_build_predictor_defaults_gnn_types_for_old_checkpoints():
+    """Checkpoints without GNN type flags fall back to InteractionNet."""
+    args = SimpleNamespace(
+        model="hi_lam",
+        graph="hierarchical",
+        hidden_dim=4,
+        hidden_layers=1,
+        processor_layers=1,
+        mesh_aggr="sum",
+        num_past_forcing_steps=1,
+        num_future_forcing_steps=1,
+        output_std=False,
+    )
+    config = SimpleNamespace(
+        training=SimpleNamespace(
+            output_clamping=SimpleNamespace(lower={}, upper={})
+        )
+    )
+    captured_kwargs = {}
+
+    class DummyHiPredictor(BaseHiGraphModel):
+        def __init__(self, **kwargs):
+            captured_kwargs.update(kwargs)
+
+    build_predictor(DummyHiPredictor, args, config, MagicMock())
+
+    assert captured_kwargs["g2m_gnn_type"] == "InteractionNet"
+    assert captured_kwargs["m2g_gnn_type"] == "InteractionNet"
+    assert captured_kwargs["mesh_up_gnn_type"] == "InteractionNet"
+    assert captured_kwargs["mesh_down_gnn_type"] == "InteractionNet"
 
 
 def test_build_predictor_adds_hierarchical_kwargs_for_base_hi_graph_subclass():
