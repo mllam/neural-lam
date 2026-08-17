@@ -54,11 +54,11 @@ class BenchmarkScorecard:
         ]
         for var in self.variables:
             rmse_str = ", ".join(
-                f"t{i+1}: {rmse:.3f}"
+                f"t{i + 1}: {rmse:.3f}"
                 for i, rmse in enumerate(self.rmse_per_lead_time.get(var, []))
             )
             bias_str = ", ".join(
-                f"t{i+1}: {bias:+.3f}"
+                f"t{i + 1}: {bias:+.3f}"
                 for i, bias in enumerate(self.mbe_per_lead_time.get(var, []))
             )
             lines.append(f"  [{var}]")
