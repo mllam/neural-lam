@@ -31,6 +31,8 @@ A few things that help keep it that way:
    working on it. New contributors looking for an approachable first task can
    filter by the
    [`good first issue` label](https://github.com/mllam/neural-lam/issues?q=is%3Aopen+is%3Aissue+label%3A%22good+first+issue%22).
+   For bug reports, include a minimal reproducible example and the full
+   traceback.
 
 2. **Read the existing discussion.** Review the full issue thread and any
    linked PRs - someone may have already proposed a solution or identified a
@@ -101,7 +103,8 @@ label in the form `vX.Y.Z (proposed)`.
 1. Push your branch and open a PR against `main`.
 2. Fill in the
    [pull request template](.github/pull_request_template.md) - it contains the
-   full checklists for authors, reviewers, and assignees.
+   full checklists for authors, reviewers, and assignees. Link the issue with
+   `closes #<N>` or `refs #<N>` in the PR body.
 3. Write commit messages in **imperative form** matching the existing
    `git log` style ("Add X" not "Added X"), and keep one concern per PR.
 4. PRs land via **squash-and-merge**: the PR title becomes the single commit

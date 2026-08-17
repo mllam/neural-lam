@@ -9,7 +9,8 @@ This file adds the AI-specific rules on top.
 
 ## Codebase reference
 
-See the README architecture overview for the data flow and module map.
+See [README > Modularity](README.md#modularity) and
+[README > Repository Structure](README.md#repository-structure) for the component overview.
 `git log --stat -- neural_lam/` shows which files have moved recently - prefer that over any
 snapshot, which will rot.
 
