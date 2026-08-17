@@ -4,11 +4,15 @@ from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 # Third-party
+import loguru
 import pytest
 
+# Mock loguru.logger.catch before importing train_model
+loguru.logger.catch = lambda f: f
+
 # First-party
-from neural_lam.models import MODELS, BaseHiGraphModel
-from neural_lam.train_model import (
+from neural_lam.models import MODELS, BaseHiGraphModel  # noqa: E402
+from neural_lam.train_model import (  # noqa: E402
     build_predictor,
     load_forecaster_module_from_checkpoint,
     main,
@@ -29,8 +33,10 @@ def test_eval_without_load_warning(eval_val, load_val, expect_warning):
     mock_args.load = load_val
     mock_args.config_path = "dummy.yaml"
     mock_args.val_steps_to_log = []
+    mock_args.train_steps_to_log = []
     mock_args.var_leads_metrics_watch = "{}"
     mock_args.ar_steps_eval = 10
+    mock_args.ar_steps_train = 10
 
     with patch(
         "neural_lam.train_model.ArgumentParser.parse_args",
@@ -57,8 +63,10 @@ def test_create_gif_forwarded_to_forecaster_module():
     mock_args.load = None
     mock_args.config_path = "dummy.yaml"
     mock_args.val_steps_to_log = [1]
+    mock_args.train_steps_to_log = [2]
     mock_args.var_leads_metrics_watch = "{}"
     mock_args.ar_steps_eval = 10
+    mock_args.ar_steps_train = 10
     mock_args.create_gif = True
     mock_args.devices = ["auto"]
     mock_args.model = "graph_lam"
@@ -94,6 +102,41 @@ def test_create_gif_forwarded_to_forecaster_module():
         "create_gif" in captured_kwargs
     ), "create_gif was not forwarded to ForecasterModule"
     assert captured_kwargs["create_gif"] is True
+    assert (
+        "train_steps_to_log" in captured_kwargs
+    ), "train_steps_to_log was not forwarded to ForecasterModule"
+    assert captured_kwargs["train_steps_to_log"] == [2]
+
+
+@pytest.mark.parametrize(
+    "train_steps,val_steps,match_err",
+    [
+        ([15], [], "Can not log train step 15"),
+        ([], [15], "Can not log val step 15"),
+    ],
+)
+def test_steps_to_log_validation(train_steps, val_steps, match_err):
+    """ValueError must be raised if steps exceed the rollout length."""
+    mock_args = MagicMock()
+    mock_args.eval = None
+    mock_args.load = None
+    mock_args.config_path = "dummy.yaml"
+    mock_args.val_steps_to_log = val_steps
+    mock_args.train_steps_to_log = train_steps
+    mock_args.var_leads_metrics_watch = "{}"
+    mock_args.ar_steps_eval = 10
+    mock_args.ar_steps_train = 10
+
+    with patch(
+        "neural_lam.train_model.ArgumentParser.parse_args",
+        return_value=mock_args,
+    ):
+        with patch(
+            "neural_lam.train_model.load_config_and_datastore",
+            return_value=(MagicMock(), MagicMock()),
+        ):
+            with pytest.raises(ValueError, match=match_err):
+                getattr(main, "__wrapped__", main)()
 
 
 def test_checkpoint_loader_restores_gnn_type_kwargs():

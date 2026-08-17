@@ -71,7 +71,7 @@ def _make_args(wandb_id=None):
         ("abc123", "allow", "abc123", None),
     ],
 )
-@patch("neural_lam.utils.pl.loggers.WandbLogger")
+@patch("neural_lam.utils.logging.pl.loggers.WandbLogger")
 def test_wandb_logger_kwargs(
     mock_wandb, wandb_id, expected_resume, expected_id, expected_name
 ):
@@ -112,11 +112,11 @@ def test_wandb_id_ignored_with_mlflow_warns():
     datastore._config = {}
 
     with (
-        patch("neural_lam.utils.CustomMLFlowLogger") as mock_mlflow,
+        patch("neural_lam.utils.logging.CustomMLFlowLogger") as mock_mlflow,
         patch.dict(
             "os.environ", {"MLFLOW_TRACKING_URI": "http://localhost:5000"}
         ),
-        patch("neural_lam.utils.logger") as mock_log,
+        patch("neural_lam.utils.logging.logger") as mock_log,
     ):
         setup_training_logger(
             datastore, args, run_name="my-run", run_dir="runs/my-run"
