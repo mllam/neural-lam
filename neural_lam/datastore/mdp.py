@@ -18,7 +18,7 @@ from loguru import logger
 from numpy import ndarray
 
 # Local
-from ..utils import log_on_rank_zero
+from ..utils.logging import log_on_rank_zero
 from .base import BaseRegularGridDatastore, CartesianGridShape
 
 

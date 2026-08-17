@@ -82,6 +82,7 @@ tags
 # Coc configuration directory
 .vim
 .vscode
+.idea
 
 # macos
 .DS_Store
