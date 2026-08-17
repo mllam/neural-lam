@@ -155,6 +155,34 @@ def test_dataset_item_create_dataarray_from_tensor(datastore_name):
             for coord_name in ["x", "y"]
         )
 
+    # Regression check that create_dataarray_from_tensor works for the
+    # forcing and static categories as well as state (#308).
+    da_forcing_raw = dataset.da_forcing
+    for dim in list(da_forcing_raw.dims):
+        if dim not in ("grid_index", "forcing_feature"):
+            da_forcing_raw = da_forcing_raw.isel({dim: 0})
+    da_forcing_raw = da_forcing_raw.transpose("grid_index", "forcing_feature")
+    da_forcing = dataset.create_dataarray_from_tensor(
+        tensor=torch.tensor(da_forcing_raw.values, dtype=torch.float32),
+        category="forcing",
+        time=target_times[0],
+    )
+    np.testing.assert_equal(
+        da_forcing.forcing_feature.values,
+        da_forcing_raw.forcing_feature.values,
+    )
+
+    da_static_raw = dataset.da_static.transpose("grid_index", "static_feature")
+    da_static = dataset.create_dataarray_from_tensor(
+        tensor=torch.tensor(da_static_raw.values, dtype=torch.float32),
+        category="static",
+        time=target_times[0],
+    )
+    np.testing.assert_equal(
+        da_static.static_feature.values,
+        da_static_raw.static_feature.values,
+    )
+
 
 @pytest.mark.parametrize("split", ["train", "val", "test"])
 @pytest.mark.parametrize("datastore_name", DATASTORES.keys())
