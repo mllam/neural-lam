@@ -52,6 +52,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Exclude boundary nodes from the spatial loss maps computed in `test_step`, so the plotted loss maps and the saved `mean_spatial_loss.pt` cover the interior only, consistent with every other loss and metric call in `ForecasterModule` [\#720](https://github.com/mllam/neural-lam/pull/720) @RajdeepKushwaha5 @NoiceHax
+
 - Fix `RuntimeError` in `HiLAMParallel` forward pass on hierarchical graphs by offsetting edge indices into the global mesh node index space ([#679](https://github.com/mllam/neural-lam/issues/679))
 
 - Fix `IndexError` in HiLAM forward pass by offsetting grid nodes in `zero_index_g2m`/`zero_index_m2g` by the total mesh-node count across all levels ([#642](https://github.com/mllam/neural-lam/issues/642)) @Sir-Sloth-The-Lazy
@@ -84,6 +86,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Fix `WeatherDataset.__len__` off-by-one in analysis mode (was undercounting by 1 sample), include `num_past_forcing_steps` in the forecast-mode minimum-horizon check, validate forcing-side forecast horizon when forcing is present, and use `min(n_state, n_forcing)` when both are present in analysis mode; raise `IndexError` for out-of-range indices in `WeatherDataset.__getitem__` (with Python-style negative indexing support) [\#312](https://github.com/mllam/neural-lam/pull/312) @kshirajahere
 
 ### Maintenance
+
+- Add a root `CONTRIBUTING.md` walking a new contributor from fork to merged PR (issue triage, environment setup pointing at the README install section, pre-commit, code standards, the exact local test command CI runs, PR template / CHANGELOG expectations, monthly dev-meeting pointer, Slack + issues for help), and trim `AGENTS.md` and the README "Development and Contributing" section down to pointers at it [\#407](https://github.com/mllam/neural-lam/pull/407) @ANANYA542
 
 - Split the monolithic `neural_lam/utils.py` into a `neural_lam/utils/` package with one module per concern (`buffer_list`, `graph`, `networks`, `plot`, `logging`, `tensor`, `time`); `utils/__init__.py` re-exports the full public API so existing imports are unaffected. Pure code movement, no behavioural change. [\#682](https://github.com/mllam/neural-lam/pull/682) @Sir-Sloth-The-Lazy
 
