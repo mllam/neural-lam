@@ -4,6 +4,7 @@
 import importlib.metadata
 
 # First-party
+import neural_lam.cnn_layers
 import neural_lam.gnn_layers
 import neural_lam.metrics
 import neural_lam.models

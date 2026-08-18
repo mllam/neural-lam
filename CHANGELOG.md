@@ -14,6 +14,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Add `--train_steps_to_log` CLI option to log training loss for individual unroll steps, and deduplicate common prediction and loss computation steps across loops [\#674](https://github.com/mllam/neural-lam/issues/674) @GiGiKoneti
 
+- Add an initial regular-grid `CNNPredictor`, CLI model construction support,
+  reusable CNN grid transforms, FiLM conditioning, Squeeze-and-Excitation, and
+  ResHRRR-style residual backbone layers with validation coverage.
+
 - Add `PropagationNet` GNN layer that incentivises directional message
   propagation from sender to receiver nodes, and expose it alongside
   `InteractionNet` through four new CLI arguments (`--g2m_gnn_type`,

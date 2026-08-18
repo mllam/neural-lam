@@ -5,6 +5,7 @@ from .forecasters.autoregressive import ARForecaster
 from .forecasters.base import Forecaster
 from .module import ForecasterModule
 from .step_predictors.base import StepPredictor
+from .step_predictors.cnn import CNNPredictor
 from .step_predictors.graph.base import BaseGraphModel
 from .step_predictors.graph.graph_efm import GraphEFM, GraphEFMMultiScale
 from .step_predictors.graph.graph_lam import GraphLAM
@@ -20,6 +21,7 @@ from .step_predictors.graph.hierarchical import BaseHiGraphModel
 # ``config`` (for their per_var_std weighting) and take no ``mesh_aggr``.
 # Registering them requires config-aware model assembly in train_model.py.
 MODELS = {
+    "cnn_predictor": CNNPredictor,
     "graph_lam": GraphLAM,
     "hi_lam": HiLAM,
     "hi_lam_parallel": HiLAMParallel,
