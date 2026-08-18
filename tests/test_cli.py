@@ -81,7 +81,6 @@ def test_wandb_logger_kwargs(
 
     args = _make_args(wandb_id=wandb_id)
     datastore = MagicMock()
-    datastore._config = {}
 
     setup_training_logger(
         datastore, args, run_name="my-run", run_dir="runs/my-run"
@@ -109,7 +108,6 @@ def test_wandb_id_ignored_with_mlflow_warns():
     args.wandb_id = "abc123"
 
     datastore = MagicMock()
-    datastore._config = {}
 
     with (
         patch("neural_lam.utils.logging.CustomMLFlowLogger") as mock_mlflow,
@@ -142,7 +140,6 @@ def test_unsupported_logger_raises_value_error():
     args.wandb_id = None
 
     datastore = MagicMock()
-    datastore._config = {}
 
     with pytest.raises(ValueError, match="Unsupported logger type"):
         setup_training_logger(
