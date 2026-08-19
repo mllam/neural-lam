@@ -534,7 +534,12 @@ Except for training and pre-processing scripts all the source code can be found 
 Model classes, including abstract base classes, are located in `neural_lam/models`.
 Notebooks for visualization and analysis are located in `docs/notebooks`.
 
-The model code is split into three layers: a `StepPredictor` advancing the state one time step, a `Forecaster` unrolling that into a full forecast and owning the training objective, and a `BaseForecastingModule` running the Lightning training/evaluation loop.
+The model code is split into three layers.
+A `Forecaster` maps initial states and forcing to a full forecast and owns the training objective; how the forecast is produced is left to the subclass.
+`ARForecaster` produces it autoregressively, by repeatedly applying a `StepPredictor` that advances the state one time step.
+This is the only setup currently in use, so in practice every model is built around a step predictor, but a forecaster that predicts all lead times at once would fit the same interface.
+A `BaseForecastingModule` wraps a forecaster in the Lightning training/evaluation loop.
+
 All of these are `torch.nn.Module` subclasses, and `*` marks a class that is abstract and meant to be subclassed:
 ```
 nn.Module
@@ -544,7 +549,7 @@ nn.Module
 │       └── ProbabilisticForecastingModule - Samples an ensemble and scores its mean
 ├── Forecaster*                            - Initial states + forcing -> full forecast; owns the training objective (neural_lam/models/forecasters)
 │   ├── ARForecaster*                      - How a forecast is produced: autoregressive unrolling of a StepPredictor
-│   ├── DeterministicForecaster*           - Training objective: a scoring rule applied to a single forecast
+│   ├── DeterministicForecaster*           - Training objective: a loss function applied to a single forecast
 │   ├── ProbabilisticForecaster*           - Adds sampling of an ensemble, leaving the objective open
 │   ├── DeterministicARForecaster          - (ARForecaster, DeterministicForecaster), what neural_lam.train_model builds
 │   └── ProbabilisticARForecaster*         - (ARForecaster, ProbabilisticForecaster), still without an objective
@@ -561,16 +566,28 @@ nn.Module
 │   ├── ConstantLatentEncoder
 │   ├── GraphLatentEncoder
 │   └── HiGraphLatentEncoder
-├── BaseGraphLatentDecoder*                - Grid representation + latent sample -> next-state increment (neural_lam/models/latent)
-│   ├── GraphLatentDecoder
-│   └── HiGraphLatentDecoder
-├── pyg.nn.MessagePassing
-│   └── InteractionNet                     - GNN layer, chosen per edge type with --g2m_gnn_type, --m2g_gnn_type, --mesh_up_gnn_type, --mesh_down_gnn_type (neural_lam/gnn_layers.py)
-│       └── PropagationNet
-├── BufferList                             - List of tensor buffers held as a Module (neural_lam/utils/buffer_list.py)
-└── SplitMLPs                              - Feeds chunks of the input through separate MLPs (neural_lam/gnn_layers.py)
+└── BaseGraphLatentDecoder*                - Grid representation + latent sample -> next-state increment (neural_lam/models/latent)
+    ├── GraphLatentDecoder
+    └── HiGraphLatentDecoder
 ```
 The `--model` values listed under [Train Models](#train-models) select the step predictor. `GraphEFM` and `GraphEFMMultiScale` are implemented but not yet selectable this way.
+
+The building blocks these are assembled from are also `torch.nn.Module` subclasses:
+```
+nn.Module
+├── pyg.nn.MessagePassing
+│   └── InteractionNet   - GNN layer, chosen per edge type with --g2m_gnn_type, --m2g_gnn_type, --mesh_up_gnn_type, --mesh_down_gnn_type (neural_lam/gnn_layers.py)
+│       └── PropagationNet
+├── BufferList           - List of tensor buffers held as a Module (neural_lam/utils/buffer_list.py)
+└── SplitMLPs            - Feeds chunks of the input through separate MLPs (neural_lam/gnn_layers.py)
+```
+
+What to extend depends on the kind of model:
+
+* **Deterministic, autoregressive:** write a new `StepPredictor` and run it with the existing `DeterministicARForecaster`. This is the common case.
+* **Deterministic, not autoregressive:** subclass `DeterministicForecaster` with the new way of producing a forecast, reusing an existing `StepPredictor` or a new one if the model has a per-step component at all.
+* **Probabilistic, autoregressive:** subclass `ProbabilisticARForecaster`, implementing `sample_ensemble` and the training objective, typically alongside a new `StepPredictor`.
+* **Probabilistic, not autoregressive:** subclass `ProbabilisticForecaster`, which additionally leaves the way the forecast is produced open.
 
 ## Format of graph directory
 The `graphs` directory contains generated graph structures that can be used by different graph-based models.
