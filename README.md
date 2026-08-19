@@ -445,6 +445,7 @@ A few of the key ones are outlined below:
 * `--processor_layers`: Number of GNN layers to use in the processing part of the model
 * `--ar_steps_train`: Number of time steps to unroll for when making predictions and computing the loss
 * `--ar_steps_eval`: Number of time steps to unroll for during validation steps
+* `--loss`: Which of the loss functions in `neural_lam/metrics.py` to train on
 
 Checkpoints of trained models are stored under `runs/<run-name>/checkpoints/`, alongside Lightning and logger outputs for the same run.
 The implemented models are:
@@ -639,6 +640,7 @@ Entries 0 in these lists describe edges between the lowest levels 1 and 2.
 Canonical dimension names used in tensor shape annotations throughout the codebase:
 
 - `B` - batch size
+- `S` - number of members in an ensemble forecast
 - `pred_steps` - number of autoregressive prediction steps
 - `num_grid_nodes` - number of nodes in the flattened spatial grid
 - `num_mesh_nodes` - number of mesh nodes; indexed as `num_mesh_nodes[l]` for hierarchical level `l`
