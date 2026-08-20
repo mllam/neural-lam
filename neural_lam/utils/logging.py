@@ -1,9 +1,13 @@
 """Setup and configuration of training loggers (WandB / MLFlow)."""
 
 # Standard library
+import argparse
 import os
 import warnings
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from ..datastore.base import BaseDatastore
 
 # Third-party
 import pytorch_lightning as pl
@@ -33,7 +37,7 @@ def log_on_rank_zero(
     **kwargs : Any
         Keyword arguments passed to the logger.
     """
-    if rank_zero_only.rank == 0:
+    if rank_zero_only.rank == 0:  # ty: ignore[unresolved-attribute]
         log_fn = getattr(logger, level, logger.info)
         log_fn(msg, *args, **kwargs)
 
@@ -67,14 +71,17 @@ def init_training_logger_metrics(
 
 @rank_zero_only
 def setup_training_logger(
-    datastore: Any, args: Any, run_name: str, run_dir: str
-) -> Any:
+    datastore: "BaseDatastore",
+    args: argparse.Namespace,
+    run_name: str,
+    run_dir: str,
+) -> pl.loggers.Logger:
     """
     Set up the training logger (WandB or MLFlow).
 
     Parameters
     ----------
-    datastore : Any
+    datastore : BaseDatastore
         Datastore providing metadata for logging configuration.
     args : argparse.Namespace
         Parsed training arguments controlling the logger backend.
@@ -88,7 +95,7 @@ def setup_training_logger(
 
     Returns
     -------
-    Any
+    pl.loggers.Logger
         The initialized logger object.
 
     Raises
@@ -117,7 +124,7 @@ def setup_training_logger(
         return pl.loggers.WandbLogger(
             project=args.logger_project,
             name=None if args.wandb_id else run_name,
-            config=dict(training=vars(args), datastore=datastore._config),
+            config=dict(training=vars(args), datastore=datastore.config),
             resume=wandb_resume,
             id=args.wandb_id,
             save_dir=run_dir,
@@ -140,7 +147,7 @@ def setup_training_logger(
             save_dir=run_dir,
         )
         training_logger.log_hyperparams(
-            dict(training=vars(args), datastore=datastore._config)
+            dict(training=vars(args), datastore=datastore.config)
         )
         return training_logger
     else:
