@@ -14,10 +14,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Add `--train_steps_to_log` CLI option to log training loss for individual unroll steps, and deduplicate common prediction and loss computation steps across loops [\#674](https://github.com/mllam/neural-lam/issues/674) @GiGiKoneti
 
-- Add a general probabilistic forecasting interface (`ProbabilisticForecaster`,
-  `ProbabilisticARForecaster`, `ProbabilisticForecastingModule`) and move
+- Add a general ensemble forecasting interface (`BaseEnsembleForecaster`,
+  `BaseEnsembleARForecaster`, `EnsembleForecastingModule`) and move
   ownership of the training objective, scoring rule and per-variable std
-  from `BaseForecastingModule` onto the `Forecaster`.
+  from `BaseForecastingModule` onto the forecaster. `Forecaster` is renamed
+  `BaseForecaster` and split into a deterministic family
+  (`BaseDeterministicForecaster`, whose `forward` returns one forecast) and
+  an ensemble family (whose `forward` takes `num_members` and returns an
+  ensemble); `ARForecaster` becomes the function `unroll_forecast`, shared
+  by both, so the hierarchy stays single-inheritance.
   [\#685](https://github.com/mllam/neural-lam/issues/685)
   @Sir-Sloth-The-Lazy
 

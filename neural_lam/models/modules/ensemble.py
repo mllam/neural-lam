@@ -1,4 +1,4 @@
-"""Lightning module evaluating probabilistic forecasters as ensembles."""
+"""Lightning module evaluating ensemble forecasters."""
 
 # Standard library
 import warnings
@@ -7,30 +7,30 @@ import warnings
 from ... import metrics
 from ...config import NeuralLAMConfig
 from ...datastore import BaseDatastore
-from ..forecasters.probabilistic import ProbabilisticForecaster
+from ..forecasters.ensemble import BaseEnsembleForecaster
 from .base import BaseForecastingModule
 
 
-class ProbabilisticForecastingModule(BaseForecastingModule):
+class EnsembleForecastingModule(BaseForecastingModule):
     """
-    Lightning module for forecasters that sample ensemble forecasts.
+    Lightning module for forecasters whose forecast is an ensemble.
 
     Training is inherited unchanged from ``BaseForecastingModule``: the
     wrapped forecaster assembles its own training loss. Validation and
     testing are ensemble based instead of deterministic: an ensemble is
     sampled from the forecaster and its mean scored per lead time and
     variable, with validation additionally reporting the forecaster's own
-    objective. The module only assumes that the forecaster can sample
-    ensemble forecasts of the correct shape; it makes no assumption on how
-    the members are produced.
+    objective. The module only assumes that the forecaster returns ensemble
+    forecasts of the correct shape; it makes no assumption on how the
+    members are produced.
     """
 
-    # The wrapped forecaster must be able to sample ensemble forecasts
-    forecaster: ProbabilisticForecaster
+    # The wrapped forecaster's forward must return an ensemble
+    forecaster: BaseEnsembleForecaster
 
     def __init__(
         self,
-        forecaster: ProbabilisticForecaster,
+        forecaster: BaseEnsembleForecaster,
         config: NeuralLAMConfig,
         datastore: BaseDatastore,
         *,
@@ -50,9 +50,9 @@ class ProbabilisticForecastingModule(BaseForecastingModule):
 
         Parameters
         ----------
-        forecaster : ProbabilisticForecaster
-            The forecaster to evaluate. Must supply ``sample_ensemble``,
-            since validation and testing score a sampled ensemble.
+        forecaster : BaseEnsembleForecaster
+            The forecaster to evaluate. Its ``forward`` must return an
+            ensemble, since validation and testing score a sampled one.
         config : NeuralLAMConfig
             Configuration object for the neural LAM model.
         datastore : BaseDatastore
@@ -150,7 +150,7 @@ class ProbabilisticForecastingModule(BaseForecastingModule):
             ``(B, pred_steps, num_state_vars)``, for epoch-end aggregation.
         """
         init_states, target_states, forcing_features, _ = batch
-        ensemble, _ = self.forecaster.sample_ensemble(
+        ensemble, _ = self.forecaster(
             init_states,
             forcing_features,
             target_states,

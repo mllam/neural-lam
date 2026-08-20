@@ -14,7 +14,7 @@ import torch
 from ... import metrics, vis
 from ...config import NeuralLAMConfig
 from ...datastore import BaseDatastore
-from ..forecasters.deterministic import DeterministicForecaster
+from ..forecasters.deterministic import BaseDeterministicForecaster
 from .base import BaseForecastingModule
 
 
@@ -23,7 +23,7 @@ class DeterministicForecastingModule(BaseForecastingModule):
     Lightning module for a single deterministic forecast per batch.
 
     Validation and testing evaluate the forecaster's own single prediction,
-    as opposed to ``ProbabilisticForecastingModule``, which samples and scores
+    as opposed to ``EnsembleForecastingModule``, which samples and scores
     an ensemble. Training is shared with that module unchanged (see
     ``BaseForecastingModule.training_step``).
 
@@ -35,13 +35,13 @@ class DeterministicForecastingModule(BaseForecastingModule):
     layer without adding meaning.
     """
 
-    # Narrowed from Forecaster: this module calls
-    # forecaster.compute_loss_from_forecast()
-    forecaster: DeterministicForecaster
+    # Narrowed from BaseForecaster: this module calls forward for a single
+    # forecast and scores it with forecaster.compute_loss_from_forecast()
+    forecaster: BaseDeterministicForecaster
 
     def __init__(
         self,
-        forecaster: DeterministicForecaster,
+        forecaster: BaseDeterministicForecaster,
         config: NeuralLAMConfig,
         datastore: BaseDatastore,
         lr: float = 1e-3,
@@ -59,7 +59,7 @@ class DeterministicForecastingModule(BaseForecastingModule):
 
         Parameters
         ----------
-        forecaster : DeterministicForecaster
+        forecaster : BaseDeterministicForecaster
             The forecaster to evaluate. Must supply
             ``compute_loss_from_forecast``, i.e. carry the deterministic
             objective, since validation and testing score a single
@@ -144,6 +144,32 @@ class DeterministicForecastingModule(BaseForecastingModule):
             time_step_loss, batch_loss, "train", batch[0].shape[0]
         )
         return batch_loss
+
+    def common_step(self, batch):
+        """
+        Produce the batch's single forecast, for validation and testing.
+
+        Lives here rather than on ``BaseForecastingModule`` because it calls
+        the forecaster with the deterministic ``forward`` signature, which
+        an ensemble forecaster does not have.
+
+        Parameters
+        ----------
+        batch : tuple
+            The batch of data containing initial states, target states,
+            forcing features, and batch times.
+
+        Returns
+        -------
+        tuple
+            A tuple containing prediction, target states, predicted standard
+            deviation, and batch times.
+        """
+        init_states, target_states, forcing_features, batch_times = batch
+        prediction, pred_std = self.forecaster(
+            init_states, forcing_features, target_states
+        )
+        return prediction, target_states, pred_std, batch_times
 
     def _compute_prediction_and_loss(
         self,

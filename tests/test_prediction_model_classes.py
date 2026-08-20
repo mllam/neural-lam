@@ -9,11 +9,13 @@ import torch
 # First-party
 from neural_lam import config as nlconfig
 from neural_lam.models import (
-    ARForecaster,
+    BaseDeterministicForecaster,
+    BaseEnsembleARForecaster,
+    BaseEnsembleForecaster,
     DeterministicARForecaster,
     DeterministicForecastingModule,
-    Forecaster,
     StepPredictor,
+    unroll_forecast,
 )
 from tests.conftest import init_datastore_example
 from tests.dummy_datastore import DummyDatastore
@@ -177,56 +179,49 @@ def test_ar_forecaster_without_config_scores_with_unweighted_loss():
     torch.testing.assert_close(scored, torch.full((B,), float(d_state)))
 
 
-class MeanAbsObjective(Forecaster):
-    """Test-only objective class taking a constructor argument of its own.
-
-    Stands in for a future objective (CRPS, a variational loss, ...) to
-    check that adding one requires nothing beyond declaring its arguments.
-    """
-
-    def __init__(self, datastore, scale: float = 1.0):
-        super().__init__(datastore=datastore)
-        self.scale = scale
-
-    def compute_training_loss(
-        self, init_states, forcing_features, target_states, interior_mask_bool
+def test_forecaster_hierarchy_is_a_tree():
+    """The two forecaster families share auto-regressive unrolling through
+    ``unroll_forecast`` rather than through a common ancestor, so every
+    forecaster has a single base and no diamond can arise. ``BaseForecaster``
+    itself is the exception, combining nn.Module with ABC."""
+    for forecaster_class in (
+        BaseDeterministicForecaster,
+        DeterministicARForecaster,
+        BaseEnsembleForecaster,
+        BaseEnsembleARForecaster,
     ):
-        prediction, _ = self(init_states, forcing_features, target_states)
-        loss = self.scale * torch.mean(torch.abs(prediction - target_states))
-        return loss, {}
+        assert len(forecaster_class.__bases__) == 1, forecaster_class
 
 
-class MeanAbsARForecaster(ARForecaster, MeanAbsObjective):
-    """Auto-regressive forecast production plus the mean-abs objective."""
-
-
-def test_objective_class_composes_without_manual_wiring():
-    """An objective class only declares its own constructor arguments; the
-    ARForecaster mix-in forwards the rest to it, so combining the two
-    initializes both halves with no setup call to remember."""
+def test_unroll_forecast_reproduces_deterministic_forward():
+    """The unrolling both families call is a plain function, so calling it
+    directly gives exactly what DeterministicARForecaster.forward does."""
     datastore = init_datastore_example("mdp")
     predictor = MockStepPredictor(datastore=datastore, output_std=False)
+    forecaster = DeterministicARForecaster(predictor, datastore)
 
-    forecaster = MeanAbsARForecaster(
-        predictor=predictor, datastore=datastore, scale=2.0
+    B, num_grid_nodes = 2, predictor.num_grid_nodes
+    d_state = datastore.get_num_data_vars(category="state")
+    d_forcing = datastore.get_num_data_vars(category="forcing") * 3
+    pred_steps = 3
+    init_states = torch.ones(B, 2, num_grid_nodes, d_state)
+    forcing_features = torch.ones(B, pred_steps, num_grid_nodes, d_forcing)
+    boundary_states = torch.ones(B, pred_steps, num_grid_nodes, d_state) * 5.0
+
+    prediction, pred_std = forecaster(
+        init_states, forcing_features, boundary_states
+    )
+    direct_prediction, direct_std = unroll_forecast(
+        predictor,
+        init_states,
+        forcing_features,
+        boundary_states,
+        forecaster.boundary_mask,
+        forecaster.interior_mask,
     )
 
-    assert forecaster.scale == 2.0
-    assert forecaster.predictor is predictor
-    assert forecaster.boundary_mask.shape[1] == predictor.num_grid_nodes
-    assert forecaster.datastore is datastore
-
-
-def test_unclaimed_constructor_argument_raises():
-    """An argument neither ARForecaster nor the objective class declares
-    must raise, not be silently swallowed by the **kwargs forwarding."""
-    datastore = init_datastore_example("mdp")
-    predictor = MockStepPredictor(datastore=datastore, output_std=False)
-
-    with pytest.raises(TypeError, match="not_a_real_arg"):
-        MeanAbsARForecaster(
-            predictor=predictor, datastore=datastore, not_a_real_arg=1
-        )
+    assert torch.equal(prediction, direct_prediction)
+    assert pred_std is None and direct_std is None
 
 
 def test_forecasting_module_checkpoint(tmp_path):

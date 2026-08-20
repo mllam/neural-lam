@@ -1,6 +1,7 @@
 """Forecasters trained by scoring a single deterministic forecast."""
 
 # Standard library
+from abc import abstractmethod
 from typing import Optional
 
 # Third-party
@@ -12,19 +13,20 @@ from ...config import NeuralLAMConfig
 from ...datastore import BaseDatastore
 from ...loss_weighting import get_per_var_std
 from ..step_predictors.base import StepPredictor
-from .autoregressive import ARForecaster
-from .base import Forecaster
+from .autoregressive import unroll_forecast
+from .base import BaseForecaster
 
 
-class DeterministicForecaster(Forecaster):
+class BaseDeterministicForecaster(BaseForecaster):
     """
-    Forecaster whose training objective is a scoring rule applied to a
-    single forecast.
+    Forecaster producing one forecast per batch, trained by scoring it.
 
-    ``compute_training_loss`` produces one forecast and scores it, and
-    ``compute_loss_from_forecast`` applies the same metric to an
-    already-produced forecast for reporting. ``forward`` is left abstract;
-    see ``DeterministicARForecaster`` for the auto-regressive combination.
+    ``forward`` returns a single forecast and is left abstract, so that how
+    that forecast is produced stays open; see ``DeterministicARForecaster``
+    for the auto-regressive one. ``compute_training_loss`` produces one
+    forecast and scores it with ``self.loss``, and
+    ``compute_loss_from_forecast`` applies the same scoring rule to an
+    already-produced forecast for reporting.
     """
 
     def __init__(
@@ -65,6 +67,59 @@ class DeterministicForecaster(Forecaster):
             else None
         )
         self.register_buffer("per_var_std", per_var_std, persistent=False)
+
+    @abstractmethod
+    def forward(
+        self,
+        init_states: torch.Tensor,
+        forcing_features: torch.Tensor,
+        boundary_states: torch.Tensor,
+    ) -> tuple[torch.Tensor, torch.Tensor | None]:
+        """
+        Produce a forecast of length ``pred_steps`` from two initial states,
+        the per-step forcing features, and the per-step true boundary states.
+
+        Parameters
+        ----------
+        init_states : torch.Tensor
+            Shape ``(B, 2, num_grid_nodes, num_state_vars)``. The two initial
+            states ``[X_{t-1}, X_t]`` used to start the forecast from. Dims:
+            ``B`` is batch size, ``2`` is the time index (``[X_{t-1}, X_t]``),
+            ``num_grid_nodes`` is the number of spatial nodes, and
+            ``num_state_vars`` is the state feature dimension.
+        forcing_features : torch.Tensor
+            Shape ``(B, pred_steps, num_grid_nodes, num_forcing_vars)``.
+            External forcings provided at each predicted step. Dims: ``B``
+            is batch size, ``pred_steps`` is the forecast length,
+            ``num_grid_nodes`` is the number of spatial nodes, and
+            ``num_forcing_vars`` is the forcing feature dimension (already
+            concatenated past/current/future windows).
+        boundary_states : torch.Tensor
+            Shape ``(B, pred_steps, num_grid_nodes, num_state_vars)``. True
+            state values used ONLY to overwrite boundary nodes at each
+            predicted step; interior predictions must not depend on
+            ``boundary_states`` in any other way. Dims: ``B`` is batch size,
+            ``pred_steps`` is the forecast length, ``num_grid_nodes`` is the
+            number of spatial nodes, and ``num_state_vars`` is the state
+            feature dimension. This is a temporary mechanism that mirrors
+            the pre-refactor ARModel behavior; it will be replaced by a
+            dedicated boundary-forcing input in #138 (training on interior +
+            boundary datastore), at which point this parameter will be
+            removed.
+
+        Returns
+        -------
+        prediction : torch.Tensor
+            Shape ``(B, pred_steps, num_grid_nodes, num_state_vars)``.
+            Forecast of state at each predicted step. Dims: same as
+            ``boundary_states``.
+        pred_std : torch.Tensor or None
+            Shape ``(B, pred_steps, num_grid_nodes, num_state_vars)`` when
+            ``predicts_std`` is True, otherwise ``None``. Per-feature
+            predicted standard deviation; when ``None``, substituting a
+            fallback std is left to whatever consumes the forecast, not to
+            the caller of ``forward``. Dims: same as ``prediction``.
+        """
 
     def compute_training_loss(
         self,
@@ -241,14 +296,12 @@ class DeterministicForecaster(Forecaster):
         )
 
 
-class DeterministicARForecaster(ARForecaster, DeterministicForecaster):
+class DeterministicARForecaster(BaseDeterministicForecaster):
     """
     Auto-regressive forecaster trained by scoring its single rollout.
 
-    Combines the two orthogonal halves: ``ARForecaster`` supplies the
-    auto-regressive ``forward``, ``DeterministicForecaster`` supplies the
-    single-forecast training objective and the reporting
-    ``compute_loss_from_forecast``.
+    Produces its forecast by unrolling a ``StepPredictor``; the training
+    objective is the one ``BaseDeterministicForecaster`` supplies.
     """
 
     def __init__(
@@ -278,9 +331,60 @@ class DeterministicARForecaster(ARForecaster, DeterministicForecaster):
             The scoring rule (from ``neural_lam.metrics``) applied by
             ``compute_training_loss``.
         """
-        super().__init__(
-            predictor=predictor,
-            datastore=datastore,
-            config=config,
-            loss=loss,
+        super().__init__(datastore=datastore, config=config, loss=loss)
+        self.predictor = predictor
+
+    @property
+    def predicts_std(self) -> bool:
+        """
+        Whether the forecaster predicts standard deviation.
+
+        Returns
+        -------
+        bool
+            ``True`` if the wrapped predictor predicts standard deviation,
+            ``False`` otherwise.
+        """
+        return self.predictor.predicts_std
+
+    def forward(
+        self,
+        init_states: torch.Tensor,
+        forcing_features: torch.Tensor,
+        boundary_states: torch.Tensor,
+    ) -> tuple[torch.Tensor, torch.Tensor | None]:
+        """
+        Unroll one auto-regressive forecast.
+
+        Parameters
+        ----------
+        init_states : torch.Tensor
+            Shape ``(B, 2, num_grid_nodes, num_state_vars)``. The two initial
+            states ``[X_{t-1}, X_t]`` used to start the rollout from.
+        forcing_features : torch.Tensor
+            Shape ``(B, pred_steps, num_grid_nodes, num_forcing_vars)``.
+            Forcing features for each predicted step; ``pred_steps`` defines
+            the rollout length.
+        boundary_states : torch.Tensor
+            Shape ``(B, pred_steps, num_grid_nodes, num_state_vars)``. True
+            state values used ONLY to overwrite boundary nodes at each AR
+            step.
+
+        Returns
+        -------
+        prediction : torch.Tensor
+            Shape ``(B, pred_steps, num_grid_nodes, num_state_vars)``.
+            Stacked per-step forecasts. Dims: same as ``boundary_states``.
+        pred_std : torch.Tensor or None
+            Shape ``(B, pred_steps, num_grid_nodes, num_state_vars)`` when
+            the wrapped predictor outputs an std, otherwise ``None``. Dims:
+            same as ``prediction``.
+        """
+        return unroll_forecast(
+            self.predictor,
+            init_states,
+            forcing_features,
+            boundary_states,
+            self.boundary_mask,
+            self.interior_mask,
         )

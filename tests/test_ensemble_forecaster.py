@@ -8,11 +8,11 @@ from neural_lam import config as nlconfig
 from neural_lam import metrics
 from neural_lam.loss_weighting import get_per_var_std
 from neural_lam.models import (
+    BaseEnsembleARForecaster,
     BaseForecastingModule,
     DeterministicARForecaster,
     DeterministicForecastingModule,
-    ProbabilisticARForecaster,
-    ProbabilisticForecastingModule,
+    EnsembleForecastingModule,
     StepPredictor,
 )
 from tests.conftest import init_datastore_example
@@ -39,17 +39,17 @@ class NoisyStepPredictor(StepPredictor):
         return pred_state, None
 
 
-class ConcreteProbabilisticARForecaster(ProbabilisticARForecaster):
+class ConcreteEnsembleARForecaster(BaseEnsembleARForecaster):
     """
-    Test-only concrete ``ProbabilisticARForecaster``.
+    Test-only concrete ``BaseEnsembleARForecaster``.
 
-    ``ProbabilisticARForecaster`` supplies no training objective (no single
+    ``BaseEnsembleARForecaster`` supplies no training objective (no single
     default fits every stochastic model), so tests that only need a working
     forecaster to instantiate use this example ensemble-mean objective
     rather than the base class directly. Being the concrete class, it also
     owns whatever that objective needs: the scoring rule, the constant
-    per-variable std, and the member count to train on (``sample_ensemble``
-    always requires an explicit one).
+    per-variable std, and the member count to train on (``forward`` always
+    requires an explicit one).
     """
 
     def __init__(
@@ -67,8 +67,9 @@ class ConcreteProbabilisticARForecaster(ProbabilisticARForecaster):
             if config is not None
             else None
         )
-        # Buffer rather than plain attribute, as DeterministicForecaster
-        # does, so it follows the module onto the accelerator
+        # Buffer rather than plain attribute, as
+        # BaseDeterministicForecaster does, so it follows the module onto
+        # the accelerator
         self.register_buffer("per_var_std", per_var_std, persistent=False)
         self.train_num_members = train_num_members
 
@@ -79,7 +80,7 @@ class ConcreteProbabilisticARForecaster(ProbabilisticARForecaster):
         target_states,
         interior_mask_bool,
     ):
-        ensemble, per_member_std = self.sample_ensemble(
+        ensemble, per_member_std = self(
             init_states,
             forcing_features,
             target_states,
@@ -147,10 +148,10 @@ def test_ar_forecaster_training_loss_matches_direct_score():
     torch.testing.assert_close(batch_loss, expected_loss)
 
 
-def test_sample_ensemble_shapes_and_member_variability():
+def test_ensemble_forward_shapes_and_member_variability():
     datastore = init_datastore_example("mdp")
     predictor = NoisyStepPredictor(datastore=datastore, output_std=False)
-    forecaster = ConcreteProbabilisticARForecaster(predictor, datastore)
+    forecaster = ConcreteEnsembleARForecaster(predictor, datastore)
 
     # Override masks to test boundary masking behaviour
     forecaster.interior_mask = torch.zeros_like(forecaster.interior_mask)
@@ -165,7 +166,7 @@ def test_sample_ensemble_shapes_and_member_variability():
     d_state = target_states.shape[-1]
 
     torch.manual_seed(42)
-    ensemble, per_member_std = forecaster.sample_ensemble(
+    ensemble, per_member_std = forecaster(
         init_states,
         forcing_features,
         target_states,
@@ -187,10 +188,10 @@ def test_sample_ensemble_shapes_and_member_variability():
     assert torch.all(ensemble[:, :, :, 1:] == 5.0)
 
 
-def test_probabilistic_training_loss_gradient_flow():
+def test_ensemble_training_loss_gradient_flow():
     datastore = init_datastore_example("mdp")
     predictor = NoisyStepPredictor(datastore=datastore, output_std=False)
-    forecaster = ConcreteProbabilisticARForecaster(
+    forecaster = ConcreteEnsembleARForecaster(
         predictor, datastore, loss="mse", train_num_members=2
     )
 
@@ -216,27 +217,25 @@ def test_probabilistic_training_loss_gradient_flow():
     assert predictor.noise_scale.grad != 0.0
 
 
-def test_sample_ensemble_rejects_empty_member_count():
+def test_ensemble_forward_rejects_empty_member_count():
     datastore = init_datastore_example("mdp")
     predictor = NoisyStepPredictor(datastore=datastore, output_std=False)
-    forecaster = ConcreteProbabilisticARForecaster(predictor, datastore)
+    forecaster = ConcreteEnsembleARForecaster(predictor, datastore)
     init_states, forcing_features, target_states = _example_batch(datastore)
 
     with pytest.raises(ValueError, match="num_members"):
-        forecaster.sample_ensemble(
-            init_states, forcing_features, target_states, num_members=0
-        )
+        forecaster(init_states, forcing_features, target_states, num_members=0)
 
 
-def test_probabilistic_ar_forecaster_is_abstract():
-    """ProbabilisticARForecaster leaves compute_training_loss abstract, so
+def test_ensemble_ar_forecaster_is_abstract():
+    """BaseEnsembleARForecaster leaves compute_training_loss abstract, so
     it cannot be instantiated directly; only a subclass that defines an
     objective can."""
     datastore = init_datastore_example("mdp")
     predictor = NoisyStepPredictor(datastore=datastore, output_std=False)
 
     with pytest.raises(TypeError, match="abstract"):
-        ProbabilisticARForecaster(predictor, datastore)
+        BaseEnsembleARForecaster(predictor, datastore)
 
 
 def test_saved_hparams_hold_resolved_values():
@@ -277,8 +276,8 @@ def test_saved_hparams_hold_resolved_values():
     assert "datastore" not in module.hparams
 
     # A subclass's own hyperparameters survive alongside the base's
-    prob_module = ProbabilisticForecastingModule(
-        forecaster=ConcreteProbabilisticARForecaster(
+    ens_module = EnsembleForecastingModule(
+        forecaster=ConcreteEnsembleARForecaster(
             NoisyStepPredictor(datastore=datastore, output_std=False),
             datastore,
             config=config,
@@ -287,9 +286,9 @@ def test_saved_hparams_hold_resolved_values():
         datastore=datastore,
         eval_ensemble_size=3,
     )
-    assert prob_module.hparams.eval_ensemble_size == 3
-    assert prob_module.hparams.val_steps_to_log == [1]
-    assert dict(prob_module.hparams_initial) == dict(prob_module.hparams)
+    assert ens_module.hparams.eval_ensemble_size == 3
+    assert ens_module.hparams.val_steps_to_log == [1]
+    assert dict(ens_module.hparams_initial) == dict(ens_module.hparams)
 
 
 def test_forecasting_module_evaluation_steps_are_abstract():
@@ -405,12 +404,12 @@ def test_deterministic_training_step_logs_per_step_losses():
     torch.testing.assert_close(batch_loss, torch.mean(step_losses))
 
 
-class MemberCountRecordingForecaster(ConcreteProbabilisticARForecaster):
-    """ProbabilisticARForecaster recording the requested member count."""
+class MemberCountRecordingForecaster(ConcreteEnsembleARForecaster):
+    """Ensemble forecaster recording the requested member count."""
 
-    def sample_ensemble(self, *args, **kwargs):
+    def forward(self, *args, **kwargs):
         self.last_num_members = kwargs.get("num_members")
-        return super().sample_ensemble(*args, **kwargs)
+        return super().forward(*args, **kwargs)
 
 
 class ComponentReportingForecaster(MemberCountRecordingForecaster):
@@ -427,9 +426,9 @@ class ComponentReportingForecaster(MemberCountRecordingForecaster):
         self.last_batch_loss = None
         self.last_components: dict[str, torch.Tensor] = {}
 
-    def sample_ensemble(self, *args, **kwargs):
+    def forward(self, *args, **kwargs):
         self.num_members_seen.append(kwargs.get("num_members"))
-        return super().sample_ensemble(*args, **kwargs)
+        return super().forward(*args, **kwargs)
 
     def compute_training_loss(self, *args, **kwargs):
         batch_loss, _ = super().compute_training_loss(*args, **kwargs)
@@ -438,7 +437,7 @@ class ComponentReportingForecaster(MemberCountRecordingForecaster):
         return batch_loss, self.last_components
 
 
-def test_probabilistic_module_validation_scores_ensemble_mean():
+def test_ensemble_module_validation_scores_ensemble_mean():
     datastore = init_datastore_example("mdp")
     predictor = NoisyStepPredictor(datastore=datastore, output_std=False)
 
@@ -450,7 +449,7 @@ def test_probabilistic_module_validation_scores_ensemble_mean():
     forecaster = MemberCountRecordingForecaster(
         predictor, datastore, config=config
     )
-    model = ProbabilisticForecastingModule(
+    model = EnsembleForecastingModule(
         forecaster=forecaster,
         config=config,
         datastore=datastore,
@@ -477,7 +476,7 @@ def test_probabilistic_module_validation_scores_ensemble_mean():
     assert torch.all(torch.isfinite(entry_mses))
 
 
-def test_probabilistic_module_rejects_empty_eval_ensemble():
+def test_ensemble_module_rejects_empty_eval_ensemble():
     datastore = init_datastore_example("mdp")
     predictor = NoisyStepPredictor(datastore=datastore, output_std=False)
     config = nlconfig.NeuralLAMConfig(
@@ -485,12 +484,12 @@ def test_probabilistic_module_rejects_empty_eval_ensemble():
             kind=datastore.SHORT_NAME, config_path=datastore.root_path
         )
     )
-    forecaster = ConcreteProbabilisticARForecaster(
+    forecaster = ConcreteEnsembleARForecaster(
         predictor, datastore, config=config
     )
 
     with pytest.raises(ValueError, match="eval_ensemble_size"):
-        ProbabilisticForecastingModule(
+        EnsembleForecastingModule(
             forecaster=forecaster,
             config=config,
             datastore=datastore,
@@ -498,7 +497,7 @@ def test_probabilistic_module_rejects_empty_eval_ensemble():
         )
 
 
-def test_probabilistic_module_test_step_scores_ensemble_mean():
+def test_ensemble_module_test_step_scores_ensemble_mean():
     datastore = init_datastore_example("mdp")
     predictor = NoisyStepPredictor(datastore=datastore, output_std=False)
 
@@ -510,7 +509,7 @@ def test_probabilistic_module_test_step_scores_ensemble_mean():
     forecaster = MemberCountRecordingForecaster(
         predictor, datastore, config=config
     )
-    model = ProbabilisticForecastingModule(
+    model = EnsembleForecastingModule(
         forecaster=forecaster,
         config=config,
         datastore=datastore,
@@ -537,7 +536,7 @@ def test_probabilistic_module_test_step_scores_ensemble_mean():
     assert torch.all(torch.isfinite(entry_mses))
 
 
-def test_probabilistic_module_logs_forecaster_objective():
+def test_ensemble_module_logs_forecaster_objective():
     """Validation reports the forecaster's own training objective, giving
     ModelCheckpoint a val_mean_loss to monitor. Testing does not: nothing
     monitors it there, so the extra forward pass would buy nothing."""
@@ -551,7 +550,7 @@ def test_probabilistic_module_logs_forecaster_objective():
     forecaster = ComponentReportingForecaster(
         predictor, datastore, config=config, train_num_members=2
     )
-    model = ProbabilisticForecastingModule(
+    model = EnsembleForecastingModule(
         forecaster=forecaster,
         config=config,
         datastore=datastore,

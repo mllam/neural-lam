@@ -537,8 +537,10 @@ Model classes, including abstract base classes, are located in `neural_lam/model
 Notebooks for visualization and analysis are located in `docs/notebooks`.
 
 The model code is split into three layers.
-A `Forecaster` maps initial states and forcing to a full forecast and owns the training objective; how the forecast is produced is left to the subclass.
-`ARForecaster` produces it autoregressively, by repeatedly applying a `StepPredictor` that advances the state one time step.
+A `BaseForecaster` maps initial states and forcing to a full forecast through `forward` and owns the training objective; how the forecast is produced is left to the subclass.
+The two families differ in what `forward` returns: a `BaseDeterministicForecaster` returns a single forecast, a `BaseEnsembleForecaster` takes the number of members to draw and returns an ensemble.
+Both currently produce their forecasts by autoregressive unrolling, repeatedly applying a `StepPredictor` that advances the state one time step.
+That unrolling is the function `unroll_forecast`, shared by the two families rather than inherited, so the class hierarchy stays a tree.
 This is the only setup currently in use, so in practice every model is built around a step predictor, but a forecaster that predicts all lead times at once would fit the same interface.
 A `BaseForecastingModule` wraps a forecaster in the Lightning training/evaluation loop.
 
@@ -548,13 +550,12 @@ nn.Module
 ├── pl.LightningModule
 │   └── BaseForecastingModule*             - Optimizer, logging, plotting and batch standardization (neural_lam/models/modules)
 │       ├── DeterministicForecastingModule - Evaluates the single forecast the forecaster produces
-│       └── ProbabilisticForecastingModule - Samples an ensemble and scores its mean
-├── Forecaster*                            - Initial states + forcing -> full forecast; owns the training objective (neural_lam/models/forecasters)
-│   ├── ARForecaster*                      - How a forecast is produced: autoregressive unrolling of a StepPredictor
-│   ├── DeterministicForecaster*           - Training objective: a loss function applied to a single forecast
-│   ├── ProbabilisticForecaster*           - Adds sampling of an ensemble, leaving the objective open
-│   ├── DeterministicARForecaster          - (ARForecaster, DeterministicForecaster), what neural_lam.train_model builds
-│   └── ProbabilisticARForecaster*         - (ARForecaster, ProbabilisticForecaster), still without an objective
+│       └── EnsembleForecastingModule      - Samples an ensemble and scores its mean
+├── BaseForecaster*                        - Initial states + forcing -> full forecast; owns the training objective (neural_lam/models/forecasters)
+│   ├── BaseDeterministicForecaster*       - forward -> one forecast; objective: a loss function applied to it
+│   │   └── DeterministicARForecaster      - Unrolls that forecast; what neural_lam.train_model builds
+│   └── BaseEnsembleForecaster*            - forward(..., num_members) -> an ensemble, leaving the objective open
+│       └── BaseEnsembleARForecaster*      - Unrolls each member, still without an objective
 ├── StepPredictor*                         - (X_{t-1}, X_t, forcing_t) -> X_{t+1} (neural_lam/models/step_predictors)
 │   ├── BaseGraphModel*                    - Encode-process-decode over a mesh graph
 │   │   ├── GraphLAM
@@ -587,9 +588,9 @@ nn.Module
 What to extend depends on the kind of model:
 
 * **Deterministic, autoregressive:** write a new `StepPredictor` and run it with the existing `DeterministicARForecaster`. This is the common case.
-* **Deterministic, not autoregressive:** subclass `DeterministicForecaster` with the new way of producing a forecast, reusing an existing `StepPredictor` or a new one if the model has a per-step component at all.
-* **Probabilistic, autoregressive:** subclass `ProbabilisticARForecaster`, implementing `sample_ensemble` and the training objective, typically alongside a new `StepPredictor`.
-* **Probabilistic, not autoregressive:** subclass `ProbabilisticForecaster`, which additionally leaves the way the forecast is produced open.
+* **Deterministic, not autoregressive:** subclass `BaseDeterministicForecaster`, implementing `forward` with the new way of producing a forecast, reusing an existing `StepPredictor` or a new one if the model has a per-step component at all.
+* **Ensemble, autoregressive:** subclass `BaseEnsembleARForecaster`, implementing the training objective, typically alongside a new `StepPredictor` that samples its output.
+* **Ensemble, not autoregressive:** subclass `BaseEnsembleForecaster`, which additionally leaves the way the members are produced open.
 
 ## Format of graph directory
 The `graphs` directory contains generated graph structures that can be used by different graph-based models.

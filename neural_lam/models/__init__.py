@@ -1,19 +1,19 @@
 """Neural-LAM model architectures including GraphLAM, HiLAM, and variants."""
 
 # Local
-from .forecasters.autoregressive import ARForecaster
-from .forecasters.base import Forecaster
+from .forecasters.autoregressive import unroll_forecast
+from .forecasters.base import BaseForecaster
 from .forecasters.deterministic import (
+    BaseDeterministicForecaster,
     DeterministicARForecaster,
-    DeterministicForecaster,
 )
-from .forecasters.probabilistic import (
-    ProbabilisticARForecaster,
-    ProbabilisticForecaster,
+from .forecasters.ensemble import (
+    BaseEnsembleARForecaster,
+    BaseEnsembleForecaster,
 )
 from .modules.base import BaseForecastingModule
 from .modules.deterministic import DeterministicForecastingModule
-from .modules.probabilistic import ProbabilisticForecastingModule
+from .modules.ensemble import EnsembleForecastingModule
 from .step_predictors.base import StepPredictor
 from .step_predictors.graph.base import BaseGraphModel
 from .step_predictors.graph.graph_efm import GraphEFM, GraphEFMMultiScale

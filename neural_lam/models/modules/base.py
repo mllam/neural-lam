@@ -1,4 +1,4 @@
-"""Abstract Lightning module shared by deterministic and probabilistic
+"""Abstract Lightning module shared by deterministic and ensemble
 forecasting modules."""
 
 # Standard library
@@ -22,29 +22,31 @@ from ... import vis
 from ...config import NeuralLAMConfig
 from ...datastore import BaseDatastore
 from ...weather_dataset import WeatherDataset
-from ..forecasters.base import Forecaster
+from ..forecasters.base import BaseForecaster
 
 
 class BaseForecastingModule(pl.LightningModule, ABC):
     """
-    Abstract Lightning module wrapping a ``Forecaster``.
+    Abstract Lightning module wrapping a ``BaseForecaster``.
 
     Owns everything that does not depend on whether the wrapped forecaster
     produces a single deterministic forecast or samples an ensemble:
     batch standardization, the training loop, optimizer configuration,
     checkpoint compatibility, and the plotting/aggregation helpers used by
-    validation and testing. ``validation_step``, ``test_step`` and
+    validation and testing. Anything that calls ``forecaster.forward``
+    belongs in a subclass instead, since the two families of forecaster
+    pin different signatures for it. ``validation_step``, ``test_step`` and
     ``on_test_epoch_end`` differ enough between the two evaluation modes
     that they are left abstract; concrete subclasses implement them
     independently (see ``DeterministicForecastingModule`` and
-    ``ProbabilisticForecastingModule``) rather than overriding one another.
+    ``EnsembleForecastingModule``) rather than overriding one another.
     """
 
     # pylint: disable=arguments-differ
 
     def __init__(
         self,
-        forecaster: Forecaster,
+        forecaster: BaseForecaster,
         config: NeuralLAMConfig,
         datastore: BaseDatastore,
         lr: float = 1e-3,
@@ -62,13 +64,12 @@ class BaseForecastingModule(pl.LightningModule, ABC):
 
         Parameters
         ----------
-        forecaster : Forecaster
+        forecaster : BaseForecaster
             The forecaster model to use for predictions. Owns the training
-            objective (``compute_training_loss``) and validation/test
-            scoring (``compute_loss_from_forecast``); this module and its
-            subclasses never
-            compute a loss themselves, only inject shared inputs (e.g. the
-            interior mask) and log what the forecaster returns.
+            objective (``compute_training_loss``); this module and its
+            subclasses never compute a loss themselves, only inject shared
+            inputs (e.g. the interior mask) and log what the forecaster
+            returns.
         config : NeuralLAMConfig
             Configuration object for the neural LAM model.
         datastore : BaseDatastore
@@ -344,28 +345,6 @@ class BaseForecastingModule(pl.LightningModule, ABC):
             ) / self.forcing_std_tiled
 
         return init_states, target_states, forcing, batch_times
-
-    def common_step(self, batch):
-        """
-        Perform a common prediction step for validation and testing.
-
-        Parameters
-        ----------
-        batch : tuple
-            The batch of data containing initial states, target states,
-            forcing features, and batch times.
-
-        Returns
-        -------
-        tuple
-            A tuple containing prediction, target states, predicted standard
-            deviation, and batch times.
-        """
-        init_states, target_states, forcing_features, batch_times = batch
-        prediction, pred_std = self.forecaster(
-            init_states, forcing_features, target_states
-        )
-        return prediction, target_states, pred_std, batch_times
 
     def training_step(self, batch):
         """

@@ -1,4 +1,4 @@
-"""Forecasters producing probabilistic (ensemble) forecasts."""
+"""Forecasters whose forecast is an ensemble of sampled members."""
 
 # Standard library
 from abc import abstractmethod
@@ -7,31 +7,34 @@ from abc import abstractmethod
 import torch
 
 # Local
-from .autoregressive import ARForecaster
-from .base import Forecaster
+from ...datastore import BaseDatastore
+from ..step_predictors.base import StepPredictor
+from .autoregressive import unroll_forecast
+from .base import BaseForecaster
 
 
-class ProbabilisticForecaster(Forecaster):
+class BaseEnsembleForecaster(BaseForecaster):
     """
-    Forecaster whose forecasts are samples from a predictive distribution.
+    Forecaster whose forecast is an ensemble sampled from a predictive
+    distribution.
 
-    Adds the capability that probabilistic evaluation and ensemble-based
-    objectives build on: sampling an ensemble of forecasts. How the
-    members are produced (auto-regressive sampling, diffusion, ...) is
-    left to subclasses; consumers only rely on the shape of the returned
+    ``forward`` takes the number of members to draw and returns them
+    stacked along an ensemble dimension after the batch dimension. How the
+    members are produced (auto-regressive sampling, diffusion, ...) is left
+    to subclasses; consumers only rely on the shape of the returned
     ensemble.
 
-    When ``sample_ensemble`` returns a ``per_member_std``, it is each
-    member's own predicted std, not a std describing the spread across
-    members. The predictive distribution is then a mixture of ``S``
-    Gaussians, one per member: ``p(x) = mean_s N(x; ensemble[:, s],
-    per_member_std[:, s]**2)``, not a single Gaussian. In particular, the
-    variance of that mixture is not the average of the per-member
-    variances: it also includes the spread between the member means.
+    When ``forward`` returns a ``per_member_std``, it is each member's own
+    predicted std, not a std describing the spread across members. The
+    predictive distribution is then a mixture of ``S`` Gaussians, one per
+    member: ``p(x) = mean_s N(x; ensemble[:, s], per_member_std[:, s]**2)``,
+    not a single Gaussian. In particular, the variance of that mixture is
+    not the average of the per-member variances: it also includes the
+    spread between the member means.
     """
 
     @abstractmethod
-    def sample_ensemble(
+    def forward(
         self,
         init_states: torch.Tensor,
         forcing_features: torch.Tensor,
@@ -52,7 +55,7 @@ class ProbabilisticForecaster(Forecaster):
         forcing_features : torch.Tensor
             Shape ``(B, pred_steps, num_grid_nodes, num_forcing_vars)``.
             External forcings provided at each predicted step. Dims: ``B``
-            is batch size, ``pred_steps`` is the rollout length,
+            is batch size, ``pred_steps`` is the forecast length,
             ``num_grid_nodes`` is the number of spatial nodes, and
             ``num_forcing_vars`` is the forcing feature dimension (already
             concatenated past/current/future windows).
@@ -79,14 +82,13 @@ class ProbabilisticForecaster(Forecaster):
         """
 
 
-class ProbabilisticARForecaster(ARForecaster, ProbabilisticForecaster):
+class BaseEnsembleARForecaster(BaseEnsembleForecaster):
     """
-    Auto-regressive forecaster for step predictors that sample their output.
+    Ensemble forecaster unrolling each member auto-regressively.
 
     Each call to the wrapped predictor draws a fresh sample of the next
-    state, so the inherited ``ARForecaster.forward`` unrolls one sampled
-    trajectory. This class adds ensemble forecasting on top: unrolling
-    several trajectories and stacking them along an ensemble dimension.
+    state, so unrolling it ``num_members`` times gives independent
+    trajectories.
 
     It supplies no training objective, and so remains abstract in
     ``compute_training_loss``. There is no default that fits every
@@ -99,7 +101,39 @@ class ProbabilisticARForecaster(ARForecaster, ProbabilisticForecaster):
     whatever configuration that objective needs.
     """
 
-    def sample_ensemble(
+    def __init__(
+        self,
+        predictor: StepPredictor,
+        datastore: BaseDatastore,
+    ) -> None:
+        """
+        Initialize the BaseEnsembleARForecaster.
+
+        Parameters
+        ----------
+        predictor : StepPredictor
+            The predictor to use for each AR step. Samples its output, so
+            that each rollout is an independent member.
+        datastore : BaseDatastore
+            The datastore providing grid metadata and boundary masks.
+        """
+        super().__init__(datastore=datastore)
+        self.predictor = predictor
+
+    @property
+    def predicts_std(self) -> bool:
+        """
+        Whether the forecaster predicts standard deviation.
+
+        Returns
+        -------
+        bool
+            ``True`` if the wrapped predictor predicts standard deviation,
+            ``False`` otherwise.
+        """
+        return self.predictor.predicts_std
+
+    def forward(
         self,
         init_states: torch.Tensor,
         forcing_features: torch.Tensor,
@@ -107,7 +141,7 @@ class ProbabilisticARForecaster(ARForecaster, ProbabilisticForecaster):
         num_members: int,
     ) -> tuple[torch.Tensor, torch.Tensor | None]:
         """
-        Sample an ensemble of forecasts.
+        Sample an ensemble of auto-regressive forecasts.
 
         Unrolls ``num_members`` independent forecasts, each sampling fresh
         randomness at every step, and stacks them along a new ensemble
@@ -167,8 +201,13 @@ class ProbabilisticARForecaster(ARForecaster, ProbabilisticForecaster):
         member_list = []
         member_std_list = []
         for _ in range(num_members):
-            prediction, pred_std = self(
-                init_states, forcing_features, boundary_states
+            prediction, pred_std = unroll_forecast(
+                self.predictor,
+                init_states,
+                forcing_features,
+                boundary_states,
+                self.boundary_mask,
+                self.interior_mask,
             )
             member_list.append(prediction)
             if pred_std is not None:
