@@ -38,6 +38,7 @@ dependencies = [
     "boto3>=1.35.32",
     "nvidia-ml-py>=13.580.82",
     "pillow>=9.0.0",
+    "weather-model-graphs>=0.4.0",
 ]
 requires-python = ">=3.10"
 
@@ -49,6 +50,9 @@ requires-python = ">=3.10"
 cpu = ["torch>=2.12,<2.13"]
 gpu = ["torch>=2.12,<2.13"]        # CUDA 13.0, default GPU build
 gpu-cu128 = ["torch>=2.11,<2.12"]  # CUDA 12.8, last torch series with cu128 wheels
+
+[project.scripts]
+create_graph_with_wmg = "neural_lam.create_graph_with_wmg:cli"
 
 [dependency-groups]
 dev = [
