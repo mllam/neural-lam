@@ -52,6 +52,11 @@ share/python-wheels/
 # mkdocs documentation
 /site
 
+# Jupyter Book / Sphinx documentation
+docs/_build/
+docs/api/
+
+
 ### Vim ###
 # Swap
 [._]*.s[a-v][a-z]

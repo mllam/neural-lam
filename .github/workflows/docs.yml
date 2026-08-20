@@ -1,0 +1,80 @@
+name: Documentation
+on:
+  push:
+    branches: ["main"]
+    paths:
+      - "neural_lam/**"
+      - "docs/**"
+      - "pyproject.toml"
+      - ".github/workflows/docs.yml"
+  pull_request:
+    branches: ["main"]
+    paths:
+      - "neural_lam/**"
+      - "docs/**"
+      - "pyproject.toml"
+      - ".github/workflows/docs.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: "docs-${{ github.ref }}"
+  cancel-in-progress: true
+
+jobs:
+  build-docs:
+    name: Build docs
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install docs dependencies
+        run: uv sync --extra docs --group dev --no-cache
+
+
+
+      - name: Build docs with sphinx
+        run: uv run sphinx-build -W --keep-going -b html docs/ docs/_build/html/
+
+      - name: Upload docs artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: docs-html
+          path: docs/_build/html/
+
+  linkcheck:
+    name: Link check
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install docs dependencies
+        run: uv sync --extra docs --group dev --no-cache
+
+
+
+      - name: Run linkcheck
+        run: uv run sphinx-build -W --keep-going -b linkcheck docs/ docs/_build/linkcheck/

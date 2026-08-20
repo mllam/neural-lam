@@ -1273,7 +1273,7 @@ def validate_graph_directory(
 
     spec_text = textwrap.dedent(
         f"""\
-    # Neural-LAM Graph Storage Specification
+    # Graph Storage Specification
 
     Version: {CURRENT_GRAPH_FORMAT_SPEC_VERSION}
 

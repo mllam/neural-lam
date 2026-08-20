@@ -422,6 +422,7 @@ class BaseDatastore(abc.ABC):
         ----------
         category : str
             The category of the dataset (state/forcing/static).
+
         Returns
         -------
         list[str]
@@ -482,12 +483,13 @@ class BaseRegularGridDatastore(BaseDatastore):
 
     The following methods and attributes must be implemented for datastore that
     represents regular-gridded data:
-    - `grid_shape_state` (property): 2D shape of the grid for the state
+
+    * `grid_shape_state` (property): 2D shape of the grid for the state
       variables.
-    - `get_xy` (method): Return the x, y coordinates of the dataset, with the
+    * `get_xy` (method): Return the x, y coordinates of the dataset, with the
       option to not stack the coordinates (so that they are returned as a 2D
       grid).
-    - `get_lat_lon` (method): Return the latitude/longitude coordinates of
+    * `get_lat_lon` (method): Return the latitude/longitude coordinates of
       the dataset for convenience when plotting.
 
     The operation of going from (x,y)-indexed regular grid
@@ -527,10 +529,11 @@ class BaseRegularGridDatastore(BaseDatastore):
         -------
         np.ndarray
             The x, y coordinates of the dataset, returned differently based on
-            the value of `stacked`: - `stacked==True`: shape `(n_grid_points,
-            2)` where
-                               n_grid_points=N_x*N_y.
-            - `stacked==False`: shape `(N_x, N_y, 2)`
+            the value of `stacked`:
+
+            * `stacked==True`: shape `(n_grid_points, 2)` where
+              n_grid_points=N_x*N_y.
+            * `stacked==False`: shape `(N_x, N_y, 2)`
         """
 
     @overload
