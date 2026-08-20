@@ -10,6 +10,11 @@ from .graph import (
     zero_index_g2m,
     zero_index_m2g,
 )
+from .heterodata import (
+    graph_dict_to_heterodata,
+    graph_tensors_from_heterodata,
+    heterodata_from_module,
+)
 from .logging import (
     init_training_logger_metrics,
     log_on_rank_zero,
@@ -25,7 +30,10 @@ __all__ = [
     "compute_grid_input_dim",
     "fractional_plot_bundle",
     "get_integer_time",
+    "graph_dict_to_heterodata",
+    "graph_tensors_from_heterodata",
     "has_working_latex",
+    "heterodata_from_module",
     "init_training_logger_metrics",
     "inverse_sigmoid",
     "inverse_softplus",

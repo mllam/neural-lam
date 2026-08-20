@@ -14,6 +14,7 @@ from torch import nn
 # Local
 from ..datastore import BaseDatastore
 from .buffer_list import BufferList
+from .heterodata import graph_dict_to_heterodata, graph_tensors_from_heterodata
 
 LEGACY_GRAPH_SPEC_VERSION = "legacy"
 
@@ -427,6 +428,7 @@ def load_and_register_graph(
     datastore: BaseDatastore,
     graph_name: str,
     mesh_node_features_scaling: float,
+    use_heterodata: bool = False,
 ) -> bool:
     """
     Load a graph and register its tensors on ``module``.
@@ -435,6 +437,14 @@ def load_and_register_graph(
     :func:`load_graph`, then registers each tensor as a non-persistent
     buffer and each non-tensor (e.g. ``BufferList``) as a plain attribute on
     ``module``.
+
+    With ``use_heterodata`` the loaded tensors are routed through a
+    ``pyg.HeteroData`` object (issue #385): they are placed on its typed
+    node/edge stores and the tensors registered on ``module`` are then read
+    back out of it. The object is not stored on ``module``; see
+    :func:`neural_lam.utils.heterodata_from_module` for building a view of
+    the registered tensors on demand. The tensors themselves are unchanged,
+    so the module behaves, and therefore trains, identically either way.
 
     Parameters
     ----------
@@ -447,6 +457,10 @@ def load_and_register_graph(
     mesh_node_features_scaling : float
         Scalar used to normalize mesh node coordinate features for graphs in
         the current on-disk format; forwarded to :func:`load_graph`.
+    use_heterodata : bool, default False
+        Whether to route the graph tensors through a ``pyg.HeteroData``
+        object and take the registered tensors from it. Supported for both
+        flat and hierarchical graphs.
 
     Returns
     -------
@@ -458,6 +472,17 @@ def load_and_register_graph(
         graph_dir_path=graph_dir_path,
         mesh_node_features_scaling=mesh_node_features_scaling,
     )
+
+    if use_heterodata:
+        graph = graph_dict_to_heterodata(
+            graph_ldict,
+            num_grid_nodes=datastore.num_grid_points,
+            hierarchical=hierarchical,
+        )
+        graph_ldict = graph_tensors_from_heterodata(
+            graph, hierarchical=hierarchical
+        )
+
     for name, attr_value in graph_ldict.items():
         # Make BufferLists module members and register tensors as buffers
         if isinstance(attr_value, torch.Tensor):
