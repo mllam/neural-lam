@@ -9,6 +9,7 @@ import pytest
 import neural_lam
 import neural_lam.create_graph
 import neural_lam.train_model
+from neural_lam.datastore.base import BaseDatastore
 
 
 def test_import():
@@ -80,7 +81,7 @@ def test_wandb_logger_kwargs(
     from neural_lam.utils import setup_training_logger
 
     args = _make_args(wandb_id=wandb_id)
-    datastore = MagicMock()
+    datastore = MagicMock(spec=BaseDatastore)
 
     setup_training_logger(
         datastore, args, run_name="my-run", run_dir="runs/my-run"
@@ -107,7 +108,7 @@ def test_wandb_id_ignored_with_mlflow_warns():
     args.logger_project = "neural_lam"
     args.wandb_id = "abc123"
 
-    datastore = MagicMock()
+    datastore = MagicMock(spec=BaseDatastore)
 
     with (
         patch("neural_lam.utils.logging.CustomMLFlowLogger") as mock_mlflow,
@@ -139,7 +140,7 @@ def test_unsupported_logger_raises_value_error():
     args.logger_project = "neural_lam"
     args.wandb_id = None
 
-    datastore = MagicMock()
+    datastore = MagicMock(spec=BaseDatastore)
 
     with pytest.raises(ValueError, match="Unsupported logger type"):
         setup_training_logger(
