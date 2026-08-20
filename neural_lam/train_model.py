@@ -62,6 +62,8 @@ def load_forecaster_module_from_checkpoint(ckpt_path, config, datastore):
         output_std=args.output_std,
         output_clamping_lower=config.training.output_clamping.lower,
         output_clamping_upper=config.training.output_clamping.upper,
+        # Checkpoints written before this flag existed have no such arg
+        use_heterodata=getattr(args, "use_heterodata", False),
     )
     forecaster = ARForecaster(predictor, datastore)
     return ForecasterModule.load_from_checkpoint(
@@ -175,6 +177,12 @@ def main(input_args=None):
         action="store_true",
         help="If models should additionally output std.-dev. per "
         "output dimensions",
+    )
+    arch_group.add_argument(
+        "--use_heterodata",
+        action="store_true",
+        help="Represent the loaded graph as a pyg.HeteroData object and take "
+        "the model's graph tensors from it (flat graphs only for now)",
     )
     arch_group.add_argument(
         "--g2m_gnn_type",
@@ -478,6 +486,7 @@ def main(input_args=None):
         m2g_gnn_type=args.m2g_gnn_type,
         mesh_up_gnn_type=args.mesh_up_gnn_type,
         mesh_down_gnn_type=args.mesh_down_gnn_type,
+        use_heterodata=args.use_heterodata,
     )
     forecaster = ARForecaster(predictor, datastore)
 

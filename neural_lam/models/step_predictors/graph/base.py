@@ -4,6 +4,7 @@
 
 # Third-party
 import torch
+from torch_geometric.data import HeteroData
 
 # Local
 from .... import utils
@@ -33,6 +34,7 @@ class BaseGraphModel(StepPredictor):
         output_clamping_upper: dict[str, float] | None = None,
         g2m_gnn_type: str = "InteractionNet",
         m2g_gnn_type: str = "InteractionNet",
+        use_heterodata: bool = False,
     ) -> None:
         """
         Initialize the BaseGraphModel.
@@ -62,6 +64,10 @@ class BaseGraphModel(StepPredictor):
             Lower clamping limits for state variables.
         output_clamping_upper : dict, optional
             Upper clamping limits for state variables.
+        use_heterodata : bool, default False
+            If True, represent the loaded graph as a ``pyg.HeteroData``
+            object and take the model's graph tensors from it. Only supported
+            for flat (non-hierarchical) graphs.
         """
         super().__init__(
             datastore=datastore,
@@ -105,11 +111,16 @@ class BaseGraphModel(StepPredictor):
             grid_xy_extent[1] - grid_xy_extent[0],
             grid_xy_extent[3] - grid_xy_extent[2],
         )
+        # With use_heterodata the loaded graph is represented as a
+        # pyg.HeteroData object (issue #385) that the model's graph tensors
+        # are then read out of; see load_and_register_graph.
+        self.use_heterodata = use_heterodata
         self.hierarchical = utils.load_and_register_graph(
             self,
             datastore,
             graph_name,
             mesh_node_features_scaling=grid_xy_max_span,
+            use_heterodata=use_heterodata,
         )
 
         # Specify dimensions of data
@@ -166,6 +177,36 @@ class BaseGraphModel(StepPredictor):
 
         # Compute indices and define clamping functions
         self.prepare_clamping_params(datastore)
+
+    @property
+    def graph(self) -> HeteroData:
+        """The model's graph as a ``pyg.HeteroData`` object.
+
+        Built on access from the graph tensors currently registered on the
+        model, so it always agrees with their device and dtype. It is not
+        stored on the model, because a ``HeteroData`` attribute would not be
+        moved by ``.to(...)`` and would go stale.
+
+        Returns
+        -------
+        torch_geometric.data.HeteroData
+            Typed graph referencing the model's current graph tensors.
+
+        Raises
+        ------
+        AttributeError
+            If the model was not constructed with ``use_heterodata=True``.
+        """
+        if not self.use_heterodata:
+            raise AttributeError(
+                "graph is only available on models constructed with "
+                "use_heterodata=True"
+            )
+        return utils.heterodata_from_module(
+            self,
+            num_grid_nodes=self.num_grid_nodes,
+            hierarchical=self.hierarchical,
+        )
 
     def get_num_mesh(self) -> tuple[int, int]:
         """

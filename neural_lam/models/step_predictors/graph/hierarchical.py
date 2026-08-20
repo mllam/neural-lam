@@ -34,6 +34,7 @@ class BaseHiGraphModel(BaseGraphModel):
         m2g_gnn_type: str = "InteractionNet",
         mesh_up_gnn_type: str = "InteractionNet",
         mesh_down_gnn_type: str = "InteractionNet",
+        use_heterodata: bool = False,
     ):
         """Extend :class:`BaseGraphModel` with hierarchical mesh structures."""
         super().__init__(
@@ -50,6 +51,7 @@ class BaseHiGraphModel(BaseGraphModel):
             output_clamping_upper=output_clamping_upper,
             g2m_gnn_type=g2m_gnn_type,
             m2g_gnn_type=m2g_gnn_type,
+            use_heterodata=use_heterodata,
         )
         self.mesh_up_gnn_type = mesh_up_gnn_type
         self.mesh_down_gnn_type = mesh_down_gnn_type

@@ -10,6 +10,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - Add latent encoder/decoder modules and the `GraphEFM` (hierarchical) / `GraphEFMMultiScale` (flat) step predictors for the Graph-EFM ensemble forecasting model. [\#648](https://github.com/mllam/neural-lam/pull/648) @Sir-Sloth-The-Lazy
 
+- Add `neural_lam.utils.heterodata` for representing the loaded graph as a
+  `pyg.HeteroData` object, with grid nodes as the `grid` node type, mesh nodes
+  as the `mesh` node type and `g2m`/`m2m`/`m2g` as typed edges.
+  `load_and_register_graph` builds that object and reads the model's graph
+  tensors back out of it when called with `use_heterodata=True` (default
+  `False`), which leaves the models' behaviour, and therefore training,
+  unchanged. Flat (non-hierarchical) graphs only.
+  [\#711](https://github.com/mllam/neural-lam/pull/711) @prajwal-tech07
+
 - Add `--num_sanity_val_steps` CLI argument to control sanity validation steps before training (#694)
 
 - Add `--train_steps_to_log` CLI option to log training loss for individual unroll steps, and deduplicate common prediction and loss computation steps across loops [\#674](https://github.com/mllam/neural-lam/issues/674) @GiGiKoneti
