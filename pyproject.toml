@@ -60,7 +60,11 @@ docs = [
 ]
 
 [dependency-groups]
-dev = ["pre-commit>=3.8.0", "pytest>=8.3.2", "pooch>=1.8.2"]
+dev = [
+    "pre-commit>=3.8.0",
+    "pytest>=8.3.2",
+    "pooch>=1.8.2",
+]
 
 [tool.uv]
 # uv-specific configuration for PyTorch CPU/GPU variant selection.
@@ -129,6 +133,12 @@ per-file-ignores = [
 
 [tool.codespell]
 skip = "requirements/*"
+
+[tool.ty.src]
+exclude = ["tests/", "docs/"]
+
+[tool.ty.rules]
+possibly-missing-submodule = "ignore"
 
 # Pylint config
 [tool.pylint]
