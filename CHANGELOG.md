@@ -50,6 +50,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Build the training logger config from the public `datastore.config` accessor instead of the MDP-specific private `_config` attribute, so any datastore implementing `BaseDatastore` can be driven through the training entry point without raising `AttributeError` [\#723](https://github.com/mllam/neural-lam/pull/723) @zakirkg
+
+- Exclude boundary nodes from the spatial loss maps computed in `test_step`, so the plotted loss maps and the saved `mean_spatial_loss.pt` cover the interior only, consistent with every other loss and metric call in `ForecasterModule` [\#720](https://github.com/mllam/neural-lam/pull/720) @RajdeepKushwaha5 @NoiceHax
+
 - Allow `graph_lam` training and checkpoint reloads to accept the full set of
   GNN type CLI options without passing hierarchical-only options to unsupported
   constructors ([#686](https://github.com/mllam/neural-lam/issues/686)).

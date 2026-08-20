@@ -13,9 +13,10 @@ from neural_lam import config as nlconfig
 from neural_lam.create_graph import create_graph_from_datastore
 from neural_lam.datastore import DATASTORES
 from neural_lam.datastore.base import BaseRegularGridDatastore
-from neural_lam.models import ForecasterModule
+from neural_lam.models import ARForecaster, ForecasterModule, GraphLAM
 from neural_lam.weather_dataset import WeatherDataModule
 from tests.conftest import init_datastore_example
+from tests.dummy_datastore import DummyDatastore, set_framed_boundary
 
 # Model architecture defaults for tests
 GRAPH = "1level"
@@ -223,3 +224,96 @@ def test_all_gather_cat_multi_device_simulation():
         "all_gather_cat produced incorrectly ordered/combined values "
         "on multi-device simulation"
     )
+
+
+@pytest.mark.slow
+def test_test_step_excludes_boundary_from_spatial_loss(tmp_path):
+    """
+    Regression test for issue #569.
+
+    `test_step` built its spatial loss map over every grid node, while every
+    other loss and metric call in the module restricts itself to the interior
+    via `interior_mask_bool`. Boundary nodes therefore leaked into the plotted
+    loss maps and into the saved `mean_spatial_loss.pt`.
+
+    Run `trainer.test()` end to end on a datastore with a known boundary mask
+    and check that the saved map is NaN on the boundary and finite inside.
+    """
+    # 20x20 is the smallest grid `create_graph_from_datastore` still builds a
+    # `1level` mesh for.
+    datastore = DummyDatastore(n_grid_points=400, n_timesteps=10)
+    set_framed_boundary(datastore)
+
+    graph_dir_path = Path(datastore.root_path) / "graph" / GRAPH
+    if not graph_dir_path.exists():
+        create_graph_from_datastore(
+            datastore=datastore,
+            output_root_path=str(graph_dir_path),
+            n_max_levels=1,
+        )
+
+    config = nlconfig.NeuralLAMConfig(
+        datastore=nlconfig.DatastoreSelection(
+            kind=datastore.SHORT_NAME,
+            config_path=datastore.root_path,
+        ),
+    )
+
+    predictor = GraphLAM(
+        datastore=datastore,
+        graph_name=GRAPH,
+        hidden_dim=HIDDEN_DIM,
+        hidden_layers=HIDDEN_LAYERS,
+        processor_layers=1,
+        mesh_aggr=MESH_AGGR,
+        num_past_forcing_steps=0,
+        num_future_forcing_steps=0,
+        output_std=False,
+        output_clamping_lower=config.training.output_clamping.lower,
+        output_clamping_upper=config.training.output_clamping.upper,
+    )
+    model = ForecasterModule(
+        forecaster=ARForecaster(predictor, datastore),
+        config=config,
+        datastore=datastore,
+        loss="mse",
+        lr=1.0e-3,
+        restore_opt=False,
+        n_example_pred=0,  # skip example plotting, not what is under test
+        val_steps_to_log=[1],
+    )
+
+    data_module = WeatherDataModule(
+        datastore=datastore,
+        ar_steps_train=1,
+        ar_steps_eval=2,
+        batch_size=1,
+        num_workers=0,
+        num_past_forcing_steps=0,
+        num_future_forcing_steps=0,
+    )
+
+    trainer = pl.Trainer(
+        accelerator="cpu",
+        devices=1,
+        logger=pl.loggers.CSVLogger(save_dir=str(tmp_path)),
+        log_every_n_steps=1,
+        enable_checkpointing=False,
+    )
+    trainer.test(model=model, datamodule=data_module)
+
+    saved_path = Path(trainer.logger.save_dir) / "mean_spatial_loss.pt"
+    assert saved_path.exists(), "test epoch did not save a spatial loss map"
+
+    # (len(val_steps_to_log), num_grid_nodes)
+    mean_spatial_loss = torch.load(saved_path, weights_only=True)
+    assert mean_spatial_loss.shape == (1, datastore.num_grid_points)
+
+    boundary = torch.tensor(datastore.boundary_mask.values, dtype=torch.bool)
+    assert torch.isnan(mean_spatial_loss[:, boundary]).all(), (
+        "boundary nodes must be excluded from the test spatial loss map, "
+        "consistent with every other loss call in the module"
+    )
+    assert torch.isfinite(
+        mean_spatial_loss[:, ~boundary]
+    ).all(), "interior nodes must keep finite loss values"
