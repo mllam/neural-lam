@@ -97,6 +97,84 @@ def get_time_step(times: np.ndarray) -> np.timedelta64:
     return time_diffs[0]
 
 
+def _requested_time_bounds(
+    da_requested: xr.DataArray,
+    da_available: xr.DataArray,
+    da_requested_is_forecast: bool,
+    da_available_is_forecast: bool,
+    num_past_steps: int,
+    num_future_steps: int,
+    requested_max_lead: np.timedelta64 | None,
+) -> tuple[np.datetime64, np.datetime64]:
+    """Return the first and last ``da_requested`` time ``da_available`` covers.
+
+    The window is measured in ``da_available`` steps: its ``time`` spacing
+    when it is analysis data, its ``elapsed_forecast_duration`` spacing when
+    it is a forecast, since that is the axis
+    :meth:`WeatherDataset._window_forcing_in_time` walks in either case.
+
+    Parameters
+    ----------
+    da_requested, da_available : xr.DataArray
+        See :func:`check_time_overlap`.
+    da_requested_is_forecast, da_available_is_forecast : bool
+        Whether each side is in forecast mode.
+    num_past_steps, num_future_steps : int
+        Window size around each requested time.
+    requested_max_lead : np.timedelta64 or None
+        Largest ``elapsed_forecast_duration`` of ``da_requested`` that is
+        actually read per sample. Only meaningful when ``da_requested`` is a
+        forecast, where each requested ``analysis_time`` needs coverage out
+        to that lead. ``None`` falls back to the full forecast length.
+
+    Returns
+    -------
+    tuple of np.datetime64
+        Inclusive ``[first, last]`` bounds on the requested times.
+    """
+    if da_requested_is_forecast:
+        times_requested = da_requested.analysis_time
+        if requested_max_lead is None:
+            requested_max_lead = (
+                da_requested.elapsed_forecast_duration.values.max()
+            )
+    else:
+        times_requested = da_requested.time
+        requested_max_lead = np.timedelta64(0, "ns")
+
+    step_requested = get_time_step(times_requested.values)
+
+    if da_available_is_forecast:
+        times_available = da_available.analysis_time.values
+        leads_available = da_available.elapsed_forecast_duration.values
+        # The window is walked over lead times, so it is lead spacing that
+        # sizes it - stepping back one launch buys `analysis / lead` window
+        # steps, not one.
+        step_window = get_time_step(leads_available)
+        # A launch is only usable if it starts strictly before the requested
+        # init time, hence the `step_requested` term.
+        first = times_available.min() + max(
+            step_requested, leads_available.min() + num_past_steps * step_window
+        )
+        last = (
+            times_available.max()
+            + leads_available.max()
+            - requested_max_lead
+            - num_future_steps * step_window
+        )
+    else:
+        times_available = da_available.time.values
+        step_window = get_time_step(times_available)
+        first = times_available.min() + num_past_steps * step_window
+        last = (
+            times_available.max()
+            - requested_max_lead
+            - num_future_steps * step_window
+        )
+
+    return first, last
+
+
 def check_time_overlap(
     da_requested: xr.DataArray,
     da_available: xr.DataArray,
@@ -104,6 +182,7 @@ def check_time_overlap(
     da_available_is_forecast: bool = False,
     num_past_steps: int = 1,
     num_future_steps: int = 1,
+    requested_max_lead: np.timedelta64 | None = None,
 ) -> None:
     """Check that the time coverage of ``da_available`` is wide enough to
     support a windowed lookup driven by ``da_requested`` times with the
@@ -123,61 +202,92 @@ def check_time_overlap(
     num_past_steps, num_future_steps : int
         Window size around each ``da_requested`` time, measured in
         ``da_available`` steps.
+    requested_max_lead : np.timedelta64, optional
+        Largest lead time read from a forecast ``da_requested`` per sample;
+        each requested ``analysis_time`` needs coverage out to that lead.
+        Defaults to the full forecast length.
 
     Raises
     ------
     ValueError
         If ``da_available`` does not cover the required time range.
     """
-    if da_requested_is_forecast:
-        times_requested = da_requested.analysis_time
-    else:
-        times_requested = da_requested.time
-    time_min_requested = times_requested.min().values
-    time_max_requested = times_requested.max().values
+    first, last = _requested_time_bounds(
+        da_requested,
+        da_available,
+        da_requested_is_forecast,
+        da_available_is_forecast,
+        num_past_steps,
+        num_future_steps,
+        requested_max_lead,
+    )
+    crop_dim = "analysis_time" if da_requested_is_forecast else "time"
+    times_requested = da_requested[crop_dim].values
 
-    if da_available_is_forecast:
-        times_available = da_available.analysis_time
-        time_min_available = times_available.min().values
-        time_max_available = times_available.max().values
-
-        time_step_available = get_time_step(times_available.values)
-        time_step_requested = get_time_step(times_requested.values)
-        max_lead = da_available.elapsed_forecast_duration.values.max()
-
-        analysis_offset = max(
-            time_step_requested, num_past_steps * time_step_available
-        )
-        required_time_min = time_min_requested - analysis_offset
-        required_time_max = time_max_requested - (
-            max_lead - num_future_steps * time_step_available
-        )
-    else:
-        times_available = da_available.time
-        time_min_available = times_available.min().values
-        time_max_available = times_available.max().values
-        time_step_available = get_time_step(times_available.values)
-
-        required_time_min = (
-            time_min_requested - num_past_steps * time_step_available
-        )
-        required_time_max = (
-            time_max_requested + num_future_steps * time_step_available
-        )
-
-    if time_min_available > required_time_min:
+    if times_requested.min() < first:
         raise ValueError(
             "`da_available` starts too late to cover the requested window. "
-            f"Required start: {required_time_min}, "
-            f"but `da_available` starts at {time_min_available}."
+            f"Earliest supported `{crop_dim}` is {first}, but "
+            f"`da_requested` starts at {times_requested.min()}."
         )
 
-    if time_max_available < required_time_max:
+    if times_requested.max() > last:
         raise ValueError(
             "`da_available` ends too early to cover the requested window. "
-            f"Required end: {required_time_max}, "
-            f"but `da_available` ends at {time_max_available}."
+            f"Latest supported `{crop_dim}` is {last}, but "
+            f"`da_requested` ends at {times_requested.max()}."
         )
+
+
+def get_time_crop_slice(
+    da_requested: xr.DataArray,
+    da_available: xr.DataArray,
+    da_requested_is_forecast: bool = False,
+    da_available_is_forecast: bool = False,
+    num_past_steps: int = 1,
+    num_future_steps: int = 1,
+    requested_max_lead: np.timedelta64 | None = None,
+) -> tuple[str, slice]:
+    """Return the ``da_requested`` dimension and slice that ``da_available``
+    can cover.
+
+    Parameters mirror :func:`check_time_overlap`. Callers that hold several
+    dataarrays on the same requested time axis (interior state and interior
+    forcing, say) apply this one slice to all of them, so they stay aligned.
+
+    Returns
+    -------
+    tuple of (str, slice)
+        The dimension to crop along (``"analysis_time"`` for a forecast
+        ``da_requested``, else ``"time"``) and the positional slice to keep.
+
+    Raises
+    ------
+    ValueError
+        If no requested time is covered at all.
+    """
+    crop_dim = "analysis_time" if da_requested_is_forecast else "time"
+    requested_tvals = da_requested[crop_dim].values
+    first, last = _requested_time_bounds(
+        da_requested,
+        da_available,
+        da_requested_is_forecast,
+        da_available_is_forecast,
+        num_past_steps,
+        num_future_steps,
+        requested_max_lead,
+    )
+
+    first_valid_idx = int(np.searchsorted(requested_tvals, first, side="left"))
+    last_valid_idx_plus_one = int(
+        np.searchsorted(requested_tvals, last, side="right")
+    )
+    if first_valid_idx >= last_valid_idx_plus_one:
+        raise ValueError(
+            f"`da_available` covers no `da_requested` `{crop_dim}` in "
+            f"[{first}, {last}]; cannot align."
+        )
+    return crop_dim, slice(first_valid_idx, last_valid_idx_plus_one)
 
 
 def crop_time_if_needed(
@@ -187,10 +297,10 @@ def crop_time_if_needed(
     da_available_is_forecast: bool = False,
     num_past_steps: int = 1,
     num_future_steps: int = 1,
+    requested_max_lead: np.timedelta64 | None = None,
 ) -> xr.DataArray:
     """Trim the leading/trailing times from ``da_requested`` so that
-    ``da_available`` covers every needed window. If ``check_time_overlap``
-    already passes, ``da_requested`` is returned unchanged. A forecast-mode
+    ``da_available`` covers every needed window. A forecast-mode
     ``da_requested`` is cropped along ``analysis_time`` (dropping whole
     launches), an analysis-mode one along ``time``; either way the removal
     is logged.
@@ -202,62 +312,46 @@ def crop_time_if_needed(
     xr.DataArray
         Possibly cropped ``da_requested``.
     """
-    if da_requested is None or da_available is None:
-        return da_requested
+    crop_dim, crop_slice = get_time_crop_slice(
+        da_requested,
+        da_available,
+        da_requested_is_forecast,
+        da_available_is_forecast,
+        num_past_steps,
+        num_future_steps,
+        requested_max_lead,
+    )
+    return apply_time_crop(da_requested, crop_dim, crop_slice)
 
-    try:
-        check_time_overlap(
-            da_requested,
-            da_available,
-            da_requested_is_forecast,
-            da_available_is_forecast,
-            num_past_steps,
-            num_future_steps,
-        )
-        return da_requested
-    except ValueError:
-        crop_dim = "analysis_time" if da_requested_is_forecast else "time"
-        requested_tvals = da_requested[crop_dim].values
-        if da_available_is_forecast:
-            available_tvals = da_available.analysis_time.values
-        else:
-            available_tvals = da_available.time.values
 
-        available_dt = get_time_step(available_tvals)
-        if da_available_is_forecast:
-            requested_dt = get_time_step(requested_tvals)
-            max_lead = da_available.elapsed_forecast_duration.values.max()
-            analysis_offset = max(requested_dt, num_past_steps * available_dt)
-            required_min = available_tvals[0] + analysis_offset
-            required_max = (
-                available_tvals[-1] + max_lead - num_future_steps * available_dt
-            )
-        else:
-            required_min = available_tvals[0] + num_past_steps * available_dt
-            required_max = available_tvals[-1] - num_future_steps * available_dt
+def apply_time_crop(
+    da: xr.DataArray, crop_dim: str, crop_slice: slice
+) -> xr.DataArray:
+    """Apply a :func:`get_time_crop_slice` result to ``da``, logging removals.
 
-        first_valid_idx = int(
-            np.searchsorted(requested_tvals, required_min, side="left")
-        )
-        last_valid_idx_plus_one = int(
-            np.searchsorted(requested_tvals, required_max, side="right")
-        )
-        if first_valid_idx >= last_valid_idx_plus_one:
-            raise ValueError(
-                "`da_available` covers no `da_requested` time in "
-                f"[{required_min}, {required_max}]; cannot align."
-            )
-        n_removed_begin = first_valid_idx
-        n_removed_end = len(requested_tvals) - last_valid_idx_plus_one
+    Parameters
+    ----------
+    da : xr.DataArray
+        Dataarray to crop along ``crop_dim``.
+    crop_dim : str
+        Dimension name, as returned by :func:`get_time_crop_slice`.
+    crop_slice : slice
+        Positional slice to keep.
 
-        if n_removed_begin > 0 or n_removed_end > 0:
-            log_on_rank_zero(
-                f"Cropping `da_requested` to align with `da_available`: "
-                f"removed {n_removed_begin} {crop_dim} steps at start and "
-                f"{n_removed_end} at the end.",
-                level="warning",
-            )
-            da_requested = da_requested.isel(
-                {crop_dim: slice(first_valid_idx, last_valid_idx_plus_one)}
-            )
-        return da_requested
+    Returns
+    -------
+    xr.DataArray
+        ``da`` cropped, or unchanged when the slice keeps everything.
+    """
+    n_removed_begin = crop_slice.start
+    n_removed_end = da.sizes[crop_dim] - crop_slice.stop
+    if n_removed_begin == 0 and n_removed_end == 0:
+        return da
+
+    log_on_rank_zero(
+        f"Cropping `{da.name or 'dataarray'}` to align with the available "
+        f"time coverage: removed {n_removed_begin} {crop_dim} steps at start "
+        f"and {n_removed_end} at the end.",
+        level="warning",
+    )
+    return da.isel({crop_dim: crop_slice})

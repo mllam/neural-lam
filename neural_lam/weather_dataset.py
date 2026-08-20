@@ -13,7 +13,34 @@ import xarray as xr
 
 # First-party
 from neural_lam.datastore.base import BaseDatastore
-from neural_lam.utils import crop_time_if_needed, get_time_step
+from neural_lam.utils import (
+    apply_time_crop,
+    get_integer_time,
+    get_time_crop_slice,
+    get_time_step,
+)
+
+
+def _format_timedelta(td: np.timedelta64) -> str:
+    """Render a numpy timedelta in its largest exact unit, e.g. ``"13 hours"``.
+
+    Parameters
+    ----------
+    td : np.timedelta64
+        The interval to render.
+
+    Returns
+    -------
+    str
+        Value and unit, for use in error messages.
+    """
+    microseconds = int(td / np.timedelta64(1, "us"))
+    value, unit = get_integer_time(
+        datetime.timedelta(microseconds=microseconds)
+    )
+    if unit == "unknown":
+        return str(td)
+    return f"{value} {unit}"
 
 
 def _check_window_bounds(
@@ -165,16 +192,31 @@ class WeatherDataset(torch.utils.data.Dataset):
                     self.da_boundary_forcing.elapsed_forecast_duration.values
                 )
 
-            # Crop the interior so the first/last samples stay within boundary.
+            # Crop the interior so the first/last samples stay within the
+            # boundary coverage. State and forcing come from the same
+            # datastore and forecast forcing is looked up by positional
+            # `analysis_time` index, so both must be cropped by the same
+            # slice or every sample would pair state and forcing from
+            # different launches.
             if self.da_boundary_forcing is not None:
-                self.da_state = crop_time_if_needed(
+                crop_dim, crop_slice = get_time_crop_slice(
                     self.da_state,
                     self.da_boundary_forcing,
                     da_requested_is_forecast=self.datastore.is_forecast,
                     da_available_is_forecast=datastore_boundary.is_forecast,
                     num_past_steps=self.num_past_boundary_steps,
                     num_future_steps=self.num_future_boundary_steps,
+                    requested_max_lead=self._max_state_lead_used(),
                 )
+                self.da_state = apply_time_crop(
+                    self.da_state, crop_dim, crop_slice
+                )
+                if self.da_forcing is not None and self.datastore.is_forecast:
+                    self.da_forcing = apply_time_crop(
+                        self.da_forcing, crop_dim, crop_slice
+                    )
+                if datastore_boundary.is_forecast:
+                    self._check_boundary_forecast_horizon()
 
         if self.datastore.is_ensemble and self.load_single_member:
             warnings.warn(
@@ -292,6 +334,88 @@ class WeatherDataset(torch.utils.data.Dataset):
         if self.datastore.is_ensemble and not self.load_single_member:
             return base_len * self.da_state.ensemble_member.size
         return base_len
+
+    def _state_time_step(self) -> np.timedelta64:
+        """Spacing between consecutive state times within one sample.
+
+        Returns
+        -------
+        np.timedelta64
+            The lead-time spacing for a forecast interior, the ``time``
+            spacing otherwise.
+        """
+        assert self.da_state is not None
+        if self.datastore.is_forecast:
+            return get_time_step(self.da_state.elapsed_forecast_duration.values)
+        return get_time_step(self.da_state.time.values)
+
+    def _check_boundary_forecast_horizon(self) -> None:
+        """Check one boundary launch can cover a whole sample's window.
+
+        Every AR step of a sample is windowed from a single boundary launch,
+        so the launch's lead-time horizon has to span the rollout plus the
+        window on either side. Cropping the interior cannot fix a horizon
+        that is too short, so this is checked once up front rather than
+        surfacing as a per-sample failure mid-epoch.
+
+        Raises
+        ------
+        ValueError
+            If the boundary forecast horizon is too short.
+        """
+        assert self.da_boundary_forcing is not None
+        leads = self.da_boundary_forcing.elapsed_forecast_duration.values
+        horizon = leads.max() - leads.min()
+        lead_step = get_time_step(leads)
+        analysis_step = get_time_step(
+            self.da_boundary_forcing.analysis_time.values
+        )
+        rollout_extent = self.ar_steps * self._state_time_step()
+        # The chosen launch sits up to one analysis step before the model
+        # init time (a launch exactly at init is rejected), or further back
+        # still when the past window needs the lead headroom.
+        launch_offset = max(
+            analysis_step, self.num_past_boundary_steps * lead_step
+        )
+        required = (
+            launch_offset
+            + rollout_extent
+            + self.num_future_boundary_steps * lead_step
+        )
+        if horizon < required:
+            raise ValueError(
+                "The boundary forecast horizon is too short: each sample is "
+                "windowed from a single boundary launch, which needs "
+                f"{_format_timedelta(required)} of lead time to cover "
+                f"{self.ar_steps} autoregressive steps with a "
+                f"({self.num_past_boundary_steps}, "
+                f"{self.num_future_boundary_steps}) window, but the boundary "
+                f"forecasts only run out to {_format_timedelta(horizon)}. "
+                "Reduce `ar_steps` or the boundary window, or use boundary "
+                "forecasts with a longer horizon."
+            )
+
+    def _max_state_lead_used(self) -> np.timedelta64 | None:
+        """Largest state lead time read per sample, for forecast interiors.
+
+        ``_slice_state_time`` only walks
+        ``INIT_STEPS + ar_steps`` lead times from ``offset``, so requiring
+        boundary coverage out to the full forecast length would crop away
+        usable launches.
+
+        Returns
+        -------
+        np.timedelta64 or None
+            The lead time of the last state step read, or ``None`` when the
+            interior datastore is analysis data.
+        """
+        if not self.datastore.is_forecast:
+            return None
+        assert self.da_state is not None
+        leads = self.da_state.elapsed_forecast_duration.values
+        offset = max(0, self.num_past_forcing_steps - self.INIT_STEPS)
+        last_idx = offset + self.INIT_STEPS + self.ar_steps - 1
+        return leads[min(last_idx, len(leads) - 1)]
 
     def _slice_state_time(
         self, da_state: xr.DataArray, idx: int, n_steps: int
@@ -432,33 +556,38 @@ class WeatherDataset(torch.utils.data.Dataset):
                 forcing_at_idx -= 1
                 forcing_at = da_forcing.analysis_time[forcing_at_idx]
 
-            lead_at_first_target = int(
-                np.floor(
-                    (first_target_time - forcing_at.values) / forecast_step
+            # `elapsed_forecast_duration` need not start at zero, so the
+            # window index is measured from the first lead, not from launch.
+            lead_offset = da_forcing.elapsed_forecast_duration.values[0]
+
+            def lead_index(valid_time: np.datetime64) -> int:
+                """Position of the latest lead at or before ``valid_time``."""
+                return int(
+                    np.floor(
+                        (valid_time - forcing_at.values - lead_offset)
+                        / forecast_step
+                    )
                 )
-            )
-            past_analysis_offset = num_past_steps - lead_at_first_target
-            if past_analysis_offset > 0:
-                forcing_at_idx -= past_analysis_offset
-                if forcing_at_idx < 0:
+
+            # Step back whole launches until this one has enough lead
+            # headroom for the past window. One launch back buys
+            # `analysis_step / forecast_step` window steps, so the two are
+            # not interchangeable and a single subtraction over- or
+            # under-shoots whenever the spacings differ.
+            while lead_index(first_target_time) < num_past_steps:
+                if forcing_at_idx == 0:
                     raise ValueError(
                         "Boundary/forcing analysis times do not extend far "
-                        "enough back to cover the requested past window."
+                        "enough back to cover the requested past window "
+                        f"({num_past_steps} steps before "
+                        f"{first_target_time})."
                     )
+                forcing_at_idx -= 1
                 forcing_at = da_forcing.analysis_time[forcing_at_idx]
 
             for step_idx in range(len(state_times) - init_steps):
                 target_time = state_times[init_steps + step_idx].values
-                lead = int(
-                    np.floor((target_time - forcing_at.values) / forecast_step)
-                )
-                center_time = forcing_at.values + lead * forecast_step
-                if center_time > target_time:
-                    raise ValueError(
-                        "Boundary forecast valid time runs ahead of the "
-                        f"interior target time ({center_time} > "
-                        f"{target_time})."
-                    )
+                lead = lead_index(target_time)
                 window_start = lead - num_past_steps
                 window_end = lead + num_future_steps + 1
                 _check_window_bounds(

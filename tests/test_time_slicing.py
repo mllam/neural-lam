@@ -654,3 +654,224 @@ def test_forecast_interior_cropped_along_analysis_time():
     assert len(cropped) < len(full)
     _, _, _, boundary, _ = cropped[0]
     assert boundary.shape[-1] == 3
+
+
+def test_forecast_interior_forcing_cropped_with_state():
+    """Cropping the interior against the boundary must move state and forcing
+    together: forecast forcing is looked up by positional ``analysis_time``
+    index, so cropping only the state would pair every sample with forcing
+    from a different launch."""
+    n_analysis = 4
+    n_leads = 10
+    interior_analysis = np.datetime64("2020-01-01") + np.arange(
+        n_analysis
+    ) * np.timedelta64(1, "D")
+    interior_leads = np.arange(n_leads) * np.timedelta64(1, "h")
+    # Launch k holds states 10k..10k+9 and forcings 100+10k..100+10k+9, so
+    # the launch a sample was built from is readable off either tensor.
+    state_values = np.arange(n_analysis * n_leads, dtype=float).reshape(
+        n_analysis, n_leads
+    )
+    forcing_values = state_values + 100.0
+    interior_datastore = SinglePointDummyDatastore(
+        state_data=state_values,
+        forcing_data=forcing_values,
+        time_values=(interior_analysis, interior_leads),
+        is_forecast=True,
+        step_length=timedelta(hours=1),
+    )
+
+    # Boundary starts three days late, so the first three launches are cropped.
+    boundary_times = np.datetime64("2020-01-03") + np.arange(
+        170
+    ) * np.timedelta64(1, "h")
+    boundary_datastore = BoundaryOnlyDummyDatastore(
+        forcing_data=np.arange(1000, 1170, dtype=float),
+        time_values=boundary_times,
+        is_forecast=False,
+        step_length=timedelta(hours=1),
+    )
+
+    dataset = WeatherDataset(
+        datastore=interior_datastore,
+        datastore_boundary=boundary_datastore,
+        ar_steps=2,
+        num_past_forcing_steps=1,
+        num_future_forcing_steps=1,
+        num_past_boundary_steps=1,
+        num_future_boundary_steps=1,
+    )
+
+    uncropped = WeatherDataset(
+        datastore=interior_datastore,
+        datastore_boundary=None,
+        ar_steps=2,
+        num_past_forcing_steps=1,
+        num_future_forcing_steps=1,
+    )
+    # The crop has to bite, or this would pass vacuously.
+    assert 0 < len(dataset) < len(uncropped)
+
+    for idx in range(len(dataset)):
+        _, target_states, forcing, _, _ = dataset[idx]
+        state_launch = int(target_states.flatten()[0].item()) // 10
+        forcing_launch = (int(forcing.flatten()[0].item()) - 100) // 10
+        assert state_launch == forcing_launch
+
+
+def test_forecast_interior_cropped_when_boundary_ends_early():
+    """The coverage check must account for the interior forecast's own lead
+    times: launches whose rollout runs past the end of an analysis boundary
+    are cropped, rather than surviving and failing per-sample."""
+    n_analysis = 4
+    n_leads = 5
+    interior_analysis = np.datetime64("2020-01-05") + np.arange(
+        n_analysis
+    ) * np.timedelta64(1, "D")
+    interior_leads = np.arange(n_leads) * np.timedelta64(1, "D")
+    interior_values = (
+        np.arange(n_analysis).reshape(-1, 1) * 100
+        + np.arange(n_leads).reshape(1, -1)
+    ).astype(float)
+    interior_datastore = SinglePointDummyDatastore(
+        state_data=interior_values,
+        forcing_data=interior_values,
+        time_values=(interior_analysis, interior_leads),
+        is_forecast=True,
+        step_length=timedelta(days=1),
+    )
+
+    # Boundary ends 01-10, but the launch at 01-08 rolls out to 01-10 and
+    # needs one further step for the future window.
+    boundary_times = np.datetime64("2020-01-03") + np.arange(
+        8
+    ) * np.timedelta64(1, "D")
+    boundary_datastore = BoundaryOnlyDummyDatastore(
+        forcing_data=np.arange(1000, 1008, dtype=float),
+        time_values=boundary_times,
+        is_forecast=False,
+        step_length=timedelta(days=1),
+    )
+
+    dataset = WeatherDataset(
+        datastore=interior_datastore,
+        datastore_boundary=boundary_datastore,
+        ar_steps=2,
+        num_past_forcing_steps=0,
+        num_future_forcing_steps=0,
+        num_past_boundary_steps=1,
+        num_future_boundary_steps=1,
+    )
+
+    assert len(dataset) < n_analysis
+    for idx in range(len(dataset)):
+        _, _, _, boundary, _ = dataset[idx]
+        assert boundary.shape[-1] == 3
+
+
+def test_forecast_boundary_launch_spacing_differs_from_lead_spacing():
+    """A boundary launched 6-hourly with hourly leads must still be windowed
+    in lead steps: stepping back one launch buys six window steps, not one."""
+    interior_times = np.datetime64("2020-01-02") + np.arange(
+        16
+    ) * np.timedelta64(3, "h")
+    interior_datastore = SinglePointDummyDatastore(
+        state_data=np.arange(16, dtype=float),
+        forcing_data=np.arange(16, dtype=float),
+        time_values=interior_times,
+        is_forecast=False,
+        step_length=timedelta(hours=3),
+    )
+
+    boundary_analysis = np.datetime64("2020-01-01") + np.arange(
+        16
+    ) * np.timedelta64(6, "h")
+    boundary_leads = np.arange(25) * np.timedelta64(1, "h")
+    boundary_values = (
+        np.arange(16).reshape(-1, 1) * 1000 + np.arange(25).reshape(1, -1)
+    ).astype(float)
+    boundary_datastore = BoundaryOnlyDummyDatastore(
+        forcing_data=boundary_values,
+        time_values=(boundary_analysis, boundary_leads),
+        is_forecast=True,
+        step_length=timedelta(hours=6),
+    )
+
+    # An 8-step past window exceeds the lead available from the launch that
+    # the init time first selects, so the launch has to be stepped back. One
+    # launch back buys 6 window steps, so a step-back counted in window steps
+    # would overshoot the 24 h horizon.
+    dataset = WeatherDataset(
+        datastore=interior_datastore,
+        datastore_boundary=boundary_datastore,
+        ar_steps=2,
+        num_past_forcing_steps=0,
+        num_future_forcing_steps=0,
+        num_past_boundary_steps=8,
+        num_future_boundary_steps=1,
+    )
+
+    assert len(dataset) > 0
+    for idx in range(len(dataset)):
+        _, _, _, boundary, target_times = dataset[idx]
+        assert boundary.shape[-1] == 10
+
+        first_target = np.datetime64(int(target_times[0]), "ns")
+        model_init = first_target - np.timedelta64(3, "h")
+        # The newest launch that starts strictly before init and still has
+        # 8 lead steps of headroom before the first target.
+        expected_launch = max(
+            i
+            for i, launch in enumerate(boundary_analysis)
+            if launch < model_init
+            and (first_target - launch) / np.timedelta64(1, "h") >= 8
+        )
+
+        for step in range(boundary.shape[0]):
+            window = boundary[step].flatten().tolist()
+            # Values encode launch * 1000 + lead, so the window pins both
+            # the launch used and that the leads are consecutive.
+            assert int(window[0]) // 1000 == expected_launch
+            assert window == [window[0] + i for i in range(10)]
+
+
+def test_short_boundary_forecast_horizon_raises():
+    """A boundary whose lead horizon cannot span a whole sample is rejected at
+    construction, not once samples are drawn."""
+    interior_times = np.datetime64("2020-01-02") + np.arange(
+        16
+    ) * np.timedelta64(3, "h")
+    interior_datastore = SinglePointDummyDatastore(
+        state_data=np.arange(16, dtype=float),
+        forcing_data=np.arange(16, dtype=float),
+        time_values=interior_times,
+        is_forecast=False,
+        step_length=timedelta(hours=3),
+    )
+
+    # 12 h of lead cannot cover a 6 h rollout plus a 4 h past window from a
+    # launch up to 6 h before init.
+    boundary_analysis = np.datetime64("2020-01-01") + np.arange(
+        16
+    ) * np.timedelta64(6, "h")
+    boundary_leads = np.arange(13) * np.timedelta64(1, "h")
+    boundary_values = (
+        np.arange(16).reshape(-1, 1) * 100 + np.arange(13).reshape(1, -1)
+    ).astype(float)
+    boundary_datastore = BoundaryOnlyDummyDatastore(
+        forcing_data=boundary_values,
+        time_values=(boundary_analysis, boundary_leads),
+        is_forecast=True,
+        step_length=timedelta(hours=6),
+    )
+
+    with pytest.raises(ValueError, match="horizon is too short"):
+        WeatherDataset(
+            datastore=interior_datastore,
+            datastore_boundary=boundary_datastore,
+            ar_steps=2,
+            num_past_forcing_steps=0,
+            num_future_forcing_steps=0,
+            num_past_boundary_steps=4,
+            num_future_boundary_steps=1,
+        )
