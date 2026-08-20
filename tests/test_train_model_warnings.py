@@ -1,6 +1,8 @@
 # Standard library
 import inspect
+from argparse import Namespace
 from types import SimpleNamespace
+from typing import cast
 from unittest.mock import MagicMock, patch
 
 # Third-party
@@ -8,9 +10,10 @@ import loguru
 import pytest
 
 # Mock loguru.logger.catch before importing train_model
-loguru.logger.catch = lambda f: f
+loguru.logger.catch = lambda f: f  # type: ignore[assignment]
 
 # First-party
+from neural_lam.config import NeuralLAMConfig  # noqa: E402
 from neural_lam.models import MODELS, BaseHiGraphModel  # noqa: E402
 from neural_lam.train_model import (  # noqa: E402
     build_predictor,
@@ -153,7 +156,7 @@ def make_args(**overrides):
         output_std=False,
     )
     args.update(overrides)
-    return SimpleNamespace(**args)
+    return Namespace(**args)
 
 
 def capturing_predictor(base=object):
@@ -170,10 +173,13 @@ def capturing_predictor(base=object):
 @pytest.fixture
 def config():
     """Config stub exposing only what build_predictor reads."""
-    return SimpleNamespace(
-        training=SimpleNamespace(
-            output_clamping=SimpleNamespace(lower={}, upper={})
-        )
+    return cast(
+        "NeuralLAMConfig",
+        SimpleNamespace(
+            training=SimpleNamespace(
+                output_clamping=SimpleNamespace(lower={}, upper={})
+            )
+        ),
     )
 
 

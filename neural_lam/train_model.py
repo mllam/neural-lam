@@ -6,7 +6,8 @@ import os
 import random
 import shutil
 import time
-from argparse import ArgumentDefaultsHelpFormatter, ArgumentParser
+from argparse import ArgumentDefaultsHelpFormatter, ArgumentParser, Namespace
+from typing import Any
 
 # Third-party
 # for logging the model:
@@ -17,7 +18,8 @@ from loguru import logger
 
 # Local
 from . import utils
-from .config import load_config_and_datastore
+from .config import NeuralLAMConfig, load_config_and_datastore
+from .datastore.base import BaseDatastore
 from .gnn_layers import GNN_TYPES
 from .models import (
     MODELS,
@@ -28,7 +30,12 @@ from .models import (
 from .weather_dataset import WeatherDataModule
 
 
-def build_predictor(predictor_class, args, config, datastore):
+def build_predictor(
+    predictor_class: type,
+    args: Namespace,
+    config: NeuralLAMConfig,
+    datastore: BaseDatastore,
+) -> Any:
     """
     Instantiate a step predictor with the GNN kwargs its family accepts.
 
@@ -66,7 +73,7 @@ def build_predictor(predictor_class, args, config, datastore):
 class AdaptiveHelpFormatter(ArgumentDefaultsHelpFormatter):
     """``--help`` formatter that scales the column width to the terminal."""
 
-    def __init__(self, prog):
+    def __init__(self, prog: str) -> None:
         """Pick a help-column width based on the current terminal size."""
         terminal_width = shutil.get_terminal_size(fallback=(100, 20)).columns
         width = max(80, min(terminal_width, 120))
@@ -78,7 +85,11 @@ class AdaptiveHelpFormatter(ArgumentDefaultsHelpFormatter):
         )
 
 
-def load_forecaster_module_from_checkpoint(ckpt_path, config, datastore):
+def load_forecaster_module_from_checkpoint(
+    ckpt_path: str,
+    config: NeuralLAMConfig,
+    datastore: BaseDatastore,
+) -> ForecasterModule:
     """
     Reconstruct a ForecasterModule from a checkpoint without requiring the
     caller to know the original architecture kwargs.
@@ -101,7 +112,7 @@ def load_forecaster_module_from_checkpoint(ckpt_path, config, datastore):
 
 
 @logger.catch
-def main(input_args=None):
+def main(input_args: list[str] | None = None) -> None:
     """Main function for training and evaluating models."""
     parser = ArgumentParser(
         description="Train or evaluate MLWP models for LAM",
@@ -479,6 +490,7 @@ def main(input_args=None):
         device_name = "cpu"
 
     # Set devices to use
+    devices: str | list[int]
     if args.devices == ["auto"]:
         devices = "auto"
     else:
