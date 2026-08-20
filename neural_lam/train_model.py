@@ -21,7 +21,12 @@ from . import utils
 from .config import NeuralLAMConfig, load_config_and_datastore
 from .datastore.base import BaseDatastore
 from .gnn_layers import GNN_TYPES
-from .models import MODELS, ARForecaster, ForecasterModule
+from .models import (
+    MODELS,
+    ARForecaster,
+    BaseHiGraphModel,
+    ForecasterModule,
+)
 from .weather_dataset import WeatherDataModule
 
 
@@ -32,25 +37,30 @@ def build_predictor(
     datastore: BaseDatastore,
 ) -> Any:
     """
-    Instantiate a step predictor with explicit GNN kwargs for its
-    model family.
+    Instantiate a step predictor with the GNN kwargs its family accepts.
+
+    Hierarchical GNN kwargs are only passed to ``BaseHiGraphModel``
+    subclasses, gating on the class hierarchy so that future hierarchical
+    models are covered without maintaining a model-name list. GNN type
+    arguments fall back to ``InteractionNet`` for checkpoints saved before
+    those CLI flags existed.
     """
-    kwargs = {
-        "datastore": datastore,
-        "graph_name": args.graph,
-        "hidden_dim": args.hidden_dim,
-        "hidden_layers": args.hidden_layers,
-        "processor_layers": args.processor_layers,
-        "mesh_aggr": args.mesh_aggr,
-        "num_past_forcing_steps": args.num_past_forcing_steps,
-        "num_future_forcing_steps": args.num_future_forcing_steps,
-        "output_std": args.output_std,
-        "output_clamping_lower": config.training.output_clamping.lower,
-        "output_clamping_upper": config.training.output_clamping.upper,
-        "g2m_gnn_type": getattr(args, "g2m_gnn_type", "InteractionNet"),
-        "m2g_gnn_type": getattr(args, "m2g_gnn_type", "InteractionNet"),
-    }
-    if getattr(args, "model", None) in ("hi_lam", "hi_lam_parallel"):
+    kwargs = dict(
+        datastore=datastore,
+        graph_name=args.graph,
+        hidden_dim=args.hidden_dim,
+        hidden_layers=args.hidden_layers,
+        processor_layers=args.processor_layers,
+        mesh_aggr=args.mesh_aggr,
+        num_past_forcing_steps=args.num_past_forcing_steps,
+        num_future_forcing_steps=args.num_future_forcing_steps,
+        output_std=args.output_std,
+        output_clamping_lower=config.training.output_clamping.lower,
+        output_clamping_upper=config.training.output_clamping.upper,
+        g2m_gnn_type=getattr(args, "g2m_gnn_type", "InteractionNet"),
+        m2g_gnn_type=getattr(args, "m2g_gnn_type", "InteractionNet"),
+    )
+    if issubclass(predictor_class, BaseHiGraphModel):
         kwargs["mesh_up_gnn_type"] = getattr(
             args, "mesh_up_gnn_type", "InteractionNet"
         )
