@@ -14,11 +14,14 @@ from neural_lam.create_graph import create_graph_from_datastore
 from neural_lam.datastore import DATASTORES
 from neural_lam.datastore.base import BaseRegularGridDatastore
 from neural_lam.models import (
+    DeterministicARForecaster,
     DeterministicForecastingModule,
+    GraphLAM,
     ProbabilisticForecastingModule,
 )
 from neural_lam.weather_dataset import WeatherDataModule
 from tests.conftest import init_datastore_example
+from tests.dummy_datastore import DummyDatastore, set_framed_boundary
 from tests.test_probabilistic_forecaster import (
     ConcreteProbabilisticARForecaster,
     NoisyStepPredictor,
@@ -339,11 +342,12 @@ def test_test_step_excludes_boundary_from_spatial_loss(tmp_path):
         output_clamping_lower=config.training.output_clamping.lower,
         output_clamping_upper=config.training.output_clamping.upper,
     )
-    model = DeterministicForecasterModule(
-        forecaster=ARForecaster(predictor, datastore),
+    model = DeterministicForecastingModule(
+        forecaster=DeterministicARForecaster(
+            predictor, datastore, config=config, loss="mse"
+        ),
         config=config,
         datastore=datastore,
-        loss="mse",
         lr=1.0e-3,
         restore_opt=False,
         n_example_pred=0,  # skip example plotting, not what is under test

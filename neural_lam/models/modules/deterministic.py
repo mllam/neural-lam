@@ -208,21 +208,8 @@ class DeterministicForecastingModule(BaseForecastingModule):
         )
 
         mean_loss = torch.mean(time_step_loss)
-        self._warn_skipped_val_steps(len(time_step_loss), "val")
-
-        val_log_dict = {
-            f"val_loss_unroll{step}": time_step_loss[step - 1]
-            for step in self.hparams.val_steps_to_log
-            if step <= len(time_step_loss)
-        }
-        val_log_dict["val_mean_loss"] = mean_loss
-        self.log_dict(
-            val_log_dict,
-            on_step=False,
-            on_epoch=True,
-            sync_dist=True,
-            batch_size=batch[0].shape[0],
-        )
+        batch_size = batch[0].shape[0]
+        self._log_step_loss(time_step_loss, mean_loss, "val", batch_size)
 
         # Reported independently of the training objective, so computed here
         # rather than through the forecaster
@@ -257,22 +244,8 @@ class DeterministicForecastingModule(BaseForecastingModule):
             self.test_metrics["output_std"].append(mean_pred_std)
 
         mean_loss = torch.mean(time_step_loss)
-        self._warn_skipped_val_steps(len(time_step_loss), "test")
-
-        test_log_dict = {
-            f"test_loss_unroll{step}": time_step_loss[step - 1]
-            for step in self.hparams.val_steps_to_log
-            if step <= len(time_step_loss)
-        }
-        test_log_dict["test_mean_loss"] = mean_loss
-
-        self.log_dict(
-            test_log_dict,
-            on_step=False,
-            on_epoch=True,
-            sync_dist=True,
-            batch_size=batch[0].shape[0],
-        )
+        batch_size = batch[0].shape[0]
+        self._log_step_loss(time_step_loss, mean_loss, "test", batch_size)
 
         # Reported independently of the training objective, so computed here
         # rather than through the forecaster
@@ -288,6 +261,7 @@ class DeterministicForecastingModule(BaseForecastingModule):
         spatial_loss = self.forecaster.compute_loss_from_forecast(
             prediction, target_states, pred_std, average_grid=False
         )
+        spatial_loss[..., ~self.interior_mask_bool] = float("nan")
         log_spatial_losses = spatial_loss[
             :,
             [
@@ -325,7 +299,8 @@ class DeterministicForecastingModule(BaseForecastingModule):
             torch.cat(self.spatial_loss_maps, dim=0)
         )
         if self.trainer.is_global_zero:
-            mean_spatial_loss = torch.mean(spatial_loss_tensor, dim=0)
+            # `nanmean` because boundary nodes are NaN-masked in `test_step`
+            mean_spatial_loss = torch.nanmean(spatial_loss_tensor, dim=0)
 
             loss_map_figs = [
                 vis.plot_spatial_error(

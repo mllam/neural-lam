@@ -98,9 +98,9 @@ class BaseForecastingModule(pl.LightningModule, ABC):
             provided, attributes on ``args`` take precedence over the
             corresponding explicit kwargs (``lr``, ``restore_opt``,
             ``n_example_pred``, ``create_gif``, ``val_steps_to_log``,
-            ``metrics_watch``, ``var_leads_metrics_watch``) so legacy
-            checkpoints round-trip through ``load_from_checkpoint``
-            correctly.
+            ``train_steps_to_log``, ``metrics_watch``,
+            ``var_leads_metrics_watch``) so legacy checkpoints round-trip
+            through ``load_from_checkpoint`` correctly.
         """
         super().__init__()
         # Pre-refactor ``ARModel`` checkpoints saved every hyperparameter nested
@@ -458,55 +458,6 @@ class BaseForecastingModule(pl.LightningModule, ABC):
                 stacklevel=2,
             )
         self._steps_warn_issued[phase] = True
-
-    def _compute_prediction_and_loss(
-        self,
-        batch: tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor],
-    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
-        """
-        Compute predicted mean, standard deviation, and step-wise loss.
-        Also extract and return corresponding target from batch.
-
-        Parameters
-        ----------
-        batch : tuple of torch.Tensor
-            The batch of data.
-
-        Returns
-        -------
-        prediction : torch.Tensor
-            Model predictions, shape
-            `(B, pred_steps, num_grid_nodes, num_state_vars)`.
-        target_states : torch.Tensor
-            Target states, shape
-            `(B, pred_steps, num_grid_nodes, num_state_vars)`.
-        pred_std : torch.Tensor
-            Predicted or pre-defined standard deviation, shape
-            `(B, pred_steps, num_grid_nodes, num_state_vars)` or
-            `(num_state_vars,)`.
-        time_step_loss : torch.Tensor
-            Loss for each unroll step, shape `(pred_steps,)`.
-        """
-        prediction, target_states, pred_std, _ = self.common_step(batch)
-        if pred_std is None:
-            pred_std = self.per_var_std
-        assert pred_std is not None
-
-        time_step_loss = torch.mean(
-            self.loss(
-                prediction,
-                target_states,
-                pred_std,
-                mask=self.interior_mask_bool,
-            ),
-            dim=0,
-        )
-        return (
-            prediction,
-            target_states,
-            pred_std,
-            time_step_loss,
-        )
 
     def _log_step_loss(
         self,
