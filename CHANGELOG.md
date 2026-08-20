@@ -8,6 +8,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [unreleased](https://github.com/mllam/neural-lam/compare/v0.6.0...HEAD)
 
 ### Added
+- Add latent encoder/decoder modules and the `GraphEFM` (hierarchical) / `GraphEFMMultiScale` (flat) step predictors for the Graph-EFM ensemble forecasting model. [\#648](https://github.com/mllam/neural-lam/pull/648) @Sir-Sloth-The-Lazy
+
+- Add `--num_sanity_val_steps` CLI argument to control sanity validation steps before training (#694)
+
+- Add `--train_steps_to_log` CLI option to log training loss for individual unroll steps, and deduplicate common prediction and loss computation steps across loops [\#674](https://github.com/mllam/neural-lam/issues/674) @GiGiKoneti
 
 - Add `PropagationNet` GNN layer that incentivises directional message
   propagation from sender to receiver nodes, and expose it alongside
@@ -45,6 +50,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Fix `graph_lam` training and checkpoint reloads crashing on hierarchical-only GNN options, by routing both call sites through a `build_predictor` helper that only passes `mesh_up_gnn_type` / `mesh_down_gnn_type` to `BaseHiGraphModel` subclasses. [\#688](https://github.com/mllam/neural-lam/pull/688) @gitcommit90
+
+- Build the training logger config from the public `datastore.config` accessor instead of the MDP-specific private `_config` attribute, so any datastore implementing `BaseDatastore` can be driven through the training entry point without raising `AttributeError` [\#723](https://github.com/mllam/neural-lam/pull/723) @zakirkg
+
+- Exclude boundary nodes from the spatial loss maps computed in `test_step`, so the plotted loss maps and the saved `mean_spatial_loss.pt` cover the interior only, consistent with every other loss and metric call in `ForecasterModule` [\#720](https://github.com/mllam/neural-lam/pull/720) @RajdeepKushwaha5 @NoiceHax
+
 - Fix `RuntimeError` in `HiLAMParallel` forward pass on hierarchical graphs by offsetting edge indices into the global mesh node index space ([#679](https://github.com/mllam/neural-lam/issues/679))
 
 - Fix `IndexError` in HiLAM forward pass by offsetting grid nodes in `zero_index_g2m`/`zero_index_m2g` by the total mesh-node count across all levels ([#642](https://github.com/mllam/neural-lam/issues/642)) @Sir-Sloth-The-Lazy
@@ -77,6 +88,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Fix `WeatherDataset.__len__` off-by-one in analysis mode (was undercounting by 1 sample), include `num_past_forcing_steps` in the forecast-mode minimum-horizon check, validate forcing-side forecast horizon when forcing is present, and use `min(n_state, n_forcing)` when both are present in analysis mode; raise `IndexError` for out-of-range indices in `WeatherDataset.__getitem__` (with Python-style negative indexing support) [\#312](https://github.com/mllam/neural-lam/pull/312) @kshirajahere
 
 ### Maintenance
+
+- Add 100% type-hint coverage across `neural_lam/`, align all type annotations with PEP 585 and PEP 604, and adopt `ty` (astral-sh) for type checking [\#673](https://github.com/mllam/neural-lam/pull/673) @GiGiKoneti
+
+- Add a root `CONTRIBUTING.md` walking a new contributor from fork to merged PR (issue triage, environment setup pointing at the README install section, pre-commit, code standards, the exact local test command CI runs, PR template / CHANGELOG expectations, monthly dev-meeting pointer, Slack + issues for help), and trim `AGENTS.md` and the README "Development and Contributing" section down to pointers at it [\#407](https://github.com/mllam/neural-lam/pull/407) @ANANYA542
+
+- Split the monolithic `neural_lam/utils.py` into a `neural_lam/utils/` package with one module per concern (`buffer_list`, `graph`, `networks`, `plot`, `logging`, `tensor`, `time`); `utils/__init__.py` re-exports the full public API so existing imports are unaffected. Pure code movement, no behavioural change. [\#682](https://github.com/mllam/neural-lam/pull/682) @Sir-Sloth-The-Lazy
 
 - Add comprehensive type hints to GraphLAM in `neural_lam/models/step_predictors/graph/graph_lam.py` [\#669](https://github.com/mllam/neural-lam/pull/669) @GiGiKoneti
 
@@ -131,6 +148,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   documented in the README. The default GPU build moves from CUDA 12.8 to 13.0;
   users on other CUDA versions install the matching `torch` variant manually
   (see README) [\#604](https://github.com/mllam/neural-lam/pull/604) @RajdeepKushwaha5
+
+- Add edge count consistency check to `test_graph_creation.py` [#301](https://github.com/mllam/neural-lam/pull/301) @osten-antonio
 
 ## [v0.6.0](https://github.com/mllam/neural-lam/releases/tag/v0.6.0)
 
