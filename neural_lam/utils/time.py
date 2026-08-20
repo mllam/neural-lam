@@ -132,17 +132,10 @@ def _requested_time_bounds(
     tuple of np.datetime64
         Inclusive ``[first, last]`` bounds on the requested times.
     """
-    if da_requested_is_forecast:
-        times_requested = da_requested.analysis_time
-        if requested_max_lead is None:
-            requested_max_lead = (
-                da_requested.elapsed_forecast_duration.values.max()
-            )
-    else:
-        times_requested = da_requested.time
+    if not da_requested_is_forecast:
         requested_max_lead = np.timedelta64(0, "ns")
-
-    step_requested = get_time_step(times_requested.values)
+    elif requested_max_lead is None:
+        requested_max_lead = da_requested.elapsed_forecast_duration.values.max()
 
     if da_available_is_forecast:
         times_available = da_available.analysis_time.values
@@ -151,10 +144,13 @@ def _requested_time_bounds(
         # sizes it - stepping back one launch buys `analysis / lead` window
         # steps, not one.
         step_window = get_time_step(leads_available)
-        # A launch is only usable if it starts strictly before the requested
-        # init time, hence the `step_requested` term.
-        first = times_available.min() + max(
-            step_requested, leads_available.min() + num_past_steps * step_window
+        # A launch at or before the requested init time is usable, and the
+        # init time is never earlier than the requested time itself, so the
+        # first launch alone bounds the start.
+        first = (
+            times_available.min()
+            + leads_available.min()
+            + num_past_steps * step_window
         )
         last = (
             times_available.max()

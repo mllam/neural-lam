@@ -489,17 +489,18 @@ def test_analysis_interior_with_forecast_boundary():
     _, _, _, boundary, _ = [t.numpy() for t in dataset[0]]
     # Sample idx=0: state slice = interior[0:4] = times 2020-01-05..08.
     # Model init is the last input state 2020-01-06; targets are 07 and 08.
-    # Boundary analysis_time pad-pick for the init 06 = idx 2 (06); equals
-    # init so decrement to idx 1 (05). lead_at_first_target = (07-05)/1d = 2,
-    # which already covers num_past=1, so no further shift. Window at
-    # target 07: lead 2, [1..3]. Window at target 08: lead 3, [2..4].
-    expected_analysis_idx = 1
+    # Boundary analysis_time pad-pick for the init 06 = idx 2 (06), which is
+    # launched exactly at init and therefore usable.
+    # lead_at_first_target = (07-06)/1d = 1, which already covers
+    # num_past=1, so no shift back. Window at target 07: lead 1, [0..2].
+    # Window at target 08: lead 2, [1..3].
+    expected_analysis_idx = 2
     assert boundary.shape == (2, 1, 3)
     np.testing.assert_array_equal(
-        boundary[0, 0, :], boundary_values[expected_analysis_idx, 1:4]
+        boundary[0, 0, :], boundary_values[expected_analysis_idx, 0:3]
     )
     np.testing.assert_array_equal(
-        boundary[1, 0, :], boundary_values[expected_analysis_idx, 2:5]
+        boundary[1, 0, :], boundary_values[expected_analysis_idx, 1:4]
     )
 
 
@@ -818,12 +819,12 @@ def test_forecast_boundary_launch_spacing_differs_from_lead_spacing():
 
         first_target = np.datetime64(int(target_times[0]), "ns")
         model_init = first_target - np.timedelta64(3, "h")
-        # The newest launch that starts strictly before init and still has
-        # 8 lead steps of headroom before the first target.
+        # The newest launch at or before init that still has 8 lead steps
+        # of headroom before the first target.
         expected_launch = max(
             i
             for i, launch in enumerate(boundary_analysis)
-            if launch < model_init
+            if launch <= model_init
             and (first_target - launch) / np.timedelta64(1, "h") >= 8
         )
 
@@ -875,3 +876,52 @@ def test_short_boundary_forecast_horizon_raises():
             num_past_boundary_steps=4,
             num_future_boundary_steps=1,
         )
+
+
+def test_forecast_boundary_launched_exactly_at_init_is_used():
+    """A boundary forecast launched exactly at the model init time is
+    available operationally - the interior analysis and the boundary forcing
+    both take time to produce, so neither is reliably ready first - and must
+    be preferred over the previous, staler launch."""
+    interior_times = np.datetime64("2020-01-05") + np.arange(
+        8
+    ) * np.timedelta64(1, "D")
+    interior_datastore = SinglePointDummyDatastore(
+        state_data=np.arange(8, dtype=float),
+        forcing_data=np.arange(8, dtype=float),
+        time_values=interior_times,
+        is_forecast=False,
+        step_length=timedelta(days=1),
+    )
+
+    # Launches on every interior day, so the init time 2020-01-06 of sample
+    # idx=0 coincides exactly with launch index 2.
+    boundary_analysis = np.datetime64("2020-01-04") + np.arange(
+        6
+    ) * np.timedelta64(1, "D")
+    boundary_leads = np.arange(8) * np.timedelta64(1, "D")
+    boundary_values = (
+        np.arange(6).reshape(-1, 1) * 1000 + np.arange(8).reshape(1, -1) * 10
+    ).astype(float)
+    boundary_datastore = BoundaryOnlyDummyDatastore(
+        forcing_data=boundary_values,
+        time_values=(boundary_analysis, boundary_leads),
+        is_forecast=True,
+        step_length=timedelta(days=1),
+    )
+
+    dataset = WeatherDataset(
+        datastore=interior_datastore,
+        datastore_boundary=boundary_datastore,
+        ar_steps=2,
+        num_past_forcing_steps=0,
+        num_future_forcing_steps=0,
+        num_past_boundary_steps=1,
+        num_future_boundary_steps=1,
+    )
+
+    _, _, _, boundary, _ = [t.numpy() for t in dataset[0]]
+    # Launch index 2 is 2020-01-06, exactly the model init time. Values
+    # encode launch * 1000, so this pins the launch rather than the staler
+    # index 1 that a strictly-before rule would have selected.
+    assert np.all(boundary // 1000 == 2)

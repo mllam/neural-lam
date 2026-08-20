@@ -372,8 +372,8 @@ class WeatherDataset(torch.utils.data.Dataset):
         )
         rollout_extent = self.ar_steps * self._state_time_step()
         # The chosen launch sits up to one analysis step before the model
-        # init time (a launch exactly at init is rejected), or further back
-        # still when the past window needs the lead headroom.
+        # init time, or further back still when the past window needs the
+        # lead headroom.
         launch_offset = max(
             analysis_step, self.num_past_boundary_steps * lead_step
         )
@@ -531,8 +531,10 @@ class WeatherDataset(torch.utils.data.Dataset):
             # anchor on the model init time (the last input state), not the
             # first target, so we never select a boundary forecast launched
             # after init - that forecast would be unavailable operationally.
-            # A launch exactly at init is also rejected (strictly before),
-            # then shifted further back if a larger num_past_steps requires
+            # A launch exactly at init is fine: operationally the interior
+            # analysis and the boundary forcing both take time to become
+            # available, so neither is reliably ready before the other. The
+            # launch is shifted further back only when num_past_steps needs
             # more lead headroom.
             model_init_time = state_times[init_steps - 1].values
             first_target_time = state_times[init_steps].values
@@ -547,14 +549,6 @@ class WeatherDataset(torch.utils.data.Dataset):
                     f"init time ({model_init_time})."
                 )
             forcing_at = da_forcing.analysis_time[forcing_at_idx]
-            if model_init_time == forcing_at.values:
-                if forcing_at_idx == 0:
-                    raise ValueError(
-                        "No boundary/forcing analysis time strictly before "
-                        f"the model init time ({model_init_time}) is available."
-                    )
-                forcing_at_idx -= 1
-                forcing_at = da_forcing.analysis_time[forcing_at_idx]
 
             # `elapsed_forecast_duration` need not start at zero, so the
             # window index is measured from the first lead, not from launch.
