@@ -55,6 +55,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   that only passes `mesh_up_gnn_type` / `mesh_down_gnn_type` to
   `BaseHiGraphModel` subclasses.
   [\#688](https://github.com/mllam/neural-lam/pull/688) @gitcommit90
+  
+- Build the training logger config from the public `datastore.config` accessor instead of the MDP-specific private `_config` attribute, so any datastore implementing `BaseDatastore` can be driven through the training entry point without raising `AttributeError` [\#723](https://github.com/mllam/neural-lam/pull/723) @zakirkg
 
 - Exclude boundary nodes from the spatial loss maps computed in `test_step`, so the plotted loss maps and the saved `mean_spatial_loss.pt` cover the interior only, consistent with every other loss and metric call in `ForecasterModule` [\#720](https://github.com/mllam/neural-lam/pull/720) @RajdeepKushwaha5 @NoiceHax
 
