@@ -3,7 +3,7 @@
 # Standard library
 import dataclasses
 from pathlib import Path
-from typing import Dict, Union
+from typing import cast
 
 # Third-party
 import dataclass_wizard
@@ -36,7 +36,7 @@ class DatastoreSelection:
     kind: str
     config_path: str
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         """
         Validate that the selected datastore kind is implemented.
 
@@ -57,11 +57,11 @@ class ManualStateFeatureWeighting:
 
     Attributes
     ----------
-    weights : Dict[str, float]
+    weights : dict[str, float]
         Manual weights for the state features.
     """
 
-    weights: Dict[str, float]
+    weights: dict[str, float]
 
 
 @dataclasses.dataclass
@@ -81,14 +81,14 @@ class OutputClamping:
 
     Attributes
     ----------
-    lower : Dict[str, float]
+    lower : dict[str, float]
         The minimum value to clamp each output feature to.
-    upper : Dict[str, float]
+    upper : dict[str, float]
         The maximum value to clamp each output feature to.
     """
 
-    lower: Dict[str, float] = dataclasses.field(default_factory=dict)
-    upper: Dict[str, float] = dataclasses.field(default_factory=dict)
+    lower: dict[str, float] = dataclasses.field(default_factory=dict)
+    upper: dict[str, float] = dataclasses.field(default_factory=dict)
 
 
 @dataclasses.dataclass
@@ -98,8 +98,8 @@ class TrainingConfig:
 
     Attributes
     ----------
-    state_feature_weighting : Union[ManualStateFeatureWeighting,
-                                    UniformFeatureWeighting]
+    state_feature_weighting :
+        ManualStateFeatureWeighting | UniformFeatureWeighting
         The method to use for weighting the state features in the loss
         function. Defaults to uniform weighting (`UniformFeatureWeighting`, i.e.
         all features are weighted equally).
@@ -108,9 +108,9 @@ class TrainingConfig:
         Defaults to an empty ``OutputClamping`` (no clamping).
     """
 
-    state_feature_weighting: Union[
-        ManualStateFeatureWeighting, UniformFeatureWeighting
-    ] = dataclasses.field(default_factory=UniformFeatureWeighting)
+    state_feature_weighting: (
+        ManualStateFeatureWeighting | UniformFeatureWeighting
+    ) = dataclasses.field(default_factory=UniformFeatureWeighting)
 
     output_clamping: OutputClamping = dataclasses.field(
         default_factory=OutputClamping
@@ -128,7 +128,7 @@ class NeuralLAMConfig(dataclass_wizard.JSONWizard, dataclass_wizard.YAMLWizard):
 
     Attributes
     ----------
-    datastores : Dict[str, DatastoreSelection]
+    datastores : dict[str, DatastoreSelection]
         Mapping from a user-chosen datastore name to its selection config. The
         role of each datastore is implied by the categories of data it
         provides rather than by a dedicated config key: a datastore that
@@ -143,7 +143,7 @@ class NeuralLAMConfig(dataclass_wizard.JSONWizard, dataclass_wizard.YAMLWizard):
         feature-weighting strategy. Defaults to ``TrainingConfig()``.
     """
 
-    datastores: Dict[str, DatastoreSelection]
+    datastores: dict[str, DatastoreSelection]
     training: TrainingConfig = dataclasses.field(default_factory=TrainingConfig)
 
     class _(dataclass_wizard.JSONWizard.Meta):
@@ -184,8 +184,8 @@ def load_config_and_datastore(
     config_path: str,
 ) -> tuple[
     NeuralLAMConfig,
-    Union[MDPDatastore, NpyFilesDatastoreMEPS],
-    Union[MDPDatastore, NpyFilesDatastoreMEPS, None],
+    MDPDatastore | NpyFilesDatastoreMEPS,
+    MDPDatastore | NpyFilesDatastoreMEPS | None,
 ]:
     """
     Load the neural-lam configuration and the datastores specified in the
@@ -268,4 +268,8 @@ def load_config_and_datastore(
     (datastore,) = interior_datastores.values()
     datastore_boundary = next(iter(boundary_datastores.values()), None)
 
-    return config, datastore, datastore_boundary
+    return (
+        config,
+        cast(MDPDatastore | NpyFilesDatastoreMEPS, datastore),
+        cast(MDPDatastore | NpyFilesDatastoreMEPS | None, datastore_boundary),
+    )

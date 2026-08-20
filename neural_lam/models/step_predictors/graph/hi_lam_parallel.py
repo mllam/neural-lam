@@ -2,8 +2,6 @@
 Parallel hierarchical graph-based LAM model.
 """
 
-# Standard library
-
 # Third-party
 import torch
 import torch_geometric as pyg
@@ -40,7 +38,7 @@ class HiLAMParallel(BaseHiGraphModel):
         m2g_gnn_type: str = "InteractionNet",
         mesh_up_gnn_type: str = "InteractionNet",
         mesh_down_gnn_type: str = "InteractionNet",
-    ):
+    ) -> None:
         """
         Initialize the HiLAMParallel model.
 
@@ -88,12 +86,38 @@ class HiLAMParallel(BaseHiGraphModel):
         )
 
         # Processor GNNs
-        # Create the complete edge_index combining all edges for processing
-        total_edge_index_list = (
-            list(self.m2m_edge_index)
-            + list(self.mesh_up_edge_index)
-            + list(self.mesh_down_edge_index)
-        )
+        # Compute start index of each level in the flattened mesh
+        first_index_level = [0]
+        for size in self.level_mesh_sizes[:-1]:
+            first_index_level.append(first_index_level[-1] + size)
+
+        # Offset node indices of edges to the global mesh index space
+        offset_m2m = [
+            ei + offset
+            for ei, offset in zip(self.m2m_edge_index, first_index_level)
+        ]
+        offset_up = [
+            torch.stack(
+                (
+                    ei[0] + first_index_level[level_idx],
+                    ei[1] + first_index_level[level_idx + 1],
+                ),
+                dim=0,
+            )
+            for level_idx, ei in enumerate(self.mesh_up_edge_index)
+        ]
+        offset_down = [
+            torch.stack(
+                (
+                    ei[0] + first_index_level[level_idx + 1],
+                    ei[1] + first_index_level[level_idx],
+                ),
+                dim=0,
+            )
+            for level_idx, ei in enumerate(self.mesh_down_edge_index)
+        ]
+
+        total_edge_index_list = offset_m2m + offset_up + offset_down
         total_edge_index = torch.cat(total_edge_index_list, dim=1)
         self.edge_split_sections = [ei.shape[1] for ei in total_edge_index_list]
 
@@ -119,8 +143,17 @@ class HiLAMParallel(BaseHiGraphModel):
             )
 
     def hi_processor_step(
-        self, mesh_rep_levels, mesh_same_rep, mesh_up_rep, mesh_down_rep
-    ):
+        self,
+        mesh_rep_levels: list[torch.Tensor],
+        mesh_same_rep: list[torch.Tensor],
+        mesh_up_rep: list[torch.Tensor],
+        mesh_down_rep: list[torch.Tensor],
+    ) -> tuple[
+        list[torch.Tensor],
+        list[torch.Tensor],
+        list[torch.Tensor],
+        list[torch.Tensor],
+    ]:
         """
         Run all processor steps in parallel across all edge types and
         hierarchy levels.
@@ -156,7 +189,7 @@ class HiLAMParallel(BaseHiGraphModel):
             mesh_rep_levels, dim=1
         )  # (B, num_mesh_nodes, hidden_dim)
         mesh_edge_rep = torch.cat(
-            mesh_same_rep + mesh_up_rep + mesh_down_rep, axis=1
+            mesh_same_rep + mesh_up_rep + mesh_down_rep, dim=1
         )  # (B, num_edges, hidden_dim)
 
         # Here, update mesh_*_rep and mesh_rep
@@ -170,13 +203,15 @@ class HiLAMParallel(BaseHiGraphModel):
             mesh_edge_rep, self.edge_split_sections, dim=1
         )
 
-        mesh_same_rep = mesh_edge_rep_sections[: self.num_levels]
-        mesh_up_rep = mesh_edge_rep_sections[
-            self.num_levels : self.num_levels + (self.num_levels - 1)
-        ]
-        mesh_down_rep = mesh_edge_rep_sections[
-            self.num_levels + (self.num_levels - 1) :
-        ]  # Last are down edges
+        mesh_same_rep = list(mesh_edge_rep_sections[: self.num_levels])
+        mesh_up_rep = list(
+            mesh_edge_rep_sections[
+                self.num_levels : self.num_levels + (self.num_levels - 1)
+            ]
+        )
+        mesh_down_rep = list(
+            mesh_edge_rep_sections[self.num_levels + (self.num_levels - 1) :]
+        )  # Last are down edges
 
         # TODO: We return all, even though only down edges really are used
         # later
