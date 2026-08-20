@@ -19,8 +19,48 @@ from loguru import logger
 from . import utils
 from .config import load_config_and_datastore
 from .gnn_layers import GNN_TYPES
-from .models import MODELS, ARForecaster, ForecasterModule
+from .models import (
+    MODELS,
+    ARForecaster,
+    BaseHiGraphModel,
+    ForecasterModule,
+)
 from .weather_dataset import WeatherDataModule
+
+
+def build_predictor(predictor_class, args, config, datastore):
+    """
+    Instantiate a step predictor with the GNN kwargs its family accepts.
+
+    Hierarchical GNN kwargs are only passed to ``BaseHiGraphModel``
+    subclasses, gating on the class hierarchy so that future hierarchical
+    models are covered without maintaining a model-name list. GNN type
+    arguments fall back to ``InteractionNet`` for checkpoints saved before
+    those CLI flags existed.
+    """
+    kwargs = dict(
+        datastore=datastore,
+        graph_name=args.graph,
+        hidden_dim=args.hidden_dim,
+        hidden_layers=args.hidden_layers,
+        processor_layers=args.processor_layers,
+        mesh_aggr=args.mesh_aggr,
+        num_past_forcing_steps=args.num_past_forcing_steps,
+        num_future_forcing_steps=args.num_future_forcing_steps,
+        output_std=args.output_std,
+        output_clamping_lower=config.training.output_clamping.lower,
+        output_clamping_upper=config.training.output_clamping.upper,
+        g2m_gnn_type=getattr(args, "g2m_gnn_type", "InteractionNet"),
+        m2g_gnn_type=getattr(args, "m2g_gnn_type", "InteractionNet"),
+    )
+    if issubclass(predictor_class, BaseHiGraphModel):
+        kwargs["mesh_up_gnn_type"] = getattr(
+            args, "mesh_up_gnn_type", "InteractionNet"
+        )
+        kwargs["mesh_down_gnn_type"] = getattr(
+            args, "mesh_down_gnn_type", "InteractionNet"
+        )
+    return predictor_class(**kwargs)
 
 
 class AdaptiveHelpFormatter(ArgumentDefaultsHelpFormatter):
@@ -50,19 +90,7 @@ def load_forecaster_module_from_checkpoint(ckpt_path, config, datastore):
     ckpt = torch.load(ckpt_path, weights_only=False)
     args = ckpt["hyper_parameters"]["args"]
     predictor_class = MODELS[args.model]
-    predictor = predictor_class(
-        datastore=datastore,
-        graph_name=args.graph,
-        hidden_dim=args.hidden_dim,
-        hidden_layers=args.hidden_layers,
-        processor_layers=args.processor_layers,
-        mesh_aggr=args.mesh_aggr,
-        num_past_forcing_steps=args.num_past_forcing_steps,
-        num_future_forcing_steps=args.num_future_forcing_steps,
-        output_std=args.output_std,
-        output_clamping_lower=config.training.output_clamping.lower,
-        output_clamping_upper=config.training.output_clamping.upper,
-    )
+    predictor = build_predictor(predictor_class, args, config, datastore)
     forecaster = ARForecaster(predictor, datastore)
     return ForecasterModule.load_from_checkpoint(
         ckpt_path,
@@ -462,23 +490,7 @@ def main(input_args=None):
     # Build predictor and forecaster externally, then inject into
     # ForecasterModule
     predictor_class = MODELS[args.model]
-    predictor = predictor_class(
-        datastore=datastore,
-        graph_name=args.graph,
-        hidden_dim=args.hidden_dim,
-        hidden_layers=args.hidden_layers,
-        processor_layers=args.processor_layers,
-        mesh_aggr=args.mesh_aggr,
-        num_past_forcing_steps=args.num_past_forcing_steps,
-        num_future_forcing_steps=args.num_future_forcing_steps,
-        output_std=args.output_std,
-        output_clamping_lower=config.training.output_clamping.lower,
-        output_clamping_upper=config.training.output_clamping.upper,
-        g2m_gnn_type=args.g2m_gnn_type,
-        m2g_gnn_type=args.m2g_gnn_type,
-        mesh_up_gnn_type=args.mesh_up_gnn_type,
-        mesh_down_gnn_type=args.mesh_down_gnn_type,
-    )
+    predictor = build_predictor(predictor_class, args, config, datastore)
     forecaster = ARForecaster(predictor, datastore)
 
     model = ForecasterModule(
