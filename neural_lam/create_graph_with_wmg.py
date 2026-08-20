@@ -8,8 +8,10 @@ duplicated logic in ``create_graph.py``.
 # Standard library
 import os
 from argparse import ArgumentDefaultsHelpFormatter, ArgumentParser
+from typing import Any, cast
 
 # Third-party
+import networkx
 import numpy as np
 import weather_model_graphs as wmg
 from loguru import logger
@@ -25,7 +27,7 @@ ARCHETYPE_FUNCTIONS = {
 }
 
 
-def _estimate_grid_node_distance(xy):
+def _estimate_grid_node_distance(xy: np.ndarray) -> float:
     """Estimate the average grid node distance from grid coordinates.
 
     Parameters
@@ -46,14 +48,14 @@ def _estimate_grid_node_distance(xy):
 
 
 def create_graph_from_datastore(
-    datastore,
-    output_root_path,
-    archetype="keisler",
-    mesh_node_distance=None,
-    mesh_grid_distance_ratio=3.0,
-    level_refinement_factor=3,
-    max_num_levels=None,
-):
+    datastore: BaseRegularGridDatastore,
+    output_root_path: str,
+    archetype: str = "keisler",
+    mesh_node_distance: float | None = None,
+    mesh_grid_distance_ratio: float = 3.0,
+    level_refinement_factor: int = 3,
+    max_num_levels: int | None = None,
+) -> None:
     """Create graph using weather-model-graphs and save in neural-lam format.
 
     Parameters
@@ -108,7 +110,7 @@ def create_graph_from_datastore(
     # wmg.save.to_torch_tensors_on_disk() expects the graph as
     # separate g2m, m2g and m2m sub-graph components
     # rather than a single merged graph.
-    archetype_kwargs = dict(
+    archetype_kwargs: dict[str, Any] = dict(
         coords=xy,
         mesh_node_distance=mesh_node_distance,
         return_components=True,
@@ -120,7 +122,11 @@ def create_graph_from_datastore(
         archetype_kwargs["max_num_levels"] = max_num_levels
 
     archetype_fn = ARCHETYPE_FUNCTIONS[archetype]
-    graph_components = archetype_fn(**archetype_kwargs)
+    # ``return_components=True`` makes the archetype functions return the
+    # g2m/m2m/m2g mapping rather than a single merged graph.
+    graph_components = cast(
+        dict[str, networkx.DiGraph], archetype_fn(**archetype_kwargs)
+    )
 
     hierarchical = archetype == "hierarchical"
 
@@ -131,7 +137,7 @@ def create_graph_from_datastore(
     )
 
 
-def cli(input_args=None):
+def cli(input_args: list[str] | None = None) -> None:
     """Command-line interface for graph creation using weather-model-graphs."""
     parser = ArgumentParser(
         description="Graph generation for neural-lam using "
