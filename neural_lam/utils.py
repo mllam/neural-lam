@@ -829,7 +829,7 @@ def get_integer_time(tdelta: datetime.timedelta) -> tuple[int, str]:
     return 1, "unknown"
 
 
-def get_time_step(times):
+def get_time_step(times: "np.ndarray") -> "np.timedelta64":
     """Calculate the (constant) time step from a 1D time array.
 
     Parameters
@@ -846,9 +846,16 @@ def get_time_step(times):
     Raises
     ------
     ValueError
-        If the spacing is not constant.
+        If fewer than two values are given, or if the spacing is not
+        constant.
     """
-    time_diffs = np.diff(np.asarray(times))
+    times = np.asarray(times)
+    if times.size < 2:
+        raise ValueError(
+            "Cannot determine a time step from a time axis with "
+            f"{times.size} value(s); at least 2 are required."
+        )
+    time_diffs = np.diff(times)
     if not np.all(time_diffs == time_diffs[0]):
         raise ValueError(
             "Inconsistent time steps in data. "

@@ -16,6 +16,36 @@ from neural_lam.datastore.base import BaseDatastore
 from neural_lam.utils import crop_time_if_needed, get_time_step
 
 
+def _check_window_bounds(
+    window_start: int,
+    window_end: int,
+    axis_size: int,
+    target_time: np.datetime64,
+    num_past_steps: int,
+    num_future_steps: int,
+    dim_name: str,
+) -> None:
+    """Raise if a forcing/boundary window runs off either end of its axis.
+
+    ``xr.DataArray.isel`` silently wraps a negative slice start and
+    truncates a slice end past the array, which would otherwise only
+    surface as an opaque coordinate-size error further down.
+
+    Raises
+    ------
+    ValueError
+        If the window is not fully contained in ``[0, axis_size)``.
+    """
+    if window_start < 0 or window_end > axis_size:
+        raise ValueError(
+            f"Forcing/boundary does not cover the window "
+            f"[{window_start}, {window_end}) along `{dim_name}` (axis size "
+            f"{axis_size}) around target time {target_time}: "
+            f"{num_past_steps} steps before and {num_future_steps} steps "
+            "after the target are required."
+        )
+
+
 class WeatherDataset(torch.utils.data.Dataset):
     """Dataset class for weather data.
 
@@ -337,12 +367,12 @@ class WeatherDataset(torch.utils.data.Dataset):
 
     def _window_forcing_in_time(
         self,
-        da_forcing,
-        state_times,
+        da_forcing: xr.DataArray,
+        state_times: xr.DataArray,
         num_past_steps: int,
         num_future_steps: int,
-        forecast_step,
-    ):
+        forecast_step: Optional[np.timedelta64],
+    ) -> xr.DataArray:
         """Window forcing/boundary in time, aligned to interior state times.
 
         ``state_times`` is the 1D ``time`` coordinate of the already-sliced
@@ -430,6 +460,15 @@ class WeatherDataset(torch.utils.data.Dataset):
                     )
                 window_start = lead - num_past_steps
                 window_end = lead + num_future_steps + 1
+                _check_window_bounds(
+                    window_start,
+                    window_end,
+                    da_forcing.sizes["elapsed_forecast_duration"],
+                    target_time,
+                    num_past_steps,
+                    num_future_steps,
+                    "elapsed_forecast_duration",
+                )
 
                 da_sliced = da_forcing.isel(
                     analysis_time=int(forcing_at_idx),
@@ -456,6 +495,15 @@ class WeatherDataset(torch.utils.data.Dataset):
 
                 window_start = forcing_time_idx - num_past_steps
                 window_end = forcing_time_idx + num_future_steps + 1
+                _check_window_bounds(
+                    window_start,
+                    window_end,
+                    da_forcing.sizes["time"],
+                    state_time,
+                    num_past_steps,
+                    num_future_steps,
+                    "time",
+                )
 
                 da_window = da_forcing.isel(
                     time=slice(int(window_start), int(window_end))
@@ -618,22 +666,10 @@ class WeatherDataset(torch.utils.data.Dataset):
                 forcing_feature_windowed=("forcing_feature", "window")
             )
         else:
-            # Use the boundary datastore's grid_index if available, otherwise
-            # fall back to state grid_index (for the no-boundary case the
-            # last dim is 0 anyway)
-            if self.datastore_boundary is not None:
-                da_boundary_ref = self.datastore_boundary.get_dataarray(
-                    category="forcing", split=self.split
-                )
-                boundary_grid_index = (
-                    da_boundary_ref.grid_index
-                    if da_boundary_ref is not None
-                    else da_state.grid_index
-                )
-            else:
-                boundary_grid_index = da_state.grid_index
+            # No boundary forcing: the feature dim is empty anyway, so the
+            # interior grid_index is used as a placeholder.
             da_boundary_windowed = self._empty_windowed_dataarray(
-                boundary_grid_index, da_target_times
+                da_state.grid_index, da_target_times
             )
 
         return (

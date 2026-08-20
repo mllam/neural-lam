@@ -17,7 +17,7 @@ Neural-LAM: graph-based neural weather prediction for Limited Area Modeling. Mod
 - `models/` — `ForecasterModule` (Lightning) → `ARForecaster` (Forecaster) →
   `GraphLAM` / `HiLAM` / `HiLAMParallel` (StepPredictor)
 - `weather_dataset.py` — `WeatherDataset` + `WeatherDataModule` (supports optional boundary datastore)
-- `config.py` — YAML config via dataclass-wizard (`NeuralLAMConfig` with optional `datastore_boundary`)
+- `config.py` — YAML config via dataclass-wizard (`NeuralLAMConfig` with a named `datastores` mapping)
 - `create_graph.py` — builds mesh graphs (must run before training)
 - `interaction_net.py` — `InteractionNet` GNN layer (PyG `MessagePassing`)
 - `utils.py` — `make_mlp`, normalization helpers
