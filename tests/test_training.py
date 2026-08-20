@@ -177,14 +177,12 @@ def test_all_gather_cat_single_device():
             return tensor_to_gather
 
     module = MockModule()
-    # Bind the real ForecasterModule.all_gather_cat to our mock
-    module.all_gather_cat = ForecasterModule.all_gather_cat.__get__(
-        module, MockModule
-    )
+    get_fn = ForecasterModule.all_gather_cat.__get__
+    module.all_gather_cat = get_fn(module, MockModule)  # type: ignore
 
     # Simulate a 3D metric tensor: (N_eval, pred_steps, d_f)
     tensor = torch.randn(4, 3, 5)
-    result = module.all_gather_cat(tensor)
+    result = module.all_gather_cat(tensor)  # type: ignore
 
     # On single device, shape must be preserved
     assert result.shape == tensor.shape, (
@@ -208,13 +206,11 @@ def test_all_gather_cat_multi_device_simulation():
             return torch.stack([tensor, tensor], dim=0)
 
     module = MockModule()
-    # Bind the real ForecasterModule.all_gather_cat to our mock
-    module.all_gather_cat = ForecasterModule.all_gather_cat.__get__(
-        module, MockModule
-    )
+    get_fn = ForecasterModule.all_gather_cat.__get__
+    module.all_gather_cat = get_fn(module, MockModule)  # type: ignore
 
     tensor = torch.randn(4, 3, 5)  # (N_eval, pred_steps, d_f)
-    result = module.all_gather_cat(tensor)
+    result = module.all_gather_cat(tensor)  # type: ignore
 
     # Should flatten (2, 4, 3, 5) -> (8, 3, 5)
     assert result.shape == (
