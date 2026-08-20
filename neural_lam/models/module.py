@@ -1002,7 +1002,6 @@ class ForecasterModule(pl.LightningModule):
             torch.cat(self.spatial_loss_maps, dim=0)
         )
         if self.trainer.is_global_zero:
-            # `nanmean` because boundary nodes are NaN-masked in `test_step`
             mean_spatial_loss = torch.nanmean(spatial_loss_tensor, dim=0)
             hparams = self.hparams
             val_steps_to_log = (
