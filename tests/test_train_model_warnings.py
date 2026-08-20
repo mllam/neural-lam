@@ -29,6 +29,7 @@ def test_eval_without_load_warning(eval_val, load_val, expect_warning):
     mock_args.train_steps_to_log = []
     mock_args.var_leads_metrics_watch = "{}"
     mock_args.ar_steps_eval = 10
+    mock_args.model = "graph_lam"
     mock_args.ar_steps_train = 10
 
     with patch(
