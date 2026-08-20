@@ -29,7 +29,15 @@ from .weather_dataset import WeatherDataModule
 
 
 def build_predictor(predictor_class, args, config, datastore):
-    """Instantiate a step predictor with the GNN kwargs its family accepts."""
+    """
+    Instantiate a step predictor with the GNN kwargs its family accepts.
+
+    Hierarchical GNN kwargs are only passed to ``BaseHiGraphModel``
+    subclasses, gating on the class hierarchy so that future hierarchical
+    models are covered without maintaining a model-name list. GNN type
+    arguments fall back to ``InteractionNet`` for checkpoints saved before
+    those CLI flags existed.
+    """
     kwargs = dict(
         datastore=datastore,
         graph_name=args.graph,
@@ -45,8 +53,6 @@ def build_predictor(predictor_class, args, config, datastore):
         g2m_gnn_type=getattr(args, "g2m_gnn_type", "InteractionNet"),
         m2g_gnn_type=getattr(args, "m2g_gnn_type", "InteractionNet"),
     )
-    # Gate on class hierarchy so future hierarchical models are covered
-    # without maintaining a model-name list.
     if issubclass(predictor_class, BaseHiGraphModel):
         kwargs["mesh_up_gnn_type"] = getattr(
             args, "mesh_up_gnn_type", "InteractionNet"
