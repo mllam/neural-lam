@@ -8,6 +8,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [unreleased](https://github.com/mllam/neural-lam/compare/v0.6.0...HEAD)
 
 ### Added
+- Add standardized forecast benchmarking and evaluation suite (`ForecastBenchmark`, `BenchmarkScorecard`) on DANRA with lead-time RMSE/Bias metrics, 2D DCT-II spectral power decomposition, scale-dependent Fractions Skill Score (FSS), and an interactive evaluation notebook. [\#721](https://github.com/mllam/neural-lam/issues/721) @GiGiKoneti
+
 - Add latent encoder/decoder modules and the `GraphEFM` (hierarchical) / `GraphEFMMultiScale` (flat) step predictors for the Graph-EFM ensemble forecasting model. [\#648](https://github.com/mllam/neural-lam/pull/648) @Sir-Sloth-The-Lazy
 
 - Add `--num_sanity_val_steps` CLI argument to control sanity validation steps before training (#694)
