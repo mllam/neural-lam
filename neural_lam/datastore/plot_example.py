@@ -184,6 +184,13 @@ if __name__ == "__main__":
         datastore_kind=datastore_kind,
         config_path=args.datastore_config_path,
     )
+    if not datastore.is_on_regular_spatial_grid:
+        raise NotImplementedError(
+            "Plotting is only supported for datastores whose grid points "
+            "form a complete 2D grid (`is_on_regular_spatial_grid`); "
+            f"{type(datastore).__name__} reports that it does not."
+        )
+
     # Standard library
     from typing import cast
 

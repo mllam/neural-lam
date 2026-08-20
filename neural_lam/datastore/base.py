@@ -376,6 +376,25 @@ class BaseDatastore(abc.ABC):
 
         """
 
+    @property
+    def is_on_regular_spatial_grid(self) -> bool:
+        """Whether the grid points form a complete 2D rectangular grid.
+
+        Only then can ``grid_index`` be unstacked back into ``x``/``y``
+        (see :class:`BaseRegularGridDatastore`), which graph creation and
+        gridded plotting rely on. Subclasses whose layout depends on the
+        data they were built from (a cropped domain, an irregular
+        observation network) override this rather than relying on their
+        class alone.
+
+        Returns
+        -------
+        bool
+            ``False`` on the base class; regular-gridded datastores
+            override it.
+        """
+        return False
+
     @cached_property
     @abc.abstractmethod
     def state_feature_weights_values(self) -> list[float]:
@@ -498,6 +517,19 @@ class BaseRegularGridDatastore(BaseDatastore):
     """
 
     spatial_coordinates: tuple[str, str] = ("x", "y")
+
+    @property
+    def is_on_regular_spatial_grid(self) -> bool:
+        """Whether the grid points form a complete 2D rectangular grid.
+
+        Returns
+        -------
+        bool
+            ``True`` unless a subclass narrows it, e.g. when a cropped
+            domain leaves fewer grid points than ``grid_shape_state``
+            describes.
+        """
+        return True
 
     @cached_property
     @abc.abstractmethod

@@ -47,10 +47,14 @@ import torch
 import xarray as xr
 
 # First-party
+from neural_lam.create_graph import create_graph_from_datastore
 from neural_lam.datastore import DATASTORES
 from neural_lam.datastore.base import BaseRegularGridDatastore
 from neural_lam.datastore.plot_example import plot_example_from_datastore
-from tests.conftest import init_datastore_example
+from tests.conftest import (
+    init_datastore_boundary_example,
+    init_datastore_example,
+)
 
 
 @pytest.mark.parametrize("datastore_name", DATASTORES.keys())
@@ -441,3 +445,37 @@ def test_get_standardized_da(datastore_name, category):
     )
 
     assert np.allclose(standard_da, (non_standard_da - mean) / std, atol=1e-6)
+
+
+@pytest.mark.parametrize("datastore_name", DATASTORES.keys())
+def test_is_on_regular_spatial_grid_matches_grid_shape(datastore_name):
+    """The `is_on_regular_spatial_grid` property must agree with whether
+    `grid_shape_state` actually accounts for every grid point, since that is
+    what unstacking `grid_index` back into x/y relies on."""
+    datastore = init_datastore_example(datastore_name)
+
+    if not isinstance(datastore, BaseRegularGridDatastore):
+        assert not datastore.is_on_regular_spatial_grid
+        return
+
+    grid_shape = datastore.grid_shape_state
+    complete_grid = datastore.num_grid_points == grid_shape.x * grid_shape.y
+    assert datastore.is_on_regular_spatial_grid == complete_grid
+
+
+@pytest.mark.slow
+def test_cropped_boundary_datastore_is_not_regular_grid():
+    """A domain-cropped datastore keeps only the grid points inside the
+    interior domain, so `grid_index` no longer unstacks to a full x/y grid
+    and graph creation must refuse it rather than silently padding."""
+    datastore_boundary = init_datastore_boundary_example("mdp")
+
+    grid_shape = datastore_boundary.grid_shape_state
+    assert datastore_boundary.num_grid_points < grid_shape.x * grid_shape.y
+    assert not datastore_boundary.is_on_regular_spatial_grid
+
+    with pytest.raises(NotImplementedError, match="complete 2D grid"):
+        create_graph_from_datastore(
+            datastore=datastore_boundary,
+            output_root_path=str(datastore_boundary.root_path / "graph"),
+        )

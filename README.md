@@ -265,6 +265,14 @@ subclassing the `neural_lam.datastore.BaseDataStore` class or
 `neural_lam.datastore.BaseRegularGridDatastore` class (if your data is stored on
 a regular grid) and implementing the abstract methods.
 
+Whether a datastore's grid points actually form a complete 2D grid is reported by
+the `is_on_regular_spatial_grid` property rather than by the class alone, because
+it can depend on the data a datastore was built from. A domain-cropped
+`MDPDatastore` (as used for boundary forcing) keeps only the points inside the
+interior domain, so it subclasses `BaseRegularGridDatastore` but reports `False`.
+Graph creation and gridded plotting check the property and refuse such a
+datastore instead of silently padding the missing cells.
+
 
 ### MDP (mllam-data-prep) Datastore - `MDPDatastore`
 

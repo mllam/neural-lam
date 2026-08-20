@@ -616,6 +616,26 @@ class MDPDatastore(BaseRegularGridDatastore):
         return coords
 
     @property
+    def is_on_regular_spatial_grid(self) -> bool:
+        """Whether the grid points form a complete 2D rectangular grid.
+
+        ``MDPDatastore`` is a :class:`BaseRegularGridDatastore` because
+        mllam-data-prep stacks a rectangular source grid into
+        ``grid_index``, but ``domain_cropping`` drops the points outside
+        the interior domain, leaving fewer than
+        ``grid_shape_state.x * grid_shape_state.y``. Unstacking such a
+        datastore silently pads the missing cells, so downstream code that
+        needs a full grid checks this instead of the class.
+
+        Returns
+        -------
+        bool
+            ``True`` when every cell of the ``x``/``y`` grid is present.
+        """
+        grid_shape = self.grid_shape_state
+        return self.num_grid_points == grid_shape.x * grid_shape.y
+
+    @property
     def num_grid_points(self) -> int:
         """Return the number of grid points in the dataset.
 
