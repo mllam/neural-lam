@@ -35,6 +35,10 @@ def _format_timedelta(td: np.timedelta64) -> str:
         Value and unit.
     """
     microseconds = int(td / np.timedelta64(1, "us"))
+    if microseconds == 0 and td != np.timedelta64(0, "ns"):
+        # Below the microsecond resolution `get_integer_time` works in, so
+        # the truncation above would render it as "0 weeks".
+        return str(td)
     value, unit = get_integer_time(
         datetime.timedelta(microseconds=microseconds)
     )

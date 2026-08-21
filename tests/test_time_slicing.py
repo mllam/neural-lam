@@ -9,7 +9,11 @@ import xarray as xr
 
 # First-party
 from neural_lam.datastore.base import BaseDatastore
-from neural_lam.weather_dataset import WeatherDataset
+from neural_lam.weather_dataset import (
+    WeatherDataset,
+    _check_window_bounds,
+    _format_timedelta,
+)
 
 
 class SinglePointDummyDatastore(BaseDatastore):
@@ -1416,3 +1420,72 @@ def test_horizon_check_ignores_samples_the_dataset_never_yields():
     assert len(dataset._sample_window_times()[0]) == len(dataset)
     for idx in range(len(dataset)):
         dataset[idx]
+
+
+def test_boundary_launches_all_after_model_init_raises():
+    """No launch at or before init means no sample can be served, and that
+    has to be said at construction rather than by an index error later."""
+    interior_times = np.datetime64("2020-01-02") + np.arange(
+        8
+    ) * np.timedelta64(6, "h")
+    interior = SinglePointDummyDatastore(
+        state_data=np.arange(8, dtype=float),
+        forcing_data=np.arange(8, dtype=float),
+        time_values=interior_times,
+        is_forecast=False,
+        step_length=timedelta(hours=6),
+    )
+    # Every launch is after the last interior time, so the coverage crop
+    # cannot rescue any sample either.
+    boundary_analysis = np.datetime64("2020-01-09") + np.arange(
+        6
+    ) * np.timedelta64(6, "h")
+    boundary_leads = np.arange(8) * np.timedelta64(6, "h")
+    boundary_values = (
+        np.arange(6).reshape(-1, 1) * 1000 + np.arange(8).reshape(1, -1)
+    ).astype(float)
+    boundary = BoundaryOnlyDummyDatastore(
+        forcing_data=boundary_values,
+        time_values=(boundary_analysis, boundary_leads),
+        is_forecast=True,
+        step_length=timedelta(hours=6),
+    )
+
+    with pytest.raises(ValueError, match="covers no|launched early enough"):
+        WeatherDataset(
+            datastore=interior,
+            datastore_boundary=boundary,
+            ar_steps=2,
+            num_past_forcing_steps=0,
+            num_future_forcing_steps=0,
+            num_past_boundary_steps=0,
+            num_future_boundary_steps=0,
+        )
+
+
+def test_window_bounds_error_names_the_axis_and_target():
+    """`_check_window_bounds` turns a window running off the lead axis into
+    a message naming the dim, the axis size and the target time, instead of
+    an opaque xarray coordinate-size error."""
+    with pytest.raises(ValueError, match="does not cover the window"):
+        _check_window_bounds(
+            window_start=-2,
+            window_end=3,
+            axis_size=10,
+            target_time=np.datetime64("2020-01-01T00", "ns"),
+            num_past_steps=2,
+            num_future_steps=2,
+            dim_name="elapsed_forecast_duration",
+        )
+
+
+def test_format_timedelta_falls_back_for_inexact_units():
+    """A timedelta that divides no whole unit is rendered verbatim rather
+    than as the `(1, "unknown")` that `get_integer_time` returns."""
+    assert _format_timedelta(np.timedelta64(6, "h")) == "6 hours"
+    # 90 minutes is not a whole number of hours, but is a whole number of
+    # minutes, so it still resolves.
+    assert _format_timedelta(np.timedelta64(90, "m")) == "90 minutes"
+    # Below microsecond resolution the conversion truncates to zero, which
+    # would otherwise render as "0 weeks".
+    assert _format_timedelta(np.timedelta64(1, "ns")) == "1 nanoseconds"
