@@ -5,7 +5,7 @@ import torch
 # First-party
 from neural_lam import config as nlconfig
 from neural_lam.models import ARForecaster, ForecasterModule, StepPredictor
-from neural_lam.weather_dataset import WeatherDataModule
+from neural_lam.weather_dataset import WeatherDataModule, WeatherDataset
 from tests.conftest import init_datastore_example
 from tests.dummy_datastore import BoundaryDummyDatastore, DummyDatastore
 
@@ -192,3 +192,54 @@ def test_safe_std_clamps_near_zero():
     assert std[1] == 1.0
     assert std[2] == 2.0
     assert torch.isfinite(std).all()
+
+
+def test_boundary_stack_order_matches_module_tiling():
+    """End-to-end check that the dataset's feature-major stacking and the
+    module's `repeat_interleave` tiling agree.
+
+    `WeatherDataset` stacks `(forcing_feature, window)`, so all window slots
+    of one feature are adjacent and the per-feature statistics must be
+    repeated, not cycled. Both sides flipping to window-major together would
+    keep every unit test green, so this drives a real sample through the
+    real hook and checks each slot against the statistic of the feature it
+    belongs to.
+    """
+    num_past = 1
+    num_future = 1
+    window_size = num_past + num_future + 1
+    datastore = DummyDatastore(n_grid_points=100, n_timesteps=20)
+    datastore_boundary = BoundaryDummyDatastore(
+        n_grid_points=25, n_timesteps=20
+    )
+    model = _build_module(
+        datastore=datastore, datastore_boundary=datastore_boundary
+    )
+
+    dataset = WeatherDataset(
+        datastore=datastore,
+        datastore_boundary=datastore_boundary,
+        split="train",
+        ar_steps=2,
+        num_past_forcing_steps=NUM_PAST_FORCING_STEPS,
+        num_future_forcing_steps=NUM_FUTURE_FORCING_STEPS,
+        num_past_boundary_steps=num_past,
+        num_future_boundary_steps=num_future,
+    )
+    batch = tuple(item.unsqueeze(0) for item in dataset[0])
+    boundary = batch[3]
+
+    num_boundary_vars = datastore_boundary.get_num_data_vars("forcing")
+    assert boundary.shape[-1] == num_boundary_vars * window_size
+    # Per-feature statistics must differ, or the tiling order is unobservable.
+    assert len(torch.unique(model.boundary_std)) == num_boundary_vars
+
+    _, _, _, norm_boundary, _ = model.on_after_batch_transfer(batch, 0)
+
+    for feature in range(num_boundary_vars):
+        start = feature * window_size
+        slots = slice(start, start + window_size)
+        expected = (
+            boundary[..., slots] - model.boundary_mean[feature]
+        ) / model.boundary_std[feature]
+        assert torch.allclose(norm_boundary[..., slots], expected)

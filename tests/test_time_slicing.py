@@ -1073,3 +1073,75 @@ def test_boundary_horizon_accounts_for_launch_grid_alignment():
             num_past_boundary_steps=3,
             num_future_boundary_steps=0,
         )
+
+
+def test_forecast_interior_with_forecast_boundary():
+    """Forecast interior + forecast boundary, the fourth analysis/forecast
+    combination.
+
+    This is the only pairing where the interior's init time differs from its
+    `analysis_time`, so it is the only one that can catch a regression to
+    anchoring the boundary launch on the launch time rather than on the init
+    time. It is also the only path that reaches the forecast branches of
+    `_state_time_step` and `_max_state_lead_used`.
+    """
+    n_analysis = 5
+    n_leads = 6
+    interior_analysis = np.datetime64("2020-01-05") + np.arange(
+        n_analysis
+    ) * np.timedelta64(1, "D")
+    interior_leads = np.arange(n_leads) * np.timedelta64(1, "D")
+    interior_values = (
+        np.arange(n_analysis).reshape(-1, 1) * 100
+        + np.arange(n_leads).reshape(1, -1)
+    ).astype(float)
+    interior_datastore = SinglePointDummyDatastore(
+        state_data=interior_values,
+        forcing_data=interior_values,
+        time_values=(interior_analysis, interior_leads),
+        is_forecast=True,
+        step_length=timedelta(days=1),
+    )
+
+    boundary_analysis = np.datetime64("2020-01-03") + np.arange(
+        8
+    ) * np.timedelta64(1, "D")
+    boundary_leads = np.arange(10) * np.timedelta64(1, "D")
+    boundary_values = (
+        np.arange(8).reshape(-1, 1) * 1000 + np.arange(10).reshape(1, -1) * 10
+    ).astype(float)
+    boundary_datastore = BoundaryOnlyDummyDatastore(
+        forcing_data=boundary_values,
+        time_values=(boundary_analysis, boundary_leads),
+        is_forecast=True,
+        step_length=timedelta(days=1),
+    )
+
+    dataset = WeatherDataset(
+        datastore=interior_datastore,
+        datastore_boundary=boundary_datastore,
+        ar_steps=2,
+        num_past_forcing_steps=0,
+        num_future_forcing_steps=0,
+        num_past_boundary_steps=1,
+        num_future_boundary_steps=1,
+    )
+
+    assert len(dataset) == n_analysis
+    for idx in range(len(dataset)):
+        _, target_states, forcing, boundary, _ = [
+            t.numpy() for t in dataset[idx]
+        ]
+        # State and forcing come from the same interior launch and, with no
+        # forcing window, the same lead times.
+        assert target_states.flatten().tolist() == forcing.flatten().tolist()
+        assert np.all(target_states.flatten() // 100 == idx)
+
+        # Interior launch idx is 2020-01-05+idx, so init is its lead 1,
+        # 2020-01-06+idx. Anchoring on the launch instead would pick the
+        # boundary launched a day earlier.
+        model_init = interior_analysis[idx] + interior_leads[1]
+        expected_boundary_launch = int(
+            np.searchsorted(boundary_analysis, model_init, side="right") - 1
+        )
+        assert np.all(boundary.flatten() // 1000 == expected_boundary_launch)

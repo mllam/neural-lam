@@ -515,6 +515,31 @@ class BoundaryDummyDatastore(DummyDatastore):
         if state_vars:
             self.ds = self.ds.drop_vars(state_vars)
 
+    def get_standardization_dataarray(self, category: str) -> xr.Dataset:
+        """Return per-feature statistics, distinct for forcing.
+
+        The base dummy uses 1.0 for every feature, which makes the order in
+        which statistics are tiled across a window unobservable. Real
+        datastores have per-variable statistics, so forcing gets distinct
+        ones here.
+
+        Parameters
+        ----------
+        category : str
+            The category of the dataset (forcing/static).
+
+        Returns
+        -------
+        xr.Dataset
+            Standardization statistics for the given category.
+        """
+        ds = super().get_standardization_dataarray(category=category)
+        if category == "forcing":
+            n_features = self.N_FEATURES["forcing"]
+            ds["forcing_mean"].values[:] = np.arange(1.0, n_features + 1.0)
+            ds["forcing_std"].values[:] = np.arange(2.0, n_features + 2.0)
+        return ds
+
     def get_xy(self, category: str, stacked: bool) -> ndarray:
         if category == "state":
             raise KeyError(
