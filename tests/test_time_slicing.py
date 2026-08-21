@@ -652,9 +652,21 @@ def test_forecast_interior_cropped_along_analysis_time():
         num_future_boundary_steps=1,
     )
 
-    assert len(cropped) < len(full)
+    # Launches 01-01..01-03 have no boundary coverage and are dropped; the
+    # last launch needs one day of future window beyond its final target.
+    assert len(full) == 6
+    assert len(cropped) == 2
     _, _, _, boundary, _ = cropped[0]
-    assert boundary.shape[-1] == 3
+    # Launch 01-05: targets 01-07 and 01-08, i.e. boundary entries 303 and
+    # 304, each with one step of past and future window around it.
+    assert boundary.flatten().tolist() == [
+        302.0,
+        303.0,
+        304.0,
+        303.0,
+        304.0,
+        305.0,
+    ]
 
 
 def test_forecast_interior_forcing_cropped_with_state():
@@ -764,10 +776,16 @@ def test_forecast_interior_cropped_when_boundary_ends_early():
         num_future_boundary_steps=1,
     )
 
-    assert len(dataset) < n_analysis
+    # Launches 01-05 and 01-06 roll out to 01-09 / 01-10, and the latter
+    # needs 01-11 for the future window, which the boundary does not have.
+    assert len(dataset) == 2
+    expected = [
+        [1003.0, 1004.0, 1005.0, 1004.0, 1005.0, 1006.0],
+        [1004.0, 1005.0, 1006.0, 1005.0, 1006.0, 1007.0],
+    ]
     for idx in range(len(dataset)):
         _, _, _, boundary, _ = dataset[idx]
-        assert boundary.shape[-1] == 3
+        assert boundary.flatten().tolist() == expected[idx]
 
 
 def test_forecast_boundary_launch_spacing_differs_from_lead_spacing():
@@ -921,10 +939,19 @@ def test_forecast_boundary_launched_exactly_at_init_is_used():
     )
 
     _, _, _, boundary, _ = [t.numpy() for t in dataset[0]]
-    # Launch index 2 is 2020-01-06, exactly the model init time. Values
-    # encode launch * 1000, so this pins the launch rather than the staler
-    # index 1 that a strictly-before rule would have selected.
-    assert np.all(boundary // 1000 == 2)
+    # Launch index 2 is 2020-01-06, exactly the model init time, and values
+    # encode launch * 1000 + lead * 10. This pins both the launch - a
+    # strictly-before rule would have picked the staler index 1 - and the
+    # leads within it, so a window offset cannot slip through.
+    # Targets 01-07 and 01-08 are leads 1 and 2 of that launch.
+    assert boundary.flatten().tolist() == [
+        2000.0,
+        2010.0,
+        2020.0,
+        2010.0,
+        2020.0,
+        2030.0,
+    ]
 
 
 def _aligned_boundary_case(n_past, n_future, lead_hours, ar_steps=2):

@@ -456,9 +456,21 @@ def test_is_on_regular_spatial_grid_matches_grid_shape(datastore_name):
     datastore = init_datastore_example(datastore_name)
     assert isinstance(datastore, BaseRegularGridDatastore)
 
+    # Independent of the property's implementation: unstacking is what the
+    # property gates, so it must succeed exactly when the property is True.
     grid_shape = datastore.grid_shape_state
-    complete_grid = datastore.num_grid_points == grid_shape.x * grid_shape.y
-    assert datastore.is_on_regular_spatial_grid == complete_grid
+    da_static = datastore.get_dataarray(category="static", split=None)
+    assert da_static is not None
+    unstacked = datastore.unstack_grid_coords(da_static)
+    xdim, ydim = datastore.spatial_coordinates
+    round_trips = (
+        unstacked.sizes[xdim] * unstacked.sizes[ydim]
+        == datastore.num_grid_points
+    )
+    assert datastore.is_on_regular_spatial_grid == round_trips
+    assert round_trips == (
+        grid_shape.x * grid_shape.y == datastore.num_grid_points
+    )
 
 
 def test_is_on_regular_spatial_grid_defaults_to_false():
