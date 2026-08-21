@@ -20,8 +20,6 @@ from .plot import fractional_plot_bundle, has_working_latex
 from .tensor import inverse_sigmoid, inverse_softplus
 from .time import (
     apply_time_crop,
-    check_time_overlap,
-    crop_time_if_needed,
     get_integer_time,
     get_time_crop_slice,
     get_time_step,
@@ -30,9 +28,7 @@ from .time import (
 __all__ = [
     "BufferList",
     "apply_time_crop",
-    "check_time_overlap",
     "compute_grid_input_dim",
-    "crop_time_if_needed",
     "fractional_plot_bundle",
     "get_integer_time",
     "get_time_crop_slice",

@@ -113,10 +113,14 @@ def _requested_time_bounds(
 
     Parameters
     ----------
-    da_requested, da_available, da_requested_is_forecast,
-    da_available_is_forecast, num_past_steps, num_future_steps,
-    requested_max_lead
-        See :func:`check_time_overlap`.
+    da_requested, da_available : xr.DataArray
+        See :func:`get_time_crop_slice`.
+    da_requested_is_forecast, da_available_is_forecast : bool
+        See :func:`get_time_crop_slice`.
+    num_past_steps, num_future_steps : int
+        See :func:`get_time_crop_slice`.
+    requested_max_lead : np.timedelta64 or None
+        See :func:`get_time_crop_slice`.
 
     Returns
     -------
@@ -160,7 +164,7 @@ def _requested_time_bounds(
     return first, last
 
 
-def check_time_overlap(
+def get_time_crop_slice(
     da_requested: xr.DataArray,
     da_available: xr.DataArray,
     da_requested_is_forecast: bool = False,
@@ -168,9 +172,11 @@ def check_time_overlap(
     num_past_steps: int = 1,
     num_future_steps: int = 1,
     requested_max_lead: np.timedelta64 | None = None,
-) -> None:
-    """Check that ``da_available`` covers a windowed lookup driven by
-    ``da_requested`` times with the given past/future window sizes.
+) -> tuple[str, slice]:
+    """Return the ``da_requested`` dimension and slice ``da_available`` covers.
+
+    Callers holding several dataarrays on the same time axis (interior state
+    and forcing) apply this one slice to all of them so they stay aligned.
 
     Parameters
     ----------
@@ -184,59 +190,12 @@ def check_time_overlap(
         Whether each side is in forecast mode (``analysis_time`` +
         ``elapsed_forecast_duration`` dims) instead of plain ``time``.
     num_past_steps, num_future_steps : int
-        Window size around each ``da_requested`` time, measured in
-        ``da_available`` steps.
+        Window size around each requested time, measured in ``da_available``
+        steps.
     requested_max_lead : np.timedelta64, optional
         Largest lead read from a forecast ``da_requested`` per sample; each
         ``analysis_time`` needs coverage out to it. Defaults to the full
         forecast length.
-
-    Raises
-    ------
-    ValueError
-        If ``da_available`` does not cover the required time range.
-    """
-    first, last = _requested_time_bounds(
-        da_requested,
-        da_available,
-        da_requested_is_forecast,
-        da_available_is_forecast,
-        num_past_steps,
-        num_future_steps,
-        requested_max_lead,
-    )
-    crop_dim = "analysis_time" if da_requested_is_forecast else "time"
-    times_requested = da_requested[crop_dim].values
-
-    if times_requested.min() < first:
-        raise ValueError(
-            "`da_available` starts too late to cover the requested window. "
-            f"Earliest supported `{crop_dim}` is {first}, but "
-            f"`da_requested` starts at {times_requested.min()}."
-        )
-
-    if times_requested.max() > last:
-        raise ValueError(
-            "`da_available` ends too early to cover the requested window. "
-            f"Latest supported `{crop_dim}` is {last}, but "
-            f"`da_requested` ends at {times_requested.max()}."
-        )
-
-
-def get_time_crop_slice(
-    da_requested: xr.DataArray,
-    da_available: xr.DataArray,
-    da_requested_is_forecast: bool = False,
-    da_available_is_forecast: bool = False,
-    num_past_steps: int = 1,
-    num_future_steps: int = 1,
-    requested_max_lead: np.timedelta64 | None = None,
-) -> tuple[str, slice]:
-    """Return the ``da_requested`` dimension and slice ``da_available`` covers.
-
-    Parameters mirror :func:`check_time_overlap`. Callers holding several
-    dataarrays on the same time axis (interior state and forcing) apply this
-    one slice to all of them so they stay aligned.
 
     Returns
     -------
@@ -271,39 +230,6 @@ def get_time_crop_slice(
             f"[{first}, {last}]; cannot align."
         )
     return crop_dim, slice(first_valid_idx, last_valid_idx_plus_one)
-
-
-def crop_time_if_needed(
-    da_requested: xr.DataArray,
-    da_available: xr.DataArray,
-    da_requested_is_forecast: bool = False,
-    da_available_is_forecast: bool = False,
-    num_past_steps: int = 1,
-    num_future_steps: int = 1,
-    requested_max_lead: np.timedelta64 | None = None,
-) -> xr.DataArray:
-    """Trim ``da_requested`` so ``da_available`` covers every needed window.
-
-    A forecast ``da_requested`` is cropped along ``analysis_time`` (dropping
-    whole launches), an analysis one along ``time``.
-
-    Parameters mirror :func:`check_time_overlap`.
-
-    Returns
-    -------
-    xr.DataArray
-        Possibly cropped ``da_requested``.
-    """
-    crop_dim, crop_slice = get_time_crop_slice(
-        da_requested,
-        da_available,
-        da_requested_is_forecast,
-        da_available_is_forecast,
-        num_past_steps,
-        num_future_steps,
-        requested_max_lead,
-    )
-    return apply_time_crop(da_requested, crop_dim, crop_slice)
 
 
 def apply_time_crop(

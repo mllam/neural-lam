@@ -572,7 +572,7 @@ def test_forecast_boundary_anchors_on_init_not_target():
 
 def test_insufficient_boundary_coverage_raises():
     """If the boundary cannot be cropped enough to cover the requested
-    past-window, ``crop_time_if_needed`` surfaces a clear error."""
+    past-window, ``get_time_crop_slice`` surfaces a clear error."""
     interior_datastore = SinglePointDummyDatastore(
         state_data=ANALYSIS_STATE_VALUES,
         forcing_data=FORCING_VALUES,
