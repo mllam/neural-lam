@@ -1287,3 +1287,83 @@ def test_too_few_samples_error_names_the_boundary_window():
             num_past_boundary_steps=1,
             num_future_boundary_steps=1,
         )
+
+
+def test_forecast_boundary_leads_not_starting_at_zero():
+    """A boundary archive whose `elapsed_forecast_duration` starts after zero
+    must still be indexed from its first lead.
+
+    Every other forecast-boundary test uses leads starting at 0, which makes
+    the `lead_offset` terms in `_latest_usable_launch` and `lead_index`
+    subtractions of zero; without this test they could all be dropped and the
+    suite would stay green, while every window silently shifted by
+    `leads[0] / lead_step` steps.
+    """
+    interior_times = np.datetime64("2020-01-03") + np.arange(
+        10
+    ) * np.timedelta64(6, "h")
+    interior_datastore = SinglePointDummyDatastore(
+        state_data=np.arange(10, dtype=float),
+        forcing_data=np.arange(10, dtype=float),
+        time_values=interior_times,
+        is_forecast=False,
+        step_length=timedelta(hours=6),
+    )
+
+    # Leads start at +12 h, as an archive that discards the spin-up would.
+    boundary_analysis = np.datetime64("2020-01-01") + np.arange(
+        12
+    ) * np.timedelta64(6, "h")
+    boundary_leads = np.timedelta64(12, "h") + np.arange(10) * np.timedelta64(
+        6, "h"
+    )
+    boundary_values = (
+        np.arange(12).reshape(-1, 1) * 1000 + np.arange(10).reshape(1, -1)
+    ).astype(float)
+    boundary_datastore = BoundaryOnlyDummyDatastore(
+        forcing_data=boundary_values,
+        time_values=(boundary_analysis, boundary_leads),
+        is_forecast=True,
+        step_length=timedelta(hours=6),
+    )
+
+    dataset = WeatherDataset(
+        datastore=interior_datastore,
+        datastore_boundary=boundary_datastore,
+        ar_steps=2,
+        num_past_forcing_steps=0,
+        num_future_forcing_steps=0,
+        num_past_boundary_steps=1,
+        num_future_boundary_steps=1,
+    )
+
+    assert len(dataset) > 0
+    lead_step = np.timedelta64(6, "h")
+    for idx in range(len(dataset)):
+        _, _, _, boundary, target_times = dataset[idx]
+        window = boundary.flatten().tolist()
+        assert len(window) == 2 * 3
+
+        # One launch serves the whole sample: the latest at or before init
+        # that still leaves one lead of past window before the first target.
+        first_target = np.datetime64(int(target_times[0]), "ns")
+        model_init = first_target - lead_step
+        bound = min(model_init, first_target - boundary_leads[0] - lead_step)
+        launch = int(np.searchsorted(boundary_analysis, bound, "right") - 1)
+
+        # Values encode launch * 1000 + lead position, and the position is
+        # measured from `leads[0]`, not from the launch time. Dropping the
+        # `lead_offset` terms shifts every position by leads[0] / lead_step.
+        expected = []
+        for step in range(2):
+            target = np.datetime64(int(target_times[step]), "ns")
+            lead = int(
+                (target - boundary_analysis[launch] - boundary_leads[0])
+                / lead_step
+            )
+            expected += [
+                launch * 1000 + lead - 1.0,
+                launch * 1000 + lead + 0.0,
+                launch * 1000 + lead + 1.0,
+            ]
+        assert window == expected
