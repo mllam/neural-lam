@@ -514,6 +514,28 @@ class BoundaryDummyDatastore(DummyDatastore):
         ]
         if state_vars:
             self.ds = self.ds.drop_vars(state_vars)
+        self._encode_forcing_by_feature()
+
+    def _encode_forcing_by_feature(self) -> None:
+        """Replace forcing values with `feature * 1000 + time`.
+
+        The base dummy fills every category with random noise, so a value
+        does not say which feature it came from and the order in which
+        `WeatherDataset` stacks `(forcing_feature, window)` is unobservable
+        downstream. Encoding the feature index makes that order testable.
+        """
+        da_forcing = self.ds["forcing"]
+        feature_axis = da_forcing.dims.index("forcing_feature")
+        time_axis = da_forcing.dims.index("time")
+        shape = [1] * da_forcing.ndim
+        shape[feature_axis] = da_forcing.sizes["forcing_feature"]
+        features = np.arange(da_forcing.sizes["forcing_feature"]).reshape(shape)
+        shape = [1] * da_forcing.ndim
+        shape[time_axis] = da_forcing.sizes["time"]
+        times = np.arange(da_forcing.sizes["time"]).reshape(shape)
+        # Assign in place: rebuilding the DataArray would drop the
+        # `grid_index` MultiIndex.
+        da_forcing.values[...] = features * 1000.0 + times
 
     def get_standardization_dataarray(self, category: str) -> xr.Dataset:
         """Return per-feature statistics, distinct for forcing.

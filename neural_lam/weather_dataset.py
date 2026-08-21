@@ -481,6 +481,12 @@ class WeatherDataset(torch.utils.data.Dataset):
         init_times, first_targets, last_targets = self._sample_window_times()
         if len(init_times) == 0:
             return
+        if np.isnat(init_times).any() or np.isnat(last_targets).any():
+            # `np.floor(nan).astype(int)` is 0 under a warning logs swallow,
+            # so a NaT would pass this check and yield garbage windows.
+            raise ValueError(
+                "The interior datastore's time coordinate contains NaT."
+            )
 
         leads = self.da_boundary_forcing.elapsed_forecast_duration.values
         lead_step = get_time_step(leads)

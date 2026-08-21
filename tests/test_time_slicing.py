@@ -1020,11 +1020,25 @@ def test_boundary_horizon_accepts_exactly_sufficient_launch():
     )
 
     assert len(dataset) > 0
+    interior_times = np.datetime64("2020-01-02") + np.arange(
+        12
+    ) * np.timedelta64(6, "h")
+    boundary_analysis = np.datetime64("2020-01-01") + np.arange(
+        16
+    ) * np.timedelta64(6, "h")
     for idx in range(len(dataset)):
-        _, _, _, boundary, _ = dataset[idx]
+        _, _, _, boundary, target_times = dataset[idx]
         assert boundary.shape[-1] == 1
-        # Every window comes from the launch at the sample's init time.
-        assert np.all(boundary.numpy() // 1000 == boundary.numpy()[0] // 1000)
+        # With aligned grids the launch IS the init time, and each target
+        # sits one lead further into it. Values encode launch * 1000 + lead.
+        model_init = interior_times[idx + 1]
+        launch = int(
+            np.searchsorted(boundary_analysis, model_init, "right") - 1
+        )
+        assert boundary.flatten().tolist() == [
+            launch * 1000 + 1.0,
+            launch * 1000 + 2.0,
+        ]
 
 
 def test_boundary_horizon_rejects_one_step_short():
@@ -1144,7 +1158,18 @@ def test_forecast_interior_with_forecast_boundary():
         expected_boundary_launch = int(
             np.searchsorted(boundary_analysis, model_init, side="right") - 1
         )
-        assert np.all(boundary.flatten() // 1000 == expected_boundary_launch)
+        # Pin the leads too, not just the launch: values encode
+        # launch * 1000 + lead * 10, and targets are leads 1 and 2 of the
+        # chosen launch with one step of window either side.
+        base = expected_boundary_launch * 1000
+        assert boundary.flatten().tolist() == [
+            base + 0.0,
+            base + 10.0,
+            base + 20.0,
+            base + 10.0,
+            base + 20.0,
+            base + 30.0,
+        ]
 
 
 def _boundary_with_analysis_times(analysis_times):

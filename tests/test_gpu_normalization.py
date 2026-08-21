@@ -234,6 +234,13 @@ def test_boundary_stack_order_matches_module_tiling():
     # Per-feature statistics must differ, or the tiling order is unobservable.
     assert len(torch.unique(model.boundary_std)) == num_boundary_vars
 
+    for feature in range(num_boundary_vars):
+        start = feature * window_size
+        slots = boundary[..., start : start + window_size]
+        assert torch.all(
+            torch.div(slots, 1000, rounding_mode="floor") == feature
+        )
+
     _, _, _, norm_boundary, _ = model.on_after_batch_transfer(batch, 0)
 
     for feature in range(num_boundary_vars):
