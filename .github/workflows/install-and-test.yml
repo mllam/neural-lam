@@ -75,9 +75,12 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-meps-reduced-example-data-v0.3.0
 
-      - name: Run tests
+      - name: Run tests (excluding notebooks)
         run: |
-          pytest -vv -s --doctest-modules
+          pytest -vv -s --doctest-modules --ignore=docs/notebooks
+
+      # Notebooks run in their own path-filtered, CPU-only workflow
+      # (.github/workflows/notebook-tests.yml).
 
       - name: Upload test figures
         uses: actions/upload-artifact@v4

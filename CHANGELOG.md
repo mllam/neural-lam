@@ -8,6 +8,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [unreleased](https://github.com/mllam/neural-lam/compare/v0.6.0...HEAD)
 
 ### Added
+
+- Add `hello_world_danra.ipynb` end-to-end tutorial notebook for training on DANRA, with a dedicated path-filtered CI workflow that runs it end-to-end via `nbmake` [\#577](https://github.com/mllam/neural-lam/pull/577) @Sharkyii
+
 - Add latent encoder/decoder modules and the `GraphEFM` (hierarchical) / `GraphEFMMultiScale` (flat) step predictors for the Graph-EFM ensemble forecasting model. [\#648](https://github.com/mllam/neural-lam/pull/648) @Sir-Sloth-The-Lazy
 
 - Add `--num_sanity_val_steps` CLI argument to control sanity validation steps before training (#694)
@@ -49,6 +52,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   @Sir-Sloth-The-Lazy
 
 ### Fixed
+
+- `train_model.main` now re-raises on error (`@logger.catch(reraise=True)`) instead of logging and exiting 0, so training/eval failures surface to callers and CI (e.g. the notebook `nbmake` run) rather than passing silently [\#577](https://github.com/mllam/neural-lam/pull/577)
+
+- Allow `graph_lam` training and checkpoint reloads to accept the full set of
+  GNN type CLI options without passing hierarchical-only options to unsupported
+  constructors via a shared `build_predictor` helper ([#686](https://github.com/mllam/neural-lam/issues/686)).
 
 - Fix `graph_lam` training and checkpoint reloads crashing on hierarchical-only GNN options, by routing both call sites through a `build_predictor` helper that only passes `mesh_up_gnn_type` / `mesh_down_gnn_type` to `BaseHiGraphModel` subclasses. [\#688](https://github.com/mllam/neural-lam/pull/688) @gitcommit90
 

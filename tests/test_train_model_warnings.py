@@ -10,7 +10,9 @@ import loguru
 import pytest
 
 # Mock loguru.logger.catch before importing train_model
-loguru.logger.catch = lambda f: f  # type: ignore[assignment]
+loguru.logger.catch = lambda *args, **kwargs: (
+    args[0] if args and callable(args[0]) else (lambda f: f)
+)
 
 # First-party
 from neural_lam.config import NeuralLAMConfig  # noqa: E402
@@ -154,6 +156,23 @@ def make_args(**overrides):
         num_past_forcing_steps=1,
         num_future_forcing_steps=1,
         output_std=False,
+        g2m_gnn_type="PropagationNet",
+        m2g_gnn_type="PropagationNet",
+        mesh_up_gnn_type="PropagationNet",
+        mesh_down_gnn_type="InteractionNet",
+    )
+    config = SimpleNamespace(
+        training=SimpleNamespace(
+            output_clamping=SimpleNamespace(lower={}, upper={})
+        )
+    )
+    datastore = MagicMock()
+    captured_kwargs = {}
+
+    class DummyPredictor:
+        def __init__(self, **kwargs):
+            captured_kwargs.update(kwargs)
+
     )
     args.update(overrides)
     return Namespace(**args)
@@ -227,9 +246,18 @@ def test_build_predictor_omits_hierarchical_gnn_kwargs_for_graph_lam(config):
         mesh_up_gnn_type="PropagationNet",
         mesh_down_gnn_type="PropagationNet",
     )
-    predictor_class, captured_kwargs = capturing_predictor()
+    config = SimpleNamespace(
+        training=SimpleNamespace(
+            output_clamping=SimpleNamespace(lower={}, upper={})
+        )
+    )
+    captured_kwargs = {}
 
-    build_predictor(predictor_class, args, config, MagicMock())
+    class DummyGraphLAM:
+        def __init__(self, **kwargs):
+            captured_kwargs.update(kwargs)
+
+    build_predictor(DummyGraphLAM, args, config, MagicMock())
 
     assert "mesh_up_gnn_type" not in captured_kwargs
     assert "mesh_down_gnn_type" not in captured_kwargs
