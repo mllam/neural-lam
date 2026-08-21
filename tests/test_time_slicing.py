@@ -1145,3 +1145,120 @@ def test_forecast_interior_with_forecast_boundary():
             np.searchsorted(boundary_analysis, model_init, side="right") - 1
         )
         assert np.all(boundary.flatten() // 1000 == expected_boundary_launch)
+
+
+def _boundary_with_analysis_times(analysis_times):
+    """Build a forecast boundary datastore on the given launch times.
+
+    Parameters
+    ----------
+    analysis_times : np.ndarray
+        Launch times, which may deliberately repeat or be unsorted.
+
+    Returns
+    -------
+    BoundaryOnlyDummyDatastore
+        The boundary datastore.
+    """
+    leads = np.arange(12) * np.timedelta64(1, "h")
+    values = (
+        np.arange(len(analysis_times)).reshape(-1, 1) * 1000
+        + np.arange(len(leads)).reshape(1, -1)
+    ).astype(float)
+    return BoundaryOnlyDummyDatastore(
+        forcing_data=values,
+        time_values=(np.array(analysis_times), leads),
+        is_forecast=True,
+        step_length=timedelta(hours=6),
+    )
+
+
+def _interior_for_boundary_checks():
+    """Build a 6-hourly analysis interior for boundary-axis checks.
+
+    Returns
+    -------
+    SinglePointDummyDatastore
+        The interior datastore.
+    """
+    times = np.datetime64("2020-01-02") + np.arange(8) * np.timedelta64(6, "h")
+    return SinglePointDummyDatastore(
+        state_data=np.arange(8, dtype=float),
+        forcing_data=np.arange(8, dtype=float),
+        time_values=times,
+        is_forecast=False,
+        step_length=timedelta(hours=6),
+    )
+
+
+@pytest.mark.parametrize(
+    "analysis_times,match",
+    [
+        # npyfilesmeps repeats each launch once per ensemble member
+        (
+            np.repeat(
+                np.datetime64("2020-01-01")
+                + np.arange(8) * np.timedelta64(6, "h"),
+                2,
+            ),
+            "must be unique",
+        ),
+        (
+            (
+                np.datetime64("2020-01-01")
+                + np.arange(8) * np.timedelta64(6, "h")
+            )[::-1],
+            "must be sorted",
+        ),
+    ],
+)
+def test_boundary_analysis_times_must_support_pad_lookup(analysis_times, match):
+    """Launches are located with a `pad` lookup, which needs a unique sorted
+    index. A duplicated or unsorted axis must be named rather than surfacing
+    as a bare pandas `InvalidIndexError`."""
+    with pytest.raises(ValueError, match=match):
+        WeatherDataset(
+            datastore=_interior_for_boundary_checks(),
+            datastore_boundary=_boundary_with_analysis_times(analysis_times),
+            ar_steps=2,
+            num_past_forcing_steps=0,
+            num_future_forcing_steps=0,
+            num_past_boundary_steps=0,
+            num_future_boundary_steps=0,
+        )
+
+
+def test_too_few_samples_error_names_the_boundary_window():
+    """When a boundary datastore is configured, the interior is cropped to
+    the boundary coverage, so the remedy list has to name the boundary window
+    and not send the user after `ar_steps` and the forcing window alone."""
+    interior_times = np.datetime64("2020-01-02") + np.arange(
+        6
+    ) * np.timedelta64(6, "h")
+    interior = SinglePointDummyDatastore(
+        state_data=np.arange(6, dtype=float),
+        forcing_data=np.arange(6, dtype=float),
+        time_values=interior_times,
+        is_forecast=False,
+        step_length=timedelta(hours=6),
+    )
+    boundary_times = np.datetime64("2020-01-02") + np.arange(
+        6
+    ) * np.timedelta64(6, "h")
+    boundary = BoundaryOnlyDummyDatastore(
+        forcing_data=np.arange(6, dtype=float),
+        time_values=boundary_times,
+        is_forecast=False,
+        step_length=timedelta(hours=6),
+    )
+
+    with pytest.raises(ValueError, match="num_past_boundary_steps"):
+        WeatherDataset(
+            datastore=interior,
+            datastore_boundary=boundary,
+            ar_steps=3,
+            num_past_forcing_steps=0,
+            num_future_forcing_steps=0,
+            num_past_boundary_steps=1,
+            num_future_boundary_steps=1,
+        )

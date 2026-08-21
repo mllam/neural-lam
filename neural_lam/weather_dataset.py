@@ -244,6 +244,7 @@ class WeatherDataset(torch.utils.data.Dataset):
                         self.da_forcing, crop_dim, crop_slice
                     )
                 if datastore_boundary.is_forecast:
+                    self._check_boundary_analysis_times()
                     self._check_boundary_forecast_horizon()
 
         if self.datastore.is_ensemble and self.load_single_member:
@@ -258,14 +259,24 @@ class WeatherDataset(torch.utils.data.Dataset):
         # check that with the provided data-arrays and ar_steps that we have a
         # non-zero amount of samples
         if self.__len__() <= 0 and self.da_state is not None:
+            remedies = (
+                "the number of autoregressive steps (`ar_steps`) and/or the "
+                "forcing window size (`num_past_forcing_steps` and "
+                "`num_future_forcing_steps`)"
+            )
+            if self.datastore_boundary is not None:
+                remedies += (
+                    ", or the boundary window (`num_past_boundary_steps` and "
+                    "`num_future_boundary_steps`), which determines how much "
+                    "of the interior is cropped to stay within the boundary "
+                    "coverage"
+                )
             raise ValueError(
                 "The provided datastore only provides "
                 f"{len(self.da_state.time)} total time steps, which is too few "
                 "to create a single sample for the WeatherDataset "
                 f"configuration used in the `{split}` split. You could try "
-                "either reducing the number of autoregressive steps "
-                "(`ar_steps`) and/or the forcing window size "
-                "(`num_past_forcing_steps` and `num_future_forcing_steps`)"
+                f"reducing {remedies}."
             )
 
         # Check the dimensions and their ordering
@@ -413,6 +424,42 @@ class WeatherDataset(torch.utils.data.Dataset):
             times[first + 1 : first + 1 + n_samples],
             times[first + self.ar_steps : first + self.ar_steps + n_samples],
         )
+
+    def _check_boundary_analysis_times(self) -> None:
+        """Check the boundary launch axis supports a `pad` lookup.
+
+        Launches are located with `Index.get_indexer(method="pad")`, which
+        needs a unique, sorted index; npyfilesmeps in particular repeats
+        each analysis time once per ensemble member. Without this the user
+        gets a bare pandas message naming neither the datastore nor the
+        coordinate.
+
+        Raises
+        ------
+        ValueError
+            If `analysis_time` has duplicates, is unsorted, or holds NaT.
+        """
+        assert self.da_boundary_forcing is not None
+        analysis_times = self.da_boundary_forcing.analysis_time
+        index = analysis_times.get_index("analysis_time")
+
+        if np.isnat(analysis_times.values).any():
+            raise ValueError(
+                "The boundary datastore's `analysis_time` contains NaT."
+            )
+        if not index.is_unique:
+            duplicates = index[index.duplicated()].unique().tolist()
+            raise ValueError(
+                "The boundary datastore's `analysis_time` must be unique, "
+                f"but {len(duplicates)} value(s) repeat, e.g. "
+                f"{duplicates[:3]}. A boundary datastore that repeats each "
+                "launch per ensemble member has to be de-duplicated first."
+            )
+        if not index.is_monotonic_increasing:
+            raise ValueError(
+                "The boundary datastore's `analysis_time` must be sorted in "
+                "increasing order."
+            )
 
     def _check_boundary_forecast_horizon(self) -> None:
         """Check every sample's window fits inside one boundary launch.

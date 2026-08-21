@@ -276,10 +276,12 @@ def test_test_step_excludes_boundary_from_spatial_loss(tmp_path):
         )
 
     config = nlconfig.NeuralLAMConfig(
-        datastore=nlconfig.DatastoreSelection(
-            kind=datastore.SHORT_NAME,
-            config_path=datastore.root_path,
-        ),
+        datastores={
+            "main": nlconfig.DatastoreSelection(
+                kind=datastore.SHORT_NAME,
+                config_path=datastore.root_path,
+            )
+        }
     )
 
     predictor = GraphLAM(
