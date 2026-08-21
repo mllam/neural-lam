@@ -73,18 +73,6 @@ class MDPDatastore(BaseRegularGridDatastore):
             ".yaml", ".zarr"
         )
 
-        # mllam-data-prep resolves `interior_dataset_config_path` against
-        # the process CWD, but it is written relative to this config file.
-        # Only that path is absolutised; other inputs keep CWD-relative
-        # behaviour.
-        domain_cropping = self._config.output.domain_cropping
-        if domain_cropping is not None:
-            interior_path = Path(domain_cropping.interior_dataset_config_path)
-            if not interior_path.is_absolute():
-                domain_cropping.interior_dataset_config_path = str(
-                    self._root_path / interior_path
-                )
-
         _ds = None
         if reuse_existing and fp_ds.exists():
             # check that the zarr directory is newer than the config file
@@ -97,7 +85,7 @@ class MDPDatastore(BaseRegularGridDatastore):
             _ds = xr.open_zarr(fp_ds, consolidated=True)
 
         if _ds is None:
-            _ds = mdp.create_dataset(config=self._config)
+            _ds = mdp.create_dataset(config=self._config_for_creation())
             _ds.to_zarr(fp_ds)
 
         # Without either there is nothing to slice or grid-shape against.
@@ -157,6 +145,30 @@ class MDPDatastore(BaseRegularGridDatastore):
         if dim_order is None:
             raise ValueError("Could not determine dim_order from inputs.")
         self.spatial_coordinates = dim_order
+
+    def _config_for_creation(self) -> mdp.Config:
+        """Return the config to build the dataset from.
+
+        mllam-data-prep resolves `interior_dataset_config_path` against the
+        process CWD, but it is written relative to this config file. Only
+        that path is absolutised, and on a copy, so the public `config`
+        still matches the YAML on disk; other inputs keep CWD-relative
+        behaviour.
+
+        Returns
+        -------
+        mdp.Config
+            The config, with any cropping path made absolute.
+        """
+        config = copy.deepcopy(self._config)
+        domain_cropping = config.output.domain_cropping
+        if domain_cropping is not None:
+            interior_path = Path(domain_cropping.interior_dataset_config_path)
+            if not interior_path.is_absolute():
+                domain_cropping.interior_dataset_config_path = str(
+                    (self._root_path / interior_path).resolve()
+                )
+        return config
 
     @property
     def root_path(self) -> Path:
