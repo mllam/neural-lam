@@ -45,10 +45,6 @@ class BaseForecastingModule(pl.LightningModule, ABC):
 
     # pylint: disable=arguments-differ
 
-    # Which metrics are collected differs per evaluation mode, so concrete
-    # subclasses create these in __init__; the epoch-end hooks here consume
-    # whatever they contain. Declared so that reads from this class resolve
-    # to the dicts rather than to ``nn.Module.__getattr__``.
     val_metrics: dict[str, list[torch.Tensor]]
     test_metrics: dict[str, list[torch.Tensor]]
 
