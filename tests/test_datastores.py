@@ -483,7 +483,6 @@ def test_is_on_regular_spatial_grid_defaults_to_false():
     assert not datastore.is_on_regular_spatial_grid
 
 
-@pytest.mark.slow
 def test_cropped_boundary_datastore_is_not_regular_grid():
     """A domain-cropped datastore keeps only the grid points inside the
     interior domain, so `grid_index` no longer unstacks to a full x/y grid
@@ -501,7 +500,6 @@ def test_cropped_boundary_datastore_is_not_regular_grid():
         )
 
 
-@pytest.mark.slow
 def test_boundary_mask_on_boundary_datastore_raises():
     """A datastore without `state` data has no interior ring to mask, so
     `boundary_mask` must say so rather than raise a bare KeyError from the
@@ -512,7 +510,6 @@ def test_boundary_mask_on_boundary_datastore_raises():
         datastore_boundary.boundary_mask
 
 
-@pytest.mark.slow
 def test_plot_example_on_cropped_datastore_raises():
     """Plotting unstacks `grid_index` back into x/y, which pads the cells a
     domain-cropped datastore does not have, so it must be refused."""
