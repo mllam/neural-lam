@@ -1367,3 +1367,52 @@ def test_forecast_boundary_leads_not_starting_at_zero():
                 launch * 1000 + lead + 1.0,
             ]
         assert window == expected
+
+
+def test_horizon_check_ignores_samples_the_dataset_never_yields():
+    """`_sample_window_times` must agree with `__len__`.
+
+    `__len__` drops the trailing `num_future_forcing_steps` samples, so
+    sizing the horizon check from the state axis alone would validate
+    samples that are never drawn, and their later targets would demand a
+    longer boundary horizon than any real sample needs - a false rejection.
+    """
+    interior_times = np.datetime64("2020-01-02") + np.arange(
+        7
+    ) * np.timedelta64(1, "h")
+    interior_datastore = SinglePointDummyDatastore(
+        state_data=np.arange(7, dtype=float),
+        forcing_data=np.arange(7, dtype=float),
+        time_values=interior_times,
+        is_forecast=False,
+        step_length=timedelta(hours=1),
+    )
+    boundary_analysis = np.datetime64("2020-01-01") + np.arange(
+        12
+    ) * np.timedelta64(6, "h")
+    boundary_leads = np.arange(5) * np.timedelta64(1, "h")
+    boundary_values = (
+        np.arange(12).reshape(-1, 1) * 1000 + np.arange(5).reshape(1, -1)
+    ).astype(float)
+    boundary_datastore = BoundaryOnlyDummyDatastore(
+        forcing_data=boundary_values,
+        time_values=(boundary_analysis, boundary_leads),
+        is_forecast=True,
+        step_length=timedelta(hours=6),
+    )
+
+    # The 4 h boundary horizon covers every sample the dataset yields; only
+    # the two phantom samples past the end would need more.
+    dataset = WeatherDataset(
+        datastore=interior_datastore,
+        datastore_boundary=boundary_datastore,
+        ar_steps=1,
+        num_past_forcing_steps=0,
+        num_future_forcing_steps=2,
+        num_past_boundary_steps=0,
+        num_future_boundary_steps=0,
+    )
+
+    assert len(dataset._sample_window_times()[0]) == len(dataset)
+    for idx in range(len(dataset)):
+        dataset[idx]

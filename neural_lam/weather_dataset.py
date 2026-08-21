@@ -415,7 +415,22 @@ class WeatherDataset(torch.utils.data.Dataset):
             )
 
         times = self.da_state.time.values
+        # `__len__` also drops the trailing `num_future_forcing_steps`
+        # samples and honours a shorter forcing axis. Using the state-only
+        # bound here would validate samples the dataset never yields, and
+        # their later targets would demand a longer boundary horizon than
+        # any real sample needs.
         n_samples = len(times) - offset - n_total + 1
+        n_samples -= self.num_future_forcing_steps
+        if self.da_forcing is not None:
+            n_samples = min(
+                n_samples,
+                len(self.da_forcing.time)
+                - offset
+                - n_total
+                + 1
+                - self.num_future_forcing_steps,
+            )
         if n_samples <= 0:
             return (np.array([]), np.array([]), np.array([]))
         first = offset + init_steps - 1
