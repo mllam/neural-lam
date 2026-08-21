@@ -487,10 +487,10 @@ class DummyDatastore(BaseRegularGridDatastore):
 class BoundaryDummyDatastore(DummyDatastore):
     """DummyDatastore acting as a boundary forcing provider with no state.
 
-    Mimics a real ERA5-style boundary datastore that only supplies ``forcing``
-    fields (no ``state`` variables). State metadata is dropped after init and
-    state-keyed lookups raise ``KeyError`` so any code path that accidentally
-    asks the boundary for ``state`` fails loudly in tests.
+    Mimics a real ERA5-style boundary datastore, which supplies ``forcing``
+    and ``static`` fields but no ``state``. State metadata is dropped after
+    init and state-keyed lookups raise ``KeyError`` so any code path that
+    accidentally asks the boundary for ``state`` fails loudly in tests.
     """
 
     SHORT_NAME = "dummydata_boundary"

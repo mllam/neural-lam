@@ -149,6 +149,7 @@ assume you placed `config.yaml` in a folder called `data`):
 data/
 ├── config.yaml           - Configuration file for neural-lam
 ├── danra.datastore.yaml  - Configuration file for the datastore, referred to from config.yaml
+├── era5.datastore.yaml   - Optional second datastore, here providing boundary forcing
 └── graphs/               - Directory containing graphs for training
 ```
 
@@ -158,9 +159,9 @@ datastores:
   danra:
     kind: mdp
     config_path: danra.datastore.yaml
-  era5_boundary:  # optional; no `state` data, so used for input (boundary) only
+  era5:  # optional; no `state` data, so used for input (boundary) only
     kind: mdp
-    config_path: era5_boundary.datastore.yaml
+    config_path: era5.datastore.yaml
 training:
   state_feature_weighting:
     __config_class__: ManualStateFeatureWeighting
@@ -188,7 +189,10 @@ the loss function. If you don't define the state feature weighting it will defau
 weighting all features equally.
 3. Valid numerical range for output of each feature. The numerical range of all features default to $]-\infty, \infty[$.
 
-(This example is taken from the `tests/datastore_examples/mdp` directory.)
+(This example is taken from the
+`tests/datastore_examples/mdp/era5_1000hPa_danra_100m_winds` directory; the
+`tests/datastore_examples/mdp/danra_100m_winds` one next to it is the
+single-datastore version.)
 
 
 Below follows instructions on how to use Neural-LAM to train and evaluate
@@ -266,8 +270,8 @@ Whether the grid points actually form a complete 2D grid is reported by the
 `is_on_regular_spatial_grid` property rather than by the class, since it can
 depend on the data a datastore was built from: a domain-cropped `MDPDatastore`
 (as used for boundary forcing) subclasses `BaseRegularGridDatastore` but reports
-`False`. Graph creation and gridded plotting refuse such a datastore rather than
-silently padding the missing cells.
+`False`. Graph creation and `datastore.plot_example` refuse such a datastore
+rather than silently padding the missing cells.
 
 
 ### MDP (mllam-data-prep) Datastore - `MDPDatastore`
