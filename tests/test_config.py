@@ -145,7 +145,9 @@ def test_load_config_and_datastore_requires_an_interior(tmp_path):
         tmp_path, {"era5": BOUNDARY_EXAMPLE_DIR / "era5.datastore.yaml"}
     )
 
-    with pytest.raises(nlconfig.InvalidConfigError, match="none of the"):
+    with pytest.raises(
+        nlconfig.InvalidConfigError, match="Exactly one datastore must provide"
+    ):
         nlconfig.load_config_and_datastore(str(config_path))
 
 
@@ -155,7 +157,7 @@ def test_load_config_and_datastore_rejects_two_interiors(tmp_path):
     config_path = _write_config(tmp_path, {"a": danra, "b": danra})
 
     with pytest.raises(
-        nlconfig.InvalidConfigError, match="Exactly one datastore may provide"
+        nlconfig.InvalidConfigError, match="Exactly one datastore must provide"
     ):
         nlconfig.load_config_and_datastore(str(config_path))
 

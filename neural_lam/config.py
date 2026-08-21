@@ -233,9 +233,6 @@ def load_config_and_datastore(
     config_dir = Path(config_path).parent
     interior_datastores = {}
     boundary_datastores = {}
-    # Building a datastore can mean fetching and writing a zarr, so bail out
-    # as soon as the roles are known to be invalid rather than building the
-    # rest of the mapping first.
     for name, selection in config.datastores.items():
         datastore = init_datastore(
             datastore_kind=selection.kind,
@@ -243,27 +240,20 @@ def load_config_and_datastore(
         )
         if datastore.get_num_data_vars(category="state") > 0:
             interior_datastores[name] = datastore
-            if len(interior_datastores) > 1:
-                raise InvalidConfigError(
-                    "Exactly one datastore may provide `state` data (the "
-                    f"interior domain), but {config_path} has several: "
-                    f"{sorted(interior_datastores)}."
-                )
         else:
             boundary_datastores[name] = datastore
-            if len(boundary_datastores) > 1:
-                raise InvalidConfigError(
-                    "At most one boundary datastore (a datastore without "
-                    "`state` data) is currently supported, but "
-                    f"{config_path} has several: "
-                    f"{sorted(boundary_datastores)}."
-                )
 
-    if not interior_datastores:
+    if len(interior_datastores) != 1:
         raise InvalidConfigError(
             "Exactly one datastore must provide `state` data (the interior "
-            f"domain), but none of the datastores in {config_path} does: "
-            f"{sorted(config.datastores)}."
+            f"domain), but {len(interior_datastores)} were found in "
+            f"{config_path}: {sorted(interior_datastores)}."
+        )
+    if len(boundary_datastores) > 1:
+        raise InvalidConfigError(
+            "At most one boundary datastore (a datastore without `state` "
+            f"data) is currently supported, but {len(boundary_datastores)} "
+            f"were found in {config_path}: {sorted(boundary_datastores)}."
         )
 
     (datastore,) = interior_datastores.values()

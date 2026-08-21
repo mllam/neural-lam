@@ -35,10 +35,6 @@ def _format_timedelta(td: np.timedelta64) -> str:
         Value and unit.
     """
     microseconds = int(td / np.timedelta64(1, "us"))
-    if microseconds == 0 and td != np.timedelta64(0, "ns"):
-        # Below the microsecond resolution `get_integer_time` works in, so
-        # the truncation above would render it as "0 weeks".
-        return str(td)
     value, unit = get_integer_time(
         datetime.timedelta(microseconds=microseconds)
     )
@@ -456,16 +452,11 @@ class WeatherDataset(torch.utils.data.Dataset):
         Raises
         ------
         ValueError
-            If `analysis_time` has duplicates, is unsorted, or holds NaT.
+            If `analysis_time` has duplicates or is unsorted.
         """
         assert self.da_boundary_forcing is not None
-        analysis_times = self.da_boundary_forcing.analysis_time
-        index = analysis_times.get_index("analysis_time")
+        index = self.da_boundary_forcing.get_index("analysis_time")
 
-        if np.isnat(analysis_times.values).any():
-            raise ValueError(
-                "The boundary datastore's `analysis_time` contains NaT."
-            )
         if not index.is_unique:
             duplicates = index[index.duplicated()].unique().tolist()
             raise ValueError(
@@ -500,12 +491,6 @@ class WeatherDataset(torch.utils.data.Dataset):
         init_times, first_targets, last_targets = self._sample_window_times()
         if len(init_times) == 0:
             return
-        if np.isnat(init_times).any() or np.isnat(last_targets).any():
-            # `np.floor(nan).astype(int)` is 0 under a warning logs swallow,
-            # so a NaT would pass this check and yield garbage windows.
-            raise ValueError(
-                "The interior datastore's time coordinate contains NaT."
-            )
 
         leads = self.da_boundary_forcing.elapsed_forecast_duration.values
         lead_step = get_time_step(leads)

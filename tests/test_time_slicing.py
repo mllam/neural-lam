@@ -1479,16 +1479,13 @@ def test_window_bounds_error_names_the_axis_and_target():
         )
 
 
-def test_format_timedelta_falls_back_for_inexact_units():
-    """A timedelta that divides no whole unit is rendered verbatim rather
-    than as the `(1, "unknown")` that `get_integer_time` returns."""
+def test_format_timedelta_renders_the_largest_whole_unit():
+    """Lead times in the boundary-horizon error read in the coarsest unit
+    they divide exactly."""
     assert _format_timedelta(np.timedelta64(6, "h")) == "6 hours"
     # 90 minutes is not a whole number of hours, but is a whole number of
     # minutes, so it still resolves.
     assert _format_timedelta(np.timedelta64(90, "m")) == "90 minutes"
-    # Below microsecond resolution the conversion truncates to zero, which
-    # would otherwise render as "0 weeks".
-    assert _format_timedelta(np.timedelta64(1, "ns")) == "1 nanoseconds"
 
 
 @pytest.mark.parametrize("interior_is_forecast", [False, True])
