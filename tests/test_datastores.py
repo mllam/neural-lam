@@ -55,6 +55,7 @@ from tests.conftest import (
     init_datastore_boundary_example,
     init_datastore_example,
 )
+from tests.dummy_datastore import EnsembleDummyDatastore
 
 
 @pytest.mark.parametrize("datastore_name", DATASTORES.keys())
@@ -453,14 +454,21 @@ def test_is_on_regular_spatial_grid_matches_grid_shape(datastore_name):
     `grid_shape_state` actually accounts for every grid point, since that is
     what unstacking `grid_index` back into x/y relies on."""
     datastore = init_datastore_example(datastore_name)
-
-    if not isinstance(datastore, BaseRegularGridDatastore):
-        assert not datastore.is_on_regular_spatial_grid
-        return
+    assert isinstance(datastore, BaseRegularGridDatastore)
 
     grid_shape = datastore.grid_shape_state
     complete_grid = datastore.num_grid_points == grid_shape.x * grid_shape.y
     assert datastore.is_on_regular_spatial_grid == complete_grid
+
+
+def test_is_on_regular_spatial_grid_defaults_to_false():
+    """A datastore that is not a `BaseRegularGridDatastore` gets the base
+    class default, so a new datastore has to opt in to being treated as
+    gridded rather than silently inheriting it."""
+    datastore = EnsembleDummyDatastore()
+
+    assert not isinstance(datastore, BaseRegularGridDatastore)
+    assert not datastore.is_on_regular_spatial_grid
 
 
 @pytest.mark.slow
