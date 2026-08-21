@@ -1489,3 +1489,73 @@ def test_format_timedelta_falls_back_for_inexact_units():
     # Below microsecond resolution the conversion truncates to zero, which
     # would otherwise render as "0 weeks".
     assert _format_timedelta(np.timedelta64(1, "ns")) == "1 nanoseconds"
+
+
+@pytest.mark.parametrize("interior_is_forecast", [False, True])
+def test_horizon_check_skipped_when_no_sample_fits(interior_is_forecast):
+    """`_sample_window_times` returns empty when the split is too short for
+    a single sample, in both interior modes.
+
+    The horizon check then has nothing to validate and must defer to the
+    `__len__` error, which explains the real problem, rather than raising a
+    misleading horizon complaint or an index error off an empty array.
+    """
+    boundary_analysis = np.datetime64("2020-01-01") + np.arange(
+        12
+    ) * np.timedelta64(6, "h")
+    boundary_leads = np.arange(8) * np.timedelta64(6, "h")
+    boundary_values = (
+        np.arange(12).reshape(-1, 1) * 1000 + np.arange(8).reshape(1, -1)
+    ).astype(float)
+    boundary = BoundaryOnlyDummyDatastore(
+        forcing_data=boundary_values,
+        time_values=(boundary_analysis, boundary_leads),
+        is_forecast=True,
+        step_length=timedelta(hours=6),
+    )
+
+    if interior_is_forecast:
+        # Three lead times cannot supply 2 init states plus 2 targets.
+        analysis = np.datetime64("2020-01-02") + np.arange(3) * np.timedelta64(
+            1, "D"
+        )
+        leads = np.arange(3) * np.timedelta64(6, "h")
+        values = (
+            np.arange(3).reshape(-1, 1) * 100 + np.arange(3).reshape(1, -1)
+        ).astype(float)
+        interior = SinglePointDummyDatastore(
+            state_data=values,
+            forcing_data=values,
+            time_values=(analysis, leads),
+            is_forecast=True,
+            step_length=timedelta(hours=6),
+        )
+    else:
+        # Three time steps cannot supply 2 init states plus 2 targets.
+        times = np.datetime64("2020-01-02") + np.arange(3) * np.timedelta64(
+            6, "h"
+        )
+        interior = SinglePointDummyDatastore(
+            state_data=np.arange(3, dtype=float),
+            forcing_data=np.arange(3, dtype=float),
+            time_values=times,
+            is_forecast=False,
+            step_length=timedelta(hours=6),
+        )
+
+    with pytest.raises(ValueError) as excinfo:
+        WeatherDataset(
+            datastore=interior,
+            datastore_boundary=boundary,
+            ar_steps=2,
+            num_past_forcing_steps=0,
+            num_future_forcing_steps=0,
+            num_past_boundary_steps=0,
+            num_future_boundary_steps=0,
+        )
+    # The complaint must be about the split being too short, not about the
+    # boundary horizon.
+    assert "horizon is too short" not in str(excinfo.value)
+    assert "too few" in str(excinfo.value) or "less than the required" in str(
+        excinfo.value
+    )
