@@ -2,11 +2,15 @@
 
 # Standard library
 import warnings
+from typing import Any
+
+# Third-party
+import torch
 
 # Local
 from ... import metrics
 from ...config import NeuralLAMConfig
-from ...datastore import BaseDatastore
+from ...datastore.base import BaseRegularGridDatastore
 from ..forecasters.ensemble import BaseEnsembleForecaster
 from .base import BaseForecastingModule
 
@@ -32,7 +36,7 @@ class EnsembleForecastingModule(BaseForecastingModule):
         self,
         forecaster: BaseEnsembleForecaster,
         config: NeuralLAMConfig,
-        datastore: BaseDatastore,
+        datastore: BaseRegularGridDatastore,
         *,
         eval_ensemble_size: int,
         lr: float = 1e-3,
@@ -43,8 +47,8 @@ class EnsembleForecastingModule(BaseForecastingModule):
         train_steps_to_log: list[int] | None = None,
         metrics_watch: list[str] | None = None,
         var_leads_metrics_watch: dict[int, list[int]] | None = None,
-        args=None,
-    ):
+        args: Any | None = None,
+    ) -> None:
         """
         Initialize the module and store the evaluation ensemble size.
 
@@ -55,7 +59,7 @@ class EnsembleForecastingModule(BaseForecastingModule):
             ensemble, since validation and testing score a sampled one.
         config : NeuralLAMConfig
             Configuration object for the neural LAM model.
-        datastore : BaseDatastore
+        datastore : BaseRegularGridDatastore
             Datastore providing grid metadata and data access.
         eval_ensemble_size : int
             Number of ensemble members sampled during validation and
@@ -118,10 +122,13 @@ class EnsembleForecastingModule(BaseForecastingModule):
         # replaces, so both end up saved.
         self.save_hyperparameters({"eval_ensemble_size": eval_ensemble_size})
         self.eval_ensemble_size = eval_ensemble_size
-        self.val_metrics: dict[str, list] = {"ens_mse": []}
-        self.test_metrics: dict[str, list] = {"ens_mse": []}
+        self.val_metrics = {"ens_mse": []}
+        self.test_metrics = {"ens_mse": []}
 
-    def _ensemble_step(self, batch):
+    def _ensemble_step(
+        self,
+        batch: tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor],
+    ) -> torch.Tensor:
         """
         Sample an ensemble and compute the per-variable MSE of its mean.
 
@@ -167,7 +174,10 @@ class EnsembleForecastingModule(BaseForecastingModule):
 
         return entry_mses
 
-    def _log_objective(self, batch) -> None:
+    def _log_objective(
+        self,
+        batch: tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor],
+    ) -> None:
         """
         Log the forecaster's own training objective as ``val_mean_loss``.
 
@@ -203,7 +213,11 @@ class EnsembleForecastingModule(BaseForecastingModule):
             batch_size=init_states.shape[0],
         )
 
-    def validation_step(self, batch, batch_idx):
+    def validation_step(
+        self,
+        batch: tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor],
+        batch_idx: int,
+    ) -> None:
         """
         Perform a single ensemble validation step.
 
@@ -225,7 +239,11 @@ class EnsembleForecastingModule(BaseForecastingModule):
         entry_mses = self._ensemble_step(batch)
         self.val_metrics["ens_mse"].append(entry_mses)
 
-    def test_step(self, batch, batch_idx):
+    def test_step(
+        self,
+        batch: tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor],
+        batch_idx: int,
+    ) -> None:
         """
         Perform a single ensemble test step.
 
@@ -243,7 +261,7 @@ class EnsembleForecastingModule(BaseForecastingModule):
         entry_mses = self._ensemble_step(batch)
         self.test_metrics["ens_mse"].append(entry_mses)
 
-    def on_test_epoch_end(self):
+    def on_test_epoch_end(self) -> None:
         """
         Perform actions at the end of the test epoch.
 
@@ -254,8 +272,11 @@ class EnsembleForecastingModule(BaseForecastingModule):
         """
         self.aggregate_and_plot_metrics(self.test_metrics, prefix="test")
 
-        if self.trainer.is_global_zero and self.hparams.metrics_watch:
-            unmatched = set(self.hparams.metrics_watch) - self.matched_metrics
+        metrics_watch = (
+            self.hparams.metrics_watch  # ty: ignore[unresolved-attribute]
+        )
+        if self.trainer.is_global_zero and metrics_watch:
+            unmatched = set(metrics_watch) - self.matched_metrics
             if unmatched:
                 warnings.warn(
                     "The following metrics in --metrics_watch "

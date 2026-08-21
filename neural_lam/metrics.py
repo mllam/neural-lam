@@ -3,7 +3,6 @@
 # Standard library
 import inspect
 from collections.abc import Callable
-from typing import Optional
 
 # Third-party
 import torch
@@ -38,7 +37,7 @@ def get_metric(metric_name: str) -> Callable[..., torch.Tensor]:
 
 def mask_and_reduce_metric(
     metric_entry_vals: torch.Tensor,
-    mask: Optional[torch.Tensor],
+    mask: torch.Tensor | None,
     average_grid: bool,
     sum_vars: bool,
 ) -> torch.Tensor:
@@ -90,7 +89,7 @@ def wmse(
     pred: torch.Tensor,
     target: torch.Tensor,
     pred_std: torch.Tensor,
-    mask: Optional[torch.Tensor] = None,
+    mask: torch.Tensor | None = None,
     average_grid: bool = True,
     sum_vars: bool = True,
 ) -> torch.Tensor:
@@ -142,8 +141,8 @@ def wmse(
 def mse(
     pred: torch.Tensor,
     target: torch.Tensor,
-    pred_std: Optional[torch.Tensor] = None,
-    mask: Optional[torch.Tensor] = None,
+    pred_std: torch.Tensor | None = None,
+    mask: torch.Tensor | None = None,
     average_grid: bool = True,
     sum_vars: bool = True,
 ) -> torch.Tensor:
@@ -191,7 +190,7 @@ def wmae(
     pred: torch.Tensor,
     target: torch.Tensor,
     pred_std: torch.Tensor,
-    mask: Optional[torch.Tensor] = None,
+    mask: torch.Tensor | None = None,
     average_grid: bool = True,
     sum_vars: bool = True,
 ) -> torch.Tensor:
@@ -243,8 +242,8 @@ def wmae(
 def mae(
     pred: torch.Tensor,
     target: torch.Tensor,
-    pred_std: Optional[torch.Tensor] = None,
-    mask: Optional[torch.Tensor] = None,
+    pred_std: torch.Tensor | None = None,
+    mask: torch.Tensor | None = None,
     average_grid: bool = True,
     sum_vars: bool = True,
 ) -> torch.Tensor:
@@ -292,7 +291,7 @@ def nll(
     pred: torch.Tensor,
     target: torch.Tensor,
     pred_std: torch.Tensor,
-    mask: Optional[torch.Tensor] = None,
+    mask: torch.Tensor | None = None,
     average_grid: bool = True,
     sum_vars: bool = True,
 ) -> torch.Tensor:
@@ -341,7 +340,7 @@ def crps_gauss(
     pred: torch.Tensor,
     target: torch.Tensor,
     pred_std: torch.Tensor,
-    mask: Optional[torch.Tensor] = None,
+    mask: torch.Tensor | None = None,
     average_grid: bool = True,
     sum_vars: bool = True,
 ) -> torch.Tensor:

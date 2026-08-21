@@ -13,7 +13,7 @@ import torch
 # Local
 from ... import metrics, vis
 from ...config import NeuralLAMConfig
-from ...datastore import BaseDatastore
+from ...datastore.base import BaseRegularGridDatastore
 from ..forecasters.deterministic import BaseDeterministicForecaster
 from .base import BaseForecastingModule
 
@@ -43,7 +43,7 @@ class DeterministicForecastingModule(BaseForecastingModule):
         self,
         forecaster: BaseDeterministicForecaster,
         config: NeuralLAMConfig,
-        datastore: BaseDatastore,
+        datastore: BaseRegularGridDatastore,
         lr: float = 1e-3,
         restore_opt: bool = False,
         n_example_pred: int = 1,
@@ -52,8 +52,8 @@ class DeterministicForecastingModule(BaseForecastingModule):
         train_steps_to_log: list[int] | None = None,
         metrics_watch: list[str] | None = None,
         var_leads_metrics_watch: dict[int, list[int]] | None = None,
-        args=None,
-    ):
+        args: Any | None = None,
+    ) -> None:
         """
         Initialize the module and its deterministic evaluation metrics.
 
@@ -66,7 +66,7 @@ class DeterministicForecastingModule(BaseForecastingModule):
             prediction through it.
         config : NeuralLAMConfig
             Configuration object for the neural LAM model.
-        datastore : BaseDatastore
+        datastore : BaseRegularGridDatastore
             Datastore providing grid metadata and data access.
         lr : float, default 1e-3
             Learning rate for the optimizer.
@@ -104,10 +104,10 @@ class DeterministicForecastingModule(BaseForecastingModule):
             var_leads_metrics_watch=var_leads_metrics_watch,
             args=args,
         )
-        self.val_metrics: dict[str, list] = {
+        self.val_metrics = {
             "mse": [],
         }
-        self.test_metrics: dict[str, list] = {
+        self.test_metrics = {
             "mse": [],
             "mae": [],
         }
@@ -115,9 +115,12 @@ class DeterministicForecastingModule(BaseForecastingModule):
             self.test_metrics["output_std"] = []  # Treat as metric
 
         # For storing spatial loss maps during evaluation
-        self.spatial_loss_maps: list[Any] = []
+        self.spatial_loss_maps: list[torch.Tensor] = []
 
-    def training_step(self, batch):
+    def training_step(
+        self,
+        batch: tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor],
+    ) -> torch.Tensor:
         """
         Perform a single training step, logging the per-step breakdown.
 
@@ -145,7 +148,10 @@ class DeterministicForecastingModule(BaseForecastingModule):
         )
         return batch_loss
 
-    def common_step(self, batch):
+    def common_step(
+        self,
+        batch: tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor],
+    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor | None, torch.Tensor]:
         """
         Produce the batch's single forecast, for validation and testing.
 
@@ -174,7 +180,7 @@ class DeterministicForecastingModule(BaseForecastingModule):
     def _compute_prediction_and_loss(
         self,
         batch: tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor],
-    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
+    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor | None, torch.Tensor]:
         """
         Compute predicted mean, standard deviation, and step-wise loss.
         Also extract and return corresponding target from batch.
@@ -198,10 +204,11 @@ class DeterministicForecastingModule(BaseForecastingModule):
         target_states : torch.Tensor
             Target states, shape
             ``(B, pred_steps, num_grid_nodes, num_state_vars)``.
-        pred_std : torch.Tensor
+        pred_std : torch.Tensor or None
             Predicted or pre-defined standard deviation, shape
             ``(B, pred_steps, num_grid_nodes, num_state_vars)`` or
-            ``(num_state_vars,)``.
+            ``(num_state_vars,)``. ``None`` when the forecaster's scoring
+            rule ignores the std.
         time_step_loss : torch.Tensor
             Loss for each unroll step, shape ``(pred_steps,)``.
         """
@@ -218,7 +225,11 @@ class DeterministicForecastingModule(BaseForecastingModule):
         )
         return prediction, target_states, pred_std, time_step_loss
 
-    def validation_step(self, batch, batch_idx):
+    def validation_step(
+        self,
+        batch: tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor],
+        batch_idx: int,
+    ) -> None:
         """
         Perform a single validation step.
 
@@ -248,7 +259,11 @@ class DeterministicForecastingModule(BaseForecastingModule):
         self.val_metrics["mse"].append(entry_mses)
 
     # pylint: disable-next=unused-argument
-    def test_step(self, batch, batch_idx):
+    def test_step(
+        self,
+        batch: tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor],
+        batch_idx: int,
+    ) -> None:
         """
         Perform a single test step.
 
@@ -288,11 +303,14 @@ class DeterministicForecastingModule(BaseForecastingModule):
             prediction, target_states, pred_std, average_grid=False
         )
         spatial_loss[..., ~self.interior_mask_bool] = float("nan")
+        val_steps_to_log = (
+            self.hparams.val_steps_to_log  # ty: ignore[unresolved-attribute]
+        )
         log_spatial_losses = spatial_loss[
             :,
             [
                 step - 1
-                for step in self.hparams.val_steps_to_log
+                for step in val_steps_to_log
                 if step <= spatial_loss.shape[1]
             ],
         ]
@@ -314,7 +332,7 @@ class DeterministicForecastingModule(BaseForecastingModule):
                 split="test",
             )
 
-    def on_test_epoch_end(self):
+    def on_test_epoch_end(self) -> None:
         """
         Perform actions at the end of the test epoch.
         Aggregates and plots test metrics and spatial loss maps.
@@ -327,6 +345,13 @@ class DeterministicForecastingModule(BaseForecastingModule):
         if self.trainer.is_global_zero:
             # `nanmean` because boundary nodes are NaN-masked in `test_step`
             mean_spatial_loss = torch.nanmean(spatial_loss_tensor, dim=0)
+            hparams = self.hparams
+            val_steps_to_log = (
+                hparams.val_steps_to_log  # ty: ignore[unresolved-attribute]
+            )
+            logger_save_dir = (
+                self.logger.save_dir  # ty: ignore[unresolved-attribute]
+            )
 
             loss_map_figs = [
                 vis.plot_spatial_error(
@@ -335,9 +360,7 @@ class DeterministicForecastingModule(BaseForecastingModule):
                     title=f"Test loss, t={t_i} "
                     f"({(self.time_step_int * t_i)} {self.time_step_unit})",
                 )
-                for t_i, loss_map in zip(
-                    self.hparams.val_steps_to_log, mean_spatial_loss
-                )
+                for t_i, loss_map in zip(val_steps_to_log, mean_spatial_loss)
             ]
 
             for i, fig in enumerate(loss_map_figs):
@@ -345,30 +368,31 @@ class DeterministicForecastingModule(BaseForecastingModule):
                 if not isinstance(self.logger, pl.loggers.WandbLogger):
                     key = f"{key}_{i}"
                 if hasattr(self.logger, "log_image"):
-                    self.logger.log_image(key=key, images=[fig])
+                    self.logger.log_image(  # ty: ignore[call-non-callable]
+                        key=key, images=[fig]
+                    )
 
             pdf_loss_map_figs = [
                 vis.plot_spatial_error(error=loss_map, datastore=self.datastore)
                 for loss_map in mean_spatial_loss
             ]
             pdf_loss_maps_dir = os.path.join(
-                self.logger.save_dir, "spatial_loss_maps"
+                logger_save_dir, "spatial_loss_maps"
             )
             os.makedirs(pdf_loss_maps_dir, exist_ok=True)
-            for t_i, fig in zip(
-                self.hparams.val_steps_to_log, pdf_loss_map_figs
-            ):
+            for t_i, fig in zip(val_steps_to_log, pdf_loss_map_figs):
                 fig.savefig(os.path.join(pdf_loss_maps_dir, f"loss_t{t_i}.pdf"))
 
             torch.save(
                 mean_spatial_loss.cpu(),
-                os.path.join(self.logger.save_dir, "mean_spatial_loss.pt"),
+                os.path.join(logger_save_dir, "mean_spatial_loss.pt"),
             )
 
-            if self.hparams.metrics_watch:
-                unmatched = (
-                    set(self.hparams.metrics_watch) - self.matched_metrics
-                )
+            metrics_watch = (
+                hparams.metrics_watch  # ty: ignore[unresolved-attribute]
+            )
+            if metrics_watch:
+                unmatched = set(metrics_watch) - self.matched_metrics
                 if unmatched:
                     warnings.warn(
                         "The following metrics in --metrics_watch "

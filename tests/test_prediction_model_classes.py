@@ -1,4 +1,5 @@
 # Standard library
+import typing
 from argparse import Namespace
 
 # Third-party
@@ -8,6 +9,7 @@ import torch
 
 # First-party
 from neural_lam import config as nlconfig
+from neural_lam.datastore.base import BaseDatastore
 from neural_lam.models import (
     BaseDeterministicForecaster,
     BaseEnsembleARForecaster,
@@ -514,7 +516,9 @@ def test_graph_lam_no_static_features():
 
     assert predictor.grid_static_features.shape[1] == 0
 
-    forecaster = DeterministicARForecaster(predictor, datastore)
+    forecaster = DeterministicARForecaster(
+        predictor, typing.cast(BaseDatastore, datastore)
+    )
     B = 2
     num_grid_nodes = predictor.num_grid_nodes
     d_state = base_datastore.get_num_data_vars(category="state")

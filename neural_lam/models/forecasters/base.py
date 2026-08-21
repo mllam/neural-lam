@@ -29,6 +29,9 @@ class BaseForecaster(nn.Module, ABC):
     Lightning module that evaluates it.
     """
 
+    boundary_mask: torch.Tensor
+    interior_mask: torch.Tensor
+
     def __init__(self, datastore: BaseDatastore) -> None:
         """
         Initialize the forecaster.

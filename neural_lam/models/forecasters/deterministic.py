@@ -2,7 +2,6 @@
 
 # Standard library
 from abc import abstractmethod
-from typing import Optional
 
 # Third-party
 import torch
@@ -28,6 +27,8 @@ class BaseDeterministicForecaster(BaseForecaster):
     ``compute_loss_from_forecast`` applies the same scoring rule to an
     already-produced forecast for reporting.
     """
+
+    per_var_std: torch.Tensor | None
 
     def __init__(
         self,
@@ -189,8 +190,8 @@ class BaseDeterministicForecaster(BaseForecaster):
         return torch.mean(step_losses), {}
 
     def _resolve_pred_std(
-        self, pred_std: Optional[torch.Tensor]
-    ) -> Optional[torch.Tensor]:
+        self, pred_std: torch.Tensor | None
+    ) -> torch.Tensor | None:
         """
         Return the std ``self.loss`` should be applied with.
 
@@ -233,8 +234,8 @@ class BaseDeterministicForecaster(BaseForecaster):
         self,
         prediction: torch.Tensor,
         target_states: torch.Tensor,
-        pred_std: Optional[torch.Tensor],
-        mask: Optional[torch.Tensor] = None,
+        pred_std: torch.Tensor | None,
+        mask: torch.Tensor | None = None,
         average_grid: bool = True,
         sum_vars: bool = True,
     ) -> torch.Tensor:
