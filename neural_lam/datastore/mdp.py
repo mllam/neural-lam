@@ -66,7 +66,7 @@ class MDPDatastore(BaseRegularGridDatastore):
             train/val/test splits.
 
         """
-        self._config_path = Path(config_path)
+        self._config_path = Path(config_path).resolve()
         self._root_path = self._config_path.parent
         self._config = mdp.Config.from_yaml_file(self._config_path)
         fp_ds = self._root_path / self._config_path.name.replace(
@@ -166,7 +166,7 @@ class MDPDatastore(BaseRegularGridDatastore):
             interior_path = Path(domain_cropping.interior_dataset_config_path)
             if not interior_path.is_absolute():
                 domain_cropping.interior_dataset_config_path = str(
-                    (self._root_path / interior_path).resolve()
+                    self._root_path / interior_path
                 )
         return config
 

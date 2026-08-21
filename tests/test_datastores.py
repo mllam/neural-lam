@@ -48,7 +48,7 @@ import xarray as xr
 
 # First-party
 from neural_lam.create_graph import create_graph_from_datastore
-from neural_lam.datastore import DATASTORES
+from neural_lam.datastore import DATASTORES, init_datastore
 from neural_lam.datastore.base import BaseRegularGridDatastore
 from neural_lam.datastore.plot_example import plot_example_from_datastore
 from tests.conftest import (
@@ -521,3 +521,26 @@ def test_plot_example_on_cropped_datastore_raises():
             datastore=datastore_boundary,
             col_dim="time",
         )
+
+
+def test_symlinked_config_resolves_to_the_real_directory():
+    """A config reached through a symlink must derive its root from the link
+    target, not the link.
+
+    The two-datastore boundary example reaches the danra config through a
+    symlink; deriving the root from the link would build a second copy of
+    the same zarr next to it.
+    """
+    linked = (
+        Path(__file__).parent
+        / "datastore_examples"
+        / "mdp"
+        / "era5_1000hPa_danra_100m_winds"
+        / "danra.datastore.yaml"
+    )
+    assert linked.is_symlink()
+
+    datastore = init_datastore(datastore_kind="mdp", config_path=linked)
+
+    assert datastore.root_path == linked.resolve().parent
+    assert datastore.root_path.name == "danra_100m_winds"
