@@ -490,3 +490,17 @@ def test_boundary_mask_on_boundary_datastore_raises():
 
     with pytest.raises(NotImplementedError, match="without `state` data"):
         datastore_boundary.boundary_mask
+
+
+@pytest.mark.slow
+def test_plot_example_on_cropped_datastore_raises():
+    """Plotting unstacks `grid_index` back into x/y, which pads the cells a
+    domain-cropped datastore does not have, so it must be refused."""
+    datastore_boundary = init_datastore_boundary_example("mdp")
+
+    with pytest.raises(NotImplementedError, match="complete 2D grid"):
+        plot_example_from_datastore(
+            category="forcing",
+            datastore=datastore_boundary,
+            col_dim="time",
+        )

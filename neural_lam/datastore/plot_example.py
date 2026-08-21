@@ -47,7 +47,20 @@ def plot_example_from_datastore(
     -------
     Figure
         Matplotlib figure object.
+
+    Raises
+    ------
+    NotImplementedError
+        If the datastore's grid points do not form a complete 2D grid, since
+        the plot is made by unstacking ``grid_index`` back into x/y.
     """
+    if not datastore.is_on_regular_spatial_grid:
+        raise NotImplementedError(
+            "Plotting is only supported for datastores whose grid points "
+            "form a complete 2D grid (`is_on_regular_spatial_grid`); "
+            f"{type(datastore).__name__} reports that it does not."
+        )
+
     da = datastore.get_dataarray(category=category, split=split)
     assert da is not None
     if standardize:
@@ -184,13 +197,6 @@ if __name__ == "__main__":
         datastore_kind=datastore_kind,
         config_path=args.datastore_config_path,
     )
-    if not datastore.is_on_regular_spatial_grid:
-        raise NotImplementedError(
-            "Plotting is only supported for datastores whose grid points "
-            "form a complete 2D grid (`is_on_regular_spatial_grid`); "
-            f"{type(datastore).__name__} reports that it does not."
-        )
-
     # Standard library
     from typing import cast
 
