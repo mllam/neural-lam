@@ -12,8 +12,8 @@ from neural_lam import config as nlconfig
 from neural_lam.datastore.base import BaseDatastore
 from neural_lam.models import (
     BaseDeterministicForecaster,
-    BaseEnsembleARForecaster,
-    BaseEnsembleForecaster,
+    BaseProbabilisticARForecaster,
+    BaseProbabilisticForecaster,
     DeterministicARForecaster,
     DeterministicForecastingModule,
     StepPredictor,
@@ -189,8 +189,8 @@ def test_forecaster_hierarchy_is_a_tree():
     for forecaster_class in (
         BaseDeterministicForecaster,
         DeterministicARForecaster,
-        BaseEnsembleForecaster,
-        BaseEnsembleARForecaster,
+        BaseProbabilisticForecaster,
+        BaseProbabilisticARForecaster,
     ):
         assert len(forecaster_class.__bases__) == 1, forecaster_class
 

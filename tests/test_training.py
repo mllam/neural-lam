@@ -16,14 +16,14 @@ from neural_lam.datastore.base import BaseRegularGridDatastore
 from neural_lam.models import (
     DeterministicARForecaster,
     DeterministicForecastingModule,
-    EnsembleForecastingModule,
     GraphLAM,
+    ProbabilisticForecastingModule,
 )
 from neural_lam.weather_dataset import WeatherDataModule
 from tests.conftest import init_datastore_example
 from tests.dummy_datastore import DummyDatastore, set_framed_boundary
-from tests.test_ensemble_forecaster import (
-    ConcreteEnsembleARForecaster,
+from tests.test_probabilistic_forecaster import (
+    ConcreteProbabilisticARForecaster,
     NoisyStepPredictor,
 )
 
@@ -190,7 +190,7 @@ def test_training_output_std():
 
 @pytest.mark.slow
 def test_ensemble_training():
-    """Run one epoch through EnsembleForecastingModule.
+    """Run one epoch through ProbabilisticForecastingModule.
 
     There is no concrete ensemble model in the repo yet, so this trains the
     mock forecaster the ensemble unit tests use, exercising the training
@@ -201,10 +201,10 @@ def test_ensemble_training():
     config = build_config(datastore)
 
     predictor = NoisyStepPredictor(datastore=datastore, output_std=False)
-    forecaster = ConcreteEnsembleARForecaster(
+    forecaster = ConcreteProbabilisticARForecaster(
         predictor, datastore, config=config, train_num_members=2
     )
-    model = EnsembleForecastingModule(
+    model = ProbabilisticForecastingModule(
         forecaster=forecaster,
         config=config,
         datastore=datastore,

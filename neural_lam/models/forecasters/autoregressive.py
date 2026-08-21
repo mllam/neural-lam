@@ -25,7 +25,7 @@ def unroll_forecast(
     This is a function rather than a base class or a mix-in so that both
     forecaster families can reuse it without either inheriting from the
     other; see ``DeterministicARForecaster.forward`` and
-    ``BaseEnsembleARForecaster.forward`` for the two call sites.
+    ``BaseProbabilisticARForecaster.forward`` for the two call sites.
 
     Parameters
     ----------

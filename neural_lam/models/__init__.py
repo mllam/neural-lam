@@ -7,13 +7,13 @@ from .forecasters.deterministic import (
     BaseDeterministicForecaster,
     DeterministicARForecaster,
 )
-from .forecasters.ensemble import (
-    BaseEnsembleARForecaster,
-    BaseEnsembleForecaster,
+from .forecasters.probabilistic import (
+    BaseProbabilisticARForecaster,
+    BaseProbabilisticForecaster,
 )
 from .modules.base import BaseForecastingModule
 from .modules.deterministic import DeterministicForecastingModule
-from .modules.ensemble import EnsembleForecastingModule
+from .modules.probabilistic import ProbabilisticForecastingModule
 from .step_predictors.base import StepPredictor
 from .step_predictors.graph.base import BaseGraphModel
 from .step_predictors.graph.graph_efm import GraphEFM, GraphEFMMultiScale

@@ -9,4 +9,7 @@ from .deterministic import (
     BaseDeterministicForecaster,
     DeterministicARForecaster,
 )
-from .ensemble import BaseEnsembleARForecaster, BaseEnsembleForecaster
+from .probabilistic import (
+    BaseProbabilisticARForecaster,
+    BaseProbabilisticForecaster,
+)

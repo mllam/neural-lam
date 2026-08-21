@@ -20,7 +20,7 @@ class BaseDeterministicForecaster(BaseForecaster):
     Forecaster whose ``forward`` is deterministic, trained by scoring it.
 
     Repeating a call returns the same forecast, so one call is the whole
-    forecast; contrast ``BaseEnsembleForecaster``, which samples a fresh
+    forecast; contrast ``BaseProbabilisticForecaster``, which samples a fresh
     one each call. How that forecast is produced stays open, ``forward``
     being inherited abstract; see ``DeterministicARForecaster`` for the
     auto-regressive one. ``compute_training_loss`` produces one forecast

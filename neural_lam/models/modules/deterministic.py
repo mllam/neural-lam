@@ -23,7 +23,7 @@ class DeterministicForecastingModule(BaseForecastingModule):
     Lightning module for a single deterministic forecast per batch.
 
     Validation and testing evaluate the forecaster's own single prediction,
-    as opposed to ``EnsembleForecastingModule``, which samples and scores
+    as opposed to ``ProbabilisticForecastingModule``, which samples and scores
     an ensemble. Training is shared with that module unchanged (see
     ``BaseForecastingModule.training_step``).
 

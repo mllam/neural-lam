@@ -539,7 +539,7 @@ Notebooks for visualization and analysis are located in `docs/notebooks`.
 The model code is split into three layers.
 A `BaseForecaster` maps initial states and forcing to a full forecast through `forward` and owns the training objective; how the forecast is produced is left to the subclass.
 Every forecaster shares that one entry point and its signature: one call produces one forecast.
-The two families differ in how they arrive at it, not in what they return: a `BaseDeterministicForecaster` returns the same forecast every call, a `BaseEnsembleForecaster` samples a fresh one, so an ensemble is repeated sampling rather than a different kind of output (`sample_ensemble`).
+The two families differ in how they arrive at it, not in what they return: a `BaseDeterministicForecaster` returns the same forecast every call, a `BaseProbabilisticForecaster` samples a fresh one, so an ensemble is repeated sampling rather than a different kind of output (`sample_ensemble`).
 Both currently produce their forecasts by autoregressive unrolling, repeatedly applying a `StepPredictor` that advances the state one time step.
 That unrolling is the function `unroll_forecast`, shared by the two families rather than inherited, so the class hierarchy stays a tree.
 This is the only setup currently in use, so in practice every model is built around a step predictor, but a forecaster that predicts all lead times at once would fit the same interface.
@@ -551,12 +551,12 @@ nn.Module
 ├── pl.LightningModule
 │   └── BaseForecastingModule*             - Optimizer, logging, plotting and batch standardization (neural_lam/models/modules)
 │       ├── DeterministicForecastingModule - Evaluates the single forecast the forecaster produces
-│       └── EnsembleForecastingModule      - Samples an ensemble and scores its mean
+│       └── ProbabilisticForecastingModule - Samples an ensemble and scores its mean
 ├── BaseForecaster*                        - Initial states + forcing -> full forecast; owns the training objective (neural_lam/models/forecasters)
 │   ├── BaseDeterministicForecaster*       - forward -> the same forecast every call; objective: a loss function applied to it
 │   │   └── DeterministicARForecaster      - Unrolls that forecast; what neural_lam.train_model builds
-│   └── BaseEnsembleForecaster*            - forward -> a fresh sample each call; sample_ensemble stacks several, leaving the objective open
-│       └── BaseEnsembleARForecaster*      - Unrolls each sample, still without an objective
+│   └── BaseProbabilisticForecaster*       - forward -> a fresh sample each call; sample_ensemble stacks several, leaving the objective open
+│       └── BaseProbabilisticARForecaster* - Unrolls each sample, still without an objective
 ├── StepPredictor*                         - (X_{t-1}, X_t, forcing_t) -> X_{t+1} (neural_lam/models/step_predictors)
 │   ├── BaseGraphModel*                    - Encode-process-decode over a mesh graph
 │   │   ├── GraphLAM
@@ -590,8 +590,8 @@ What to extend depends on the kind of model:
 
 * **Deterministic, autoregressive:** write a new `StepPredictor` and run it with the existing `DeterministicARForecaster`. This is the common case.
 * **Deterministic, not autoregressive:** subclass `BaseDeterministicForecaster`, implementing `forward` with the new way of producing a forecast, reusing an existing `StepPredictor` or a new one if the model has a per-step component at all.
-* **Ensemble, autoregressive:** subclass `BaseEnsembleARForecaster`, implementing the training objective, typically alongside a new `StepPredictor` that samples its output.
-* **Ensemble, not autoregressive:** subclass `BaseEnsembleForecaster`, which additionally leaves the way the members are produced open.
+* **Probabilistic, autoregressive:** subclass `BaseProbabilisticARForecaster`, implementing the training objective, typically alongside a new `StepPredictor` that samples its output.
+* **Probabilistic, not autoregressive:** subclass `BaseProbabilisticForecaster`, which additionally leaves the way a single sample is produced open.
 
 ## Format of graph directory
 The `graphs` directory contains generated graph structures that can be used by different graph-based models.

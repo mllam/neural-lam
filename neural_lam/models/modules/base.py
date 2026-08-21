@@ -1,4 +1,4 @@
-"""Abstract Lightning module shared by deterministic and ensemble
+"""Abstract Lightning module shared by deterministic and probabilistic
 forecasting modules."""
 
 # Standard library
@@ -40,7 +40,7 @@ class BaseForecastingModule(pl.LightningModule, ABC):
     sampled from repeated calls. ``validation_step``, ``test_step`` and
     ``on_test_epoch_end`` therefore stay abstract; concrete subclasses
     implement them independently (see ``DeterministicForecastingModule`` and
-    ``EnsembleForecastingModule``) rather than overriding one another.
+    ``ProbabilisticForecastingModule``) rather than overriding one another.
     """
 
     # pylint: disable=arguments-differ
@@ -383,9 +383,9 @@ class BaseForecastingModule(pl.LightningModule, ABC):
         Produce one forecast for the batch.
 
         Every forecaster shares the ``forward`` contract, so this works for
-        an ensemble forecaster too; there it returns a single sample rather
-        than a whole ensemble (see
-        ``BaseEnsembleForecaster.sample_ensemble``).
+        a probabilistic forecaster too; there it returns a single sample
+        rather than a whole ensemble (see
+        ``BaseProbabilisticForecaster.sample_ensemble``).
 
         Parameters
         ----------

@@ -22,9 +22,9 @@ class BaseForecaster(nn.Module, ABC):
     Every forecaster shares that one entry point and its signature: one
     call produces one forecast. What differs between families is how that
     forecast is arrived at, not its shape. ``BaseDeterministicForecaster``
-    returns the same forecast every call; ``BaseEnsembleForecaster`` samples
-    a fresh one, so calling it repeatedly is what yields an ensemble (see
-    ``BaseEnsembleForecaster.sample_ensemble``).
+    returns the same forecast every call; ``BaseProbabilisticForecaster``
+    samples a fresh one, so calling it repeatedly is what yields an ensemble
+    (see ``BaseProbabilisticForecaster.sample_ensemble``).
     """
 
     boundary_mask: torch.Tensor

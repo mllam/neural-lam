@@ -1,4 +1,4 @@
-"""Lightning module evaluating ensemble forecasters."""
+"""Lightning module evaluating probabilistic forecasters."""
 
 # Standard library
 import warnings
@@ -11,11 +11,11 @@ import torch
 from ... import metrics
 from ...config import NeuralLAMConfig
 from ...datastore.base import BaseRegularGridDatastore
-from ..forecasters.ensemble import BaseEnsembleForecaster
+from ..forecasters.probabilistic import BaseProbabilisticForecaster
 from .base import BaseForecastingModule
 
 
-class EnsembleForecastingModule(BaseForecastingModule):
+class ProbabilisticForecastingModule(BaseForecastingModule):
     """
     Lightning module evaluating a forecaster by sampling an ensemble.
 
@@ -29,12 +29,13 @@ class EnsembleForecastingModule(BaseForecastingModule):
     is made of.
     """
 
-    # The wrapped forecaster's forward must return an ensemble
-    forecaster: BaseEnsembleForecaster
+    # The wrapped forecaster's forward must sample, so that repeating it
+    # yields an ensemble
+    forecaster: BaseProbabilisticForecaster
 
     def __init__(
         self,
-        forecaster: BaseEnsembleForecaster,
+        forecaster: BaseProbabilisticForecaster,
         config: NeuralLAMConfig,
         datastore: BaseRegularGridDatastore,
         *,
@@ -54,7 +55,7 @@ class EnsembleForecastingModule(BaseForecastingModule):
 
         Parameters
         ----------
-        forecaster : BaseEnsembleForecaster
+        forecaster : BaseProbabilisticForecaster
             The forecaster to evaluate. Its ``forward`` must return an
             ensemble, since validation and testing score a sampled one.
         config : NeuralLAMConfig

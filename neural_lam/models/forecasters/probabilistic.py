@@ -12,7 +12,7 @@ from .autoregressive import unroll_forecast
 from .base import BaseForecaster
 
 
-class BaseEnsembleForecaster(BaseForecaster):
+class BaseProbabilisticForecaster(BaseForecaster):
     """
     Forecaster whose ``forward`` samples from a predictive distribution.
 
@@ -117,9 +117,9 @@ class BaseEnsembleForecaster(BaseForecaster):
         return ensemble, per_member_std
 
 
-class BaseEnsembleARForecaster(BaseEnsembleForecaster):
+class BaseProbabilisticARForecaster(BaseProbabilisticForecaster):
     """
-    Ensemble forecaster sampling each forecast auto-regressively.
+    Probabilistic forecaster sampling each forecast auto-regressively.
 
     Each call to the wrapped predictor draws a fresh sample of the next
     state, so one unrolling is one member and ``sample_ensemble`` gets
@@ -142,7 +142,7 @@ class BaseEnsembleARForecaster(BaseEnsembleForecaster):
         datastore: BaseDatastore,
     ) -> None:
         """
-        Initialize the BaseEnsembleARForecaster.
+        Initialize the BaseProbabilisticARForecaster.
 
         Parameters
         ----------
