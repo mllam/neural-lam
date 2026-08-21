@@ -479,3 +479,14 @@ def test_cropped_boundary_datastore_is_not_regular_grid():
             datastore=datastore_boundary,
             output_root_path=str(datastore_boundary.root_path / "graph"),
         )
+
+
+@pytest.mark.slow
+def test_boundary_mask_on_boundary_datastore_raises():
+    """A datastore without `state` data has no interior ring to mask, so
+    `boundary_mask` must say so rather than raise a bare KeyError from the
+    missing `state` variable."""
+    datastore_boundary = init_datastore_boundary_example("mdp")
+
+    with pytest.raises(NotImplementedError, match="without `state` data"):
+        datastore_boundary.boundary_mask

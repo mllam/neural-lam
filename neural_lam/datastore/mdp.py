@@ -430,7 +430,22 @@ class MDPDatastore(BaseRegularGridDatastore):
             A 0/1 mask for the boundary points of the dataset, where 1 is a
             boundary point and 0 is not.
 
+        Raises
+        ------
+        NotImplementedError
+            If the datastore provides no ``state`` data, i.e. it is a
+            boundary datastore rather than an interior one.
+
         """
+        if "state" not in self._ds:
+            raise NotImplementedError(
+                "`boundary_mask` marks the outer ring of the interior domain "
+                "so it can be excluded from the loss and overwritten in the "
+                "prediction, which a datastore without `state` data does not "
+                "have. A boundary datastore contributes forcing everywhere "
+                "and has no ring to mask."
+            )
+
         ds_unstacked = self.unstack_grid_coords(da_or_ds=self._ds)
         da_state_variable = (
             ds_unstacked["state"].isel(time=0).isel(state_feature=0)
