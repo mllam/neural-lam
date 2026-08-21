@@ -23,9 +23,9 @@ from .datastore.base import BaseDatastore
 from .gnn_layers import GNN_TYPES
 from .models import (
     MODELS,
-    ARForecaster,
     BaseHiGraphModel,
-    ForecasterModule,
+    DeterministicARForecaster,
+    DeterministicForecastingModule,
 )
 from .weather_dataset import WeatherDataModule
 
@@ -85,14 +85,14 @@ class AdaptiveHelpFormatter(ArgumentDefaultsHelpFormatter):
         )
 
 
-def load_forecaster_module_from_checkpoint(
+def load_forecasting_module_from_checkpoint(
     ckpt_path: str,
     config: NeuralLAMConfig,
     datastore: BaseDatastore,
-) -> ForecasterModule:
+) -> DeterministicForecastingModule:
     """
-    Reconstruct a ForecasterModule from a checkpoint without requiring the
-    caller to know the original architecture kwargs.
+    Reconstruct a DeterministicForecastingModule from a checkpoint without
+    requiring the caller to know the original architecture kwargs.
 
     The checkpoint must have been saved with args in hyper_parameters (i.e.
     created via train_model.main), so that model class and architecture kwargs
@@ -102,8 +102,10 @@ def load_forecaster_module_from_checkpoint(
     args = ckpt["hyper_parameters"]["args"]
     predictor_class = MODELS[args.model]
     predictor = build_predictor(predictor_class, args, config, datastore)
-    forecaster = ARForecaster(predictor, datastore)
-    return ForecasterModule.load_from_checkpoint(
+    forecaster = DeterministicARForecaster(
+        predictor, datastore, config=config, loss=args.loss
+    )
+    return DeterministicForecastingModule.load_from_checkpoint(
         ckpt_path,
         forecaster=forecaster,
         datastore=datastore,
@@ -500,16 +502,17 @@ def main(input_args: list[str] | None = None) -> None:
             raise ValueError("devices should be 'auto' or a list of integers")
 
     # Build predictor and forecaster externally, then inject into
-    # ForecasterModule
+    # DeterministicForecastingModule
     predictor_class = MODELS[args.model]
     predictor = build_predictor(predictor_class, args, config, datastore)
-    forecaster = ARForecaster(predictor, datastore)
+    forecaster = DeterministicARForecaster(
+        predictor, datastore, config=config, loss=args.loss
+    )
 
-    model = ForecasterModule(
+    model = DeterministicForecastingModule(
         forecaster=forecaster,
         config=config,
         datastore=datastore,
-        loss=args.loss,
         lr=args.lr,
         restore_opt=args.restore_opt,
         n_example_pred=args.n_example_pred,

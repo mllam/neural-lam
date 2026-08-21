@@ -3,13 +3,22 @@ import typing
 from argparse import Namespace
 
 # Third-party
+import pytest
 import pytorch_lightning as pl
 import torch
 
 # First-party
 from neural_lam import config as nlconfig
 from neural_lam.datastore.base import BaseDatastore
-from neural_lam.models import ARForecaster, ForecasterModule, StepPredictor
+from neural_lam.models import (
+    BaseDeterministicForecaster,
+    BaseProbabilisticARForecaster,
+    BaseProbabilisticForecaster,
+    DeterministicARForecaster,
+    DeterministicForecastingModule,
+    StepPredictor,
+    unroll_forecast,
+)
 from tests.conftest import init_datastore_example
 from tests.dummy_datastore import DummyDatastore
 
@@ -42,7 +51,7 @@ def test_ar_forecaster_unroll():
         output_std=False,
     )
 
-    forecaster = ARForecaster(predictor, datastore)
+    forecaster = DeterministicARForecaster(predictor, datastore)
 
     # Override masks to test boundary masking behaviour
     forecaster.interior_mask = torch.zeros_like(forecaster.interior_mask)
@@ -73,7 +82,151 @@ def test_ar_forecaster_unroll():
     assert torch.all(prediction[:, :, 1:, :] == 5.0)
 
 
-def test_forecaster_module_checkpoint(tmp_path):
+def test_ar_forecaster_compute_loss_from_forecast():
+    datastore = init_datastore_example("mdp")
+    config = nlconfig.NeuralLAMConfig(
+        datastore=nlconfig.DatastoreSelection(
+            kind=datastore.SHORT_NAME, config_path=datastore.root_path
+        )
+    )
+    predictor = MockStepPredictor(datastore=datastore, output_std=False)
+    forecaster = DeterministicARForecaster(
+        predictor, datastore, config=config, loss="mse"
+    )
+
+    B, num_grid_nodes = 2, predictor.num_grid_nodes
+    d_state = datastore.get_num_data_vars(category="state")
+    prediction = torch.zeros(B, num_grid_nodes, d_state)
+    target = torch.ones(B, num_grid_nodes, d_state)
+    mask = torch.ones(num_grid_nodes, dtype=torch.bool)
+
+    # pred_std=None falls back to forecaster.per_var_std and applies the
+    # forecaster's own configured scoring rule (self.loss)
+    scored = forecaster.compute_loss_from_forecast(
+        prediction, target, None, mask=mask
+    )
+    expected = forecaster.loss(
+        prediction, target, forecaster.per_var_std, mask=mask
+    )
+    assert torch.equal(scored, expected)
+
+    # An explicit pred_std is used as-is, not overridden by per_var_std
+    explicit_std = torch.full((d_state,), 2.0)
+    scored_explicit = forecaster.compute_loss_from_forecast(
+        prediction, target, explicit_std, mask=mask
+    )
+    expected_explicit = forecaster.loss(
+        prediction, target, explicit_std, mask=mask
+    )
+    assert torch.equal(scored_explicit, expected_explicit)
+
+
+def test_ar_forecaster_without_config_raises_on_use_not_construction():
+    """A predictor that doesn't output std plus no config is a valid,
+    unambiguous state at construction time (the forecaster may only ever
+    be used for inference), so DeterministicARForecaster must not raise
+    there. It should only raise once scoring is actually attempted and has
+    no std to use, and the error should come from the forecaster itself,
+    not a wrapping module."""
+    datastore = init_datastore_example("mdp")
+    predictor = MockStepPredictor(datastore=datastore, output_std=False)
+
+    # Construction succeeds even though predicts_std=False and config=None
+    forecaster = DeterministicARForecaster(predictor, datastore)
+    assert forecaster.per_var_std is None
+
+    B, num_grid_nodes = 2, predictor.num_grid_nodes
+    d_state = datastore.get_num_data_vars(category="state")
+    prediction = torch.zeros(B, num_grid_nodes, d_state)
+    target = torch.ones(B, num_grid_nodes, d_state)
+
+    with pytest.raises(ValueError, match="per_var_std fallback"):
+        forecaster.compute_loss_from_forecast(prediction, target, None)
+
+    num_past_forcing_steps = 1
+    num_future_forcing_steps = 1
+    d_forcing = datastore.get_num_data_vars(category="forcing") * (
+        num_past_forcing_steps + num_future_forcing_steps + 1
+    )
+    pred_steps = 3
+    init_states = torch.ones(B, 2, num_grid_nodes, d_state)
+    forcing_features = torch.ones(B, pred_steps, num_grid_nodes, d_forcing)
+    true_states = torch.ones(B, pred_steps, num_grid_nodes, d_state)
+
+    with pytest.raises(ValueError, match="per_var_std fallback"):
+        forecaster.compute_training_loss(
+            init_states,
+            forcing_features,
+            true_states,
+            interior_mask_bool=torch.ones(num_grid_nodes, dtype=torch.bool),
+        )
+
+
+def test_ar_forecaster_without_config_scores_with_unweighted_loss():
+    """The std fallback is only needed by scoring rules that use a std, so
+    an unweighted loss must score without a config, rather than demanding a
+    per_var_std it would immediately ignore."""
+    datastore = init_datastore_example("mdp")
+    predictor = MockStepPredictor(datastore=datastore, output_std=False)
+
+    forecaster = DeterministicARForecaster(predictor, datastore, loss="mse")
+    assert forecaster.per_var_std is None
+
+    B, num_grid_nodes = 2, predictor.num_grid_nodes
+    d_state = datastore.get_num_data_vars(category="state")
+    prediction = torch.zeros(B, num_grid_nodes, d_state)
+    target = torch.ones(B, num_grid_nodes, d_state)
+
+    scored = forecaster.compute_loss_from_forecast(prediction, target, None)
+    torch.testing.assert_close(scored, torch.full((B,), float(d_state)))
+
+
+def test_forecaster_hierarchy_is_a_tree():
+    """The two forecaster families share auto-regressive unrolling through
+    ``unroll_forecast`` rather than through a common ancestor, so every
+    forecaster has a single base and no diamond can arise. ``BaseForecaster``
+    itself is the exception, combining nn.Module with ABC."""
+    for forecaster_class in (
+        BaseDeterministicForecaster,
+        DeterministicARForecaster,
+        BaseProbabilisticForecaster,
+        BaseProbabilisticARForecaster,
+    ):
+        assert len(forecaster_class.__bases__) == 1, forecaster_class
+
+
+def test_unroll_forecast_reproduces_deterministic_forward():
+    """The unrolling both families call is a plain function, so calling it
+    directly gives exactly what DeterministicARForecaster.forward does."""
+    datastore = init_datastore_example("mdp")
+    predictor = MockStepPredictor(datastore=datastore, output_std=False)
+    forecaster = DeterministicARForecaster(predictor, datastore)
+
+    B, num_grid_nodes = 2, predictor.num_grid_nodes
+    d_state = datastore.get_num_data_vars(category="state")
+    d_forcing = datastore.get_num_data_vars(category="forcing") * 3
+    pred_steps = 3
+    init_states = torch.ones(B, 2, num_grid_nodes, d_state)
+    forcing_features = torch.ones(B, pred_steps, num_grid_nodes, d_forcing)
+    boundary_states = torch.ones(B, pred_steps, num_grid_nodes, d_state) * 5.0
+
+    prediction, pred_std = forecaster(
+        init_states, forcing_features, boundary_states
+    )
+    direct_prediction, direct_std = unroll_forecast(
+        predictor,
+        init_states,
+        forcing_features,
+        boundary_states,
+        forecaster.boundary_mask,
+        forecaster.interior_mask,
+    )
+
+    assert torch.equal(prediction, direct_prediction)
+    assert pred_std is None and direct_std is None
+
+
+def test_forecasting_module_checkpoint(tmp_path):
     datastore = init_datastore_example("mdp")
 
     config = nlconfig.NeuralLAMConfig(
@@ -83,7 +236,7 @@ def test_forecaster_module_checkpoint(tmp_path):
     )
 
     # Build predictor and forecaster externally, then inject into
-    # ForecasterModule
+    # DeterministicForecastingModule
     # First-party
     from neural_lam.models import MODELS
 
@@ -99,13 +252,14 @@ def test_forecaster_module_checkpoint(tmp_path):
         num_future_forcing_steps=1,
         output_std=False,
     )
-    forecaster = ARForecaster(predictor, datastore)
+    forecaster = DeterministicARForecaster(
+        predictor, datastore, config=config, loss="mse"
+    )
 
-    model = ForecasterModule(
+    model = DeterministicForecastingModule(
         forecaster=forecaster,
         config=config,
         datastore=datastore,
-        loss="mse",
         lr=1e-3,
         restore_opt=False,
         n_example_pred=1,
@@ -135,10 +289,12 @@ def test_forecaster_module_checkpoint(tmp_path):
         num_future_forcing_steps=1,
         output_std=False,
     )
-    load_forecaster = ARForecaster(load_predictor, datastore)
+    load_forecaster = DeterministicARForecaster(
+        load_predictor, datastore, config=config, loss="mse"
+    )
 
     # Load from checkpoint
-    loaded_model = ForecasterModule.load_from_checkpoint(
+    loaded_model = DeterministicForecastingModule.load_from_checkpoint(
         ckpt_path,
         datastore=datastore,
         forecaster=load_forecaster,
@@ -171,7 +327,7 @@ def test_forecaster_module_checkpoint(tmp_path):
     assert torch.allclose(out_before[0], out_after[0])
 
 
-def test_forecaster_module_old_checkpoint(tmp_path):
+def test_forecasting_module_old_checkpoint(tmp_path):
     datastore = init_datastore_example("mdp")
 
     config = nlconfig.NeuralLAMConfig(
@@ -195,21 +351,22 @@ def test_forecaster_module_old_checkpoint(tmp_path):
         num_future_forcing_steps=1,
         output_std=False,
     )
-    forecaster = ARForecaster(predictor, datastore)
-
     # Use distinctive non-default values so we can detect silent fallback
-    # to ForecasterModule's defaults during load.
+    # to DeterministicForecastingModule's defaults during load.
     saved_loss = "mse"
     saved_lr = 0.123
     saved_create_gif = True
     saved_val_steps = [2]
     saved_n_example_pred = 7
 
-    model = ForecasterModule(
+    forecaster = DeterministicARForecaster(
+        predictor, datastore, config=config, loss=saved_loss
+    )
+
+    model = DeterministicForecastingModule(
         forecaster=forecaster,
         config=config,
         datastore=datastore,
-        loss=saved_loss,
         lr=saved_lr,
         restore_opt=False,
         n_example_pred=saved_n_example_pred,
@@ -271,10 +428,12 @@ def test_forecaster_module_old_checkpoint(tmp_path):
         num_future_forcing_steps=1,
         output_std=False,
     )
-    load_forecaster = ARForecaster(load_predictor, datastore)
+    load_forecaster = DeterministicARForecaster(
+        load_predictor, datastore, config=config, loss=saved_loss
+    )
 
     # Load from hacked old checkpoint
-    loaded_model = ForecasterModule.load_from_checkpoint(
+    loaded_model = DeterministicForecastingModule.load_from_checkpoint(
         ckpt_path,
         datastore=datastore,
         forecaster=load_forecaster,
@@ -285,8 +444,8 @@ def test_forecaster_module_old_checkpoint(tmp_path):
     assert loaded_model.forecaster.predictor.__class__.__name__ == "GraphLAM"
 
     # Hyperparameters nested in the legacy 'args' namespace must round-trip
-    # rather than silently falling back to ForecasterModule defaults.
-    assert loaded_model.hparams.loss == saved_loss
+    # rather than silently falling back to DeterministicForecastingModule
+    # defaults.
     assert loaded_model.hparams.lr == saved_lr
     assert loaded_model.hparams.val_steps_to_log == saved_val_steps
     assert loaded_model.create_gif is saved_create_gif
@@ -357,7 +516,9 @@ def test_graph_lam_no_static_features():
 
     assert predictor.grid_static_features.shape[1] == 0
 
-    forecaster = ARForecaster(predictor, typing.cast(BaseDatastore, datastore))
+    forecaster = DeterministicARForecaster(
+        predictor, typing.cast(BaseDatastore, datastore)
+    )
     B = 2
     num_grid_nodes = predictor.num_grid_nodes
     d_state = base_datastore.get_num_data_vars(category="state")
@@ -391,8 +552,8 @@ def test_step_predictor_no_static_features():
         0,
     )
 
-    # Verify a forward pass works end-to-end via ARForecaster
-    forecaster = ARForecaster(predictor, datastore)
+    # Verify a forward pass works end-to-end via DeterministicARForecaster
+    forecaster = DeterministicARForecaster(predictor, datastore)
     B, num_grid_nodes = 2, predictor.num_grid_nodes
     d_state = datastore.get_num_data_vars(category="state")
     d_forcing = datastore.get_num_data_vars(category="forcing")

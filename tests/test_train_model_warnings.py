@@ -17,7 +17,7 @@ from neural_lam.config import NeuralLAMConfig  # noqa: E402
 from neural_lam.models import MODELS, BaseHiGraphModel  # noqa: E402
 from neural_lam.train_model import (  # noqa: E402
     build_predictor,
-    load_forecaster_module_from_checkpoint,
+    load_forecasting_module_from_checkpoint,
     main,
 )
 
@@ -59,8 +59,9 @@ def test_eval_without_load_warning(eval_val, load_val, expect_warning):
                     mock_warning.assert_not_called()
 
 
-def test_create_gif_forwarded_to_forecaster_module():
-    """--create_gif must be forwarded to ForecasterModule.__init__."""
+def test_create_gif_forwarded_to_forecasting_module():
+    """--create_gif must be forwarded to
+    DeterministicForecastingModule.__init__."""
     mock_args = MagicMock()
     mock_args.eval = None
     mock_args.load = None
@@ -92,9 +93,10 @@ def test_create_gif_forwarded_to_forecaster_module():
         ),
         patch("neural_lam.train_model.WeatherDataModule"),
         patch("neural_lam.train_model.MODELS", {"graph_lam": MagicMock}),
-        patch("neural_lam.train_model.ARForecaster"),
+        patch("neural_lam.train_model.DeterministicARForecaster"),
         patch(
-            "neural_lam.models.module.ForecasterModule.__init__",
+            "neural_lam.models.modules.deterministic."
+            "DeterministicForecastingModule.__init__",
             capture_init,
         ),
         pytest.raises(SystemExit),
@@ -103,11 +105,11 @@ def test_create_gif_forwarded_to_forecaster_module():
 
     assert (
         "create_gif" in captured_kwargs
-    ), "create_gif was not forwarded to ForecasterModule"
+    ), "create_gif was not forwarded to DeterministicForecastingModule"
     assert captured_kwargs["create_gif"] is True
     assert (
         "train_steps_to_log" in captured_kwargs
-    ), "train_steps_to_log was not forwarded to ForecasterModule"
+    ), "train_steps_to_log was not forwarded to ForecastingModule"
     assert captured_kwargs["train_steps_to_log"] == [2]
 
 
@@ -154,6 +156,7 @@ def make_args(**overrides):
         num_past_forcing_steps=1,
         num_future_forcing_steps=1,
         output_std=False,
+        loss="wmse",
     )
     args.update(overrides)
     return Namespace(**args)
@@ -200,13 +203,14 @@ def test_checkpoint_loader_restores_gnn_type_kwargs(config):
             return_value={"hyper_parameters": {"args": args}},
         ),
         patch("neural_lam.train_model.MODELS", {"hi_lam": predictor_class}),
-        patch("neural_lam.train_model.ARForecaster"),
+        patch("neural_lam.train_model.DeterministicARForecaster"),
         patch(
-            "neural_lam.train_model.ForecasterModule.load_from_checkpoint",
+            "neural_lam.train_model.DeterministicForecastingModule"
+            ".load_from_checkpoint",
             return_value=loaded_module,
         ),
     ):
-        result = load_forecaster_module_from_checkpoint(
+        result = load_forecasting_module_from_checkpoint(
             "model.ckpt", config, MagicMock()
         )
 

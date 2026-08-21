@@ -211,9 +211,10 @@ the input-data representation is split into two parts:
 
 2. A `pytorch.Dataset`-derived class (called
    `neural_lam.weather_dataset.WeatherDataset`) which takes care of sampling in
-   time to create individual samples for training, validation and testing. The
-   `WeatherDataset` class is also responsible for normalising the values and
-   returning `torch.Tensor`-objects.
+   time to create individual samples for training, validation and testing, and
+   returning `torch.Tensor`-objects. The values are returned unnormalised;
+   normalisation is applied to each batch on the accelerator instead, by
+   `BaseForecastingModule.on_after_batch_transfer`.
 
 There are currently two different datastores implemented in the codebase:
 
@@ -445,6 +446,7 @@ A few of the key ones are outlined below:
 * `--processor_layers`: Number of GNN layers to use in the processing part of the model
 * `--ar_steps_train`: Number of time steps to unroll for when making predictions and computing the loss
 * `--ar_steps_eval`: Number of time steps to unroll for during validation steps
+* `--loss`: Which of the loss functions in `neural_lam/metrics.py` to train on
 
 Checkpoints of trained models are stored under `runs/<run-name>/checkpoints/`, alongside Lightning and logger outputs for the same run.
 The implemented models are:
@@ -534,6 +536,63 @@ Except for training and pre-processing scripts all the source code can be found 
 Model classes, including abstract base classes, are located in `neural_lam/models`.
 Notebooks for visualization and analysis are located in `docs/notebooks`.
 
+The model code is split into three layers.
+A `BaseForecaster` maps initial states and forcing to a full forecast through `forward` and owns the training objective; how the forecast is produced is left to the subclass.
+Every forecaster shares that one entry point and its signature: one call produces one forecast.
+The two families differ in how they arrive at it, not in what they return: a `BaseDeterministicForecaster` returns the same forecast every call, a `BaseProbabilisticForecaster` samples a fresh one, so an ensemble is repeated sampling rather than a different kind of output (`sample_ensemble`).
+Both currently produce their forecasts by autoregressive unrolling, repeatedly applying a `StepPredictor` that advances the state one time step.
+That unrolling is the function `unroll_forecast`, shared by the two families rather than inherited, so the class hierarchy stays a tree.
+This is the only setup currently in use, so in practice every model is built around a step predictor, but a forecaster that predicts all lead times at once would fit the same interface.
+A `BaseForecastingModule` wraps a forecaster in the Lightning training/evaluation loop.
+
+All of these are `torch.nn.Module` subclasses, and `*` marks a class that is abstract and meant to be subclassed:
+```
+nn.Module
+├── pl.LightningModule
+│   └── BaseForecastingModule*             - Optimizer, logging, plotting and batch standardization (neural_lam/models/modules)
+│       ├── DeterministicForecastingModule - Evaluates the single forecast the forecaster produces
+│       └── ProbabilisticForecastingModule - Samples an ensemble and scores its mean
+├── BaseForecaster*                        - Initial states + forcing -> full forecast; owns the training objective (neural_lam/models/forecasters)
+│   ├── BaseDeterministicForecaster*       - forward -> the same forecast every call; objective: a loss function applied to it
+│   │   └── DeterministicARForecaster      - Unrolls that forecast; what neural_lam.train_model builds
+│   └── BaseProbabilisticForecaster*       - forward -> a fresh sample each call; sample_ensemble stacks several, leaving the objective open
+│       └── BaseProbabilisticARForecaster* - Unrolls each sample, still without an objective
+├── StepPredictor*                         - (X_{t-1}, X_t, forcing_t) -> X_{t+1} (neural_lam/models/step_predictors)
+│   ├── BaseGraphModel*                    - Encode-process-decode over a mesh graph
+│   │   ├── GraphLAM
+│   │   └── BaseHiGraphModel*              - Requires a hierarchical mesh graph
+│   │       ├── HiLAM
+│   │       └── HiLAMParallel
+│   └── BaseGraphEFM*                      - Latent-variable predictors with their own prior, encoder and decoder
+│       ├── GraphEFM
+│       └── GraphEFMMultiScale
+├── BaseLatentEncoder*                     - Grid representation -> Gaussian over a latent on the mesh (neural_lam/models/latent)
+│   ├── ConstantLatentEncoder
+│   ├── GraphLatentEncoder
+│   └── HiGraphLatentEncoder
+└── BaseGraphLatentDecoder*                - Grid representation + latent sample -> next-state increment (neural_lam/models/latent)
+    ├── GraphLatentDecoder
+    └── HiGraphLatentDecoder
+```
+The `--model` values listed under [Train Models](#train-models) select the step predictor. `GraphEFM` and `GraphEFMMultiScale` are implemented but not yet selectable this way.
+
+The building blocks these are assembled from are also `torch.nn.Module` subclasses:
+```
+nn.Module
+├── pyg.nn.MessagePassing
+│   └── InteractionNet   - GNN layer, chosen per edge type with --g2m_gnn_type, --m2g_gnn_type, --mesh_up_gnn_type, --mesh_down_gnn_type (neural_lam/gnn_layers.py)
+│       └── PropagationNet
+├── BufferList           - List of tensor buffers held as a Module (neural_lam/utils/buffer_list.py)
+└── SplitMLPs            - Feeds chunks of the input through separate MLPs (neural_lam/gnn_layers.py)
+```
+
+What to extend depends on the kind of model:
+
+* **Deterministic, autoregressive:** write a new `StepPredictor` and run it with the existing `DeterministicARForecaster`. This is the common case.
+* **Deterministic, not autoregressive:** subclass `BaseDeterministicForecaster`, implementing `forward` with the new way of producing a forecast, reusing an existing `StepPredictor` or a new one if the model has a per-step component at all.
+* **Probabilistic, autoregressive:** subclass `BaseProbabilisticARForecaster`, implementing the training objective, typically alongside a new `StepPredictor` that samples its output.
+* **Probabilistic, not autoregressive:** subclass `BaseProbabilisticForecaster`, which additionally leaves the way a single sample is produced open.
+
 ## Format of graph directory
 The `graphs` directory contains generated graph structures that can be used by different graph-based models.
 For a strict, machine-verifiable specification, see `docs/graph_storage_spec.md`.
@@ -584,6 +643,7 @@ Entries 0 in these lists describe edges between the lowest levels 1 and 2.
 Canonical dimension names used in tensor shape annotations throughout the codebase:
 
 - `B` - batch size
+- `S` - number of members in an ensemble forecast
 - `pred_steps` - number of autoregressive prediction steps
 - `num_grid_nodes` - number of nodes in the flattened spatial grid
 - `num_mesh_nodes` - number of mesh nodes; indexed as `num_mesh_nodes[l]` for hierarchical level `l`
