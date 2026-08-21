@@ -73,11 +73,10 @@ class MDPDatastore(BaseRegularGridDatastore):
             ".yaml", ".zarr"
         )
 
-        # `domain_cropping.interior_dataset_config_path` references a sibling
-        # config and is written relative to this config file, but
-        # mllam-data-prep resolves it against the process CWD. Make only that
-        # path absolute so cropped datastores build from any directory while
-        # all other (CWD-relative) input paths keep their default behaviour.
+        # mllam-data-prep resolves `interior_dataset_config_path` against
+        # the process CWD, but it is written relative to this config file.
+        # Only that path is absolutised; other inputs keep CWD-relative
+        # behaviour.
         domain_cropping = self._config.output.domain_cropping
         if domain_cropping is not None:
             interior_path = Path(domain_cropping.interior_dataset_config_path)
@@ -101,8 +100,7 @@ class MDPDatastore(BaseRegularGridDatastore):
             _ds = mdp.create_dataset(config=self._config)
             _ds.to_zarr(fp_ds)
 
-        # A valid datastore must provide at least state or forcing data;
-        # otherwise downstream code has nothing to slice or grid-shape against.
+        # Without either there is nothing to slice or grid-shape against.
         if "state" not in _ds and "forcing" not in _ds:
             raise ValueError(
                 f"Datastore at {self._config_path} contains neither 'state' "
@@ -326,10 +324,8 @@ class MDPDatastore(BaseRegularGridDatastore):
 
         da_category = self._ds[category]
 
-        # Set units on spatial coordinates if missing. Use the dim names
-        # actually declared in the config's grid_index stacking (so this
-        # works for both projected (x, y) and geographic (longitude,
-        # latitude) source datasets like ERA5).
+        # Use the dim names declared in the config's grid_index stacking,
+        # so both projected (x, y) and geographic (lon, lat) sources work.
         _UNITS_BY_COORD = {
             "x": "m",
             "y": "m",
@@ -535,9 +531,8 @@ class MDPDatastore(BaseRegularGridDatastore):
             The shape of the cartesian grid for the state variables.
 
         """
-        # Use state if available, otherwise fall back to forcing (for
-        # boundary-only datastores with no state variables). The presence
-        # of at least one is guaranteed by __init__.
+        # Boundary-only datastores have no state; __init__ guarantees one
+        # of the two is present.
         category = "state" if "state" in self._ds else "forcing"
         ds_cat = self.unstack_grid_coords(self._ds[category])
         xdim, ydim = self.spatial_coordinates
@@ -634,13 +629,9 @@ class MDPDatastore(BaseRegularGridDatastore):
     def is_on_regular_spatial_grid(self) -> bool:
         """Whether the grid points form a complete 2D rectangular grid.
 
-        ``MDPDatastore`` is a :class:`BaseRegularGridDatastore` because
-        mllam-data-prep stacks a rectangular source grid into
-        ``grid_index``, but ``domain_cropping`` drops the points outside
-        the interior domain, leaving fewer than
-        ``grid_shape_state.x * grid_shape_state.y``. Unstacking such a
-        datastore silently pads the missing cells, so downstream code that
-        needs a full grid checks this instead of the class.
+        ``domain_cropping`` drops the points outside the interior domain, so
+        a cropped datastore holds fewer than ``grid_shape_state.x * .y`` and
+        unstacking it would pad the missing cells.
 
         Returns
         -------

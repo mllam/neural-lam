@@ -129,15 +129,11 @@ class NeuralLAMConfig(dataclass_wizard.JSONWizard, dataclass_wizard.YAMLWizard):
     Attributes
     ----------
     datastores : dict[str, DatastoreSelection]
-        Mapping from a user-chosen datastore name to its selection config. The
-        role of each datastore is implied by the categories of data it
-        provides rather than by a dedicated config key: a datastore that
-        contains `state` data is used for both model input and output (the
-        interior domain), while a datastore without `state` data is used for
-        input only (e.g. boundary forcing from a separate domain). Exactly
-        one datastore must provide `state` data, and at most one datastore
-        may omit it (the boundary); both constraints are enforced in
-        :func:`load_config_and_datastore`.
+        Mapping from a user-chosen datastore name to its selection config.
+        A datastore's role follows from the categories it provides: one with
+        `state` data is the interior (input and output), one without is
+        input-only (boundary forcing). :func:`load_config_and_datastore`
+        requires exactly one interior and at most one boundary.
     training : TrainingConfig
         Configuration for training the model, including loss function and
         feature-weighting strategy. Defaults to ``TrainingConfig()``.
@@ -199,16 +195,14 @@ def load_config_and_datastore(
     Returns
     -------
     tuple[NeuralLAMConfig, datastore, datastore_boundary]
-        The Neural-LAM configuration, the loaded interior datastore (the one
-        providing `state` data), and the boundary datastore (the one without
-        `state` data, or None if no such datastore is configured).
+        The configuration, the interior datastore (the one with `state`
+        data), and the boundary datastore (the one without, or None).
 
     Raises
     ------
     InvalidConfigError
         If not exactly one datastore provides `state` data, or if more than
-        one datastore omits it (only a single boundary datastore is currently
-        supported).
+        one omits it.
     """
     with open(config_path, encoding="utf-8") as f:
         raw_config = yaml.safe_load(f)
@@ -235,10 +229,7 @@ def load_config_and_datastore(
             f"{config_path}. "
         ) from ex
 
-    # datastore configs are assumed to be relative to the config file. The
-    # role of each datastore is implied by the categories of data it provides:
-    # a datastore with `state` data is the interior (input and output), one
-    # without `state` data is used for input only (e.g. boundary forcing).
+    # Datastore config paths are relative to the neural-lam config file.
     config_dir = Path(config_path).parent
     interior_datastores = {}
     boundary_datastores = {}

@@ -24,8 +24,7 @@ from ..loss_weighting import get_state_feature_weighting
 from ..weather_dataset import WeatherDataset
 from .forecasters.base import Forecaster
 
-# (init_states, target_states, forcing, boundary, target_times) as
-# returned by `WeatherDataset.__getitem__` and collated by the loader.
+# (init_states, target_states, forcing, boundary, target_times)
 Batch = tuple[
     torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor
 ]
@@ -81,9 +80,8 @@ class ForecasterModule(pl.LightningModule):
         datastore : BaseRegularGridDatastore
             Datastore providing grid metadata and data access.
         datastore_boundary : BaseDatastore, optional
-            Datastore providing boundary forcing, used here only to register
-            the boundary standardization statistics. ``None`` when no
-            boundary datastore is configured.
+            Boundary forcing datastore, used here only to register the
+            boundary standardization statistics.
         loss : str, default "wmse"
             The loss function to use.
         lr : float, default 1e-3
@@ -240,9 +238,7 @@ class ForecasterModule(pl.LightningModule):
             self.forcing_mean = None
             self.forcing_std = None
 
-        # Boundary standardization: registered only when a boundary
-        # datastore is wired in. The same feature-major window tiling as
-        # forcing applies, so we cache the tiled mean/std on first batch.
+        # Boundary tiling matches forcing, see `on_after_batch_transfer`.
         if (
             datastore_boundary is not None
             and datastore_boundary.get_num_data_vars(category="forcing") > 0
@@ -463,9 +459,8 @@ class ForecasterModule(pl.LightningModule):
             boundary_features,
             batch_times,
         ) = batch
-        # NOTE: boundary_features is standardized in
-        # `on_after_batch_transfer` but not yet consumed by the forecaster.
-        # The model-side boundary handling lands in a follow-up PR (#108).
+        # NOTE: boundary_features is standardized but not yet consumed by
+        # the forecaster; model-side handling lands in #108.
         prediction, pred_std = self.forecaster(
             init_states, forcing_features, target_states
         )

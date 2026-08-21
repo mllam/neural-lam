@@ -380,18 +380,15 @@ class BaseDatastore(abc.ABC):
     def is_on_regular_spatial_grid(self) -> bool:
         """Whether the grid points form a complete 2D rectangular grid.
 
-        Only then can ``grid_index`` be unstacked back into ``x``/``y``
-        (see :class:`BaseRegularGridDatastore`), which graph creation and
-        gridded plotting rely on. Subclasses whose layout depends on the
-        data they were built from (a cropped domain, an irregular
-        observation network) override this rather than relying on their
-        class alone.
+        Only then can ``grid_index`` be unstacked back into ``x``/``y``,
+        which graph creation and gridded plotting rely on. Subclasses whose
+        layout depends on the data they were built from override this rather
+        than relying on their class alone.
 
         Returns
         -------
         bool
-            ``False`` on the base class; regular-gridded datastores
-            override it.
+            ``False`` unless a subclass opts in.
         """
         return False
 
@@ -525,9 +522,7 @@ class BaseRegularGridDatastore(BaseDatastore):
         Returns
         -------
         bool
-            ``True`` unless a subclass narrows it, e.g. when a cropped
-            domain leaves fewer grid points than ``grid_shape_state``
-            describes.
+            ``True`` unless a subclass narrows it, e.g. for a cropped domain.
         """
         return True
 

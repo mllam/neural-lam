@@ -22,7 +22,7 @@ from neural_lam.utils import (
 
 
 def _format_timedelta(td: np.timedelta64) -> str:
-    """Render a numpy timedelta in its largest exact unit, e.g. ``"13 hours"``.
+    """Render a timedelta in its largest exact unit, e.g. ``"13 hours"``.
 
     Parameters
     ----------
@@ -32,7 +32,7 @@ def _format_timedelta(td: np.timedelta64) -> str:
     Returns
     -------
     str
-        Value and unit, for use in error messages.
+        Value and unit.
     """
     microseconds = int(td / np.timedelta64(1, "us"))
     value, unit = get_integer_time(
@@ -54,9 +54,9 @@ def _check_window_bounds(
 ) -> None:
     """Raise if a forcing/boundary window runs off either end of its axis.
 
-    ``xr.DataArray.isel`` silently wraps a negative slice start and
-    truncates a slice end past the array, which would otherwise only
-    surface as an opaque coordinate-size error further down.
+    ``xr.DataArray.isel`` wraps a negative slice start and truncates a slice
+    end past the array, which would otherwise only surface as an opaque
+    coordinate-size error further down.
 
     Raises
     ------
@@ -76,12 +76,11 @@ def _check_window_bounds(
 class WeatherDataset(torch.utils.data.Dataset):
     """Dataset class for weather data.
 
-    This class loads and processes weather data from a given datastore,
-    with optional boundary forcing from a separate boundary datastore.
-    Boundary windowing is aligned to interior state times by
-    nearest-neighbor lookup, so the interior and boundary datastores may
-    differ in step length and either side may be analysis or forecast
-    data.
+    Loads and processes weather data from a given datastore, with optional
+    boundary forcing from a separate boundary datastore. Boundary windowing
+    is aligned to interior state times by nearest-neighbor lookup, so the
+    two datastores may differ in step length and either may be analysis or
+    forecast data.
 
     Parameters
     ----------
@@ -108,8 +107,8 @@ class WeatherDataset(torch.utils.data.Dataset):
         Number of future time steps to include in boundary forcing input.
         Default is 1.
     datastore_boundary : BaseDatastore, optional
-        A separate datastore providing boundary forcing data. If None, no
-        boundary forcing is used (boundary tensor will be empty).
+        Separate datastore providing boundary forcing. If None, the boundary
+        tensor is empty.
     load_single_member : bool, optional
         If `False` and the datastore returns an ensemble of state
         realisations, treat each state ensemble member as an independent
@@ -167,11 +166,6 @@ class WeatherDataset(torch.utils.data.Dataset):
             category="forcing", split=self.split
         )
 
-        # Load boundary forcing from the boundary datastore. Alignment to
-        # interior state times is done in `_window_forcing_in_time` via
-        # nearest-neighbor (pad) lookup on time coordinates, so the
-        # boundary datastore can have a different step length than the
-        # interior, and either side may be analysis or forecast.
         if self.datastore_boundary is not None:
             self.da_boundary_forcing = self.datastore_boundary.get_dataarray(
                 category="forcing", split=self.split
@@ -179,8 +173,6 @@ class WeatherDataset(torch.utils.data.Dataset):
         else:
             self.da_boundary_forcing = None
 
-        # Forecast lead-time step for the boundary, only meaningful when the
-        # boundary datastore is in forecast mode.
         self._forecast_step_boundary = None
         if self.datastore_boundary is not None:
             datastore_boundary = self.datastore_boundary
@@ -192,12 +184,9 @@ class WeatherDataset(torch.utils.data.Dataset):
                     self.da_boundary_forcing.elapsed_forecast_duration.values
                 )
 
-            # Crop the interior so the first/last samples stay within the
-            # boundary coverage. State and forcing come from the same
-            # datastore and forecast forcing is looked up by positional
-            # `analysis_time` index, so both must be cropped by the same
-            # slice or every sample would pair state and forcing from
-            # different launches.
+            # Forecast forcing is looked up by positional `analysis_time`
+            # index, so state and forcing must be cropped by the same slice
+            # or samples would pair them from different launches.
             if self.da_boundary_forcing is not None:
                 crop_dim, crop_slice = get_time_crop_slice(
                     self.da_state,
@@ -341,8 +330,8 @@ class WeatherDataset(torch.utils.data.Dataset):
         Returns
         -------
         np.timedelta64
-            The lead-time spacing for a forecast interior, the ``time``
-            spacing otherwise.
+            Lead-time spacing for a forecast interior, ``time`` spacing
+            otherwise.
         """
         assert self.da_state is not None
         if self.datastore.is_forecast:
@@ -352,11 +341,8 @@ class WeatherDataset(torch.utils.data.Dataset):
     def _check_boundary_forecast_horizon(self) -> None:
         """Check one boundary launch can cover a whole sample's window.
 
-        Every AR step of a sample is windowed from a single boundary launch,
-        so the launch's lead-time horizon has to span the rollout plus the
-        window on either side. Cropping the interior cannot fix a horizon
-        that is too short, so this is checked once up front rather than
-        surfacing as a per-sample failure mid-epoch.
+        Cropping the interior cannot fix a horizon that is too short, so
+        this is checked up front rather than failing per-sample mid-epoch.
 
         Raises
         ------
@@ -371,9 +357,8 @@ class WeatherDataset(torch.utils.data.Dataset):
             self.da_boundary_forcing.analysis_time.values
         )
         rollout_extent = self.ar_steps * self._state_time_step()
-        # The chosen launch sits up to one analysis step before the model
-        # init time, or further back still when the past window needs the
-        # lead headroom.
+        # The launch sits up to one analysis step before init, or further
+        # back when the past window needs the lead headroom.
         launch_offset = max(
             analysis_step, self.num_past_boundary_steps * lead_step
         )
@@ -398,16 +383,15 @@ class WeatherDataset(torch.utils.data.Dataset):
     def _max_state_lead_used(self) -> np.timedelta64 | None:
         """Largest state lead time read per sample, for forecast interiors.
 
-        ``_slice_state_time`` only walks
-        ``INIT_STEPS + ar_steps`` lead times from ``offset``, so requiring
-        boundary coverage out to the full forecast length would crop away
-        usable launches.
+        ``_slice_state_time`` walks only ``INIT_STEPS + ar_steps`` leads, so
+        demanding boundary coverage out to the full forecast length would
+        crop away usable launches.
 
         Returns
         -------
         np.timedelta64 or None
-            The lead time of the last state step read, or ``None`` when the
-            interior datastore is analysis data.
+            Lead time of the last state step read, or ``None`` for an
+            analysis interior.
         """
         if not self.datastore.is_forecast:
             return None
@@ -527,15 +511,10 @@ class WeatherDataset(torch.utils.data.Dataset):
                     "forecast_step must be supplied when forcing/boundary "
                     "is in forecast mode."
                 )
-            # Choose a single analysis_time (launch) for this sample. We
-            # anchor on the model init time (the last input state), not the
-            # first target, so we never select a boundary forecast launched
-            # after init - that forecast would be unavailable operationally.
-            # A launch exactly at init is fine: operationally the interior
-            # analysis and the boundary forcing both take time to become
-            # available, so neither is reliably ready before the other. The
-            # launch is shifted further back only when num_past_steps needs
-            # more lead headroom.
+            # Anchor on the model init time rather than the first target,
+            # so we never pick a launch that would be unavailable
+            # operationally. A launch exactly at init is fine: interior
+            # analysis and boundary forcing both take time to produce.
             model_init_time = state_times[init_steps - 1].values
             first_target_time = state_times[init_steps].values
 
@@ -550,8 +529,7 @@ class WeatherDataset(torch.utils.data.Dataset):
                 )
             forcing_at = da_forcing.analysis_time[forcing_at_idx]
 
-            # `elapsed_forecast_duration` need not start at zero, so the
-            # window index is measured from the first lead, not from launch.
+            # `elapsed_forecast_duration` need not start at zero.
             lead_offset = da_forcing.elapsed_forecast_duration.values[0]
 
             def lead_index(valid_time: np.datetime64) -> int:
@@ -563,11 +541,9 @@ class WeatherDataset(torch.utils.data.Dataset):
                     )
                 )
 
-            # Step back whole launches until this one has enough lead
-            # headroom for the past window. One launch back buys
-            # `analysis_step / forecast_step` window steps, so the two are
-            # not interchangeable and a single subtraction over- or
-            # under-shoots whenever the spacings differ.
+            # One launch back buys `analysis_step / forecast_step` window
+            # steps, so stepping back by a window-step count over- or
+            # under-shoots whenever the two spacings differ.
             while lead_index(first_target_time) < num_past_steps:
                 if forcing_at_idx == 0:
                     raise ValueError(
@@ -722,13 +698,9 @@ class WeatherDataset(torch.utils.data.Dataset):
         else:
             da_forcing = None
 
-        # Slice the state once, then window forcing and boundary against
-        # the resulting state times. Forcing is windowed by integer
-        # `analysis_time` index when it comes from the same forecast
-        # datastore as state (the analysis_time series can have repeats
-        # there, e.g. npyfilesmeps); boundary always comes from a
-        # different datastore so it is windowed by time-based
-        # nearest-neighbor lookup.
+        # Forcing shares the state's forecast datastore, whose analysis_time
+        # series can repeat (npyfilesmeps), so it is windowed by integer
+        # index; boundary is a separate datastore, windowed by time.
         da_state = self._slice_state_time(
             da_state=da_state, idx=sample_idx, n_steps=self.ar_steps
         )
@@ -790,8 +762,7 @@ class WeatherDataset(torch.utils.data.Dataset):
                 forcing_feature_windowed=("forcing_feature", "window")
             )
         else:
-            # No boundary forcing: the feature dim is empty anyway, so the
-            # interior grid_index is used as a placeholder.
+            # Feature dim is empty, so the interior grid_index will do.
             da_boundary_windowed = self._empty_windowed_dataarray(
                 da_state.grid_index, da_target_times
             )

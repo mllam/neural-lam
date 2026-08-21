@@ -180,15 +180,9 @@ training:
 For now the neural-lam config only defines few things:
 
 1. A named mapping of datastores (`datastores`), each giving the kind of
-   datastore and the path to its config. The role of each datastore is implied
-   by the categories of data it provides: a datastore that contains `state`
-   data is used for both model input and output (the interior domain), while a
-   datastore without `state` data is used for input only (e.g. boundary forcing
-   from a separate domain such as ERA5 for a LAM domain). Exactly one datastore
-   must provide `state` data, and at most one datastore may omit it, so there is
-   a single interior and a single (optional) boundary datastore. When a boundary
-   datastore is present its forcing is windowed and included as an additional
-   tensor in each training sample.
+   datastore and the path to its config. Which one is the interior and which is
+   the boundary follows from the categories each provides, see [Data
+   categories](#data-categories) below.
 2. The weighting of different features in
 the loss function. If you don't define the state feature weighting it will default to
 weighting all features equally.
@@ -228,8 +222,10 @@ the input-data representation is split into two parts:
    `WeatherDataset` class is also responsible for normalising the values and
    returning `torch.Tensor`-objects.
 
-Each variable in a datastore is assigned to one of three data *categories*,
-which fix whether it is fed to the model as input, predicted as output, or both:
+### Data categories
+
+Each variable in a datastore belongs to one of three *categories*, which fix
+whether it is fed to the model as input, predicted as output, or both:
 
 | Category  | Model input | Model output | Description |
 |-----------|:-----------:|:------------:|-------------|
@@ -237,10 +233,11 @@ which fix whether it is fed to the model as input, predicted as output, or both:
 | `forcing` | ✓           |              | Time-varying inputs known in advance (e.g. solar radiation, boundary forcing). |
 | `static`  | ✓           |              | Time-invariant inputs (e.g. orography, land-sea mask). |
 
-These categories are
-also what determine a datastore's role: a datastore that provides `state` data
-is the interior domain (model input and output), while one without `state` data
-is used for input only, e.g. boundary forcing from a separate domain.
+The categories also fix each datastore's role. A datastore with `state` data is
+the interior domain; one without is input-only, e.g. ERA5 boundary forcing for a
+LAM domain, whose forcing is windowed into an extra tensor per training sample.
+Exactly one interior datastore is required and at most one boundary datastore is
+supported.
 
 There are currently two different datastores implemented in the codebase:
 
@@ -265,13 +262,12 @@ subclassing the `neural_lam.datastore.BaseDataStore` class or
 `neural_lam.datastore.BaseRegularGridDatastore` class (if your data is stored on
 a regular grid) and implementing the abstract methods.
 
-Whether a datastore's grid points actually form a complete 2D grid is reported by
-the `is_on_regular_spatial_grid` property rather than by the class alone, because
-it can depend on the data a datastore was built from. A domain-cropped
-`MDPDatastore` (as used for boundary forcing) keeps only the points inside the
-interior domain, so it subclasses `BaseRegularGridDatastore` but reports `False`.
-Graph creation and gridded plotting check the property and refuse such a
-datastore instead of silently padding the missing cells.
+Whether the grid points actually form a complete 2D grid is reported by the
+`is_on_regular_spatial_grid` property rather than by the class, since it can
+depend on the data a datastore was built from: a domain-cropped `MDPDatastore`
+(as used for boundary forcing) subclasses `BaseRegularGridDatastore` but reports
+`False`. Graph creation and gridded plotting refuse such a datastore rather than
+silently padding the missing cells.
 
 
 ### MDP (mllam-data-prep) Datastore - `MDPDatastore`

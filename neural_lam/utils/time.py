@@ -67,9 +67,8 @@ def get_time_step(times: np.ndarray) -> np.timedelta64:
 
     Parameters
     ----------
-    times : array-like
-        A 1D array of datetime64 (or timedelta64) values to compute the
-        step from.
+    times : np.ndarray
+        1D array of datetime64 or timedelta64 values.
 
     Returns
     -------
@@ -108,24 +107,16 @@ def _requested_time_bounds(
 ) -> tuple[np.datetime64, np.datetime64]:
     """Return the first and last ``da_requested`` time ``da_available`` covers.
 
-    The window is measured in ``da_available`` steps: its ``time`` spacing
-    when it is analysis data, its ``elapsed_forecast_duration`` spacing when
-    it is a forecast, since that is the axis
-    :meth:`WeatherDataset._window_forcing_in_time` walks in either case.
+    The window is measured along whichever ``da_available`` axis
+    :meth:`WeatherDataset._window_forcing_in_time` walks: ``time`` for
+    analysis data, ``elapsed_forecast_duration`` for a forecast.
 
     Parameters
     ----------
-    da_requested, da_available : xr.DataArray
+    da_requested, da_available, da_requested_is_forecast,
+    da_available_is_forecast, num_past_steps, num_future_steps,
+    requested_max_lead
         See :func:`check_time_overlap`.
-    da_requested_is_forecast, da_available_is_forecast : bool
-        Whether each side is in forecast mode.
-    num_past_steps, num_future_steps : int
-        Window size around each requested time.
-    requested_max_lead : np.timedelta64 or None
-        Largest ``elapsed_forecast_duration`` of ``da_requested`` that is
-        actually read per sample. Only meaningful when ``da_requested`` is a
-        forecast, where each requested ``analysis_time`` needs coverage out
-        to that lead. ``None`` falls back to the full forecast length.
 
     Returns
     -------
@@ -140,13 +131,11 @@ def _requested_time_bounds(
     if da_available_is_forecast:
         times_available = da_available.analysis_time.values
         leads_available = da_available.elapsed_forecast_duration.values
-        # The window is walked over lead times, so it is lead spacing that
-        # sizes it - stepping back one launch buys `analysis / lead` window
-        # steps, not one.
+        # Lead spacing sizes the window, not analysis spacing: stepping back
+        # one launch buys `analysis / lead` window steps.
         step_window = get_time_step(leads_available)
-        # A launch at or before the requested init time is usable, and the
-        # init time is never earlier than the requested time itself, so the
-        # first launch alone bounds the start.
+        # The init time is never earlier than the requested time itself, so
+        # the first launch alone bounds the start.
         first = (
             times_available.min()
             + leads_available.min()
@@ -180,9 +169,8 @@ def check_time_overlap(
     num_future_steps: int = 1,
     requested_max_lead: np.timedelta64 | None = None,
 ) -> None:
-    """Check that the time coverage of ``da_available`` is wide enough to
-    support a windowed lookup driven by ``da_requested`` times with the
-    given past/future window sizes.
+    """Check that ``da_available`` covers a windowed lookup driven by
+    ``da_requested`` times with the given past/future window sizes.
 
     Parameters
     ----------
@@ -199,9 +187,9 @@ def check_time_overlap(
         Window size around each ``da_requested`` time, measured in
         ``da_available`` steps.
     requested_max_lead : np.timedelta64, optional
-        Largest lead time read from a forecast ``da_requested`` per sample;
-        each requested ``analysis_time`` needs coverage out to that lead.
-        Defaults to the full forecast length.
+        Largest lead read from a forecast ``da_requested`` per sample; each
+        ``analysis_time`` needs coverage out to it. Defaults to the full
+        forecast length.
 
     Raises
     ------
@@ -244,12 +232,11 @@ def get_time_crop_slice(
     num_future_steps: int = 1,
     requested_max_lead: np.timedelta64 | None = None,
 ) -> tuple[str, slice]:
-    """Return the ``da_requested`` dimension and slice that ``da_available``
-    can cover.
+    """Return the ``da_requested`` dimension and slice ``da_available`` covers.
 
-    Parameters mirror :func:`check_time_overlap`. Callers that hold several
-    dataarrays on the same requested time axis (interior state and interior
-    forcing, say) apply this one slice to all of them, so they stay aligned.
+    Parameters mirror :func:`check_time_overlap`. Callers holding several
+    dataarrays on the same time axis (interior state and forcing) apply this
+    one slice to all of them so they stay aligned.
 
     Returns
     -------
@@ -295,11 +282,10 @@ def crop_time_if_needed(
     num_future_steps: int = 1,
     requested_max_lead: np.timedelta64 | None = None,
 ) -> xr.DataArray:
-    """Trim the leading/trailing times from ``da_requested`` so that
-    ``da_available`` covers every needed window. A forecast-mode
-    ``da_requested`` is cropped along ``analysis_time`` (dropping whole
-    launches), an analysis-mode one along ``time``; either way the removal
-    is logged.
+    """Trim ``da_requested`` so ``da_available`` covers every needed window.
+
+    A forecast ``da_requested`` is cropped along ``analysis_time`` (dropping
+    whole launches), an analysis one along ``time``.
 
     Parameters mirror :func:`check_time_overlap`.
 
@@ -328,9 +314,9 @@ def apply_time_crop(
     Parameters
     ----------
     da : xr.DataArray
-        Dataarray to crop along ``crop_dim``.
+        Dataarray to crop.
     crop_dim : str
-        Dimension name, as returned by :func:`get_time_crop_slice`.
+        Dimension to crop along.
     crop_slice : slice
         Positional slice to keep.
 
