@@ -460,7 +460,7 @@ class ForecasterModule(pl.LightningModule):
             batch_times,
         ) = batch
         # NOTE: boundary_features is standardized but not yet consumed by
-        # the forecaster; model-side handling lands in #108.
+        # the forecaster; model-side handling lands in #138.
         prediction, pred_std = self.forecaster(
             init_states, forcing_features, target_states
         )

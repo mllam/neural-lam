@@ -589,15 +589,15 @@ class WeatherDataset(torch.utils.data.Dataset):
 
         ``state_times`` is the 1D ``time`` coordinate of the already-sliced
         state sample. For each AR target step the matching forcing time is
-        picked by nearest-neighbor ``pad`` lookup (smallest forcing time
+        picked by nearest-neighbor ``pad`` lookup (latest forcing time
         ``<=`` state time), and a window of
         ``num_past_steps + num_future_steps + 1`` consecutive forcing
         entries is taken around it.
 
-        When ``da_forcing`` has an ``analysis_time`` dimension the same
-        logic is applied to forecast forcing/boundary: an analysis time is
-        chosen such that the lead times cover the requested window for
-        every AR step, then windows are walked across lead times.
+        When ``da_forcing`` has an ``analysis_time`` dimension a single
+        launch is resolved for the sample (see
+        :func:`_latest_usable_launch`) and the windows are walked across its
+        lead times.
 
         Returns
         -------
