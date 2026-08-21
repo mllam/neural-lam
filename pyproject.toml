@@ -121,6 +121,12 @@ per-file-ignores = [
 [tool.codespell]
 skip = "requirements/*,docs/notebooks/hello_world_danra.ipynb"
 
+[tool.ty.src]
+exclude = ["tests/", "docs/"]
+
+[tool.ty.rules]
+possibly-missing-submodule = "ignore"
+
 # Pylint config
 [tool.pylint]
 ignore = [
