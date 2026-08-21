@@ -1,7 +1,6 @@
 """Forecasters trained by scoring a single deterministic forecast."""
 
 # Standard library
-from abc import abstractmethod
 
 # Third-party
 import torch
@@ -18,14 +17,16 @@ from .base import BaseForecaster
 
 class BaseDeterministicForecaster(BaseForecaster):
     """
-    Forecaster producing one forecast per batch, trained by scoring it.
+    Forecaster whose ``forward`` is deterministic, trained by scoring it.
 
-    ``forward`` returns a single forecast and is left abstract, so that how
-    that forecast is produced stays open; see ``DeterministicARForecaster``
-    for the auto-regressive one. ``compute_training_loss`` produces one
-    forecast and scores it with ``self.loss``, and
-    ``compute_loss_from_forecast`` applies the same scoring rule to an
-    already-produced forecast for reporting.
+    Repeating a call returns the same forecast, so one call is the whole
+    forecast; contrast ``BaseEnsembleForecaster``, which samples a fresh
+    one each call. How that forecast is produced stays open, ``forward``
+    being inherited abstract; see ``DeterministicARForecaster`` for the
+    auto-regressive one. ``compute_training_loss`` produces one forecast
+    and scores it with ``self.loss``, and ``compute_loss_from_forecast``
+    applies the same scoring rule to an already-produced forecast for
+    reporting.
     """
 
     per_var_std: torch.Tensor | None
@@ -68,59 +69,6 @@ class BaseDeterministicForecaster(BaseForecaster):
             else None
         )
         self.register_buffer("per_var_std", per_var_std, persistent=False)
-
-    @abstractmethod
-    def forward(
-        self,
-        init_states: torch.Tensor,
-        forcing_features: torch.Tensor,
-        boundary_states: torch.Tensor,
-    ) -> tuple[torch.Tensor, torch.Tensor | None]:
-        """
-        Produce a forecast of length ``pred_steps`` from two initial states,
-        the per-step forcing features, and the per-step true boundary states.
-
-        Parameters
-        ----------
-        init_states : torch.Tensor
-            Shape ``(B, 2, num_grid_nodes, num_state_vars)``. The two initial
-            states ``[X_{t-1}, X_t]`` used to start the forecast from. Dims:
-            ``B`` is batch size, ``2`` is the time index (``[X_{t-1}, X_t]``),
-            ``num_grid_nodes`` is the number of spatial nodes, and
-            ``num_state_vars`` is the state feature dimension.
-        forcing_features : torch.Tensor
-            Shape ``(B, pred_steps, num_grid_nodes, num_forcing_vars)``.
-            External forcings provided at each predicted step. Dims: ``B``
-            is batch size, ``pred_steps`` is the forecast length,
-            ``num_grid_nodes`` is the number of spatial nodes, and
-            ``num_forcing_vars`` is the forcing feature dimension (already
-            concatenated past/current/future windows).
-        boundary_states : torch.Tensor
-            Shape ``(B, pred_steps, num_grid_nodes, num_state_vars)``. True
-            state values used ONLY to overwrite boundary nodes at each
-            predicted step; interior predictions must not depend on
-            ``boundary_states`` in any other way. Dims: ``B`` is batch size,
-            ``pred_steps`` is the forecast length, ``num_grid_nodes`` is the
-            number of spatial nodes, and ``num_state_vars`` is the state
-            feature dimension. This is a temporary mechanism that mirrors
-            the pre-refactor ARModel behavior; it will be replaced by a
-            dedicated boundary-forcing input in #138 (training on interior +
-            boundary datastore), at which point this parameter will be
-            removed.
-
-        Returns
-        -------
-        prediction : torch.Tensor
-            Shape ``(B, pred_steps, num_grid_nodes, num_state_vars)``.
-            Forecast of state at each predicted step. Dims: same as
-            ``boundary_states``.
-        pred_std : torch.Tensor or None
-            Shape ``(B, pred_steps, num_grid_nodes, num_state_vars)`` when
-            ``predicts_std`` is True, otherwise ``None``. Per-feature
-            predicted standard deviation; when ``None``, substituting a
-            fallback std is left to whatever consumes the forecast, not to
-            the caller of ``forward``. Dims: same as ``prediction``.
-        """
 
     def compute_training_loss(
         self,

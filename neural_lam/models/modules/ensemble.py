@@ -17,16 +17,16 @@ from .base import BaseForecastingModule
 
 class EnsembleForecastingModule(BaseForecastingModule):
     """
-    Lightning module for forecasters whose forecast is an ensemble.
+    Lightning module evaluating a forecaster by sampling an ensemble.
 
     Training is inherited unchanged from ``BaseForecastingModule``: the
     wrapped forecaster assembles its own training loss. Validation and
     testing are ensemble based instead of deterministic: an ensemble is
-    sampled from the forecaster and its mean scored per lead time and
-    variable, with validation additionally reporting the forecaster's own
-    objective. The module only assumes that the forecaster returns ensemble
-    forecasts of the correct shape; it makes no assumption on how the
-    members are produced.
+    sampled through ``forecaster.sample_ensemble`` and its mean scored per
+    lead time and variable, with validation additionally reporting the
+    forecaster's own objective. The module makes no assumption on how the
+    members are produced, only that repeated sampling is what an ensemble
+    is made of.
     """
 
     # The wrapped forecaster's forward must return an ensemble
@@ -157,7 +157,7 @@ class EnsembleForecastingModule(BaseForecastingModule):
             ``(B, pred_steps, num_state_vars)``, for epoch-end aggregation.
         """
         init_states, target_states, forcing_features, _ = batch
-        ensemble, _ = self.forecaster(
+        ensemble, _ = self.forecaster.sample_ensemble(
             init_states,
             forcing_features,
             target_states,

@@ -538,7 +538,8 @@ Notebooks for visualization and analysis are located in `docs/notebooks`.
 
 The model code is split into three layers.
 A `BaseForecaster` maps initial states and forcing to a full forecast through `forward` and owns the training objective; how the forecast is produced is left to the subclass.
-The two families differ in what `forward` returns: a `BaseDeterministicForecaster` returns a single forecast, a `BaseEnsembleForecaster` takes the number of members to draw and returns an ensemble.
+Every forecaster shares that one entry point and its signature: one call produces one forecast.
+The two families differ in how they arrive at it, not in what they return: a `BaseDeterministicForecaster` returns the same forecast every call, a `BaseEnsembleForecaster` samples a fresh one, so an ensemble is repeated sampling rather than a different kind of output (`sample_ensemble`).
 Both currently produce their forecasts by autoregressive unrolling, repeatedly applying a `StepPredictor` that advances the state one time step.
 That unrolling is the function `unroll_forecast`, shared by the two families rather than inherited, so the class hierarchy stays a tree.
 This is the only setup currently in use, so in practice every model is built around a step predictor, but a forecaster that predicts all lead times at once would fit the same interface.
@@ -552,10 +553,10 @@ nn.Module
 │       ├── DeterministicForecastingModule - Evaluates the single forecast the forecaster produces
 │       └── EnsembleForecastingModule      - Samples an ensemble and scores its mean
 ├── BaseForecaster*                        - Initial states + forcing -> full forecast; owns the training objective (neural_lam/models/forecasters)
-│   ├── BaseDeterministicForecaster*       - forward -> one forecast; objective: a loss function applied to it
+│   ├── BaseDeterministicForecaster*       - forward -> the same forecast every call; objective: a loss function applied to it
 │   │   └── DeterministicARForecaster      - Unrolls that forecast; what neural_lam.train_model builds
-│   └── BaseEnsembleForecaster*            - forward(..., num_members) -> an ensemble, leaving the objective open
-│       └── BaseEnsembleARForecaster*      - Unrolls each member, still without an objective
+│   └── BaseEnsembleForecaster*            - forward -> a fresh sample each call; sample_ensemble stacks several, leaving the objective open
+│       └── BaseEnsembleARForecaster*      - Unrolls each sample, still without an objective
 ├── StepPredictor*                         - (X_{t-1}, X_t, forcing_t) -> X_{t+1} (neural_lam/models/step_predictors)
 │   ├── BaseGraphModel*                    - Encode-process-decode over a mesh graph
 │   │   ├── GraphLAM

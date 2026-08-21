@@ -1,3 +1,6 @@
+# Standard library
+import inspect
+
 # Third-party
 import pytest
 import torch
@@ -48,8 +51,8 @@ class ConcreteEnsembleARForecaster(BaseEnsembleARForecaster):
     forecaster to instantiate use this example ensemble-mean objective
     rather than the base class directly. Being the concrete class, it also
     owns whatever that objective needs: the scoring rule, the constant
-    per-variable std, and the member count to train on (``forward`` always
-    requires an explicit one).
+    per-variable std, and the member count to train on
+    (``sample_ensemble`` always requires an explicit one).
     """
 
     def __init__(
@@ -80,7 +83,7 @@ class ConcreteEnsembleARForecaster(BaseEnsembleARForecaster):
         target_states,
         interior_mask_bool,
     ):
-        ensemble, per_member_std = self(
+        ensemble, per_member_std = self.sample_ensemble(
             init_states,
             forcing_features,
             target_states,
@@ -148,7 +151,7 @@ def test_ar_forecaster_training_loss_matches_direct_score():
     torch.testing.assert_close(batch_loss, expected_loss)
 
 
-def test_ensemble_forward_shapes_and_member_variability():
+def test_ensemble_sample_shapes_and_member_variability():
     datastore = init_datastore_example("mdp")
     predictor = NoisyStepPredictor(datastore=datastore, output_std=False)
     forecaster = ConcreteEnsembleARForecaster(predictor, datastore)
@@ -166,7 +169,7 @@ def test_ensemble_forward_shapes_and_member_variability():
     d_state = target_states.shape[-1]
 
     torch.manual_seed(42)
-    ensemble, per_member_std = forecaster(
+    ensemble, per_member_std = forecaster.sample_ensemble(
         init_states,
         forcing_features,
         target_states,
@@ -217,14 +220,61 @@ def test_ensemble_training_loss_gradient_flow():
     assert predictor.noise_scale.grad != 0.0
 
 
-def test_ensemble_forward_rejects_empty_member_count():
+def test_sample_ensemble_rejects_empty_member_count():
     datastore = init_datastore_example("mdp")
     predictor = NoisyStepPredictor(datastore=datastore, output_std=False)
     forecaster = ConcreteEnsembleARForecaster(predictor, datastore)
     init_states, forcing_features, target_states = _example_batch(datastore)
 
     with pytest.raises(ValueError, match="num_members"):
-        forecaster(init_states, forcing_features, target_states, num_members=0)
+        forecaster.sample_ensemble(
+            init_states, forcing_features, target_states, num_members=0
+        )
+
+
+def test_both_forecaster_families_share_the_forward_signature():
+    """Both families answer the same call, so a consumer holding a
+    BaseForecaster never has to ask which one it got."""
+    datastore = init_datastore_example("mdp")
+    init_states, forcing_features, target_states = _example_batch(datastore)
+
+    deterministic = DeterministicARForecaster(
+        ZeroStepPredictor(datastore=datastore, output_std=False),
+        datastore,
+        loss="mse",
+    )
+    ensemble = ConcreteEnsembleARForecaster(
+        NoisyStepPredictor(datastore=datastore, output_std=False), datastore
+    )
+
+    assert inspect.signature(deterministic.forward) == inspect.signature(
+        ensemble.forward
+    )
+
+    for forecaster in (deterministic, ensemble):
+        prediction, _ = forecaster(init_states, forcing_features, target_states)
+        assert prediction.shape == target_states.shape
+
+
+def test_ensemble_forward_samples_a_fresh_forecast_each_call():
+    """A stochastic forecaster's forward is one draw, not the ensemble:
+    calling it twice gives different forecasts of single-forecast shape."""
+    datastore = init_datastore_example("mdp")
+    predictor = NoisyStepPredictor(datastore=datastore, output_std=False)
+    forecaster = ConcreteEnsembleARForecaster(predictor, datastore)
+    init_states, forcing_features, target_states = _example_batch(datastore)
+
+    # One interior node, so the boundary overwrite cannot mask the sampling
+    forecaster.interior_mask = torch.zeros_like(forecaster.interior_mask)
+    forecaster.interior_mask[0, 0] = 1
+    forecaster.boundary_mask = 1 - forecaster.interior_mask
+
+    torch.manual_seed(42)
+    first, _ = forecaster(init_states, forcing_features, target_states)
+    second, _ = forecaster(init_states, forcing_features, target_states)
+
+    assert first.shape == target_states.shape
+    assert not torch.allclose(first[:, :, 0], second[:, :, 0])
 
 
 def test_ensemble_ar_forecaster_is_abstract():
@@ -407,9 +457,9 @@ def test_deterministic_training_step_logs_per_step_losses():
 class MemberCountRecordingForecaster(ConcreteEnsembleARForecaster):
     """Ensemble forecaster recording the requested member count."""
 
-    def forward(self, *args, **kwargs):
+    def sample_ensemble(self, *args, **kwargs):
         self.last_num_members = kwargs.get("num_members")
-        return super().forward(*args, **kwargs)
+        return super().sample_ensemble(*args, **kwargs)
 
 
 class ComponentReportingForecaster(MemberCountRecordingForecaster):
@@ -426,9 +476,9 @@ class ComponentReportingForecaster(MemberCountRecordingForecaster):
         self.last_batch_loss = None
         self.last_components: dict[str, torch.Tensor] = {}
 
-    def forward(self, *args, **kwargs):
+    def sample_ensemble(self, *args, **kwargs):
         self.num_members_seen.append(kwargs.get("num_members"))
-        return super().forward(*args, **kwargs)
+        return super().sample_ensemble(*args, **kwargs)
 
     def compute_training_loss(self, *args, **kwargs):
         batch_loss, _ = super().compute_training_loss(*args, **kwargs)

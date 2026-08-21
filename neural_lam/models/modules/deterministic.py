@@ -148,35 +148,6 @@ class DeterministicForecastingModule(BaseForecastingModule):
         )
         return batch_loss
 
-    def common_step(
-        self,
-        batch: tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor],
-    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor | None, torch.Tensor]:
-        """
-        Produce the batch's single forecast, for validation and testing.
-
-        Lives here rather than on ``BaseForecastingModule`` because it calls
-        the forecaster with the deterministic ``forward`` signature, which
-        an ensemble forecaster does not have.
-
-        Parameters
-        ----------
-        batch : tuple
-            The batch of data containing initial states, target states,
-            forcing features, and batch times.
-
-        Returns
-        -------
-        tuple
-            A tuple containing prediction, target states, predicted standard
-            deviation, and batch times.
-        """
-        init_states, target_states, forcing_features, batch_times = batch
-        prediction, pred_std = self.forecaster(
-            init_states, forcing_features, target_states
-        )
-        return prediction, target_states, pred_std, batch_times
-
     def _compute_prediction_and_loss(
         self,
         batch: tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor],

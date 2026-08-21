@@ -34,12 +34,12 @@ class BaseForecastingModule(pl.LightningModule, ABC):
     produces a single deterministic forecast or samples an ensemble:
     batch standardization, the training loop, optimizer configuration,
     checkpoint compatibility, and the plotting/aggregation helpers used by
-    validation and testing. Anything that calls ``forecaster.forward``
-    belongs in a subclass instead, since the two families of forecaster
-    pin different signatures for it. ``validation_step``, ``test_step`` and
-    ``on_test_epoch_end`` differ enough between the two evaluation modes
-    that they are left abstract; concrete subclasses implement them
-    independently (see ``DeterministicForecastingModule`` and
+    validation and testing. Producing one forecast (``common_step``) belongs
+    here too, since every forecaster shares the ``forward`` contract. What
+    differs is what a subclass evaluates: one forecast, or an ensemble
+    sampled from repeated calls. ``validation_step``, ``test_step`` and
+    ``on_test_epoch_end`` therefore stay abstract; concrete subclasses
+    implement them independently (see ``DeterministicForecastingModule`` and
     ``EnsembleForecastingModule``) rather than overriding one another.
     """
 
@@ -374,6 +374,36 @@ class BaseForecastingModule(pl.LightningModule, ABC):
             ) / self.forcing_std_tiled
 
         return init_states, target_states, forcing, batch_times
+
+    def common_step(
+        self,
+        batch: tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor],
+    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor | None, torch.Tensor]:
+        """
+        Produce one forecast for the batch.
+
+        Every forecaster shares the ``forward`` contract, so this works for
+        an ensemble forecaster too; there it returns a single sample rather
+        than a whole ensemble (see
+        ``BaseEnsembleForecaster.sample_ensemble``).
+
+        Parameters
+        ----------
+        batch : tuple
+            The batch of data containing initial states, target states,
+            forcing features, and batch times.
+
+        Returns
+        -------
+        tuple
+            A tuple containing prediction, target states, predicted standard
+            deviation, and batch times.
+        """
+        init_states, target_states, forcing_features, batch_times = batch
+        prediction, pred_std = self.forecaster(
+            init_states, forcing_features, target_states
+        )
+        return prediction, target_states, pred_std, batch_times
 
     def training_step(
         self,
