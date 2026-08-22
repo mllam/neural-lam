@@ -130,6 +130,7 @@ def _write_config(tmp_path, entries):
     return config_path
 
 
+@pytest.mark.slow
 def test_load_config_and_datastore_splits_by_state(monkeypatch, tmp_path):
     """The shipped two-datastore example loads into (config, interior,
     boundary), with the roles decided by which datastore has `state` data,
@@ -150,6 +151,7 @@ def test_load_config_and_datastore_splits_by_state(monkeypatch, tmp_path):
     assert datastore_boundary.get_num_data_vars("forcing") > 0
 
 
+@pytest.mark.slow
 def test_load_config_and_datastore_requires_an_interior(tmp_path):
     """A config whose datastores all lack `state` data has no interior."""
     config_path = _write_config(
@@ -162,6 +164,7 @@ def test_load_config_and_datastore_requires_an_interior(tmp_path):
         nlconfig.load_config_and_datastore(str(config_path))
 
 
+@pytest.mark.slow
 def test_load_config_and_datastore_rejects_two_interiors(tmp_path):
     """Two datastores with `state` data are ambiguous as the interior."""
     danra = DATASTORE_EXAMPLES / "danra_100m_winds" / "danra.datastore.yaml"
@@ -173,6 +176,7 @@ def test_load_config_and_datastore_rejects_two_interiors(tmp_path):
         nlconfig.load_config_and_datastore(str(config_path))
 
 
+@pytest.mark.slow
 def test_load_config_and_datastore_rejects_two_boundaries(tmp_path):
     """Only a single boundary datastore is supported for now."""
     danra = DATASTORE_EXAMPLES / "danra_100m_winds" / "danra.datastore.yaml"

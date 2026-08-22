@@ -611,6 +611,7 @@ def test_boundary_crops_interior_when_window_overflows():
     assert len(dataset_with_boundary) == len(dataset_no_boundary) - 2
 
 
+@pytest.mark.slow
 def test_boundary_datastore_example_shapes():
     """Build the real MDP interior (DANRA) and ERA5 boundary example
     datastores and check WeatherDataset returns a coherent windowed boundary
