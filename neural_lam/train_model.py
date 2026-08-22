@@ -89,6 +89,7 @@ def load_forecaster_module_from_checkpoint(
     ckpt_path: str,
     config: NeuralLAMConfig,
     datastore: BaseDatastore,
+    datastore_boundary: BaseDatastore | None = None,
 ) -> ForecasterModule:
     """
     Reconstruct a ForecasterModule from a checkpoint without requiring the
@@ -96,7 +97,9 @@ def load_forecaster_module_from_checkpoint(
 
     The checkpoint must have been saved with args in hyper_parameters (i.e.
     created via train_model.main), so that model class and architecture kwargs
-    can be recovered automatically.
+    can be recovered automatically. Pass `datastore_boundary` if the
+    checkpoint was trained with a boundary datastore, otherwise the
+    boundary standardization statistics are not restored.
     """
     ckpt = torch.load(ckpt_path, weights_only=False)
     args = ckpt["hyper_parameters"]["args"]
@@ -107,6 +110,7 @@ def load_forecaster_module_from_checkpoint(
         ckpt_path,
         forecaster=forecaster,
         datastore=datastore,
+        datastore_boundary=datastore_boundary,
         weights_only=False,
     )
 

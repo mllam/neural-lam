@@ -413,7 +413,14 @@ class ForecasterModule(pl.LightningModule):
                 forcing - self.forcing_mean_tiled
             ) / self.forcing_std_tiled
 
-        if boundary.shape[-1] > 0 and self.boundary_mean is not None:
+        if boundary.shape[-1] > 0:
+            if self.boundary_mean is None:
+                raise ValueError(
+                    "Batch has non-empty boundary forcing but no boundary "
+                    "standardization statistics are registered. Pass "
+                    "`datastore_boundary` when constructing or loading "
+                    "ForecasterModule."
+                )
             assert self.boundary_std is not None
             if self.boundary_mean_tiled is None:
                 window_size = boundary.shape[-1] // self.boundary_mean.shape[-1]

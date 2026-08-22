@@ -55,7 +55,10 @@ def test_on_after_batch_transfer():
     forcing = torch.randn(
         1, ar_steps, num_grid_nodes, num_forcing_vars * window_size
     )
-    boundary = torch.randn(1, ar_steps, num_grid_nodes, 3)
+    # No boundary datastore is configured, so WeatherDataset would yield an
+    # empty (last-dim 0) boundary tensor; that is the only shape the hook
+    # supports without registered boundary statistics.
+    boundary = torch.empty(1, ar_steps, num_grid_nodes, 0)
     target_times = torch.randint(0, 1000000, (1, ar_steps))
 
     norm_init, norm_target, norm_forcing, norm_boundary, norm_times = (
@@ -154,8 +157,36 @@ def test_boundary_standardized_when_datastore_provided():
 
 
 def test_boundary_passthrough_when_no_boundary_datastore():
-    """Without a boundary datastore, boundary is passed through unchanged
-    even if the tensor has non-zero last dim."""
+    """Without a boundary datastore, an empty boundary tensor (the shape
+    WeatherDataset yields when no boundary is configured) is passed through
+    unchanged."""
+    datastore = init_datastore_example("mdp")
+    model = _build_module(datastore)
+    assert model.boundary_mean is None
+
+    num_state = datastore.get_num_data_vars("state")
+    boundary = torch.empty(1, 2, datastore.num_grid_points, 0)
+    init_states = torch.randn(1, 2, datastore.num_grid_points, num_state)
+    target_states = torch.randn(1, 2, datastore.num_grid_points, num_state)
+    forcing = torch.randn(
+        1,
+        2,
+        datastore.num_grid_points,
+        datastore.get_num_data_vars("forcing")
+        * (NUM_PAST_FORCING_STEPS + NUM_FUTURE_FORCING_STEPS + 1),
+    )
+    target_times = torch.randint(0, 1000000, (1, 2))
+
+    _, _, _, norm_boundary, _ = model.on_after_batch_transfer(
+        (init_states, target_states, forcing, boundary, target_times), 0
+    )
+    assert torch.equal(norm_boundary, boundary)
+
+
+def test_boundary_raises_when_stats_missing():
+    """A non-empty boundary tensor with no registered boundary statistics
+    (e.g. a checkpoint reloaded without `datastore_boundary`) must raise
+    rather than silently pass through unstandardized data."""
     datastore = init_datastore_example("mdp")
     model = _build_module(datastore)
     assert model.boundary_mean is None
@@ -173,10 +204,10 @@ def test_boundary_passthrough_when_no_boundary_datastore():
     )
     target_times = torch.randint(0, 1000000, (1, 2))
 
-    _, _, _, norm_boundary, _ = model.on_after_batch_transfer(
-        (init_states, target_states, forcing, boundary, target_times), 0
-    )
-    assert torch.equal(norm_boundary, boundary)
+    with pytest.raises(ValueError, match="boundary"):
+        model.on_after_batch_transfer(
+            (init_states, target_states, forcing, boundary, target_times), 0
+        )
 
 
 def test_safe_std_clamps_near_zero():
