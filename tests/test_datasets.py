@@ -156,6 +156,25 @@ def test_dataset_item_create_dataarray_from_tensor(datastore_name):
         )
 
 
+def test_create_dataarray_from_tensor_forcing_category():
+    """category="forcing" must use the forcing_feature coordinate, not the
+    state_feature one hardcoded for the "state" category."""
+    datastore = DummyDatastore()
+    dataset = WeatherDataset(datastore=datastore, split="train")
+
+    tensor = torch.tensor(dataset.da_forcing.isel(time=0).values)
+    da = dataset.create_dataarray_from_tensor(
+        tensor=tensor,
+        time=dataset.da_forcing.time.values[0],
+        category="forcing",
+    )
+
+    assert "forcing_feature" in da.coords
+    np.testing.assert_equal(
+        da.forcing_feature.values, dataset.da_forcing.forcing_feature.values
+    )
+
+
 @pytest.mark.parametrize("split", ["train", "val", "test"])
 @pytest.mark.parametrize("datastore_name", DATASTORES.keys())
 def test_single_batch(datastore_name, split):
