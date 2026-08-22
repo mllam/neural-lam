@@ -1147,6 +1147,14 @@ class WeatherDataModule(pl.LightningDataModule):
             Number of past forcing steps to include. Default ``1``.
         num_future_forcing_steps : int, optional
             Number of future forcing steps to include. Default ``1``.
+        num_past_boundary_steps : int, optional
+            Number of past boundary forcing steps to include. Default ``1``.
+        num_future_boundary_steps : int, optional
+            Number of future boundary forcing steps to include. Default
+            ``1``.
+        datastore_boundary : BaseDatastore, optional
+            Separate datastore providing boundary forcing, used for all
+            splits. If ``None``, the boundary tensor is empty.
         load_single_member : bool, optional
             If ``True``, load only a single ensemble member per sample.
             Default ``False``.
