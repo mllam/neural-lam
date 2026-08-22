@@ -32,7 +32,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Graph storage specification (`docs/graph_storage_spec.md`), PEP 723–compliant validator script (`docs/validate_graph.py`), and pre-commit hook keeping the spec in sync with the validator for the torch-tensors-on-disk graph format currently used in neural-lam [\#323](https://github.com/mllam/neural-lam/pull/323) @leifdenby
 
-- Support plotting boundary data from a separate boundary datastore in `vis.plot_on_axis` and `vis.plot_prediction` via optional `boundary_da` and `boundary_datastore` parameters. Evaluation figures automatically include the boundary forcing as a thin ring around the interior when a boundary datastore is configured. A new optional `plotting` section in `config.yaml` (`NeuralLAMConfig.plotting`) controls the overlay, including `boundary_datastore` to name which `datastores` entry supplies the boundary forcing (defaults to the single datastore without `state` data). [\#636](https://github.com/mllam/neural-lam/pull/636)
+- Support plotting boundary data from a separate boundary datastore in `vis.plot_on_axis` and `vis.plot_prediction` via optional `boundary_da` and `boundary_datastore` parameters. A new optional `plotting` section in `config.yaml` (`NeuralLAMConfig.plotting`) controls the overlay. [\#636](https://github.com/mllam/neural-lam/pull/636)
 
 ### Changed
 

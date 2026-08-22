@@ -160,7 +160,8 @@ class ForecasterModule(pl.LightningModule):
 
         # Compute interior_mask_bool directly from datastore
         boundary_mask = (
-            torch.tensor(datastore.boundary_mask.values, dtype=torch.float32)
+            torch
+            .tensor(datastore.boundary_mask.values, dtype=torch.float32)
             .unsqueeze(0)
             .unsqueeze(-1)
         )  # (1, num_grid_nodes, 1)
@@ -467,8 +468,8 @@ class ForecasterModule(pl.LightningModule):
             boundary_features,
             batch_times,
         ) = batch
-        # TODO: boundary_features is standardized but not yet consumed by
-        # the forecaster; model-side handling lands in #138.
+        # boundary_features is standardized here but not yet passed to the
+        # forecaster.
         prediction, pred_std = self.forecaster(
             init_states, forcing_features, target_states
         )
@@ -666,8 +667,7 @@ class ForecasterModule(pl.LightningModule):
         self.aggregate_and_plot_metrics(self.val_metrics, prefix="val")
 
         if (
-            self.trainer.is_global_zero
-            and self.hparams.metrics_watch  # ty: ignore[unresolved-attribute]
+            self.trainer.is_global_zero and self.hparams.metrics_watch  # ty: ignore[unresolved-attribute]
         ):
             metrics_watch = (
                 self.hparams.metrics_watch  # ty: ignore[unresolved-attribute]
@@ -845,7 +845,8 @@ class ForecasterModule(pl.LightningModule):
             ).unstack("grid_index")
 
             var_vmin = (
-                torch.minimum(
+                torch
+                .minimum(
                     pred_slice.flatten(0, 1).min(dim=0)[0],
                     target_slice.flatten(0, 1).min(dim=0)[0],
                 )
@@ -853,7 +854,8 @@ class ForecasterModule(pl.LightningModule):
                 .numpy()
             )
             var_vmax = (
-                torch.maximum(
+                torch
+                .maximum(
                     pred_slice.flatten(0, 1).max(dim=0)[0],
                     target_slice.flatten(0, 1).max(dim=0)[0],
                 )

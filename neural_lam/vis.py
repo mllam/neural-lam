@@ -2,13 +2,12 @@
 
 # Standard library
 import warnings
-from typing import Any, Optional
+from typing import Any
 
 # Third-party
 import cartopy.crs as ccrs
 import cartopy.feature as cfeature
 import matplotlib
-import matplotlib.axes
 import matplotlib.collections
 import matplotlib.colors
 import matplotlib.figure
@@ -229,9 +228,9 @@ def _get_heatmap_color_values(
         If ``normalization`` is not one of ``'state_std'`` or ``'diff_std'``.
     """
 
-    def _per_var_fallback() -> (
-        tuple[np.ndarray, str, matplotlib.colors.Colormap]
-    ):
+    def _per_var_fallback() -> tuple[
+        np.ndarray, str, matplotlib.colors.Colormap
+    ]:
         """
         Normalize errors by per-variable maximum value.
 
@@ -351,8 +350,8 @@ def plot_on_axis(
     ax_title: str | None = None,
     cmap: str | matplotlib.colors.Colormap = "plasma",
     boundary_alpha: float | None = None,
-    boundary_da: Optional[xr.DataArray] = None,
-    boundary_datastore: Optional[BaseRegularGridDatastore] = None,
+    boundary_da: xr.DataArray | None = None,
+    boundary_datastore: BaseRegularGridDatastore | None = None,
     boundary_margin_degrees: float = 1.0,
 ) -> matplotlib.collections.QuadMesh:
     """
@@ -459,9 +458,9 @@ def plot_on_axis(
             )
             lat_name = "latitude" if "latitude" in boundary_da.coords else "lat"
             grid_dim = boundary_da.dims[-1]
-            da_unstacked = boundary_da.set_index(
-                {grid_dim: [lon_name, lat_name]}
-            ).unstack([grid_dim])
+            da_unstacked = boundary_da.set_index({
+                grid_dim: [lon_name, lat_name]
+            }).unstack([grid_dim])
             b_lons, b_lats = np.meshgrid(
                 da_unstacked[lon_name].values,
                 da_unstacked[lat_name].values,
@@ -730,9 +729,6 @@ def _interior_padded_projected_bbox(
     )
     xs, ys = xyz[:, 0], xyz[:, 1]
 
-    # 1 deg of latitude in projection units, sampled at the interior
-    # center. For LambertConformal/PlateCarree-style projections this is
-    # locally well defined.
     ref_lon = float(interior_lons.mean())
     ref_lat = float(interior_lats.mean())
     p0 = proj.transform_point(ref_lon, ref_lat, ccrs.PlateCarree())
@@ -769,10 +765,10 @@ def plot_prediction(
     vrange: tuple[float, float] | None = None,
     boundary_alpha: float = 0.7,
     colorbar_label: str = "",
-    boundary_da: Optional[xr.DataArray] = None,
-    boundary_datastore: Optional[BaseRegularGridDatastore] = None,
+    boundary_da: xr.DataArray | None = None,
+    boundary_datastore: BaseRegularGridDatastore | None = None,
     boundary_margin_degrees: float = 1.0,
-    crop_to_interior: Optional[bool] = None,
+    crop_to_interior: bool | None = None,
 ) -> matplotlib.figure.Figure:
     """
     Plot an example prediction alongside the ground truth.
@@ -835,8 +831,6 @@ def plot_prediction(
     else:
         vmin, vmax = vrange
 
-    # Size the figure so each panel matches the interior's projected
-    # aspect (with boundary margin added when applicable).
     margin = boundary_margin_degrees if boundary_da is not None else 0.0
     panel_aspect = _interior_extent_aspect(datastore, margin)
     panel_height = 6.0
@@ -893,7 +887,7 @@ def plot_spatial_error(
     vrange: tuple[float, float] | None = None,
     boundary_alpha: float = 0.7,
     colorbar_label: str = "",
-    crop_to_interior: Optional[bool] = None,
+    crop_to_interior: bool | None = None,
 ) -> matplotlib.figure.Figure:
     """
     Plot a spatially resolved error map on a projection-aware axis.

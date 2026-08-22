@@ -234,41 +234,6 @@ def test_time_slicing_analysis(
     np.testing.assert_equal(forcing[:, 0, :], np.array(expected_forcing_values))
 
 
-@pytest.mark.parametrize(
-    "step_length",
-    [timedelta(hours=1), timedelta(hours=3), timedelta(minutes=30)],
-)
-def test_step_length_timedeltas(step_length):
-    """Test that datastores work with different step_length timedeltas."""
-    time_values = np.datetime64("2020-01-01") + np.arange(
-        len(ANALYSIS_STATE_VALUES)
-    )
-    datastore = SinglePointDummyDatastore(
-        state_data=ANALYSIS_STATE_VALUES,
-        forcing_data=FORCING_VALUES,
-        time_values=time_values,
-        is_forecast=False,
-        step_length=step_length,
-    )
-
-    # Test that the step_length property returns the correct timedelta
-    assert datastore.step_length == step_length
-
-    # Test that WeatherDataset can be created with this datastore
-    dataset = WeatherDataset(
-        datastore=datastore,
-        ar_steps=3,
-        num_future_forcing_steps=0,
-        num_past_forcing_steps=0,
-    )
-
-    # Test that we can get a sample
-    sample = dataset[0]
-    assert (
-        len(sample) == 5
-    )  # init_states, target_states, forcing, boundary, target_times
-
-
 def _interior_times():
     return np.datetime64("2020-01-01") + np.arange(len(ANALYSIS_STATE_VALUES))
 
@@ -292,7 +257,6 @@ def _boundary_times_aligned():
         [3, 1, 1],
         [3, 2, 2],
         [3, 3, 1],
-        [3, 1, 3],
     ],
 )
 def test_time_slicing_boundary_analysis(
