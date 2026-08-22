@@ -424,7 +424,7 @@ class WeatherDataset(torch.utils.data.Dataset):
 
         times = self.da_state.time.values
         # `__len__` also drops the trailing `num_future_forcing_steps`
-        # samples and honours a shorter forcing axis. 
+        # samples and honours a shorter forcing axis.
         n_samples = len(times) - offset - n_total + 1
         n_samples -= self.num_future_forcing_steps
         if self.da_forcing is not None:
@@ -503,16 +503,18 @@ class WeatherDataset(torch.utils.data.Dataset):
             "analysis_time"
         )
 
-        launch_bounds = np.array([
-            _latest_usable_launch(
-                init_time,
-                first_target,
-                leads[0],
-                lead_step,
-                self.num_past_boundary_steps,
-            )
-            for init_time, first_target in zip(init_times, first_targets)
-        ])
+        launch_bounds = np.array(
+            [
+                _latest_usable_launch(
+                    init_time,
+                    first_target,
+                    leads[0],
+                    lead_step,
+                    self.num_past_boundary_steps,
+                )
+                for init_time, first_target in zip(init_times, first_targets)
+            ]
+        )
         launch_idx = analysis_index.get_indexer(launch_bounds, method="pad")
         if (launch_idx < 0).any():
             earliest = init_times[launch_idx < 0].min()
@@ -602,9 +604,9 @@ class WeatherDataset(torch.utils.data.Dataset):
             da_sliced["time"] = (
                 da_sliced.analysis_time + da_sliced.elapsed_forecast_duration
             )
-            da_sliced = da_sliced.swap_dims({
-                "elapsed_forecast_duration": "time"
-            })
+            da_sliced = da_sliced.swap_dims(
+                {"elapsed_forecast_duration": "time"}
+            )
         else:
             start_idx = idx + offset
             da_sliced = da_state.isel(

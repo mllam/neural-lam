@@ -228,9 +228,9 @@ def _get_heatmap_color_values(
         If ``normalization`` is not one of ``'state_std'`` or ``'diff_std'``.
     """
 
-    def _per_var_fallback() -> tuple[
-        np.ndarray, str, matplotlib.colors.Colormap
-    ]:
+    def _per_var_fallback() -> (
+        tuple[np.ndarray, str, matplotlib.colors.Colormap]
+    ):
         """
         Normalize errors by per-variable maximum value.
 
@@ -458,9 +458,9 @@ def plot_on_axis(
             )
             lat_name = "latitude" if "latitude" in boundary_da.coords else "lat"
             grid_dim = boundary_da.dims[-1]
-            da_unstacked = boundary_da.set_index({
-                grid_dim: [lon_name, lat_name]
-            }).unstack([grid_dim])
+            da_unstacked = boundary_da.set_index(
+                {grid_dim: [lon_name, lat_name]}
+            ).unstack([grid_dim])
             b_lons, b_lats = np.meshgrid(
                 da_unstacked[lon_name].values,
                 da_unstacked[lat_name].values,
