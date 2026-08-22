@@ -51,8 +51,10 @@ import xarray as xr
 from neural_lam.create_graph import create_graph_from_datastore
 from neural_lam.datastore import DATASTORES, init_datastore
 from neural_lam.datastore.base import BaseRegularGridDatastore
+from neural_lam.datastore.mdp import MDPDatastore
 from neural_lam.datastore.plot_example import plot_example_from_datastore
 from tests.conftest import (
+    DATASTORES_EXAMPLES,
     init_datastore_boundary_example,
     init_datastore_example,
 )
@@ -245,6 +247,21 @@ def test_boundary_mask(datastore_name):
     if isinstance(datastore, BaseRegularGridDatastore):
         grid_shape = datastore.grid_shape_state
         assert datastore.boundary_mask.size == grid_shape.x * grid_shape.y
+
+
+@pytest.mark.slow
+def test_boundary_mask_zero_width_is_all_interior():
+    """`n_boundary_points=0` (used when a separate boundary datastore
+    supplies the boundary forcing) must mark the whole domain as interior.
+
+    `slice(n, -n)` collapses to the empty `slice(0, 0)` when `n` is 0 (since
+    `-0 == 0`), which previously left every point unmatched and therefore
+    `fillna`'d to boundary (1) instead of interior (0)."""
+    datastore = MDPDatastore(
+        config_path=DATASTORES_EXAMPLES["mdp"], n_boundary_points=0
+    )
+
+    assert (datastore.boundary_mask.values == 0).all()
 
 
 @pytest.mark.parametrize("datastore_name", DATASTORES.keys())

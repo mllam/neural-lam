@@ -461,9 +461,15 @@ class MDPDatastore(BaseRegularGridDatastore):
             ds_unstacked["state"].isel(time=0).isel(state_feature=0)
         )
         da_domain_allzero = xr.zeros_like(da_state_variable)
+        # `-0` is `0`, so `slice(n, -n)` collapses to an empty slice when
+        # `n_boundary_points` is 0 instead of selecting the full domain.
+        interior_slice = slice(
+            self._n_boundary_points or None,
+            -self._n_boundary_points or None,
+        )
         ds_unstacked["boundary_mask"] = da_domain_allzero.isel(
-            x=slice(self._n_boundary_points, -self._n_boundary_points),
-            y=slice(self._n_boundary_points, -self._n_boundary_points),
+            x=interior_slice,
+            y=interior_slice,
         )
         ds_unstacked["boundary_mask"] = ds_unstacked.boundary_mask.fillna(
             1
