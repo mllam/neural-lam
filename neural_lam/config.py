@@ -205,7 +205,13 @@ def load_config_and_datastore(
         one omits it.
     """
     with open(config_path, encoding="utf-8") as f:
-        raw_config = yaml.safe_load(f)
+        try:
+            raw_config = yaml.safe_load(f)
+        except yaml.YAMLError as ex:
+            raise InvalidConfigError(
+                f"Could not parse the configuration file at {config_path}: "
+                f"{ex}"
+            ) from ex
     if isinstance(raw_config, dict) and (
         "datastore" in raw_config and "datastores" not in raw_config
     ):

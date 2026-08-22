@@ -92,6 +92,17 @@ def test_legacy_datastore_key_raises_migration_error(tmp_path):
         nlconfig.load_config_and_datastore(str(config_path))
 
 
+def test_malformed_yaml_raises_invalid_config_error(tmp_path):
+    """A syntactically broken config file must raise `InvalidConfigError`
+    like every other config problem, not a raw `yaml.YAMLError`."""
+    config_path = tmp_path / "config.yaml"
+    config_path.write_text(
+        "datastores:\n  danra:\n  - broken: [", encoding="utf-8"
+    )
+    with pytest.raises(nlconfig.InvalidConfigError):
+        nlconfig.load_config_and_datastore(str(config_path))
+
+
 DATASTORE_EXAMPLES = Path(__file__).parent / "datastore_examples" / "mdp"
 BOUNDARY_EXAMPLE_DIR = DATASTORE_EXAMPLES / "era5_1000hPa_danra_100m_winds"
 
