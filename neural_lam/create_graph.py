@@ -51,10 +51,10 @@ def plot_graph(
     # higher levels in hierarchy
     edge_index = edge_index - edge_index.min()
 
-    if pyg.utils.is_undirected(edge_index):
+    is_undirected = pyg.utils.is_undirected(edge_index)
+    if is_undirected:
         # Keep only 1 direction of edge_index
         edge_index = edge_index[:, edge_index[0] < edge_index[1]]  # (2, M/2)
-    # TODO: indicate direction of directed edges
 
     # Move all to cpu and numpy, compute (in)-degrees
     degrees = (
@@ -66,12 +66,29 @@ def plot_graph(
     # Plot edges
     from_pos = pos[edge_index[0]]  # (M/2, 2)
     to_pos = pos[edge_index[1]]  # (M/2, 2)
-    edge_lines = np.stack((from_pos, to_pos), axis=1)
-    axis.add_collection(
-        matplotlib.collections.LineCollection(
-            edge_lines, lw=0.4, colors="black", zorder=1
+    if is_undirected:
+        edge_lines = np.stack((from_pos, to_pos), axis=1)
+        axis.add_collection(
+            matplotlib.collections.LineCollection(
+                edge_lines, lw=0.4, colors="black", zorder=1
+            )
         )
-    )
+    else:
+        # Arrowheads make edge direction visible for directed graphs
+        axis.quiver(
+            from_pos[:, 0],
+            from_pos[:, 1],
+            to_pos[:, 0] - from_pos[:, 0],
+            to_pos[:, 1] - from_pos[:, 1],
+            angles="xy",
+            scale_units="xy",
+            scale=1,
+            width=0.002,
+            headwidth=9,
+            headlength=10,
+            color="black",
+            zorder=1,
+        )
 
     # Plot nodes
     node_scatter = axis.scatter(
