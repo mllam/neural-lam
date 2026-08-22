@@ -231,6 +231,15 @@ the input-data representation is split into two parts:
    `WeatherDataset` class is also responsible for normalising the values and
    returning `torch.Tensor`-objects.
 
+Each interior `MDPDatastore` also has its own boundary mask - a rim of
+`n_boundary_points` grid cells (default 30) excluded from the loss and
+overwritten in the prediction, independent of pairing it with a separate
+boundary datastore (below). Set `datastores.<name>.n_boundary_points` in
+`config.yaml` to narrow it (e.g. to 0) once boundary forcing comes from
+elsewhere, or leave a small margin to avoid boundary artifacts.
+`NpyFilesDatastoreMEPS`'s boundary mask is fixed at data-preparation time and
+does not support this option.
+
 ### Data categories
 
 Each variable in a datastore belongs to one of three *categories*, which fix

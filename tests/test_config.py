@@ -202,3 +202,35 @@ def test_load_config_and_datastore_rejects_two_boundaries(tmp_path):
         nlconfig.InvalidConfigError, match="At most one boundary datastore"
     ):
         nlconfig.load_config_and_datastore(str(config_path))
+
+
+def test_datastore_selection_rejects_n_boundary_points_for_non_mdp():
+    """`n_boundary_points` only means something for `MDPDatastore`, which is
+    the only kind whose boundary mask width it controls."""
+    with pytest.raises(ValueError, match="n_boundary_points"):
+        nlconfig.DatastoreSelection(
+            kind="npyfilesmeps", config_path="", n_boundary_points=5
+        )
+
+
+@pytest.mark.slow
+def test_load_config_and_datastore_forwards_n_boundary_points(tmp_path):
+    """`n_boundary_points` set on a datastore entry reaches the datastore
+    and changes the width of its boundary mask, so it can be narrowed (or
+    set to 0) once boundary forcing is supplied by a separate datastore."""
+    danra = DATASTORE_EXAMPLES / "danra_100m_winds" / "danra.datastore.yaml"
+    config_path = tmp_path / "config.yaml"
+    config_path.write_text(
+        "datastores:\n"
+        "  main:\n"
+        "    kind: mdp\n"
+        f"    config_path: {danra}\n"
+        "    n_boundary_points: 5\n",
+        encoding="utf-8",
+    )
+
+    _, datastore, _ = nlconfig.load_config_and_datastore(str(config_path))
+
+    grid_shape = datastore.grid_shape_state
+    expected_interior = (grid_shape.x - 10) * (grid_shape.y - 10)
+    assert int((datastore.boundary_mask.values == 0).sum()) == expected_interior

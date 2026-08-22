@@ -3,7 +3,7 @@
 # Standard library
 import dataclasses
 from pathlib import Path
-from typing import cast, dict
+from typing import cast, dict, Optional
 
 # Third-party
 import dataclass_wizard
@@ -31,22 +31,45 @@ class DatastoreSelection:
     config_path : str
         The path to the configuration file for the selected datastore, this is
         assumed to be relative to the configuration file for neural-lam.
+    n_boundary_points : int, optional
+        Overrides :class:`MDPDatastore`'s default boundary-mask width (only
+        valid for `kind: mdp`). Left unset, the datastore's own default (30)
+        applies. This is independent of whether this `datastores:` mapping
+        also has a separate boundary datastore entry: pairing one with an
+        interior datastore does not by itself change how much of the
+        interior's own edge is masked out of the loss, so set this
+        explicitly (e.g. to a small value, or 0) if the interior's boundary
+        mask should shrink now that boundary forcing is supplied
+        externally.
     """
 
     kind: str
     config_path: str
+    n_boundary_points: int | None = None
 
     def __post_init__(self) -> None:
         """
-        Validate that the selected datastore kind is implemented.
+        Validate that the selected datastore kind is implemented and that
+        ``n_boundary_points`` is only set for datastore kinds that support it.
 
         Raises
         ------
         ValueError
-            If the provided ``kind`` is not part of :data:`DATASTORES`.
+            If the provided ``kind`` is not part of :data:`DATASTORES`, or if
+            ``n_boundary_points`` is set for a ``kind`` other than
+            :data:`MDPDatastore.SHORT_NAME`.
         """
         if self.kind not in DATASTORES:
             raise ValueError(f"Datastore kind {self.kind} is not implemented")
+        if (
+            self.n_boundary_points is not None
+            and self.kind != MDPDatastore.SHORT_NAME
+        ):
+            raise ValueError(
+                "`n_boundary_points` is only supported for "
+                f"`kind: {MDPDatastore.SHORT_NAME}` datastores, but was set "
+                f"for a `kind: {self.kind}` datastore."
+            )
 
 
 @dataclasses.dataclass
@@ -268,6 +291,7 @@ def load_config_and_datastore(
         datastore = init_datastore(
             datastore_kind=selection.kind,
             config_path=config_dir / selection.config_path,
+            n_boundary_points=selection.n_boundary_points,
         )
         if datastore.get_num_data_vars(category="state") > 0:
             interior_datastores[name] = datastore
