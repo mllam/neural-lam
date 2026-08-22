@@ -254,9 +254,9 @@ def test_boundary_mask_zero_width_is_all_interior():
     """`n_boundary_points=0` (used when a separate boundary datastore
     supplies the boundary forcing) must mark the whole domain as interior.
 
-    `slice(n, -n)` collapses to the empty `slice(0, 0)` when `n` is 0 (since
-    `-0 == 0`), which previously left every point unmatched and therefore
-    `fillna`'d to boundary (1) instead of interior (0)."""
+    Guards against `slice(n, -n)`, which collapses to the empty
+    `slice(0, 0)` when `n` is 0 (since `-0 == 0`), leaving every point
+    unmatched and `fillna`'d to boundary (1) instead of interior (0)."""
     datastore = MDPDatastore(
         config_path=DATASTORES_EXAMPLES["mdp"], n_boundary_points=0
     )
