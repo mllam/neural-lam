@@ -374,20 +374,6 @@ class WeatherDataset(torch.utils.data.Dataset):
             return base_len * self.da_state.ensemble_member.size
         return base_len
 
-    def _state_time_step(self) -> np.timedelta64:
-        """Spacing between consecutive state times within one sample.
-
-        Returns
-        -------
-        np.timedelta64
-            Lead-time spacing for a forecast interior, ``time`` spacing
-            otherwise.
-        """
-        assert self.da_state is not None
-        if self.datastore.is_forecast:
-            return get_time_step(self.da_state.elapsed_forecast_duration.values)
-        return get_time_step(self.da_state.time.values)
-
     def _sample_window_times(self) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
         """Init, first-target and last-target time of every sample.
 

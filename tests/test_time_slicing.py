@@ -1100,8 +1100,8 @@ def test_forecast_interior_with_forecast_boundary():
     This is the only pairing where the interior's init time differs from its
     `analysis_time`, so it is the only one that can catch a regression to
     anchoring the boundary launch on the launch time rather than on the init
-    time. It is also the only path that reaches the forecast branches of
-    `_state_time_step` and `_max_state_lead_used`.
+    time. It is also the only path that reaches the forecast branch of
+    `_max_state_lead_used`.
     """
     n_analysis = 5
     n_leads = 6
