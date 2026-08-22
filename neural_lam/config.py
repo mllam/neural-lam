@@ -3,7 +3,7 @@
 # Standard library
 import dataclasses
 from pathlib import Path
-from typing import Optional, cast
+from typing import cast
 
 # Third-party
 import dataclass_wizard
@@ -45,7 +45,7 @@ class DatastoreSelection:
 
     kind: str
     config_path: str
-    n_boundary_points: Optional[int] = None
+    n_boundary_points: int | None = None
 
     def __post_init__(self) -> None:
         """
@@ -232,8 +232,7 @@ def load_config_and_datastore(
             raw_config = yaml.safe_load(f)
         except yaml.YAMLError as ex:
             raise InvalidConfigError(
-                f"Could not parse the configuration file at {config_path}: "
-                f"{ex}"
+                f"Could not parse the configuration file at {config_path}: {ex}"
             ) from ex
     if isinstance(raw_config, dict) and (
         "datastore" in raw_config and "datastores" not in raw_config
