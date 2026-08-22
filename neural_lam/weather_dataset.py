@@ -3,7 +3,8 @@
 # Standard library
 import datetime
 import warnings
-from typing import Any, Iterator, cast
+from collections.abc import Iterator
+from typing import Any, cast
 
 # Third-party
 import numpy as np
@@ -97,6 +98,26 @@ def _check_window_bounds(
     end past the array, which would otherwise only surface as an opaque
     coordinate-size error further down.
 
+    Parameters
+    ----------
+    window_start : int
+        Start index of the window (inclusive); may be negative if the
+        window runs off the start of the axis.
+    window_end : int
+        End index of the window (exclusive); may exceed ``axis_size`` if
+        the window runs off the end of the axis.
+    axis_size : int
+        Size of the axis the window is taken along.
+    target_time : np.datetime64
+        Target time the window is centered on, used only for the error
+        message.
+    num_past_steps : int
+        Past window size, in steps, used only for the error message.
+    num_future_steps : int
+        Future window size, in steps, used only for the error message.
+    dim_name : str
+        Name of the axis/dimension, used only for the error message.
+
     Raises
     ------
     ValueError
@@ -155,6 +176,7 @@ class WeatherDataset(torch.utils.data.Dataset):
         so all members are used when available.
     """
 
+    # NOTE: The number of initial states is fixed at 2 (inspired by GraphCast)
     INIT_STEPS = 2
 
     def __init__(
@@ -402,10 +424,7 @@ class WeatherDataset(torch.utils.data.Dataset):
 
         times = self.da_state.time.values
         # `__len__` also drops the trailing `num_future_forcing_steps`
-        # samples and honours a shorter forcing axis. Using the state-only
-        # bound here would validate samples the dataset never yields, and
-        # their later targets would demand a longer boundary horizon than
-        # any real sample needs.
+        # samples and honours a shorter forcing axis. 
         n_samples = len(times) - offset - n_total + 1
         n_samples -= self.num_future_forcing_steps
         if self.da_forcing is not None:
@@ -484,18 +503,16 @@ class WeatherDataset(torch.utils.data.Dataset):
             "analysis_time"
         )
 
-        launch_bounds = np.array(
-            [
-                _latest_usable_launch(
-                    init_time,
-                    first_target,
-                    leads[0],
-                    lead_step,
-                    self.num_past_boundary_steps,
-                )
-                for init_time, first_target in zip(init_times, first_targets)
-            ]
-        )
+        launch_bounds = np.array([
+            _latest_usable_launch(
+                init_time,
+                first_target,
+                leads[0],
+                lead_step,
+                self.num_past_boundary_steps,
+            )
+            for init_time, first_target in zip(init_times, first_targets)
+        ])
         launch_idx = analysis_index.get_indexer(launch_bounds, method="pad")
         if (launch_idx < 0).any():
             earliest = init_times[launch_idx < 0].min()
@@ -557,6 +574,16 @@ class WeatherDataset(torch.utils.data.Dataset):
         The leading offset accounts for ``num_past_forcing_steps`` so the
         forcing window of the very first sample is in-bounds.
 
+        Parameters
+        ----------
+        da_state : xr.DataArray
+            The state dataarray to slice from.
+        idx : int
+            The sample index (already ensemble-member-adjusted).
+        n_steps : int
+            Number of autoregressive target steps to include, beyond
+            ``INIT_STEPS`` initial states.
+
         Returns
         -------
         da_sliced : xr.DataArray
@@ -575,9 +602,9 @@ class WeatherDataset(torch.utils.data.Dataset):
             da_sliced["time"] = (
                 da_sliced.analysis_time + da_sliced.elapsed_forecast_duration
             )
-            da_sliced = da_sliced.swap_dims(
-                {"elapsed_forecast_duration": "time"}
-            )
+            da_sliced = da_sliced.swap_dims({
+                "elapsed_forecast_duration": "time"
+            })
         else:
             start_idx = idx + offset
             da_sliced = da_state.isel(
@@ -600,6 +627,25 @@ class WeatherDataset(torch.utils.data.Dataset):
         analysis_time series). Walks lead times in lockstep with the
         state slice; each window is centered on the corresponding target
         state time.
+
+        Parameters
+        ----------
+        da_forcing : xr.DataArray
+            Forcing dataarray from the same forecast datastore as state.
+        idx : int
+            The ``analysis_time`` index of the sample's launch.
+        state_times : xr.DataArray
+            The ``time`` coordinate of the already-sliced state sample.
+        num_past_steps : int
+            Number of past forcing steps to include in each window.
+        num_future_steps : int
+            Number of future forcing steps to include in each window.
+
+        Returns
+        -------
+        xr.DataArray
+            Concatenated windows with dims
+            ``('time', 'grid_index', 'window', 'forcing_feature')``.
         """
         init_steps = self.INIT_STEPS
         offset = max(0, self.num_past_forcing_steps - init_steps) + init_steps
@@ -642,6 +688,22 @@ class WeatherDataset(torch.utils.data.Dataset):
         :func:`_latest_usable_launch`) and the windows are walked across its
         lead times.
 
+        Parameters
+        ----------
+        da_forcing : xr.DataArray
+            Forcing or boundary dataarray to window, either analysis
+            (``time`` dimension) or forecast (``analysis_time`` and
+            ``elapsed_forecast_duration`` dimensions).
+        state_times : xr.DataArray
+            The ``time`` coordinate of the already-sliced state sample.
+        num_past_steps : int
+            Number of past steps to include in each window.
+        num_future_steps : int
+            Number of future steps to include in each window.
+        forecast_step : np.timedelta64 or None
+            Spacing between ``da_forcing`` lead times, required when
+            ``da_forcing`` is in forecast mode.
+
         Returns
         -------
         xr.DataArray
@@ -659,8 +721,7 @@ class WeatherDataset(torch.utils.data.Dataset):
                 )
             # Anchor on the model init time rather than the first target,
             # so we never pick a launch that would be unavailable
-            # operationally. A launch exactly at init is fine: interior
-            # analysis and boundary forcing both take time to produce.
+            # operationally. A launch exactly at init is fine.
             model_init_time = cast(
                 np.datetime64, state_times[init_steps - 1].values
             )
@@ -1017,6 +1078,10 @@ class WeatherDataset(torch.utils.data.Dataset):
         This isn't used by pytorch DataLoader which itself implements an
         iterator that uses Dataset.__getitem__ and Dataset.__len__.
 
+        Yields
+        ------
+        tuple of torch.Tensor
+            Same 5-tuple as :meth:`__getitem__`.
         """
         for i in range(len(self)):
             yield self[i]
@@ -1229,7 +1294,13 @@ class WeatherDataModule(pl.LightningDataModule):
             )
 
     def train_dataloader(self) -> torch.utils.data.DataLoader:
-        """Load train dataset."""
+        """Load train dataset.
+
+        Returns
+        -------
+        torch.utils.data.DataLoader
+            Dataloader over ``self.train_dataset``, shuffled.
+        """
         assert self.train_dataset is not None
         return torch.utils.data.DataLoader(
             self.train_dataset,
@@ -1242,7 +1313,13 @@ class WeatherDataModule(pl.LightningDataModule):
         )
 
     def val_dataloader(self) -> torch.utils.data.DataLoader:
-        """Load validation dataset."""
+        """Load validation dataset.
+
+        Returns
+        -------
+        torch.utils.data.DataLoader
+            Dataloader over ``self.val_dataset``, not shuffled.
+        """
         assert self.val_dataset is not None
         return torch.utils.data.DataLoader(
             self.val_dataset,
@@ -1255,7 +1332,13 @@ class WeatherDataModule(pl.LightningDataModule):
         )
 
     def test_dataloader(self) -> torch.utils.data.DataLoader:
-        """Load test dataset."""
+        """Load test dataset.
+
+        Returns
+        -------
+        torch.utils.data.DataLoader
+            Dataloader over ``self.test_dataset``, not shuffled.
+        """
         assert self.test_dataset is not None
         return torch.utils.data.DataLoader(
             self.test_dataset,

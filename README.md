@@ -251,11 +251,7 @@ whether it is fed to the model as input, predicted as output, or both:
 | `forcing` | ✓           |              | Time-varying inputs known in advance (e.g. solar radiation, boundary forcing). |
 | `static`  | ✓           |              | Time-invariant inputs (e.g. orography, land-sea mask). |
 
-The categories also fix each datastore's role. A datastore with `state` data is
-the interior domain; one without is input-only, e.g. ERA5 boundary forcing for a
-LAM domain, whose forcing is windowed into an extra tensor per training sample.
-Exactly one interior datastore is required and at most one boundary datastore is
-supported.
+The categories also fix each datastore's role. A datastore with `state` data is the interior domain; one without is input-only, e.g. ERA5 boundary forcing for a LAM domain, whose forcing is windowed into an extra tensor per training sample. Exactly one interior datastore is required and at most one boundary datastore is supported.
 
 There are currently two different datastores implemented in the codebase:
 
@@ -282,10 +278,7 @@ a regular grid) and implementing the abstract methods.
 
 Whether the grid points actually form a complete 2D grid is reported by the
 `is_on_regular_spatial_grid` property rather than by the class, since it can
-depend on the data a datastore was built from: a domain-cropped `MDPDatastore`
-(as used for boundary forcing) subclasses `BaseRegularGridDatastore` but reports
-`False`. Graph creation and `datastore.plot_example` refuse such a datastore
-rather than silently padding the missing cells.
+depend on the data a datastore was built from.
 
 
 ### MDP (mllam-data-prep) Datastore - `MDPDatastore`
@@ -664,7 +657,7 @@ Canonical dimension names used in tensor shape annotations throughout the codeba
 - `num_variables` - generic variable dimension used in metric functions
 - `hidden_dim` - internal hidden representation size in GNN layers and MLPs
 - `input_dim` - input feature dimensionality to a layer before transformation
-- `d_mesh_static` - number of static features per mesh node
+- `num_mesh_static_vars` - number of static features per mesh node
 - `num_edges` - number of edges in a graph (g2m, m2g, same-level, up, down)
 - `num_send` - number of sender nodes in a message-passing step
 - `num_rec` - number of receiver nodes in a message-passing step
