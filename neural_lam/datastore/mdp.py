@@ -88,7 +88,6 @@ class MDPDatastore(BaseRegularGridDatastore):
             _ds = mdp.create_dataset(config=self._config_for_creation())
             _ds.to_zarr(fp_ds)
 
-        # Without either there is nothing to slice or grid-shape against.
         if "state" not in _ds and "forcing" not in _ds:
             raise ValueError(
                 f"Datastore at {self._config_path} contains neither 'state' "
@@ -338,6 +337,7 @@ class MDPDatastore(BaseRegularGridDatastore):
 
         da_category = self._ds[category]
 
+        # set units on x y coordinates if missing
         # Use the dim names declared in the config's grid_index stacking,
         # so both projected (x, y) and geographic (lon, lat) sources work.
         _UNITS_BY_COORD = {
@@ -545,8 +545,6 @@ class MDPDatastore(BaseRegularGridDatastore):
             The shape of the cartesian grid for the state variables.
 
         """
-        # Boundary-only datastores have no state; __init__ guarantees one
-        # of the two is present.
         category = "state" if "state" in self._ds else "forcing"
         ds_cat = self.unstack_grid_coords(self._ds[category])
         xdim, ydim = self.spatial_coordinates
