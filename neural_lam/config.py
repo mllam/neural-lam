@@ -3,7 +3,7 @@
 # Standard library
 import dataclasses
 from pathlib import Path
-from typing import cast, dict, Optional
+from typing import cast
 
 # Third-party
 import dataclass_wizard
