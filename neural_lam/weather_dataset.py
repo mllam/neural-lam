@@ -575,7 +575,7 @@ class WeatherDataset(torch.utils.data.Dataset):
         time : datetime.datetime or list[datetime.datetime]
             The time or times of the tensor.
         category : str
-            The category of the tensor, either "state", "forcing" or "static".
+            The category of the tensor, either "state" or "forcing".
 
         Returns
         -------
@@ -613,10 +613,10 @@ class WeatherDataset(torch.utils.data.Dataset):
 
         da_datastore_state = getattr(self, f"da_{category}")
         da_grid_index = da_datastore_state.grid_index
-        da_state_feature = da_datastore_state.state_feature
+        da_category_feature = da_datastore_state[f"{category}_feature"]
 
         coords = {
-            f"{category}_feature": da_state_feature,
+            f"{category}_feature": da_category_feature,
             "grid_index": da_grid_index,
         }
         if add_time_as_dim:
