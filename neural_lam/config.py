@@ -3,7 +3,7 @@
 # Standard library
 import dataclasses
 from pathlib import Path
-from typing import Dict, Optional, cast
+from typing import cast, dict
 
 # Third-party
 import dataclass_wizard
@@ -71,8 +71,6 @@ class UniformFeatureWeighting:
     all state features are weighted equally.
     """
 
-    pass
-
 
 @dataclasses.dataclass
 class OutputClamping:
@@ -131,15 +129,15 @@ class PlottingConfig:
     boundary_margin_degrees : float
         Lat/lon margin (in projection degrees) drawn around the interior
         domain when a boundary datastore is configured. Defaults to 1.0.
-    boundary_var_mapping : Dict[str, str]
+    boundary_var_mapping : dict[str, str]
         Optional mapping from interior state variable name to boundary
         forcing feature name for the overlay. State variables not listed
         fall back to matching a boundary forcing feature of the same name.
     """
 
-    boundary_datastore: Optional[str] = None
+    boundary_datastore: str | None = None
     boundary_margin_degrees: float = 1.0
-    boundary_var_mapping: Dict[str, str] = dataclasses.field(
+    boundary_var_mapping: dict[str, str] = dataclasses.field(
         default_factory=dict
     )
 
@@ -203,8 +201,6 @@ class NeuralLAMConfig(dataclass_wizard.JSONWizard, dataclass_wizard.YAMLWizard):
 class InvalidConfigError(Exception):
     """Raised when the Neural-LAM configuration file is invalid or malformed."""
 
-    pass
-
 
 def load_config_and_datastore(
     config_path: str,
@@ -239,8 +235,7 @@ def load_config_and_datastore(
             raw_config = yaml.safe_load(f)
         except yaml.YAMLError as ex:
             raise InvalidConfigError(
-                f"Could not parse the configuration file at {config_path}: "
-                f"{ex}"
+                f"Could not parse the configuration file at {config_path}: {ex}"
             ) from ex
     if isinstance(raw_config, dict) and (
         "datastore" in raw_config and "datastores" not in raw_config
