@@ -120,6 +120,8 @@ ignore = [
 ]
 per-file-ignores = [
     "__init__.py: F401", # Allow unused imports
+    # NO_GCE_CHECK has to be set before the imports, see the comment there
+    "tests/conftest.py: E402",
 ]
 
 [tool.codespell]
