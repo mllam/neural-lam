@@ -566,6 +566,11 @@ class NpyFilesDatastoreMEPS(BaseRegularGridDatastore):
         """Get the analysis times for the given split by parsing the filenames
         of all the files found for the given split.
 
+        Every category's analysis-time coordinate is derived from the state
+        files when they exist, on the assumption that forcing/static files
+        are available at the same analysis times; only a state-less
+        (boundary-only) datastore falls back to forcing files.
+
         Parameters
         ----------
         split : str
@@ -593,6 +598,19 @@ class NpyFilesDatastoreMEPS(BaseRegularGridDatastore):
 
             sample_files = list(sample_dir.glob(pattern))
             if sample_files:
+                if (
+                    filename_format is not STATE_FILENAME_FORMAT
+                    and self.get_vars_names(category="state")
+                ):
+                    warnings.warn(
+                        f"No state files matching {STATE_FILENAME_FORMAT!r} "
+                        f"found in {sample_dir}, even though this datastore "
+                        "configures state variables. Falling back to "
+                        f"forcing-file ({filename_format!r}) analysis "
+                        "times; this may indicate a misconfigured or "
+                        "incomplete interior datastore rather than a "
+                        "genuine boundary-only one."
+                    )
                 times = []
                 for fp in sample_files:
                     name_parts = parse.parse(filename_format, fp.name)

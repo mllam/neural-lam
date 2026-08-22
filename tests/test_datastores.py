@@ -36,6 +36,7 @@ attributes:
 # Standard library
 import collections
 import dataclasses
+import warnings
 from datetime import timedelta
 from pathlib import Path
 
@@ -508,6 +509,44 @@ def test_boundary_mask_on_boundary_datastore_raises():
 
     with pytest.raises(NotImplementedError, match="without `state` data"):
         datastore_boundary.boundary_mask
+
+
+def test_meps_analysis_times_warns_on_missing_state_files(
+    tmp_path, monkeypatch
+):
+    """If state variables are configured but no state files are found on
+    disk, falling back to forcing-file analysis times must warn - this
+    distinguishes a genuinely boundary-only datastore from a
+    misconfigured/incomplete interior one."""
+    datastore = init_datastore_example("npyfilesmeps")
+
+    split_dir = tmp_path / "samples" / "train"
+    split_dir.mkdir(parents=True)
+    (split_dir / "nwp_toa_downwelling_shortwave_flux_2022010100.npy").touch()
+    monkeypatch.setattr(datastore, "_root_path", tmp_path)
+
+    with pytest.warns(UserWarning, match="misconfigured or incomplete"):
+        times = datastore._get_analysis_times(split="train")
+    assert len(times) == 1
+
+
+def test_meps_analysis_times_no_warning_when_boundary_only(
+    tmp_path, monkeypatch
+):
+    """A datastore with no configured state variables falling back to
+    forcing files is the expected boundary-only path and must not warn."""
+    datastore = init_datastore_example("npyfilesmeps")
+
+    split_dir = tmp_path / "samples" / "train"
+    split_dir.mkdir(parents=True)
+    (split_dir / "nwp_toa_downwelling_shortwave_flux_2022010100.npy").touch()
+    monkeypatch.setattr(datastore, "_root_path", tmp_path)
+    monkeypatch.setattr(datastore, "get_vars_names", lambda category: [])
+
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        times = datastore._get_analysis_times(split="train")
+    assert len(times) == 1
 
 
 def test_boundary_datastore_state_metadata_accessors_return_empty():
