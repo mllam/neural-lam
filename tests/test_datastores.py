@@ -242,6 +242,7 @@ def test_boundary_mask(datastore_name):
         assert datastore.boundary_mask.size == grid_shape.x * grid_shape.y
 
 
+@pytest.mark.requires_real_data
 def test_boundary_mask_zero_n_boundary_points_is_all_interior():
     """slice(n, -n) is empty (not "the whole array") when n == 0, so
     n_boundary_points=0 must produce a mask with no boundary points, not one

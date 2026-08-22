@@ -171,6 +171,7 @@ exclude = ["tests", "docs", "build"]
 [tool.pytest.ini_options]
 markers = [
     "slow: marks tests as slow (deselected by default, run with -m slow)",
+    "requires_real_data: marks tests that require downloading real data",
 ]
 
 [build-system]
