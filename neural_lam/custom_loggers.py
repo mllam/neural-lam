@@ -95,8 +95,9 @@ class CustomMLFlowLogger(pl.loggers.MLFlowLogger):
 
         Raises
         ------
-        SystemExit
-            If AWS credentials for the MLflow artifact store are missing.
+        botocore.exceptions.NoCredentialsError
+            If AWS credentials for the MLflow artifact store are missing;
+            re-raised for the caller to handle.
         """
         # Third-party
         from botocore.exceptions import NoCredentialsError
