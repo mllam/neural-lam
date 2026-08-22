@@ -19,6 +19,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Fix `MDPDatastore.boundary_mask` marking the entire domain as boundary instead of none when `n_boundary_points=0`, since `slice(n, -n)` is an empty selection (not the whole array) when `n == 0` [\#728](https://github.com/mllam/neural-lam/pull/728) @AshNicolus
+
 - Fix `MDPDatastore` raising `KeyError` for `category="static"` when the datastore has no static data, instead of returning `None`/`[]` as documented and as `category="forcing"` already correctly does [\#733](https://github.com/mllam/neural-lam/pull/733) @AshNicolus
 
 - Fix stale docstring in `CustomMLFlowLogger.log_image` documenting old `sys.exit(1)` behavior that was replaced with re-raise in [\#496](https://github.com/mllam/neural-lam/pull/496) [\#724](https://github.com/mllam/neural-lam/pull/724) @AshNicolus
