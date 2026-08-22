@@ -36,6 +36,7 @@ attributes:
 # Standard library
 import collections
 import dataclasses
+import warnings
 from datetime import timedelta
 from pathlib import Path
 
@@ -47,10 +48,15 @@ import torch
 import xarray as xr
 
 # First-party
-from neural_lam.datastore import DATASTORES
+from neural_lam.create_graph import create_graph_from_datastore
+from neural_lam.datastore import DATASTORES, init_datastore
 from neural_lam.datastore.base import BaseRegularGridDatastore
 from neural_lam.datastore.plot_example import plot_example_from_datastore
-from tests.conftest import init_datastore_example
+from tests.conftest import (
+    init_datastore_boundary_example,
+    init_datastore_example,
+)
+from tests.dummy_datastore import EnsembleDummyDatastore
 
 
 @pytest.mark.parametrize("datastore_name", DATASTORES.keys())
@@ -441,3 +447,154 @@ def test_get_standardized_da(datastore_name, category):
     )
 
     assert np.allclose(standard_da, (non_standard_da - mean) / std, atol=1e-6)
+
+
+@pytest.mark.parametrize("datastore_name", DATASTORES.keys())
+def test_is_on_regular_spatial_grid_matches_grid_shape(datastore_name):
+    """The `is_on_regular_spatial_grid` property must agree with whether
+    `grid_shape_state` actually accounts for every grid point, since that is
+    what unstacking `grid_index` back into x/y relies on."""
+    datastore = init_datastore_example(datastore_name)
+    assert isinstance(datastore, BaseRegularGridDatastore)
+
+    # Independent of the property's implementation: unstacking is what the
+    # property gates, so it must succeed exactly when the property is True.
+    grid_shape = datastore.grid_shape_state
+    da_static = datastore.get_dataarray(category="static", split=None)
+    assert da_static is not None
+    unstacked = datastore.unstack_grid_coords(da_static)
+    xdim, ydim = datastore.spatial_coordinates
+    round_trips = (
+        unstacked.sizes[xdim] * unstacked.sizes[ydim]
+        == datastore.num_grid_points
+    )
+    assert datastore.is_on_regular_spatial_grid == round_trips
+    assert round_trips == (
+        grid_shape.x * grid_shape.y == datastore.num_grid_points
+    )
+
+
+def test_is_on_regular_spatial_grid_defaults_to_false():
+    """A datastore that is not a `BaseRegularGridDatastore` gets the base
+    class default, so a new datastore has to opt in to being treated as
+    gridded rather than silently inheriting it."""
+    datastore = EnsembleDummyDatastore()
+
+    assert not isinstance(datastore, BaseRegularGridDatastore)
+    assert not datastore.is_on_regular_spatial_grid
+
+
+@pytest.mark.slow
+def test_cropped_boundary_datastore_is_not_regular_grid():
+    """A domain-cropped datastore keeps only the grid points inside the
+    interior domain, so `grid_index` no longer unstacks to a full x/y grid
+    and graph creation must refuse it rather than silently padding."""
+    datastore_boundary = init_datastore_boundary_example("mdp")
+
+    grid_shape = datastore_boundary.grid_shape_state
+    assert datastore_boundary.num_grid_points < grid_shape.x * grid_shape.y
+    assert not datastore_boundary.is_on_regular_spatial_grid
+
+    with pytest.raises(NotImplementedError, match="complete 2D grid"):
+        create_graph_from_datastore(
+            datastore=datastore_boundary,
+            output_root_path=str(datastore_boundary.root_path / "graph"),
+        )
+
+
+@pytest.mark.slow
+def test_boundary_mask_on_boundary_datastore_raises():
+    """A datastore without `state` data has no interior ring to mask, so
+    `boundary_mask` must say so rather than raise a bare KeyError from the
+    missing `state` variable."""
+    datastore_boundary = init_datastore_boundary_example("mdp")
+
+    with pytest.raises(NotImplementedError, match="without `state` data"):
+        datastore_boundary.boundary_mask
+
+
+def test_meps_analysis_times_warns_on_missing_state_files(
+    tmp_path, monkeypatch
+):
+    """If state variables are configured but no state files are found on
+    disk, falling back to forcing-file analysis times must warn - this
+    distinguishes a genuinely boundary-only datastore from a
+    misconfigured/incomplete interior one."""
+    datastore = init_datastore_example("npyfilesmeps")
+
+    split_dir = tmp_path / "samples" / "train"
+    split_dir.mkdir(parents=True)
+    (split_dir / "nwp_toa_downwelling_shortwave_flux_2022010100.npy").touch()
+    monkeypatch.setattr(datastore, "_root_path", tmp_path)
+
+    with pytest.warns(UserWarning, match="misconfigured or incomplete"):
+        times = datastore._get_analysis_times(split="train")
+    assert len(times) == 1
+
+
+def test_meps_analysis_times_no_warning_when_boundary_only(
+    tmp_path, monkeypatch
+):
+    """A datastore with no configured state variables falling back to
+    forcing files is the expected boundary-only path and must not warn."""
+    datastore = init_datastore_example("npyfilesmeps")
+
+    split_dir = tmp_path / "samples" / "train"
+    split_dir.mkdir(parents=True)
+    (split_dir / "nwp_toa_downwelling_shortwave_flux_2022010100.npy").touch()
+    monkeypatch.setattr(datastore, "_root_path", tmp_path)
+    monkeypatch.setattr(datastore, "get_vars_names", lambda category: [])
+
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        times = datastore._get_analysis_times(split="train")
+    assert len(times) == 1
+
+
+@pytest.mark.slow
+def test_boundary_datastore_state_metadata_accessors_return_empty():
+    """A datastore without `state` data must return an empty list from all
+    three state-metadata accessors, not raise a KeyError on the missing
+    `state_feature*` zarr variables."""
+    datastore_boundary = init_datastore_boundary_example("mdp")
+
+    assert datastore_boundary.get_vars_names(category="state") == []
+    assert datastore_boundary.get_vars_long_names(category="state") == []
+    assert datastore_boundary.get_vars_units(category="state") == []
+
+
+@pytest.mark.slow
+def test_plot_example_on_cropped_datastore_raises():
+    """Plotting unstacks `grid_index` back into x/y, which pads the cells a
+    domain-cropped datastore does not have, so it must be refused."""
+    datastore_boundary = init_datastore_boundary_example("mdp")
+
+    with pytest.raises(NotImplementedError, match="complete 2D grid"):
+        plot_example_from_datastore(
+            category="forcing",
+            datastore=datastore_boundary,
+            col_dim="time",
+        )
+
+
+def test_symlinked_config_resolves_to_the_real_directory():
+    """A config reached through a symlink must derive its root from the link
+    target, not the link.
+
+    The two-datastore boundary example reaches the danra config through a
+    symlink; deriving the root from the link would build a second copy of
+    the same zarr next to it.
+    """
+    linked = (
+        Path(__file__).parent
+        / "datastore_examples"
+        / "mdp"
+        / "era5_1000hPa_danra_100m_winds"
+        / "danra.datastore.yaml"
+    )
+    assert linked.is_symlink()
+
+    datastore = init_datastore(datastore_kind="mdp", config_path=linked)
+
+    assert datastore.root_path == linked.resolve().parent
+    assert datastore.root_path.name == "danra_100m_winds"

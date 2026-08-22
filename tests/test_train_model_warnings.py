@@ -88,7 +88,7 @@ def test_create_gif_forwarded_to_forecaster_module():
         ),
         patch(
             "neural_lam.train_model.load_config_and_datastore",
-            return_value=(MagicMock(), MagicMock()),
+            return_value=(MagicMock(), MagicMock(), None),
         ),
         patch("neural_lam.train_model.WeatherDataModule"),
         patch("neural_lam.train_model.MODELS", {"graph_lam": MagicMock}),
@@ -215,6 +215,35 @@ def test_checkpoint_loader_restores_gnn_type_kwargs(config):
     assert captured_kwargs["m2g_gnn_type"] == "PropagationNet"
     assert captured_kwargs["mesh_up_gnn_type"] == "PropagationNet"
     assert captured_kwargs["mesh_down_gnn_type"] == "InteractionNet"
+
+
+def test_checkpoint_loader_forwards_datastore_boundary(config):
+    """A boundary datastore passed to the loader must reach
+    ForecasterModule.load_from_checkpoint, so boundary standardization
+    statistics are restored rather than silently dropped."""
+    args = make_args()
+    predictor_class, _ = capturing_predictor(BaseHiGraphModel)
+    datastore_boundary = MagicMock()
+
+    with (
+        patch(
+            "neural_lam.train_model.torch.load",
+            return_value={"hyper_parameters": {"args": args}},
+        ),
+        patch("neural_lam.train_model.MODELS", {"hi_lam": predictor_class}),
+        patch("neural_lam.train_model.ARForecaster"),
+        patch(
+            "neural_lam.train_model.ForecasterModule.load_from_checkpoint"
+        ) as mock_load_from_checkpoint,
+    ):
+        load_forecaster_module_from_checkpoint(
+            "model.ckpt", config, MagicMock(), datastore_boundary
+        )
+
+    assert (
+        mock_load_from_checkpoint.call_args.kwargs["datastore_boundary"]
+        is datastore_boundary
+    )
 
 
 def test_build_predictor_omits_hierarchical_gnn_kwargs_for_graph_lam(config):
