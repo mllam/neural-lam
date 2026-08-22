@@ -9,6 +9,7 @@ import xarray as xr
 
 # First-party
 from neural_lam.datastore.base import BaseDatastore
+from neural_lam.utils.time import get_time_step
 from neural_lam.weather_dataset import (
     WeatherDataset,
     _check_window_bounds,
@@ -1477,6 +1478,21 @@ def test_window_bounds_error_names_the_axis_and_target():
             num_future_steps=2,
             dim_name="elapsed_forecast_duration",
         )
+
+
+def test_get_time_step_rejects_too_few_values():
+    """A time axis with fewer than 2 values has no step to determine."""
+    with pytest.raises(ValueError, match="at least 2 are required"):
+        get_time_step(np.array([np.datetime64("2020-01-01")]))
+
+
+def test_get_time_step_rejects_irregular_spacing():
+    """A gap in an otherwise regular time axis (e.g. a missing forecast
+    cycle) must be caught here rather than silently misaligning windows
+    downstream."""
+    times = np.datetime64("2020-01-01") + np.array([0, 6, 15], dtype="m8[h]")
+    with pytest.raises(ValueError, match="Inconsistent time steps"):
+        get_time_step(times)
 
 
 def test_format_timedelta_renders_the_largest_whole_unit():
