@@ -793,8 +793,9 @@ def plot_prediction(
     title : str, optional
         Overall figure title.
     vrange : tuple of (float, float), optional
-        ``(vmin, vmax)`` for the shared colour scale. Inferred from data
-        if not given.
+        ``(vmin, vmax)`` for the shared colour scale. Inferred from
+        ``da_prediction`` and ``da_target`` if not given, extended to
+        also cover ``boundary_da`` when it is provided.
     boundary_alpha : float, optional
         Alpha transparency for the boundary mask overlay (default 0.7).
     colorbar_label : str, optional
@@ -828,6 +829,9 @@ def plot_prediction(
     if vrange is None:
         vmin = float(min(da_prediction.min(), da_target.min()))
         vmax = float(max(da_prediction.max(), da_target.max()))
+        if boundary_da is not None:
+            vmin = min(vmin, float(boundary_da.min()))
+            vmax = max(vmax, float(boundary_da.max()))
     else:
         vmin, vmax = vrange
 
