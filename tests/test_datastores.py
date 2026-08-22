@@ -510,6 +510,17 @@ def test_boundary_mask_on_boundary_datastore_raises():
         datastore_boundary.boundary_mask
 
 
+def test_boundary_datastore_state_metadata_accessors_return_empty():
+    """A datastore without `state` data must return an empty list from all
+    three state-metadata accessors, not raise a KeyError on the missing
+    `state_feature*` zarr variables."""
+    datastore_boundary = init_datastore_boundary_example("mdp")
+
+    assert datastore_boundary.get_vars_names(category="state") == []
+    assert datastore_boundary.get_vars_long_names(category="state") == []
+    assert datastore_boundary.get_vars_units(category="state") == []
+
+
 def test_plot_example_on_cropped_datastore_raises():
     """Plotting unstacks `grid_index` back into x/y, which pads the cells a
     domain-cropped datastore does not have, so it must be refused."""

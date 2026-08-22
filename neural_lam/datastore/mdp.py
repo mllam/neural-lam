@@ -222,10 +222,12 @@ class MDPDatastore(BaseRegularGridDatastore):
             The units of the variables in the given category.
 
         """
-        if category not in self._ds and category == "forcing":
-            warnings.warn("no forcing data found in datastore")
+        units_key = f"{category}_feature_units"
+        if units_key not in self._ds:
+            if category == "forcing":
+                warnings.warn("no forcing data found in datastore")
             return []
-        return self._ds[f"{category}_feature_units"].values.tolist()
+        return self._ds[units_key].values.tolist()
 
     def get_vars_names(self, category: str) -> list[str]:
         """Return the names of the variables in the given category.
