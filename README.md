@@ -536,6 +536,7 @@ Notebooks for visualization and analysis are located in `docs/notebooks`.
 
 ## Format of graph directory
 The `graphs` directory contains generated graph structures that can be used by different graph-based models.
+For a strict, machine-verifiable specification, see `docs/graph_storage_spec.md`.
 The structure is shown with examples below:
 ```
 graphs
@@ -596,16 +597,7 @@ Canonical dimension names used in tensor shape annotations throughout the codeba
 - `num_rec` - number of receiver nodes in a message-passing step
 
 # Development and Contributing
-Any push or Pull-Request to the main branch will trigger a selection of pre-commit hooks.
-These hooks will run a series of checks on the code, like formatting and linting.
-If any of these checks fail the push or PR will be rejected.
-To test whether your code passes these checks before pushing, run
-``` bash
-pre-commit run --all-files
-```
-from the root directory of the repository.
-
-Furthermore, all tests in the ```tests``` directory will be run upon pushing changes by a github action. Failure in any of the tests will also reject the push/PR.
+See [CONTRIBUTING.md](CONTRIBUTING.md) for the full contributor guide: how to open an issue, set up a development environment, the code standards we follow, the checks to run before pushing, the pull-request and review process, and the community roadmap.
 
 # Contact
 If you are interested in machine learning models for LAM, have questions about the implementation or ideas for extending it, feel free to get in touch.

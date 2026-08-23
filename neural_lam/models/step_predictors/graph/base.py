@@ -18,6 +18,16 @@ class BaseGraphModel(StepPredictor):
     the encode-process-decode idea.
     """
 
+    diff_mean: torch.Tensor
+    diff_std: torch.Tensor
+    g2m_features: torch.Tensor
+    m2g_features: torch.Tensor
+    g2m_edge_index: torch.Tensor
+    m2g_edge_index: torch.Tensor
+    mesh_static_features: torch.Tensor | list[torch.Tensor]
+    m2m_features: torch.Tensor | list[torch.Tensor]
+    m2m_edge_index: torch.Tensor | list[torch.Tensor]
+
     def __init__(
         self,
         datastore: BaseDatastore,
@@ -100,16 +110,17 @@ class BaseGraphModel(StepPredictor):
         # Load graph with static features
         # NOTE: (IMPORTANT!) mesh nodes MUST have the first
         # num_mesh_nodes indices,
-        graph_dir_path = datastore.root_path / "graph" / graph_name
-        self.hierarchical, graph_ldict = utils.load_graph(
-            graph_dir_path=graph_dir_path
+        grid_xy_extent = datastore.get_xy_extent(category="state")
+        grid_xy_max_span = max(
+            grid_xy_extent[1] - grid_xy_extent[0],
+            grid_xy_extent[3] - grid_xy_extent[2],
         )
-        for name, attr_value in graph_ldict.items():
-            # Make BufferLists module members and register tensors as buffers
-            if isinstance(attr_value, torch.Tensor):
-                self.register_buffer(name, attr_value, persistent=False)
-            else:
-                setattr(self, name, attr_value)
+        self.hierarchical = utils.load_and_register_graph(
+            self,
+            datastore,
+            graph_name,
+            mesh_node_features_scaling=grid_xy_max_span,
+        )
 
         # Specify dimensions of data
         self.num_mesh_nodes, _ = self.get_num_mesh()
@@ -119,14 +130,10 @@ class BaseGraphModel(StepPredictor):
         )
 
         # Compute grid_input_dim: total input dimensionality on the grid
-        num_state_vars = datastore.get_num_data_vars(category="state")
-        num_forcing_vars = datastore.get_num_data_vars(category="forcing")
-        grid_static_dim = self.grid_static_features.shape[1]
-        self.grid_input_dim = (
-            2 * num_state_vars
-            + grid_static_dim
-            + num_forcing_vars
-            * (num_past_forcing_steps + num_future_forcing_steps + 1)
+        self.grid_input_dim = utils.compute_grid_input_dim(
+            datastore,
+            num_past_forcing_steps,
+            num_future_forcing_steps,
         )
 
         self.g2m_edges, g2m_dim = self.g2m_features.shape

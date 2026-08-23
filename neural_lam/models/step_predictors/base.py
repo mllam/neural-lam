@@ -18,6 +18,19 @@ class StepPredictor(nn.Module, ABC):
     time steps plus forcing into a prediction of the next state.
     """
 
+    grid_static_features: torch.Tensor
+    state_mean: torch.Tensor
+    state_std: torch.Tensor
+
+    # Registered buffers for clamping
+    sigmoid_lower_lims: torch.Tensor
+    sigmoid_upper_lims: torch.Tensor
+    softplus_lower_lims: torch.Tensor
+    softplus_upper_lims: torch.Tensor
+    clamp_lower_upper_idx: torch.Tensor
+    clamp_lower_idx: torch.Tensor
+    clamp_upper_idx: torch.Tensor
+
     def __init__(
         self,
         datastore: BaseDatastore,
