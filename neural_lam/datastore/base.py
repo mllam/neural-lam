@@ -1,3 +1,5 @@
+"""Abstract base classes describing Neural-LAM datastore APIs."""
+
 # Standard library
 import abc
 import collections
@@ -6,7 +8,7 @@ import functools
 from datetime import timedelta
 from functools import cached_property
 from pathlib import Path
-from typing import List, Optional, Union
+from typing import overload
 
 # Third-party
 import cartopy.crs as ccrs
@@ -28,25 +30,28 @@ class BaseDatastore(abc.ABC):
     `weather_dataset.WeatherDataset` class (which inherits from
     `torch.utils.data.Dataset` and uses the datastore to access the data).
 
-    # Forecast vs analysis data
-    If the datastore is used to represent forecast rather than analysis data,
-    then the `is_forecast` attribute should be set to True, and returned data
-    from `get_dataarray` is assumed to have `analysis_time` and `forecast_time`
-    dimensions (rather than just `time`).
+    Forecast vs analysis data
+    -------------------------
+    If the datastore is used to represent forecast rather than analysis
+    data, then the ``is_forecast`` attribute should be set to True, and
+    returned data from ``get_dataarray`` is assumed to have `analysis_time`
+    and `forecast_time` dimensions (rather than just `time`).
 
-    # Ensemble vs deterministic data
+    Ensemble vs deterministic data
+    ------------------------------
     If the datastore is used to present an ensemble of state realisations, for
     example for forecast ensembles, then the `is_ensemble` attribute should be
-    set to `True` and returned state data from `get_dataarray` is expected to
+    set to `True` and returned state data from ``get_dataarray`` is expected to
     have an `ensemble_member` dimension. If each ensemble member has its own
     forcing values, then `has_ensemble_forcing` should be set to `True`, and
-    returned forcing data from `get_dataarray` is expected to have an
+    returned forcing data from ``get_dataarray`` is expected to have an
     `ensemble_member` dimension; otherwise forcing data is expected not to have
     one.
 
-    # Grid index
+    Grid index
+    ----------
     All methods that return data specific to a grid point (like
-    `get_dataarray`) should have a single dimension named `grid_index` that
+    ``get_dataarray``) should have a single dimension named `grid_index` that
     represents the spatial grid index of the data. The actual x, y coordinates
     of the grid points should be stored in the `x` and `y` coordinates of the
     dataarray or dataset with the `grid_index` dimension as the coordinate for
@@ -70,7 +75,6 @@ class BaseDatastore(abc.ABC):
             The root path to the datastore.
 
         """
-        pass
 
     @property
     @abc.abstractmethod
@@ -84,7 +88,6 @@ class BaseDatastore(abc.ABC):
             returned.
 
         """
-        pass
 
     @property
     @abc.abstractmethod
@@ -97,10 +100,9 @@ class BaseDatastore(abc.ABC):
             The step length of the dataset.
 
         """
-        pass
 
     @abc.abstractmethod
-    def get_vars_units(self, category: str) -> List[str]:
+    def get_vars_units(self, category: str) -> list[str]:
         """Get the units of the variables in the given category.
 
         Parameters
@@ -110,14 +112,13 @@ class BaseDatastore(abc.ABC):
 
         Returns
         -------
-        List[str]
+        list[str]
             The units of the variables.
 
         """
-        pass
 
     @abc.abstractmethod
-    def get_vars_names(self, category: str) -> List[str]:
+    def get_vars_names(self, category: str) -> list[str]:
         """Get the names of the variables in the given category.
 
         Parameters
@@ -127,14 +128,13 @@ class BaseDatastore(abc.ABC):
 
         Returns
         -------
-        List[str]
+        list[str]
             The names of the variables.
 
         """
-        pass
 
     @abc.abstractmethod
-    def get_vars_long_names(self, category: str) -> List[str]:
+    def get_vars_long_names(self, category: str) -> list[str]:
         """Get the long names of the variables in the given category.
 
         Parameters
@@ -144,11 +144,10 @@ class BaseDatastore(abc.ABC):
 
         Returns
         -------
-        List[str]
+        list[str]
             The long names of the variables.
 
         """
-        pass
 
     @abc.abstractmethod
     def get_num_data_vars(self, category: str) -> int:
@@ -165,7 +164,6 @@ class BaseDatastore(abc.ABC):
             The number of data variables.
 
         """
-        pass
 
     @abc.abstractmethod
     def get_standardization_dataarray(self, category: str) -> xr.Dataset:
@@ -194,7 +192,6 @@ class BaseDatastore(abc.ABC):
             differences for state variables).
 
         """
-        pass
 
     def _standardize_datarray(
         self, da: xr.DataArray, category: str
@@ -228,9 +225,9 @@ class BaseDatastore(abc.ABC):
     def get_dataarray(
         self,
         category: str,
-        split: Optional[str],
+        split: str | None,
         standardize: bool = False,
-    ) -> Union[xr.DataArray, None]:
+    ) -> xr.DataArray | None:
         """
         Return the processed data (as a single `xr.DataArray`) for the given
         category of data and test/train/val-split that covers all the data (in
@@ -272,7 +269,6 @@ class BaseDatastore(abc.ABC):
             The xarray DataArray object with processed dataset.
 
         """
-        pass
 
     @cached_property
     @abc.abstractmethod
@@ -289,7 +285,6 @@ class BaseDatastore(abc.ABC):
             `('grid_index',)`.
 
         """
-        pass
 
     @abc.abstractmethod
     def get_xy(self, category: str, stacked: bool) -> np.ndarray:
@@ -324,10 +319,9 @@ class BaseDatastore(abc.ABC):
             The projection object.
 
         """
-        pass
 
     @functools.lru_cache
-    def get_xy_extent(self, category: str) -> List[float]:
+    def get_xy_extent(self, category: str) -> list[float]:
         """
         Return the extent of the x, y coordinates for a given category of data.
         The extent should be returned as a list of 4 floats with `[xmin, xmax,
@@ -340,7 +334,7 @@ class BaseDatastore(abc.ABC):
 
         Returns
         -------
-        List[float]
+        list[float]
             The extent of the x, y coordinates.
 
         """
@@ -381,11 +375,10 @@ class BaseDatastore(abc.ABC):
             The number of grid points in the dataset.
 
         """
-        pass
 
     @cached_property
     @abc.abstractmethod
-    def state_feature_weights_values(self) -> List[float]:
+    def state_feature_weights_values(self) -> list[float]:
         """
         Return the weights for each state feature as a list of floats.
 
@@ -399,12 +392,11 @@ class BaseDatastore(abc.ABC):
         list of float
             The weight for each state feature.
         """
-        pass
 
     @functools.lru_cache
     def expected_dim_order(
         self,
-        category: Optional[str] = None,
+        category: str | None = None,
     ) -> tuple[str, ...]:
         """
         Return the expected dimension order for the dataarray or dataset
@@ -432,7 +424,7 @@ class BaseDatastore(abc.ABC):
             The category of the dataset (state/forcing/static).
         Returns
         -------
-        List[str]
+        list[str]
             The expected dimension order for the dataarray or dataset.
 
         """
@@ -443,14 +435,20 @@ class BaseDatastore(abc.ABC):
                 # static data does not vary in time
                 if self.is_forecast:
                     dim_order.extend(
-                        ["analysis_time", "elapsed_forecast_duration"]
+                        [
+                            "analysis_time",
+                            "elapsed_forecast_duration",
+                        ]
                     )
                 elif not self.is_forecast:
                     dim_order.append("time")
 
-            if category == "state" and self.is_ensemble:
-                dim_order.append("ensemble_member")
-            elif category == "forcing" and self.has_ensemble_forcing:
+            if (
+                category == "state"
+                and self.is_ensemble
+                or category == "forcing"
+                and self.has_ensemble_forcing
+            ):
                 dim_order.append("ensemble_member")
 
         dim_order.append("grid_index")
@@ -499,7 +497,7 @@ class BaseRegularGridDatastore(BaseDatastore):
     `stack_grid_coords` and `unstack_grid_coords` respectively).
     """
 
-    spatial_coordinates = ("x", "y")
+    spatial_coordinates: tuple[str, str] = ("x", "y")
 
     @cached_property
     @abc.abstractmethod
@@ -513,7 +511,6 @@ class BaseRegularGridDatastore(BaseDatastore):
             `y` attributes.
 
         """
-        pass
 
     @abc.abstractmethod
     def get_xy(self, category: str, stacked: bool) -> np.ndarray:
@@ -535,11 +532,18 @@ class BaseRegularGridDatastore(BaseDatastore):
                                n_grid_points=N_x*N_y.
             - `stacked==False`: shape `(N_x, N_y, 2)`
         """
-        pass
+
+    @overload
+    def unstack_grid_coords(self, da_or_ds: xr.DataArray) -> xr.DataArray:
+        """Unstack spatial grid coordinates of DataArray."""
+
+    @overload
+    def unstack_grid_coords(self, da_or_ds: xr.Dataset) -> xr.Dataset:
+        """Unstack spatial grid coordinates of Dataset."""
 
     def unstack_grid_coords(
-        self, da_or_ds: Union[xr.DataArray, xr.Dataset]
-    ) -> Union[xr.DataArray, xr.Dataset]:
+        self, da_or_ds: xr.DataArray | xr.Dataset
+    ) -> xr.DataArray | xr.Dataset:
         """
         Unstack the spatial grid coordinates from `grid_index` into separate `x`
         and `y` dimensions to create a 2D grid (if the spatial coordinates have
@@ -567,7 +571,7 @@ class BaseRegularGridDatastore(BaseDatastore):
         da_or_ds_unstacked = da_or_ds.unstack("grid_index")
 
         # Ensure that the x, y dimensions are in the correct order
-        dims = da_or_ds_unstacked.dims
+        dims = list(da_or_ds_unstacked.dims)
         xy_dim_order = [d for d in dims if d in self.spatial_coordinates]
 
         if xy_dim_order != self.spatial_coordinates:
@@ -592,9 +596,17 @@ class BaseRegularGridDatastore(BaseDatastore):
 
         return da_or_ds_unstacked
 
+    @overload
+    def stack_grid_coords(self, da_or_ds: xr.DataArray) -> xr.DataArray:
+        """Stack spatial grid coordinates of DataArray."""
+
+    @overload
+    def stack_grid_coords(self, da_or_ds: xr.Dataset) -> xr.Dataset:
+        """Stack spatial grid coordinates of Dataset."""
+
     def stack_grid_coords(
-        self, da_or_ds: Union[xr.DataArray, xr.Dataset]
-    ) -> Union[xr.DataArray, xr.Dataset]:
+        self, da_or_ds: xr.DataArray | xr.Dataset
+    ) -> xr.DataArray | xr.Dataset:
         """
         Stack the spatial grid coordinates (x and y) into a single `grid_index`
         dimension. Only performs stacking if the data is currently unstacked
@@ -620,7 +632,7 @@ class BaseRegularGridDatastore(BaseDatastore):
         # dimension named in the format `{category}_feature`
         category = None
         for dim in da_or_ds_stacked.dims:
-            if dim.endswith("_feature"):
+            if isinstance(dim, str) and dim.endswith("_feature"):
                 if category is not None:
                     raise ValueError(
                         "Multiple dimensions ending with '_feature' found in "
