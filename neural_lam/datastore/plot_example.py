@@ -1,19 +1,23 @@
+"""CLI helper to plot slices from datastores for manual inspection."""
+
 # Third-party
+import matplotlib.figure
 import matplotlib.pyplot as plt
 
 # Local
 from . import DATASTORES, init_datastore
+from .base import BaseRegularGridDatastore
 
 
 def plot_example_from_datastore(
-    category,
-    datastore,
-    col_dim,
-    split="train",
-    standardize=True,
-    selection={},
-    index_selection={},
-):
+    category: str,
+    datastore: BaseRegularGridDatastore,
+    col_dim: str,
+    split: str = "train",
+    standardize: bool = True,
+    selection: dict = {},
+    index_selection: dict = {},
+) -> matplotlib.figure.Figure:
     """
     Create a plot of the data from the datastore.
 
@@ -45,6 +49,7 @@ def plot_example_from_datastore(
         Matplotlib figure object.
     """
     da = datastore.get_dataarray(category=category, split=split)
+    assert da is not None
     if standardize:
         da_stats = datastore.get_standardization_dataarray(category=category)
         da = (da - da_stats[f"{category}_mean"]) / da_stats[f"{category}_std"]
@@ -56,10 +61,10 @@ def plot_example_from_datastore(
         da = da.isel(**index_selection)
 
     col = col_dim.format(category=category)
-
     # check that the column dimension exists and that the resulting shape is 2D
     if col not in da.dims:
         raise ValueError(f"Column dimension {col} not found in dataarray.")
+
     da_col_item = da.isel({col: 0}).squeeze()
     if not len(da_col_item.shape) == 2:
         raise ValueError(
@@ -71,7 +76,7 @@ def plot_example_from_datastore(
 
     crs = datastore.coords_projection
     col_wrap = min(4, int(da[col].count()))
-    g = da.plot(
+    g = da.plot(  # ty: ignore[missing-argument]
         x="x",
         y="y",
         col=col,
@@ -92,15 +97,17 @@ if __name__ == "__main__":
     # Standard library
     import argparse
 
-    def _parse_dict(arg_str):
+    def _parse_dict(arg_str: str) -> tuple[str, int | float | str]:
+        """Parse ``key=value`` CLI arguments into typed dictionary entries."""
         key, value = arg_str.split("=")
+        typed_value: int | float | str = value
         for op in [int, float]:
             try:
-                value = op(value)
+                typed_value = op(value)
                 break
             except ValueError:
                 pass
-        return key, value
+        return key, typed_value
 
     parser = argparse.ArgumentParser(
         formatter_class=argparse.ArgumentDefaultsHelpFormatter
@@ -177,6 +184,10 @@ if __name__ == "__main__":
         datastore_kind=datastore_kind,
         config_path=args.datastore_config_path,
     )
+    # Standard library
+    from typing import cast
+
+    datastore = cast(BaseRegularGridDatastore, datastore)
 
     plot_example_from_datastore(
         args.category,

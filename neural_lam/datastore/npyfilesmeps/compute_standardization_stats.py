@@ -1,9 +1,12 @@
+"""Utilities for computing MEPS datastore standardization statistics."""
+
 # Standard library
 import os
 import subprocess
 from argparse import ArgumentParser
 from datetime import timedelta
 from pathlib import Path
+from typing import Any, cast
 
 # Third-party
 import torch
@@ -18,7 +21,24 @@ from neural_lam.utils import get_integer_time
 
 
 class PaddedWeatherDataset(torch.utils.data.Dataset):
-    def __init__(self, base_dataset, world_size, batch_size):
+    """Wrap :class:`WeatherDataset` to pad samples for distributed runners."""
+
+    def __init__(
+        self,
+        base_dataset: WeatherDataset,
+        world_size: int,
+        batch_size: int,
+    ) -> None:
+        """
+        Parameters
+        ----------
+        base_dataset : WeatherDataset
+            Dataset to pad.
+        world_size : int
+            Total number of distributed ranks participating.
+        batch_size : int
+            Per-rank batch size.
+        """
         super().__init__()
         self.base_dataset = base_dataset
         self.world_size = world_size
@@ -32,7 +52,10 @@ class PaddedWeatherDataset(torch.utils.data.Dataset):
             range(self.total_samples, self.total_samples + self.padded_samples)
         )
 
-    def __getitem__(self, idx):
+    def __getitem__(  # ty: ignore[invalid-method-override]
+        self, idx: int
+    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
+        """Return an item, repeating the final sample for padded indices."""
         return self.base_dataset[
             (
                 self.original_indices[-1]
@@ -41,23 +64,57 @@ class PaddedWeatherDataset(torch.utils.data.Dataset):
             )
         ]
 
-    def __len__(self):
+    def __len__(self) -> int:
+        """Return the padded dataset length."""
         return self.total_samples + self.padded_samples
 
-    def get_original_indices(self):
+    def get_original_indices(self) -> list[int]:
+        """Return indices of the non-padded samples."""
         return self.original_indices
 
 
-def get_rank():
+def get_rank() -> int:
+    """
+    Return the rank inferred from SLURM or default to 0.
+
+    Returns
+    -------
+    int
+        The current process rank.
+    """
     return int(os.environ.get("SLURM_PROCID", 0))
 
 
-def get_world_size():
+def get_world_size() -> int:
+    """
+    Return the world size inferred from SLURM or default to 1.
+
+    Returns
+    -------
+    int
+        The total number of processes in the distributed group.
+    """
     return int(os.environ.get("SLURM_NTASKS", 1))
 
 
-def setup(rank, world_size):  # pylint: disable=redefined-outer-name
-    """Initialize the distributed group."""
+def setup(
+    rank: int, world_size: int
+) -> None:  # pylint: disable=redefined-outer-name
+    """
+    Initialize the distributed group.
+
+    Parameters
+    ----------
+    rank : int
+        The rank of the current process.
+    world_size : int
+        The total number of processes.
+
+    Raises
+    ------
+    RuntimeError
+        If ``SLURM_JOB_NODELIST`` is set but no hostnames can be retrieved.
+    """
     if "SLURM_JOB_NODELIST" in os.environ:
         nodelist = os.environ["SLURM_JOB_NODELIST"]
         hostnames = subprocess.check_output(
@@ -93,16 +150,53 @@ def setup(rank, world_size):  # pylint: disable=redefined-outer-name
 
 
 def save_stats(
-    static_dir_path, means, squares, flux_means, flux_squares, filename_prefix
-):
-    means = (
+    static_dir_path: str | Path,
+    means: list[torch.Tensor],
+    squares: list[torch.Tensor],
+    flux_means: list[torch.Tensor],
+    flux_squares: list[torch.Tensor],
+    filename_prefix: str,
+) -> None:
+    """
+    Aggregate running statistics and persist them to ``static_dir_path``.
+
+    Parameters
+    ----------
+    static_dir_path : str or pathlib.Path
+        Directory where ``*.pt`` files should be written.
+    means : Sequence[torch.Tensor]
+        Shape ``(B, num_state_vars)``. Batch-wise means. Sequence of one or
+        more tensors each of shape ``(B_i, num_state_vars)``; concatenated /
+        stacked along the batch dim before reduction. Typical callers pass a
+        single already-gathered tensor. The list can have length 0 to skip
+        saving.
+    squares : Sequence[torch.Tensor]
+        Shape ``(B, num_state_vars)``. Batch-wise second moments. Sequence of
+        one or more tensors each of shape ``(B_i, num_state_vars)``;
+        concatenated / stacked along the batch dim before reduction. Typical
+        callers pass a single already-gathered tensor. The list can have
+        length 0 to skip saving.
+    flux_means : Sequence[torch.Tensor]
+        Shape ``(B,)``. Flux means. Sequence of one or more tensors each of
+        shape ``(B_i,)``; concatenated / stacked along the batch dim before
+        reduction. Typical callers pass a single already-gathered tensor.
+        The list can have length 0 to skip saving.
+    flux_squares : Sequence[torch.Tensor]
+        Shape ``(B,)``. Flux second moments. Sequence of one or more tensors
+        each of shape ``(B_i,)``; concatenated / stacked along the batch dim
+        before reduction. Typical callers pass a single already-gathered
+        tensor. The list can have length 0 to skip saving.
+    filename_prefix : str
+        Prefix (e.g., ``"parameter"`` or ``"diff"``) for saved tensors.
+    """
+    means_tensor = (
         torch.stack(means) if len(means) > 1 else means[0]
-    )  # (N_batch, d_features,)
-    squares = (
+    )  # (B, d_features,)
+    squares_tensor = (
         torch.stack(squares) if len(squares) > 1 else squares[0]
-    )  # (N_batch, d_features,)
-    mean = torch.mean(means, dim=0)  # (d_features,)
-    second_moment = torch.mean(squares, dim=0)  # (d_features,)
+    )  # (B, d_features,)
+    mean = torch.mean(means_tensor, dim=0)  # (d_features,)
+    second_moment = torch.mean(squares_tensor, dim=0)  # (d_features,)
     std = torch.sqrt(second_moment - mean**2)  # (d_features,)
     print(
         f"Saving {filename_prefix} mean and std.-dev. to "
@@ -117,14 +211,14 @@ def save_stats(
 
     if len(flux_means) == 0:
         return
-    flux_means = (
+    flux_means_tensor = (
         torch.stack(flux_means) if len(flux_means) > 1 else flux_means[0]
-    )  # (N_batch,)
-    flux_squares = (
+    )  # (B,)
+    flux_squares_tensor = (
         torch.stack(flux_squares) if len(flux_squares) > 1 else flux_squares[0]
-    )  # (N_batch,)
-    flux_mean = torch.mean(flux_means)  # (,)
-    flux_second_moment = torch.mean(flux_squares)  # (,)
+    )  # (B,)
+    flux_mean = torch.mean(flux_means_tensor)  # (,)
+    flux_second_moment = torch.mean(flux_squares_tensor)  # (,)
     flux_std = torch.sqrt(flux_second_moment - flux_mean**2)  # (,)
     print("Saving flux mean and std.-dev. to flux_stats.pt")
     torch.save(
@@ -134,23 +228,27 @@ def save_stats(
 
 
 def main(
-    datastore_config_path, batch_size, step_length, n_workers, distributed
-):
+    datastore_config_path: str | Path,
+    batch_size: int,
+    step_length: timedelta,
+    n_workers: int,
+    distributed: bool,
+) -> None:
     """
-    Pre-compute parameter weights to be used in loss function
+    Pre-compute and persist standardization statistics from the datastore.
 
-    Arguments
-    ---------
-    datastore_config_path : str
-        Path to datastore config file
+    Parameters
+    ----------
+    datastore_config_path : str or pathlib.Path
+        Path to the MEPS datastore configuration file.
     batch_size : int
-        Batch size when iterating over the dataset
+        Batch size used while iterating through the dataset.
     step_length : datetime.timedelta
-        Step length to consider single time step
+        Temporal sampling interval for the difference statistics.
     n_workers : int
-        Number of workers in data loader
+        Number of dataloader workers.
     distributed : bool
-        Run the script in distributed
+        If ``True``, run using torch.distributed with SLURM settings.
     """
 
     rank = get_rank()
@@ -173,16 +271,18 @@ def main(
     # 65 forecast steps - 2 initial steps = 63
     ar_steps = 63
     # Raw (non-standardized) data for computing mean/std
-    ds = WeatherDataset(
+    ds_base = WeatherDataset(
         datastore=datastore,
         split="train",
         ar_steps=ar_steps,
         num_past_forcing_steps=0,
         num_future_forcing_steps=0,
     )
+    sampler: DistributedSampler | None
+    ds: torch.utils.data.Dataset
     if distributed:
         ds = PaddedWeatherDataset(
-            ds,
+            ds_base,
             world_size,
             batch_size,
         )
@@ -190,6 +290,7 @@ def main(
             ds, num_replicas=world_size, rank=rank, shuffle=False
         )
     else:
+        ds = ds_base
         sampler = None
     loader = torch.utils.data.DataLoader(
         ds,
@@ -210,46 +311,46 @@ def main(
                 target_batch.to(device),
                 forcing_batch.to(device),
             )
-        # (N_batch, N_t, N_grid, d_features)
+        # (B, N_t, num_grid_nodes, d_features)
         batch = torch.cat((init_batch, target_batch), dim=1)
         # Flux at 1st windowed position is index 0 in forcing
         flux_batch = forcing_batch[:, :, :, 0]
-        # (N_batch, d_features,)
+        # (B, d_features,)
         means.append(torch.mean(batch, dim=(1, 2)).cpu())
         squares.append(
             torch.mean(batch**2, dim=(1, 2)).cpu()
-        )  # (N_batch, d_features,)
+        )  # (B, d_features,)
         flux_means.append(torch.mean(flux_batch).cpu())  # (,)
         flux_squares.append(torch.mean(flux_batch**2).cpu())  # (,)
 
     if distributed and world_size > 1:
-        means_gathered, squares_gathered = [None] * world_size, [
-            None
-        ] * world_size
-        flux_means_gathered, flux_squares_gathered = (
-            [None] * world_size,
-            [None] * world_size,
-        )
+        means_gathered: list[Any] = [None] * world_size
+        squares_gathered: list[Any] = [None] * world_size
+        flux_means_gathered: list[Any] = [None] * world_size
+        flux_squares_gathered: list[Any] = [None] * world_size
         dist.all_gather_object(means_gathered, torch.cat(means, dim=0))
         dist.all_gather_object(squares_gathered, torch.cat(squares, dim=0))
         dist.all_gather_object(flux_means_gathered, flux_means)
         dist.all_gather_object(flux_squares_gathered, flux_squares)
 
         if rank == 0:
-            means_gathered, squares_gathered = (
-                torch.cat(means_gathered, dim=0),
-                torch.cat(squares_gathered, dim=0),
+            means_gathered_tensor = torch.cat(
+                cast(list[torch.Tensor], means_gathered), dim=0
+            )
+            squares_gathered_tensor = torch.cat(
+                cast(list[torch.Tensor], squares_gathered), dim=0
             )
 
+            assert isinstance(ds, PaddedWeatherDataset)
             original_indices = ds.get_original_indices()
             means, squares = (
-                [means_gathered[i] for i in original_indices],
-                [squares_gathered[i] for i in original_indices],
+                [means_gathered_tensor[i] for i in original_indices],
+                [squares_gathered_tensor[i] for i in original_indices],
             )
             flux_means = [
                 torch.cat(
                     [
-                        torch.stack(rank_flux)
+                        torch.stack(cast(list[torch.Tensor], rank_flux))
                         for rank_flux in flux_means_gathered
                     ]
                 )
@@ -257,16 +358,16 @@ def main(
             flux_squares = [
                 torch.cat(
                     [
-                        torch.stack(rank_flux)
+                        torch.stack(cast(list[torch.Tensor], rank_flux))
                         for rank_flux in flux_squares_gathered
                     ]
                 )
             ]
     else:
-        means = [torch.cat(means, dim=0)]  # (N_batch, d_features,)
-        squares = [torch.cat(squares, dim=0)]  # (N_batch, d_features,)
-        flux_means = [torch.tensor(flux_means)]  # (N_batch,)
-        flux_squares = [torch.tensor(flux_squares)]  # (N_batch,)
+        means = [torch.cat(means, dim=0)]  # (B, d_features,)
+        squares = [torch.cat(squares, dim=0)]  # (B, d_features,)
+        flux_means = [torch.tensor(flux_means)]  # (B,)
+        flux_squares = [torch.tensor(flux_squares)]  # (B,)
 
     if rank == 0:
         save_stats(
@@ -283,16 +384,18 @@ def main(
 
     if rank == 0:
         print("Computing mean and std.-dev. for one-step differences...")
-    ds_standard = WeatherDataset(
+    ds_standard_base = WeatherDataset(
         datastore=datastore,
         split="train",
         ar_steps=ar_steps,
         num_past_forcing_steps=0,
         num_future_forcing_steps=0,
     )
+    sampler_standard: DistributedSampler | None
+    ds_standard: torch.utils.data.Dataset
     if distributed:
         ds_standard = PaddedWeatherDataset(
-            ds_standard,
+            ds_standard_base,
             world_size,
             batch_size,
         )
@@ -300,6 +403,7 @@ def main(
             ds_standard, num_replicas=world_size, rank=rank, shuffle=False
         )
     else:
+        ds_standard = ds_standard_base
         sampler_standard = None
     loader_standard = torch.utils.data.DataLoader(
         ds_standard,
@@ -338,7 +442,7 @@ def main(
             )
         init_batch = (init_batch - state_mean) / state_std
         target_batch = (target_batch - state_mean) / state_std
-        # (N_batch, N_t', N_grid, d_features)
+        # (B, N_t', num_grid_nodes, num_state_vars)
         batch = torch.cat((init_batch, target_batch), dim=1)
         # Note: batch contains only 1h-steps
         stepped_batch = torch.cat(
@@ -348,21 +452,19 @@ def main(
             ],
             dim=0,
         )
-        # (N_batch', N_t, N_grid, d_features),
-        # N_batch' = step_length*N_batch
+        # (B', N_t, num_grid_nodes, d_features),
+        # B' = step_length*B
         batch_diffs = stepped_batch[:, 1:] - stepped_batch[:, :-1]
-        # (N_batch', N_t-1, N_grid, d_features)
+        # (B', N_t-1, num_grid_nodes, d_features)
         diff_means.append(torch.mean(batch_diffs, dim=(1, 2)).cpu())
-        # (N_batch', d_features,)
+        # (B', d_features,)
         diff_squares.append(torch.mean(batch_diffs**2, dim=(1, 2)).cpu())
-        # (N_batch', d_features,)
+        # (B', d_features,)
 
     if distributed and world_size > 1:
         dist.barrier()
-        diff_means_gathered, diff_squares_gathered = (
-            [None] * world_size,
-            [None] * world_size,
-        )
+        diff_means_gathered: list[Any] = [None] * world_size
+        diff_squares_gathered: list[Any] = [None] * world_size
         dist.all_gather_object(
             diff_means_gathered, torch.cat(diff_means, dim=0)
         )
@@ -371,16 +473,21 @@ def main(
         )
 
         if rank == 0:
-            diff_means_gathered = torch.cat(diff_means_gathered, dim=0)
-            diff_squares_gathered = torch.cat(diff_squares_gathered, dim=0)
+            diff_means_gathered_tensor = torch.cat(
+                cast(list[torch.Tensor], diff_means_gathered), dim=0
+            )
+            diff_squares_gathered_tensor = torch.cat(
+                cast(list[torch.Tensor], diff_squares_gathered), dim=0
+            )
+            assert isinstance(ds_standard, PaddedWeatherDataset)
             n_original_windows = (
                 len(ds_standard.get_original_indices()) * time_step_int
             )
-            diff_means = [diff_means_gathered[:n_original_windows]]
-            diff_squares = [diff_squares_gathered[:n_original_windows]]
+            diff_means = [diff_means_gathered_tensor[:n_original_windows]]
+            diff_squares = [diff_squares_gathered_tensor[:n_original_windows]]
 
-    diff_means = [torch.cat(diff_means, dim=0)]  # (N_batch', d_features,)
-    diff_squares = [torch.cat(diff_squares, dim=0)]  # (N_batch', d_features,)
+    diff_means = [torch.cat(diff_means, dim=0)]  # (B', d_features,)
+    diff_squares = [torch.cat(diff_squares, dim=0)]  # (B', d_features,)
 
     if rank == 0:
         save_stats(static_dir_path, diff_means, diff_squares, [], [], "diff")
@@ -389,7 +496,8 @@ def main(
         dist.destroy_process_group()
 
 
-def cli():
+def cli() -> None:
+    """Parse CLI arguments and trigger :func:`main`."""
     parser = ArgumentParser(description="Training arguments")
     parser.add_argument(
         "--datastore_config_path",

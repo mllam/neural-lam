@@ -11,7 +11,9 @@ from neural_lam.custom_loggers import CustomMLFlowLogger
 @pytest.fixture
 def logger_instance():
     """Return a CustomMLFlowLogger with __init__ fully bypassed."""
-    return CustomMLFlowLogger.__new__(CustomMLFlowLogger)
+    instance = CustomMLFlowLogger.__new__(CustomMLFlowLogger)
+    instance._save_dir = ""
+    return instance
 
 
 def _make_figs(n):
