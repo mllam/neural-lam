@@ -93,6 +93,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Maintenance
 
+- Rename the `d_mesh_static` mesh-node static-feature dimension to `num_mesh_static_vars` in comments and docstrings, matching the canonical `num_*` naming. [\#695](https://github.com/mllam/neural-lam/pull/695) @uttam12331
+
 - Add 100% type-hint coverage across `neural_lam/`, align all type annotations with PEP 585 and PEP 604, and adopt `ty` (astral-sh) for type checking [\#673](https://github.com/mllam/neural-lam/pull/673) @GiGiKoneti
 
 - Add a root `CONTRIBUTING.md` walking a new contributor from fork to merged PR (issue triage, environment setup pointing at the README install section, pre-commit, code standards, the exact local test command CI runs, PR template / CHANGELOG expectations, monthly dev-meeting pointer, Slack + issues for help), and trim `AGENTS.md` and the README "Development and Contributing" section down to pointers at it [\#407](https://github.com/mllam/neural-lam/pull/407) @ANANYA542
