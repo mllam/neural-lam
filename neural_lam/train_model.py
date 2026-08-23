@@ -467,7 +467,7 @@ def main(input_args: list[str] | None = None) -> None:
     random_run_id = random.randint(0, 9999)
 
     # Set seed
-    seed.seed_everything(args.seed)
+    seed.seed_everything(args.seed, workers=True)
 
     # Load neural-lam configuration and datastores to use
     config, datastore, datastore_boundary = load_config_and_datastore(
