@@ -4,7 +4,11 @@
 import importlib.metadata
 import os
 
-os.environ.setdefault("MPLBACKEND", "Agg")
+# Third-party
+import matplotlib
+
+if "MPLBACKEND" not in os.environ:
+    matplotlib.use("Agg")
 
 # First-party
 import neural_lam.gnn_layers  # noqa: E402
