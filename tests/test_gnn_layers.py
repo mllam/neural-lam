@@ -8,7 +8,7 @@ import torch
 from neural_lam import config as nlconfig
 from neural_lam.create_graph import create_graph_from_datastore
 from neural_lam.gnn_layers import InteractionNet, PropagationNet
-from neural_lam.models import MODELS, ARForecaster
+from neural_lam.models import MODELS, DeterministicARForecaster
 from tests.conftest import init_datastore_example
 
 
@@ -73,7 +73,7 @@ def _build_model_and_data(
         output_clamping_upper=config.training.output_clamping.upper,
         **gnn_kwargs,
     )
-    forecaster = ARForecaster(predictor, datastore)
+    forecaster = DeterministicARForecaster(predictor, datastore, config=config)
 
     B = 2
     num_grid_nodes = predictor.num_grid_nodes
