@@ -229,9 +229,9 @@ def _get_heatmap_color_values(
         If ``normalization`` is not one of ``'state_std'`` or ``'diff_std'``.
     """
 
-    def _per_var_fallback() -> (
-        tuple[np.ndarray, str, matplotlib.colors.Colormap]
-    ):
+    def _per_var_fallback() -> tuple[
+        np.ndarray, str, matplotlib.colors.Colormap
+    ]:
         """
         Normalize errors by per-variable maximum value.
 

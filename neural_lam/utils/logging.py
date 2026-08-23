@@ -7,6 +7,7 @@ import warnings
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
+    # Local
     from ..datastore.base import BaseDatastore
 
 # Third-party
