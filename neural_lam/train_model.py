@@ -1,9 +1,13 @@
+"""CLI entry point for training Neural-LAM models."""
+
 # Standard library
 import json
+import os
 import random
 import shutil
 import time
-from argparse import ArgumentDefaultsHelpFormatter, ArgumentParser
+from argparse import ArgumentDefaultsHelpFormatter, ArgumentParser, Namespace
+from typing import Any
 
 # Third-party
 # for logging the model:
@@ -14,37 +18,34 @@ from loguru import logger
 
 # Local
 from . import utils
-from .config import load_config_and_datastore
+from .config import NeuralLAMConfig, load_config_and_datastore
+from .datastore.base import BaseDatastore
 from .gnn_layers import GNN_TYPES
-from .models import MODELS, ARForecaster, ForecasterModule
+from .models import (
+    MODELS,
+    ARForecaster,
+    BaseHiGraphModel,
+    ForecasterModule,
+)
 from .weather_dataset import WeatherDataModule
 
 
-class AdaptiveHelpFormatter(ArgumentDefaultsHelpFormatter):
-    def __init__(self, prog):
-        terminal_width = shutil.get_terminal_size(fallback=(100, 20)).columns
-        width = max(80, min(terminal_width, 120))
-        help_position = min(44, width // 3)
-        super().__init__(
-            prog,
-            max_help_position=help_position,
-            width=width,
-        )
-
-
-def load_forecaster_module_from_checkpoint(ckpt_path, config, datastore):
+def build_predictor(
+    predictor_class: type,
+    args: Namespace,
+    config: NeuralLAMConfig,
+    datastore: BaseDatastore,
+) -> Any:
     """
-    Reconstruct a ForecasterModule from a checkpoint without requiring the
-    caller to know the original architecture kwargs.
+    Instantiate a step predictor with the GNN kwargs its family accepts.
 
-    The checkpoint must have been saved with args in hyper_parameters (i.e.
-    created via train_model.main), so that model class and architecture kwargs
-    can be recovered automatically.
+    Hierarchical GNN kwargs are only passed to ``BaseHiGraphModel``
+    subclasses, gating on the class hierarchy so that future hierarchical
+    models are covered without maintaining a model-name list. GNN type
+    arguments fall back to ``InteractionNet`` for checkpoints saved before
+    those CLI flags existed.
     """
-    ckpt = torch.load(ckpt_path, weights_only=False)
-    args = ckpt["hyper_parameters"]["args"]
-    predictor_class = MODELS[args.model]
-    predictor = predictor_class(
+    kwargs = dict(
         datastore=datastore,
         graph_name=args.graph,
         hidden_dim=args.hidden_dim,
@@ -56,7 +57,51 @@ def load_forecaster_module_from_checkpoint(ckpt_path, config, datastore):
         output_std=args.output_std,
         output_clamping_lower=config.training.output_clamping.lower,
         output_clamping_upper=config.training.output_clamping.upper,
+        g2m_gnn_type=getattr(args, "g2m_gnn_type", "InteractionNet"),
+        m2g_gnn_type=getattr(args, "m2g_gnn_type", "InteractionNet"),
     )
+    if issubclass(predictor_class, BaseHiGraphModel):
+        kwargs["mesh_up_gnn_type"] = getattr(
+            args, "mesh_up_gnn_type", "InteractionNet"
+        )
+        kwargs["mesh_down_gnn_type"] = getattr(
+            args, "mesh_down_gnn_type", "InteractionNet"
+        )
+    return predictor_class(**kwargs)
+
+
+class AdaptiveHelpFormatter(ArgumentDefaultsHelpFormatter):
+    """``--help`` formatter that scales the column width to the terminal."""
+
+    def __init__(self, prog: str) -> None:
+        """Pick a help-column width based on the current terminal size."""
+        terminal_width = shutil.get_terminal_size(fallback=(100, 20)).columns
+        width = max(80, min(terminal_width, 120))
+        help_position = min(44, width // 3)
+        super().__init__(
+            prog,
+            max_help_position=help_position,
+            width=width,
+        )
+
+
+def load_forecaster_module_from_checkpoint(
+    ckpt_path: str,
+    config: NeuralLAMConfig,
+    datastore: BaseDatastore,
+) -> ForecasterModule:
+    """
+    Reconstruct a ForecasterModule from a checkpoint without requiring the
+    caller to know the original architecture kwargs.
+
+    The checkpoint must have been saved with args in hyper_parameters (i.e.
+    created via train_model.main), so that model class and architecture kwargs
+    can be recovered automatically.
+    """
+    ckpt = torch.load(ckpt_path, weights_only=False)
+    args = ckpt["hyper_parameters"]["args"]
+    predictor_class = MODELS[args.model]
+    predictor = build_predictor(predictor_class, args, config, datastore)
     forecaster = ARForecaster(predictor, datastore)
     return ForecasterModule.load_from_checkpoint(
         ckpt_path,
@@ -67,7 +112,7 @@ def load_forecaster_module_from_checkpoint(ckpt_path, config, datastore):
 
 
 @logger.catch
-def main(input_args=None):
+def main(input_args: list[str] | None = None) -> None:
     """Main function for training and evaluating models."""
     parser = ArgumentParser(
         description="Train or evaluate MLWP models for LAM",
@@ -175,29 +220,34 @@ def main(input_args=None):
         type=str,
         default="InteractionNet",
         choices=list(GNN_TYPES.keys()),
-        help="GNN type for grid-to-mesh encoding",
+        help="GNN type for grid-to-mesh encoding. Applies to all models, "
+        "including the probabilistic Graph-EFM model",
     )
     arch_group.add_argument(
         "--m2g_gnn_type",
         type=str,
         default="InteractionNet",
         choices=list(GNN_TYPES.keys()),
-        help="GNN type for mesh-to-grid decoding",
+        help="GNN type for mesh-to-grid decoding. Applies to all models, "
+        "including the probabilistic Graph-EFM model",
     )
     arch_group.add_argument(
         "--mesh_up_gnn_type",
         type=str,
         default="InteractionNet",
         choices=list(GNN_TYPES.keys()),
-        help="GNN type for upward mesh message passing in hierarchical models",
+        help="GNN type for upward mesh message passing in hierarchical "
+        "models. Only affects Hi-LAM; the probabilistic Graph-EFM model "
+        "hard-codes its mesh-up GNN types",
     )
     arch_group.add_argument(
         "--mesh_down_gnn_type",
         type=str,
         default="InteractionNet",
         choices=list(GNN_TYPES.keys()),
-        help="GNN type for downward mesh message passing in "
-        "hierarchical models",
+        help="GNN type for downward mesh message passing in hierarchical "
+        "models. Only affects Hi-LAM; the probabilistic Graph-EFM model "
+        "hard-codes its mesh-down GNN type",
     )
 
     # Training options
@@ -232,6 +282,13 @@ def main(input_args=None):
         type=int,
         default=1,
         help="Number of epochs training between each validation run",
+    )
+
+    train_group.add_argument(
+        "--num_sanity_val_steps",
+        type=int,
+        default=2,
+        help="Number of sanity validation steps to run before training",
     )
 
     # Evaluation options
@@ -284,6 +341,13 @@ def main(input_args=None):
         help="""Logger run name, for e.g. MLFlow (with default value `None`
           neural-lam's default format string is used)""",
     )
+    parser.add_argument(
+        "--runs_root",
+        type=str,
+        default="runs",
+        help="Root directory under which per-run output dirs (checkpoints, "
+        "logger files, plots) are written as `<runs_root>/<run_name>/`",
+    )
 
     logger_group.add_argument(
         "--wandb_id",
@@ -304,6 +368,13 @@ def main(input_args=None):
         type=int,
         default=[1, 2, 3, 5, 10],
         help="Steps to log val loss for",
+    )
+    metrics_group.add_argument(
+        "--train_steps_to_log",
+        nargs="+",
+        type=int,
+        default=[],
+        help="Steps to log train loss for during training (optional)",
     )
     metrics_group.add_argument(
         "--metrics_watch",
@@ -347,14 +418,17 @@ def main(input_args=None):
     }
 
     # Check that config only specifies logging for lead times that exist
-    # Check --val_steps_to_log
-    for step in args.val_steps_to_log:
-        if step > args.ar_steps_eval:
-            raise ValueError(
-                f"Can not log validation step {step} when validation is "
-                f"only unrolled {args.ar_steps_eval} steps. Adjust "
-                "--val_steps_to_log."
-            )
+    for phase, max_steps in [
+        ("train", args.ar_steps_train),
+        ("val", args.ar_steps_eval),
+    ]:
+        for step in getattr(args, f"{phase}_steps_to_log"):
+            if step > max_steps:
+                raise ValueError(
+                    f"Can not log {phase} step {step} when only "
+                    f"unrolling {max_steps} steps during {phase} phase. "
+                    f"Adjust --{phase}_steps_to_log."
+                )
     # Check --var_leads_metric_watch
     for var_i, leads in args.var_leads_metrics_watch.items():
         for step in leads:
@@ -375,7 +449,7 @@ def main(input_args=None):
     random_run_id = random.randint(0, 9999)
 
     # Set seed
-    seed.seed_everything(args.seed)
+    seed.seed_everything(args.seed, workers=True)
 
     # Load neural-lam configuration and datastore to use
     config, datastore = load_config_and_datastore(config_path=args.config_path)
@@ -416,6 +490,7 @@ def main(input_args=None):
         device_name = "cpu"
 
     # Set devices to use
+    devices: str | list[int]
     if args.devices == ["auto"]:
         devices = "auto"
     else:
@@ -427,23 +502,7 @@ def main(input_args=None):
     # Build predictor and forecaster externally, then inject into
     # ForecasterModule
     predictor_class = MODELS[args.model]
-    predictor = predictor_class(
-        datastore=datastore,
-        graph_name=args.graph,
-        hidden_dim=args.hidden_dim,
-        hidden_layers=args.hidden_layers,
-        processor_layers=args.processor_layers,
-        mesh_aggr=args.mesh_aggr,
-        num_past_forcing_steps=args.num_past_forcing_steps,
-        num_future_forcing_steps=args.num_future_forcing_steps,
-        output_std=args.output_std,
-        output_clamping_lower=config.training.output_clamping.lower,
-        output_clamping_upper=config.training.output_clamping.upper,
-        g2m_gnn_type=args.g2m_gnn_type,
-        m2g_gnn_type=args.m2g_gnn_type,
-        mesh_up_gnn_type=args.mesh_up_gnn_type,
-        mesh_down_gnn_type=args.mesh_down_gnn_type,
-    )
+    predictor = build_predictor(predictor_class, args, config, datastore)
     forecaster = ARForecaster(predictor, datastore)
 
     model = ForecasterModule(
@@ -456,6 +515,7 @@ def main(input_args=None):
         n_example_pred=args.n_example_pred,
         create_gif=args.create_gif,
         val_steps_to_log=args.val_steps_to_log,
+        train_steps_to_log=args.train_steps_to_log,
         metrics_watch=args.metrics_watch,
         var_leads_metrics_watch=args.var_leads_metrics_watch,
         args=args,
@@ -474,29 +534,47 @@ def main(input_args=None):
             f"{time.strftime('%m_%d_%H')}-{random_run_id:04d}"
         )
 
+    run_dir = os.path.join(args.runs_root, run_name)
+
     training_logger = utils.setup_training_logger(
-        datastore=datastore, args=args, run_name=run_name
+        datastore=datastore, args=args, run_name=run_name, run_dir=run_dir
     )
 
-    checkpoint_callback = pl.callbacks.ModelCheckpoint(
-        dirpath=f"saved_models/{run_name}",
+    # Two separate callbacks decouple "best validated model" from
+    # "rescue / resume" snapshots: long HPC jobs that crash or time out
+    # between validations can still resume from a recent train-epoch
+    # checkpoint instead of losing all progress since the last validation.
+    val_checkpoint = pl.callbacks.ModelCheckpoint(
+        dirpath=os.path.join(run_dir, "checkpoints"),
         filename="min_val_loss",
         monitor="val_mean_loss",
         mode="min",
-        save_last=True,
+        save_top_k=1,
+        save_on_train_epoch_end=False,
+    )
+    latest_checkpoint = pl.callbacks.ModelCheckpoint(
+        dirpath=os.path.join(run_dir, "checkpoints"),
+        filename="last",
+        monitor=None,
+        save_top_k=1,
+        every_n_epochs=1,
+        save_on_train_epoch_end=True,
+        enable_version_counter=False,
     )
     trainer = pl.Trainer(
         max_epochs=args.epochs,
         deterministic=True,
+        default_root_dir=run_dir,
         strategy="auto",
         accelerator=device_name,
         num_nodes=args.num_nodes,
         devices=devices,
         logger=training_logger,
         log_every_n_steps=1,
-        callbacks=[checkpoint_callback],
+        callbacks=[val_checkpoint, latest_checkpoint],
         check_val_every_n_epoch=args.val_interval,
         precision=args.precision,
+        num_sanity_val_steps=args.num_sanity_val_steps,
     )
 
     # Only init once, on rank 0 only

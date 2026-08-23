@@ -1,7 +1,8 @@
 ### Project Specific ###
-wandb
+runs/
 saved_models
 lightning_logs
+wandb
 data
 graphs
 *.sif
@@ -76,6 +77,7 @@ tags
 # Coc configuration directory
 .vim
 .vscode
+.idea
 
 # macos
 .DS_Store

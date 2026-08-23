@@ -1029,3 +1029,28 @@ class TestHierarchicalIntegration:
         for gnn in predictor.mesh_read_gnns:
             assert isinstance(gnn, InteractionNet)
             assert not isinstance(gnn, PropagationNet)
+
+    def test_hilam_parallel_forward_pass_succeeds(self):
+        """HiLAMParallel should successfully run a forward pass on
+        hierarchical graphs.
+        """
+        datastore, config = _get_datastore_and_config("hierarchical")
+
+        forecaster, _, init_states, forcing, boundary = _build_model_and_data(
+            datastore,
+            config,
+            "hi_lam_parallel",
+            "hierarchical",
+        )
+
+        with torch.no_grad():
+            out, _ = forecaster(init_states, forcing, boundary)
+
+        assert isinstance(out, torch.Tensor)
+        expected_shape = (
+            init_states.shape[0],
+            forcing.shape[1],
+            init_states.shape[2],
+            init_states.shape[3],
+        )
+        assert out.shape == expected_shape
