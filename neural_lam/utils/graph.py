@@ -81,11 +81,10 @@ def zero_index_m2g(
             dim=0,
         )
     else:
-        # Grid (interior) has the first indices, adjust mesh indices (row 0)
-        num_interior_nodes = (
+        num_interior_nodes: int = (
             num_grid_nodes
             if num_grid_nodes is not None
-            else m2g_edge_index[1].max().item() + 1
+            else int(m2g_edge_index[1].max().item() + 1)
         )
         return torch.stack(
             (
@@ -143,12 +142,15 @@ def zero_index_g2m(
         )
     else:
         # Grid has the first indices, adjust mesh indices (row 1)
-        if num_grid_nodes is None:
-            num_grid_nodes = g2m_edge_index[0].max().item() + 1
+        grid_nodes_count: int = (
+            num_grid_nodes
+            if num_grid_nodes is not None
+            else int(g2m_edge_index[0].max().item() + 1)
+        )
         return torch.stack(
             (
                 g2m_edge_index[0],
-                g2m_edge_index[1] + sign * num_grid_nodes,
+                g2m_edge_index[1] + sign * grid_nodes_count,
             ),
             dim=0,
         )
