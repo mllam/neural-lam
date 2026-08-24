@@ -37,10 +37,8 @@ class DatastoreSelection:
         applies. This is independent of whether this `datastores:` mapping
         also has a separate boundary datastore entry: pairing one with an
         interior datastore does not by itself change how much of the
-        interior's own edge is masked out of the loss, so set this
-        explicitly (e.g. to a small value, or 0) if the interior's boundary
-        mask should shrink now that boundary forcing is supplied
-        externally.
+        interior's own edge is considered boundary forcing, so set this
+        explicitly to 0 if using external boundary forcing. 
     """
 
     kind: str
