@@ -44,7 +44,6 @@ class StepPredictor(nn.Module, ABC):
         """
         return any(p.requires_grad for p in self.parameters())
 
-
     def __init__(
         self,
         datastore: BaseDatastore,
