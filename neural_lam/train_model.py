@@ -6,7 +6,8 @@ import os
 import random
 import shutil
 import time
-from argparse import ArgumentDefaultsHelpFormatter, ArgumentParser
+from argparse import ArgumentDefaultsHelpFormatter, ArgumentParser, Namespace
+from typing import Any
 
 # Third-party
 # for logging the model:
@@ -17,40 +18,34 @@ from loguru import logger
 
 # Local
 from . import utils
-from .config import load_config_and_datastore
+from .config import NeuralLAMConfig, load_config_and_datastore
+from .datastore.base import BaseDatastore
 from .gnn_layers import GNN_TYPES
-from .models import MODELS, ARForecaster, ForecasterModule
+from .models import (
+    MODELS,
+    ARForecaster,
+    BaseHiGraphModel,
+    ForecasterModule,
+)
 from .weather_dataset import WeatherDataModule
 
 
-class AdaptiveHelpFormatter(ArgumentDefaultsHelpFormatter):
-    """``--help`` formatter that scales the column width to the terminal."""
-
-    def __init__(self, prog):
-        """Pick a help-column width based on the current terminal size."""
-        terminal_width = shutil.get_terminal_size(fallback=(100, 20)).columns
-        width = max(80, min(terminal_width, 120))
-        help_position = min(44, width // 3)
-        super().__init__(
-            prog,
-            max_help_position=help_position,
-            width=width,
-        )
-
-
-def load_forecaster_module_from_checkpoint(ckpt_path, config, datastore):
+def build_predictor(
+    predictor_class: type,
+    args: Namespace,
+    config: NeuralLAMConfig,
+    datastore: BaseDatastore,
+) -> Any:
     """
-    Reconstruct a ForecasterModule from a checkpoint without requiring the
-    caller to know the original architecture kwargs.
+    Instantiate a step predictor with the GNN kwargs its family accepts.
 
-    The checkpoint must have been saved with args in hyper_parameters (i.e.
-    created via train_model.main), so that model class and architecture kwargs
-    can be recovered automatically.
+    Hierarchical GNN kwargs are only passed to ``BaseHiGraphModel``
+    subclasses, gating on the class hierarchy so that future hierarchical
+    models are covered without maintaining a model-name list. GNN type
+    arguments fall back to ``InteractionNet`` for checkpoints saved before
+    those CLI flags existed.
     """
-    ckpt = torch.load(ckpt_path, weights_only=False)
-    args = ckpt["hyper_parameters"]["args"]
-    predictor_class = MODELS[args.model]
-    predictor = predictor_class(
+    kwargs = dict(
         datastore=datastore,
         graph_name=args.graph,
         hidden_dim=args.hidden_dim,
@@ -62,7 +57,51 @@ def load_forecaster_module_from_checkpoint(ckpt_path, config, datastore):
         output_std=args.output_std,
         output_clamping_lower=config.training.output_clamping.lower,
         output_clamping_upper=config.training.output_clamping.upper,
+        g2m_gnn_type=getattr(args, "g2m_gnn_type", "InteractionNet"),
+        m2g_gnn_type=getattr(args, "m2g_gnn_type", "InteractionNet"),
     )
+    if issubclass(predictor_class, BaseHiGraphModel):
+        kwargs["mesh_up_gnn_type"] = getattr(
+            args, "mesh_up_gnn_type", "InteractionNet"
+        )
+        kwargs["mesh_down_gnn_type"] = getattr(
+            args, "mesh_down_gnn_type", "InteractionNet"
+        )
+    return predictor_class(**kwargs)
+
+
+class AdaptiveHelpFormatter(ArgumentDefaultsHelpFormatter):
+    """``--help`` formatter that scales the column width to the terminal."""
+
+    def __init__(self, prog: str) -> None:
+        """Pick a help-column width based on the current terminal size."""
+        terminal_width = shutil.get_terminal_size(fallback=(100, 20)).columns
+        width = max(80, min(terminal_width, 120))
+        help_position = min(44, width // 3)
+        super().__init__(
+            prog,
+            max_help_position=help_position,
+            width=width,
+        )
+
+
+def load_forecaster_module_from_checkpoint(
+    ckpt_path: str,
+    config: NeuralLAMConfig,
+    datastore: BaseDatastore,
+) -> ForecasterModule:
+    """
+    Reconstruct a ForecasterModule from a checkpoint without requiring the
+    caller to know the original architecture kwargs.
+
+    The checkpoint must have been saved with args in hyper_parameters (i.e.
+    created via train_model.main), so that model class and architecture kwargs
+    can be recovered automatically.
+    """
+    ckpt = torch.load(ckpt_path, weights_only=False)
+    args = ckpt["hyper_parameters"]["args"]
+    predictor_class = MODELS[args.model]
+    predictor = build_predictor(predictor_class, args, config, datastore)
     forecaster = ARForecaster(predictor, datastore)
     return ForecasterModule.load_from_checkpoint(
         ckpt_path,
@@ -72,8 +111,9 @@ def load_forecaster_module_from_checkpoint(ckpt_path, config, datastore):
     )
 
 
-def build_parser():
+def build_parser() -> ArgumentParser:
     """Build the argument parser for training and evaluating models."""
+
     parser = ArgumentParser(
         description="Train or evaluate MLWP models for LAM",
         formatter_class=AdaptiveHelpFormatter,
@@ -459,6 +499,7 @@ def run(args, config=None, datastore=None):
         device_name = "cpu"
 
     # Set devices to use
+    devices: str | list[int]
     if args.devices == ["auto"]:
         devices = "auto"
     else:
@@ -470,26 +511,8 @@ def run(args, config=None, datastore=None):
     # Build predictor and forecaster externally, then inject into
     # ForecasterModule
     predictor_class = MODELS[args.model]
-    predictor_kwargs = {
-        "datastore": datastore,
-        "graph_name": args.graph,
-        "hidden_dim": args.hidden_dim,
-        "hidden_layers": args.hidden_layers,
-        "processor_layers": args.processor_layers,
-        "mesh_aggr": args.mesh_aggr,
-        "num_past_forcing_steps": args.num_past_forcing_steps,
-        "num_future_forcing_steps": args.num_future_forcing_steps,
-        "output_std": args.output_std,
-        "output_clamping_lower": config.training.output_clamping.lower,
-        "output_clamping_upper": config.training.output_clamping.upper,
-        "g2m_gnn_type": args.g2m_gnn_type,
-        "m2g_gnn_type": args.m2g_gnn_type,
-    }
-    if args.model != "graph_lam":
-        predictor_kwargs["mesh_up_gnn_type"] = args.mesh_up_gnn_type
-        predictor_kwargs["mesh_down_gnn_type"] = args.mesh_down_gnn_type
+    predictor = build_predictor(predictor_class, args, config, datastore)
 
-    predictor = predictor_class(**predictor_kwargs)
     forecaster = ARForecaster(predictor, datastore)
 
     model = ForecasterModule(
@@ -595,7 +618,7 @@ def run(args, config=None, datastore=None):
 
 
 @logger.catch
-def main(input_args=None):
+def main(input_args: list[str] | None = None) -> None:
     """Main function for training and evaluating models."""
     parser = build_parser()
     args = parser.parse_args(input_args)
