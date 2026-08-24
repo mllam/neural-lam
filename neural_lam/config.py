@@ -38,7 +38,7 @@ class DatastoreSelection:
         also has a separate boundary datastore entry: pairing one with an
         interior datastore does not by itself change how much of the
         interior's own edge is considered boundary forcing, so set this
-        explicitly to 0 if using external boundary forcing. 
+        explicitly to 0 if using external boundary forcing.
     """
 
     kind: str

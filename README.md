@@ -228,13 +228,13 @@ the input-data representation is split into two parts:
 
 Each interior `MDPDatastore` still has its own boundary mask - a rim of
 `n_boundary_points` grid cells (default 30) excluded from the loss and
-overwritten with ground truth in the prediction. This is independent of any 
-pairing with a separate boundary datastore (below). 
-Set `datastores.<name>.n_boundary_points` in `config.yaml` to 0 once boundary 
-forcing comes from elsewhere. If there is no separate datastore with boundary 
-forcing, `n_boundary_points > 0` can still be used to take boundary input from the 
-interior state. Using both `n_boundary_points > 0` and a separate boundary datastore 
-corresponds to taking two kinds of boundary inputs (from interior state and boundary 
+overwritten with ground truth in the prediction. This is independent of any
+pairing with a separate boundary datastore (below).
+Set `datastores.<name>.n_boundary_points` in `config.yaml` to 0 once boundary
+forcing comes from elsewhere. If there is no separate datastore with boundary
+forcing, `n_boundary_points > 0` can still be used to take boundary input from the
+interior state. Using both `n_boundary_points > 0` and a separate boundary datastore
+corresponds to taking two kinds of boundary inputs (from interior state and boundary
 datastore), and is not recommended unless you have a very specific setup.
 `NpyFilesDatastoreMEPS`'s boundary mask is fixed at data-preparation time and
 does not support this option.
