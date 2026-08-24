@@ -453,7 +453,7 @@ def run(args, config=None, datastore=None):
     random_run_id = random.randint(0, 9999)
 
     # Set seed
-    seed.seed_everything(args.seed)
+    seed.seed_everything(args.seed, workers=True)
 
     # Load neural-lam configuration and datastore to use
     if config is None or datastore is None:
