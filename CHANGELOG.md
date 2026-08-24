@@ -52,6 +52,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Fix offset mismatch in legacy graph zero-indexing helpers when boundary grid nodes are unconnected [\#699](https://github.com/mllam/neural-lam/issues/699) @GiGiKoneti
 
+- Set `workers=True` in `seed_everything` to properly seed DataLoader workers, ensuring uncorrelated random states across processes when `num_workers > 0` [\#716](https://github.com/mllam/neural-lam/pull/716) @GiGiKoneti
+
+- Fix `graph_lam` training and checkpoint reloads crashing on hierarchical-only GNN options, by routing both call sites through a `build_predictor` helper that only passes `mesh_up_gnn_type` / `mesh_down_gnn_type` to `BaseHiGraphModel` subclasses. [\#688](https://github.com/mllam/neural-lam/pull/688) @gitcommit90
+
+- Build the training logger config from the public `datastore.config` accessor instead of the MDP-specific private `_config` attribute, so any datastore implementing `BaseDatastore` can be driven through the training entry point without raising `AttributeError` [\#723](https://github.com/mllam/neural-lam/pull/723) @zakirkg
+
+- Exclude boundary nodes from the spatial loss maps computed in `test_step`, so the plotted loss maps and the saved `mean_spatial_loss.pt` cover the interior only, consistent with every other loss and metric call in `ForecasterModule` [\#720](https://github.com/mllam/neural-lam/pull/720) @RajdeepKushwaha5 @NoiceHax
+
 - Fix `RuntimeError` in `HiLAMParallel` forward pass on hierarchical graphs by offsetting edge indices into the global mesh node index space ([#679](https://github.com/mllam/neural-lam/issues/679))
 
 - Fix `IndexError` in HiLAM forward pass by offsetting grid nodes in `zero_index_g2m`/`zero_index_m2g` by the total mesh-node count across all levels ([#642](https://github.com/mllam/neural-lam/issues/642)) @Sir-Sloth-The-Lazy
@@ -77,6 +85,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Reset `plotted_examples` and clear `test_metrics` at the end of `on_test_epoch_end` so repeated `trainer.test()` calls on the same model instance regenerate example plots and start from a clean metric slate instead of silently skipping plots and accumulating tensors [\#437](https://github.com/mllam/neural-lam/pull/437) @RajdeepKushwaha5
 
+- Default the matplotlib backend to `Agg` to prevent `RuntimeError: main thread is not in main loop` in headless or multi-threaded contexts, without overriding a user-set `MPLBACKEND` [\#277](https://github.com/mllam/neural-lam/pull/277) @sahilkr31
+
 - Log every figure passed to `CustomMLFlowLogger.log_image` instead of silently dropping all but the first, using per-figure indexed keys (`{key}_{i}`) when more than one is supplied [\#499](https://github.com/mllam/neural-lam/pull/499) @Raj-Taware
 
 - Validate `--var_leads_metrics_watch` variable indices against the datastore in `train_model.py` so an out-of-range index raises a clear CLI error immediately, instead of an `IndexError` deep in the first validation epoch after potentially hours of training [\#306](https://github.com/mllam/neural-lam/pull/306) @Ayushhgit
@@ -84,6 +94,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Fix `WeatherDataset.__len__` off-by-one in analysis mode (was undercounting by 1 sample), include `num_past_forcing_steps` in the forecast-mode minimum-horizon check, validate forcing-side forecast horizon when forcing is present, and use `min(n_state, n_forcing)` when both are present in analysis mode; raise `IndexError` for out-of-range indices in `WeatherDataset.__getitem__` (with Python-style negative indexing support) [\#312](https://github.com/mllam/neural-lam/pull/312) @kshirajahere
 
 ### Maintenance
+
+- Rename the `d_mesh_static` mesh-node static-feature dimension to `num_mesh_static_vars` in comments and docstrings, matching the canonical `num_*` naming. [\#695](https://github.com/mllam/neural-lam/pull/695) @uttam12331
+
+- Add 100% type-hint coverage across `neural_lam/`, align all type annotations with PEP 585 and PEP 604, and adopt `ty` (astral-sh) for type checking [\#673](https://github.com/mllam/neural-lam/pull/673) @GiGiKoneti
+
+- Add a root `CONTRIBUTING.md` walking a new contributor from fork to merged PR (issue triage, environment setup pointing at the README install section, pre-commit, code standards, the exact local test command CI runs, PR template / CHANGELOG expectations, monthly dev-meeting pointer, Slack + issues for help), and trim `AGENTS.md` and the README "Development and Contributing" section down to pointers at it [\#407](https://github.com/mllam/neural-lam/pull/407) @ANANYA542
 
 - Split the monolithic `neural_lam/utils.py` into a `neural_lam/utils/` package with one module per concern (`buffer_list`, `graph`, `networks`, `plot`, `logging`, `tensor`, `time`); `utils/__init__.py` re-exports the full public API so existing imports are unaffected. Pure code movement, no behavioural change. [\#682](https://github.com/mllam/neural-lam/pull/682) @Sir-Sloth-The-Lazy
 

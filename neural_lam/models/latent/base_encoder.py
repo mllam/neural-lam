@@ -43,7 +43,7 @@ class BaseLatentEncoder(nn.Module):
                 f"Unknown encoder output distribution: {output_dist}"
             )
 
-    def compute_dist_params(self, grid_rep, **kwargs):
+    def compute_dist_params(self, grid_rep, *args, **kwargs):
         """
         Compute raw distribution parameters from the grid representation.
 
