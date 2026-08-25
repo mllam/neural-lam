@@ -49,6 +49,7 @@ import xarray as xr
 # First-party
 from neural_lam.datastore import DATASTORES
 from neural_lam.datastore.base import BaseRegularGridDatastore
+from neural_lam.datastore.mdp import MDPDatastore
 from neural_lam.datastore.plot_example import plot_example_from_datastore
 from tests.conftest import init_datastore_example
 
@@ -220,6 +221,26 @@ def test_get_dataarray(datastore_name):
 
         # check that the number of features is the same for all splits
         assert n_features["train"] == n_features["val"] == n_features["test"]
+
+
+def test_get_dataarray_missing_static_category_returns_none():
+    """category="static" must be treated as optional like "forcing" - per
+    get_dataarray's own docstring only "state" is required, but the code only
+    special-cased "forcing", raising KeyError for a static-less config."""
+    datastore = object.__new__(MDPDatastore)
+    datastore._ds = xr.Dataset({"state": xr.DataArray([1.0], dims=["x"])})
+
+    with pytest.warns(UserWarning, match="no static data found"):
+        assert datastore.get_dataarray(category="static", split="train") is None
+
+    with pytest.warns(UserWarning, match="no static data found"):
+        assert datastore.get_vars_names(category="static") == []
+
+    with pytest.warns(UserWarning, match="no static data found"):
+        assert datastore.get_vars_units(category="static") == []
+
+    with pytest.warns(UserWarning, match="no static data found"):
+        assert datastore.get_vars_long_names(category="static") == []
 
 
 @pytest.mark.parametrize("datastore_name", DATASTORES.keys())
