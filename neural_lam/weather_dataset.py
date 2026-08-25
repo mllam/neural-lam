@@ -426,7 +426,7 @@ class WeatherDataset(torch.utils.data.Dataset):
         # `__len__` also drops the trailing `num_future_forcing_steps`
         # samples and honours a shorter forcing axis.
         n_samples_base = len(times)
-        n_samples_offset = - offset - n_total + 1 - self.num_future_forcing_steps
+        n_samples_offset = -offset - n_total + 1 - self.num_future_forcing_steps
         if self.da_forcing is not None:
             n_samples_base = min(n_samples_base, len(self.da_forcing.time))
         n_samples = n_samples_base + n_samples_offset
