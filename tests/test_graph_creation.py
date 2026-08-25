@@ -15,7 +15,12 @@ from neural_lam.create_graph import (
 )
 from neural_lam.datastore import DATASTORES
 from neural_lam.datastore.base import BaseRegularGridDatastore
-from neural_lam.utils import BufferList, load_graph
+from neural_lam.utils import (
+    BufferList,
+    load_graph,
+    zero_index_g2m,
+    zero_index_m2g,
+)
 from tests.conftest import init_datastore_example
 
 
@@ -341,3 +346,94 @@ def test_buffer_list_iter(buffer_list_five):
     """Iteration yields all buffers in order."""
     values = [t.item() for t in buffer_list_five]
     assert values == [0.0, 1.0, 2.0, 3.0, 4.0]
+
+
+def test_legacy_graph_unconnected_boundary_grid_node_zero_indexing():
+    """Regression test for issue #699.
+
+    Tests zero_index_g2m and zero_index_m2g on legacy-format graphs
+    (mesh_first = False) where top-indexed grid nodes (e.g. boundary nodes)
+    are disconnected from the GNN mesh.
+
+    Without passing `num_grid_nodes`, the maximum active grid index in
+    the edge index is smaller than the total number of grid nodes, causing
+    zero_index_* to compute an incorrect interior node offset and produce
+    out-of-bounds/shifted mesh indices.
+    """
+    num_grid_nodes = 100
+    mesh_static_features = [torch.zeros((10, 3))]  # 10 mesh nodes
+
+    # In legacy format (mesh_first = False):
+    # Grid nodes: 0..99 (total 100)
+    # Mesh nodes: 100..109
+    # Suppose only grid nodes 0..90 are connected to mesh nodes 100..109,
+    # leaving grid nodes 91..99 (boundary nodes) unconnected.
+
+    g2m_edge_index = torch.tensor(
+        [
+            [0, 10, 50, 90],  # grid nodes (max active = 90 < 99)
+            [100, 101, 105, 109],  # mesh nodes
+        ]
+    )
+
+    m2g_edge_index = torch.tensor(
+        [
+            [100, 101, 105, 109],  # mesh nodes
+            [0, 10, 50, 90],  # grid nodes (max active = 90 < 99)
+        ]
+    )
+
+    # 1. Test with explicit num_grid_nodes (correct behavior)
+    g2m_zeroed = zero_index_g2m(
+        g2m_edge_index,
+        mesh_static_features,
+        mesh_first=False,
+        restore=False,
+        num_grid_nodes=num_grid_nodes,
+    )
+    # Grid nodes (row 0) should remain 0, 10, 50, 90
+    assert torch.equal(g2m_zeroed[0], torch.tensor([0, 10, 50, 90]))
+    # Mesh nodes (row 1) should be zero-indexed: 100 - 100 = 0, etc.
+    assert torch.equal(g2m_zeroed[1], torch.tensor([0, 1, 5, 9]))
+
+    m2g_zeroed = zero_index_m2g(
+        m2g_edge_index,
+        mesh_static_features,
+        mesh_first=False,
+        restore=False,
+        num_grid_nodes=num_grid_nodes,
+    )
+    # Mesh nodes (row 0) should be zero-indexed: 100 - 100 = 0, etc.
+    assert torch.equal(m2g_zeroed[0], torch.tensor([0, 1, 5, 9]))
+    # Grid nodes (row 1) should remain 0, 10, 50, 90
+    assert torch.equal(m2g_zeroed[1], torch.tensor([0, 10, 50, 90]))
+
+    # 2. Test restore=True with num_grid_nodes
+    g2m_restored = zero_index_g2m(
+        g2m_zeroed,
+        mesh_static_features,
+        mesh_first=False,
+        restore=True,
+        num_grid_nodes=num_grid_nodes,
+    )
+    assert torch.equal(g2m_restored, g2m_edge_index)
+
+    m2g_restored = zero_index_m2g(
+        m2g_zeroed,
+        mesh_static_features,
+        mesh_first=False,
+        restore=True,
+        num_grid_nodes=num_grid_nodes,
+    )
+    assert torch.equal(m2g_restored, m2g_edge_index)
+
+    # 3. Verify without num_grid_nodes zero_index_g2m uses wrong mesh offset
+    g2m_wrong = zero_index_g2m(
+        g2m_edge_index,
+        mesh_static_features,
+        mesh_first=False,
+        restore=False,
+    )
+    # Without num_grid_nodes, max grid index is 90 (subtracts 91 not 100),
+    # resulting in mesh indices [9, 10, 14, 18] instead of [0, 1, 5, 9]
+    assert not torch.equal(g2m_wrong[1], torch.tensor([0, 1, 5, 9]))

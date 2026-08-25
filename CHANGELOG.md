@@ -50,6 +50,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Fix offset mismatch in legacy graph zero-indexing helpers when boundary grid nodes are unconnected [\#699](https://github.com/mllam/neural-lam/issues/699) @GiGiKoneti
+
 - Set `workers=True` in `seed_everything` to properly seed DataLoader workers, ensuring uncorrelated random states across processes when `num_workers > 0` [\#716](https://github.com/mllam/neural-lam/pull/716) @GiGiKoneti
 
 - Fix `graph_lam` training and checkpoint reloads crashing on hierarchical-only GNN options, by routing both call sites through a `build_predictor` helper that only passes `mesh_up_gnn_type` / `mesh_down_gnn_type` to `BaseHiGraphModel` subclasses. [\#688](https://github.com/mllam/neural-lam/pull/688) @gitcommit90
