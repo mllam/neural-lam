@@ -14,7 +14,6 @@ from typing import Any, cast
 
 # Third-party
 import cartopy.crs as ccrs
-import dask
 import dask.array
 import dask.delayed
 import numpy as np

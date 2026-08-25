@@ -467,7 +467,10 @@ def create_graph(
         num_nodes_level = np.array([len(g_level.nodes) for g_level in G])
         # First node index in each level in the hierarchical graph
         first_index_level = np.concatenate(
-            (np.zeros(1, dtype=int), np.cumsum(num_nodes_level[:-1]))
+            (
+                np.zeros(1, dtype=int),
+                np.cumsum(num_nodes_level[:-1]),
+            )
         )
 
         # Create inter-level mesh edges from lower levels to upper levels.
