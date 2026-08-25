@@ -358,8 +358,8 @@ class HiLAM(BaseHiGraphModel):
                 mesh_rep_levels,
                 mesh_same_rep,
                 mesh_down_rep,
-                cast(nn.ModuleList, down_gnns),
-                cast(nn.ModuleList, down_same_gnns),
+                cast("nn.ModuleList", down_gnns),
+                cast("nn.ModuleList", down_same_gnns),
             )
 
             # Up
@@ -367,8 +367,8 @@ class HiLAM(BaseHiGraphModel):
                 mesh_rep_levels,
                 mesh_same_rep,
                 mesh_up_rep,
-                cast(nn.ModuleList, up_gnns),
-                cast(nn.ModuleList, up_same_gnns),
+                cast("nn.ModuleList", up_gnns),
+                cast("nn.ModuleList", up_same_gnns),
             )
 
         # NOTE: We return all, even though only down edges really are used

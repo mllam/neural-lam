@@ -97,9 +97,7 @@ def get_world_size() -> int:
     return int(os.environ.get("SLURM_NTASKS", 1))
 
 
-def setup(
-    rank: int, world_size: int
-) -> None:  # pylint: disable=redefined-outer-name
+def setup(rank: int, world_size: int) -> None:  # pylint: disable=redefined-outer-name
     """
     Initialize the distributed group.
 
@@ -335,10 +333,10 @@ def main(
 
         if rank == 0:
             means_gathered_tensor = torch.cat(
-                cast(list[torch.Tensor], means_gathered), dim=0
+                cast("list[torch.Tensor]", means_gathered), dim=0
             )
             squares_gathered_tensor = torch.cat(
-                cast(list[torch.Tensor], squares_gathered), dim=0
+                cast("list[torch.Tensor]", squares_gathered), dim=0
             )
 
             assert isinstance(ds, PaddedWeatherDataset)
@@ -350,7 +348,7 @@ def main(
             flux_means = [
                 torch.cat(
                     [
-                        torch.stack(cast(list[torch.Tensor], rank_flux))
+                        torch.stack(cast("list[torch.Tensor]", rank_flux))
                         for rank_flux in flux_means_gathered
                     ]
                 )
@@ -358,7 +356,7 @@ def main(
             flux_squares = [
                 torch.cat(
                     [
-                        torch.stack(cast(list[torch.Tensor], rank_flux))
+                        torch.stack(cast("list[torch.Tensor]", rank_flux))
                         for rank_flux in flux_squares_gathered
                     ]
                 )
@@ -426,9 +424,9 @@ def main(
         state_std = state_std.to(device)
 
     time_step_int, time_step_unit = get_integer_time(step_length)
-    assert (
-        time_step_unit == "hours"
-    ), "Only 'hours' time unit is supported by meps datastore."
+    assert time_step_unit == "hours", (
+        "Only 'hours' time unit is supported by meps datastore."
+    )
     used_subsample_len = (65 // time_step_int) * time_step_int
 
     diff_means, diff_squares = [], []
@@ -437,8 +435,9 @@ def main(
         loader_standard, disable=rank != 0
     ):
         if distributed:
-            init_batch, target_batch = init_batch.to(device), target_batch.to(
-                device
+            init_batch, target_batch = (
+                init_batch.to(device),
+                target_batch.to(device),
             )
         init_batch = (init_batch - state_mean) / state_std
         target_batch = (target_batch - state_mean) / state_std
@@ -474,10 +473,10 @@ def main(
 
         if rank == 0:
             diff_means_gathered_tensor = torch.cat(
-                cast(list[torch.Tensor], diff_means_gathered), dim=0
+                cast("list[torch.Tensor]", diff_means_gathered), dim=0
             )
             diff_squares_gathered_tensor = torch.cat(
-                cast(list[torch.Tensor], diff_squares_gathered), dim=0
+                cast("list[torch.Tensor]", diff_squares_gathered), dim=0
             )
             assert isinstance(ds_standard, PaddedWeatherDataset)
             n_original_windows = (
