@@ -60,7 +60,9 @@ def build_predictor(
         g2m_gnn_type=getattr(args, "g2m_gnn_type", "InteractionNet"),
         m2g_gnn_type=getattr(args, "m2g_gnn_type", "InteractionNet"),
     )
-    if issubclass(predictor_class, BaseHiGraphModel):
+    if isinstance(predictor_class, type) and issubclass(
+        predictor_class, BaseHiGraphModel
+    ):
         kwargs["mesh_up_gnn_type"] = getattr(
             args, "mesh_up_gnn_type", "InteractionNet"
         )
@@ -503,6 +505,13 @@ def main(input_args: list[str] | None = None) -> None:
     # ForecasterModule
     predictor_class = MODELS[args.model]
     predictor = build_predictor(predictor_class, args, config, datastore)
+
+    if not args.eval and not predictor.trainable:
+        raise ValueError(
+            f"The {args.model} model cannot be trained. Run with "
+            "--eval <val/test> to evaluate a baseline."
+        )
+
     forecaster = ARForecaster(predictor, datastore)
 
     model = ForecasterModule(
