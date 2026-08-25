@@ -226,7 +226,8 @@ def test_get_dataarray(datastore_name):
 def test_get_dataarray_missing_static_category_returns_none():
     """category="static" must be treated as optional like "forcing" - per
     get_dataarray's own docstring only "state" is required, but the code only
-    special-cased "forcing", raising KeyError for a static-less config."""
+    special-cased "forcing", raising KeyError for a static-less config.
+    Uses a minimal state-only dataset to verify the fix."""
     datastore = object.__new__(MDPDatastore)
     datastore._ds = xr.Dataset({"state": xr.DataArray([1.0], dims=["x"])})
 
