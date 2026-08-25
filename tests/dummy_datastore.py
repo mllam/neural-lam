@@ -3,7 +3,6 @@ import tempfile
 from datetime import timedelta
 from functools import cached_property
 from pathlib import Path
-from typing import List, Optional, Tuple, Union
 
 # Third-party
 import isodate
@@ -15,12 +14,11 @@ from numpy import ndarray
 # First-party
 from neural_lam.datastore.base import (
     BaseDatastore,
-    BaseRegularGridDatastore,
     CartesianGridShape,
 )
 
 
-class DummyDatastore(BaseRegularGridDatastore):
+class DummyDatastore(BaseDatastore):
     """
     Datastore that creates some dummy data for testing purposes. The data
     consists of state, forcing, and static variables, and is stored in a
@@ -32,6 +30,7 @@ class DummyDatastore(BaseRegularGridDatastore):
     T0 = isodate.parse_datetime("2021-01-01T00:00:00")
     N_FEATURES = dict(state=5, forcing=2, static=1)
     spatial_coordinates = ("x", "y")
+    is_on_regular_spatial_grid = True
 
     # center the domain on Denmark
     latlon_center = [56, 10]  # latitude, longitude
@@ -134,7 +133,7 @@ class DummyDatastore(BaseRegularGridDatastore):
 
             # Define dimensions and create random data
             dims = ["grid_index", f"{category}_feature"]
-            shape: Tuple[int, ...]
+            shape: tuple[int, ...]
             if category != "static":
                 dims.append("time")
                 shape = (n_grid_points, n, n_timesteps)
@@ -251,7 +250,7 @@ class DummyDatastore(BaseRegularGridDatastore):
         """
         return self.ds[f"{category}_feature_units"].values.tolist()
 
-    def get_vars_long_names(self, category: str) -> List[str]:
+    def get_vars_long_names(self, category: str) -> list[str]:
         """Get the long names of the variables in the given category.
 
         Parameters
@@ -322,8 +321,8 @@ class DummyDatastore(BaseRegularGridDatastore):
         return ds_standardization
 
     def get_dataarray(
-        self, category: str, split: Optional[str], standardize: bool = False
-    ) -> Union[xr.DataArray, None]:
+        self, category: str, split: str | None, standardize: bool = False
+    ) -> xr.DataArray | None:
         """
         Return the processed data (as a single `xr.DataArray`) for the given
         category of data and test/train/val-split that covers all the data (in
@@ -478,6 +477,105 @@ class DummyDatastore(BaseRegularGridDatastore):
 
         n_points_1d = int(np.sqrt(self.num_grid_points))
         return CartesianGridShape(x=n_points_1d, y=n_points_1d)
+
+    @cached_property
+    def state_feature_weights_values(self) -> list[float]:
+        return [1.0] * self.N_FEATURES["state"]
+
+
+class BoundaryDummyDatastore(DummyDatastore):
+    """DummyDatastore acting as a boundary forcing provider with no state.
+
+    Mimics a real ERA5-style boundary datastore, which supplies ``forcing``
+    and ``static`` fields but no ``state``. State metadata is dropped after
+    init and state-keyed lookups raise ``KeyError`` so any code path that
+    accidentally asks the boundary for ``state`` fails loudly in tests.
+    """
+
+    SHORT_NAME = "dummydata_boundary"
+    N_FEATURES = dict(state=0, forcing=3, static=1)
+
+    def __init__(self, n_grid_points=400, n_timesteps=10, step_length=None):
+        super().__init__(
+            n_grid_points=n_grid_points,
+            n_timesteps=n_timesteps,
+            step_length=step_length,
+        )
+        state_vars = [
+            v
+            for v in (
+                "state",
+                "state_feature",
+                "state_feature_units",
+                "state_feature_long_name",
+            )
+            if v in self.ds.variables
+        ]
+        if state_vars:
+            self.ds = self.ds.drop_vars(state_vars)
+        self._encode_forcing_by_feature()
+
+    def _encode_forcing_by_feature(self) -> None:
+        """Replace forcing values with `feature * 1000 + time`.
+
+        The base dummy fills every category with random noise, so a value
+        does not say which feature it came from and the order in which
+        `WeatherDataset` stacks `(forcing_feature, window)` is unobservable
+        downstream. Encoding the feature index makes that order testable.
+        """
+        da_forcing = self.ds["forcing"]
+        feature_axis = da_forcing.dims.index("forcing_feature")
+        time_axis = da_forcing.dims.index("time")
+        shape = [1] * da_forcing.ndim
+        shape[feature_axis] = da_forcing.sizes["forcing_feature"]
+        features = np.arange(da_forcing.sizes["forcing_feature"]).reshape(shape)
+        shape = [1] * da_forcing.ndim
+        shape[time_axis] = da_forcing.sizes["time"]
+        times = np.arange(da_forcing.sizes["time"]).reshape(shape)
+        # Assign in place: rebuilding the DataArray would drop the
+        # `grid_index` MultiIndex.
+        da_forcing.values[...] = features * 1000.0 + times
+
+    def get_standardization_dataarray(self, category: str) -> xr.Dataset:
+        """Return per-feature statistics, distinct for forcing.
+
+        The base dummy uses 1.0 for every feature, which makes the order in
+        which statistics are tiled across a window unobservable. Real
+        datastores have per-variable statistics, so forcing gets distinct
+        ones here.
+
+        Parameters
+        ----------
+        category : str
+            The category of the dataset (forcing/static).
+
+        Returns
+        -------
+        xr.Dataset
+            Standardization statistics for the given category.
+        """
+        ds = super().get_standardization_dataarray(category=category)
+        if category == "forcing":
+            n_features = self.N_FEATURES["forcing"]
+            ds["forcing_mean"].values[:] = np.arange(1.0, n_features + 1.0)
+            ds["forcing_std"].values[:] = np.arange(2.0, n_features + 2.0)
+        return ds
+
+    def get_xy(self, category: str, stacked: bool) -> ndarray:
+        if category == "state":
+            raise KeyError(
+                "BoundaryDummyDatastore has no state category; "
+                "use 'forcing' instead."
+            )
+        return super().get_xy(category=category, stacked=stacked)
+
+    def get_vars_names(self, category: str) -> list[str]:
+        if category == "state":
+            raise KeyError(
+                "BoundaryDummyDatastore has no state category; "
+                "use 'forcing' instead."
+            )
+        return super().get_vars_names(category=category)
 
 
 class EnsembleDummyDatastore(BaseDatastore):
@@ -732,8 +830,8 @@ class EnsembleDummyDatastore(BaseDatastore):
         return ds
 
     def get_dataarray(
-        self, category: str, split: Optional[str], standardize: bool = False
-    ) -> Union[xr.DataArray, None]:
+        self, category: str, split: str | None, standardize: bool = False
+    ) -> xr.DataArray | None:
         if category == "state":
             da = self._da_state
         elif category == "forcing":

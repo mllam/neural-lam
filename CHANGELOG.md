@@ -14,6 +14,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Add `--train_steps_to_log` CLI option to log training loss for individual unroll steps, and deduplicate common prediction and loss computation steps across loops [\#674](https://github.com/mllam/neural-lam/issues/674) @GiGiKoneti
 
+- Add optional boundary datastore support: `NeuralLAMConfig` now takes a named `datastores` dict. `WeatherDataset` loads boundary forcing from such a datastore and `__getitem__` returns a 5-tuple `(init_states, target_states, forcing, boundary, target_times)`. New CLI args `--num_past_boundary_steps` / `--num_future_boundary_steps` control the boundary forcing window. Expose `MDPDatastore`'s boundary-mask width as `n_boundary_points` on a `datastores.<name>` entry in `config.yaml`. New `is_on_regular_spatial_grid` property to `BaseDatastore`, reporting whether a datastore's grid points form a complete 2D grid. [\#635](https://github.com/mllam/neural-lam/pull/635) @sadamov
+
 - Add `PropagationNet` GNN layer that incentivises directional message
   propagation from sender to receiver nodes, and expose it alongside
   `InteractionNet` through four new CLI arguments (`--g2m_gnn_type`,
@@ -31,6 +33,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Graph storage specification (`docs/graph_storage_spec.md`), PEP 723–compliant validator script (`docs/validate_graph.py`), and pre-commit hook keeping the spec in sync with the validator for the torch-tensors-on-disk graph format currently used in neural-lam [\#323](https://github.com/mllam/neural-lam/pull/323) @leifdenby
 
 ### Changed
+
+- Replace the single `datastore` config key with a named `datastores` mapping; a datastore's role now follows from the categories it provides, and existing configs must move their datastore under a named entry in `datastores:`. `BaseRegularGridDatastore` is removed and its members moved onto `BaseDatastore`, gated on the new `is_on_regular_spatial_grid` property. Datastores on a regular grid must set `is_on_regular_spatial_grid = True` and implement `grid_shape_state`; the gated members raise `NotImplementedError` otherwise [\#635](https://github.com/mllam/neural-lam/pull/635) @sadamov
 
 - Move data normalization from CPU (`WeatherDataset`) to GPU
   (`ForecasterModule.on_after_batch_transfer`) for improved performance and

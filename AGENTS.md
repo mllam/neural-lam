@@ -26,8 +26,8 @@ python -m neural_lam.train_model --config_path <config> --model graph_lam --grap
 python -m neural_lam.train_model --eval test --config_path <config> --load <ckpt>
 ```
 
-W&B is auto-disabled in tests. `DummyDatastore` is the in-memory test fixture; example data is
-downloaded from S3 on first run.
+W&B is auto-disabled in tests. `DummyDatastore` is the in-memory test fixture (with
+`BoundaryDummyDatastore` for a state-less boundary); example data is downloaded from S3 or Google Cloud Storage on first run.
 
 ---
 
