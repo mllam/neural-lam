@@ -115,6 +115,7 @@ class DeterministicForecastingModule(BaseForecastingModule):
         self.test_metrics = {
             "mse": [],
             "mae": [],
+            "bias": [],
         }
         if self.forecaster.predicts_std:
             self.test_metrics["output_std"] = []  # Treat as metric
@@ -267,7 +268,7 @@ class DeterministicForecastingModule(BaseForecastingModule):
 
         # Reported independently of the training objective, so computed here
         # rather than through the forecaster
-        for metric_name in ("mse", "mae"):
+        for metric_name in ("mse", "mae", "bias"):
             batch_metric_vals = metrics.get_metric(metric_name)(
                 prediction,
                 target_states,
