@@ -3,7 +3,6 @@ import tempfile
 from datetime import timedelta
 from functools import cached_property
 from pathlib import Path
-from typing import List, Optional, Tuple, Union
 
 # Third-party
 import isodate
@@ -134,7 +133,7 @@ class DummyDatastore(BaseRegularGridDatastore):
 
             # Define dimensions and create random data
             dims = ["grid_index", f"{category}_feature"]
-            shape: Tuple[int, ...]
+            shape: tuple[int, ...]
             if category != "static":
                 dims.append("time")
                 shape = (n_grid_points, n, n_timesteps)
@@ -251,7 +250,7 @@ class DummyDatastore(BaseRegularGridDatastore):
         """
         return self.ds[f"{category}_feature_units"].values.tolist()
 
-    def get_vars_long_names(self, category: str) -> List[str]:
+    def get_vars_long_names(self, category: str) -> list[str]:
         """Get the long names of the variables in the given category.
 
         Parameters
@@ -322,8 +321,8 @@ class DummyDatastore(BaseRegularGridDatastore):
         return ds_standardization
 
     def get_dataarray(
-        self, category: str, split: Optional[str], standardize: bool = False
-    ) -> Union[xr.DataArray, None]:
+        self, category: str, split: str | None, standardize: bool = False
+    ) -> xr.DataArray | None:
         """
         Return the processed data (as a single `xr.DataArray`) for the given
         category of data and test/train/val-split that covers all the data (in
@@ -480,7 +479,7 @@ class DummyDatastore(BaseRegularGridDatastore):
         return CartesianGridShape(x=n_points_1d, y=n_points_1d)
 
     @cached_property
-    def state_feature_weights_values(self) -> List[float]:
+    def state_feature_weights_values(self) -> list[float]:
         return [1.0] * self.N_FEATURES["state"]
 
 
@@ -831,8 +830,8 @@ class EnsembleDummyDatastore(BaseDatastore):
         return ds
 
     def get_dataarray(
-        self, category: str, split: Optional[str], standardize: bool = False
-    ) -> Union[xr.DataArray, None]:
+        self, category: str, split: str | None, standardize: bool = False
+    ) -> xr.DataArray | None:
         if category == "state":
             da = self._da_state
         elif category == "forcing":

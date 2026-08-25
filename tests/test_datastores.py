@@ -205,10 +205,11 @@ def test_get_dataarray(datastore_name):
                         "elapsed_forecast_duration",
                     ]
 
-            if datastore.is_ensemble and category == "state":
-                expected_dims.append("ensemble_member")
-            elif category == "forcing" and getattr(
-                datastore, "has_ensemble_forcing", False
+            if (
+                datastore.is_ensemble
+                and category == "state"
+                or category == "forcing"
+                and getattr(datastore, "has_ensemble_forcing", False)
             ):
                 expected_dims.append("ensemble_member")
 
