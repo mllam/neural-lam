@@ -18,7 +18,7 @@ from torch_geometric.utils.convert import from_networkx
 
 # Local
 from .config import load_config_and_datastore
-from .datastore.base import BaseRegularGridDatastore
+from .datastore.base import BaseDatastore
 
 # Stores the graph storage spec version the graph conforms to.
 METAINFO_FILENAME = "metainfo.yaml"
@@ -866,7 +866,7 @@ def create_graph(
 
 
 def create_graph_from_datastore(
-    datastore: BaseRegularGridDatastore,
+    datastore: BaseDatastore,
     output_root_path: str,
     n_max_levels: int | None = None,
     hierarchical: bool = False,
@@ -877,7 +877,7 @@ def create_graph_from_datastore(
 
     Parameters
     ----------
-    datastore : BaseRegularGridDatastore
+    datastore : BaseDatastore
         Datastore providing ``get_xy`` for state nodes.
     output_root_path : str
         Directory where the resulting ``*.pt`` graph files are stored.

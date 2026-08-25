@@ -18,10 +18,10 @@ from numpy import ndarray
 
 # Local
 from ..utils.logging import log_on_rank_zero
-from .base import BaseRegularGridDatastore, CartesianGridShape
+from .base import BaseDatastore, CartesianGridShape
 
 
-class MDPDatastore(BaseRegularGridDatastore):
+class MDPDatastore(BaseDatastore):
     """
     Datastore class for datasets made with the mllam_data_prep library
     (https://github.com/mllam/mllam-data-prep). This class wraps the
@@ -545,18 +545,24 @@ class MDPDatastore(BaseRegularGridDatastore):
     def grid_shape_state(self) -> CartesianGridShape:
         """The shape of the cartesian grid for the state variables.
 
+        Counted from the distinct ``x``/``y`` coordinate values rather than
+        by unstacking, since `unstack_grid_coords` is itself gated on
+        `is_on_regular_spatial_grid`, which is derived from this shape.
+
         Returns
         -------
         CartesianGridShape
-            The shape of the cartesian grid for the state variables.
+            The shape of the cartesian grid for the state variables. For a
+            datastore that is not on a regular grid this is the bounding
+            grid, which holds more cells than the datastore has points.
 
         """
         category = "state" if "state" in self._ds else "forcing"
-        ds_cat = self.unstack_grid_coords(self._ds[category])
+        da_cat = self._ds[category]
         xdim, ydim = self.spatial_coordinates
-        da_x, da_y = ds_cat[xdim], ds_cat[ydim]
-        assert da_x.ndim == da_y.ndim == 1
-        return CartesianGridShape(x=da_x.size, y=da_y.size)
+        n_x = np.unique(da_cat[xdim].values).size
+        n_y = np.unique(da_cat[ydim].values).size
+        return CartesianGridShape(x=n_x, y=n_y)
 
     def get_xy(self, category: str, stacked: bool) -> ndarray:
         """

@@ -11,7 +11,6 @@ from torch.utils.data import DataLoader
 from neural_lam import config as nlconfig
 from neural_lam.create_graph import create_graph_from_datastore
 from neural_lam.datastore import DATASTORES
-from neural_lam.datastore.base import BaseRegularGridDatastore
 from neural_lam.models import ForecasterModule
 from neural_lam.weather_dataset import WeatherDataset
 from tests.conftest import (
@@ -128,7 +127,7 @@ def test_dataset_item_create_dataarray_from_tensor(datastore_name):
             da_target[dim].values, da_target_true[dim].values
         )
 
-    if isinstance(datastore, BaseRegularGridDatastore):
+    if datastore.is_on_regular_spatial_grid:
         # test unstacking the grid coordinates
         da_target_unstacked = datastore.unstack_grid_coords(da_target)
         assert all(
@@ -152,7 +151,7 @@ def test_dataset_item_create_dataarray_from_tensor(datastore_name):
             da_target_single[dim].values, da_target_true[0][dim].values
         )
 
-    if isinstance(datastore, BaseRegularGridDatastore):
+    if datastore.is_on_regular_spatial_grid:
         # test unstacking the grid coordinates
         da_target_single_unstacked = datastore.unstack_grid_coords(
             da_target_single
@@ -210,7 +209,7 @@ def test_single_batch(datastore_name, split):
                 n_max_levels=1,
             )
 
-    if not isinstance(datastore, BaseRegularGridDatastore):
+    if not datastore.is_on_regular_spatial_grid:
         with pytest.raises(NotImplementedError):
             _create_graph()
         pytest.skip("Skipping on model-run on non-regular grid datastores")

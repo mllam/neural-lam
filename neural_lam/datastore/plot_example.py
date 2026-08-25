@@ -6,12 +6,12 @@ import matplotlib.pyplot as plt
 
 # Local
 from . import DATASTORES, init_datastore
-from .base import BaseRegularGridDatastore
+from .base import BaseDatastore
 
 
 def plot_example_from_datastore(
     category: str,
-    datastore: BaseRegularGridDatastore,
+    datastore: BaseDatastore,
     col_dim: str,
     split: str = "train",
     standardize: bool = True,
@@ -197,10 +197,6 @@ if __name__ == "__main__":
         datastore_kind=datastore_kind,
         config_path=args.datastore_config_path,
     )
-    # Standard library
-    from typing import cast
-
-    datastore = cast(BaseRegularGridDatastore, datastore)
 
     plot_example_from_datastore(
         args.category,

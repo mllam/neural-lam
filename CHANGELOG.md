@@ -34,7 +34,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- Replace the single `datastore` key in the neural-lam config with a named `datastores` mapping. Each datastore's role is now implied by the categories it provides rather than by a dedicated config key. Existing configs must move their datastore under a named entry in `datastores:` [\#635](https://github.com/mllam/neural-lam/pull/635) @sadamov
+- Replace the single `datastore` config key with a named `datastores` mapping; a datastore's role now follows from the categories it provides, and existing configs must move their datastore under a named entry in `datastores:`. `BaseRegularGridDatastore` is removed and its members moved onto `BaseDatastore`, gated on the new `is_on_regular_spatial_grid` property. Datastores on a regular grid must set `is_on_regular_spatial_grid = True` and implement `grid_shape_state`; the gated members raise `NotImplementedError` otherwise [\#635](https://github.com/mllam/neural-lam/pull/635) @sadamov
 
 - Move data normalization from CPU (`WeatherDataset`) to GPU
   (`ForecasterModule.on_after_batch_transfer`) for improved performance and

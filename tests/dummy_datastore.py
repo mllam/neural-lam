@@ -14,12 +14,11 @@ from numpy import ndarray
 # First-party
 from neural_lam.datastore.base import (
     BaseDatastore,
-    BaseRegularGridDatastore,
     CartesianGridShape,
 )
 
 
-class DummyDatastore(BaseRegularGridDatastore):
+class DummyDatastore(BaseDatastore):
     """
     Datastore that creates some dummy data for testing purposes. The data
     consists of state, forcing, and static variables, and is stored in a
@@ -31,6 +30,7 @@ class DummyDatastore(BaseRegularGridDatastore):
     T0 = isodate.parse_datetime("2021-01-01T00:00:00")
     N_FEATURES = dict(state=5, forcing=2, static=1)
     spatial_coordinates = ("x", "y")
+    is_on_regular_spatial_grid = True
 
     # center the domain on Denmark
     latlon_center = [56, 10]  # latitude, longitude

@@ -23,7 +23,7 @@ import xarray as xr
 from xarray.core.dataarray import DataArray
 
 # Local
-from ..base import BaseRegularGridDatastore, CartesianGridShape
+from ..base import BaseDatastore, CartesianGridShape
 from .config import NpyDatastoreConfig
 
 STATE_FILENAME_FORMAT = "nwp_{analysis_time:%Y%m%d%H}_mbr{member_id:03d}.npy"
@@ -63,7 +63,7 @@ def _load_np(
     return arr
 
 
-class NpyFilesDatastoreMEPS(BaseRegularGridDatastore):
+class NpyFilesDatastoreMEPS(BaseDatastore):
     """
     Represents a dataset stored as numpy files on disk. The dataset is assumed
     to be stored in a directory structure where each sample is stored in a
@@ -164,6 +164,7 @@ class NpyFilesDatastoreMEPS(BaseRegularGridDatastore):
     SHORT_NAME = "npyfilesmeps"
 
     is_forecast = True
+    is_on_regular_spatial_grid = True
 
     _config_path: Path
     _root_path: Path

@@ -19,7 +19,7 @@ from cartopy.mpl.geoaxes import GeoAxes
 
 # Local
 from . import utils
-from .datastore.base import BaseRegularGridDatastore
+from .datastore.base import BaseDatastore
 
 # Font sizes shared across projection-aware plot functions.
 _TITLE_SIZE = 13  # suptitle and per-axes titles
@@ -100,13 +100,13 @@ def _compute_heatmap_layout(n_rows: int, n_cols: int) -> dict[str, float]:
     }
 
 
-def _get_heatmap_var_labels(datastore: BaseRegularGridDatastore) -> list[str]:
+def _get_heatmap_var_labels(datastore: BaseDatastore) -> list[str]:
     """
     Build state-variable labels from datastore metadata.
 
     Parameters
     ----------
-    datastore : BaseRegularGridDatastore
+    datastore : BaseDatastore
         The datastore containing metadata about the grid.
 
     Returns
@@ -192,7 +192,7 @@ def _get_feature_scale(
 
 def _get_heatmap_color_values(
     errors_np: np.ndarray,
-    datastore: BaseRegularGridDatastore,
+    datastore: BaseDatastore,
     normalization: str,
 ) -> tuple[np.ndarray, str, matplotlib.colors.Colormap]:
     """
@@ -209,7 +209,7 @@ def _get_heatmap_color_values(
     ----------
     errors_np : np.ndarray
         The error values to normalize.
-    datastore : BaseRegularGridDatastore
+    datastore : BaseDatastore
         The datastore containing standardization stats.
     normalization : str
         The normalization mode to use ('state_std' or 'diff_std').
@@ -344,7 +344,7 @@ def _get_annotation_text_color(
 def plot_on_axis(
     ax: GeoAxes,
     da: xr.DataArray,
-    datastore: BaseRegularGridDatastore,
+    datastore: BaseDatastore,
     vmin: float | None = None,
     vmax: float | None = None,
     ax_title: str | None = None,
@@ -361,7 +361,7 @@ def plot_on_axis(
         The axis to plot on. Should have a cartopy projection.
     da : xarray.DataArray
         The data to plot. Should have shape (num_grid_nodes,).
-    datastore : BaseRegularGridDatastore
+    datastore : BaseDatastore
         The datastore containing metadata about the grid.
     vmin : float, optional
         Minimum value for color scale.
@@ -470,7 +470,7 @@ def plot_on_axis(
 @matplotlib.rc_context(utils.fractional_plot_bundle(1))
 def plot_error_heatmap(
     errors: torch.Tensor,
-    datastore: BaseRegularGridDatastore,
+    datastore: BaseDatastore,
     title: str | None = None,
     normalization: str = "state_std",
 ) -> matplotlib.figure.Figure:
@@ -483,7 +483,7 @@ def plot_error_heatmap(
         Shape ``(pred_steps, num_state_vars)``. Per-step, per-variable
         errors. These values are used for the numeric annotations in each
         cell.
-    datastore : BaseRegularGridDatastore
+    datastore : BaseDatastore
         Datastore providing variable names, units, and step length.
     title : str, optional
         Title for the axes.
@@ -589,7 +589,7 @@ def plot_error_heatmap(
 
 def plot_error_map(
     errors: torch.Tensor,
-    datastore: BaseRegularGridDatastore,
+    datastore: BaseDatastore,
     title: str | None = None,
 ) -> matplotlib.figure.Figure:
     """
@@ -599,7 +599,7 @@ def plot_error_map(
     ----------
     errors : torch.Tensor
         The error values to plot.
-    datastore : BaseRegularGridDatastore
+    datastore : BaseDatastore
         The datastore containing grid metadata.
     title : str, optional
         The title for the plot.
@@ -619,7 +619,7 @@ def plot_error_map(
 
 @matplotlib.rc_context(utils.fractional_plot_bundle(1))
 def plot_prediction(
-    datastore: BaseRegularGridDatastore,
+    datastore: BaseDatastore,
     da_prediction: xr.DataArray,
     da_target: xr.DataArray,
     title: str | None = None,
@@ -633,7 +633,7 @@ def plot_prediction(
 
     Parameters
     ----------
-    datastore : BaseRegularGridDatastore
+    datastore : BaseDatastore
        Datastore providing grid metadata and projection.
     da_prediction : xarray.DataArray
         Shape ``(num_grid_nodes,)``. Predicted field values.
@@ -705,7 +705,7 @@ def plot_prediction(
 @matplotlib.rc_context(utils.fractional_plot_bundle(1))
 def plot_spatial_error(
     error: torch.Tensor,
-    datastore: BaseRegularGridDatastore,
+    datastore: BaseDatastore,
     title: str | None = None,
     vrange: tuple[float, float] | None = None,
     boundary_alpha: float = 0.7,
@@ -720,7 +720,7 @@ def plot_spatial_error(
     error : torch.Tensor
         Error magnitudes on the flattened grid.
         * **Shape**: ``(num_grid_nodes,)``
-    datastore : BaseRegularGridDatastore
+    datastore : BaseDatastore
         Datastore providing coordinate metadata and boundary masks.
     title : str or None, optional
         Optional figure title.

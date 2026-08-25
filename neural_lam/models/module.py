@@ -19,7 +19,7 @@ from neural_lam.utils import get_integer_time
 # Local
 from .. import metrics, vis
 from ..config import NeuralLAMConfig
-from ..datastore.base import BaseDatastore, BaseRegularGridDatastore
+from ..datastore.base import BaseDatastore
 from ..loss_weighting import get_state_feature_weighting
 from ..weather_dataset import WeatherDataset
 from .forecasters.base import Forecaster
@@ -55,7 +55,7 @@ class ForecasterModule(pl.LightningModule):
         self,
         forecaster: Forecaster,
         config: NeuralLAMConfig,
-        datastore: BaseRegularGridDatastore,
+        datastore: BaseDatastore,
         datastore_boundary: BaseDatastore | None = None,
         loss: str = "wmse",
         lr: float = 1e-3,
@@ -77,7 +77,7 @@ class ForecasterModule(pl.LightningModule):
             The forecaster model to use for predictions.
         config : NeuralLAMConfig
             Configuration object for the neural LAM model.
-        datastore : BaseRegularGridDatastore
+        datastore : BaseDatastore
             Datastore providing grid metadata and data access.
         datastore_boundary : BaseDatastore, optional
             Boundary forcing datastore, used here only to register the

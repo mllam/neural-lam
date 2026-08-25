@@ -22,8 +22,8 @@
       with spatial dimensions stacked.
 - `config` (property): Return the configuration of the datastore.
 
-In addition BaseRegularGridDatastore must have the following methods and
-attributes:
+In addition, datastores on a regular spatial grid (`is_on_regular_spatial_grid`
+is `True`) must have the following methods and attributes:
 - `get_xy_extent` (method): Return the extent of the x, y coordinates for a
         given category of data.
 - `get_xy` (method): Return the x, y coordinates of the dataset.
@@ -50,7 +50,6 @@ import xarray as xr
 # First-party
 from neural_lam.create_graph import create_graph_from_datastore
 from neural_lam.datastore import DATASTORES, init_datastore
-from neural_lam.datastore.base import BaseRegularGridDatastore
 from neural_lam.datastore.mdp import MDPDatastore
 from neural_lam.datastore.plot_example import plot_example_from_datastore
 from tests.conftest import (
@@ -95,7 +94,7 @@ def test_datastore_grid_xy(datastore_name):
     tastore.grid_shape_state` property."""
     datastore = init_datastore_example(datastore_name)
 
-    if not isinstance(datastore, BaseRegularGridDatastore):
+    if not datastore.is_on_regular_spatial_grid:
         pytest.skip(
             "Skip grid_shape_state test for non-regular grid datastores"
         )
@@ -221,7 +220,7 @@ def test_get_dataarray(datastore_name):
 
             assert isinstance(da, xr.DataArray)
             assert set(da.dims) == set(expected_dims)
-            if isinstance(datastore, BaseRegularGridDatastore):
+            if datastore.is_on_regular_spatial_grid:
                 grid_shape = datastore.grid_shape_state
                 assert da.grid_index.size == grid_shape.x * grid_shape.y
 
@@ -245,7 +244,7 @@ def test_boundary_mask(datastore_name):
     assert da_mask.sum() > 0
     assert da_mask.sum() < da_mask.size
 
-    if isinstance(datastore, BaseRegularGridDatastore):
+    if datastore.is_on_regular_spatial_grid:
         grid_shape = datastore.grid_shape_state
         assert datastore.boundary_mask.size == grid_shape.x * grid_shape.y
 
@@ -271,7 +270,7 @@ def test_get_xy_extent(datastore_name):
     the returned object is a tuple of the correct length."""
     datastore = init_datastore_example(datastore_name)
 
-    if not isinstance(datastore, BaseRegularGridDatastore):
+    if not datastore.is_on_regular_spatial_grid:
         pytest.skip("Datastore does not implement `BaseCartesianDatastore`")
 
     extents = {}
@@ -293,7 +292,7 @@ def test_get_xy(datastore_name):
     """Check that the `datastore.get_xy` method is implemented."""
     datastore = init_datastore_example(datastore_name)
 
-    if not isinstance(datastore, BaseRegularGridDatastore):
+    if not datastore.is_on_regular_spatial_grid:
         pytest.skip("Datastore does not implement `BaseCartesianDatastore`")
 
     for category in ["state", "forcing", "static"]:
@@ -322,7 +321,7 @@ def test_get_xy(datastore_name):
             shapes and values."""
             datastore = init_datastore_example(datastore_name)
 
-            if not isinstance(datastore, BaseRegularGridDatastore):
+            if not datastore.is_on_regular_spatial_grid:
                 pytest.skip(
                     "Datastore does not implement `BaseCartesianDatastore`"
                 )
@@ -351,7 +350,7 @@ def test_get_projection(datastore_name):
     """Check that the `datastore.coords_projection` property is implemented."""
     datastore = init_datastore_example(datastore_name)
 
-    if not isinstance(datastore, BaseRegularGridDatastore):
+    if not datastore.is_on_regular_spatial_grid:
         pytest.skip("Datastore does not implement `BaseCartesianDatastore`")
 
     assert isinstance(datastore.coords_projection, ccrs.Projection)
@@ -362,7 +361,7 @@ def get_grid_shape_state(datastore_name):
     """Check that the `datastore.grid_shape_state` property is implemented."""
     datastore = init_datastore_example(datastore_name)
 
-    if not isinstance(datastore, BaseRegularGridDatastore):
+    if not datastore.is_on_regular_spatial_grid:
         pytest.skip("Datastore does not implement `BaseCartesianDatastore`")
 
     grid_shape = datastore.grid_shape_state
@@ -378,7 +377,7 @@ def test_stacking_grid_coords(datastore_name, category):
     """Check that the `datastore.stack_grid_coords` method is implemented."""
     datastore = init_datastore_example(datastore_name)
 
-    if not isinstance(datastore, BaseRegularGridDatastore):
+    if not datastore.is_on_regular_spatial_grid:
         pytest.skip("Datastore does not implement `BaseCartesianDatastore`")
 
     da_static = datastore.get_dataarray(category=category, split="train")
@@ -473,7 +472,7 @@ def test_is_on_regular_spatial_grid_matches_grid_shape(datastore_name):
     `grid_shape_state` actually accounts for every grid point, since that is
     what unstacking `grid_index` back into x/y relies on."""
     datastore = init_datastore_example(datastore_name)
-    assert isinstance(datastore, BaseRegularGridDatastore)
+    assert datastore.is_on_regular_spatial_grid
 
     # Independent of the property's implementation: unstacking is what the
     # property gates, so it must succeed exactly when the property is True.
@@ -493,12 +492,11 @@ def test_is_on_regular_spatial_grid_matches_grid_shape(datastore_name):
 
 
 def test_is_on_regular_spatial_grid_defaults_to_false():
-    """A datastore that is not a `BaseRegularGridDatastore` gets the base
-    class default, so a new datastore has to opt in to being treated as
-    gridded rather than silently inheriting it."""
+    """A datastore that does not opt in gets the `BaseDatastore` default,
+    so a new datastore has to explicitly declare itself as gridded rather
+    than silently inheriting it."""
     datastore = EnsembleDummyDatastore()
 
-    assert not isinstance(datastore, BaseRegularGridDatastore)
     assert not datastore.is_on_regular_spatial_grid
 
 
@@ -518,6 +516,21 @@ def test_cropped_boundary_datastore_is_not_regular_grid():
             datastore=datastore_boundary,
             output_root_path=str(datastore_boundary.root_path / "graph"),
         )
+
+
+@pytest.mark.slow
+def test_unstacking_cropped_boundary_datastore_raises():
+    """`unstack_grid_coords` now lives on `BaseDatastore`, so it has to
+    refuse a datastore that is not on a regular grid itself rather than
+    relying on the caller having checked first."""
+    datastore_boundary = init_datastore_boundary_example("mdp")
+    da_forcing = datastore_boundary.get_dataarray(
+        category="forcing", split="train"
+    )
+    assert da_forcing is not None
+
+    with pytest.raises(NotImplementedError, match="complete 2D grid"):
+        datastore_boundary.unstack_grid_coords(da_forcing)
 
 
 @pytest.mark.slow
