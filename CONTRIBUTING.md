@@ -49,13 +49,14 @@ A few things that help keep it that way:
 ## Code standards
 
 Code quality is enforced automatically by
-[pre-commit hooks](.pre-commit-config.yaml) (Black, isort, Flake8, mypy,
+[pre-commit hooks](.pre-commit-config.yaml) (Black, isort, Flake8, ty,
 Codespell and others). In addition:
 
-- Add **NumPy-style docstrings** and **type annotations** to every public
-  function and class. The
-  [numpydoc style guide](https://numpydoc.readthedocs.io/en/latest/format.html)
-  is the authoritative reference;
+- Add **NumPy-style docstrings** and **type annotations** to every function and
+  class in `neural_lam/`. Docstring coverage is gated at 100% and the package is
+  type-checked in the CI. The [numpydoc style
+  guide](https://numpydoc.readthedocs.io/en/latest/format.html) is the
+  authoritative reference;
   [`neural_lam/datastore/base.py`](neural_lam/datastore/base.py) is a good
   in-repo example of the conventions we follow (sectioned `Parameters` /
   `Returns`, types in the signature line, prose first).
