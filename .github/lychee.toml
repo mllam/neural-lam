@@ -1,0 +1,18 @@
+# Config for the lychee link checker (see .pre-commit-config.yaml).
+
+# Also verify `#section` anchors resolve, not just that the file exists.
+include_fragments = "full"
+timeout = 20
+
+# Single-quoted TOML literal strings: regex backslashes need no escaping.
+exclude = [
+    # Reachable for humans, but reject automated requests (bot filtering,
+    # link shorteners), so they would fail the check even while working.
+    '^https://join\.slack\.com/t/ml-lam/shared_invite/',
+    '^https://kutt\.to/mllam$',
+    '^https://pyg\.org/?$',
+    # CHANGELOG's auto-generated self-references: ~142 links that always
+    # resolve, and dominate the runtime if re-checked on every commit.
+    # `NNN` is the placeholder in CONTRIBUTING.md's changelog example.
+    '^https://github\.com/mllam/neural-lam/(issues|pull)/(\d+|NNN)/?$',
+]
