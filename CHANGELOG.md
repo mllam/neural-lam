@@ -89,7 +89,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Maintenance
 
-- Add a `lychee` pre-commit hook that checks Markdown links and section anchors (configured in `.github/lychee.toml`), add a PR-template checklist item reminding contributors to update `CONTRIBUTING.md` / `AGENTS.md` when they change contributor workflow, and fix the two broken links the new hook surfaced [\#NNN](https://github.com/mllam/neural-lam/pull/NNN) @KumarShivam1908 @beanscg
+- Add a `lychee` pre-commit hook that checks Markdown links and section anchors (configured in `.github/lychee.toml`), add a PR-template checklist item reminding contributors to update `CONTRIBUTING.md` / `AGENTS.md` when they change contributor workflow, and fix the two broken links the new hook surfaced [\#738](https://github.com/mllam/neural-lam/pull/738) @KumarShivam1908
 
 - Rename the `d_mesh_static` mesh-node static-feature dimension to `num_mesh_static_vars` in comments and docstrings, matching the canonical `num_*` naming. [\#695](https://github.com/mllam/neural-lam/pull/695) @uttam12331
 
