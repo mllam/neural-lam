@@ -23,8 +23,9 @@ repos:
     hooks:
       - id: lychee
         description: Check links in Markdown files
-        args: ["--no-progress", "--config", ".github/lychee.toml"]
+        args: ["--no-progress", "--config", ".github/lychee.toml", "--hidden", "."]
         types: [markdown]
+        pass_filenames: false
 
   - repo: https://github.com/psf/black
     rev: 25.11.0

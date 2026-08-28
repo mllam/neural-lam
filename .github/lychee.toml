@@ -2,17 +2,21 @@
 
 # Also verify `#section` anchors resolve, not just that the file exists.
 include_fragments = "full"
-timeout = 20
+
+# Cache results so the whole-tree check stays cheap on repeat runs.
+cache = true
+max_cache_age = "2d"
 
 # Single-quoted TOML literal strings: regex backslashes need no escaping.
 exclude = [
-    # Reachable for humans, but reject automated requests (bot filtering,
-    # link shorteners), so they would fail the check even while working.
+    # Unverifiable over HTTP, so checking them would only add flakiness:
+    # join.slack.com answers 403 for live and dead invites alike, and
+    # kutt.to answers 200 for short links that do not exist.
     '^https://join\.slack\.com/t/ml-lam/shared_invite/',
     '^https://kutt\.to/mllam$',
-    '^https://pyg\.org/?$',
-    # CHANGELOG's auto-generated self-references: ~142 links that always
+    # Times out on automated requests, both the apex domain and www.
+    '^https://(www\.)?pyg\.org/?$',
+    # CHANGELOG's auto-generated self-references: ~147 links that always
     # resolve, and dominate the runtime if re-checked on every commit.
-    # `NNN` is the placeholder in CONTRIBUTING.md's changelog example.
-    '^https://github\.com/mllam/neural-lam/(issues|pull)/(\d+|NNN)/?$',
+    '^https://github\.com/mllam/neural-lam/(issues|pull)/\d+/?$',
 ]
