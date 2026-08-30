@@ -169,9 +169,10 @@ class ForecasterModule(pl.LightningModule):
             feature_weights_t = torch.tensor(
                 state_feature_weights, dtype=torch.float32
             )
+
             self.register_buffer(
                 "per_var_std",
-                diff_std / torch.sqrt(feature_weights_t),
+                self._compute_per_var_std(diff_std, feature_weights_t),
                 persistent=False,
             )
         else:
@@ -322,6 +323,33 @@ class ForecasterModule(pl.LightningModule):
                 stacklevel=2,
             )
         return torch.clamp(std, min=eps)
+
+    @staticmethod
+    def _compute_per_var_std(
+        diff_std: torch.Tensor, feature_weights: torch.Tensor
+    ) -> torch.Tensor:
+        """Compute `per_var_std = diff_std / sqrt(feature_weights)`.
+
+        A zero feature weight would otherwise divide by zero, producing
+        `inf`/`NaN` in the loss. An epsilon keeps the division finite, and a
+        warning names the affected indices since those variables then
+        contribute nothing to the loss.
+        """
+        zero_weight_mask = feature_weights == 0.0
+        if zero_weight_mask.any().item():
+            zero_indices = zero_weight_mask.nonzero(as_tuple=False).squeeze(-1)
+            warnings.warn(
+                f"Feature weight(s) at indices {zero_indices.tolist()} "
+                "are set to 0.0. These state variables will contribute "
+                "nothing to the loss and effectively be ignored during "
+                "training. If this is intentional, you can disregard "
+                "this warning.",
+                UserWarning,
+                stacklevel=2,
+            )
+        return diff_std / torch.sqrt(
+            feature_weights + torch.finfo(torch.float32).eps
+        )
 
     def on_after_batch_transfer(
         self,
