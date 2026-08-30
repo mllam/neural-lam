@@ -14,6 +14,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Add `--train_steps_to_log` CLI option to log training loss for individual unroll steps, and deduplicate common prediction and loss computation steps across loops [\#674](https://github.com/mllam/neural-lam/issues/674) @GiGiKoneti
 
+- Add a checkpoint migration registry (`neural_lam/migrations.py`) so
+  checkpoints from older neural-lam versions keep loading across renames
+  and restructuring of the model classes, instead of failing outright.
+  Checkpoints are now stamped with an internal schema version;
+  `ForecasterModule.on_load_checkpoint` migrates old ones automatically
+  with a warning, and a standalone `python -m neural_lam.migrate_checkpoint`
+  script can upgrade a checkpoint file in place.
+  [\#48](https://github.com/mllam/neural-lam/issues/48) @Sharkyii
+
 - Add `PropagationNet` GNN layer that incentivises directional message
   propagation from sender to receiver nodes, and expose it alongside
   `InteractionNet` through four new CLI arguments (`--g2m_gnn_type`,
