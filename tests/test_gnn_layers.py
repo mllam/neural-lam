@@ -22,12 +22,8 @@ def _make_edge_index(n_send, n_rec, n_edges):
 
 def _make_fully_connected_edge_index(n_send, n_rec):
     """Create a fully-connected edge_index (every sender to every receiver)."""
-    senders = (
-        torch.arange(n_send).unsqueeze(1).expand(n_send, n_rec).reshape(-1)
-    )
-    receivers = (
-        torch.arange(n_rec).unsqueeze(0).expand(n_send, n_rec).reshape(-1)
-    )
+    senders = torch.arange(n_send).unsqueeze(1).expand(n_send, n_rec).reshape(-1)
+    receivers = torch.arange(n_rec).unsqueeze(0).expand(n_send, n_rec).reshape(-1)
     return torch.stack([senders, receivers])
 
 
@@ -300,12 +296,8 @@ class TestPropagationNetForwardPass:
         n_send, n_rec, n_edges, d_h = 5, 4, 10, 8
         edge_index = _make_edge_index(n_send, n_rec, n_edges)
 
-        inet = InteractionNet(
-            edge_index.clone(), input_dim=d_h, update_edges=True
-        )
-        pnet = PropagationNet(
-            edge_index.clone(), input_dim=d_h, update_edges=True
-        )
+        inet = InteractionNet(edge_index.clone(), input_dim=d_h, update_edges=True)
+        pnet = PropagationNet(edge_index.clone(), input_dim=d_h, update_edges=True)
         pnet.load_state_dict(inet.state_dict())
 
         torch.manual_seed(42)
@@ -377,9 +369,7 @@ class TestEdgeUpdateBehavior:
         # Verify: edge_diff = edge_out - edge_rep should be the raw message
         # from propagate. Recompute to verify.
         node_reps = torch.cat((rec_rep, send_rep), dim=-2)
-        _, edge_diff = pnet.propagate(
-            pnet.edge_index, x=node_reps, edge_attr=edge_rep
-        )
+        _, edge_diff = pnet.propagate(pnet.edge_index, x=node_reps, edge_attr=edge_rep)
         expected_edge_out = edge_rep + edge_diff
         assert torch.allclose(edge_out, expected_edge_out, atol=1e-5)
 
@@ -707,16 +697,14 @@ class TestNumericalStability:
         current_rec = rec_rep
         current_edge = edge_rep
         for layer in layers:
-            current_rec, current_edge = layer(
-                send_rep, current_rec, current_edge
-            )
+            current_rec, current_edge = layer(send_rep, current_rec, current_edge)
 
-        assert torch.isfinite(
-            current_rec
-        ).all(), "Receiver reps contain non-finite values after deep stacking"
-        assert torch.isfinite(
-            current_edge
-        ).all(), "Edge reps contain non-finite values after deep stacking"
+        assert torch.isfinite(current_rec).all(), (
+            "Receiver reps contain non-finite values after deep stacking"
+        )
+        assert torch.isfinite(current_edge).all(), (
+            "Edge reps contain non-finite values after deep stacking"
+        )
 
     def test_high_degree_stability(self):
         """With many incoming edges per receiver, mean aggregation should
@@ -839,8 +827,8 @@ class TestDefaultBehaviorUnchanged:
         datastore, config = _get_datastore_and_config("1level")
 
         torch.manual_seed(42)
-        forecaster_default, _, init_states, forcing, boundary = (
-            _build_model_and_data(datastore, config, "graph_lam", "1level")
+        forecaster_default, _, init_states, forcing, boundary = _build_model_and_data(
+            datastore, config, "graph_lam", "1level"
         )
 
         torch.manual_seed(42)
@@ -970,8 +958,8 @@ class TestHierarchicalIntegration:
         datastore, config = _get_datastore_and_config("hierarchical")
 
         torch.manual_seed(42)
-        forecaster_default, _, init_states, forcing, boundary = (
-            _build_model_and_data(datastore, config, "hi_lam", "hierarchical")
+        forecaster_default, _, init_states, forcing, boundary = _build_model_and_data(
+            datastore, config, "hi_lam", "hierarchical"
         )
 
         torch.manual_seed(42)
@@ -1054,3 +1042,112 @@ class TestHierarchicalIntegration:
             init_states.shape[3],
         )
         assert out.shape == expected_shape
+
+
+#
+# Section K: num_rec Fix (Issue #729)
+#
+
+
+class TestNumRecFix:
+    """Regression tests for Issue #729: trailing receiver nodes with no
+    incoming edges caused silent feature corruption or RuntimeError."""
+
+    HIDDEN_DIM = 16
+
+    def test_inferred_num_rec_matches_max_receiver(self):
+        """Without num_rec, num_rec == edge_index[1].max() + 1."""
+        edge_index = torch.tensor([[0, 1], [2, 3]], dtype=torch.long)
+        gnn = InteractionNet(edge_index, self.HIDDEN_DIM)
+        assert gnn.num_rec == 4  # 3 + 1
+
+    def test_explicit_num_rec_overrides_inference(self):
+        """Explicit num_rec is used even when edges don't cover all
+        receiver nodes."""
+        edge_index = torch.tensor([[0, 1], [2, 3]], dtype=torch.long)
+        gnn = InteractionNet(edge_index, self.HIDDEN_DIM, num_rec=10)
+        assert gnn.num_rec == 10
+
+    def test_trailing_receivers_crash_without_num_rec(self):
+        """Reproduces Issue #729: forward crashes when trailing receivers
+        have no incoming edges and num_rec is not passed."""
+        num_send = 100
+        num_rec = 50
+
+        # Receiver node 49 has no incoming edge; max receiver in
+        # edge_index is 48 → inferred num_rec = 49, not 50.
+        edge_index = torch.tensor([[0, 1, 2], [10, 20, 48]], dtype=torch.long)
+        gnn = InteractionNet(edge_index, self.HIDDEN_DIM)
+
+        rec_rep = torch.randn((num_rec, self.HIDDEN_DIM))
+        send_rep = torch.randn((num_send, self.HIDDEN_DIM))
+        edge_rep = torch.randn((3, self.HIDDEN_DIM))
+
+        with torch.no_grad():
+            try:
+                gnn(send_rep, rec_rep, edge_rep)
+                # If it doesn't crash, the bug is masked; still a problem
+                # because num_rec is wrong and features are silently corrupt.
+                assert gnn.num_rec < num_rec
+            except RuntimeError:
+                pass  # Expected: dimension mismatch
+
+    def test_trailing_receivers_pass_with_num_rec(self):
+        """Same scenario as above but with explicit num_rec — works."""
+        num_send = 100
+        num_rec = 50
+
+        edge_index = torch.tensor([[0, 1, 2], [10, 20, 48]], dtype=torch.long)
+        gnn = InteractionNet(
+            edge_index,
+            self.HIDDEN_DIM,
+            update_edges=False,
+            num_rec=num_rec,
+        )
+
+        rec_rep = torch.randn((num_rec, self.HIDDEN_DIM))
+        send_rep = torch.randn((num_send, self.HIDDEN_DIM))
+        edge_rep = torch.randn((3, self.HIDDEN_DIM))
+
+        with torch.no_grad():
+            result = gnn(send_rep, rec_rep, edge_rep)
+        assert result.shape == (num_rec, self.HIDDEN_DIM)
+
+    def test_empty_edge_index_without_num_rec(self):
+        """Empty edge_index with no num_rec → num_rec = 0."""
+        edge_index = torch.zeros((2, 0), dtype=torch.long)
+        gnn = InteractionNet(edge_index, self.HIDDEN_DIM)
+        assert gnn.num_rec == 0
+
+    def test_empty_edge_index_with_explicit_num_rec(self):
+        """Empty edge_index with explicit num_rec is respected."""
+        edge_index = torch.zeros((2, 0), dtype=torch.long)
+        gnn = InteractionNet(edge_index, self.HIDDEN_DIM, num_rec=5)
+        assert gnn.num_rec == 5
+
+    def test_propagation_net_forwards_num_rec(self):
+        """PropagationNet correctly forwards num_rec to InteractionNet."""
+        edge_index = torch.tensor([[0, 1], [2, 3]], dtype=torch.long)
+        gnn = PropagationNet(edge_index, self.HIDDEN_DIM, num_rec=10)
+        assert gnn.num_rec == 10
+
+    def test_propagation_net_trailing_receivers_pass(self):
+        """PropagationNet with explicit num_rec handles trailing receivers."""
+        num_send = 50
+        num_rec = 30
+
+        edge_index = torch.tensor([[0, 1], [5, 10]], dtype=torch.long)
+        gnn = PropagationNet(
+            edge_index,
+            self.HIDDEN_DIM,
+            update_edges=False,
+            num_rec=num_rec,
+        )
+
+        rec_rep = torch.randn((num_rec, self.HIDDEN_DIM))
+        send_rep = torch.randn((num_send, self.HIDDEN_DIM))
+        edge_rep = torch.randn((2, self.HIDDEN_DIM))
+
+        with torch.no_grad():
+            result = gnn(send_rep, rec_rep, edge_rep)
+        assert result.shape == (num_rec, self.HIDDEN_DIM)
