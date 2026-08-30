@@ -30,6 +30,7 @@ class InteractionNet(pyg.nn.MessagePassing):
         edge_chunk_sizes: list[int] | None = None,
         aggr_chunk_sizes: list[int] | None = None,
         aggr: str = "sum",
+        num_rec: int | None = None,
     ) -> None:
         """
         Create a new InteractionNet.
@@ -56,6 +57,11 @@ class InteractionNet(pyg.nn.MessagePassing):
             separate MLPs. ``None`` uses a single shared MLP.
         aggr : {"sum", "mean"}, optional
             Message aggregation method. Default is ``"sum"``.
+        num_rec : int or None, optional
+            Explicit number of receiver nodes. When ``None`` (the default),
+            inferred as ``edge_index[1].max() + 1``.  Pass this explicitly
+            when trailing receiver nodes may have no incoming edges, to
+            avoid silent feature corruption or dimension-mismatch crashes.
 
         Raises
         ------
@@ -70,7 +76,12 @@ class InteractionNet(pyg.nn.MessagePassing):
             # Default to input dim if not explicitly given
             hidden_dim = input_dim
 
-        self.num_rec = edge_index[1].max() + 1
+        if num_rec is not None:
+            self.num_rec = int(num_rec)
+        elif edge_index.numel() > 0:
+            self.num_rec = int(edge_index[1].max().item()) + 1
+        else:
+            self.num_rec = 0
         # edge_index is expected to be zero-based and local:
         #   edge_index[0]: sender indices in [0 .. num_snd-1]
         #   edge_index[1]: receiver indices in [0 .. num_rec-1]
@@ -79,9 +90,7 @@ class InteractionNet(pyg.nn.MessagePassing):
         #   senders   → [num_rec .. num_rec+num_snd-1]
         # Hence, sender indices from the input edge_index are offset
         # by num_rec to obtain the indices used in this layer.
-        edge_index = torch.stack(
-            (edge_index[0] + self.num_rec, edge_index[1]), dim=0
-        )
+        edge_index = torch.stack((edge_index[0] + self.num_rec, edge_index[1]), dim=0)
 
         self.register_buffer("edge_index", edge_index, persistent=False)
 
@@ -208,6 +217,7 @@ class PropagationNet(InteractionNet):
         edge_chunk_sizes: list[int] | None = None,
         aggr_chunk_sizes: list[int] | None = None,
         aggr: str = "sum",
+        num_rec: int | None = None,
     ) -> None:
         """Initialise the :class:`PropagationNet` layer.
 
@@ -226,6 +236,7 @@ class PropagationNet(InteractionNet):
             edge_chunk_sizes=edge_chunk_sizes,
             aggr_chunk_sizes=aggr_chunk_sizes,
             aggr="mean",
+            num_rec=num_rec,
         )
 
     def node_residual_target(
@@ -265,8 +276,7 @@ def get_gnn_class(gnn_type: str) -> type[pyg.nn.MessagePassing]:
     """
     if gnn_type not in GNN_TYPES:
         raise ValueError(
-            f"Unknown GNN type '{gnn_type}'. "
-            f"Available types: {list(GNN_TYPES.keys())}"
+            f"Unknown GNN type '{gnn_type}'. Available types: {list(GNN_TYPES.keys())}"
         )
     return GNN_TYPES[gnn_type]
 
@@ -295,9 +305,9 @@ class SplitMLPs(nn.Module):
             If the number of ``mlps`` and ``chunk_sizes`` differ.
         """
         super().__init__()
-        assert len(mlps) == len(
-            chunk_sizes
-        ), "Number of MLPs must match the number of chunks"
+        assert len(mlps) == len(chunk_sizes), (
+            "Number of MLPs must match the number of chunks"
+        )
 
         self.mlps = nn.ModuleList(mlps)
         self.chunk_sizes = chunk_sizes
