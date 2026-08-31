@@ -90,7 +90,9 @@ class InteractionNet(pyg.nn.MessagePassing):
         #   senders   → [num_rec .. num_rec+num_snd-1]
         # Hence, sender indices from the input edge_index are offset
         # by num_rec to obtain the indices used in this layer.
-        edge_index = torch.stack((edge_index[0] + self.num_rec, edge_index[1]), dim=0)
+        edge_index = torch.stack(
+            (edge_index[0] + self.num_rec, edge_index[1]), dim=0
+        )
 
         self.register_buffer("edge_index", edge_index, persistent=False)
 
@@ -276,7 +278,8 @@ def get_gnn_class(gnn_type: str) -> type[pyg.nn.MessagePassing]:
     """
     if gnn_type not in GNN_TYPES:
         raise ValueError(
-            f"Unknown GNN type '{gnn_type}'. Available types: {list(GNN_TYPES.keys())}"
+            f"Unknown GNN type '{gnn_type}'. "
+            f"Available types: {list(GNN_TYPES.keys())}"
         )
     return GNN_TYPES[gnn_type]
 
@@ -305,9 +308,9 @@ class SplitMLPs(nn.Module):
             If the number of ``mlps`` and ``chunk_sizes`` differ.
         """
         super().__init__()
-        assert len(mlps) == len(chunk_sizes), (
-            "Number of MLPs must match the number of chunks"
-        )
+        assert len(mlps) == len(
+            chunk_sizes
+        ), "Number of MLPs must match the number of chunks"
 
         self.mlps = nn.ModuleList(mlps)
         self.chunk_sizes = chunk_sizes

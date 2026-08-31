@@ -22,8 +22,12 @@ def _make_edge_index(n_send, n_rec, n_edges):
 
 def _make_fully_connected_edge_index(n_send, n_rec):
     """Create a fully-connected edge_index (every sender to every receiver)."""
-    senders = torch.arange(n_send).unsqueeze(1).expand(n_send, n_rec).reshape(-1)
-    receivers = torch.arange(n_rec).unsqueeze(0).expand(n_send, n_rec).reshape(-1)
+    senders = (
+        torch.arange(n_send).unsqueeze(1).expand(n_send, n_rec).reshape(-1)
+    )
+    receivers = (
+        torch.arange(n_rec).unsqueeze(0).expand(n_send, n_rec).reshape(-1)
+    )
     return torch.stack([senders, receivers])
 
 
@@ -296,8 +300,12 @@ class TestPropagationNetForwardPass:
         n_send, n_rec, n_edges, d_h = 5, 4, 10, 8
         edge_index = _make_edge_index(n_send, n_rec, n_edges)
 
-        inet = InteractionNet(edge_index.clone(), input_dim=d_h, update_edges=True)
-        pnet = PropagationNet(edge_index.clone(), input_dim=d_h, update_edges=True)
+        inet = InteractionNet(
+            edge_index.clone(), input_dim=d_h, update_edges=True
+        )
+        pnet = PropagationNet(
+            edge_index.clone(), input_dim=d_h, update_edges=True
+        )
         pnet.load_state_dict(inet.state_dict())
 
         torch.manual_seed(42)
@@ -369,7 +377,9 @@ class TestEdgeUpdateBehavior:
         # Verify: edge_diff = edge_out - edge_rep should be the raw message
         # from propagate. Recompute to verify.
         node_reps = torch.cat((rec_rep, send_rep), dim=-2)
-        _, edge_diff = pnet.propagate(pnet.edge_index, x=node_reps, edge_attr=edge_rep)
+        _, edge_diff = pnet.propagate(
+            pnet.edge_index, x=node_reps, edge_attr=edge_rep
+        )
         expected_edge_out = edge_rep + edge_diff
         assert torch.allclose(edge_out, expected_edge_out, atol=1e-5)
 
@@ -697,14 +707,16 @@ class TestNumericalStability:
         current_rec = rec_rep
         current_edge = edge_rep
         for layer in layers:
-            current_rec, current_edge = layer(send_rep, current_rec, current_edge)
+            current_rec, current_edge = layer(
+                send_rep, current_rec, current_edge
+            )
 
-        assert torch.isfinite(current_rec).all(), (
-            "Receiver reps contain non-finite values after deep stacking"
-        )
-        assert torch.isfinite(current_edge).all(), (
-            "Edge reps contain non-finite values after deep stacking"
-        )
+        assert torch.isfinite(
+            current_rec
+        ).all(), "Receiver reps contain non-finite values after deep stacking"
+        assert torch.isfinite(
+            current_edge
+        ).all(), "Edge reps contain non-finite values after deep stacking"
 
     def test_high_degree_stability(self):
         """With many incoming edges per receiver, mean aggregation should
@@ -827,8 +839,8 @@ class TestDefaultBehaviorUnchanged:
         datastore, config = _get_datastore_and_config("1level")
 
         torch.manual_seed(42)
-        forecaster_default, _, init_states, forcing, boundary = _build_model_and_data(
-            datastore, config, "graph_lam", "1level"
+        forecaster_default, _, init_states, forcing, boundary = (
+            _build_model_and_data(datastore, config, "graph_lam", "1level")
         )
 
         torch.manual_seed(42)
@@ -958,8 +970,8 @@ class TestHierarchicalIntegration:
         datastore, config = _get_datastore_and_config("hierarchical")
 
         torch.manual_seed(42)
-        forecaster_default, _, init_states, forcing, boundary = _build_model_and_data(
-            datastore, config, "hi_lam", "hierarchical"
+        forecaster_default, _, init_states, forcing, boundary = (
+            _build_model_and_data(datastore, config, "hi_lam", "hierarchical")
         )
 
         torch.manual_seed(42)
