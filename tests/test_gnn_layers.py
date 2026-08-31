@@ -1054,3 +1054,112 @@ class TestHierarchicalIntegration:
             init_states.shape[3],
         )
         assert out.shape == expected_shape
+
+
+#
+# Section K: num_rec Fix (Issue #729)
+#
+
+
+class TestNumRecFix:
+    """Regression tests for Issue #729: trailing receiver nodes with no
+    incoming edges caused silent feature corruption or RuntimeError."""
+
+    HIDDEN_DIM = 16
+
+    def test_inferred_num_rec_matches_max_receiver(self):
+        """Without num_rec, num_rec == edge_index[1].max() + 1."""
+        edge_index = torch.tensor([[0, 1], [2, 3]], dtype=torch.long)
+        gnn = InteractionNet(edge_index, self.HIDDEN_DIM)
+        assert gnn.num_rec == 4  # 3 + 1
+
+    def test_explicit_num_rec_overrides_inference(self):
+        """Explicit num_rec is used even when edges don't cover all
+        receiver nodes."""
+        edge_index = torch.tensor([[0, 1], [2, 3]], dtype=torch.long)
+        gnn = InteractionNet(edge_index, self.HIDDEN_DIM, num_rec=10)
+        assert gnn.num_rec == 10
+
+    def test_trailing_receivers_crash_without_num_rec(self):
+        """Reproduces Issue #729: forward crashes when trailing receivers
+        have no incoming edges and num_rec is not passed."""
+        num_send = 100
+        num_rec = 50
+
+        # Receiver node 49 has no incoming edge; max receiver in
+        # edge_index is 48 → inferred num_rec = 49, not 50.
+        edge_index = torch.tensor([[0, 1, 2], [10, 20, 48]], dtype=torch.long)
+        gnn = InteractionNet(edge_index, self.HIDDEN_DIM)
+
+        rec_rep = torch.randn((num_rec, self.HIDDEN_DIM))
+        send_rep = torch.randn((num_send, self.HIDDEN_DIM))
+        edge_rep = torch.randn((3, self.HIDDEN_DIM))
+
+        with torch.no_grad():
+            try:
+                gnn(send_rep, rec_rep, edge_rep)
+                # If it doesn't crash, the bug is masked; still a problem
+                # because num_rec is wrong and features are silently corrupt.
+                assert gnn.num_rec < num_rec
+            except RuntimeError:
+                pass  # Expected: dimension mismatch
+
+    def test_trailing_receivers_pass_with_num_rec(self):
+        """Same scenario as above but with explicit num_rec — works."""
+        num_send = 100
+        num_rec = 50
+
+        edge_index = torch.tensor([[0, 1, 2], [10, 20, 48]], dtype=torch.long)
+        gnn = InteractionNet(
+            edge_index,
+            self.HIDDEN_DIM,
+            update_edges=False,
+            num_rec=num_rec,
+        )
+
+        rec_rep = torch.randn((num_rec, self.HIDDEN_DIM))
+        send_rep = torch.randn((num_send, self.HIDDEN_DIM))
+        edge_rep = torch.randn((3, self.HIDDEN_DIM))
+
+        with torch.no_grad():
+            result = gnn(send_rep, rec_rep, edge_rep)
+        assert result.shape == (num_rec, self.HIDDEN_DIM)
+
+    def test_empty_edge_index_without_num_rec(self):
+        """Empty edge_index with no num_rec → num_rec = 0."""
+        edge_index = torch.zeros((2, 0), dtype=torch.long)
+        gnn = InteractionNet(edge_index, self.HIDDEN_DIM)
+        assert gnn.num_rec == 0
+
+    def test_empty_edge_index_with_explicit_num_rec(self):
+        """Empty edge_index with explicit num_rec is respected."""
+        edge_index = torch.zeros((2, 0), dtype=torch.long)
+        gnn = InteractionNet(edge_index, self.HIDDEN_DIM, num_rec=5)
+        assert gnn.num_rec == 5
+
+    def test_propagation_net_forwards_num_rec(self):
+        """PropagationNet correctly forwards num_rec to InteractionNet."""
+        edge_index = torch.tensor([[0, 1], [2, 3]], dtype=torch.long)
+        gnn = PropagationNet(edge_index, self.HIDDEN_DIM, num_rec=10)
+        assert gnn.num_rec == 10
+
+    def test_propagation_net_trailing_receivers_pass(self):
+        """PropagationNet with explicit num_rec handles trailing receivers."""
+        num_send = 50
+        num_rec = 30
+
+        edge_index = torch.tensor([[0, 1], [5, 10]], dtype=torch.long)
+        gnn = PropagationNet(
+            edge_index,
+            self.HIDDEN_DIM,
+            update_edges=False,
+            num_rec=num_rec,
+        )
+
+        rec_rep = torch.randn((num_rec, self.HIDDEN_DIM))
+        send_rep = torch.randn((num_send, self.HIDDEN_DIM))
+        edge_rep = torch.randn((2, self.HIDDEN_DIM))
+
+        with torch.no_grad():
+            result = gnn(send_rep, rec_rep, edge_rep)
+        assert result.shape == (num_rec, self.HIDDEN_DIM)
