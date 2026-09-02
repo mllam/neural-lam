@@ -95,7 +95,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Maintenance
 
-- Add `hypothesis` as a dev dependency and cover the output clamping in `tests/test_clamping.py` with property-based tests, asserting that the clamped state stays within its configured bounds and that unbounded features keep the plain residual update, for any previous state and any delta. The existing example-based test is unchanged; its setup moved to a module-scoped fixture so the model is built once rather than per generated example. [\#602](https://github.com/mllam/neural-lam/issues/602) @KumarShivam1908
+- Add `hypothesis` as a dev dependency and cover the output clamping in `tests/test_clamping.py` with property-based tests, asserting that the clamped state stays within its configured bounds and that unbounded features keep the plain residual update, for any previous state and any delta. The existing example-based test is unchanged; its setup moved to a module-scoped fixture so the model is built once rather than per generated example. [\#741](https://github.com/mllam/neural-lam/pull/741) @KumarShivam1908
 
 - Rename the `d_mesh_static` mesh-node static-feature dimension to `num_mesh_static_vars` in comments and docstrings, matching the canonical `num_*` naming. [\#695](https://github.com/mllam/neural-lam/pull/695) @uttam12331
 
