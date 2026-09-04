@@ -50,6 +50,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Derive the `plot_error_heatmap` lead-time axis label from a full unit-name
+  lookup instead of `time_step_unit[0]`, which rendered `minutes`,
+  `milliseconds` and `microseconds` all as "m" and `unknown` as "u"; the
+  label now reads e.g. "min" / "ms" and falls back to "steps" when no unit
+  divides the step length evenly [\#PR](https://github.com/mllam/neural-lam/pull/PR) @nikhil3495
+
 - Set `workers=True` in `seed_everything` to properly seed DataLoader workers, ensuring uncorrelated random states across processes when `num_workers > 0` [\#716](https://github.com/mllam/neural-lam/pull/716) @GiGiKoneti
 
 - Fix `graph_lam` training and checkpoint reloads crashing on hierarchical-only GNN options, by routing both call sites through a `build_predictor` helper that only passes `mesh_up_gnn_type` / `mesh_down_gnn_type` to `BaseHiGraphModel` subclasses. [\#688](https://github.com/mllam/neural-lam/pull/688) @gitcommit90

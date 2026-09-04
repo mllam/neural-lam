@@ -36,6 +36,22 @@ _HEATMAP_CMAP = matplotlib.colors.LinearSegmentedColormap.from_list(
     ["#ffffff", "#fee5d9", "#fcae91", "#fb6a4a", "#cb181d"],
 )
 
+# Short forms of the unit names returned by ``utils.get_integer_time`` for use
+# in axis labels. ``"minutes"``, ``"milliseconds"`` and ``"microseconds"`` all
+# start with "m", so the first character alone is ambiguous. ``"unknown"`` (no
+# unit divides the step length evenly) has no abbreviation; the tick labels are
+# then plain step indices, so "steps" is the honest label.
+_LEAD_TIME_UNIT_ABBREVIATIONS = {
+    "weeks": "w",
+    "days": "d",
+    "hours": "h",
+    "minutes": "min",
+    "seconds": "s",
+    "milliseconds": "ms",
+    "microseconds": "µs",
+    "unknown": "steps",
+}
+
 
 def _tex_safe(s: str) -> str:
     """
@@ -572,9 +588,10 @@ def plot_error_heatmap(
         rotation=layout["x_tick_rotation"],
         ha="right" if layout["x_tick_rotation"] > 0 else "center",
     )
-    ax.set_xlabel(
-        f"Lead time ({time_step_unit[0]})", size=layout["tick_label_size"]
+    unit_abbr = _LEAD_TIME_UNIT_ABBREVIATIONS.get(
+        time_step_unit, time_step_unit
     )
+    ax.set_xlabel(f"Lead time ({unit_abbr})", size=layout["tick_label_size"])
 
     ax.set_yticks(np.arange(d_f))
     ax.set_yticklabels(
