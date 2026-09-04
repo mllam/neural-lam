@@ -19,6 +19,7 @@ from neural_lam import config as nlconfig
 from neural_lam import vis
 from neural_lam.create_graph import create_graph_from_datastore
 from neural_lam.models import ARForecaster, ForecasterModule, GraphLAM
+from neural_lam.utils import get_integer_time
 from neural_lam.weather_dataset import WeatherDataset
 from tests.conftest import init_datastore_example
 from tests.dummy_datastore import DummyDatastore
@@ -334,6 +335,51 @@ def test_plot_error_heatmap_adapts_layout_for_grid_size():
     plt.close(small_fig)
     plt.close(large_fig)
     plt.close(dense_fig)
+
+
+def test_lead_time_unit_abbreviations_cover_get_integer_time_units():
+    """Every unit name ``get_integer_time`` can return has an abbreviation, so
+    the lead-time axis label never falls through to the raw word."""
+    get_integer_time_units = {
+        "weeks",
+        "days",
+        "hours",
+        "minutes",
+        "seconds",
+        "milliseconds",
+        "microseconds",
+        "unknown",
+    }
+    assert get_integer_time_units <= set(vis._LEAD_TIME_UNIT_ABBREVIATIONS)
+
+
+@pytest.mark.parametrize(
+    "step_length, expected_unit",
+    [
+        (timedelta(hours=3), "h"),
+        (timedelta(days=1), "d"),
+        (timedelta(minutes=15), "min"),
+        (timedelta(seconds=90), "s"),
+        (timedelta(days=0.001), "steps"),
+    ],
+)
+def test_plot_error_heatmap_lead_time_axis_label(step_length, expected_unit):
+    """Lead-time axis label uses the full unit abbreviation, not just its
+    first character (``minutes`` used to render as "m"), and reads "steps"
+    when no unit divides the step length evenly (used to render as "u")."""
+    datastore = HeatmapDatastore(n_vars=3, step_length=step_length)
+
+    fig = vis.plot_error_heatmap(torch.ones((4, 3)), datastore=datastore)
+    ax = fig.axes[0]
+
+    assert ax.get_xlabel() == f"Lead time ({expected_unit})"
+
+    time_step_int, _ = get_integer_time(step_length)
+    expected_x_ticklabels = [str(time_step_int * step) for step in range(1, 5)]
+    actual_x_ticklabels = [tick.get_text() for tick in ax.get_xticklabels()]
+    assert actual_x_ticklabels == expected_x_ticklabels
+
+    plt.close(fig)
 
 
 def test_plot_spatial_error() -> None:
