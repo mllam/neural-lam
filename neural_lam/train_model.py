@@ -423,20 +423,22 @@ def main(input_args: list[str] | None = None) -> None:
         ("val", args.ar_steps_eval),
     ]:
         for step in getattr(args, f"{phase}_steps_to_log"):
-            if step > max_steps:
+            if not 1 <= step <= max_steps:
                 raise ValueError(
-                    f"Can not log {phase} step {step} when only "
-                    f"unrolling {max_steps} steps during {phase} phase. "
-                    f"Adjust --{phase}_steps_to_log."
+                    f"Can not log {phase} step {step}: step must be "
+                    f"between 1 and {max_steps} when only unrolling "
+                    f"{max_steps} steps during {phase} phase. Adjust "
+                    f"--{phase}_steps_to_log."
                 )
     # Check --var_leads_metric_watch
     for var_i, leads in args.var_leads_metrics_watch.items():
         for step in leads:
-            if step > args.ar_steps_eval:
+            if not 1 <= step <= args.ar_steps_eval:
                 raise ValueError(
                     f"Can not log validation step {step} for variable "
-                    f"{var_i} when validation is only unrolled "
-                    f"{args.ar_steps_eval} steps. Adjust "
+                    f"{var_i}: step must be between 1 and "
+                    f"{args.ar_steps_eval} when validation is only "
+                    f"unrolled {args.ar_steps_eval} steps. Adjust "
                     "--var_leads_metric_watch."
                 )
 
