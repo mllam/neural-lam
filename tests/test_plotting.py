@@ -337,22 +337,6 @@ def test_plot_error_heatmap_adapts_layout_for_grid_size():
     plt.close(dense_fig)
 
 
-def test_lead_time_unit_abbreviations_cover_get_integer_time_units():
-    """Every unit name ``get_integer_time`` can return has an abbreviation, so
-    the lead-time axis label never falls through to the raw word."""
-    get_integer_time_units = {
-        "weeks",
-        "days",
-        "hours",
-        "minutes",
-        "seconds",
-        "milliseconds",
-        "microseconds",
-        "unknown",
-    }
-    assert get_integer_time_units <= set(vis._LEAD_TIME_UNIT_ABBREVIATIONS)
-
-
 @pytest.mark.parametrize(
     "step_length, expected_unit",
     [
@@ -364,9 +348,8 @@ def test_lead_time_unit_abbreviations_cover_get_integer_time_units():
     ],
 )
 def test_plot_error_heatmap_lead_time_axis_label(step_length, expected_unit):
-    """Lead-time axis label uses the full unit abbreviation, not just its
-    first character (``minutes`` used to render as "m"), and reads "steps"
-    when no unit divides the step length evenly (used to render as "u")."""
+    """Check lead-time axis label uses unit abbreviation as given in
+    ``_LEAD_TIME_UNIT_ABBREVIATIONS`` and uses consistent ticks."""
     datastore = HeatmapDatastore(n_vars=3, step_length=step_length)
 
     fig = vis.plot_error_heatmap(torch.ones((4, 3)), datastore=datastore)

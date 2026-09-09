@@ -36,11 +36,6 @@ _HEATMAP_CMAP = matplotlib.colors.LinearSegmentedColormap.from_list(
     ["#ffffff", "#fee5d9", "#fcae91", "#fb6a4a", "#cb181d"],
 )
 
-# Short forms of the unit names returned by ``utils.get_integer_time`` for use
-# in axis labels. ``"minutes"``, ``"milliseconds"`` and ``"microseconds"`` all
-# start with "m", so the first character alone is ambiguous. ``"unknown"`` (no
-# unit divides the step length evenly) has no abbreviation; the tick labels are
-# then plain step indices, so "steps" is the honest label.
 _LEAD_TIME_UNIT_ABBREVIATIONS = {
     "weeks": "w",
     "days": "d",
