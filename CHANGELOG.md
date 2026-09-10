@@ -50,6 +50,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Build the output-clamping index buffers with `dtype=torch.long`. An empty list gave a float tensor, so any config leaving a clamping category unused raised `IndexError` when the buffer was used to index. [\#741](https://github.com/mllam/neural-lam/pull/741) @KumarShivam1908
+
 - Set `workers=True` in `seed_everything` to properly seed DataLoader workers, ensuring uncorrelated random states across processes when `num_workers > 0` [\#716](https://github.com/mllam/neural-lam/pull/716) @GiGiKoneti
 
 - Fix `graph_lam` training and checkpoint reloads crashing on hierarchical-only GNN options, by routing both call sites through a `build_predictor` helper that only passes `mesh_up_gnn_type` / `mesh_down_gnn_type` to `BaseHiGraphModel` subclasses. [\#688](https://github.com/mllam/neural-lam/pull/688) @gitcommit90
@@ -95,7 +97,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Maintenance
 
-- Add `hypothesis` as a dev dependency and cover the output clamping in `tests/test_clamping.py` with property-based tests, asserting that the clamped state stays within its configured bounds and that unbounded features keep the plain residual update, for any previous state and any delta. The existing example-based test is unchanged; its setup moved to a module-scoped fixture so the model is built once rather than per generated example. [\#741](https://github.com/mllam/neural-lam/pull/741) @KumarShivam1908
+- Add `hypothesis` as a dev dependency and cover the output clamping in `tests/test_clamping.py` with property-based tests, asserting that the clamped state stays within its configured bounds and that unbounded features keep the plain residual update, for any previous state and any delta. The hand-built out-of-bounds cases the property test subsumes are removed, and the setup moved to a module-scoped fixture so the model is built once rather than per generated example. [\#741](https://github.com/mllam/neural-lam/pull/741) @KumarShivam1908
 
 - Rename the `d_mesh_static` mesh-node static-feature dimension to `num_mesh_static_vars` in comments and docstrings, matching the canonical `num_*` naming. [\#695](https://github.com/mllam/neural-lam/pull/695) @uttam12331
 

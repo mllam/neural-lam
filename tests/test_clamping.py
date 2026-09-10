@@ -18,18 +18,13 @@ from tests.conftest import init_datastore_example
 
 
 @pytest.fixture(scope="module")
-def clamping_setup():
-    """Build a GraphLAM with clamping limits once for the whole module.
-
-    Constructing the datastore, graph and model takes about a second, and
-    `@given` re-runs a test body once per generated example, so this is
-    built at module scope rather than inside the tests.
+def datastore_and_graph():
+    """Build the example datastore and its graph once for the whole module.
 
     Returns
     -------
     tuple
-        The model, the config it was built from, and the state feature
-        names.
+        The datastore and the name of the graph built on it.
     """
     datastore = init_datastore_example(MDPDatastore.SHORT_NAME)
 
@@ -43,6 +38,25 @@ def clamping_setup():
             output_root_path=str(graph_dir_path),
             n_max_levels=1,
         )
+
+    return datastore, graph_name
+
+
+@pytest.fixture(scope="module")
+def clamping_setup(datastore_and_graph):
+    """Build a GraphLAM with clamping limits once for the whole module.
+
+    Constructing the datastore, graph and model takes about a second, and
+    `@given` re-runs a test body once per generated example, so this is
+    built at module scope rather than inside the tests.
+
+    Returns
+    -------
+    tuple
+        The model, the config it was built from, and the state feature
+        names.
+    """
+    datastore, graph_name = datastore_and_graph
 
     class ModelArgs:
         output_std = False
@@ -150,15 +164,9 @@ def test_clamping(clamping_setup):
 
     # Check that clamped states are within bounds
     # they should not be at the bounds but allow it due to numerical precision
-    assert (
-        (
-            model.sigmoid_lower_lims
-            <= prediction[:, :, model.clamp_lower_upper_idx]
-            <= model.sigmoid_upper_lims
-        )
-        .all()
-        .item()
-    )
+    sigmoid_prediction = prediction[:, :, model.clamp_lower_upper_idx]
+    assert (sigmoid_prediction >= model.sigmoid_lower_lims).all().item()
+    assert (sigmoid_prediction <= model.sigmoid_upper_lims).all().item()
     assert (
         (model.softplus_lower_lims <= prediction[:, :, model.clamp_lower_idx])
         .all()
@@ -198,62 +206,6 @@ def test_clamping(clamping_setup):
         .item()
     )
 
-    # Check that a prediction from a state starting outside the bounds is also
-    # pushed within bounds. 3 delta should be enough to give an initial state
-    # out of bounds so 5 is well outside
-    invalid_state = original_state + 5 * delta
-    assert (
-        not (
-            model.sigmoid_lower_lims
-            <= invalid_state[:, :, model.clamp_lower_upper_idx]
-            <= model.sigmoid_upper_lims
-        )
-        .any()
-        .item()
-    )
-    assert (
-        not (
-            model.softplus_lower_lims
-            <= invalid_state[:, :, model.clamp_lower_idx]
-        )
-        .any()
-        .item()
-    )
-    assert (
-        not (
-            invalid_state[:, :, model.clamp_upper_idx]
-            <= model.softplus_upper_lims
-        )
-        .any()
-        .item()
-    )
-    invalid_prediction = model.get_clamped_new_state(zero_delta, invalid_state)
-    assert (
-        (
-            model.sigmoid_lower_lims
-            <= invalid_prediction[:, :, model.clamp_lower_upper_idx]
-            <= model.sigmoid_upper_lims
-        )
-        .all()
-        .item()
-    )
-    assert (
-        (
-            model.softplus_lower_lims
-            <= invalid_prediction[:, :, model.clamp_lower_idx]
-        )
-        .all()
-        .item()
-    )
-    assert (
-        (
-            invalid_prediction[:, :, model.clamp_upper_idx]
-            <= model.softplus_upper_lims
-        )
-        .all()
-        .item()
-    )
-
     # Above tests only check the upper sigmoid limit.
     # Repeat to check lower sigmoid limit
 
@@ -264,17 +216,12 @@ def test_clamping(clamping_setup):
         prediction = model.get_clamped_new_state(-delta, prediction)
 
     # Check that clamped states are within bounds
-    assert (
-        (
-            model.sigmoid_lower_lims
-            <= prediction[:, :, model.clamp_lower_upper_idx]
-            <= model.sigmoid_upper_lims
-        )
-        .all()
-        .item()
-    )
+    sigmoid_prediction = prediction[:, :, model.clamp_lower_upper_idx]
+    assert (sigmoid_prediction >= model.sigmoid_lower_lims).all().item()
+    assert (sigmoid_prediction <= model.sigmoid_upper_lims).all().item()
 
     # Check that prediction is within bounds in original non-normalized space
+    unscaled_prediction = prediction * model.state_std + model.state_mean
     assert (
         (
             torch.tensor(list(lower_lims.values()))
@@ -292,29 +239,44 @@ def test_clamping(clamping_setup):
         .item()
     )
 
-    # Check that a prediction from a state starting outside the bounds is also
-    # pushed within bounds. 3 delta should be enough to give an initial state
-    # out of bounds so 5 is well outside
-    invalid_state = original_state - 5 * delta
-    assert (
-        not (
-            model.sigmoid_lower_lims
-            <= invalid_state[:, :, model.clamp_lower_upper_idx]
-            <= model.sigmoid_upper_lims
-        )
-        .any()
-        .item()
+
+def test_empty_clamp_category_indices_are_long(datastore_and_graph):
+    """Clamp index buffers stay integer tensors when a category is empty."""
+    datastore, graph_name = datastore_and_graph
+
+    # Only lower limits, so both the sigmoid and the upper softplus
+    # categories come out empty.
+    model = GraphLAM(
+        datastore=datastore,
+        graph_name=graph_name,
+        hidden_dim=4,
+        hidden_layers=1,
+        processor_layers=2,
+        mesh_aggr="sum",
+        num_past_forcing_steps=1,
+        num_future_forcing_steps=1,
+        output_std=False,
+        output_clamping_lower={"t2m": 0.0},
+        output_clamping_upper={},
     )
-    invalid_prediction = model.get_clamped_new_state(zero_delta, invalid_state)
-    assert (
-        (
-            model.sigmoid_lower_lims
-            <= invalid_prediction[:, :, model.clamp_lower_upper_idx]
-            <= model.sigmoid_upper_lims
-        )
-        .all()
-        .item()
-    )
+
+    assert model.clamp_lower_upper_idx.numel() == 0
+    assert model.clamp_upper_idx.numel() == 0
+
+    for idx in (
+        model.clamp_lower_upper_idx,
+        model.clamp_lower_idx,
+        model.clamp_upper_idx,
+    ):
+        assert idx.dtype == torch.long
+
+    # Indexing with an empty buffer must work rather than raise IndexError.
+    features = datastore.get_vars_names(category="state")
+    state = torch.zeros(1, 1, len(features))
+    assert state[:, :, model.clamp_upper_idx].numel() == 0
+
+    new_state = model.get_clamped_new_state(torch.ones_like(state), state)
+    assert torch.isfinite(new_state).all()
 
 
 # Values are drawn in standardized units, where the model operates. 1e3 is
@@ -328,13 +290,9 @@ _ELEMENTS = st.floats(
     allow_infinity=False,
 )
 
-# `derandomize` fixes the drawn examples, so a given commit always runs the
-# same inputs. That trades hypothesis' open-ended search for determinism,
-# on the reasoning that a property test which can fail on an unrelated PR
-# tends to get disabled rather than fixed.
 # `deadline=None` because per-example timing of torch ops on shared CI
 # runners is unreliable, and the 200 ms default would only add flakiness.
-_SETTINGS = settings(deadline=None, derandomize=True)
+_SETTINGS = settings(deadline=None)
 
 
 def _draw_state_and_delta(data, num_features):
