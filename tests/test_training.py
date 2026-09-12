@@ -157,6 +157,7 @@ def test_training(datastore_name):
 
 
 @pytest.mark.slow
+@pytest.mark.requires_real_data
 def test_training_output_std():
     datastore = init_datastore_example("mdp")  # Test only with mdp datastore
     run_simple_training(datastore, set_output_std=True)

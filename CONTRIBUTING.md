@@ -77,6 +77,13 @@ pytest -vv -s --doctest-modules
 > **Note:** The first test run downloads ~50 MB of example data via
 > [pooch](https://www.fatiando.org/pooch/).
 
+For a quicker check that does not need the example data, run
+`pytest -m "not requires_real_data"`. Tests that construct the `mdp` or
+`npyfilesmeps` example datastores must be marked with
+`@pytest.mark.requires_real_data` (tests parametrized over `datastore_name`
+are marked automatically); an unmarked test that does so fails with a message
+saying so.
+
 ## Community roadmap
 
 Our community roadmap is defined by

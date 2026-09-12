@@ -3,6 +3,7 @@ import typing
 from argparse import Namespace
 
 # Third-party
+import pytest
 import pytorch_lightning as pl
 import torch
 
@@ -35,6 +36,7 @@ class MockStepPredictor(StepPredictor):
         return pred_state, pred_std
 
 
+@pytest.mark.requires_real_data
 def test_ar_forecaster_unroll():
     datastore = init_datastore_example("mdp")
     predictor = MockStepPredictor(
@@ -73,6 +75,7 @@ def test_ar_forecaster_unroll():
     assert torch.all(prediction[:, :, 1:, :] == 5.0)
 
 
+@pytest.mark.requires_real_data
 def test_forecaster_module_checkpoint(tmp_path):
     datastore = init_datastore_example("mdp")
 
@@ -171,6 +174,7 @@ def test_forecaster_module_checkpoint(tmp_path):
     assert torch.allclose(out_before[0], out_after[0])
 
 
+@pytest.mark.requires_real_data
 def test_forecaster_module_old_checkpoint(tmp_path):
     datastore = init_datastore_example("mdp")
 
@@ -315,6 +319,7 @@ def test_forecaster_module_old_checkpoint(tmp_path):
     assert torch.allclose(out_before[0], out_after[0])
 
 
+@pytest.mark.requires_real_data
 def test_graph_lam_no_static_features():
     """GraphLAM (real GNN) should run a forward pass when the datastore has
     no static features - verifying that the empty static tensor flows through
