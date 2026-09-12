@@ -150,11 +150,17 @@ class BaseGraphModel(StepPredictor):
 
         # GNNs
         # encoder
+        g2m_num_rec = (
+            self.mesh_static_features[0].shape[0]
+            if self.hierarchical
+            else self.num_mesh_nodes
+        )
         self.g2m_gnn = get_gnn_class(g2m_gnn_type)(
             self.g2m_edge_index,
             hidden_dim,
             hidden_layers=hidden_layers,
             update_edges=False,
+            num_rec=g2m_num_rec,
         )
         self.encoding_grid_mlp = utils.make_mlp(
             [hidden_dim] + self.mlp_blueprint_end
@@ -166,6 +172,7 @@ class BaseGraphModel(StepPredictor):
             hidden_dim,
             hidden_layers=hidden_layers,
             update_edges=False,
+            num_rec=self.num_grid_nodes,
         )
 
         # Output mapping (hidden_dim -> output_dim)

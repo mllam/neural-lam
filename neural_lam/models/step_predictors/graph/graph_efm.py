@@ -3,7 +3,7 @@ predictors, for hierarchical (GraphEFM) and flat (GraphEFMMultiScale) mesh
 graphs."""
 
 # Standard library
-from typing import Dict, Optional
+from typing import Dict, Optional, cast
 
 # Third-party
 import torch
@@ -50,6 +50,8 @@ class BaseGraphEFM(StepPredictor):
     :attr:`latent_spatial_dim`. See :class:`GraphEFM` (hierarchical graph)
     and :class:`GraphEFMMultiScale` (flat graph).
     """
+
+    mesh_static_features: torch.Tensor | list[torch.Tensor]
 
     def __init__(
         self,
@@ -165,6 +167,17 @@ class BaseGraphEFM(StepPredictor):
         # latent_spatial_dim), so it cannot wait until the subclass
         # constructor resumes after this call returns.
         self.check_graph_type(graph_name)
+
+        if self.hierarchical:
+            mesh_features = cast(list[torch.Tensor], self.mesh_static_features)
+            self.level_mesh_sizes = [
+                mesh_feat.shape[0] for mesh_feat in mesh_features
+            ]
+            self.num_mesh_nodes = sum(self.level_mesh_sizes)
+        else:
+            mesh_features_tensor = cast(torch.Tensor, self.mesh_static_features)
+            self.num_mesh_nodes = mesh_features_tensor.shape[0]
+            self.level_mesh_sizes = [self.num_mesh_nodes]
 
         # Specify dimensions of data
         self.num_state_vars = datastore.get_num_data_vars(category="state")
@@ -575,12 +588,9 @@ class GraphEFM(BaseGraphEFM):
             output_clamping_upper=output_clamping_upper,
         )
 
-        level_mesh_sizes = [
-            mesh_feat.shape[0] for mesh_feat in self.mesh_static_features
-        ]
         num_levels = len(self.mesh_static_features)
         utils.log_on_rank_zero("Loaded hierarchical graph with structure:")
-        for level_index, level_mesh_size in enumerate(level_mesh_sizes):
+        for level_index, level_mesh_size in enumerate(self.level_mesh_sizes):
             same_level_edges = self.m2m_features[level_index].shape[0]
             utils.log_on_rank_zero(
                 f"level {level_index} - {level_mesh_size} nodes, "
@@ -647,6 +657,7 @@ class GraphEFM(BaseGraphEFM):
             hidden_layers=hidden_layers,
             g2m_gnn_type=g2m_gnn_type,
             output_dist="diagonal",
+            level_mesh_sizes=self.level_mesh_sizes,
         )
         self.decoder = HiGraphLatentDecoder(
             g2m_edge_index=self.g2m_edge_index,
@@ -662,6 +673,8 @@ class GraphEFM(BaseGraphEFM):
             g2m_gnn_type=g2m_gnn_type,
             m2g_gnn_type=m2g_gnn_type,
             output_std=bool(output_std),
+            num_grid_nodes=self.num_grid_nodes,
+            level_mesh_sizes=self.level_mesh_sizes,
         )
 
     def check_graph_type(self, graph_name: str) -> None:
@@ -741,6 +754,7 @@ class GraphEFM(BaseGraphEFM):
             hidden_layers=hidden_layers,
             g2m_gnn_type=g2m_gnn_type,
             output_dist=prior_dist,
+            level_mesh_sizes=self.level_mesh_sizes,
         )
 
     def embedd_mesh(self, batch_size):
@@ -920,6 +934,7 @@ class GraphEFMMultiScale(BaseGraphEFM):
             hidden_layers=hidden_layers,
             g2m_gnn_type=g2m_gnn_type,
             output_dist="diagonal",
+            num_mesh_nodes=self.num_mesh_nodes,
         )
         self.decoder = GraphLatentDecoder(
             g2m_edge_index=self.g2m_edge_index,
@@ -933,6 +948,8 @@ class GraphEFMMultiScale(BaseGraphEFM):
             g2m_gnn_type=g2m_gnn_type,
             m2g_gnn_type=m2g_gnn_type,
             output_std=bool(output_std),
+            num_grid_nodes=self.num_grid_nodes,
+            num_mesh_nodes=self.num_mesh_nodes,
         )
 
     def check_graph_type(self, graph_name: str) -> None:
@@ -1010,6 +1027,7 @@ class GraphEFMMultiScale(BaseGraphEFM):
             hidden_layers=hidden_layers,
             g2m_gnn_type=g2m_gnn_type,
             output_dist=prior_dist,
+            num_mesh_nodes=self.num_mesh_nodes,
         )
 
     def embedd_mesh(self, batch_size):

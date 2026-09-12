@@ -111,6 +111,7 @@ class GraphLAM(BaseGraphModel):
                 hidden_dim,
                 hidden_layers=hidden_layers,
                 aggr=mesh_aggr,
+                num_rec=self.num_mesh_nodes,
             )
             for _ in range(processor_layers)
         ]

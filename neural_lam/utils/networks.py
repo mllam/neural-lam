@@ -46,6 +46,7 @@ def make_gnn_seq(
     hidden_layers,
     hidden_dim,
     gnn_type="InteractionNet",
+    num_rec: int | None = None,
 ):
     """
     Build a sequential stack of GNN layers that propagates both node and
@@ -69,6 +70,8 @@ def make_gnn_seq(
         Dimensionality of node and edge representations.
     gnn_type : str
         GNN layer type, any key in ``gnn_layers.GNN_TYPES``.
+    num_rec : int or None, optional
+        Explicit number of receiver nodes passed to each GNN layer.
 
     Returns
     -------
@@ -98,6 +101,7 @@ def make_gnn_seq(
                     edge_index,
                     hidden_dim,
                     hidden_layers=hidden_layers,
+                    num_rec=num_rec,
                 ),
                 "mesh_rep, mesh_rep, edge_rep -> mesh_rep, edge_rep",
             )

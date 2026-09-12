@@ -117,8 +117,11 @@ class HiLAM(BaseHiGraphModel):
                     edge_index,
                     self.hidden_dim,
                     hidden_layers=self.hidden_layers,
+                    num_rec=level_size,
                 )
-                for edge_index in self.m2m_edge_index
+                for edge_index, level_size in zip(
+                    self.m2m_edge_index, self.level_mesh_sizes
+                )
             ]
         )
 
@@ -138,8 +141,11 @@ class HiLAM(BaseHiGraphModel):
                     edge_index,
                     self.hidden_dim,
                     hidden_layers=self.hidden_layers,
+                    num_rec=rec_size,
                 )
-                for edge_index in self.mesh_up_edge_index
+                for edge_index, rec_size in zip(
+                    self.mesh_up_edge_index, self.level_mesh_sizes[1:]
+                )
             ]
         )
 
@@ -159,8 +165,11 @@ class HiLAM(BaseHiGraphModel):
                     edge_index,
                     self.hidden_dim,
                     hidden_layers=self.hidden_layers,
+                    num_rec=rec_size,
                 )
-                for edge_index in self.mesh_down_edge_index
+                for edge_index, rec_size in zip(
+                    self.mesh_down_edge_index, self.level_mesh_sizes[:-1]
+                )
             ]
         )
 

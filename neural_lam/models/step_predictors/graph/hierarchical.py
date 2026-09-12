@@ -131,8 +131,11 @@ class BaseHiGraphModel(BaseGraphModel):
                     edge_index,
                     hidden_dim,
                     hidden_layers=hidden_layers,
+                    num_rec=rec_size,
                 )
-                for edge_index in self.mesh_up_edge_index
+                for edge_index, rec_size in zip(
+                    self.mesh_up_edge_index, self.level_mesh_sizes[1:]
+                )
             ]
         )
 
@@ -145,8 +148,11 @@ class BaseHiGraphModel(BaseGraphModel):
                     hidden_dim,
                     hidden_layers=hidden_layers,
                     update_edges=False,
+                    num_rec=rec_size,
                 )
-                for edge_index in self.mesh_down_edge_index
+                for edge_index, rec_size in zip(
+                    self.mesh_down_edge_index, self.level_mesh_sizes[:-1]
+                )
             ]
         )
 
