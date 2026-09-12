@@ -131,6 +131,7 @@ class HiLAMParallel(BaseHiGraphModel):
                     hidden_layers=hidden_layers,
                     edge_chunk_sizes=self.edge_split_sections,
                     aggr_chunk_sizes=self.level_mesh_sizes,
+                    num_rec=self.num_mesh_nodes,
                 )
                 for _ in range(processor_layers)
             ]

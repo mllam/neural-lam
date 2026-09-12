@@ -31,6 +31,7 @@ class HiGraphLatentEncoder(BaseLatentEncoder):
         hidden_layers=1,
         g2m_gnn_type="InteractionNet",
         output_dist="isotropic",
+        level_mesh_sizes=None,
     ):
         """
         Set up the g2m, mesh-up and intra-level GNNs and latent param map.
@@ -73,17 +74,26 @@ class HiGraphLatentEncoder(BaseLatentEncoder):
                 "flat graphs."
             )
 
+        g2m_num_rec = (
+            level_mesh_sizes[0] if level_mesh_sizes is not None else None
+        )
         self.g2m_gnn = get_gnn_class(g2m_gnn_type)(
             g2m_edge_index,
             hidden_dim,
             hidden_layers=hidden_layers,
             update_edges=False,
+            num_rec=g2m_num_rec,
         )
 
         # Mesh-up edges must use PropagationNet: each upward step has to push
         # information into nodes of the next level even when those start from
         # their static embedding, so that grid information reaches the latent
         # readout at the top level.
+        up_rec_sizes = (
+            level_mesh_sizes[1:]
+            if level_mesh_sizes is not None
+            else [None] * len(mesh_up_edge_index)
+        )
         self.mesh_up_gnns = nn.ModuleList(
             [
                 PropagationNet(
@@ -91,13 +101,21 @@ class HiGraphLatentEncoder(BaseLatentEncoder):
                     hidden_dim,
                     hidden_layers=hidden_layers,
                     update_edges=False,
+                    num_rec=rec_size,
                 )
-                for edge_index in mesh_up_edge_index
+                for edge_index, rec_size in zip(
+                    mesh_up_edge_index, up_rec_sizes
+                )
             ]
         )
 
         # None if intra_level_layers == 0, in which case no intra-level
         # processing is done in compute_dist_params
+        intra_rec_sizes = (
+            level_mesh_sizes
+            if level_mesh_sizes is not None
+            else [None] * len(m2m_edge_index)
+        )
         self.intra_level_gnns = (
             nn.ModuleList(
                 [
@@ -106,8 +124,11 @@ class HiGraphLatentEncoder(BaseLatentEncoder):
                         intra_level_layers,
                         hidden_layers,
                         hidden_dim,
+                        num_rec=rec_size,
                     )
-                    for edge_index in m2m_edge_index
+                    for edge_index, rec_size in zip(
+                        m2m_edge_index, intra_rec_sizes
+                    )
                 ]
             )
             if intra_level_layers > 0

@@ -2,6 +2,7 @@
 from pathlib import Path
 
 # Third-party
+import pytest
 import torch
 
 # First-party
@@ -1096,13 +1097,8 @@ class TestNumRecFix:
         edge_rep = torch.randn((3, self.HIDDEN_DIM))
 
         with torch.no_grad():
-            try:
+            with pytest.raises(RuntimeError):
                 gnn(send_rep, rec_rep, edge_rep)
-                # If it doesn't crash, the bug is masked; still a problem
-                # because num_rec is wrong and features are silently corrupt.
-                assert gnn.num_rec < num_rec
-            except RuntimeError:
-                pass  # Expected: dimension mismatch
 
     def test_trailing_receivers_pass_with_num_rec(self):
         """Same scenario as above but with explicit num_rec — works."""
@@ -1163,3 +1159,90 @@ class TestNumRecFix:
         with torch.no_grad():
             result = gnn(send_rep, rec_rep, edge_rep)
         assert result.shape == (num_rec, self.HIDDEN_DIM)
+
+    def test_graph_lam_sets_explicit_num_rec(self):
+        """GraphLAM should pass explicit num_rec to g2m, m2g, and processor."""
+        datastore, config = _get_datastore_and_config("1level")
+        _, predictor, _, _, _ = _build_model_and_data(
+            datastore, config, "graph_lam", "1level"
+        )
+        assert predictor.g2m_gnn.num_rec == predictor.num_mesh_nodes
+        assert predictor.m2g_gnn.num_rec == predictor.num_grid_nodes
+        for module in predictor.processor.modules():
+            if isinstance(module, InteractionNet):
+                assert module.num_rec == predictor.num_mesh_nodes
+
+    def test_hilam_sets_explicit_num_rec(self):
+        """HiLAM should pass explicit num_rec to all hierarchical GNNs."""
+        datastore, config = _get_datastore_and_config("hierarchical")
+        _, predictor, _, _, _ = _build_model_and_data(
+            datastore, config, "hi_lam", "hierarchical"
+        )
+        assert predictor.g2m_gnn.num_rec == predictor.level_mesh_sizes[0]
+        assert predictor.m2g_gnn.num_rec == predictor.num_grid_nodes
+
+        for i, gnn in enumerate(predictor.mesh_init_gnns):
+            assert gnn.num_rec == predictor.level_mesh_sizes[i + 1]
+
+        for i, gnn in enumerate(predictor.mesh_read_gnns):
+            assert gnn.num_rec == predictor.level_mesh_sizes[i]
+
+        for same_step in predictor.mesh_down_same_gnns:
+            for lvl, gnn in enumerate(same_step):
+                assert gnn.num_rec == predictor.level_mesh_sizes[lvl]
+
+    def test_hilam_parallel_sets_explicit_num_rec(self):
+        """HiLAMParallel should pass num_rec to processor InteractionNets."""
+        datastore, config = _get_datastore_and_config("hierarchical")
+        _, predictor, _, _, _ = _build_model_and_data(
+            datastore, config, "hi_lam_parallel", "hierarchical"
+        )
+        assert predictor.g2m_gnn.num_rec == predictor.level_mesh_sizes[0]
+        assert predictor.m2g_gnn.num_rec == predictor.num_grid_nodes
+        for module in predictor.processor.modules():
+            if isinstance(module, InteractionNet):
+                assert module.num_rec == predictor.num_mesh_nodes
+
+    def test_base_graph_model_trailing_receivers_forward_pass(self):
+        """Model forward pass succeeds when trailing mesh receivers have no
+        incoming edges (Issue #729)."""
+        datastore, config = _get_datastore_and_config("1level")
+        forecaster, predictor, init_states, forcing, boundary = (
+            _build_model_and_data(datastore, config, "graph_lam", "1level")
+        )
+        # Remove edges pointing to the last mesh receiver node
+        last_mesh_node = predictor.num_mesh_nodes - 1
+        g2m_mask = predictor.g2m_edge_index[1] < last_mesh_node
+        truncated_g2m = predictor.g2m_edge_index[:, g2m_mask]
+        truncated_features = predictor.g2m_features[g2m_mask]
+
+        # Verify that without num_rec, forward crashes with RuntimeError
+        crasher_g2m = InteractionNet(
+            truncated_g2m,
+            predictor.hidden_dim,
+            hidden_layers=predictor.hidden_layers,
+            update_edges=False,
+        )
+        predictor.g2m_gnn = crasher_g2m
+        predictor.g2m_features = truncated_features
+        with torch.no_grad():
+            with pytest.raises(RuntimeError):
+                forecaster(init_states, forcing, boundary)
+
+        # With explicit num_rec, forward pass succeeds
+        fixed_g2m = InteractionNet(
+            truncated_g2m,
+            predictor.hidden_dim,
+            hidden_layers=predictor.hidden_layers,
+            update_edges=False,
+            num_rec=predictor.num_mesh_nodes,
+        )
+        predictor.g2m_gnn = fixed_g2m
+        with torch.no_grad():
+            out, _ = forecaster(init_states, forcing, boundary)
+        assert out.shape == (
+            init_states.shape[0],
+            forcing.shape[1],
+            init_states.shape[2],
+            init_states.shape[3],
+        )

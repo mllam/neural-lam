@@ -60,7 +60,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Reject `step < 1` in `--train_steps_to_log`, `--val_steps_to_log`, and `--var_leads_metrics_watch` at CLI parse time, instead of silently logging the wrong step's loss via negative-index wraparound in `ForecasterModule._log_step_loss` [\#746](https://github.com/mllam/neural-lam/pull/746) @RudraDudhat2509
 
-- Allow passing explicit `num_rec` to `InteractionNet` and `PropagationNet` to prevent silent sender feature index corruption and dimension mismatch `RuntimeError` when trailing receiver nodes have no incoming edges [\#740](https://github.com/mllam/neural-lam/pull/740) @Anurag-M1
+- Allow passing and forward explicit `num_rec` across graph models and latent modules to `InteractionNet` and `PropagationNet` to prevent silent sender feature index corruption and dimension mismatch `RuntimeError` when trailing receiver nodes have no incoming edges [\#740](https://github.com/mllam/neural-lam/pull/740) @Anurag-M1
 
 - Set `workers=True` in `seed_everything` to properly seed DataLoader workers, ensuring uncorrelated random states across processes when `num_workers > 0` [\#716](https://github.com/mllam/neural-lam/pull/716) @GiGiKoneti
 
