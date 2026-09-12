@@ -1,9 +1,11 @@
 # Third-party
 import torch
+from torch.utils.data.distributed import DistributedSampler
 
 # First-party
 from neural_lam.datastore.npyfilesmeps.compute_standardization_stats import (
     PaddedWeatherDataset,
+    real_sample_mask_per_batch,
 )
 
 
@@ -114,3 +116,108 @@ class TestDiffStatsShape:
 
         assert torch.equal(result, data[:12])
         assert not torch.equal(result, old_result)
+
+
+# -- Bug 3: positional depadding after a distributed gather -----------------
+#
+# DistributedSampler(shuffle=False) stripes dataset indices across ranks
+# (rank r gets r, r+world_size, r+2*world_size, ...), so a rank-major
+# concatenation of per-rank results is not in dataset order. Depadding it
+# positionally (`gathered[:total_samples]` / `gathered[original_indices]`,
+# as `main()` used to) silently keeps padding rows from one rank while
+# dropping real rows from another whenever `total_samples % world_size !=
+# 0`. `real_sample_mask_per_batch` fixes this by identifying real vs.
+# padded rows locally, per rank, before any gather.
+
+
+class _IndexEchoDataset:
+    """Dataset stub whose items reveal their own index, for identity checks."""
+
+    def __init__(self, n_samples: int):
+        self._n = n_samples
+
+    def __len__(self) -> int:
+        return self._n
+
+    def __getitem__(self, idx: int) -> torch.Tensor:
+        return torch.tensor(idx)
+
+
+def _per_rank_real_dataset_indices(
+    padded_ds: PaddedWeatherDataset, world_size: int, batch_size: int
+) -> list[int]:
+    """
+    Simulate one rank's local depadding: iterate its `DistributedSampler`
+    order in `batch_size` chunks, keep only the rows the real-sample mask
+    marks ``True``, and return the underlying (pre-padding) dataset indices
+    those rows correspond to.
+    """
+    recovered: list[int] = []
+    for rank in range(world_size):
+        sampler = DistributedSampler(
+            padded_ds, num_replicas=world_size, rank=rank, shuffle=False
+        )
+        masks = real_sample_mask_per_batch(
+            sampler, batch_size, padded_ds.total_samples
+        )
+        rank_indices = list(sampler)
+        chunks = [
+            rank_indices[i : i + batch_size]
+            for i in range(0, len(rank_indices), batch_size)
+        ]
+        for chunk, mask in zip(chunks, masks):
+            recovered.extend(
+                idx for idx, keep in zip(chunk, mask.tolist()) if keep
+            )
+    return recovered
+
+
+class TestRealSampleMaskPerBatch:
+    """Tests for `real_sample_mask_per_batch`."""
+
+    def test_mask_true_count_matches_total_samples(self):
+        """Real-row count, summed over all ranks, equals the unpadded len."""
+        total_samples, world_size, batch_size = 101, 4, 8
+        ds = PaddedWeatherDataset(
+            _IndexEchoDataset(total_samples), world_size, batch_size
+        )
+
+        n_real = 0
+        for rank in range(world_size):
+            sampler = DistributedSampler(
+                ds, num_replicas=world_size, rank=rank, shuffle=False
+            )
+            masks = real_sample_mask_per_batch(
+                sampler, batch_size, total_samples
+            )
+            n_real += sum(mask.sum().item() for mask in masks)
+
+        assert n_real == total_samples
+
+    def test_recovers_exact_original_index_set(self):
+        """
+        Reproduces the bug: with the old positional depadding (`gathered[:
+        total_samples]`), real samples 95 and 99 were dropped and padded
+        samples 101 and 102 were kept for this exact configuration. Masking
+        locally per rank must instead recover {0, ..., total_samples-1}
+        exactly once each, with no padded index leaking in.
+        """
+        total_samples, world_size, batch_size = 101, 4, 8
+        ds = PaddedWeatherDataset(
+            _IndexEchoDataset(total_samples), world_size, batch_size
+        )
+
+        recovered = _per_rank_real_dataset_indices(ds, world_size, batch_size)
+
+        assert sorted(recovered) == list(range(total_samples))
+
+    def test_no_padding_needed_keeps_every_row(self):
+        """When length is already divisible by world_size, nothing pads."""
+        total_samples, world_size, batch_size = 16, 4, 4
+        ds = PaddedWeatherDataset(
+            _IndexEchoDataset(total_samples), world_size, batch_size
+        )
+
+        recovered = _per_rank_real_dataset_indices(ds, world_size, batch_size)
+
+        assert sorted(recovered) == list(range(total_samples))
