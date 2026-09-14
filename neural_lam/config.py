@@ -205,3 +205,24 @@ def load_config_and_datastore(
     )
 
     return config, cast(MDPDatastore | NpyFilesDatastoreMEPS, datastore)
+
+
+try:
+    # Standard library
+    import argparse
+
+    # Third-party
+    import torch
+
+    torch.serialization.add_safe_globals(
+        [
+            NeuralLAMConfig,
+            DatastoreSelection,
+            TrainingConfig,
+            OutputClamping,
+            UniformFeatureWeighting,
+            argparse.Namespace,
+        ]
+    )
+except (ImportError, AttributeError):
+    pass
