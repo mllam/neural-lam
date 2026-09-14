@@ -18,13 +18,21 @@ from .logging import (
 from .networks import make_gnn_seq, make_mlp
 from .plot import fractional_plot_bundle, has_working_latex
 from .tensor import inverse_sigmoid, inverse_softplus
-from .time import get_integer_time
+from .time import (
+    apply_time_crop,
+    get_integer_time,
+    get_time_crop_slice,
+    get_time_step,
+)
 
 __all__ = [
     "BufferList",
+    "apply_time_crop",
     "compute_grid_input_dim",
     "fractional_plot_bundle",
     "get_integer_time",
+    "get_time_crop_slice",
+    "get_time_step",
     "has_working_latex",
     "init_training_logger_metrics",
     "inverse_sigmoid",

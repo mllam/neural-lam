@@ -1,5 +1,16 @@
 # Standard library
 import os
+
+# `google.auth` caches NO_GCE_CHECK in a module-level constant when it is first
+# imported, and only accepts the exact string "true". Opening the ERA5 boundary
+# example pulls in gcsfs, which runs google credential discovery even though the
+# bucket is public; on hosts that blackhole the GCE metadata address (most HPC
+# nodes) every attempt then waits out a ~12 s timeout, turning that build from
+# 45 s into ~9 min. This has to stay above the imports below, since any of them
+# reaching google.auth first would make the assignment a silent no-op.
+os.environ["NO_GCE_CHECK"] = "true"
+
+# Standard library
 from datetime import timedelta
 from pathlib import Path
 
@@ -105,6 +116,15 @@ DATASTORES_EXAMPLES = dict(
     dummydata=None,
 )
 
+DATASTORES_BOUNDARY_EXAMPLES = {
+    "mdp": (
+        DATASTORE_EXAMPLES_ROOT_PATH
+        / "mdp"
+        / "era5_1000hPa_danra_100m_winds"
+        / "era5.datastore.yaml"
+    ),
+}
+
 DATASTORES[DummyDatastore.SHORT_NAME] = DummyDatastore
 
 
@@ -123,3 +143,12 @@ def init_datastore_example(datastore_kind):
     )
 
     return datastore
+
+
+def init_datastore_boundary_example(datastore_kind):
+    datastore_boundary = init_datastore(
+        datastore_kind=datastore_kind,
+        config_path=DATASTORES_BOUNDARY_EXAMPLES[datastore_kind],
+    )
+
+    return datastore_boundary

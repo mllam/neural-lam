@@ -66,7 +66,7 @@ class MDPDatastore(BaseRegularGridDatastore):
             train/val/test splits.
 
         """
-        self._config_path = Path(config_path)
+        self._config_path = Path(config_path).resolve()
         self._root_path = self._config_path.parent
         self._config = mdp.Config.from_yaml_file(self._config_path)
         fp_ds = self._root_path / self._config_path.name.replace(
@@ -85,12 +85,20 @@ class MDPDatastore(BaseRegularGridDatastore):
             _ds = xr.open_zarr(fp_ds, consolidated=True)
 
         if _ds is None:
-            _ds = mdp.create_dataset(config=self._config)
+            _ds = mdp.create_dataset(config=self._config_for_creation())
             _ds.to_zarr(fp_ds)
+
+        if "state" not in _ds and "forcing" not in _ds:
+            raise ValueError(
+                f"Datastore at {self._config_path} contains neither 'state' "
+                "nor 'forcing' data. At least one is required."
+            )
 
         self._ds = _ds
         self._n_boundary_points = n_boundary_points
-        self.is_ensemble = "ensemble_member" in self._ds["state"].dims
+        self.is_ensemble = (
+            "state" in self._ds and "ensemble_member" in self._ds["state"].dims
+        )
         self.has_ensemble_forcing = (
             "forcing" in self._ds
             and "ensemble_member" in self._ds["forcing"].dims
@@ -136,6 +144,30 @@ class MDPDatastore(BaseRegularGridDatastore):
         if dim_order is None:
             raise ValueError("Could not determine dim_order from inputs.")
         self.spatial_coordinates = dim_order
+
+    def _config_for_creation(self) -> mdp.Config:
+        """Return the config to build the dataset from.
+
+        mllam-data-prep resolves `interior_dataset_config_path` against the
+        process CWD, but it is written relative to this config file. Only
+        that path is absolutised, and on a copy, so the public `config`
+        still matches the YAML on disk; other inputs keep CWD-relative
+        behaviour.
+
+        Returns
+        -------
+        mdp.Config
+            The config, with any cropping path made absolute.
+        """
+        config = copy.deepcopy(self._config)
+        domain_cropping = config.output.domain_cropping
+        if domain_cropping is not None:
+            interior_path = Path(domain_cropping.interior_dataset_config_path)
+            if not interior_path.is_absolute():
+                domain_cropping.interior_dataset_config_path = str(
+                    self._root_path / interior_path
+                )
+        return config
 
     @property
     def root_path(self) -> Path:
@@ -189,10 +221,12 @@ class MDPDatastore(BaseRegularGridDatastore):
             The units of the variables in the given category.
 
         """
-        if category not in self._ds and category == "forcing":
-            warnings.warn("no forcing data found in datastore")
+        units_key = f"{category}_feature_units"
+        if units_key not in self._ds:
+            if category == "forcing":
+                warnings.warn("no forcing data found in datastore")
             return []
-        return self._ds[f"{category}_feature_units"].values.tolist()
+        return self._ds[units_key].values.tolist()
 
     def get_vars_names(self, category: str) -> list[str]:
         """Return the names of the variables in the given category.
@@ -208,10 +242,12 @@ class MDPDatastore(BaseRegularGridDatastore):
             The names of the variables in the given category.
 
         """
-        if category not in self._ds and category == "forcing":
-            warnings.warn("no forcing data found in datastore")
+        feature_key = f"{category}_feature"
+        if feature_key not in self._ds:
+            if category == "forcing":
+                warnings.warn("no forcing data found in datastore")
             return []
-        return self._ds[f"{category}_feature"].values.tolist()
+        return self._ds[feature_key].values.tolist()
 
     def get_vars_long_names(self, category: str) -> list[str]:
         """
@@ -228,10 +264,12 @@ class MDPDatastore(BaseRegularGridDatastore):
             The long names of the variables in the given category.
 
         """
-        if category not in self._ds and category == "forcing":
-            warnings.warn("no forcing data found in datastore")
+        long_name_key = f"{category}_feature_long_name"
+        if long_name_key not in self._ds:
+            if category == "forcing":
+                warnings.warn("no forcing data found in datastore")
             return []
-        return self._ds[f"{category}_feature_long_name"].values.tolist()
+        return self._ds[long_name_key].values.tolist()
 
     def get_num_data_vars(self, category: str) -> int:
         """Return the number of variables in the given category.
@@ -300,9 +338,21 @@ class MDPDatastore(BaseRegularGridDatastore):
         da_category = self._ds[category]
 
         # set units on x y coordinates if missing
-        for coord in ["x", "y"]:
+        # Use the dim names declared in the config's grid_index stacking,
+        # so both projected (x, y) and geographic (lon, lat) sources work.
+        _UNITS_BY_COORD = {
+            "x": "m",
+            "y": "m",
+            "longitude": "degrees_east",
+            "latitude": "degrees_north",
+            "lon": "degrees_east",
+            "lat": "degrees_north",
+        }
+        for coord in self.spatial_coordinates:
             if "units" not in da_category[coord].attrs:
-                da_category[coord].attrs["units"] = "m"
+                da_category[coord].attrs["units"] = _UNITS_BY_COORD.get(
+                    coord, ""
+                )
 
         # set multi-index for grid-index
         da_category = da_category.set_index(grid_index=self.spatial_coordinates)
@@ -390,15 +440,36 @@ class MDPDatastore(BaseRegularGridDatastore):
             A 0/1 mask for the boundary points of the dataset, where 1 is a
             boundary point and 0 is not.
 
+        Raises
+        ------
+        NotImplementedError
+            If the datastore provides no ``state`` data, i.e. it is a
+            boundary datastore rather than an interior one.
+
         """
+        if "state" not in self._ds:
+            raise NotImplementedError(
+                "`boundary_mask` marks the outer ring of the interior domain "
+                "so it can be excluded from the loss and overwritten in the "
+                "prediction, which a datastore without `state` data does not "
+                "have. A boundary datastore contributes forcing everywhere "
+                "and has no ring to mask."
+            )
+
         ds_unstacked = self.unstack_grid_coords(da_or_ds=self._ds)
         da_state_variable = (
             ds_unstacked["state"].isel(time=0).isel(state_feature=0)
         )
         da_domain_allzero = xr.zeros_like(da_state_variable)
+        # `-0` is `0`, so `slice(n, -n)` collapses to an empty slice when
+        # `n_boundary_points` is 0 instead of selecting the full domain.
+        interior_slice = slice(
+            self._n_boundary_points or None,
+            -self._n_boundary_points or None,
+        )
         ds_unstacked["boundary_mask"] = da_domain_allzero.isel(
-            x=slice(self._n_boundary_points, -self._n_boundary_points),
-            y=slice(self._n_boundary_points, -self._n_boundary_points),
+            x=interior_slice,
+            y=interior_slice,
         )
         ds_unstacked["boundary_mask"] = ds_unstacked.boundary_mask.fillna(
             1
@@ -480,9 +551,10 @@ class MDPDatastore(BaseRegularGridDatastore):
             The shape of the cartesian grid for the state variables.
 
         """
-        ds_state = self.unstack_grid_coords(self._ds["state"])
+        category = "state" if "state" in self._ds else "forcing"
+        ds_cat = self.unstack_grid_coords(self._ds[category])
         xdim, ydim = self.spatial_coordinates
-        da_x, da_y = ds_state[xdim], ds_state[ydim]
+        da_x, da_y = ds_cat[xdim], ds_cat[ydim]
         assert da_x.ndim == da_y.ndim == 1
         return CartesianGridShape(x=da_x.size, y=da_y.size)
 
@@ -570,3 +642,30 @@ class MDPDatastore(BaseRegularGridDatastore):
 
         coords = np.stack((lon.values, lat.values), axis=1)
         return coords
+
+    @property
+    def is_on_regular_spatial_grid(self) -> bool:
+        """Whether the grid points form a complete 2D rectangular grid.
+
+        ``domain_cropping`` drops the points outside the interior domain, so
+        a cropped datastore holds fewer than ``grid_shape_state.x * .y`` and
+        unstacking it would pad the missing cells.
+
+        Returns
+        -------
+        bool
+            ``True`` when every cell of the ``x``/``y`` grid is present.
+        """
+        grid_shape = self.grid_shape_state
+        return self.num_grid_points == grid_shape.x * grid_shape.y
+
+    @property
+    def num_grid_points(self) -> int:
+        """Return the number of grid points in the dataset.
+
+        Returns
+        -------
+        int
+            The number of grid points in the dataset.
+        """
+        return len(self._ds.grid_index)

@@ -885,12 +885,14 @@ def create_graph_from_datastore(
     create_plot : bool, optional
         If ``True``, display matplotlib previews of the generated graphs.
     """
-    if isinstance(datastore, BaseRegularGridDatastore):
-        xy = datastore.get_xy(category="state", stacked=False)
-    else:
+    if not datastore.is_on_regular_spatial_grid:
         raise NotImplementedError(
-            "Only graph creation for BaseRegularGridDatastore is supported"
+            "Graph creation is only supported for datastores whose grid "
+            "points form a complete 2D grid "
+            "(`is_on_regular_spatial_grid`); "
+            f"{type(datastore).__name__} reports that it does not."
         )
+    xy = datastore.get_xy(category="state", stacked=False)
 
     create_graph(
         graph_dir_path=output_root_path,
@@ -948,7 +950,7 @@ def cli(input_args: list[str] | None = None) -> None:
         raise ValueError("Specify your config with --config_path")
 
     # Load neural-lam configuration and datastore to use
-    _, datastore = load_config_and_datastore(config_path=args.config_path)
+    _, datastore, _ = load_config_and_datastore(config_path=args.config_path)
 
     create_graph_from_datastore(
         datastore=datastore,
