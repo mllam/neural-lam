@@ -661,10 +661,14 @@ def fractions_skill_score_2d(
     ref_sq = (frac_pred**2) + (frac_target**2)
 
     if mask is not None:
-        mask_in = mask.unsqueeze(0).unsqueeze(0)
-        diff_sq = diff_sq * mask_in
-        ref_sq = ref_sq * mask_in
-        mask_sum = mask_in.sum()
+        mask_in = mask.unsqueeze(0).unsqueeze(0).float()
+        # Require entire neighborhood kernel to lie inside interior mask
+        valid_mask = (
+            F.conv2d(mask_in, kernel, padding=padding) >= 1.0 - 1e-6
+        ).float()
+        diff_sq = diff_sq * valid_mask
+        ref_sq = ref_sq * valid_mask
+        mask_sum = valid_mask.sum() * diff_sq.shape[0]
         mse = diff_sq.sum() / (mask_sum + 1e-8)
         ref = ref_sq.sum() / (mask_sum + 1e-8)
     else:
