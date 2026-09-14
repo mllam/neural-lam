@@ -1,7 +1,9 @@
+"""Configuration dataclasses and helpers for Neural-LAM experiments."""
+
 # Standard library
 import dataclasses
 from pathlib import Path
-from typing import Dict, Union
+from typing import cast
 
 # Third-party
 import dataclass_wizard
@@ -31,12 +33,19 @@ class DatastoreSelection:
     """
 
     kind: str
+    config_path: str
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
+        """
+        Validate that the selected datastore kind is implemented.
+
+        Raises
+        ------
+        ValueError
+            If the provided ``kind`` is not part of :data:`DATASTORES`.
+        """
         if self.kind not in DATASTORES:
             raise ValueError(f"Datastore kind {self.kind} is not implemented")
-
-    config_path: str
 
 
 @dataclasses.dataclass
@@ -47,11 +56,11 @@ class ManualStateFeatureWeighting:
 
     Attributes
     ----------
-    weights : Dict[str, float]
+    weights : dict[str, float]
         Manual weights for the state features.
     """
 
-    weights: Dict[str, float]
+    weights: dict[str, float]
 
 
 @dataclasses.dataclass
@@ -71,14 +80,14 @@ class OutputClamping:
 
     Attributes
     ----------
-    lower : Dict[str, float]
+    lower : dict[str, float]
         The minimum value to clamp each output feature to.
-    upper : Dict[str, float]
+    upper : dict[str, float]
         The maximum value to clamp each output feature to.
     """
 
-    lower: Dict[str, float] = dataclasses.field(default_factory=dict)
-    upper: Dict[str, float] = dataclasses.field(default_factory=dict)
+    lower: dict[str, float] = dataclasses.field(default_factory=dict)
+    upper: dict[str, float] = dataclasses.field(default_factory=dict)
 
 
 @dataclasses.dataclass
@@ -88,16 +97,19 @@ class TrainingConfig:
 
     Attributes
     ----------
-    state_feature_weighting : Union[ManualStateFeatureWeighting,
-                                    UnformFeatureWeighting]
+    state_feature_weighting :
+        ManualStateFeatureWeighting | UniformFeatureWeighting
         The method to use for weighting the state features in the loss
-        function. Defaults to uniform weighting (`UnformFeatureWeighting`, i.e.
+        function. Defaults to uniform weighting (`UniformFeatureWeighting`, i.e.
         all features are weighted equally).
+    output_clamping : OutputClamping
+        Per-feature lower / upper clamping bounds applied to the model output.
+        Defaults to an empty ``OutputClamping`` (no clamping).
     """
 
-    state_feature_weighting: Union[
-        ManualStateFeatureWeighting, UniformFeatureWeighting
-    ] = dataclasses.field(default_factory=UniformFeatureWeighting)
+    state_feature_weighting: (
+        ManualStateFeatureWeighting | UniformFeatureWeighting
+    ) = dataclasses.field(default_factory=UniformFeatureWeighting)
 
     output_clamping: OutputClamping = dataclasses.field(
         default_factory=OutputClamping
@@ -107,15 +119,20 @@ class TrainingConfig:
 @dataclasses.dataclass
 class NeuralLAMConfig(dataclass_wizard.JSONWizard, dataclass_wizard.YAMLWizard):
     """
-    Dataclass for Neural-LAM configuration. This class is used to load and
-    store the configuration for using Neural-LAM.
+    Configuration for the Neural-LAM model and training pipeline.
+
+    Loads and stores all settings needed to run Neural-LAM, including
+    datastore selection and training hyperparameters. Serialisation and
+    deserialisation from YAML/JSON is handled via ``dataclass_wizard``.
 
     Attributes
     ----------
     datastore : DatastoreSelection
-        The configuration for the datastore to use.
+        Configuration specifying which datastore backend to use and its
+        associated settings.
     training : TrainingConfig
-        The configuration for training the model.
+        Configuration for training the model, including loss function and
+        feature-weighting strategy. Defaults to ``TrainingConfig()``.
     """
 
     datastore: DatastoreSelection
@@ -150,12 +167,14 @@ class NeuralLAMConfig(dataclass_wizard.JSONWizard, dataclass_wizard.YAMLWizard):
 
 
 class InvalidConfigError(Exception):
+    """Raised when the Neural-LAM configuration file is invalid or malformed."""
+
     pass
 
 
 def load_config_and_datastore(
     config_path: str,
-) -> tuple[NeuralLAMConfig, Union[MDPDatastore, NpyFilesDatastoreMEPS]]:
+) -> tuple[NeuralLAMConfig, MDPDatastore | NpyFilesDatastoreMEPS]:
     """
     Load the neural-lam configuration and the datastore specified in the
     configuration.
@@ -167,7 +186,7 @@ def load_config_and_datastore(
 
     Returns
     -------
-    tuple[NeuralLAMConfig, Union[MDPDatastore, NpyFilesDatastoreMEPS]]
+    tuple[NeuralLAMConfig, MDPDatastore | NpyFilesDatastoreMEPS]
         The Neural-LAM configuration and the loaded datastore.
     """
     try:
@@ -185,4 +204,4 @@ def load_config_and_datastore(
         datastore_kind=config.datastore.kind, config_path=datastore_config_path
     )
 
-    return config, datastore
+    return config, cast(MDPDatastore | NpyFilesDatastoreMEPS, datastore)

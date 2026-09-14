@@ -44,7 +44,7 @@ class SinglePointDummyDatastore(BaseDatastore):
     def get_num_data_vars(self, category):
         return 1
 
-    def get_dataarray(self, category, split):
+    def get_dataarray(self, category, split):  # type: ignore[override]
         if category == "state":
             values = self._state_data
         elif category == "forcing":
@@ -69,7 +69,7 @@ class SinglePointDummyDatastore(BaseDatastore):
     def get_standardization_dataarray(self, category):
         raise NotImplementedError()
 
-    def get_xy(self, category):
+    def get_xy(self, category):  # type: ignore[override]
         raise NotImplementedError()
 
     def get_vars_units(self, category):
@@ -111,7 +111,6 @@ def test_time_slicing_analysis(
         ar_steps=ar_steps,
         num_future_forcing_steps=num_future_forcing_steps,
         num_past_forcing_steps=num_past_forcing_steps,
-        standardize=False,
     )
 
     sample = dataset[0]
@@ -187,7 +186,6 @@ def test_step_length_timedeltas(step_length):
         ar_steps=3,
         num_future_forcing_steps=0,
         num_past_forcing_steps=0,
-        standardize=False,
     )
 
     # Test that we can get a sample
