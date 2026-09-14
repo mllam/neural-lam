@@ -158,6 +158,7 @@ class ForecastBenchmark:
 
         # Build interior evaluation domain mask
         self.interior_mask_2d: torch.Tensor | None = None
+        self.interior_mask_1d: torch.Tensor | None = None
         if isinstance(self.datastore, BaseRegularGridDatastore):
             ny, nx = (
                 self.datastore.grid_shape_state.y,
@@ -171,6 +172,7 @@ class ForecastBenchmark:
                 mask[:, :bw] = 0.0
                 mask[:, -bw:] = 0.0
             self.interior_mask_2d = mask
+            self.interior_mask_1d = mask.flatten().bool()
 
     def evaluate(
         self,
@@ -253,24 +255,32 @@ class ForecastBenchmark:
                     v_targ_phys = target_physical[..., v_i]
 
                     # Per step metrics: shape (B, T, N) -> average over B and N
+                    if self.interior_mask_1d is not None:
+                        v_p_std = v_pred_std[:, :, self.interior_mask_1d]
+                        v_t_std = v_targ_std[:, :, self.interior_mask_1d]
+                        v_p_phys = v_pred_phys[:, :, self.interior_mask_1d]
+                        v_t_phys = v_targ_phys[:, :, self.interior_mask_1d]
+                    else:
+                        v_p_std = v_pred_std
+                        v_t_std = v_targ_std
+                        v_p_phys = v_pred_phys
+                        v_t_phys = v_targ_phys
+
                     mse_steps = (
-                        ((v_pred_std - v_targ_std) ** 2)
+                        ((v_p_std - v_t_std) ** 2)
                         .mean(dim=(0, 2))
                         .cpu()
                         .tolist()
                     )
                     rmse_steps = (
                         torch.sqrt(
-                            ((v_pred_phys - v_targ_phys) ** 2).mean(dim=(0, 2))
+                            ((v_p_phys - v_t_phys) ** 2).mean(dim=(0, 2))
                         )
                         .cpu()
                         .tolist()
                     )
                     bias_steps = (
-                        (v_pred_phys - v_targ_phys)
-                        .mean(dim=(0, 2))
-                        .cpu()
-                        .tolist()
+                        (v_p_phys - v_t_phys).mean(dim=(0, 2)).cpu().tolist()
                     )
 
                     var_mse_list[var].append(mse_steps)
