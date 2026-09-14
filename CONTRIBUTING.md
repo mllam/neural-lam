@@ -77,6 +77,27 @@ pytest -vv -s --doctest-modules
 > **Note:** The first test run downloads ~50 MB of example data via
 > [pooch](https://www.fatiando.org/pooch/).
 
+## Property-based tests
+
+Some tests use [hypothesis](https://hypothesis.readthedocs.io/) to generate
+inputs rather than hardcode them. `tests/test_clamping.py` is the reference
+example.
+
+Write one when a rule must hold across a whole input space and the existing
+tests pin a single arbitrary point of it. Do not write one for specific
+input/output pairs, physical reference values or regression cases: there is no
+invariant to state, and the generator scaffolding costs more than it returns.
+
+- Set `deadline=None`; torch op timing on shared CI runners is too unreliable
+  for the 200 ms default.
+- Do **not** set `derandomize=True`. It freezes the examples to those drawn at
+  authoring time, so the test stops finding anything new.
+- Fixtures used by a `@given` test must be module-scoped or wider. Hypothesis
+  rejects function-scoped ones, and the body re-runs per generated example.
+
+When a property fails, reproduce with the falsifying example hypothesis prints
+and fix the cause. Do not disable the test or pin a seed.
+
 ## Community roadmap
 
 Our community roadmap is defined by

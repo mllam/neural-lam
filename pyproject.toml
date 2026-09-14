@@ -55,6 +55,7 @@ dev = [
     "pre-commit>=3.8.0",
     "pytest>=8.3.2",
     "pooch>=1.8.2",
+    "hypothesis>=6.0.0",
 ]
 
 [tool.uv]
