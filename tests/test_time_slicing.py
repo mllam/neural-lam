@@ -22,14 +22,16 @@ class SinglePointDummyDatastore(BaseDatastore):
         self,
         time_values,
         state_data,
-        forcing_data,
-        is_forecast,
+        forcing_data=None,
+        is_forecast=False,
         step_length=timedelta(hours=1),
     ):
         self._step_length = step_length
         self._time_values = np.array(time_values)
         self._state_data = np.array(state_data)
-        self._forcing_data = np.array(forcing_data)
+        self._forcing_data = (
+            None if forcing_data is None else np.array(forcing_data)
+        )
         self.is_forecast = is_forecast
 
         if is_forecast:
@@ -48,6 +50,8 @@ class SinglePointDummyDatastore(BaseDatastore):
         if category == "state":
             values = self._state_data
         elif category == "forcing":
+            if self._forcing_data is None:
+                return None
             values = self._forcing_data
         else:
             raise NotImplementedError(category)
@@ -158,6 +162,34 @@ def test_time_slicing_analysis(
         1 + num_past_forcing_steps + num_future_forcing_steps,
     )
     np.testing.assert_equal(forcing[:, 0, :], np.array(expected_forcing_values))
+
+
+def test_len_ignores_num_future_forcing_steps_when_no_forcing():
+    """__len__ must not require num_future_forcing_steps of extra state data
+    when the datastore has no forcing (da_forcing is None) -
+    _slice_state_time only ever needs max(2, num_past_forcing_steps) +
+    ar_steps state time steps, regardless of num_future_forcing_steps."""
+    ar_steps = 3
+    num_past_forcing_steps = 1
+    num_future_forcing_steps = 1
+    state_window = max(2, num_past_forcing_steps) + ar_steps
+    time_values = np.datetime64("2020-01-01") + np.arange(state_window)
+
+    datastore = SinglePointDummyDatastore(
+        state_data=np.arange(state_window),
+        forcing_data=None,
+        time_values=time_values,
+        is_forecast=False,
+    )
+
+    dataset = WeatherDataset(
+        datastore=datastore,
+        ar_steps=ar_steps,
+        num_past_forcing_steps=num_past_forcing_steps,
+        num_future_forcing_steps=num_future_forcing_steps,
+    )
+
+    assert len(dataset) == 1
 
 
 @pytest.mark.parametrize(
