@@ -147,7 +147,7 @@ class StepPredictor(nn.Module, ABC):
     ) -> tuple[torch.Tensor, torch.Tensor | None]:
         """
         Advance the state by one step:
-        ``(X_{t-1}, X_t, forcing_t) -> X_{t+1}``.
+        ``(X_t, X_{t-1}, forcing_t) -> X_{t+1}``.
 
         Parameters
         ----------
