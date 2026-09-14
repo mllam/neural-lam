@@ -50,6 +50,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Derive the `plot_error_heatmap` lead-time axis label from a full unit-name
+  lookup instead of `time_step_unit[0]`, which rendered `minutes`,
+  `milliseconds` and `microseconds` all as "m" and `unknown` as "u"; the
+  label now reads e.g. "min" / "ms" and falls back to "steps" when no unit
+  divides the step length evenly [\#743](https://github.com/mllam/neural-lam/pull/743) @nikhil3495
+
 - Set `workers=True` in `seed_everything` to properly seed DataLoader workers, ensuring uncorrelated random states across processes when `num_workers > 0` [\#716](https://github.com/mllam/neural-lam/pull/716) @GiGiKoneti
 
 - Fix `StepPredictor.forward` docstring stating the argument order backwards (`(X_{t-1}, X_t, forcing_t)` instead of `(X_t, X_{t-1}, forcing_t)`), contradicting its own per-parameter docs and signature [\#731](https://github.com/mllam/neural-lam/pull/731) @AshNicolus
