@@ -828,13 +828,20 @@ def plot_examples(
 
         time_arr = np.array(time_slice.cpu(), dtype="datetime64[ns]")
 
-        da_prediction = datastore.create_dataarray_from_tensor(
-            tensor=pred_slice, time=time_arr, category="state"
-        ).unstack("grid_index")
+        # create_dataarray_from_tensor builds a lightweight positional
+        # grid_index, so unstack through the datastore sets the
+        # spatial multi index first and then fix the x/y dimension order.q:
+        da_prediction = datastore.unstack_grid_coords(
+            datastore.create_dataarray_from_tensor(
+                tensor=pred_slice, time=time_arr, category="state"
+            )
+        )
 
-        da_target = datastore.create_dataarray_from_tensor(
-            tensor=target_slice, time=time_arr, category="state"
-        ).unstack("grid_index")
+        da_target = datastore.unstack_grid_coords(
+            datastore.create_dataarray_from_tensor(
+                tensor=target_slice, time=time_arr, category="state"
+            )
+        )
 
         var_vmin = (
             torch.minimum(

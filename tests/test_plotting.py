@@ -550,18 +550,20 @@ def test_plot_examples_integration_saves_figure(
     target_slice = target_rescaled[0].detach()
     time_slice = batch[3][0]
 
-    # Create DataArrays.
-    dataset = WeatherDataset(datastore=datastore, split="train")
-
+    # Create DataArrays
     time = np.array(time_slice.cpu(), dtype="datetime64[ns]")
 
-    da_prediction = dataset.create_dataarray_from_tensor(
-        tensor=pred_slice, time=time, category="state"
-    ).unstack("grid_index")
+    da_prediction = datastore.unstack_grid_coords(
+        datastore.create_dataarray_from_tensor(
+            tensor=pred_slice, time=time, category="state"
+        )
+    )
 
-    da_target = dataset.create_dataarray_from_tensor(
-        tensor=target_slice, time=time, category="state"
-    ).unstack("grid_index")
+    da_target = datastore.unstack_grid_coords(
+        datastore.create_dataarray_from_tensor(
+            tensor=target_slice, time=time, category="state"
+        )
+    )
 
     # Get vranges.
     var_vmin = (
