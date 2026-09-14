@@ -231,6 +231,7 @@ class ForecasterModule(pl.LightningModule):
         self.test_metrics: dict[str, list] = {
             "mse": [],
             "mae": [],
+            "bias": [],
         }
         if self.forecaster.predicts_std:
             self.test_metrics["output_std"] = []  # Treat as metric
@@ -639,7 +640,7 @@ class ForecasterModule(pl.LightningModule):
             hparams.val_steps_to_log  # ty: ignore[unresolved-attribute]
         )
 
-        for metric_name in ("mse", "mae"):
+        for metric_name in ("mse", "mae", "bias"):
             metric_func = metrics.get_metric(metric_name)
             batch_metric_vals = metric_func(
                 prediction,
