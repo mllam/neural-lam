@@ -248,7 +248,7 @@ in neural-lam, are done in a separate package called
 [mllam-data-prep](https://github.com/mllam/mllam-data-prep) rather than in
 neural-lam itself.
 Specifically, the `mllam-data-prep` datastore configuration (for example
-[danra.datastore.yaml](tests/datastore_examples/mdp/danra.datastore.yaml))
+[danra.datastore.yaml](tests/datastore_examples/mdp/danra_100m_winds/danra.datastore.yaml))
 specifies a) what source datasets to read from, b) what variables to select, c)
 what transformations of dimensions and variables to make, d) what statistics to
 calculate (for normalisation) and e) how to split the data into training,
@@ -601,5 +601,5 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for the full contributor guide: how to op
 
 # Contact
 If you are interested in machine learning models for LAM, have questions about the implementation or ideas for extending it, feel free to get in touch.
-There is an open [mllam slack channel](https://join.slack.com/t/ml-lam/shared_invite/zt-2t112zvm8-Vt6aBvhX7nYa6Kbj_LkCBQ) that anyone can join (after following the link you have to request to join, this is to avoid spam bots).
+There is an open [mllam slack channel](https://kutt.to/mllam) that anyone can join (after following the link you have to request to join, this is to avoid spam bots).
 You can also open a github issue on this page.
