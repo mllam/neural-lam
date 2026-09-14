@@ -169,6 +169,7 @@ ignore-property-decorators = false
 exclude = ["tests", "docs", "build"]
 
 [tool.pytest.ini_options]
+testpaths = ["tests", "neural_lam"]
 markers = [
     "slow: marks tests as slow (deselected by default, run with -m slow)",
 ]

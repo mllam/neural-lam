@@ -65,6 +65,11 @@ def test_dct_2d_transform_and_power_spectrum():
     coeffs = dct(field)
     assert coeffs.shape == (2, 16, 16)
 
+    # Parseval's theorem: orthonormal DCT-II preserves total energy
+    energy_field = (field**2).sum(dim=(-2, -1))
+    energy_coeffs = (coeffs**2).sum(dim=(-2, -1))
+    assert torch.allclose(energy_field, energy_coeffs, atol=1e-4)
+
     k_centers, psd = metrics.dct_power_spectrum_2d(field)
     assert len(k_centers) == 8
     assert psd.shape == (2, 8)
@@ -79,6 +84,13 @@ def test_fractions_skill_score_2d():
         field, field, threshold=10.0, kernel_size=1
     )
     assert torch.isclose(fss_perfect, torch.tensor(1.0))
+
+    # Masked identical fields -> FSS should also be 1.0
+    mask = torch.tensor([[1.0, 1.0], [0.0, 0.0]])
+    fss_masked = metrics.fractions_skill_score_2d(
+        field, field, threshold=10.0, kernel_size=1, mask=mask
+    )
+    assert torch.isclose(fss_masked, torch.tensor(1.0))
 
     # Completely disjoint fields -> FSS is 0.0 at kernel_size=1
     target = torch.tensor([[15.0, 5.0], [5.0, 15.0]])
