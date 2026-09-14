@@ -44,7 +44,7 @@ class SinglePointDummyDatastore(BaseDatastore):
     def get_num_data_vars(self, category):
         return 1
 
-    def get_dataarray(self, category, split):
+    def get_dataarray(self, category, split):  # type: ignore[override]
         if category == "state":
             values = self._state_data
         elif category == "forcing":
@@ -69,7 +69,7 @@ class SinglePointDummyDatastore(BaseDatastore):
     def get_standardization_dataarray(self, category):
         raise NotImplementedError()
 
-    def get_xy(self, category):
+    def get_xy(self, category):  # type: ignore[override]
         raise NotImplementedError()
 
     def get_vars_units(self, category):

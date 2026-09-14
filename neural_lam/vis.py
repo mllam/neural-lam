@@ -3,7 +3,7 @@
 # Standard library
 import os
 import warnings
-from typing import Optional
+from typing import Any
 
 # Third-party
 import cartopy.crs as ccrs
@@ -18,6 +18,7 @@ import numpy as np
 import pytorch_lightning as pl
 import torch
 import xarray as xr
+from cartopy.mpl.geoaxes import GeoAxes
 from PIL import Image
 
 # Local
@@ -37,6 +38,17 @@ _HEATMAP_CMAP = matplotlib.colors.LinearSegmentedColormap.from_list(
     "error_heatmap_white_red",
     ["#ffffff", "#fee5d9", "#fcae91", "#fb6a4a", "#cb181d"],
 )
+
+_LEAD_TIME_UNIT_ABBREVIATIONS = {
+    "weeks": "w",
+    "days": "d",
+    "hours": "h",
+    "minutes": "min",
+    "seconds": "s",
+    "milliseconds": "ms",
+    "microseconds": "µs",
+    "unknown": "steps",
+}
 
 
 def _tex_safe(s: str) -> str:
@@ -125,7 +137,7 @@ def _get_heatmap_var_labels(datastore: BaseRegularGridDatastore) -> list[str]:
     ]
 
 
-def _to_heatmap_matrix(values) -> np.ndarray:
+def _to_heatmap_matrix(values: Any) -> np.ndarray:
     """
     Convert heatmap inputs to a ``(num_state_vars, pred_steps)`` matrix.
 
@@ -231,7 +243,9 @@ def _get_heatmap_color_values(
         If ``normalization`` is not one of ``'state_std'`` or ``'diff_std'``.
     """
 
-    def _per_var_fallback():
+    def _per_var_fallback() -> (
+        tuple[np.ndarray, str, matplotlib.colors.Colormap]
+    ):
         """
         Normalize errors by per-variable maximum value.
 
@@ -343,7 +357,7 @@ def _get_annotation_text_color(
 
 
 def plot_on_axis(
-    ax: matplotlib.axes.Axes,
+    ax: GeoAxes,
     da: xr.DataArray,
     datastore: BaseRegularGridDatastore,
     vmin: float | None = None,
@@ -472,7 +486,7 @@ def plot_on_axis(
 def plot_error_heatmap(
     errors: torch.Tensor,
     datastore: BaseRegularGridDatastore,
-    title: Optional[str] = None,
+    title: str | None = None,
     normalization: str = "state_std",
 ) -> matplotlib.figure.Figure:
     """
@@ -549,7 +563,9 @@ def plot_error_heatmap(
                 )
             else:
                 formatted_error = str(error)
-            text_color = _get_annotation_text_color(color_values_np[j, i], im)
+            text_color = _get_annotation_text_color(
+                float(color_values_np[j, i]), im
+            )
             ax.text(
                 i,
                 j,
@@ -570,9 +586,10 @@ def plot_error_heatmap(
         rotation=layout["x_tick_rotation"],
         ha="right" if layout["x_tick_rotation"] > 0 else "center",
     )
-    ax.set_xlabel(
-        f"Lead time ({time_step_unit[0]})", size=layout["tick_label_size"]
+    unit_abbr = _LEAD_TIME_UNIT_ABBREVIATIONS.get(
+        time_step_unit, time_step_unit
     )
+    ax.set_xlabel(f"Lead time ({unit_abbr})", size=layout["tick_label_size"])
 
     ax.set_yticks(np.arange(d_f))
     ax.set_yticklabels(
@@ -589,7 +606,7 @@ def plot_error_heatmap(
 def plot_error_map(
     errors: torch.Tensor,
     datastore: BaseRegularGridDatastore,
-    title: Optional[str] = None,
+    title: str | None = None,
 ) -> matplotlib.figure.Figure:
     """
     Deprecated: use :func:`plot_error_heatmap` instead.
@@ -621,8 +638,8 @@ def plot_prediction(
     datastore: BaseRegularGridDatastore,
     da_prediction: xr.DataArray,
     da_target: xr.DataArray,
-    title: Optional[str] = None,
-    vrange: Optional[tuple[float, float]] = None,
+    title: str | None = None,
+    vrange: tuple[float, float] | None = None,
     boundary_alpha: float = 0.7,
     crop_to_interior: bool = True,
     colorbar_label: str = "",
@@ -705,8 +722,8 @@ def plot_prediction(
 def plot_spatial_error(
     error: torch.Tensor,
     datastore: BaseRegularGridDatastore,
-    title: Optional[str] = None,
-    vrange: Optional[tuple[float, float]] = None,
+    title: str | None = None,
+    vrange: tuple[float, float] | None = None,
     boundary_alpha: float = 0.7,
     crop_to_interior: bool = True,
     colorbar_label: str = "",
@@ -751,7 +768,7 @@ def plot_spatial_error(
     )
 
     mesh = plot_on_axis(
-        ax=ax,
+        ax=ax,  # ty: ignore[invalid-argument-type]
         da=xr.DataArray(error_np),
         datastore=datastore,
         vmin=vmin,
@@ -770,7 +787,7 @@ def plot_spatial_error(
         pad=0.02,
     )
     cbar.ax.tick_params(labelsize=_TICK_SIZE)
-    cbar.formatter.set_powerlimits((-3, 3))
+    cbar.formatter.set_powerlimits((-3, 3))  # ty: ignore[unresolved-attribute]
     if colorbar_label:
         cbar.set_label(_tex_safe(colorbar_label), size=_LABEL_SIZE)
 

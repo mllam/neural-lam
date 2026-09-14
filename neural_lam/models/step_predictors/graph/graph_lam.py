@@ -21,6 +21,10 @@ class GraphLAM(BaseGraphModel):
     Oskarsson et al. (2023).
     """
 
+    mesh_static_features: torch.Tensor
+    m2m_features: torch.Tensor
+    m2m_edge_index: torch.Tensor
+
     def __init__(
         self,
         datastore: BaseDatastore,
@@ -36,6 +40,7 @@ class GraphLAM(BaseGraphModel):
         output_clamping_upper: dict[str, float] | None = None,
         g2m_gnn_type: str = "InteractionNet",
         m2g_gnn_type: str = "InteractionNet",
+        **_kwargs: object,
     ) -> None:
         """
         Initialize the GraphLAM model.

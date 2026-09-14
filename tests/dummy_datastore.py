@@ -765,3 +765,19 @@ class EnsembleDummyDatastore(BaseDatastore):
     @property
     def state_feature_weights_values(self) -> list[float]:
         return [1.0]
+
+
+def set_framed_boundary(
+    datastore: DummyDatastore, width: int = 1
+) -> np.ndarray:
+    """Replace the random boundary mask with a frame of `width` cells."""
+    shape = (datastore.grid_shape_state.x, datastore.grid_shape_state.y)
+    mask = np.ones(shape, dtype=int)
+    mask[width:-width, width:-width] = 0
+    # `grid_index` is the stacked ("x", "y") dimension, so a C-order flatten
+    # of an (x, y) array lines up with it.
+    datastore.ds["boundary_mask"] = xr.DataArray(
+        mask.reshape(-1), dims=["grid_index"]
+    )
+    datastore.__dict__.pop("boundary_mask", None)  # bust the cached_property
+    return mask
