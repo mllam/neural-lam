@@ -481,6 +481,9 @@ To train Hi-LAM-Parallel use
 python -m neural_lam.train_model --model hi_lam_parallel --graph hierarchical ...
 ```
 
+### Persistence
+A trivial baseline model that returns the previous state unchanged at each step (`--model persistence`). Since it has no learnable parameters, it must be evaluated directly without training (e.g. `--eval val` or `--eval test`).
+
 Checkpoint files for our models trained on the MEPS data are available upon request.
 
 ### High Performance Computing
