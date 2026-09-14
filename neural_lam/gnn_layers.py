@@ -295,9 +295,9 @@ class SplitMLPs(nn.Module):
             If the number of ``mlps`` and ``chunk_sizes`` differ.
         """
         super().__init__()
-        assert len(mlps) == len(
-            chunk_sizes
-        ), "Number of MLPs must match the number of chunks"
+        assert len(mlps) == len(chunk_sizes), (
+            "Number of MLPs must match the number of chunks"
+        )
 
         self.mlps = nn.ModuleList(mlps)
         self.chunk_sizes = chunk_sizes

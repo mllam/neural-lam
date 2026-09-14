@@ -57,7 +57,7 @@ def download_meps_example_reduced_dataset():
 
     config_path = dataset_path / "meps_example_reduced.datastore.yaml"
 
-    with open(config_path, "r") as f:
+    with open(config_path) as f:
         config = yaml.safe_load(f)
 
     if "class" in config["projection"]:

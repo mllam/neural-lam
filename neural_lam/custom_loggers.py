@@ -2,6 +2,7 @@
 
 # Standard library
 import os
+from pathlib import Path
 
 # Third-party
 import matplotlib.pyplot as plt
@@ -118,5 +119,5 @@ class CustomMLFlowLogger(pl.loggers.MLFlowLogger):
                 logger.error("Error logging image\nSet AWS credentials")
                 raise
             finally:
-                if os.path.exists(temporary_image):
-                    os.remove(temporary_image)
+                if Path(temporary_image).exists():
+                    Path(temporary_image).unlink()

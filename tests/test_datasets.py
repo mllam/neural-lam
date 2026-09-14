@@ -166,9 +166,7 @@ def test_single_batch(datastore_name, split):
     """
     datastore = init_datastore_example(datastore_name)
 
-    device_name = (
-        torch.device("cuda") if torch.cuda.is_available() else "cpu"
-    )  # noqa
+    device_name = torch.device("cuda") if torch.cuda.is_available() else "cpu"
 
     graph_name = "1level"
 

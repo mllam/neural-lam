@@ -218,9 +218,14 @@ def assert_edge_index_in_range(
     -------
     None
     """
-    assert (
-        edge_index.ndim == 2 and edge_index.shape[0] == 2
-    ), f"{name}: expected edge_index shape [2, E], got {tuple(edge_index.shape)}"  # noqa: E501
+    assert edge_index.ndim == 2, (
+        f"{name}: expected edge_index shape [2, E], "
+        f"got {tuple(edge_index.shape)}"
+    )
+    assert edge_index.shape[0] == 2, (
+        f"{name}: expected edge_index shape [2, E], "
+        f"got {tuple(edge_index.shape)}"
+    )
     assert edge_index.shape[1] > 0, f"{name}: expected at least one edge"
 
     sender_start, sender_stop = sender_range

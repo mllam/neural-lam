@@ -1,5 +1,6 @@
 """
-Standalone CLI validator and specification for neural-lam on-disk graph directories.  # noqa: E501
+Standalone CLI validator and specification for neural-lam on-disk graph
+directories.
 
 Run with:
     uv run docs/validate_graph.py <path-to-graph-dir>
@@ -174,7 +175,8 @@ class ValidationReport:
 
     def summarize(self) -> str:
         """
-        Summarize the validation report by counting results of each severity level.  # noqa: E501
+        Summarize the validation report by counting results of each severity
+        level.
 
         Returns
         -------
@@ -188,7 +190,7 @@ class ValidationReport:
             f"Summary: {fails} fail(s), {warns} warning(s), {passes} pass(es)."
         )
 
-    def __iadd__(self, other: "ValidationReport") -> "ValidationReport":
+    def __iadd__(self, other: ValidationReport) -> ValidationReport:
         """
         Merge another ValidationReport into this one (in-place).
 
@@ -206,7 +208,7 @@ class ValidationReport:
         self.ok = self.ok and other.ok
         return self
 
-    def __add__(self, other: "ValidationReport") -> "ValidationReport":
+    def __add__(self, other: ValidationReport) -> ValidationReport:
         """
         Combine two ValidationReports into a new one.
 
@@ -954,9 +956,7 @@ def check_edge_features(
 
     if features.shape[0] > 0:
         vec_norm = torch.linalg.vector_norm(features[:, 1:], dim=1)
-        max_diff = float(
-            torch.max(torch.abs(vec_norm - features[:, 0])).item()
-        )  # noqa: E501
+        max_diff = float(torch.max(torch.abs(vec_norm - features[:, 0])).item())  # noqa: E501
         if max_diff > 5.0e-3:
             report.add(
                 section_name,

@@ -204,4 +204,4 @@ def load_config_and_datastore(
         datastore_kind=config.datastore.kind, config_path=datastore_config_path
     )
 
-    return config, cast(MDPDatastore | NpyFilesDatastoreMEPS, datastore)
+    return config, cast("MDPDatastore | NpyFilesDatastoreMEPS", datastore)

@@ -140,7 +140,7 @@ def test_base_encoder_diagonal_has_positive_std():
 
 
 def test_base_encoder_rejects_unknown_dist():
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match="Unknown encoder output distribution"):
         _IdentityEncoder(latent_dim=4, num_mesh_nodes=3, output_dist="bogus")
 
 

@@ -314,6 +314,6 @@ def test_test_step_excludes_boundary_from_spatial_loss(tmp_path):
         "boundary nodes must be excluded from the test spatial loss map, "
         "consistent with every other loss call in the module"
     )
-    assert torch.isfinite(
-        mean_spatial_loss[:, ~boundary]
-    ).all(), "interior nodes must keep finite loss values"
+    assert torch.isfinite(mean_spatial_loss[:, ~boundary]).all(), (
+        "interior nodes must keep finite loss values"
+    )
