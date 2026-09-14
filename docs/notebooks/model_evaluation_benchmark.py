@@ -202,7 +202,15 @@ def _(ForecastBenchmark, datastore, model):
 def _(mo):
     mo.md(
         r"""
-    ## 5. Diagnostic Visualizations: Lead-Time RMSE & 2D DCT-II Power Spectra
+    ## 5. Diagnostic Visualizations: Multi-Metric Verification Suite
+
+    We plot the three core atmospheric verification dimensions:
+    1. **Physical Lead-Time Errors**: Interior RMSE and Bias growth over rollout
+       steps.
+    2. **Scale-Dependent Fractions Skill Score (FSS)**: Spatial tolerance skill
+       curve (Roberts & Lean 2008) resolving the double-penalty problem.
+    3. **2D DCT-II Power Spectral Density**: Energy spectrum (Denis et al. 2002)
+       diagnosing fine-scale turbulence preservation vs spatial collapse.
     """
     )
     return
@@ -210,9 +218,9 @@ def _(mo):
 
 @app.cell
 def _(plt, scorecard):
-    fig, axes = plt.subplots(1, 2, figsize=(14, 5))
+    fig, axes = plt.subplots(1, 3, figsize=(18, 5))
 
-    # 1. Lead-Time RMSE Plot
+    # 1. Lead-Time RMSE & Bias Plot
     for var in scorecard.variables[:2]:
         axes[0].plot(
             scorecard.lead_time_hours,
@@ -220,28 +228,63 @@ def _(plt, scorecard):
             marker="o",
             label=f"{var} RMSE",
         )
+        axes[0].plot(
+            scorecard.lead_time_hours,
+            scorecard.mbe_per_lead_time[var],
+            marker="^",
+            linestyle="--",
+            alpha=0.7,
+            label=f"{var} Bias",
+        )
+    axes[0].axhline(0.0, color="gray", linestyle=":", alpha=0.5)
     axes[0].set_xlabel("Forecast Lead Time (hours)")
-    axes[0].set_ylabel("Physical RMSE")
-    axes[0].set_title("Physical Error vs Lead Time (Interior Domain)")
+    axes[0].set_ylabel("Physical Units")
+    axes[0].set_title("Lead-Time RMSE & Bias (Interior Domain)")
     axes[0].grid(True, linestyle="--", alpha=0.6)
-    axes[0].legend()
+    axes[0].legend(fontsize=9)
 
-    # 2. 2D DCT-II Radial Power Spectral Density
+    # 2. Scale-Dependent Fractions Skill Score (FSS)
+    fss_plotted = False
+    for var in scorecard.variables[:2]:
+        if var in scorecard.fss_scores and scorecard.fss_scores[var]:
+            scales = sorted(scorecard.fss_scores[var].keys())
+            fss_vals = [scorecard.fss_scores[var][s][0] for s in scales]
+            axes[1].plot(
+                scales,
+                fss_vals,
+                marker="D",
+                label=f"{var} FSS",
+            )
+            fss_plotted = True
+    if fss_plotted:
+        axes[1].axhline(
+            0.5,
+            color="red",
+            linestyle=":",
+            alpha=0.8,
+            label="Useful Skill (FSS=0.5)",
+        )
+        axes[1].set_xlabel("Spatial Neighborhood Scale (grid units)")
+        axes[1].set_ylabel("FSS (75th Percentile)")
+        axes[1].set_title("Scale-Dependent Fractions Skill Score")
+        axes[1].set_ylim(0.0, 1.05)
+        axes[1].grid(True, linestyle="--", alpha=0.6)
+        axes[1].legend(fontsize=9)
+
+    # 3. 2D DCT-II Radial Power Spectral Density
     if scorecard.wavenumbers:
         for var in scorecard.variables[:2]:
-            axes[1].loglog(
+            axes[2].loglog(
                 scorecard.wavenumbers,
                 scorecard.radial_psd[var],
                 marker="s",
-                label=f"{var} 2D DCT-II PSD",
+                label=f"{var} DCT-II PSD",
             )
-        axes[1].set_xlabel("Normalized Wavenumber k")
-        axes[1].set_ylabel("Power Spectral Density (PSD)")
-        axes[1].set_title(
-            "2D DCT-II Energy Spectrum (No Periodization Artifacts)"
-        )
-        axes[1].grid(True, which="both", linestyle="--", alpha=0.6)
-        axes[1].legend()
+        axes[2].set_xlabel("Normalized Wavenumber k")
+        axes[2].set_ylabel("Power Spectral Density")
+        axes[2].set_title("2D DCT-II Kinetic Energy Spectrum")
+        axes[2].grid(True, which="both", linestyle="--", alpha=0.6)
+        axes[2].legend(fontsize=9)
 
     plt.tight_layout()
     plt.show()

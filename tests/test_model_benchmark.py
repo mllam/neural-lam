@@ -82,3 +82,4 @@ def test_forecast_benchmark_scorecard_and_evaluation():
     assert "Forecast Benchmark Summary" in summary_text
     assert "RMSE" in summary_text
     assert "Bias" in summary_text
+    assert "FSS" in summary_text

@@ -65,6 +65,13 @@ class BenchmarkScorecard:
             lines.append(f"    RMSE -> {rmse_str}")
             lines.append(f"    Bias -> {bias_str}")
 
+            if var in self.fss_scores and self.fss_scores[var]:
+                fss_strs = [
+                    f"{scale}px: {np.mean(scores):.2f}"
+                    for scale, scores in sorted(self.fss_scores[var].items())
+                ]
+                lines.append(f"    FSS -> {', '.join(fss_strs)}")
+
             if var in self.spectral_collapse_ratios:
                 scr_val = np.mean(self.spectral_collapse_ratios[var])
                 lines.append(
@@ -373,7 +380,8 @@ class ForecastBenchmark:
                 scr_map[var] = scr_tensor.tolist()
 
                 # Fine-scale SCR (last quarter of spectrum)
-                scr_fine = float(scr_tensor[-len(scr_tensor) // 4 :].mean())
+                num_fine = max(1, len(scr_tensor) // 4)
+                scr_fine = float(scr_tensor[-num_fine:].mean())
                 fss_fine = (
                     float(np.mean(fss_map[var][self.fss_kernel_sizes[0]]))
                     if fss_map[var][self.fss_kernel_sizes[0]]
