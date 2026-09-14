@@ -4,7 +4,7 @@
 import os
 import warnings
 from pathlib import Path
-from typing import Any, Union
+from typing import Any
 
 # Third-party
 import torch
@@ -144,7 +144,7 @@ def zero_index_g2m(
 
 
 def load_graph(
-    graph_dir_path: Union[str, Path],
+    graph_dir_path: str | Path,
     mesh_node_features_scaling: float,
     device: str = "cpu",
 ) -> tuple[bool, dict[str, Any]]:
@@ -267,7 +267,7 @@ def load_graph(
     # Load static node features
     mesh_static_features = loads_file(
         "mesh_features.pt"
-    )  # List of (N_mesh[l], d_mesh_static)
+    )  # List of (N_mesh[l], num_mesh_static_vars)
 
     graph_spec_version = load_graph_spec_version()
     if graph_spec_version not in {

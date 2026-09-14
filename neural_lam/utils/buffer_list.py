@@ -1,7 +1,7 @@
 """Module wrapper exposing a list of tensors as registered buffers."""
 
 # Standard library
-from typing import Iterator, Union, overload
+from typing import Iterator, overload
 
 # Third-party
 import torch
@@ -44,8 +44,8 @@ class BufferList(nn.Module):
         """Slice-indexed access overload; see the implementation below."""
 
     def __getitem__(
-        self, key: Union[int, slice]
-    ) -> Union[torch.Tensor, list[torch.Tensor]]:
+        self, key: int | slice
+    ) -> torch.Tensor | list[torch.Tensor]:
         """Return the buffer(s) at ``key``.
 
         Supports integer indexing (with Python-style negative indices)
@@ -76,13 +76,13 @@ class BufferList(nn.Module):
         """Iterate over the registered buffers in ascending index order."""
         return (self[i] for i in range(len(self)))
 
-    def __itruediv__(self, other: float) -> "BufferList":
+    def __itruediv__(self, other: float | torch.Tensor) -> "BufferList":
         """
         Divide each element in list with other.
 
         Parameters
         ----------
-        other : float
+        other : float or torch.Tensor
             The value to divide by.
 
         Returns
@@ -92,13 +92,13 @@ class BufferList(nn.Module):
         """
         return self.__imul__(1.0 / other)
 
-    def __imul__(self, other: float) -> "BufferList":
+    def __imul__(self, other: float | torch.Tensor) -> "BufferList":
         """
         Multiply each element in list with other.
 
         Parameters
         ----------
-        other : float
+        other : float or torch.Tensor
             The value to multiply by.
 
         Returns

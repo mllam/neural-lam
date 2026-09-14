@@ -100,7 +100,7 @@ def test_graph_creation(datastore_name, graph_name):
 
     # check that the number of edges is consistent over the files
     d_features = 3
-    d_mesh_static = 2
+    num_mesh_static_vars = 2
     edge_counts = {}
 
     with tempfile.TemporaryDirectory() as tmpdir:
@@ -164,7 +164,7 @@ def test_graph_creation(datastore_name, graph_name):
                     assert isinstance(r, torch.Tensor)
 
                     if file_id == "mesh_features":
-                        assert r.shape[1] == d_mesh_static
+                        assert r.shape[1] == num_mesh_static_vars
                     elif file_id.endswith("_index"):
                         assert r.shape[0] == 2  # adjacency matrix uses two rows
                     elif file_id.endswith("_features"):

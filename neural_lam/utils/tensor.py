@@ -37,7 +37,7 @@ def inverse_softplus(
     ``torch.clamp`` will zero the gradients near the bounds, but values this
     close to zero or ``threshold / beta`` already have negligible gradients.
     """
-    x_clamped = torch.clamp(
+    x_clamped = torch.clamp(  # ty: ignore[no-matching-overload]
         x, min=torch.log(torch.tensor(1e-6 + 1)) / beta, max=threshold / beta
     )
 

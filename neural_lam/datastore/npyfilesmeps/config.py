@@ -3,7 +3,7 @@
 # Standard library
 from dataclasses import dataclass, field
 from datetime import timedelta
-from typing import Any, Dict, List
+from typing import Any
 
 # Third-party
 import dataclass_wizard
@@ -24,7 +24,7 @@ class Projection:
     """
 
     class_name: str
-    kwargs: Dict[str, Any]
+    kwargs: dict[str, Any]
 
 
 @dataclass
@@ -47,14 +47,14 @@ class Dataset:
     """
 
     name: str
-    var_names: List[str]
-    var_units: List[str]
-    var_longnames: List[str]
+    var_names: list[str]
+    var_units: list[str]
+    var_longnames: list[str]
     num_forcing_features: int
     num_timesteps: int
     step_length: timedelta
     num_ensemble_members: int
-    remove_state_features_with_index: List[int] = field(default_factory=list)
+    remove_state_features_with_index: list[int] = field(default_factory=list)
 
 
 @dataclass
@@ -70,5 +70,5 @@ class NpyDatastoreConfig(dataclass_wizard.YAMLWizard):
     """
 
     dataset: Dataset
-    grid_shape_state: List[int]
+    grid_shape_state: list[int]
     projection: Projection

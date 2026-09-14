@@ -8,6 +8,7 @@ import functools
 from datetime import timedelta
 from functools import cached_property
 from pathlib import Path
+from typing import overload
 
 # Third-party
 import cartopy.crs as ccrs
@@ -111,7 +112,7 @@ class BaseDatastore(abc.ABC):
 
         Returns
         -------
-        List[str]
+        list[str]
             The units of the variables.
 
         """
@@ -127,7 +128,7 @@ class BaseDatastore(abc.ABC):
 
         Returns
         -------
-        List[str]
+        list[str]
             The names of the variables.
 
         """
@@ -143,7 +144,7 @@ class BaseDatastore(abc.ABC):
 
         Returns
         -------
-        List[str]
+        list[str]
             The long names of the variables.
 
         """
@@ -333,7 +334,7 @@ class BaseDatastore(abc.ABC):
 
         Returns
         -------
-        List[float]
+        list[float]
             The extent of the x, y coordinates.
 
         """
@@ -423,7 +424,7 @@ class BaseDatastore(abc.ABC):
             The category of the dataset (state/forcing/static).
         Returns
         -------
-        List[str]
+        list[str]
             The expected dimension order for the dataarray or dataset.
 
         """
@@ -496,7 +497,7 @@ class BaseRegularGridDatastore(BaseDatastore):
     `stack_grid_coords` and `unstack_grid_coords` respectively).
     """
 
-    spatial_coordinates = ("x", "y")
+    spatial_coordinates: tuple[str, str] = ("x", "y")
 
     @cached_property
     @abc.abstractmethod
@@ -532,6 +533,14 @@ class BaseRegularGridDatastore(BaseDatastore):
             - `stacked==False`: shape `(N_x, N_y, 2)`
         """
 
+    @overload
+    def unstack_grid_coords(self, da_or_ds: xr.DataArray) -> xr.DataArray:
+        """Unstack spatial grid coordinates of DataArray."""
+
+    @overload
+    def unstack_grid_coords(self, da_or_ds: xr.Dataset) -> xr.Dataset:
+        """Unstack spatial grid coordinates of Dataset."""
+
     def unstack_grid_coords(
         self, da_or_ds: xr.DataArray | xr.Dataset
     ) -> xr.DataArray | xr.Dataset:
@@ -562,7 +571,7 @@ class BaseRegularGridDatastore(BaseDatastore):
         da_or_ds_unstacked = da_or_ds.unstack("grid_index")
 
         # Ensure that the x, y dimensions are in the correct order
-        dims = da_or_ds_unstacked.dims
+        dims = list(da_or_ds_unstacked.dims)
         xy_dim_order = [d for d in dims if d in self.spatial_coordinates]
 
         if xy_dim_order != self.spatial_coordinates:
@@ -586,6 +595,14 @@ class BaseRegularGridDatastore(BaseDatastore):
             da_or_ds_unstacked = da_or_ds_unstacked.transpose(*new_dim_order)
 
         return da_or_ds_unstacked
+
+    @overload
+    def stack_grid_coords(self, da_or_ds: xr.DataArray) -> xr.DataArray:
+        """Stack spatial grid coordinates of DataArray."""
+
+    @overload
+    def stack_grid_coords(self, da_or_ds: xr.Dataset) -> xr.Dataset:
+        """Stack spatial grid coordinates of Dataset."""
 
     def stack_grid_coords(
         self, da_or_ds: xr.DataArray | xr.Dataset
@@ -615,7 +632,7 @@ class BaseRegularGridDatastore(BaseDatastore):
         # dimension named in the format `{category}_feature`
         category = None
         for dim in da_or_ds_stacked.dims:
-            if dim.endswith("_feature"):
+            if isinstance(dim, str) and dim.endswith("_feature"):
                 if category is not None:
                     raise ValueError(
                         "Multiple dimensions ending with '_feature' found in "

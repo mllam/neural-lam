@@ -15,6 +15,7 @@ def _load_validator_module():
     spec = importlib.util.spec_from_file_location(
         "validate_graph_script", script_path
     )
+    assert spec is not None
     module = importlib.util.module_from_spec(spec)
     # Standard library
     import sys

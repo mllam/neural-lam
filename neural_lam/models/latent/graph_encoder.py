@@ -76,7 +76,9 @@ class GraphLatentEncoder(BaseLatentEncoder):
         )
 
     # pylint: disable-next=arguments-differ
-    def compute_dist_params(self, grid_rep, graph_emb, **kwargs):
+    def compute_dist_params(  # type: ignore[override]
+        self, grid_rep, graph_emb, **kwargs
+    ):
         """
         Compute distribution parameters on mesh from grid features.
 

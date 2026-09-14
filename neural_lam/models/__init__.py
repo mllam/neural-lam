@@ -14,11 +14,11 @@ from .step_predictors.graph.hierarchical import BaseHiGraphModel
 
 # NOTE: GraphEFM/GraphEFMMultiScale are intentionally NOT registered in
 # MODELS yet.
-# The shared construction call in train_model.py instantiates the chosen
-# model with a fixed deterministic kwarg set -- datastore-first, no
-# ``config``, and with ``mesh_aggr`` -- whereas the Graph-EFM models require
-# ``config`` (for their per_var_std weighting) and take no ``mesh_aggr``.
-# Registering them requires config-aware model assembly in train_model.py.
+# ``train_model.build_predictor`` instantiates the chosen model with a fixed
+# deterministic kwarg set -- datastore-first, no ``config``, and with
+# ``mesh_aggr`` -- whereas the Graph-EFM models require ``config`` (for their
+# per_var_std weighting) and take no ``mesh_aggr``.
+# Registering them requires making ``build_predictor`` config-aware.
 MODELS = {
     "graph_lam": GraphLAM,
     "hi_lam": HiLAM,

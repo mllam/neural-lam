@@ -177,6 +177,8 @@ class BaseGraphEFM(StepPredictor):
             num_future_forcing_steps,
         )
         grid_current_dim = self.grid_dim + num_state_vars
+        assert isinstance(self.g2m_features, torch.Tensor)
+        assert isinstance(self.m2g_features, torch.Tensor)
         g2m_dim = self.g2m_features.shape[1]
         m2g_dim = self.m2g_features.shape[1]
 
@@ -458,6 +460,7 @@ class BaseGraphEFM(StepPredictor):
         # one-step difference statistics, then add it onto prev_state (X_t)
         # and clamp to the valid range (a no-op when no clamping limits are
         # configured), as for the deterministic models.
+        assert isinstance(self.decoder, torch.nn.Module)
         mean_delta, pred_std = self.decoder(
             grid_prev_emb, latent_samples, graph_emb
         )
@@ -476,6 +479,11 @@ class GraphEFM(BaseGraphEFM):
     prior and variational encoder are ``HiGraphLatentEncoder``s and the
     decoder is a ``HiGraphLatentDecoder``.
     """
+
+    mesh_static_features: list[torch.Tensor]
+    mesh_up_features: list[torch.Tensor]
+    mesh_down_features: list[torch.Tensor]
+    m2m_features: list[torch.Tensor]
 
     def __init__(
         self,
@@ -758,7 +766,7 @@ class GraphEFM(BaseGraphEFM):
                     self.mesh_embedders,
                     self.mesh_static_features,
                 )
-            ],  # each (B, num_mesh_nodes[l], d_h)
+            ],
             "mesh_up": [
                 self.expand_to_batch(emb(edge_feat), batch_size)
                 for emb, edge_feat in zip(
@@ -790,10 +798,13 @@ class GraphEFMMultiScale(BaseGraphEFM):
     Graph-based Ensemble Forecasting Model on a flat mesh graph
     (e.g. a multi-scale graph).
 
-    The latent variable lives on the mesh nodes. The prior and variational
-    encoder are ``GraphLatentEncoder``s and the decoder is a
-    ``GraphLatentDecoder``.
+    The latent variable lives on the (single) level of the mesh graph. The
+    prior and variational encoder are ``GraphLatentEncoder``s and the
+    decoder is a ``GraphLatentDecoder``.
     """
+
+    mesh_static_features: torch.Tensor
+    m2m_features: torch.Tensor
 
     def __init__(
         self,
