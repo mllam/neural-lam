@@ -27,6 +27,8 @@ on: [push, pull_request, workflow_dispatch]
 jobs:
   tests:
     runs-on: ${{ matrix.runner }}
+    env:
+      FSSPEC_SIMPLECACHE_CACHE_STORAGE: ${{ github.workspace }}/.fsspec-cache
     strategy:
       matrix:
         device: [cpu, gpu]
@@ -75,6 +77,15 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-meps-reduced-example-data-v0.3.0
 
+      # Input data for the mdp examples, downloaded through fsspec simplecache.
+      # The cache resets when an mdp datastore config changes or v1 is bumped.
+      - name: Load mdp input cache
+        id: mdp-input-cache
+        uses: actions/cache/restore@v4
+        with:
+          path: ${{ env.FSSPEC_SIMPLECACHE_CACHE_STORAGE }}
+          key: ${{ runner.os }}-mdp-input-v1-${{ hashFiles('tests/datastore_examples/mdp/**/*.datastore.yaml') }}
+
       - name: Run tests
         run: |
           pytest -vv -s --doctest-modules
@@ -92,3 +103,10 @@ jobs:
         with:
           path: tests/datastore_examples/npyfilesmeps/meps_example_reduced.v0.3.0.tar.gz
           key: ${{ runner.os }}-meps-reduced-example-data-v0.3.0
+
+      - name: Save mdp input cache
+        if: steps.mdp-input-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: ${{ env.FSSPEC_SIMPLECACHE_CACHE_STORAGE }}
+          key: ${{ steps.mdp-input-cache.outputs.cache-primary-key }}
