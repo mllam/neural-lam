@@ -170,7 +170,8 @@ exclude = ["tests", "docs", "build"]
 
 [tool.pytest.ini_options]
 markers = [
-    "slow: marks tests as slow (deselected by default, run with -m slow)",
+    "requires_training: marks tests that train a model with trainer.fit() (skip with -m 'not requires_training')",
+    "quick: added automatically to tests with neither requires_real_data nor requires_training (run with -m quick)",
     "requires_real_data: marks tests that need the real (non-dummy) example datastores (mdp, npyfilesmeps), a small sample downloaded on first run (skip with -m 'not requires_real_data')",
 ]
 

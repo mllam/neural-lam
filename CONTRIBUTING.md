@@ -77,8 +77,11 @@ pytest -vv -s --doctest-modules
 > **Note:** The first test run downloads ~50 MB of example data via
 > [pooch](https://www.fatiando.org/pooch/).
 
-For a quicker check that does not need the example data, run
-`pytest -m "not requires_real_data"`. Tests that construct the `mdp` or
+For a quick check without the example data or any training, run
+`pytest -m quick` (or `pytest -m "not requires_real_data"` to skip only the
+example data). Tests that call `trainer.fit()` must be marked with
+`@pytest.mark.requires_training`; `quick` is added automatically to tests with
+neither marker. Tests that construct the `mdp` or
 `npyfilesmeps` example datastores must be marked with
 `@pytest.mark.requires_real_data` (tests parametrized over `datastore_name`
 are marked automatically); an unmarked test that does so fails with a message

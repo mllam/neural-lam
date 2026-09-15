@@ -142,7 +142,7 @@ def run_simple_training(
     trainer.fit(model=model, datamodule=data_module)
 
 
-@pytest.mark.slow
+@pytest.mark.requires_training
 @pytest.mark.parametrize("datastore_name", DATASTORES.keys())
 def test_training(datastore_name):
     datastore = init_datastore_example(datastore_name)
@@ -156,7 +156,7 @@ def test_training(datastore_name):
     run_simple_training(datastore, set_output_std=False)
 
 
-@pytest.mark.slow
+@pytest.mark.requires_training
 @pytest.mark.requires_real_data
 def test_training_output_std():
     datastore = init_datastore_example("mdp")  # Test only with mdp datastore
@@ -227,7 +227,6 @@ def test_all_gather_cat_multi_device_simulation():
     )
 
 
-@pytest.mark.slow
 def test_test_step_excludes_boundary_from_spatial_loss(tmp_path):
     """
     Regression test for issue #569.

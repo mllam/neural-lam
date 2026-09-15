@@ -113,7 +113,8 @@ REAL_DATA_DATASTORE_KINDS = ("mdp", "npyfilesmeps")
 
 def pytest_collection_modifyitems(items):
     """Mark tests parametrized with a ``datastore_name`` that needs real
-    example data with ``requires_real_data``."""
+    example data with ``requires_real_data``, and tests needing neither real
+    data nor training with ``quick``."""
     for item in items:
         callspec = getattr(item, "callspec", None)
         if (
@@ -122,6 +123,11 @@ def pytest_collection_modifyitems(items):
             in REAL_DATA_DATASTORE_KINDS
         ):
             item.add_marker(pytest.mark.requires_real_data)
+        if not (
+            item.get_closest_marker("requires_real_data")
+            or item.get_closest_marker("requires_training")
+        ):
+            item.add_marker(pytest.mark.quick)
 
 
 def _fail_unmarked_example_datastore(kind):
