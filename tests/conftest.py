@@ -131,16 +131,16 @@ def pytest_collection_modifyitems(items):
 
 
 def _fail_unmarked_example_datastore(kind):
-    """Return an ``__init__`` that fails the test constructing ``kind``."""
+    """Return a callable that fails the test constructing ``kind``."""
 
-    def __init__(self, *args, **kwargs):
+    def fail(*args, **kwargs):
         pytest.fail(
             f"This test constructs the '{kind}' example datastore, which "
             "needs real example data. Mark it with "
             "@pytest.mark.requires_real_data."
         )
 
-    return __init__
+    return fail
 
 
 @pytest.hookimpl(wrapper=True)
@@ -162,6 +162,12 @@ def pytest_runtest_protocol(item, nextitem):
                 "__init__",
                 _fail_unmarked_example_datastore(kind),
             )
+        # the npyfilesmeps example is downloaded before its datastore is built
+        mp.setitem(
+            globals(),
+            "download_meps_example_reduced_dataset",
+            _fail_unmarked_example_datastore("npyfilesmeps"),
+        )
         return (yield)
 
 
