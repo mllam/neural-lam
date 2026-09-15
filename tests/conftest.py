@@ -4,6 +4,7 @@ from datetime import timedelta
 from pathlib import Path
 
 # Third-party
+import fsspec
 import pooch
 import pytest
 import yaml
@@ -21,6 +22,11 @@ from .dummy_datastore import DummyDatastore
 # Disable weights and biases to avoid unnecessary logging
 # and to avoid having to deal with authentication
 os.environ["WANDB_MODE"] = "disabled"
+
+# The mdp example inputs are read through `simplecache::https://`, which with
+# zarr 3 needs an async https filesystem. mllam-data-prep does not accept
+# storage_options yet, so set this globally.
+fsspec.config.conf["https"] = {"asynchronous": True}
 
 
 @pytest.fixture(autouse=True)
