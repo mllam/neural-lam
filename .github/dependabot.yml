@@ -19,7 +19,7 @@ updates:
   cooldown:
     default-days: 7
   groups:
-    uv.lock-patches:
+    uvlock-patches:
       update-types:
       - patch
 
