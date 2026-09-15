@@ -56,17 +56,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   label now reads e.g. "min" / "ms" and falls back to "steps" when no unit
   divides the step length evenly [\#743](https://github.com/mllam/neural-lam/pull/743) @nikhil3495
 
-- Fix silent corruption of `compute_standardization_stats.py --distributed`
-  output: depadding after the multi-rank gather selected
-  `gathered[:total_samples]` (equivalently `gathered[original_indices]`),
-  which assumes padded rows land at the tail of the gathered tensor. They
-  don't -- `DistributedSampler(shuffle=False)` stripes dataset indices
-  across ranks, so a naive prefix selection silently swapped a handful of
-  real samples for padded (duplicated last-sample) ones whenever
-  `total_samples % world_size != 0`, corrupting the saved parameter/diff
-  mean and std tensors. Real vs. padded rows are now identified locally,
-  per rank, before the gather (`real_sample_mask_per_batch`), so order no
-  longer matters. @nikhil3495
+- Fix `compute_standardization_stats.py --distributed` silently keeping padded rows and dropping real ones when `len(dataset) % world_size != 0`. Padded rows are now masked out per rank before the gather. [\#748](https://github.com/mllam/neural-lam/pull/748) @nikhil3495
 
 - Set `workers=True` in `seed_everything` to properly seed DataLoader workers, ensuring uncorrelated random states across processes when `num_workers > 0` [\#716](https://github.com/mllam/neural-lam/pull/716) @GiGiKoneti
 
