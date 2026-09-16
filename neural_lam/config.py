@@ -7,6 +7,7 @@ from typing import cast
 
 # Third-party
 import dataclass_wizard
+import torch
 
 # Local
 from .datastore import (
@@ -164,6 +165,19 @@ class NeuralLAMConfig(dataclass_wizard.JSONWizard, dataclass_wizard.YAMLWizard):
         # currently cannot be used together with `auto_assign_tags` due to a
         # bug it seems
         # raise_on_unknown_json_key = True
+
+
+if hasattr(torch.serialization, "add_safe_globals"):
+    torch.serialization.add_safe_globals(
+        [
+            NeuralLAMConfig,
+            DatastoreSelection,
+            ManualStateFeatureWeighting,
+            UniformFeatureWeighting,
+            OutputClamping,
+            TrainingConfig,
+        ]
+    )
 
 
 class InvalidConfigError(Exception):

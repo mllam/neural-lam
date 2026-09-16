@@ -29,6 +29,9 @@ from .models import (
 )
 from .weather_dataset import WeatherDataModule
 
+if hasattr(torch.serialization, "add_safe_globals"):
+    torch.serialization.add_safe_globals([Namespace])
+
 
 def build_predictor(
     predictor_class: type,
