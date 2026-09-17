@@ -165,7 +165,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   users on other CUDA versions install the matching `torch` variant manually
   (see README) [\#604](https://github.com/mllam/neural-lam/pull/604) @RajdeepKushwaha5
 
+<<<<<<< Updated upstream
 - Add edge count consistency check to `test_graph_creation.py` [#301](https://github.com/mllam/neural-lam/pull/301) @osten-antonio
+=======
+- Add more detailed (module and function name) coverage linting errors [\#659](https://github.com/mllam/neural-lam/pull/659), @leifdenby
+>>>>>>> Stashed changes
 
 ## [v0.6.0](https://github.com/mllam/neural-lam/releases/tag/v0.6.0)
 
