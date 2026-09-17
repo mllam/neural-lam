@@ -909,7 +909,7 @@ def test_spatial_loss_maps_out_of_range_steps(tmp_path):
         lr=1.0e-3,
         restore_opt=False,
         n_example_pred=0,
-        val_steps_to_log=[100, 1, 2],
+        val_steps_to_log=[-1, 0, 1, 2, 100],
     )
 
     # Mock the trainer to simulate rank-0 single-process execution
@@ -925,7 +925,8 @@ def test_spatial_loss_maps_out_of_range_steps(tmp_path):
 
     model.all_gather_cat = lambda x: x
 
-    # Simulate test_step with rollout length 2 (steps 1 and 2)
+    # Simulate test_step with rollout length 2; steps -1, 0 (non-positive) and 100
+    # (exceeds rollout) must be filtered out, keeping only steps 1 and 2
     batch_size = 1
     pred_steps = 2
     num_grid_nodes = datastore.num_grid_points
@@ -951,10 +952,11 @@ def test_spatial_loss_maps_out_of_range_steps(tmp_path):
 
     model.test_step(dummy_batch, batch_idx=0)
 
-    # Filtered steps should only contain in-range steps
+    # Filtered steps must exclude non-positive steps (-1, 0) and out-of-range (100)
     assert model._test_spatial_steps == [1, 2]
 
     # Run on_test_epoch_end
+    tmp_path.mkdir(parents=True, exist_ok=True)
     model.on_test_epoch_end()
 
     # Verify generated PDF files

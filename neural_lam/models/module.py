@@ -656,7 +656,7 @@ class ForecasterModule(pl.LightningModule):
         )
         spatial_loss[..., ~self.interior_mask_bool] = float("nan")
         self._test_spatial_steps = [
-            step for step in val_steps_to_log if step <= spatial_loss.shape[1]
+            step for step in val_steps_to_log if 1 <= step <= spatial_loss.shape[1]
         ]
         log_spatial_losses = spatial_loss[
             :,
@@ -887,10 +887,6 @@ class ForecasterModule(pl.LightningModule):
         log_dict[full_log_name] = metric_fig
 
         if prefix == "test":
-            os.makedirs(
-                self.logger.save_dir,
-                exist_ok=True,  # ty: ignore[unresolved-attribute]
-            )
             metric_fig.savefig(
                 os.path.join(
                     self.logger.save_dir,  # ty: ignore[unresolved-attribute]
