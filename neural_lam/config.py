@@ -166,8 +166,6 @@ class NeuralLAMConfig(dataclass_wizard.JSONWizard, dataclass_wizard.YAMLWizard):
         # raise_on_unknown_json_key = True
 
 
-
-
 class InvalidConfigError(Exception):
     """Raised when the Neural-LAM configuration file is invalid or malformed."""
 
