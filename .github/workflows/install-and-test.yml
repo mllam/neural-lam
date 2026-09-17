@@ -83,7 +83,7 @@ jobs:
         id: mdp-input-cache
         uses: actions/cache/restore@v4
         with:
-          path: ${{ env.FSSPEC_SIMPLECACHE_CACHE_STORAGE }}
+          path: .fsspec-cache
           key: ${{ runner.os }}-mdp-input-v1-${{ hashFiles('tests/datastore_examples/mdp/**/*.datastore.yaml') }}
 
       - name: Run tests
@@ -108,5 +108,5 @@ jobs:
         if: steps.mdp-input-cache.outputs.cache-hit != 'true'
         uses: actions/cache/save@v4
         with:
-          path: ${{ env.FSSPEC_SIMPLECACHE_CACHE_STORAGE }}
+          path: .fsspec-cache
           key: ${{ steps.mdp-input-cache.outputs.cache-primary-key }}
