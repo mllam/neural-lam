@@ -52,6 +52,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Build the output-clamping index buffers with `dtype=torch.long`. An empty list gave a float tensor, so any config leaving a clamping category unused raised `IndexError` when the buffer was used to index. [\#741](https://github.com/mllam/neural-lam/pull/741) @KumarShivam1908
+
 - Derive the `plot_error_heatmap` lead-time axis label from a full unit-name
   lookup instead of `time_step_unit[0]`, which rendered `minutes`,
   `milliseconds` and `microseconds` all as "m" and `unknown` as "u"; the
@@ -104,6 +106,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Fix `WeatherDataset.__len__` off-by-one in analysis mode (was undercounting by 1 sample), include `num_past_forcing_steps` in the forecast-mode minimum-horizon check, validate forcing-side forecast horizon when forcing is present, and use `min(n_state, n_forcing)` when both are present in analysis mode; raise `IndexError` for out-of-range indices in `WeatherDataset.__getitem__` (with Python-style negative indexing support) [\#312](https://github.com/mllam/neural-lam/pull/312) @kshirajahere
 
 ### Maintenance
+
+- Add `hypothesis` as a dev dependency and cover the output clamping in `tests/test_clamping.py` with property-based tests, asserting that the clamped state stays within its configured bounds and that unbounded features keep the plain residual update, for any previous state and any delta. The hand-built out-of-bounds cases the property test subsumes are removed, and the setup moved to a module-scoped fixture so the model is built once rather than per generated example. [\#741](https://github.com/mllam/neural-lam/pull/741) @KumarShivam1908
 
 - Rename the `d_mesh_static` mesh-node static-feature dimension to `num_mesh_static_vars` in comments and docstrings, matching the canonical `num_*` naming. [\#695](https://github.com/mllam/neural-lam/pull/695) @uttam12331
 

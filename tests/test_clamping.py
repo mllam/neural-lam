@@ -2,7 +2,12 @@
 from pathlib import Path
 
 # Third-party
+import numpy as np
+import pytest
 import torch
+from hypothesis import given, settings
+from hypothesis import strategies as st
+from hypothesis.extra import numpy as hnp
 
 # First-party
 from neural_lam import config as nlconfig
@@ -12,7 +17,15 @@ from neural_lam.models import GraphLAM
 from tests.conftest import init_datastore_example
 
 
-def test_clamping():
+@pytest.fixture(scope="module")
+def datastore_and_graph():
+    """Build the example datastore and its graph once for the whole module.
+
+    Returns
+    -------
+    tuple
+        The datastore and the name of the graph built on it.
+    """
     datastore = init_datastore_example(MDPDatastore.SHORT_NAME)
 
     graph_name = "1level"
@@ -25,6 +38,25 @@ def test_clamping():
             output_root_path=str(graph_dir_path),
             archetype="keisler",
         )
+
+    return datastore, graph_name
+
+
+@pytest.fixture(scope="module")
+def clamping_setup(datastore_and_graph):
+    """Build a GraphLAM with clamping limits once for the whole module.
+
+    Constructing the datastore, graph and model takes about a second, and
+    `@given` re-runs a test body once per generated example, so this is
+    built at module scope rather than inside the tests.
+
+    Returns
+    -------
+    tuple
+        The model, the config it was built from, and the state feature
+        names.
+    """
+    datastore, graph_name = datastore_and_graph
 
     class ModelArgs:
         output_std = False
@@ -72,6 +104,13 @@ def test_clamping():
     )
 
     features = datastore.get_vars_names(category="state")
+
+    return model, config, features
+
+
+def test_clamping(clamping_setup):
+    model, config, features = clamping_setup
+
     original_state = torch.zeros(1, 1, len(features))
     zero_delta = original_state.clone()
 
@@ -125,15 +164,9 @@ def test_clamping():
 
     # Check that clamped states are within bounds
     # they should not be at the bounds but allow it due to numerical precision
-    assert (
-        (
-            model.sigmoid_lower_lims
-            <= prediction[:, :, model.clamp_lower_upper_idx]
-            <= model.sigmoid_upper_lims
-        )
-        .all()
-        .item()
-    )
+    sigmoid_prediction = prediction[:, :, model.clamp_lower_upper_idx]
+    assert (sigmoid_prediction >= model.sigmoid_lower_lims).all().item()
+    assert (sigmoid_prediction <= model.sigmoid_upper_lims).all().item()
     assert (
         (model.softplus_lower_lims <= prediction[:, :, model.clamp_lower_idx])
         .all()
@@ -173,62 +206,6 @@ def test_clamping():
         .item()
     )
 
-    # Check that a prediction from a state starting outside the bounds is also
-    # pushed within bounds. 3 delta should be enough to give an initial state
-    # out of bounds so 5 is well outside
-    invalid_state = original_state + 5 * delta
-    assert (
-        not (
-            model.sigmoid_lower_lims
-            <= invalid_state[:, :, model.clamp_lower_upper_idx]
-            <= model.sigmoid_upper_lims
-        )
-        .any()
-        .item()
-    )
-    assert (
-        not (
-            model.softplus_lower_lims
-            <= invalid_state[:, :, model.clamp_lower_idx]
-        )
-        .any()
-        .item()
-    )
-    assert (
-        not (
-            invalid_state[:, :, model.clamp_upper_idx]
-            <= model.softplus_upper_lims
-        )
-        .any()
-        .item()
-    )
-    invalid_prediction = model.get_clamped_new_state(zero_delta, invalid_state)
-    assert (
-        (
-            model.sigmoid_lower_lims
-            <= invalid_prediction[:, :, model.clamp_lower_upper_idx]
-            <= model.sigmoid_upper_lims
-        )
-        .all()
-        .item()
-    )
-    assert (
-        (
-            model.softplus_lower_lims
-            <= invalid_prediction[:, :, model.clamp_lower_idx]
-        )
-        .all()
-        .item()
-    )
-    assert (
-        (
-            invalid_prediction[:, :, model.clamp_upper_idx]
-            <= model.softplus_upper_lims
-        )
-        .all()
-        .item()
-    )
-
     # Above tests only check the upper sigmoid limit.
     # Repeat to check lower sigmoid limit
 
@@ -239,17 +216,12 @@ def test_clamping():
         prediction = model.get_clamped_new_state(-delta, prediction)
 
     # Check that clamped states are within bounds
-    assert (
-        (
-            model.sigmoid_lower_lims
-            <= prediction[:, :, model.clamp_lower_upper_idx]
-            <= model.sigmoid_upper_lims
-        )
-        .all()
-        .item()
-    )
+    sigmoid_prediction = prediction[:, :, model.clamp_lower_upper_idx]
+    assert (sigmoid_prediction >= model.sigmoid_lower_lims).all().item()
+    assert (sigmoid_prediction <= model.sigmoid_upper_lims).all().item()
 
     # Check that prediction is within bounds in original non-normalized space
+    unscaled_prediction = prediction * model.state_std + model.state_mean
     assert (
         (
             torch.tensor(list(lower_lims.values()))
@@ -267,26 +239,143 @@ def test_clamping():
         .item()
     )
 
-    # Check that a prediction from a state starting outside the bounds is also
-    # pushed within bounds. 3 delta should be enough to give an initial state
-    # out of bounds so 5 is well outside
-    invalid_state = original_state - 5 * delta
-    assert (
-        not (
-            model.sigmoid_lower_lims
-            <= invalid_state[:, :, model.clamp_lower_upper_idx]
-            <= model.sigmoid_upper_lims
-        )
-        .any()
-        .item()
+
+def test_empty_clamp_category_indices_are_long(datastore_and_graph):
+    """Clamp index buffers stay integer tensors when a category is empty."""
+    datastore, graph_name = datastore_and_graph
+
+    # Only lower limits, so both the sigmoid and the upper softplus
+    # categories come out empty.
+    model = GraphLAM(
+        datastore=datastore,
+        graph_name=graph_name,
+        hidden_dim=4,
+        hidden_layers=1,
+        processor_layers=2,
+        mesh_aggr="sum",
+        num_past_forcing_steps=1,
+        num_future_forcing_steps=1,
+        output_std=False,
+        output_clamping_lower={"t2m": 0.0},
+        output_clamping_upper={},
     )
-    invalid_prediction = model.get_clamped_new_state(zero_delta, invalid_state)
+
+    assert model.clamp_lower_upper_idx.numel() == 0
+    assert model.clamp_upper_idx.numel() == 0
+
+    for idx in (
+        model.clamp_lower_upper_idx,
+        model.clamp_lower_idx,
+        model.clamp_upper_idx,
+    ):
+        assert idx.dtype == torch.long
+
+    # Indexing with an empty buffer must work rather than raise IndexError.
+    features = datastore.get_vars_names(category="state")
+    state = torch.zeros(1, 1, len(features))
+    assert state[:, :, model.clamp_upper_idx].numel() == 0
+
+    new_state = model.get_clamped_new_state(torch.ones_like(state), state)
+    assert torch.isfinite(new_state).all()
+
+
+# Values are drawn in standardized units, where the model operates. 1e3 is
+# far beyond anything seen in practice and fully saturates the clamping
+# functions, which is precisely the regime the bounds have to survive.
+_ELEMENTS = st.floats(
+    min_value=-1e3,
+    max_value=1e3,
+    width=32,
+    allow_nan=False,
+    allow_infinity=False,
+)
+
+# `deadline=None` because per-example timing of torch ops on shared CI
+# runners is unreliable, and the 200 ms default would only add flakiness.
+_SETTINGS = settings(deadline=None)
+
+
+def _draw_state_and_delta(data, num_features):
+    """Draw a `(prev_state, state_delta)` pair sharing one random shape.
+
+    Parameters
+    ----------
+    data : hypothesis.strategies.DataObject
+        The `st.data()` object of the calling test.
+    num_features : int
+        Size of the trailing state-feature dimension.
+
+    Returns
+    -------
+    tuple of torch.Tensor
+        Two tensors of shape `(batch, grid, num_features)`.
+    """
+    shape = (
+        data.draw(st.integers(min_value=1, max_value=3), label="batch"),
+        data.draw(st.integers(min_value=1, max_value=4), label="grid"),
+        num_features,
+    )
+    arrays = hnp.arrays(dtype=np.float32, shape=shape, elements=_ELEMENTS)
+    return (
+        torch.from_numpy(data.draw(arrays, label="prev_state")),
+        torch.from_numpy(data.draw(arrays, label="state_delta")),
+    )
+
+
+@_SETTINGS
+@given(data=st.data())
+def test_clamped_features_stay_within_bounds(clamping_setup, data):
+    """Bounds hold for any previous state and any delta.
+
+    `get_clamped_new_state` applies `f(f^-1(x) + delta)`, and both inverses
+    clamp internally, so an out-of-range `prev_state` is a valid input rather
+    than something that has to be constructed by hand. That makes the bound
+    an unconditional property of the whole input space, not of the particular
+    trajectory `test_clamping` walks.
+    """
+    model, _, features = clamping_setup
+    prev_state, state_delta = _draw_state_and_delta(data, len(features))
+
+    new_state = model.get_clamped_new_state(state_delta, prev_state)
+
+    assert torch.isfinite(new_state).all()
+
+    # Each bound is asserted on its own rather than as `lower <= x <= upper`:
+    # Python expands a chained comparison to `and`, which raises on a tensor
+    # holding more than one value.
+    sigmoid_state = new_state[:, :, model.clamp_lower_upper_idx]
+    assert (sigmoid_state >= model.sigmoid_lower_lims).all()
+    assert (sigmoid_state <= model.sigmoid_upper_lims).all()
     assert (
-        (
-            model.sigmoid_lower_lims
-            <= invalid_prediction[:, :, model.clamp_lower_upper_idx]
-            <= model.sigmoid_upper_lims
-        )
-        .all()
-        .item()
+        new_state[:, :, model.clamp_lower_idx] >= model.softplus_lower_lims
+    ).all()
+    assert (
+        new_state[:, :, model.clamp_upper_idx] <= model.softplus_upper_lims
+    ).all()
+
+
+@_SETTINGS
+@given(data=st.data())
+def test_unclamped_features_are_a_plain_residual_sum(clamping_setup, data):
+    """Features without limits are untouched by clamping.
+
+    Clamping must not leak onto features the config left unbounded; those
+    keep the plain `prev_state + state_delta` update, exactly.
+    """
+    model, _, features = clamping_setup
+    prev_state, state_delta = _draw_state_and_delta(data, len(features))
+
+    unclamped_idx = sorted(
+        set(range(len(features)))
+        - set(model.clamp_lower_upper_idx.tolist())
+        - set(model.clamp_lower_idx.tolist())
+        - set(model.clamp_upper_idx.tolist())
+    )
+    assert unclamped_idx, "expected at least one unbounded state feature"
+
+    new_state = model.get_clamped_new_state(state_delta, prev_state)
+
+    assert torch.equal(
+        new_state[:, :, unclamped_idx],
+        prev_state[:, :, unclamped_idx] + state_delta[:, :, unclamped_idx],
     )

@@ -283,13 +283,16 @@ class StepPredictor(nn.Module, ABC):
         )
 
         self.register_buffer(
-            "clamp_lower_upper_idx", torch.tensor(sigmoid_lower_upper_idx)
+            "clamp_lower_upper_idx",
+            torch.tensor(sigmoid_lower_upper_idx, dtype=torch.long),
         )
         self.register_buffer(
-            "clamp_lower_idx", torch.tensor(softplus_lower_idx)
+            "clamp_lower_idx",
+            torch.tensor(softplus_lower_idx, dtype=torch.long),
         )
         self.register_buffer(
-            "clamp_upper_idx", torch.tensor(softplus_upper_idx)
+            "clamp_upper_idx",
+            torch.tensor(softplus_upper_idx, dtype=torch.long),
         )
 
         # Define clamping functions
