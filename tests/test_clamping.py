@@ -2,6 +2,7 @@
 from pathlib import Path
 
 # Third-party
+import pytest
 import torch
 
 # First-party
@@ -10,6 +11,9 @@ from neural_lam.create_graph_with_wmg import create_graph_from_datastore
 from neural_lam.datastore.mdp import MDPDatastore
 from neural_lam.models import GraphLAM
 from tests.conftest import init_datastore_example
+
+# Clamping is checked on a model built on the mdp example datastore
+pytestmark = pytest.mark.requires_real_data
 
 
 def test_clamping():

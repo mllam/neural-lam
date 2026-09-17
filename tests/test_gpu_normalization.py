@@ -32,6 +32,7 @@ def _build_module(datastore):
     )
 
 
+@pytest.mark.requires_real_data
 def test_on_after_batch_transfer():
     """The hook standardizes state and forcing as (x - mean) / std and
     leaves shapes and target times untouched."""
@@ -74,6 +75,7 @@ def test_on_after_batch_transfer():
     assert torch.allclose(norm_forcing, expected_forcing)
 
 
+@pytest.mark.requires_real_data
 def test_normalization_applied_exactly_once():
     """Data fed through WeatherDataset and the hook must be standardized
     exactly once: not skipped (WeatherDataset returns raw data) and not
