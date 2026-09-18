@@ -656,7 +656,9 @@ class ForecasterModule(pl.LightningModule):
         )
         spatial_loss[..., ~self.interior_mask_bool] = float("nan")
         self._test_spatial_steps = [
-            step for step in val_steps_to_log if 1 <= step <= spatial_loss.shape[1]
+            step
+            for step in val_steps_to_log
+            if 1 <= step <= spatial_loss.shape[1]
         ]
         log_spatial_losses = spatial_loss[
             :,

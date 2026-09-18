@@ -555,7 +555,7 @@ def test_plot_examples_integration_saves_figure(
     ), f"Expected time_step_unit={time_unit}, got {model.time_step_unit}"
 
     # Generate prediction
-    init_states, target, forcing_features, _batch_times = batch
+    (init_states, target, forcing_features, _batch_times) = batch
     prediction, _ = model.forecaster(init_states, forcing_features, target)
 
     # Rescale to original data scale
@@ -925,8 +925,8 @@ def test_spatial_loss_maps_out_of_range_steps(tmp_path):
 
     model.all_gather_cat = lambda x: x
 
-    # Simulate test_step with rollout length 2; steps -1, 0 (non-positive) and 100
-    # (exceeds rollout) must be filtered out, keeping only steps 1 and 2
+    # Simulate test_step with rollout length 2; steps -1, 0 (non-positive)
+    # and 100 (exceeds rollout) must be filtered out, keeping steps 1 and 2
     batch_size = 1
     pred_steps = 2
     num_grid_nodes = datastore.num_grid_points
@@ -952,7 +952,7 @@ def test_spatial_loss_maps_out_of_range_steps(tmp_path):
 
     model.test_step(dummy_batch, batch_idx=0)
 
-    # Filtered steps must exclude non-positive steps (-1, 0) and out-of-range (100)
+    # Filtered steps must exclude non-positive (-1, 0) and out-of-range (100)
     assert model._test_spatial_steps == [1, 2]
 
     # Run on_test_epoch_end
