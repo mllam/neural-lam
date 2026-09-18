@@ -280,6 +280,52 @@ def mae(
     )
 
 
+def bias(
+    pred: torch.Tensor,
+    target: torch.Tensor,
+    pred_std: torch.Tensor,
+    mask: torch.Tensor | None = None,
+    average_grid: bool = True,
+    sum_vars: bool = True,
+) -> torch.Tensor:
+    """
+    (Unweighted) Bias, i.e. mean signed error. Positive values indicate the
+    prediction is on average too high, negative too low.
+
+    Parameters
+    ----------
+    pred : torch.Tensor
+        Shape ``(..., N, num_variables)``. Model prediction. ``(...)`` denotes
+        any number of broadcastable batch dimensions, ``N`` is the number
+        of grid nodes, and ``num_variables`` is the number of state variables.
+    target : torch.Tensor
+        Shape ``(..., N, num_variables)``. Ground-truth target. Dims: same as
+        ``pred``.
+    pred_std : torch.Tensor
+        Shape ``(..., N, num_variables)`` or ``(num_variables,)``. Unused;
+        kept for a signature consistent with the other metrics.
+    mask : torch.Tensor or None, optional
+        Shape ``(N,)``. Boolean mask over grid nodes. ``None`` uses all
+        nodes.
+    average_grid : bool, optional
+        If True, average over the grid dimension (default True).
+    sum_vars : bool, optional
+        If True, sum over the variable dimension (default True).
+
+    Returns
+    -------
+    torch.Tensor
+        Reduced metric values. Shape is one of ``(...,)``,
+        ``(..., num_variables)``, ``(..., N)``, or ``(..., N, num_variables)``
+        depending on ``average_grid`` and ``sum_vars``.
+    """
+    entry_bias = pred - target  # (..., num_grid_nodes, num_variables)
+
+    return mask_and_reduce_metric(
+        entry_bias, mask=mask, average_grid=average_grid, sum_vars=sum_vars
+    )
+
+
 def nll(
     pred: torch.Tensor,
     target: torch.Tensor,
@@ -391,6 +437,7 @@ DEFINED_METRICS = {
     "mae": mae,
     "wmse": wmse,
     "wmae": wmae,
+    "bias": bias,
     "nll": nll,
     "crps_gauss": crps_gauss,
 }
