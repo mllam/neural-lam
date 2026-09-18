@@ -52,6 +52,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Preserve filtered evaluation steps in `_test_spatial_steps` so `on_test_epoch_end` correctly associates spatial loss maps and saved PDF filenames when `val_steps_to_log` contains out-of-range steps [#752](https://github.com/mllam/neural-lam/pull/752) @vikramsingh920
+
 - Derive the `plot_error_heatmap` lead-time axis label from a full unit-name
   lookup instead of `time_step_unit[0]`, which rendered `minutes`,
   `milliseconds` and `microseconds` all as "m" and `unknown` as "u"; the

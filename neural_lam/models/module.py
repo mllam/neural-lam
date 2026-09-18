@@ -245,6 +245,7 @@ class ForecasterModule(pl.LightningModule):
 
         # For storing spatial loss maps during evaluation
         self.spatial_loss_maps: list[Any] = []
+        self._test_spatial_steps: list[int] = []
 
         # Warn once per phase if steps_to_log exceeds the actual rollout
         self._steps_warn_issued = {
@@ -654,13 +655,14 @@ class ForecasterModule(pl.LightningModule):
             prediction, target_states, pred_std, average_grid=False
         )
         spatial_loss[..., ~self.interior_mask_bool] = float("nan")
+        self._test_spatial_steps = [
+            step
+            for step in val_steps_to_log
+            if 1 <= step <= spatial_loss.shape[1]
+        ]
         log_spatial_losses = spatial_loss[
             :,
-            [
-                step - 1
-                for step in val_steps_to_log
-                if step <= spatial_loss.shape[1]
-            ],
+            [step - 1 for step in self._test_spatial_steps],
         ]
         self.spatial_loss_maps.append(log_spatial_losses)
 
@@ -1004,9 +1006,6 @@ class ForecasterModule(pl.LightningModule):
         if self.trainer.is_global_zero:
             mean_spatial_loss = torch.nanmean(spatial_loss_tensor, dim=0)
             hparams = self.hparams
-            val_steps_to_log = (
-                hparams.val_steps_to_log  # ty: ignore[unresolved-attribute]
-            )
             logger_save_dir = (
                 self.logger.save_dir  # ty: ignore[unresolved-attribute]
             )
@@ -1019,7 +1018,7 @@ class ForecasterModule(pl.LightningModule):
                     f"({(self.time_step_int * t_i)} {self.time_step_unit})",
                 )
                 for t_i, loss_map in zip(
-                    val_steps_to_log,
+                    self._test_spatial_steps,
                     mean_spatial_loss,
                 )
             ]
@@ -1042,7 +1041,7 @@ class ForecasterModule(pl.LightningModule):
             )
             os.makedirs(pdf_loss_maps_dir, exist_ok=True)
             for t_i, fig in zip(
-                val_steps_to_log,
+                self._test_spatial_steps,
                 pdf_loss_map_figs,
             ):
                 fig.savefig(os.path.join(pdf_loss_maps_dir, f"loss_t{t_i}.pdf"))
@@ -1070,6 +1069,7 @@ class ForecasterModule(pl.LightningModule):
 
         self.matched_metrics = set()
         self.spatial_loss_maps.clear()
+        self._test_spatial_steps.clear()
 
         # Clear stored test metrics so repeated `trainer.test()` calls on
         # the same model instance start from a clean slate (otherwise the
