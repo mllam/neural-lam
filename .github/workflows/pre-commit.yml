@@ -11,6 +11,8 @@ on:
 jobs:
   pre-commit-job:
     runs-on: ubuntu-latest
+    env:
+      SKIP: lychee
     strategy:
       matrix:
         python-version: ["3.10", "3.11", "3.12", "3.13", "3.14"]
@@ -21,3 +23,15 @@ jobs:
       with:
         python-version: ${{ matrix.python-version }}
     - uses: pre-commit/action@v3.0.1
+
+  link-check-job:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v2
+    - name: Set up Python
+      uses: actions/setup-python@v2
+      with:
+        python-version: "3.13"
+    - uses: pre-commit/action@v3.0.1
+      with:
+        extra_args: lychee --all-files
