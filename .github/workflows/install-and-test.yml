@@ -67,13 +67,11 @@ jobs:
         run: |
           python -c "import torch; assert torch.__version__.endswith('+cu130')"
 
-      - name: Load cache data
-        uses: actions/cache/restore@v4
+      - name: Cache meps example data
+        uses: actions/cache@v4
         with:
           path: tests/datastore_examples/npyfilesmeps/meps_example_reduced.v0.3.0.tar.gz
           key: ${{ runner.os }}-meps-reduced-example-data-v0.3.0
-          restore-keys: |
-            ${{ runner.os }}-meps-reduced-example-data-v0.3.0
 
       - name: Run tests
         run: |
@@ -86,9 +84,3 @@ jobs:
           path: tests/test_outputs/
           if-no-files-found: warn
           retention-days: 30
-
-      - name: Save cache data
-        uses: actions/cache/save@v4
-        with:
-          path: tests/datastore_examples/npyfilesmeps/meps_example_reduced.v0.3.0.tar.gz
-          key: ${{ runner.os }}-meps-reduced-example-data-v0.3.0
