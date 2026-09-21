@@ -2,6 +2,7 @@
 
 # Standard library
 import os
+import warnings
 from argparse import ArgumentDefaultsHelpFormatter, ArgumentParser
 
 # Third-party
@@ -911,6 +912,14 @@ def cli(input_args: list[str] | None = None) -> None:
         Argument list forwarded to :class:`argparse.ArgumentParser`. When
         ``None``, ``sys.argv`` is used.
     """
+    warnings.warn(
+        "create_graph.py is deprecated and will be removed in a future "
+        "version. Use create_graph_with_wmg.py instead, which delegates "
+        "graph creation to weather-model-graphs (wmg). See "
+        "https://github.com/mllam/neural-lam/issues/384 for details.",
+        DeprecationWarning,
+        stacklevel=2,
+    )
     parser = ArgumentParser(
         description="Graph generation for neural-lam",
         formatter_class=ArgumentDefaultsHelpFormatter,

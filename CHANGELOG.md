@@ -10,6 +10,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - Add latent encoder/decoder modules and the `GraphEFM` (hierarchical) / `GraphEFMMultiScale` (flat) step predictors for the Graph-EFM ensemble forecasting model. [\#648](https://github.com/mllam/neural-lam/pull/648) @Sir-Sloth-The-Lazy
 
+- Add `neural_lam.create_graph_with_wmg` CLI which builds `keisler`, `graphcast` and `hierarchical` graphs with [weather-model-graphs](https://github.com/mllam/weather-model-graphs), deprecating `neural_lam.create_graph`. [\#596](https://github.com/mllam/neural-lam/pull/596) @prajwal-tech07
+
 - Add `--num_sanity_val_steps` CLI argument to control sanity validation steps before training (#694)
 
 - Add `--train_steps_to_log` CLI option to log training loss for individual unroll steps, and deduplicate common prediction and loss computation steps across loops [\#674](https://github.com/mllam/neural-lam/issues/674) @GiGiKoneti
@@ -166,6 +168,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (see README) [\#604](https://github.com/mllam/neural-lam/pull/604) @RajdeepKushwaha5
 
 - Add edge count consistency check to `test_graph_creation.py` [#301](https://github.com/mllam/neural-lam/pull/301) @osten-antonio
+
+- Add more detailed (module and function name) coverage linting errors [\#659](https://github.com/mllam/neural-lam/pull/659), @leifdenby
 
 ## [v0.6.0](https://github.com/mllam/neural-lam/releases/tag/v0.6.0)
 
