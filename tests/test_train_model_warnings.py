@@ -152,7 +152,7 @@ def test_steps_to_log_validation(train_steps, val_steps, var_leads, match_err):
             side_effect=SystemExit(0),
         ):
             with expected:
-                main()
+                getattr(main, "__wrapped__", main)()
 
 
 def make_args(**overrides):
