@@ -18,6 +18,7 @@ from loguru import logger
 
 # Local
 from . import utils
+from .callbacks import EMACallback
 from .config import NeuralLAMConfig, load_config_and_datastore
 from .datastore.base import BaseDatastore
 from .gnn_layers import GNN_TYPES
@@ -290,6 +291,15 @@ def main(input_args: list[str] | None = None) -> None:
         default=2,
         help="Number of sanity validation steps to run before training",
     )
+    train_group.add_argument(
+        "--ema_decay",
+        type=float,
+        default=None,
+        help="Decay factor of an exponential moving average of the model "
+        "weights, e.g. 0.999. The averaged weights are used for validation "
+        "and evaluation while training continues on the raw weights. Left "
+        "unset, no average is kept",
+    )
 
     # Evaluation options
     eval_group = parser.add_argument_group("Evaluation Options")
@@ -561,6 +571,10 @@ def main(input_args: list[str] | None = None) -> None:
         save_on_train_epoch_end=True,
         enable_version_counter=False,
     )
+    callbacks: list[pl.Callback] = [val_checkpoint, latest_checkpoint]
+    if args.ema_decay is not None:
+        callbacks.append(EMACallback(decay=args.ema_decay))
+
     trainer = pl.Trainer(
         max_epochs=args.epochs,
         deterministic=True,
@@ -571,7 +585,7 @@ def main(input_args: list[str] | None = None) -> None:
         devices=devices,
         logger=training_logger,
         log_every_n_steps=1,
-        callbacks=[val_checkpoint, latest_checkpoint],
+        callbacks=callbacks,
         check_val_every_n_epoch=args.val_interval,
         precision=args.precision,
         num_sanity_val_steps=args.num_sanity_val_steps,
