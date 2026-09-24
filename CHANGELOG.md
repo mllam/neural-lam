@@ -107,6 +107,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Maintenance
 
+- Add a short "Graph artifacts" appendix (`docs/graph_debugging.md`) to document generated graph files and assist with debugging graph-related errors [\#535](https://github.com/mllam/neural-lam/issues/535) @loukikjoshi06-ops
 - Use the combined `actions/cache` step for the meps test-data cache in CI, so a PR that restores the existing cache no longer saves a duplicate copy under its own branch [\#754](https://github.com/mllam/neural-lam/pull/754) @KumarShivam1908
 
 - Rename the `d_mesh_static` mesh-node static-feature dimension to `num_mesh_static_vars` in comments and docstrings, matching the canonical `num_*` naming. [\#695](https://github.com/mllam/neural-lam/pull/695) @uttam12331
