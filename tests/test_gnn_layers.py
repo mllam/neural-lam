@@ -2,6 +2,7 @@
 from pathlib import Path
 
 # Third-party
+import pytest
 import torch
 
 # First-party
@@ -1054,3 +1055,194 @@ class TestHierarchicalIntegration:
             init_states.shape[3],
         )
         assert out.shape == expected_shape
+
+
+#
+# Section K: num_rec Fix (Issue #729)
+#
+
+
+class TestNumRecFix:
+    """Regression tests for Issue #729: trailing receiver nodes with no
+    incoming edges caused silent feature corruption or RuntimeError."""
+
+    HIDDEN_DIM = 16
+
+    def test_inferred_num_rec_matches_max_receiver(self):
+        """Without num_rec, num_rec == edge_index[1].max() + 1."""
+        edge_index = torch.tensor([[0, 1], [2, 3]], dtype=torch.long)
+        gnn = InteractionNet(edge_index, self.HIDDEN_DIM)
+        assert gnn.num_rec == 4  # 3 + 1
+
+    def test_explicit_num_rec_overrides_inference(self):
+        """Explicit num_rec is used even when edges don't cover all
+        receiver nodes."""
+        edge_index = torch.tensor([[0, 1], [2, 3]], dtype=torch.long)
+        gnn = InteractionNet(edge_index, self.HIDDEN_DIM, num_rec=10)
+        assert gnn.num_rec == 10
+
+    def test_trailing_receivers_crash_without_num_rec(self):
+        """Reproduces Issue #729: forward crashes when trailing receivers
+        have no incoming edges and num_rec is not passed."""
+        num_send = 100
+        num_rec = 50
+
+        # Receiver node 49 has no incoming edge; max receiver in
+        # edge_index is 48 → inferred num_rec = 49, not 50.
+        edge_index = torch.tensor([[0, 1, 2], [10, 20, 48]], dtype=torch.long)
+        gnn = InteractionNet(edge_index, self.HIDDEN_DIM)
+
+        rec_rep = torch.randn((num_rec, self.HIDDEN_DIM))
+        send_rep = torch.randn((num_send, self.HIDDEN_DIM))
+        edge_rep = torch.randn((3, self.HIDDEN_DIM))
+
+        with torch.no_grad():
+            with pytest.raises(RuntimeError):
+                gnn(send_rep, rec_rep, edge_rep)
+
+    def test_trailing_receivers_pass_with_num_rec(self):
+        """Same scenario as above but with explicit num_rec — works."""
+        num_send = 100
+        num_rec = 50
+
+        edge_index = torch.tensor([[0, 1, 2], [10, 20, 48]], dtype=torch.long)
+        gnn = InteractionNet(
+            edge_index,
+            self.HIDDEN_DIM,
+            update_edges=False,
+            num_rec=num_rec,
+        )
+
+        rec_rep = torch.randn((num_rec, self.HIDDEN_DIM))
+        send_rep = torch.randn((num_send, self.HIDDEN_DIM))
+        edge_rep = torch.randn((3, self.HIDDEN_DIM))
+
+        with torch.no_grad():
+            result = gnn(send_rep, rec_rep, edge_rep)
+        assert result.shape == (num_rec, self.HIDDEN_DIM)
+
+    def test_empty_edge_index_without_num_rec(self):
+        """Empty edge_index with no num_rec → num_rec = 0."""
+        edge_index = torch.zeros((2, 0), dtype=torch.long)
+        gnn = InteractionNet(edge_index, self.HIDDEN_DIM)
+        assert gnn.num_rec == 0
+
+    def test_empty_edge_index_with_explicit_num_rec(self):
+        """Empty edge_index with explicit num_rec is respected."""
+        edge_index = torch.zeros((2, 0), dtype=torch.long)
+        gnn = InteractionNet(edge_index, self.HIDDEN_DIM, num_rec=5)
+        assert gnn.num_rec == 5
+
+    def test_propagation_net_forwards_num_rec(self):
+        """PropagationNet correctly forwards num_rec to InteractionNet."""
+        edge_index = torch.tensor([[0, 1], [2, 3]], dtype=torch.long)
+        gnn = PropagationNet(edge_index, self.HIDDEN_DIM, num_rec=10)
+        assert gnn.num_rec == 10
+
+    def test_propagation_net_trailing_receivers_pass(self):
+        """PropagationNet with explicit num_rec handles trailing receivers."""
+        num_send = 50
+        num_rec = 30
+
+        edge_index = torch.tensor([[0, 1], [5, 10]], dtype=torch.long)
+        gnn = PropagationNet(
+            edge_index,
+            self.HIDDEN_DIM,
+            update_edges=False,
+            num_rec=num_rec,
+        )
+
+        rec_rep = torch.randn((num_rec, self.HIDDEN_DIM))
+        send_rep = torch.randn((num_send, self.HIDDEN_DIM))
+        edge_rep = torch.randn((2, self.HIDDEN_DIM))
+
+        with torch.no_grad():
+            result = gnn(send_rep, rec_rep, edge_rep)
+        assert result.shape == (num_rec, self.HIDDEN_DIM)
+
+    def test_graph_lam_sets_explicit_num_rec(self):
+        """GraphLAM should pass explicit num_rec to g2m, m2g, and processor."""
+        datastore, config = _get_datastore_and_config("1level")
+        _, predictor, _, _, _ = _build_model_and_data(
+            datastore, config, "graph_lam", "1level"
+        )
+        assert predictor.g2m_gnn.num_rec == predictor.num_mesh_nodes
+        assert predictor.m2g_gnn.num_rec == predictor.num_grid_nodes
+        for module in predictor.processor.modules():
+            if isinstance(module, InteractionNet):
+                assert module.num_rec == predictor.num_mesh_nodes
+
+    def test_hilam_sets_explicit_num_rec(self):
+        """HiLAM should pass explicit num_rec to all hierarchical GNNs."""
+        datastore, config = _get_datastore_and_config("hierarchical")
+        _, predictor, _, _, _ = _build_model_and_data(
+            datastore, config, "hi_lam", "hierarchical"
+        )
+        assert predictor.g2m_gnn.num_rec == predictor.level_mesh_sizes[0]
+        assert predictor.m2g_gnn.num_rec == predictor.num_grid_nodes
+
+        for i, gnn in enumerate(predictor.mesh_init_gnns):
+            assert gnn.num_rec == predictor.level_mesh_sizes[i + 1]
+
+        for i, gnn in enumerate(predictor.mesh_read_gnns):
+            assert gnn.num_rec == predictor.level_mesh_sizes[i]
+
+        for same_step in predictor.mesh_down_same_gnns:
+            for lvl, gnn in enumerate(same_step):
+                assert gnn.num_rec == predictor.level_mesh_sizes[lvl]
+
+    def test_hilam_parallel_sets_explicit_num_rec(self):
+        """HiLAMParallel should pass num_rec to processor InteractionNets."""
+        datastore, config = _get_datastore_and_config("hierarchical")
+        _, predictor, _, _, _ = _build_model_and_data(
+            datastore, config, "hi_lam_parallel", "hierarchical"
+        )
+        assert predictor.g2m_gnn.num_rec == predictor.level_mesh_sizes[0]
+        assert predictor.m2g_gnn.num_rec == predictor.num_grid_nodes
+        for module in predictor.processor.modules():
+            if isinstance(module, InteractionNet):
+                assert module.num_rec == predictor.num_mesh_nodes
+
+    def test_base_graph_model_trailing_receivers_forward_pass(self):
+        """Model forward pass succeeds when trailing mesh receivers have no
+        incoming edges (Issue #729)."""
+        datastore, config = _get_datastore_and_config("1level")
+        forecaster, predictor, init_states, forcing, boundary = (
+            _build_model_and_data(datastore, config, "graph_lam", "1level")
+        )
+        # Remove edges pointing to the last mesh receiver node
+        last_mesh_node = predictor.num_mesh_nodes - 1
+        g2m_mask = predictor.g2m_edge_index[1] < last_mesh_node
+        truncated_g2m = predictor.g2m_edge_index[:, g2m_mask]
+        truncated_features = predictor.g2m_features[g2m_mask]
+
+        # Verify that without num_rec, forward crashes with RuntimeError
+        crasher_g2m = InteractionNet(
+            truncated_g2m,
+            predictor.hidden_dim,
+            hidden_layers=predictor.hidden_layers,
+            update_edges=False,
+        )
+        predictor.g2m_gnn = crasher_g2m
+        predictor.g2m_features = truncated_features
+        with torch.no_grad():
+            with pytest.raises(RuntimeError):
+                forecaster(init_states, forcing, boundary)
+
+        # With explicit num_rec, forward pass succeeds
+        fixed_g2m = InteractionNet(
+            truncated_g2m,
+            predictor.hidden_dim,
+            hidden_layers=predictor.hidden_layers,
+            update_edges=False,
+            num_rec=predictor.num_mesh_nodes,
+        )
+        predictor.g2m_gnn = fixed_g2m
+        with torch.no_grad():
+            out, _ = forecaster(init_states, forcing, boundary)
+        assert out.shape == (
+            init_states.shape[0],
+            forcing.shape[1],
+            init_states.shape[2],
+            init_states.shape[3],
+        )

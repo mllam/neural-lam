@@ -30,6 +30,7 @@ class InteractionNet(pyg.nn.MessagePassing):
         edge_chunk_sizes: list[int] | None = None,
         aggr_chunk_sizes: list[int] | None = None,
         aggr: str = "sum",
+        num_rec: int | None = None,
     ) -> None:
         """
         Create a new InteractionNet.
@@ -56,6 +57,11 @@ class InteractionNet(pyg.nn.MessagePassing):
             separate MLPs. ``None`` uses a single shared MLP.
         aggr : {"sum", "mean"}, optional
             Message aggregation method. Default is ``"sum"``.
+        num_rec : int or None, optional
+            Explicit number of receiver nodes. When ``None`` (the default),
+            inferred as ``edge_index[1].max() + 1``.  Pass this explicitly
+            when trailing receiver nodes may have no incoming edges, to
+            avoid silent feature corruption or dimension-mismatch crashes.
 
         Raises
         ------
@@ -70,7 +76,12 @@ class InteractionNet(pyg.nn.MessagePassing):
             # Default to input dim if not explicitly given
             hidden_dim = input_dim
 
-        self.num_rec = edge_index[1].max() + 1
+        if num_rec is not None:
+            self.num_rec = int(num_rec)
+        elif edge_index.numel() > 0:
+            self.num_rec = int(edge_index[1].max().item()) + 1
+        else:
+            self.num_rec = 0
         # edge_index is expected to be zero-based and local:
         #   edge_index[0]: sender indices in [0 .. num_snd-1]
         #   edge_index[1]: receiver indices in [0 .. num_rec-1]
@@ -208,6 +219,7 @@ class PropagationNet(InteractionNet):
         edge_chunk_sizes: list[int] | None = None,
         aggr_chunk_sizes: list[int] | None = None,
         aggr: str = "sum",
+        num_rec: int | None = None,
     ) -> None:
         """Initialise the :class:`PropagationNet` layer.
 
@@ -226,6 +238,7 @@ class PropagationNet(InteractionNet):
             edge_chunk_sizes=edge_chunk_sizes,
             aggr_chunk_sizes=aggr_chunk_sizes,
             aggr="mean",
+            num_rec=num_rec,
         )
 
     def node_residual_target(

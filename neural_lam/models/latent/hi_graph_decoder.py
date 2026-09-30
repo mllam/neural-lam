@@ -42,6 +42,8 @@ class HiGraphLatentDecoder(BaseGraphLatentDecoder):
         g2m_gnn_type="InteractionNet",
         m2g_gnn_type="InteractionNet",
         output_std=True,
+        num_grid_nodes=None,
+        level_mesh_sizes=None,
     ):
         """
         Set up the g2m, m2g, mesh-up/-down and intra-level GNNs.
@@ -98,22 +100,32 @@ class HiGraphLatentDecoder(BaseGraphLatentDecoder):
                 "flat graphs."
             )
 
+        g2m_num_rec = (
+            level_mesh_sizes[0] if level_mesh_sizes is not None else None
+        )
         self.g2m_gnn = get_gnn_class(g2m_gnn_type)(
             g2m_edge_index,
             hidden_dim,
             hidden_layers=hidden_layers,
             update_edges=False,
+            num_rec=g2m_num_rec,
         )
         self.m2g_gnn = get_gnn_class(m2g_gnn_type)(
             m2g_edge_index,
             hidden_dim,
             hidden_layers=hidden_layers,
             update_edges=False,
+            num_rec=num_grid_nodes,
         )
 
         # Mesh-up edges must use InteractionNet: with a PropagationNet the
         # latent rep at the top level would be overwritten rather than
         # residually updated, leaving Z unused at initialization.
+        up_rec_sizes = (
+            level_mesh_sizes[1:]
+            if level_mesh_sizes is not None
+            else [None] * len(mesh_up_edge_index)
+        )
         self.mesh_up_gnns = nn.ModuleList(
             [
                 InteractionNet(
@@ -121,13 +133,21 @@ class HiGraphLatentDecoder(BaseGraphLatentDecoder):
                     hidden_dim,
                     hidden_layers=hidden_layers,
                     update_edges=False,
+                    num_rec=rec_size,
                 )
-                for edge_index in mesh_up_edge_index
+                for edge_index, rec_size in zip(
+                    mesh_up_edge_index, up_rec_sizes
+                )
             ]
         )
         # Mesh-down edges must use PropagationNet: each downward step has to
         # push the latent information from the level above into the lower
         # level, so that Z reaches the grid output.
+        down_rec_sizes = (
+            level_mesh_sizes[:-1]
+            if level_mesh_sizes is not None
+            else [None] * len(mesh_down_edge_index)
+        )
         self.mesh_down_gnns = nn.ModuleList(
             [
                 PropagationNet(
@@ -135,13 +155,21 @@ class HiGraphLatentDecoder(BaseGraphLatentDecoder):
                     hidden_dim,
                     hidden_layers=hidden_layers,
                     update_edges=False,
+                    num_rec=rec_size,
                 )
-                for edge_index in mesh_down_edge_index
+                for edge_index, rec_size in zip(
+                    mesh_down_edge_index, down_rec_sizes
+                )
             ]
         )
 
         # None if intra_level_layers == 0, in which case no intra-level
         # processing is done in combine_with_latent
+        intra_up_rec_sizes = (
+            level_mesh_sizes
+            if level_mesh_sizes is not None
+            else [None] * len(m2m_edge_index)
+        )
         self.intra_up_gnns = (
             nn.ModuleList(
                 [
@@ -150,12 +178,20 @@ class HiGraphLatentDecoder(BaseGraphLatentDecoder):
                         intra_level_layers,
                         hidden_layers,
                         hidden_dim,
+                        num_rec=rec_size,
                     )
-                    for edge_index in m2m_edge_index
+                    for edge_index, rec_size in zip(
+                        m2m_edge_index, intra_up_rec_sizes
+                    )
                 ]
             )
             if intra_level_layers > 0
             else None
+        )
+        intra_down_rec_sizes = (
+            level_mesh_sizes[:-1]
+            if level_mesh_sizes is not None
+            else [None] * (len(m2m_edge_index) - 1)
         )
         self.intra_down_gnns = (
             nn.ModuleList(
@@ -165,9 +201,11 @@ class HiGraphLatentDecoder(BaseGraphLatentDecoder):
                         intra_level_layers,
                         hidden_layers,
                         hidden_dim,
+                        num_rec=rec_size,
                     )
-                    for edge_index in list(m2m_edge_index)[:-1]
-                    # Top level (L) does not need a down intra-level GNN
+                    for edge_index, rec_size in zip(
+                        list(m2m_edge_index)[:-1], intra_down_rec_sizes
+                    )
                 ]
             )
             if intra_level_layers > 0
