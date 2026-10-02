@@ -207,6 +207,186 @@ def load_config_and_datastore(
     return config, cast(MDPDatastore | NpyFilesDatastoreMEPS, datastore)
 
 
+@dataclasses.dataclass
+class ModelConfig:
+    """
+    Configuration for neural-lam model architecture.
+
+    Attributes
+    ----------
+    model : str, default "graph_lam"
+        Model architecture name.
+    graph : str, default "multiscale"
+        Name of the graph to load from the datastore.
+    hidden_dim : int, default 64
+        Dimensionality of hidden representations.
+    hidden_layers : int, default 1
+        Number of hidden layers in MLPs.
+    processor_layers : int, default 4
+        Number of GNN layers in processor GNN.
+    mesh_aggr : str, default "sum"
+        Aggregation method for m2m GNN layers ("sum" or "mean").
+    output_std : bool, default False
+        Whether models should output standard deviation per feature.
+    g2m_gnn_type : str, default "InteractionNet"
+        GNN layer type for grid-to-mesh encoding.
+    m2g_gnn_type : str, default "InteractionNet"
+        GNN layer type for mesh-to-grid decoding.
+    mesh_up_gnn_type : str, default "InteractionNet"
+        GNN layer type for upward mesh message passing.
+    mesh_down_gnn_type : str, default "InteractionNet"
+        GNN layer type for downward mesh message passing.
+    """
+
+    model: str = "graph_lam"
+    graph: str = "multiscale"
+    hidden_dim: int = 64
+    hidden_layers: int = 1
+    processor_layers: int = 4
+    mesh_aggr: str = "sum"
+    output_std: bool = False
+    g2m_gnn_type: str = "InteractionNet"
+    m2g_gnn_type: str = "InteractionNet"
+    mesh_up_gnn_type: str = "InteractionNet"
+    mesh_down_gnn_type: str = "InteractionNet"
+
+
+@dataclasses.dataclass
+class TrainRunConfig:
+    """
+    Hyperparameters and settings for a training or evaluation run.
+
+    Attributes
+    ----------
+    epochs : int, default 200
+        Number of training epochs.
+    batch_size : int, default 4
+        Batch size.
+    ar_steps_train : int, default 1
+        Autoregressive rollout steps during training.
+    ar_steps_eval : int, default 10
+        Autoregressive rollout steps during evaluation.
+    loss : str, default "wmse"
+        Loss function to use ("mse" or "wmse").
+    lr : float, default 1e-3
+        Learning rate.
+    val_interval : int, default 1
+        Validation epoch frequency.
+    num_sanity_val_steps : int, default 2
+        Number of validation batches to run prior to training.
+    val_steps_to_log : list of int, default [1]
+        Rollout steps to log during validation.
+    train_steps_to_log : list of int, default []
+        Rollout steps to log during training.
+    metrics_watch : list of str, default []
+        List of watched metrics.
+    var_leads_metrics_watch : dict of {int: list of int}, default {}
+        Mapping from variable index to list of watched rollout steps.
+    load : str or None, default None
+        Checkpoint path to load.
+    restore_opt : bool, default False
+        Whether to restore optimizer state from checkpoint.
+    eval : str or None, default None
+        Evaluation split name ("val", "test") or None if training.
+    n_example_pred : int, default 1
+        Number of example predictions to plot during testing.
+    create_gif : bool, default False
+        Whether to create animation GIFs during evaluation.
+    """
+
+    epochs: int = 200
+    batch_size: int = 4
+    ar_steps_train: int = 1
+    ar_steps_eval: int = 10
+    loss: str = "wmse"
+    lr: float = 1e-3
+    val_interval: int = 1
+    num_sanity_val_steps: int = 2
+    val_steps_to_log: list[int] = dataclasses.field(default_factory=lambda: [1])
+    train_steps_to_log: list[int] = dataclasses.field(default_factory=list)
+    metrics_watch: list[str] = dataclasses.field(default_factory=list)
+    var_leads_metrics_watch: dict[int, list[int]] = dataclasses.field(
+        default_factory=dict
+    )
+    load: str | None = None
+    restore_opt: bool = False
+    eval: str | None = None
+    n_example_pred: int = 1
+    create_gif: bool = False
+
+
+@dataclasses.dataclass
+class DataConfig:
+    """
+    Data loading and forcing parameters.
+
+    Attributes
+    ----------
+    num_past_forcing_steps : int, default 1
+        Number of past forcing time steps as input.
+    num_future_forcing_steps : int, default 1
+        Number of future forcing time steps as input.
+    num_workers : int, default 4
+        Number of data loader workers.
+    load_single_member : bool, default False
+        Whether to load only ensemble member 0.
+    """
+
+    num_past_forcing_steps: int = 1
+    num_future_forcing_steps: int = 1
+    num_workers: int = 4
+    load_single_member: bool = False
+
+
+@dataclasses.dataclass
+class ComputeConfig:
+    """
+    Compute and accelerator configuration.
+
+    Attributes
+    ----------
+    seed : int, default 42
+        Random seed.
+    num_nodes : int, default 1
+        Number of cluster nodes.
+    devices : str or list of int, default "auto"
+        Hardware devices to use.
+    precision : str or int, default 32
+        Floating point precision.
+    """
+
+    seed: int = 42
+    num_nodes: int = 1
+    devices: str | list[int] = "auto"
+    precision: str | int = 32
+
+
+@dataclasses.dataclass
+class LoggingConfig:
+    """
+    Experiment tracking and artifact logging configuration.
+
+    Attributes
+    ----------
+    logger : str, default "wandb"
+        Logger backend name ("wandb" or "mlflow").
+    logger_project : str, default "neural_lam"
+        Project name for the logger.
+    logger_run_name : str or None, default None
+        Custom run name for the logger.
+    runs_root : str, default "runs"
+        Root directory for run artifacts and checkpoints.
+    wandb_id : str or None, default None
+        W&B run ID for resuming experiments.
+    """
+
+    logger: str = "wandb"
+    logger_project: str = "neural_lam"
+    logger_run_name: str | None = None
+    runs_root: str = "runs"
+    wandb_id: str | None = None
+
+
 try:
     # Standard library
     import argparse
@@ -221,6 +401,11 @@ try:
             TrainingConfig,
             OutputClamping,
             UniformFeatureWeighting,
+            ModelConfig,
+            TrainRunConfig,
+            DataConfig,
+            ComputeConfig,
+            LoggingConfig,
             argparse.Namespace,
         ]
     )

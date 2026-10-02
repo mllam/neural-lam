@@ -36,6 +36,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Decouple CLI argument parsing from training execution by introducing typed configuration dataclasses (`ModelConfig`, `TrainRunConfig`, `DataConfig`, `ComputeConfig`, `LoggingConfig`) and routing programmatic API calls (`train`, `evaluate`) directly through `neural_lam.train_model.fit` without synthesizing `argparse.Namespace` [\#707](https://github.com/mllam/neural-lam/issues/707) @GiGiKoneti
+
 - Move data normalization from CPU (`WeatherDataset`) to GPU
   (`ForecasterModule.on_after_batch_transfer`) for improved performance and
   multi-GPU compatibility. `WeatherDataset` / `WeatherDataModule` no longer

@@ -1,7 +1,7 @@
 """Setup and configuration of training loggers (WandB / MLFlow)."""
 
 # Standard library
-import argparse
+import dataclasses
 import os
 import warnings
 from typing import TYPE_CHECKING, Any
@@ -72,9 +72,14 @@ def init_training_logger_metrics(
 @rank_zero_only
 def setup_training_logger(
     datastore: "BaseDatastore",
-    args: argparse.Namespace,
-    run_name: str,
-    run_dir: str,
+    args: Any | None = None,
+    run_name: str = "",
+    run_dir: str = "",
+    *,
+    logger_type: str = "wandb",
+    logger_project: str = "neural_lam",
+    wandb_id: str | None = None,
+    config_dict: dict[str, Any] | None = None,
 ) -> pl.loggers.Logger:
     """
     Set up the training logger (WandB or MLFlow).
@@ -83,15 +88,22 @@ def setup_training_logger(
     ----------
     datastore : BaseDatastore
         Datastore providing metadata for logging configuration.
-    args : argparse.Namespace
-        Parsed training arguments controlling the logger backend.
-    run_name : str
+    args : Any or None, optional
+        Legacy parsed training arguments or ``LoggingConfig``.
+    run_name : str, default ""
         Name of the run.
-
-    run_dir : str
+    run_dir : str, default ""
         Directory under which all artifacts for this run are written
         (logger ``save_dir``, checkpoints, Lightning ``default_root_dir``).
         Typically ``runs/<run_name>``.
+    logger_type : str, default "wandb"
+        Logger backend type ("wandb" or "mlflow").
+    logger_project : str, default "neural_lam"
+        Project name for the logger.
+    wandb_id : str or None, optional
+        W&B run ID for resuming experiments.
+    config_dict : dict of {str: Any} or None, optional
+        Dictionary of hyperparameters to log.
 
     Returns
     -------
@@ -101,36 +113,42 @@ def setup_training_logger(
     Raises
     ------
     ValueError
-        If ``args.logger`` is not ``'wandb'`` or ``'mlflow'``.
-
-    Notes
-    -----
-    When ``--wandb_id`` is given, ``resume="allow"`` is set automatically:
-    W&B resumes the run if it exists, or creates it with that ID otherwise.
-    This allows the same job script to be safely resubmitted on HPC systems.
-    The run name is set to ``None`` when resuming to preserve the existing name.
+        If logger type is not ``'wandb'`` or ``'mlflow'``.
     """
-    if args.wandb_id and args.logger != "wandb":
+    if args is not None:
+        logger_type = getattr(args, "logger", logger_type)
+        logger_project = getattr(
+            args, "logger_project", getattr(args, "project", logger_project)
+        )
+        wandb_id = getattr(args, "wandb_id", wandb_id)
+        if config_dict is None:
+            if hasattr(args, "__dict__"):
+                config_dict = vars(args)
+            elif dataclasses.is_dataclass(args):
+                config_dict = dataclasses.asdict(args)
+
+    if config_dict is None:
+        config_dict = {}
+
+    if wandb_id and logger_type != "wandb":
         logger.warning(
-            f"--wandb_id is set but logger is {args.logger!r}; "
+            f"--wandb_id is set but logger is {logger_type!r}; "
             "the wandb_id will have no effect."
         )
 
-    if args.logger == "wandb":
-        wandb_resume = "allow" if args.wandb_id else None
-        logger.info(
-            f"Wandb resume mode: {wandb_resume!r} (id: {args.wandb_id!r})"
-        )
+    if logger_type == "wandb":
+        wandb_resume = "allow" if wandb_id else None
+        logger.info(f"Wandb resume mode: {wandb_resume!r} (id: {wandb_id!r})")
         return pl.loggers.WandbLogger(
-            project=args.logger_project,
-            name=None if args.wandb_id else run_name,
-            config=dict(training=vars(args), datastore=datastore.config),
+            project=logger_project,
+            name=None if wandb_id else run_name,
+            config=dict(training=config_dict, datastore=datastore.config),
             resume=wandb_resume,
-            id=args.wandb_id,
+            id=wandb_id,
             save_dir=run_dir,
         )
-    elif args.logger == "mlflow":
-        if args.wandb_id is not None:
+    elif logger_type == "mlflow":
+        if wandb_id is not None:
             warnings.warn(
                 "--wandb_id is only used with --logger=wandb and will be "
                 "ignored."
@@ -141,17 +159,17 @@ def setup_training_logger(
                 "MLFlow logger requires setting MLFLOW_TRACKING_URI in env."
             )
         training_logger = CustomMLFlowLogger(
-            experiment_name=args.logger_project,
+            experiment_name=logger_project,
             tracking_uri=url,
             run_name=run_name,
             save_dir=run_dir,
         )
         training_logger.log_hyperparams(
-            dict(training=vars(args), datastore=datastore.config)
+            dict(training=config_dict, datastore=datastore.config)
         )
         return training_logger
     else:
         raise ValueError(
-            f"Unsupported logger type: {args.logger!r}. "
+            f"Unsupported logger type: {logger_type!r}. "
             "Supported loggers are: 'wandb', 'mlflow'."
         )

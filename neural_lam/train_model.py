@@ -7,7 +7,7 @@ import random
 import shutil
 import time
 from argparse import ArgumentDefaultsHelpFormatter, ArgumentParser, Namespace
-from typing import Any
+from typing import Any, cast
 
 # Third-party
 # for logging the model:
@@ -18,8 +18,16 @@ from loguru import logger
 
 # Local
 from . import utils
-from .config import NeuralLAMConfig, load_config_and_datastore
-from .datastore.base import BaseDatastore
+from .config import (
+    ComputeConfig,
+    DataConfig,
+    LoggingConfig,
+    ModelConfig,
+    NeuralLAMConfig,
+    TrainRunConfig,
+    load_config_and_datastore,
+)
+from .datastore.base import BaseDatastore, BaseRegularGridDatastore
 from .gnn_layers import GNN_TYPES
 from .models import (
     MODELS,
@@ -32,9 +40,11 @@ from .weather_dataset import WeatherDataModule
 
 def build_predictor(
     predictor_class: type,
-    args: Namespace,
+    model_config: Any,
     config: NeuralLAMConfig,
     datastore: BaseDatastore,
+    num_past_forcing_steps: int = 1,
+    num_future_forcing_steps: int = 1,
 ) -> Any:
     """
     Instantiate a step predictor with the GNN kwargs its family accepts.
@@ -45,27 +55,33 @@ def build_predictor(
     arguments fall back to ``InteractionNet`` for checkpoints saved before
     those CLI flags existed.
     """
+    past_forcing = getattr(
+        model_config, "num_past_forcing_steps", num_past_forcing_steps
+    )
+    future_forcing = getattr(
+        model_config, "num_future_forcing_steps", num_future_forcing_steps
+    )
     kwargs = dict(
         datastore=datastore,
-        graph_name=args.graph,
-        hidden_dim=args.hidden_dim,
-        hidden_layers=args.hidden_layers,
-        processor_layers=args.processor_layers,
-        mesh_aggr=args.mesh_aggr,
-        num_past_forcing_steps=args.num_past_forcing_steps,
-        num_future_forcing_steps=args.num_future_forcing_steps,
-        output_std=args.output_std,
+        graph_name=getattr(model_config, "graph", "multiscale"),
+        hidden_dim=getattr(model_config, "hidden_dim", 64),
+        hidden_layers=getattr(model_config, "hidden_layers", 1),
+        processor_layers=getattr(model_config, "processor_layers", 4),
+        mesh_aggr=getattr(model_config, "mesh_aggr", "sum"),
+        num_past_forcing_steps=past_forcing,
+        num_future_forcing_steps=future_forcing,
+        output_std=getattr(model_config, "output_std", False),
         output_clamping_lower=config.training.output_clamping.lower,
         output_clamping_upper=config.training.output_clamping.upper,
-        g2m_gnn_type=getattr(args, "g2m_gnn_type", "InteractionNet"),
-        m2g_gnn_type=getattr(args, "m2g_gnn_type", "InteractionNet"),
+        g2m_gnn_type=getattr(model_config, "g2m_gnn_type", "InteractionNet"),
+        m2g_gnn_type=getattr(model_config, "m2g_gnn_type", "InteractionNet"),
     )
     if issubclass(predictor_class, BaseHiGraphModel):
         kwargs["mesh_up_gnn_type"] = getattr(
-            args, "mesh_up_gnn_type", "InteractionNet"
+            model_config, "mesh_up_gnn_type", "InteractionNet"
         )
         kwargs["mesh_down_gnn_type"] = getattr(
-            args, "mesh_down_gnn_type", "InteractionNet"
+            model_config, "mesh_down_gnn_type", "InteractionNet"
         )
     return predictor_class(**kwargs)
 
@@ -415,145 +431,186 @@ def build_parser() -> ArgumentParser:
     return parser
 
 
-def run(args, config=None, datastore=None):
-    """Run the training or evaluation loop."""
-    args.var_leads_metrics_watch = {
-        int(k): v for k, v in json.loads(args.var_leads_metrics_watch).items()
-    }
+def fit(
+    model_config: ModelConfig,
+    train_config: TrainRunConfig,
+    data_config: DataConfig,
+    compute_config: ComputeConfig,
+    logging_config: LoggingConfig,
+    *,
+    config: NeuralLAMConfig | None = None,
+    datastore: BaseDatastore | None = None,
+    config_path: str | None = None,
+    args: Any | None = None,
+) -> Any:
+    """
+    Run training or evaluation using strongly-typed configuration dataclasses.
 
-    # Check that config only specifies logging for lead times that exist
+    Parameters
+    ----------
+    model_config : ModelConfig
+        Model architecture and graph configuration.
+    train_config : TrainRunConfig
+        Training hyperparameters and evaluation settings.
+    data_config : DataConfig
+        Data loading and forcing parameters.
+    compute_config : ComputeConfig
+        Compute devices, seed, and precision settings.
+    logging_config : LoggingConfig
+        Experiment tracking and logging settings.
+    config : NeuralLAMConfig or None, optional
+        Loaded Neural-LAM configuration.
+    datastore : BaseDatastore or None, optional
+        Initialized datastore instance.
+    config_path : str or None, optional
+        Path to the configuration file, used if config or datastore is None.
+    args : Any or None, optional
+        Legacy argparse Namespace for checkpoint backward compatibility.
+
+    Returns
+    -------
+    Run
+        Object containing paths to run outputs and saved checkpoints.
+    """
     for phase, max_steps in [
-        ("train", args.ar_steps_train),
-        ("val", args.ar_steps_eval),
+        ("train", train_config.ar_steps_train),
+        ("val", train_config.ar_steps_eval),
     ]:
-        for step in getattr(args, f"{phase}_steps_to_log"):
+        steps = (
+            train_config.train_steps_to_log
+            if phase == "train"
+            else train_config.val_steps_to_log
+        )
+        for step in steps:
             if not 1 <= step <= max_steps:
                 raise ValueError(
                     f"Can not log {phase} step {step}: must be between 1 "
                     f"and {max_steps}, the number of unrolled steps during "
-                    f"{phase} phase. Adjust --{phase}_steps_to_log."
+                    f"{phase} phase."
                 )
-    # Check --var_leads_metrics_watch
-    for var_i, leads in args.var_leads_metrics_watch.items():
+
+    for var_i, leads in train_config.var_leads_metrics_watch.items():
         for step in leads:
-            if not 1 <= step <= args.ar_steps_eval:
+            if not 1 <= step <= train_config.ar_steps_eval:
                 raise ValueError(
                     f"Can not log validation step {step} for variable "
-                    f"{var_i}: must be between 1 and {args.ar_steps_eval}, "
-                    "the number of unrolled validation steps. Adjust "
-                    "--var_leads_metrics_watch."
+                    f"{var_i}: must be between 1 and "
+                    f"{train_config.ar_steps_eval}, the number of unrolled "
+                    "validation steps."
                 )
 
-    if args.eval and not args.load:
+    if train_config.eval and not train_config.load:
         logger.warning(
-            "Evaluation (--eval) without --load: no checkpoint will be loaded.",
+            "Evaluation without load checkpoint: no checkpoint will be loaded.",
         )
 
-    # Get an (actual) random run id as a unique identifier
     random_run_id = random.randint(0, 9999)
+    seed.seed_everything(compute_config.seed, workers=True)
 
-    # Set seed
-    seed.seed_everything(args.seed, workers=True)
-
-    # Load neural-lam configuration and datastore to use
     if config is None or datastore is None:
+        if config_path is None:
+            raise ValueError(
+                "Either (config and datastore) or config_path must be provided."
+            )
         loaded_config, loaded_datastore = load_config_and_datastore(
-            config_path=args.config_path
+            config_path=config_path
         )
         config = config or loaded_config
         datastore = datastore or loaded_datastore
 
-    # Check --var_leads_metrics_watch variable indices against the datastore
-    # so users get an immediate error instead of an IndexError deep in the
-    # first validation epoch.
+    if not isinstance(datastore, BaseRegularGridDatastore):
+        raise TypeError(
+            f"Expected BaseRegularGridDatastore, got {type(datastore)}"
+        )
+
     state_var_names = datastore.get_vars_names(category="state")
-    for var_i in args.var_leads_metrics_watch:
+    for var_i in train_config.var_leads_metrics_watch:
         if not 0 <= var_i < len(state_var_names):
             raise ValueError(
                 f"Invalid state variable index {var_i} in "
-                f"--var_leads_metrics_watch. Index must be between 0 and "
+                f"var_leads_metrics_watch. Index must be between 0 and "
                 f"{len(state_var_names) - 1} (datastore has "
                 f"{len(state_var_names)} state variables)."
             )
 
-    # Create datamodule
     data_module = WeatherDataModule(
         datastore=datastore,
-        ar_steps_train=args.ar_steps_train,
-        ar_steps_eval=args.ar_steps_eval,
-        num_past_forcing_steps=args.num_past_forcing_steps,
-        num_future_forcing_steps=args.num_future_forcing_steps,
-        load_single_member=args.load_single_member,
-        batch_size=args.batch_size,
-        num_workers=args.num_workers,
-        eval_split=args.eval or "test",
+        ar_steps_train=train_config.ar_steps_train,
+        ar_steps_eval=train_config.ar_steps_eval,
+        num_past_forcing_steps=data_config.num_past_forcing_steps,
+        num_future_forcing_steps=data_config.num_future_forcing_steps,
+        load_single_member=data_config.load_single_member,
+        batch_size=train_config.batch_size,
+        num_workers=data_config.num_workers,
+        eval_split=train_config.eval or "test",
     )
 
-    # Instantiate model + trainer
     if torch.cuda.is_available():
         device_name = "cuda"
-        torch.set_float32_matmul_precision(
-            "high"
-        )  # Allows using Tensor Cores on A100s
+        torch.set_float32_matmul_precision("high")
     else:
         device_name = "cpu"
 
-    # Set devices to use
     devices: str | list[int]
-    if args.devices == ["auto"]:
+    if compute_config.devices == "auto" or compute_config.devices == ["auto"]:
         devices = "auto"
-    else:
+    elif isinstance(compute_config.devices, list):
         try:
-            devices = [int(i) for i in args.devices]
+            devices = [int(i) for i in compute_config.devices]
         except ValueError:
             raise ValueError("devices should be 'auto' or a list of integers")
+    else:
+        devices = str(compute_config.devices)
 
-    # Build predictor and forecaster externally, then inject into
-    # ForecasterModule
-    predictor_class = MODELS[args.model]
-    predictor = build_predictor(predictor_class, args, config, datastore)
-
+    predictor_class = MODELS[model_config.model]
+    predictor = build_predictor(
+        predictor_class,
+        model_config,
+        config,
+        datastore,
+        data_config.num_past_forcing_steps,
+        data_config.num_future_forcing_steps,
+    )
     forecaster = ARForecaster(predictor, datastore)
 
     model = ForecasterModule(
         forecaster=forecaster,
         config=config,
         datastore=datastore,
-        loss=args.loss,
-        lr=args.lr,
-        restore_opt=args.restore_opt,
-        n_example_pred=args.n_example_pred,
-        create_gif=args.create_gif,
-        val_steps_to_log=args.val_steps_to_log,
-        train_steps_to_log=args.train_steps_to_log,
-        metrics_watch=args.metrics_watch,
-        var_leads_metrics_watch=args.var_leads_metrics_watch,
+        loss=train_config.loss,
+        lr=train_config.lr,
+        restore_opt=train_config.restore_opt,
+        n_example_pred=train_config.n_example_pred,
+        create_gif=train_config.create_gif,
+        val_steps_to_log=train_config.val_steps_to_log,
+        train_steps_to_log=train_config.train_steps_to_log,
+        metrics_watch=train_config.metrics_watch,
+        var_leads_metrics_watch=train_config.var_leads_metrics_watch,
         args=args,
     )
 
-    if args.eval:
-        prefix = f"eval-{args.eval}-"
-    else:
-        prefix = "train-"
-
-    if args.logger_run_name:
-        run_name = args.logger_run_name
+    prefix = f"eval-{train_config.eval}-" if train_config.eval else "train-"
+    if logging_config.logger_run_name:
+        run_name = logging_config.logger_run_name
     else:
         run_name = (
-            f"{prefix}{args.model}-{args.processor_layers}x{args.hidden_dim}-"
+            f"{prefix}{model_config.model}-"
+            f"{model_config.processor_layers}x{model_config.hidden_dim}-"
             f"{time.strftime('%m_%d_%H')}-{random_run_id:04d}"
         )
 
-    run_dir = os.path.join(args.runs_root, run_name)
+    run_dir = os.path.join(logging_config.runs_root, run_name)
 
     training_logger = utils.setup_training_logger(
-        datastore=datastore, args=args, run_name=run_name, run_dir=run_dir
+        datastore=datastore,
+        args=args or logging_config,
+        run_name=run_name,
+        run_dir=run_dir,
+        logger_type=logging_config.logger,
+        logger_project=logging_config.logger_project,
+        wandb_id=logging_config.wandb_id,
     )
 
-    # Two separate callbacks decouple "best validated model" from
-    # "rescue / resume" snapshots: long HPC jobs that crash or time out
-    # between validations can still resume from a recent train-epoch
-    # checkpoint instead of losing all progress since the last validation.
     val_checkpoint = pl.callbacks.ModelCheckpoint(
         dirpath=os.path.join(run_dir, "checkpoints"),
         filename="min_val_loss",
@@ -572,35 +629,39 @@ def run(args, config=None, datastore=None):
         enable_version_counter=False,
     )
     trainer = pl.Trainer(
-        max_epochs=args.epochs,
+        max_epochs=train_config.epochs,
         deterministic=True,
         default_root_dir=run_dir,
         strategy="auto",
         accelerator=device_name,
-        num_nodes=args.num_nodes,
+        num_nodes=compute_config.num_nodes,
         devices=devices,
         logger=training_logger,
         log_every_n_steps=1,
         callbacks=[val_checkpoint, latest_checkpoint],
-        check_val_every_n_epoch=args.val_interval,
-        precision=args.precision,
-        num_sanity_val_steps=args.num_sanity_val_steps,
+        check_val_every_n_epoch=train_config.val_interval,
+        precision=cast(Any, compute_config.precision),
+        num_sanity_val_steps=train_config.num_sanity_val_steps,
     )
 
-    # Only init once, on rank 0 only
     if trainer.global_rank == 0:
         utils.init_training_logger_metrics(
-            training_logger, val_steps=args.val_steps_to_log
-        )  # Do after initializing logger
-    if args.eval:
+            training_logger, val_steps=train_config.val_steps_to_log
+        )
+
+    if train_config.eval:
         trainer.test(
             model=model,
             datamodule=data_module,
-            ckpt_path=args.load,
+            ckpt_path=train_config.load,
         )
-        checkpoint_path = args.load
+        checkpoint_path = train_config.load
     else:
-        trainer.fit(model=model, datamodule=data_module, ckpt_path=args.load)
+        trainer.fit(
+            model=model,
+            datamodule=data_module,
+            ckpt_path=train_config.load,
+        )
         checkpoint_path = val_checkpoint.best_model_path or os.path.join(
             run_dir, "checkpoints", "min_val_loss.ckpt"
         )
@@ -614,6 +675,84 @@ def run(args, config=None, datastore=None):
     return Run(
         run_dir=Path(run_dir),
         checkpoint_path=Path(checkpoint_path) if checkpoint_path else None,
+    )
+
+
+def run(
+    args: Namespace,
+    config: NeuralLAMConfig | None = None,
+    datastore: BaseDatastore | None = None,
+) -> Any:
+    """Run the training or evaluation loop from parsed CLI arguments."""
+    var_leads = getattr(args, "var_leads_metrics_watch", "{}")
+    if isinstance(var_leads, str):
+        var_leads = {int(k): v for k, v in json.loads(var_leads).items()}
+
+    devices_list = getattr(args, "devices", ["auto"])
+
+    model_config = ModelConfig(
+        model=args.model,
+        graph=args.graph,
+        hidden_dim=args.hidden_dim,
+        hidden_layers=args.hidden_layers,
+        processor_layers=args.processor_layers,
+        mesh_aggr=args.mesh_aggr,
+        output_std=args.output_std,
+        g2m_gnn_type=getattr(args, "g2m_gnn_type", "InteractionNet"),
+        m2g_gnn_type=getattr(args, "m2g_gnn_type", "InteractionNet"),
+        mesh_up_gnn_type=getattr(args, "mesh_up_gnn_type", "InteractionNet"),
+        mesh_down_gnn_type=getattr(
+            args, "mesh_down_gnn_type", "InteractionNet"
+        ),
+    )
+    train_config = TrainRunConfig(
+        epochs=args.epochs,
+        batch_size=args.batch_size,
+        ar_steps_train=args.ar_steps_train,
+        ar_steps_eval=args.ar_steps_eval,
+        loss=args.loss,
+        lr=args.lr,
+        val_interval=args.val_interval,
+        num_sanity_val_steps=args.num_sanity_val_steps,
+        val_steps_to_log=args.val_steps_to_log,
+        train_steps_to_log=args.train_steps_to_log,
+        metrics_watch=args.metrics_watch,
+        var_leads_metrics_watch=var_leads,
+        load=args.load,
+        restore_opt=args.restore_opt,
+        eval=args.eval,
+        n_example_pred=args.n_example_pred,
+        create_gif=args.create_gif,
+    )
+    data_config = DataConfig(
+        num_past_forcing_steps=args.num_past_forcing_steps,
+        num_future_forcing_steps=args.num_future_forcing_steps,
+        num_workers=args.num_workers,
+        load_single_member=args.load_single_member,
+    )
+    compute_config = ComputeConfig(
+        seed=args.seed,
+        num_nodes=args.num_nodes,
+        devices=devices_list,
+        precision=args.precision,
+    )
+    logging_config = LoggingConfig(
+        logger=args.logger,
+        logger_project=args.logger_project,
+        logger_run_name=args.logger_run_name,
+        runs_root=args.runs_root,
+        wandb_id=args.wandb_id,
+    )
+    return fit(
+        model_config=model_config,
+        train_config=train_config,
+        data_config=data_config,
+        compute_config=compute_config,
+        logging_config=logging_config,
+        config=config,
+        datastore=datastore,
+        config_path=args.config_path,
+        args=args,
     )
 
 
