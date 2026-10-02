@@ -58,6 +58,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   label now reads e.g. "min" / "ms" and falls back to "steps" when no unit
   divides the step length evenly [\#743](https://github.com/mllam/neural-lam/pull/743) @nikhil3495
 
+- Reject `step < 1` in `--train_steps_to_log`, `--val_steps_to_log`, and `--var_leads_metrics_watch` at CLI parse time, instead of silently logging the wrong step's loss via negative-index wraparound in `ForecasterModule._log_step_loss` [\#746](https://github.com/mllam/neural-lam/pull/746) @RudraDudhat2509
+
 - Set `workers=True` in `seed_everything` to properly seed DataLoader workers, ensuring uncorrelated random states across processes when `num_workers > 0` [\#716](https://github.com/mllam/neural-lam/pull/716) @GiGiKoneti
 
 - Fix `StepPredictor.forward` docstring stating the argument order backwards (`(X_{t-1}, X_t, forcing_t)` instead of `(X_t, X_{t-1}, forcing_t)`), contradicting its own per-parameter docs and signature [\#731](https://github.com/mllam/neural-lam/pull/731) @AshNicolus
@@ -106,6 +108,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Maintenance
 
 - Cache the mdp example input data in CI with fsspec `simplecache`, so the DANRA inputs are no longer downloaded on every run [\#751](https://github.com/mllam/neural-lam/pull/751) @KumarShivam1908
+
+- Use the combined `actions/cache` step for the meps test-data cache in CI, so a PR that restores the existing cache no longer saves a duplicate copy under its own branch [\#754](https://github.com/mllam/neural-lam/pull/754) @KumarShivam1908
 
 - Rename the `d_mesh_static` mesh-node static-feature dimension to `num_mesh_static_vars` in comments and docstrings, matching the canonical `num_*` naming. [\#695](https://github.com/mllam/neural-lam/pull/695) @uttam12331
 
