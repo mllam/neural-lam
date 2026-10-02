@@ -13,6 +13,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Add latent encoder/decoder modules and the `GraphEFM` (hierarchical) / `GraphEFMMultiScale` (flat) step predictors for the Graph-EFM ensemble forecasting model. [\#648](https://github.com/mllam/neural-lam/pull/648) @Sir-Sloth-The-Lazy
 
+- Add `neural_lam.create_graph_with_wmg` CLI which builds `keisler`, `graphcast` and `hierarchical` graphs with [weather-model-graphs](https://github.com/mllam/weather-model-graphs), deprecating `neural_lam.create_graph`. [\#596](https://github.com/mllam/neural-lam/pull/596) @prajwal-tech07
+
 - Add `--num_sanity_val_steps` CLI argument to control sanity validation steps before training (#694)
 
 - Add `--train_steps_to_log` CLI option to log training loss for individual unroll steps, and deduplicate common prediction and loss computation steps across loops [\#674](https://github.com/mllam/neural-lam/issues/674) @GiGiKoneti
@@ -58,6 +60,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Allow `graph_lam` training and checkpoint reloads to accept the full set of
   GNN type CLI options without passing hierarchical-only options to unsupported
   constructors via a shared `build_predictor` helper ([#686](https://github.com/mllam/neural-lam/issues/686)).
+- Derive the `plot_error_heatmap` lead-time axis label from a full unit-name
+  lookup instead of `time_step_unit[0]`, which rendered `minutes`,
+  `milliseconds` and `microseconds` all as "m" and `unknown` as "u"; the
+  label now reads e.g. "min" / "ms" and falls back to "steps" when no unit
+  divides the step length evenly [\#743](https://github.com/mllam/neural-lam/pull/743) @nikhil3495
+
+- Reject `step < 1` in `--train_steps_to_log`, `--val_steps_to_log`, and `--var_leads_metrics_watch` at CLI parse time, instead of silently logging the wrong step's loss via negative-index wraparound in `ForecasterModule._log_step_loss` [\#746](https://github.com/mllam/neural-lam/pull/746) @RudraDudhat2509
+
+- Set `workers=True` in `seed_everything` to properly seed DataLoader workers, ensuring uncorrelated random states across processes when `num_workers > 0` [\#716](https://github.com/mllam/neural-lam/pull/716) @GiGiKoneti
+
+- Fix `StepPredictor.forward` docstring stating the argument order backwards (`(X_{t-1}, X_t, forcing_t)` instead of `(X_t, X_{t-1}, forcing_t)`), contradicting its own per-parameter docs and signature [\#731](https://github.com/mllam/neural-lam/pull/731) @AshNicolus
 
 - Fix `graph_lam` training and checkpoint reloads crashing on hierarchical-only GNN options, by routing both call sites through a `build_predictor` helper that only passes `mesh_up_gnn_type` / `mesh_down_gnn_type` to `BaseHiGraphModel` subclasses. [\#688](https://github.com/mllam/neural-lam/pull/688) @gitcommit90
 
@@ -86,9 +99,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Raise `ValueError` for unsupported `--logger` values in `setup_training_logger`, preventing a misleading `UnboundLocalError` on misconfigured logger types [\#463](https://github.com/mllam/neural-lam/pull/463) @Ritinikhil
 
+- Fix image overwriting in `plot_examples` for non-Wandb loggers by including the example index in the log key (the previous logic had the two branches inverted relative to its own comment) [\#205](https://github.com/mllam/neural-lam/pull/205) @Shristi-Goel
+
 - Close the `PIL.Image` file handle and delete the temporary `.png` after upload in `CustomMLFlowLogger.log_image`, fixing a resource leak and temp-file accumulation in CWD; replace `sys.exit(1)` on `NoCredentialsError` with a re-raise so callers can handle the failure [\#496](https://github.com/mllam/neural-lam/pull/496) @Zrahay
 
 - Reset `plotted_examples` and clear `test_metrics` at the end of `on_test_epoch_end` so repeated `trainer.test()` calls on the same model instance regenerate example plots and start from a clean metric slate instead of silently skipping plots and accumulating tensors [\#437](https://github.com/mllam/neural-lam/pull/437) @RajdeepKushwaha5
+
+- Default the matplotlib backend to `Agg` to prevent `RuntimeError: main thread is not in main loop` in headless or multi-threaded contexts, without overriding a user-set `MPLBACKEND` [\#277](https://github.com/mllam/neural-lam/pull/277) @sahilkr31
 
 - Log every figure passed to `CustomMLFlowLogger.log_image` instead of silently dropping all but the first, using per-figure indexed keys (`{key}_{i}`) when more than one is supplied [\#499](https://github.com/mllam/neural-lam/pull/499) @Raj-Taware
 
@@ -102,6 +119,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `notebook-tests.yml` CI workflow that runs them as plain Python scripts; swap
   `ipykernel`/`nbmake` dev deps for `marimo>=0.9` @Sharkyii
 
+- Cache the mdp example input data in CI with fsspec `simplecache`, so the DANRA inputs are no longer downloaded on every run [\#751](https://github.com/mllam/neural-lam/pull/751) @KumarShivam1908
+
+- Use the combined `actions/cache` step for the meps test-data cache in CI, so a PR that restores the existing cache no longer saves a duplicate copy under its own branch [\#754](https://github.com/mllam/neural-lam/pull/754) @KumarShivam1908
+
+- Rename the `d_mesh_static` mesh-node static-feature dimension to `num_mesh_static_vars` in comments and docstrings, matching the canonical `num_*` naming. [\#695](https://github.com/mllam/neural-lam/pull/695) @uttam12331
 
 - Add 100% type-hint coverage across `neural_lam/`, align all type annotations with PEP 585 and PEP 604, and adopt `ty` (astral-sh) for type checking [\#673](https://github.com/mllam/neural-lam/pull/673) @GiGiKoneti
 
@@ -162,6 +184,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (see README) [\#604](https://github.com/mllam/neural-lam/pull/604) @RajdeepKushwaha5
 
 - Add edge count consistency check to `test_graph_creation.py` [#301](https://github.com/mllam/neural-lam/pull/301) @osten-antonio
+
+- Add more detailed (module and function name) coverage linting errors [\#659](https://github.com/mllam/neural-lam/pull/659), @leifdenby
 
 ## [v0.6.0](https://github.com/mllam/neural-lam/releases/tag/v0.6.0)
 

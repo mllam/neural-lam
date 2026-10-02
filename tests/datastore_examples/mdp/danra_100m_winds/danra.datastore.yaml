@@ -31,7 +31,7 @@ output:
 
 inputs:
   danra_height_levels:
-    path: https://object-store.os-api.cci1.ecmwf.int/mllam-testdata/danra_cropped/v0.2.0/height_levels.zarr
+    path: simplecache::https://object-store.os-api.cci1.ecmwf.int/mllam-testdata/danra_cropped/v0.2.0/height_levels.zarr
     dims: [time, x, y, altitude]
     variables:
       u:
@@ -56,7 +56,7 @@ inputs:
     target_output_variable: state
 
   danra_surface_forcing:
-    path: https://object-store.os-api.cci1.ecmwf.int/mllam-testdata/danra_cropped/v0.2.0/single_levels.zarr
+    path: simplecache::https://object-store.os-api.cci1.ecmwf.int/mllam-testdata/danra_cropped/v0.2.0/single_levels.zarr
     dims: [time, x, y]
     variables:
       # use surface incoming shortwave radiation as forcing
@@ -74,7 +74,7 @@ inputs:
     target_output_variable: forcing
 
   danra_surface:
-    path: https://object-store.os-api.cci1.ecmwf.int/mllam-testdata/danra_cropped/v0.2.0/single_levels.zarr
+    path: simplecache::https://object-store.os-api.cci1.ecmwf.int/mllam-testdata/danra_cropped/v0.2.0/single_levels.zarr
     dims: [time, x, y]
     variables:
       - r2m
@@ -92,7 +92,7 @@ inputs:
     target_output_variable: state
 
   danra_static:
-    path: https://object-store.os-api.cci1.ecmwf.int/mllam-testdata/danra_cropped/v0.2.0/single_levels.zarr
+    path: simplecache::https://object-store.os-api.cci1.ecmwf.int/mllam-testdata/danra_cropped/v0.2.0/single_levels.zarr
     dims: [x, y]
     variables:
       - lsm
