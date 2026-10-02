@@ -19,6 +19,7 @@ from neural_lam import config as nlconfig
 from neural_lam import vis
 from neural_lam.create_graph import create_graph_from_datastore
 from neural_lam.models import ARForecaster, ForecasterModule, GraphLAM
+from neural_lam.utils import get_integer_time
 from neural_lam.weather_dataset import WeatherDataset
 from tests.conftest import init_datastore_example
 from tests.dummy_datastore import DummyDatastore
@@ -334,6 +335,34 @@ def test_plot_error_heatmap_adapts_layout_for_grid_size():
     plt.close(small_fig)
     plt.close(large_fig)
     plt.close(dense_fig)
+
+
+@pytest.mark.parametrize(
+    "step_length, expected_unit",
+    [
+        (timedelta(hours=3), "h"),
+        (timedelta(days=1), "d"),
+        (timedelta(minutes=15), "min"),
+        (timedelta(seconds=90), "s"),
+        (timedelta(days=0.001), "steps"),
+    ],
+)
+def test_plot_error_heatmap_lead_time_axis_label(step_length, expected_unit):
+    """Check lead-time axis label uses unit abbreviation as given in
+    ``_LEAD_TIME_UNIT_ABBREVIATIONS`` and uses consistent ticks."""
+    datastore = HeatmapDatastore(n_vars=3, step_length=step_length)
+
+    fig = vis.plot_error_heatmap(torch.ones((4, 3)), datastore=datastore)
+    ax = fig.axes[0]
+
+    assert ax.get_xlabel() == f"Lead time ({expected_unit})"
+
+    time_step_int, _ = get_integer_time(step_length)
+    expected_x_ticklabels = [str(time_step_int * step) for step in range(1, 5)]
+    actual_x_ticklabels = [tick.get_text() for tick in ax.get_xticklabels()]
+    assert actual_x_ticklabels == expected_x_ticklabels
+
+    plt.close(fig)
 
 
 def test_plot_spatial_error() -> None:
