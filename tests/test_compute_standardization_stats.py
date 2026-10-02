@@ -1,5 +1,8 @@
 # Third-party
+import pytest
 import torch
+from torch.utils.data import DataLoader
+from torch.utils.data.distributed import DistributedSampler
 
 # First-party
 from neural_lam.datastore.npyfilesmeps.compute_standardization_stats import (
@@ -25,11 +28,6 @@ class _StubDataset:
 
 class TestPaddedWeatherDataset:
     """Tests for PaddedWeatherDataset helper."""
-
-    def test_original_indices(self):
-        """get_original_indices must return [0, ..., N-1]."""
-        ds = PaddedWeatherDataset(_StubDataset(10), world_size=4, batch_size=4)
-        assert list(ds.get_original_indices()) == list(range(10))
 
     def test_padded_length(self):
         """Pad total to next multiple of world_size."""
@@ -114,3 +112,53 @@ class TestDiffStatsShape:
 
         assert torch.equal(result, data[:12])
         assert not torch.equal(result, old_result)
+
+
+# -- Bug 3: positional depadding after distributed gather ------------------
+
+
+class _IndexEchoDataset:
+    """Dataset stub whose items echo their own index."""
+
+    def __init__(self, n_samples: int):
+        self._n = n_samples
+
+    def __len__(self) -> int:
+        return self._n
+
+    def __getitem__(self, idx: int) -> torch.Tensor:
+        return torch.tensor(idx)
+
+
+class TestRealSampleMasks:
+    """Per-rank masks drop exactly the padded rows the DataLoader yields."""
+
+    @pytest.mark.parametrize(
+        "total_samples, world_size, batch_size",
+        [
+            (16, 4, 4),  # no padding
+            (103, 4, 8),  # one padded row, on rank 3 only
+            (101, 4, 8),  # old prefix slice kept pads 101, 102, dropped 95, 99
+            (97, 4, 8),  # each pad is alone in a 1-row last batch (empty mask)
+            (10, 4, 4),  # per-rank count below batch_size
+        ],
+    )
+    def test_masked_batches_recover_each_real_sample_once(
+        self, total_samples, world_size, batch_size
+    ):
+        """Pads echo total_samples - 1, so a leaked pad shows as a duplicate."""
+        ds = PaddedWeatherDataset(
+            _IndexEchoDataset(total_samples), world_size, batch_size
+        )
+        recovered = []
+        for rank in range(world_size):
+            sampler = DistributedSampler(
+                ds, num_replicas=world_size, rank=rank, shuffle=False
+            )
+            loader = DataLoader(ds, batch_size, sampler=sampler)
+            masks = ds.real_sample_masks(sampler)
+            assert len(masks) == len(loader)
+            for batch, mask in zip(loader, masks):
+                recovered.extend(batch[mask].tolist())
+
+        assert sorted(recovered) == list(range(total_samples))
