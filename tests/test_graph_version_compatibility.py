@@ -37,17 +37,30 @@ def _write_legacy_graph(
     m2g_edge_index: torch.Tensor,
     num_grid_nodes: int,
     num_mesh_nodes: int,
+    mesh_first: bool = True,
 ) -> None:
     """Write a legacy-format graph with combined-offset edge indices."""
-    # Legacy format: mesh nodes first, then grid nodes.
-    # Edge indices use combined offset: grid indices shifted by num_mesh_nodes.
-    legacy_g2m = g2m_edge_index.clone()
-    legacy_g2m[0] += num_mesh_nodes  # grid senders offset by mesh node count
-    legacy_m2g = m2g_edge_index.clone()
-    legacy_m2g[1] += num_mesh_nodes  # grid receivers offset by mesh node count
+    if mesh_first:
+        # Legacy format: mesh nodes first, then grid nodes.
+        # Edge indices use combined offset: grid indices shifted by
+        # num_mesh_nodes.
+        legacy_g2m = g2m_edge_index.clone()
+        legacy_g2m[0] += num_mesh_nodes
+        legacy_m2g = m2g_edge_index.clone()
+        legacy_m2g[1] += num_mesh_nodes
+        legacy_m2m = m2m_edge_index
+    else:
+        # Legacy format: grid nodes first, then mesh nodes.
+        # Edge indices use combined offset: mesh indices shifted by
+        # num_grid_nodes.
+        legacy_g2m = g2m_edge_index.clone()
+        legacy_g2m[1] += num_grid_nodes
+        legacy_m2g = m2g_edge_index.clone()
+        legacy_m2g[0] += num_grid_nodes
+        legacy_m2m = [ei + num_grid_nodes for ei in m2m_edge_index]
 
     torch.save(mesh_features, graph_dir_path / "mesh_features.pt")
-    torch.save(m2m_edge_index, graph_dir_path / "m2m_edge_index.pt")
+    torch.save(legacy_m2m, graph_dir_path / "m2m_edge_index.pt")
     torch.save(m2m_features, graph_dir_path / "m2m_features.pt")
     torch.save(legacy_g2m, graph_dir_path / "g2m_edge_index.pt")
     torch.save(legacy_m2g, graph_dir_path / "m2g_edge_index.pt")
@@ -151,3 +164,80 @@ def test_load_graph_respects_current_and_legacy_mesh_feature_formats():
         assert torch.equal(
             legacy_graph_ldict["m2g_edge_index"], raw_m2g_edge_index
         )
+
+
+def test_load_graph_legacy_mesh_last_format():
+    """Verify legacy graphs with mesh_first=False zero-index correctly.
+
+    Also tests the case where the topmost mesh node appears only in m2m,
+    ensuring max_idx calculation uses the raw m2m_edge_index[0].
+    """
+    datastore = DummyDatastore()
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        graph_dir_path = Path(tmpdir) / "graph" / "1level"
+        create_graph_from_datastore(
+            datastore=datastore,
+            output_root_path=str(graph_dir_path),
+            hierarchical=False,
+            n_max_levels=1,
+        )
+
+        grid_xy_extent = datastore.get_xy_extent(category="state")
+        grid_xy_max_span = max(
+            grid_xy_extent[1] - grid_xy_extent[0],
+            grid_xy_extent[3] - grid_xy_extent[2],
+        )
+
+        raw_mesh_features = torch.load(graph_dir_path / "mesh_features.pt")
+        raw_m2m_edge_index = _load_edge_index(
+            graph_dir_path / "m2m_edge_index.pt"
+        )
+        raw_g2m_edge_index = _load_edge_index(
+            graph_dir_path / "g2m_edge_index.pt"
+        )
+        raw_m2g_edge_index = _load_edge_index(
+            graph_dir_path / "m2g_edge_index.pt"
+        )
+        raw_m2m_features = _load_edge_index(graph_dir_path / "m2m_features.pt")
+
+        num_mesh_nodes = raw_mesh_features[0].shape[0]
+        grid_xy = datastore.get_xy(category="state", stacked=False)
+        num_grid_nodes = grid_xy.shape[0] * grid_xy.shape[1]
+
+        # Filter g2m and m2g so the topmost mesh node (index num_mesh_nodes - 1)
+        # is unconnected to the grid, but remains connected in m2m.
+        top_mesh_node = num_mesh_nodes - 1
+        g2m_mask = raw_g2m_edge_index[1] != top_mesh_node
+        m2g_mask = raw_m2g_edge_index[0] != top_mesh_node
+        filtered_g2m = raw_g2m_edge_index[:, g2m_mask]
+        filtered_m2g = raw_m2g_edge_index[:, m2g_mask]
+
+        legacy_dir = Path(tmpdir) / "graph" / "legacy_mesh_last"
+        legacy_dir.mkdir(parents=True)
+        _write_legacy_graph(
+            legacy_dir,
+            mesh_features=copy.deepcopy(raw_mesh_features),
+            m2m_edge_index=copy.deepcopy(raw_m2m_edge_index),
+            g2m_edge_index=filtered_g2m,
+            m2g_edge_index=filtered_m2g,
+            m2m_features=copy.deepcopy(raw_m2m_features),
+            num_grid_nodes=num_grid_nodes,
+            num_mesh_nodes=num_mesh_nodes,
+            mesh_first=False,
+        )
+
+        with pytest.warns(RuntimeWarning, match="legacy pre-spec format"):
+            _, legacy_graph_ldict = utils.load_graph(
+                graph_dir_path=str(legacy_dir),
+                mesh_node_features_scaling=grid_xy_max_span,
+            )
+
+        assert torch.equal(legacy_graph_ldict["g2m_edge_index"], filtered_g2m)
+        assert torch.equal(legacy_graph_ldict["m2g_edge_index"], filtered_m2g)
+        assert torch.equal(
+            legacy_graph_ldict["m2m_edge_index"], raw_m2m_edge_index[0]
+        )
+        assert legacy_graph_ldict["m2g_edge_index"].min() >= 0
+        assert legacy_graph_ldict["g2m_edge_index"].min() >= 0
+        assert legacy_graph_ldict["m2m_edge_index"].min() >= 0

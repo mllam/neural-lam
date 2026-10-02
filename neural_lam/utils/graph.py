@@ -323,12 +323,6 @@ def load_graph(
     m2g_edge_index = loads_file("m2g_edge_index.pt")  # (2, num_edges)
 
     if should_zero_index_edge_indices:
-        # Legacy graphs used a shifted node-index layout; normalize it on load.
-        m2m_edge_index = BufferList(
-            [zero_index_edge_index(ei) for ei in m2m_edge_index],
-            persistent=False,
-        )
-
         # m2g and g2m has to be handled specially as not all mesh nodes
         # might be indexed.
         m2g_min_indices = m2g_edge_index.min(dim=1, keepdim=True)[0]
@@ -339,15 +333,21 @@ def load_graph(
             # Under legacy layout, mesh nodes are at indices:
             # num_grid_nodes to num_grid_nodes + num_mesh_nodes - 1.
             # We determine total number of nodes at the bottom level
-            # to find num_grid_nodes.
+            # to find num_grid_nodes using raw, un-rebased edges.
             max_idx = max(
                 g2m_edge_index.max().item(),
                 m2g_edge_index.max().item(),
-                max(ei.max().item() for ei in m2m_edge_index),
+                m2m_edge_index[0].max().item(),
             )
             total_nodes = max_idx + 1
             num_mesh_nodes = mesh_static_features[0].shape[0]
             num_grid_nodes = total_nodes - num_mesh_nodes
+
+        # Legacy graphs used a shifted node-index layout; normalize it on load.
+        m2m_edge_index = BufferList(
+            [zero_index_edge_index(ei) for ei in m2m_edge_index],
+            persistent=False,
+        )
 
         g2m_edge_index = zero_index_g2m(
             g2m_edge_index,
