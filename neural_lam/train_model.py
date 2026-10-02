@@ -501,7 +501,8 @@ def fit(
 
     if train_config.eval and not train_config.load:
         logger.warning(
-            "Evaluation without load checkpoint: no checkpoint will be loaded.",
+            "Evaluation without load checkpoint: no checkpoint will be loaded. "
+            "Use --load <checkpoint> to load a checkpoint."
         )
 
     random_run_id = random.randint(0, 9999)
@@ -517,11 +518,6 @@ def fit(
         )
         config = config or loaded_config
         datastore = datastore or loaded_datastore
-
-    if not isinstance(datastore, BaseRegularGridDatastore):
-        raise TypeError(
-            f"Expected BaseRegularGridDatastore, got {type(datastore)}"
-        )
 
     state_var_names = datastore.get_vars_names(category="state")
     for var_i in train_config.var_leads_metrics_watch:
