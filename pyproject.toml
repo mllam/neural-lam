@@ -51,7 +51,7 @@ gpu = ["torch>=2.12,<2.13"]        # CUDA 13.0, default GPU build
 gpu-cu128 = ["torch>=2.11,<2.12"]  # CUDA 12.8, last torch series with cu128 wheels
 
 [dependency-groups]
-dev = ["pre-commit>=3.8.0", "pytest>=8.3.2", "pooch>=1.8.2", "nbmake>=1.5.0", "ipykernel>=6.0.0"]
+dev = ["pre-commit>=3.8.0", "pytest>=8.3.2", "pooch>=1.8.2", "marimo>=0.9"]
 
 [tool.uv]
 # uv-specific configuration for PyTorch CPU/GPU variant selection.
@@ -115,7 +115,8 @@ ignore = [
     "W503", # Allow line break before binary operator (PEP 8-compatible)
 ]
 per-file-ignores = [
-    "__init__.py: F401", # Allow unused imports
+    "__init__.py: F401",
+    "docs/notebooks/*.py: E501, E712, E265, F401, F821, F841",
 ]
 
 [tool.codespell]

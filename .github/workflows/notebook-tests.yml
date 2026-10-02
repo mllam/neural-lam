@@ -39,4 +39,4 @@ jobs:
 
       - name: Run notebook tests
         run: |
-          pytest -vv -s --nbmake --nbmake-timeout=600 docs/notebooks/
+          python docs/notebooks/hello_world_danra.py && python docs/notebooks/create_reduced_meps_dataset.py
