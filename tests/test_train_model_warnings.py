@@ -112,34 +112,53 @@ def test_create_gif_forwarded_to_forecaster_module():
 
 
 @pytest.mark.parametrize(
-    "train_steps,val_steps,match_err",
+    "cli_args,match_err",
     [
-        ([15], [], "Can not log train step 15"),
-        ([], [15], "Can not log val step 15"),
+        (
+            [
+                "--train_steps_to_log",
+                "1",
+                "10",
+                "--val_steps_to_log",
+                "1",
+                "10",
+                "--var_leads_metrics_watch",
+                '{"0": [1, 10]}',
+            ],
+            None,
+        ),
+        (["--train_steps_to_log", "15"], "Can not log train step 15"),
+        (["--train_steps_to_log", "0"], "Can not log train step 0"),
+        (["--val_steps_to_log", "15"], "Can not log val step 15"),
+        (["--val_steps_to_log", "0"], "Can not log val step 0"),
+        (
+            ["--var_leads_metrics_watch", '{"0": [15]}'],
+            "Can not log validation step 15",
+        ),
+        (
+            ["--var_leads_metrics_watch", '{"0": [0]}'],
+            "Can not log validation step 0",
+        ),
     ],
 )
-def test_steps_to_log_validation(train_steps, val_steps, match_err):
-    """ValueError must be raised if steps exceed the rollout length."""
-    mock_args = MagicMock()
-    mock_args.eval = None
-    mock_args.load = None
-    mock_args.config_path = "dummy.yaml"
-    mock_args.val_steps_to_log = val_steps
-    mock_args.train_steps_to_log = train_steps
-    mock_args.var_leads_metrics_watch = "{}"
-    mock_args.ar_steps_eval = 10
-    mock_args.ar_steps_train = 10
+def test_steps_to_log_validation(cli_args, match_err):
+    """ValueError must be raised if a step is outside [1, rollout length]."""
+    if match_err is None:
+        # The checks run before load_config_and_datastore, so hitting the
+        # SystemExit sentinel means every step was accepted
+        expected = pytest.raises(SystemExit)
+    else:
+        expected = pytest.raises(ValueError, match=match_err)
 
     with patch(
-        "neural_lam.train_model.ArgumentParser.parse_args",
-        return_value=mock_args,
+        "neural_lam.train_model.load_config_and_datastore",
+        side_effect=SystemExit(0),
     ):
-        with patch(
-            "neural_lam.train_model.load_config_and_datastore",
-            return_value=(MagicMock(), MagicMock()),
-        ):
-            with pytest.raises(ValueError, match=match_err):
-                getattr(main, "__wrapped__", main)()
+        with expected:
+            getattr(main, "__wrapped__", main)(
+                ["--config_path", "dummy.yaml", "--ar_steps_train", "10"]
+                + cli_args
+            )
 
 
 def make_args(**overrides):
