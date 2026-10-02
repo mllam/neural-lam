@@ -51,35 +51,6 @@ torch.serialization.add_safe_globals(
 )
 
 
-def build_predictor(predictor_class, args, config, datastore):
-    """
-    Instantiate a step predictor with explicit GNN kwargs for its model family.
-    """
-    kwargs = dict(
-        datastore=datastore,
-        graph_name=args.graph,
-        hidden_dim=args.hidden_dim,
-        hidden_layers=args.hidden_layers,
-        processor_layers=args.processor_layers,
-        mesh_aggr=args.mesh_aggr,
-        num_past_forcing_steps=args.num_past_forcing_steps,
-        num_future_forcing_steps=args.num_future_forcing_steps,
-        output_std=args.output_std,
-        output_clamping_lower=config.training.output_clamping.lower,
-        output_clamping_upper=config.training.output_clamping.upper,
-        g2m_gnn_type=getattr(args, "g2m_gnn_type", "InteractionNet"),
-        m2g_gnn_type=getattr(args, "m2g_gnn_type", "InteractionNet"),
-    )
-    if getattr(args, "model", None) in ("hi_lam", "hi_lam_parallel"):
-        kwargs["mesh_up_gnn_type"] = getattr(
-            args, "mesh_up_gnn_type", "InteractionNet"
-        )
-        kwargs["mesh_down_gnn_type"] = getattr(
-            args, "mesh_down_gnn_type", "InteractionNet"
-        )
-    return predictor_class(**kwargs)
-
-
 def build_predictor(
     predictor_class: type,
     args: Namespace,
