@@ -572,7 +572,7 @@ def fit(
     model = ForecasterModule(
         forecaster=forecaster,
         config=config,
-        datastore=datastore,
+        datastore=cast(BaseRegularGridDatastore, datastore),
         loss=train_config.loss,
         lr=train_config.lr,
         restore_opt=train_config.restore_opt,
