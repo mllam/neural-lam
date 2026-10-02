@@ -27,6 +27,8 @@ on: [push, pull_request, workflow_dispatch]
 jobs:
   tests:
     runs-on: ${{ matrix.runner }}
+    env:
+      FSSPEC_SIMPLECACHE_CACHE_STORAGE: ${{ github.workspace }}/.fsspec-cache
     strategy:
       matrix:
         device: [cpu, gpu]
@@ -72,6 +74,12 @@ jobs:
         with:
           path: tests/datastore_examples/npyfilesmeps/meps_example_reduced.v0.3.0.tar.gz
           key: ${{ runner.os }}-meps-reduced-example-data-v0.3.0
+
+      - name: Cache mdp input data
+        uses: actions/cache@v4
+        with:
+          path: .fsspec-cache
+          key: ${{ runner.os }}-mdp-input-v1-${{ hashFiles('tests/datastore_examples/mdp/**/*.datastore.yaml') }}
 
       - name: Run tests
         run: |
