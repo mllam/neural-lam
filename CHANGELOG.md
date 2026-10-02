@@ -8,6 +8,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [unreleased](https://github.com/mllam/neural-lam/compare/v0.6.0...HEAD)
 
 ### Added
+
+- Add `hello_world_danra.ipynb` end-to-end tutorial notebook for training on DANRA, with a dedicated path-filtered CI workflow that runs it end-to-end via `nbmake` [\#577](https://github.com/mllam/neural-lam/pull/577) @Sharkyii
+
 - Add latent encoder/decoder modules and the `GraphEFM` (hierarchical) / `GraphEFMMultiScale` (flat) step predictors for the Graph-EFM ensemble forecasting model. [\#648](https://github.com/mllam/neural-lam/pull/648) @Sir-Sloth-The-Lazy
 
 - Add `neural_lam.create_graph_with_wmg` CLI which builds `keisler`, `graphcast` and `hierarchical` graphs with [weather-model-graphs](https://github.com/mllam/weather-model-graphs), deprecating `neural_lam.create_graph`. [\#596](https://github.com/mllam/neural-lam/pull/596) @prajwal-tech07
@@ -52,6 +55,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- `train_model.main` now re-raises on error (`@logger.catch(reraise=True)`) instead of logging and exiting 0, so training/eval failures surface to callers and CI (e.g. the notebook `nbmake` run) rather than passing silently [\#577](https://github.com/mllam/neural-lam/pull/577)
+
+- Allow `graph_lam` training and checkpoint reloads to accept the full set of
+  GNN type CLI options without passing hierarchical-only options to unsupported
+  constructors via a shared `build_predictor` helper ([#686](https://github.com/mllam/neural-lam/issues/686)).
 - Derive the `plot_error_heatmap` lead-time axis label from a full unit-name
   lookup instead of `time_step_unit[0]`, which rendered `minutes`,
   `milliseconds` and `microseconds` all as "m" and `unknown` as "u"; the
@@ -106,6 +114,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Fix `WeatherDataset.__len__` off-by-one in analysis mode (was undercounting by 1 sample), include `num_past_forcing_steps` in the forecast-mode minimum-horizon check, validate forcing-side forecast horizon when forcing is present, and use `min(n_state, n_forcing)` when both are present in analysis mode; raise `IndexError` for out-of-range indices in `WeatherDataset.__getitem__` (with Python-style negative indexing support) [\#312](https://github.com/mllam/neural-lam/pull/312) @kshirajahere
 
 ### Maintenance
+
+- Convert `docs/notebooks/` from Jupyter `.ipynb` to marimo `.py` scripts; add
+  `notebook-tests.yml` CI workflow that runs them as plain Python scripts; swap
+  `ipykernel`/`nbmake` dev deps for `marimo>=0.9` @Sharkyii
 
 - Cache the mdp example input data in CI with fsspec `simplecache`, so the DANRA inputs are no longer downloaded on every run [\#751](https://github.com/mllam/neural-lam/pull/751) @KumarShivam1908
 

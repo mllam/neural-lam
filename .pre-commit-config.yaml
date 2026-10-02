@@ -17,6 +17,12 @@ repos:
     hooks:
       - id: codespell
         description: Check for spelling errors
+        # codespell reads [tool.codespell] from pyproject.toml via tomllib,
+        # which is unavailable on Python <3.11 unless `tomli` is installed;
+        # on such runners the config silently fails to load. Pass --skip
+        # explicitly so it doesn't depend on that.
+        args:
+          - --skip=requirements/*,docs/notebooks/hello_world_danra.ipynb
 
   - repo: https://github.com/psf/black
     rev: 25.11.0

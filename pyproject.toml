@@ -55,11 +55,7 @@ gpu-cu128 = ["torch>=2.11,<2.12"]  # CUDA 12.8, last torch series with cu128 whe
 create_graph_with_wmg = "neural_lam.create_graph_with_wmg:cli"
 
 [dependency-groups]
-dev = [
-    "pre-commit>=3.8.0",
-    "pytest>=8.3.2",
-    "pooch>=1.8.2",
-]
+dev = ["pre-commit>=3.8.0", "pytest>=8.3.2", "pooch>=1.8.2", "marimo>=0.9"]
 
 [tool.uv]
 # uv-specific configuration for PyTorch CPU/GPU variant selection.
@@ -123,11 +119,12 @@ ignore = [
     "W503", # Allow line break before binary operator (PEP 8-compatible)
 ]
 per-file-ignores = [
-    "__init__.py: F401", # Allow unused imports
+    "__init__.py: F401",
+    "docs/notebooks/*.py: E501, E712, E265, F401, F821, F841",
 ]
 
 [tool.codespell]
-skip = "requirements/*"
+skip = "requirements/*,docs/notebooks/hello_world_danra.ipynb"
 
 [tool.ty.src]
 exclude = ["tests/", "docs/"]
@@ -173,11 +170,6 @@ ignore-property-decorators = false
 exclude = ["tests", "docs", "build"]
 omit-covered-files = true
 
-[tool.pytest.ini_options]
-markers = [
-    "slow: marks tests as slow (deselected by default, run with -m slow)",
-]
-
 [build-system]
 requires = ["hatchling>=1.27.0", "hatch-vcs"]
 build-backend = "hatchling.build"
@@ -188,6 +180,13 @@ core-metadata-version = "2.4"
 [tool.hatch.version]
 source = "vcs"
 fallback-version = "0.0.0"
+
+[tool.pytest.ini_options]
+markers = [
+    "slow: marks tests as slow (deselected by default, run with -m slow)",
+]
+testpaths = ["neural_lam", "tests"]
+addopts = "--doctest-modules -vv -s"
 
 [tool.hatch.build.targets.sdist]
 exclude = [
