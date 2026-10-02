@@ -8,6 +8,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [unreleased](https://github.com/mllam/neural-lam/compare/v0.6.0...HEAD)
 
 ### Added
+- Add a high-level programmatic Python API (`neural_lam.api`) exposing `train`, `evaluate`, and `create_graph` with native IDE autocomplete support [\#707](https://github.com/mllam/neural-lam/issues/707)
+
 - Add latent encoder/decoder modules and the `GraphEFM` (hierarchical) / `GraphEFMMultiScale` (flat) step predictors for the Graph-EFM ensemble forecasting model. [\#648](https://github.com/mllam/neural-lam/pull/648) @Sir-Sloth-The-Lazy
 
 - Add `neural_lam.create_graph_with_wmg` CLI which builds `keisler`, `graphcast` and `hierarchical` graphs with [weather-model-graphs](https://github.com/mllam/weather-model-graphs), deprecating `neural_lam.create_graph`. [\#596](https://github.com/mllam/neural-lam/pull/596) @prajwal-tech07
@@ -33,6 +35,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Graph storage specification (`docs/graph_storage_spec.md`), PEP 723–compliant validator script (`docs/validate_graph.py`), and pre-commit hook keeping the spec in sync with the validator for the torch-tensors-on-disk graph format currently used in neural-lam [\#323](https://github.com/mllam/neural-lam/pull/323) @leifdenby
 
 ### Changed
+
+- Decouple CLI argument parsing from training execution by introducing typed configuration dataclasses (`ModelConfig`, `TrainRunConfig`, `DataConfig`, `ComputeConfig`, `LoggingConfig`) and routing programmatic API calls (`train`, `evaluate`) directly through `neural_lam.train_model.fit` without synthesizing `argparse.Namespace` [\#707](https://github.com/mllam/neural-lam/issues/707) @GiGiKoneti
 
 - Move data normalization from CPU (`WeatherDataset`) to GPU
   (`ForecasterModule.on_after_batch_transfer`) for improved performance and
