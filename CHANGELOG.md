@@ -57,7 +57,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   datastore config although the neural-lam config is required. The flag is now
   `--config_path` (consistent with `create_graph` and `train_model`), defaults
   to the DANRA example config, and `--datastore_config_path` is kept as a
-  deprecated alias [\#PR](https://github.com/mllam/neural-lam/pull/PR) @nikhil3495
+  deprecated alias [\#761](https://github.com/mllam/neural-lam/pull/761) @nikhil3495
 
 - Derive the `plot_error_heatmap` lead-time axis label from a full unit-name
   lookup instead of `time_step_unit[0]`, which rendered `minutes`,
