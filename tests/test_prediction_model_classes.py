@@ -3,6 +3,7 @@ import typing
 from argparse import Namespace
 
 # Third-party
+import pytest
 import pytorch_lightning as pl
 import torch
 
@@ -405,3 +406,21 @@ def test_step_predictor_no_static_features():
     )
     assert prediction.shape == (B, 1, num_grid_nodes, d_state)
     assert pred_std is None
+
+
+@pytest.mark.parametrize("lower,upper", [(5.0, 1.0), (1.0, 1.0)])
+def test_step_predictor_invalid_clamping_limits(lower, upper):
+    """Lower clamping limit must be smaller than upper, else ValueError.
+
+    Checked with a raise rather than an ``assert``, which ``python -O`` strips.
+    """
+    datastore = DummyDatastore()
+    feature = datastore.get_vars_names(category="state")[0]
+    predictor = MockStepPredictor(
+        datastore=datastore,
+        output_clamping_lower={feature: lower},
+        output_clamping_upper={feature: upper},
+    )
+
+    with pytest.raises(ValueError, match="must be smaller than upper"):
+        predictor.prepare_clamping_params(datastore)

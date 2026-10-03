@@ -52,6 +52,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Raise `ValueError` instead of a bare `assert` when an `output_clamping` `lower` limit is not smaller than its `upper` limit in `StepPredictor.prepare_clamping_params`, so the check is no longer stripped under `python -O` [\#757](https://github.com/mllam/neural-lam/pull/757) @RudraDudhat2509
+
 - Derive the `plot_error_heatmap` lead-time axis label from a full unit-name
   lookup instead of `time_step_unit[0]`, which rendered `minutes`,
   `milliseconds` and `microseconds` all as "m" and `unknown` as "u"; the
