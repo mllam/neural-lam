@@ -2,6 +2,7 @@
 
 # Standard library
 import os
+import warnings
 from argparse import ArgumentDefaultsHelpFormatter, ArgumentParser
 from typing import Any
 
@@ -232,17 +233,23 @@ def plot_graph(
     return fig
 
 
-def main() -> None:
+def main(input_args: list[str] | None = None) -> None:
     """Plot graph structure in 3D using plotly."""
     parser = ArgumentParser(
         description="Plot graph",
         formatter_class=ArgumentDefaultsHelpFormatter,
     )
     parser.add_argument(
+        "--config_path",
+        type=str,
+        default="tests/datastore_examples/mdp/danra_100m_winds/config.yaml",
+        help="Path to neural-lam configuration file",
+    )
+    parser.add_argument(
         "--datastore_config_path",
         type=str,
-        default="tests/datastore_examples/mdp/config.yaml",
-        help="Path for the datastore config",
+        default=None,
+        help="Deprecated alias for --config_path",
     )
     parser.add_argument(
         "--graph",
@@ -261,10 +268,17 @@ def main() -> None:
         help="If the axis should be displayed",
     )
 
-    args = parser.parse_args()
-    _, datastore = load_config_and_datastore(
-        config_path=args.datastore_config_path
-    )
+    args = parser.parse_args(input_args)
+    if args.datastore_config_path is not None:
+        warnings.warn(
+            "--datastore_config_path is deprecated and will be removed in a "
+            "future version. Use --config_path instead (it expects the "
+            "neural-lam configuration file, not the datastore config).",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        args.config_path = args.datastore_config_path
+    _, datastore = load_config_and_datastore(config_path=args.config_path)
 
     xy = datastore.get_xy("state", stacked=True)  # (num_grid_nodes, 2)
     grid_xy_extent = datastore.get_xy_extent(category="state")
