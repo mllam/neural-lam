@@ -26,6 +26,7 @@ class GraphLatentEncoder(BaseLatentEncoder):
         hidden_layers=1,
         g2m_gnn_type="InteractionNet",
         output_dist="isotropic",
+        num_mesh_nodes=None,
     ):
         """
         Set up the g2m GNN, on-mesh processing stack and latent param map.
@@ -58,13 +59,18 @@ class GraphLatentEncoder(BaseLatentEncoder):
             hidden_dim,
             hidden_layers=hidden_layers,
             update_edges=False,
+            num_rec=num_mesh_nodes,
         )
 
         # None if m2m_layers == 0, in which case no on-mesh processing is
         # done in compute_dist_params
         self.m2m_gnns = (
             utils.make_gnn_seq(
-                m2m_edge_index, m2m_layers, hidden_layers, hidden_dim
+                m2m_edge_index,
+                m2m_layers,
+                hidden_layers,
+                hidden_dim,
+                num_rec=num_mesh_nodes,
             )
             if m2m_layers > 0
             else None
