@@ -26,6 +26,27 @@ def test_inverse_softplus_near_zero_is_finite():
     assert torch.isfinite(x_near_zero).all()
 
 
+@pytest.mark.parametrize("beta", [0.5, 1.0, 2.0])
+def test_inverse_softplus_float16_is_finite_and_roundtrips(beta):
+    """The inverse stays finite when half precision expm1 would overflow."""
+    y = torch.tensor(
+        [12.0 / beta, 15.0 / beta, 20.0 / beta, 25.0 / beta],
+        dtype=torch.float16,
+        requires_grad=True,
+    )
+
+    x = inverse_softplus(y, beta=beta)
+
+    assert torch.isfinite(x).all()
+    torch.testing.assert_close(
+        F.softplus(x, beta=beta), y, rtol=1e-3, atol=1e-3
+    )
+
+    x.sum().backward()
+    assert y.grad is not None
+    torch.testing.assert_close(y.grad, torch.ones_like(y.grad))
+
+
 @pytest.mark.parametrize("threshold", [20.0, 5.0])
 def test_inverse_softplus_above_threshold_is_identity(threshold):
     """Values above `threshold` bypass the log path and return unchanged."""
