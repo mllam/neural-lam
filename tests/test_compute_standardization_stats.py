@@ -1,9 +1,12 @@
 # Third-party
+import pytest
 import torch
 
 # First-party
 from neural_lam.datastore.npyfilesmeps.compute_standardization_stats import (
     PaddedWeatherDataset,
+    sample_moments,
+    save_stats,
 )
 
 
@@ -114,3 +117,82 @@ class TestDiffStatsShape:
 
         assert torch.equal(result, data[:12])
         assert not torch.equal(result, old_result)
+
+
+# -- std from moments: large mean relative to std ---------------------------
+
+
+def _saved_std(tmp_path, x):
+    """Run per-sample moments of ``x`` through save_stats, return the std."""
+    means, squares = sample_moments(x)
+    save_stats(tmp_path, [means], [squares], [], [], "parameter")
+    return torch.load(tmp_path / "parameter_std.pt", weights_only=True)
+
+
+class TestStdFromMoments:
+    """Std must stay accurate when the mean is large compared to the std."""
+
+    @pytest.mark.parametrize(
+        "mean,std",
+        [(280.0, 10.0), (1e5, 1e3), (1e5, 100.0), (1e5, 20.0), (1e5, 5.0)],
+    )
+    def test_matches_float64_reference(self, tmp_path, mean, std):
+        """E[x^2] - E[x]^2 in float32 gives 9-60% errors or NaN here."""
+        g = torch.Generator().manual_seed(0)
+        x = (mean + std * torch.randn(8, 5, 200, 2, generator=g)).float()
+        expected = x.double().std(dim=(0, 1, 2), unbiased=False)
+        result = _saved_std(tmp_path, x)
+        assert torch.isfinite(result).all()
+        torch.testing.assert_close(
+            result.double(), expected, rtol=1e-3, atol=0.0
+        )
+
+    @pytest.mark.parametrize("value", [1e5, 100000.1])
+    def test_constant_field_has_negligible_std(self, tmp_path, value):
+        """A constant field must not give NaN or a std of the float32 noise
+        level (tens, in float32), only below one float32 step of the data."""
+        x = torch.full((4, 5, 50, 1), value)
+        std = _saved_std(tmp_path, x).item()
+        assert std <= torch.finfo(torch.float32).eps * value
+
+    def test_saved_as_float32(self, tmp_path):
+        """Stats are applied to float32 batches, float64 would upcast them."""
+        x = torch.randn(4, 5, 50, 3) + 100.0
+        means, squares = sample_moments(x)
+        save_stats(
+            tmp_path, [means], [squares], [means[:, 0]], [squares[:, 0]], "p"
+        )
+        assert torch.load(tmp_path / "p_mean.pt").dtype == torch.float32
+        assert torch.load(tmp_path / "p_std.pt").dtype == torch.float32
+        assert torch.load(tmp_path / "flux_stats.pt").dtype == torch.float32
+
+    def test_flux_stats(self, tmp_path):
+        """Flux mean and std come out of the same float64 path."""
+        g = torch.Generator().manual_seed(0)
+        flux = (1e5 + 20.0 * torch.randn(4 * 5 * 50, generator=g)).float()
+        per_sample = flux.view(4, -1).double()
+        save_stats(
+            tmp_path,
+            [torch.zeros(4, 1)],
+            [torch.zeros(4, 1)],
+            [per_sample.mean(dim=1)],
+            [(per_sample**2).mean(dim=1)],
+            "p",
+        )
+        flux_mean, flux_std = torch.load(tmp_path / "flux_stats.pt")
+        torch.testing.assert_close(
+            flux_std.double(),
+            flux.double().std(unbiased=False),
+            rtol=1e-3,
+            atol=0,
+        )
+        torch.testing.assert_close(
+            flux_mean.double(), flux.double().mean(), rtol=1e-6, atol=0
+        )
+
+    def test_inconsistent_moments_raise(self, tmp_path):
+        """E[x^2] < E[x]^2 is impossible, so it must not be written out."""
+        means = torch.tensor([[3.0]], dtype=torch.float64)
+        squares = torch.tensor([[1.0]], dtype=torch.float64)
+        with pytest.raises(ValueError, match="Negative variance"):
+            save_stats(tmp_path, [means], [squares], [], [], "parameter")
