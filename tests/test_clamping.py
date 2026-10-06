@@ -46,9 +46,11 @@ def test_clamping():
     model_args = ModelArgs()
 
     config = nlconfig.NeuralLAMConfig(
-        datastore=nlconfig.DatastoreSelection(
-            kind=datastore.SHORT_NAME, config_path=datastore.root_path
-        ),
+        datastores={
+            "main": nlconfig.DatastoreSelection(
+                kind=datastore.SHORT_NAME, config_path=datastore.root_path
+            )
+        },
         training=nlconfig.TrainingConfig(
             output_clamping=nlconfig.OutputClamping(
                 lower={"t2m": 0.0, "r2m": 0.0},

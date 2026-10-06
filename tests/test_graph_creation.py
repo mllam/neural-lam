@@ -14,7 +14,6 @@ from neural_lam.create_graph_with_wmg import (
     create_graph_from_datastore as wmg_create_graph_from_datastore,
 )
 from neural_lam.datastore import DATASTORES
-from neural_lam.datastore.base import BaseRegularGridDatastore
 from neural_lam.utils import BufferList, load_graph
 from tests.conftest import init_datastore_example
 
@@ -44,7 +43,7 @@ def test_graph_creation(datastore_name, graph_name):
     validator = _load_validator_module()
     datastore = init_datastore_example(datastore_name)
 
-    if not isinstance(datastore, BaseRegularGridDatastore):
+    if not datastore.is_on_regular_spatial_grid:
         pytest.skip(
             f"Skipping test for {datastore_name} as it is not a regular grid datastore."  # noqa: E501
         )
@@ -94,7 +93,7 @@ def test_loaded_g2m_m2g_indices_in_bounds(datastore_name, graph_name):
     """
     datastore = init_datastore_example(datastore_name)
 
-    if not isinstance(datastore, BaseRegularGridDatastore):
+    if not datastore.is_on_regular_spatial_grid:
         pytest.skip(
             f"Skipping test for {datastore_name} as it is not a regular "
             "grid datastore."

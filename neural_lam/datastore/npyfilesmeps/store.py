@@ -14,7 +14,6 @@ from typing import Any, cast
 
 # Third-party
 import cartopy.crs as ccrs
-import dask
 import dask.array
 import dask.delayed
 import numpy as np
@@ -24,7 +23,7 @@ import xarray as xr
 from xarray.core.dataarray import DataArray
 
 # Local
-from ..base import BaseRegularGridDatastore, CartesianGridShape
+from ..base import BaseDatastore, CartesianGridShape
 from .config import NpyDatastoreConfig
 
 STATE_FILENAME_FORMAT = "nwp_{analysis_time:%Y%m%d%H}_mbr{member_id:03d}.npy"
@@ -64,7 +63,7 @@ def _load_np(
     return arr
 
 
-class NpyFilesDatastoreMEPS(BaseRegularGridDatastore):
+class NpyFilesDatastoreMEPS(BaseDatastore):
     """
     Represents a dataset stored as numpy files on disk. The dataset is assumed
     to be stored in a directory structure where each sample is stored in a
@@ -144,8 +143,8 @@ class NpyFilesDatastoreMEPS(BaseRegularGridDatastore):
         └── surface_geopotential.npy
 
     For the MEPS dataset:
-    N_t' = 65
-    N_t = 65//subsample_step (= 21 for 3h steps)
+    num_times' = 65
+    num_times = 65//subsample_step (= 21 for 3h steps)
     dim_y = 268
     dim_x = 238
     num_grid_nodes = 268x238 = 63784
@@ -153,8 +152,8 @@ class NpyFilesDatastoreMEPS(BaseRegularGridDatastore):
     num_forcing_vars = 5
 
     For the MEPS reduced dataset:
-    N_t' = 65
-    N_t = 65//subsample_step (= 21 for 3h steps)
+    num_times' = 65
+    num_times = 65//subsample_step (= 21 for 3h steps)
     dim_y = 134
     dim_x = 119
     num_grid_nodes = 134x119 = 15946
@@ -165,6 +164,7 @@ class NpyFilesDatastoreMEPS(BaseRegularGridDatastore):
     SHORT_NAME = "npyfilesmeps"
 
     is_forecast = True
+    is_on_regular_spatial_grid = True
 
     _config_path: Path
     _root_path: Path
@@ -266,11 +266,17 @@ class NpyFilesDatastoreMEPS(BaseRegularGridDatastore):
 
         """
         if category == "state":
+            state_vars = self.get_vars_names(category="state")
+            if not state_vars:
+                raise ValueError(
+                    "No state variables configured. This datastore may "
+                    "be a boundary-only datastore without state data."
+                )
             das = []
             # for the state category, we need to load all ensemble members
             for member in range(self._num_ensemble_members):
                 da_member = self._get_single_timeseries_dataarray(
-                    features=self.get_vars_names(category="state"),
+                    features=state_vars,
                     split=split,
                     member=member,
                 )
@@ -414,7 +420,8 @@ class NpyFilesDatastoreMEPS(BaseRegularGridDatastore):
         features_vary_with_analysis_time = True
         feature_dim_mask = None
         if (
-            features == self.get_vars_names(category="state")
+            features
+            and features == self.get_vars_names(category="state")
             and split is not None
         ):
             filename_format = STATE_FILENAME_FORMAT
@@ -559,6 +566,11 @@ class NpyFilesDatastoreMEPS(BaseRegularGridDatastore):
         """Get the analysis times for the given split by parsing the filenames
         of all the files found for the given split.
 
+        Every category's analysis-time coordinate is derived from the state
+        files when they exist, on the assumption that forcing/static files
+        are available at the same analysis times; only a state-less
+        (boundary-only) datastore falls back to forcing files.
+
         Parameters
         ----------
         split : str
@@ -570,22 +582,42 @@ class NpyFilesDatastoreMEPS(BaseRegularGridDatastore):
             The analysis times for the given split, sorted in ascending order.
 
         """
-        pattern = re.sub(r"{analysis_time:[^}]*}", "*", STATE_FILENAME_FORMAT)
-        pattern = re.sub(r"{member_id:[^}]*}", "*", pattern)
-
         sample_dir = self.root_path / "samples" / split
-        sample_files = sample_dir.glob(pattern)
-        times = []
-        for fp in sample_files:
-            name_parts = parse.parse(STATE_FILENAME_FORMAT, fp.name)
-            times.append(name_parts["analysis_time"])
 
-        if len(times) == 0:
-            raise ValueError(
-                f"No files found in {sample_dir} with pattern {pattern}"
-            )
+        # Try state files first, then fall back to forcing files
+        # (boundary-only datastores may not have state files)
+        formats_to_try = [
+            (STATE_FILENAME_FORMAT, [r"{member_id:[^}]*}"]),
+            (TOA_SW_DOWN_FLUX_FILENAME_FORMAT, []),
+        ]
 
-        return sorted(times)
+        for filename_format, extra_wildcards in formats_to_try:
+            pattern = re.sub(r"{analysis_time:[^}]*}", "*", filename_format)
+            for wc in extra_wildcards:
+                pattern = re.sub(wc, "*", pattern)
+
+            sample_files = list(sample_dir.glob(pattern))
+            if sample_files:
+                if (
+                    filename_format is not STATE_FILENAME_FORMAT
+                    and self.get_vars_names(category="state")
+                ):
+                    warnings.warn(
+                        f"No state files matching {STATE_FILENAME_FORMAT!r} "
+                        f"found in {sample_dir}, even though this datastore "
+                        "configures state variables. Falling back to "
+                        f"forcing-file ({filename_format!r}) analysis "
+                        "times; this may indicate a misconfigured or "
+                        "incomplete interior datastore rather than a "
+                        "genuine boundary-only one."
+                    )
+                times = []
+                for fp in sample_files:
+                    name_parts = parse.parse(filename_format, fp.name)
+                    times.append(name_parts["analysis_time"])
+                return sorted(times)
+
+        raise ValueError(f"No state or forcing files found in {sample_dir}")
 
     def _calc_datetime_forcing_features(
         self, da_time: xr.DataArray
