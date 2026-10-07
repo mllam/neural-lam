@@ -52,6 +52,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Add missing tests for `inverse_sigmoid` on float32, float16 and adjust the epsilon to prevent overflow near bounds in float16.
+  Replace a handwritten `torch.log(x_clamped / (1 - x_clamped))` formula with `torch.logit(x_clamped)` for higher stability for float32 and float16 [\#769](https://github.com/mllam/neural-lam/pull/769) @Tima-a
+
 - Derive the `plot_error_heatmap` lead-time axis label from a full unit-name
   lookup instead of `time_step_unit[0]`, which rendered `minutes`,
   `milliseconds` and `microseconds` all as "m" and `unknown` as "u"; the
