@@ -76,45 +76,7 @@ class TestFluxStatsGather:
         assert torch.isclose(torch.mean(result), torch.tensor(3.0))
 
 
-# -- Bug 2: diff stats wrong shape -----------------------------------------
-
-
-class TestDiffStatsShape:
-    """Diff stats distributed gather: contiguous slice preserves (N, d_f)."""
-
-    def test_fix_shape(self):
-        """Slicing the gathered tensor preserves the feature dimension."""
-        d_f, total, n_orig = 17, 100, 80
-        data = torch.randn(total, d_f)
-
-        result = data[:n_orig]
-        assert result.shape == (n_orig, d_f)
-
-    def test_fix_preserves_values(self):
-        """Contiguous slice selects the expected rows."""
-        d_f, total = 5, 10
-        data = torch.arange(total * d_f, dtype=torch.float32).view(total, d_f)
-
-        result = data[:4]
-        expected = torch.stack([data[0], data[1], data[2], data[3]])
-        assert torch.equal(result, expected)
-
-    def test_slice_handles_larger_step_length(self):
-        """Step lengths above one select distinct diff rows."""
-        d_f = 3
-        n_samples = 4
-        step_int = 3
-        data = torch.arange(20 * d_f, dtype=torch.float32).view(20, d_f)
-        old_indices = [i // step_int for i in range(n_samples * step_int)]
-
-        result = data[: n_samples * step_int]
-        old_result = data[old_indices]
-
-        assert torch.equal(result, data[:12])
-        assert not torch.equal(result, old_result)
-
-
-# -- Bug 3: positional depadding after distributed gather ------------------
+# -- Bug 2: positional depadding after distributed gather ------------------
 
 
 class _IndexEchoDataset:
