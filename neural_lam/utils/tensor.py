@@ -41,7 +41,11 @@ def inverse_softplus(
         x, min=torch.log(torch.tensor(1e-6 + 1)) / beta, max=threshold / beta
     )
 
-    non_linear_part = torch.log(torch.expm1(x_clamped * beta)) / beta
+    # This equivalent form avoids overflow in expm1 for lower-precision
+    # floating-point tensors while preserving the input dtype.
+    non_linear_part = (
+        x_clamped + torch.log(-torch.expm1(-x_clamped * beta)) / beta
+    )
 
     below_threshold = x * beta <= threshold
 
