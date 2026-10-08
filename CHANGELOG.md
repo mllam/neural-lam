@@ -51,7 +51,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   @Sir-Sloth-The-Lazy
 
 ### Fixed
-
+- Reject nonpositive `ar_steps` values in `WeatherDataset` with a clear validation error @saisrikar8
 - Derive the `plot_error_heatmap` lead-time axis label from a full unit-name
   lookup instead of `time_step_unit[0]`, which rendered `minutes`,
   `milliseconds` and `microseconds` all as "m" and `unknown` as "u"; the
