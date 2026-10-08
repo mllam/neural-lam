@@ -212,8 +212,9 @@ the input-data representation is split into two parts:
 2. A `pytorch.Dataset`-derived class (called
    `neural_lam.weather_dataset.WeatherDataset`) which takes care of sampling in
    time to create individual samples for training, validation and testing. The
-   `WeatherDataset` class is also responsible for normalising the values and
-   returning `torch.Tensor`-objects.
+   `WeatherDataset` class returns unstandardized `torch.Tensor` objects. State
+    and forcing tensors are standardized after device transfer by
+    `ForecasterModule.on_after_batch_transfer`.
 
 There are currently two different datastores implemented in the codebase:
 
