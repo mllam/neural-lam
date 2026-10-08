@@ -55,11 +55,12 @@ def inverse_sigmoid(x: torch.Tensor) -> torch.Tensor:
     Inverse of ``torch.sigmoid`` with clamping for numerical stability.
 
     Sigmoid output takes values in ``[0, 1]``; we clamp the input slightly
-    within that open interval before applying ``log(x / (1 - x))``.
+    within that open interval before applying ``torch.logit``.
 
     Note that ``torch.clamp`` will make gradients 0 near the bounds, but
     this is not a problem as values of x that are this close to 0 or 1
-    have gradients of 0 anyhow.
+    have gradients of 0 anyhow. Clamping is adjusted based on dtype
+    with larger epsilon on float16.
 
     Parameters
     ----------
@@ -69,7 +70,7 @@ def inverse_sigmoid(x: torch.Tensor) -> torch.Tensor:
     Returns
     -------
     torch.Tensor
-        Tensor containing ``log(x / (1 - x))`` after clamping away from the
+        Tensor containing ``torch.logit(x)`` after clamping away from the
         saturation limits.
 
     Notes
@@ -77,5 +78,6 @@ def inverse_sigmoid(x: torch.Tensor) -> torch.Tensor:
     ``torch.clamp`` zeroes gradients for values at the bounds, but values this
     close to 0 or 1 already have negligible gradients.
     """
-    x_clamped = torch.clamp(x, min=1e-6, max=1 - 1e-6)
-    return torch.log(x_clamped / (1 - x_clamped))
+    eps = 1e-3 if x.dtype == torch.float16 else 1e-6
+    x_clamped = torch.clamp(x, min=eps, max=1 - eps)
+    return torch.logit(x_clamped)
