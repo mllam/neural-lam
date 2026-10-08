@@ -314,9 +314,6 @@ def main(
     if rank == 0:
         print("Computing mean and std.-dev. for parameters...")
     means, squares, flux_means, flux_squares = [], [], [], []
-    # Precomputed so padded rows can be dropped locally, per rank, as soon
-    # as each batch is processed -- see `real_sample_masks` for why
-    # depadding after the gather below is not safe to do positionally.
     real_masks = None
     if distributed:
         assert isinstance(ds, PaddedWeatherDataset) and sampler is not None
@@ -339,7 +336,6 @@ def main(
         batch_means = torch.mean(batch, dim=(1, 2)).cpu()
         batch_squares = torch.mean(batch**2, dim=(1, 2)).cpu()
         if real_masks is not None:
-            # Drop padded rows per rank, see `real_sample_masks`
             mask = real_masks[batch_i]
             batch_means = batch_means[mask]
             batch_squares = batch_squares[mask]
@@ -359,7 +355,6 @@ def main(
         dist.all_gather_object(flux_squares_gathered, flux_squares)
 
         if rank == 0:
-            # Padded rows were already dropped per rank above
             means = [torch.cat(cast(list[torch.Tensor], means_gathered), dim=0)]
             squares = [
                 torch.cat(cast(list[torch.Tensor], squares_gathered), dim=0)
@@ -505,7 +500,6 @@ def main(
         )
 
         if rank == 0:
-            # Padded rows were already dropped per rank above
             diff_means = [
                 torch.cat(cast(list[torch.Tensor], diff_means_gathered), dim=0)
             ]
