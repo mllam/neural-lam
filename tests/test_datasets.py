@@ -107,7 +107,24 @@ def test_dataset_item_create_dataarray_from_tensor(datastore_name):
     target_times = np.array(target_times_arr, dtype="datetime64[ns]")
     np.testing.assert_equal(target_times, da_target_times_true.values)
 
-    da_target = dataset.create_dataarray_from_tensor(
+    def _assert_coords_equal(da, da_true):
+        """Compare the coordinates of two DataArrays dimension by dimension.
+
+        `BaseDatastore.create_dataarray_from_tensor` builds `grid_index` as a
+        lightweight positional index rather than copying the datastore's
+        spatial multi-index, so for that dimension the attached x/y
+        coordinates are compared instead of the index values themselves.
+        """
+        for dim in da.dims:
+            if dim == "grid_index":
+                for coord_name in ["x", "y"]:
+                    np.testing.assert_equal(
+                        da[coord_name].values, da_true[coord_name].values
+                    )
+            else:
+                np.testing.assert_equal(da[dim].values, da_true[dim].values)
+
+    da_target = datastore.create_dataarray_from_tensor(
         tensor=target_states, category="state", time=target_times
     )
 
@@ -116,10 +133,7 @@ def test_dataset_item_create_dataarray_from_tensor(datastore_name):
         da_target.values, da_target_true.values, rtol=1e-6
     )
     assert da_target.dims == da_target_true.dims
-    for dim in da_target.dims:
-        np.testing.assert_equal(
-            da_target[dim].values, da_target_true[dim].values
-        )
+    _assert_coords_equal(da_target, da_target_true)
 
     if isinstance(datastore, BaseRegularGridDatastore):
         # test unstacking the grid coordinates
@@ -130,7 +144,7 @@ def test_dataset_item_create_dataarray_from_tensor(datastore_name):
         )
 
     # check construction of a single time
-    da_target_single = dataset.create_dataarray_from_tensor(
+    da_target_single = datastore.create_dataarray_from_tensor(
         tensor=target_states[0], category="state", time=target_times[0]
     )
 
@@ -140,10 +154,7 @@ def test_dataset_item_create_dataarray_from_tensor(datastore_name):
         da_target_single.values, da_target_true[0].values, rtol=1e-6
     )
     assert da_target_single.dims == da_target_true[0].dims
-    for dim in da_target_single.dims:
-        np.testing.assert_equal(
-            da_target_single[dim].values, da_target_true[0][dim].values
-        )
+    _assert_coords_equal(da_target_single, da_target_true[0])
 
     if isinstance(datastore, BaseRegularGridDatastore):
         # test unstacking the grid coordinates
