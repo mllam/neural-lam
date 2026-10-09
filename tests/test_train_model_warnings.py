@@ -6,16 +6,12 @@ from typing import cast
 from unittest.mock import MagicMock, patch
 
 # Third-party
-import loguru
 import pytest
 
-# Mock loguru.logger.catch before importing train_model
-loguru.logger.catch = lambda f: f  # type: ignore[assignment]
-
 # First-party
-from neural_lam.config import NeuralLAMConfig  # noqa: E402
-from neural_lam.models import MODELS, BaseHiGraphModel  # noqa: E402
-from neural_lam.train_model import (  # noqa: E402
+from neural_lam.config import NeuralLAMConfig
+from neural_lam.models import MODELS, BaseHiGraphModel
+from neural_lam.train_model import (
     build_predictor,
     load_forecaster_module_from_checkpoint,
     main,
@@ -159,6 +155,32 @@ def test_steps_to_log_validation(cli_args, match_err):
                 ["--config_path", "dummy.yaml", "--ar_steps_train", "10"]
                 + cli_args
             )
+
+
+@pytest.mark.parametrize(
+    "cli_args,exc_type,match_err",
+    [
+        (
+            ["--config_path", "nonexistent.yaml"],
+            FileNotFoundError,
+            "nonexistent.yaml",
+        ),
+        (
+            [
+                "--config_path",
+                "nonexistent.yaml",
+                "--val_steps_to_log",
+                "99",
+            ],
+            ValueError,
+            "Can not log val step 99",
+        ),
+    ],
+)
+def test_main_raises_on_startup_error(cli_args, exc_type, match_err):
+    """main() must raise, not log and return, so the CLI exits non-zero."""
+    with pytest.raises(exc_type, match=match_err):
+        main(cli_args)
 
 
 def make_args(**overrides):

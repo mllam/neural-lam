@@ -111,7 +111,7 @@ def load_forecaster_module_from_checkpoint(
     )
 
 
-@logger.catch
+@logger.catch(reraise=True)
 def main(input_args: list[str] | None = None) -> None:
     """Main function for training and evaluating models."""
     parser = ArgumentParser(
