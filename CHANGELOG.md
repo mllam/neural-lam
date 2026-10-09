@@ -75,6 +75,8 @@ It also contains a number of smaller improvements, bug fixes and maintenance upd
 
 ### Fixed
 
+- Fix `fractional_plot_bundle` docstring describing `fraction` as a denominator of the figure width, when it is a multiplier applied to both the width and the height [\#NNN](https://github.com/mllam/neural-lam/pull/NNN) @nikhil3495
+
 - Raise `ValueError` instead of a bare `assert` when an `output_clamping` `lower` limit is not smaller than its `upper` limit in `StepPredictor.prepare_clamping_params`, so the check is no longer stripped under `python -O` [\#757](https://github.com/mllam/neural-lam/pull/757) @RudraDudhat2509
 
 - Derive the `plot_error_heatmap` lead-time axis label from a full unit-name
