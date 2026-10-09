@@ -62,6 +62,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Reject `step < 1` in `--train_steps_to_log`, `--val_steps_to_log`, and `--var_leads_metrics_watch` at CLI parse time, instead of silently logging the wrong step's loss via negative-index wraparound in `ForecasterModule._log_step_loss` [\#746](https://github.com/mllam/neural-lam/pull/746) @RudraDudhat2509
 
+- Fix `compute_standardization_stats.py --distributed` silently keeping padded rows and dropping real ones when `len(dataset) % world_size != 0`. Padded rows are now masked out per rank before the gather. [\#748](https://github.com/mllam/neural-lam/pull/748) @nikhil3495
+
 - Set `workers=True` in `seed_everything` to properly seed DataLoader workers, ensuring uncorrelated random states across processes when `num_workers > 0` [\#716](https://github.com/mllam/neural-lam/pull/716) @GiGiKoneti
 
 - Fix `StepPredictor.forward` docstring stating the argument order backwards (`(X_{t-1}, X_t, forcing_t)` instead of `(X_t, X_{t-1}, forcing_t)`), contradicting its own per-parameter docs and signature [\#731](https://github.com/mllam/neural-lam/pull/731) @AshNicolus
@@ -108,6 +110,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Fix `WeatherDataset.__len__` off-by-one in analysis mode (was undercounting by 1 sample), include `num_past_forcing_steps` in the forecast-mode minimum-horizon check, validate forcing-side forecast horizon when forcing is present, and use `min(n_state, n_forcing)` when both are present in analysis mode; raise `IndexError` for out-of-range indices in `WeatherDataset.__getitem__` (with Python-style negative indexing support) [\#312](https://github.com/mllam/neural-lam/pull/312) @kshirajahere
 
 ### Maintenance
+
+- Cache the mdp example input data in CI with fsspec `simplecache`, so the DANRA inputs are no longer downloaded on every run [\#751](https://github.com/mllam/neural-lam/pull/751) @KumarShivam1908
 
 - Use the combined `actions/cache` step for the meps test-data cache in CI, so a PR that restores the existing cache no longer saves a duplicate copy under its own branch [\#754](https://github.com/mllam/neural-lam/pull/754) @KumarShivam1908
 
