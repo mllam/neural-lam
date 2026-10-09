@@ -4,6 +4,7 @@
 import os
 import warnings
 from argparse import ArgumentDefaultsHelpFormatter, ArgumentParser
+from typing import Any
 
 # Third-party
 import matplotlib
@@ -902,24 +903,8 @@ def create_graph_from_datastore(
     )
 
 
-def cli(input_args: list[str] | None = None) -> None:
-    """
-    Parse CLI arguments and call :func:`create_graph_from_datastore`.
-
-    Parameters
-    ----------
-    input_args : list[str] or None, optional
-        Argument list forwarded to :class:`argparse.ArgumentParser`. When
-        ``None``, ``sys.argv`` is used.
-    """
-    warnings.warn(
-        "create_graph.py is deprecated and will be removed in a future "
-        "version. Use create_graph_with_wmg.py instead, which delegates "
-        "graph creation to weather-model-graphs (wmg). See "
-        "https://github.com/mllam/neural-lam/issues/384 for details.",
-        DeprecationWarning,
-        stacklevel=2,
-    )
+def build_parser() -> ArgumentParser:
+    """Build the argument parser for graph generation."""
     parser = ArgumentParser(
         description="Graph generation for neural-lam",
         formatter_class=ArgumentDefaultsHelpFormatter,
@@ -951,13 +936,23 @@ def cli(input_args: list[str] | None = None) -> None:
         action="store_true",
         help="Generate hierarchical mesh graph. Otherwise multi-scale.",
     )
-    args = parser.parse_args(input_args)
+    return parser
 
-    if args.config_path is None:
-        raise ValueError("Specify your config with --config_path")
+
+def run(
+    args: Any,
+    config: Any | None = None,
+    datastore: Any | None = None,
+) -> None:
+    """Generate graph components."""
+    if args.config_path is None and datastore is None:
+        raise ValueError(
+            "Specify config with --config_path or provide a datastore directly"
+        )
 
     # Load neural-lam configuration and datastore to use
-    _, datastore = load_config_and_datastore(config_path=args.config_path)
+    if datastore is None:
+        _, datastore = load_config_and_datastore(config_path=args.config_path)
 
     create_graph_from_datastore(
         datastore=datastore,
@@ -966,6 +961,29 @@ def cli(input_args: list[str] | None = None) -> None:
         hierarchical=args.hierarchical,
         create_plot=args.plot,
     )
+
+
+def cli(input_args: list[str] | None = None) -> None:
+    """
+    Parse CLI arguments and call :func:`create_graph_from_datastore`.
+
+    Parameters
+    ----------
+    input_args : list[str] or None, optional
+        Argument list forwarded to :class:`argparse.ArgumentParser`. When
+        ``None``, ``sys.argv`` is used.
+    """
+    warnings.warn(
+        "create_graph.py is deprecated and will be removed in a future "
+        "version. Use create_graph_with_wmg.py instead, which delegates "
+        "graph creation to weather-model-graphs (wmg). See "
+        "https://github.com/mllam/neural-lam/issues/384 for details.",
+        DeprecationWarning,
+        stacklevel=2,
+    )
+    parser = build_parser()
+    args = parser.parse_args(input_args)
+    run(args)
 
 
 if __name__ == "__main__":
