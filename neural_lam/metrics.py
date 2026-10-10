@@ -23,14 +23,16 @@ def get_metric(metric_name: str) -> Callable[..., torch.Tensor]:
 
     Raises
     ------
-    AssertionError
+    ValueError
         If ``metric_name`` (case-insensitive) is not a key in
         ``DEFINED_METRICS``.
     """
     metric_name_lower = metric_name.lower()
-    assert (
-        metric_name_lower in DEFINED_METRICS
-    ), f"Unknown metric: {metric_name}"
+    if metric_name_lower not in DEFINED_METRICS:
+        raise ValueError(
+            f"Unknown metric: {metric_name!r}. "
+            f"Available metrics: {list(DEFINED_METRICS.keys())}"
+        )
     return DEFINED_METRICS[metric_name_lower]
 
 
