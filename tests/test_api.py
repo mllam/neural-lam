@@ -115,3 +115,30 @@ def test_fit_with_dataclasses(tmp_path):
     assert run.run_dir.exists()
     assert run.checkpoint_path is not None
     assert run.checkpoint_path.exists()
+
+
+def test_api_var_leads_metrics_watch_parsing(monkeypatch, tmp_path):
+    """Test that var_leads_metrics_watch handles dict, JSON string, and None."""
+    captured_train_config = []
+
+    def mock_fit(*, train_config, **kwargs):
+        captured_train_config.append(train_config)
+        return api.Run(run_dir=tmp_path)
+
+    monkeypatch.setattr(api.train_model_script, "fit", mock_fit)
+
+    # Test dict input
+    api.train(var_leads_metrics_watch={0: [1, 2]})
+    assert captured_train_config[-1].var_leads_metrics_watch == {0: [1, 2]}
+
+    # Test JSON string input
+    api.train(var_leads_metrics_watch='{"0": [1, 2]}')
+    assert captured_train_config[-1].var_leads_metrics_watch == {0: [1, 2]}
+
+    # Test None input
+    api.train(var_leads_metrics_watch=None)
+    assert captured_train_config[-1].var_leads_metrics_watch == {}
+
+    # Test evaluate with dict input
+    api.evaluate(var_leads_metrics_watch={1: [3, 4]})
+    assert captured_train_config[-1].var_leads_metrics_watch == {1: [3, 4]}

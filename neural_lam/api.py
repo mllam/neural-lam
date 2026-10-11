@@ -85,7 +85,7 @@ def train(
     val_steps_to_log: list[int] | None = None,
     train_steps_to_log: list[int] | None = None,
     metrics_watch: list[str] | None = None,
-    var_leads_metrics_watch: str = "{}",
+    var_leads_metrics_watch: dict[int, list[int]] | str | None = None,
     num_past_forcing_steps: int = 1,
     num_future_forcing_steps: int = 1,
     load_single_member: bool = False,
@@ -174,8 +174,9 @@ def train(
         Forecast lead steps to log training loss for.
     metrics_watch : list of str or None, optional
         Metric names to track in summary logs.
-    var_leads_metrics_watch : str, default "{}"
-        JSON mapping variable IDs to lead steps for metric tracking.
+    var_leads_metrics_watch : dict or str or None, optional
+        Mapping from variable IDs to lead steps for metric tracking,
+        or a JSON string representation.
     num_past_forcing_steps : int, default 1
         Number of past forcing timesteps.
     num_future_forcing_steps : int, default 1
@@ -225,11 +226,15 @@ def train(
         mesh_up_gnn_type=kwargs.get("mesh_up_gnn_type", mesh_up_gnn_type),
         mesh_down_gnn_type=kwargs.get("mesh_down_gnn_type", mesh_down_gnn_type),
     )
-    var_leads = (
-        {int(k): v for k, v in json.loads(var_leads_metrics_watch).items()}
-        if isinstance(var_leads_metrics_watch, str)
-        else var_leads_metrics_watch
-    )
+    var_leads: dict[int, list[int]]
+    if var_leads_metrics_watch is None:
+        var_leads = {}
+    elif isinstance(var_leads_metrics_watch, str):
+        var_leads = {
+            int(k): v for k, v in json.loads(var_leads_metrics_watch).items()
+        }
+    else:
+        var_leads = {int(k): v for k, v in var_leads_metrics_watch.items()}
     train_config = TrainRunConfig(
         epochs=kwargs.get("epochs", epochs),
         batch_size=kwargs.get("batch_size", batch_size),
@@ -326,7 +331,7 @@ def evaluate(
     val_steps_to_log: list[int] | None = None,
     train_steps_to_log: list[int] | None = None,
     metrics_watch: list[str] | None = None,
-    var_leads_metrics_watch: str = "{}",
+    var_leads_metrics_watch: dict[int, list[int]] | str | None = None,
     num_past_forcing_steps: int = 1,
     num_future_forcing_steps: int = 1,
     load_single_member: bool = False,
