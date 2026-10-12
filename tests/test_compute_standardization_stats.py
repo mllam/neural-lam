@@ -1,5 +1,8 @@
 # Third-party
+import pytest
 import torch
+from torch.utils.data import DataLoader
+from torch.utils.data.distributed import DistributedSampler
 
 # First-party
 from neural_lam.datastore.npyfilesmeps.compute_standardization_stats import (
@@ -25,11 +28,6 @@ class _StubDataset:
 
 class TestPaddedWeatherDataset:
     """Tests for PaddedWeatherDataset helper."""
-
-    def test_original_indices(self):
-        """get_original_indices must return [0, ..., N-1]."""
-        ds = PaddedWeatherDataset(_StubDataset(10), world_size=4, batch_size=4)
-        assert list(ds.get_original_indices()) == list(range(10))
 
     def test_padded_length(self):
         """Pad total to next multiple of world_size."""
@@ -78,39 +76,51 @@ class TestFluxStatsGather:
         assert torch.isclose(torch.mean(result), torch.tensor(3.0))
 
 
-# -- Bug 2: diff stats wrong shape -----------------------------------------
+# -- Bug 2: positional depadding after distributed gather ------------------
 
 
-class TestDiffStatsShape:
-    """Diff stats distributed gather: contiguous slice preserves (N, d_f)."""
+class _IndexEchoDataset:
+    """Dataset stub whose items echo their own index."""
 
-    def test_fix_shape(self):
-        """Slicing the gathered tensor preserves the feature dimension."""
-        d_f, total, n_orig = 17, 100, 80
-        data = torch.randn(total, d_f)
+    def __init__(self, n_samples: int):
+        self._n = n_samples
 
-        result = data[:n_orig]
-        assert result.shape == (n_orig, d_f)
+    def __len__(self) -> int:
+        return self._n
 
-    def test_fix_preserves_values(self):
-        """Contiguous slice selects the expected rows."""
-        d_f, total = 5, 10
-        data = torch.arange(total * d_f, dtype=torch.float32).view(total, d_f)
+    def __getitem__(self, idx: int) -> torch.Tensor:
+        return torch.tensor(idx)
 
-        result = data[:4]
-        expected = torch.stack([data[0], data[1], data[2], data[3]])
-        assert torch.equal(result, expected)
 
-    def test_slice_handles_larger_step_length(self):
-        """Step lengths above one select distinct diff rows."""
-        d_f = 3
-        n_samples = 4
-        step_int = 3
-        data = torch.arange(20 * d_f, dtype=torch.float32).view(20, d_f)
-        old_indices = [i // step_int for i in range(n_samples * step_int)]
+class TestRealSampleMasks:
+    """Per-rank masks drop exactly the padded rows the DataLoader yields."""
 
-        result = data[: n_samples * step_int]
-        old_result = data[old_indices]
+    @pytest.mark.parametrize(
+        "total_samples, world_size, batch_size",
+        [
+            (16, 4, 4),  # no padding
+            (103, 4, 8),  # one padded row, on rank 3 only
+            (101, 4, 8),  # old prefix slice kept pads 101, 102, dropped 95, 99
+            (97, 4, 8),  # each pad is alone in a 1-row last batch (empty mask)
+            (10, 4, 4),  # per-rank count below batch_size
+        ],
+    )
+    def test_masked_batches_recover_each_real_sample_once(
+        self, total_samples, world_size, batch_size
+    ):
+        """Pads echo total_samples - 1, so a leaked pad shows as a duplicate."""
+        ds = PaddedWeatherDataset(
+            _IndexEchoDataset(total_samples), world_size, batch_size
+        )
+        recovered = []
+        for rank in range(world_size):
+            sampler = DistributedSampler(
+                ds, num_replicas=world_size, rank=rank, shuffle=False
+            )
+            loader = DataLoader(ds, batch_size, sampler=sampler)
+            masks = ds.real_sample_masks(sampler)
+            assert len(masks) == len(loader)
+            for batch, mask in zip(loader, masks):
+                recovered.extend(batch[mask].tolist())
 
-        assert torch.equal(result, data[:12])
-        assert not torch.equal(result, old_result)
+        assert sorted(recovered) == list(range(total_samples))
