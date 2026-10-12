@@ -65,6 +65,8 @@ It also contains a number of smaller improvements, bug fixes and maintenance upd
 
 ### Fixed
 
+- Raise `ValueError` for unknown metric names in `get_metric` instead of an `assert`, and add comprehensive unit test coverage for `neural_lam.metrics` [\#778](https://github.com/mllam/neural-lam/issues/778) @muskan-creates352
+
 - Raise `ValueError` instead of a bare `assert` when an `output_clamping` `lower` limit is not smaller than its `upper` limit in `StepPredictor.prepare_clamping_params`, so the check is no longer stripped under `python -O` [\#757](https://github.com/mllam/neural-lam/pull/757) @RudraDudhat2509
 
 - Derive the `plot_error_heatmap` lead-time axis label from a full unit-name
