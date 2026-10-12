@@ -54,7 +54,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Raise `ValueError` for unknown metric names in `get_metric` instead of an
   `assert`, and add comprehensive unit test coverage for `neural_lam.metrics`
-  [\#<PR_NUMBER>](https://github.com/mllam/neural-lam/pull/<PR_NUMBER>) @Kushagra2024-code
+  [\#781](https://github.com/mllam/neural-lam/pull/781) @Kushagra2024-code
 
 - Raise `ValueError` instead of a bare `assert` when an `output_clamping` `lower` limit is not smaller than its `upper` limit in `StepPredictor.prepare_clamping_params`, so the check is no longer stripped under `python -O` [\#757](https://github.com/mllam/neural-lam/pull/757) @RudraDudhat2509
 
