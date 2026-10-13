@@ -87,7 +87,8 @@ def fractional_plot_bundle(fraction: float) -> dict[str, Any]:
     Parameters
     ----------
     fraction : float
-        Denominator applied to the default NeurIPS figure width.
+        Multiplier applied to both the width and the height of the default
+        NeurIPS figure size.
 
     Returns
     -------
