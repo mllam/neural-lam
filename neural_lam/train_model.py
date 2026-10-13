@@ -439,6 +439,15 @@ def main(input_args: list[str] | None = None) -> None:
                     "the number of unrolled validation steps. Adjust "
                     "--var_leads_metrics_watch."
                 )
+    # Watched metrics are only logged when both are set
+    if bool(args.metrics_watch) != bool(args.var_leads_metrics_watch):
+        missing = (
+            "var_leads_metrics_watch" if args.metrics_watch else "metrics_watch"
+        )
+        raise ValueError(
+            "metrics_watch and var_leads_metrics_watch must be set together, "
+            f"but {missing} is not set."
+        )
 
     if args.eval and not args.load:
         logger.warning(

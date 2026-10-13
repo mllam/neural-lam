@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [unreleased](https://github.com/mllam/neural-lam/compare/v0.7.0...HEAD)
 
+### Fixed
+
+- Raise a `ValueError` when only one of `metrics_watch` and `var_leads_metrics_watch` is set, instead of silently logging no watched metrics [\#785](https://github.com/mllam/neural-lam/pull/785) @KumarShivam1908
+
 ## [v0.7.0](https://github.com/mllam/neural-lam/releases/tag/v0.7.0)
 
 This release contains two major improvements to the codebase: splitting the monolithic `ARModel` into a modular `ForecasterModule` / `Forecaster` / `StepPredictor` hierarchy and adding graph creation through the weather-model-graphs package.
