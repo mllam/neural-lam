@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [unreleased](https://github.com/mllam/neural-lam/compare/v0.7.0...HEAD)
 
+### Fixed
+
+- Prevent `inverse_sigmoid` overflow and `NaN` gradients for `float16` inputs near bounds by using `torch.logit` and dtype-appropriate clamping [\#<PR_NUMBER>](https://github.com/mllam/neural-lam/pull/<PR_NUMBER>) @Kushagra2024-code
+
 ## [v0.7.0](https://github.com/mllam/neural-lam/releases/tag/v0.7.0)
 
 This release contains two major improvements to the codebase: splitting the monolithic `ARModel` into a modular `ForecasterModule` / `Forecaster` / `StepPredictor` hierarchy and adding graph creation through the weather-model-graphs package.
