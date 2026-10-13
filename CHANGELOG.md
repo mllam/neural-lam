@@ -5,16 +5,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [unreleased](https://github.com/mllam/neural-lam/compare/v0.6.0...HEAD)
+## [unreleased](https://github.com/mllam/neural-lam/compare/v0.7.0...HEAD)
+
+## [v0.7.0](https://github.com/mllam/neural-lam/releases/tag/v0.7.0)
+
+This release contains two major improvements to the codebase: splitting the monolithic `ARModel` into a modular `ForecasterModule` / `Forecaster` / `StepPredictor` hierarchy and adding graph creation through the weather-model-graphs package.
+It also contains a number of smaller improvements, bug fixes and maintenance updates.
 
 ### Added
+
 - Add latent encoder/decoder modules and the `GraphEFM` (hierarchical) / `GraphEFMMultiScale` (flat) step predictors for the Graph-EFM ensemble forecasting model. [\#648](https://github.com/mllam/neural-lam/pull/648) @Sir-Sloth-The-Lazy
 
 - Add `neural_lam.create_graph_with_wmg` CLI which builds `keisler`, `graphcast` and `hierarchical` graphs with [weather-model-graphs](https://github.com/mllam/weather-model-graphs), deprecating `neural_lam.create_graph`. [\#596](https://github.com/mllam/neural-lam/pull/596) @prajwal-tech07
 
-- Add `--num_sanity_val_steps` CLI argument to control sanity validation steps before training (#694)
+- Add `--num_sanity_val_steps` CLI argument to control sanity validation steps before training [\#694](https://github.com/mllam/neural-lam/pull/694)
 
-- Add `--train_steps_to_log` CLI option to log training loss for individual unroll steps, and deduplicate common prediction and loss computation steps across loops [\#674](https://github.com/mllam/neural-lam/issues/674) @GiGiKoneti
+- Add `--train_steps_to_log` CLI option to log training loss for individual unroll steps, and deduplicate common prediction and loss computation steps across loops [\#675](https://github.com/mllam/neural-lam/pull/675) @GiGiKoneti
 
 - Add `PropagationNet` GNN layer that incentivises directional message
   propagation from sender to receiver nodes, and expose it alongside
@@ -50,8 +56,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   [\#208](https://github.com/mllam/neural-lam/pull/208)
   @Sir-Sloth-The-Lazy
 
+- Change metric heatmap (`plot_error_map`, now `plot_error_heatmap`) to use a
+  shared cross-variable color scale instead of per-row normalization, add a
+  colorbar, and scale figure size and font sizes with grid dimensions
+  [\#376](https://github.com/mllam/neural-lam/pull/376)
+
+- Consolidate all training/evaluation run outputs (checkpoints, logger files, plots) into a single `runs/<run-name>/` directory instead of scattering across `saved_models/`, `lightning_logs/`, `wandb/`, and `mlruns/` [\#580](https://github.com/mllam/neural-lam/pull/580) @sudhansu-24
+
 ### Fixed
 - Reject nonpositive `ar_steps` values in `WeatherDataset` with a clear validation error @saisrikar8
+- Raise `ValueError` instead of a bare `assert` when an `output_clamping` `lower` limit is not smaller than its `upper` limit in `StepPredictor.prepare_clamping_params`, so the check is no longer stripped under `python -O` [\#757](https://github.com/mllam/neural-lam/pull/757) @RudraDudhat2509
 - Derive the `plot_error_heatmap` lead-time axis label from a full unit-name
   lookup instead of `time_step_unit[0]`, which rendered `minutes`,
   `milliseconds` and `microseconds` all as "m" and `unknown` as "u"; the
@@ -59,6 +73,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   divides the step length evenly [\#743](https://github.com/mllam/neural-lam/pull/743) @nikhil3495
 
 - Reject `step < 1` in `--train_steps_to_log`, `--val_steps_to_log`, and `--var_leads_metrics_watch` at CLI parse time, instead of silently logging the wrong step's loss via negative-index wraparound in `ForecasterModule._log_step_loss` [\#746](https://github.com/mllam/neural-lam/pull/746) @RudraDudhat2509
+
+- Fix `compute_standardization_stats.py --distributed` silently keeping padded rows and dropping real ones when `len(dataset) % world_size != 0`. Padded rows are now masked out per rank before the gather. [\#748](https://github.com/mllam/neural-lam/pull/748) @nikhil3495
 
 - Set `workers=True` in `seed_everything` to properly seed DataLoader workers, ensuring uncorrelated random states across processes when `num_workers > 0` [\#716](https://github.com/mllam/neural-lam/pull/716) @GiGiKoneti
 
@@ -70,14 +86,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Exclude boundary nodes from the spatial loss maps computed in `test_step`, so the plotted loss maps and the saved `mean_spatial_loss.pt` cover the interior only, consistent with every other loss and metric call in `ForecasterModule` [\#720](https://github.com/mllam/neural-lam/pull/720) @RajdeepKushwaha5 @NoiceHax
 
-- Fix `RuntimeError` in `HiLAMParallel` forward pass on hierarchical graphs by offsetting edge indices into the global mesh node index space ([#679](https://github.com/mllam/neural-lam/issues/679))
+- Fix `RuntimeError` in `HiLAMParallel` forward pass on hierarchical graphs by offsetting edge indices into the global mesh node index space [\#680](https://github.com/mllam/neural-lam/pull/680)
 
-- Fix `IndexError` in HiLAM forward pass by offsetting grid nodes in `zero_index_g2m`/`zero_index_m2g` by the total mesh-node count across all levels ([#642](https://github.com/mllam/neural-lam/issues/642)) @Sir-Sloth-The-Lazy
-
-- Change metric heatmap (`plot_error_map`, now `plot_error_heatmap`) to use a
-  shared cross-variable color scale instead of per-row normalization, add a
-  colorbar, and scale figure size and font sizes with grid dimensions
-  ([#375](https://github.com/mllam/neural-lam/issues/375))
+- Fix `IndexError` in HiLAM forward pass by offsetting grid nodes in `zero_index_g2m`/`zero_index_m2g` by the total mesh-node count across all levels [\#643](https://github.com/mllam/neural-lam/pull/643) @Sir-Sloth-The-Lazy
 
 - Fix `AssertionError` in `aggregate_and_plot_metrics` when using `--metrics_watch` flags by using `isinstance` dispatch for figure vs scalar logging [\#303](https://github.com/mllam/neural-lam/pull/303) @AftAb-25
 
@@ -127,7 +138,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Add comprehensive type hints to BaseGraphModel in `neural_lam/models/step_predictors/graph/base.py` [\#667](https://github.com/mllam/neural-lam/pull/667) @GiGiKoneti
 
-- Establish 100% docstring coverage across `neural_lam/` via an `interrogate` pre-commit hook, add a Dimension Glossary to the README for canonical tensor-shape names, and rewrite public docstrings in NumPy style to serve as the entry point for the autoapi pipeline (#196 / #272). [\#252](https://github.com/mllam/neural-lam/pull/252) @Mohit-Lakra
+- Establish 100% docstring coverage across `neural_lam/` via an `interrogate` pre-commit hook, add a Dimension Glossary to the README for canonical tensor-shape names, and rewrite public docstrings in NumPy style to serve as the entry point for the autoapi pipeline ([\#196](https://github.com/mllam/neural-lam/issues/196) / [\#272](https://github.com/mllam/neural-lam/issues/272)). [\#252](https://github.com/mllam/neural-lam/pull/252) @Mohit-Lakra
 
 - Register a `slow` pytest marker and apply it to `test_training` and `test_training_output_std` so contributors can skip long-running training tests during local iteration via `pytest -m "not slow"`. [\#651](https://github.com/mllam/neural-lam/pull/651) @sadamov
 
@@ -171,9 +182,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   users on other CUDA versions install the matching `torch` variant manually
   (see README) [\#604](https://github.com/mllam/neural-lam/pull/604) @RajdeepKushwaha5
 
-- Add edge count consistency check to `test_graph_creation.py` [#301](https://github.com/mllam/neural-lam/pull/301) @osten-antonio
+- Add edge count consistency check to `test_graph_creation.py` [\#301](https://github.com/mllam/neural-lam/pull/301) @osten-antonio
 
-- Add more detailed (module and function name) coverage linting errors [\#659](https://github.com/mllam/neural-lam/pull/659), @leifdenby
+- Add more detailed (module and function name) coverage linting errors [\#659](https://github.com/mllam/neural-lam/pull/659) @leifdenby
 
 ## [v0.6.0](https://github.com/mllam/neural-lam/releases/tag/v0.6.0)
 
@@ -195,7 +206,6 @@ This release introduces new features including GIF animation support, wandb run 
 
 ### Changed
 
-- Consolidate all training/evaluation run outputs (checkpoints, logger files, plots) into a single `runs/<run-name>/` directory instead of scattering across `saved_models/`, `lightning_logs/`, `wandb/`, and `mlruns/` [\#293](https://github.com/mllam/neural-lam/issues/293) @sudhansu-24
 - Change the default ensemble-loading behavior in `WeatherDataset` / `WeatherDataModule` to use all ensemble members as independent samples for ensemble datastores (with matching ensemble-member selection for forcing when available); single-member behavior now requires explicitly opting in via `--load_single_member` [\#332](https://github.com/mllam/neural-lam/pull/332) @kshirajahere
 
 - Refactor graph loading: move zero-indexing out of the model and update plotting to prepare using the research-branch graph I/O [\#184](https://github.com/mllam/neural-lam/pull/184) @zweihuehner
