@@ -32,6 +32,11 @@ jobs:
       uses: actions/setup-python@v2
       with:
         python-version: "3.13"
-    - uses: pre-commit/action@v3.0.1
+    - uses: astral-sh/setup-uv@v7
       with:
-        extra_args: lychee --all-files
+        enable-cache: false
+    - uses: actions/cache@v4
+      with:
+        path: ~/.cache/pre-commit
+        key: lychee-${{ hashFiles('.pre-commit-config.yaml') }}
+    - run: uvx pre-commit run --show-diff-on-failure --color=always lychee --all-files
