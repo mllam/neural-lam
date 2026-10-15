@@ -292,7 +292,7 @@ in neural-lam, are done in a separate package called
 [mllam-data-prep](https://github.com/mllam/mllam-data-prep) rather than in
 neural-lam itself.
 Specifically, the `mllam-data-prep` datastore configuration (for example
-[danra.datastore.yaml](tests/datastore_examples/mdp/danra.datastore.yaml))
+[danra.datastore.yaml](tests/datastore_examples/mdp/danra_100m_winds/danra.datastore.yaml))
 specifies a) what source datasets to read from, b) what variables to select, c)
 what transformations of dimensions and variables to make, d) what statistics to
 calculate (for normalisation) and e) how to split the data into training,
@@ -444,6 +444,9 @@ python -m neural_lam.datastore.npyfilesmeps.compute_standardization_stats <path-
 
 ### Graph creation
 
+> **Note:** The `create_graph` command below is deprecated and will be removed
+> in a future release. Please use `create_graph_with_wmg` (see below) instead.
+
 Run `python -m neural_lam.create_graph` with suitable options to generate the graph you want to use (see `python -m neural_lam.create_graph --help` for a list of options).
 The graphs used for the different models in the [paper](#graph-based-neural-weather-prediction-for-limited-area-modeling) can be created as:
 
@@ -452,6 +455,26 @@ The graphs used for the different models in the [paper](#graph-based-neural-weat
 * **L1-LAM**: `python -m neural_lam.create_graph --config_path <neural-lam-config-path> --name 1level --levels 1`
 
 The graph-related files are stored in a directory called `graphs`.
+
+### Graph creation with weather-model-graphs
+
+The recommended way to create graphs is with the `create_graph_with_wmg`
+command, which delegates graph construction to
+[weather-model-graphs](https://github.com/mllam/weather-model-graphs):
+
+```bash
+python -m neural_lam.create_graph_with_wmg --config_path <neural-lam-config-path> --archetype <archetype>
+```
+
+Available archetypes:
+
+* **keisler** (default): `python -m neural_lam.create_graph_with_wmg --config_path <neural-lam-config-path> --archetype keisler`
+* **graphcast**: `python -m neural_lam.create_graph_with_wmg --config_path <neural-lam-config-path> --archetype graphcast`
+* **hierarchical**: `python -m neural_lam.create_graph_with_wmg --config_path <neural-lam-config-path> --archetype hierarchical`
+
+Run `python -m neural_lam.create_graph_with_wmg --help` for the full list of
+options (e.g. `--mesh_node_distance`, `--mesh_grid_distance_ratio`,
+`--level_refinement_factor`, `--max_num_levels`).
 
 ## Logging your experiments
 
@@ -525,6 +548,9 @@ To train Hi-LAM-Parallel use
 ```
 python -m neural_lam.train_model --model hi_lam_parallel --graph hierarchical ...
 ```
+
+### Persistence
+A trivial baseline model that returns the previous state unchanged at each step (`--model persistence`). Since it has no learnable parameters, it must be evaluated directly without training (e.g. `--eval val` or `--eval test`).
 
 Checkpoint files for our models trained on the MEPS data are available upon request.
 
@@ -651,5 +677,5 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for the full contributor guide: how to op
 
 # Contact
 If you are interested in machine learning models for LAM, have questions about the implementation or ideas for extending it, feel free to get in touch.
-There is an open [mllam slack channel](https://join.slack.com/t/ml-lam/shared_invite/zt-2t112zvm8-Vt6aBvhX7nYa6Kbj_LkCBQ) that anyone can join (after following the link you have to request to join, this is to avoid spam bots).
+There is an open [mllam slack channel](https://kutt.to/mllam) that anyone can join (after following the link you have to request to join, this is to avoid spam bots).
 You can also open a github issue on this page.

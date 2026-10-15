@@ -9,7 +9,7 @@ from torch.utils.data import DataLoader
 
 # First-party
 from neural_lam import config as nlconfig
-from neural_lam.create_graph import create_graph_from_datastore
+from neural_lam.create_graph_with_wmg import create_graph_from_datastore
 from neural_lam.datastore import DATASTORES
 from neural_lam.models import ForecasterModule
 from neural_lam.weather_dataset import WeatherDataset
@@ -206,7 +206,7 @@ def test_single_batch(datastore_name, split):
             create_graph_from_datastore(
                 datastore=datastore,
                 output_root_path=str(graph_dir_path),
-                n_max_levels=1,
+                archetype="keisler",
             )
 
     if not datastore.is_on_regular_spatial_grid:
