@@ -425,12 +425,6 @@ def plot_on_axis(
 
     # Plot boundary data underneath interior data when provided
     if boundary_da is not None and boundary_datastore is not None:
-        # Use "forcing" category because boundary datastores will not have
-        # state variables (e.g. ERA5 boundary with only forcing + static).
-        b_xy = boundary_datastore.get_xy("forcing", stacked=False)
-        b_grid_shape = (b_xy.shape[0], b_xy.shape[1])
-        b_lats_lons = boundary_datastore.get_lat_lon("forcing")
-
         # Prefer per-point lat/lon carried on the boundary DataArray when
         # available. Fall back to the datastore regular grid otherwise.
         per_point_lats_lons = None
@@ -453,9 +447,16 @@ def plot_on_axis(
             boundary_da = boundary_da.transpose("x", "y")
 
         b_values_flat = np.asarray(boundary_da.values).ravel()
-        regular_grid = b_values_flat.size == int(np.prod(b_grid_shape))
+        # Use "forcing" category because boundary datastores will not have
+        # state variables (e.g. ERA5 boundary with only forcing + static).
+        regular_grid = boundary_datastore.is_on_regular_spatial_grid
+        if regular_grid:
+            b_xy = boundary_datastore.get_xy("forcing", stacked=False)
+            b_grid_shape = (b_xy.shape[0], b_xy.shape[1])
+            regular_grid = b_values_flat.size == int(np.prod(b_grid_shape))
 
         if regular_grid:
+            b_lats_lons = boundary_datastore.get_lat_lon("forcing")
             b_lons = b_lats_lons[:, 0].reshape(b_grid_shape)
             b_lats = b_lats_lons[:, 1].reshape(b_grid_shape)
             b_values = b_values_flat.reshape(b_grid_shape)
@@ -480,8 +481,8 @@ def plot_on_axis(
             b_values = da_unstacked.transpose(lon_name, lat_name).values
         else:
             raise ValueError(
-                "Boundary has irregular grid shape "
-                f"({b_values_flat.size} != {int(np.prod(b_grid_shape))}) "
+                "Boundary data does not fill a complete x/y grid "
+                f"({b_values_flat.size} points) "
                 "but no per-point latitude/longitude coords are present "
                 "on the boundary DataArray. Cropped boundary datastores "
                 "must carry `latitude`/`longitude` (or `lat`/`lon`) "
