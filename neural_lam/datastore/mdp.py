@@ -574,22 +574,29 @@ class MDPDatastore(BaseDatastore):
         category : str
             The category of the dataset (state/forcing/static).
         stacked : bool
-            Whether to stack the x, y coordinates.
+            Whether to stack the x, y coordinates. `stacked=False` requires
+            `is_on_regular_spatial_grid`.
 
         Returns
         -------
         np.ndarray
             The x, y coordinates of the dataset, returned differently based on
             the value of `stacked`:
-            - `stacked==True`: shape `(n_grid_points, 2)` where
-                               n_grid_points=N_x*N_y.
+            - `stacked==True`: shape `(n_grid_points, 2)`, where
+                               n_grid_points=N_x*N_y on a regular grid.
             - `stacked==False`: shape `(N_x, N_y, 2)`
 
         """
+        xdim, ydim = self.spatial_coordinates
+
+        if stacked and not self.is_on_regular_spatial_grid:
+            # There is no x/y grid to unstack onto, so return the
+            # coordinates of the grid points in `grid_index` order
+            da_cat = self._ds[category]
+            return np.stack([da_cat[xdim].values, da_cat[ydim].values], axis=1)
+
         # assume variables are stored in dimensions [grid_index, ...]
         ds_category = self.unstack_grid_coords(da_or_ds=self._ds[category])
-
-        xdim, ydim = self.spatial_coordinates
 
         da_xs = ds_category[xdim]
         da_ys = ds_category[ydim]
