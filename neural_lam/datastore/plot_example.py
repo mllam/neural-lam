@@ -187,7 +187,7 @@ if __name__ == "__main__":
     # Standard library
     from typing import cast
 
-    datastore = cast(BaseRegularGridDatastore, datastore)
+    datastore = cast("BaseRegularGridDatastore", datastore)
 
     plot_example_from_datastore(
         args.category,

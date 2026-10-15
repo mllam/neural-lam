@@ -50,13 +50,6 @@ repos:
       - id: pyproject-fmt
         description: Normalize pyproject.toml formatting
 
-  - repo: https://github.com/pre-commit/mirrors-mypy
-    rev: v1.19.0
-    hooks:
-    -   id: mypy
-        additional_dependencies: [types-PyYAML, types-Pillow, types-tqdm]
-        description: Check for type errors
-
   - repo: https://github.com/econchick/interrogate
     rev: 1.7.0
     hooks:
@@ -64,7 +57,6 @@ repos:
         description: Ensure documentation coverage stays perfect
         pass_filenames: false
         args: ["-c", "pyproject.toml", "neural_lam"]
-
   - repo: https://github.com/astral-sh/ty-pre-commit
     rev: v0.0.69
     hooks:
