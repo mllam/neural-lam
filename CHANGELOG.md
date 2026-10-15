@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [unreleased](https://github.com/mllam/neural-lam/compare/v0.7.0...HEAD)
 
+### Added
+
+- Add `PersistencePredictor` baseline model (`--model persistence`) that returns the previous state unchanged, enabling standard evaluation of a persistence baseline through the existing pipeline [\#677](https://github.com/mllam/neural-lam/pull/677) @GiGiKoneti
+
 ### Maintenance
 
 - Add a `lychee` pre-commit hook checking Markdown links and section anchors (config in `.github/lychee.toml`, run once per push in CI) and a PR-template reminder to update `CONTRIBUTING.md` / `AGENTS.md` [\#738](https://github.com/mllam/neural-lam/pull/738) @KumarShivam1908
