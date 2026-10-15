@@ -507,9 +507,14 @@ def test_cropped_boundary_datastore_is_not_regular_grid():
     and graph creation must refuse it rather than silently padding."""
     datastore_boundary = init_datastore_boundary_example("mdp")
 
-    grid_shape = datastore_boundary.grid_shape_state
-    assert datastore_boundary.num_grid_points < grid_shape.x * grid_shape.y
+    xy = datastore_boundary.get_xy(category="forcing", stacked=True)
+    assert xy.shape == (datastore_boundary.num_grid_points, 2)
+    n_x, n_y = np.unique(xy[:, 0]).size, np.unique(xy[:, 1]).size
+    assert datastore_boundary.num_grid_points < n_x * n_y
     assert not datastore_boundary.is_on_regular_spatial_grid
+
+    with pytest.raises(NotImplementedError, match="complete 2D grid"):
+        _ = datastore_boundary.grid_shape_state
 
     with pytest.raises(NotImplementedError, match="complete 2D grid"):
         create_graph_from_datastore(

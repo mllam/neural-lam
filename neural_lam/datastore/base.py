@@ -403,7 +403,18 @@ class BaseDatastore(abc.ABC):
         int
             The number of grid points in the dataset.
 
+        Raises
+        ------
+        NotImplementedError
+            If the datastore is not on a regular spatial grid and does not
+            override this.
         """
+        if not self.is_on_regular_spatial_grid:
+            raise NotImplementedError(
+                f"{type(self).__name__} is not on a regular spatial grid, "
+                "so `num_grid_points` cannot be derived from "
+                "`grid_shape_state` and must be overridden."
+            )
         return self.grid_shape_state.x * self.grid_shape_state.y
 
     @property
@@ -463,9 +474,7 @@ class BaseDatastore(abc.ABC):
             raise NotImplementedError(
                 f"`{operation}` requires the grid points to form a complete "
                 "2D grid (`is_on_regular_spatial_grid`); "
-                f"{type(self).__name__} reports that they do not, so the "
-                "result would be padded with cells the datastore has no "
-                "data for."
+                f"{type(self).__name__} reports that they do not."
             )
 
     @overload
