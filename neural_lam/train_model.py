@@ -567,6 +567,12 @@ def fit(
         data_config.num_past_forcing_steps,
         data_config.num_future_forcing_steps,
     )
+
+    if not train_config.eval and not predictor.trainable:
+        raise ValueError(
+            f"The {model_config.model} model cannot be trained. Run with "
+            "--eval <val/test> to evaluate a baseline."
+        )
     forecaster = ARForecaster(predictor, datastore)
 
     model = ForecasterModule(
