@@ -719,10 +719,10 @@ class WeatherDataset(torch.utils.data.Dataset):
             # so we never pick a launch that would be unavailable
             # operationally. A launch exactly at init is fine.
             model_init_time = cast(
-                np.datetime64, state_times[init_steps - 1].values
+                "np.datetime64", state_times[init_steps - 1].values
             )
             first_target_time = cast(
-                np.datetime64, state_times[init_steps].values
+                "np.datetime64", state_times[init_steps].values
             )
 
             analysis_index = da_forcing.analysis_time.get_index("analysis_time")
@@ -761,7 +761,7 @@ class WeatherDataset(torch.utils.data.Dataset):
 
             for step_idx in range(len(state_times) - init_steps):
                 target_time = cast(
-                    np.datetime64, state_times[init_steps + step_idx].values
+                    "np.datetime64", state_times[init_steps + step_idx].values
                 )
                 lead = lead_index(target_time)
                 window_start = lead - num_past_steps
@@ -790,7 +790,7 @@ class WeatherDataset(torch.utils.data.Dataset):
         else:
             forcing_time_index = da_forcing.time.get_index("time")
             for step_idx in range(init_steps, len(state_times)):
-                state_time = cast(np.datetime64, state_times[step_idx].values)
+                state_time = cast("np.datetime64", state_times[step_idx].values)
                 forcing_time_idx = forcing_time_index.get_indexer(
                     [state_time], method="pad"
                 )[0]

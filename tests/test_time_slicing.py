@@ -557,7 +557,7 @@ def test_insufficient_boundary_coverage_raises():
         is_forecast=False,
     )
 
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match="cannot align"):
         WeatherDataset(
             datastore=interior_datastore,
             datastore_boundary=boundary_datastore,
@@ -1520,7 +1520,9 @@ def test_horizon_check_skipped_when_no_sample_fits(interior_is_forecast):
             step_length=timedelta(hours=6),
         )
 
-    with pytest.raises(ValueError) as excinfo:
+    with pytest.raises(
+        ValueError, match="too few|less than the required"
+    ) as excinfo:
         WeatherDataset(
             datastore=interior,
             datastore_boundary=boundary,
@@ -1533,6 +1535,3 @@ def test_horizon_check_skipped_when_no_sample_fits(interior_is_forecast):
     # The complaint must be about the split being too short, not about the
     # boundary horizon.
     assert "horizon is too short" not in str(excinfo.value)
-    assert "too few" in str(excinfo.value) or "less than the required" in str(
-        excinfo.value
-    )

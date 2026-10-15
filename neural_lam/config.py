@@ -288,6 +288,6 @@ def load_config_and_datastore(
 
     return (
         config,
-        cast(MDPDatastore | NpyFilesDatastoreMEPS, datastore),
-        cast(MDPDatastore | NpyFilesDatastoreMEPS | None, datastore_boundary),
+        cast("MDPDatastore | NpyFilesDatastoreMEPS", datastore),
+        cast("MDPDatastore | NpyFilesDatastoreMEPS | None", datastore_boundary),
     )
