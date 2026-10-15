@@ -3,7 +3,7 @@
 # Standard library
 import os
 import warnings
-from typing import Any, cast
+from typing import Any
 
 # Third-party
 import matplotlib.pyplot as plt
@@ -19,7 +19,7 @@ from neural_lam.utils import get_integer_time
 # Local
 from .. import metrics, vis
 from ..config import NeuralLAMConfig
-from ..datastore.base import BaseDatastore, BaseRegularGridDatastore
+from ..datastore.base import BaseDatastore
 from ..loss_weighting import get_state_feature_weighting
 from ..weather_dataset import WeatherDataset
 from .forecasters.base import Forecaster
@@ -55,7 +55,7 @@ class ForecasterModule(pl.LightningModule):
         self,
         forecaster: Forecaster,
         config: NeuralLAMConfig,
-        datastore: BaseRegularGridDatastore,
+        datastore: BaseDatastore,
         datastore_boundary: BaseDatastore | None = None,
         loss: str = "wmse",
         lr: float = 1e-3,
@@ -77,7 +77,7 @@ class ForecasterModule(pl.LightningModule):
             The forecaster model to use for predictions.
         config : NeuralLAMConfig
             Configuration object for the neural LAM model.
-        datastore : BaseRegularGridDatastore
+        datastore : BaseDatastore
             Datastore providing grid metadata and data access.
         datastore_boundary : BaseDatastore, optional
             Boundary forcing datastore, used here only to register the
@@ -390,9 +390,8 @@ class ForecasterModule(pl.LightningModule):
         target_states = (target_states - self.state_mean) / self.state_std
 
         if forcing.shape[-1] > 0:
-            assert (
-                self.forcing_mean is not None and self.forcing_std is not None
-            )
+            assert self.forcing_mean is not None
+            assert self.forcing_std is not None
             if self.forcing_mean_tiled is None:
                 # Forcing is (..., num_forcing_vars * window_size).
                 # WeatherDataset stacks (forcing_feature, window)
@@ -406,10 +405,8 @@ class ForecasterModule(pl.LightningModule):
                 self.forcing_std_tiled = self.forcing_std.repeat_interleave(
                     window_size
                 )
-            assert (
-                self.forcing_mean_tiled is not None
-                and self.forcing_std_tiled is not None
-            )
+            assert self.forcing_mean_tiled is not None
+            assert self.forcing_std_tiled is not None
             forcing = (
                 forcing - self.forcing_mean_tiled
             ) / self.forcing_std_tiled
@@ -431,10 +428,8 @@ class ForecasterModule(pl.LightningModule):
                 self.boundary_std_tiled = self.boundary_std.repeat_interleave(
                     window_size
                 )
-            assert (
-                self.boundary_mean_tiled is not None
-                and self.boundary_std_tiled is not None
-            )
+            assert self.boundary_mean_tiled is not None
+            assert self.boundary_std_tiled is not None
             boundary = (
                 boundary - self.boundary_mean_tiled
             ) / self.boundary_std_tiled
@@ -923,10 +918,7 @@ class ForecasterModule(pl.LightningModule):
                         ).squeeze(),
                         boundary_da=boundary_field,
                         boundary_datastore=(
-                            cast(
-                                BaseRegularGridDatastore,
-                                self.datastore_boundary,
-                            )
+                            self.datastore_boundary
                             if boundary_field is not None
                             else None
                         ),
@@ -948,9 +940,9 @@ class ForecasterModule(pl.LightningModule):
                     self.datastore.get_vars_names("state"), var_figs
                 ):
                     if isinstance(self.logger, pl.loggers.WandbLogger):
-                        key = f"{var_name}_example_{example_i}"
-                    else:
                         key = f"{var_name}_example"
+                    else:
+                        key = f"{var_name}_example_{example_i}"
 
                     if hasattr(self.logger, "log_image"):
                         self.logger.log_image(  # ty: ignore[call-non-callable]

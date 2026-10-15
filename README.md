@@ -231,12 +231,16 @@ the input-data representation is split into two parts:
    `WeatherDataset` class is also responsible for normalising the values and
    returning `torch.Tensor`-objects.
 
-Each interior `MDPDatastore` also has its own boundary mask - a rim of
+Each interior `MDPDatastore` still has its own boundary mask - a rim of
 `n_boundary_points` grid cells (default 30) excluded from the loss and
-overwritten in the prediction, independent of pairing it with a separate
-boundary datastore (below). Set `datastores.<name>.n_boundary_points` in
-`config.yaml` to narrow it (e.g. to 0) once boundary forcing comes from
-elsewhere, or leave a small margin to avoid boundary artifacts.
+overwritten with ground truth in the prediction. This is independent of any
+pairing with a separate boundary datastore (below).
+Set `datastores.<name>.n_boundary_points` in `config.yaml` to 0 once boundary
+forcing comes from elsewhere. If there is no separate datastore with boundary
+forcing, `n_boundary_points > 0` can still be used to take boundary input from the
+interior state. Using both `n_boundary_points > 0` and a separate boundary datastore
+corresponds to taking two kinds of boundary inputs (from interior state and boundary
+datastore), and is not recommended unless you have a very specific setup.
 `NpyFilesDatastoreMEPS`'s boundary mask is fixed at data-preparation time and
 does not support this option.
 
@@ -272,13 +276,16 @@ There are currently two different datastores implemented in the codebase:
    example for how to create similar numpy-based datastores.
 
 If neither of these options fit your need you can create your own datastore by
-subclassing the `neural_lam.datastore.BaseDataStore` class or
-`neural_lam.datastore.BaseRegularGridDatastore` class (if your data is stored on
-a regular grid) and implementing the abstract methods.
+subclassing the `neural_lam.datastore.BaseDatastore` class and implementing the abstract methods.
 
-Whether the grid points actually form a complete 2D grid is reported by the
-`is_on_regular_spatial_grid` property rather than by the class, since it can
-depend on the data a datastore was built from.
+Whether the grid points form a complete 2D grid that can be unstacked back
+into `x`/`y` (as opposed to an irregular grid where each cell cannot be
+indexed by just two integers) is reported by the `is_on_regular_spatial_grid`
+property, which datastores on a regular grid should set to `True` and
+implement `grid_shape_state` for. This is a property rather than a
+distinction encoded via a separate base class, since it can depend on the
+data a datastore was built from rather than just its type (for example a
+domain-cropped `MDPDatastore` is not on a regular grid).
 
 
 ### MDP (mllam-data-prep) Datastore - `MDPDatastore`
@@ -290,7 +297,7 @@ in neural-lam, are done in a separate package called
 [mllam-data-prep](https://github.com/mllam/mllam-data-prep) rather than in
 neural-lam itself.
 Specifically, the `mllam-data-prep` datastore configuration (for example
-[danra.datastore.yaml](tests/datastore_examples/mdp/danra.datastore.yaml))
+[danra.datastore.yaml](tests/datastore_examples/mdp/danra_100m_winds/danra.datastore.yaml))
 specifies a) what source datasets to read from, b) what variables to select, c)
 what transformations of dimensions and variables to make, d) what statistics to
 calculate (for normalisation) and e) how to split the data into training,
@@ -442,6 +449,9 @@ python -m neural_lam.datastore.npyfilesmeps.compute_standardization_stats <path-
 
 ### Graph creation
 
+> **Note:** The `create_graph` command below is deprecated and will be removed
+> in a future release. Please use `create_graph_with_wmg` (see below) instead.
+
 Run `python -m neural_lam.create_graph` with suitable options to generate the graph you want to use (see `python -m neural_lam.create_graph --help` for a list of options).
 The graphs used for the different models in the [paper](#graph-based-neural-weather-prediction-for-limited-area-modeling) can be created as:
 
@@ -450,6 +460,26 @@ The graphs used for the different models in the [paper](#graph-based-neural-weat
 * **L1-LAM**: `python -m neural_lam.create_graph --config_path <neural-lam-config-path> --name 1level --levels 1`
 
 The graph-related files are stored in a directory called `graphs`.
+
+### Graph creation with weather-model-graphs
+
+The recommended way to create graphs is with the `create_graph_with_wmg`
+command, which delegates graph construction to
+[weather-model-graphs](https://github.com/mllam/weather-model-graphs):
+
+```bash
+python -m neural_lam.create_graph_with_wmg --config_path <neural-lam-config-path> --archetype <archetype>
+```
+
+Available archetypes:
+
+* **keisler** (default): `python -m neural_lam.create_graph_with_wmg --config_path <neural-lam-config-path> --archetype keisler`
+* **graphcast**: `python -m neural_lam.create_graph_with_wmg --config_path <neural-lam-config-path> --archetype graphcast`
+* **hierarchical**: `python -m neural_lam.create_graph_with_wmg --config_path <neural-lam-config-path> --archetype hierarchical`
+
+Run `python -m neural_lam.create_graph_with_wmg --help` for the full list of
+options (e.g. `--mesh_node_distance`, `--mesh_grid_distance_ratio`,
+`--level_refinement_factor`, `--max_num_levels`).
 
 ## Logging your experiments
 
@@ -523,6 +553,9 @@ To train Hi-LAM-Parallel use
 ```
 python -m neural_lam.train_model --model hi_lam_parallel --graph hierarchical ...
 ```
+
+### Persistence
+A trivial baseline model that returns the previous state unchanged at each step (`--model persistence`). Since it has no learnable parameters, it must be evaluated directly without training (e.g. `--eval val` or `--eval test`).
 
 Checkpoint files for our models trained on the MEPS data are available upon request.
 
@@ -664,5 +697,5 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for the full contributor guide: how to op
 
 # Contact
 If you are interested in machine learning models for LAM, have questions about the implementation or ideas for extending it, feel free to get in touch.
-There is an open [mllam slack channel](https://join.slack.com/t/ml-lam/shared_invite/zt-2t112zvm8-Vt6aBvhX7nYa6Kbj_LkCBQ) that anyone can join (after following the link you have to request to join, this is to avoid spam bots).
+There is an open [mllam slack channel](https://kutt.to/mllam) that anyone can join (after following the link you have to request to join, this is to avoid spam bots).
 You can also open a github issue on this page.

@@ -2,6 +2,7 @@
 
 # Standard library
 import os
+import warnings
 from argparse import ArgumentDefaultsHelpFormatter, ArgumentParser
 
 # Third-party
@@ -18,7 +19,7 @@ from torch_geometric.utils.convert import from_networkx
 
 # Local
 from .config import load_config_and_datastore
-from .datastore.base import BaseRegularGridDatastore
+from .datastore.base import BaseDatastore
 
 # Stores the graph storage spec version the graph conforms to.
 METAINFO_FILENAME = "metainfo.yaml"
@@ -467,7 +468,10 @@ def create_graph(
         num_nodes_level = np.array([len(g_level.nodes) for g_level in G])
         # First node index in each level in the hierarchical graph
         first_index_level = np.concatenate(
-            (np.zeros(1, dtype=int), np.cumsum(num_nodes_level[:-1]))
+            (
+                np.zeros(1, dtype=int),
+                np.cumsum(num_nodes_level[:-1]),
+            )
         )
 
         # Create inter-level mesh edges from lower levels to upper levels.
@@ -863,7 +867,7 @@ def create_graph(
 
 
 def create_graph_from_datastore(
-    datastore: BaseRegularGridDatastore,
+    datastore: BaseDatastore,
     output_root_path: str,
     n_max_levels: int | None = None,
     hierarchical: bool = False,
@@ -874,7 +878,7 @@ def create_graph_from_datastore(
 
     Parameters
     ----------
-    datastore : BaseRegularGridDatastore
+    datastore : BaseDatastore
         Datastore providing ``get_xy`` for state nodes.
     output_root_path : str
         Directory where the resulting ``*.pt`` graph files are stored.
@@ -913,6 +917,14 @@ def cli(input_args: list[str] | None = None) -> None:
         Argument list forwarded to :class:`argparse.ArgumentParser`. When
         ``None``, ``sys.argv`` is used.
     """
+    warnings.warn(
+        "create_graph.py is deprecated and will be removed in a future "
+        "version. Use create_graph_with_wmg.py instead, which delegates "
+        "graph creation to weather-model-graphs (wmg). See "
+        "https://github.com/mllam/neural-lam/issues/384 for details.",
+        DeprecationWarning,
+        stacklevel=2,
+    )
     parser = ArgumentParser(
         description="Graph generation for neural-lam",
         formatter_class=ArgumentDefaultsHelpFormatter,

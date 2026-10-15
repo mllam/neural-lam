@@ -18,10 +18,10 @@ from numpy import ndarray
 
 # Local
 from ..utils.logging import log_on_rank_zero
-from .base import BaseRegularGridDatastore, CartesianGridShape
+from .base import BaseDatastore, CartesianGridShape
 
 
-class MDPDatastore(BaseRegularGridDatastore):
+class MDPDatastore(BaseDatastore):
     """
     Datastore class for datasets made with the mllam_data_prep library
     (https://github.com/mllam/mllam-data-prep). This class wraps the
@@ -542,6 +542,29 @@ class MDPDatastore(BaseRegularGridDatastore):
         return ProjectionClass(**kwargs)
 
     @cached_property
+    def _grid_xy_counts(self) -> tuple[int, int, int]:
+        """Count the distinct ``x`` values, ``y`` values and ``(x, y)``
+        pairs of the grid points.
+
+        Read straight from the coordinates rather than by unstacking, since
+        `unstack_grid_coords` is itself gated on `is_on_regular_spatial_grid`,
+        which is derived from these counts.
+
+        Returns
+        -------
+        tuple[int, int, int]
+            Number of distinct ``x`` values, ``y`` values and ``(x, y)``
+            pairs.
+        """
+        category = "state" if "state" in self._ds else "forcing"
+        da_cat = self._ds[category]
+        xdim, ydim = self.spatial_coordinates
+        xs = da_cat[xdim].values
+        ys = da_cat[ydim].values
+        n_pairs = np.unique(np.stack([xs, ys], axis=1), axis=0).shape[0]
+        return np.unique(xs).size, np.unique(ys).size, n_pairs
+
+    @cached_property
     def grid_shape_state(self) -> CartesianGridShape:
         """The shape of the cartesian grid for the state variables.
 
@@ -550,13 +573,15 @@ class MDPDatastore(BaseRegularGridDatastore):
         CartesianGridShape
             The shape of the cartesian grid for the state variables.
 
+        Raises
+        ------
+        NotImplementedError
+            If the datastore is not on a regular spatial grid, e.g. after
+            ``domain_cropping``. Use `num_grid_points` instead.
         """
-        category = "state" if "state" in self._ds else "forcing"
-        ds_cat = self.unstack_grid_coords(self._ds[category])
-        xdim, ydim = self.spatial_coordinates
-        da_x, da_y = ds_cat[xdim], ds_cat[ydim]
-        assert da_x.ndim == da_y.ndim == 1
-        return CartesianGridShape(x=da_x.size, y=da_y.size)
+        self._check_on_regular_spatial_grid("grid_shape_state")
+        n_x, n_y, _ = self._grid_xy_counts
+        return CartesianGridShape(x=n_x, y=n_y)
 
     def get_xy(self, category: str, stacked: bool) -> ndarray:
         """
@@ -568,22 +593,29 @@ class MDPDatastore(BaseRegularGridDatastore):
         category : str
             The category of the dataset (state/forcing/static).
         stacked : bool
-            Whether to stack the x, y coordinates.
+            Whether to stack the x, y coordinates. `stacked=False` requires
+            `is_on_regular_spatial_grid`.
 
         Returns
         -------
         np.ndarray
             The x, y coordinates of the dataset, returned differently based on
             the value of `stacked`:
-            - `stacked==True`: shape `(n_grid_points, 2)` where
-                               n_grid_points=N_x*N_y.
+            - `stacked==True`: shape `(n_grid_points, 2)`, where
+                               n_grid_points=N_x*N_y on a regular grid.
             - `stacked==False`: shape `(N_x, N_y, 2)`
 
         """
+        xdim, ydim = self.spatial_coordinates
+
+        if stacked and not self.is_on_regular_spatial_grid:
+            # There is no x/y grid to unstack onto, so return the
+            # coordinates of the grid points in `grid_index` order
+            da_cat = self._ds[category]
+            return np.stack([da_cat[xdim].values, da_cat[ydim].values], axis=1)
+
         # assume variables are stored in dimensions [grid_index, ...]
         ds_category = self.unstack_grid_coords(da_or_ds=self._ds[category])
-
-        xdim, ydim = self.spatial_coordinates
 
         da_xs = ds_category[xdim]
         da_ys = ds_category[ydim]
@@ -647,17 +679,21 @@ class MDPDatastore(BaseRegularGridDatastore):
     def is_on_regular_spatial_grid(self) -> bool:
         """Whether the grid points form a complete 2D rectangular grid.
 
+        True when every grid point is a distinct ``(x, y)`` pair and every
+        combination of the distinct ``x`` and ``y`` values is present, i.e.
+        ``grid_index`` unstacks to an ``x``/``y`` grid without padding. The
+        spacing of ``x`` and ``y`` is not required to be uniform.
         ``domain_cropping`` drops the points outside the interior domain, so
-        a cropped datastore holds fewer than ``grid_shape_state.x * .y`` and
-        unstacking it would pad the missing cells.
+        a cropped datastore is not on a regular grid.
 
         Returns
         -------
         bool
-            ``True`` when every cell of the ``x``/``y`` grid is present.
+            ``True`` when every cell of the ``x``/``y`` grid is present
+            exactly once.
         """
-        grid_shape = self.grid_shape_state
-        return self.num_grid_points == grid_shape.x * grid_shape.y
+        n_x, n_y, n_pairs = self._grid_xy_counts
+        return self.num_grid_points == n_pairs == n_x * n_y
 
     @property
     def num_grid_points(self) -> int:

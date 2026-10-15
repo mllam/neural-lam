@@ -425,17 +425,11 @@ class WeatherDataset(torch.utils.data.Dataset):
         times = self.da_state.time.values
         # `__len__` also drops the trailing `num_future_forcing_steps`
         # samples and honours a shorter forcing axis.
-        n_samples = len(times) - offset - n_total + 1
-        n_samples -= self.num_future_forcing_steps
+        n_samples_base = len(times)
+        n_samples_offset = -offset - n_total + 1 - self.num_future_forcing_steps
         if self.da_forcing is not None:
-            n_samples = min(
-                n_samples,
-                len(self.da_forcing.time)
-                - offset
-                - n_total
-                + 1
-                - self.num_future_forcing_steps,
-            )
+            n_samples_base = min(n_samples_base, len(self.da_forcing.time))
+        n_samples = n_samples_base + n_samples_offset
         if n_samples <= 0:
             return (np.array([]), np.array([]), np.array([]))
         first = offset + init_steps - 1
@@ -725,10 +719,10 @@ class WeatherDataset(torch.utils.data.Dataset):
             # so we never pick a launch that would be unavailable
             # operationally. A launch exactly at init is fine.
             model_init_time = cast(
-                np.datetime64, state_times[init_steps - 1].values
+                "np.datetime64", state_times[init_steps - 1].values
             )
             first_target_time = cast(
-                np.datetime64, state_times[init_steps].values
+                "np.datetime64", state_times[init_steps].values
             )
 
             analysis_index = da_forcing.analysis_time.get_index("analysis_time")
@@ -767,7 +761,7 @@ class WeatherDataset(torch.utils.data.Dataset):
 
             for step_idx in range(len(state_times) - init_steps):
                 target_time = cast(
-                    np.datetime64, state_times[init_steps + step_idx].values
+                    "np.datetime64", state_times[init_steps + step_idx].values
                 )
                 lead = lead_index(target_time)
                 window_start = lead - num_past_steps
@@ -796,7 +790,7 @@ class WeatherDataset(torch.utils.data.Dataset):
         else:
             forcing_time_index = da_forcing.time.get_index("time")
             for step_idx in range(init_steps, len(state_times)):
-                state_time = cast(np.datetime64, state_times[step_idx].values)
+                state_time = cast("np.datetime64", state_times[step_idx].values)
                 forcing_time_idx = forcing_time_index.get_indexer(
                     [state_time], method="pad"
                 )[0]

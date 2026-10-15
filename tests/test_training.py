@@ -10,9 +10,8 @@ import wandb
 
 # First-party
 from neural_lam import config as nlconfig
-from neural_lam.create_graph import create_graph_from_datastore
+from neural_lam.create_graph_with_wmg import create_graph_from_datastore
 from neural_lam.datastore import DATASTORES
-from neural_lam.datastore.base import BaseRegularGridDatastore
 from neural_lam.models import ARForecaster, ForecasterModule, GraphLAM
 from neural_lam.weather_dataset import WeatherDataModule
 from tests.conftest import (
@@ -43,7 +42,7 @@ def run_simple_training(
 
     Parameters
     ----------
-    datastore : BaseRegularGridDatastore
+    datastore : BaseDatastore
         Datastore to load data from for training
     set_output_std : bool
         If --output_std should be set during training
@@ -92,7 +91,7 @@ def run_simple_training(
         create_graph_from_datastore(
             datastore=datastore,
             output_root_path=str(graph_dir_path),
-            n_max_levels=1,
+            archetype="keisler",
         )
 
     data_module = WeatherDataModule(
@@ -157,7 +156,7 @@ def run_simple_training(
 def test_training(datastore_name):
     datastore = init_datastore_example(datastore_name)
 
-    if not isinstance(datastore, BaseRegularGridDatastore):
+    if not datastore.is_on_regular_spatial_grid:
         pytest.skip(
             f"Skipping test for {datastore_name} as "
             f"it is not a regular grid datastore."
@@ -272,7 +271,7 @@ def test_test_step_excludes_boundary_from_spatial_loss(tmp_path):
         create_graph_from_datastore(
             datastore=datastore,
             output_root_path=str(graph_dir_path),
-            n_max_levels=1,
+            archetype="keisler",
         )
 
     config = nlconfig.NeuralLAMConfig(
