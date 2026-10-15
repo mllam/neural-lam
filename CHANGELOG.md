@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [unreleased](https://github.com/mllam/neural-lam/compare/v0.7.0...HEAD)
 
 ### Added
+- Add standardized forecast benchmarking and evaluation suite (`ForecastBenchmark`, `BenchmarkScorecard`) on DANRA with lead-time RMSE/Bias metrics, 2D DCT-II spectral power decomposition, scale-dependent Fractions Skill Score (FSS), and an interactive marimo evaluation notebook. [\#721](https://github.com/mllam/neural-lam/issues/721) @GiGiKoneti
 
 - Add `PersistencePredictor` baseline model (`--model persistence`) that returns the previous state unchanged, enabling standard evaluation of a persistence baseline through the existing pipeline [\#677](https://github.com/mllam/neural-lam/pull/677) @GiGiKoneti
 
@@ -16,11 +17,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Add a `lychee` pre-commit hook checking Markdown links and section anchors (config in `.github/lychee.toml`, run once per push in CI) and a PR-template reminder to update `CONTRIBUTING.md` / `AGENTS.md` [\#738](https://github.com/mllam/neural-lam/pull/738) @KumarShivam1908
 
 ## [v0.7.0](https://github.com/mllam/neural-lam/releases/tag/v0.7.0)
-
-This release contains two major improvements to the codebase: splitting the monolithic `ARModel` into a modular `ForecasterModule` / `Forecaster` / `StepPredictor` hierarchy and adding graph creation through the weather-model-graphs package.
-It also contains a number of smaller improvements, bug fixes and maintenance updates.
-
-### Added
 
 - Add latent encoder/decoder modules and the `GraphEFM` (hierarchical) / `GraphEFMMultiScale` (flat) step predictors for the Graph-EFM ensemble forecasting model. [\#648](https://github.com/mllam/neural-lam/pull/648) @Sir-Sloth-The-Lazy
 
