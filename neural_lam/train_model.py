@@ -1,6 +1,7 @@
 """CLI entry point for training Neural-LAM models."""
 
 # Standard library
+import argparse
 import json
 import os
 import random
@@ -18,7 +19,15 @@ from loguru import logger
 
 # Local
 from . import utils
-from .config import NeuralLAMConfig, load_config_and_datastore
+from .config import (
+    DatastoreSelection,
+    ManualStateFeatureWeighting,
+    NeuralLAMConfig,
+    OutputClamping,
+    TrainingConfig,
+    UniformFeatureWeighting,
+    load_config_and_datastore,
+)
 from .datastore.base import BaseDatastore
 from .gnn_layers import GNN_TYPES
 from .models import (
@@ -28,6 +37,18 @@ from .models import (
     ForecasterModule,
 )
 from .weather_dataset import WeatherDataModule
+
+torch.serialization.add_safe_globals(
+    [
+        argparse.Namespace,
+        DatastoreSelection,
+        ManualStateFeatureWeighting,
+        NeuralLAMConfig,
+        OutputClamping,
+        TrainingConfig,
+        UniformFeatureWeighting,
+    ]
+)
 
 
 def build_predictor(

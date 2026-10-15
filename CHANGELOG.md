@@ -9,7 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Add the `hello_world_danra.py` marimo tutorial (prepare the DANRA example data, build a graph, train and evaluate `graph_lam` on CPU) and convert `create_reduced_meps_dataset` to marimo, with a dedicated path-filtered CI workflow that runs the tutorial end-to-end [\#577](https://github.com/mllam/neural-lam/pull/577) @Sharkyii
+
 - Add `PersistencePredictor` baseline model (`--model persistence`) that returns the previous state unchanged, enabling standard evaluation of a persistence baseline through the existing pipeline [\#677](https://github.com/mllam/neural-lam/pull/677) @GiGiKoneti
+
+### Fixed
+
+- Make `train_model.main` re-raise on error (`@logger.catch(reraise=True)`) instead of logging and exiting 0, so training/eval failures surface to callers and CI [\#577](https://github.com/mllam/neural-lam/pull/577) @Sharkyii
 
 ### Maintenance
 
