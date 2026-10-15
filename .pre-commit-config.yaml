@@ -24,6 +24,15 @@ repos:
         args:
           - --skip=requirements/*,docs/notebooks/hello_world_danra.ipynb
 
+  - repo: https://github.com/lycheeverse/lychee
+    rev: lychee-v0.24.2
+    hooks:
+      - id: lychee
+        description: Check links in Markdown files
+        args: ["--no-progress", "--config", ".github/lychee.toml", "--hidden", "."]
+        types: [markdown]
+        pass_filenames: false
+
   - repo: https://github.com/psf/black
     rev: 25.11.0
     hooks:

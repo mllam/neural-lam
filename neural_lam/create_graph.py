@@ -2,6 +2,7 @@
 
 # Standard library
 import os
+import warnings
 from argparse import ArgumentDefaultsHelpFormatter, ArgumentParser
 
 # Third-party
@@ -372,7 +373,7 @@ def create_graph(
     - m2m_edge_index.pt  list of [2, N_m2m_edges_level], length==n_levels
     - m2m_features.pt    list of [N_m2m_edges_level, d_features],
                          length==n_levels
-    - mesh_features.pt   list of [N_mesh_nodes_level, d_mesh_static],
+    - mesh_features.pt   list of [N_mesh_nodes_level, num_mesh_static_vars],
                          length==n_levels
 
     where
@@ -386,9 +387,9 @@ def create_graph(
       N_m2m_edges_level:
             number of edges in the graph from mesh-to-mesh at a given level
             (list index corresponds to the level)
-      d_mesh_static:
+      num_mesh_static_vars:
             number of static features per mesh node (currently
-            d_mesh_static==2, for x and y)
+            num_mesh_static_vars==2, for x and y)
       N_mesh_nodes_level:
             number of nodes in the mesh at a given level
 
@@ -911,6 +912,14 @@ def cli(input_args: list[str] | None = None) -> None:
         Argument list forwarded to :class:`argparse.ArgumentParser`. When
         ``None``, ``sys.argv`` is used.
     """
+    warnings.warn(
+        "create_graph.py is deprecated and will be removed in a future "
+        "version. Use create_graph_with_wmg.py instead, which delegates "
+        "graph creation to weather-model-graphs (wmg). See "
+        "https://github.com/mllam/neural-lam/issues/384 for details.",
+        DeprecationWarning,
+        stacklevel=2,
+    )
     parser = ArgumentParser(
         description="Graph generation for neural-lam",
         formatter_class=ArgumentDefaultsHelpFormatter,
