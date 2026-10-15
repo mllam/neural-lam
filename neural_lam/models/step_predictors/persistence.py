@@ -14,8 +14,8 @@ class PersistencePredictor(StepPredictor):
     Trivial baseline predictor that returns the previous state unchanged.
 
     At each AR step the predicted next state is simply the current state,
-    i.e. ``X_{t+1} = X_t``.  This provides a persistence (climatological
-    no-change) baseline that can be evaluated through the standard
+    i.e. ``X_{t+1} = X_t``.  This provides a persistence (no-change)
+    baseline that can be evaluated through the standard
     ``ForecasterModule`` / ``ARForecaster`` pipeline.
     """
 
@@ -25,7 +25,7 @@ class PersistencePredictor(StepPredictor):
         output_std: bool = False,
         output_clamping_lower: dict[str, float] | None = None,
         output_clamping_upper: dict[str, float] | None = None,
-        **kwargs,
+        **_kwargs: object,
     ) -> None:
         """
         Initialize the PersistencePredictor.
@@ -35,12 +35,13 @@ class PersistencePredictor(StepPredictor):
         datastore : BaseDatastore
             The datastore providing grid metadata and data access.
         output_std : bool, default False
-            Ignored — persistence never predicts uncertainty.
+            Ignored, a warning is logged if True. Persistence never predicts
+            uncertainty.
         output_clamping_lower : dict, optional
-            Ignored — persistence returns the raw previous state.
+            Ignored, persistence returns the raw previous state.
         output_clamping_upper : dict, optional
-            Ignored — persistence returns the raw previous state.
-        **kwargs
+            Ignored, persistence returns the raw previous state.
+        **_kwargs
             Absorbed so that the standard CLI kwargs (``graph_name``,
             ``hidden_dim``, etc.) do not cause errors.
         """
@@ -84,6 +85,6 @@ class PersistencePredictor(StepPredictor):
             Shape ``(B, num_grid_nodes, num_state_vars)``.
             Equal to ``prev_state``.
         pred_std : None
-            Always ``None`` — persistence does not predict uncertainty.
+            Always ``None``, persistence does not predict uncertainty.
         """
         return prev_state, None

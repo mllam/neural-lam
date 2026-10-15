@@ -134,8 +134,8 @@ def test_persistence_training_error():
         ),
         patch("neural_lam.train_model.WeatherDataModule"),
         patch(
-            "neural_lam.train_model.MODELS",
-            {"persistence": MagicMock(return_value=mock_predictor)},
+            "neural_lam.train_model.build_predictor",
+            return_value=mock_predictor,
         ),
         pytest.raises(
             ValueError,

@@ -60,9 +60,7 @@ def build_predictor(
         g2m_gnn_type=getattr(args, "g2m_gnn_type", "InteractionNet"),
         m2g_gnn_type=getattr(args, "m2g_gnn_type", "InteractionNet"),
     )
-    if isinstance(predictor_class, type) and issubclass(
-        predictor_class, BaseHiGraphModel
-    ):
+    if issubclass(predictor_class, BaseHiGraphModel):
         kwargs["mesh_up_gnn_type"] = getattr(
             args, "mesh_up_gnn_type", "InteractionNet"
         )
