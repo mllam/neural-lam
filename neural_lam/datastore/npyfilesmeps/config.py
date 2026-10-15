@@ -1,7 +1,9 @@
+"""Dataclasses describing the MEPS numpy-file datastore configuration."""
+
 # Standard library
 from dataclasses import dataclass, field
 from datetime import timedelta
-from typing import Any, Dict, List
+from typing import Any
 
 # Third-party
 import dataclass_wizard
@@ -22,7 +24,7 @@ class Projection:
     """
 
     class_name: str
-    kwargs: Dict[str, Any]
+    kwargs: dict[str, Any]
 
 
 @dataclass
@@ -36,18 +38,23 @@ class Dataset:
         var_units: A list of units for each variable.
         var_longnames: A list of long, descriptive names for each variable.
         num_forcing_features: The number of forcing features in the dataset.
+        num_timesteps: The number of timesteps per analysis sample.
+        step_length: The time delta between consecutive timesteps.
+        num_ensemble_members: The number of ensemble members in the dataset.
+        remove_state_features_with_index: Indices of state features to drop
+        when loading the dataset.
 
     """
 
     name: str
-    var_names: List[str]
-    var_units: List[str]
-    var_longnames: List[str]
+    var_names: list[str]
+    var_units: list[str]
+    var_longnames: list[str]
     num_forcing_features: int
     num_timesteps: int
     step_length: timedelta
     num_ensemble_members: int
-    remove_state_features_with_index: List[int] = field(default_factory=list)
+    remove_state_features_with_index: list[int] = field(default_factory=list)
 
 
 @dataclass
@@ -63,5 +70,5 @@ class NpyDatastoreConfig(dataclass_wizard.YAMLWizard):
     """
 
     dataset: Dataset
-    grid_shape_state: List[int]
+    grid_shape_state: list[int]
     projection: Projection

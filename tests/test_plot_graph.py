@@ -2,13 +2,12 @@
 from pathlib import Path
 
 # Third-party
-import numpy as np
 import plotly.graph_objects as go
 import pytest
 
 # First-party
 from neural_lam import utils
-from neural_lam.create_graph import create_graph_from_datastore
+from neural_lam.create_graph_with_wmg import create_graph_from_datastore
 from neural_lam.plot_graph import (
     plot_graph,
 )
@@ -19,8 +18,9 @@ from tests.dummy_datastore import DummyDatastore
 def graph_fixture(request, tmp_path_factory):
     """Create a graph from a DummyDatastore and load it back.
 
-    Parametrized over graph types: 1level (flat), multiscale (flat multi-level),
-    and hierarchical.
+    Parametrized over graph types: 1level (flat, keisler archetype),
+    multiscale (flat multi-level, graphcast archetype) and hierarchical
+    (multi-level with up/down edges).
 
     Returns
     -------
@@ -31,14 +31,14 @@ def graph_fixture(request, tmp_path_factory):
     datastore = DummyDatastore()
 
     if graph_name == "hierarchical":
-        hierarchical = True
-        n_max_levels = 3
+        archetype = "hierarchical"
+        max_num_levels = 3
     elif graph_name == "multiscale":
-        hierarchical = False
-        n_max_levels = 3
+        archetype = "graphcast"
+        max_num_levels = 3
     elif graph_name == "1level":
-        hierarchical = False
-        n_max_levels = 1
+        archetype = "keisler"
+        max_num_levels = None
     else:
         raise ValueError(f"Unknown graph_name: {graph_name}")
 
@@ -46,17 +46,23 @@ def graph_fixture(request, tmp_path_factory):
     create_graph_from_datastore(
         datastore=datastore,
         output_root_path=str(graph_dir_path),
-        hierarchical=hierarchical,
-        n_max_levels=n_max_levels,
+        archetype=archetype,
+        max_num_levels=max_num_levels,
+    )
+
+    grid_xy_extent = datastore.get_xy_extent(category="state")
+    grid_xy_max_span = max(
+        grid_xy_extent[1] - grid_xy_extent[0],
+        grid_xy_extent[3] - grid_xy_extent[2],
     )
 
     is_hierarchical, graph_ldict = utils.load_graph(
-        graph_dir_path=str(graph_dir_path)
+        graph_dir_path=str(graph_dir_path),
+        mesh_node_features_scaling=grid_xy_max_span,
     )
 
     xy = datastore.get_xy("state", stacked=True)
-    pos_max = np.max(np.abs(xy))
-    grid_pos = xy / pos_max
+    grid_pos = xy / grid_xy_max_span
 
     return grid_pos, is_hierarchical, graph_ldict, graph_name
 

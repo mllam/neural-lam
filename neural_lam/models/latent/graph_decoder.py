@@ -1,0 +1,134 @@
+"""Latent decoder for flat (non-hierarchical) graphs."""
+
+# First-party
+from neural_lam import utils
+from neural_lam.gnn_layers import get_gnn_class
+
+# Local
+from .base_decoder import BaseGraphLatentDecoder
+
+
+class GraphLatentDecoder(BaseGraphLatentDecoder):
+    """
+    Latent decoder for a flat (non-hierarchical) graph. Encodes grid into
+    mesh with a g2m GNN (type set by ``g2m_gnn_type``), processes on mesh,
+    and reads back out to grid with an m2g GNN (type set by ``m2g_gnn_type``).
+    The grid representation also goes through a residual MLP that is added
+    back to the mesh-to-grid output.
+    """
+
+    def __init__(
+        self,
+        g2m_edge_index,
+        m2m_edge_index,
+        m2g_edge_index,
+        hidden_dim,
+        latent_dim,
+        num_state_vars,
+        m2m_layers,
+        hidden_layers=1,
+        g2m_gnn_type="InteractionNet",
+        m2g_gnn_type="InteractionNet",
+        output_std=True,
+    ):
+        """
+        Set up the g2m, on-mesh and m2g GNNs.
+
+        Parameters
+        ----------
+        g2m_edge_index : torch.Tensor
+            Shape ``(2, M_g2m)``. Edge index of grid-to-mesh edges.
+        m2m_edge_index : torch.Tensor
+            Shape ``(2, M_m2m)``. Edge index of mesh-to-mesh edges.
+        m2g_edge_index : torch.Tensor
+            Shape ``(2, M_m2g)``. Edge index of mesh-to-grid edges.
+        hidden_dim : int
+            Dimensionality of internal node and edge representations.
+        latent_dim : int
+            Dimensionality of the latent variable at each mesh node.
+        num_state_vars : int
+            Number of state variables predicted at each grid node.
+        m2m_layers : int
+            Number of on-mesh (m2m) GNN layers; 0 disables on-mesh
+            processing.
+        hidden_layers : int
+            Number of hidden layers in internal MLPs.
+        g2m_gnn_type : str
+            GNN type for the grid-to-mesh step (key in
+            ``gnn_layers.GNN_TYPES``).
+        m2g_gnn_type : str
+            GNN type for the mesh-to-grid step (key in
+            ``gnn_layers.GNN_TYPES``).
+        output_std : bool
+            If True, the decoder outputs both mean and std of the next-state
+            distribution; if False, only the mean.
+        """
+        super().__init__(
+            hidden_dim, latent_dim, num_state_vars, hidden_layers, output_std
+        )
+
+        self.g2m_gnn = get_gnn_class(g2m_gnn_type)(
+            g2m_edge_index,
+            hidden_dim,
+            hidden_layers=hidden_layers,
+            update_edges=False,
+        )
+
+        # None if m2m_layers == 0, in which case no on-mesh processing is
+        # done in combine_with_latent
+        self.m2m_gnns = (
+            utils.make_gnn_seq(
+                m2m_edge_index, m2m_layers, hidden_layers, hidden_dim
+            )
+            if m2m_layers > 0
+            else None
+        )
+
+        self.m2g_gnn = get_gnn_class(m2g_gnn_type)(
+            m2g_edge_index,
+            hidden_dim,
+            hidden_layers=hidden_layers,
+            update_edges=False,
+        )
+
+    def combine_with_latent(
+        self, original_grid_rep, latent_rep, residual_grid_rep, graph_emb
+    ):
+        """
+        Fuse grid and latent reps via g2m -> m2m -> m2g.
+
+        Parameters
+        ----------
+        original_grid_rep : torch.Tensor
+            Shape ``(B, num_grid_nodes, d_h)``. Embedded grid input
+            features, used as the sender representation in the
+            grid-to-mesh step.
+        latent_rep : torch.Tensor
+            Shape ``(B, num_mesh_nodes, d_h)``. Latent sample embedded to
+            ``d_h``, used as the initial mesh node representation (the
+            receiver in the grid-to-mesh step), so all mesh processing
+            starts from the latent.
+        residual_grid_rep : torch.Tensor
+            Shape ``(B, num_grid_nodes, d_h)``. Residually updated grid
+            representation, used as the receiver representation in the
+            mesh-to-grid step.
+        graph_emb : dict
+            Embedded static graph node and edge features, with at least
+            the entries ``g2m``: ``(B, M_g2m, d_h)``,
+            ``m2m``: ``(B, M_m2m, d_h)`` and ``m2g``: ``(B, M_m2g, d_h)``.
+
+        Returns
+        -------
+        torch.Tensor
+            Shape ``(B, num_grid_nodes, d_h)``. Combined grid
+            representation, incorporating both the grid input and the
+            latent sample.
+        """
+        mesh_rep = self.g2m_gnn(original_grid_rep, latent_rep, graph_emb["g2m"])
+
+        if self.m2m_gnns is not None:
+            mesh_rep, _ = self.m2m_gnns(mesh_rep, graph_emb["m2m"])
+
+        grid_rep = self.m2g_gnn(mesh_rep, residual_grid_rep, graph_emb["m2g"])
+
+        return grid_rep

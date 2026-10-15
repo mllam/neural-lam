@@ -26,6 +26,15 @@ repos:
       - id: codespell
         description: Check for spelling errors
 
+  - repo: https://github.com/lycheeverse/lychee
+    rev: lychee-v0.24.2
+    hooks:
+      - id: lychee
+        description: Check links in Markdown files
+        args: ["--no-progress", "--config", ".github/lychee.toml", "--hidden", "."]
+        types: [markdown]
+        pass_filenames: false
+
   - repo: https://github.com/astral-sh/ruff-pre-commit
     rev: v0.15.4
     hooks:
@@ -47,3 +56,26 @@ repos:
     -   id: mypy
         additional_dependencies: [types-PyYAML, types-Pillow, types-tqdm]
         description: Check for type errors
+
+  - repo: https://github.com/econchick/interrogate
+    rev: 1.7.0
+    hooks:
+      - id: interrogate
+        description: Ensure documentation coverage stays perfect
+        pass_filenames: false
+        args: ["-c", "pyproject.toml", "neural_lam"]
+
+  - repo: https://github.com/astral-sh/ty-pre-commit
+    rev: v0.0.69
+    hooks:
+      - id: ty
+
+  - repo: local
+    hooks:
+      - id: graph-storage-spec
+        name: Regenerate graph storage spec from validator
+        entry: python docs/validate_graph.py --write-spec-to-path docs/graph_storage_spec.md
+        language: python
+        additional_dependencies: [PyYAML]
+        pass_filenames: false
+        files: ^docs/(validate_graph\.py|graph_storage_spec\.md)$

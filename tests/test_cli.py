@@ -9,6 +9,7 @@ import pytest
 import neural_lam
 import neural_lam.create_graph
 import neural_lam.train_model
+from neural_lam.datastore.base import BaseDatastore
 
 
 def test_import():
@@ -71,7 +72,7 @@ def _make_args(wandb_id=None):
         ("abc123", "allow", "abc123", None),
     ],
 )
-@patch("neural_lam.utils.pl.loggers.WandbLogger")
+@patch("neural_lam.utils.logging.pl.loggers.WandbLogger")
 def test_wandb_logger_kwargs(
     mock_wandb, wandb_id, expected_resume, expected_id, expected_name
 ):
@@ -80,19 +81,25 @@ def test_wandb_logger_kwargs(
     from neural_lam.utils import setup_training_logger
 
     args = _make_args(wandb_id=wandb_id)
-    datastore = MagicMock()
-    datastore._config = {}
+    datastore = MagicMock(spec=BaseDatastore)
 
-    setup_training_logger(datastore, args, run_name="my-run")
+    setup_training_logger(
+        datastore, args, run_name="my-run", run_dir="runs/my-run"
+    )
 
     _, kwargs = mock_wandb.call_args
     assert kwargs["resume"] == expected_resume
     assert kwargs["id"] == expected_id
     assert kwargs["name"] == expected_name
+    assert kwargs["save_dir"] == "runs/my-run"
 
 
 def test_wandb_id_ignored_with_mlflow_warns():
-    """--wandb_id is ignored when logger=mlflow and a warning is emitted."""
+    """--wandb_id is ignored when logger=mlflow and a warning is emitted.
+
+    Also asserts that `run_dir` is forwarded to `CustomMLFlowLogger` as
+    `save_dir`.
+    """
     # First-party
     from neural_lam.utils import setup_training_logger
 
@@ -101,19 +108,41 @@ def test_wandb_id_ignored_with_mlflow_warns():
     args.logger_project = "neural_lam"
     args.wandb_id = "abc123"
 
-    datastore = MagicMock()
-    datastore._config = {}
+    datastore = MagicMock(spec=BaseDatastore)
 
     with (
-        patch("neural_lam.utils.CustomMLFlowLogger"),
+        patch("neural_lam.utils.logging.CustomMLFlowLogger") as mock_mlflow,
         patch.dict(
             "os.environ", {"MLFLOW_TRACKING_URI": "http://localhost:5000"}
         ),
-        patch("neural_lam.utils.logger") as mock_log,
+        patch("neural_lam.utils.logging.logger") as mock_log,
     ):
-        setup_training_logger(datastore, args, run_name="my-run")
+        setup_training_logger(
+            datastore, args, run_name="my-run", run_dir="runs/my-run"
+        )
 
     mock_log.warning.assert_called_once()
     warning_msg = mock_log.warning.call_args[0][0]
     assert "--wandb_id is set but logger is" in warning_msg
     assert "mlflow" in warning_msg
+
+    _, kwargs = mock_mlflow.call_args
+    assert kwargs["save_dir"] == "runs/my-run"
+
+
+def test_unsupported_logger_raises_value_error():
+    """Unsupported --logger values raise ValueError, not return None."""
+    # First-party
+    from neural_lam.utils import setup_training_logger
+
+    args = MagicMock()
+    args.logger = "tensorboard"
+    args.logger_project = "neural_lam"
+    args.wandb_id = None
+
+    datastore = MagicMock(spec=BaseDatastore)
+
+    with pytest.raises(ValueError, match="Unsupported logger type"):
+        setup_training_logger(
+            datastore, args, run_name="my-run", run_dir="runs/my-run"
+        )

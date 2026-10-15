@@ -1,5 +1,7 @@
 # Standard library
+import importlib.util
 import tempfile
+import warnings
 from pathlib import Path
 
 # Third-party
@@ -8,18 +10,87 @@ import torch
 
 # First-party
 from neural_lam.create_graph import create_graph_from_datastore
+from neural_lam.create_graph_with_wmg import (
+    create_graph_from_datastore as wmg_create_graph_from_datastore,
+)
 from neural_lam.datastore import DATASTORES
 from neural_lam.datastore.base import BaseRegularGridDatastore
+from neural_lam.utils import BufferList, load_graph
 from tests.conftest import init_datastore_example
+
+
+def _load_validator_module():
+    script_path = (
+        Path(__file__).resolve().parents[1] / "docs" / "validate_graph.py"
+    )
+    spec = importlib.util.spec_from_file_location(
+        "validate_graph_script", script_path
+    )
+    module = importlib.util.module_from_spec(spec)
+    # Standard library
+    import sys
+
+    sys.modules["validate_graph_script"] = module
+    assert spec.loader is not None
+    spec.loader.exec_module(module)
+    return module
 
 
 @pytest.mark.parametrize("graph_name", ["1level", "multiscale", "hierarchical"])
 @pytest.mark.parametrize("datastore_name", DATASTORES.keys())
 def test_graph_creation(datastore_name, graph_name):
-    """Check that the `create_ graph_from_datastore` function is implemented.
+    """Check that `create_graph_from_datastore` produces a graph that
+    conforms to the graph storage specification."""
+    validator = _load_validator_module()
+    datastore = init_datastore_example(datastore_name)
 
-    And that the graph is created in the correct location.
+    if not isinstance(datastore, BaseRegularGridDatastore):
+        pytest.skip(
+            f"Skipping test for {datastore_name} as it is not a regular grid datastore."  # noqa: E501
+        )
 
+    if graph_name == "hierarchical":
+        hierarchical = True
+        n_max_levels = 3
+    elif graph_name == "multiscale":
+        hierarchical = False
+        n_max_levels = 3
+    elif graph_name == "1level":
+        hierarchical = False
+        n_max_levels = 1
+    else:
+        raise ValueError(f"Unknown graph_name: {graph_name}")
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        graph_dir_path = Path(tmpdir) / "graph" / graph_name
+
+        create_graph_from_datastore(
+            datastore=datastore,
+            output_root_path=str(graph_dir_path),
+            hierarchical=hierarchical,
+            n_max_levels=n_max_levels,
+        )
+
+        report, _, _ = validator.validate_graph_directory(graph_dir_path)
+        assert not report.has_fails(), report.summarize()
+
+
+@pytest.mark.parametrize("graph_name", ["1level", "multiscale", "hierarchical"])
+@pytest.mark.parametrize("datastore_name", DATASTORES.keys())
+def test_loaded_g2m_m2g_indices_in_bounds(datastore_name, graph_name):
+    """Regression test for the hierarchical g2m/m2g zero-indexing bug.
+
+    ``create_graph`` numbers grid nodes after the *total* mesh-node count
+    across all hierarchy levels, so ``zero_index_g2m``/``zero_index_m2g``
+    must subtract that same total. Previously they used only the
+    bottom-level mesh count, which left grid indices offset out of bounds
+    for hierarchical graphs and raised an ``IndexError`` in the GNN layers.
+
+    Assert that, after ``load_graph`` zero-indexes the edges, the grid-side
+    indices are zero-based and local (``< num_grid_points``) and the
+    mesh-side indices are local (``< num_mesh_nodes``). With the
+    bottom-level-only offset the grid-side indices stay shifted past
+    ``num_grid_points`` for hierarchical graphs.
     """
     datastore = init_datastore_example(datastore_name)
 
@@ -35,39 +106,12 @@ def test_graph_creation(datastore_name, graph_name):
     elif graph_name == "multiscale":
         hierarchical = False
         n_max_levels = 3
-    elif graph_name == "1level":
+    else:
         hierarchical = False
         n_max_levels = 1
-    else:
-        raise ValueError(f"Unknown graph_name: {graph_name}")
-
-    required_graph_files = [
-        "m2m_edge_index.pt",
-        "g2m_edge_index.pt",
-        "m2g_edge_index.pt",
-        "m2m_features.pt",
-        "g2m_features.pt",
-        "m2g_features.pt",
-        "mesh_features.pt",
-    ]
-    if hierarchical:
-        required_graph_files.extend(
-            [
-                "mesh_up_edge_index.pt",
-                "mesh_down_edge_index.pt",
-                "mesh_up_features.pt",
-                "mesh_down_features.pt",
-            ]
-        )
-
-    # TODO: check that the number of edges is consistent over the files, for
-    # now we just check the number of features
-    d_features = 3
-    d_mesh_static = 2
 
     with tempfile.TemporaryDirectory() as tmpdir:
         graph_dir_path = Path(tmpdir) / "graph" / graph_name
-
         create_graph_from_datastore(
             datastore=datastore,
             output_root_path=str(graph_dir_path),
@@ -75,45 +119,162 @@ def test_graph_creation(datastore_name, graph_name):
             n_max_levels=n_max_levels,
         )
 
-        assert graph_dir_path.exists()
+        grid_xy_extent = datastore.get_xy_extent(category="state")
+        grid_xy_max_span = max(
+            grid_xy_extent[1] - grid_xy_extent[0],
+            grid_xy_extent[3] - grid_xy_extent[2],
+        )
 
-        # check that all the required files are present
-        for file_name in required_graph_files:
-            assert (graph_dir_path / file_name).exists()
+        is_hierarchical, graph = load_graph(
+            graph_dir_path=graph_dir_path,
+            mesh_node_features_scaling=grid_xy_max_span,
+        )
 
-        # try to load each and ensure they have the right shape
-        for file_name in required_graph_files:
-            file_id = Path(file_name).stem  # remove the extension
-            result = torch.load(graph_dir_path / file_name)
+        mesh_static_features = graph["mesh_static_features"]
+        if is_hierarchical:
+            num_mesh_nodes = sum(sf.shape[0] for sf in mesh_static_features)
+        else:
+            num_mesh_nodes = mesh_static_features.shape[0]
+        num_grid_nodes = datastore.num_grid_points
 
-            if file_id.startswith("g2m") or file_id.startswith("m2g"):
-                assert isinstance(result, torch.Tensor)
+        # create_graph builds g2m edges grid -> mesh and m2g edges
+        # mesh -> grid, so after zero-indexing:
+        #   g2m_edge_index = [grid (sender), mesh (receiver)]
+        #   m2g_edge_index = [mesh (sender), grid (receiver)]
+        index_roles = {
+            "g2m_edge_index": ("grid", "mesh"),
+            "m2g_edge_index": ("mesh", "grid"),
+        }
+        bound = {"grid": num_grid_nodes, "mesh": num_mesh_nodes}
 
-                if file_id.endswith("_index"):
-                    assert (
-                        result.shape[0] == 2
-                    )  # adjacency matrix uses two rows
-                elif file_id.endswith("_features"):
-                    assert result.shape[1] == d_features
+        for name, roles in index_roles.items():
+            edge_index = graph[name]
+            assert edge_index.min() >= 0, f"Negative index in {name}"
+            for row, role in enumerate(roles):
+                row_max = int(edge_index[row].max())
+                assert row_max < bound[role], (
+                    f"{name} {role}-side index {row_max} is out of bounds: "
+                    f"expected a zero-based local index < {bound[role]} "
+                    f"({role} node count). num_mesh_nodes={num_mesh_nodes}, "
+                    f"num_grid_nodes={num_grid_nodes}."
+                )
 
-            elif file_id.startswith("m2m") or file_id.startswith("mesh"):
-                assert isinstance(result, list)
-                if not hierarchical:
-                    assert len(result) == 1
-                else:
-                    if file_id.startswith("mesh_up") or file_id.startswith(
-                        "mesh_down"
-                    ):
-                        assert len(result) == n_max_levels - 1
-                    else:
-                        assert len(result) == n_max_levels
 
-                for r in result:
-                    assert isinstance(r, torch.Tensor)
+@pytest.fixture
+def buffer_list_five():
+    """Five scalar buffers for BufferList indexing tests."""
+    tensors = [torch.tensor([float(i)]) for i in range(5)]
+    return BufferList(tensors)
 
-                    if file_id == "mesh_features":
-                        assert r.shape[1] == d_mesh_static
-                    elif file_id.endswith("_index"):
-                        assert r.shape[0] == 2  # adjacency matrix uses two rows
-                    elif file_id.endswith("_features"):
-                        assert r.shape[1] == d_features
+
+def test_buffer_list_integer_index(buffer_list_five):
+    """Positive integer indexing returns the correct buffer."""
+    assert torch.equal(buffer_list_five[0], torch.tensor([0.0]))
+    assert torch.equal(buffer_list_five[4], torch.tensor([4.0]))
+
+
+def test_buffer_list_negative_index(buffer_list_five):
+    """Negative indexing follows Python sequence convention."""
+    assert torch.equal(buffer_list_five[-1], torch.tensor([4.0]))
+    assert torch.equal(buffer_list_five[-3], torch.tensor([2.0]))
+
+
+def test_buffer_list_out_of_bounds_raises_index_error(buffer_list_five):
+    """Out-of-bounds access raises IndexError (not AttributeError)."""
+    with pytest.raises(IndexError):
+        _ = buffer_list_five[5]
+    with pytest.raises(IndexError):
+        _ = buffer_list_five[-6]
+    with pytest.raises(IndexError):
+        _ = buffer_list_five[-100]
+
+
+def test_buffer_list_slice_full(buffer_list_five):
+    """Full slice returns all buffers as a list."""
+    result = buffer_list_five[:]
+    assert len(result) == 5
+    for i, tensor in enumerate(result):
+        assert torch.equal(tensor, torch.tensor([float(i)]))
+
+
+def test_buffer_list_slice_from_index(buffer_list_five):
+    """Slice from index returns the correct subset."""
+    result = buffer_list_five[2:]
+    assert len(result) == 3
+    for i, tensor in enumerate(result):
+        assert torch.equal(tensor, torch.tensor([float(i + 2)]))
+
+
+def test_buffer_list_slice_with_step(buffer_list_five):
+    """Slice with step skips elements correctly."""
+    result = buffer_list_five[::2]
+    assert len(result) == 3
+    expected_vals = [0.0, 2.0, 4.0]
+    for tensor, expected in zip(result, expected_vals):
+        assert torch.equal(tensor, torch.tensor([expected]))
+
+
+def test_buffer_list_slice_negative_bounds(buffer_list_five):
+    """Slice with negative bounds follows Python convention."""
+    result = buffer_list_five[-2:]
+    assert len(result) == 2
+    assert torch.equal(result[0], torch.tensor([3.0]))
+    assert torch.equal(result[1], torch.tensor([4.0]))
+
+
+def test_buffer_list_len(buffer_list_five):
+    """Length reflects number of registered buffers."""
+    assert len(buffer_list_five) == 5
+
+
+def test_buffer_list_iter(buffer_list_five):
+    """Iteration yields all buffers in order."""
+    values = [t.item() for t in buffer_list_five]
+    assert values == [0.0, 1.0, 2.0, 3.0, 4.0]
+
+
+@pytest.mark.parametrize("archetype", ["keisler", "graphcast", "hierarchical"])
+@pytest.mark.parametrize("datastore_name", DATASTORES.keys())
+def test_wmg_graph_creation(datastore_name, archetype):
+    """Check that graph creation via weather-model-graphs produces a graph
+    that conforms to the graph storage specification."""
+    datastore = init_datastore_example(datastore_name)
+
+    if not isinstance(datastore, BaseRegularGridDatastore):
+        pytest.skip(
+            f"Skipping test for {datastore_name} as it is not a regular "
+            "grid datastore."
+        )
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        graph_dir_path = Path(tmpdir) / "graph" / archetype
+
+        wmg_create_graph_from_datastore(
+            datastore=datastore,
+            output_root_path=str(graph_dir_path),
+            archetype=archetype,
+        )
+
+        validator = _load_validator_module()
+        report, _, _ = validator.validate_graph_directory(graph_dir_path)
+        assert not report.has_fails(), report.summarize()
+
+
+@pytest.mark.parametrize("datastore_name", DATASTORES.keys())
+def test_old_create_graph_deprecation_warning(datastore_name):
+    """Check that the old create_graph CLI emits a deprecation warning."""
+    # First-party
+    from neural_lam.create_graph import cli as old_cli
+
+    with warnings.catch_warnings(record=True) as w:
+        warnings.simplefilter("always")
+        try:
+            old_cli(["--config_path", "nonexistent.yaml"])
+        except Exception:
+            pass  # We only care about the warning, not the error
+
+        deprecation_warnings = [
+            x for x in w if issubclass(x.category, DeprecationWarning)
+        ]
+        assert len(deprecation_warnings) >= 1
+        assert "create_graph_with_wmg" in str(deprecation_warnings[0].message)
