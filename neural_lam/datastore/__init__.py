@@ -4,9 +4,9 @@
 from pathlib import Path
 
 # Local
-from .base import BaseDatastore  # noqa
-from .mdp import MDPDatastore  # noqa
-from .npyfilesmeps import NpyFilesDatastoreMEPS  # noqa
+from .base import BaseDatastore  # noqa: F401
+from .mdp import MDPDatastore  # noqa: F401
+from .npyfilesmeps import NpyFilesDatastoreMEPS  # noqa: F401
 
 DATASTORE_CLASSES = [
     MDPDatastore,
