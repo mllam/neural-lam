@@ -8,10 +8,9 @@ duplicated logic in ``create_graph.py``.
 # Standard library
 import os
 from argparse import ArgumentDefaultsHelpFormatter, ArgumentParser
-from typing import Any, cast
+from typing import TYPE_CHECKING, Any, cast
 
 # Third-party
-import networkx
 import numpy as np
 import weather_model_graphs as wmg
 from loguru import logger
@@ -19,6 +18,10 @@ from loguru import logger
 # Local
 from .config import load_config_and_datastore
 from .datastore.base import BaseRegularGridDatastore
+
+if TYPE_CHECKING:
+    # Third-party
+    import networkx
 
 ARCHETYPE_FUNCTIONS = {
     "keisler": wmg.create.archetype.create_keisler_graph,
@@ -125,7 +128,7 @@ def create_graph_from_datastore(
     # ``return_components=True`` makes the archetype functions return the
     # g2m/m2m/m2g mapping rather than a single merged graph.
     graph_components = cast(
-        dict[str, networkx.DiGraph], archetype_fn(**archetype_kwargs)
+        "dict[str, networkx.DiGraph]", archetype_fn(**archetype_kwargs)
     )
 
     hierarchical = archetype == "hierarchical"
@@ -193,9 +196,9 @@ def cli(input_args: list[str] | None = None) -> None:
     )
     args = parser.parse_args(input_args)
 
-    assert (
-        args.config_path is not None
-    ), "Specify your config with --config_path"
+    assert args.config_path is not None, (
+        "Specify your config with --config_path"
+    )
 
     # Load neural-lam configuration and datastore to use
     _, datastore = load_config_and_datastore(config_path=args.config_path)

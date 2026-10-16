@@ -216,8 +216,10 @@ class TestPropagationNetForwardPass:
             p_out = pnet(send_rep, rec_rep, edge_rep)
 
             if update_edges:
-                assert isinstance(i_out, tuple) and len(i_out) == 2
-                assert isinstance(p_out, tuple) and len(p_out) == 2
+                assert isinstance(i_out, tuple)
+                assert len(i_out) == 2
+                assert isinstance(p_out, tuple)
+                assert len(p_out) == 2
                 assert i_out[0].shape == p_out[0].shape == (n_rec, d_h)
                 assert i_out[1].shape == p_out[1].shape == (n_edges, d_h)
             else:
@@ -338,7 +340,8 @@ class TestEdgeUpdateBehavior:
         edge_rep = torch.randn(n_edges, d_h)
 
         result = pnet(send_rep, rec_rep, edge_rep)
-        assert isinstance(result, tuple) and len(result) == 2
+        assert isinstance(result, tuple)
+        assert len(result) == 2
         assert result[0].shape == (n_rec, d_h)
         assert result[1].shape == (n_edges, d_h)
 
@@ -711,12 +714,12 @@ class TestNumericalStability:
                 send_rep, current_rec, current_edge
             )
 
-        assert torch.isfinite(
-            current_rec
-        ).all(), "Receiver reps contain non-finite values after deep stacking"
-        assert torch.isfinite(
-            current_edge
-        ).all(), "Edge reps contain non-finite values after deep stacking"
+        assert torch.isfinite(current_rec).all(), (
+            "Receiver reps contain non-finite values after deep stacking"
+        )
+        assert torch.isfinite(current_edge).all(), (
+            "Edge reps contain non-finite values after deep stacking"
+        )
 
     def test_high_degree_stability(self):
         """With many incoming edges per receiver, mean aggregation should
