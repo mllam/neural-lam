@@ -61,7 +61,8 @@ class BaseGraphModel(StepPredictor):
         processor_layers : int, default 4
             The number of processor layers in the GNN.
         mesh_aggr : str, default "sum"
-            The aggregation method for mesh nodes.
+            The aggregation method for ``InteractionNet`` mesh processor
+            layers. Grid-to-mesh and mesh-to-grid layers are unaffected.
         num_past_forcing_steps : int, default 1
             The number of past forcing steps to include.
         num_future_forcing_steps : int, default 1
@@ -72,7 +73,15 @@ class BaseGraphModel(StepPredictor):
             Lower clamping limits for state variables.
         output_clamping_upper : dict, optional
             Upper clamping limits for state variables.
+
+        Raises
+        ------
+        ValueError
+            If ``mesh_aggr`` is not ``"sum"`` or ``"mean"``.
         """
+        if mesh_aggr not in {"sum", "mean"}:
+            raise ValueError(f"Unknown aggregation method: {mesh_aggr}")
+
         super().__init__(
             datastore=datastore,
             output_std=output_std,

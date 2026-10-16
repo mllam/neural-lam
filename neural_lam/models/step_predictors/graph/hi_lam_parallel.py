@@ -55,7 +55,7 @@ class HiLAMParallel(BaseHiGraphModel):
         processor_layers : int, default 4
             The number of processor layers in the GNN.
         mesh_aggr : str, default "sum"
-            The aggregation method for mesh nodes.
+            The aggregation method for mesh processor layers.
         num_past_forcing_steps : int, default 1
             The number of past forcing steps to include.
         num_future_forcing_steps : int, default 1
@@ -131,6 +131,7 @@ class HiLAMParallel(BaseHiGraphModel):
                     hidden_layers=hidden_layers,
                     edge_chunk_sizes=self.edge_split_sections,
                     aggr_chunk_sizes=self.level_mesh_sizes,
+                    aggr=self.mesh_aggr,
                 )
                 for _ in range(processor_layers)
             ]

@@ -2,6 +2,7 @@
 from pathlib import Path
 
 # Third-party
+import pytest
 import torch
 
 # First-party
@@ -40,6 +41,7 @@ def _build_model_and_data(
     m2g_gnn_type="InteractionNet",
     mesh_up_gnn_type="InteractionNet",
     mesh_down_gnn_type="InteractionNet",
+    mesh_aggr="sum",
 ):
     """Helper to build a model and matching random input tensors."""
     num_past_forcing_steps = 1
@@ -65,7 +67,7 @@ def _build_model_and_data(
         hidden_dim=4,
         hidden_layers=1,
         processor_layers=1,
-        mesh_aggr="sum",
+        mesh_aggr=mesh_aggr,
         num_past_forcing_steps=num_past_forcing_steps,
         num_future_forcing_steps=num_future_forcing_steps,
         output_std=False,
@@ -896,6 +898,91 @@ class TestHierarchicalIntegration:
                 assert isinstance(gnn, InteractionNet)
                 assert not isinstance(gnn, PropagationNet)
 
+    @pytest.mark.parametrize("model_name", ["hi_lam", "hi_lam_parallel"])
+    def test_hierarchical_processors_respect_mesh_aggr(self, model_name):
+        """Hierarchical processors should apply the selected aggregation."""
+        datastore, config = _get_datastore_and_config("hierarchical")
+
+        mean_forecaster, mean_predictor, init_states, forcing, boundary = (
+            _build_model_and_data(
+                datastore,
+                config,
+                model_name,
+                "hierarchical",
+                mesh_aggr="mean",
+            )
+        )
+
+        if model_name == "hi_lam":
+            processor_groups = (
+                mean_predictor.mesh_down_gnns,
+                mean_predictor.mesh_down_same_gnns,
+                mean_predictor.mesh_up_gnns,
+                mean_predictor.mesh_up_same_gnns,
+            )
+            processor_gnns = [
+                gnn
+                for group in processor_groups
+                for layer in group
+                for gnn in layer
+            ]
+        else:
+            processor_gnns = list(mean_predictor.processor.children())
+
+        assert processor_gnns
+        assert all(gnn.aggr == "mean" for gnn in processor_gnns)
+        assert mean_predictor.g2m_gnn.aggr == "sum"
+        assert mean_predictor.m2g_gnn.aggr == "sum"
+        assert any(
+            torch.unique(
+                torch.bincount(gnn.edge_index[1], minlength=int(gnn.num_rec))
+            ).numel()
+            > 1
+            for gnn in processor_gnns
+        )
+
+        sum_forecaster, sum_predictor, _, _, _ = _build_model_and_data(
+            datastore,
+            config,
+            model_name,
+            "hierarchical",
+            mesh_aggr="sum",
+        )
+        sum_predictor.load_state_dict(mean_predictor.state_dict())
+
+        with torch.no_grad():
+            mean_output, _ = mean_forecaster(init_states, forcing, boundary)
+            sum_output, _ = sum_forecaster(init_states, forcing, boundary)
+        assert mean_output.shape == (
+            init_states.shape[0],
+            forcing.shape[1],
+            init_states.shape[2],
+            init_states.shape[3],
+        )
+        assert not torch.allclose(mean_output, sum_output)
+
+    @pytest.mark.parametrize(
+        "model_name,graph_name",
+        [
+            ("graph_lam", "1level"),
+            ("hi_lam", "hierarchical"),
+            ("hi_lam_parallel", "hierarchical"),
+        ],
+    )
+    def test_graph_models_reject_invalid_mesh_aggr(
+        self, model_name, graph_name
+    ):
+        """Graph models should reject invalid aggregation without processors."""
+        datastore, _ = _get_datastore_and_config(graph_name)
+
+        with pytest.raises(ValueError, match="Unknown aggregation method: foo"):
+            MODELS[model_name](
+                datastore=datastore,
+                graph_name=graph_name,
+                processor_layers=0,
+                mesh_aggr="foo",
+            )
+
     def test_hilam_propnet_for_vertical_gnns(self):
         """With PropagationNet for g2m, m2g, and mesh_up, HiLAM should use
         PropagationNet for those while keeping mesh_down and same-level
@@ -910,36 +997,50 @@ class TestHierarchicalIntegration:
             g2m_gnn_type="PropagationNet",
             m2g_gnn_type="PropagationNet",
             mesh_up_gnn_type="PropagationNet",
+            mesh_aggr="mean",
         )
 
         # g2m and m2g should be PropagationNet
         assert isinstance(predictor.g2m_gnn, PropagationNet)
         assert isinstance(predictor.m2g_gnn, PropagationNet)
+        assert predictor.g2m_gnn.aggr == "mean"
+        assert predictor.m2g_gnn.aggr == "mean"
 
         # mesh_init_gnns should be PropagationNet
         for gnn in predictor.mesh_init_gnns:
             assert isinstance(gnn, PropagationNet)
+            assert gnn.aggr == "mean"
 
         # mesh_up_gnns should be PropagationNet
         for up_gnn_list in predictor.mesh_up_gnns:
             for gnn in up_gnn_list:
                 assert isinstance(gnn, PropagationNet)
+                assert gnn.aggr == "mean"
 
         # mesh_down_gnns should still be InteractionNet (default)
         for down_gnn_list in predictor.mesh_down_gnns:
             for gnn in down_gnn_list:
                 assert isinstance(gnn, InteractionNet)
                 assert not isinstance(gnn, PropagationNet)
+                assert gnn.aggr == "mean"
 
         # same-level GNNs should ALWAYS be InteractionNet
         for same_gnn_list in predictor.mesh_down_same_gnns:
             for gnn in same_gnn_list:
                 assert isinstance(gnn, InteractionNet)
                 assert not isinstance(gnn, PropagationNet)
+                assert gnn.aggr == "mean"
         for same_gnn_list in predictor.mesh_up_same_gnns:
             for gnn in same_gnn_list:
                 assert isinstance(gnn, InteractionNet)
                 assert not isinstance(gnn, PropagationNet)
+                assert gnn.aggr == "mean"
+
+        # Readout layers are not processor layers and remain unchanged.
+        for gnn in predictor.mesh_read_gnns:
+            assert isinstance(gnn, InteractionNet)
+            assert not isinstance(gnn, PropagationNet)
+            assert gnn.aggr == "sum"
 
     def test_hilam_propnet_mesh_down(self):
         """Setting mesh_down_gnn_type to PropagationNet should affect
