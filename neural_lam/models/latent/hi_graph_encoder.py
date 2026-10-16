@@ -1,6 +1,10 @@
 """Latent encoder for hierarchical graphs."""
 
+# Standard library
+from typing import Any
+
 # Third-party
+import torch
 from torch import nn
 
 # First-party
@@ -22,16 +26,16 @@ class HiGraphLatentEncoder(BaseLatentEncoder):
 
     def __init__(
         self,
-        latent_dim,
-        g2m_edge_index,
-        m2m_edge_index,
-        mesh_up_edge_index,
-        hidden_dim,
-        intra_level_layers,
-        hidden_layers=1,
-        g2m_gnn_type="InteractionNet",
-        output_dist="isotropic",
-    ):
+        latent_dim: int,
+        g2m_edge_index: torch.Tensor,
+        m2m_edge_index: utils.BufferList,
+        mesh_up_edge_index: utils.BufferList,
+        hidden_dim: int,
+        intra_level_layers: int,
+        hidden_layers: int = 1,
+        g2m_gnn_type: str = "InteractionNet",
+        output_dist: str = "isotropic",
+    ) -> None:
         """
         Set up the g2m, mesh-up and intra-level GNNs and latent param map.
 
@@ -121,8 +125,11 @@ class HiGraphLatentEncoder(BaseLatentEncoder):
 
     # pylint: disable-next=arguments-differ
     def compute_dist_params(  # type: ignore[override]
-        self, grid_rep, graph_emb, **kwargs
-    ):
+        self,
+        grid_rep: torch.Tensor,
+        graph_emb: dict[str, Any],
+        **kwargs: Any,
+    ) -> torch.Tensor:
         """
         Compute distribution parameters on the top mesh level.
 
