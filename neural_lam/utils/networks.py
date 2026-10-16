@@ -24,9 +24,18 @@ def make_mlp(blueprint: list[int], layer_norm: bool = True) -> nn.Sequential:
     -------
     torch.nn.Sequential
         Sequential module implementing the specified MLP.
+
+    Raises
+    ------
+    ValueError
+        If ``blueprint`` contains fewer than 2 entries.
     """
+    if len(blueprint) < 2:
+        raise ValueError(
+            f"Invalid MLP blueprint {blueprint}: blueprint must contain at "
+            "least 2 entries (input and output dimensions)."
+        )
     hidden_layers = len(blueprint) - 2
-    assert hidden_layers >= 0, "Invalid MLP blueprint"
 
     layers = []
     for layer_i, (dim1, dim2) in enumerate(zip(blueprint[:-1], blueprint[1:])):
