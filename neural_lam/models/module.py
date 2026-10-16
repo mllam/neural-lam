@@ -340,9 +340,8 @@ class ForecasterModule(pl.LightningModule):
         target_states = (target_states - self.state_mean) / self.state_std
 
         if forcing.shape[-1] > 0:
-            assert (
-                self.forcing_mean is not None and self.forcing_std is not None
-            )
+            assert self.forcing_mean is not None
+            assert self.forcing_std is not None
             if self.forcing_mean_tiled is None:
                 # Forcing is (..., num_forcing_vars * window_size).
                 # WeatherDataset stacks (forcing_feature, window)
@@ -356,10 +355,8 @@ class ForecasterModule(pl.LightningModule):
                 self.forcing_std_tiled = self.forcing_std.repeat_interleave(
                     window_size
                 )
-            assert (
-                self.forcing_mean_tiled is not None
-                and self.forcing_std_tiled is not None
-            )
+            assert self.forcing_mean_tiled is not None
+            assert self.forcing_std_tiled is not None
             forcing = (
                 forcing - self.forcing_mean_tiled
             ) / self.forcing_std_tiled
@@ -583,8 +580,7 @@ class ForecasterModule(pl.LightningModule):
         self.aggregate_and_plot_metrics(self.val_metrics, prefix="val")
 
         if (
-            self.trainer.is_global_zero
-            and self.hparams.metrics_watch  # ty: ignore[unresolved-attribute]
+            self.trainer.is_global_zero and self.hparams.metrics_watch  # ty: ignore[unresolved-attribute]
         ):
             metrics_watch = (
                 self.hparams.metrics_watch  # ty: ignore[unresolved-attribute]

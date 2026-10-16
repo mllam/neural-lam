@@ -31,6 +31,19 @@ class StepPredictor(nn.Module, ABC):
     clamp_lower_idx: torch.Tensor
     clamp_upper_idx: torch.Tensor
 
+    @property
+    def trainable(self) -> bool:
+        """
+        Whether the predictor has learnable parameters and can be trained.
+
+        Returns
+        -------
+        bool
+            ``True`` if the predictor has trainable parameters,
+            ``False`` otherwise.
+        """
+        return any(p.requires_grad for p in self.parameters())
+
     def __init__(
         self,
         datastore: BaseDatastore,
