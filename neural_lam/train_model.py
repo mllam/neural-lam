@@ -578,7 +578,7 @@ def fit(
     model = ForecasterModule(
         forecaster=forecaster,
         config=config,
-        datastore=cast(BaseRegularGridDatastore, datastore),
+        datastore=cast("BaseRegularGridDatastore", datastore),
         loss=train_config.loss,
         lr=train_config.lr,
         restore_opt=train_config.restore_opt,
@@ -642,7 +642,7 @@ def fit(
         log_every_n_steps=1,
         callbacks=[val_checkpoint, latest_checkpoint],
         check_val_every_n_epoch=train_config.val_interval,
-        precision=cast(Any, compute_config.precision),
+        precision=cast("Any", compute_config.precision),
         num_sanity_val_steps=train_config.num_sanity_val_steps,
     )
 
