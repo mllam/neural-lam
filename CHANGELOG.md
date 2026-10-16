@@ -127,6 +127,8 @@ It also contains a number of smaller improvements, bug fixes and maintenance upd
 
 ### Maintenance
 
+- Set up dependabot to keep GitHub Actions, pre-commit hooks and `uv.lock` up to date [\#718](https://github.com/mllam/neural-lam/pull/718) @observingClouds
+
 - Cache the mdp example input data in CI with fsspec `simplecache`, so the DANRA inputs are no longer downloaded on every run [\#751](https://github.com/mllam/neural-lam/pull/751) @KumarShivam1908
 
 - Use the combined `actions/cache` step for the meps test-data cache in CI, so a PR that restores the existing cache no longer saves a duplicate copy under its own branch [\#754](https://github.com/mllam/neural-lam/pull/754) @KumarShivam1908
