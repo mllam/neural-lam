@@ -1,5 +1,11 @@
 """Latent decoder for flat (non-hierarchical) graphs."""
 
+# Standard library
+from typing import Any
+
+# Third-party
+import torch
+
 # First-party
 from neural_lam import utils
 from neural_lam.gnn_layers import get_gnn_class
@@ -19,18 +25,18 @@ class GraphLatentDecoder(BaseGraphLatentDecoder):
 
     def __init__(
         self,
-        g2m_edge_index,
-        m2m_edge_index,
-        m2g_edge_index,
-        hidden_dim,
-        latent_dim,
-        num_state_vars,
-        m2m_layers,
-        hidden_layers=1,
-        g2m_gnn_type="InteractionNet",
-        m2g_gnn_type="InteractionNet",
-        output_std=True,
-    ):
+        g2m_edge_index: torch.Tensor,
+        m2m_edge_index: torch.Tensor,
+        m2g_edge_index: torch.Tensor,
+        hidden_dim: int,
+        latent_dim: int,
+        num_state_vars: int,
+        m2m_layers: int,
+        hidden_layers: int = 1,
+        g2m_gnn_type: str = "InteractionNet",
+        m2g_gnn_type: str = "InteractionNet",
+        output_std: bool = True,
+    ) -> None:
         """
         Set up the g2m, on-mesh and m2g GNNs.
 
@@ -92,8 +98,12 @@ class GraphLatentDecoder(BaseGraphLatentDecoder):
         )
 
     def combine_with_latent(
-        self, original_grid_rep, latent_rep, residual_grid_rep, graph_emb
-    ):
+        self,
+        original_grid_rep: torch.Tensor,
+        latent_rep: torch.Tensor,
+        residual_grid_rep: torch.Tensor,
+        graph_emb: dict[str, Any],
+    ) -> torch.Tensor:
         """
         Fuse grid and latent reps via g2m -> m2m -> m2g.
 

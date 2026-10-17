@@ -4,6 +4,7 @@ from datetime import timedelta
 from pathlib import Path
 
 # Third-party
+import fsspec
 import pooch
 import pytest
 import yaml
@@ -21,6 +22,11 @@ from .dummy_datastore import DummyDatastore
 # Disable weights and biases to avoid unnecessary logging
 # and to avoid having to deal with authentication
 os.environ["WANDB_MODE"] = "disabled"
+
+# The mdp example inputs are read through `simplecache::https://`, which with
+# zarr 3 needs an async https filesystem. mllam-data-prep does not accept
+# storage_options yet, so set this globally.
+fsspec.config.conf["https"] = {"asynchronous": True}
 
 
 @pytest.fixture(autouse=True)
@@ -57,7 +63,7 @@ def download_meps_example_reduced_dataset():
 
     config_path = dataset_path / "meps_example_reduced.datastore.yaml"
 
-    with open(config_path, "r") as f:
+    with config_path.open() as f:
         config = yaml.safe_load(f)
 
     if "class" in config["projection"]:
@@ -69,7 +75,7 @@ def download_meps_example_reduced_dataset():
         # dataclass
         config["projection"]["class_name"] = config["projection"].pop("class")
 
-        with open(config_path, "w") as f:
+        with config_path.open("w") as f:
             yaml.dump(config, f)
 
     # create parameters, only run if the files we expect are not present
