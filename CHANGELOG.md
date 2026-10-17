@@ -11,6 +11,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Add `PersistencePredictor` baseline model (`--model persistence`) that returns the previous state unchanged, enabling standard evaluation of a persistence baseline through the existing pipeline [\#677](https://github.com/mllam/neural-lam/pull/677) @GiGiKoneti
 
+### Fixed
+
+- Re-raise exceptions from `train_model.main` (`@logger.catch(reraise=True)`) so `python -m neural_lam.train_model` exits with a non-zero code on startup, model init and training errors instead of logging the traceback and exiting 0 [\#777](https://github.com/mllam/neural-lam/pull/777) @nikhil3495
+
 ### Maintenance
 
 - Add a `lychee` pre-commit hook checking Markdown links and section anchors (config in `.github/lychee.toml`, run once per push in CI) and a PR-template reminder to update `CONTRIBUTING.md` / `AGENTS.md` [\#738](https://github.com/mllam/neural-lam/pull/738) @KumarShivam1908
