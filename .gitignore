@@ -52,9 +52,11 @@ share/python-wheels/
 # mkdocs documentation
 /site
 
-# Jupyter Book / Sphinx documentation
+# Sphinx documentation and generated notebook pages
 docs/_build/
 docs/api/
+docs/notebooks/create_reduced_meps_dataset.md
+docs/notebooks/__marimo__/
 
 
 ### Vim ###

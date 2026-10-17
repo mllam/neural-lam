@@ -14,7 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Add `--train_steps_to_log` CLI option to log training loss for individual unroll steps, and deduplicate common prediction and loss computation steps across loops [\#674](https://github.com/mllam/neural-lam/issues/674) @GiGiKoneti
 
-- Add a Sphinx + `sphinx-autoapi` documentation site (intro, install, quickstart, auto-generated API reference) on `myst-nb` and `sphinx-book-theme`, with a `docs` CI build/linkcheck job and a ReadTheDocs config. closes #61 [\#272](https://github.com/mllam/neural-lam/pull/272) @Mohit-Lakra
+- Add a Sphinx + `sphinx-autoapi` documentation site (intro, install, quickstart, auto-generated API reference) on `myst-parser` and `sphinx-book-theme`. Notebooks are marimo `.py` sources exported to Markdown during local, CI and Read the Docs builds, replacing MyST-NB and Jupyter execution. closes #61 [\#272](https://github.com/mllam/neural-lam/pull/272) @Mohit-Lakra
 
 - Add `PropagationNet` GNN layer that incentivises directional message
   propagation from sender to receiver nodes, and expose it alongside

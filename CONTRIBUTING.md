@@ -65,6 +65,38 @@ Codespell and others). In addition:
   across the codebase.
 - Keep new code consistent with the patterns already in the codebase.
 
+## Notebooks
+
+Store notebooks as marimo `.py` files under `docs/notebooks/`; do not commit
+`.ipynb` files or generated notebook Markdown. Install the `docs` extra to
+edit, run, or export notebooks:
+
+```bash
+uv sync --extra docs --group dev --locked
+uv run --locked marimo edit docs/notebooks/create_reduced_meps_dataset.py
+uv run --locked python docs/notebooks/create_reduced_meps_dataset.py
+```
+
+Run these commands from the repository root. The dataset-reduction notebook
+requires the `data/meps_example` dataset described in the
+[README](README.md#using-neural-lam). It creates output directories under
+`data/meps_example_reduced` and overwrites matching output files on reruns.
+Use `--input-dir` and `--output-dir` to select other locations; with
+`marimo edit`, put notebook arguments after `--`.
+
+Export notebooks before building or checking the documentation:
+
+```bash
+uv run --locked python docs/export_notebooks.py
+uv run --locked sphinx-build -W --keep-going -b html docs/ docs/_build/html/
+uv run --locked sphinx-build -W --keep-going -b linkcheck docs/ docs/_build/linkcheck/
+```
+
+Markdown export includes prose and code without executing notebooks or
+including cell outputs, so building the docs does not require tutorial data.
+For a new notebook, add its extensionless path to the toctree in
+`docs/index.md` and ignore its generated `.md` file in `.gitignore`.
+
 ## Before you push
 
 Run **both** checks locally - they are the same ones CI will run:

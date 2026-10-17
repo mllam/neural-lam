@@ -532,7 +532,7 @@ This issue stems from PyTorch Lightning. See for example [this PR](https://githu
 # Repository Structure
 Except for training and pre-processing scripts all the source code can be found in the `neural_lam` directory.
 Model classes, including abstract base classes, are located in `neural_lam/models`.
-Notebooks for visualization and analysis are located in `docs/notebooks`.
+Notebooks for visualization and analysis are marimo `.py` files in `docs/notebooks`.
 
 ## Format of graph directory
 The `graphs` directory contains generated graph structures that can be used by different graph-based models.
