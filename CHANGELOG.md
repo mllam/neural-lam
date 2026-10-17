@@ -13,7 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- Re-raise exceptions from `train_model.main` (`@logger.catch(reraise=True)`) so `python -m neural_lam.train_model` exits with a non-zero code on startup, model init and training errors instead of logging the traceback and exiting 0 [\#NNN](https://github.com/mllam/neural-lam/pull/NNN) @nikhil3495
+- Re-raise exceptions from `train_model.main` (`@logger.catch(reraise=True)`) so `python -m neural_lam.train_model` exits with a non-zero code on startup, model init and training errors instead of logging the traceback and exiting 0 [\#777](https://github.com/mllam/neural-lam/pull/777) @nikhil3495
 
 ### Maintenance
 
