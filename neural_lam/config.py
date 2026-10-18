@@ -247,8 +247,9 @@ def load_config_and_datastore(
     Raises
     ------
     InvalidConfigError
-        If not exactly one datastore provides `state` data, or if more than
-        one omits it.
+        If not exactly one datastore provides `state` data, if more than
+        one omits it, or if `plotting.boundary_var_mapping` maps to a feature
+        the boundary datastore does not provide.
     """
     with open(config_path, encoding="utf-8") as f:
         try:
@@ -310,6 +311,25 @@ def load_config_and_datastore(
 
     (datastore,) = interior_datastores.values()
     datastore_boundary = next(iter(boundary_datastores.values()), None)
+
+    # A mapped feature the boundary datastore does not provide would
+    # silently leave the overlay out of the evaluation plots.
+    boundary_features = (
+        set(datastore_boundary.get_vars_names(category="forcing"))
+        if datastore_boundary is not None
+        else set()
+    )
+    unknown = {
+        var: feature
+        for var, feature in config.plotting.boundary_var_mapping.items()
+        if feature not in boundary_features
+    }
+    if unknown:
+        raise InvalidConfigError(
+            "`plotting.boundary_var_mapping` maps to features that are not "
+            f"forcing features of the boundary datastore: {unknown}; "
+            f"available: {sorted(boundary_features)}."
+        )
 
     return (
         config,
