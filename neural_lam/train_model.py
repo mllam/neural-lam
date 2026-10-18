@@ -586,7 +586,7 @@ def fit(
     else:
         device_name = "cpu"
 
-    devices: str | list[int]
+    devices: int | str | list[int]
     if compute_config.devices == "auto" or compute_config.devices == ["auto"]:
         devices = "auto"
     elif isinstance(compute_config.devices, list):
@@ -708,6 +708,12 @@ def fit(
         checkpoint_path = (
             val_checkpoint.best_model_path or latest_checkpoint.best_model_path
         )
+
+    # Close the W&B run so a later train/evaluate call in the same Python
+    # session (e.g. a notebook) starts a new run instead of reusing this one.
+    # setup_training_logger is rank_zero_only, so other ranks have no logger.
+    if isinstance(training_logger, pl.loggers.WandbLogger):
+        training_logger.experiment.finish()
 
     return Run(
         run_dir=Path(run_dir),

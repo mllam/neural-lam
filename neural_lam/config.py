@@ -351,7 +351,7 @@ class ComputeConfig:
         Random seed.
     num_nodes : int, default 1
         Number of cluster nodes.
-    devices : list of str or str or list of int, default ["auto"]
+    devices : int or str or list of int or list of str, default ["auto"]
         Hardware devices to use.
     precision : str or int, default 32
         Floating point precision.
@@ -359,7 +359,7 @@ class ComputeConfig:
 
     seed: int = 42
     num_nodes: int = 1
-    devices: str | list[int] | list[str] = dataclasses.field(
+    devices: int | str | list[int] | list[str] = dataclasses.field(
         default_factory=lambda: ["auto"]
     )
     precision: str | int = 32

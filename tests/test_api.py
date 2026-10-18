@@ -5,6 +5,7 @@ import dataclasses
 
 # Third-party
 import pytest
+import wandb
 
 # First-party
 from neural_lam import api, train_model
@@ -72,6 +73,8 @@ def test_api_train_and_evaluate_roundtrip(shared_env, tmp_path, model, graph):
     )
 
     assert train_run.run_dir.exists()
+    # fit closes its W&B run so the following evaluate starts a new one
+    assert wandb.run is None
     assert train_run.checkpoint_dir.exists()
     assert train_run.checkpoint_path is not None
     assert train_run.checkpoint_path.exists()

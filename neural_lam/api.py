@@ -29,7 +29,7 @@ def train(
     seed: int = 42,
     num_workers: int = 4,
     num_nodes: int = 1,
-    devices: str | list[int] | list[str] | None = None,
+    devices: int | str | list[int] | list[str] | None = None,
     precision: str | int = 32,
     load: str | None = None,
     restore_opt: bool = False,
@@ -84,7 +84,7 @@ def train(
         Number of workers for data loaders.
     num_nodes : int, default 1
         Number of nodes for DDP distributed training.
-    devices : str or list of int or list of str, default "auto"
+    devices : int or str or list of int or list of str, default "auto"
         Device specification for training.
     precision : str or int, default 32
         Numerical precision (32, 16, or "bf16").
@@ -259,7 +259,7 @@ def evaluate(
     seed: int = 42,
     num_workers: int = 4,
     num_nodes: int = 1,
-    devices: str | list[int] | list[str] | None = None,
+    devices: int | str | list[int] | list[str] | None = None,
     precision: str | int = 32,
     graph: str = "multiscale",
     hidden_dim: int = 64,
