@@ -28,7 +28,7 @@ graph_storage_spec
 ```
 
 - **[🚀 Getting Started](getting-started/installation.md)**: Installation guide and quickstart tutorial to get you up and running.
-- **[📚 API Reference](api/index.rst)**: Auto-generated reference for all modules, classes, and functions.
+- **:doc:`📚 API Reference <api/index>`**: Auto-generated reference for all modules, classes, and functions.
 
 ## Key Features
 
