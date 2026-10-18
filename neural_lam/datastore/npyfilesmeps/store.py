@@ -640,7 +640,7 @@ class NpyFilesDatastoreMEPS(BaseDatastore):
 
         da_datetime_forcing = xr.concat(
             cast(
-                list[xr.DataArray],
+                "list[xr.DataArray]",
                 [
                     np.sin(da_hour_angle),
                     np.cos(da_hour_angle),

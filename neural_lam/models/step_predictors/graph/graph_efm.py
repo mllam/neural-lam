@@ -3,7 +3,7 @@ predictors, for hierarchical (GraphEFM) and flat (GraphEFMMultiScale) mesh
 graphs."""
 
 # Standard library
-from typing import Dict, Optional
+from typing import Any, Dict, Optional
 
 # Third-party
 import torch
@@ -51,6 +51,9 @@ class BaseGraphEFM(StepPredictor):
     and :class:`GraphEFMMultiScale` (flat graph).
     """
 
+    g2m_edge_index: torch.Tensor
+    m2g_edge_index: torch.Tensor
+
     def __init__(
         self,
         datastore: BaseDatastore,
@@ -67,7 +70,7 @@ class BaseGraphEFM(StepPredictor):
         output_std: bool = False,
         output_clamping_lower: Optional[Dict[str, float]] = None,
         output_clamping_upper: Optional[Dict[str, float]] = None,
-    ):
+    ) -> None:
         """
         Set up the graph-type independent parts of the predictor.
 
@@ -262,13 +265,13 @@ class BaseGraphEFM(StepPredictor):
 
     def build_learnable_prior(
         self,
-        latent_dim,
-        hidden_dim,
-        hidden_layers,
-        g2m_gnn_type,
-        prior_dist,
-        prior_layers,
-    ):
+        latent_dim: int,
+        hidden_dim: int,
+        hidden_layers: int,
+        g2m_gnn_type: str,
+        prior_dist: str,
+        prior_layers: int,
+    ) -> nn.Module:
         """
         Build the graph-type specific learnable prior encoder.
 
@@ -300,11 +303,11 @@ class BaseGraphEFM(StepPredictor):
 
     def embedd_grid_with_target(
         self,
-        prev_state,
-        prev_prev_state,
-        forcing,
-        current_state,
-    ):
+        prev_state: torch.Tensor,
+        prev_prev_state: torch.Tensor,
+        forcing: torch.Tensor,
+        current_state: torch.Tensor,
+    ) -> torch.Tensor:
         """
         Embed the grid representation including the current (target) state.
         Used as input to the encoder, which is conditioned also on the target.
@@ -342,7 +345,7 @@ class BaseGraphEFM(StepPredictor):
             grid_current_features
         )  # (B, num_grid_nodes, d_h)
 
-    def embedd_mesh(self, batch_size):
+    def embedd_mesh(self, batch_size: int) -> dict[str, Any]:
         """
         Embed static mesh node and intra-mesh edge features.
 
@@ -361,7 +364,12 @@ class BaseGraphEFM(StepPredictor):
         """
         raise NotImplementedError("embedd_mesh not implemented")
 
-    def embedd_grid_and_graph(self, prev_state, prev_prev_state, forcing):
+    def embedd_grid_and_graph(
+        self,
+        prev_state: torch.Tensor,
+        prev_prev_state: torch.Tensor,
+        forcing: torch.Tensor,
+    ) -> tuple[torch.Tensor, dict[str, Any]]:
         """
         Embed the grid (states up to t-1) and the full graph.
 
@@ -484,6 +492,9 @@ class GraphEFM(BaseGraphEFM):
     mesh_up_features: list[torch.Tensor]
     mesh_down_features: list[torch.Tensor]
     m2m_features: list[torch.Tensor]
+    m2m_edge_index: utils.BufferList
+    mesh_up_edge_index: utils.BufferList
+    mesh_down_edge_index: utils.BufferList
 
     def __init__(
         self,
@@ -504,7 +515,7 @@ class GraphEFM(BaseGraphEFM):
         output_std: bool = False,
         output_clamping_lower: Optional[Dict[str, float]] = None,
         output_clamping_upper: Optional[Dict[str, float]] = None,
-    ):
+    ) -> None:
         """
         Build the mesh embedders and the hierarchical encoder/decoder
         latent modules. The prior is built by the base class.
@@ -700,13 +711,13 @@ class GraphEFM(BaseGraphEFM):
 
     def build_learnable_prior(
         self,
-        latent_dim,
-        hidden_dim,
-        hidden_layers,
-        g2m_gnn_type,
-        prior_dist,
-        prior_layers,
-    ):
+        latent_dim: int,
+        hidden_dim: int,
+        hidden_layers: int,
+        g2m_gnn_type: str,
+        prior_dist: str,
+        prior_layers: int,
+    ) -> HiGraphLatentEncoder:
         """
         Build the hierarchical learnable prior encoder.
 
@@ -743,7 +754,7 @@ class GraphEFM(BaseGraphEFM):
             output_dist=prior_dist,
         )
 
-    def embedd_mesh(self, batch_size):
+    def embedd_mesh(self, batch_size: int) -> dict[str, Any]:
         """
         Embed static mesh node and intra-mesh edge features per level.
 
@@ -805,6 +816,7 @@ class GraphEFMMultiScale(BaseGraphEFM):
 
     mesh_static_features: torch.Tensor
     m2m_features: torch.Tensor
+    m2m_edge_index: torch.Tensor
 
     def __init__(
         self,
@@ -825,7 +837,7 @@ class GraphEFMMultiScale(BaseGraphEFM):
         output_std: bool = False,
         output_clamping_lower: Optional[Dict[str, float]] = None,
         output_clamping_upper: Optional[Dict[str, float]] = None,
-    ):
+    ) -> None:
         """
         Build the mesh embedders and the flat-graph encoder/decoder latent
         modules. The prior is built by the base class.
@@ -970,13 +982,13 @@ class GraphEFMMultiScale(BaseGraphEFM):
 
     def build_learnable_prior(
         self,
-        latent_dim,
-        hidden_dim,
-        hidden_layers,
-        g2m_gnn_type,
-        prior_dist,
-        prior_layers,
-    ):
+        latent_dim: int,
+        hidden_dim: int,
+        hidden_layers: int,
+        g2m_gnn_type: str,
+        prior_dist: str,
+        prior_layers: int,
+    ) -> GraphLatentEncoder:
         """
         Build the flat-graph learnable prior encoder.
 
@@ -1012,7 +1024,7 @@ class GraphEFMMultiScale(BaseGraphEFM):
             output_dist=prior_dist,
         )
 
-    def embedd_mesh(self, batch_size):
+    def embedd_mesh(self, batch_size: int) -> dict[str, Any]:
         """
         Embed static mesh node and intra-mesh edge features.
 

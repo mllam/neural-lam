@@ -661,8 +661,7 @@ class ForecasterModule(pl.LightningModule):
         self.aggregate_and_plot_metrics(self.val_metrics, prefix="val")
 
         if (
-            self.trainer.is_global_zero
-            and self.hparams.metrics_watch  # ty: ignore[unresolved-attribute]
+            self.trainer.is_global_zero and self.hparams.metrics_watch  # ty: ignore[unresolved-attribute]
         ):
             metrics_watch = (
                 self.hparams.metrics_watch  # ty: ignore[unresolved-attribute]
@@ -888,7 +887,7 @@ class ForecasterModule(pl.LightningModule):
                         time=target_time, method="nearest"
                     )
 
-                def _boundary_for(var_name: str):
+                def _boundary_for(var_name: str) -> xr.DataArray | None:
                     """Return the boundary field for ``var_name`` if the
                     boundary datastore exposes the mapped forcing feature
                     (``boundary_var_mapping``, defaulting to the same name),
