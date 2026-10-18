@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Add a high-level programmatic Python API (`neural_lam.api`) exposing typed keyword-only `train`, `evaluate` and `create_graph` functions; `train` and `evaluate` return a `Run` handle with the run's checkpoint and plot paths. The training CLI now parses into the typed run config dataclasses (`ModelConfig`, `TrainRunConfig`, `DataConfig`, `ComputeConfig`, `LoggingConfig`) and calls the same `neural_lam.train_model.fit` [\#715](https://github.com/mllam/neural-lam/pull/715) @GiGiKoneti
+
 - Add `PersistencePredictor` baseline model (`--model persistence`) that returns the previous state unchanged, enabling standard evaluation of a persistence baseline through the existing pipeline [\#677](https://github.com/mllam/neural-lam/pull/677) @GiGiKoneti
 
 - Add optional boundary datastore support: `NeuralLAMConfig` now takes a named `datastores` dict. `WeatherDataset` loads boundary forcing from such a datastore and `__getitem__` returns a 5-tuple `(init_states, target_states, forcing, boundary, target_times)`. New CLI args `--num_past_boundary_steps` / `--num_future_boundary_steps` control the boundary forcing window. Expose `MDPDatastore`'s boundary-mask width as `n_boundary_points` on a `datastores.<name>` entry in `config.yaml`. New `is_on_regular_spatial_grid` property to `BaseDatastore`, reporting whether a datastore's grid points form a complete 2D grid. [\#635](https://github.com/mllam/neural-lam/pull/635) @sadamov
