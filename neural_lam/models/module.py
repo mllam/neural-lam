@@ -18,7 +18,7 @@ from neural_lam.utils import get_integer_time
 
 # Local
 from .. import metrics, vis
-from ..config import NeuralLAMConfig
+from ..config import NeuralLAMConfig, PlottingConfig
 from ..datastore.base import BaseDatastore
 from ..loss_weighting import get_state_feature_weighting
 from ..weather_dataset import WeatherDataset
@@ -805,7 +805,9 @@ class ForecasterModule(pl.LightningModule):
         # forcing feature on the boundary datastore. State variables absent from
         # the mapping fall back to matching a boundary forcing feature of the
         # same name (e.g. DANRA ``u100m`` overlays ERA5 ``u100m``);
-        plotting_cfg = self.config.plotting
+        # Configs pickled in checkpoints from before `plotting` existed lack
+        # the section, fall back to its defaults.
+        plotting_cfg = getattr(self.config, "plotting", PlottingConfig())
         boundary_var_mapping = plotting_cfg.boundary_var_mapping
         da_boundary_forcing = None
         boundary_feature_names: set = set()

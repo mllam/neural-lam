@@ -1056,3 +1056,33 @@ def test_aggregate_and_plot_metrics_with_metrics_watch(tmp_path):
     )
 
     plt.close("all")
+
+
+@pytest.mark.parametrize(
+    "time_step,time_unit",
+    [(1, "hours")],
+)
+def test_plot_examples_with_config_from_before_plotting(
+    model_and_batch, monkeypatch
+):
+    """Configs pickled in checkpoints from before the `plotting` section
+    existed lack the attribute, `plot_examples` must fall back to its
+    defaults instead of raising."""
+    model, batch, _, tmp_path = model_and_batch
+    model.plotted_examples = 0
+    del model.config.plotting
+
+    class _SimpleLogger:
+        save_dir = str(tmp_path)
+
+    simple_logger = _SimpleLogger()
+    monkeypatch.setattr(
+        type(model), "logger", property(lambda self: simple_logger)
+    )
+
+    with torch.no_grad():
+        prediction, _, _, _ = model.common_step(batch)
+        model.plot_examples(
+            batch, n_examples=1, prediction=prediction, split="train"
+        )
+    assert model.plotted_examples == 1
