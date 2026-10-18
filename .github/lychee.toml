@@ -16,8 +16,6 @@ exclude = [
     '^https://kutt\.to/mllam$',
     # Times out on automated requests, both the apex domain and www.
     '^https://(www\.)?pyg\.org/?$',
-    # Rate-limited or returns 503 on automated requests via Cloudflare.
-    '^https://(www\.)?lightning\.ai/',
     # CHANGELOG's auto-generated self-references: ~147 links that always
     # resolve, and dominate the runtime if re-checked on every commit.
     '^https://github\.com/mllam/neural-lam/(issues|pull)/\d+/?$',

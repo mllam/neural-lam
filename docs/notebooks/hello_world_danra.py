@@ -208,12 +208,13 @@ def _(np, plt, xr):
         "tests/datastore_examples/mdp/danra_100m_winds/danra.datastore.zarr"
     )
     print(ds)
+    fig = None
     if "state" in ds:
         da = ds["state"].isel(time=0, state_feature=0)
         values = da.values
         x = ds.coords["x"].values if "x" in ds.coords else None
         y = ds.coords["y"].values if "y" in ds.coords else None
-        _fig, ax = plt.subplots(figsize=(8, 6))
+        fig, ax = plt.subplots(figsize=(8, 6))
         if x is not None and y is not None:
             x_unique = np.sort(np.unique(x))
             y_unique = np.sort(np.unique(y))
@@ -240,8 +241,7 @@ def _(np, plt, xr):
         ax.set_title(f"2D state field: {feature_names[0]} at t=0")
         plt.colorbar(pcm, ax=ax)
         plt.tight_layout()
-        plt.show()
-    return
+    return (fig,)
 
 
 @app.cell(hide_code=True)
@@ -283,17 +283,6 @@ def _(subprocess, sys):
         ],
         check=True,
     )
-    return
-
-
-@app.cell
-def _(glob):
-    # Confirm the graph was created
-    _graph_files = glob.glob(
-        "tests/datastore_examples/mdp/danra_100m_winds/graph/1level/**",
-        recursive=True,
-    )
-    print(f"Graph files created ({len(_graph_files)}):", _graph_files)
     return
 
 
@@ -375,8 +364,7 @@ def _(load_config_and_datastore, np, os, plot_graph, plt, utils):
     ax3d.set_title("Graph structure (3D: grid + mesh layers)")
     ax3d.set_zticks([])
     ax3d.legend(loc="upper right", markerscale=3)
-    plt.show()
-    return
+    return (fig3d,)
 
 
 @app.cell(hide_code=True)
@@ -440,14 +428,6 @@ def _(os, subprocess, sys):
     return
 
 
-@app.cell
-def _(glob):
-    # Find the checkpoint saved during training
-    _ckpts = glob.glob("runs/**/*.ckpt", recursive=True)
-    print("Checkpoints found:", _ckpts)
-    return
-
-
 @app.cell(hide_code=True)
 def _(mo):
     mo.md(
@@ -500,6 +480,7 @@ def _(ckpt_path, os, subprocess, sys):
             "2",
             "--n_example_pred",
             "2",
+            "--create_gif",
             "--ar_steps_eval",
             "4",
             "--num_workers",

@@ -120,7 +120,7 @@ lint.ignore = [
 ]
 lint.per-file-ignores."__init__.py" = [ "F401" ]
 lint.per-file-ignores."docs/**" = [ "ANN" ]
-lint.per-file-ignores."docs/notebooks/*.py" = [ "ANN", "E265", "E501", "E712", "F401", "F821", "F841" ]
+lint.per-file-ignores."docs/notebooks/*.py" = [ "ANN", "E265", "E501", "E712" ]
 lint.per-file-ignores."tests/**" = [ "ANN" ]
 lint.isort.import-heading = { first-party = "First-party", local-folder = "Local", standard-library = "Standard library", third-party = "Third-party" }
 lint.isort.known-first-party = [ "neural_lam", "tests" ]
@@ -157,7 +157,6 @@ ini_options.markers = [
   "slow: marks tests as slow (deselected by default, run with -m slow)",
 ]
 ini_options.testpaths = [ "neural_lam", "tests" ]
-ini_options.addopts = "--doctest-modules -vv -s"
 
 [tool.interrogate]
 fail-under = 100

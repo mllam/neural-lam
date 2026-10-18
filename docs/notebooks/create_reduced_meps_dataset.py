@@ -26,7 +26,7 @@ def _(mo):
     return
 
 
-@app.cell
+@app.cell(disabled=True)
 def _():
     # Cell tags: skip-execution
     # Standard library
@@ -49,7 +49,7 @@ def _(mo):
     return
 
 
-@app.cell
+@app.cell(disabled=True)
 def _(np):
     # Cell tags: skip-execution
     # Load existing grid
@@ -74,7 +74,7 @@ def _(mo):
     return
 
 
-@app.cell
+@app.cell(disabled=True)
 def _(grid_xy_reduced, np):
     # Cell tags: skip-execution
     # Outer 10 grid points are border
@@ -105,7 +105,7 @@ def _(mo):
     return
 
 
-@app.cell
+@app.cell(disabled=True)
 def _(np, num_x, num_y, torch, x_slice, y_slice):
     # Cell tags: skip-execution
     # Load surface_geopotential.npy, index only values from the reduced grid, and save to new file
@@ -150,7 +150,7 @@ def _(mo):
     return
 
 
-@app.cell
+@app.cell(disabled=True)
 def _(np, torch):
     # Cell tags: skip-execution
     num_vars = 8
@@ -193,7 +193,7 @@ def _(mo):
     return
 
 
-@app.cell
+@app.cell(disabled=True)
 def _(np):
     # Cell tags: skip-execution
     print(
@@ -219,7 +219,7 @@ def _(mo):
     return
 
 
-@app.cell
+@app.cell(disabled=True)
 def _(np, num_vars, os, x_slice, y_slice):
     # Cell tags: skip-execution
     for sample in ["train", "test", "val"]:

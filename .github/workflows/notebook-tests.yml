@@ -37,6 +37,13 @@ jobs:
           uv sync --extra cpu --group dev --locked
           echo "$PWD/.venv/bin" >> $GITHUB_PATH
 
+      - name: Cache mdp input data
+        uses: actions/cache@v4
+        with:
+          path: .fsspec-cache
+          key: ${{ runner.os }}-mdp-input-v1-${{ hashFiles('tests/datastore_examples/mdp/**/*.datastore.yaml') }}
+
       - name: Run notebook tests
         run: |
           python docs/notebooks/hello_world_danra.py
+          python docs/notebooks/create_reduced_meps_dataset.py
