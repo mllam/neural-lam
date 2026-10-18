@@ -606,8 +606,6 @@ When a boundary datastore is configured in the `datastores` mapping of
 underneath the interior prediction and ground truth panels. The overlay is
 controlled by the optional `plotting` section in `config.yaml`:
 
-* `boundary_datastore`: name of the `datastores` entry to overlay (defaults to
-  the single datastore without `state` data).
 * `boundary_margin_degrees`: lat/lon margin (in projection degrees) drawn
   around the interior domain (default `1.0`).
 * `boundary_var_mapping`: maps interior state variable names to boundary

@@ -31,16 +31,18 @@ def test_config_serialization(state_weighting_config):
     assert c == c.from_yaml(c.to_yaml())
 
 
-def test_plotting_config_boundary_datastore_roundtrip():
+def test_plotting_config_roundtrip():
     c = nlconfig.NeuralLAMConfig(
         datastores={
             "danra": nlconfig.DatastoreSelection(kind="mdp", config_path=""),
             "era5": nlconfig.DatastoreSelection(kind="mdp", config_path=""),
         },
-        plotting=nlconfig.PlottingConfig(boundary_datastore="era5"),
+        plotting=nlconfig.PlottingConfig(
+            boundary_margin_degrees=2.0,
+            boundary_var_mapping={"u100m": "u_component_of_wind1000hPa"},
+        ),
     )
 
-    assert c.plotting.boundary_datastore == "era5"
     assert c == c.from_yaml(c.to_yaml())
 
 
