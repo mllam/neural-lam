@@ -28,11 +28,11 @@ def _ctx_mock(value):
     return m
 
 
-@patch("os.path.exists", return_value=False)
+@patch("pathlib.Path.exists", return_value=False)
 @patch("mlflow.log_image")
 @patch("PIL.Image.open")
 def test_single_image_uses_original_key(
-    mock_open, mock_mlflow, _mock_exists, logger_instance
+    mock_open, mock_mlflow, mock_exists, logger_instance
 ):
     """A single-figure list logs under the bare key with no index suffix."""
     figs = _make_figs(1)
@@ -46,11 +46,11 @@ def test_single_image_uses_original_key(
     mock_mlflow.assert_called_once_with(mock_img, "loss.png")
 
 
-@patch("os.path.exists", return_value=False)
+@patch("pathlib.Path.exists", return_value=False)
 @patch("mlflow.log_image")
 @patch("PIL.Image.open")
 def test_multiple_images_use_indexed_keys(
-    mock_open, mock_mlflow, _mock_exists, logger_instance
+    mock_open, mock_mlflow, mock_exists, logger_instance
 ):
     """Each figure in a multi-figure list is logged under key_0, key_1, ..."""
     figs = _make_figs(3)
@@ -66,11 +66,11 @@ def test_multiple_images_use_indexed_keys(
     assert logged_keys == ["val_0.png", "val_1.png", "val_2.png"]
 
 
-@patch("os.path.exists", return_value=False)
+@patch("pathlib.Path.exists", return_value=False)
 @patch("mlflow.log_image")
 @patch("PIL.Image.open")
 def test_step_is_appended_to_key(
-    mock_open, mock_mlflow, _mock_exists, logger_instance
+    mock_open, mock_mlflow, mock_exists, logger_instance
 ):
     """When step is provided it is appended to the key before indexing."""
     figs = _make_figs(2)
@@ -85,11 +85,11 @@ def test_step_is_appended_to_key(
     assert logged_keys == ["metric_5_0.png", "metric_5_1.png"]
 
 
-@patch("os.path.exists", return_value=False)
+@patch("pathlib.Path.exists", return_value=False)
 @patch("mlflow.log_image")
 @patch("PIL.Image.open")
 def test_no_credentials_error_propagates(
-    mock_open, mock_mlflow, _mock_exists, logger_instance
+    mock_open, mock_mlflow, mock_exists, logger_instance
 ):
     """NoCredentialsError is re-raised so callers can handle it."""
     # Third-party
@@ -103,11 +103,11 @@ def test_no_credentials_error_propagates(
         logger_instance.log_image("err", figs)
 
 
-@patch("os.path.exists", return_value=False)
+@patch("pathlib.Path.exists", return_value=False)
 @patch("mlflow.log_image")
 @patch("PIL.Image.open")
 def test_no_credentials_error_propagates_on_second_figure(
-    mock_open, mock_mlflow, _mock_exists, logger_instance
+    mock_open, mock_mlflow, mock_exists, logger_instance
 ):
     """A NoCredentialsError on any iteration (not just the first) propagates."""
     # Third-party
