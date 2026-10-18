@@ -3,12 +3,10 @@
 # Standard library
 import json
 import os
-from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 # Local
-from . import create_graph as create_graph_script
 from . import train_model as train_model_script
 from .config import (
     ComputeConfig,
@@ -19,30 +17,9 @@ from .config import (
     TrainRunConfig,
     load_config_and_datastore,
 )
-from .datastore.base import BaseDatastore
-
-
-@dataclass
-class Run:
-    """Handle containing output paths for a Neural-LAM run."""
-
-    run_dir: Path
-    checkpoint_path: Path | None = None
-
-    @property
-    def plot_dir(self) -> Path:
-        """Directory containing generated plots."""
-        return self.run_dir / "plots"
-
-    @property
-    def example_plots(self) -> Path:
-        """Directory containing example evaluation plots."""
-        return self.plot_dir / "example_plots"
-
-    @property
-    def rmse_plot(self) -> Path:
-        """Path to the generated RMSE map plot."""
-        return self.plot_dir / "rmse.png"
+from .create_graph_with_wmg import create_graph_from_datastore
+from .datastore.base import BaseDatastore, BaseRegularGridDatastore
+from .train_model import Run
 
 
 def train(
@@ -52,7 +29,7 @@ def train(
     seed: int = 42,
     num_workers: int = 4,
     num_nodes: int = 1,
-    devices: str | list[int] | list[str] = "auto",
+    devices: str | list[int] | list[str] | None = None,
     precision: str | int = 32,
     load: str | None = None,
     restore_opt: bool = False,
@@ -73,7 +50,7 @@ def train(
     lr: float = 1e-3,
     val_interval: int = 1,
     num_sanity_val_steps: int = 2,
-    eval: str | None = None,
+    eval: Literal["val", "test"] | None = None,
     ar_steps_eval: int = 10,
     n_example_pred: int = 1,
     create_gif: bool = False,
@@ -91,7 +68,6 @@ def train(
     load_single_member: bool = False,
     config: NeuralLAMConfig | None = None,
     datastore: BaseDatastore | None = None,
-    **kwargs: Any,
 ) -> Run:
     """
     Train a Neural-LAM model programmatically.
@@ -187,8 +163,6 @@ def train(
         Pre-loaded NeuralLAMConfig object.
     datastore : BaseDatastore or None, optional
         Pre-initialized Datastore instance.
-    **kwargs : Any
-        Additional keyword arguments forwarded to training runtime.
 
     Returns
     -------
@@ -202,29 +176,18 @@ def train(
     if metrics_watch is None:
         metrics_watch = []
 
-    devices_val: str | list[int]
-    if isinstance(devices, str):
-        devices_val = devices
-    elif isinstance(devices, list):
-        try:
-            devices_val = [int(d) for d in devices]
-        except ValueError:
-            devices_val = "auto"
-    else:
-        devices_val = "auto"
-
     model_config = ModelConfig(
-        model=kwargs.get("model", model),
-        graph=kwargs.get("graph", graph),
-        hidden_dim=kwargs.get("hidden_dim", hidden_dim),
-        hidden_layers=kwargs.get("hidden_layers", hidden_layers),
-        processor_layers=kwargs.get("processor_layers", processor_layers),
-        mesh_aggr=kwargs.get("mesh_aggr", mesh_aggr),
-        output_std=kwargs.get("output_std", output_std),
-        g2m_gnn_type=kwargs.get("g2m_gnn_type", g2m_gnn_type),
-        m2g_gnn_type=kwargs.get("m2g_gnn_type", m2g_gnn_type),
-        mesh_up_gnn_type=kwargs.get("mesh_up_gnn_type", mesh_up_gnn_type),
-        mesh_down_gnn_type=kwargs.get("mesh_down_gnn_type", mesh_down_gnn_type),
+        model=model,
+        graph=graph,
+        hidden_dim=hidden_dim,
+        hidden_layers=hidden_layers,
+        processor_layers=processor_layers,
+        mesh_aggr=mesh_aggr,
+        output_std=output_std,
+        g2m_gnn_type=g2m_gnn_type,
+        m2g_gnn_type=m2g_gnn_type,
+        mesh_up_gnn_type=mesh_up_gnn_type,
+        mesh_down_gnn_type=mesh_down_gnn_type,
     )
     var_leads: dict[int, list[int]]
     if var_leads_metrics_watch is None:
@@ -236,48 +199,44 @@ def train(
     else:
         var_leads = {int(k): v for k, v in var_leads_metrics_watch.items()}
     train_config = TrainRunConfig(
-        epochs=kwargs.get("epochs", epochs),
-        batch_size=kwargs.get("batch_size", batch_size),
-        ar_steps_train=kwargs.get("ar_steps_train", ar_steps_train),
-        ar_steps_eval=kwargs.get("ar_steps_eval", ar_steps_eval),
-        loss=kwargs.get("loss", loss),
-        lr=kwargs.get("lr", lr),
-        val_interval=kwargs.get("val_interval", val_interval),
-        num_sanity_val_steps=kwargs.get(
-            "num_sanity_val_steps", num_sanity_val_steps
-        ),
+        epochs=epochs,
+        batch_size=batch_size,
+        ar_steps_train=ar_steps_train,
+        ar_steps_eval=ar_steps_eval,
+        loss=loss,
+        lr=lr,
+        val_interval=val_interval,
+        num_sanity_val_steps=num_sanity_val_steps,
         val_steps_to_log=val_steps_to_log,
         train_steps_to_log=train_steps_to_log,
         metrics_watch=metrics_watch,
         var_leads_metrics_watch=var_leads,
-        load=kwargs.get("load", load),
-        restore_opt=kwargs.get("restore_opt", restore_opt),
-        eval=kwargs.get("eval", eval),
-        n_example_pred=kwargs.get("n_example_pred", n_example_pred),
-        create_gif=kwargs.get("create_gif", create_gif),
+        load=load,
+        restore_opt=restore_opt,
+        eval=eval,
+        n_example_pred=n_example_pred,
+        create_gif=create_gif,
     )
     data_config = DataConfig(
-        num_past_forcing_steps=kwargs.get(
-            "num_past_forcing_steps", num_past_forcing_steps
-        ),
-        num_future_forcing_steps=kwargs.get(
-            "num_future_forcing_steps", num_future_forcing_steps
-        ),
-        num_workers=kwargs.get("num_workers", num_workers),
-        load_single_member=kwargs.get("load_single_member", load_single_member),
+        num_past_forcing_steps=num_past_forcing_steps,
+        num_future_forcing_steps=num_future_forcing_steps,
+        num_workers=num_workers,
+        load_single_member=load_single_member,
     )
-    compute_config = ComputeConfig(
-        seed=kwargs.get("seed", seed),
-        num_nodes=kwargs.get("num_nodes", num_nodes),
-        devices=devices_val,
-        precision=kwargs.get("precision", precision),
+    compute_kwargs: dict[str, Any] = dict(
+        seed=seed,
+        num_nodes=num_nodes,
+        precision=precision,
     )
+    if devices is not None:
+        compute_kwargs["devices"] = devices
+    compute_config = ComputeConfig(**compute_kwargs)
     logging_config = LoggingConfig(
-        logger=kwargs.get("logger", logger),
-        logger_project=kwargs.get("logger_project", logger_project),
-        logger_run_name=kwargs.get("logger_run_name", logger_run_name),
-        runs_root=kwargs.get("runs_root", runs_root),
-        wandb_id=kwargs.get("wandb_id", wandb_id),
+        logger=logger,
+        logger_project=logger_project,
+        logger_run_name=logger_run_name,
+        runs_root=runs_root,
+        wandb_id=wandb_id,
     )
     return train_model_script.fit(
         model_config=model_config,
@@ -295,14 +254,13 @@ def evaluate(
     *,
     config_path: str | None = None,
     load: str | None = None,
-    eval: str = "test",
+    eval: Literal["val", "test"] = "test",
     model: str = "graph_lam",
     seed: int = 42,
     num_workers: int = 4,
     num_nodes: int = 1,
-    devices: str | list[int] | list[str] = "auto",
+    devices: str | list[int] | list[str] | None = None,
     precision: str | int = 32,
-    restore_opt: bool = False,
     graph: str = "multiscale",
     hidden_dim: int = 64,
     hidden_layers: int = 1,
@@ -313,13 +271,7 @@ def evaluate(
     m2g_gnn_type: str = "InteractionNet",
     mesh_up_gnn_type: str = "InteractionNet",
     mesh_down_gnn_type: str = "InteractionNet",
-    epochs: int = 200,
     batch_size: int = 4,
-    ar_steps_train: int = 1,
-    loss: str = "wmse",
-    lr: float = 1e-3,
-    val_interval: int = 1,
-    num_sanity_val_steps: int = 2,
     ar_steps_eval: int = 10,
     n_example_pred: int = 1,
     create_gif: bool = False,
@@ -329,7 +281,6 @@ def evaluate(
     runs_root: str = "runs",
     wandb_id: str | None = None,
     val_steps_to_log: list[int] | None = None,
-    train_steps_to_log: list[int] | None = None,
     metrics_watch: list[str] | None = None,
     var_leads_metrics_watch: dict[int, list[int]] | str | None = None,
     num_past_forcing_steps: int = 1,
@@ -337,30 +288,25 @@ def evaluate(
     load_single_member: bool = False,
     config: NeuralLAMConfig | None = None,
     datastore: BaseDatastore | None = None,
-    **kwargs: Any,
 ) -> Run:
     """
     Evaluate a Neural-LAM model checkpoint programmatically.
 
     Parameters share the meaning and defaults of :func:`train`, with ``eval``
-    defaulting to ``"test"``.
+    defaulting to ``"test"``, and training-only parameters omitted.
 
     Returns
     -------
     Run
         Handle containing run output paths and evaluation artifacts.
     """
-    return train(
-        config_path=config_path,
-        load=load,
-        eval=eval,
+    if val_steps_to_log is None:
+        val_steps_to_log = [1, 2, 3, 5, 10]
+    if metrics_watch is None:
+        metrics_watch = []
+
+    model_config = ModelConfig(
         model=model,
-        seed=seed,
-        num_workers=num_workers,
-        num_nodes=num_nodes,
-        devices=devices,
-        precision=precision,
-        restore_opt=restore_opt,
         graph=graph,
         hidden_dim=hidden_dim,
         hidden_layers=hidden_layers,
@@ -371,94 +317,129 @@ def evaluate(
         m2g_gnn_type=m2g_gnn_type,
         mesh_up_gnn_type=mesh_up_gnn_type,
         mesh_down_gnn_type=mesh_down_gnn_type,
-        epochs=epochs,
+    )
+    var_leads: dict[int, list[int]]
+    if var_leads_metrics_watch is None:
+        var_leads = {}
+    elif isinstance(var_leads_metrics_watch, str):
+        var_leads = {
+            int(k): v for k, v in json.loads(var_leads_metrics_watch).items()
+        }
+    else:
+        var_leads = {int(k): v for k, v in var_leads_metrics_watch.items()}
+    train_config = TrainRunConfig(
+        epochs=1,
         batch_size=batch_size,
-        ar_steps_train=ar_steps_train,
-        loss=loss,
-        lr=lr,
-        val_interval=val_interval,
-        num_sanity_val_steps=num_sanity_val_steps,
+        ar_steps_train=1,
         ar_steps_eval=ar_steps_eval,
+        loss="wmse",
+        lr=1e-3,
+        val_interval=1,
+        num_sanity_val_steps=0,
+        val_steps_to_log=val_steps_to_log,
+        train_steps_to_log=[],
+        metrics_watch=metrics_watch,
+        var_leads_metrics_watch=var_leads,
+        load=load,
+        restore_opt=False,
+        eval=eval,
         n_example_pred=n_example_pred,
         create_gif=create_gif,
+    )
+    data_config = DataConfig(
+        num_past_forcing_steps=num_past_forcing_steps,
+        num_future_forcing_steps=num_future_forcing_steps,
+        num_workers=num_workers,
+        load_single_member=load_single_member,
+    )
+    compute_kwargs: dict[str, Any] = dict(
+        seed=seed,
+        num_nodes=num_nodes,
+        precision=precision,
+    )
+    if devices is not None:
+        compute_kwargs["devices"] = devices
+    compute_config = ComputeConfig(**compute_kwargs)
+    logging_config = LoggingConfig(
         logger=logger,
         logger_project=logger_project,
         logger_run_name=logger_run_name,
         runs_root=runs_root,
         wandb_id=wandb_id,
-        val_steps_to_log=val_steps_to_log,
-        train_steps_to_log=train_steps_to_log,
-        metrics_watch=metrics_watch,
-        var_leads_metrics_watch=var_leads_metrics_watch,
-        num_past_forcing_steps=num_past_forcing_steps,
-        num_future_forcing_steps=num_future_forcing_steps,
-        load_single_member=load_single_member,
+    )
+    return train_model_script.fit(
+        model_config=model_config,
+        train_config=train_config,
+        data_config=data_config,
+        compute_config=compute_config,
+        logging_config=logging_config,
         config=config,
         datastore=datastore,
-        **kwargs,
+        config_path=config_path,
     )
 
 
 def create_graph(
     *,
     config_path: str | None = None,
-    name: str = "multiscale",
-    plot: bool = False,
-    levels: int | None = None,
-    hierarchical: bool = False,
-    config: NeuralLAMConfig | None = None,
     datastore: BaseDatastore | None = None,
-    **kwargs: Any,
+    name: str = "multiscale",
+    output_root_path: str | Path | None = None,
+    archetype: Literal["keisler", "graphcast", "hierarchical"] = "keisler",
+    mesh_node_distance: float | None = None,
+    mesh_grid_distance_ratio: float = 3.0,
+    level_refinement_factor: int = 3,
+    max_num_levels: int | None = None,
 ) -> None:
     """
-    Generate graph components programmatically.
+    Generate graph components programmatically using weather-model-graphs.
 
     Parameters
     ----------
     config_path : str or None, optional
-        Path to the Neural-LAM configuration YAML file.
-    name : str, default "multiscale"
-        Name to save the graph as under ``graph/<name>``.
-    plot : bool, default False
-        Whether to generate plots of graph connectivity during generation.
-    levels : int or None, optional
-        Limit multi-scale mesh to given number of levels.
-    hierarchical : bool, default False
-        Generate hierarchical mesh graph instead of multi-scale graph.
-    config : NeuralLAMConfig or None, optional
-        Pre-loaded NeuralLAMConfig object.
+        Path to the Neural-LAM configuration YAML file. Used to load the
+        datastore if ``datastore`` is not provided.
     datastore : BaseDatastore or None, optional
-        Pre-initialized Datastore instance.
-    **kwargs : Any
-        Additional keyword arguments forwarded to graph creation.
+        Datastore instance providing grid coordinates.
+    name : str, default "multiscale"
+        Name of the graph subdirectory under ``graph/<name>``.
+    output_root_path : str or Path or None, optional
+        Directory where graph files will be saved. Defaults to
+        ``<datastore.root_path>/graph/<name>``.
+    archetype : {"keisler", "graphcast", "hierarchical"}, default "keisler"
+        Graph archetype to create.
+    mesh_node_distance : float or None, optional
+        Distance between mesh nodes in coordinate units.
+    mesh_grid_distance_ratio : float, default 3.0
+        Ratio of mesh node distance to grid node distance.
+    level_refinement_factor : int, default 3
+        Refinement factor between mesh levels.
+    max_num_levels : int or None, optional
+        Maximum number of mesh levels.
     """
     if datastore is None:
         if config_path is None:
             raise ValueError(
-                "Specify config with config_path or provide a "
-                "datastore directly"
+                "Either datastore or config_path must be provided."
             )
         _, datastore = load_config_and_datastore(config_path=config_path)
-
-    # Local
-    from .datastore.base import BaseRegularGridDatastore
 
     if not isinstance(datastore, BaseRegularGridDatastore):
         raise TypeError(
             f"Expected BaseRegularGridDatastore, got {type(datastore)}"
         )
 
-    graph_name = kwargs.get("name", name)
-    graph_plot = kwargs.get("plot", plot)
-    graph_levels = kwargs.get("levels", levels)
-    graph_hierarchical = kwargs.get("hierarchical", hierarchical)
+    if output_root_path is None:
+        output_root_path = os.path.join(datastore.root_path, "graph", name)
 
-    create_graph_script.create_graph_from_datastore(
+    create_graph_from_datastore(
         datastore=datastore,
-        output_root_path=os.path.join(datastore.root_path, "graph", graph_name),
-        n_max_levels=graph_levels,
-        hierarchical=graph_hierarchical,
-        create_plot=graph_plot,
+        output_root_path=str(output_root_path),
+        archetype=archetype,
+        mesh_node_distance=mesh_node_distance,
+        mesh_grid_distance_ratio=mesh_grid_distance_ratio,
+        level_refinement_factor=level_refinement_factor,
+        max_num_levels=max_num_levels,
     )
 
 

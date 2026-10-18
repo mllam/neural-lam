@@ -1,12 +1,14 @@
 """CLI entry point for training Neural-LAM models."""
 
 # Standard library
+import dataclasses
 import json
 import os
 import random
 import shutil
 import time
 from argparse import ArgumentDefaultsHelpFormatter, ArgumentParser, Namespace
+from pathlib import Path
 from typing import Any, cast
 
 # Third-party
@@ -21,10 +23,15 @@ from . import utils
 from .config import (
     ComputeConfig,
     DataConfig,
+    DatastoreSelection,
     LoggingConfig,
+    ManualStateFeatureWeighting,
     ModelConfig,
     NeuralLAMConfig,
+    OutputClamping,
+    TrainingConfig,
     TrainRunConfig,
+    UniformFeatureWeighting,
     load_config_and_datastore,
 )
 from .datastore.base import BaseDatastore, BaseRegularGridDatastore
@@ -37,14 +44,52 @@ from .models import (
 )
 from .weather_dataset import WeatherDataModule
 
+if hasattr(torch.serialization, "add_safe_globals"):
+    torch.serialization.add_safe_globals(
+        [
+            Namespace,
+            DatastoreSelection,
+            ManualStateFeatureWeighting,
+            NeuralLAMConfig,
+            OutputClamping,
+            TrainingConfig,
+            UniformFeatureWeighting,
+        ]
+    )
+
+
+@dataclasses.dataclass(frozen=True)
+class Run:
+    """Handle containing output paths for a Neural-LAM run."""
+
+    run_dir: Path
+    checkpoint_path: Path | None = None
+
+    @property
+    def checkpoint_dir(self) -> Path:
+        """Directory holding ``min_val_loss.ckpt`` and ``last.ckpt``."""
+        return self.run_dir / "checkpoints"
+
+    @property
+    def plot_dir(self) -> Path:
+        """Directory evaluation plots are written to (logger ``save_dir``)."""
+        return self.run_dir
+
+    @property
+    def rmse_plot(self) -> Path:
+        """Lead time x variable RMSE heatmap written by test evaluation."""
+        return self.plot_dir / "test_rmse.pdf"
+
+    def example_plots(self, example_i: int) -> Path:
+        """Frames and GIF of example ``example_i`` (1-based, create_gif)."""
+        return self.plot_dir / f"example_plots_{example_i}"
+
 
 def build_predictor(
     predictor_class: type,
-    model_config: Any,
+    args: Namespace,
     config: NeuralLAMConfig,
     datastore: BaseDatastore,
-    num_past_forcing_steps: int = 1,
-    num_future_forcing_steps: int = 1,
 ) -> Any:
     """
     Instantiate a step predictor with the GNN kwargs its family accepts.
@@ -55,33 +100,27 @@ def build_predictor(
     arguments fall back to ``InteractionNet`` for checkpoints saved before
     those CLI flags existed.
     """
-    past_forcing = getattr(
-        model_config, "num_past_forcing_steps", num_past_forcing_steps
-    )
-    future_forcing = getattr(
-        model_config, "num_future_forcing_steps", num_future_forcing_steps
-    )
     kwargs = dict(
         datastore=datastore,
-        graph_name=getattr(model_config, "graph", "multiscale"),
-        hidden_dim=getattr(model_config, "hidden_dim", 64),
-        hidden_layers=getattr(model_config, "hidden_layers", 1),
-        processor_layers=getattr(model_config, "processor_layers", 4),
-        mesh_aggr=getattr(model_config, "mesh_aggr", "sum"),
-        num_past_forcing_steps=past_forcing,
-        num_future_forcing_steps=future_forcing,
-        output_std=getattr(model_config, "output_std", False),
+        graph_name=args.graph,
+        hidden_dim=args.hidden_dim,
+        hidden_layers=args.hidden_layers,
+        processor_layers=args.processor_layers,
+        mesh_aggr=args.mesh_aggr,
+        num_past_forcing_steps=args.num_past_forcing_steps,
+        num_future_forcing_steps=args.num_future_forcing_steps,
+        output_std=args.output_std,
         output_clamping_lower=config.training.output_clamping.lower,
         output_clamping_upper=config.training.output_clamping.upper,
-        g2m_gnn_type=getattr(model_config, "g2m_gnn_type", "InteractionNet"),
-        m2g_gnn_type=getattr(model_config, "m2g_gnn_type", "InteractionNet"),
+        g2m_gnn_type=getattr(args, "g2m_gnn_type", "InteractionNet"),
+        m2g_gnn_type=getattr(args, "m2g_gnn_type", "InteractionNet"),
     )
     if issubclass(predictor_class, BaseHiGraphModel):
         kwargs["mesh_up_gnn_type"] = getattr(
-            model_config, "mesh_up_gnn_type", "InteractionNet"
+            args, "mesh_up_gnn_type", "InteractionNet"
         )
         kwargs["mesh_down_gnn_type"] = getattr(
-            model_config, "mesh_down_gnn_type", "InteractionNet"
+            args, "mesh_down_gnn_type", "InteractionNet"
         )
     return predictor_class(**kwargs)
 
@@ -441,8 +480,7 @@ def fit(
     config: NeuralLAMConfig | None = None,
     datastore: BaseDatastore | None = None,
     config_path: str | None = None,
-    args: Any | None = None,
-) -> Any:
+) -> Run:
     """
     Run training or evaluation using strongly-typed configuration dataclasses.
 
@@ -464,8 +502,6 @@ def fit(
         Initialized datastore instance.
     config_path : str or None, optional
         Path to the configuration file, used if config or datastore is None.
-    args : Any or None, optional
-        Legacy argparse Namespace for checkpoint backward compatibility.
 
     Returns
     -------
@@ -486,7 +522,7 @@ def fit(
                 raise ValueError(
                     f"Can not log {phase} step {step}: must be between 1 "
                     f"and {max_steps}, the number of unrolled steps during "
-                    f"{phase} phase."
+                    f"{phase} phase. Adjust --{phase}_steps_to_log."
                 )
 
     for var_i, leads in train_config.var_leads_metrics_watch.items():
@@ -496,35 +532,35 @@ def fit(
                     f"Can not log validation step {step} for variable "
                     f"{var_i}: must be between 1 and "
                     f"{train_config.ar_steps_eval}, the number of unrolled "
-                    "validation steps."
+                    "validation steps. Adjust --var_leads_metrics_watch."
                 )
 
     if train_config.eval and not train_config.load:
         logger.warning(
-            "Evaluation without load checkpoint: no checkpoint will be loaded. "
-            "Use --load <checkpoint> to load a checkpoint."
+            "Evaluation (--eval) without --load: no checkpoint will be loaded.",
         )
 
     random_run_id = random.randint(0, 9999)
     seed.seed_everything(compute_config.seed, workers=True)
 
-    if config is None or datastore is None:
+    if config is None and datastore is None:
         if config_path is None:
             raise ValueError(
                 "Either (config and datastore) or config_path must be provided."
             )
-        loaded_config, loaded_datastore = load_config_and_datastore(
-            config_path=config_path
-        )
-        config = config or loaded_config
-        datastore = datastore or loaded_datastore
+        config, datastore = load_config_and_datastore(config_path=config_path)
+    elif config is None or datastore is None:
+        raise ValueError("config and datastore must be provided together.")
 
+    # Check --var_leads_metrics_watch variable indices against the datastore
+    # so users get an immediate error instead of an IndexError deep in the
+    # first validation epoch.
     state_var_names = datastore.get_vars_names(category="state")
     for var_i in train_config.var_leads_metrics_watch:
         if not 0 <= var_i < len(state_var_names):
             raise ValueError(
                 f"Invalid state variable index {var_i} in "
-                f"var_leads_metrics_watch. Index must be between 0 and "
+                f"--var_leads_metrics_watch. Index must be between 0 and "
                 f"{len(state_var_names) - 1} (datastore has "
                 f"{len(state_var_names)} state variables)."
             )
@@ -541,9 +577,12 @@ def fit(
         eval_split=train_config.eval or "test",
     )
 
+    # Instantiate model + trainer
     if torch.cuda.is_available():
         device_name = "cuda"
-        torch.set_float32_matmul_precision("high")
+        torch.set_float32_matmul_precision(
+            "high"
+        )  # Allows using Tensor Cores on A100s
     else:
         device_name = "cpu"
 
@@ -556,17 +595,20 @@ def fit(
         except ValueError:
             raise ValueError("devices should be 'auto' or a list of integers")
     else:
-        devices = str(compute_config.devices)
+        devices = compute_config.devices
 
-    predictor_class = MODELS[model_config.model]
-    predictor = build_predictor(
-        predictor_class,
-        model_config,
-        config,
-        datastore,
-        data_config.num_past_forcing_steps,
-        data_config.num_future_forcing_steps,
+    hparams = Namespace(
+        **dataclasses.asdict(model_config),
+        **dataclasses.asdict(train_config),
+        **dataclasses.asdict(data_config),
+        **dataclasses.asdict(compute_config),
+        **dataclasses.asdict(logging_config),
     )
+
+    # Build predictor and forecaster externally, then inject into
+    # ForecasterModule
+    predictor_class = MODELS[model_config.model]
+    predictor = build_predictor(predictor_class, hparams, config, datastore)
 
     if not train_config.eval and not predictor.trainable:
         raise ValueError(
@@ -588,7 +630,7 @@ def fit(
         train_steps_to_log=train_config.train_steps_to_log,
         metrics_watch=train_config.metrics_watch,
         var_leads_metrics_watch=train_config.var_leads_metrics_watch,
-        args=args,
+        args=hparams,
     )
 
     prefix = f"eval-{train_config.eval}-" if train_config.eval else "train-"
@@ -604,15 +646,13 @@ def fit(
     run_dir = os.path.join(logging_config.runs_root, run_name)
 
     training_logger = utils.setup_training_logger(
-        datastore=datastore,
-        args=args or logging_config,
-        run_name=run_name,
-        run_dir=run_dir,
-        logger_type=logging_config.logger,
-        logger_project=logging_config.logger_project,
-        wandb_id=logging_config.wandb_id,
+        datastore=datastore, args=hparams, run_name=run_name, run_dir=run_dir
     )
 
+    # Two separate callbacks decouple "best validated model" from
+    # "rescue / resume" snapshots: long HPC jobs that crash or time out
+    # between validations can still resume from a recent train-epoch
+    # checkpoint instead of losing all progress since the last validation.
     val_checkpoint = pl.callbacks.ModelCheckpoint(
         dirpath=os.path.join(run_dir, "checkpoints"),
         filename="min_val_loss",
@@ -646,10 +686,11 @@ def fit(
         num_sanity_val_steps=train_config.num_sanity_val_steps,
     )
 
+    # Only init once, on rank 0 only
     if trainer.global_rank == 0:
         utils.init_training_logger_metrics(
             training_logger, val_steps=train_config.val_steps_to_log
-        )
+        )  # Do after initializing logger
 
     if train_config.eval:
         trainer.test(
@@ -664,15 +705,9 @@ def fit(
             datamodule=data_module,
             ckpt_path=train_config.load,
         )
-        checkpoint_path = val_checkpoint.best_model_path or os.path.join(
-            run_dir, "checkpoints", "min_val_loss.ckpt"
+        checkpoint_path = (
+            val_checkpoint.best_model_path or latest_checkpoint.best_model_path
         )
-
-    # Standard library
-    from pathlib import Path
-
-    # Local
-    from .api import Run
 
     return Run(
         run_dir=Path(run_dir),
@@ -684,67 +719,30 @@ def run(
     args: Namespace,
     config: NeuralLAMConfig | None = None,
     datastore: BaseDatastore | None = None,
-) -> Any:
+) -> Run:
     """Run the training or evaluation loop from parsed CLI arguments."""
     var_leads = getattr(args, "var_leads_metrics_watch", "{}")
     if isinstance(var_leads, str):
-        var_leads = {int(k): v for k, v in json.loads(var_leads).items()}
+        args.var_leads_metrics_watch = {
+            int(k): v for k, v in json.loads(var_leads).items()
+        }
 
-    devices_list = getattr(args, "devices", ["auto"])
+    def _from_args(cls: Any) -> Any:
+        """Instantiate a configuration dataclass from matching CLI arguments."""
+        return cls(
+            **{
+                f.name: getattr(args, f.name)
+                for f in dataclasses.fields(cls)
+                if hasattr(args, f.name)
+            }
+        )
 
-    model_config = ModelConfig(
-        model=args.model,
-        graph=args.graph,
-        hidden_dim=args.hidden_dim,
-        hidden_layers=args.hidden_layers,
-        processor_layers=args.processor_layers,
-        mesh_aggr=args.mesh_aggr,
-        output_std=args.output_std,
-        g2m_gnn_type=getattr(args, "g2m_gnn_type", "InteractionNet"),
-        m2g_gnn_type=getattr(args, "m2g_gnn_type", "InteractionNet"),
-        mesh_up_gnn_type=getattr(args, "mesh_up_gnn_type", "InteractionNet"),
-        mesh_down_gnn_type=getattr(
-            args, "mesh_down_gnn_type", "InteractionNet"
-        ),
-    )
-    train_config = TrainRunConfig(
-        epochs=args.epochs,
-        batch_size=args.batch_size,
-        ar_steps_train=args.ar_steps_train,
-        ar_steps_eval=args.ar_steps_eval,
-        loss=args.loss,
-        lr=args.lr,
-        val_interval=args.val_interval,
-        num_sanity_val_steps=args.num_sanity_val_steps,
-        val_steps_to_log=args.val_steps_to_log,
-        train_steps_to_log=args.train_steps_to_log,
-        metrics_watch=args.metrics_watch,
-        var_leads_metrics_watch=var_leads,
-        load=args.load,
-        restore_opt=args.restore_opt,
-        eval=args.eval,
-        n_example_pred=args.n_example_pred,
-        create_gif=args.create_gif,
-    )
-    data_config = DataConfig(
-        num_past_forcing_steps=args.num_past_forcing_steps,
-        num_future_forcing_steps=args.num_future_forcing_steps,
-        num_workers=args.num_workers,
-        load_single_member=args.load_single_member,
-    )
-    compute_config = ComputeConfig(
-        seed=args.seed,
-        num_nodes=args.num_nodes,
-        devices=devices_list,
-        precision=args.precision,
-    )
-    logging_config = LoggingConfig(
-        logger=args.logger,
-        logger_project=args.logger_project,
-        logger_run_name=args.logger_run_name,
-        runs_root=args.runs_root,
-        wandb_id=args.wandb_id,
-    )
+    model_config = _from_args(ModelConfig)
+    train_config = _from_args(TrainRunConfig)
+    data_config = _from_args(DataConfig)
+    compute_config = _from_args(ComputeConfig)
+    logging_config = _from_args(LoggingConfig)
+
     return fit(
         model_config=model_config,
         train_config=train_config,
@@ -754,7 +752,6 @@ def run(
         config=config,
         datastore=datastore,
         config_path=args.config_path,
-        args=args,
     )
 
 

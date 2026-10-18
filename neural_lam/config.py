@@ -274,7 +274,7 @@ class TrainRunConfig:
         Validation epoch frequency.
     num_sanity_val_steps : int, default 2
         Number of validation batches to run prior to training.
-    val_steps_to_log : list of int, default [1]
+    val_steps_to_log : list of int, default [1, 2, 3, 5, 10]
         Rollout steps to log during validation.
     train_steps_to_log : list of int, default []
         Rollout steps to log during training.
@@ -302,7 +302,9 @@ class TrainRunConfig:
     lr: float = 1e-3
     val_interval: int = 1
     num_sanity_val_steps: int = 2
-    val_steps_to_log: list[int] = dataclasses.field(default_factory=lambda: [1])
+    val_steps_to_log: list[int] = dataclasses.field(
+        default_factory=lambda: [1, 2, 3, 5, 10]
+    )
     train_steps_to_log: list[int] = dataclasses.field(default_factory=list)
     metrics_watch: list[str] = dataclasses.field(default_factory=list)
     var_leads_metrics_watch: dict[int, list[int]] = dataclasses.field(
@@ -349,7 +351,7 @@ class ComputeConfig:
         Random seed.
     num_nodes : int, default 1
         Number of cluster nodes.
-    devices : str or list of int, default "auto"
+    devices : list of str or str or list of int, default ["auto"]
         Hardware devices to use.
     precision : str or int, default 32
         Floating point precision.
@@ -357,7 +359,9 @@ class ComputeConfig:
 
     seed: int = 42
     num_nodes: int = 1
-    devices: str | list[int] = "auto"
+    devices: str | list[int] | list[str] = dataclasses.field(
+        default_factory=lambda: ["auto"]
+    )
     precision: str | int = 32
 
 
@@ -385,29 +389,3 @@ class LoggingConfig:
     logger_run_name: str | None = None
     runs_root: str = "runs"
     wandb_id: str | None = None
-
-
-try:
-    # Standard library
-    import argparse
-
-    # Third-party
-    import torch
-
-    torch.serialization.add_safe_globals(
-        [
-            NeuralLAMConfig,
-            DatastoreSelection,
-            TrainingConfig,
-            OutputClamping,
-            UniformFeatureWeighting,
-            ModelConfig,
-            TrainRunConfig,
-            DataConfig,
-            ComputeConfig,
-            LoggingConfig,
-            argparse.Namespace,
-        ]
-    )
-except (ImportError, AttributeError):
-    pass
