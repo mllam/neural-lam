@@ -1,6 +1,10 @@
 """Latent decoder for hierarchical graphs."""
 
+# Standard library
+from typing import Any
+
 # Third-party
+import torch
 from torch import nn
 
 # First-party
@@ -29,20 +33,20 @@ class HiGraphLatentDecoder(BaseGraphLatentDecoder):
 
     def __init__(
         self,
-        g2m_edge_index,
-        m2m_edge_index,
-        m2g_edge_index,
-        mesh_up_edge_index,
-        mesh_down_edge_index,
-        hidden_dim,
-        latent_dim,
-        num_state_vars,
-        intra_level_layers,
-        hidden_layers=1,
-        g2m_gnn_type="InteractionNet",
-        m2g_gnn_type="InteractionNet",
-        output_std=True,
-    ):
+        g2m_edge_index: torch.Tensor,
+        m2m_edge_index: utils.BufferList,
+        m2g_edge_index: torch.Tensor,
+        mesh_up_edge_index: utils.BufferList,
+        mesh_down_edge_index: utils.BufferList,
+        hidden_dim: int,
+        latent_dim: int,
+        num_state_vars: int,
+        intra_level_layers: int,
+        hidden_layers: int = 1,
+        g2m_gnn_type: str = "InteractionNet",
+        m2g_gnn_type: str = "InteractionNet",
+        output_std: bool = True,
+    ) -> None:
         """
         Set up the g2m, m2g, mesh-up/-down and intra-level GNNs.
 
@@ -175,8 +179,12 @@ class HiGraphLatentDecoder(BaseGraphLatentDecoder):
         )
 
     def combine_with_latent(
-        self, original_grid_rep, latent_rep, residual_grid_rep, graph_emb
-    ):
+        self,
+        original_grid_rep: torch.Tensor,
+        latent_rep: torch.Tensor,
+        residual_grid_rep: torch.Tensor,
+        graph_emb: dict[str, Any],
+    ) -> torch.Tensor:
         """
         Hierarchical up-then-down fusion of grid and latent reps.
 

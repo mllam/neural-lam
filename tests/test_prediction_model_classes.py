@@ -1,17 +1,22 @@
 # Standard library
 import typing
 from argparse import Namespace
+from typing import TYPE_CHECKING
 
 # Third-party
+import pytest
 import pytorch_lightning as pl
 import torch
 
 # First-party
 from neural_lam import config as nlconfig
-from neural_lam.datastore.base import BaseDatastore
 from neural_lam.models import ARForecaster, ForecasterModule, StepPredictor
 from tests.conftest import init_datastore_example
 from tests.dummy_datastore import DummyDatastore
+
+if TYPE_CHECKING:
+    # First-party
+    from neural_lam.datastore.base import BaseDatastore
 
 
 class NoStaticDummyDatastore(DummyDatastore):
@@ -357,7 +362,9 @@ def test_graph_lam_no_static_features():
 
     assert predictor.grid_static_features.shape[1] == 0
 
-    forecaster = ARForecaster(predictor, typing.cast(BaseDatastore, datastore))
+    forecaster = ARForecaster(
+        predictor, typing.cast("BaseDatastore", datastore)
+    )
     B = 2
     num_grid_nodes = predictor.num_grid_nodes
     d_state = base_datastore.get_num_data_vars(category="state")
@@ -405,3 +412,21 @@ def test_step_predictor_no_static_features():
     )
     assert prediction.shape == (B, 1, num_grid_nodes, d_state)
     assert pred_std is None
+
+
+@pytest.mark.parametrize("lower,upper", [(5.0, 1.0), (1.0, 1.0)])
+def test_step_predictor_invalid_clamping_limits(lower, upper):
+    """Lower clamping limit must be smaller than upper, else ValueError.
+
+    Checked with a raise rather than an ``assert``, which ``python -O`` strips.
+    """
+    datastore = DummyDatastore()
+    feature = datastore.get_vars_names(category="state")[0]
+    predictor = MockStepPredictor(
+        datastore=datastore,
+        output_clamping_lower={feature: lower},
+        output_clamping_upper={feature: upper},
+    )
+
+    with pytest.raises(ValueError, match="must be smaller than upper"):
+        predictor.prepare_clamping_params(datastore)

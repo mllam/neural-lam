@@ -102,3 +102,4 @@ build/
 *.egg-info/
 
 tests/test_outputs/
+.lycheecache
