@@ -3,6 +3,9 @@
 # Standard library
 from pathlib import Path
 
+# Third-party
+import pytest
+
 # First-party
 from neural_lam import config as nlconfig
 from neural_lam.benchmark import BenchmarkScorecard, ForecastBenchmark
@@ -11,6 +14,7 @@ from neural_lam.models import ARForecaster, ForecasterModule, GraphLAM
 from tests.conftest import init_datastore_example
 
 
+@pytest.mark.requires_real_data
 def test_forecast_benchmark_scorecard_and_evaluation():
     """Verify ForecastBenchmark runs autoregressive evaluation on DANRA."""
     datastore = init_datastore_example("mdp")
