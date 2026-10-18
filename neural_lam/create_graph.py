@@ -371,6 +371,7 @@ def create_graph(
     `graph_dir_path`.
 
     Creates the following files for all graphs:
+
     - g2m_edge_index.pt  [2, N_g2m_edges]
     - g2m_features.pt    [N_g2m_edges, d_features]
     - m2g_edge_index.pt  [2, N_m2m_edges]
@@ -399,14 +400,15 @@ def create_graph(
             number of nodes in the mesh at a given level
 
     And in addition for hierarchical graphs:
-    - mesh_up_edge_index.pt
-        list of [2, N_mesh_updown_edges_level], length==n_levels-1
-    - mesh_up_features.pt
-        list of [N_mesh_updown_edges_level, d_features], length==n_levels-1
-    - mesh_down_edge_index.pt
-        list of [2, N_mesh_updown_edges_level], length==n_levels-1
-    - mesh_down_features.pt
-        list of [N_mesh_updown_edges_level, d_features], length==n_levels-1
+
+    - mesh_up_edge_index.pt: list of [2, N_mesh_updown_edges_level],
+      length==n_levels-1
+    - mesh_up_features.pt: list of [N_mesh_updown_edges_level, d_features],
+      length==n_levels-1
+    - mesh_down_edge_index.pt: list of [2, N_mesh_updown_edges_level],
+      length==n_levels-1
+    - mesh_down_features.pt: list of [N_mesh_updown_edges_level, d_features],
+      length==n_levels-1
 
     where N_mesh_updown_edges_level is the number of edges in the graph from
     mesh-to-mesh between two consecutive levels (list index corresponds index
