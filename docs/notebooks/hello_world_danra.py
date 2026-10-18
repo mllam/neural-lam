@@ -19,7 +19,7 @@ def _(mo):
         r"""
     # Hello World: Training `neural-lam` on DANRA
 
-    This notebook provides a **beginner-friendly, end-to-end walkthrough** for running a minimal model training pipeline in `neural-lam` using a small, public DANRA dataset.
+    This notebook provides a **beginner-friendly, end-to-end walkthrough** for running a minimal model training pipeline in `neural-lam` using a small, public DANRA dataset. Every step uses the Python API in `neural_lam.api`.
 
     It covers:
     1. Environment setup (CPU-safe)
@@ -40,8 +40,6 @@ def _(mo):
         (Adamov et al., 2025) available at [arXiv:2504.09340](https://arxiv.org/abs/2504.09340).
     >
     > **Python Version:** Make sure you are using a Python version supported by the project (3.10-3.14).
-    >
-    > **Note on Future Graph Updates:** The graph generation step currently uses `create_graph.py`, but it will be migrated to use the upcoming `weather-model-graphs` package in the near future.
     """
     )
     return
@@ -51,18 +49,28 @@ def _(mo):
 def _(mo):
     # Standard library
     import os
-    import subprocess
-    import sys
     from pathlib import Path
 
+    # Run on CPU and keep W&B metrics local, before torch and wandb start
+    os.environ["CUDA_VISIBLE_DEVICES"] = ""
+    os.environ["WANDB_MODE"] = "offline"
+
     # Third-party
-    import matplotlib.pyplot as plt
+    import fsspec
+    import matplotlib
+    import mllam_data_prep
     import numpy as np
     import xarray as xr
 
+    # Lightning callbacks plot from worker threads, which GUI backends
+    # such as TkAgg do not support
+    matplotlib.use("Agg")
+    # Third-party
+    import matplotlib.pyplot as plt
+
     # First-party
     import neural_lam
-    from neural_lam import utils
+    from neural_lam import api, utils
     from neural_lam.config import load_config_and_datastore
     from neural_lam.plot_graph import plot_graph
 
@@ -72,17 +80,16 @@ def _(mo):
     config_path = str(example_dir / "config.yaml")
     print("Working directory:", Path.cwd())
     return (
-        Path,
+        api,
         config_path,
         example_dir,
+        fsspec,
         load_config_and_datastore,
+        mllam_data_prep,
         neural_lam,
         np,
-        os,
         plot_graph,
         plt,
-        subprocess,
-        sys,
         utils,
         xr,
     )
@@ -132,7 +139,7 @@ def _(mo):
 
     This example uses a **cropped DANRA dataset** (~100×100 grid points, ~10 days in April 2022) served from a public ECMWF object store — no local data download is required.
 
-    The `mllam-data-prep` command reads the datastore config, fetches the data, and writes a processed `.zarr` archive to disk.
+    `mllam_data_prep.create_dataset_zarr` reads the datastore config, fetches the data, and writes a processed `.zarr` archive next to it.
 
     > **Note:** This will download and process approximately 60–120 MB of data. It may take a few minutes on the first run.
     """
@@ -141,22 +148,13 @@ def _(mo):
 
 
 @app.cell
-def _(example_dir, os, subprocess, sys, xr):
-    # Run mllam-data-prep to create the processed DANRA .zarr dataset
-    # next to danra.datastore.yaml, unless it already exists
+def _(example_dir, fsspec, mllam_data_prep, xr):
     _zarr_path = example_dir / "danra.datastore.zarr"
     if not _zarr_path.exists():
-        _env = os.environ.copy()
-        _env["FSSPEC_HTTPS_ASYNCHRONOUS"] = "true"
-        subprocess.run(
-            [
-                sys.executable,
-                "-m",
-                "mllam_data_prep",
-                str(example_dir / "danra.datastore.yaml"),
-            ],
-            check=True,
-            env=_env,
+        # zarr 3 reads the remote inputs through an async https filesystem
+        fsspec.config.conf["https"] = {"asynchronous": True}
+        mllam_data_prep.create_dataset_zarr(
+            fp_config=example_dir / "danra.datastore.yaml"
         )
     else:
         print(f"Dataset already exists at {_zarr_path}, skipping preparation.")
@@ -193,41 +191,29 @@ def _(mo):
         r"""
     ## 3. Graph Generation
 
-    `neural-lam` uses a **graph** to define the message-passing structure of the GNN. Different graph types exist:
+    `neural-lam` uses a **graph** to define the message-passing structure of the GNN. `api.create_graph` builds it with [`weather-model-graphs`](https://github.com/mllam/weather-model-graphs) from one of these archetypes:
 
-    | Graph type  | Command flag                    | Use case               |
-    |-------------|----------------------------------|------------------------|
-    | L1-LAM      | `--name 1level --levels 1`       | Quick demo (this notebook) |
-    | GC-LAM      | `--name multiscale`              | Standard multi-scale model |
-    | Hi-LAM      | `--name hierarchical --hierarchical` | Hierarchical model (production) |
+    | Archetype      | Mesh                       | Model                  |
+    |----------------|----------------------------|------------------------|
+    | `keisler`      | Single level               | `graph_lam` (this notebook) |
+    | `graphcast`    | Multi-scale, flattened     | `graph_lam`            |
+    | `hierarchical` | Hierarchy of mesh levels   | `hi_lam`, `hi_lam_parallel` |
 
-    For this Hello World example we use the **L1 (single-level) graph** — the lightest option, ideal for CPU.
+    For this Hello World example we use the **single-level `keisler` graph** — the lightest option, ideal for CPU.
     """
     )
     return
 
 
 @app.cell
-def _(config_path, example_dir, os, subprocess, sys):
-    # Generate the single-level graph for fast CPU execution
+def _(api, config_path, example_dir):
     graph_name = "1level"
-    subprocess.run(
-        [
-            sys.executable,
-            "-m",
-            "neural_lam.create_graph",
-            "--config_path",
-            config_path,
-            "--name",
-            graph_name,
-            "--levels",
-            "1",
-        ],
-        check=True,
+    api.create_graph(
+        config_path=config_path, name=graph_name, archetype="keisler"
     )
     graph_dir = example_dir / "graph" / graph_name
     for _f in sorted(graph_dir.glob("*.pt")):
-        print(f"  {_f.name:40s} {os.path.getsize(_f) / 1024:.1f} KB")
+        print(f"  {_f.name:40s} {_f.stat().st_size / 1024:.1f} KB")
     return graph_dir, graph_name
 
 
@@ -255,65 +241,40 @@ def _(mo):
         r"""
     ## 4. Training on CPU
 
-    We train the `graph_lam` model for **1 epoch** using the L1 graph. Key flags used here:
+    `api.train` takes the same options as `python -m neural_lam.train_model`, as keyword arguments. We train the `graph_lam` model for **1 epoch** on the single-level graph:
 
-    | Flag | Value | Why |
+    | Argument | Value | Why |
     |------|-------|-----|
-    | `--model` | `graph_lam` | Simplest model — compatible with non-hierarchical graphs |
-    | `--graph` | `1level` | Must match the graph name used in the previous step |
-    | `--epochs` | `1` | Minimal run — just to verify the pipeline works end-to-end |
-    | `--processor_layers` | `2` | Reduced from default (4) for CPU |
-    | `--ar_steps_train` | `1` | Unroll 1 time-step during training — reduces memory and compute |
-    | `--ar_steps_eval` | `1` | Also 1 step for the val pass within this demo run |
-    | `--logger_run_name` | `hello_world_danra_train` | Fixed run directory under `runs/`, so the checkpoint path is known |
+    | `model` | `"graph_lam"` | Simplest model — compatible with non-hierarchical graphs |
+    | `graph` | `"1level"` | Must match the graph name used in the previous step |
+    | `epochs` | `1` | Minimal run — just to verify the pipeline works end-to-end |
+    | `processor_layers` | `2` | Reduced from default (4) for CPU |
+    | `ar_steps_train` | `1` | Unroll 1 time-step during training — reduces memory and compute |
+    | `ar_steps_eval` | `1` | Also 1 step for the val pass within this demo run |
 
-    **About logging:** By default, `neural-lam` logs via [Weights & Biases](https://wandb.ai). To suppress W&B upload during this demo, we set `WANDB_MODE=offline` so metrics are saved locally without requiring a W&B account or login.
+    It returns a `Run` handle with the run directory and the checkpoint path.
+
+    **About logging:** By default, `neural-lam` logs via [Weights & Biases](https://wandb.ai). To suppress W&B upload during this demo, the import cell sets `WANDB_MODE=offline` so metrics are saved locally without requiring a W&B account or login.
     """
     )
     return
 
 
 @app.cell
-def _(Path, config_path, graph_name, os, subprocess, sys):
-    os.environ["WANDB_MODE"] = "offline"
-    os.environ["CUDA_VISIBLE_DEVICES"] = ""
-    # Force a non-interactive matplotlib backend in the subprocess:
-    # the default TkAgg backend aborts (Tcl threading) when plotting
-    # from Lightning callback threads.
-    os.environ["MPLBACKEND"] = "Agg"
-
-    _run_name = "hello_world_danra_train"
-    subprocess.run(
-        [
-            sys.executable,
-            "-m",
-            "neural_lam.train_model",
-            "--config_path",
-            config_path,
-            "--model",
-            "graph_lam",
-            "--graph",
-            graph_name,
-            "--epochs",
-            "1",
-            "--processor_layers",
-            "2",
-            "--ar_steps_train",
-            "1",
-            "--ar_steps_eval",
-            "1",
-            "--num_workers",
-            "0",
-            "--val_steps_to_log",
-            "1",
-            "--logger_run_name",
-            _run_name,
-        ],
-        check=True,
+def _(api, config_path, graph_name):
+    train_run = api.train(
+        config_path=config_path,
+        model="graph_lam",
+        graph=graph_name,
+        epochs=1,
+        processor_layers=2,
+        ar_steps_train=1,
+        ar_steps_eval=1,
+        num_workers=0,
+        val_steps_to_log=[1],
     )
-    ckpt_path = Path("runs") / _run_name / "checkpoints" / "last.ckpt"
-    print("Checkpoint:", ckpt_path)
-    return (ckpt_path,)
+    print("Checkpoint:", train_run.checkpoint_path)
+    return (train_run,)
 
 
 @app.cell(hide_code=True)
@@ -322,58 +283,38 @@ def _(mo):
         r"""
     ## 5. Evaluation & Visualization
 
-    Evaluation reuses the same `train_model` command with `--eval test` and the `--load` flag pointing to the checkpoint from training.
-
-    The test RMSE per lead time is saved as `test_rmse.pdf` in the run directory. With `--create_gif`, `--n_example_pred` example forecasts are also written there as per-variable GIFs.
+    `api.evaluate` loads the checkpoint from training and runs the test set. The returned `Run` points to the plots it writes: the test RMSE per lead time (`rmse_plot`) and, with `create_gif=True`, a GIF per variable for each of the `n_example_pred` example forecasts (`example_plots(i)`).
     """
     )
     return
 
 
 @app.cell
-def _(Path, ckpt_path, config_path, graph_name, subprocess, sys):
-    _run_name = "hello_world_danra_eval"
-    subprocess.run(
-        [
-            sys.executable,
-            "-m",
-            "neural_lam.train_model",
-            "--config_path",
-            config_path,
-            "--model",
-            "graph_lam",
-            "--graph",
-            graph_name,
-            "--eval",
-            "test",
-            "--load",
-            str(ckpt_path),
-            "--processor_layers",
-            "2",
-            "--n_example_pred",
-            "1",
-            "--create_gif",
-            "--ar_steps_eval",
-            "4",
-            "--num_workers",
-            "0",
-            "--val_steps_to_log",
-            "1",
-            "--logger_run_name",
-            _run_name,
-        ],
-        check=True,
+def _(api, config_path, graph_name, train_run):
+    eval_run = api.evaluate(
+        config_path=config_path,
+        load=str(train_run.checkpoint_path),
+        model="graph_lam",
+        graph=graph_name,
+        processor_layers=2,
+        ar_steps_eval=4,
+        n_example_pred=1,
+        create_gif=True,
+        num_workers=0,
+        val_steps_to_log=[1],
     )
-    eval_dir = Path("runs") / _run_name
-    return (eval_dir,)
+    return (eval_run,)
 
 
 @app.cell
-def _(eval_dir, mo):
+def _(eval_run, mo):
     mo.vstack(
         [
-            mo.pdf(src=eval_dir / "test_rmse.pdf", height="50vh"),
-            *[mo.image(src=_gif) for _gif in sorted(eval_dir.glob("*/*.gif"))],
+            mo.pdf(src=eval_run.rmse_plot, height="50vh"),
+            *[
+                mo.image(src=_gif)
+                for _gif in sorted(eval_run.example_plots(1).glob("*.gif"))
+            ],
         ]
     )
     return
@@ -387,24 +328,27 @@ def _(mo):
 
     ### 🔁 Use a larger / hierarchical graph
 
-    For a production-quality run, switch to the hierarchical Hi-LAM graph:
+    For a production-quality run, switch to the hierarchical graph and the Hi-LAM model:
 
-    ```bash
-    python -m neural_lam.create_graph \
-        --config_path <your_config.yaml> \
-        --name hierarchical \
-        --hierarchical
-
-    python -m neural_lam.train_model \
-        --config_path <your_config.yaml> \
-        --model hi_lam \
-        --graph hierarchical \
-        --epochs 200
+    ```python
+    api.create_graph(
+        config_path="<your_config.yaml>",
+        name="hierarchical",
+        archetype="hierarchical",
+    )
+    api.train(
+        config_path="<your_config.yaml>",
+        model="hi_lam",
+        graph="hierarchical",
+        epochs=200,
+    )
     ```
+
+    The same steps are available on the command line as `python -m neural_lam.create_graph_with_wmg` and `python -m neural_lam.train_model`.
 
     ### ⚡ Enable GPU training
 
-    Re-create the environment with a CUDA build of PyTorch and remove the `CUDA_VISIBLE_DEVICES=""` line from the training cell, so that `--devices` (default `auto`) picks up your GPU:
+    Re-create the environment with a CUDA build of PyTorch and remove the `CUDA_VISIBLE_DEVICES` line from the import cell, so that `devices` (default `auto`) picks up your GPU:
     ```bash
     uv sync --extra gpu        # CUDA 13.0
     # or: uv sync --extra gpu-cu128   # CUDA 12.8
@@ -412,18 +356,11 @@ def _(mo):
 
     ### 📦 Use larger / full DANRA data
 
-    Modify `danra.datastore.yaml` to extend the `coord_ranges.time` window, or point `inputs[*].path` at a larger dataset. See the [mllam-data-prep README](https://github.com/mllam/mllam-data-prep) for full configuration options.
-
-    For large datasets (≥10 GB), use parallel preprocessing:
-    ```bash
-    python -m mllam_data_prep \
-        <your_datastore.yaml> \
-        --dask-distributed-local-core-fraction 0.5
-    ```
+    Modify `danra.datastore.yaml` to extend the `coord_ranges.time` window, or point `inputs[*].path` at a larger dataset. See the [mllam-data-prep README](https://github.com/mllam/mllam-data-prep) for full configuration options, including parallel processing of large datasets with dask.
 
     ### 📊 Enable cloud logging with W&B
 
-    Remove the `WANDB_MODE=offline` line in the training cell (or set it to `online`) and optionally set `--logger wandb --logger-project <your-project-name>`.
+    Remove the `WANDB_MODE` line in the import cell (or set it to `online`) and optionally pass `logger="wandb", logger_project="<your-project-name>"`.
 
     ### 🔗 Further reading
 
