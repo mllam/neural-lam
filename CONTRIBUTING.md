@@ -84,6 +84,11 @@ requires the `data/meps_example` dataset described in the
 Use `--input-dir` and `--output-dir` to select other locations; with
 `marimo edit`, put notebook arguments after `--`.
 
+Notebooks listed in `EXECUTED_NOTEBOOKS` in `docs/export_notebooks.py`
+(currently `hello_world_danra`) are executed when the docs are built, so
+their page shows the cell outputs; this also makes the docs CI fail when a
+change in `neural_lam` breaks them. Use `--no-execute` to skip that locally.
+
 Export notebooks before building or checking the documentation:
 
 ```bash
