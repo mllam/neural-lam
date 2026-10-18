@@ -65,6 +65,38 @@ others). In addition:
   across the codebase.
 - Keep new code consistent with the patterns already in the codebase.
 
+## Notebooks
+
+Store notebooks as marimo `.py` files under `docs/notebooks/` (no `.ipynb`).
+Add `--extra docs` to your `uv sync` command to edit, run, or export notebooks:
+
+```bash
+uv sync --extra cpu --extra docs --group dev --locked
+source .venv/bin/activate
+marimo edit docs/notebooks/create_reduced_meps_dataset.py
+python docs/notebooks/create_reduced_meps_dataset.py
+```
+
+Run these commands from the repository root. The dataset-reduction notebook
+requires the `data/meps_example` dataset described in the
+[README](README.md#using-neural-lam). It creates output directories under
+`data/meps_example_reduced` and overwrites matching output files on reruns.
+Use `--input-dir` and `--output-dir` to select other locations; with
+`marimo edit`, put notebook arguments after `--`.
+
+Export notebooks before building or checking the documentation:
+
+```bash
+python docs/export_notebooks.py
+sphinx-build -W --keep-going -b html docs/ docs/_build/html/
+sphinx-build -W --keep-going -b linkcheck docs/ docs/_build/linkcheck/
+```
+
+Markdown export includes prose and code without executing notebooks or
+including cell outputs, so building the docs does not require tutorial data.
+For a new notebook, add its extensionless path to the toctree in
+`docs/index.md`.
+
 ## Before you push
 
 Run **both** checks locally - they are the same ones CI will run:
@@ -76,6 +108,16 @@ pytest -vv -s --doctest-modules
 
 > **Note:** The first test run downloads ~50 MB of example data via
 > [pooch](https://www.fatiando.org/pooch/).
+
+For a quick check without the example data or any training, run
+`pytest -m quick` (or `pytest -m "not requires_real_data"` to skip only the
+example data). Tests that call `trainer.fit()` must be marked with
+`@pytest.mark.requires_training`; `quick` is added automatically to tests with
+neither marker. Tests that construct the `mdp` or
+`npyfilesmeps` example datastores must be marked with
+`@pytest.mark.requires_real_data` (tests parametrized over `datastore_name`
+are marked automatically); an unmarked test that does so fails with a message
+saying so.
 
 ## Community roadmap
 
