@@ -72,6 +72,7 @@ Add `--extra docs` to your `uv sync` command to edit, run, or export notebooks:
 
 ```bash
 uv sync --extra cpu --extra docs --group dev --locked
+source .venv/bin/activate
 marimo edit docs/notebooks/create_reduced_meps_dataset.py
 python docs/notebooks/create_reduced_meps_dataset.py
 ```
