@@ -161,7 +161,9 @@ src.exclude = [ "tests/", "docs/" ]
 
 [tool.pytest]
 ini_options.markers = [
-  "slow: marks tests as slow (deselected by default, run with -m slow)",
+  "quick: added automatically to tests with neither requires_real_data nor requires_training (run with -m quick)",
+  "requires_real_data: marks tests needing the mdp or npyfilesmeps example data (skip with -m 'not requires_real_data')",
+  "requires_training: marks tests that train a model with trainer.fit() (skip with -m 'not requires_training')",
 ]
 ini_options.testpaths = [ "neural_lam", "tests" ]
 
