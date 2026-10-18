@@ -94,7 +94,7 @@ def _(mo):
         r"""
     ## 1. Environment Setup
 
-    Set up the environment with [`uv`](https://docs.astral.sh/uv/) from the repository root (see the [README](https://github.com/mllam/neural-lam#installation)) and open this notebook with marimo:
+    Set up the environment with [`uv`](https://docs.astral.sh/uv/) from the repository root (see "Installing Neural-LAM" in the [README](https://github.com/mllam/neural-lam/blob/main/README.md)) and open this notebook with marimo:
 
     ```bash
     uv sync --extra cpu --extra docs --group dev
