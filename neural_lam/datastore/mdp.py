@@ -601,9 +601,10 @@ class MDPDatastore(BaseDatastore):
         np.ndarray
             The x, y coordinates of the dataset, returned differently based on
             the value of `stacked`:
-            - `stacked==True`: shape `(n_grid_points, 2)`, where
-                               n_grid_points=N_x*N_y on a regular grid.
-            - `stacked==False`: shape `(N_x, N_y, 2)`
+
+            * `stacked==True`: shape `(n_grid_points, 2)`, where
+              n_grid_points=N_x*N_y on a regular grid.
+            * `stacked==False`: shape `(N_x, N_y, 2)`
 
         """
         xdim, ydim = self.spatial_coordinates

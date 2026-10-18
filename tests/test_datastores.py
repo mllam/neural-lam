@@ -249,7 +249,7 @@ def test_boundary_mask(datastore_name):
         assert datastore.boundary_mask.size == grid_shape.x * grid_shape.y
 
 
-@pytest.mark.slow
+@pytest.mark.requires_real_data
 def test_boundary_mask_zero_width_is_all_interior():
     """`n_boundary_points=0` (used when a separate boundary datastore
     supplies the boundary forcing) must mark the whole domain as interior.
@@ -500,7 +500,7 @@ def test_is_on_regular_spatial_grid_defaults_to_false():
     assert not datastore.is_on_regular_spatial_grid
 
 
-@pytest.mark.slow
+@pytest.mark.requires_real_data
 def test_cropped_boundary_datastore_is_not_regular_grid():
     """A domain-cropped datastore keeps only the grid points inside the
     interior domain, so `grid_index` no longer unstacks to a full x/y grid
@@ -523,7 +523,7 @@ def test_cropped_boundary_datastore_is_not_regular_grid():
         )
 
 
-@pytest.mark.slow
+@pytest.mark.requires_real_data
 def test_unstacking_cropped_boundary_datastore_raises():
     """`unstack_grid_coords` now lives on `BaseDatastore`, so it has to
     refuse a datastore that is not on a regular grid itself rather than
@@ -538,7 +538,7 @@ def test_unstacking_cropped_boundary_datastore_raises():
         datastore_boundary.unstack_grid_coords(da_forcing)
 
 
-@pytest.mark.slow
+@pytest.mark.requires_real_data
 def test_boundary_mask_on_boundary_datastore_raises():
     """A datastore without `state` data has no interior ring to mask, so
     `boundary_mask` must say so rather than raise a bare KeyError from the
@@ -549,6 +549,7 @@ def test_boundary_mask_on_boundary_datastore_raises():
         datastore_boundary.boundary_mask
 
 
+@pytest.mark.requires_real_data
 def test_meps_analysis_times_warns_on_missing_state_files(
     tmp_path, monkeypatch
 ):
@@ -568,6 +569,7 @@ def test_meps_analysis_times_warns_on_missing_state_files(
     assert len(times) == 1
 
 
+@pytest.mark.requires_real_data
 def test_meps_analysis_times_no_warning_when_boundary_only(
     tmp_path, monkeypatch
 ):
@@ -587,7 +589,7 @@ def test_meps_analysis_times_no_warning_when_boundary_only(
     assert len(times) == 1
 
 
-@pytest.mark.slow
+@pytest.mark.requires_real_data
 def test_boundary_datastore_state_metadata_accessors_return_empty():
     """A datastore without `state` data must return an empty list from all
     three state-metadata accessors, not raise a KeyError on the missing
@@ -599,7 +601,7 @@ def test_boundary_datastore_state_metadata_accessors_return_empty():
     assert datastore_boundary.get_vars_units(category="state") == []
 
 
-@pytest.mark.slow
+@pytest.mark.requires_real_data
 def test_plot_example_on_cropped_datastore_raises():
     """Plotting unstacks `grid_index` back into x/y, which pads the cells a
     domain-cropped datastore does not have, so it must be refused."""
@@ -613,6 +615,7 @@ def test_plot_example_on_cropped_datastore_raises():
         )
 
 
+@pytest.mark.requires_real_data
 def test_symlinked_config_resolves_to_the_real_directory():
     """A config reached through a symlink must derive its root from the link
     target, not the link.

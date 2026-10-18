@@ -1,4 +1,5 @@
 # Standard library
+import shutil
 from collections.abc import Iterator
 from datetime import timedelta
 from pathlib import Path
@@ -284,7 +285,7 @@ def test_plot_on_axis_boundary_sets_extent() -> None:
         assert got == pytest.approx(want)
 
 
-@pytest.mark.slow
+@pytest.mark.requires_real_data
 def test_plot_prediction_with_era5_boundary() -> None:
     """Integration test: DANRA interior + ERA5 boundary overlay.
 
@@ -620,8 +621,22 @@ def test_plot_spatial_error_extent_matches_interior() -> None:
         assert got == pytest.approx(want)
 
 
+@pytest.fixture(scope="module")
+def dummy_graph_dir(tmp_path_factory):
+    """Build the dummy ``1level`` graph once. Every ``DummyDatastore`` has the
+    same grid but its own root dir, so tests copy this instead of rebuilding.
+    """
+    graph_dir_path = tmp_path_factory.mktemp("graph") / "1level"
+    create_graph_from_datastore(
+        datastore=DummyDatastore(),
+        output_root_path=str(graph_dir_path),
+        n_max_levels=1,
+    )
+    return graph_dir_path
+
+
 @pytest.fixture
-def model_and_batch(tmp_path, time_step, time_unit):
+def model_and_batch(tmp_path, time_step, time_unit, dummy_graph_dir):
     """Setup a model and dataset for testing plot_examples."""
     # Create timedelta with specified step length.
     step_length_kwargs = {time_unit: time_step}
@@ -650,14 +665,7 @@ def model_and_batch(tmp_path, time_step, time_unit):
         num_future_forcing_steps = 0
         var_leads_metrics_watch = {}
 
-    # Create graph files if they do not already exist.
-    graph_dir_path = Path(datastore.root_path) / "graph" / "1level"
-    if not graph_dir_path.exists():
-        create_graph_from_datastore(
-            datastore=datastore,
-            output_root_path=str(graph_dir_path),
-            n_max_levels=1,
-        )
+    shutil.copytree(dummy_graph_dir, datastore.root_path / "graph" / "1level")
 
     # Create config.
     config = nlconfig.NeuralLAMConfig(
@@ -915,7 +923,7 @@ def _build_metrics_watch_module(datastore, config):
     )
 
 
-def test_create_metric_log_dict_with_metrics_watch(tmp_path):
+def test_create_metric_log_dict_with_metrics_watch(dummy_graph_dir):
     """
     Regression test for issue #302: AssertionError when using --metrics_watch.
 
@@ -927,13 +935,7 @@ def test_create_metric_log_dict_with_metrics_watch(tmp_path):
     datastore = DummyDatastore()
     num_state_vars = datastore.get_num_data_vars(category="state")
 
-    graph_dir_path = Path(datastore.root_path) / "graph" / "1level"
-    if not graph_dir_path.exists():
-        create_graph_from_datastore(
-            datastore=datastore,
-            output_root_path=str(graph_dir_path),
-            n_max_levels=1,
-        )
+    shutil.copytree(dummy_graph_dir, datastore.root_path / "graph" / "1level")
 
     config = nlconfig.NeuralLAMConfig(
         datastores={
@@ -975,7 +977,7 @@ def test_create_metric_log_dict_with_metrics_watch(tmp_path):
     plt.close("all")
 
 
-def test_aggregate_and_plot_metrics_with_metrics_watch(tmp_path):
+def test_aggregate_and_plot_metrics_with_metrics_watch(dummy_graph_dir):
     """
     Integration test for issue #302: exercises the full watched-metrics path
     through aggregate_and_plot_metrics(), which is the exact crash site of the
@@ -988,13 +990,7 @@ def test_aggregate_and_plot_metrics_with_metrics_watch(tmp_path):
     datastore = DummyDatastore()
     num_state_vars = datastore.get_num_data_vars(category="state")
 
-    graph_dir_path = Path(datastore.root_path) / "graph" / "1level"
-    if not graph_dir_path.exists():
-        create_graph_from_datastore(
-            datastore=datastore,
-            output_root_path=str(graph_dir_path),
-            n_max_levels=1,
-        )
+    shutil.copytree(dummy_graph_dir, datastore.root_path / "graph" / "1level")
 
     config = nlconfig.NeuralLAMConfig(
         datastores={

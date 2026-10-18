@@ -656,6 +656,7 @@ class BaseDatastore(abc.ABC):
         ----------
         category : str
             The category of the dataset (state/forcing/static).
+
         Returns
         -------
         list[str]

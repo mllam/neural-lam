@@ -15,6 +15,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Support plotting boundary data from a separate boundary datastore in `vis.plot_on_axis` and `vis.plot_prediction` via optional `boundary_da` and `boundary_datastore` parameters. A new optional `plotting` section in `config.yaml` (`NeuralLAMConfig.plotting`) controls the overlay. [\#636](https://github.com/mllam/neural-lam/pull/636)
 
+- Add a Sphinx + `sphinx-autoapi` documentation site (intro, install, quickstart, auto-generated API reference) on `myst-parser` and `sphinx-book-theme`, published with GitHub Pages. Notebooks are now marimo `.py` files, exported to Markdown at docs build time [\#272](https://github.com/mllam/neural-lam/pull/272) @Mohit-Lakra
+
 ### Changed
 
 - Replace the single `datastore` config key with a named `datastores` mapping; a datastore's role now follows from the categories it provides, and existing configs must move their datastore under a named entry in `datastores:`. `BaseRegularGridDatastore` is removed and its members moved onto `BaseDatastore`, gated on the new `is_on_regular_spatial_grid` property. Datastores on a regular grid must set `is_on_regular_spatial_grid = True` and implement `grid_shape_state`; the gated members raise `NotImplementedError` otherwise [\#635](https://github.com/mllam/neural-lam/pull/635) @sadamov
@@ -22,6 +24,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Maintenance
 
 - Add a `lychee` pre-commit hook checking Markdown links and section anchors (config in `.github/lychee.toml`, run once per push in CI) and a PR-template reminder to update `CONTRIBUTING.md` / `AGENTS.md` [\#738](https://github.com/mllam/neural-lam/pull/738) @KumarShivam1908
+
+- Add `requires_real_data` and `requires_training` pytest markers (the latter replaces `slow`), an automatic `quick` marker for tests needing neither, and build the dummy graph once in the plotting tests, so `pytest -m quick` gives a fast check; import mlflow lazily in `CustomMLFlowLogger` so plain `import neural_lam` no longer loads it. [\#750](https://github.com/mllam/neural-lam/pull/750) @KumarShivam1908
 
 - Modernize linting and formatting toolchain by migrating `black`/`isort`/`flake8` to Ruff (with `ANN` rules enforcing type annotation coverage in `neural_lam/`) and adding `pyproject-fmt`, `python-check-blanket-noqa`, and `no-commit-to-branch` pre-commit hooks [\#614](https://github.com/mllam/neural-lam/pull/614) @Shivampal157
 

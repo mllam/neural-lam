@@ -38,6 +38,7 @@ def _build_module(datastore, datastore_boundary=None):
     )
 
 
+@pytest.mark.requires_real_data
 def test_on_after_batch_transfer():
     """The hook standardizes state and forcing as (x - mean) / std and
     leaves shapes, boundary forcing and target times untouched."""
@@ -85,6 +86,7 @@ def test_on_after_batch_transfer():
     assert torch.allclose(norm_forcing, expected_forcing)
 
 
+@pytest.mark.requires_real_data
 def test_normalization_applied_exactly_once():
     """Data fed through WeatherDataset and the hook must be standardized
     exactly once: not skipped (WeatherDataset returns raw data) and not
@@ -156,6 +158,7 @@ def test_boundary_standardized_when_datastore_provided():
     assert model.boundary_std_tiled is not None
 
 
+@pytest.mark.requires_real_data
 def test_boundary_passthrough_when_no_boundary_datastore():
     """Without a boundary datastore, an empty boundary tensor (the shape
     WeatherDataset yields when no boundary is configured) is passed through
@@ -183,6 +186,7 @@ def test_boundary_passthrough_when_no_boundary_datastore():
     assert torch.equal(norm_boundary, boundary)
 
 
+@pytest.mark.requires_real_data
 def test_boundary_raises_when_stats_missing():
     """A non-empty boundary tensor with no registered boundary statistics
     (e.g. a checkpoint reloaded without `datastore_boundary`) must raise
