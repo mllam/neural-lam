@@ -156,5 +156,4 @@ def init_datastore_boundary_example(datastore_kind):
         datastore_kind=datastore_kind,
         config_path=DATASTORES_BOUNDARY_EXAMPLES[datastore_kind],
     )
-
     return datastore_boundary
