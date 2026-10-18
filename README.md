@@ -11,6 +11,8 @@ Also global forecasting is possible, but currently on a [different branch](https
 The code uses [PyTorch](https://pytorch.org/) and [PyTorch Lightning](https://github.com/Lightning-AI/pytorch-lightning).
 Graph Neural Networks are implemented using [PyG](https://pyg.org/) and logging is set up through [Weights & Biases](https://wandb.ai/).
 
+Read the [Neural-LAM documentation](https://mllam.github.io/neural-lam/) for installation, quickstart, and API reference.
+
 The repository contains LAM versions of:
 
 * The graph-based model from [Keisler (2022)](https://arxiv.org/abs/2202.07575).

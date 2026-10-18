@@ -11,7 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Add `PersistencePredictor` baseline model (`--model persistence`) that returns the previous state unchanged, enabling standard evaluation of a persistence baseline through the existing pipeline [\#677](https://github.com/mllam/neural-lam/pull/677) @GiGiKoneti
 
-- Add a Sphinx + `sphinx-autoapi` documentation site (intro, install, quickstart, auto-generated API reference) on `myst-parser` and `sphinx-book-theme`, built on Read the Docs. Notebooks are now marimo `.py` files, exported to Markdown at docs build time [\#272](https://github.com/mllam/neural-lam/pull/272) @Mohit-Lakra
+- Add a Sphinx + `sphinx-autoapi` documentation site (intro, install, quickstart, auto-generated API reference) on `myst-parser` and `sphinx-book-theme`, published with GitHub Pages. Notebooks are now marimo `.py` files, exported to Markdown at docs build time [\#272](https://github.com/mllam/neural-lam/pull/272) @Mohit-Lakra
 
 ### Maintenance
 

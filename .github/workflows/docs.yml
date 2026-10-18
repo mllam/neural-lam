@@ -9,7 +9,6 @@ on:
       - "tests/test_marimo_notebook.py"
       - "pyproject.toml"
       - "uv.lock"
-      - ".readthedocs.yaml"
       - ".github/workflows/docs.yml"
   pull_request:
     branches: ["main"]
@@ -20,13 +19,17 @@ on:
       - "tests/test_marimo_notebook.py"
       - "pyproject.toml"
       - "uv.lock"
-      - ".readthedocs.yaml"
       - ".github/workflows/docs.yml"
   workflow_dispatch:
 
 concurrency:
   group: "docs-${{ github.ref }}"
   cancel-in-progress: true
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
 
 jobs:
   build-docs:
@@ -61,11 +64,26 @@ jobs:
       - name: Build docs with sphinx
         run: sphinx-build -W --keep-going -b html docs/ docs/_build/html/
 
-      - name: Upload docs artifact
-        uses: actions/upload-artifact@v4
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
         with:
-          name: docs-html
           path: docs/_build/html/
+
+  deploy:
+    name: Deploy docs
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: build-docs
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    permissions:
+      pages: write
+      id-token: write
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
 
   linkcheck:
     name: Link check

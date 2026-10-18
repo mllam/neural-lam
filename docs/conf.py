@@ -96,7 +96,8 @@ html_theme_options = {
 }
 
 # OpenGraph settings
-ogp_site_url = "https://neural-lam.readthedocs.io/en/latest/"
+html_baseurl = "https://mllam.github.io/neural-lam/"
+ogp_site_url = "https://mllam.github.io/neural-lam/"
 ogp_image = "_static/logo.png"
 ogp_use_first_image = True
 
