@@ -20,6 +20,3 @@ exclude = [
     # resolve, and dominate the runtime if re-checked on every commit.
     '^https://github\.com/mllam/neural-lam/(issues|pull)/\d+/?$',
 ]
-te the runtime if re-checked on every commit.
-    '^https://github\.com/mllam/neural-lam/(issues|pull)/\d+/?$',
-]
