@@ -534,6 +534,19 @@ def fit(
                     f"{train_config.ar_steps_eval}, the number of unrolled "
                     "validation steps. Adjust --var_leads_metrics_watch."
                 )
+    # Watched metrics are only logged when both are set
+    if bool(train_config.metrics_watch) != bool(
+        train_config.var_leads_metrics_watch
+    ):
+        missing = (
+            "var_leads_metrics_watch"
+            if train_config.metrics_watch
+            else "metrics_watch"
+        )
+        raise ValueError(
+            "metrics_watch and var_leads_metrics_watch must be set together, "
+            f"but {missing} is not set."
+        )
 
     if train_config.eval and not train_config.load:
         logger.warning(

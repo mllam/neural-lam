@@ -40,6 +40,7 @@ def test_eval_without_load_warning(eval_val, load_val, expect_warning):
     mock_args.config_path = "dummy.yaml"
     mock_args.val_steps_to_log = []
     mock_args.train_steps_to_log = []
+    mock_args.metrics_watch = []
     mock_args.var_leads_metrics_watch = "{}"
     mock_args.ar_steps_eval = 10
     mock_args.ar_steps_train = 10
@@ -70,6 +71,7 @@ def test_create_gif_forwarded_to_forecaster_module():
     mock_args.config_path = "dummy.yaml"
     mock_args.val_steps_to_log = [1]
     mock_args.train_steps_to_log = [2]
+    mock_args.metrics_watch = []
     mock_args.var_leads_metrics_watch = "{}"
     mock_args.ar_steps_eval = 10
     mock_args.ar_steps_train = 10
@@ -125,6 +127,8 @@ def test_create_gif_forwarded_to_forecaster_module():
                 "--val_steps_to_log",
                 "1",
                 "10",
+                "--metrics_watch",
+                "val_rmse",
                 "--var_leads_metrics_watch",
                 '{"0": [1, 10]}',
             ],
@@ -142,10 +146,19 @@ def test_create_gif_forwarded_to_forecaster_module():
             ["--var_leads_metrics_watch", '{"0": [0]}'],
             "Can not log validation step 0",
         ),
+        (
+            ["--metrics_watch", "val_rmse"],
+            "but var_leads_metrics_watch is not set",
+        ),
+        (
+            ["--var_leads_metrics_watch", '{"0": [1]}'],
+            "but metrics_watch is not set",
+        ),
     ],
 )
 def test_steps_to_log_validation(cli_args, match_err):
-    """ValueError must be raised if a step is outside [1, rollout length]."""
+    """ValueError must be raised if a step is outside [1, rollout length]
+    or only one of metrics_watch and var_leads_metrics_watch is set."""
     if match_err is None:
         # The checks run before load_config_and_datastore, so hitting the
         # SystemExit sentinel means every step was accepted
