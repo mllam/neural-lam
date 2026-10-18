@@ -1,5 +1,8 @@
 """Constant (input-independent) latent encoder."""
 
+# Standard library
+from typing import Any
+
 # Third-party
 import torch
 
@@ -16,7 +19,12 @@ class ConstantLatentEncoder(BaseLatentEncoder):
     ``Normal(mean=0, std=softplus(0)+eps)`` for ``output_dist="diagonal"``.
     """
 
-    def __init__(self, latent_dim, num_mesh_nodes, output_dist="isotropic"):
+    def __init__(
+        self,
+        latent_dim: int,
+        num_mesh_nodes: int,
+        output_dist: str = "isotropic",
+    ) -> None:
         """
         Store the number of mesh nodes to produce parameters for.
 
@@ -32,7 +40,9 @@ class ConstantLatentEncoder(BaseLatentEncoder):
         super().__init__(latent_dim, output_dist)
         self.num_mesh_nodes = num_mesh_nodes
 
-    def compute_dist_params(self, grid_rep, **kwargs):
+    def compute_dist_params(
+        self, grid_rep: torch.Tensor, **kwargs: Any
+    ) -> torch.Tensor:
         """
         Compute raw distribution parameters from the grid representation.
 
