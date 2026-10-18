@@ -57,6 +57,7 @@ docs/_build/
 docs/api/
 docs/notebooks/*.md
 docs/notebooks/__marimo__/
+docs/_static/notebooks/
 
 
 ### Vim ###

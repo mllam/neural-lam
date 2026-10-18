@@ -9,8 +9,15 @@ from unittest.mock import MagicMock, patch
 import loguru
 import pytest
 
+
 # Mock loguru.logger.catch before importing train_model
-loguru.logger.catch = lambda f: f  # type: ignore[assignment]
+def _mock_catch(*args, **kwargs):
+    if args and callable(args[0]):
+        return args[0]
+    return lambda f: f
+
+
+loguru.logger.catch = _mock_catch  # type: ignore[assignment]
 
 # First-party
 from neural_lam.models import MODELS, BaseHiGraphModel  # noqa: E402
