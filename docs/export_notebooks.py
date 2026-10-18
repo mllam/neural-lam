@@ -7,9 +7,15 @@ from pathlib import Path
 
 
 def main() -> None:
-    """Export each notebook without executing its data-processing cells."""
+    """Export each notebook to Markdown without executing it."""
     notebook_dir = Path(__file__).resolve().parent / "notebooks"
-    for notebook in sorted(notebook_dir.glob("*.py")):
+    notebooks = sorted(notebook_dir.glob("*.py"))
+    # Markdown export does not validate cells, so fail on broken notebooks here
+    subprocess.run(
+        [sys.executable, "-m", "marimo", "check", *map(str, notebooks)],
+        check=True,
+    )
+    for notebook in notebooks:
         result = subprocess.run(
             [
                 sys.executable,

@@ -6,7 +6,6 @@ build:
     python: "3.11"
   commands:
     - pip install uv
-    - uv sync --extra docs --group dev --locked
-    - uv run --locked python docs/export_notebooks.py
-    - uv run --locked sphinx-build -W --keep-going -b html docs/ docs/_build/html/
-    - cp -r docs/_build/html/* $READTHEDOCS_OUTPUT/html/
+    - uv sync --extra cpu --extra docs --group dev --locked
+    - .venv/bin/python docs/export_notebooks.py
+    - .venv/bin/sphinx-build -W --keep-going -b html docs/ $READTHEDOCS_OUTPUT/html/

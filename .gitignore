@@ -55,7 +55,7 @@ share/python-wheels/
 # Sphinx documentation and generated notebook pages
 docs/_build/
 docs/api/
-docs/notebooks/create_reduced_meps_dataset.md
+docs/notebooks/*.md
 docs/notebooks/__marimo__/
 
 

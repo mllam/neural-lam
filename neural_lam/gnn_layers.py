@@ -268,7 +268,7 @@ def get_gnn_class(gnn_type: str) -> type[pyg.nn.MessagePassing]:
 
     Returns
     -------
-    Type[pyg.nn.MessagePassing]
+    type[pyg.nn.MessagePassing]
         The corresponding GNN class.
     """
     if gnn_type not in GNN_TYPES:

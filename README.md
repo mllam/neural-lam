@@ -73,7 +73,7 @@ development toolchain packages installation too.
 **regarding `torch` installation**: `torch` is a required dependency, but it ships separate variants for CPU-only and each CUDA version. With `uv`, the correct PyTorch index is chosen automatically via `[tool.uv.sources]`. With `pip`, you must pass `--index-url` explicitly (see instructions below).
 
 We cover all the installation options in our [github actions ci/cd
-setup](.github/workflows/) which you can use as a reference.
+setup](https://github.com/mllam/neural-lam/tree/main/.github/workflows) which you can use as a reference.
 
 ### From pypi.org
 

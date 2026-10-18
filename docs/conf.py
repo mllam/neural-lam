@@ -101,11 +101,6 @@ ogp_site_url = "https://neural-lam.readthedocs.io/en/latest/"
 ogp_image = "_static/logo.png"
 ogp_use_first_image = True
 
-suppress_warnings = [
-    "autoapi.python_import_resolution",
-    "myst.xref_missing",
-]
-
 # Linkcheck settings
 linkcheck_report_timeouts_as_broken = True
 linkcheck_ignore = [
@@ -114,19 +109,28 @@ linkcheck_ignore = [
 ]
 
 
-def use_notebook_source(app, pagename, templatename, context, doctree):
-    """Point notebook edit links at the tracked Python source."""
-    if not pagename.startswith("notebooks/"):
+def use_tracked_source(app, pagename, templatename, context, doctree):
+    """Point edit links of generated pages at their tracked source file."""
+    if pagename.startswith("notebooks/"):
+        candidates = [f"docs/{pagename}.py"]
+    elif pagename.startswith("api/neural_lam/"):
+        module = pagename.removeprefix("api/").removesuffix("/index")
+        candidates = [f"{module}.py", f"{module}/__init__.py"]
+    else:
         return
-    if not (Path(app.srcdir) / f"{pagename}.py").is_file():
+    root = Path(app.srcdir).parent
+    sources = [c for c in candidates if (root / c).is_file()]
+    if not sources:
         return
     context["edit_page_provider_name"] = "GitHub"
+    context["edit_source_path"] = sources[0]
+    # pydata-sphinx-theme requires `file_name` to appear in the template
     context["edit_page_url_template"] = (
         "{{ github_url }}/{{ github_user }}/{{ github_repo }}/edit/"
-        "{{ github_version }}/{{ doc_path }}{{ file_name[:-3] }}.py"
+        "{{ github_version }}/{{ edit_source_path or doc_path ~ file_name }}"
     )
 
 
 def setup(app):
     """Configure source links before the theme creates its header buttons."""
-    app.connect("html-page-context", use_notebook_source, priority=500)
+    app.connect("html-page-context", use_tracked_source, priority=500)

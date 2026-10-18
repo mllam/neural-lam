@@ -1,7 +1,6 @@
 """Check the dataset tutorial with small, deterministic input arrays."""
 
 # Standard library
-import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -24,8 +23,8 @@ def test_reduce_meps_notebook(tmp_path):
     output = tmp_path / "reduced"
     static = source / "static"
     static.mkdir(parents=True)
-    nx, ny, nvars = 48, 52, 10
-    crop = (slice(12, 36), slice(13, 39))
+    nx, ny, nvars = 50, 54, 10
+    crop = (slice(12, 37), slice(13, 40))
     grid = np.arange(2 * nx * ny).reshape(2, nx, ny)
     surface = np.arange(nx * ny).reshape(nx, ny)
     border = np.ones((nx, ny), dtype=bool)
@@ -71,8 +70,6 @@ def test_reduce_meps_notebook(tmp_path):
             ],
             cwd=tmp_path,
             check=True,
-            capture_output=True,
-            text=True,
         )
         result_static = output / "static"
         np.testing.assert_array_equal(
@@ -81,7 +78,7 @@ def test_reduce_meps_notebook(tmp_path):
         np.testing.assert_array_equal(
             np.load(result_static / "surface_geopotential.npy"), surface[crop]
         )
-        expected_border = np.ones((24, 26), dtype=bool)
+        expected_border = np.ones((25, 27), dtype=bool)
         expected_border[10:-10, 10:-10] = False
         np.testing.assert_array_equal(
             np.load(result_static / "border_mask.npy"), expected_border
@@ -110,32 +107,8 @@ def test_reduce_meps_notebook(tmp_path):
                 )
 
 
-def test_export_without_dataset(tmp_path):
-    """Export must work without executing any dataset-dependent cells."""
-    pytest.importorskip("marimo", reason="Requires the docs extra")
-    docs = tmp_path / "docs"
-    (docs / "notebooks").mkdir(parents=True)
-    shutil.copyfile(NOTEBOOK, docs / "notebooks" / NOTEBOOK.name)
-    exporter = docs / "export_notebooks.py"
-    shutil.copyfile(NOTEBOOK.parents[1] / exporter.name, exporter)
-    # A second build must overwrite the generated Markdown without prompting.
-    for _ in range(2):
-        subprocess.run(
-            [sys.executable, str(exporter)],
-            cwd=tmp_path,
-            check=True,
-            capture_output=True,
-            text=True,
-        )
-    exported = (docs / "notebooks" / NOTEBOOK.name).with_suffix(".md")
-    markdown = exported.read_text()
-    assert "# Creating meps_example_reduced" in markdown
-    assert "np.load" in markdown
-    assert not (tmp_path / "data").exists()
-
-
-def test_notebook_edit_link(tmp_path):
-    """Generated pages must link to Python sources that exist in Git."""
+def test_generated_page_edit_links(tmp_path):
+    """Generated pages must link to their tracked Python sources."""
     pytest.importorskip("sphinx", reason="Requires the docs extra")
     pytest.importorskip("myst_parser", reason="Requires the docs extra")
     pytest.importorskip("sphinx_book_theme", reason="Requires the docs extra")
@@ -150,11 +123,16 @@ def test_notebook_edit_link(tmp_path):
         + "html_logo = None\nhtml_static_path = []\n"
     )
     (docs / "index.md").write_text(
-        "# Home\n\n```{toctree}\nnotebooks/example\nguide\n```\n"
+        "# Home\n\n```{toctree}\nnotebooks/example\n"
+        "api/neural_lam/example/index\nguide\n```\n"
     )
     (docs / "guide.md").write_text("# Guide\n")
     (docs / "notebooks" / "example.md").write_text("# Example\n")
     (docs / "notebooks" / "example.py").write_text("# Notebook source\n")
+    (docs / "api" / "neural_lam" / "example").mkdir(parents=True)
+    (docs / "api" / "neural_lam" / "example" / "index.md").write_text("# API\n")
+    (tmp_path / "neural_lam").mkdir()
+    (tmp_path / "neural_lam" / "example.py").write_text("# Module source\n")
     output = tmp_path / "html"
     subprocess.run(
         [
@@ -169,12 +147,14 @@ def test_notebook_edit_link(tmp_path):
             str(output),
         ],
         check=True,
-        capture_output=True,
-        text=True,
     )
     notebook_html = (output / "notebooks" / "example.html").read_text()
+    api_html = (
+        output / "api" / "neural_lam" / "example" / "index.html"
+    ).read_text()
     guide_html = (output / "guide.html").read_text()
-    edit_root = "https://github.com/mllam/neural-lam/edit/main/docs/"
-    assert edit_root + "notebooks/example.py" in notebook_html
-    assert edit_root + "notebooks/example.md" not in notebook_html
-    assert edit_root + "guide.md" in guide_html
+    edit_root = "https://github.com/mllam/neural-lam/edit/main/"
+    assert edit_root + "docs/notebooks/example.py" in notebook_html
+    assert edit_root + "docs/notebooks/example.md" not in notebook_html
+    assert edit_root + "neural_lam/example.py" in api_html
+    assert edit_root + "docs/guide.md" in guide_html

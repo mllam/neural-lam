@@ -5,6 +5,7 @@ on:
     paths:
       - "neural_lam/**"
       - "docs/**"
+      - "README.md"
       - "tests/test_marimo_notebook.py"
       - "pyproject.toml"
       - "uv.lock"
@@ -15,6 +16,7 @@ on:
     paths:
       - "neural_lam/**"
       - "docs/**"
+      - "README.md"
       - "tests/test_marimo_notebook.py"
       - "pyproject.toml"
       - "uv.lock"
@@ -46,16 +48,18 @@ jobs:
           python-version: "3.11"
 
       - name: Install docs dependencies
-        run: uv sync --extra docs --group dev --locked
+        run: |
+          uv sync --extra cpu --extra docs --group dev --locked
+          echo "$PWD/.venv/bin" >> $GITHUB_PATH
 
       - name: Export marimo notebooks
-        run: uv run --locked python docs/export_notebooks.py
+        run: python docs/export_notebooks.py
 
-      - name: Test notebook execution and export
-        run: uv run --locked pytest -q tests/test_marimo_notebook.py
+      - name: Test notebook execution and edit links
+        run: pytest -q tests/test_marimo_notebook.py
 
       - name: Build docs with sphinx
-        run: uv run --locked sphinx-build -W --keep-going -b html docs/ docs/_build/html/
+        run: sphinx-build -W --keep-going -b html docs/ docs/_build/html/
 
       - name: Upload docs artifact
         uses: actions/upload-artifact@v4
@@ -82,10 +86,12 @@ jobs:
           python-version: "3.11"
 
       - name: Install docs dependencies
-        run: uv sync --extra docs --group dev --locked
+        run: |
+          uv sync --extra cpu --extra docs --group dev --locked
+          echo "$PWD/.venv/bin" >> $GITHUB_PATH
 
       - name: Export marimo notebooks
-        run: uv run --locked python docs/export_notebooks.py
+        run: python docs/export_notebooks.py
 
       - name: Run linkcheck
-        run: uv run --locked sphinx-build -W --keep-going -b linkcheck docs/ docs/_build/linkcheck/
+        run: sphinx-build -W --keep-going -b linkcheck docs/ docs/_build/linkcheck/

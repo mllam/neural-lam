@@ -13,14 +13,15 @@
 ## Building Documentation Locally
 
 ```{code-block} bash
-# Install docs dependencies
-uv sync --extra docs --group dev --locked
+# Install docs dependencies (swap cpu for the torch extra you use)
+uv sync --extra cpu --extra docs --group dev --locked
+source .venv/bin/activate
 
 # Export notebook source to Markdown (does not execute the notebooks)
-uv run --locked python docs/export_notebooks.py
+python docs/export_notebooks.py
 
 # Build the documentation
-uv run --locked sphinx-build -W --keep-going -b html docs/ docs/_build/html/
+sphinx-build -W --keep-going -b html docs/ docs/_build/html/
 
 # Open in browser
 open docs/_build/html/index.html  # macOS
