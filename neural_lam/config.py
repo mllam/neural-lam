@@ -92,6 +92,8 @@ class UniformFeatureWeighting:
     all state features are weighted equally.
     """
 
+    pass
+
 
 @dataclasses.dataclass
 class OutputClamping:
@@ -216,6 +218,8 @@ class NeuralLAMConfig(dataclass_wizard.JSONWizard, dataclass_wizard.YAMLWizard):
 
 class InvalidConfigError(Exception):
     """Raised when the Neural-LAM configuration file is invalid or malformed."""
+
+    pass
 
 
 def load_config_and_datastore(
