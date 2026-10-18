@@ -21,6 +21,12 @@ on:
       - "uv.lock"
       - ".github/workflows/docs.yml"
   workflow_dispatch:
+    inputs:
+      deploy:
+        description: "Deploy this manually built revision to GitHub Pages"
+        required: false
+        default: false
+        type: boolean
 
 concurrency:
   group: "docs-${{ github.ref }}"
@@ -71,7 +77,9 @@ jobs:
 
   deploy:
     name: Deploy docs
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: >-
+      (github.event_name == 'push' && github.ref == 'refs/heads/main') ||
+      (github.event_name == 'workflow_dispatch' && inputs.deploy)
     needs: build-docs
     runs-on: ubuntu-latest
     environment:
