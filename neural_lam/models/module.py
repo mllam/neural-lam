@@ -660,8 +660,7 @@ class ForecasterModule(pl.LightningModule):
         self.aggregate_and_plot_metrics(self.val_metrics, prefix="val")
 
         if (
-            self.trainer.is_global_zero
-            and self.hparams.metrics_watch  # ty: ignore[unresolved-attribute]
+            self.trainer.is_global_zero and self.hparams.metrics_watch  # ty: ignore[unresolved-attribute]
         ):
             metrics_watch = (
                 self.hparams.metrics_watch  # ty: ignore[unresolved-attribute]

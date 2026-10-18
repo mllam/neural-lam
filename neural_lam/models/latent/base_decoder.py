@@ -1,6 +1,10 @@
 """Abstract base class for graph-based latent decoders."""
 
+# Standard library
+from typing import Any
+
 # Third-party
+import torch
 from torch import nn
 
 # First-party
@@ -21,12 +25,12 @@ class BaseGraphLatentDecoder(nn.Module):
 
     def __init__(
         self,
-        hidden_dim,
-        latent_dim,
-        num_state_vars,
-        hidden_layers=1,
-        output_std=True,
-    ):
+        hidden_dim: int,
+        latent_dim: int,
+        num_state_vars: int,
+        hidden_layers: int = 1,
+        output_std: bool = True,
+    ) -> None:
         """
         Set up the latent embedder, grid-residual MLP and output param map.
 
@@ -73,8 +77,12 @@ class BaseGraphLatentDecoder(nn.Module):
         )
 
     def combine_with_latent(
-        self, original_grid_rep, latent_rep, residual_grid_rep, graph_emb
-    ):
+        self,
+        original_grid_rep: torch.Tensor,
+        latent_rep: torch.Tensor,
+        residual_grid_rep: torch.Tensor,
+        graph_emb: dict[str, Any],
+    ) -> torch.Tensor:
         """
         Fuse grid and latent representations and return a grid-shaped output.
 
@@ -107,7 +115,12 @@ class BaseGraphLatentDecoder(nn.Module):
         """
         raise NotImplementedError("combine_with_latent not implemented")
 
-    def forward(self, grid_rep, latent_samples, graph_emb):
+    def forward(
+        self,
+        grid_rep: torch.Tensor,
+        latent_samples: torch.Tensor,
+        graph_emb: dict[str, Any],
+    ) -> tuple[torch.Tensor, torch.Tensor | None]:
         """
         Predict the next-state increment (and optionally std).
 
