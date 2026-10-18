@@ -50,26 +50,26 @@ dependencies = [
   "torch-geometric==2.3.1",
   "tueplots>=0.0.8",
   "wandb>=0.13.10",
-  "weather-model-graphs>=0.4.0",
+  "weather-model-graphs>=0.4",
 ]
 # The torch variant is selected at install time via these mutually-exclusive
 # extras (see [tool.uv]). Versions are pinned per CUDA build because not every
 # torch release ships wheels for every CUDA version, e.g. cu128 wheels were
 # dropped in torch 2.12, so the cu128 extra stays on the 2.11 series.
 optional-dependencies.cpu = [ "torch>=2.12,<2.13" ]
+optional-dependencies.docs = [
+  "linkify-it-py>=2",
+  "marimo>=0.19",
+  "myst-parser>=3.0.1",
+  "sphinx>=7.2.6",
+  "sphinx-autoapi>=3",
+  "sphinx-book-theme>=1.1",
+  "sphinx-copybutton>=0.5.2",
+  "sphinxext-opengraph>=0.9",
+]
 optional-dependencies.gpu = [ "torch>=2.12,<2.13" ]  # CUDA 13.0, default GPU build
 optional-dependencies.gpu-cu128 = [ "torch>=2.11,<2.12" ]  # CUDA 12.8, last torch series with cu128 wheels
 scripts.create_graph_with_wmg = "neural_lam.create_graph_with_wmg:cli"
-optional-dependencies.docs = [
-  "sphinx-autoapi>=3.0.0",
-  "sphinx-copybutton>=0.5.2",
-  "sphinx-book-theme>=1.1.0",
-  "sphinx>=7.2.6",
-  "myst-parser>=3.0.1",
-  "marimo>=0.19.0",
-  "sphinxext-opengraph>=0.9.0",
-  "linkify-it-py>=2.0.0",
-]
 
 [dependency-groups]
 dev = [ "pooch>=1.8.2", "pre-commit>=3.8", "pytest>=8.3.2" ]
@@ -165,6 +165,7 @@ src.exclude = [ "tests/", "docs/" ]
 ini_options.markers = [
   "slow: marks tests as slow (deselected by default, run with -m slow)",
 ]
+ini_options.norecursedirs = [ "docs" ]
 
 [tool.interrogate]
 fail-under = 100

@@ -1,10 +1,9 @@
 # Standard library
-import os
 import sys
 from pathlib import Path
 
 # Add the project root to sys.path so sphinx can find neural_lam
-sys.path.insert(0, os.path.abspath(".."))
+sys.path.insert(0, str(Path("..").resolve()))
 
 project = "Neural-LAM"
 copyright = "2024–2026, MLLAM Community"
@@ -108,6 +107,7 @@ suppress_warnings = [
 ]
 
 # Linkcheck settings
+linkcheck_report_timeouts_as_broken = True
 linkcheck_ignore = [
     r"https://kutt\.to/mllam",  # Returns 403 Forbidden for bots
     r"https://docs\.pytorch\.org/.*",  # Flaky anchors in intersphinx
