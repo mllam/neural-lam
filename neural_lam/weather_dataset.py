@@ -141,39 +141,6 @@ class WeatherDataset(torch.utils.data.Dataset):
     is aligned to interior state times by nearest-neighbor lookup, so the
     two datastores may differ in step length and either may be analysis or
     forecast data.
-
-    Parameters
-    ----------
-    datastore : BaseDatastore
-        The datastore to load the data from (e.g. mdp).
-    split : str, optional
-        The data split to use ("train", "val" or "test"). Default is "train".
-    ar_steps : int, optional
-        The number of autoregressive steps. Default is 3.
-    num_past_forcing_steps: int, optional
-        Number of past time steps to include in forcing input. If set to i,
-        forcing from times t-i, t-i+1, ..., t-1, t (and potentially beyond,
-        given num_future_forcing_steps) are included as forcing inputs at time t
-        Default is 1.
-    num_future_forcing_steps: int, optional
-        Number of future time steps to include in forcing input. If set to j,
-        forcing from times t, t+1, ..., t+j-1, t+j (and potentially times before
-        t, given num_past_forcing_steps) are included as forcing inputs at time
-        t. Default is 1.
-    num_past_boundary_steps: int, optional
-        Number of past time steps to include in boundary forcing input.
-        Default is 1.
-    num_future_boundary_steps: int, optional
-        Number of future time steps to include in boundary forcing input.
-        Default is 1.
-    datastore_boundary : BaseDatastore, optional
-        Separate datastore providing boundary forcing. If None, the boundary
-        tensor is empty.
-    load_single_member : bool, optional
-        If `False` and the datastore returns an ensemble of state
-        realisations, treat each state ensemble member as an independent
-        sample. If `True`, only ensemble member 0 is used. Default is False,
-        so all members are used when available.
     """
 
     # NOTE: The number of initial states is fixed at 2 (inspired by GraphCast)
@@ -192,8 +159,39 @@ class WeatherDataset(torch.utils.data.Dataset):
         load_single_member: bool = False,
     ) -> None:
         """
-        Construct a ``WeatherDataset``. See the class docstring for the
-        constructor parameters.
+        Parameters
+        ----------
+        datastore : BaseDatastore
+            The datastore to load the data from (e.g. mdp).
+        split : str, optional
+            The data split to use ("train", "val" or "test"). Default is
+            "train".
+        ar_steps : int, optional
+            The number of autoregressive steps. Default is 3.
+        num_past_forcing_steps: int, optional
+            Number of past time steps to include in forcing input. If set to i,
+            forcing from times t-i, t-i+1, ..., t-1, t (and potentially beyond,
+            given num_future_forcing_steps) are included as forcing inputs at
+            time t Default is 1.
+        num_future_forcing_steps: int, optional
+            Number of future time steps to include in forcing input. If set to
+            j, forcing from times t, t+1, ..., t+j-1, t+j (and potentially times
+            before t, given num_past_forcing_steps) are included as forcing
+            inputs at time t. Default is 1.
+        num_past_boundary_steps: int, optional
+            Number of past time steps to include in boundary forcing input.
+            Default is 1.
+        num_future_boundary_steps: int, optional
+            Number of future time steps to include in boundary forcing input.
+            Default is 1.
+        datastore_boundary : BaseDatastore, optional
+            Separate datastore providing boundary forcing. If None, the boundary
+            tensor is empty.
+        load_single_member : bool, optional
+            If `False` and the datastore returns an ensemble of state
+            realisations, treat each state ensemble member as an independent
+            sample. If `True`, only ensemble member 0 is used. Default is False,
+            so all members are used when available.
 
         Raises
         ------
