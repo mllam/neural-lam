@@ -15,9 +15,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Raise a `ValueError` when only one of `metrics_watch` and `var_leads_metrics_watch` is set, instead of silently logging no watched metrics [\#785](https://github.com/mllam/neural-lam/pull/785) @KumarShivam1908
 
+- Add a Sphinx + `sphinx-autoapi` documentation site (intro, install, quickstart, auto-generated API reference) on `myst-parser` and `sphinx-book-theme`, published with GitHub Pages. Notebooks are now marimo `.py` files, exported to Markdown at docs build time [\#272](https://github.com/mllam/neural-lam/pull/272) @Mohit-Lakra
+
 ### Maintenance
 
 - Add a `lychee` pre-commit hook checking Markdown links and section anchors (config in `.github/lychee.toml`, run once per push in CI) and a PR-template reminder to update `CONTRIBUTING.md` / `AGENTS.md` [\#738](https://github.com/mllam/neural-lam/pull/738) @KumarShivam1908
+
+- Add `requires_real_data` and `requires_training` pytest markers (the latter replaces `slow`), an automatic `quick` marker for tests needing neither, and build the dummy graph once in the plotting tests, so `pytest -m quick` gives a fast check; import mlflow lazily in `CustomMLFlowLogger` so plain `import neural_lam` no longer loads it. [\#750](https://github.com/mllam/neural-lam/pull/750) @KumarShivam1908
 
 - Modernize linting and formatting toolchain by migrating `black`/`isort`/`flake8` to Ruff (with `ANN` rules enforcing type annotation coverage in `neural_lam/`) and adding `pyproject-fmt`, `python-check-blanket-noqa`, and `no-commit-to-branch` pre-commit hooks [\#614](https://github.com/mllam/neural-lam/pull/614) @Shivampal157
 

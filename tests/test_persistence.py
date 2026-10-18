@@ -10,6 +10,7 @@ from neural_lam.models.step_predictors.persistence import PersistencePredictor
 from tests.conftest import init_datastore_example
 
 
+@pytest.mark.requires_real_data
 def test_persistence_predictor_returns_prev_state():
     """PersistencePredictor.forward returns prev_state unchanged."""
     datastore = init_datastore_example("mdp")
@@ -31,6 +32,7 @@ def test_persistence_predictor_returns_prev_state():
     assert torch.equal(pred_state, prev_state)
 
 
+@pytest.mark.requires_real_data
 def test_persistence_predictor_ignores_kwargs():
     """Extra graph-specific kwargs are silently absorbed."""
     datastore = init_datastore_example("mdp")
@@ -45,6 +47,7 @@ def test_persistence_predictor_ignores_kwargs():
     assert isinstance(predictor, PersistencePredictor)
 
 
+@pytest.mark.requires_real_data
 def test_persistence_forecaster_unroll():
     """ARForecaster with PersistencePredictor reproduces initial state."""
     datastore = init_datastore_example("mdp")
@@ -81,6 +84,7 @@ def test_persistence_forecaster_unroll():
         )
 
 
+@pytest.mark.requires_real_data
 def test_persistence_predicts_std_false():
     """
     PersistencePredictor.predicts_std is always False and logs warning
