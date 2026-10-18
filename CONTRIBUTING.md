@@ -49,8 +49,8 @@ A few things that help keep it that way:
 ## Code standards
 
 Code quality is enforced automatically by
-[pre-commit hooks](.pre-commit-config.yaml) (Black, isort, Flake8, ty,
-Codespell and others). In addition:
+[pre-commit hooks](.pre-commit-config.yaml) (Ruff, ty, Codespell and
+others). In addition:
 
 - Add **NumPy-style docstrings** and **type annotations** to every function and
   class in `neural_lam/`. Docstring coverage is gated at 100% and the package is
