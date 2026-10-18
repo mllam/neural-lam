@@ -54,7 +54,6 @@ intersphinx_mapping = {
     "python": ("https://docs.python.org/3", None),
     "numpy": ("https://numpy.org/doc/stable", None),
     "torch": ("https://pytorch.org/docs/stable", None),
-    "pytorch_lightning": ("https://lightning.ai/docs/pytorch/stable/", None),
     "torch_geometric": (
         "https://pytorch-geometric.readthedocs.io/en/latest/",
         None,
