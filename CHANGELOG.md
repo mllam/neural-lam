@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Add a high-level programmatic Python API (`neural_lam.api`) exposing typed keyword-only `train`, `evaluate` and `create_graph` functions; `train` and `evaluate` return a `Run` handle with the run's checkpoint and plot paths. The training CLI now parses into the typed run config dataclasses (`ModelConfig`, `TrainRunConfig`, `DataConfig`, `ComputeConfig`, `LoggingConfig`) and calls the same `neural_lam.train_model.fit` [\#715](https://github.com/mllam/neural-lam/pull/715) @GiGiKoneti
+
 - Add `PersistencePredictor` baseline model (`--model persistence`) that returns the previous state unchanged, enabling standard evaluation of a persistence baseline through the existing pipeline [\#677](https://github.com/mllam/neural-lam/pull/677) @GiGiKoneti
 
 ### Fixed
