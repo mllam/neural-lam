@@ -59,7 +59,6 @@ def _():
     import matplotlib.pyplot as plt
     import numpy as np
     import xarray as xr
-    from IPython.display import Image, display
 
     # First-party
     import neural_lam
@@ -68,13 +67,12 @@ def _():
     from neural_lam.plot_graph import plot_graph
 
     return (
-        Image,
-        display,
         glob,
         load_config_and_datastore,
         neural_lam,
         np,
         os,
+        plot_graph,
         plt,
         subprocess,
         sys,
@@ -166,18 +164,29 @@ def _(mo):
 
 
 @app.cell
-def _(subprocess, sys):
+def _(os, subprocess, sys):
     # Run mllam-data-prep to create the processed DANRA .zarr dataset
     # Output will appear next to danra.datastore.yaml as danra.datastore.zarr
-    #! {sys.executable} -m mllam_data_prep tests/datastore_examples/mdp/danra_100m_winds/danra.datastore.yaml
-    subprocess.call(
-        [
-            str(sys.executable),
-            "-m",
-            "mllam_data_prep",
-            "tests/datastore_examples/mdp/danra_100m_winds/danra.datastore.yaml",
-        ]
+    _zarr_path = (
+        "tests/datastore_examples/mdp/danra_100m_winds/danra.datastore.zarr"
     )
+    if not os.path.exists(_zarr_path):
+        env = os.environ.copy()
+        env["FSSPEC_HTTPS_ASYNCHRONOUS"] = "true"
+        subprocess.run(
+            [
+                str(sys.executable),
+                "-m",
+                "mllam_data_prep",
+                "tests/datastore_examples/mdp/danra_100m_winds/danra.datastore.yaml",
+            ],
+            check=True,
+            env=env,
+        )
+    else:
+        print(
+            f"Dataset already exists at {_zarr_path}, skipping data preparation."
+        )
     return
 
 
@@ -215,8 +224,6 @@ def _(np, plt, xr):
             pcm = ax.pcolormesh(
                 x_unique, y_unique, grid, cmap="RdBu_r", shading="auto"
             )
-            x_units = ds.coords["x"].attrs.get("units", "")
-            y_units = ds.coords["y"].attrs.get("units", "")
             ax.set_xlabel("x (m)")
             ax.set_ylabel("y (m)")
         else:
@@ -262,7 +269,7 @@ def _(subprocess, sys):
     # Generate the single-level graph for fast CPU execution
     # Graph files are stored in tests/datastore_examples/mdp/danra_100m_winds/graphs/1level/
     #! {sys.executable} -m neural_lam.create_graph --config_path tests/datastore_examples/mdp/danra_100m_winds/config.yaml --name 1level --levels 1
-    subprocess.call(
+    subprocess.run(
         [
             str(sys.executable),
             "-m",
@@ -273,7 +280,8 @@ def _(subprocess, sys):
             "1level",
             "--levels",
             "1",
-        ]
+        ],
+        check=True,
     )
     return
 
@@ -308,10 +316,7 @@ def _(glob, os):
 
 
 @app.cell
-def _(load_config_and_datastore, np, os, plt, utils):
-    # Third-party
-    from IPython.display import HTML  # noqa: F401
-
+def _(load_config_and_datastore, np, os, plot_graph, plt, utils):
     config_path = "tests/datastore_examples/mdp/danra_100m_winds/config.yaml"
     _, datastore = load_config_and_datastore(config_path=config_path)
     xy = datastore.get_xy("state", stacked=True)
@@ -471,38 +476,6 @@ def _(glob, os):
 
 
 @app.cell
-def _():
-    # Standard library
-    import argparse
-
-    # Third-party
-    import torch
-
-    # First-party
-    from neural_lam.config import (
-        DatastoreSelection,
-        ManualStateFeatureWeighting,
-        NeuralLAMConfig,
-        OutputClamping,
-        TrainingConfig,
-        UniformFeatureWeighting,
-    )
-
-    torch.serialization.add_safe_globals(
-        [
-            argparse.Namespace,
-            DatastoreSelection,
-            ManualStateFeatureWeighting,
-            NeuralLAMConfig,
-            OutputClamping,
-            TrainingConfig,
-            UniformFeatureWeighting,
-        ]
-    )
-    return
-
-
-@app.cell
 def _(ckpt_path, os, subprocess, sys):
     os.environ["WANDB_MODE"] = "offline"
     os.environ["CUDA_VISIBLE_DEVICES"] = ""
@@ -540,14 +513,14 @@ def _(ckpt_path, os, subprocess, sys):
 
 
 @app.cell
-def _(Image, display, glob, os):
+def _(glob, mo, os):
     rmse_plots = sorted(
         glob.glob("runs/**/test_rmse_*.png", recursive=True),
         key=os.path.getmtime,
     )
     if rmse_plots:
         print("RMSE scorecard:", rmse_plots[-1])
-        display(Image(filename=rmse_plots[-1]))
+        mo.image(src=rmse_plots[-1])
     else:
         print("test_rmse plot not found - check eval output above.")
 
@@ -560,7 +533,7 @@ def _(Image, display, glob, os):
         print(f"Showing {n_show} of {len(example_plots)} prediction plot(s):")
         for path in example_plots[-n_show:]:
             print(" ", path)
-            display(Image(filename=path))
+            mo.image(src=path)
     else:
         print("No prediction plots found - check eval output above.")
     return

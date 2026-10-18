@@ -1,7 +1,7 @@
 """CLI entry point for training Neural-LAM models."""
 
 # Standard library
-import argparse
+import inspect
 import json
 import os
 import random
@@ -19,15 +19,7 @@ from loguru import logger
 
 # Local
 from . import utils
-from .config import (
-    DatastoreSelection,
-    ManualStateFeatureWeighting,
-    NeuralLAMConfig,
-    OutputClamping,
-    TrainingConfig,
-    UniformFeatureWeighting,
-    load_config_and_datastore,
-)
+from .config import NeuralLAMConfig, load_config_and_datastore
 from .datastore.base import BaseDatastore
 from .gnn_layers import GNN_TYPES
 from .models import (
@@ -37,18 +29,6 @@ from .models import (
     ForecasterModule,
 )
 from .weather_dataset import WeatherDataModule
-
-torch.serialization.add_safe_globals(
-    [
-        argparse.Namespace,
-        DatastoreSelection,
-        ManualStateFeatureWeighting,
-        NeuralLAMConfig,
-        OutputClamping,
-        TrainingConfig,
-        UniformFeatureWeighting,
-    ]
-)
 
 
 def build_predictor(
@@ -132,7 +112,7 @@ def load_forecaster_module_from_checkpoint(
     )
 
 
-@logger.catch
+@logger.catch(reraise=True)
 def main(input_args: list[str] | None = None) -> None:
     """Main function for training and evaluating models."""
     parser = ArgumentParser(
@@ -610,14 +590,24 @@ def main(input_args: list[str] | None = None) -> None:
         utils.init_training_logger_metrics(
             training_logger, val_steps=args.val_steps_to_log
         )  # Do after initializing logger
+    extra_kwargs = {}
+    if "weights_only" in inspect.signature(trainer.test).parameters:
+        extra_kwargs["weights_only"] = False
+
     if args.eval:
         trainer.test(
             model=model,
             datamodule=data_module,
             ckpt_path=args.load,
+            **extra_kwargs,
         )
     else:
-        trainer.fit(model=model, datamodule=data_module, ckpt_path=args.load)
+        trainer.fit(
+            model=model,
+            datamodule=data_module,
+            ckpt_path=args.load,
+            **extra_kwargs,
+        )
 
 
 if __name__ == "__main__":

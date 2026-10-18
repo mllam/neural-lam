@@ -2,24 +2,34 @@
 import inspect
 from argparse import Namespace
 from types import SimpleNamespace
-from typing import cast
+from typing import TYPE_CHECKING, cast
 from unittest.mock import MagicMock, patch
 
 # Third-party
 import loguru
 import pytest
 
+
 # Mock loguru.logger.catch before importing train_model
-loguru.logger.catch = lambda f: f  # type: ignore[assignment]
+def _mock_catch(*args, **kwargs):
+    if args and callable(args[0]):
+        return args[0]
+    return lambda f: f
+
+
+loguru.logger.catch = _mock_catch  # type: ignore[assignment]
 
 # First-party
-from neural_lam.config import NeuralLAMConfig  # noqa: E402
 from neural_lam.models import MODELS, BaseHiGraphModel  # noqa: E402
 from neural_lam.train_model import (  # noqa: E402
     build_predictor,
     load_forecaster_module_from_checkpoint,
     main,
 )
+
+if TYPE_CHECKING:
+    # First-party
+    from neural_lam.config import NeuralLAMConfig  # noqa: E402
 
 
 @pytest.mark.parametrize(
@@ -101,13 +111,13 @@ def test_create_gif_forwarded_to_forecaster_module():
     ):
         main()
 
-    assert (
-        "create_gif" in captured_kwargs
-    ), "create_gif was not forwarded to ForecasterModule"
+    assert "create_gif" in captured_kwargs, (
+        "create_gif was not forwarded to ForecasterModule"
+    )
     assert captured_kwargs["create_gif"] is True
-    assert (
-        "train_steps_to_log" in captured_kwargs
-    ), "train_steps_to_log was not forwarded to ForecasterModule"
+    assert "train_steps_to_log" in captured_kwargs, (
+        "train_steps_to_log was not forwarded to ForecasterModule"
+    )
     assert captured_kwargs["train_steps_to_log"] == [2]
 
 
