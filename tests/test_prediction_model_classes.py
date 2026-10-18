@@ -438,3 +438,95 @@ def test_step_predictor_invalid_clamping_limits(lower, upper):
 
     with pytest.raises(ValueError, match="must be smaller than upper"):
         predictor.prepare_clamping_params(datastore)
+
+
+# ---------------------------------------------------------------------------
+# Issue #791: Model & Datastore Registries and from_config factory method
+# ---------------------------------------------------------------------------
+
+
+def test_register_model_decorator():
+    """Verify register_model registers classes and rejects duplicate names."""
+    # First-party
+    from neural_lam.models import MODELS, register_model
+
+    @register_model("mock_test_model")
+    class DummyTestModel(StepPredictor):
+        pass
+
+    assert "mock_test_model" in MODELS
+    assert MODELS["mock_test_model"] is DummyTestModel
+
+    with pytest.raises(ValueError, match="already registered"):
+
+        @register_model("mock_test_model")
+        class AnotherDummyModel(StepPredictor):
+            pass
+
+    # Clean up test registry entry
+    del MODELS["mock_test_model"]
+
+
+def test_register_datastore_decorator():
+    """Verify register_datastore registers classes and rejects duplicates."""
+    # First-party
+    from neural_lam.datastore import DATASTORES, register_datastore
+    from neural_lam.datastore.base import BaseDatastore
+
+    @register_datastore("mock_test_ds")
+    class DummyTestDS(BaseDatastore):
+        pass
+
+    assert "mock_test_ds" in DATASTORES
+    assert DATASTORES["mock_test_ds"] is DummyTestDS
+
+    with pytest.raises(ValueError, match="already registered"):
+
+        @register_datastore("mock_test_ds")
+        class AnotherDummyDS(BaseDatastore):
+            pass
+
+    # Clean up test registry entry
+    del DATASTORES["mock_test_ds"]
+
+
+def test_build_predictor_delegates_to_from_config():
+    """build_predictor delegates to from_config on the predictor class."""
+    # First-party
+    from neural_lam.train_model import build_predictor
+
+    class CustomPredictor(StepPredictor):
+        called_from_config = False
+
+        def forward(self, prev_state, prev_prev_state, forcing):
+            return prev_state, None
+
+        @classmethod
+        def from_config(cls, args, config, datastore):
+            cls.called_from_config = True
+            return cls(datastore=datastore)
+
+    datastore = DummyDatastore()
+    config = nlconfig.NeuralLAMConfig(
+        datastore=nlconfig.DatastoreSelection(kind="mdp", config_path="dummy")
+    )
+    args = Namespace(graph="dummy")
+
+    inst = build_predictor(CustomPredictor, args, config, datastore)
+    assert CustomPredictor.called_from_config is True
+    assert isinstance(inst, CustomPredictor)
+
+
+def test_graphefm_registered_in_models():
+    """GraphEFM and GraphEFMMultiScale must be registered in MODELS."""
+    # First-party
+    from neural_lam.models import MODELS
+    from neural_lam.models.step_predictors.graph.graph_efm import (
+        GraphEFM,
+        GraphEFMMultiScale,
+    )
+
+    assert "graph_efm" in MODELS
+    assert MODELS["graph_efm"] is GraphEFM
+    assert "graph_efm_multiscale" in MODELS
+    assert MODELS["graph_efm_multiscale"] is GraphEFMMultiScale

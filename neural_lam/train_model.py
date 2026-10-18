@@ -39,8 +39,8 @@ from .gnn_layers import GNN_TYPES
 from .models import (
     MODELS,
     ARForecaster,
-    BaseHiGraphModel,
     ForecasterModule,
+    StepPredictor,
 )
 from .weather_dataset import WeatherDataModule
 
@@ -86,43 +86,15 @@ class Run:
 
 
 def build_predictor(
-    predictor_class: type,
+    predictor_class: type[StepPredictor],
     args: Namespace,
     config: NeuralLAMConfig,
     datastore: BaseDatastore,
-) -> Any:
+) -> StepPredictor:
     """
-    Instantiate a step predictor with the GNN kwargs its family accepts.
-
-    Hierarchical GNN kwargs are only passed to ``BaseHiGraphModel``
-    subclasses, gating on the class hierarchy so that future hierarchical
-    models are covered without maintaining a model-name list. GNN type
-    arguments fall back to ``InteractionNet`` for checkpoints saved before
-    those CLI flags existed.
+    Instantiate a step predictor via its ``from_config`` classmethod.
     """
-    kwargs = dict(
-        datastore=datastore,
-        graph_name=args.graph,
-        hidden_dim=args.hidden_dim,
-        hidden_layers=args.hidden_layers,
-        processor_layers=args.processor_layers,
-        mesh_aggr=args.mesh_aggr,
-        num_past_forcing_steps=args.num_past_forcing_steps,
-        num_future_forcing_steps=args.num_future_forcing_steps,
-        output_std=args.output_std,
-        output_clamping_lower=config.training.output_clamping.lower,
-        output_clamping_upper=config.training.output_clamping.upper,
-        g2m_gnn_type=getattr(args, "g2m_gnn_type", "InteractionNet"),
-        m2g_gnn_type=getattr(args, "m2g_gnn_type", "InteractionNet"),
-    )
-    if issubclass(predictor_class, BaseHiGraphModel):
-        kwargs["mesh_up_gnn_type"] = getattr(
-            args, "mesh_up_gnn_type", "InteractionNet"
-        )
-        kwargs["mesh_down_gnn_type"] = getattr(
-            args, "mesh_down_gnn_type", "InteractionNet"
-        )
-    return predictor_class(**kwargs)
+    return predictor_class.from_config(args, config, datastore)
 
 
 class AdaptiveHelpFormatter(ArgumentDefaultsHelpFormatter):
