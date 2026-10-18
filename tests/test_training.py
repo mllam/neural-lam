@@ -10,11 +10,13 @@ import wandb
 
 # First-party
 from neural_lam import config as nlconfig
+from neural_lam import vis
 from neural_lam.create_graph_with_wmg import create_graph_from_datastore
 from neural_lam.datastore import DATASTORES
 from neural_lam.models import ARForecaster, ForecasterModule, GraphLAM
 from neural_lam.weather_dataset import WeatherDataModule
 from tests.conftest import (
+    DATASTORES_BOUNDARY_EXAMPLES,
     init_datastore_boundary_example,
     init_datastore_example,
 )
@@ -182,6 +184,96 @@ def test_training_with_boundary():
         set_output_std=False,
         datastore_boundary=datastore_boundary,
     )
+
+
+@pytest.mark.slow
+def test_training_and_eval_plots_with_boundary_overlay(tmp_path, monkeypatch):
+    """One training step and a test epoch on the shipped DANRA + ERA5
+    example config, checking that each evaluation plot overlays the ERA5
+    forcing field `plotting.boundary_var_mapping` maps its state variable to,
+    and no boundary for unmapped variables."""
+    config, datastore, datastore_boundary = nlconfig.load_config_and_datastore(
+        str(DATASTORES_BOUNDARY_EXAMPLES["mdp"].parent / "config.yaml")
+    )
+    mapping = config.plotting.boundary_var_mapping
+    assert mapping, "the shipped example should map at least one variable"
+
+    graph_dir_path = Path(datastore.root_path) / "graph" / GRAPH
+    if not graph_dir_path.exists():
+        create_graph_from_datastore(
+            datastore=datastore,
+            output_root_path=str(graph_dir_path),
+            archetype="keisler",
+        )
+
+    predictor = GraphLAM(
+        datastore=datastore,
+        graph_name=GRAPH,
+        hidden_dim=HIDDEN_DIM,
+        hidden_layers=HIDDEN_LAYERS,
+        processor_layers=1,
+        mesh_aggr=MESH_AGGR,
+        num_past_forcing_steps=NUM_PAST_FORCING_STEPS,
+        num_future_forcing_steps=NUM_FUTURE_FORCING_STEPS,
+        output_std=False,
+        output_clamping_lower=config.training.output_clamping.lower,
+        output_clamping_upper=config.training.output_clamping.upper,
+    )
+    model = ForecasterModule(
+        forecaster=ARForecaster(predictor, datastore),
+        config=config,
+        datastore=datastore,
+        datastore_boundary=datastore_boundary,
+        loss="mse",
+        lr=1.0e-3,
+        restore_opt=False,
+        n_example_pred=1,
+        val_steps_to_log=[1],
+    )
+    data_module = WeatherDataModule(
+        datastore=datastore,
+        datastore_boundary=datastore_boundary,
+        ar_steps_train=1,
+        ar_steps_eval=1,
+        batch_size=1,
+        num_workers=0,
+        num_past_forcing_steps=NUM_PAST_FORCING_STEPS,
+        num_future_forcing_steps=NUM_FUTURE_FORCING_STEPS,
+    )
+
+    # Record the boundary field each example plot is given, keyed by the
+    # state variable it shows, while still rendering the real figure.
+    overlays = {}
+    plot_prediction = vis.plot_prediction
+
+    def record_overlay(**kwargs):
+        overlays[kwargs["da_target"].state_feature.item()] = kwargs[
+            "boundary_da"
+        ]
+        return plot_prediction(**kwargs)
+
+    monkeypatch.setattr(vis, "plot_prediction", record_overlay)
+
+    trainer = pl.Trainer(
+        accelerator="cpu",
+        devices=1,
+        max_steps=1,
+        limit_val_batches=1,
+        limit_test_batches=1,
+        logger=pl.loggers.CSVLogger(save_dir=str(tmp_path)),
+        log_every_n_steps=1,
+        enable_checkpointing=False,
+    )
+    trainer.fit(model=model, datamodule=data_module)
+    trainer.test(model=model, datamodule=data_module)
+
+    assert set(overlays) == set(datastore.get_vars_names("state"))
+    for var_name, boundary_da in overlays.items():
+        if var_name in mapping:
+            assert boundary_da is not None, f"no overlay for {var_name}"
+            assert boundary_da.forcing_feature.item() == mapping[var_name]
+        else:
+            assert boundary_da is None, f"unexpected overlay for {var_name}"
 
 
 def test_all_gather_cat_single_device():

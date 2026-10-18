@@ -20,3 +20,6 @@ training:
     upper:
       r2m: 1.0
       u100m: 100.0
+plotting:
+  boundary_var_mapping:
+    u100m: u_component_of_wind1000hPa
