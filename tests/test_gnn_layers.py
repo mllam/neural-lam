@@ -748,6 +748,7 @@ class TestNumericalStability:
 #
 
 
+@pytest.mark.requires_real_data
 class TestDefaultBehaviorUnchanged:
     """Tests that with default GNN types, models use InteractionNet
     (backward compatibility). All tests use deterministic models only."""
@@ -870,6 +871,7 @@ class TestDefaultBehaviorUnchanged:
 #
 
 
+@pytest.mark.requires_real_data
 class TestHierarchicalIntegration:
     """Tests for GNN type selection in hierarchical deterministic models."""
 
