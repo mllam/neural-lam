@@ -107,6 +107,7 @@ linkcheck_report_timeouts_as_broken = True
 linkcheck_ignore = [
     r"https://kutt\.to/mllam",  # Returns 403 Forbidden for bots
     r"https://docs\.pytorch\.org/.*",  # Flaky anchors in intersphinx
+    r"https://mllam\.github\.io/neural-lam/.*",  # Own site, not yet deployed
 ]
 
 
