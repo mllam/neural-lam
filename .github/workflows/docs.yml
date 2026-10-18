@@ -1,0 +1,115 @@
+name: Documentation
+on:
+  push:
+    branches: ["main"]
+    paths:
+      - "neural_lam/**"
+      - "docs/**"
+      - "README.md"
+      - "tests/test_marimo_notebook.py"
+      - "pyproject.toml"
+      - "uv.lock"
+      - ".github/workflows/docs.yml"
+  pull_request:
+    branches: ["main"]
+    paths:
+      - "neural_lam/**"
+      - "docs/**"
+      - "README.md"
+      - "tests/test_marimo_notebook.py"
+      - "pyproject.toml"
+      - "uv.lock"
+      - ".github/workflows/docs.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: "docs-${{ github.ref }}"
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+jobs:
+  build-docs:
+    name: Build docs
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install docs dependencies
+        run: |
+          uv sync --extra cpu --extra docs --group dev --locked
+          echo "$PWD/.venv/bin" >> $GITHUB_PATH
+
+      - name: Export marimo notebooks
+        run: python docs/export_notebooks.py
+
+      - name: Test notebook execution and edit links
+        run: pytest -q tests/test_marimo_notebook.py
+
+      - name: Build docs with sphinx
+        run: sphinx-build -W --keep-going -b html docs/ docs/_build/html/
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: docs/_build/html/
+
+  deploy:
+    name: Deploy docs
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: build-docs
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    permissions:
+      pages: write
+      id-token: write
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
+
+  linkcheck:
+    name: Link check
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install docs dependencies
+        run: |
+          uv sync --extra cpu --extra docs --group dev --locked
+          echo "$PWD/.venv/bin" >> $GITHUB_PATH
+
+      - name: Export marimo notebooks
+        run: python docs/export_notebooks.py
+
+      - name: Run linkcheck
+        run: sphinx-build -W --keep-going -b linkcheck docs/ docs/_build/linkcheck/
