@@ -1,4 +1,5 @@
 # Standard library
+import contextlib
 import importlib.util
 import tempfile
 import warnings
@@ -268,10 +269,9 @@ def test_old_create_graph_deprecation_warning(datastore_name):
 
     with warnings.catch_warnings(record=True) as w:
         warnings.simplefilter("always")
-        try:
+        # We only care about the warning, not the error
+        with contextlib.suppress(Exception):
             old_cli(["--config_path", "nonexistent.yaml"])
-        except Exception:
-            pass  # We only care about the warning, not the error
 
         deprecation_warnings = [
             x for x in w if issubclass(x.category, DeprecationWarning)
