@@ -57,6 +57,16 @@ dependencies = [
 # torch release ships wheels for every CUDA version, e.g. cu128 wheels were
 # dropped in torch 2.12, so the cu128 extra stays on the 2.11 series.
 optional-dependencies.cpu = [ "torch>=2.12,<2.13" ]
+optional-dependencies.docs = [
+  "linkify-it-py>=2",
+  "marimo>=0.19",
+  "myst-parser>=3.0.1",
+  "sphinx>=7.2.6",
+  "sphinx-autoapi>=3",
+  "sphinx-book-theme>=1.1",
+  "sphinx-copybutton>=0.5.2",
+  "sphinxext-opengraph>=0.9",
+]
 optional-dependencies.gpu = [ "torch>=2.12,<2.13" ]  # CUDA 13.0, default GPU build
 optional-dependencies.gpu-cu128 = [ "torch>=2.11,<2.12" ]  # CUDA 12.8, last torch series with cu128 wheels
 scripts.create_graph_with_wmg = "neural_lam.create_graph_with_wmg:cli"
@@ -97,8 +107,6 @@ conflicts = [ [ { extra = "cpu" }, { extra = "gpu" }, { extra = "gpu-cu128" } ] 
 [tool.ruff]
 target-version = "py310"
 line-length = 80
-# Avoid notebook churn from lint-only modernization.
-extend-exclude = [ "docs/notebooks/*.ipynb" ]
 lint.select = [ "ANN", "E", "F", "G", "I", "PT", "PTH", "S", "TCH", "UP", "W" ]
 lint.ignore = [
   "ANN401", # Allow explicit Any, e.g. the checkpoint `args: Any`
@@ -157,6 +165,7 @@ ini_options.markers = [
   "requires_real_data: marks tests needing the mdp or npyfilesmeps example data (skip with -m 'not requires_real_data')",
   "requires_training: marks tests that train a model with trainer.fit() (skip with -m 'not requires_training')",
 ]
+ini_options.testpaths = [ "neural_lam", "tests" ]
 
 [tool.interrogate]
 fail-under = 100
