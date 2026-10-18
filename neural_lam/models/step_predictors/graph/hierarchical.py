@@ -45,7 +45,13 @@ class BaseHiGraphModel(BaseGraphModel):
         mesh_up_gnn_type: str = "InteractionNet",
         mesh_down_gnn_type: str = "InteractionNet",
     ) -> None:
-        """Extend :class:`BaseGraphModel` with hierarchical mesh structures."""
+        """Extend :class:`BaseGraphModel` with hierarchical mesh structures.
+
+        Raises
+        ------
+        ValueError
+            If the loaded graph is flat (single level).
+        """
         super().__init__(
             datastore=datastore,
             graph_name=graph_name,
@@ -61,6 +67,7 @@ class BaseHiGraphModel(BaseGraphModel):
             g2m_gnn_type=g2m_gnn_type,
             m2g_gnn_type=m2g_gnn_type,
         )
+
         self.mesh_up_gnn_type = mesh_up_gnn_type
         self.mesh_down_gnn_type = mesh_down_gnn_type
 
@@ -335,3 +342,24 @@ class BaseHiGraphModel(BaseGraphModel):
             mesh_down_rep)`` in the same order as the inputs.
         """
         raise NotImplementedError("hi_process_step not implemented")
+
+    def check_graph_type(self, graph_name: str) -> None:
+        """
+        Verify the loaded graph is hierarchical.
+
+        Parameters
+        ----------
+        graph_name : str
+            Name of the graph directory that was loaded, for the error
+            message.
+
+        Raises
+        ------
+        ValueError
+            If the loaded graph is flat.
+        """
+        if not self.hierarchical:
+            raise ValueError(
+                f"{type(self).__name__} requires a hierarchical mesh "
+                f"graph, but graph '{graph_name}' is flat"
+            )
