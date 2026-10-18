@@ -81,12 +81,9 @@ jobs:
           path: .fsspec-cache
           key: ${{ runner.os }}-mdp-input-v1-${{ hashFiles('tests/datastore_examples/mdp/**/*.datastore.yaml') }}
 
-      - name: Run tests (excluding notebooks)
+      - name: Run tests
         run: |
-          pytest -vv -s --doctest-modules --ignore=docs/notebooks
-
-      # Notebooks run in their own path-filtered, CPU-only workflow
-      # (.github/workflows/notebook-tests.yml).
+          pytest -vv -s --doctest-modules
 
       - name: Upload test figures
         uses: actions/upload-artifact@v4

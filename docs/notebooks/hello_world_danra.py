@@ -31,7 +31,7 @@ def _(mo):
 
     ---
 
-    ### Prerequisites and Context
+    ## Prerequisites and Context
 
     > **Important:** This notebook is designed to be run from inside a **local clone** of [`mllam/neural-lam`](https://github.com/mllam/neural-lam). All paths are relative to the repository root.
     >
@@ -39,7 +39,7 @@ def _(mo):
         "Building Machine Learning Limited Area Models: Kilometer-Scale Weather Forecasting in Realistic Settings" \
         (Adamov et al., 2025) available at [arXiv:2504.09340](https://arxiv.org/abs/2504.09340).
     >
-    > **Python Version:** Make sure you are using a Python version supported by the project (e.g. 3.10-3.14) with `ipykernel` installed.
+    > **Python Version:** Make sure you are using a Python version supported by the project (3.10-3.14).
     >
     > **Note on Future Graph Updates:** The graph generation step currently uses `create_graph.py`, but it will be migrated to use the upcoming `weather-model-graphs` package in the near future.
     """
@@ -48,12 +48,12 @@ def _(mo):
 
 
 @app.cell
-def _():
+def _(mo):
     # Standard library
-    import glob
     import os
     import subprocess
     import sys
+    from pathlib import Path
 
     # Third-party
     import matplotlib.pyplot as plt
@@ -66,8 +66,15 @@ def _():
     from neural_lam.config import load_config_and_datastore
     from neural_lam.plot_graph import plot_graph
 
+    # All paths below are relative to the repository root
+    os.chdir(mo.notebook_dir().parents[1])
+    example_dir = Path("tests/datastore_examples/mdp/danra_100m_winds")
+    config_path = str(example_dir / "config.yaml")
+    print("Working directory:", Path.cwd())
     return (
-        glob,
+        Path,
+        config_path,
+        example_dir,
         load_config_and_datastore,
         neural_lam,
         np,
@@ -81,51 +88,23 @@ def _():
     )
 
 
-@app.cell
-def _(os):
-    # Verify we are at the repo root (should see neural_lam/, docs/, tests/, etc.)
-    print("Current directory:", os.getcwd())
-    print(
-        "Repo contents:", [f for f in os.listdir(".") if not f.startswith(".")]
-    )
-    return
-
-
-@app.cell(hide_code=True)
-def _(mo):
-    mo.md(
-        r"""
-
-    """
-    )
-    return
-
-
-@app.cell
-def _(os):
-    # The notebook is typically located in docs/notebooks/.
-    # Change the working directory to the repository root so that paths like 'tests/...' resolve correctly.
-    if os.getcwd().endswith("notebooks"):
-        os.chdir("../../")
-    print("Current working directory:", os.getcwd())
-    return
-
-
 @app.cell(hide_code=True)
 def _(mo):
     mo.md(
         r"""
     ## 1. Environment Setup
 
-    Set up the environment with [`uv`](https://docs.astral.sh/uv/) from the repository root (see the [README](https://github.com/mllam/neural-lam#installation)):
+    Set up the environment with [`uv`](https://docs.astral.sh/uv/) from the repository root (see the [README](https://github.com/mllam/neural-lam#installation)) and open this notebook with marimo:
 
     ```bash
-    uv sync --extra cpu --group dev
+    uv sync --extra cpu --extra docs --group dev
+    source .venv/bin/activate
+    marimo edit docs/notebooks/hello_world_danra.py
     ```
 
-    This creates a `.venv` with the CPU build of PyTorch plus the development dependencies. For GPU runs swap `--extra cpu` for `--extra gpu` (CUDA 13.0) or `--extra gpu-cu128` (CUDA 12.8).
+    This creates a `.venv` with the CPU build of PyTorch, marimo (from the `docs` extra) and the development dependencies. For GPU runs swap `--extra cpu` for `--extra gpu` (CUDA 13.0) or `--extra gpu-cu128` (CUDA 12.8).
 
-    Run the rest of this notebook on that environment's kernel (Python >=3.10 with `ipykernel` installed).
+    To run the whole tutorial non-interactively use `python docs/notebooks/hello_world_danra.py`.
     """
     )
     return
@@ -155,8 +134,6 @@ def _(mo):
 
     The `mllam-data-prep` command reads the datastore config, fetches the data, and writes a processed `.zarr` archive to disk.
 
-    > **Version requirement:** This notebook requires `mllam-data-prep >= 0.6.0`. Check with `python -m mllam_data_prep --version` or upgrade with `uv pip install --upgrade mllam-data-prep`.\n
-    >\n
     > **Note:** This will download and process approximately 60–120 MB of data. It may take a few minutes on the first run.
     """
     )
@@ -164,84 +141,50 @@ def _(mo):
 
 
 @app.cell
-def _(os, subprocess, sys):
+def _(example_dir, os, subprocess, sys, xr):
     # Run mllam-data-prep to create the processed DANRA .zarr dataset
-    # Output will appear next to danra.datastore.yaml as danra.datastore.zarr
-    _zarr_path = (
-        "tests/datastore_examples/mdp/danra_100m_winds/danra.datastore.zarr"
-    )
-    if not os.path.exists(_zarr_path):
-        env = os.environ.copy()
-        env["FSSPEC_HTTPS_ASYNCHRONOUS"] = "true"
+    # next to danra.datastore.yaml, unless it already exists
+    _zarr_path = example_dir / "danra.datastore.zarr"
+    if not _zarr_path.exists():
+        _env = os.environ.copy()
+        _env["FSSPEC_HTTPS_ASYNCHRONOUS"] = "true"
         subprocess.run(
             [
-                str(sys.executable),
+                sys.executable,
                 "-m",
                 "mllam_data_prep",
-                "tests/datastore_examples/mdp/danra_100m_winds/danra.datastore.yaml",
+                str(example_dir / "danra.datastore.yaml"),
             ],
             check=True,
-            env=env,
+            env=_env,
         )
     else:
-        print(
-            f"Dataset already exists at {_zarr_path}, skipping data preparation."
-        )
-    return
+        print(f"Dataset already exists at {_zarr_path}, skipping preparation.")
+    ds = xr.open_zarr(_zarr_path)
+    ds
+    return (ds,)
 
 
 @app.cell
-def _(os):
-    zarr_path = (
-        "tests/datastore_examples/mdp/danra_100m_winds/danra.datastore.zarr"
+def _(ds, np, plt):
+    _da = ds["state"].isel(time=0, state_feature=0)
+    _x_unique = np.unique(ds["x"].values)
+    _y_unique = np.unique(ds["y"].values)
+    _grid = np.full((len(_y_unique), len(_x_unique)), np.nan)
+    _grid[
+        np.searchsorted(_y_unique, ds["y"].values),
+        np.searchsorted(_x_unique, ds["x"].values),
+    ] = _da.values
+    fig, _ax = plt.subplots(figsize=(8, 6))
+    _pcm = _ax.pcolormesh(
+        _x_unique, _y_unique, _grid, cmap="RdBu_r", shading="auto"
     )
-    if os.path.exists(zarr_path):
-        print("Zarr dataset at:", zarr_path)
-    else:
-        print("zarr dataset not found — check the output above for errors.")
+    _ax.set_xlabel("x (m)")
+    _ax.set_ylabel("y (m)")
+    _ax.set_title(f"{_da['state_feature'].item()} at t=0")
+    fig.colorbar(_pcm, ax=_ax)
+    fig
     return
-
-
-@app.cell
-def _(np, plt, xr):
-    ds = xr.open_zarr(
-        "tests/datastore_examples/mdp/danra_100m_winds/danra.datastore.zarr"
-    )
-    print(ds)
-    fig = None
-    if "state" in ds:
-        da = ds["state"].isel(time=0, state_feature=0)
-        values = da.values
-        x = ds.coords["x"].values if "x" in ds.coords else None
-        y = ds.coords["y"].values if "y" in ds.coords else None
-        fig, ax = plt.subplots(figsize=(8, 6))
-        if x is not None and y is not None:
-            x_unique = np.sort(np.unique(x))
-            y_unique = np.sort(np.unique(y))
-            xi = np.searchsorted(x_unique, x)
-            yi = np.searchsorted(y_unique, y)
-            grid = np.full((len(y_unique), len(x_unique)), np.nan)
-            grid[yi, xi] = values
-            pcm = ax.pcolormesh(
-                x_unique, y_unique, grid, cmap="RdBu_r", shading="auto"
-            )
-            ax.set_xlabel("x (m)")
-            ax.set_ylabel("y (m)")
-        else:
-            n = len(values)
-            ny = int(np.sqrt(n))
-            nx = n // ny
-            grid = values[: ny * nx].reshape(ny, nx)
-            pcm = ax.pcolormesh(grid, cmap="RdBu_r", shading="auto")
-        feature_names = (
-            list(ds["state_feature"].values)
-            if "state_feature" in ds.coords
-            else ["feature_0"]
-        )
-        ax.set_title(f"2D state field: {feature_names[0]} at t=0")
-        plt.colorbar(pcm, ax=ax)
-        plt.tight_layout()
-    return (fig,)
 
 
 @app.cell(hide_code=True)
@@ -265,106 +208,45 @@ def _(mo):
 
 
 @app.cell
-def _(subprocess, sys):
+def _(config_path, example_dir, os, subprocess, sys):
     # Generate the single-level graph for fast CPU execution
-    # Graph files are stored in tests/datastore_examples/mdp/danra_100m_winds/graphs/1level/
-    #! {sys.executable} -m neural_lam.create_graph --config_path tests/datastore_examples/mdp/danra_100m_winds/config.yaml --name 1level --levels 1
+    graph_name = "1level"
     subprocess.run(
         [
-            str(sys.executable),
+            sys.executable,
             "-m",
             "neural_lam.create_graph",
             "--config_path",
-            "tests/datastore_examples/mdp/danra_100m_winds/config.yaml",
+            config_path,
             "--name",
-            "1level",
+            graph_name,
             "--levels",
             "1",
         ],
         check=True,
     )
-    return
+    graph_dir = example_dir / "graph" / graph_name
+    for _f in sorted(graph_dir.glob("*.pt")):
+        print(f"  {_f.name:40s} {os.path.getsize(_f) / 1024:.1f} KB")
+    return graph_dir, graph_name
 
 
 @app.cell
-def _(glob, os):
-    _graph_dir = "tests/datastore_examples/mdp/danra_100m_winds/graph/1level"
-    _graph_files = glob.glob(
-        os.path.join(_graph_dir, "**", "*.pt"), recursive=True
+def _(config_path, graph_dir, load_config_and_datastore, np, plot_graph, utils):
+    # Interactive 3D view of the grid and mesh nodes and their connections
+    _, _datastore = load_config_and_datastore(config_path=config_path)
+    _xy = _datastore.get_xy("state", stacked=True)
+    _grid_xy_max_span = np.max(np.abs(_xy))
+    _hierarchical, _graph_ldict = utils.load_graph(
+        graph_dir_path=str(graph_dir),
+        mesh_node_features_scaling=_grid_xy_max_span,
     )
-    if _graph_files:
-        print(f"✅ Graph created with {len(_graph_files)} tensor file(s):")
-        for f in sorted(_graph_files):
-            size_kb = os.path.getsize(f) / 1024
-            print(f"  {os.path.basename(f):40s} {size_kb:.1f} KB")
-    else:
-        print(
-            "❌ No graph .pt files found — check the create_graph output above."
-        )
+    plot_graph(
+        grid_pos=_xy / _grid_xy_max_span,
+        hierarchical=_hierarchical,
+        graph_ldict=_graph_ldict,
+    )
     return
-
-
-@app.cell
-def _(load_config_and_datastore, np, os, plot_graph, plt, utils):
-    config_path = "tests/datastore_examples/mdp/danra_100m_winds/config.yaml"
-    _, datastore = load_config_and_datastore(config_path=config_path)
-    xy = datastore.get_xy("state", stacked=True)
-    grid_xy_max_span = np.max(np.abs(xy))
-    grid_pos = xy / grid_xy_max_span
-    _graph_dir = os.path.join(datastore.root_path, "graph", "1level")
-    hierarchical, graph_ldict = utils.load_graph(
-        graph_dir_path=_graph_dir, mesh_node_features_scaling=grid_xy_max_span
-    )
-    _fig = plot_graph(
-        grid_pos=grid_pos, hierarchical=hierarchical, graph_ldict=graph_ldict
-    )
-    _fig.write_html("graph_viz.html", include_plotlyjs="cdn")
-    print(
-        "Full interactive 3D graph saved to graph_viz.html - open it in a browser."
-    )
-    traces = {t.name: t for t in _fig.data}
-
-    def edge_xyz(name, keep=None):
-        """x, y, z of an edge trace (None-separated segments), optionally thinned."""
-        t = traces[name]
-        x = np.asarray(t.x, float)
-        y = np.asarray(t.y, float)
-        z = np.asarray(t.z, float)
-        n_edges = x.size // 3
-        if keep is not None and n_edges > keep:
-            sel = np.zeros(x.size, dtype=bool)
-            for i in range(0, n_edges, max(1, n_edges // keep)):
-                sel[3 * i : 3 * i + 3] = True
-            x, y, z = (x[sel], y[sel], z[sel])
-        return (x, y, z)
-
-    grid_x = np.asarray(traces["Grid nodes"].x, dtype=float)
-    grid_y = np.asarray(traces["Grid nodes"].y, dtype=float)
-    mesh_x = np.asarray(traces["Mesh nodes"].x, dtype=float)
-    mesh_y = np.asarray(traces["Mesh nodes"].y, dtype=float)
-    mesh_z = np.asarray(traces["Mesh nodes"].z, dtype=float)
-    stride = max(1, grid_x.size // 20000)
-    fig3d = plt.figure(figsize=(8, 6))
-    ax3d = fig3d.add_subplot(111, projection="3d")
-    ax3d.plot(*edge_xyz("G2M", keep=400), color="0.7", lw=0.2, alpha=0.4)
-    ax3d.plot(
-        *edge_xyz("M2M"), color="tab:blue", lw=0.4, alpha=0.6, label="M2M edges"
-    )
-    ax3d.scatter(
-        grid_x[::stride],
-        grid_y[::stride],
-        np.zeros(grid_x[::stride].size),
-        s=1,
-        color="lightgray",
-        label="grid nodes",
-    )
-    ax3d.scatter(
-        mesh_x, mesh_y, mesh_z, s=10, color="tab:red", label="mesh nodes"
-    )
-    ax3d.set_title("Graph structure (3D: grid + mesh layers)")
-    ax3d.set_zticks([])
-    ax3d.legend(loc="upper right", markerscale=3)
-    return (fig3d,)
 
 
 @app.cell(hide_code=True)
@@ -383,6 +265,7 @@ def _(mo):
     | `--processor_layers` | `2` | Reduced from default (4) for CPU |
     | `--ar_steps_train` | `1` | Unroll 1 time-step during training — reduces memory and compute |
     | `--ar_steps_eval` | `1` | Also 1 step for the val pass within this demo run |
+    | `--logger_run_name` | `hello_world_danra_train` | Fixed run directory under `runs/`, so the checkpoint path is known |
 
     **About logging:** By default, `neural-lam` logs via [Weights & Biases](https://wandb.ai). To suppress W&B upload during this demo, we set `WANDB_MODE=offline` so metrics are saved locally without requiring a W&B account or login.
     """
@@ -391,7 +274,7 @@ def _(mo):
 
 
 @app.cell
-def _(os, subprocess, sys):
+def _(Path, config_path, graph_name, os, subprocess, sys):
     os.environ["WANDB_MODE"] = "offline"
     os.environ["CUDA_VISIBLE_DEVICES"] = ""
     # Force a non-interactive matplotlib backend in the subprocess:
@@ -399,17 +282,18 @@ def _(os, subprocess, sys):
     # from Lightning callback threads.
     os.environ["MPLBACKEND"] = "Agg"
 
+    _run_name = "hello_world_danra_train"
     subprocess.run(
         [
             sys.executable,
             "-m",
             "neural_lam.train_model",
             "--config_path",
-            "tests/datastore_examples/mdp/danra_100m_winds/config.yaml",
+            config_path,
             "--model",
             "graph_lam",
             "--graph",
-            "1level",
+            graph_name,
             "--epochs",
             "1",
             "--processor_layers",
@@ -422,10 +306,14 @@ def _(os, subprocess, sys):
             "0",
             "--val_steps_to_log",
             "1",
+            "--logger_run_name",
+            _run_name,
         ],
         check=True,
     )
-    return
+    ckpt_path = Path("runs") / _run_name / "checkpoints" / "last.ckpt"
+    print("Checkpoint:", ckpt_path)
+    return (ckpt_path,)
 
 
 @app.cell(hide_code=True)
@@ -436,50 +324,34 @@ def _(mo):
 
     Evaluation reuses the same `train_model` command with `--eval test` and the `--load` flag pointing to the checkpoint from training.
 
-    Example predictions are plotted automatically and saved by the logger. Set `--n_example_pred` to control how many prediction plots to produce.
+    The test RMSE per lead time is saved as `test_rmse.pdf` in the run directory. With `--create_gif`, `--n_example_pred` example forecasts are also written there as per-variable GIFs.
     """
     )
     return
 
 
 @app.cell
-def _(glob, os):
-    _ckpts = glob.glob("runs/**/*.ckpt", recursive=True)
-    if not _ckpts:
-        raise FileNotFoundError(
-            "No checkpoint found under runs/ - the training cell above did not complete."
-        )
-    else:
-        ckpt_path = max(_ckpts, key=os.path.getmtime)
-        print(f"✅ Using checkpoint: {ckpt_path}")
-    return (ckpt_path,)
-
-
-@app.cell
-def _(ckpt_path, os, subprocess, sys):
-    os.environ["WANDB_MODE"] = "offline"
-    os.environ["CUDA_VISIBLE_DEVICES"] = ""
-    os.environ["MPLBACKEND"] = "Agg"
-
+def _(Path, ckpt_path, config_path, graph_name, subprocess, sys):
+    _run_name = "hello_world_danra_eval"
     subprocess.run(
         [
             sys.executable,
             "-m",
             "neural_lam.train_model",
             "--config_path",
-            "tests/datastore_examples/mdp/danra_100m_winds/config.yaml",
+            config_path,
             "--model",
             "graph_lam",
             "--graph",
-            "1level",
+            graph_name,
             "--eval",
             "test",
             "--load",
-            ckpt_path,
+            str(ckpt_path),
             "--processor_layers",
             "2",
             "--n_example_pred",
-            "2",
+            "1",
             "--create_gif",
             "--ar_steps_eval",
             "4",
@@ -487,36 +359,23 @@ def _(ckpt_path, os, subprocess, sys):
             "0",
             "--val_steps_to_log",
             "1",
+            "--logger_run_name",
+            _run_name,
         ],
         check=True,
     )
-    return
+    eval_dir = Path("runs") / _run_name
+    return (eval_dir,)
 
 
 @app.cell
-def _(glob, mo, os):
-    rmse_plots = sorted(
-        glob.glob("runs/**/test_rmse_*.png", recursive=True),
-        key=os.path.getmtime,
+def _(eval_dir, mo):
+    mo.vstack(
+        [
+            mo.pdf(src=eval_dir / "test_rmse.pdf", height="50vh"),
+            *[mo.image(src=_gif) for _gif in sorted(eval_dir.glob("*/*.gif"))],
+        ]
     )
-    if rmse_plots:
-        print("RMSE scorecard:", rmse_plots[-1])
-        mo.image(src=rmse_plots[-1])
-    else:
-        print("test_rmse plot not found - check eval output above.")
-
-    example_plots = sorted(
-        glob.glob("runs/**/*_example_*.png", recursive=True),
-        key=os.path.getmtime,
-    )
-    if example_plots:
-        n_show = min(2, len(example_plots))
-        print(f"Showing {n_show} of {len(example_plots)} prediction plot(s):")
-        for path in example_plots[-n_show:]:
-            print(" ", path)
-            mo.image(src=path)
-    else:
-        print("No prediction plots found - check eval output above.")
     return
 
 
@@ -545,7 +404,7 @@ def _(mo):
 
     ### ⚡ Enable GPU training
 
-    Re-create the environment with a CUDA build of PyTorch and `--devices` will auto-detect your GPU:
+    Re-create the environment with a CUDA build of PyTorch and remove the `CUDA_VISIBLE_DEVICES=""` line from the training cell, so that `--devices` (default `auto`) picks up your GPU:
     ```bash
     uv sync --extra gpu        # CUDA 13.0
     # or: uv sync --extra gpu-cu128   # CUDA 12.8
@@ -564,13 +423,13 @@ def _(mo):
 
     ### 📊 Enable cloud logging with W&B
 
-    Remove the `WANDB_MODE=offline` line (or set it to `online`) and optionally set `--logger wandb --logger-project <your-project-name>`.
+    Remove the `WANDB_MODE=offline` line in the training cell (or set it to `online`) and optionally set `--logger wandb --logger-project <your-project-name>`.
 
     ### 🔗 Further reading
 
     - [neural-lam README](https://github.com/mllam/neural-lam)
     - [mllam-data-prep](https://github.com/mllam/mllam-data-prep)
-    - [Graph-based Neural Weather Prediction (NeurIPS 2023)](https://arxiv.org/abs/2309.17370)
+    - [Graph-based Neural Weather Prediction for Limited Area Modeling (NeurIPS 2023 CCAI workshop)](https://arxiv.org/abs/2309.17370)
     - [Probabilistic Weather Forecasting with Hierarchical GNNs (NeurIPS 2024)](https://arxiv.org/abs/2406.04759)
     """
     )

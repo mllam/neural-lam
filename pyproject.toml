@@ -72,7 +72,7 @@ optional-dependencies.gpu-cu128 = [ "torch>=2.11,<2.12" ]  # CUDA 12.8, last tor
 scripts.create_graph_with_wmg = "neural_lam.create_graph_with_wmg:cli"
 
 [dependency-groups]
-dev = [ "marimo>=0.9", "pooch>=1.8.2", "pre-commit>=3.8", "pytest>=8.3.2" ]
+dev = [ "pooch>=1.8.2", "pre-commit>=3.8", "pytest>=8.3.2" ]
 
 [tool.hatch]
 build.targets.sdist.exclude = [
@@ -128,7 +128,7 @@ lint.ignore = [
 ]
 lint.per-file-ignores."__init__.py" = [ "F401" ]
 lint.per-file-ignores."docs/**" = [ "ANN" ]
-lint.per-file-ignores."docs/notebooks/*.py" = [ "ANN", "E265", "E501", "E712" ]
+lint.per-file-ignores."docs/notebooks/*.py" = [ "E501" ]
 lint.per-file-ignores."tests/**" = [ "ANN" ]
 lint.isort.import-heading = { first-party = "First-party", local-folder = "Local", standard-library = "Standard library", third-party = "Third-party" }
 lint.isort.known-first-party = [ "neural_lam", "tests" ]

@@ -16,6 +16,7 @@ getting-started/quickstart
 :hidden:
 
 notebooks/create_reduced_meps_dataset
+notebooks/hello_world_danra
 ```
 
 ```{toctree}
