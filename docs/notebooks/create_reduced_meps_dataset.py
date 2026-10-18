@@ -7,243 +7,246 @@ app = marimo.App()
 
 @app.cell
 def _():
+    # Standard library
+    import argparse
+    from pathlib import Path
+
     # Third-party
     import marimo as mo
+    import numpy as np
+    import torch
 
-    return (mo,)
+    return Path, argparse, mo, np, torch
 
 
-@app.cell(hide_code=True)
+@app.cell
 def _(mo):
     mo.md(
         r"""
     # Creating meps_example_reduced
-    This notebook outlines how the small-size test dataset ```meps_example_reduced``` was created based on the slightly larger dataset ```meps_example```. The zipped up datasets are 263 MB and 2.6 GB, respectively. See [README.md](../../README.md) for info on how to download ```meps_example```.
 
-    The dataset was reduced in size by reducing the number of grid points and variables.
+    This notebook outlines how the small test dataset
+    `meps_example_reduced` was created from `meps_example`. The original
+    zipped datasets were 263 MB and 2.6 GB, respectively. See the
+    [README](https://github.com/mllam/neural-lam/blob/main/README.md)
+    for instructions to download and extract `meps_example`.
+
+    The dataset was reduced by cropping the grid and keeping fewer
+    variables. Run this notebook from the repository root with:
+
+    ```bash
+    python docs/notebooks/create_reduced_meps_dataset.py
+    ```
+
+    The default input is `data/meps_example`; output directories are
+    created under `data/meps_example_reduced`. Use `--input-dir` and
+    `--output-dir` to select other locations. Rerunning overwrites
+    matching output files. The input and output directories must differ.
+
+    The final configuration edit described below remains a manual step.
+    Exporting this notebook to Markdown does not run the data processing.
     """
     )
     return
 
 
-@app.cell(disabled=True)
-def _():
-    # Cell tags: skip-execution
-    # Standard library
-    import os
+@app.cell
+def _(Path, argparse):
+    _parser = argparse.ArgumentParser(description="Reduce the MEPS dataset")
+    _parser.add_argument(
+        "--input-dir", type=Path, default=Path("data/meps_example")
+    )
+    _parser.add_argument(
+        "--output-dir", type=Path, default=Path("data/meps_example_reduced")
+    )
+    _args = _parser.parse_args()
+    input_dir = _args.input_dir.resolve()
+    output_dir = _args.output_dir.resolve()
+    if not (input_dir / "static" / "nwp_xy.npy").is_file():
+        raise FileNotFoundError(
+            f"MEPS source dataset not found at {input_dir}. "
+            "Download and extract meps_example as described in the README, "
+            "or pass --input-dir."
+        )
+    if output_dir == input_dir:
+        raise ValueError("Input and output directories must differ")
+    (output_dir / "static").mkdir(parents=True, exist_ok=True)
+    for _split in ("train", "test", "val"):
+        (output_dir / "samples" / _split).mkdir(parents=True, exist_ok=True)
+    return input_dir, output_dir
 
-    # Third-party
-    import numpy as np
-    import torch
 
-    return np, os, torch
-
-
-@app.cell(hide_code=True)
+@app.cell
 def _(mo):
     mo.md(
         r"""
-    The number of grid points was reduced to 1/4 by halving the number of coordinates in both the x and y direction. This was done by removing a quarter of the grid points along each outer edge, so the center grid points would stay centered in the new set.
+    ## Reduce the grid
+
+    The number of grid points was reduced to one quarter by halving
+    both spatial dimensions. Removing a quarter of the coordinates
+    along each outer edge keeps the central grid points centered.
     """
     )
     return
 
 
-@app.cell(disabled=True)
-def _(np):
-    # Cell tags: skip-execution
-    # Load existing grid
-    grid_xy = np.load("data/meps_example/static/nwp_xy.npy")
-    # Get slices in each dimension by cutting off a quarter along each edge
+@app.cell
+def _(input_dir, np, output_dir):
+    grid_xy = np.load(input_dir / "static" / "nwp_xy.npy")
     num_x, num_y = grid_xy.shape[1:]
     x_slice = slice(num_x // 4, 3 * num_x // 4)
     y_slice = slice(num_y // 4, 3 * num_y // 4)
-    # Index and save reduced grid
     grid_xy_reduced = grid_xy[:, x_slice, y_slice]
-    np.save("data/meps_example_reduced/static/nwp_xy.npy", grid_xy_reduced)
+    np.save(output_dir / "static" / "nwp_xy.npy", grid_xy_reduced)
     return grid_xy_reduced, num_x, num_y, x_slice, y_slice
 
 
-@app.cell(hide_code=True)
+@app.cell
 def _(mo):
     mo.md(
         r"""
-    This cut out the border, so a new perimeter of 10 grid points was established as border (10 was also the border size in the original "meps_example").
+    Cropping removes the original border. Establish a new perimeter of
+    10 grid points, matching the border width in `meps_example`.
     """
     )
     return
 
 
-@app.cell(disabled=True)
-def _(grid_xy_reduced, np):
-    # Cell tags: skip-execution
-    # Outer 10 grid points are border
-    old_border_mask = np.load("data/meps_example/static/border_mask.npy")
-    assert np.all(old_border_mask[10:-10, 10:-10] == False)
-    assert np.all(old_border_mask[:10, :] == True)
-    assert np.all(old_border_mask[:, :10] == True)
-    assert np.all(old_border_mask[-10:, :] == True)
-    assert np.all(old_border_mask[:, -10:] == True)
+@app.cell
+def _(grid_xy_reduced, input_dir, np, output_dir):
+    _old_border_mask = np.load(input_dir / "static" / "border_mask.npy")
+    assert not np.any(_old_border_mask[10:-10, 10:-10])
+    assert np.all(_old_border_mask[:10, :])
+    assert np.all(_old_border_mask[:, :10])
+    assert np.all(_old_border_mask[-10:, :])
+    assert np.all(_old_border_mask[:, -10:])
 
-    # Create new array with False everywhere but the outer 10 grid points
-    border_mask = np.zeros_like(grid_xy_reduced[0, :, :], dtype=bool)
-    border_mask[:10] = True
-    border_mask[:, :10] = True
-    border_mask[-10:] = True
-    border_mask[:, -10:] = True
-    np.save("data/meps_example_reduced/static/border_mask.npy", border_mask)
+    _border_mask = np.zeros_like(grid_xy_reduced[0], dtype=bool)
+    _border_mask[:10] = True
+    _border_mask[:, :10] = True
+    _border_mask[-10:] = True
+    _border_mask[:, -10:] = True
+    np.save(output_dir / "static" / "border_mask.npy", _border_mask)
     return
 
 
-@app.cell(hide_code=True)
+@app.cell
 def _(mo):
     mo.md(
-        r"""
-    A few other files also needed to be copied using only the new reduced grid
+        """
+    Crop surface geopotential and grid features to the same grid.
+    The two-element `flux_stats.pt` vector does not depend on the grid
+    shape or the number of variables, so copy it unchanged.
     """
     )
     return
 
 
-@app.cell(disabled=True)
-def _(np, num_x, num_y, torch, x_slice, y_slice):
-    # Cell tags: skip-execution
-    # Load surface_geopotential.npy, index only values from the reduced grid, and save to new file
-    surface_geopotential = np.load(
-        "data/meps_example/static/surface_geopotential.npy"
+@app.cell
+def _(input_dir, np, num_x, num_y, output_dir, torch, x_slice, y_slice):
+    _surface_geopotential = np.load(
+        input_dir / "static" / "surface_geopotential.npy"
     )
-    surface_geopotential_reduced = surface_geopotential[x_slice, y_slice]
     np.save(
-        "data/meps_example_reduced/static/surface_geopotential.npy",
-        surface_geopotential_reduced,
+        output_dir / "static" / "surface_geopotential.npy",
+        _surface_geopotential[x_slice, y_slice],
     )
 
-    # Load pytorch file grid_features.pt
-    grid_features = torch.load("data/meps_example/static/grid_features.pt")
-    # Index only values from the reduced grid.
-    # First reshape from (num_grid_points_total, 4) to (num_grid_points_x, num_grid_points_y, 4),
-    # then index, then reshape back to new total number of grid points
-    print(grid_features.shape)
-    grid_features_new = grid_features.reshape(num_x, num_y, 4)[
+    _grid_features = torch.load(input_dir / "static" / "grid_features.pt")
+    print(_grid_features.shape)
+    # Reshape to the grid, crop, then flatten the spatial dimensions again.
+    _grid_features_reduced = _grid_features.reshape(num_x, num_y, 4)[
         x_slice, y_slice, :
     ].reshape((-1, 4))
-    # Save to new file
     torch.save(
-        grid_features_new, "data/meps_example_reduced/static/grid_features.pt"
+        _grid_features_reduced, output_dir / "static" / "grid_features.pt"
     )
-
-    # flux_stats.pt is just a vector of length 2, so the grid shape and variable changes does not change this file
     torch.save(
-        torch.load("data/meps_example/static/flux_stats.pt"),
-        "data/meps_example_reduced/static/flux_stats.pt",
+        torch.load(input_dir / "static" / "flux_stats.pt"),
+        output_dir / "static" / "flux_stats.pt",
     )
     return
 
 
-@app.cell(hide_code=True)
+@app.cell
 def _(mo):
     mo.md(
-        r"""
-    The number of variables was reduced by truncating the variable list to the first 8.
+        """
+    ## Reduce the variables
+
+    Keep the first eight variables, including their weights and
+    normalization statistics.
     """
     )
     return
 
 
-@app.cell(disabled=True)
-def _(np, torch):
-    # Cell tags: skip-execution
+@app.cell
+def _(input_dir, np, output_dir, torch):
     num_vars = 8
-
-    # Load parameter_weights.npy, truncate to first 8 variables, and save to new file
-    parameter_weights = np.load(
-        "data/meps_example/static/parameter_weights.npy"
-    )
-    parameter_weights_reduced = parameter_weights[:num_vars]
+    _parameter_weights = np.load(input_dir / "static" / "parameter_weights.npy")
     np.save(
-        "data/meps_example_reduced/static/parameter_weights.npy",
-        parameter_weights_reduced,
+        output_dir / "static" / "parameter_weights.npy",
+        _parameter_weights[:num_vars],
     )
-
-    # Do the same for following 4 pytorch files
-    for file in ["diff_mean", "diff_std", "parameter_mean", "parameter_std"]:
-        old_file = torch.load(f"data/meps_example/static/{file}.pt")
-        new_file = old_file[:num_vars]
-        torch.save(new_file, f"data/meps_example_reduced/static/{file}.pt")
+    for _name in ("diff_mean", "diff_std", "parameter_mean", "parameter_std"):
+        _old_file = torch.load(input_dir / "static" / f"{_name}.pt")
+        torch.save(_old_file[:num_vars], output_dir / "static" / f"{_name}.pt")
     return (num_vars,)
 
 
-@app.cell(hide_code=True)
+@app.cell
 def _(mo):
     mo.md(
         r"""
-    Lastly the files in each of the directories train, test, and val have to be reduced. The folders all have the same structure with files of the following types:
-    ```
-    nwp_YYYYMMDDHH_mbrXXX.npy
-    wtr_YYYYMMDDHH.npy
-    nwp_toa_downwelling_shortwave_flux_YYYYMMDDHH.npy
-    ```
-    with ```YYYYMMDDHH``` being some date with hours, and ```XXX``` being some 3-digit integer.
+    ## Reduce the samples
 
-    The first type of file has x and y in dimensions 1 and 2, and variable index in dimension 3. Dimension 0 is unchanged.
-    The second type has has x and y in dimensions 1 and 2. Dimension 0 is unchanged.
-    The last type has just x and y as the only 2 dimensions.
+    Each of `samples/train`, `samples/test`, and `samples/val` contains:
+
+    - `nwp_YYYYMMDDHH_mbrXXX.npy`: forecast time, two spatial dimensions,
+      then variables. Crop the spatial dimensions and keep eight variables.
+    - `wtr_YYYYMMDDHH.npy`: two spatial dimensions, both cropped.
+    - `nwp_toa_downwelling_shortwave_flux_YYYYMMDDHH.npy`: forecast time
+      followed by two spatial dimensions. Keep every forecast time.
+
+    Here `YYYYMMDDHH` is a date and hour, and `XXX` is a three-digit
+    member index. In the original example, the state array had shape
+    `(65, 268, 238, 18)` and the shortwave-flux array had shape
+    `(65, 268, 238)`.
     """
     )
     return
 
 
-@app.cell(disabled=True)
-def _(np):
-    # Cell tags: skip-execution
-    print(
-        np.load(
-            "data/meps_example/samples/train/nwp_2022040100_mbr000.npy"
-        ).shape
-    )
-    print(
-        np.load(
-            "data/meps_example/samples/train/nwp_toa_downwelling_shortwave_flux_2022040112.npy"
-        ).shape
-    )
-    return
-
-
-@app.cell(hide_code=True)
-def _(mo):
-    mo.md(
-        r"""
-    The following loop goes through each file in each sample folder and indexes them according to the dimensions given by the file name.
-    """
-    )
-    return
-
-
-@app.cell(disabled=True)
-def _(np, num_vars, os, x_slice, y_slice):
-    # Cell tags: skip-execution
-    for sample in ["train", "test", "val"]:
-        files = os.listdir(f"data/meps_example/samples/{sample}")
-
-        for f in files:
-            data = np.load(f"data/meps_example/samples/{sample}/{f}")
-            if "mbr" in f:
-                data = data[:, x_slice, y_slice, :num_vars]
-            elif "wtr" in f:
-                data = data[x_slice, y_slice]
+@app.cell
+def _(input_dir, np, num_vars, output_dir, x_slice, y_slice):
+    for _sample in ("train", "test", "val"):
+        for _file in sorted((input_dir / "samples" / _sample).iterdir()):
+            _data = np.load(_file)
+            if "mbr" in _file.name:
+                _data = _data[:, x_slice, y_slice, :num_vars]
+            elif "wtr" in _file.name:
+                _data = _data[x_slice, y_slice]
             else:
-                data = data[:, x_slice, y_slice]
-            np.save(f"data/meps_example_reduced/samples/{sample}/{f}", data)
+                _data = _data[:, x_slice, y_slice]
+            np.save(output_dir / "samples" / _sample / _file.name, _data)
     return
 
 
-@app.cell(hide_code=True)
+@app.cell
 def _(mo):
     mo.md(
         r"""
-    Lastly, the file ```data_config.yaml``` is modified manually by truncating the variable units, long and short names, and setting the new grid shape. Also the unit descriptions containing ```^``` was automatically parsed using latex, and to avoid having to install latex in the GitHub CI/CD pipeline, this was changed to ```**```.
+    ## Update the configuration manually
 
-    This new config file was placed in ```data/meps_example_reduced```, and that directory was then zipped and placed in a European Weather Cloud S3 bucket.
+    Finally, copy `data_config.yaml` from the source dataset into the
+    output directory. Truncate the variable units, long names and short
+    names to the first eight entries, and set the new grid shape.
+
+    In the original reduction, unit descriptions containing `^` were
+    changed to `**` to avoid requiring LaTeX in GitHub CI. The resulting
+    `data/meps_example_reduced` directory was then archived and uploaded
+    to a European Weather Cloud S3 bucket.
     """
     )
     return
