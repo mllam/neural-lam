@@ -45,12 +45,14 @@ import numpy as np
 import pytest
 import torch
 import xarray as xr
+import yaml
 
 # First-party
 from neural_lam.datastore import DATASTORES
 from neural_lam.datastore.base import BaseRegularGridDatastore
+from neural_lam.datastore.mdp import MDPDatastore
 from neural_lam.datastore.plot_example import plot_example_from_datastore
-from tests.conftest import init_datastore_example
+from tests.conftest import DATASTORE_EXAMPLES_ROOT_PATH, init_datastore_example
 
 
 @pytest.mark.parametrize("datastore_name", DATASTORES.keys())
@@ -220,6 +222,50 @@ def test_get_dataarray(datastore_name):
 
         # check that the number of features is the same for all splits
         assert n_features["train"] == n_features["val"] == n_features["test"]
+
+
+@pytest.mark.requires_real_data
+def test_mdp_state_only_optional_categories(tmp_path):
+    """Test MDPDatastore accessors for absent optional categories.
+
+    Builds the datastore from the DANRA example config with the `forcing`
+    and `static` outputs and their inputs removed. For these optional
+    categories, `get_dataarray` returns `None` and `get_vars_names`,
+    `get_vars_units` and `get_vars_long_names` return empty lists, each
+    emitting a `UserWarning`.
+    """
+    danra_config_path = (
+        DATASTORE_EXAMPLES_ROOT_PATH
+        / "mdp"
+        / "danra_100m_winds"
+        / "danra.datastore.yaml"
+    )
+    config = yaml.safe_load(danra_config_path.read_text())
+    for category in ["forcing", "static"]:
+        del config["output"]["variables"][category]
+    config["inputs"] = {
+        name: input_
+        for name, input_ in config["inputs"].items()
+        if input_["target_output_variable"] == "state"
+    }
+    config_path = tmp_path / "state_only.datastore.yaml"
+    config_path.write_text(yaml.safe_dump(config))
+
+    with pytest.warns(UserWarning, match="no static data found"):
+        datastore = MDPDatastore(config_path=config_path)
+
+    assert len(datastore.get_vars_names("state")) > 0
+    for category in ["forcing", "static"]:
+        with pytest.warns(UserWarning, match=f"no {category} data found"):
+            da = datastore.get_dataarray(category=category, split=None)
+        assert da is None
+        for get_vars in [
+            datastore.get_vars_names,
+            datastore.get_vars_units,
+            datastore.get_vars_long_names,
+        ]:
+            with pytest.warns(UserWarning, match=f"no {category} data found"):
+                assert get_vars(category=category) == []
 
 
 @pytest.mark.parametrize("datastore_name", DATASTORES.keys())
