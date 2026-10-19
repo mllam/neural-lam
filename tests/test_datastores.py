@@ -45,6 +45,7 @@ import numpy as np
 import pytest
 import torch
 import xarray as xr
+import yaml
 
 # First-party
 from neural_lam.datastore import DATASTORES
@@ -224,21 +225,34 @@ def test_get_dataarray(datastore_name):
 
 
 @pytest.mark.requires_real_data
-def test_mdp_state_only_optional_categories():
+def test_mdp_state_only_optional_categories(tmp_path):
     """Test MDPDatastore accessors for absent optional categories.
 
-    Builds the datastore from a config with only a `state` output. For the
-    optional categories "forcing" and "static", `get_dataarray` returns
-    `None` and `get_vars_names`, `get_vars_units` and `get_vars_long_names`
-    return empty lists, each emitting a `UserWarning`.
+    Builds the datastore from the DANRA example config with the `forcing`
+    and `static` outputs and their inputs removed. For these optional
+    categories, `get_dataarray` returns `None` and `get_vars_names`,
+    `get_vars_units` and `get_vars_long_names` return empty lists, each
+    emitting a `UserWarning`.
     """
+    danra_config_path = (
+        DATASTORE_EXAMPLES_ROOT_PATH
+        / "mdp"
+        / "danra_100m_winds"
+        / "danra.datastore.yaml"
+    )
+    config = yaml.safe_load(danra_config_path.read_text())
+    for category in ["forcing", "static"]:
+        del config["output"]["variables"][category]
+    config["inputs"] = {
+        name: input_
+        for name, input_ in config["inputs"].items()
+        if input_["target_output_variable"] == "state"
+    }
+    config_path = tmp_path / "state_only.datastore.yaml"
+    config_path.write_text(yaml.safe_dump(config))
+
     with pytest.warns(UserWarning, match="no static data found"):
-        datastore = MDPDatastore(
-            config_path=DATASTORE_EXAMPLES_ROOT_PATH
-            / "mdp"
-            / "danra_100m_winds"
-            / "state_only.datastore.yaml"
-        )
+        datastore = MDPDatastore(config_path=config_path)
 
     assert len(datastore.get_vars_names("state")) > 0
     for category in ["forcing", "static"]:
