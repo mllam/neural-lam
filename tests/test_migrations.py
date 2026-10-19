@@ -34,14 +34,10 @@ def test_remove_keys_drops_present_keys_and_ignores_missing():
 
 
 def test_migration_requires_exactly_one_of_apply_or_hard_break():
-    with pytest.raises(
-        ValueError, match="Migration must set exactly one of"
-    ):
+    with pytest.raises(ValueError, match="Migration must set exactly one of"):
         migrations.Migration(target_version=1, description="neither")
 
-    with pytest.raises(
-        ValueError, match="Migration must set exactly one of"
-    ):
+    with pytest.raises(ValueError, match="Migration must set exactly one of"):
         migrations.Migration(
             target_version=1,
             description="both",
