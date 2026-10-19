@@ -568,7 +568,8 @@ class NpyFilesDatastoreMEPS(BaseRegularGridDatastore):
         Returns
         -------
         list[dt.datetime]
-            The analysis times for the given split, sorted in ascending order.
+            The unique analysis times for the given split, sorted in ascending
+            order.
 
         """
         pattern = re.sub(r"{analysis_time:[^}]*}", "*", STATE_FILENAME_FORMAT)

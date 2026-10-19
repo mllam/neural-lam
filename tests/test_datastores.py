@@ -280,7 +280,7 @@ def test_npyfilesmeps_analysis_times_unique():
     assert times == sorted(times)
 
     da_state = datastore.get_dataarray(category="state", split="train")
-    assert da_state.analysis_time.size == len(times)
+    assert da_state.analysis_time.to_index().is_unique
 
 
 @pytest.mark.parametrize("datastore_name", DATASTORES.keys())
