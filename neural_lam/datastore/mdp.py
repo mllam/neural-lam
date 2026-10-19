@@ -54,7 +54,8 @@ class MDPDatastore(BaseDatastore):
             `mllam_data_prep.Config.from_yaml_file` method to then call
             `mllam_data_prep.create_dataset` to create the dataset.
         n_boundary_points : int
-            The number of boundary points to use in the boundary mask.
+            Width, in grid points, of the boundary along each x/y edge of the
+            domain. 0 gives no boundary points.
         reuse_existing : bool
             Whether to reuse an existing dataset zarr file if it exists and its
             creation date is newer than the configuration file.
@@ -446,12 +447,9 @@ class MDPDatastore(BaseDatastore):
             ds_unstacked["state"].isel(time=0).isel(state_feature=0)
         )
         da_domain_allzero = xr.zeros_like(da_state_variable)
-        # `-0` is `0`, so `slice(n, -n)` collapses to an empty slice when
-        # `n_boundary_points` is 0 instead of selecting the full domain.
-        interior_slice = slice(
-            self._n_boundary_points or None,
-            -self._n_boundary_points or None,
-        )
+        # slice(n, -n) is empty (not "the whole array") when n == 0
+        n = self._n_boundary_points
+        interior_slice = slice(n, -n) if n > 0 else slice(None)
         ds_unstacked["boundary_mask"] = da_domain_allzero.isel(
             x=interior_slice,
             y=interior_slice,

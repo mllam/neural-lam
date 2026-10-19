@@ -274,6 +274,21 @@ def test_mdp_state_only_optional_categories(tmp_path):
                 assert get_vars(category=category) == []
 
 
+@pytest.mark.requires_real_data
+def test_npyfilesmeps_analysis_times_unique():
+    """Each analysis time has one file per ensemble member, but must only
+    appear once in the `analysis_time` coordinate."""
+    datastore = init_datastore_example("npyfilesmeps")
+    assert datastore.is_ensemble
+
+    times = datastore._get_analysis_times(split="train")
+    assert len(times) == len(set(times))
+    assert times == sorted(times)
+
+    da_state = datastore.get_dataarray(category="state", split="train")
+    assert da_state.analysis_time.to_index().is_unique
+
+
 @pytest.mark.parametrize("datastore_name", DATASTORES.keys())
 def test_boundary_mask(datastore_name):
     """Check that the `datastore.boundary_mask` property is implemented and
@@ -302,13 +317,22 @@ def test_init_datastore_rejects_n_boundary_points_for_non_mdp():
 
 
 @pytest.mark.requires_real_data
-def test_boundary_mask_zero_width_is_all_interior():
-    """`n_boundary_points=0` marks the whole domain as interior."""
+@pytest.mark.parametrize("n_boundary_points", [0, 1, 30])
+def test_mdp_boundary_mask_n_boundary_points(n_boundary_points):
+    """Check that `MDPDatastore.boundary_mask` marks exactly the outer
+    `n_boundary_points` grid points along each edge as boundary, and none
+    for `n_boundary_points=0`."""
     datastore = MDPDatastore(
-        config_path=DATASTORES_EXAMPLES["mdp"], n_boundary_points=0
+        config_path=DATASTORES_EXAMPLES["mdp"],
+        n_boundary_points=n_boundary_points,
     )
-
-    assert (datastore.boundary_mask.values == 0).all()
+    grid_shape = datastore.grid_shape_state
+    n_interior = (grid_shape.x - 2 * n_boundary_points) * (
+        grid_shape.y - 2 * n_boundary_points
+    )
+    assert int(datastore.boundary_mask.sum()) == (
+        grid_shape.x * grid_shape.y - n_interior
+    )
 
 
 @pytest.mark.parametrize("datastore_name", DATASTORES.keys())
