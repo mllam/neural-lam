@@ -858,7 +858,7 @@ def test_aggregate_and_plot_metrics_with_metrics_watch(dummy_graph_dir):
     plt.close("all")
 
 
-def test_spatial_loss_maps_out_of_range_steps(tmp_path):
+def test_spatial_loss_maps_out_of_range_steps(tmp_path, dummy_graph_dir):
     """
     Regression test for issue #747.
 
@@ -867,14 +867,7 @@ def test_spatial_loss_maps_out_of_range_steps(tmp_path):
     loss maps and saved filenames in on_test_epoch_end without misalignment.
     """
     datastore = DummyDatastore()
-
-    graph_dir_path = Path(datastore.root_path) / "graph" / "1level"
-    if not graph_dir_path.exists():
-        create_graph_from_datastore(
-            datastore=datastore,
-            output_root_path=str(graph_dir_path),
-            n_max_levels=1,
-        )
+    shutil.copytree(dummy_graph_dir, datastore.root_path / "graph" / "1level")
 
     config = nlconfig.NeuralLAMConfig(
         datastore=nlconfig.DatastoreSelection(
@@ -905,7 +898,7 @@ def test_spatial_loss_maps_out_of_range_steps(tmp_path):
         lr=1.0e-3,
         restore_opt=False,
         n_example_pred=0,
-        val_steps_to_log=[-1, 0, 1, 2, 100],
+        val_steps_to_log=[100, -1, 0, 1, 2],
     )
 
     # Mock the trainer to simulate rank-0 single-process execution
@@ -931,6 +924,7 @@ def test_spatial_loss_maps_out_of_range_steps(tmp_path):
     prediction = torch.zeros(
         batch_size, pred_steps, num_grid_nodes, num_state_vars
     )
+    prediction[:, 1] = 1.0  # only step 2 has a non-zero error
     target = torch.zeros(batch_size, pred_steps, num_grid_nodes, num_state_vars)
     pred_std = torch.ones(num_state_vars)
     time_step_loss = torch.zeros(pred_steps)
@@ -947,12 +941,6 @@ def test_spatial_loss_maps_out_of_range_steps(tmp_path):
     )
 
     model.test_step(dummy_batch, batch_idx=0)
-
-    # Filtered steps must exclude non-positive (-1, 0) and out-of-range (100)
-    assert model._test_spatial_steps == [1, 2]
-
-    # Run on_test_epoch_end
-    tmp_path.mkdir(parents=True, exist_ok=True)
     model.on_test_epoch_end()
 
     # Verify generated PDF files
@@ -962,15 +950,22 @@ def test_spatial_loss_maps_out_of_range_steps(tmp_path):
     assert not (pdf_dir / "loss_t100.pdf").exists()
 
     # Verify logged figure titles match retained steps
-    logged_figs = [
-        call.kwargs["images"][0]
+    t, unit = model.time_step_int, model.time_step_unit
+    titles = [
+        call.kwargs["images"][0].get_suptitle()
         for call in mock_logger.log_image.call_args_list
-        if "images" in call.kwargs and len(call.kwargs["images"]) > 0
+        if call.kwargs["key"].startswith("test_loss")
     ]
-    titles = [fig.get_suptitle() for fig in logged_figs]
-    assert any("t=1 " in title for title in titles)
-    assert any("t=2 " in title for title in titles)
-    assert not any("t=100" in title for title in titles)
+    assert titles == [
+        f"Test loss, t=1 ({t} {unit})",
+        f"Test loss, t=2 ({2 * t} {unit})",
+    ]
+
+    # Verify the maps are in the same order as the titles and filenames
+    mean_spatial_loss = torch.load(tmp_path / "mean_spatial_loss.pt")
+    interior = model.interior_mask_bool
+    assert (mean_spatial_loss[0, interior] == 0).all()
+    assert (mean_spatial_loss[1, interior] > 0).all()
 
     # Verify clean slate after on_test_epoch_end
     assert len(model._test_spatial_steps) == 0
