@@ -52,7 +52,11 @@ from neural_lam.datastore import DATASTORES
 from neural_lam.datastore.base import BaseRegularGridDatastore
 from neural_lam.datastore.mdp import MDPDatastore
 from neural_lam.datastore.plot_example import plot_example_from_datastore
-from tests.conftest import DATASTORE_EXAMPLES_ROOT_PATH, init_datastore_example
+from tests.conftest import (
+    DATASTORE_EXAMPLES_ROOT_PATH,
+    DATASTORES_EXAMPLES,
+    init_datastore_example,
+)
 
 
 @pytest.mark.parametrize("datastore_name", DATASTORES.keys())
@@ -300,6 +304,25 @@ def test_boundary_mask(datastore_name):
     if isinstance(datastore, BaseRegularGridDatastore):
         grid_shape = datastore.grid_shape_state
         assert datastore.boundary_mask.size == grid_shape.x * grid_shape.y
+
+
+@pytest.mark.requires_real_data
+@pytest.mark.parametrize("n_boundary_points", [0, 1, 30])
+def test_mdp_boundary_mask_n_boundary_points(n_boundary_points):
+    """Check that `MDPDatastore.boundary_mask` marks exactly the outer
+    `n_boundary_points` grid points along each edge as boundary, and none
+    for `n_boundary_points=0`."""
+    datastore = MDPDatastore(
+        config_path=DATASTORES_EXAMPLES["mdp"],
+        n_boundary_points=n_boundary_points,
+    )
+    grid_shape = datastore.grid_shape_state
+    n_interior = (grid_shape.x - 2 * n_boundary_points) * (
+        grid_shape.y - 2 * n_boundary_points
+    )
+    assert int(datastore.boundary_mask.sum()) == (
+        grid_shape.x * grid_shape.y - n_interior
+    )
 
 
 @pytest.mark.parametrize("datastore_name", DATASTORES.keys())
