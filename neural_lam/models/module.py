@@ -1083,7 +1083,7 @@ class ForecasterModule(pl.LightningModule):
         # otherwise stay permanently False).
         self.plotted_examples = 0
 
-    def on_save_checkpoint(self, checkpoint):
+    def on_save_checkpoint(self, checkpoint: dict[str, Any]) -> None:
         """
         Stamp the checkpoint with the state dict schema version it was
         saved with, so `on_load_checkpoint` knows which migrations (if
