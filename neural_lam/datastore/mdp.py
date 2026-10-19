@@ -189,8 +189,8 @@ class MDPDatastore(BaseRegularGridDatastore):
             The units of the variables in the given category.
 
         """
-        if category not in self._ds and category == "forcing":
-            warnings.warn("no forcing data found in datastore")
+        if category not in self._ds and category in ("forcing", "static"):
+            warnings.warn(f"no {category} data found in datastore")
             return []
         return self._ds[f"{category}_feature_units"].values.tolist()
 
@@ -208,8 +208,8 @@ class MDPDatastore(BaseRegularGridDatastore):
             The names of the variables in the given category.
 
         """
-        if category not in self._ds and category == "forcing":
-            warnings.warn("no forcing data found in datastore")
+        if category not in self._ds and category in ("forcing", "static"):
+            warnings.warn(f"no {category} data found in datastore")
             return []
         return self._ds[f"{category}_feature"].values.tolist()
 
@@ -228,8 +228,8 @@ class MDPDatastore(BaseRegularGridDatastore):
             The long names of the variables in the given category.
 
         """
-        if category not in self._ds and category == "forcing":
-            warnings.warn("no forcing data found in datastore")
+        if category not in self._ds and category in ("forcing", "static"):
+            warnings.warn(f"no {category} data found in datastore")
             return []
         return self._ds[f"{category}_feature_long_name"].values.tolist()
 
@@ -293,8 +293,8 @@ class MDPDatastore(BaseRegularGridDatastore):
             The xarray DataArray object with processed dataset.
 
         """
-        if category not in self._ds and category == "forcing":
-            warnings.warn("no forcing data found in datastore")
+        if category not in self._ds and category in ("forcing", "static"):
+            warnings.warn(f"no {category} data found in datastore")
             return None
 
         da_category = self._ds[category]
@@ -503,9 +503,10 @@ class MDPDatastore(BaseRegularGridDatastore):
         np.ndarray
             The x, y coordinates of the dataset, returned differently based on
             the value of `stacked`:
-            - `stacked==True`: shape `(n_grid_points, 2)` where
-                               n_grid_points=N_x*N_y.
-            - `stacked==False`: shape `(N_x, N_y, 2)`
+
+            * `stacked==True`: shape `(n_grid_points, 2)` where
+              n_grid_points=N_x*N_y.
+            * `stacked==False`: shape `(N_x, N_y, 2)`
 
         """
         # assume variables are stored in dimensions [grid_index, ...]

@@ -10,6 +10,7 @@ from neural_lam.models.step_predictors.persistence import PersistencePredictor
 from tests.conftest import init_datastore_example
 
 
+@pytest.mark.requires_real_data
 def test_persistence_predictor_returns_prev_state():
     """PersistencePredictor.forward returns prev_state unchanged."""
     datastore = init_datastore_example("mdp")
@@ -31,6 +32,7 @@ def test_persistence_predictor_returns_prev_state():
     assert torch.equal(pred_state, prev_state)
 
 
+@pytest.mark.requires_real_data
 def test_persistence_predictor_ignores_kwargs():
     """Extra graph-specific kwargs are silently absorbed."""
     datastore = init_datastore_example("mdp")
@@ -45,6 +47,7 @@ def test_persistence_predictor_ignores_kwargs():
     assert isinstance(predictor, PersistencePredictor)
 
 
+@pytest.mark.requires_real_data
 def test_persistence_forecaster_unroll():
     """ARForecaster with PersistencePredictor reproduces initial state."""
     datastore = init_datastore_example("mdp")
@@ -81,6 +84,7 @@ def test_persistence_forecaster_unroll():
         )
 
 
+@pytest.mark.requires_real_data
 def test_persistence_predicts_std_false():
     """
     PersistencePredictor.predicts_std is always False and logs warning
@@ -115,6 +119,7 @@ def test_persistence_training_error():
     mock_args.load = None
     mock_args.config_path = "dummy.yaml"
     mock_args.val_steps_to_log = []
+    mock_args.metrics_watch = []
     mock_args.var_leads_metrics_watch = "{}"
     mock_args.ar_steps_eval = 10
     mock_args.model = "persistence"
