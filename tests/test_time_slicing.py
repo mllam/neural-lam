@@ -26,13 +26,15 @@ class SinglePointDummyDatastore(BaseDatastore):
         self,
         time_values,
         state_data,
-        forcing_data,
-        is_forecast,
+        forcing_data=None,
+        is_forecast=False,
         step_length=timedelta(hours=1),
     ):
         self._step_length = step_length
         self._state_data = np.array(state_data)
-        self._forcing_data = np.array(forcing_data)
+        self._forcing_data = (
+            None if forcing_data is None else np.array(forcing_data)
+        )
         self.is_forecast = is_forecast
 
         if is_forecast:
@@ -54,6 +56,8 @@ class SinglePointDummyDatastore(BaseDatastore):
         if category == "state":
             values = self._state_data
         elif category == "forcing":
+            if self._forcing_data is None:
+                return None
             values = self._forcing_data
         else:
             raise NotImplementedError(category)
@@ -213,6 +217,45 @@ def test_time_slicing_analysis(
         1 + num_past_forcing_steps + num_future_forcing_steps,
     )
     np.testing.assert_equal(forcing[:, 0, :], np.array(expected_forcing_values))
+
+
+@pytest.mark.parametrize(
+    "num_past_forcing_steps,num_future_forcing_steps", [[1, 1], [3, 2]]
+)
+def test_len_ignores_num_future_forcing_steps_when_no_forcing(
+    num_past_forcing_steps, num_future_forcing_steps
+):
+    """__len__ must not require num_future_forcing_steps of extra state data
+    when the datastore has no forcing (da_forcing is None) -
+    _slice_state_time only ever needs max(2, num_past_forcing_steps) +
+    ar_steps state time steps, regardless of num_future_forcing_steps."""
+    ar_steps = 3
+    time_values = np.datetime64("2020-01-01") + np.arange(
+        len(ANALYSIS_STATE_VALUES)
+    )
+
+    datastore = SinglePointDummyDatastore(
+        state_data=ANALYSIS_STATE_VALUES,
+        forcing_data=None,
+        time_values=time_values,
+    )
+
+    dataset = WeatherDataset(
+        datastore=datastore,
+        ar_steps=ar_steps,
+        num_past_forcing_steps=num_past_forcing_steps,
+        num_future_forcing_steps=num_future_forcing_steps,
+    )
+
+    state_window = max(2, num_past_forcing_steps) + ar_steps
+    assert len(dataset) == len(ANALYSIS_STATE_VALUES) - state_window + 1
+
+    init_states, target_states, forcing, _, _ = [
+        tensor.numpy() for tensor in dataset[-1]
+    ]
+    assert init_states[:, 0, 0].tolist() == ANALYSIS_STATE_VALUES[-5:-3]
+    assert target_states[:, 0, 0].tolist() == ANALYSIS_STATE_VALUES[-3:]
+    assert forcing.shape == (ar_steps, 1, 0)
 
 
 @pytest.mark.parametrize(
@@ -912,6 +955,35 @@ def test_forecast_boundary_leads_not_starting_at_zero():
                 launch * 1000 + lead + 1.0,
             ]
         assert window == expected
+
+
+@pytest.mark.parametrize("with_forcing", [True, False])
+def test_sample_window_times_matches_len(with_forcing, monkeypatch):
+    """The boundary horizon check sees exactly the samples `__len__`
+    yields, with and without forcing."""
+    interior = SinglePointDummyDatastore(
+        state_data=ANALYSIS_STATE_VALUES,
+        forcing_data=FORCING_VALUES,
+        time_values=_interior_times(),
+        is_forecast=False,
+    )
+    if not with_forcing:
+        state_only = interior.get_dataarray
+        monkeypatch.setattr(
+            interior,
+            "get_dataarray",
+            lambda category, split: (
+                None if category == "forcing" else state_only(category, split)
+            ),
+        )
+    dataset = WeatherDataset(
+        datastore=interior,
+        ar_steps=3,
+        num_past_forcing_steps=1,
+        num_future_forcing_steps=2,
+    )
+
+    assert len(dataset._sample_window_times()[0]) == len(dataset)
 
 
 def test_get_time_step_rejects_irregular_spacing():

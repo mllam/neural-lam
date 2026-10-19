@@ -569,7 +569,8 @@ class NpyFilesDatastoreMEPS(BaseDatastore):
         Returns
         -------
         list[dt.datetime]
-            The analysis times for the given split, sorted in ascending order.
+            The unique analysis times for the given split, sorted in ascending
+            order.
 
         """
         pattern = re.sub(r"{analysis_time:[^}]*}", "*", STATE_FILENAME_FORMAT)
@@ -587,7 +588,8 @@ class NpyFilesDatastoreMEPS(BaseDatastore):
                 f"No files found in {sample_dir} with pattern {pattern}"
             )
 
-        return sorted(times)
+        # one file per ensemble member matches each analysis time
+        return sorted(set(times))
 
     def _calc_datetime_forcing_features(
         self, da_time: xr.DataArray

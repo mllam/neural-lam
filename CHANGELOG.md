@@ -25,13 +25,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Fix `WeatherDataset.__len__` undercounting samples by `num_future_forcing_steps` when a datastore has no forcing data, sometimes raising a spurious `ValueError` in `__init__` [\#735](https://github.com/mllam/neural-lam/pull/735) @AshNicolus
+
+- Fix `MDPDatastore.boundary_mask` marking the entire domain as boundary instead of none when `n_boundary_points=0`, since `slice(n, -n)` is an empty selection (not the whole array) when `n == 0` [\#728](https://github.com/mllam/neural-lam/pull/728) @AshNicolus
+
+- Fix `NpyFilesDatastoreMEPS` returning each analysis time once per ensemble member, which duplicated every sample `num_ensemble_members` times per epoch; the deduplication intended in [\#386](https://github.com/mllam/neural-lam/pull/386) had not landed [\#806](https://github.com/mllam/neural-lam/pull/806) @AshNicolus
+
 - Fix `MDPDatastore` raising `KeyError` for `category="static"` when the datastore has no static data, instead of returning `None`/`[]` as documented and as `category="forcing"` already correctly does [\#733](https://github.com/mllam/neural-lam/pull/733) @AshNicolus
 
 - Fix stale docstring in `CustomMLFlowLogger.log_image` documenting old `sys.exit(1)` behavior that was replaced with re-raise in [\#496](https://github.com/mllam/neural-lam/pull/496) [\#724](https://github.com/mllam/neural-lam/pull/724) @AshNicolus
 
 - Raise a `ValueError` when only one of `metrics_watch` and `var_leads_metrics_watch` is set, instead of silently logging no watched metrics [\#785](https://github.com/mllam/neural-lam/pull/785) @KumarShivam1908
 
+- Fix flux standardization statistics weighting for short final batches and exclude distributed padding samples [\#782](https://github.com/mllam/neural-lam/pull/782) @Karvy-Singh
+
 ### Maintenance
+
+- Fix the GPU CI job silently running on CPU: use an NVIDIA `g4dn.xlarge` cirun instance instead of the AMD `g4ad.xlarge`, install `--extra gpu-cu128` to match the runner's CUDA 12.2 driver, assert `torch.cuda.is_available()`, and run only the GPU-relevant tests there [\#802](https://github.com/mllam/neural-lam/pull/802) @varma1221
 
 - Add a `lychee` pre-commit hook checking Markdown links and section anchors (config in `.github/lychee.toml`, run once per push in CI) and a PR-template reminder to update `CONTRIBUTING.md` / `AGENTS.md` [\#738](https://github.com/mllam/neural-lam/pull/738) @KumarShivam1908
 

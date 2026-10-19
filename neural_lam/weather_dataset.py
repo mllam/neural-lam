@@ -344,18 +344,20 @@ class WeatherDataset(torch.utils.data.Dataset):
             base_len = self.da_state.analysis_time.size
         else:
             # Number of valid sample start indices in a contiguous time
-            # series. With T total time steps and a per-sample window of
-            # W = max(2, num_past_forcing_steps) + ar_steps +
-            # num_future_forcing_steps, valid start indices are
-            # [0 .. T - W], i.e. (T - W + 1) samples in total.
-            window = (
-                max(2, self.num_past_forcing_steps)
-                + self.ar_steps
-                + self.num_future_forcing_steps
-            )
-            n_state_samples = len(self.da_state.time) - window + 1
+            # series. With T total time steps and a per-sample state window
+            # of W = max(2, num_past_forcing_steps) + ar_steps, valid start
+            # indices are [0 .. T - W], i.e. (T - W + 1) samples in total.
+            # _slice_state_time never uses num_future_forcing_steps, so it
+            # must not shrink the state-only count; only the forcing window
+            # (when forcing is present) additionally needs those steps, to
+            # match _window_forcing_in_time.
+            state_window = max(2, self.num_past_forcing_steps) + self.ar_steps
+            n_state_samples = len(self.da_state.time) - state_window + 1
             if self.da_forcing is not None:
-                n_forcing_samples = len(self.da_forcing.time) - window + 1
+                forcing_window = state_window + self.num_future_forcing_steps
+                n_forcing_samples = (
+                    len(self.da_forcing.time) - forcing_window + 1
+                )
                 base_len = max(0, min(n_state_samples, n_forcing_samples))
             else:
                 base_len = max(0, n_state_samples)
@@ -390,13 +392,17 @@ class WeatherDataset(torch.utils.data.Dataset):
             )
 
         times = self.da_state.time.values
-        # `__len__` also drops the trailing `num_future_forcing_steps`
-        # samples and honours a shorter forcing axis.
-        n_samples_base = len(times)
-        n_samples_offset = -offset - n_total + 1 - self.num_future_forcing_steps
+        # Count samples exactly as `__len__` does
+        state_window = offset + n_total
+        n_samples = len(times) - state_window + 1
         if self.da_forcing is not None:
-            n_samples_base = min(n_samples_base, len(self.da_forcing.time))
-        n_samples = n_samples_base + n_samples_offset
+            n_samples = min(
+                n_samples,
+                len(self.da_forcing.time)
+                - state_window
+                - self.num_future_forcing_steps
+                + 1,
+            )
         if n_samples <= 0:
             return (np.array([]), np.array([]), np.array([]))
         first = offset + init_steps - 1
@@ -573,8 +579,8 @@ class WeatherDataset(torch.utils.data.Dataset):
     ) -> xr.DataArray:
         """Window forcing from the same forecast datastore as state.
 
-        Indexes ``analysis_time`` by position, since it can repeat
-        (npyfilesmeps), and walks the lead times along with the state.
+        Indexes ``analysis_time`` by position, like the state slice, and walks
+        the lead times along with the state.
 
         Parameters
         ----------

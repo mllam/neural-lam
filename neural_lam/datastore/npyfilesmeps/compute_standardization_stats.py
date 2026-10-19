@@ -347,14 +347,19 @@ def main(
         # (B, num_state_vars,)
         batch_means = torch.mean(batch, dim=(1, 2)).cpu()
         batch_squares = torch.mean(batch**2, dim=(1, 2)).cpu()
+        # (B,)
+        batch_flux_means = torch.mean(flux_batch, dim=(1, 2)).cpu()
+        batch_flux_squares = torch.mean(flux_batch**2, dim=(1, 2)).cpu()
         if real_masks is not None:
             mask = real_masks[batch_i]
             batch_means = batch_means[mask]
             batch_squares = batch_squares[mask]
+            batch_flux_means = batch_flux_means[mask]
+            batch_flux_squares = batch_flux_squares[mask]
         means.append(batch_means)
         squares.append(batch_squares)
-        flux_means.append(torch.mean(flux_batch).cpu())  # (,)
-        flux_squares.append(torch.mean(flux_batch**2).cpu())  # (,)
+        flux_means.append(batch_flux_means)
+        flux_squares.append(batch_flux_squares)
 
     if distributed and world_size > 1:
         means_gathered: list[Any] = [None] * world_size
@@ -363,8 +368,12 @@ def main(
         flux_squares_gathered: list[Any] = [None] * world_size
         dist.all_gather_object(means_gathered, torch.cat(means, dim=0))
         dist.all_gather_object(squares_gathered, torch.cat(squares, dim=0))
-        dist.all_gather_object(flux_means_gathered, flux_means)
-        dist.all_gather_object(flux_squares_gathered, flux_squares)
+        dist.all_gather_object(
+            flux_means_gathered, torch.cat(flux_means, dim=0)
+        )
+        dist.all_gather_object(
+            flux_squares_gathered, torch.cat(flux_squares, dim=0)
+        )
 
         if rank == 0:
             means = [
@@ -375,25 +384,19 @@ def main(
             ]
             flux_means = [
                 torch.cat(
-                    [
-                        torch.stack(cast("list[torch.Tensor]", rank_flux))
-                        for rank_flux in flux_means_gathered
-                    ]
+                    cast("list[torch.Tensor]", flux_means_gathered), dim=0
                 )
             ]
             flux_squares = [
                 torch.cat(
-                    [
-                        torch.stack(cast("list[torch.Tensor]", rank_flux))
-                        for rank_flux in flux_squares_gathered
-                    ]
+                    cast("list[torch.Tensor]", flux_squares_gathered), dim=0
                 )
             ]
     else:
         means = [torch.cat(means, dim=0)]  # (B, num_state_vars,)
         squares = [torch.cat(squares, dim=0)]  # (B, num_state_vars,)
-        flux_means = [torch.tensor(flux_means)]  # (B,)
-        flux_squares = [torch.tensor(flux_squares)]  # (B,)
+        flux_means = [torch.cat(flux_means, dim=0)]  # (B,)
+        flux_squares = [torch.cat(flux_squares, dim=0)]  # (B,)
 
     if rank == 0:
         save_stats(
