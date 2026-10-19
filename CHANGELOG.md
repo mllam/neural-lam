@@ -27,7 +27,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Maintenance
 
-- Fix GPU CI job so it actually runs on the GPU: switch the cirun runner from `--extra gpu` (CUDA 13.0, incompatible with the runner's CUDA 12.2 driver) to `--extra gpu-cu128` (CUDA 12.8, compatible via minor-version forward compatibility); add a hard `torch.cuda.is_available()` assertion so future driver/wheel mismatches fail fast; and restrict the GPU pytest run to `requires_training` tests and `tests/test_gpu_normalization.py` so the paid cirun runner only exercises GPU-specific paths while the full suite remains on the free CPU runner [\#802](https://github.com/mllam/neural-lam/pull/802) @varma1221
+- Fix the GPU CI job silently running on CPU: use an NVIDIA `g4dn.xlarge` cirun instance instead of the AMD `g4ad.xlarge`, install `--extra gpu-cu128` to match the runner's CUDA 12.2 driver, assert `torch.cuda.is_available()`, and run only the GPU-relevant tests there [\#802](https://github.com/mllam/neural-lam/pull/802) @varma1221
 
 - Add a `lychee` pre-commit hook checking Markdown links and section anchors (config in `.github/lychee.toml`, run once per push in CI) and a PR-template reminder to update `CONTRIBUTING.md` / `AGENTS.md` [\#738](https://github.com/mllam/neural-lam/pull/738) @KumarShivam1908
 

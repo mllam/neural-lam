@@ -21,13 +21,13 @@
 #
 # GPU test scope:
 # - The GPU job installs the gpu-cu128 extra (CUDA 12.8), which is compatible
-#   with the cirun runner's CUDA 12.2 driver via minor-version forward
+#   with the cirun runner's CUDA 12.2 driver via CUDA minor version
 #   compatibility.
 # - It asserts torch.cuda.is_available() so a future driver/wheel mismatch
 #   fails fast rather than silently running on CPU.
 # - Only GPU-relevant tests are run on the paid cirun runner:
 #   * tests marked requires_training (trainer.fit() exercises CUDA paths)
-#   * tests/test_gpu_normalization.py (on_after_batch_transfer on GPU)
+#   * tests/test_datasets.py::test_single_batch (training_step on CUDA)
 # - The full suite continues to run on the free ubuntu-latest CPU runner.
 name: CPU+GPU testing
 
@@ -82,25 +82,10 @@ jobs:
         run: |
           python -c "import torch; assert torch.__version__.endswith('+cu128')"
 
-      - name: Inspect GPU hardware and configure CUDA
-        if: matrix.device == 'gpu'
-        run: |
-          echo "=== PCI Devices ==="
-          lspci | grep -i -E "vga|3d|display|nvidia|amd|radeon" || lspci || true
-          echo "=== NVIDIA SMI ==="
-          nvidia-smi || true
-          # If CUDA compatibility package exists on the runner, add it to LD_LIBRARY_PATH
-          for dir in /usr/local/cuda/compat /usr/local/cuda-12.8/compat /usr/local/cuda-12/compat; do
-            if [ -d "$dir" ]; then
-              echo "Adding CUDA compat directory to LD_LIBRARY_PATH: $dir"
-              echo "LD_LIBRARY_PATH=$dir:${LD_LIBRARY_PATH:-}" >> $GITHUB_ENV
-              export LD_LIBRARY_PATH="$dir:${LD_LIBRARY_PATH:-}"
-            fi
-          done
-
       - name: Check CUDA is available
         if: matrix.device == 'gpu'
         run: |
+          nvidia-smi
           python -c "import torch; assert torch.cuda.is_available(), f'CUDA is not available - torch={torch.__version__}, cuda_version={torch.version.cuda}, device_count={torch.cuda.device_count()}'"
 
       - name: Cache meps example data
@@ -124,7 +109,7 @@ jobs:
         if: matrix.device == 'gpu'
         run: |
           pytest -vv -s -m requires_training
-          pytest -vv -s tests/test_gpu_normalization.py
+          pytest -vv -s tests/test_datasets.py::test_single_batch
 
       - name: Upload test figures
         uses: actions/upload-artifact@v4
