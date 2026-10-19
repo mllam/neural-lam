@@ -4,6 +4,7 @@ from datetime import timedelta
 from pathlib import Path
 
 # Third-party
+import fsspec
 import pooch
 import pytest
 import yaml
@@ -21,6 +22,11 @@ from .dummy_datastore import DummyDatastore
 # Disable weights and biases to avoid unnecessary logging
 # and to avoid having to deal with authentication
 os.environ["WANDB_MODE"] = "disabled"
+
+# The mdp example inputs are read through `simplecache::https://`, which with
+# zarr 3 needs an async https filesystem. mllam-data-prep does not accept
+# storage_options yet, so set this globally.
+fsspec.config.conf["https"] = {"asynchronous": True}
 
 
 @pytest.fixture(autouse=True)
@@ -57,7 +63,7 @@ def download_meps_example_reduced_dataset():
 
     config_path = dataset_path / "meps_example_reduced.datastore.yaml"
 
-    with open(config_path, "r") as f:
+    with config_path.open() as f:
         config = yaml.safe_load(f)
 
     if "class" in config["projection"]:
@@ -69,7 +75,7 @@ def download_meps_example_reduced_dataset():
         # dataclass
         config["projection"]["class_name"] = config["projection"].pop("class")
 
-        with open(config_path, "w") as f:
+        with config_path.open("w") as f:
             yaml.dump(config, f)
 
     # create parameters, only run if the files we expect are not present
@@ -106,6 +112,69 @@ DATASTORES_EXAMPLES = dict(
 )
 
 DATASTORES[DummyDatastore.SHORT_NAME] = DummyDatastore
+
+# Datastore kinds whose examples are real data, downloaded on first use
+REAL_DATA_DATASTORE_KINDS = ("mdp", "npyfilesmeps")
+
+
+def pytest_collection_modifyitems(items):
+    """Mark tests parametrized with a ``datastore_name`` that needs real
+    example data with ``requires_real_data``, and tests needing neither real
+    data nor training with ``quick``."""
+    for item in items:
+        callspec = getattr(item, "callspec", None)
+        if (
+            callspec is not None
+            and callspec.params.get("datastore_name")
+            in REAL_DATA_DATASTORE_KINDS
+        ):
+            item.add_marker(pytest.mark.requires_real_data)
+        if not (
+            item.get_closest_marker("requires_real_data")
+            or item.get_closest_marker("requires_training")
+        ):
+            item.add_marker(pytest.mark.quick)
+
+
+def _fail_unmarked_example_datastore(kind):
+    """Return a callable that fails the test constructing ``kind``."""
+
+    def fail(*args, **kwargs):
+        pytest.fail(
+            f"This test constructs the '{kind}' example datastore, which "
+            "needs real example data. Mark it with "
+            "@pytest.mark.requires_real_data."
+        )
+
+    return fail
+
+
+@pytest.hookimpl(wrapper=True)
+def pytest_runtest_protocol(item, nextitem):
+    """Fail tests that construct a real example datastore without the
+    ``requires_real_data`` marker, so that
+    ``pytest -m "not requires_real_data"`` never needs the example data.
+
+    Wrapping the whole test protocol, rather than using an autouse fixture,
+    also covers module- and session-scoped fixtures set up for the test.
+    """
+    if item.get_closest_marker("requires_real_data"):
+        return (yield)
+
+    with pytest.MonkeyPatch.context() as mp:
+        for kind in REAL_DATA_DATASTORE_KINDS:
+            mp.setattr(
+                DATASTORES[kind],
+                "__init__",
+                _fail_unmarked_example_datastore(kind),
+            )
+        # the npyfilesmeps example is downloaded before its datastore is built
+        mp.setitem(
+            globals(),
+            "download_meps_example_reduced_dataset",
+            _fail_unmarked_example_datastore("npyfilesmeps"),
+        )
+        return (yield)
 
 
 def init_datastore_example(datastore_kind):

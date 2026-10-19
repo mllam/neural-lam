@@ -1,5 +1,11 @@
 """Latent encoder for flat (non-hierarchical) graphs."""
 
+# Standard library
+from typing import Any
+
+# Third-party
+import torch
+
 # First-party
 from neural_lam import utils
 from neural_lam.gnn_layers import get_gnn_class
@@ -18,15 +24,15 @@ class GraphLatentEncoder(BaseLatentEncoder):
 
     def __init__(
         self,
-        latent_dim,
-        g2m_edge_index,
-        m2m_edge_index,
-        hidden_dim,
-        m2m_layers,
-        hidden_layers=1,
-        g2m_gnn_type="InteractionNet",
-        output_dist="isotropic",
-    ):
+        latent_dim: int,
+        g2m_edge_index: torch.Tensor,
+        m2m_edge_index: torch.Tensor,
+        hidden_dim: int,
+        m2m_layers: int,
+        hidden_layers: int = 1,
+        g2m_gnn_type: str = "InteractionNet",
+        output_dist: str = "isotropic",
+    ) -> None:
         """
         Set up the g2m GNN, on-mesh processing stack and latent param map.
 
@@ -77,8 +83,11 @@ class GraphLatentEncoder(BaseLatentEncoder):
 
     # pylint: disable-next=arguments-differ
     def compute_dist_params(  # type: ignore[override]
-        self, grid_rep, graph_emb, **kwargs
-    ):
+        self,
+        grid_rep: torch.Tensor,
+        graph_emb: dict[str, Any],
+        **kwargs: Any,
+    ) -> torch.Tensor:
         """
         Compute distribution parameters on mesh from grid features.
 
