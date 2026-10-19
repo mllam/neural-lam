@@ -21,6 +21,9 @@ from neural_lam.models.step_predictors.graph.graph_efm import (
 )
 from tests.conftest import init_datastore_example
 
+# Every test here builds the predictors on the mdp example datastore
+pytestmark = pytest.mark.requires_real_data
+
 NUM_PAST_FORCING_STEPS = 1
 NUM_FUTURE_FORCING_STEPS = 1
 
