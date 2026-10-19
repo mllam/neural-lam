@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Add `neural_lam.api.predict` for programmatic forecast rollouts returning standardized `xarray.Dataset` forecasts, supporting timestamp resolution (`init_times`), unstacking regular grids, unstandardization to physical units, target states comparison, and `neural_lam.utils.create_forecast_dataset` adhering to `BaseDatastore.expected_dim_order` [\#811](https://github.com/mllam/neural-lam/pull/811) @GiGiKoneti
+
 - Add the `hello_world_danra.py` marimo tutorial (prepare the DANRA example data, build a graph, train and evaluate `graph_lam` on CPU, all through `neural_lam.api`), executed at docs build time so the docs page shows its outputs; `train_model` now exits non-zero on errors (`@logger.catch(reraise=True)`) [\#577](https://github.com/mllam/neural-lam/pull/577) @Sharkyii
 
 - Add a high-level programmatic Python API (`neural_lam.api`) exposing typed keyword-only `train`, `evaluate` and `create_graph` functions; `train` and `evaluate` return a `Run` handle with the run's checkpoint and plot paths. The training CLI now parses into the typed run config dataclasses (`ModelConfig`, `TrainRunConfig`, `DataConfig`, `ComputeConfig`, `LoggingConfig`) and calls the same `neural_lam.train_model.fit` [\#715](https://github.com/mllam/neural-lam/pull/715) @GiGiKoneti
