@@ -2,6 +2,7 @@
 
 # Standard library
 import os
+import warnings
 from argparse import ArgumentDefaultsHelpFormatter, ArgumentParser
 
 # Third-party
@@ -218,9 +219,14 @@ def assert_edge_index_in_range(
     -------
     None
     """
-    assert (
-        edge_index.ndim == 2 and edge_index.shape[0] == 2
-    ), f"{name}: expected edge_index shape [2, E], got {tuple(edge_index.shape)}"  # noqa: E501
+    assert edge_index.ndim == 2, (
+        f"{name}: expected edge_index shape [2, E], "
+        f"got {tuple(edge_index.shape)}"
+    )
+    assert edge_index.shape[0] == 2, (
+        f"{name}: expected edge_index shape [2, E], "
+        f"got {tuple(edge_index.shape)}"
+    )
     assert edge_index.shape[1] > 0, f"{name}: expected at least one edge"
 
     sender_start, sender_stop = sender_range
@@ -365,6 +371,7 @@ def create_graph(
     `graph_dir_path`.
 
     Creates the following files for all graphs:
+
     - g2m_edge_index.pt  [2, N_g2m_edges]
     - g2m_features.pt    [N_g2m_edges, d_features]
     - m2g_edge_index.pt  [2, N_m2m_edges]
@@ -393,14 +400,15 @@ def create_graph(
             number of nodes in the mesh at a given level
 
     And in addition for hierarchical graphs:
-    - mesh_up_edge_index.pt
-        list of [2, N_mesh_updown_edges_level], length==n_levels-1
-    - mesh_up_features.pt
-        list of [N_mesh_updown_edges_level, d_features], length==n_levels-1
-    - mesh_down_edge_index.pt
-        list of [2, N_mesh_updown_edges_level], length==n_levels-1
-    - mesh_down_features.pt
-        list of [N_mesh_updown_edges_level, d_features], length==n_levels-1
+
+    - mesh_up_edge_index.pt: list of [2, N_mesh_updown_edges_level],
+      length==n_levels-1
+    - mesh_up_features.pt: list of [N_mesh_updown_edges_level, d_features],
+      length==n_levels-1
+    - mesh_down_edge_index.pt: list of [2, N_mesh_updown_edges_level],
+      length==n_levels-1
+    - mesh_down_features.pt: list of [N_mesh_updown_edges_level, d_features],
+      length==n_levels-1
 
     where N_mesh_updown_edges_level is the number of edges in the graph from
     mesh-to-mesh between two consecutive levels (list index corresponds index
@@ -911,6 +919,14 @@ def cli(input_args: list[str] | None = None) -> None:
         Argument list forwarded to :class:`argparse.ArgumentParser`. When
         ``None``, ``sys.argv`` is used.
     """
+    warnings.warn(
+        "create_graph.py is deprecated and will be removed in a future "
+        "version. Use create_graph_with_wmg.py instead, which delegates "
+        "graph creation to weather-model-graphs (wmg). See "
+        "https://github.com/mllam/neural-lam/issues/384 for details.",
+        DeprecationWarning,
+        stacklevel=2,
+    )
     parser = ArgumentParser(
         description="Graph generation for neural-lam",
         formatter_class=ArgumentDefaultsHelpFormatter,
