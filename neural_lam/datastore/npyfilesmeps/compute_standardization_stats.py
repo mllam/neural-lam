@@ -370,11 +370,13 @@ def main(
                 torch.cat(cast("list[torch.Tensor]", squares_gathered), dim=0)
             ]
             flux_means = [
-                torch.cat(cast(list[torch.Tensor], flux_means_gathered), dim=0)
+                torch.cat(
+                    cast("list[torch.Tensor]", flux_means_gathered), dim=0
+                )
             ]
             flux_squares = [
                 torch.cat(
-                    cast(list[torch.Tensor], flux_squares_gathered), dim=0
+                    cast("list[torch.Tensor]", flux_squares_gathered), dim=0
                 )
             ]
     else:
