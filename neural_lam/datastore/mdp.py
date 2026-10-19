@@ -223,8 +223,8 @@ class MDPDatastore(BaseDatastore):
         """
         units_key = f"{category}_feature_units"
         if units_key not in self._ds:
-            if category == "forcing":
-                warnings.warn("no forcing data found in datastore")
+            if category in ("forcing", "static"):
+                warnings.warn(f"no {category} data found in datastore")
             return []
         return self._ds[units_key].values.tolist()
 
@@ -244,8 +244,8 @@ class MDPDatastore(BaseDatastore):
         """
         feature_key = f"{category}_feature"
         if feature_key not in self._ds:
-            if category == "forcing":
-                warnings.warn("no forcing data found in datastore")
+            if category in ("forcing", "static"):
+                warnings.warn(f"no {category} data found in datastore")
             return []
         return self._ds[feature_key].values.tolist()
 
@@ -266,8 +266,8 @@ class MDPDatastore(BaseDatastore):
         """
         long_name_key = f"{category}_feature_long_name"
         if long_name_key not in self._ds:
-            if category == "forcing":
-                warnings.warn("no forcing data found in datastore")
+            if category in ("forcing", "static"):
+                warnings.warn(f"no {category} data found in datastore")
             return []
         return self._ds[long_name_key].values.tolist()
 
@@ -331,8 +331,8 @@ class MDPDatastore(BaseDatastore):
             The xarray DataArray object with processed dataset.
 
         """
-        if category not in self._ds and category == "forcing":
-            warnings.warn("no forcing data found in datastore")
+        if category not in self._ds and category in ("forcing", "static"):
+            warnings.warn(f"no {category} data found in datastore")
             return None
 
         da_category = self._ds[category]
