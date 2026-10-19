@@ -6,6 +6,11 @@ import os
 from pathlib import Path
 from typing import Any, Literal
 
+# Third-party
+import numpy as np
+import torch
+import xarray as xr
+
 # Local
 from . import train_model as train_model_script
 from .config import (
@@ -20,6 +25,8 @@ from .config import (
 from .create_graph_with_wmg import create_graph_from_datastore
 from .datastore.base import BaseDatastore
 from .train_model import Run
+from .utils import create_forecast_dataset
+from .weather_dataset import WeatherDataset
 
 
 def train(
@@ -456,6 +463,315 @@ def create_graph(
     )
 
 
+def predict(
+    *,
+    load: str,
+    config_path: str | None = None,
+    init_times: (
+        str
+        | np.datetime64
+        | list[str | np.datetime64]
+        | slice
+        | int
+        | list[int]
+        | None
+    ) = None,
+    lead_steps: int | None = None,
+    split: str = "test",
+    device: str | torch.device = "cpu",
+    batch_size: int = 1,
+    unstandardize: bool = True,
+    return_target: bool = False,
+    unstack_grid: bool = False,
+    config: NeuralLAMConfig | None = None,
+    datastore: BaseDatastore | None = None,
+) -> xr.Dataset | tuple[xr.Dataset, xr.Dataset]:
+    """
+    Generate weather forecast predictions using a trained model checkpoint.
+
+    Parameters
+    ----------
+    load : str
+        Path to the saved model checkpoint (.ckpt).
+    config_path : str or None, optional
+        Path to the Neural-LAM YAML configuration. Required if config or
+        datastore is not provided.
+    init_times : str, np.datetime64, list, slice, int, or None, optional
+        Forecast initialization time(s). Can be a timestamp string
+        (e.g. ``'2022-04-01T00:00:00'``), list of timestamps, timestamp slice,
+        integer sample index, or list of sample indices. If ``None`` (default),
+        uses the first available initialization time in the split.
+    lead_steps : int or None, optional
+        Number of autoregressive forecast steps to rollout. Defaults to the
+        configured evaluation steps or 10.
+    split : str, default "test"
+        Data split to extract initial conditions and forcing from
+        (``'train'``, ``'val'``, or ``'test'``).
+    device : str or torch.device, default "cpu"
+        Compute device to perform inference on (e.g. ``'cpu'`` or ``'cuda'``).
+    batch_size : int, default 1
+        Batch size for inference rollouts.
+    unstandardize : bool, default True
+        Whether to unstandardize predictions back into physical units using the
+        dataset state mean and standard deviation.
+    return_target : bool, default False
+        Whether to also return the ground-truth target states as a companion
+        dataset.
+    unstack_grid : bool, default False
+        Whether to unstack the ``grid_index`` dimension into spatial grid
+        dimensions (e.g. ``x``, ``y``) for regular grid datastores.
+    config : NeuralLAMConfig or None, optional
+        Loaded Neural-LAM configuration dataclass.
+    datastore : BaseDatastore or None, optional
+        Initialized datastore instance.
+
+    Returns
+    -------
+    xr.Dataset or tuple of (xr.Dataset, xr.Dataset)
+        Forecast prediction dataset, or tuple of ``(predictions, targets)``
+        when ``return_target=True``.
+    """
+    if config is None or datastore is None:
+        if config_path is None:
+            raise ValueError(
+                "Either (config and datastore) or config_path must be provided."
+            )
+        config, datastore = load_config_and_datastore(config_path=config_path)
+
+    model = train_model_script.load_forecaster_module_from_checkpoint(
+        ckpt_path=load,
+        config=config,
+        datastore=datastore,
+    )
+    torch_device = torch.device(device)
+    model.to(torch_device)
+    model.eval()
+
+    if lead_steps is None:
+        training_cfg = getattr(config, "training", None)
+        ar_steps_eval = getattr(training_cfg, "ar_steps_eval", None)
+        lead_steps = ar_steps_eval if ar_steps_eval is not None else 10
+
+    args = getattr(model.hparams, "args", None)
+    num_past = getattr(args, "num_past_forcing_steps", 1) if args else 1
+    num_future = getattr(args, "num_future_forcing_steps", 1) if args else 1
+    data_cfg = getattr(config, "data", None)
+    if data_cfg is not None:
+        num_past = getattr(data_cfg, "num_past_forcing_steps", num_past)
+        num_future = getattr(data_cfg, "num_future_forcing_steps", num_future)
+
+    dataset = WeatherDataset(
+        datastore=datastore,
+        split=split,
+        ar_steps=lead_steps,
+        num_past_forcing_steps=num_past,
+        num_future_forcing_steps=num_future,
+    )
+
+    n_samples = len(dataset)
+    if n_samples == 0:
+        raise ValueError(
+            f"Dataset for split '{split}' with lead_steps={lead_steps} "
+            "contains 0 samples. Not enough time steps available."
+        )
+
+    n_members = (
+        dataset.da_state.ensemble_member.size
+        if hasattr(dataset.da_state, "ensemble_member")
+        else 1
+    )
+    if datastore.is_forecast:
+        base_len = dataset.da_state.analysis_time.size
+        base_init_times = np.asarray(
+            dataset.da_state.analysis_time.values[:base_len],
+            dtype="datetime64[ns]",
+        )
+    else:
+        init_offset = max(2, num_past) - 1
+        base_len = len(dataset.da_state.time) - (init_offset + lead_steps) + 1
+        if dataset.da_forcing is not None:
+            forcing_offset = (
+                max(2, num_past) + lead_steps + dataset.num_future_forcing_steps
+            )
+            base_len = max(
+                0,
+                min(
+                    base_len,
+                    len(dataset.da_forcing.time) - forcing_offset + 1,
+                ),
+            )
+        base_init_times = np.asarray(
+            dataset.da_state.time.values[init_offset : init_offset + base_len],
+            dtype="datetime64[ns]",
+        )
+
+    if datastore.is_ensemble and not dataset.load_single_member:
+        all_init_times = np.repeat(base_init_times, n_members)
+    else:
+        all_init_times = base_init_times
+
+    if init_times is None:
+        selected_indices = [0]
+    elif isinstance(init_times, (int, np.integer)):
+        idx = int(init_times)
+        if not 0 <= idx < n_samples:
+            raise IndexError(
+                f"Sample index {idx} out of range [0, {n_samples - 1}]."
+            )
+        selected_indices = [idx]
+    elif isinstance(init_times, slice):
+        start_val = init_times.start
+        stop_val = init_times.stop
+        step_val = init_times.step or 1
+
+        if (start_val is None or isinstance(start_val, (int, np.integer))) and (
+            stop_val is None or isinstance(stop_val, (int, np.integer))
+        ):
+            selected_indices = list(range(n_samples)[init_times])
+        else:
+            start_dt = (
+                np.asarray(start_val, dtype="datetime64[ns]")
+                if start_val is not None
+                else None
+            )
+            stop_dt = (
+                np.asarray(stop_val, dtype="datetime64[ns]")
+                if stop_val is not None
+                else None
+            )
+            mask = np.ones(n_samples, dtype=bool)
+            if start_dt is not None:
+                mask &= all_init_times >= start_dt
+            if stop_dt is not None:
+                mask &= all_init_times <= stop_dt
+            selected_indices = np.where(mask)[0][::step_val].tolist()
+            if len(selected_indices) == 0:
+                raise ValueError(
+                    f"No samples match init_times slice '{init_times}'. "
+                    f"Available times range from {all_init_times[0]} to "
+                    f"{all_init_times[-1]}."
+                )
+    elif isinstance(init_times, (str, np.datetime64)):
+        target_dt = np.asarray(init_times, dtype="datetime64[ns]")
+        matches = np.where(all_init_times == target_dt)[0]
+        if len(matches) == 0:
+            raise ValueError(
+                f"Requested init_time '{init_times}' not found. "
+                f"Available init_times range from {all_init_times[0]} to "
+                f"{all_init_times[-1]}."
+            )
+        selected_indices = [int(matches[0])]
+    elif hasattr(init_times, "__iter__"):
+        selected_indices = []
+        for t in init_times:
+            if isinstance(t, (int, np.integer)):
+                idx = int(t)
+                if not 0 <= idx < n_samples:
+                    raise IndexError(
+                        f"Sample index {idx} out of range [0, {n_samples - 1}]."
+                    )
+                selected_indices.append(idx)
+            else:
+                target_dt = np.asarray(t, dtype="datetime64[ns]")
+                matches = np.where(all_init_times == target_dt)[0]
+                if len(matches) == 0:
+                    raise ValueError(
+                        f"Requested init_time '{t}' not found. "
+                        f"Available init_times range from {all_init_times[0]} "
+                        f"to {all_init_times[-1]}."
+                    )
+                selected_indices.append(int(matches[0]))
+    else:
+        raise TypeError(f"Unsupported type for init_times: {type(init_times)}")
+
+    pred_list: list[torch.Tensor] = []
+    target_list: list[torch.Tensor] = []
+    pred_std_list: list[torch.Tensor] = []
+
+    for batch_start in range(0, len(selected_indices), batch_size):
+        batch_idxs = selected_indices[batch_start : batch_start + batch_size]
+        batch_samples = [dataset[i] for i in batch_idxs]
+
+        init_batch = torch.stack([s[0] for s in batch_samples], dim=0).to(
+            torch_device
+        )
+        target_batch = torch.stack([s[1] for s in batch_samples], dim=0).to(
+            torch_device
+        )
+        forcing_batch = torch.stack([s[2] for s in batch_samples], dim=0).to(
+            torch_device
+        )
+        times_batch = torch.stack([s[3] for s in batch_samples], dim=0).to(
+            torch_device
+        )
+
+        norm_init, norm_target, norm_forcing, _ = model.on_after_batch_transfer(
+            (init_batch, target_batch, forcing_batch, times_batch),
+            dataloader_idx=0,
+        )
+
+        with torch.no_grad():
+            pred, pred_std = model.forecaster(
+                norm_init, norm_forcing, norm_target
+            )
+
+        if unstandardize:
+            pred = pred * model.state_std + model.state_mean
+            target_to_save = target_batch
+            if pred_std is not None:
+                if (
+                    not model.forecaster.predicts_std
+                    and model.per_var_std is not None
+                ):
+                    pred_std = model.per_var_std * model.state_std
+                else:
+                    pred_std = pred_std * model.state_std
+        else:
+            target_to_save = norm_target
+
+        pred_list.append(pred.cpu())
+        target_list.append(target_to_save.cpu())
+        if pred_std is not None:
+            pred_std_list.append(pred_std.cpu())
+
+    all_preds = torch.cat(pred_list, dim=0)
+    all_targets = torch.cat(target_list, dim=0)
+    all_pred_stds = torch.cat(pred_std_list, dim=0) if pred_std_list else None
+
+    sel_analysis_times = all_init_times[selected_indices]
+    first_target_times = (
+        dataset[selected_indices[0]][3].cpu().numpy().astype("datetime64[ns]")
+    )
+    first_init_time = sel_analysis_times[0]
+    elapsed_durations = first_target_times - first_init_time
+
+    ds_pred = create_forecast_dataset(
+        predictions=all_preds,
+        analysis_times=sel_analysis_times,
+        elapsed_durations=elapsed_durations,
+        datastore=datastore,
+        category="state",
+        pred_std=all_pred_stds,
+    )
+
+    if unstack_grid and isinstance(datastore, BaseRegularGridDatastore):
+        ds_pred = ds_pred.unstack("grid_index")
+
+    if return_target:
+        ds_target = create_forecast_dataset(
+            predictions=all_targets,
+            analysis_times=sel_analysis_times,
+            elapsed_durations=elapsed_durations,
+            datastore=datastore,
+            category="state",
+        )
+        if unstack_grid and isinstance(datastore, BaseRegularGridDatastore):
+            ds_target = ds_target.unstack("grid_index")
+        return ds_pred, ds_target
+
+    return ds_pred
+
+
 __all__ = [
     "ComputeConfig",
     "DataConfig",
@@ -463,7 +779,9 @@ __all__ = [
     "ModelConfig",
     "Run",
     "TrainRunConfig",
+    "create_forecast_dataset",
     "create_graph",
     "evaluate",
+    "predict",
     "train",
 ]

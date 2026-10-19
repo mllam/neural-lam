@@ -4,8 +4,10 @@
 import dataclasses
 
 # Third-party
+import numpy as np
 import pytest
 import wandb
+import xarray as xr
 
 # First-party
 from neural_lam import api, train_model
@@ -265,3 +267,174 @@ def test_api_var_leads_metrics_watch_parsing(monkeypatch, tmp_path):
     # Test evaluate with dict input
     api.evaluate(var_leads_metrics_watch={1: [3, 4]})
     assert captured_train_config[-1].var_leads_metrics_watch == {1: [3, 4]}
+
+
+def test_create_forecast_dataset_unit(shared_env):
+    """
+    Test unit behavior of create_forecast_dataset.
+
+    Validates coordinates, dimensions, and ensemble support.
+    """
+    datastore, _ = shared_env
+    b_dim, t_dim, n_dim, f_dim = 2, 3, 100, 5
+    preds = np.random.randn(b_dim, t_dim, n_dim, f_dim).astype(np.float32)
+    analysis_times = [
+        np.datetime64("2021-01-01T02:00:00", "ns"),
+        np.datetime64("2021-01-01T03:00:00", "ns"),
+    ]
+    elapsed = [
+        np.timedelta64(1, "h"),
+        np.timedelta64(2, "h"),
+        np.timedelta64(3, "h"),
+    ]
+
+    ds = api.create_forecast_dataset(
+        predictions=preds,
+        analysis_times=analysis_times,
+        elapsed_durations=elapsed,
+        datastore=datastore,
+    )
+    assert isinstance(ds, xr.Dataset)
+    assert "state" in ds
+    assert ds.state.dims == (
+        "analysis_time",
+        "elapsed_forecast_duration",
+        "grid_index",
+        "state_feature",
+    )
+    assert ds.state.shape == (2, 3, 100, 5)
+    assert "valid_time" in ds.coords
+    assert ds.coords["valid_time"].shape == (2, 3)
+    expected_valid_0_1 = np.datetime64(
+        "2021-01-01T02:00:00", "ns"
+    ) + np.timedelta64(2, "h")
+    assert ds.coords["valid_time"].values[0, 1] == expected_valid_0_1
+    assert "x" in ds.coords
+    assert "y" in ds.coords
+
+    # Test with ensemble member dimension
+    preds_ens = np.random.randn(b_dim, t_dim, 4, n_dim, f_dim).astype(
+        np.float32
+    )
+    ds_ens = api.create_forecast_dataset(
+        predictions=preds_ens,
+        analysis_times=analysis_times,
+        elapsed_durations=elapsed,
+        datastore=datastore,
+        ensemble_members=["m0", "m1", "m2", "m3"],
+    )
+    assert ds_ens.state.dims == (
+        "analysis_time",
+        "elapsed_forecast_duration",
+        "ensemble_member",
+        "grid_index",
+        "state_feature",
+    )
+    assert list(ds_ens.ensemble_member.values) == ["m0", "m1", "m2", "m3"]
+
+
+def test_api_predict_and_init_times(shared_env, tmp_path):
+    """
+    Test api.predict end-to-end.
+
+    Validates unstandardization, target return, unstack_grid, and init_times.
+    """
+    datastore, config = shared_env
+    runs_root = tmp_path / "runs_predict"
+
+    train_run = api.train(
+        datastore=datastore,
+        config=config,
+        model="graph_lam",
+        graph="1level",
+        epochs=1,
+        ar_steps_train=1,
+        val_interval=1,
+        num_sanity_val_steps=0,
+        batch_size=1,
+        num_workers=0,
+        hidden_dim=4,
+        processor_layers=1,
+        hidden_layers=1,
+        runs_root=str(runs_root),
+        logger_run_name="train_predict_ckpt",
+        val_steps_to_log=[1],
+    )
+    ckpt_path = str(train_run.checkpoint_path)
+
+    # 1. Default prediction: init_times=None, unstandardize=True
+    ds_pred = api.predict(
+        load=ckpt_path,
+        datastore=datastore,
+        config=config,
+        lead_steps=2,
+    )
+    assert isinstance(ds_pred, xr.Dataset)
+    assert "state" in ds_pred
+    assert ds_pred.state.dims == (
+        "analysis_time",
+        "elapsed_forecast_duration",
+        "grid_index",
+        "state_feature",
+    )
+    assert ds_pred.state.shape == (1, 2, 100, 5)
+    assert not np.isnan(ds_pred.state.values).any()
+
+    # 2. Prediction with return_target=True and unstandardize=False
+    ds_pred_std, ds_target_std = api.predict(
+        load=ckpt_path,
+        datastore=datastore,
+        config=config,
+        lead_steps=2,
+        unstandardize=False,
+        return_target=True,
+    )
+    assert ds_pred_std.state.shape == ds_target_std.state.shape
+    assert not np.allclose(ds_pred.state.values, ds_pred_std.state.values)
+
+    # 3. Test unstack_grid=True on regular grid
+    ds_unstacked = api.predict(
+        load=ckpt_path,
+        datastore=datastore,
+        config=config,
+        lead_steps=2,
+        unstack_grid=True,
+    )
+    assert "x" in ds_unstacked.state.dims
+    assert "y" in ds_unstacked.state.dims
+    assert ds_unstacked.state.sizes["x"] == 10
+    assert ds_unstacked.state.sizes["y"] == 10
+    assert ds_unstacked.state.sizes["state_feature"] == 5
+    assert ds_unstacked.state.sizes["elapsed_forecast_duration"] == 2
+    assert ds_unstacked.state.sizes["analysis_time"] == 1
+
+    # 4. Test init_times as string timestamp
+    avail_time_0 = str(ds_pred.analysis_time.values[0])
+    ds_by_str = api.predict(
+        load=ckpt_path,
+        datastore=datastore,
+        config=config,
+        init_times=avail_time_0,
+        lead_steps=2,
+    )
+    assert ds_by_str.analysis_time.values[0] == ds_pred.analysis_time.values[0]
+
+    # 5. Test init_times as integer index
+    ds_by_int = api.predict(
+        load=ckpt_path,
+        datastore=datastore,
+        config=config,
+        init_times=0,
+        lead_steps=2,
+    )
+    assert ds_by_int.analysis_time.values[0] == ds_pred.analysis_time.values[0]
+
+    # 6. Test invalid init_times raises informative ValueError
+    with pytest.raises(ValueError, match="Requested init_time .* not found"):
+        api.predict(
+            load=ckpt_path,
+            datastore=datastore,
+            config=config,
+            init_times="2099-01-01T00:00:00",
+            lead_steps=2,
+        )
