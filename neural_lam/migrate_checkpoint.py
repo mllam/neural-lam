@@ -31,7 +31,7 @@ def migrate_checkpoint_file(load_path: str, save_path: str) -> None:
         Path to save the migrated checkpoint to.
     """
     checkpoint = torch.load(load_path, map_location="cpu", weights_only=False)
-    checkpoint_version = checkpoint.get("neural_lam_checkpoint_version", 0)
+    checkpoint_version = migrations.detect_checkpoint_version(checkpoint)
 
     if checkpoint_version >= migrations.CURRENT_CHECKPOINT_VERSION:
         print(

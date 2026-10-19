@@ -1109,7 +1109,7 @@ class ForecasterModule(pl.LightningModule):
         checkpoint : dict
             The loaded checkpoint dictionary.
         """
-        checkpoint_version = checkpoint.get("neural_lam_checkpoint_version", 0)
+        checkpoint_version = migrations.detect_checkpoint_version(checkpoint)
         if checkpoint_version < migrations.CURRENT_CHECKPOINT_VERSION:
             warnings.warn(
                 f"Checkpoint was saved with state dict schema version "

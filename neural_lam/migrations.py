@@ -83,6 +83,14 @@ def _prefix_flat_ar_model_keys(state_dict: StateDict) -> StateDict:
     return state_dict
 
 
+def _rename_grid_mlp_keys(state_dict: StateDict) -> StateDict:
+    """Rename 'g2m_gnn.grid_mlp' to 'encoding_grid_mlp'."""
+    for old_key in [key for key in state_dict if "g2m_gnn.grid_mlp" in key]:
+        new_key = old_key.replace("g2m_gnn.grid_mlp", "encoding_grid_mlp")
+        state_dict[new_key] = state_dict.pop(old_key)
+    return state_dict
+
+
 # Ordered oldest to newest. Each migration is applied to a state dict that
 # is already at `target_version - 1`ish (in practice: at any version below
 # `target_version`), so migrations must remain valid to run in sequence.
@@ -93,7 +101,7 @@ MIGRATIONS: list[Migration] = [
             "Rename 'g2m_gnn.grid_mlp' to 'encoding_grid_mlp', from moving "
             "the grid MLP out of the InteractionNet class."
         ),
-        apply=rename_keys("g2m_gnn.grid_mlp", "encoding_grid_mlp"),
+        apply=_rename_grid_mlp_keys,
     ),
     Migration(
         target_version=2,
@@ -109,6 +117,42 @@ MIGRATIONS: list[Migration] = [
 CURRENT_CHECKPOINT_VERSION = max(
     (migration.target_version for migration in MIGRATIONS), default=0
 )
+
+
+# Schema versions for unversioned legacy checkpoints
+LEGACY_FLAT_SCHEMA_VERSION = 0  # Pre-#208 flat ARModel (v0.6.0 and earlier)
+V0_7_0_MODULAR_SCHEMA_VERSION = 2  # Post-#208 modular layout (v0.7.0 era)
+
+
+def detect_checkpoint_version(checkpoint: dict) -> int:
+    """
+    Determine the schema version of a checkpoint.
+
+    If the checkpoint has an explicit version tag, return it. Otherwise,
+    inspect the state dict keys to infer whether the checkpoint predates
+    the model hierarchy split (#208) or was saved with the modular layout
+    (e.g., release tag v0.7.0).
+
+    Parameters
+    ----------
+    checkpoint : dict
+        The loaded checkpoint dictionary.
+
+    Returns
+    -------
+    int
+        The detected checkpoint version.
+    """
+    if "neural_lam_checkpoint_version" in checkpoint:
+        return int(checkpoint["neural_lam_checkpoint_version"])
+
+    state_dict = checkpoint.get("state_dict", {})
+    if any(k.startswith("forecaster.") for k in state_dict):
+        # Modern modular layout (v0.7.0 era, post-#208 and grid_mlp rename)
+        return V0_7_0_MODULAR_SCHEMA_VERSION
+
+    # Pre-#208 flat ARModel layout (v0.6.0 or earlier)
+    return LEGACY_FLAT_SCHEMA_VERSION
 
 
 def apply_migrations(

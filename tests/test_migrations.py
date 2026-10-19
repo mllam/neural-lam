@@ -118,3 +118,50 @@ def test_pre_refactor_flat_checkpoint_migrates_to_current_layout():
         "interior_mask_bool": "mask",
         "per_var_std": "std",
     }
+
+
+def test_detect_checkpoint_version_uses_explicit_tag():
+    assert (
+        migrations.detect_checkpoint_version(
+            {"neural_lam_checkpoint_version": 2}
+        )
+        == 2
+    )
+    assert (
+        migrations.detect_checkpoint_version(
+            {"neural_lam_checkpoint_version": "3"}
+        )
+        == 3
+    )
+
+
+def test_detect_checkpoint_version_infers_v0_for_untagged_flat_layout():
+    checkpoint = {
+        "state_dict": {
+            "g2m_gnn.grid_mlp.0.weight": 1,
+            "interior_mask_bool": 2,
+        }
+    }
+    assert migrations.detect_checkpoint_version(checkpoint) == 0
+
+
+def test_detect_checkpoint_version_infers_v2_for_untagged_modular_layout():
+    checkpoint = {
+        "state_dict": {
+            "forecaster.predictor.encoding_grid_mlp.0.weight": 1,
+            "interior_mask_bool": 2,
+        }
+    }
+    assert migrations.detect_checkpoint_version(checkpoint) == 2
+
+
+def test_grid_mlp_migration_handles_prefixed_keys():
+    """Ensure that checkpoints saved with forecaster.predictor prefix
+    still have g2m_gnn.grid_mlp renamed to encoding_grid_mlp."""
+    state_dict = {
+        "forecaster.predictor.g2m_gnn.grid_mlp.0.weight": "w0",
+        "forecaster.predictor.other.weight": "w1",
+    }
+    migrated, _ = migrations.apply_migrations(state_dict, from_version=0)
+    assert "forecaster.predictor.encoding_grid_mlp.0.weight" in migrated
+    assert "forecaster.predictor.g2m_gnn.grid_mlp.0.weight" not in migrated

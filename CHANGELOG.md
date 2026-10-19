@@ -21,6 +21,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `ForecasterModule.on_load_checkpoint` migrates old ones automatically
   with a warning, and a standalone `python -m neural_lam.migrate_checkpoint`
   script can upgrade a checkpoint file in place.
+  Includes a backward compatibility test using a reference checkpoint
+  fetched via pooch and a reproduction script
+  (`tests/testdata/generate_reference_checkpoint.py`).
   [\#48](https://github.com/mllam/neural-lam/issues/48) @Sharkyii
 
 - Add `PropagationNet` GNN layer that incentivises directional message

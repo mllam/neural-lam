@@ -1,8 +1,12 @@
 # Standard library
+import urllib.error
 from pathlib import Path
 
 # Third-party
+import pooch
+import pytest
 import pytorch_lightning as pl
+import requests
 import torch
 
 # First-party
@@ -10,7 +14,15 @@ from neural_lam import config as nlconfig
 from neural_lam import migrations
 from neural_lam.create_graph import create_graph_from_datastore
 from neural_lam.models import ARForecaster, ForecasterModule, GraphLAM
-from tests.dummy_datastore import DummyDatastore
+from neural_lam.train_model import load_forecaster_module_from_checkpoint
+
+# Local
+from .conftest import (
+    DATASTORE_EXAMPLES_ROOT_PATH,
+    S3_BUCKET_NAME,
+    S3_ENDPOINT_URL,
+)
+from .dummy_datastore import DummyDatastore
 
 
 def _build_forecaster_module(datastore: DummyDatastore) -> ForecasterModule:
@@ -136,3 +148,67 @@ def test_pre_refactor_checkpoint_loads_via_migration(tmp_path):
         checkpoint["neural_lam_checkpoint_version"]
         == migrations.CURRENT_CHECKPOINT_VERSION
     )
+
+
+REFERENCE_CHECKPOINT_KEY = (
+    "neural-lam/model-checkpoints/v0.7.0/danra_winds_graph_lam_1level_v1.ckpt"
+)
+REFERENCE_CHECKPOINT_URL = (
+    f"{S3_ENDPOINT_URL}/{S3_BUCKET_NAME}/{REFERENCE_CHECKPOINT_KEY}"
+)
+REFERENCE_CHECKPOINT_HASH = (
+    "75ba32cb7b4d1a13dc36033a20ccb3edfae2c3d9f520d637b0d89be3b48c9555"
+)
+
+
+def test_v0_7_0_reference_checkpoint_loads_via_pooch(tmp_path):
+    """
+    Verify that an authentic v0.7.0 release checkpoint fetched via pooch
+    loads cleanly and runs a single forward step.
+    """
+    try:
+        ckpt_file = pooch.retrieve(
+            url=REFERENCE_CHECKPOINT_URL,
+            known_hash=REFERENCE_CHECKPOINT_HASH,
+            path=tmp_path,
+            fname="danra_winds_graph_lam_1level_v1.ckpt",
+        )
+    except (
+        requests.exceptions.RequestException,
+        urllib.error.URLError,
+    ) as e:
+        pytest.skip(f"Reference checkpoint not available on S3: {e}")
+
+    danra_config_path = (
+        DATASTORE_EXAMPLES_ROOT_PATH / "mdp/danra_100m_winds/config.yaml"
+    )
+    config, datastore = nlconfig.load_config_and_datastore(danra_config_path)
+    loaded_model = load_forecaster_module_from_checkpoint(
+        ckpt_path=ckpt_file,
+        config=config,
+        datastore=datastore,
+    )
+
+    assert loaded_model is not None
+    predictor = loaded_model.forecaster.predictor
+    assert predictor.__class__.__name__ == "GraphLAM"
+
+    # Single forward step
+    B, num_grid_nodes = 1, predictor.num_grid_nodes
+    d_state = datastore.get_num_data_vars(category="state")
+    d_forcing = datastore.get_num_data_vars(category="forcing") * (
+        predictor.num_past_forcing_steps
+        + predictor.num_future_forcing_steps
+        + 1
+    )
+    init_states = torch.ones(B, 2, num_grid_nodes, d_state)
+    forcing_features = torch.ones(B, 1, num_grid_nodes, d_forcing)
+    boundary_states = torch.ones(B, 1, num_grid_nodes, d_state)
+
+    with torch.no_grad():
+        pred = loaded_model.forecaster(
+            init_states, forcing_features, boundary_states
+        )
+
+    assert pred.shape[0] == B
+    assert pred.shape[-2] == num_grid_nodes
