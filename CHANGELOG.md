@@ -21,6 +21,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Raise a `ValueError` when only one of `metrics_watch` and `var_leads_metrics_watch` is set, instead of silently logging no watched metrics [\#785](https://github.com/mllam/neural-lam/pull/785) @KumarShivam1908
 
+- Fix flux standardization statistics weighting for short final batches and exclude distributed padding samples [\#782](https://github.com/mllam/neural-lam/pull/782) @Karvy-Singh
+
 ### Maintenance
 
 - Add a `lychee` pre-commit hook checking Markdown links and section anchors (config in `.github/lychee.toml`, run once per push in CI) and a PR-template reminder to update `CONTRIBUTING.md` / `AGENTS.md` [\#738](https://github.com/mllam/neural-lam/pull/738) @KumarShivam1908
