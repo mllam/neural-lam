@@ -272,6 +272,21 @@ def test_mdp_state_only_optional_categories(tmp_path):
                 assert get_vars(category=category) == []
 
 
+@pytest.mark.requires_real_data
+def test_npyfilesmeps_analysis_times_unique():
+    """Each analysis time has one file per ensemble member, but must only
+    appear once in the `analysis_time` coordinate."""
+    datastore = init_datastore_example("npyfilesmeps")
+    assert datastore.is_ensemble
+
+    times = datastore._get_analysis_times(split="train")
+    assert len(times) == len(set(times))
+    assert times == sorted(times)
+
+    da_state = datastore.get_dataarray(category="state", split="train")
+    assert da_state.analysis_time.to_index().is_unique
+
+
 @pytest.mark.parametrize("datastore_name", DATASTORES.keys())
 def test_boundary_mask(datastore_name):
     """Check that the `datastore.boundary_mask` property is implemented and
