@@ -177,8 +177,7 @@ def test_training_output_std():
 @pytest.mark.requires_training
 @pytest.mark.requires_real_data
 def test_training_with_boundary():
-    """One epoch of training with a boundary datastore, exercising boundary
-    loading and standardization through the full Lightning training loop."""
+    """One epoch of training with a boundary datastore."""
     datastore = init_datastore_example("mdp")
     datastore_boundary = init_datastore_boundary_example("mdp")
     run_simple_training(

@@ -86,10 +86,7 @@ def create_graph_from_datastore(
     """
     if not datastore.is_on_regular_spatial_grid:
         raise NotImplementedError(
-            "Graph creation is only supported for datastores whose grid "
-            "points form a complete 2D grid "
-            "(`is_on_regular_spatial_grid`); "
-            f"{type(datastore).__name__} reports that it does not."
+            "Graph creation requires a datastore on a regular spatial grid."
         )
 
     if archetype not in ARCHETYPE_FUNCTIONS:
@@ -144,7 +141,13 @@ def create_graph_from_datastore(
 
 
 def cli(input_args: list[str] | None = None) -> None:
-    """Command-line interface for graph creation using weather-model-graphs."""
+    """Command-line interface for graph creation using weather-model-graphs.
+
+    Parameters
+    ----------
+    input_args : list of str or None, optional
+        Arguments to parse instead of ``sys.argv``.
+    """
     parser = ArgumentParser(
         description="Graph generation for neural-lam using "
         "weather-model-graphs (wmg)",

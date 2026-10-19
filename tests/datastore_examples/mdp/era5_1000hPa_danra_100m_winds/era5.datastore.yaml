@@ -27,11 +27,9 @@ output:
       test:
         start: 2022-03-30T00:00
         end: 2022-04-12T00:00
-  # Second-pass crop: keep only ERA5 points within `margin_width_degrees`
-  # of the interior dataset's convex hull. Follows the documented mllam
-  # pattern in `example.era5_cropped.yaml` -- the dim_mapping below stacks
-  # `[longitude, latitude]` directly into `grid_index` (no rename) so that
-  # convex-hull cropping can find lat/lon coords by name.
+  # Keep only ERA5 points within `margin_width_degrees` of the interior
+  # domain. Cropping finds the lat/lon coords by name, so grid_index stacks
+  # `[longitude, latitude]` without renaming them.
   domain_cropping:
     margin_width_degrees: 10
     interior_dataset_config_path: danra.datastore.yaml
@@ -41,8 +39,7 @@ inputs:
   era_height_levels:
     path: 'gs://weatherbench2/datasets/era5/1959-2023_01_10-6h-64x32_equiangular_conservative.zarr'
     dims: [time, longitude, latitude, level]
-    # First-pass crop on the source lat/lon dims to keep the test dataset
-    # small. Region covers DANRA + a ~10 degree margin.
+    # DANRA plus a ~10 degree margin
     coord_ranges:
       latitude: {start: 40, end: 75}
       longitude: {start: 0, end: 30}

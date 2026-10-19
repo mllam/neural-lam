@@ -478,18 +478,12 @@ class DummyDatastore(BaseDatastore):
         n_points_1d = int(np.sqrt(self.num_grid_points))
         return CartesianGridShape(x=n_points_1d, y=n_points_1d)
 
-    @cached_property
-    def state_feature_weights_values(self) -> list[float]:
-        return [1.0] * self.N_FEATURES["state"]
-
 
 class BoundaryDummyDatastore(DummyDatastore):
-    """DummyDatastore acting as a boundary forcing provider with no state.
+    """DummyDatastore without `state` data, like an ERA5 boundary.
 
-    Mimics a real ERA5-style boundary datastore, which supplies ``forcing``
-    and ``static`` fields but no ``state``. State metadata is dropped after
-    init and state-keyed lookups raise ``KeyError`` so any code path that
-    accidentally asks the boundary for ``state`` fails loudly in tests.
+    Forcing values encode `feature * 1000 + time` and the forcing statistics
+    differ per feature, so the stacking order of the boundary is testable.
     """
 
     SHORT_NAME = "dummydata_boundary"
@@ -516,13 +510,7 @@ class BoundaryDummyDatastore(DummyDatastore):
         self._encode_forcing_by_feature()
 
     def _encode_forcing_by_feature(self) -> None:
-        """Replace forcing values with `feature * 1000 + time`.
-
-        The base dummy fills every category with random noise, so a value
-        does not say which feature it came from and the order in which
-        `WeatherDataset` stacks `(forcing_feature, window)` is unobservable
-        downstream. Encoding the feature index makes that order testable.
-        """
+        """Replace forcing values with `feature * 1000 + time`."""
         da_forcing = self.ds["forcing"]
         feature_axis = da_forcing.dims.index("forcing_feature")
         time_axis = da_forcing.dims.index("time")
@@ -532,28 +520,12 @@ class BoundaryDummyDatastore(DummyDatastore):
         shape = [1] * da_forcing.ndim
         shape[time_axis] = da_forcing.sizes["time"]
         times = np.arange(da_forcing.sizes["time"]).reshape(shape)
-        # Assign in place: rebuilding the DataArray would drop the
-        # `grid_index` MultiIndex.
+        # In place, rebuilding would drop the `grid_index` MultiIndex
         da_forcing.values[...] = features * 1000.0 + times
 
     def get_standardization_dataarray(self, category: str) -> xr.Dataset:
-        """Return per-feature statistics, distinct for forcing.
-
-        The base dummy uses 1.0 for every feature, which makes the order in
-        which statistics are tiled across a window unobservable. Real
-        datastores have per-variable statistics, so forcing gets distinct
-        ones here.
-
-        Parameters
-        ----------
-        category : str
-            The category of the dataset (forcing/static).
-
-        Returns
-        -------
-        xr.Dataset
-            Standardization statistics for the given category.
-        """
+        """Return the base statistics, with distinct ones per forcing
+        feature."""
         ds = super().get_standardization_dataarray(category=category)
         if category == "forcing":
             n_features = self.N_FEATURES["forcing"]

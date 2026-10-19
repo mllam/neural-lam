@@ -154,9 +154,24 @@ def load_forecaster_module_from_checkpoint(
 
     The checkpoint must have been saved with args in hyper_parameters (i.e.
     created via train_model.main), so that model class and architecture kwargs
-    can be recovered automatically. Pass `datastore_boundary` if the
-    checkpoint was trained with a boundary datastore, otherwise the
-    boundary standardization statistics are not restored.
+    can be recovered automatically.
+
+    Parameters
+    ----------
+    ckpt_path : str
+        Path to the checkpoint.
+    config : NeuralLAMConfig
+        Neural-LAM configuration.
+    datastore : BaseDatastore
+        Interior datastore.
+    datastore_boundary : BaseDatastore, optional
+        Boundary datastore, needed to restore the boundary standardization
+        statistics of a checkpoint trained with one.
+
+    Returns
+    -------
+    ForecasterModule
+        The restored module.
     """
     ckpt = torch.load(ckpt_path, weights_only=False)
     args = ckpt["hyper_parameters"]["args"]
@@ -173,7 +188,13 @@ def load_forecaster_module_from_checkpoint(
 
 
 def build_parser() -> ArgumentParser:
-    """Build the argument parser for training and evaluating models."""
+    """Build the argument parser for training and evaluating models.
+
+    Returns
+    -------
+    ArgumentParser
+        The parser.
+    """
 
     parser = ArgumentParser(
         description="Train or evaluate MLWP models for LAM",
@@ -770,7 +791,24 @@ def run(
     datastore: BaseDatastore | None = None,
     datastore_boundary: BaseDatastore | None = None,
 ) -> Run:
-    """Run the training or evaluation loop from parsed CLI arguments."""
+    """Run the training or evaluation loop from parsed CLI arguments.
+
+    Parameters
+    ----------
+    args : Namespace
+        Parsed arguments from :func:`build_parser`.
+    config : NeuralLAMConfig or None, optional
+        Loaded configuration, loaded from ``args.config_path`` if ``None``.
+    datastore : BaseDatastore or None, optional
+        Interior datastore, used together with ``config``.
+    datastore_boundary : BaseDatastore or None, optional
+        Boundary datastore, used together with ``config``.
+
+    Returns
+    -------
+    Run
+        Paths to the run outputs and saved checkpoints.
+    """
     var_leads = getattr(args, "var_leads_metrics_watch", "{}")
     if isinstance(var_leads, str):
         args.var_leads_metrics_watch = {

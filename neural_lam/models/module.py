@@ -80,8 +80,8 @@ class ForecasterModule(pl.LightningModule):
         datastore : BaseDatastore
             Datastore providing grid metadata and data access.
         datastore_boundary : BaseDatastore, optional
-            Boundary forcing datastore, used here only to register the
-            boundary standardization statistics.
+            Boundary forcing datastore, used for its standardization
+            statistics.
         loss : str, default "wmse"
             The loss function to use.
         lr : float, default 1e-3
@@ -144,11 +144,11 @@ class ForecasterModule(pl.LightningModule):
         if var_leads_metrics_watch is None:
             var_leads_metrics_watch = {}
 
-        # datastore and forecaster are excluded from saved hparams and must be
-        # provided explicitly when calling load_from_checkpoint. Saving args
-        # makes the checkpoint self-describing: it carries model, graph_name,
-        # hidden_dim, etc. so the caller can reconstruct the exact forecaster
-        # architecture from the checkpoint alone.
+        # datastore and forecaster are excluded from saved hparams and must
+        # be provided explicitly when calling load_from_checkpoint. Saving
+        # args makes the checkpoint self-describing: it carries model,
+        # graph_name, hidden_dim, etc. so the caller can reconstruct the
+        # exact forecaster architecture from the checkpoint alone.
         self.save_hyperparameters(
             ignore=["datastore", "datastore_boundary", "forecaster"]
         )
@@ -383,6 +383,19 @@ class ForecasterModule(pl.LightningModule):
         Forcing and boundary share the same feature-major
         ``(feature, window)`` stacking, so per-feature mean/std are tiled
         once and cached.
+
+        Parameters
+        ----------
+        batch : Batch
+            ``(init_states, target_states, forcing, boundary, target_times)``
+            as returned by the dataloader.
+        dataloader_idx : int
+            Index of the dataloader the batch comes from.
+
+        Returns
+        -------
+        Batch
+            The batch with state, forcing and boundary standardized.
         """
         init_states, target_states, forcing, boundary, batch_times = batch
 

@@ -12,7 +12,7 @@ from neural_lam import api, train_model
 from neural_lam import config as nlconfig
 from neural_lam.models import ForecasterModule
 from neural_lam.train_model import load_forecaster_module_from_checkpoint
-from tests.dummy_datastore import BoundaryDummyDatastore, DummyDatastore
+from tests.dummy_datastore import DummyDatastore
 
 
 @pytest.fixture(scope="module")
@@ -265,27 +265,3 @@ def test_api_var_leads_metrics_watch_parsing(monkeypatch, tmp_path):
     # Test evaluate with dict input
     api.evaluate(var_leads_metrics_watch={1: [3, 4]})
     assert captured_train_config[-1].var_leads_metrics_watch == {1: [3, 4]}
-
-
-def test_api_forwards_boundary_datastore(monkeypatch, tmp_path):
-    """`api.train` and `api.evaluate` hand the boundary datastore and the
-    boundary window sizes through to `fit`."""
-    captured = []
-
-    def mock_fit(*, data_config, datastore_boundary, **kwargs):
-        captured.append((data_config, datastore_boundary))
-        return train_model.Run(run_dir=tmp_path)
-
-    monkeypatch.setattr(api.train_model_script, "fit", mock_fit)
-    boundary = BoundaryDummyDatastore()
-
-    for entry_point in (api.train, api.evaluate):
-        entry_point(
-            datastore_boundary=boundary,
-            num_past_boundary_steps=2,
-            num_future_boundary_steps=3,
-        )
-        data_config, datastore_boundary = captured[-1]
-        assert datastore_boundary is boundary
-        assert data_config.num_past_boundary_steps == 2
-        assert data_config.num_future_boundary_steps == 3

@@ -66,20 +66,11 @@ class BaseDatastore(abc.ABC):
     each of the `x` and `y` coordinates.
 
     Regular spatial grid
-    ---------------------
-    A datastore whose `grid_index` coordinate values can be reshaped back
-    into a complete 2D `x`/`y` grid (like a chess-board, as opposed to an
-    irregular grid where each cell cannot be indexed by just two integers,
-    see https://en.wikipedia.org/wiki/Regular_grid) should set
-    `is_on_regular_spatial_grid` to `True` and implement `grid_shape_state`
-    (to change the name of the spatial coordinates the `spatial_coordinates`
-    value should be changed from its default value of `("x", "y")`).
-    `grid_shape_state`, `stack_grid_coords` and `unstack_grid_coords` are
-    only defined in that case and raise `NotImplementedError` otherwise,
-    rather than silently padding the result with cells the datastore has no
-    data for. Code that should work with both kinds of datastore therefore
-    takes a `BaseDatastore` and checks `is_on_regular_spatial_grid` before
-    reaching for any of them.
+    --------------------
+    A datastore whose `grid_index` can be reshaped back into a complete 2D
+    `x`/`y` grid should set `is_on_regular_spatial_grid` to `True` and
+    implement `grid_shape_state`. `grid_shape_state`, `stack_grid_coords` and
+    `unstack_grid_coords` raise `NotImplementedError` otherwise.
     """
 
     is_ensemble: bool = False
@@ -393,10 +384,8 @@ class BaseDatastore(abc.ABC):
     def num_grid_points(self) -> int:
         """Return the number of grid points in the dataset.
 
-        The default implementation derives this from `grid_shape_state`,
-        which is only defined for datastores on a regular spatial grid.
-        Datastores that are not on a regular spatial grid must override
-        this.
+        Derived from `grid_shape_state`, so datastores not on a regular
+        spatial grid must override this.
 
         Returns
         -------
@@ -416,199 +405,6 @@ class BaseDatastore(abc.ABC):
                 "`grid_shape_state` and must be overridden."
             )
         return self.grid_shape_state.x * self.grid_shape_state.y
-
-    @property
-    def is_on_regular_spatial_grid(self) -> bool:
-        """Whether the grid points form a complete 2D rectangular grid.
-
-        Only then can ``grid_index`` be unstacked back into ``x``/``y``,
-        which graph creation and gridded plotting rely on. Subclasses whose
-        layout depends on the data they were built from override this rather
-        than relying on their class alone.
-
-        Returns
-        -------
-        bool
-            ``False`` unless a subclass opts in.
-        """
-        return False
-
-    @cached_property
-    def grid_shape_state(self) -> CartesianGridShape:
-        """The shape of the cartesian grid for the state variables.
-
-        Only defined for datastores where `is_on_regular_spatial_grid` is
-        `True`. Regular-grid datastores must override this.
-
-        Returns
-        -------
-        CartesianGridShape
-            The shape of the cartesian grid for the state variables, which
-            has `x` and `y` attributes.
-
-        Raises
-        ------
-        NotImplementedError
-            If the datastore is not on a regular spatial grid.
-        """
-        raise NotImplementedError(
-            f"{type(self).__name__} does not define `grid_shape_state`; "
-            "this is only available for datastores where "
-            "`is_on_regular_spatial_grid` is True."
-        )
-
-    def _check_on_regular_spatial_grid(self, operation: str) -> None:
-        """Guard an operation that requires a complete 2D ``x``/``y`` grid.
-
-        Parameters
-        ----------
-        operation : str
-            Name of the calling method, used in the error message.
-
-        Raises
-        ------
-        NotImplementedError
-            If the datastore's grid points do not form a complete 2D grid.
-        """
-        if not self.is_on_regular_spatial_grid:
-            raise NotImplementedError(
-                f"`{operation}` requires the grid points to form a complete "
-                "2D grid (`is_on_regular_spatial_grid`); "
-                f"{type(self).__name__} reports that they do not."
-            )
-
-    @overload
-    def unstack_grid_coords(self, da_or_ds: xr.DataArray) -> xr.DataArray:
-        """Unstack spatial grid coordinates of DataArray."""
-
-    @overload
-    def unstack_grid_coords(self, da_or_ds: xr.Dataset) -> xr.Dataset:
-        """Unstack spatial grid coordinates of Dataset."""
-
-    def unstack_grid_coords(
-        self, da_or_ds: xr.DataArray | xr.Dataset
-    ) -> xr.DataArray | xr.Dataset:
-        """
-        Unstack the spatial grid coordinates from `grid_index` into separate `x`
-        and `y` dimensions to create a 2D grid (if the spatial coordinates have
-        different names, those are used instead). Only performs unstacking if
-        the data is currently stacked (has grid_index dimension).
-
-        Only defined for datastores where `is_on_regular_spatial_grid` is
-        `True`, since unstacking an irregular grid would pad the result with
-        cells the datastore has no data for.
-
-        Parameters
-        ----------
-        da_or_ds : xr.DataArray or xr.Dataset
-            The dataarray or dataset to unstack the grid coordinates of.
-
-        Returns
-        -------
-        xr.DataArray or xr.Dataset
-            The dataarray or dataset with the grid coordinates unstacked.
-
-        Raises
-        ------
-        NotImplementedError
-            If the datastore is not on a regular spatial grid.
-        """
-        # Return original data if already unstacked (no grid_index dimension)
-        if "grid_index" not in da_or_ds.dims:
-            return da_or_ds
-
-        self._check_on_regular_spatial_grid("unstack_grid_coords")
-
-        # Check whether `grid_index` is a multi-index
-        if not isinstance(da_or_ds.indexes.get("grid_index"), MultiIndex):
-            da_or_ds = da_or_ds.set_index(grid_index=self.spatial_coordinates)
-
-        da_or_ds_unstacked = da_or_ds.unstack("grid_index")
-
-        # Ensure that the x, y dimensions are in the correct order
-        dims = list(da_or_ds_unstacked.dims)
-        xy_dim_order = [d for d in dims if d in self.spatial_coordinates]
-
-        if xy_dim_order != self.spatial_coordinates:
-            # work out where the first spatial coordinate is located
-            # so that we can insert the second spatial coordinate next to it in
-            # the correct order. Although this looks verbose, it ensures that
-            # we don't change the order of any other dimensions.
-            first_xy_dim_index = min(
-                dims.index(self.spatial_coordinates[0]),
-                dims.index(self.spatial_coordinates[1]),
-            )
-            new_dim_order = list(dims)
-            new_dim_order.remove(self.spatial_coordinates[0])
-            new_dim_order.remove(self.spatial_coordinates[1])
-            new_dim_order.insert(
-                first_xy_dim_index, self.spatial_coordinates[0]
-            )
-            new_dim_order.insert(
-                first_xy_dim_index + 1, self.spatial_coordinates[1]
-            )
-            da_or_ds_unstacked = da_or_ds_unstacked.transpose(*new_dim_order)
-
-        return da_or_ds_unstacked
-
-    @overload
-    def stack_grid_coords(self, da_or_ds: xr.DataArray) -> xr.DataArray:
-        """Stack spatial grid coordinates of DataArray."""
-
-    @overload
-    def stack_grid_coords(self, da_or_ds: xr.Dataset) -> xr.Dataset:
-        """Stack spatial grid coordinates of Dataset."""
-
-    def stack_grid_coords(
-        self, da_or_ds: xr.DataArray | xr.Dataset
-    ) -> xr.DataArray | xr.Dataset:
-        """
-        Stack the spatial grid coordinates (x and y) into a single `grid_index`
-        dimension. Only performs stacking if the data is currently unstacked
-        (has x and y dimensions).
-
-        Only defined for datastores where `is_on_regular_spatial_grid` is
-        `True`, since separate `x`/`y` dimensions to stack only exist for a
-        complete 2D grid.
-
-        Parameters
-        ----------
-        da_or_ds : xr.DataArray or xr.Dataset
-            The dataarray or dataset to stack the grid coordinates of.
-
-        Returns
-        -------
-        xr.DataArray or xr.Dataset
-            The dataarray or dataset with the grid coordinates stacked.
-
-        Raises
-        ------
-        NotImplementedError
-            If the datastore is not on a regular spatial grid.
-        """
-        # Return original data if already stacked (has grid_index dimension)
-        if "grid_index" in da_or_ds.dims:
-            return da_or_ds
-
-        self._check_on_regular_spatial_grid("stack_grid_coords")
-
-        da_or_ds_stacked = da_or_ds.stack(grid_index=self.spatial_coordinates)
-
-        # infer what category of data the array represents by finding the
-        # dimension named in the format `{category}_feature`
-        category = None
-        for dim in da_or_ds_stacked.dims:
-            if isinstance(dim, str) and dim.endswith("_feature"):
-                if category is not None:
-                    raise ValueError(
-                        "Multiple dimensions ending with '_feature' found in "
-                        f"dataarray: {da_or_ds_stacked}. Cannot infer category."
-                    )
-                category = dim.split("_")[0]
-
-        dim_order = self.expected_dim_order(category=category)
-
-        return da_or_ds_stacked.transpose(*dim_order)
 
     @cached_property
     @abc.abstractmethod
@@ -692,3 +488,181 @@ class BaseDatastore(abc.ABC):
             dim_order.append(f"{category}_feature")
 
         return tuple(dim_order)
+
+    @property
+    def is_on_regular_spatial_grid(self) -> bool:
+        """Whether ``grid_index`` can be unstacked into a complete 2D
+        ``x``/``y`` grid.
+
+        Returns
+        -------
+        bool
+            ``False`` unless a subclass opts in.
+        """
+        return False
+
+    @cached_property
+    def grid_shape_state(self) -> CartesianGridShape:
+        """The shape of the grid for the state variables.
+
+        Returns
+        -------
+        CartesianGridShape:
+            The shape of the grid for the state variables, which has `x` and
+            `y` attributes.
+
+        Raises
+        ------
+        NotImplementedError
+            If the datastore is not on a regular spatial grid.
+        """
+        raise NotImplementedError(
+            f"{type(self).__name__} does not define `grid_shape_state`; "
+            "this is only available for datastores where "
+            "`is_on_regular_spatial_grid` is True."
+        )
+
+    def _check_on_regular_spatial_grid(self, operation: str) -> None:
+        """Guard an operation that requires a complete 2D ``x``/``y`` grid.
+
+        Parameters
+        ----------
+        operation : str
+            Name of the calling method, used in the error message.
+
+        Raises
+        ------
+        NotImplementedError
+            If the datastore's grid points do not form a complete 2D grid.
+        """
+        if not self.is_on_regular_spatial_grid:
+            raise NotImplementedError(
+                f"`{operation}` requires the grid points to form a complete "
+                "2D grid (`is_on_regular_spatial_grid`); "
+                f"{type(self).__name__} reports that they do not."
+            )
+
+    @overload
+    def unstack_grid_coords(self, da_or_ds: xr.DataArray) -> xr.DataArray:
+        """Unstack spatial grid coordinates of DataArray."""
+
+    @overload
+    def unstack_grid_coords(self, da_or_ds: xr.Dataset) -> xr.Dataset:
+        """Unstack spatial grid coordinates of Dataset."""
+
+    def unstack_grid_coords(
+        self, da_or_ds: xr.DataArray | xr.Dataset
+    ) -> xr.DataArray | xr.Dataset:
+        """
+        Unstack the spatial grid coordinates from `grid_index` into separate `x`
+        and `y` dimensions to create a 2D grid (if the spatial coordinates have
+        different names, those are used instead). Only performs unstacking if
+        the data is currently stacked (has grid_index dimension).
+
+        Parameters
+        ----------
+        da_or_ds : xr.DataArray or xr.Dataset
+            The dataarray or dataset to unstack the grid coordinates of.
+
+        Returns
+        -------
+        xr.DataArray or xr.Dataset
+            The dataarray or dataset with the grid coordinates unstacked.
+
+        Raises
+        ------
+        NotImplementedError
+            If the datastore is not on a regular spatial grid.
+        """
+        # Return original data if already unstacked (no grid_index dimension)
+        if "grid_index" not in da_or_ds.dims:
+            return da_or_ds
+
+        self._check_on_regular_spatial_grid("unstack_grid_coords")
+
+        # Check whether `grid_index` is a multi-index
+        if not isinstance(da_or_ds.indexes.get("grid_index"), MultiIndex):
+            da_or_ds = da_or_ds.set_index(grid_index=self.spatial_coordinates)
+
+        da_or_ds_unstacked = da_or_ds.unstack("grid_index")
+
+        # Ensure that the x, y dimensions are in the correct order
+        dims = list(da_or_ds_unstacked.dims)
+        xy_dim_order = [d for d in dims if d in self.spatial_coordinates]
+
+        if xy_dim_order != self.spatial_coordinates:
+            # work out where the first spatial coordinate is located
+            # so that we can insert the second spatial coordinate next to it in
+            # the correct order. Although this looks verbose, it ensures that
+            # we don't change the order of any other dimensions.
+            first_xy_dim_index = min(
+                dims.index(self.spatial_coordinates[0]),
+                dims.index(self.spatial_coordinates[1]),
+            )
+            new_dim_order = list(dims)
+            new_dim_order.remove(self.spatial_coordinates[0])
+            new_dim_order.remove(self.spatial_coordinates[1])
+            new_dim_order.insert(
+                first_xy_dim_index, self.spatial_coordinates[0]
+            )
+            new_dim_order.insert(
+                first_xy_dim_index + 1, self.spatial_coordinates[1]
+            )
+            da_or_ds_unstacked = da_or_ds_unstacked.transpose(*new_dim_order)
+
+        return da_or_ds_unstacked
+
+    @overload
+    def stack_grid_coords(self, da_or_ds: xr.DataArray) -> xr.DataArray:
+        """Stack spatial grid coordinates of DataArray."""
+
+    @overload
+    def stack_grid_coords(self, da_or_ds: xr.Dataset) -> xr.Dataset:
+        """Stack spatial grid coordinates of Dataset."""
+
+    def stack_grid_coords(
+        self, da_or_ds: xr.DataArray | xr.Dataset
+    ) -> xr.DataArray | xr.Dataset:
+        """
+        Stack the spatial grid coordinates (x and y) into a single `grid_index`
+        dimension. Only performs stacking if the data is currently unstacked
+        (has x and y dimensions).
+
+        Parameters
+        ----------
+        da_or_ds : xr.DataArray or xr.Dataset
+            The dataarray or dataset to stack the grid coordinates of.
+
+        Returns
+        -------
+        xr.DataArray or xr.Dataset
+            The dataarray or dataset with the grid coordinates stacked.
+
+        Raises
+        ------
+        NotImplementedError
+            If the datastore is not on a regular spatial grid.
+        """
+        # Return original data if already stacked (has grid_index dimension)
+        if "grid_index" in da_or_ds.dims:
+            return da_or_ds
+
+        self._check_on_regular_spatial_grid("stack_grid_coords")
+
+        da_or_ds_stacked = da_or_ds.stack(grid_index=self.spatial_coordinates)
+
+        # infer what category of data the array represents by finding the
+        # dimension named in the format `{category}_feature`
+        category = None
+        for dim in da_or_ds_stacked.dims:
+            if isinstance(dim, str) and dim.endswith("_feature"):
+                if category is not None:
+                    raise ValueError(
+                        "Multiple dimensions ending with '_feature' found in "
+                        f"dataarray: {da_or_ds_stacked}. Cannot infer category."
+                    )
+                category = dim.split("_")[0]
+
+        dim_order = self.expected_dim_order(category=category)
+
+        return da_or_ds_stacked.transpose(*dim_order)

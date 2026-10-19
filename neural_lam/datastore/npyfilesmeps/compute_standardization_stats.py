@@ -53,7 +53,18 @@ class PaddedWeatherDataset(torch.utils.data.Dataset):
     ) -> tuple[
         torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor
     ]:
-        """Return an item, repeating the final sample for padded indices."""
+        """Return an item, repeating the final sample for padded indices.
+
+        Parameters
+        ----------
+        idx : int
+            Index into the padded dataset.
+
+        Returns
+        -------
+        tuple of torch.Tensor
+            The sample, as returned by `WeatherDataset.__getitem__`.
+        """
         return self.base_dataset[min(idx, self.total_samples - 1)]
 
     def __len__(self) -> int:
