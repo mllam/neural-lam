@@ -25,6 +25,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Raise a `ValueError` when only one of `metrics_watch` and `var_leads_metrics_watch` is set, instead of silently logging no watched metrics [\#785](https://github.com/mllam/neural-lam/pull/785) @KumarShivam1908
 
+- Fix flux standardization statistics weighting for short final batches and exclude distributed padding samples [\#782](https://github.com/mllam/neural-lam/pull/782) @Karvy-Singh
+
 ### Maintenance
 
 - Fix the GPU CI job silently running on CPU: use an NVIDIA `g4dn.xlarge` cirun instance instead of the AMD `g4ad.xlarge`, install `--extra gpu-cu128` to match the runner's CUDA 12.2 driver, assert `torch.cuda.is_available()`, and run only the GPU-relevant tests there [\#802](https://github.com/mllam/neural-lam/pull/802) @varma1221
