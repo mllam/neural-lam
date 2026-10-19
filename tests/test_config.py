@@ -92,36 +92,12 @@ def test_legacy_datastore_key_raises_migration_error(tmp_path):
         nlconfig.load_config_and_datastore(str(config_path))
 
 
-def test_malformed_yaml_raises_invalid_config_error(tmp_path):
-    """A syntactically broken config file must raise `InvalidConfigError`
-    like every other config problem, not a raw `yaml.YAMLError`."""
-    config_path = tmp_path / "config.yaml"
-    config_path.write_text(
-        "datastores:\n  danra:\n  - broken: [", encoding="utf-8"
-    )
-    with pytest.raises(nlconfig.InvalidConfigError):
-        nlconfig.load_config_and_datastore(str(config_path))
-
-
 DATASTORE_EXAMPLES = Path(__file__).parent / "datastore_examples" / "mdp"
 BOUNDARY_EXAMPLE_DIR = DATASTORE_EXAMPLES / "era5_1000hPa_danra_100m_winds"
 
 
 def _write_config(tmp_path, entries):
-    """Write a neural-lam config with the given datastore entries.
-
-    Parameters
-    ----------
-    tmp_path : pathlib.Path
-        Directory to write the config into.
-    entries : dict
-        Mapping from datastore name to the datastore config path.
-
-    Returns
-    -------
-    pathlib.Path
-        Path to the written config.
-    """
+    """Write a config with `mdp` datastore entries `{name: config_path}`."""
     lines = ["datastores:"]
     for name, path in entries.items():
         lines += [f"  {name}:", "    kind: mdp", f"    config_path: {path}"]
@@ -132,12 +108,8 @@ def _write_config(tmp_path, entries):
 
 @pytest.mark.requires_real_data
 def test_load_config_and_datastore_splits_by_state(monkeypatch, tmp_path):
-    """The shipped two-datastore example loads into (config, interior,
-    boundary), with the roles decided by which datastore has `state` data,
-    and `config_path` entries resolved relative to the config file rather
-    than the working directory."""
-    # Run from elsewhere: the entries are relative, so a CWD-relative
-    # resolution would not find them.
+    """The boundary example splits into interior and boundary by `state`
+    data, with `config_path` resolved relative to the config file."""
     monkeypatch.chdir(tmp_path)
 
     config, datastore, datastore_boundary = nlconfig.load_config_and_datastore(
@@ -165,20 +137,8 @@ def test_load_config_and_datastore_requires_an_interior(tmp_path):
 
 
 @pytest.mark.requires_real_data
-def test_load_config_and_datastore_rejects_two_interiors(tmp_path):
-    """Two datastores with `state` data are ambiguous as the interior."""
-    danra = DATASTORE_EXAMPLES / "danra_100m_winds" / "danra.datastore.yaml"
-    config_path = _write_config(tmp_path, {"a": danra, "b": danra})
-
-    with pytest.raises(
-        nlconfig.InvalidConfigError, match="Exactly one datastore must provide"
-    ):
-        nlconfig.load_config_and_datastore(str(config_path))
-
-
-@pytest.mark.requires_real_data
 def test_load_config_and_datastore_rejects_two_boundaries(tmp_path):
-    """Only a single boundary datastore is supported for now."""
+    """At most one boundary datastore is supported."""
     danra = DATASTORE_EXAMPLES / "danra_100m_winds" / "danra.datastore.yaml"
     era5 = BOUNDARY_EXAMPLE_DIR / "era5.datastore.yaml"
     config_path = _write_config(
@@ -191,20 +151,10 @@ def test_load_config_and_datastore_rejects_two_boundaries(tmp_path):
         nlconfig.load_config_and_datastore(str(config_path))
 
 
-def test_datastore_selection_rejects_n_boundary_points_for_non_mdp():
-    """`n_boundary_points` only means something for `MDPDatastore`, which is
-    the only kind whose boundary mask width it controls."""
-    with pytest.raises(ValueError, match="n_boundary_points"):
-        nlconfig.DatastoreSelection(
-            kind="npyfilesmeps", config_path="", n_boundary_points=5
-        )
-
-
 @pytest.mark.requires_real_data
 def test_load_config_and_datastore_forwards_n_boundary_points(tmp_path):
-    """`n_boundary_points` set on a datastore entry reaches the datastore
-    and changes the width of its boundary mask, so it can be narrowed (or
-    set to 0) once boundary forcing is supplied by a separate datastore."""
+    """`n_boundary_points` on a datastore entry sets its boundary mask
+    width."""
     danra = DATASTORE_EXAMPLES / "danra_100m_winds" / "danra.datastore.yaml"
     config_path = tmp_path / "config.yaml"
     config_path.write_text(

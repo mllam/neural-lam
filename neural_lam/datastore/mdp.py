@@ -146,13 +146,9 @@ class MDPDatastore(BaseDatastore):
         self.spatial_coordinates = dim_order
 
     def _config_for_creation(self) -> mdp.Config:
-        """Return the config to build the dataset from.
-
-        mllam-data-prep resolves `interior_dataset_config_path` against the
-        process CWD, but it is written relative to this config file. Only
-        that path is absolutised, and on a copy, so the public `config`
-        still matches the YAML on disk; other inputs keep CWD-relative
-        behaviour.
+        """Return the config to build the dataset from, with a relative
+        `interior_dataset_config_path` made relative to this config file
+        rather than the working directory.
 
         Returns
         -------
@@ -221,12 +217,11 @@ class MDPDatastore(BaseDatastore):
             The units of the variables in the given category.
 
         """
-        units_key = f"{category}_feature_units"
-        if units_key not in self._ds:
+        if category not in self._ds:
             if category in ("forcing", "static"):
                 warnings.warn(f"no {category} data found in datastore")
             return []
-        return self._ds[units_key].values.tolist()
+        return self._ds[f"{category}_feature_units"].values.tolist()
 
     def get_vars_names(self, category: str) -> list[str]:
         """Return the names of the variables in the given category.
@@ -242,12 +237,11 @@ class MDPDatastore(BaseDatastore):
             The names of the variables in the given category.
 
         """
-        feature_key = f"{category}_feature"
-        if feature_key not in self._ds:
+        if category not in self._ds:
             if category in ("forcing", "static"):
                 warnings.warn(f"no {category} data found in datastore")
             return []
-        return self._ds[feature_key].values.tolist()
+        return self._ds[f"{category}_feature"].values.tolist()
 
     def get_vars_long_names(self, category: str) -> list[str]:
         """
@@ -264,12 +258,11 @@ class MDPDatastore(BaseDatastore):
             The long names of the variables in the given category.
 
         """
-        long_name_key = f"{category}_feature_long_name"
-        if long_name_key not in self._ds:
+        if category not in self._ds:
             if category in ("forcing", "static"):
                 warnings.warn(f"no {category} data found in datastore")
             return []
-        return self._ds[long_name_key].values.tolist()
+        return self._ds[f"{category}_feature_long_name"].values.tolist()
 
     def get_num_data_vars(self, category: str) -> int:
         """Return the number of variables in the given category.
@@ -338,11 +331,7 @@ class MDPDatastore(BaseDatastore):
         da_category = self._ds[category]
 
         # set units on x y coordinates if missing
-        # Use the dim names declared in the config's grid_index stacking,
-        # so both projected (x, y) and geographic (lon, lat) sources work.
-        _UNITS_BY_COORD = {
-            "x": "m",
-            "y": "m",
+        geographic_units = {
             "longitude": "degrees_east",
             "latitude": "degrees_north",
             "lon": "degrees_east",
@@ -350,8 +339,8 @@ class MDPDatastore(BaseDatastore):
         }
         for coord in self.spatial_coordinates:
             if "units" not in da_category[coord].attrs:
-                da_category[coord].attrs["units"] = _UNITS_BY_COORD.get(
-                    coord, ""
+                da_category[coord].attrs["units"] = geographic_units.get(
+                    coord, "m"
                 )
 
         # set multi-index for grid-index
@@ -443,17 +432,13 @@ class MDPDatastore(BaseDatastore):
         Raises
         ------
         NotImplementedError
-            If the datastore provides no ``state`` data, i.e. it is a
-            boundary datastore rather than an interior one.
+            If the datastore provides no ``state`` data.
 
         """
         if "state" not in self._ds:
             raise NotImplementedError(
-                "`boundary_mask` marks the outer ring of the interior domain "
-                "so it can be excluded from the loss and overwritten in the "
-                "prediction, which a datastore without `state` data does not "
-                "have. A boundary datastore contributes forcing everywhere "
-                "and has no ring to mask."
+                "`boundary_mask` is only defined for datastores with `state` "
+                "data."
             )
 
         ds_unstacked = self.unstack_grid_coords(da_or_ds=self._ds)
@@ -543,12 +528,9 @@ class MDPDatastore(BaseDatastore):
 
     @cached_property
     def _grid_xy_counts(self) -> tuple[int, int, int]:
-        """Count the distinct ``x`` values, ``y`` values and ``(x, y)``
-        pairs of the grid points.
-
-        Read straight from the coordinates rather than by unstacking, since
-        `unstack_grid_coords` is itself gated on `is_on_regular_spatial_grid`,
-        which is derived from these counts.
+        """Number of distinct ``x`` values, ``y`` values and ``(x, y)`` pairs,
+        read from the coordinates since unstacking is gated on
+        `is_on_regular_spatial_grid`, which is derived from these.
 
         Returns
         -------
@@ -602,8 +584,8 @@ class MDPDatastore(BaseDatastore):
             The x, y coordinates of the dataset, returned differently based on
             the value of `stacked`:
 
-            * `stacked==True`: shape `(n_grid_points, 2)`, where
-              n_grid_points=N_x*N_y on a regular grid.
+            * `stacked==True`: shape `(num_grid_nodes, 2)`, with
+              num_grid_nodes=N_x*N_y on a regular grid.
             * `stacked==False`: shape `(N_x, N_y, 2)`
 
         """
@@ -678,14 +660,10 @@ class MDPDatastore(BaseDatastore):
 
     @property
     def is_on_regular_spatial_grid(self) -> bool:
-        """Whether the grid points form a complete 2D rectangular grid.
-
-        True when every grid point is a distinct ``(x, y)`` pair and every
-        combination of the distinct ``x`` and ``y`` values is present, i.e.
-        ``grid_index`` unstacks to an ``x``/``y`` grid without padding. The
-        spacing of ``x`` and ``y`` is not required to be uniform.
-        ``domain_cropping`` drops the points outside the interior domain, so
-        a cropped datastore is not on a regular grid.
+        """Whether ``grid_index`` can be unstacked into a complete 2D
+        ``x``/``y`` grid, i.e. every combination of the distinct ``x`` and
+        ``y`` values is present exactly once. A datastore cropped with
+        ``domain_cropping`` is not.
 
         Returns
         -------

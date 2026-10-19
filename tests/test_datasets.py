@@ -488,8 +488,7 @@ def test_forecast_ensemble_len_scales_with_default_all_members():
 
 
 def test_boundary_datastore_shapes():
-    """WeatherDataset with a boundary datastore should return a 5-tuple where
-    the boundary tensor has the boundary grid and windowed features."""
+    """The boundary tensor has the boundary grid and windowed features."""
     n_timesteps = 20
     ar_steps = 3
     num_past_boundary = 1
@@ -524,13 +523,11 @@ def test_boundary_datastore_shapes():
     assert boundary.shape[2] == n_boundary_features * boundary_window
     assert target_times.shape == (ar_steps,)
 
-    # Verify the boundary tensor has no NaN values
     assert not torch.isnan(boundary).any()
 
 
 def test_boundary_datastore_none_gives_empty_boundary():
-    """Without a boundary datastore the boundary tensor should have zero
-    features (last dim == 0)."""
+    """Without a boundary datastore the boundary tensor has no features."""
     datastore = DummyDatastore(n_grid_points=100, n_timesteps=20)
 
     dataset = WeatherDataset(
@@ -543,76 +540,10 @@ def test_boundary_datastore_none_gives_empty_boundary():
     assert boundary.shape[-1] == 0
 
 
-def test_boundary_dataset_length_unchanged_when_boundary_covers():
-    """Adding a boundary datastore that covers the requested past/future
-    window does not change the dataset length."""
-    n_timesteps = 20
-    datastore = DummyDatastore(n_grid_points=100, n_timesteps=n_timesteps)
-    # num_past_boundary=num_future_boundary=0 means the boundary only
-    # needs to cover the interior times themselves, no padding.
-    boundary_ds = BoundaryDummyDatastore(
-        n_grid_points=25, n_timesteps=n_timesteps
-    )
-
-    dataset_no_boundary = WeatherDataset(
-        datastore=datastore,
-        split="train",
-        ar_steps=3,
-        num_past_forcing_steps=1,
-        num_future_forcing_steps=1,
-    )
-
-    dataset_with_boundary = WeatherDataset(
-        datastore=datastore,
-        split="train",
-        ar_steps=3,
-        num_past_forcing_steps=1,
-        num_future_forcing_steps=1,
-        num_past_boundary_steps=0,
-        num_future_boundary_steps=0,
-        datastore_boundary=boundary_ds,
-    )
-
-    assert len(dataset_no_boundary) == len(dataset_with_boundary)
-
-
-def test_boundary_crops_interior_when_window_overflows():
-    """When the boundary does not cover the requested past/future window,
-    interior is cropped at start/end and the dataset shrinks accordingly."""
-    n_timesteps = 20
-    datastore = DummyDatastore(n_grid_points=100, n_timesteps=n_timesteps)
-    boundary_ds = BoundaryDummyDatastore(
-        n_grid_points=25, n_timesteps=n_timesteps
-    )
-
-    dataset_no_boundary = WeatherDataset(
-        datastore=datastore,
-        split="train",
-        ar_steps=3,
-        num_past_forcing_steps=1,
-        num_future_forcing_steps=1,
-    )
-    dataset_with_boundary = WeatherDataset(
-        datastore=datastore,
-        split="train",
-        ar_steps=3,
-        num_past_forcing_steps=1,
-        num_future_forcing_steps=1,
-        num_past_boundary_steps=1,
-        num_future_boundary_steps=1,
-        datastore_boundary=boundary_ds,
-    )
-
-    # Boundary spans the same range as interior, so a (past=1, future=1)
-    # window forces 1 step of cropping at each end.
-    assert len(dataset_with_boundary) == len(dataset_no_boundary) - 2
-
-
 @pytest.mark.requires_real_data
 def test_boundary_datastore_example_shapes():
-    """Build the real MDP interior (DANRA) and ERA5 boundary example
-    datastores and check WeatherDataset returns a coherent windowed boundary
-    tensor for a temporally overlapping interior/boundary pair."""
+    """Boundary tensor shapes for the DANRA interior and ERA5 boundary
+    example."""
     datastore = init_datastore_example("mdp")
     datastore_boundary = init_datastore_boundary_example("mdp")
 

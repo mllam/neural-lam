@@ -475,10 +475,7 @@ def create_graph(
         num_nodes_level = np.array([len(g_level.nodes) for g_level in G])
         # First node index in each level in the hierarchical graph
         first_index_level = np.concatenate(
-            (
-                np.zeros(1, dtype=int),
-                np.cumsum(num_nodes_level[:-1]),
-            )
+            (np.zeros(1, dtype=int), np.cumsum(num_nodes_level[:-1]))
         )
 
         # Create inter-level mesh edges from lower levels to upper levels.
@@ -898,10 +895,7 @@ def create_graph_from_datastore(
     """
     if not datastore.is_on_regular_spatial_grid:
         raise NotImplementedError(
-            "Graph creation is only supported for datastores whose grid "
-            "points form a complete 2D grid "
-            "(`is_on_regular_spatial_grid`); "
-            f"{type(datastore).__name__} reports that it does not."
+            "Graph creation requires a datastore on a regular spatial grid."
         )
     xy = datastore.get_xy(category="state", stacked=False)
 

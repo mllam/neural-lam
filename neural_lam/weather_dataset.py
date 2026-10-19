@@ -51,14 +51,10 @@ def _latest_usable_launch(
     lead_step: np.timedelta64,
     num_past_steps: int,
 ) -> np.datetime64:
-    """Upper bound on the boundary launch usable for one sample.
+    """Latest boundary launch usable for one sample.
 
-    A launch is usable when it starts at or before the model init time (a
-    later one would be unavailable operationally) and still leaves
-    ``num_past_steps`` of lead before the first target. Lead position falls
-    monotonically as the launch gets later, so both conditions collapse to a
-    single upper bound and the latest usable launch is the one that
-    ``pad``-matches it.
+    A launch is usable if it starts no later than the model init time and
+    still leaves ``num_past_steps`` of lead before the first target.
 
     Parameters
     ----------
@@ -92,31 +88,21 @@ def _check_window_bounds(
     num_future_steps: int,
     dim_name: str,
 ) -> None:
-    """Raise if a forcing/boundary window runs off either end of its axis.
-
-    ``xr.DataArray.isel`` wraps a negative slice start and truncates a slice
-    end past the array, which would otherwise only surface as an opaque
-    coordinate-size error further down.
+    """Raise if a forcing/boundary window runs off either end of its axis,
+    which ``isel`` would otherwise silently wrap or truncate.
 
     Parameters
     ----------
-    window_start : int
-        Start index of the window (inclusive); may be negative if the
-        window runs off the start of the axis.
-    window_end : int
-        End index of the window (exclusive); may exceed ``axis_size`` if
-        the window runs off the end of the axis.
+    window_start, window_end : int
+        Window start (inclusive) and end (exclusive) index.
     axis_size : int
         Size of the axis the window is taken along.
     target_time : np.datetime64
-        Target time the window is centered on, used only for the error
-        message.
-    num_past_steps : int
-        Past window size, in steps, used only for the error message.
-    num_future_steps : int
-        Future window size, in steps, used only for the error message.
+        Target time of the window, for the error message.
+    num_past_steps, num_future_steps : int
+        Window size, for the error message.
     dim_name : str
-        Name of the axis/dimension, used only for the error message.
+        Name of the axis, for the error message.
 
     Raises
     ------
@@ -136,11 +122,9 @@ def _check_window_bounds(
 class WeatherDataset(torch.utils.data.Dataset):
     """Dataset class for weather data.
 
-    Loads and processes weather data from a given datastore, with optional
-    boundary forcing from a separate boundary datastore. Boundary windowing
-    is aligned to interior state times by nearest-neighbor lookup, so the
-    two datastores may differ in step length and either may be analysis or
-    forecast data.
+    Loads and processes weather data from a given datastore, optionally with
+    boundary forcing from a separate datastore. See :meth:`__init__` for the
+    full parameter list.
     """
 
     # NOTE: The number of initial states is fixed at 2 (inspired by GraphCast)
@@ -162,36 +146,31 @@ class WeatherDataset(torch.utils.data.Dataset):
         Parameters
         ----------
         datastore : BaseDatastore
-            The datastore to load the data from (e.g. mdp).
+            Datastore providing access to state/forcing/static arrays.
         split : str, optional
-            The data split to use ("train", "val" or "test"). Default is
-            "train".
+            Data split (``"train"``, ``"val"``, or ``"test"``).
+            Default ``"train"``.
         ar_steps : int, optional
-            The number of autoregressive steps. Default is 3.
-        num_past_forcing_steps: int, optional
-            Number of past time steps to include in forcing input. If set to i,
-            forcing from times t-i, t-i+1, ..., t-1, t (and potentially beyond,
-            given num_future_forcing_steps) are included as forcing inputs at
-            time t Default is 1.
-        num_future_forcing_steps: int, optional
-            Number of future time steps to include in forcing input. If set to
-            j, forcing from times t, t+1, ..., t+j-1, t+j (and potentially times
-            before t, given num_past_forcing_steps) are included as forcing
-            inputs at time t. Default is 1.
-        num_past_boundary_steps: int, optional
-            Number of past time steps to include in boundary forcing input.
-            Default is 1.
-        num_future_boundary_steps: int, optional
-            Number of future time steps to include in boundary forcing input.
-            Default is 1.
+            Number of autoregressive steps per training sample. Default ``3``.
+        num_past_forcing_steps : int, optional
+            Past forcing window length ``i`` so that ``[t-i, ..., t]`` forcings
+            are concatenated. Default ``1``.
+        num_future_forcing_steps : int, optional
+            Future forcing window length ``j`` so that ``[t, ..., t+j]``
+            forcings are available. Default ``1``.
+        num_past_boundary_steps : int, optional
+            Past window length for boundary forcing, in boundary time steps.
+            Default ``1``.
+        num_future_boundary_steps : int, optional
+            Future window length for boundary forcing. Default ``1``.
         datastore_boundary : BaseDatastore, optional
-            Separate datastore providing boundary forcing. If None, the boundary
+            Datastore providing boundary forcing. If ``None``, the boundary
             tensor is empty.
         load_single_member : bool, optional
-            If `False` and the datastore returns an ensemble of state
+            If ``False`` and the datastore returns an ensemble of state
             realisations, treat each state ensemble member as an independent
-            sample. If `True`, only ensemble member 0 is used. Default is False,
-            so all members are used when available.
+            sample. If ``True``, only ensemble member 0 is used. Default
+            ``False``.
 
         Raises
         ------
@@ -225,47 +204,37 @@ class WeatherDataset(torch.utils.data.Dataset):
             category="forcing", split=self.split
         )
 
-        if self.datastore_boundary is not None:
-            self.da_boundary_forcing = self.datastore_boundary.get_dataarray(
+        self.da_boundary_forcing = None
+        self._forecast_step_boundary = None
+        if datastore_boundary is not None:
+            self.da_boundary_forcing = datastore_boundary.get_dataarray(
                 category="forcing", split=self.split
             )
-        else:
-            self.da_boundary_forcing = None
-
-        self._forecast_step_boundary = None
-        if self.datastore_boundary is not None:
-            datastore_boundary = self.datastore_boundary
-            if (
-                self.da_boundary_forcing is not None
-                and datastore_boundary.is_forecast
-            ):
+        if self.da_boundary_forcing is not None:
+            assert datastore_boundary is not None
+            if datastore_boundary.is_forecast:
                 self._forecast_step_boundary = get_time_step(
                     self.da_boundary_forcing.elapsed_forecast_duration.values
                 )
-
-            # Forecast forcing is looked up by positional `analysis_time`
-            # index, so state and forcing must be cropped by the same slice
-            # or samples would pair them from different launches.
-            if self.da_boundary_forcing is not None:
-                crop_dim, crop_slice = get_time_crop_slice(
-                    self.da_state,
-                    self.da_boundary_forcing,
-                    da_requested_is_forecast=self.datastore.is_forecast,
-                    da_available_is_forecast=datastore_boundary.is_forecast,
-                    num_past_steps=self.num_past_boundary_steps,
-                    num_future_steps=self.num_future_boundary_steps,
-                    requested_max_lead=self._max_state_lead_used(),
+            crop_dim, crop_slice = get_time_crop_slice(
+                self.da_state,
+                self.da_boundary_forcing,
+                da_requested_is_forecast=self.datastore.is_forecast,
+                da_available_is_forecast=datastore_boundary.is_forecast,
+                num_past_steps=self.num_past_boundary_steps,
+                num_future_steps=self.num_future_boundary_steps,
+                requested_max_lead=self._max_state_lead_used(),
+            )
+            self.da_state = apply_time_crop(self.da_state, crop_dim, crop_slice)
+            # Forecast forcing is indexed by position along `analysis_time`,
+            # so it has to be cropped together with the state.
+            if self.da_forcing is not None and self.datastore.is_forecast:
+                self.da_forcing = apply_time_crop(
+                    self.da_forcing, crop_dim, crop_slice
                 )
-                self.da_state = apply_time_crop(
-                    self.da_state, crop_dim, crop_slice
-                )
-                if self.da_forcing is not None and self.datastore.is_forecast:
-                    self.da_forcing = apply_time_crop(
-                        self.da_forcing, crop_dim, crop_slice
-                    )
-                if datastore_boundary.is_forecast:
-                    self._check_boundary_analysis_times()
-                    self._check_boundary_forecast_horizon()
+            if datastore_boundary.is_forecast:
+                self._check_boundary_analysis_times()
+                self._check_boundary_forecast_horizon()
 
         if self.datastore.is_ensemble and self.load_single_member:
             warnings.warn(
@@ -438,13 +407,8 @@ class WeatherDataset(torch.utils.data.Dataset):
         )
 
     def _check_boundary_analysis_times(self) -> None:
-        """Check the boundary launch axis supports a `pad` lookup.
-
-        Launches are located with `Index.get_indexer(method="pad")`, which
-        needs a unique, sorted index; npyfilesmeps in particular repeats
-        each analysis time once per ensemble member. Without this the user
-        gets a bare pandas message naming neither the datastore nor the
-        coordinate.
+        """Check the boundary `analysis_time` is unique and sorted, as the
+        `pad` launch lookup requires.
 
         Raises
         ------
@@ -471,12 +435,8 @@ class WeatherDataset(torch.utils.data.Dataset):
     def _check_boundary_forecast_horizon(self) -> None:
         """Check every sample's window fits inside one boundary launch.
 
-        Each sample is windowed from a single launch, so that launch needs
-        lead time out to the last target plus the future window. Cropping
-        the interior cannot fix a horizon that is too short, so this is
-        checked up front rather than failing per-sample mid-epoch. The
-        launch is resolved with the same rule the windowing uses, so the
-        check is exact rather than an estimate from step lengths.
+        Done up front, since cropping the interior cannot fix a boundary
+        forecast horizon that is too short.
 
         Raises
         ------
@@ -538,11 +498,8 @@ class WeatherDataset(torch.utils.data.Dataset):
             )
 
     def _max_state_lead_used(self) -> np.timedelta64 | None:
-        """Largest state lead time read per sample, for forecast interiors.
-
-        ``_slice_state_time`` walks only ``INIT_STEPS + ar_steps`` leads, so
-        demanding boundary coverage out to the full forecast length would
-        crop away usable launches.
+        """Largest state lead time read per sample, for forecast interiors,
+        which is as far as the boundary has to cover.
 
         Returns
         -------
@@ -616,11 +573,8 @@ class WeatherDataset(torch.utils.data.Dataset):
     ) -> xr.DataArray:
         """Window forcing from the same forecast datastore as state.
 
-        Uses integer ``analysis_time=idx`` indexing so it tolerates
-        repeated analysis_time values (e.g. npyfilesmeps duplicates the
-        analysis_time series). Walks lead times in lockstep with the
-        state slice; each window is centered on the corresponding target
-        state time.
+        Indexes ``analysis_time`` by position, since it can repeat
+        (npyfilesmeps), and walks the lead times along with the state.
 
         Parameters
         ----------
@@ -670,17 +624,11 @@ class WeatherDataset(torch.utils.data.Dataset):
     ) -> xr.DataArray:
         """Window forcing/boundary in time, aligned to interior state times.
 
-        ``state_times`` is the 1D ``time`` coordinate of the already-sliced
-        state sample. For each AR target step the matching forcing time is
-        picked by nearest-neighbor ``pad`` lookup (latest forcing time
-        ``<=`` state time), and a window of
-        ``num_past_steps + num_future_steps + 1`` consecutive forcing
-        entries is taken around it.
-
-        When ``da_forcing`` has an ``analysis_time`` dimension a single
-        launch is resolved for the sample (see
-        :func:`_latest_usable_launch`) and the windows are walked across its
-        lead times.
+        For each target step the latest forcing time at or before the state
+        time is found (``pad``) and a window of
+        ``num_past_steps + num_future_steps + 1`` entries is taken around it.
+        Forecast data is windowed along the lead times of a single launch
+        per sample, see :func:`_latest_usable_launch`.
 
         Parameters
         ----------
@@ -708,14 +656,7 @@ class WeatherDataset(torch.utils.data.Dataset):
         da_list = []
 
         if "analysis_time" in da_forcing.dims:
-            if forecast_step is None:
-                raise ValueError(
-                    "forecast_step must be supplied when forcing/boundary "
-                    "is in forecast mode."
-                )
-            # Anchor on the model init time rather than the first target,
-            # so we never pick a launch that would be unavailable
-            # operationally. A launch exactly at init is fine.
+            assert forecast_step is not None
             model_init_time = cast(
                 "np.datetime64", state_times[init_steps - 1].values
             )
@@ -749,7 +690,18 @@ class WeatherDataset(torch.utils.data.Dataset):
             lead_offset = da_forcing.elapsed_forecast_duration.values[0]
 
             def lead_index(valid_time: np.datetime64) -> int:
-                """Position of the latest lead at or before ``valid_time``."""
+                """Position of the latest lead at or before ``valid_time``.
+
+                Parameters
+                ----------
+                valid_time : np.datetime64
+                    The time to look up.
+
+                Returns
+                -------
+                int
+                    Index along ``elapsed_forecast_duration``.
+                """
                 return int(
                     np.floor(
                         (valid_time - forcing_at.values - lead_offset)
@@ -825,8 +777,8 @@ class WeatherDataset(torch.utils.data.Dataset):
     ) -> xr.DataArray:
         """Build an empty windowed forcing/boundary dataarray.
 
-        Used when no forcing (or no boundary) is configured: the feature
-        dimension has size 0 so downstream code can unpack a stable 5-tuple.
+        Used when no forcing or boundary is configured, so that the sample
+        always has the same five entries.
 
         Parameters
         ----------
@@ -902,9 +854,6 @@ class WeatherDataset(torch.utils.data.Dataset):
         else:
             da_forcing = None
 
-        # Forcing shares the state's forecast datastore, whose analysis_time
-        # series can repeat (npyfilesmeps), so it is windowed by integer
-        # index; boundary is a separate datastore, windowed by time.
         da_state = self._slice_state_time(
             da_state=da_state, idx=sample_idx, n_steps=self.ar_steps
         )

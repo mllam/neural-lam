@@ -32,13 +32,9 @@ class DatastoreSelection:
         The path to the configuration file for the selected datastore, this is
         assumed to be relative to the configuration file for neural-lam.
     n_boundary_points : int, optional
-        Overrides :class:`MDPDatastore`'s default boundary-mask width (only
-        valid for `kind: mdp`). Left unset, the datastore's own default (30)
-        applies. This is independent of whether this `datastores:` mapping
-        also has a separate boundary datastore entry: pairing one with an
-        interior datastore does not by itself change how much of the
-        interior's own edge is considered boundary forcing, so set this
-        explicitly to 0 if using external boundary forcing.
+        Overrides :class:`MDPDatastore`'s default boundary-mask width (30),
+        only valid for `kind: mdp`. Set it to 0 when the boundary forcing
+        comes from a separate datastore.
     """
 
     kind: str
@@ -47,27 +43,15 @@ class DatastoreSelection:
 
     def __post_init__(self) -> None:
         """
-        Validate that the selected datastore kind is implemented and that
-        ``n_boundary_points`` is only set for datastore kinds that support it.
+        Validate that the selected datastore kind is implemented.
 
         Raises
         ------
         ValueError
-            If the provided ``kind`` is not part of :data:`DATASTORES`, or if
-            ``n_boundary_points`` is set for a ``kind`` other than
-            :data:`MDPDatastore.SHORT_NAME`.
+            If the provided ``kind`` is not part of :data:`DATASTORES`.
         """
         if self.kind not in DATASTORES:
             raise ValueError(f"Datastore kind {self.kind} is not implemented")
-        if (
-            self.n_boundary_points is not None
-            and self.kind != MDPDatastore.SHORT_NAME
-        ):
-            raise ValueError(
-                "`n_boundary_points` is only supported for "
-                f"`kind: {MDPDatastore.SHORT_NAME}` datastores, but was set "
-                f"for a `kind: {self.kind}` datastore."
-            )
 
 
 @dataclasses.dataclass
@@ -226,25 +210,14 @@ def load_config_and_datastore(
         one omits it.
     """
     with open(config_path, encoding="utf-8") as f:
-        try:
-            raw_config = yaml.safe_load(f)
-        except yaml.YAMLError as ex:
-            raise InvalidConfigError(
-                f"Could not parse the configuration file at {config_path}: {ex}"
-            ) from ex
+        raw_config = yaml.safe_load(f)
     if isinstance(raw_config, dict) and (
         "datastore" in raw_config and "datastores" not in raw_config
     ):
         raise InvalidConfigError(
             "The `datastore:` config key has been replaced by a named "
-            "`datastores:` mapping (the role of each datastore is now implied "
-            "by the categories it provides). Move your datastore under a "
-            "named entry, e.g.:\n"
-            "datastores:\n"
-            "  <name>:\n"
-            "    kind: ...\n"
-            "    config_path: ...\n"
-            "See the README and CHANGELOG for details."
+            "`datastores:` mapping, move your datastore under a named entry "
+            "(`datastores: {<name>: {kind: ..., config_path: ...}}`)."
         )
 
     try:
