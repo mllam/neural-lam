@@ -292,14 +292,22 @@ def test_boundary_mask(datastore_name):
 
 
 @pytest.mark.requires_real_data
-def test_boundary_mask_zero_n_boundary_points_is_all_interior():
-    """slice(n, -n) is empty (not "the whole array") when n == 0, so
-    n_boundary_points=0 must produce a mask with no boundary points, not one
-    where every grid point is (incorrectly) marked as boundary."""
+@pytest.mark.parametrize("n_boundary_points", [0, 1, 30])
+def test_mdp_boundary_mask_n_boundary_points(n_boundary_points):
+    """Check that `MDPDatastore.boundary_mask` marks exactly the outer
+    `n_boundary_points` grid points along each edge as boundary, and none
+    for `n_boundary_points=0`."""
     datastore = MDPDatastore(
-        config_path=DATASTORES_EXAMPLES["mdp"], n_boundary_points=0
+        config_path=DATASTORES_EXAMPLES["mdp"],
+        n_boundary_points=n_boundary_points,
     )
-    assert datastore.boundary_mask.sum() == 0
+    grid_shape = datastore.grid_shape_state
+    n_interior = (grid_shape.x - 2 * n_boundary_points) * (
+        grid_shape.y - 2 * n_boundary_points
+    )
+    assert int(datastore.boundary_mask.sum()) == (
+        grid_shape.x * grid_shape.y - n_interior
+    )
 
 
 @pytest.mark.parametrize("datastore_name", DATASTORES.keys())

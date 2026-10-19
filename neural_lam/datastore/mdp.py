@@ -54,7 +54,8 @@ class MDPDatastore(BaseRegularGridDatastore):
             `mllam_data_prep.Config.from_yaml_file` method to then call
             `mllam_data_prep.create_dataset` to create the dataset.
         n_boundary_points : int
-            The number of boundary points to use in the boundary mask.
+            Width, in grid points, of the boundary along each x/y edge of the
+            domain. 0 gives no boundary points.
         reuse_existing : bool
             Whether to reuse an existing dataset zarr file if it exists and its
             creation date is newer than the configuration file.
