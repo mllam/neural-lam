@@ -86,15 +86,20 @@ class Run:
 
 
 def build_predictor(
-    predictor_class: type[StepPredictor],
+    predictor_class: Any,
     args: Namespace,
     config: NeuralLAMConfig,
     datastore: BaseDatastore,
-) -> StepPredictor:
+) -> Any:
     """
     Instantiate a step predictor via its ``from_config`` classmethod.
     """
-    return predictor_class.from_config(args, config, datastore)
+    if hasattr(predictor_class, "from_config"):
+        return predictor_class.from_config(args, config, datastore)
+    from_config_fn: Any = getattr(
+        StepPredictor.from_config, "__func__", StepPredictor.from_config
+    )
+    return from_config_fn(predictor_class, args, config, datastore)
 
 
 class AdaptiveHelpFormatter(ArgumentDefaultsHelpFormatter):

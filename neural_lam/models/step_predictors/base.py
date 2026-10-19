@@ -456,9 +456,16 @@ class StepPredictor(nn.Module, ABC):
             g2m_gnn_type=getattr(args, "g2m_gnn_type", "InteractionNet"),
             m2g_gnn_type=getattr(args, "m2g_gnn_type", "InteractionNet"),
         )
-        if hasattr(args, "mesh_up_gnn_type"):
-            kwargs["mesh_up_gnn_type"] = args.mesh_up_gnn_type
-        if hasattr(args, "mesh_down_gnn_type"):
-            kwargs["mesh_down_gnn_type"] = args.mesh_down_gnn_type
+        # Handle hierarchical model kwargs if applicable
+        # Local
+        from .graph.hierarchical import BaseHiGraphModel
+
+        if isinstance(cls, type) and issubclass(cls, BaseHiGraphModel):
+            kwargs["mesh_up_gnn_type"] = getattr(
+                args, "mesh_up_gnn_type", "InteractionNet"
+            )
+            kwargs["mesh_down_gnn_type"] = getattr(
+                args, "mesh_down_gnn_type", "InteractionNet"
+            )
 
         return cls(**kwargs)
