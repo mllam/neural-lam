@@ -189,7 +189,7 @@ class MDPDatastore(BaseRegularGridDatastore):
             The units of the variables in the given category.
 
         """
-        if category not in self._ds and category != "state":
+        if category not in self._ds and category in ("forcing", "static"):
             warnings.warn(f"no {category} data found in datastore")
             return []
         return self._ds[f"{category}_feature_units"].values.tolist()
@@ -208,7 +208,7 @@ class MDPDatastore(BaseRegularGridDatastore):
             The names of the variables in the given category.
 
         """
-        if category not in self._ds and category != "state":
+        if category not in self._ds and category in ("forcing", "static"):
             warnings.warn(f"no {category} data found in datastore")
             return []
         return self._ds[f"{category}_feature"].values.tolist()
@@ -228,7 +228,7 @@ class MDPDatastore(BaseRegularGridDatastore):
             The long names of the variables in the given category.
 
         """
-        if category not in self._ds and category != "state":
+        if category not in self._ds and category in ("forcing", "static"):
             warnings.warn(f"no {category} data found in datastore")
             return []
         return self._ds[f"{category}_feature_long_name"].values.tolist()
@@ -293,7 +293,7 @@ class MDPDatastore(BaseRegularGridDatastore):
             The xarray DataArray object with processed dataset.
 
         """
-        if category not in self._ds and category != "state":
+        if category not in self._ds and category in ("forcing", "static"):
             warnings.warn(f"no {category} data found in datastore")
             return None
 
