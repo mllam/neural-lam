@@ -220,7 +220,7 @@ def _(api, config_path, example_dir):
 @app.cell
 def _(config_path, graph_dir, load_config_and_datastore, np, plot_graph, utils):
     # Interactive 3D view of the grid and mesh nodes and their connections
-    _, _datastore = load_config_and_datastore(config_path=config_path)
+    _, _datastore, _ = load_config_and_datastore(config_path=config_path)
     _xy = _datastore.get_xy("state", stacked=True)
     _grid_xy_max_span = np.max(np.abs(_xy))
     _hierarchical, _graph_ldict = utils.load_graph(
