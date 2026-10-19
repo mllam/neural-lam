@@ -164,22 +164,25 @@ def test_time_slicing_analysis(
     np.testing.assert_equal(forcing[:, 0, :], np.array(expected_forcing_values))
 
 
-def test_len_ignores_num_future_forcing_steps_when_no_forcing():
+@pytest.mark.parametrize(
+    "num_past_forcing_steps,num_future_forcing_steps", [[1, 1], [3, 2]]
+)
+def test_len_ignores_num_future_forcing_steps_when_no_forcing(
+    num_past_forcing_steps, num_future_forcing_steps
+):
     """__len__ must not require num_future_forcing_steps of extra state data
     when the datastore has no forcing (da_forcing is None) -
     _slice_state_time only ever needs max(2, num_past_forcing_steps) +
     ar_steps state time steps, regardless of num_future_forcing_steps."""
     ar_steps = 3
-    num_past_forcing_steps = 1
-    num_future_forcing_steps = 1
-    state_window = max(2, num_past_forcing_steps) + ar_steps
-    time_values = np.datetime64("2020-01-01") + np.arange(state_window)
+    time_values = np.datetime64("2020-01-01") + np.arange(
+        len(ANALYSIS_STATE_VALUES)
+    )
 
     datastore = SinglePointDummyDatastore(
-        state_data=np.arange(state_window),
+        state_data=ANALYSIS_STATE_VALUES,
         forcing_data=None,
         time_values=time_values,
-        is_forecast=False,
     )
 
     dataset = WeatherDataset(
@@ -189,7 +192,15 @@ def test_len_ignores_num_future_forcing_steps_when_no_forcing():
         num_future_forcing_steps=num_future_forcing_steps,
     )
 
-    assert len(dataset) == 1
+    state_window = max(2, num_past_forcing_steps) + ar_steps
+    assert len(dataset) == len(ANALYSIS_STATE_VALUES) - state_window + 1
+
+    init_states, target_states, forcing, _ = [
+        tensor.numpy() for tensor in dataset[-1]
+    ]
+    assert init_states[:, 0, 0].tolist() == ANALYSIS_STATE_VALUES[-5:-3]
+    assert target_states[:, 0, 0].tolist() == ANALYSIS_STATE_VALUES[-3:]
+    assert forcing.shape == (ar_steps, 1, 0)
 
 
 @pytest.mark.parametrize(

@@ -19,7 +19,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- Fix `WeatherDataset.__len__` undercounting samples by `num_future_forcing_steps` when a datastore has no forcing data, sometimes raising a spurious "too few time steps" `ValueError` [\#735](https://github.com/mllam/neural-lam/pull/735) @AshNicolus
+- Fix `WeatherDataset.__len__` undercounting samples by `num_future_forcing_steps` when a datastore has no forcing data, sometimes raising a spurious `ValueError` in `__init__` [\#735](https://github.com/mllam/neural-lam/pull/735) @AshNicolus
 
 - Fix `MDPDatastore` raising `KeyError` for `category="static"` when the datastore has no static data, instead of returning `None`/`[]` as documented and as `category="forcing"` already correctly does [\#733](https://github.com/mllam/neural-lam/pull/733) @AshNicolus
 
