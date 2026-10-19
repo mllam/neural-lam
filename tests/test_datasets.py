@@ -9,7 +9,7 @@ from torch.utils.data import DataLoader
 
 # First-party
 from neural_lam import config as nlconfig
-from neural_lam.create_graph import create_graph_from_datastore
+from neural_lam.create_graph_with_wmg import create_graph_from_datastore
 from neural_lam.datastore import DATASTORES
 from neural_lam.datastore.base import BaseRegularGridDatastore
 from neural_lam.models import ForecasterModule
@@ -194,9 +194,7 @@ def test_single_batch(datastore_name, split):
     """
     datastore = init_datastore_example(datastore_name)
 
-    device_name = (
-        torch.device("cuda") if torch.cuda.is_available() else "cpu"
-    )  # noqa
+    device_name = torch.device("cuda") if torch.cuda.is_available() else "cpu"
 
     graph_name = "1level"
 
@@ -228,7 +226,7 @@ def test_single_batch(datastore_name, split):
             create_graph_from_datastore(
                 datastore=datastore,
                 output_root_path=str(graph_dir_path),
-                n_max_levels=1,
+                archetype="keisler",
             )
 
     if not isinstance(datastore, BaseRegularGridDatastore):

@@ -1,7 +1,8 @@
 ### Project Specific ###
-wandb
+runs/
 saved_models
 lightning_logs
+wandb
 data
 graphs
 *.sif
@@ -51,6 +52,14 @@ share/python-wheels/
 # mkdocs documentation
 /site
 
+# Sphinx documentation and generated notebook pages
+docs/_build/
+docs/api/
+docs/notebooks/*.md
+docs/notebooks/__marimo__/
+docs/_static/notebooks/
+
+
 ### Vim ###
 # Swap
 [._]*.s[a-v][a-z]
@@ -76,6 +85,7 @@ tags
 # Coc configuration directory
 .vim
 .vscode
+.idea
 
 # macos
 .DS_Store
@@ -93,3 +103,4 @@ build/
 *.egg-info/
 
 tests/test_outputs/
+.lycheecache

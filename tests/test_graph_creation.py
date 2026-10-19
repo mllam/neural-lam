@@ -1,5 +1,8 @@
 # Standard library
+import contextlib
+import importlib.util
 import tempfile
+import warnings
 from pathlib import Path
 
 # Third-party
@@ -8,26 +11,43 @@ import torch
 
 # First-party
 from neural_lam.create_graph import create_graph_from_datastore
+from neural_lam.create_graph_with_wmg import (
+    create_graph_from_datastore as wmg_create_graph_from_datastore,
+)
 from neural_lam.datastore import DATASTORES
 from neural_lam.datastore.base import BaseRegularGridDatastore
 from neural_lam.utils import BufferList, load_graph
 from tests.conftest import init_datastore_example
 
 
+def _load_validator_module():
+    script_path = (
+        Path(__file__).resolve().parents[1] / "docs" / "validate_graph.py"
+    )
+    spec = importlib.util.spec_from_file_location(
+        "validate_graph_script", script_path
+    )
+    module = importlib.util.module_from_spec(spec)
+    # Standard library
+    import sys
+
+    sys.modules["validate_graph_script"] = module
+    assert spec.loader is not None
+    spec.loader.exec_module(module)
+    return module
+
+
 @pytest.mark.parametrize("graph_name", ["1level", "multiscale", "hierarchical"])
 @pytest.mark.parametrize("datastore_name", DATASTORES.keys())
 def test_graph_creation(datastore_name, graph_name):
-    """Check that the `create_ graph_from_datastore` function is implemented.
-
-    And that the graph is created in the correct location.
-
-    """
+    """Check that `create_graph_from_datastore` produces a graph that
+    conforms to the graph storage specification."""
+    validator = _load_validator_module()
     datastore = init_datastore_example(datastore_name)
 
     if not isinstance(datastore, BaseRegularGridDatastore):
         pytest.skip(
-            f"Skipping test for {datastore_name} as it is not a regular "
-            "grid datastore."
+            f"Skipping test for {datastore_name} as it is not a regular grid datastore."  # noqa: E501
         )
 
     if graph_name == "hierarchical":
@@ -42,30 +62,6 @@ def test_graph_creation(datastore_name, graph_name):
     else:
         raise ValueError(f"Unknown graph_name: {graph_name}")
 
-    required_graph_files = [
-        "m2m_edge_index.pt",
-        "g2m_edge_index.pt",
-        "m2g_edge_index.pt",
-        "m2m_features.pt",
-        "g2m_features.pt",
-        "m2g_features.pt",
-        "mesh_features.pt",
-    ]
-    if hierarchical:
-        required_graph_files.extend(
-            [
-                "mesh_up_edge_index.pt",
-                "mesh_down_edge_index.pt",
-                "mesh_up_features.pt",
-                "mesh_down_features.pt",
-            ]
-        )
-
-    # TODO: check that the number of edges is consistent over the files, for
-    # now we just check the number of features
-    d_features = 3
-    d_mesh_static = 2
-
     with tempfile.TemporaryDirectory() as tmpdir:
         graph_dir_path = Path(tmpdir) / "graph" / graph_name
 
@@ -76,48 +72,8 @@ def test_graph_creation(datastore_name, graph_name):
             n_max_levels=n_max_levels,
         )
 
-        assert graph_dir_path.exists()
-
-        # check that all the required files are present
-        for file_name in required_graph_files:
-            assert (graph_dir_path / file_name).exists()
-
-        # try to load each and ensure they have the right shape
-        for file_name in required_graph_files:
-            file_id = Path(file_name).stem  # remove the extension
-            result = torch.load(graph_dir_path / file_name, weights_only=True)
-
-            if file_id.startswith("g2m") or file_id.startswith("m2g"):
-                assert isinstance(result, torch.Tensor)
-
-                if file_id.endswith("_index"):
-                    assert (
-                        result.shape[0] == 2
-                    )  # adjacency matrix uses two rows
-                elif file_id.endswith("_features"):
-                    assert result.shape[1] == d_features
-
-            elif file_id.startswith("m2m") or file_id.startswith("mesh"):
-                assert isinstance(result, list)
-                if not hierarchical:
-                    assert len(result) == 1
-                else:
-                    if file_id.startswith("mesh_up") or file_id.startswith(
-                        "mesh_down"
-                    ):
-                        assert len(result) == n_max_levels - 1
-                    else:
-                        assert len(result) == n_max_levels
-
-                for r in result:
-                    assert isinstance(r, torch.Tensor)
-
-                    if file_id == "mesh_features":
-                        assert r.shape[1] == d_mesh_static
-                    elif file_id.endswith("_index"):
-                        assert r.shape[0] == 2  # adjacency matrix uses two rows
-                    elif file_id.endswith("_features"):
-                        assert r.shape[1] == d_features
+        report, _, _ = validator.validate_graph_directory(graph_dir_path)
+        assert not report.has_fails(), report.summarize()
 
 
 @pytest.mark.parametrize("graph_name", ["1level", "multiscale", "hierarchical"])
@@ -164,7 +120,16 @@ def test_loaded_g2m_m2g_indices_in_bounds(datastore_name, graph_name):
             n_max_levels=n_max_levels,
         )
 
-        is_hierarchical, graph = load_graph(graph_dir_path=graph_dir_path)
+        grid_xy_extent = datastore.get_xy_extent(category="state")
+        grid_xy_max_span = max(
+            grid_xy_extent[1] - grid_xy_extent[0],
+            grid_xy_extent[3] - grid_xy_extent[2],
+        )
+
+        is_hierarchical, graph = load_graph(
+            graph_dir_path=graph_dir_path,
+            mesh_node_features_scaling=grid_xy_max_span,
+        )
 
         mesh_static_features = graph["mesh_static_features"]
         if is_hierarchical:
@@ -267,3 +232,49 @@ def test_buffer_list_iter(buffer_list_five):
     """Iteration yields all buffers in order."""
     values = [t.item() for t in buffer_list_five]
     assert values == [0.0, 1.0, 2.0, 3.0, 4.0]
+
+
+@pytest.mark.parametrize("archetype", ["keisler", "graphcast", "hierarchical"])
+@pytest.mark.parametrize("datastore_name", DATASTORES.keys())
+def test_wmg_graph_creation(datastore_name, archetype):
+    """Check that graph creation via weather-model-graphs produces a graph
+    that conforms to the graph storage specification."""
+    datastore = init_datastore_example(datastore_name)
+
+    if not isinstance(datastore, BaseRegularGridDatastore):
+        pytest.skip(
+            f"Skipping test for {datastore_name} as it is not a regular "
+            "grid datastore."
+        )
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        graph_dir_path = Path(tmpdir) / "graph" / archetype
+
+        wmg_create_graph_from_datastore(
+            datastore=datastore,
+            output_root_path=str(graph_dir_path),
+            archetype=archetype,
+        )
+
+        validator = _load_validator_module()
+        report, _, _ = validator.validate_graph_directory(graph_dir_path)
+        assert not report.has_fails(), report.summarize()
+
+
+@pytest.mark.parametrize("datastore_name", DATASTORES.keys())
+def test_old_create_graph_deprecation_warning(datastore_name):
+    """Check that the old create_graph CLI emits a deprecation warning."""
+    # First-party
+    from neural_lam.create_graph import cli as old_cli
+
+    with warnings.catch_warnings(record=True) as w:
+        warnings.simplefilter("always")
+        # We only care about the warning, not the error
+        with contextlib.suppress(Exception):
+            old_cli(["--config_path", "nonexistent.yaml"])
+
+        deprecation_warnings = [
+            x for x in w if issubclass(x.category, DeprecationWarning)
+        ]
+        assert len(deprecation_warnings) >= 1
+        assert "create_graph_with_wmg" in str(deprecation_warnings[0].message)

@@ -59,17 +59,17 @@ class DummyDatastore(BaseRegularGridDatastore):
         step_length : timedelta, optional
             The step length between timesteps. Defaults to timedelta(hours=1).
         """
-        assert (
-            config_path is None
-        ), "No config file is needed for the dummy datastore"
+        assert config_path is None, (
+            "No config file is needed for the dummy datastore"
+        )
 
         self._step_length = step_length or timedelta(hours=1)
 
         # Ensure n_grid_points is a perfect square
         n_points_1d = int(np.sqrt(n_grid_points))
-        assert (
-            n_points_1d * n_points_1d == n_grid_points
-        ), "n_grid_points must be a perfect square"
+        assert n_points_1d * n_points_1d == n_grid_points, (
+            "n_grid_points must be a perfect square"
+        )
 
         # create equal area grid
         lx, ly = self.bbox_size_km
@@ -504,7 +504,7 @@ class EnsembleDummyDatastore(BaseDatastore):
         self.is_forecast = is_forecast
         self._forcing_has_ensemble = forcing_has_ensemble
         self._step_length = timedelta(hours=1)
-        self._root_path = Path(".")
+        self._root_path = Path()
 
         self._state_feature = np.array(["state_feat_0"], dtype=object)
         self._forcing_feature = np.array(["forcing_feat_0"], dtype=object)
@@ -765,3 +765,19 @@ class EnsembleDummyDatastore(BaseDatastore):
     @property
     def state_feature_weights_values(self) -> list[float]:
         return [1.0]
+
+
+def set_framed_boundary(
+    datastore: DummyDatastore, width: int = 1
+) -> np.ndarray:
+    """Replace the random boundary mask with a frame of `width` cells."""
+    shape = (datastore.grid_shape_state.x, datastore.grid_shape_state.y)
+    mask = np.ones(shape, dtype=int)
+    mask[width:-width, width:-width] = 0
+    # `grid_index` is the stacked ("x", "y") dimension, so a C-order flatten
+    # of an (x, y) array lines up with it.
+    datastore.ds["boundary_mask"] = xr.DataArray(
+        mask.reshape(-1), dims=["grid_index"]
+    )
+    datastore.__dict__.pop("boundary_mask", None)  # bust the cached_property
+    return mask

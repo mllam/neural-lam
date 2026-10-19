@@ -1,4 +1,5 @@
 # Standard library
+import shutil
 from datetime import timedelta
 from pathlib import Path
 from typing import Iterator
@@ -19,6 +20,7 @@ from neural_lam import config as nlconfig
 from neural_lam import vis
 from neural_lam.create_graph import create_graph_from_datastore
 from neural_lam.models import ARForecaster, ForecasterModule, GraphLAM
+from neural_lam.utils import get_integer_time
 from neural_lam.weather_dataset import WeatherDataset
 from tests.conftest import init_datastore_example
 from tests.dummy_datastore import DummyDatastore
@@ -336,6 +338,34 @@ def test_plot_error_heatmap_adapts_layout_for_grid_size():
     plt.close(dense_fig)
 
 
+@pytest.mark.parametrize(
+    "step_length, expected_unit",
+    [
+        (timedelta(hours=3), "h"),
+        (timedelta(days=1), "d"),
+        (timedelta(minutes=15), "min"),
+        (timedelta(seconds=90), "s"),
+        (timedelta(days=0.001), "steps"),
+    ],
+)
+def test_plot_error_heatmap_lead_time_axis_label(step_length, expected_unit):
+    """Check lead-time axis label uses unit abbreviation as given in
+    ``_LEAD_TIME_UNIT_ABBREVIATIONS`` and uses consistent ticks."""
+    datastore = HeatmapDatastore(n_vars=3, step_length=step_length)
+
+    fig = vis.plot_error_heatmap(torch.ones((4, 3)), datastore=datastore)
+    ax = fig.axes[0]
+
+    assert ax.get_xlabel() == f"Lead time ({expected_unit})"
+
+    time_step_int, _ = get_integer_time(step_length)
+    expected_x_ticklabels = [str(time_step_int * step) for step in range(1, 5)]
+    actual_x_ticklabels = [tick.get_text() for tick in ax.get_xticklabels()]
+    assert actual_x_ticklabels == expected_x_ticklabels
+
+    plt.close(fig)
+
+
 def test_plot_spatial_error() -> None:
     """Check that plot_spatial_error runs without error and returns a Figure."""
     datastore = init_datastore_example("dummydata")
@@ -401,8 +431,22 @@ def test_plot_spatial_error_crop_to_interior_changes_extent() -> None:
     assert isinstance(called_crs, ccrs.PlateCarree)
 
 
+@pytest.fixture(scope="module")
+def dummy_graph_dir(tmp_path_factory):
+    """Build the dummy ``1level`` graph once. Every ``DummyDatastore`` has the
+    same grid but its own root dir, so tests copy this instead of rebuilding.
+    """
+    graph_dir_path = tmp_path_factory.mktemp("graph") / "1level"
+    create_graph_from_datastore(
+        datastore=DummyDatastore(),
+        output_root_path=str(graph_dir_path),
+        n_max_levels=1,
+    )
+    return graph_dir_path
+
+
 @pytest.fixture
-def model_and_batch(tmp_path, time_step, time_unit):
+def model_and_batch(tmp_path, time_step, time_unit, dummy_graph_dir):
     """Setup a model and dataset for testing plot_examples."""
     # Create timedelta with specified step length.
     step_length_kwargs = {time_unit: time_step}
@@ -431,14 +475,7 @@ def model_and_batch(tmp_path, time_step, time_unit):
         num_future_forcing_steps = 0
         var_leads_metrics_watch = {}
 
-    # Create graph files if they do not already exist.
-    graph_dir_path = Path(datastore.root_path) / "graph" / "1level"
-    if not graph_dir_path.exists():
-        create_graph_from_datastore(
-            datastore=datastore,
-            output_root_path=str(graph_dir_path),
-            n_max_levels=1,
-        )
+    shutil.copytree(dummy_graph_dir, datastore.root_path / "graph" / "1level")
 
     # Create config.
     config = nlconfig.NeuralLAMConfig(
@@ -518,12 +555,12 @@ def test_plot_examples_integration_saves_figure(
     model.plotted_examples = 0
 
     # Verify that the model correctly inferred time step from the datastore.
-    assert (
-        model.time_step_int == time_step
-    ), f"Expected time_step_int={time_step}, got {model.time_step_int}"
-    assert (
-        model.time_step_unit == time_unit
-    ), f"Expected time_step_unit={time_unit}, got {model.time_step_unit}"
+    assert model.time_step_int == time_step, (
+        f"Expected time_step_int={time_step}, got {model.time_step_int}"
+    )
+    assert model.time_step_unit == time_unit, (
+        f"Expected time_step_unit={time_unit}, got {model.time_step_unit}"
+    )
 
     # Generate prediction
     (init_states, target, forcing_features, _batch_times) = batch
@@ -694,7 +731,7 @@ def _build_metrics_watch_module(datastore, config):
     )
 
 
-def test_create_metric_log_dict_with_metrics_watch(tmp_path):
+def test_create_metric_log_dict_with_metrics_watch(dummy_graph_dir):
     """
     Regression test for issue #302: AssertionError when using --metrics_watch.
 
@@ -706,13 +743,7 @@ def test_create_metric_log_dict_with_metrics_watch(tmp_path):
     datastore = DummyDatastore()
     num_state_vars = datastore.get_num_data_vars(category="state")
 
-    graph_dir_path = Path(datastore.root_path) / "graph" / "1level"
-    if not graph_dir_path.exists():
-        create_graph_from_datastore(
-            datastore=datastore,
-            output_root_path=str(graph_dir_path),
-            n_max_levels=1,
-        )
+    shutil.copytree(dummy_graph_dir, datastore.root_path / "graph" / "1level")
 
     config = nlconfig.NeuralLAMConfig(
         datastore=nlconfig.DatastoreSelection(
@@ -745,14 +776,14 @@ def test_create_metric_log_dict_with_metrics_watch(tmp_path):
 
     # Verify figure entries are plt.Figure and scalar entries are tensors
     for key, value in log_dict.items():
-        assert isinstance(
-            value, (plt.Figure, torch.Tensor)
-        ), f"Unexpected value type for key '{key}': {type(value)}"
+        assert isinstance(value, (plt.Figure, torch.Tensor)), (
+            f"Unexpected value type for key '{key}': {type(value)}"
+        )
 
     plt.close("all")
 
 
-def test_aggregate_and_plot_metrics_with_metrics_watch(tmp_path):
+def test_aggregate_and_plot_metrics_with_metrics_watch(dummy_graph_dir):
     """
     Integration test for issue #302: exercises the full watched-metrics path
     through aggregate_and_plot_metrics(), which is the exact crash site of the
@@ -765,13 +796,7 @@ def test_aggregate_and_plot_metrics_with_metrics_watch(tmp_path):
     datastore = DummyDatastore()
     num_state_vars = datastore.get_num_data_vars(category="state")
 
-    graph_dir_path = Path(datastore.root_path) / "graph" / "1level"
-    if not graph_dir_path.exists():
-        create_graph_from_datastore(
-            datastore=datastore,
-            output_root_path=str(graph_dir_path),
-            n_max_levels=1,
-        )
+    shutil.copytree(dummy_graph_dir, datastore.root_path / "graph" / "1level")
 
     config = nlconfig.NeuralLAMConfig(
         datastore=nlconfig.DatastoreSelection(

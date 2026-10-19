@@ -1,3 +1,7 @@
+"""
+Graph-based step predictors.
+"""
+
 # Local
 from .base import BaseGraphModel
 from .graph_lam import GraphLAM

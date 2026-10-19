@@ -1,11 +1,11 @@
+"""Custom logging utilities (e.g., MLFlow wrappers) used in Neural-LAM."""
+
 # Standard library
 import os
-from typing import Optional
+from pathlib import Path
 
 # Third-party
 import matplotlib.pyplot as plt
-import mlflow
-import mlflow.pytorch
 import pytorch_lightning as pl
 from loguru import logger
 
@@ -22,10 +22,38 @@ class CustomMLFlowLogger(pl.loggers.MLFlowLogger):
         experiment_name: str,
         tracking_uri: str,
         run_name: str,
+        save_dir: str,
     ) -> None:
+        """
+        Initialize the logger, ensure ``save_dir`` exists, and start the
+        MLflow run.
+
+        Parameters
+        ----------
+        experiment_name : str
+            Target MLflow experiment.
+        tracking_uri : str
+            MLflow tracking server URI.
+        run_name : str
+            Human-readable run name stored as ``mlflow.runName``.
+        save_dir : str
+            Directory where ``log_image`` writes temporary figure files.
+            Created eagerly with ``exist_ok=True``.
+
+        Notes
+        -----
+        Starts the MLflow run with ``log_system_metrics=True`` and also
+        records ``run_id`` as an MLflow param.
+        """
         super().__init__(
             experiment_name=experiment_name, tracking_uri=tracking_uri
         )
+        self._save_dir = save_dir
+        os.makedirs(self._save_dir, exist_ok=True)
+
+        # mlflow is heavy and only needed with --logger mlflow
+        # Third-party
+        import mlflow
 
         mlflow.start_run(run_id=self.run_id, log_system_metrics=True)
         mlflow.set_tag("mlflow.runName", run_name)
@@ -42,13 +70,13 @@ class CustomMLFlowLogger(pl.loggers.MLFlowLogger):
         str
             Path to the directory where the artifacts are saved.
         """
-        return "mlruns"
+        return self._save_dir
 
     def log_image(
         self,
         key: str,
         images: list[plt.Figure],
-        step: Optional[int] = None,
+        step: int | None = None,
     ) -> None:
         """
         Log one or more matplotlib figures as images to MLFlow.
@@ -67,8 +95,15 @@ class CustomMLFlowLogger(pl.loggers.MLFlowLogger):
         step : int or None, optional
             Step to associate with the log entry. ``None`` logs without
             a step suffix.
+
+        Raises
+        ------
+        botocore.exceptions.NoCredentialsError
+            If AWS credentials for the MLflow artifact store are missing;
+            re-raised for the caller to handle.
         """
         # Third-party
+        import mlflow
         from botocore.exceptions import NoCredentialsError
         from PIL import Image
 
@@ -79,7 +114,7 @@ class CustomMLFlowLogger(pl.loggers.MLFlowLogger):
         # mlflow.log_image should do this automatically, but is buggy
         for i, fig in enumerate(images):
             img_key = f"{key}_{i}" if len(images) > 1 else key
-            temporary_image = f"{img_key}.png"
+            temporary_image = os.path.join(self.save_dir, f"{img_key}.png")
             try:
                 fig.savefig(temporary_image)
                 with Image.open(temporary_image) as img:
@@ -88,5 +123,5 @@ class CustomMLFlowLogger(pl.loggers.MLFlowLogger):
                 logger.error("Error logging image\nSet AWS credentials")
                 raise
             finally:
-                if os.path.exists(temporary_image):
-                    os.remove(temporary_image)
+                if Path(temporary_image).exists():
+                    Path(temporary_image).unlink()

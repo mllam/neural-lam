@@ -2,6 +2,7 @@
 from pathlib import Path
 
 # Third-party
+import pytest
 import torch
 
 # First-party
@@ -216,8 +217,10 @@ class TestPropagationNetForwardPass:
             p_out = pnet(send_rep, rec_rep, edge_rep)
 
             if update_edges:
-                assert isinstance(i_out, tuple) and len(i_out) == 2
-                assert isinstance(p_out, tuple) and len(p_out) == 2
+                assert isinstance(i_out, tuple)
+                assert len(i_out) == 2
+                assert isinstance(p_out, tuple)
+                assert len(p_out) == 2
                 assert i_out[0].shape == p_out[0].shape == (n_rec, d_h)
                 assert i_out[1].shape == p_out[1].shape == (n_edges, d_h)
             else:
@@ -338,7 +341,8 @@ class TestEdgeUpdateBehavior:
         edge_rep = torch.randn(n_edges, d_h)
 
         result = pnet(send_rep, rec_rep, edge_rep)
-        assert isinstance(result, tuple) and len(result) == 2
+        assert isinstance(result, tuple)
+        assert len(result) == 2
         assert result[0].shape == (n_rec, d_h)
         assert result[1].shape == (n_edges, d_h)
 
@@ -711,12 +715,12 @@ class TestNumericalStability:
                 send_rep, current_rec, current_edge
             )
 
-        assert torch.isfinite(
-            current_rec
-        ).all(), "Receiver reps contain non-finite values after deep stacking"
-        assert torch.isfinite(
-            current_edge
-        ).all(), "Edge reps contain non-finite values after deep stacking"
+        assert torch.isfinite(current_rec).all(), (
+            "Receiver reps contain non-finite values after deep stacking"
+        )
+        assert torch.isfinite(current_edge).all(), (
+            "Edge reps contain non-finite values after deep stacking"
+        )
 
     def test_high_degree_stability(self):
         """With many incoming edges per receiver, mean aggregation should
@@ -743,6 +747,7 @@ class TestNumericalStability:
 #
 
 
+@pytest.mark.requires_real_data
 class TestDefaultBehaviorUnchanged:
     """Tests that with default GNN types, models use InteractionNet
     (backward compatibility). All tests use deterministic models only."""
@@ -865,6 +870,7 @@ class TestDefaultBehaviorUnchanged:
 #
 
 
+@pytest.mark.requires_real_data
 class TestHierarchicalIntegration:
     """Tests for GNN type selection in hierarchical deterministic models."""
 
@@ -1029,3 +1035,28 @@ class TestHierarchicalIntegration:
         for gnn in predictor.mesh_read_gnns:
             assert isinstance(gnn, InteractionNet)
             assert not isinstance(gnn, PropagationNet)
+
+    def test_hilam_parallel_forward_pass_succeeds(self):
+        """HiLAMParallel should successfully run a forward pass on
+        hierarchical graphs.
+        """
+        datastore, config = _get_datastore_and_config("hierarchical")
+
+        forecaster, _, init_states, forcing, boundary = _build_model_and_data(
+            datastore,
+            config,
+            "hi_lam_parallel",
+            "hierarchical",
+        )
+
+        with torch.no_grad():
+            out, _ = forecaster(init_states, forcing, boundary)
+
+        assert isinstance(out, torch.Tensor)
+        expected_shape = (
+            init_states.shape[0],
+            forcing.shape[1],
+            init_states.shape[2],
+            init_states.shape[3],
+        )
+        assert out.shape == expected_shape
