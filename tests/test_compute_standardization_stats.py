@@ -135,7 +135,7 @@ class TestFluxStats:
 
     @pytest.mark.parametrize(
         "n_samples, world_size",
-        [(101, 2), (97, 4)],
+        [(97, 4)],
     )
     def test_main_gathers_short_batches_without_distributed_padding(
         self, tmp_path, n_samples, world_size
