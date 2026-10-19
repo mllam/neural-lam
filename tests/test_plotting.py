@@ -856,3 +856,119 @@ def test_aggregate_and_plot_metrics_with_metrics_watch(dummy_graph_dir):
     )
 
     plt.close("all")
+
+
+def test_spatial_loss_maps_out_of_range_steps(tmp_path, dummy_graph_dir):
+    """
+    Regression test for issue #747.
+
+    Verify that out-of-range steps in val_steps_to_log are excluded from spatial
+    loss maps and that remaining valid steps are correctly associated with their
+    loss maps and saved filenames in on_test_epoch_end without misalignment.
+    """
+    datastore = DummyDatastore()
+    shutil.copytree(dummy_graph_dir, datastore.root_path / "graph" / "1level")
+
+    config = nlconfig.NeuralLAMConfig(
+        datastore=nlconfig.DatastoreSelection(
+            kind=datastore.SHORT_NAME,
+            config_path=datastore.root_path,
+        ),
+    )
+
+    predictor = GraphLAM(
+        datastore=datastore,
+        graph_name="1level",
+        hidden_dim=4,
+        hidden_layers=1,
+        processor_layers=1,
+        mesh_aggr="sum",
+        num_past_forcing_steps=0,
+        num_future_forcing_steps=0,
+        output_std=False,
+        output_clamping_lower=config.training.output_clamping.lower,
+        output_clamping_upper=config.training.output_clamping.upper,
+    )
+    forecaster = ARForecaster(predictor, datastore)
+    model = ForecasterModule(
+        forecaster=forecaster,
+        config=config,
+        datastore=datastore,
+        loss="mse",
+        lr=1.0e-3,
+        restore_opt=False,
+        n_example_pred=0,
+        val_steps_to_log=[100, -1, 0, 1, 2],
+    )
+
+    # Mock the trainer to simulate rank-0 single-process execution
+    mock_trainer = MagicMock()
+    mock_trainer.is_global_zero = True
+    mock_trainer.sanity_checking = False
+    mock_trainer.current_epoch = 0
+    model._trainer = mock_trainer
+
+    mock_logger = MagicMock()
+    mock_logger.save_dir = str(tmp_path)
+    mock_trainer.logger = mock_logger
+
+    model.all_gather_cat = lambda x: x
+
+    # Simulate test_step with rollout length 2; steps -1, 0 (non-positive)
+    # and 100 (exceeds rollout) must be filtered out, keeping steps 1 and 2
+    batch_size = 1
+    pred_steps = 2
+    num_grid_nodes = datastore.num_grid_points
+    num_state_vars = datastore.get_num_data_vars(category="state")
+
+    prediction = torch.zeros(
+        batch_size, pred_steps, num_grid_nodes, num_state_vars
+    )
+    prediction[:, 1] = 1.0  # only step 2 has a non-zero error
+    target = torch.zeros(batch_size, pred_steps, num_grid_nodes, num_state_vars)
+    pred_std = torch.ones(num_state_vars)
+    time_step_loss = torch.zeros(pred_steps)
+
+    model._compute_prediction_and_loss = MagicMock(
+        return_value=(prediction, target, pred_std, time_step_loss)
+    )
+
+    dummy_batch = (
+        torch.zeros(batch_size, 1, num_grid_nodes, num_state_vars),
+        target,
+        torch.zeros(batch_size, 1, num_grid_nodes, 0),
+        torch.zeros(batch_size, dtype=torch.long),
+    )
+
+    model.test_step(dummy_batch, batch_idx=0)
+    model.on_test_epoch_end()
+
+    # Verify generated PDF files
+    pdf_dir = tmp_path / "spatial_loss_maps"
+    generated_pdfs = sorted(p.name for p in pdf_dir.glob("*.pdf"))
+    assert generated_pdfs == ["loss_t1.pdf", "loss_t2.pdf"]
+    assert not (pdf_dir / "loss_t100.pdf").exists()
+
+    # Verify logged figure titles match retained steps
+    t, unit = model.time_step_int, model.time_step_unit
+    titles = [
+        call.kwargs["images"][0].get_suptitle()
+        for call in mock_logger.log_image.call_args_list
+        if call.kwargs["key"].startswith("test_loss")
+    ]
+    assert titles == [
+        f"Test loss, t=1 ({t} {unit})",
+        f"Test loss, t=2 ({2 * t} {unit})",
+    ]
+
+    # Verify the maps are in the same order as the titles and filenames
+    mean_spatial_loss = torch.load(tmp_path / "mean_spatial_loss.pt")
+    interior = model.interior_mask_bool
+    assert (mean_spatial_loss[0, interior] == 0).all()
+    assert (mean_spatial_loss[1, interior] > 0).all()
+
+    # Verify clean slate after on_test_epoch_end
+    assert len(model._test_spatial_steps) == 0
+    assert len(model.spatial_loss_maps) == 0
+
+    plt.close("all")
