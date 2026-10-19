@@ -2,7 +2,9 @@
 
 # Standard library
 import os
+import pathlib
 import warnings
+from argparse import Namespace
 from typing import Any
 
 # Third-party
@@ -18,7 +20,19 @@ from neural_lam.utils import get_integer_time
 
 # Local
 from .. import metrics, vis
-from ..config import NeuralLAMConfig
+from ..config import (
+    ComputeConfig,
+    DataConfig,
+    DatastoreSelection,
+    LoggingConfig,
+    ManualStateFeatureWeighting,
+    ModelConfig,
+    NeuralLAMConfig,
+    OutputClamping,
+    TrainingConfig,
+    TrainRunConfig,
+    UniformFeatureWeighting,
+)
 from ..datastore.base import BaseDatastore
 from ..loss_weighting import get_state_feature_weighting
 from ..weather_dataset import WeatherDataset
@@ -28,6 +42,27 @@ from .forecasters.base import Forecaster
 Batch = tuple[
     torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor
 ]
+
+if hasattr(torch.serialization, "add_safe_globals"):
+    torch.serialization.add_safe_globals(
+        [
+            Namespace,
+            pathlib.Path,
+            pathlib.PosixPath,
+            pathlib.WindowsPath,
+            ComputeConfig,
+            DataConfig,
+            DatastoreSelection,
+            LoggingConfig,
+            ManualStateFeatureWeighting,
+            ModelConfig,
+            NeuralLAMConfig,
+            OutputClamping,
+            TrainingConfig,
+            TrainRunConfig,
+            UniformFeatureWeighting,
+        ]
+    )
 
 
 class ForecasterModule(pl.LightningModule):
