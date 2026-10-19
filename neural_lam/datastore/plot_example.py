@@ -36,7 +36,7 @@ def plot_example_from_datastore(
         Whether to standardize the data before plotting, by default True.
     selection : dict, optional
         Selections to apply to the dataarray, for example
-        `time="1990-09-03T0:00" would select this single timestep, by default
+        `time="1990-09-03T0:00"` would select this single timestep, by default
         {}.
     index_selection: dict, optional
         Index-based selection to apply to the dataarray, for example
@@ -164,9 +164,9 @@ if __name__ == "__main__":
     )
     args = parser.parse_args()
 
-    assert (
-        args.datastore_config_path is not None
-    ), "Specify your datastore config with --datastore_config_path"
+    assert args.datastore_config_path is not None, (
+        "Specify your datastore config with --datastore_config_path"
+    )
 
     selection = dict(args.selection)
     index_selection = dict(args.index_selection)
@@ -187,7 +187,7 @@ if __name__ == "__main__":
     # Standard library
     from typing import cast
 
-    datastore = cast(BaseRegularGridDatastore, datastore)
+    datastore = cast("BaseRegularGridDatastore", datastore)
 
     plot_example_from_datastore(
         args.category,

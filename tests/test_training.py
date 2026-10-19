@@ -10,7 +10,7 @@ import wandb
 
 # First-party
 from neural_lam import config as nlconfig
-from neural_lam.create_graph import create_graph_from_datastore
+from neural_lam.create_graph_with_wmg import create_graph_from_datastore
 from neural_lam.datastore import DATASTORES
 from neural_lam.datastore.base import BaseRegularGridDatastore
 from neural_lam.models import ARForecaster, ForecasterModule, GraphLAM
@@ -86,7 +86,7 @@ def run_simple_training(
         create_graph_from_datastore(
             datastore=datastore,
             output_root_path=str(graph_dir_path),
-            n_max_levels=1,
+            archetype="keisler",
         )
 
     data_module = WeatherDataModule(
@@ -142,7 +142,7 @@ def run_simple_training(
     trainer.fit(model=model, datamodule=data_module)
 
 
-@pytest.mark.slow
+@pytest.mark.requires_training
 @pytest.mark.parametrize("datastore_name", DATASTORES.keys())
 def test_training(datastore_name):
     datastore = init_datastore_example(datastore_name)
@@ -156,7 +156,8 @@ def test_training(datastore_name):
     run_simple_training(datastore, set_output_std=False)
 
 
-@pytest.mark.slow
+@pytest.mark.requires_training
+@pytest.mark.requires_real_data
 def test_training_output_std():
     datastore = init_datastore_example("mdp")  # Test only with mdp datastore
     run_simple_training(datastore, set_output_std=True)
@@ -226,7 +227,6 @@ def test_all_gather_cat_multi_device_simulation():
     )
 
 
-@pytest.mark.slow
 def test_test_step_excludes_boundary_from_spatial_loss(tmp_path):
     """
     Regression test for issue #569.
@@ -249,7 +249,7 @@ def test_test_step_excludes_boundary_from_spatial_loss(tmp_path):
         create_graph_from_datastore(
             datastore=datastore,
             output_root_path=str(graph_dir_path),
-            n_max_levels=1,
+            archetype="keisler",
         )
 
     config = nlconfig.NeuralLAMConfig(
@@ -314,6 +314,6 @@ def test_test_step_excludes_boundary_from_spatial_loss(tmp_path):
         "boundary nodes must be excluded from the test spatial loss map, "
         "consistent with every other loss call in the module"
     )
-    assert torch.isfinite(
-        mean_spatial_loss[:, ~boundary]
-    ).all(), "interior nodes must keep finite loss values"
+    assert torch.isfinite(mean_spatial_loss[:, ~boundary]).all(), (
+        "interior nodes must keep finite loss values"
+    )
