@@ -262,7 +262,9 @@ def build_parser() -> ArgumentParser:
         "--mesh_aggr",
         type=str,
         default="sum",
-        help="Aggregation to use for m2m processor GNN layers (sum/mean)",
+        choices=["sum", "mean"],
+        help="Aggregation for InteractionNet mesh processor layers; "
+        "PropagationNet always uses mean",
     )
     arch_group.add_argument(
         "--output_std",

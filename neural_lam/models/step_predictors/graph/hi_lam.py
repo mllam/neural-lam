@@ -56,7 +56,8 @@ class HiLAM(BaseHiGraphModel):
         processor_layers : int, default 4
             The number of processor layers in the GNN.
         mesh_aggr : str, default "sum"
-            The aggregation method for mesh nodes.
+            The aggregation method for ``InteractionNet`` mesh processor
+            layers. ``PropagationNet`` layers always use mean aggregation.
         num_past_forcing_steps : int, default 1
             The number of past forcing steps to include.
         num_future_forcing_steps : int, default 1
@@ -117,6 +118,7 @@ class HiLAM(BaseHiGraphModel):
                     edge_index,
                     self.hidden_dim,
                     hidden_layers=self.hidden_layers,
+                    aggr=self.mesh_aggr,
                 )
                 for edge_index in self.m2m_edge_index
             ]
@@ -138,6 +140,7 @@ class HiLAM(BaseHiGraphModel):
                     edge_index,
                     self.hidden_dim,
                     hidden_layers=self.hidden_layers,
+                    aggr=self.mesh_aggr,
                 )
                 for edge_index in self.mesh_up_edge_index
             ]
@@ -159,6 +162,7 @@ class HiLAM(BaseHiGraphModel):
                     edge_index,
                     self.hidden_dim,
                     hidden_layers=self.hidden_layers,
+                    aggr=self.mesh_aggr,
                 )
                 for edge_index in self.mesh_down_edge_index
             ]
