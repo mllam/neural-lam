@@ -85,7 +85,7 @@ class WeatherDataset(torch.utils.data.Dataset):
         # (`__getitem__`) but `create_dataarray_from_tensor(category="static")`
         # needs the static coordinate metadata, so cache it here too.
         self.da_static = self.datastore.get_dataarray(
-            category="static", split=self.split
+            category="static", split=None
         )
 
         if self.datastore.is_ensemble and self.load_single_member:
@@ -575,9 +575,11 @@ class WeatherDataset(torch.utils.data.Dataset):
         ----------
         tensor : torch.Tensor
             The tensor to construct the DataArray from, this assumed to have
-            the same dimension ordering as returned by the __getitem__ method
-            (i.e. time, grid_index, {category}_feature). The tensor will be
-            copied to the CPU before constructing the DataArray.
+            dimensions (time, grid_index, {category}_feature), as for the
+            states returned by the __getitem__ method. Windowed forcing from
+            __getitem__ is not supported, its feature dimension has size
+            num_forcing_vars * window. The tensor will be copied to the CPU
+            before constructing the DataArray.
         time : datetime.datetime or list[datetime.datetime]
             The time or times of the tensor.
         category : str

@@ -29,6 +29,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Fix flux standardization statistics weighting for short final batches and exclude distributed padding samples [\#782](https://github.com/mllam/neural-lam/pull/782) @Karvy-Singh
 
+- Fix `WeatherDataset.create_dataarray_from_tensor` always looking up the `state_feature` coordinate, so it now also works for `category="forcing"` and `category="static"`, and expose `WeatherDataset.da_static` [\#309](https://github.com/mllam/neural-lam/pull/309) @Jayant-kernel
+
 ### Maintenance
 
 - Fix the GPU CI job silently running on CPU: use an NVIDIA `g4dn.xlarge` cirun instance instead of the AMD `g4ad.xlarge`, install `--extra gpu-cu128` to match the runner's CUDA 12.2 driver, assert `torch.cuda.is_available()`, and run only the GPU-relevant tests there [\#802](https://github.com/mllam/neural-lam/pull/802) @varma1221
@@ -148,8 +150,6 @@ It also contains a number of smaller improvements, bug fixes and maintenance upd
 - Validate `--var_leads_metrics_watch` variable indices against the datastore in `train_model.py` so an out-of-range index raises a clear CLI error immediately, instead of an `IndexError` deep in the first validation epoch after potentially hours of training [\#306](https://github.com/mllam/neural-lam/pull/306) @Ayushhgit
 
 - Fix `WeatherDataset.__len__` off-by-one in analysis mode (was undercounting by 1 sample), include `num_past_forcing_steps` in the forecast-mode minimum-horizon check, validate forcing-side forecast horizon when forcing is present, and use `min(n_state, n_forcing)` when both are present in analysis mode; raise `IndexError` for out-of-range indices in `WeatherDataset.__getitem__` (with Python-style negative indexing support) [\#312](https://github.com/mllam/neural-lam/pull/312) @kshirajahere
-
-- Fix `WeatherDataset.create_dataarray_from_tensor` to look up the feature coordinate dynamically (`{category}_feature`) instead of hardcoded `state_feature` and expose `WeatherDataset.da_static`, so the method works for `state`, `forcing`, and `static` categories without raising `AttributeError` [\#309](https://github.com/mllam/neural-lam/pull/309) @Jayant-kernel
 
 ### Maintenance
 
