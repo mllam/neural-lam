@@ -876,10 +876,12 @@ def test_spatial_loss_maps_out_of_range_steps(tmp_path, dummy_graph_dir):
     shutil.copytree(dummy_graph_dir, datastore.root_path / "graph" / "1level")
 
     config = nlconfig.NeuralLAMConfig(
-        datastore=nlconfig.DatastoreSelection(
-            kind=datastore.SHORT_NAME,
-            config_path=datastore.root_path,
-        ),
+        datastores={
+            "main": nlconfig.DatastoreSelection(
+                kind=datastore.SHORT_NAME,
+                config_path=datastore.root_path,
+            )
+        },
     )
 
     predictor = GraphLAM(
@@ -942,6 +944,7 @@ def test_spatial_loss_maps_out_of_range_steps(tmp_path, dummy_graph_dir):
     dummy_batch = (
         torch.zeros(batch_size, 1, num_grid_nodes, num_state_vars),
         target,
+        torch.zeros(batch_size, 1, num_grid_nodes, 0),
         torch.zeros(batch_size, 1, num_grid_nodes, 0),
         torch.zeros(batch_size, dtype=torch.long),
     )
