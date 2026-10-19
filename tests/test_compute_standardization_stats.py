@@ -1,10 +1,15 @@
+# Standard library
+from datetime import timedelta
+
 # Third-party
 import pytest
 import torch
+import torch.multiprocessing as mp
 from torch.utils.data import DataLoader
 from torch.utils.data.distributed import DistributedSampler
 
 # First-party
+from neural_lam.datastore.npyfilesmeps import compute_standardization_stats
 from neural_lam.datastore.npyfilesmeps.compute_standardization_stats import (
     PaddedWeatherDataset,
 )
@@ -47,33 +52,129 @@ class TestPaddedWeatherDataset:
             assert torch.equal(item_real, ds[padded_idx])
 
 
-# -- Bug 1: flux stats IndexError ------------------------------------------
+# -- Flux stats aggregation ------------------------------------------------
 
 
-class TestFluxStatsGather:
-    """Flux stats distributed gather: stack per-rank batch scalars into 1-D."""
+class _FluxIsIndexDataset:
+    """Dataset whose sample ``i`` has state and flux equal to ``i``."""
 
-    def _make_gathered(self, world_size, n_batches):
-        return [
-            [torch.tensor(float(r * 10 + b)) for b in range(n_batches)]
-            for r in range(world_size)
-        ]
+    n_samples = 101
 
-    def test_fix_shape(self):
-        """Stack flattens per-rank scalars into a 1-D tensor."""
-        ws, nb = 4, 3
-        gathered = self._make_gathered(ws, nb)
-        result = torch.cat([torch.stack(rf) for rf in gathered])
-        assert result.shape == (ws * nb,)
+    def __init__(self, **_):
+        self._n = self.n_samples
 
-    def test_fix_mean(self):
-        """Global mean is the mean over all per-rank batch scalars."""
-        gathered = [
-            [torch.tensor(0.0), torch.tensor(2.0)],
-            [torch.tensor(4.0), torch.tensor(6.0)],
-        ]
-        result = torch.cat([torch.stack(rf) for rf in gathered])
-        assert torch.isclose(torch.mean(result), torch.tensor(3.0))
+    def __len__(self):
+        return self._n
+
+    def __getitem__(self, idx):
+        state = torch.full((65, 1, 1), float(idx))
+        forcing = torch.full((2, 3, 1), float(idx))
+        return state[:2], state[2:], forcing, torch.zeros(1)
+
+
+def _run_distributed_stats(rank, world_size, n_samples, config_path, init_path):
+    """Run one real Gloo rank of the standardization-statistics job."""
+    compute_standardization_stats.init_datastore = lambda **_: object()
+    _FluxIsIndexDataset.n_samples = n_samples
+    compute_standardization_stats.WeatherDataset = _FluxIsIndexDataset
+    compute_standardization_stats.get_rank = lambda: rank
+    compute_standardization_stats.get_world_size = lambda: world_size
+    compute_standardization_stats.torch.cuda.is_available = lambda: False
+
+    def setup(_rank, _world_size):
+        compute_standardization_stats.dist.init_process_group(
+            "gloo",
+            init_method=init_path.as_uri(),
+            rank=_rank,
+            world_size=_world_size,
+            timeout=timedelta(seconds=60),
+        )
+
+    compute_standardization_stats.setup = setup
+    compute_standardization_stats.main(
+        datastore_config_path=config_path,
+        batch_size=8,
+        step_length=timedelta(hours=1),
+        n_workers=0,
+        distributed=True,
+    )
+
+
+class TestFluxStats:
+    """Flux statistics weight samples rather than DataLoader batches."""
+
+    def test_main_weights_short_final_batch_by_sample(
+        self, tmp_path, monkeypatch
+    ):
+        """The generated flux stats match all 101 synthetic samples."""
+        monkeypatch.setattr(
+            compute_standardization_stats,
+            "init_datastore",
+            lambda **_: object(),
+        )
+        monkeypatch.setattr(
+            compute_standardization_stats,
+            "WeatherDataset",
+            _FluxIsIndexDataset,
+        )
+
+        compute_standardization_stats.main(
+            datastore_config_path=tmp_path / "config.yaml",
+            batch_size=8,
+            step_length=timedelta(hours=1),
+            n_workers=0,
+            distributed=False,
+        )
+
+        samples = torch.arange(101).float()
+        expected = torch.stack((samples.mean(), samples.std(unbiased=False)))
+        flux_stats = torch.load(
+            tmp_path / "static" / "flux_stats.pt", weights_only=True
+        )
+        torch.testing.assert_close(flux_stats, expected)
+
+    @pytest.mark.parametrize(
+        "n_samples, world_size",
+        [(97, 4)],
+    )
+    def test_main_gathers_short_batches_without_distributed_padding(
+        self, tmp_path, n_samples, world_size
+    ):
+        """Gather each sample once despite short batches and padding."""
+        mp.spawn(
+            _run_distributed_stats,
+            args=(
+                world_size,
+                n_samples,
+                tmp_path / "config.yaml",
+                tmp_path / "dist_init",
+            ),
+            nprocs=world_size,
+            join=True,
+        )
+
+        samples = torch.arange(n_samples).float()
+        expected = torch.stack((samples.mean(), samples.std(unbiased=False)))
+        flux_stats = torch.load(
+            tmp_path / "static" / "flux_stats.pt", weights_only=True
+        )
+        torch.testing.assert_close(flux_stats, expected)
+        parameter_mean = torch.load(
+            tmp_path / "static" / "parameter_mean.pt", weights_only=True
+        )
+        parameter_std = torch.load(
+            tmp_path / "static" / "parameter_std.pt", weights_only=True
+        )
+        torch.testing.assert_close(parameter_mean, expected[0].unsqueeze(0))
+        torch.testing.assert_close(parameter_std, expected[1].unsqueeze(0))
+        diff_mean = torch.load(
+            tmp_path / "static" / "diff_mean.pt", weights_only=True
+        )
+        diff_std = torch.load(
+            tmp_path / "static" / "diff_std.pt", weights_only=True
+        )
+        torch.testing.assert_close(diff_mean, torch.zeros(1))
+        torch.testing.assert_close(diff_std, torch.zeros(1))
 
 
 # -- Bug 2: positional depadding after distributed gather ------------------
