@@ -82,10 +82,26 @@ jobs:
         run: |
           python -c "import torch; assert torch.__version__.endswith('+cu128')"
 
+      - name: Inspect GPU hardware and configure CUDA
+        if: matrix.device == 'gpu'
+        run: |
+          echo "=== PCI Devices ==="
+          lspci | grep -i -E "vga|3d|display|nvidia|amd|radeon" || lspci || true
+          echo "=== NVIDIA SMI ==="
+          nvidia-smi || true
+          # If CUDA compatibility package exists on the runner, add it to LD_LIBRARY_PATH
+          for dir in /usr/local/cuda/compat /usr/local/cuda-12.8/compat /usr/local/cuda-12/compat; do
+            if [ -d "$dir" ]; then
+              echo "Adding CUDA compat directory to LD_LIBRARY_PATH: $dir"
+              echo "LD_LIBRARY_PATH=$dir:${LD_LIBRARY_PATH:-}" >> $GITHUB_ENV
+              export LD_LIBRARY_PATH="$dir:${LD_LIBRARY_PATH:-}"
+            fi
+          done
+
       - name: Check CUDA is available
         if: matrix.device == 'gpu'
         run: |
-          python -c "import torch; assert torch.cuda.is_available(), 'CUDA is not available - torch/driver version mismatch'"
+          python -c "import torch; assert torch.cuda.is_available(), f'CUDA is not available - torch={torch.__version__}, cuda_version={torch.version.cuda}, device_count={torch.cuda.device_count()}'"
 
       - name: Cache meps example data
         uses: actions/cache@v4
