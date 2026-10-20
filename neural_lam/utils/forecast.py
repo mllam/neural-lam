@@ -82,6 +82,13 @@ def create_forecast_dataset(
 
     var_names = datastore.get_vars_names(category=category)
 
+    if (
+        predictions_np.ndim == 4
+        and ensemble_members is not None
+        and len(analysis_times_np) == 1
+    ):
+        predictions_np = predictions_np[np.newaxis, ...]
+
     has_members = ensemble_members is not None or predictions_np.ndim == 5
     if has_members:
         dims = (
