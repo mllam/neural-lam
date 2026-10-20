@@ -12,7 +12,7 @@
 #
 # We only run uv in CI: pip cannot do extras-based index routing and resolving
 # the right CPU/GPU torch wheel with pip is brittle. The pip install path is
-# still documented in the README for users who prefer it.
+# still documented in the installation guide for users who prefer it.
 #
 # Hosts used to run the tests:
 # - ubuntu-latest for CPU: these are on github
@@ -21,8 +21,6 @@
 name: CPU+GPU testing
 
 on: [push, pull_request, workflow_dispatch]
-
-
 
 jobs:
   tests:
