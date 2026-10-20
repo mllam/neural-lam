@@ -487,7 +487,8 @@ def test_forecast_ensemble_len_scales_with_default_all_members():
     assert len(dataset_all) == len(dataset_single) * 3
 
 
-def test_boundary_datastore_shapes():
+@pytest.mark.parametrize("num_future_forcing_steps", [1, 2])
+def test_boundary_datastore_shapes(num_future_forcing_steps):
     """The boundary tensor has the boundary grid and windowed features."""
     n_timesteps = 20
     ar_steps = 3
@@ -505,7 +506,7 @@ def test_boundary_datastore_shapes():
         split="train",
         ar_steps=ar_steps,
         num_past_forcing_steps=1,
-        num_future_forcing_steps=1,
+        num_future_forcing_steps=num_future_forcing_steps,
         num_past_boundary_steps=num_past_boundary,
         num_future_boundary_steps=num_future_boundary,
         datastore_boundary=boundary_ds,
@@ -524,6 +525,10 @@ def test_boundary_datastore_shapes():
     assert target_times.shape == (ar_steps,)
 
     assert not torch.isnan(boundary).any()
+
+    # The boundary crops the interior in time, the last sample's forcing
+    # window must still be in range
+    dataset[len(dataset) - 1]
 
 
 def test_boundary_datastore_none_gives_empty_boundary():

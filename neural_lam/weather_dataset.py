@@ -226,9 +226,9 @@ class WeatherDataset(torch.utils.data.Dataset):
                 requested_max_lead=self._max_state_lead_used(),
             )
             self.da_state = apply_time_crop(self.da_state, crop_dim, crop_slice)
-            # Forecast forcing is indexed by position along `analysis_time`,
-            # so it has to be cropped together with the state.
-            if self.da_forcing is not None and self.datastore.is_forecast:
+            # Interior forcing shares the state's time axis and `__len__`
+            # counts samples on both by position, so crop them together.
+            if self.da_forcing is not None:
                 self.da_forcing = apply_time_crop(
                     self.da_forcing, crop_dim, crop_slice
                 )
