@@ -687,6 +687,8 @@ def predict(
     target_list: list[torch.Tensor] = []
     pred_std_list: list[torch.Tensor] = []
 
+    first_target_times: np.ndarray | None = None
+
     for batch_start in range(0, len(selected_indices), batch_size):
         batch_idxs = selected_indices[batch_start : batch_start + batch_size]
         batch_samples = [dataset[i] for i in batch_idxs]
@@ -706,6 +708,11 @@ def predict(
         times_batch = torch.stack([s[4] for s in batch_samples], dim=0).to(
             torch_device
         )
+
+        if first_target_times is None:
+            first_target_times = (
+                times_batch[0].cpu().numpy().astype("datetime64[ns]")
+            )
 
         (
             norm_init,
@@ -747,9 +754,7 @@ def predict(
     all_pred_stds = torch.cat(pred_std_list, dim=0) if pred_std_list else None
 
     sel_analysis_times = all_init_times[selected_indices]
-    first_target_times = (
-        dataset[selected_indices[0]][4].cpu().numpy().astype("datetime64[ns]")
-    )
+    assert first_target_times is not None
     first_init_time = sel_analysis_times[0]
     elapsed_durations = first_target_times - first_init_time
 
