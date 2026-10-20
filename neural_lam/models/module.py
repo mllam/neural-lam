@@ -284,7 +284,16 @@ class ForecasterModule(pl.LightningModule):
         xr.DataArray
             The resulting xarray DataArray.
         """
-        weather_dataset = WeatherDataset(datastore=self.datastore, split=split)
+        # Only used for its coordinates, so use the smallest sample window
+        # (2 init states + 1 step): any evaluation needs at least that many
+        # time steps, while the default window can exceed a short split.
+        weather_dataset = WeatherDataset(
+            datastore=self.datastore,
+            split=split,
+            ar_steps=1,
+            num_past_forcing_steps=0,
+            num_future_forcing_steps=0,
+        )
         time_np = np.array(time.cpu(), dtype="datetime64[ns]")
         da = weather_dataset.create_dataarray_from_tensor(
             tensor=tensor, time=time_np, category=category
