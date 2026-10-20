@@ -30,8 +30,7 @@ NUM_FUTURE_FORCING_STEPS = 1
 def run_simple_training(
     datastore,
     set_output_std,
-    tmp_path,
-    detect_anomaly=False,
+    sanity_check=False,
     metrics_watch=None,
     var_leads_metrics_watch=None,
 ):
@@ -44,10 +43,8 @@ def run_simple_training(
         Datastore to load data from for training
     set_output_std : bool
         If --output_std should be set during training
-    tmp_path : pathlib.Path
-        Temporary directory for any Lightning output.
-    detect_anomaly : bool, default False
-        Whether PyTorch autograd anomaly detection should be enabled.
+    sanity_check : bool, default False
+        Whether to run Lightning's sanity validation steps before training.
     """
     if metrics_watch is None:
         metrics_watch = []
@@ -78,11 +75,12 @@ def run_simple_training(
         # to support single-GPU machines
         devices=2 if torch.cuda.device_count() >= 2 else 1,
         log_every_n_steps=1,
-        detect_anomaly=detect_anomaly,
+        # use `detect_anomaly` to ensure that we don't have NaNs popping up
+        # during training
+        detect_anomaly=True,
         limit_train_batches=2,
         limit_val_batches=2,
-        num_sanity_val_steps=0,
-        default_root_dir=tmp_path,
+        num_sanity_val_steps=2 if sanity_check else 0,
         enable_checkpointing=False,
         logger=False,
         enable_progress_bar=False,
@@ -153,7 +151,7 @@ def run_simple_training(
 
 @pytest.mark.requires_training
 @pytest.mark.parametrize("datastore_name", DATASTORES.keys())
-def test_training(datastore_name, tmp_path):
+def test_training(datastore_name):
     datastore = init_datastore_example(datastore_name)
 
     if not isinstance(datastore, BaseRegularGridDatastore):
@@ -165,16 +163,17 @@ def test_training(datastore_name, tmp_path):
     run_simple_training(
         datastore,
         set_output_std=False,
-        tmp_path=tmp_path,
-        detect_anomaly=datastore_name == DummyDatastore.SHORT_NAME,
+        # the sanity check runs the same code for every datastore, so the
+        # cheapest one is enough to cover it
+        sanity_check=datastore_name == DummyDatastore.SHORT_NAME,
     )
 
 
 @pytest.mark.requires_training
 @pytest.mark.requires_real_data
-def test_training_output_std(tmp_path):
+def test_training_output_std():
     datastore = init_datastore_example("mdp")  # Test only with mdp datastore
-    run_simple_training(datastore, set_output_std=True, tmp_path=tmp_path)
+    run_simple_training(datastore, set_output_std=True)
 
 
 def test_all_gather_cat_single_device():
