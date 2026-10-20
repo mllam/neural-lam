@@ -154,8 +154,33 @@ def create_forecast_dataset(
         if pred_std_np.ndim == 1 and pred_std_np.shape[0] == len(var_names):
             std_dims = (f"{category}_feature",)
             std_coords = {f"{category}_feature": var_names}
+        elif has_members and pred_std_np.ndim == 4:
+            # Standard deviation computed across ensemble members
+            std_dims = (
+                "analysis_time",
+                "elapsed_forecast_duration",
+                "grid_index",
+                f"{category}_feature",
+            )
+            std_coords = {d: coords[d] for d in std_dims}
+        elif (
+            has_members
+            and pred_std_np.ndim == 3
+            and len(analysis_times_np) == 1
+        ):
+            pred_std_np = pred_std_np[np.newaxis, ...]
+            std_dims = (
+                "analysis_time",
+                "elapsed_forecast_duration",
+                "grid_index",
+                f"{category}_feature",
+            )
+            std_coords = {d: coords[d] for d in std_dims}
         else:
-            if pred_std_np.ndim == predictions_np.ndim - 1:
+            if (
+                pred_std_np.ndim == predictions_np.ndim - 1
+                and len(analysis_times_np) == 1
+            ):
                 pred_std_np = pred_std_np[np.newaxis, ...]
             std_dims = dims[: pred_std_np.ndim]
             std_coords = {d: coords[d] for d in std_dims}

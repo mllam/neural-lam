@@ -601,30 +601,8 @@ def predict(
         if hasattr(dataset.da_state, "ensemble_member")
         else 1
     )
-    if datastore.is_forecast:
-        base_len = dataset.da_state.analysis_time.size
-        base_init_times = np.asarray(
-            dataset.da_state.analysis_time.values[:base_len],
-            dtype="datetime64[ns]",
-        )
-    else:
-        init_offset = max(2, num_past) - 1
-        base_len = len(dataset.da_state.time) - (init_offset + lead_steps) + 1
-        if dataset.da_forcing is not None:
-            forcing_offset = (
-                max(2, num_past) + lead_steps + dataset.num_future_forcing_steps
-            )
-            base_len = max(
-                0,
-                min(
-                    base_len,
-                    len(dataset.da_forcing.time) - forcing_offset + 1,
-                ),
-            )
-        base_init_times = np.asarray(
-            dataset.da_state.time.values[init_offset : init_offset + base_len],
-            dtype="datetime64[ns]",
-        )
+    base_init_times, _, _ = dataset._sample_window_times()
+    base_init_times = np.asarray(base_init_times, dtype="datetime64[ns]")
 
     if datastore.is_ensemble and not dataset.load_single_member:
         all_init_times = np.repeat(base_init_times, n_members)
@@ -785,12 +763,7 @@ def predict(
     )
 
     if unstack_grid:
-        if not datastore.is_on_rectilinear_grid:
-            raise ValueError(
-                "unstack_grid=True is only supported for datastores with "
-                "is_on_rectilinear_grid=True."
-            )
-        ds_pred = ds_pred.unstack("grid_index")
+        ds_pred = datastore.unstack_grid_coords(ds_pred)
 
     if return_target:
         ds_target = create_forecast_dataset(
@@ -801,7 +774,7 @@ def predict(
             category="state",
         )
         if unstack_grid:
-            ds_target = ds_target.unstack("grid_index")
+            ds_target = datastore.unstack_grid_coords(ds_target)
         return ds_pred, ds_target
 
     return ds_pred
