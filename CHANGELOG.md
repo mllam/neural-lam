@@ -33,7 +33,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Modernize linting and formatting toolchain by migrating `black`/`isort`/`flake8` to Ruff (with `ANN` rules enforcing type annotation coverage in `neural_lam/`) and adding `pyproject-fmt`, `python-check-blanket-noqa`, and `no-commit-to-branch` pre-commit hooks [\#614](https://github.com/mllam/neural-lam/pull/614) @Shivampal157
 
-- - Restructure README as a concise front door with links into the structured docs [\#803](https://github.com/mllam/neural-lam/pull/803) @tyrobro
+- Restructure the README as a concise front door with links into the docs, and move its detailed guides (install options, datastores, graph creation, training and evaluation, logging) into the docs site [\#808](https://github.com/mllam/neural-lam/pull/808) @tyrobro
 
 ## [v0.7.0](https://github.com/mllam/neural-lam/releases/tag/v0.7.0)
 

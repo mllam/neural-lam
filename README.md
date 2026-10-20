@@ -16,7 +16,8 @@ It is aimed at researchers and engineers working on ML-based numerical weather p
 Full guides, tutorials, and API reference live at **[mllam.github.io/neural-lam](https://mllam.github.io/neural-lam/)**:
 
 - 📦 [Installation](https://mllam.github.io/neural-lam/getting-started/installation.html)
-- 🚀 [Quickstart](https://mllam.github.io/neural-lam/getting-started/quickstart.html)
+- 🚀 [Quickstart](https://mllam.github.io/neural-lam/getting-started/quickstart.html) and the [DANRA tutorial](https://mllam.github.io/neural-lam/notebooks/hello_world_danra.html)
+- 📖 User guide: [configuration and datastores](https://mllam.github.io/neural-lam/user-guide/datastores.html), [graph creation](https://mllam.github.io/neural-lam/user-guide/graphs.html), [training and evaluation](https://mllam.github.io/neural-lam/user-guide/training.html), [experiment logging](https://mllam.github.io/neural-lam/user-guide/logging.html)
 - 📚 [API Reference](https://mllam.github.io/neural-lam/api/index.html)
 - 🗺️ [Graph Storage Specification](https://mllam.github.io/neural-lam/graph_storage_spec.html)
 
@@ -51,24 +52,28 @@ You need a config file, a datastore, and a graph. The fastest path:
 
 ```bash
 # 1. Build the graph
-python -m neural_lam.create_graph_with_wmg --config_path data/config.yaml --archetype keisler
+python -m neural_lam.create_graph_with_wmg --config_path data/config.yaml --archetype keisler --name keisler
 
 # 2. Train
 python -m neural_lam.train_model --config_path data/config.yaml --model graph_lam --graph keisler
 
 # 3. Evaluate
-python -m neural_lam.train_model --eval test --config_path data/config.yaml --load <checkpoint>
+python -m neural_lam.train_model --eval test --config_path data/config.yaml --model graph_lam --graph keisler --load runs/<run-name>/checkpoints/min_val_loss.ckpt
 ```
 
-See the [Quickstart guide](https://mllam.github.io/neural-lam/getting-started/quickstart.html) for a full walkthrough with example data, including how to set up a datastore with [mllam-data-prep](https://github.com/mllam/mllam-data-prep).
+The [DANRA tutorial](https://mllam.github.io/neural-lam/notebooks/hello_world_danra.html) runs these steps end to end on a small public example dataset. See the [configuration and datastores guide](https://mllam.github.io/neural-lam/user-guide/datastores.html) for how to write `config.yaml` and set up a datastore, e.g. with [mllam-data-prep](https://github.com/mllam/mllam-data-prep).
 
 # Repository Structure
 
 ```
 neural-lam/
 ├── neural_lam/           - Source code
-│   ├── models/           - GraphLAM, HiLAM, HiLAMParallel
-│   └── datastore/        - Datastore implementations and base classes
+│   ├── train_model.py    - Training / evaluation CLI
+│   ├── create_graph_with_wmg.py - Graph creation CLI
+│   ├── api.py            - Python API (train, evaluate, create_graph)
+│   ├── models/           - ForecasterModule, forecasters, step predictors (GraphLAM, HiLAM, HiLAMParallel, Persistence)
+│   ├── datastore/        - Datastore implementations and base classes
+│   └── utils/            - Graph loading and other helpers
 ├── docs/                 - Documentation source (Sphinx)
 │   ├── getting-started/  - Installation and quickstart
 │   └── notebooks/        - Marimo tutorial notebooks
