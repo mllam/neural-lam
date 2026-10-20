@@ -1,4 +1,5 @@
 # Standard library
+import pickle
 from pathlib import Path
 
 # Third-party
@@ -13,7 +14,7 @@ from neural_lam.create_graph_with_wmg import create_graph_from_datastore
 from neural_lam.datastore import DATASTORES
 from neural_lam.datastore.base import BaseRegularGridDatastore
 from neural_lam.models import ForecasterModule
-from neural_lam.weather_dataset import WeatherDataset
+from neural_lam.weather_dataset import WeatherDataModule, WeatherDataset
 from tests.conftest import init_datastore_example
 from tests.dummy_datastore import DummyDatastore, EnsembleDummyDatastore
 
@@ -317,6 +318,40 @@ def test_dataset_out_of_range_raises_index_error():
     # corresponding positive index.
     dataset[-1]
     dataset[n - 1]
+
+
+@pytest.mark.parametrize("datastore_name", DATASTORES.keys())
+def test_dataset_pickle_roundtrip(datastore_name):
+    """With ``num_workers > 0`` `WeatherDataModule` uses the "spawn" start
+    method, which pickles the dataset, including its datastore, into every
+    worker process."""
+    datastore = init_datastore_example(datastore_name)
+    dataset = WeatherDataset(datastore=datastore, split="train", ar_steps=2)
+
+    restored = pickle.loads(pickle.dumps(dataset))  # noqa: S301
+
+    for original, roundtripped in zip(dataset[0], restored[0]):
+        assert torch.equal(original, roundtripped)
+
+
+def test_dataloader_spawn_worker():
+    """Load a batch through a spawned DataLoader worker, the path training
+    takes whenever ``num_workers > 0`` (the default)."""
+    data_module = WeatherDataModule(
+        datastore=DummyDatastore(),
+        ar_steps_train=2,
+        ar_steps_eval=2,
+        batch_size=2,
+        num_workers=1,
+    )
+    data_module.setup("fit")
+    assert data_module.multiprocessing_context == "spawn"
+
+    init_states, target_states, forcing, target_times = next(
+        iter(data_module.train_dataloader())
+    )
+    assert init_states.shape[:2] == (2, 2)
+    assert target_states.shape[:2] == (2, 2)
 
 
 def test_ensemble_len_scales_with_default_all_members():

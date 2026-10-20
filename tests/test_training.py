@@ -6,7 +6,6 @@ from pathlib import Path
 import pytest
 import pytorch_lightning as pl
 import torch
-import wandb
 
 # First-party
 from neural_lam import config as nlconfig
@@ -31,6 +30,7 @@ NUM_FUTURE_FORCING_STEPS = 1
 def run_simple_training(
     datastore,
     set_output_std,
+    sanity_check=False,
     metrics_watch=None,
     var_leads_metrics_watch=None,
 ):
@@ -43,6 +43,8 @@ def run_simple_training(
         Datastore to load data from for training
     set_output_std : bool
         If --output_std should be set during training
+    sanity_check : bool, default False
+        Whether to run Lightning's sanity validation steps before training.
     """
     if metrics_watch is None:
         metrics_watch = []
@@ -76,6 +78,12 @@ def run_simple_training(
         # use `detect_anomaly` to ensure that we don't have NaNs popping up
         # during training
         detect_anomaly=True,
+        limit_train_batches=2,
+        limit_val_batches=2,
+        num_sanity_val_steps=2 if sanity_check else 0,
+        enable_checkpointing=False,
+        logger=False,
+        enable_progress_bar=False,
     )
 
     graph_name = "1level"
@@ -94,7 +102,7 @@ def run_simple_training(
         ar_steps_train=3,
         ar_steps_eval=5,
         batch_size=2,
-        num_workers=1,
+        num_workers=0,
         num_past_forcing_steps=1,
         num_future_forcing_steps=1,
     )
@@ -138,7 +146,6 @@ def run_simple_training(
         metrics_watch=metrics_watch,
         var_leads_metrics_watch=var_leads_metrics_watch,
     )
-    wandb.init(mode="disabled")  # Disable wandb for offline test run
     trainer.fit(model=model, datamodule=data_module)
 
 
@@ -153,7 +160,13 @@ def test_training(datastore_name):
             f"it is not a regular grid datastore."
         )
 
-    run_simple_training(datastore, set_output_std=False)
+    run_simple_training(
+        datastore,
+        set_output_std=False,
+        # the sanity check runs the same code for every datastore, so the
+        # cheapest one is enough to cover it
+        sanity_check=datastore_name == DummyDatastore.SHORT_NAME,
+    )
 
 
 @pytest.mark.requires_training
