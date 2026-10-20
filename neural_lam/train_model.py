@@ -34,7 +34,7 @@ from .config import (
     UniformFeatureWeighting,
     load_config_and_datastore,
 )
-from .datastore.base import BaseDatastore, BaseRegularGridDatastore
+from .datastore.base import BaseDatastore
 from .gnn_layers import GNN_TYPES
 from .models import (
     MODELS,
@@ -144,6 +144,7 @@ def load_forecaster_module_from_checkpoint(
     ckpt_path: str,
     config: NeuralLAMConfig,
     datastore: BaseDatastore,
+    datastore_boundary: BaseDatastore | None = None,
 ) -> ForecasterModule:
     """
     Reconstruct a ForecasterModule from a checkpoint without requiring the
@@ -152,6 +153,23 @@ def load_forecaster_module_from_checkpoint(
     The checkpoint must have been saved with args in hyper_parameters (i.e.
     created via train_model.main), so that model class and architecture kwargs
     can be recovered automatically.
+
+    Parameters
+    ----------
+    ckpt_path : str
+        Path to the checkpoint.
+    config : NeuralLAMConfig
+        Neural-LAM configuration.
+    datastore : BaseDatastore
+        Interior datastore.
+    datastore_boundary : BaseDatastore, optional
+        Boundary datastore, needed to restore the boundary standardization
+        statistics of a checkpoint trained with one.
+
+    Returns
+    -------
+    ForecasterModule
+        The restored module.
     """
     ckpt = torch.load(ckpt_path, weights_only=False)
     args = ckpt["hyper_parameters"]["args"]
@@ -162,12 +180,19 @@ def load_forecaster_module_from_checkpoint(
         ckpt_path,
         forecaster=forecaster,
         datastore=datastore,
+        datastore_boundary=datastore_boundary,
         weights_only=False,
     )
 
 
 def build_parser() -> ArgumentParser:
-    """Build the argument parser for training and evaluating models."""
+    """Build the argument parser for training and evaluating models.
+
+    Returns
+    -------
+    ArgumentParser
+        The parser.
+    """
 
     parser = ArgumentParser(
         description="Train or evaluate MLWP models for LAM",
@@ -460,6 +485,20 @@ def build_parser() -> ArgumentParser:
         help="Number of future time steps to use as input for forcing data",
     )
     data_group.add_argument(
+        "--num_past_boundary_steps",
+        type=int,
+        default=1,
+        help="Number of past time steps to use as input for boundary forcing, "
+        "when present",
+    )
+    data_group.add_argument(
+        "--num_future_boundary_steps",
+        type=int,
+        default=1,
+        help="Number of future time steps to use as input for boundary "
+        "forcing, when present",
+    )
+    data_group.add_argument(
         "--load_single_member",
         action="store_true",
         help=(
@@ -479,6 +518,7 @@ def fit(
     *,
     config: NeuralLAMConfig | None = None,
     datastore: BaseDatastore | None = None,
+    datastore_boundary: BaseDatastore | None = None,
     config_path: str | None = None,
 ) -> Run:
     """
@@ -500,6 +540,9 @@ def fit(
         Loaded Neural-LAM configuration.
     datastore : BaseDatastore or None, optional
         Initialized datastore instance.
+    datastore_boundary : BaseDatastore or None, optional
+        Initialized boundary datastore, used together with ``config`` and
+        ``datastore``. Loaded from ``config_path`` otherwise.
     config_path : str or None, optional
         Path to the configuration file, used if config or datastore is None.
 
@@ -561,7 +604,9 @@ def fit(
             raise ValueError(
                 "Either (config and datastore) or config_path must be provided."
             )
-        config, datastore = load_config_and_datastore(config_path=config_path)
+        config, datastore, datastore_boundary = load_config_and_datastore(
+            config_path=config_path
+        )
     elif config is None or datastore is None:
         raise ValueError("config and datastore must be provided together.")
 
@@ -584,6 +629,9 @@ def fit(
         ar_steps_eval=train_config.ar_steps_eval,
         num_past_forcing_steps=data_config.num_past_forcing_steps,
         num_future_forcing_steps=data_config.num_future_forcing_steps,
+        num_past_boundary_steps=data_config.num_past_boundary_steps,
+        num_future_boundary_steps=data_config.num_future_boundary_steps,
+        datastore_boundary=datastore_boundary,
         load_single_member=data_config.load_single_member,
         batch_size=train_config.batch_size,
         num_workers=data_config.num_workers,
@@ -633,7 +681,8 @@ def fit(
     model = ForecasterModule(
         forecaster=forecaster,
         config=config,
-        datastore=cast("BaseRegularGridDatastore", datastore),
+        datastore=datastore,
+        datastore_boundary=datastore_boundary,
         loss=train_config.loss,
         lr=train_config.lr,
         restore_opt=train_config.restore_opt,
@@ -738,8 +787,26 @@ def run(
     args: Namespace,
     config: NeuralLAMConfig | None = None,
     datastore: BaseDatastore | None = None,
+    datastore_boundary: BaseDatastore | None = None,
 ) -> Run:
-    """Run the training or evaluation loop from parsed CLI arguments."""
+    """Run the training or evaluation loop from parsed CLI arguments.
+
+    Parameters
+    ----------
+    args : Namespace
+        Parsed arguments from :func:`build_parser`.
+    config : NeuralLAMConfig or None, optional
+        Loaded configuration, loaded from ``args.config_path`` if ``None``.
+    datastore : BaseDatastore or None, optional
+        Interior datastore, used together with ``config``.
+    datastore_boundary : BaseDatastore or None, optional
+        Boundary datastore, used together with ``config``.
+
+    Returns
+    -------
+    Run
+        Paths to the run outputs and saved checkpoints.
+    """
     var_leads = getattr(args, "var_leads_metrics_watch", "{}")
     if isinstance(var_leads, str):
         args.var_leads_metrics_watch = {
@@ -770,6 +837,7 @@ def run(
         logging_config=logging_config,
         config=config,
         datastore=datastore,
+        datastore_boundary=datastore_boundary,
         config_path=args.config_path,
     )
 
