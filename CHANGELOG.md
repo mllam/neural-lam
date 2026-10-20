@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Add `--gradient_checkpointing` flag for autoregressive rollout gradient checkpointing in `ARForecaster`, reducing peak activation memory during training unrolls [\#807](https://github.com/mllam/neural-lam/pull/807) @Sharkyii
+
 - Add the `hello_world_danra.py` marimo tutorial (prepare the DANRA example data, build a graph, train and evaluate `graph_lam` on CPU, all through `neural_lam.api`), executed at docs build time so the docs page shows its outputs; `train_model` now exits non-zero on errors (`@logger.catch(reraise=True)`) [\#577](https://github.com/mllam/neural-lam/pull/577) @Sharkyii
 
 - Add a high-level programmatic Python API (`neural_lam.api`) exposing typed keyword-only `train`, `evaluate` and `create_graph` functions; `train` and `evaluate` return a `Run` handle with the run's checkpoint and plot paths. The training CLI now parses into the typed run config dataclasses (`ModelConfig`, `TrainRunConfig`, `DataConfig`, `ComputeConfig`, `LoggingConfig`) and calls the same `neural_lam.train_model.fit` [\#715](https://github.com/mllam/neural-lam/pull/715) @GiGiKoneti
