@@ -941,7 +941,7 @@ def test_spatial_loss_maps_out_of_range_steps(tmp_path, dummy_graph_dir):
     )
     prediction[:, 1] = 1.0  # only step 2 has a non-zero error
     target = torch.zeros(batch_size, pred_steps, num_grid_nodes, num_state_vars)
-    pred_std = torch.ones(num_state_vars)
+    pred_std = None  # This predictor does not output a standard deviation.
     time_step_loss = torch.zeros(pred_steps)
 
     model._compute_prediction_and_loss = MagicMock(
