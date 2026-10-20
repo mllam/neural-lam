@@ -7,6 +7,7 @@ from typing import cast
 
 # Third-party
 import dataclass_wizard
+import yaml
 
 # Local
 from .datastore import (
@@ -30,10 +31,15 @@ class DatastoreSelection:
     config_path : str
         The path to the configuration file for the selected datastore, this is
         assumed to be relative to the configuration file for neural-lam.
+    n_boundary_points : int, optional
+        Overrides :class:`MDPDatastore`'s default boundary-mask width (30),
+        only valid for `kind: mdp`. Set it to 0 when the boundary forcing
+        comes from a separate datastore.
     """
 
     kind: str
     config_path: str
+    n_boundary_points: int | None = None
 
     def __post_init__(self) -> None:
         """
@@ -127,15 +133,18 @@ class NeuralLAMConfig(dataclass_wizard.JSONWizard, dataclass_wizard.YAMLWizard):
 
     Attributes
     ----------
-    datastore : DatastoreSelection
-        Configuration specifying which datastore backend to use and its
-        associated settings.
+    datastores : dict[str, DatastoreSelection]
+        Mapping from a user-chosen datastore name to its selection config.
+        A datastore's role follows from the categories it provides: one with
+        `state` data is the interior (input and output), one without is
+        input-only (boundary forcing). :func:`load_config_and_datastore`
+        requires exactly one interior and at most one boundary.
     training : TrainingConfig
         Configuration for training the model, including loss function and
         feature-weighting strategy. Defaults to ``TrainingConfig()``.
     """
 
-    datastore: DatastoreSelection
+    datastores: dict[str, DatastoreSelection]
     training: TrainingConfig = dataclasses.field(default_factory=TrainingConfig)
 
     class _(dataclass_wizard.JSONWizard.Meta):
@@ -174,9 +183,13 @@ class InvalidConfigError(Exception):
 
 def load_config_and_datastore(
     config_path: str,
-) -> tuple[NeuralLAMConfig, MDPDatastore | NpyFilesDatastoreMEPS]:
+) -> tuple[
+    NeuralLAMConfig,
+    MDPDatastore | NpyFilesDatastoreMEPS,
+    MDPDatastore | NpyFilesDatastoreMEPS | None,
+]:
     """
-    Load the neural-lam configuration and the datastore specified in the
+    Load the neural-lam configuration and the datastores specified in the
     configuration.
 
     Parameters
@@ -186,9 +199,27 @@ def load_config_and_datastore(
 
     Returns
     -------
-    tuple[NeuralLAMConfig, MDPDatastore | NpyFilesDatastoreMEPS]
-        The Neural-LAM configuration and the loaded datastore.
+    tuple[NeuralLAMConfig, datastore, datastore_boundary]
+        The configuration, the interior datastore (the one with `state`
+        data), and the boundary datastore (the one without, or None).
+
+    Raises
+    ------
+    InvalidConfigError
+        If not exactly one datastore provides `state` data, or if more than
+        one omits it.
     """
+    with open(config_path, encoding="utf-8") as f:
+        raw_config = yaml.safe_load(f)
+    if isinstance(raw_config, dict) and (
+        "datastore" in raw_config and "datastores" not in raw_config
+    ):
+        raise InvalidConfigError(
+            "The `datastore:` config key has been replaced by a named "
+            "`datastores:` mapping, move your datastore under a named entry "
+            "(`datastores: {<name>: {kind: ..., config_path: ...}}`)."
+        )
+
     try:
         config = NeuralLAMConfig.from_yaml_file(config_path)
     except dataclass_wizard.errors.UnknownJSONKey as ex:
@@ -196,12 +227,230 @@ def load_config_and_datastore(
             "There was an error loading the configuration file at "
             f"{config_path}. "
         ) from ex
-    # datastore config is assumed to be relative to the config file
-    datastore_config_path = (
-        Path(config_path).parent / config.datastore.config_path
-    )
-    datastore = init_datastore(
-        datastore_kind=config.datastore.kind, config_path=datastore_config_path
+
+    # Datastore config paths are relative to the neural-lam config file.
+    config_dir = Path(config_path).parent
+    interior_datastores = {}
+    boundary_datastores = {}
+    for name, selection in config.datastores.items():
+        datastore = init_datastore(
+            datastore_kind=selection.kind,
+            config_path=config_dir / selection.config_path,
+            n_boundary_points=selection.n_boundary_points,
+        )
+        if datastore.get_num_data_vars(category="state") > 0:
+            interior_datastores[name] = datastore
+        else:
+            boundary_datastores[name] = datastore
+
+    if len(interior_datastores) != 1:
+        raise InvalidConfigError(
+            "Exactly one datastore must provide `state` data (the interior "
+            f"domain), but {len(interior_datastores)} were found in "
+            f"{config_path}: {sorted(interior_datastores)}."
+        )
+    if len(boundary_datastores) > 1:
+        raise InvalidConfigError(
+            "At most one boundary datastore (a datastore without `state` "
+            f"data) is currently supported, but {len(boundary_datastores)} "
+            f"were found in {config_path}: {sorted(boundary_datastores)}."
+        )
+
+    (datastore,) = interior_datastores.values()
+    datastore_boundary = next(iter(boundary_datastores.values()), None)
+
+    return (
+        config,
+        cast("MDPDatastore | NpyFilesDatastoreMEPS", datastore),
+        cast("MDPDatastore | NpyFilesDatastoreMEPS | None", datastore_boundary),
     )
 
-    return config, cast(MDPDatastore | NpyFilesDatastoreMEPS, datastore)
+
+@dataclasses.dataclass
+class ModelConfig:
+    """
+    Configuration for neural-lam model architecture.
+
+    Attributes
+    ----------
+    model : str, default "graph_lam"
+        Model architecture name.
+    graph : str, default "multiscale"
+        Name of the graph to load from the datastore.
+    hidden_dim : int, default 64
+        Dimensionality of hidden representations.
+    hidden_layers : int, default 1
+        Number of hidden layers in MLPs.
+    processor_layers : int, default 4
+        Number of GNN layers in processor GNN.
+    mesh_aggr : str, default "sum"
+        Aggregation method for m2m GNN layers ("sum" or "mean").
+    output_std : bool, default False
+        Whether models should output standard deviation per feature.
+    g2m_gnn_type : str, default "InteractionNet"
+        GNN layer type for grid-to-mesh encoding.
+    m2g_gnn_type : str, default "InteractionNet"
+        GNN layer type for mesh-to-grid decoding.
+    mesh_up_gnn_type : str, default "InteractionNet"
+        GNN layer type for upward mesh message passing.
+    mesh_down_gnn_type : str, default "InteractionNet"
+        GNN layer type for downward mesh message passing.
+    """
+
+    model: str = "graph_lam"
+    graph: str = "multiscale"
+    hidden_dim: int = 64
+    hidden_layers: int = 1
+    processor_layers: int = 4
+    mesh_aggr: str = "sum"
+    output_std: bool = False
+    g2m_gnn_type: str = "InteractionNet"
+    m2g_gnn_type: str = "InteractionNet"
+    mesh_up_gnn_type: str = "InteractionNet"
+    mesh_down_gnn_type: str = "InteractionNet"
+
+
+@dataclasses.dataclass
+class TrainRunConfig:
+    """
+    Hyperparameters and settings for a training or evaluation run.
+
+    Attributes
+    ----------
+    epochs : int, default 200
+        Number of training epochs.
+    batch_size : int, default 4
+        Batch size.
+    ar_steps_train : int, default 1
+        Autoregressive rollout steps during training.
+    ar_steps_eval : int, default 10
+        Autoregressive rollout steps during evaluation.
+    loss : str, default "wmse"
+        Loss function to use ("mse" or "wmse").
+    lr : float, default 1e-3
+        Learning rate.
+    val_interval : int, default 1
+        Validation epoch frequency.
+    num_sanity_val_steps : int, default 2
+        Number of validation batches to run prior to training.
+    val_steps_to_log : list of int, default [1, 2, 3, 5, 10]
+        Rollout steps to log during validation.
+    train_steps_to_log : list of int, default []
+        Rollout steps to log during training.
+    metrics_watch : list of str, default []
+        List of watched metrics.
+    var_leads_metrics_watch : dict of {int: list of int}, default {}
+        Mapping from variable index to list of watched rollout steps.
+    load : str or None, default None
+        Checkpoint path to load.
+    restore_opt : bool, default False
+        Whether to restore optimizer state from checkpoint.
+    eval : str or None, default None
+        Evaluation split name ("val", "test") or None if training.
+    n_example_pred : int, default 1
+        Number of example predictions to plot during testing.
+    create_gif : bool, default False
+        Whether to create animation GIFs during evaluation.
+    """
+
+    epochs: int = 200
+    batch_size: int = 4
+    ar_steps_train: int = 1
+    ar_steps_eval: int = 10
+    loss: str = "wmse"
+    lr: float = 1e-3
+    val_interval: int = 1
+    num_sanity_val_steps: int = 2
+    val_steps_to_log: list[int] = dataclasses.field(
+        default_factory=lambda: [1, 2, 3, 5, 10]
+    )
+    train_steps_to_log: list[int] = dataclasses.field(default_factory=list)
+    metrics_watch: list[str] = dataclasses.field(default_factory=list)
+    var_leads_metrics_watch: dict[int, list[int]] = dataclasses.field(
+        default_factory=dict
+    )
+    load: str | None = None
+    restore_opt: bool = False
+    eval: str | None = None
+    n_example_pred: int = 1
+    create_gif: bool = False
+
+
+@dataclasses.dataclass
+class DataConfig:
+    """
+    Data loading and forcing parameters.
+
+    Attributes
+    ----------
+    num_past_forcing_steps : int, default 1
+        Number of past forcing time steps as input.
+    num_future_forcing_steps : int, default 1
+        Number of future forcing time steps as input.
+    num_past_boundary_steps : int, default 1
+        Number of past boundary forcing time steps as input.
+    num_future_boundary_steps : int, default 1
+        Number of future boundary forcing time steps as input.
+    num_workers : int, default 4
+        Number of data loader workers.
+    load_single_member : bool, default False
+        Whether to load only ensemble member 0.
+    """
+
+    num_past_forcing_steps: int = 1
+    num_future_forcing_steps: int = 1
+    num_past_boundary_steps: int = 1
+    num_future_boundary_steps: int = 1
+    num_workers: int = 4
+    load_single_member: bool = False
+
+
+@dataclasses.dataclass
+class ComputeConfig:
+    """
+    Compute and accelerator configuration.
+
+    Attributes
+    ----------
+    seed : int, default 42
+        Random seed.
+    num_nodes : int, default 1
+        Number of cluster nodes.
+    devices : int or str or list of int or list of str, default ["auto"]
+        Hardware devices to use.
+    precision : str or int, default 32
+        Floating point precision.
+    """
+
+    seed: int = 42
+    num_nodes: int = 1
+    devices: int | str | list[int] | list[str] = dataclasses.field(
+        default_factory=lambda: ["auto"]
+    )
+    precision: str | int = 32
+
+
+@dataclasses.dataclass
+class LoggingConfig:
+    """
+    Experiment tracking and artifact logging configuration.
+
+    Attributes
+    ----------
+    logger : str, default "wandb"
+        Logger backend name ("wandb" or "mlflow").
+    logger_project : str, default "neural_lam"
+        Project name for the logger.
+    logger_run_name : str or None, default None
+        Custom run name for the logger.
+    runs_root : str, default "runs"
+        Root directory for run artifacts and checkpoints.
+    wandb_id : str or None, default None
+        W&B run ID for resuming experiments.
+    """
+
+    logger: str = "wandb"
+    logger_project: str = "neural_lam"
+    logger_run_name: str | None = None
+    runs_root: str = "runs"
+    wandb_id: str | None = None

@@ -1,6 +1,7 @@
 # Standard library
 import typing
 from argparse import Namespace
+from typing import TYPE_CHECKING
 
 # Third-party
 import pytest
@@ -21,6 +22,10 @@ from neural_lam.models import (
 )
 from tests.conftest import init_datastore_example
 from tests.dummy_datastore import DummyDatastore
+
+if TYPE_CHECKING:
+    # First-party
+    from neural_lam.datastore.base import BaseDatastore
 
 
 class NoStaticDummyDatastore(DummyDatastore):
@@ -44,6 +49,7 @@ class MockStepPredictor(StepPredictor):
         return pred_state, pred_std
 
 
+@pytest.mark.requires_real_data
 def test_ar_forecaster_unroll():
     datastore = init_datastore_example("mdp")
     predictor = MockStepPredictor(
@@ -82,12 +88,15 @@ def test_ar_forecaster_unroll():
     assert torch.all(prediction[:, :, 1:, :] == 5.0)
 
 
+@pytest.mark.requires_real_data
 def test_ar_forecaster_compute_loss_from_forecast():
     datastore = init_datastore_example("mdp")
     config = nlconfig.NeuralLAMConfig(
-        datastore=nlconfig.DatastoreSelection(
-            kind=datastore.SHORT_NAME, config_path=datastore.root_path
-        )
+        datastores={
+            "main": nlconfig.DatastoreSelection(
+                kind=datastore.SHORT_NAME, config_path=datastore.root_path
+            )
+        }
     )
     predictor = MockStepPredictor(datastore=datastore, output_std=False)
     forecaster = DeterministicARForecaster(
@@ -121,6 +130,7 @@ def test_ar_forecaster_compute_loss_from_forecast():
     assert torch.equal(scored_explicit, expected_explicit)
 
 
+@pytest.mark.requires_real_data
 def test_ar_forecaster_without_config_raises_on_use_not_construction():
     """A predictor that doesn't output std plus no config is a valid,
     unambiguous state at construction time (the forecaster may only ever
@@ -162,6 +172,7 @@ def test_ar_forecaster_without_config_raises_on_use_not_construction():
         )
 
 
+@pytest.mark.requires_real_data
 def test_ar_forecaster_without_config_scores_with_unweighted_loss():
     """The std fallback is only needed by scoring rules that use a std, so
     an unweighted loss must score without a config, rather than demanding a
@@ -195,6 +206,7 @@ def test_forecaster_hierarchy_is_a_tree():
         assert len(forecaster_class.__bases__) == 1, forecaster_class
 
 
+@pytest.mark.requires_real_data
 def test_unroll_forecast_reproduces_deterministic_forward():
     """The unrolling both families call is a plain function, so calling it
     directly gives exactly what DeterministicARForecaster.forward does."""
@@ -223,16 +235,20 @@ def test_unroll_forecast_reproduces_deterministic_forward():
     )
 
     assert torch.equal(prediction, direct_prediction)
-    assert pred_std is None and direct_std is None
+    assert pred_std is None
+    assert direct_std is None
 
 
+@pytest.mark.requires_real_data
 def test_forecasting_module_checkpoint(tmp_path):
     datastore = init_datastore_example("mdp")
 
     config = nlconfig.NeuralLAMConfig(
-        datastore=nlconfig.DatastoreSelection(
-            kind=datastore.SHORT_NAME, config_path=datastore.root_path
-        )
+        datastores={
+            "main": nlconfig.DatastoreSelection(
+                kind=datastore.SHORT_NAME, config_path=datastore.root_path
+            )
+        }
     )
 
     # Build predictor and forecaster externally, then inject into
@@ -327,13 +343,16 @@ def test_forecasting_module_checkpoint(tmp_path):
     assert torch.allclose(out_before[0], out_after[0])
 
 
+@pytest.mark.requires_real_data
 def test_forecasting_module_old_checkpoint(tmp_path):
     datastore = init_datastore_example("mdp")
 
     config = nlconfig.NeuralLAMConfig(
-        datastore=nlconfig.DatastoreSelection(
-            kind=datastore.SHORT_NAME, config_path=datastore.root_path
-        )
+        datastores={
+            "main": nlconfig.DatastoreSelection(
+                kind=datastore.SHORT_NAME, config_path=datastore.root_path
+            )
+        }
     )
 
     # First-party
@@ -474,6 +493,7 @@ def test_forecasting_module_old_checkpoint(tmp_path):
     assert torch.allclose(out_before[0], out_after[0])
 
 
+@pytest.mark.requires_real_data
 def test_graph_lam_no_static_features():
     """GraphLAM (real GNN) should run a forward pass when the datastore has
     no static features - verifying that the empty static tensor flows through
@@ -517,7 +537,7 @@ def test_graph_lam_no_static_features():
     assert predictor.grid_static_features.shape[1] == 0
 
     forecaster = DeterministicARForecaster(
-        predictor, typing.cast(BaseDatastore, datastore)
+        predictor, typing.cast("BaseDatastore", datastore)
     )
     B = 2
     num_grid_nodes = predictor.num_grid_nodes
@@ -566,3 +586,21 @@ def test_step_predictor_no_static_features():
     )
     assert prediction.shape == (B, 1, num_grid_nodes, d_state)
     assert pred_std is None
+
+
+@pytest.mark.parametrize("lower,upper", [(5.0, 1.0), (1.0, 1.0)])
+def test_step_predictor_invalid_clamping_limits(lower, upper):
+    """Lower clamping limit must be smaller than upper, else ValueError.
+
+    Checked with a raise rather than an ``assert``, which ``python -O`` strips.
+    """
+    datastore = DummyDatastore()
+    feature = datastore.get_vars_names(category="state")[0]
+    predictor = MockStepPredictor(
+        datastore=datastore,
+        output_clamping_lower={feature: lower},
+        output_clamping_upper={feature: upper},
+    )
+
+    with pytest.raises(ValueError, match="must be smaller than upper"):
+        predictor.prepare_clamping_params(datastore)

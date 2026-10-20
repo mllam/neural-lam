@@ -2,14 +2,18 @@
 from pathlib import Path
 
 # Third-party
+import pytest
 import torch
 
 # First-party
 from neural_lam import config as nlconfig
-from neural_lam.create_graph import create_graph_from_datastore
+from neural_lam.create_graph_with_wmg import create_graph_from_datastore
 from neural_lam.datastore.mdp import MDPDatastore
 from neural_lam.models import GraphLAM
 from tests.conftest import init_datastore_example
+
+# Clamping is checked on a model built on the mdp example datastore
+pytestmark = pytest.mark.requires_real_data
 
 
 def test_clamping():
@@ -23,7 +27,7 @@ def test_clamping():
         create_graph_from_datastore(
             datastore=datastore,
             output_root_path=str(graph_dir_path),
-            n_max_levels=1,
+            archetype="keisler",
         )
 
     class ModelArgs:
@@ -46,9 +50,11 @@ def test_clamping():
     model_args = ModelArgs()
 
     config = nlconfig.NeuralLAMConfig(
-        datastore=nlconfig.DatastoreSelection(
-            kind=datastore.SHORT_NAME, config_path=datastore.root_path
-        ),
+        datastores={
+            "main": nlconfig.DatastoreSelection(
+                kind=datastore.SHORT_NAME, config_path=datastore.root_path
+            )
+        },
         training=nlconfig.TrainingConfig(
             output_clamping=nlconfig.OutputClamping(
                 lower={"t2m": 0.0, "r2m": 0.0},

@@ -2,6 +2,7 @@
 
 # Standard library
 import os
+import warnings
 from argparse import ArgumentDefaultsHelpFormatter, ArgumentParser
 
 # Third-party
@@ -18,7 +19,7 @@ from torch_geometric.utils.convert import from_networkx
 
 # Local
 from .config import load_config_and_datastore
-from .datastore.base import BaseRegularGridDatastore
+from .datastore.base import BaseDatastore
 
 # Stores the graph storage spec version the graph conforms to.
 METAINFO_FILENAME = "metainfo.yaml"
@@ -218,9 +219,14 @@ def assert_edge_index_in_range(
     -------
     None
     """
-    assert (
-        edge_index.ndim == 2 and edge_index.shape[0] == 2
-    ), f"{name}: expected edge_index shape [2, E], got {tuple(edge_index.shape)}"  # noqa: E501
+    assert edge_index.ndim == 2, (
+        f"{name}: expected edge_index shape [2, E], "
+        f"got {tuple(edge_index.shape)}"
+    )
+    assert edge_index.shape[0] == 2, (
+        f"{name}: expected edge_index shape [2, E], "
+        f"got {tuple(edge_index.shape)}"
+    )
     assert edge_index.shape[1] > 0, f"{name}: expected at least one edge"
 
     sender_start, sender_stop = sender_range
@@ -365,6 +371,7 @@ def create_graph(
     `graph_dir_path`.
 
     Creates the following files for all graphs:
+
     - g2m_edge_index.pt  [2, N_g2m_edges]
     - g2m_features.pt    [N_g2m_edges, d_features]
     - m2g_edge_index.pt  [2, N_m2m_edges]
@@ -372,7 +379,7 @@ def create_graph(
     - m2m_edge_index.pt  list of [2, N_m2m_edges_level], length==n_levels
     - m2m_features.pt    list of [N_m2m_edges_level, d_features],
                          length==n_levels
-    - mesh_features.pt   list of [N_mesh_nodes_level, d_mesh_static],
+    - mesh_features.pt   list of [N_mesh_nodes_level, num_mesh_static_vars],
                          length==n_levels
 
     where
@@ -386,21 +393,22 @@ def create_graph(
       N_m2m_edges_level:
             number of edges in the graph from mesh-to-mesh at a given level
             (list index corresponds to the level)
-      d_mesh_static:
+      num_mesh_static_vars:
             number of static features per mesh node (currently
-            d_mesh_static==2, for x and y)
+            num_mesh_static_vars==2, for x and y)
       N_mesh_nodes_level:
             number of nodes in the mesh at a given level
 
     And in addition for hierarchical graphs:
-    - mesh_up_edge_index.pt
-        list of [2, N_mesh_updown_edges_level], length==n_levels-1
-    - mesh_up_features.pt
-        list of [N_mesh_updown_edges_level, d_features], length==n_levels-1
-    - mesh_down_edge_index.pt
-        list of [2, N_mesh_updown_edges_level], length==n_levels-1
-    - mesh_down_features.pt
-        list of [N_mesh_updown_edges_level, d_features], length==n_levels-1
+
+    - mesh_up_edge_index.pt: list of [2, N_mesh_updown_edges_level],
+      length==n_levels-1
+    - mesh_up_features.pt: list of [N_mesh_updown_edges_level, d_features],
+      length==n_levels-1
+    - mesh_down_edge_index.pt: list of [2, N_mesh_updown_edges_level],
+      length==n_levels-1
+    - mesh_down_features.pt: list of [N_mesh_updown_edges_level, d_features],
+      length==n_levels-1
 
     where N_mesh_updown_edges_level is the number of edges in the graph from
     mesh-to-mesh between two consecutive levels (list index corresponds index
@@ -863,7 +871,7 @@ def create_graph(
 
 
 def create_graph_from_datastore(
-    datastore: BaseRegularGridDatastore,
+    datastore: BaseDatastore,
     output_root_path: str,
     n_max_levels: int | None = None,
     hierarchical: bool = False,
@@ -874,7 +882,7 @@ def create_graph_from_datastore(
 
     Parameters
     ----------
-    datastore : BaseRegularGridDatastore
+    datastore : BaseDatastore
         Datastore providing ``get_xy`` for state nodes.
     output_root_path : str
         Directory where the resulting ``*.pt`` graph files are stored.
@@ -885,12 +893,11 @@ def create_graph_from_datastore(
     create_plot : bool, optional
         If ``True``, display matplotlib previews of the generated graphs.
     """
-    if isinstance(datastore, BaseRegularGridDatastore):
-        xy = datastore.get_xy(category="state", stacked=False)
-    else:
+    if not datastore.is_on_rectilinear_grid:
         raise NotImplementedError(
-            "Only graph creation for BaseRegularGridDatastore is supported"
+            "Graph creation requires a datastore on a rectilinear grid."
         )
+    xy = datastore.get_xy(category="state", stacked=False)
 
     create_graph(
         graph_dir_path=output_root_path,
@@ -911,6 +918,14 @@ def cli(input_args: list[str] | None = None) -> None:
         Argument list forwarded to :class:`argparse.ArgumentParser`. When
         ``None``, ``sys.argv`` is used.
     """
+    warnings.warn(
+        "create_graph.py is deprecated and will be removed in a future "
+        "version. Use create_graph_with_wmg.py instead, which delegates "
+        "graph creation to weather-model-graphs (wmg). See "
+        "https://github.com/mllam/neural-lam/issues/384 for details.",
+        DeprecationWarning,
+        stacklevel=2,
+    )
     parser = ArgumentParser(
         description="Graph generation for neural-lam",
         formatter_class=ArgumentDefaultsHelpFormatter,
@@ -948,7 +963,7 @@ def cli(input_args: list[str] | None = None) -> None:
         raise ValueError("Specify your config with --config_path")
 
     # Load neural-lam configuration and datastore to use
-    _, datastore = load_config_and_datastore(config_path=args.config_path)
+    _, datastore, _ = load_config_and_datastore(config_path=args.config_path)
 
     create_graph_from_datastore(
         datastore=datastore,

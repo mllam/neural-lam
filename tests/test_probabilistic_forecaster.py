@@ -121,6 +121,7 @@ def _example_batch(datastore, B=2, pred_steps=3):
     return init_states, forcing_features, target_states
 
 
+@pytest.mark.requires_real_data
 def test_ar_forecaster_training_loss_matches_direct_score():
     datastore = init_datastore_example("mdp")
     predictor = ZeroStepPredictor(datastore=datastore, output_std=False)
@@ -151,6 +152,7 @@ def test_ar_forecaster_training_loss_matches_direct_score():
     torch.testing.assert_close(batch_loss, expected_loss)
 
 
+@pytest.mark.requires_real_data
 def test_ensemble_sample_shapes_and_member_variability():
     datastore = init_datastore_example("mdp")
     predictor = NoisyStepPredictor(datastore=datastore, output_std=False)
@@ -191,6 +193,7 @@ def test_ensemble_sample_shapes_and_member_variability():
     assert torch.all(ensemble[:, :, :, 1:] == 5.0)
 
 
+@pytest.mark.requires_real_data
 def test_ensemble_training_loss_gradient_flow():
     datastore = init_datastore_example("mdp")
     predictor = NoisyStepPredictor(datastore=datastore, output_std=False)
@@ -220,6 +223,7 @@ def test_ensemble_training_loss_gradient_flow():
     assert predictor.noise_scale.grad != 0.0
 
 
+@pytest.mark.requires_real_data
 def test_sample_ensemble_rejects_empty_member_count():
     datastore = init_datastore_example("mdp")
     predictor = NoisyStepPredictor(datastore=datastore, output_std=False)
@@ -232,6 +236,7 @@ def test_sample_ensemble_rejects_empty_member_count():
         )
 
 
+@pytest.mark.requires_real_data
 def test_both_forecaster_families_share_the_forward_signature():
     """Both families answer the same call, so a consumer holding a
     BaseForecaster never has to ask which one it got."""
@@ -256,6 +261,7 @@ def test_both_forecaster_families_share_the_forward_signature():
         assert prediction.shape == target_states.shape
 
 
+@pytest.mark.requires_real_data
 def test_ensemble_forward_samples_a_fresh_forecast_each_call():
     """A stochastic forecaster's forward is one draw, not the ensemble:
     calling it twice gives different forecasts of single-forecast shape."""
@@ -277,6 +283,7 @@ def test_ensemble_forward_samples_a_fresh_forecast_each_call():
     assert not torch.allclose(first[:, :, 0], second[:, :, 0])
 
 
+@pytest.mark.requires_real_data
 def test_ensemble_ar_forecaster_is_abstract():
     """BaseProbabilisticARForecaster leaves compute_training_loss abstract, so
     it cannot be instantiated directly; only a subclass that defines an
@@ -288,6 +295,7 @@ def test_ensemble_ar_forecaster_is_abstract():
         BaseProbabilisticARForecaster(predictor, datastore)
 
 
+@pytest.mark.requires_real_data
 def test_saved_hparams_hold_resolved_values():
     """Saved hyperparameters are the values the module runs on.
 
@@ -301,9 +309,11 @@ def test_saved_hparams_hold_resolved_values():
     """
     datastore = init_datastore_example("mdp")
     config = nlconfig.NeuralLAMConfig(
-        datastore=nlconfig.DatastoreSelection(
-            kind=datastore.SHORT_NAME, config_path=datastore.root_path
-        )
+        datastores={
+            "main": nlconfig.DatastoreSelection(
+                kind=datastore.SHORT_NAME, config_path=datastore.root_path
+            )
+        }
     )
     predictor = ZeroStepPredictor(datastore=datastore, output_std=False)
     module = DeterministicForecastingModule(
@@ -361,14 +371,17 @@ def test_forecasting_module_evaluation_steps_are_abstract():
         MissingEvaluationSteps(forecaster=None, config=None, datastore=None)
 
 
+@pytest.mark.requires_real_data
 def test_module_training_step_delegates_to_forecaster():
     datastore = init_datastore_example("mdp")
     predictor = ZeroStepPredictor(datastore=datastore, output_std=False)
 
     config = nlconfig.NeuralLAMConfig(
-        datastore=nlconfig.DatastoreSelection(
-            kind=datastore.SHORT_NAME, config_path=datastore.root_path
-        )
+        datastores={
+            "main": nlconfig.DatastoreSelection(
+                kind=datastore.SHORT_NAME, config_path=datastore.root_path
+            )
+        }
     )
     forecaster = DeterministicARForecaster(
         predictor, datastore, config=config, loss="mse"
@@ -381,7 +394,13 @@ def test_module_training_step_delegates_to_forecaster():
 
     init_states, forcing_features, target_states = _example_batch(datastore)
     batch_times = torch.zeros(init_states.shape[0], target_states.shape[1])
-    batch = (init_states, target_states, forcing_features, batch_times)
+    batch = (
+        init_states,
+        target_states,
+        forcing_features,
+        forcing_features[..., :0],
+        batch_times,
+    )
 
     batch_loss = model.training_step(batch)
 
@@ -395,6 +414,7 @@ def test_module_training_step_delegates_to_forecaster():
     torch.testing.assert_close(batch_loss, expected_loss)
 
 
+@pytest.mark.requires_real_data
 def test_deterministic_training_step_logs_per_step_losses():
     """--train_steps_to_log selects per-step training losses to report,
     which the deterministic objective can supply because it decomposes
@@ -402,9 +422,11 @@ def test_deterministic_training_step_logs_per_step_losses():
     datastore = init_datastore_example("mdp")
     predictor = ZeroStepPredictor(datastore=datastore, output_std=False)
     config = nlconfig.NeuralLAMConfig(
-        datastore=nlconfig.DatastoreSelection(
-            kind=datastore.SHORT_NAME, config_path=datastore.root_path
-        )
+        datastores={
+            "main": nlconfig.DatastoreSelection(
+                kind=datastore.SHORT_NAME, config_path=datastore.root_path
+            )
+        }
     )
     forecaster = DeterministicARForecaster(
         predictor, datastore, config=config, loss="mse"
@@ -421,7 +443,13 @@ def test_deterministic_training_step_logs_per_step_losses():
         datastore, pred_steps=pred_steps
     )
     batch_times = torch.zeros(init_states.shape[0], pred_steps)
-    batch = (init_states, target_states, forcing_features, batch_times)
+    batch = (
+        init_states,
+        target_states,
+        forcing_features,
+        forcing_features[..., :0],
+        batch_times,
+    )
 
     captured = {}
     model.log_dict = lambda log_dict, **kwargs: captured.update(log_dict)
@@ -487,14 +515,17 @@ class ComponentReportingForecaster(MemberCountRecordingForecaster):
         return batch_loss, self.last_components
 
 
+@pytest.mark.requires_real_data
 def test_ensemble_module_validation_scores_ensemble_mean():
     datastore = init_datastore_example("mdp")
     predictor = NoisyStepPredictor(datastore=datastore, output_std=False)
 
     config = nlconfig.NeuralLAMConfig(
-        datastore=nlconfig.DatastoreSelection(
-            kind=datastore.SHORT_NAME, config_path=datastore.root_path
-        )
+        datastores={
+            "main": nlconfig.DatastoreSelection(
+                kind=datastore.SHORT_NAME, config_path=datastore.root_path
+            )
+        }
     )
     forecaster = MemberCountRecordingForecaster(
         predictor, datastore, config=config
@@ -511,7 +542,13 @@ def test_ensemble_module_validation_scores_ensemble_mean():
         datastore, B=B, pred_steps=pred_steps
     )
     batch_times = torch.zeros(B, pred_steps)
-    batch = (init_states, target_states, forcing_features, batch_times)
+    batch = (
+        init_states,
+        target_states,
+        forcing_features,
+        forcing_features[..., :0],
+        batch_times,
+    )
 
     torch.manual_seed(42)
     model.validation_step(batch, 0)
@@ -526,13 +563,16 @@ def test_ensemble_module_validation_scores_ensemble_mean():
     assert torch.all(torch.isfinite(entry_mses))
 
 
+@pytest.mark.requires_real_data
 def test_ensemble_module_rejects_empty_eval_ensemble():
     datastore = init_datastore_example("mdp")
     predictor = NoisyStepPredictor(datastore=datastore, output_std=False)
     config = nlconfig.NeuralLAMConfig(
-        datastore=nlconfig.DatastoreSelection(
-            kind=datastore.SHORT_NAME, config_path=datastore.root_path
-        )
+        datastores={
+            "main": nlconfig.DatastoreSelection(
+                kind=datastore.SHORT_NAME, config_path=datastore.root_path
+            )
+        }
     )
     forecaster = ConcreteProbabilisticARForecaster(
         predictor, datastore, config=config
@@ -547,14 +587,17 @@ def test_ensemble_module_rejects_empty_eval_ensemble():
         )
 
 
+@pytest.mark.requires_real_data
 def test_ensemble_module_test_step_scores_ensemble_mean():
     datastore = init_datastore_example("mdp")
     predictor = NoisyStepPredictor(datastore=datastore, output_std=False)
 
     config = nlconfig.NeuralLAMConfig(
-        datastore=nlconfig.DatastoreSelection(
-            kind=datastore.SHORT_NAME, config_path=datastore.root_path
-        )
+        datastores={
+            "main": nlconfig.DatastoreSelection(
+                kind=datastore.SHORT_NAME, config_path=datastore.root_path
+            )
+        }
     )
     forecaster = MemberCountRecordingForecaster(
         predictor, datastore, config=config
@@ -571,7 +614,13 @@ def test_ensemble_module_test_step_scores_ensemble_mean():
         datastore, B=B, pred_steps=pred_steps
     )
     batch_times = torch.zeros(B, pred_steps)
-    batch = (init_states, target_states, forcing_features, batch_times)
+    batch = (
+        init_states,
+        target_states,
+        forcing_features,
+        forcing_features[..., :0],
+        batch_times,
+    )
 
     torch.manual_seed(42)
     model.test_step(batch, 0)
@@ -586,6 +635,7 @@ def test_ensemble_module_test_step_scores_ensemble_mean():
     assert torch.all(torch.isfinite(entry_mses))
 
 
+@pytest.mark.requires_real_data
 def test_ensemble_module_logs_forecaster_objective():
     """Validation reports the forecaster's own training objective, giving
     ModelCheckpoint a val_mean_loss to monitor. Testing does not: nothing
@@ -593,9 +643,11 @@ def test_ensemble_module_logs_forecaster_objective():
     datastore = init_datastore_example("mdp")
     predictor = NoisyStepPredictor(datastore=datastore, output_std=False)
     config = nlconfig.NeuralLAMConfig(
-        datastore=nlconfig.DatastoreSelection(
-            kind=datastore.SHORT_NAME, config_path=datastore.root_path
-        )
+        datastores={
+            "main": nlconfig.DatastoreSelection(
+                kind=datastore.SHORT_NAME, config_path=datastore.root_path
+            )
+        }
     )
     forecaster = ComponentReportingForecaster(
         predictor, datastore, config=config, train_num_members=2
@@ -615,6 +667,7 @@ def test_ensemble_module_logs_forecaster_objective():
         init_states,
         target_states,
         forcing_features,
+        forcing_features[..., :0],
         torch.zeros(B, pred_steps),
     )
 

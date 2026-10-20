@@ -10,9 +10,9 @@ import torch
 # Local
 from ... import metrics
 from ...config import NeuralLAMConfig
-from ...datastore.base import BaseRegularGridDatastore
+from ...datastore.base import BaseDatastore
 from ..forecasters.probabilistic import BaseProbabilisticForecaster
-from .base import BaseForecastingModule
+from .base import BaseForecastingModule, Batch
 
 
 class ProbabilisticForecastingModule(BaseForecastingModule):
@@ -37,9 +37,10 @@ class ProbabilisticForecastingModule(BaseForecastingModule):
         self,
         forecaster: BaseProbabilisticForecaster,
         config: NeuralLAMConfig,
-        datastore: BaseRegularGridDatastore,
+        datastore: BaseDatastore,
         *,
         eval_ensemble_size: int,
+        datastore_boundary: BaseDatastore | None = None,
         lr: float = 1e-3,
         restore_opt: bool = False,
         n_example_pred: int = 1,
@@ -60,12 +61,15 @@ class ProbabilisticForecastingModule(BaseForecastingModule):
             ensemble, since validation and testing score a sampled one.
         config : NeuralLAMConfig
             Configuration object for the neural LAM model.
-        datastore : BaseRegularGridDatastore
+        datastore : BaseDatastore
             Datastore providing grid metadata and data access.
         eval_ensemble_size : int
             Number of ensemble members sampled during validation and
             testing. Keyword-only and required: how many members to draw is
             a choice this module cannot sensibly default.
+        datastore_boundary : BaseDatastore, optional
+            Boundary forcing datastore, used for its standardization
+            statistics.
         lr : float, default 1e-3
             Learning rate for the optimizer.
         restore_opt : bool, default False
@@ -103,6 +107,7 @@ class ProbabilisticForecastingModule(BaseForecastingModule):
             forecaster=forecaster,
             config=config,
             datastore=datastore,
+            datastore_boundary=datastore_boundary,
             lr=lr,
             restore_opt=restore_opt,
             n_example_pred=n_example_pred,
@@ -128,7 +133,7 @@ class ProbabilisticForecastingModule(BaseForecastingModule):
 
     def _ensemble_step(
         self,
-        batch: tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor],
+        batch: Batch,
     ) -> torch.Tensor:
         """
         Sample an ensemble and compute the per-variable MSE of its mean.
@@ -157,7 +162,7 @@ class ProbabilisticForecastingModule(BaseForecastingModule):
             Per-variable ensemble-mean MSE, shape
             ``(B, pred_steps, num_state_vars)``, for epoch-end aggregation.
         """
-        init_states, target_states, forcing_features, _ = batch
+        init_states, target_states, forcing_features, _boundary, _ = batch
         ensemble, _ = self.forecaster.sample_ensemble(
             init_states,
             forcing_features,
@@ -177,7 +182,7 @@ class ProbabilisticForecastingModule(BaseForecastingModule):
 
     def _log_objective(
         self,
-        batch: tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor],
+        batch: Batch,
     ) -> None:
         """
         Log the forecaster's own training objective as ``val_mean_loss``.
@@ -195,7 +200,7 @@ class ProbabilisticForecastingModule(BaseForecastingModule):
         batch : tuple
             The batch of data.
         """
-        init_states, target_states, forcing_features, _ = batch
+        init_states, target_states, forcing_features, _boundary, _ = batch
         batch_loss, loss_components = self.forecaster.compute_training_loss(
             init_states,
             forcing_features,
@@ -216,7 +221,7 @@ class ProbabilisticForecastingModule(BaseForecastingModule):
 
     def validation_step(
         self,
-        batch: tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor],
+        batch: Batch,
         batch_idx: int,
     ) -> None:
         """
@@ -242,7 +247,7 @@ class ProbabilisticForecastingModule(BaseForecastingModule):
 
     def test_step(
         self,
-        batch: tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor],
+        batch: Batch,
         batch_idx: int,
     ) -> None:
         """

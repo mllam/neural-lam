@@ -267,7 +267,7 @@ def load_graph(
     # Load static node features
     mesh_static_features = loads_file(
         "mesh_features.pt"
-    )  # List of (N_mesh[l], d_mesh_static)
+    )  # List of (N_mesh[l], num_mesh_static_vars)
 
     graph_spec_version = load_graph_spec_version()
     if graph_spec_version not in {
@@ -350,12 +350,12 @@ def load_graph(
     m2g_features = m2g_features / longest_edge
 
     # Some checks for consistency
-    assert (
-        len(m2m_features) == n_levels
-    ), "Inconsistent number of levels in mesh"
-    assert (
-        len(mesh_static_features) == n_levels
-    ), "Inconsistent number of levels in mesh"
+    assert len(m2m_features) == n_levels, (
+        "Inconsistent number of levels in mesh"
+    )
+    assert len(mesh_static_features) == n_levels, (
+        "Inconsistent number of levels in mesh"
+    )
 
     if hierarchical:
         # Load up and down edges and features

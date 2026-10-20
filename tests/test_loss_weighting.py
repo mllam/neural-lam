@@ -2,6 +2,7 @@
 import math
 
 # Third-party
+import pytest
 import torch
 
 # First-party
@@ -14,9 +15,11 @@ from tests.dummy_datastore import DummyDatastore
 def _config(datastore, state_feature_weighting):
     """Build a config for the datastore with the given feature weighting."""
     return nlconfig.NeuralLAMConfig(
-        datastore=nlconfig.DatastoreSelection(
-            kind=datastore.SHORT_NAME, config_path=datastore.root_path
-        ),
+        datastores={
+            "main": nlconfig.DatastoreSelection(
+                kind=datastore.SHORT_NAME, config_path=datastore.root_path
+            )
+        },
         training=nlconfig.TrainingConfig(
             state_feature_weighting=state_feature_weighting
         ),
@@ -55,6 +58,7 @@ def test_per_var_std_uniform_weighting_scales_by_num_features():
     )
 
 
+@pytest.mark.requires_real_data
 def test_per_var_std_uses_the_difference_std():
     """Under unit weights the std is the standardized one-step-difference
     std, which for a real datastore is not the state std."""

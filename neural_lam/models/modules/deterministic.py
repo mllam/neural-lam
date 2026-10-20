@@ -13,9 +13,9 @@ import torch
 # Local
 from ... import metrics, vis
 from ...config import NeuralLAMConfig
-from ...datastore.base import BaseRegularGridDatastore
+from ...datastore.base import BaseDatastore
 from ..forecasters.deterministic import BaseDeterministicForecaster
-from .base import BaseForecastingModule
+from .base import BaseForecastingModule, Batch
 
 
 class DeterministicForecastingModule(BaseForecastingModule):
@@ -43,7 +43,8 @@ class DeterministicForecastingModule(BaseForecastingModule):
         self,
         forecaster: BaseDeterministicForecaster,
         config: NeuralLAMConfig,
-        datastore: BaseRegularGridDatastore,
+        datastore: BaseDatastore,
+        datastore_boundary: BaseDatastore | None = None,
         lr: float = 1e-3,
         restore_opt: bool = False,
         n_example_pred: int = 1,
@@ -66,8 +67,11 @@ class DeterministicForecastingModule(BaseForecastingModule):
             prediction through it.
         config : NeuralLAMConfig
             Configuration object for the neural LAM model.
-        datastore : BaseRegularGridDatastore
+        datastore : BaseDatastore
             Datastore providing grid metadata and data access.
+        datastore_boundary : BaseDatastore, optional
+            Boundary forcing datastore, used for its standardization
+            statistics.
         lr : float, default 1e-3
             Learning rate for the optimizer.
         restore_opt : bool, default False
@@ -94,6 +98,7 @@ class DeterministicForecastingModule(BaseForecastingModule):
             forecaster=forecaster,
             config=config,
             datastore=datastore,
+            datastore_boundary=datastore_boundary,
             lr=lr,
             restore_opt=restore_opt,
             n_example_pred=n_example_pred,
@@ -116,10 +121,11 @@ class DeterministicForecastingModule(BaseForecastingModule):
 
         # For storing spatial loss maps during evaluation
         self.spatial_loss_maps: list[torch.Tensor] = []
+        self._test_spatial_steps: list[int] = []
 
     def training_step(
         self,
-        batch: tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor],
+        batch: Batch,
     ) -> torch.Tensor:
         """
         Perform a single training step, logging the per-step breakdown.
@@ -150,7 +156,7 @@ class DeterministicForecastingModule(BaseForecastingModule):
 
     def _compute_prediction_and_loss(
         self,
-        batch: tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor],
+        batch: Batch,
     ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor | None, torch.Tensor]:
         """
         Compute predicted mean, standard deviation, and step-wise loss.
@@ -198,7 +204,7 @@ class DeterministicForecastingModule(BaseForecastingModule):
 
     def validation_step(
         self,
-        batch: tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor],
+        batch: Batch,
         batch_idx: int,
     ) -> None:
         """
@@ -232,7 +238,7 @@ class DeterministicForecastingModule(BaseForecastingModule):
     # pylint: disable-next=unused-argument
     def test_step(
         self,
-        batch: tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor],
+        batch: Batch,
         batch_idx: int,
     ) -> None:
         """
@@ -277,13 +283,13 @@ class DeterministicForecastingModule(BaseForecastingModule):
         val_steps_to_log = (
             self.hparams.val_steps_to_log  # ty: ignore[unresolved-attribute]
         )
+        self._test_spatial_steps = [
+            step
+            for step in val_steps_to_log
+            if 1 <= step <= spatial_loss.shape[1]
+        ]
         log_spatial_losses = spatial_loss[
-            :,
-            [
-                step - 1
-                for step in val_steps_to_log
-                if step <= spatial_loss.shape[1]
-            ],
+            :, [step - 1 for step in self._test_spatial_steps]
         ]
         self.spatial_loss_maps.append(log_spatial_losses)
 
@@ -317,9 +323,6 @@ class DeterministicForecastingModule(BaseForecastingModule):
             # `nanmean` because boundary nodes are NaN-masked in `test_step`
             mean_spatial_loss = torch.nanmean(spatial_loss_tensor, dim=0)
             hparams = self.hparams
-            val_steps_to_log = (
-                hparams.val_steps_to_log  # ty: ignore[unresolved-attribute]
-            )
             logger_save_dir = (
                 self.logger.save_dir  # ty: ignore[unresolved-attribute]
             )
@@ -331,7 +334,9 @@ class DeterministicForecastingModule(BaseForecastingModule):
                     title=f"Test loss, t={t_i} "
                     f"({(self.time_step_int * t_i)} {self.time_step_unit})",
                 )
-                for t_i, loss_map in zip(val_steps_to_log, mean_spatial_loss)
+                for t_i, loss_map in zip(
+                    self._test_spatial_steps, mean_spatial_loss
+                )
             ]
 
             for i, fig in enumerate(loss_map_figs):
@@ -351,7 +356,7 @@ class DeterministicForecastingModule(BaseForecastingModule):
                 logger_save_dir, "spatial_loss_maps"
             )
             os.makedirs(pdf_loss_maps_dir, exist_ok=True)
-            for t_i, fig in zip(val_steps_to_log, pdf_loss_map_figs):
+            for t_i, fig in zip(self._test_spatial_steps, pdf_loss_map_figs):
                 fig.savefig(os.path.join(pdf_loss_maps_dir, f"loss_t{t_i}.pdf"))
 
             torch.save(
@@ -374,6 +379,7 @@ class DeterministicForecastingModule(BaseForecastingModule):
 
         self.matched_metrics = set()
         self.spatial_loss_maps.clear()
+        self._test_spatial_steps.clear()
 
         # Clear stored test metrics so repeated `trainer.test()` calls on
         # the same model instance start from a clean slate (otherwise the

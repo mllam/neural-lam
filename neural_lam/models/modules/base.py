@@ -21,9 +21,14 @@ from neural_lam.utils import get_integer_time
 # Local
 from ... import vis
 from ...config import NeuralLAMConfig
-from ...datastore.base import BaseRegularGridDatastore
+from ...datastore.base import BaseDatastore
 from ...weather_dataset import WeatherDataset
 from ..forecasters.base import BaseForecaster
+
+# (init_states, target_states, forcing, boundary, target_times)
+Batch = tuple[
+    torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor
+]
 
 
 class BaseForecastingModule(pl.LightningModule, ABC):
@@ -56,12 +61,17 @@ class BaseForecastingModule(pl.LightningModule, ABC):
     forcing_std: torch.Tensor | None
     forcing_mean_tiled: torch.Tensor | None
     forcing_std_tiled: torch.Tensor | None
+    boundary_mean: torch.Tensor | None
+    boundary_std: torch.Tensor | None
+    boundary_mean_tiled: torch.Tensor | None
+    boundary_std_tiled: torch.Tensor | None
 
     def __init__(
         self,
         forecaster: BaseForecaster,
         config: NeuralLAMConfig,
-        datastore: BaseRegularGridDatastore,
+        datastore: BaseDatastore,
+        datastore_boundary: BaseDatastore | None = None,
         lr: float = 1e-3,
         restore_opt: bool = False,
         n_example_pred: int = 1,
@@ -85,8 +95,11 @@ class BaseForecastingModule(pl.LightningModule, ABC):
             returns.
         config : NeuralLAMConfig
             Configuration object for the neural LAM model.
-        datastore : BaseRegularGridDatastore
+        datastore : BaseDatastore
             Datastore providing grid metadata and data access.
+        datastore_boundary : BaseDatastore, optional
+            Boundary forcing datastore, used for its standardization
+            statistics.
         lr : float, default 1e-3
             Learning rate for the optimizer.
         restore_opt : bool, default False
@@ -182,6 +195,7 @@ class BaseForecastingModule(pl.LightningModule, ABC):
         )
 
         self.datastore = datastore
+        self.datastore_boundary = datastore_boundary
         self.forecaster = forecaster
         self.matched_metrics: set = set()
 
@@ -242,6 +256,36 @@ class BaseForecastingModule(pl.LightningModule, ABC):
         else:
             self.forcing_mean = None
             self.forcing_std = None
+
+        # Boundary tiling matches forcing, see `on_after_batch_transfer`.
+        if (
+            datastore_boundary is not None
+            and datastore_boundary.get_num_data_vars(category="forcing") > 0
+        ):
+            da_boundary_stats = (
+                datastore_boundary.get_standardization_dataarray(
+                    category="forcing"
+                )
+            )
+            self.register_buffer(
+                "boundary_mean",
+                torch.tensor(
+                    da_boundary_stats.forcing_mean.values, dtype=torch.float32
+                ),
+                persistent=False,
+            )
+            self.register_buffer(
+                "boundary_std",
+                self._safe_std(
+                    da_boundary_stats.forcing_std.values, eps, "boundary"
+                ),
+                persistent=False,
+            )
+            self.register_buffer("boundary_mean_tiled", None, persistent=False)
+            self.register_buffer("boundary_std_tiled", None, persistent=False)
+        else:
+            self.boundary_mean = None
+            self.boundary_std = None
 
         # For making restoring of optimizer state optional
         self.restore_opt = restore_opt
@@ -330,24 +374,39 @@ class BaseForecastingModule(pl.LightningModule, ABC):
 
     def on_after_batch_transfer(
         self,
-        batch: tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor],
+        batch: Batch,
         dataloader_idx: int,
-    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
+    ) -> Batch:
         """Standardize a batch on-device after transfer to the accelerator.
 
         Lightning calls this for every train/val/test/predict batch.
-        WeatherDataset returns unstandardized state and forcing; both are
-        normalized here so the work runs on the accelerator.
+        WeatherDataset returns unstandardized state, forcing and boundary;
+        all three are normalized here so the work runs on the accelerator.
+        Forcing and boundary share the same feature-major
+        ``(feature, window)`` stacking, so per-feature mean/std are tiled
+        once and cached.
+
+        Parameters
+        ----------
+        batch : Batch
+            ``(init_states, target_states, forcing, boundary, target_times)``
+            as returned by the dataloader.
+        dataloader_idx : int
+            Index of the dataloader the batch comes from.
+
+        Returns
+        -------
+        Batch
+            The batch with state, forcing and boundary standardized.
         """
-        init_states, target_states, forcing, batch_times = batch
+        init_states, target_states, forcing, boundary, batch_times = batch
 
         init_states = (init_states - self.state_mean) / self.state_std
         target_states = (target_states - self.state_mean) / self.state_std
 
         if forcing.shape[-1] > 0:
-            assert (
-                self.forcing_mean is not None and self.forcing_std is not None
-            )
+            assert self.forcing_mean is not None
+            assert self.forcing_std is not None
             if self.forcing_mean_tiled is None:
                 # Forcing is (..., num_forcing_vars * window_size).
                 # WeatherDataset stacks (forcing_feature, window)
@@ -361,19 +420,40 @@ class BaseForecastingModule(pl.LightningModule, ABC):
                 self.forcing_std_tiled = self.forcing_std.repeat_interleave(
                     window_size
                 )
-            assert (
-                self.forcing_mean_tiled is not None
-                and self.forcing_std_tiled is not None
-            )
+            assert self.forcing_mean_tiled is not None
+            assert self.forcing_std_tiled is not None
             forcing = (
                 forcing - self.forcing_mean_tiled
             ) / self.forcing_std_tiled
 
-        return init_states, target_states, forcing, batch_times
+        if boundary.shape[-1] > 0:
+            if self.boundary_mean is None:
+                raise ValueError(
+                    "Batch has non-empty boundary forcing but no boundary "
+                    "standardization statistics are registered. Pass "
+                    "`datastore_boundary` when constructing or loading "
+                    "BaseForecastingModule."
+                )
+            assert self.boundary_std is not None
+            if self.boundary_mean_tiled is None:
+                window_size = boundary.shape[-1] // self.boundary_mean.shape[-1]
+                self.boundary_mean_tiled = self.boundary_mean.repeat_interleave(
+                    window_size
+                )
+                self.boundary_std_tiled = self.boundary_std.repeat_interleave(
+                    window_size
+                )
+            assert self.boundary_mean_tiled is not None
+            assert self.boundary_std_tiled is not None
+            boundary = (
+                boundary - self.boundary_mean_tiled
+            ) / self.boundary_std_tiled
+
+        return init_states, target_states, forcing, boundary, batch_times
 
     def common_step(
         self,
-        batch: tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor],
+        batch: Batch,
     ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor | None, torch.Tensor]:
         """
         Produce one forecast for the batch.
@@ -387,7 +467,7 @@ class BaseForecastingModule(pl.LightningModule, ABC):
         ----------
         batch : tuple
             The batch of data containing initial states, target states,
-            forcing features, and batch times.
+            forcing features, boundary forcing features, and batch times.
 
         Returns
         -------
@@ -395,7 +475,15 @@ class BaseForecastingModule(pl.LightningModule, ABC):
             A tuple containing prediction, target states, predicted standard
             deviation, and batch times.
         """
-        init_states, target_states, forcing_features, batch_times = batch
+        (
+            init_states,
+            target_states,
+            forcing_features,
+            boundary_features,
+            batch_times,
+        ) = batch
+        # boundary_features is standardized here but not yet passed to the
+        # forecaster.
         prediction, pred_std = self.forecaster(
             init_states, forcing_features, target_states
         )
@@ -403,7 +491,7 @@ class BaseForecastingModule(pl.LightningModule, ABC):
 
     def training_step(
         self,
-        batch: tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor],
+        batch: Batch,
     ) -> torch.Tensor:
         """
         Perform a single training step.
@@ -431,7 +519,7 @@ class BaseForecastingModule(pl.LightningModule, ABC):
         torch.Tensor
             The computed loss for the training step.
         """
-        init_states, target_states, forcing_features, _ = batch
+        init_states, target_states, forcing_features, _boundary, _ = batch
         batch_loss, loss_components = self.forecaster.compute_training_loss(
             init_states,
             forcing_features,
@@ -534,7 +622,7 @@ class BaseForecastingModule(pl.LightningModule, ABC):
     @abstractmethod
     def validation_step(
         self,
-        batch: tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor],
+        batch: Batch,
         batch_idx: int,
     ) -> None:
         """
@@ -566,8 +654,7 @@ class BaseForecastingModule(pl.LightningModule, ABC):
         self.aggregate_and_plot_metrics(self.val_metrics, prefix="val")
 
         if (
-            self.trainer.is_global_zero
-            and self.hparams.metrics_watch  # ty: ignore[unresolved-attribute]
+            self.trainer.is_global_zero and self.hparams.metrics_watch  # ty: ignore[unresolved-attribute]
         ):
             metrics_watch = (
                 self.hparams.metrics_watch  # ty: ignore[unresolved-attribute]
@@ -589,7 +676,7 @@ class BaseForecastingModule(pl.LightningModule, ABC):
     @abstractmethod
     def test_step(
         self,
-        batch: tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor],
+        batch: Batch,
         batch_idx: int,
     ) -> None:
         """
@@ -614,7 +701,7 @@ class BaseForecastingModule(pl.LightningModule, ABC):
 
     def plot_examples(
         self,
-        batch: tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor],
+        batch: Batch,
         n_examples: int,
         split: str,
         prediction: torch.Tensor,
@@ -635,7 +722,7 @@ class BaseForecastingModule(pl.LightningModule, ABC):
         """
 
         target = batch[1]
-        time = batch[3]
+        time = batch[4]
 
         da_state_stats = self.datastore.get_standardization_dataarray("state")
         state_std = torch.tensor(
@@ -731,9 +818,9 @@ class BaseForecastingModule(pl.LightningModule, ABC):
                     self.datastore.get_vars_names("state"), var_figs
                 ):
                     if isinstance(self.logger, pl.loggers.WandbLogger):
-                        key = f"{var_name}_example_{example_i}"
-                    else:
                         key = f"{var_name}_example"
+                    else:
+                        key = f"{var_name}_example_{example_i}"
 
                     if hasattr(self.logger, "log_image"):
                         self.logger.log_image(  # ty: ignore[call-non-callable]

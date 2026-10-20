@@ -9,8 +9,9 @@ from neural_lam.models import (
     DeterministicForecastingModule,
     StepPredictor,
 )
-from neural_lam.weather_dataset import WeatherDataModule
+from neural_lam.weather_dataset import WeatherDataModule, WeatherDataset
 from tests.conftest import init_datastore_example
+from tests.dummy_datastore import BoundaryDummyDatastore, DummyDatastore
 
 NUM_PAST_FORCING_STEPS = 1
 NUM_FUTURE_FORCING_STEPS = 1
@@ -24,22 +25,28 @@ class _MockStepPredictor(StepPredictor):
         return torch.zeros_like(prev_state), None
 
 
-def _build_module(datastore):
+def _build_module(datastore, datastore_boundary=None):
     config = nlconfig.NeuralLAMConfig(
-        datastore=nlconfig.DatastoreSelection(
-            kind=datastore.SHORT_NAME, config_path=datastore.root_path
-        )
+        datastores={
+            "main": nlconfig.DatastoreSelection(
+                kind=datastore.SHORT_NAME, config_path=datastore.root_path
+            )
+        }
     )
     predictor = _MockStepPredictor(datastore=datastore, output_std=False)
     forecaster = DeterministicARForecaster(predictor, datastore, config=config)
     return DeterministicForecastingModule(
-        forecaster=forecaster, config=config, datastore=datastore
+        forecaster=forecaster,
+        config=config,
+        datastore=datastore,
+        datastore_boundary=datastore_boundary,
     )
 
 
+@pytest.mark.requires_real_data
 def test_on_after_batch_transfer():
     """The hook standardizes state and forcing as (x - mean) / std and
-    leaves shapes and target times untouched."""
+    leaves shapes, boundary forcing and target times untouched."""
     datastore = init_datastore_example("mdp")
     model = _build_module(datastore)
 
@@ -54,17 +61,20 @@ def test_on_after_batch_transfer():
     forcing = torch.randn(
         1, ar_steps, num_grid_nodes, num_forcing_vars * window_size
     )
+    # Without a boundary datastore the boundary tensor is empty
+    boundary = torch.empty(1, ar_steps, num_grid_nodes, 0)
     target_times = torch.randint(0, 1000000, (1, ar_steps))
 
-    norm_init, norm_target, norm_forcing, norm_times = (
+    norm_init, norm_target, norm_forcing, norm_boundary, norm_times = (
         model.on_after_batch_transfer(
-            (init_states, target_states, forcing, target_times), 0
+            (init_states, target_states, forcing, boundary, target_times), 0
         )
     )
 
     assert norm_init.shape == init_states.shape
     assert norm_target.shape == target_states.shape
     assert norm_forcing.shape == forcing.shape
+    assert torch.equal(norm_boundary, boundary)
     assert torch.equal(norm_times, target_times)
 
     expected_init = (init_states - model.state_mean) / model.state_std
@@ -79,6 +89,7 @@ def test_on_after_batch_transfer():
     assert torch.allclose(norm_forcing, expected_forcing)
 
 
+@pytest.mark.requires_real_data
 def test_normalization_applied_exactly_once():
     """Data fed through WeatherDataset and the hook must be standardized
     exactly once: not skipped (WeatherDataset returns raw data) and not
@@ -124,3 +135,53 @@ def test_safe_std_clamps_near_zero():
     assert std[1] == 1.0
     assert std[2] == 2.0
     assert torch.isfinite(std).all()
+
+
+def test_boundary_stack_order_matches_module_tiling():
+    """The dataset stacks boundary features feature-major, matching the
+    `repeat_interleave` tiling of the statistics in the module."""
+    num_past = 1
+    num_future = 1
+    window_size = num_past + num_future + 1
+    datastore = DummyDatastore(n_grid_points=100, n_timesteps=20)
+    datastore_boundary = BoundaryDummyDatastore(
+        n_grid_points=25, n_timesteps=20
+    )
+    model = _build_module(
+        datastore=datastore, datastore_boundary=datastore_boundary
+    )
+
+    dataset = WeatherDataset(
+        datastore=datastore,
+        datastore_boundary=datastore_boundary,
+        split="train",
+        ar_steps=2,
+        num_past_forcing_steps=NUM_PAST_FORCING_STEPS,
+        num_future_forcing_steps=NUM_FUTURE_FORCING_STEPS,
+        num_past_boundary_steps=num_past,
+        num_future_boundary_steps=num_future,
+    )
+    batch = tuple(item.unsqueeze(0) for item in dataset[0])
+    boundary = batch[3]
+
+    num_boundary_vars = datastore_boundary.get_num_data_vars("forcing")
+    assert boundary.shape[-1] == num_boundary_vars * window_size
+    # Per-feature statistics must differ, or the tiling order is unobservable.
+    assert len(torch.unique(model.boundary_std)) == num_boundary_vars
+
+    for feature in range(num_boundary_vars):
+        start = feature * window_size
+        slots = boundary[..., start : start + window_size]
+        assert torch.all(
+            torch.div(slots, 1000, rounding_mode="floor") == feature
+        )
+
+    _, _, _, norm_boundary, _ = model.on_after_batch_transfer(batch, 0)
+
+    for feature in range(num_boundary_vars):
+        start = feature * window_size
+        slots = slice(start, start + window_size)
+        expected = (
+            boundary[..., slots] - model.boundary_mean[feature]
+        ) / model.boundary_std[feature]
+        assert torch.allclose(norm_boundary[..., slots], expected)
