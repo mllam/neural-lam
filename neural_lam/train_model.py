@@ -23,15 +23,10 @@ from . import utils
 from .config import (
     ComputeConfig,
     DataConfig,
-    DatastoreSelection,
     LoggingConfig,
-    ManualStateFeatureWeighting,
     ModelConfig,
     NeuralLAMConfig,
-    OutputClamping,
-    TrainingConfig,
     TrainRunConfig,
-    UniformFeatureWeighting,
     load_config_and_datastore,
 )
 from .datastore.base import BaseDatastore
@@ -43,19 +38,6 @@ from .models import (
     ForecasterModule,
 )
 from .weather_dataset import WeatherDataModule
-
-if hasattr(torch.serialization, "add_safe_globals"):
-    torch.serialization.add_safe_globals(
-        [
-            Namespace,
-            DatastoreSelection,
-            ManualStateFeatureWeighting,
-            NeuralLAMConfig,
-            OutputClamping,
-            TrainingConfig,
-            UniformFeatureWeighting,
-        ]
-    )
 
 
 @dataclasses.dataclass(frozen=True)
