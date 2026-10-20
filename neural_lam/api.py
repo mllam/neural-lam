@@ -485,6 +485,7 @@ def predict(
     unstack_grid: bool = False,
     config: NeuralLAMConfig | None = None,
     datastore: BaseDatastore | None = None,
+    datastore_boundary: BaseDatastore | None = None,
 ) -> xr.Dataset | tuple[xr.Dataset, xr.Dataset]:
     """
     Generate weather forecast predictions using a trained model checkpoint.
@@ -524,6 +525,8 @@ def predict(
         Loaded Neural-LAM configuration dataclass.
     datastore : BaseDatastore or None, optional
         Initialized datastore instance.
+    datastore_boundary : BaseDatastore or None, optional
+        Initialized boundary datastore instance.
 
     Returns
     -------
@@ -536,12 +539,15 @@ def predict(
             raise ValueError(
                 "Either (config and datastore) or config_path must be provided."
             )
-        config, datastore = load_config_and_datastore(config_path=config_path)
+        config, datastore, datastore_boundary = load_config_and_datastore(
+            config_path=config_path
+        )
 
     model = train_model_script.load_forecaster_module_from_checkpoint(
         ckpt_path=load,
         config=config,
         datastore=datastore,
+        datastore_boundary=datastore_boundary,
     )
     torch_device = torch.device(device)
     model.to(torch_device)
@@ -555,10 +561,22 @@ def predict(
     args = getattr(model.hparams, "args", None)
     num_past = getattr(args, "num_past_forcing_steps", 1) if args else 1
     num_future = getattr(args, "num_future_forcing_steps", 1) if args else 1
+    num_past_boundary = (
+        getattr(args, "num_past_boundary_steps", 1) if args else 1
+    )
+    num_future_boundary = (
+        getattr(args, "num_future_boundary_steps", 1) if args else 1
+    )
     data_cfg = getattr(config, "data", None)
     if data_cfg is not None:
         num_past = getattr(data_cfg, "num_past_forcing_steps", num_past)
         num_future = getattr(data_cfg, "num_future_forcing_steps", num_future)
+        num_past_boundary = getattr(
+            data_cfg, "num_past_boundary_steps", num_past_boundary
+        )
+        num_future_boundary = getattr(
+            data_cfg, "num_future_boundary_steps", num_future_boundary
+        )
 
     dataset = WeatherDataset(
         datastore=datastore,
@@ -566,6 +584,9 @@ def predict(
         ar_steps=lead_steps,
         num_past_forcing_steps=num_past,
         num_future_forcing_steps=num_future,
+        num_past_boundary_steps=num_past_boundary,
+        num_future_boundary_steps=num_future_boundary,
+        datastore_boundary=datastore_boundary,
     )
 
     n_samples = len(dataset)
@@ -701,12 +722,27 @@ def predict(
         forcing_batch = torch.stack([s[2] for s in batch_samples], dim=0).to(
             torch_device
         )
-        times_batch = torch.stack([s[3] for s in batch_samples], dim=0).to(
+        boundary_batch = torch.stack([s[3] for s in batch_samples], dim=0).to(
+            torch_device
+        )
+        times_batch = torch.stack([s[4] for s in batch_samples], dim=0).to(
             torch_device
         )
 
-        norm_init, norm_target, norm_forcing, _ = model.on_after_batch_transfer(
-            (init_batch, target_batch, forcing_batch, times_batch),
+        (
+            norm_init,
+            norm_target,
+            norm_forcing,
+            norm_boundary,
+            _,
+        ) = model.on_after_batch_transfer(
+            (
+                init_batch,
+                target_batch,
+                forcing_batch,
+                boundary_batch,
+                times_batch,
+            ),
             dataloader_idx=0,
         )
 
@@ -719,13 +755,7 @@ def predict(
             pred = pred * model.state_std + model.state_mean
             target_to_save = target_batch
             if pred_std is not None:
-                if (
-                    not model.forecaster.predicts_std
-                    and model.per_var_std is not None
-                ):
-                    pred_std = model.per_var_std * model.state_std
-                else:
-                    pred_std = pred_std * model.state_std
+                pred_std = pred_std * model.state_std
         else:
             target_to_save = norm_target
 
@@ -740,7 +770,7 @@ def predict(
 
     sel_analysis_times = all_init_times[selected_indices]
     first_target_times = (
-        dataset[selected_indices[0]][3].cpu().numpy().astype("datetime64[ns]")
+        dataset[selected_indices[0]][4].cpu().numpy().astype("datetime64[ns]")
     )
     first_init_time = sel_analysis_times[0]
     elapsed_durations = first_target_times - first_init_time
@@ -754,7 +784,12 @@ def predict(
         pred_std=all_pred_stds,
     )
 
-    if unstack_grid and isinstance(datastore, BaseRegularGridDatastore):
+    if unstack_grid:
+        if not datastore.is_on_rectilinear_grid:
+            raise ValueError(
+                "unstack_grid=True is only supported for datastores with "
+                "is_on_rectilinear_grid=True."
+            )
         ds_pred = ds_pred.unstack("grid_index")
 
     if return_target:
@@ -765,7 +800,7 @@ def predict(
             datastore=datastore,
             category="state",
         )
-        if unstack_grid and isinstance(datastore, BaseRegularGridDatastore):
+        if unstack_grid:
             ds_target = ds_target.unstack("grid_index")
         return ds_pred, ds_target
 
