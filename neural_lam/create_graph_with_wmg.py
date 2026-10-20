@@ -84,9 +84,9 @@ def create_graph_from_datastore(
         Maximum number of mesh hierarchy levels. Only used for ``"graphcast"``
         and ``"hierarchical"`` archetypes.
     """
-    if not datastore.is_on_regular_spatial_grid:
+    if not datastore.is_on_rectilinear_grid:
         raise NotImplementedError(
-            "Graph creation requires a datastore on a regular spatial grid."
+            "Graph creation requires a datastore on a rectilinear grid."
         )
 
     if archetype not in ARCHETYPE_FUNCTIONS:

@@ -127,7 +127,7 @@ def test_dataset_item_create_dataarray_from_tensor(datastore_name):
             da_target[dim].values, da_target_true[dim].values
         )
 
-    if datastore.is_on_regular_spatial_grid:
+    if datastore.is_on_rectilinear_grid:
         # test unstacking the grid coordinates
         da_target_unstacked = datastore.unstack_grid_coords(da_target)
         assert all(
@@ -151,7 +151,7 @@ def test_dataset_item_create_dataarray_from_tensor(datastore_name):
             da_target_single[dim].values, da_target_true[0][dim].values
         )
 
-    if datastore.is_on_regular_spatial_grid:
+    if datastore.is_on_rectilinear_grid:
         # test unstacking the grid coordinates
         da_target_single_unstacked = datastore.unstack_grid_coords(
             da_target_single
@@ -207,10 +207,10 @@ def test_single_batch(datastore_name, split):
                 archetype="keisler",
             )
 
-    if not datastore.is_on_regular_spatial_grid:
+    if not datastore.is_on_rectilinear_grid:
         with pytest.raises(NotImplementedError):
             _create_graph()
-        pytest.skip("Skipping on model-run on non-regular grid datastores")
+        pytest.skip("Skipping on model-run on non-rectilinear grid datastores")
 
     _create_graph()
 
@@ -543,6 +543,17 @@ def test_boundary_datastore_none_gives_empty_boundary():
 
     _, _, _, boundary, _ = dataset[0]
     assert boundary.shape[-1] == 0
+
+
+def test_boundary_datastore_with_ensemble_forcing_raises():
+    """Ensemble boundary forcing is not supported yet."""
+    with pytest.raises(NotImplementedError, match="ensemble forcing"):
+        WeatherDataset(
+            datastore=DummyDatastore(n_grid_points=100, n_timesteps=20),
+            datastore_boundary=EnsembleDummyDatastore(
+                forcing_has_ensemble=True
+            ),
+        )
 
 
 @pytest.mark.requires_real_data

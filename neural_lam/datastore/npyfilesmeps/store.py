@@ -165,7 +165,7 @@ class NpyFilesDatastoreMEPS(BaseDatastore):
     SHORT_NAME = "npyfilesmeps"
 
     is_forecast = True
-    is_on_regular_spatial_grid = True
+    is_on_rectilinear_grid = True
 
     _config_path: Path
     _root_path: Path

@@ -30,7 +30,7 @@ class DummyDatastore(BaseDatastore):
     T0 = isodate.parse_datetime("2021-01-01T00:00:00")
     N_FEATURES = dict(state=5, forcing=2, static=1)
     spatial_coordinates = ("x", "y")
-    is_on_regular_spatial_grid = True
+    is_on_rectilinear_grid = True
 
     # center the domain on Denmark
     latlon_center = [56, 10]  # latitude, longitude

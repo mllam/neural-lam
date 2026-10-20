@@ -65,12 +65,13 @@ class BaseDatastore(abc.ABC):
     dataarray or dataset with the `grid_index` dimension as the coordinate for
     each of the `x` and `y` coordinates.
 
-    Regular spatial grid
-    --------------------
+    Rectilinear grid
+    ----------------
     A datastore whose `grid_index` can be reshaped back into a complete 2D
-    `x`/`y` grid should set `is_on_regular_spatial_grid` to `True` and
-    implement `grid_shape_state`. `grid_shape_state`, `stack_grid_coords` and
-    `unstack_grid_coords` raise `NotImplementedError` otherwise.
+    `x`/`y` grid, with possibly non-uniform spacing, should set
+    `is_on_rectilinear_grid` to `True` and implement `grid_shape_state`.
+    `grid_shape_state`, `stack_grid_coords` and `unstack_grid_coords` raise
+    `NotImplementedError` otherwise.
     """
 
     is_ensemble: bool = False
@@ -384,8 +385,8 @@ class BaseDatastore(abc.ABC):
     def num_grid_points(self) -> int:
         """Return the number of grid points in the dataset.
 
-        Derived from `grid_shape_state`, so datastores not on a regular
-        spatial grid must override this.
+        Derived from `grid_shape_state`, so datastores not on a rectilinear
+        grid must override this.
 
         Returns
         -------
@@ -395,12 +396,12 @@ class BaseDatastore(abc.ABC):
         Raises
         ------
         NotImplementedError
-            If the datastore is not on a regular spatial grid and does not
+            If the datastore is not on a rectilinear grid and does not
             override this.
         """
-        if not self.is_on_regular_spatial_grid:
+        if not self.is_on_rectilinear_grid:
             raise NotImplementedError(
-                f"{type(self).__name__} is not on a regular spatial grid, "
+                f"{type(self).__name__} is not on a rectilinear grid, "
                 "so `num_grid_points` cannot be derived from "
                 "`grid_shape_state` and must be overridden."
             )
@@ -490,9 +491,9 @@ class BaseDatastore(abc.ABC):
         return tuple(dim_order)
 
     @property
-    def is_on_regular_spatial_grid(self) -> bool:
+    def is_on_rectilinear_grid(self) -> bool:
         """Whether ``grid_index`` can be unstacked into a complete 2D
-        ``x``/``y`` grid.
+        ``x``/``y`` rectilinear grid. The spacing need not be uniform.
 
         Returns
         -------
@@ -514,15 +515,15 @@ class BaseDatastore(abc.ABC):
         Raises
         ------
         NotImplementedError
-            If the datastore is not on a regular spatial grid.
+            If the datastore is not on a rectilinear grid.
         """
         raise NotImplementedError(
             f"{type(self).__name__} does not define `grid_shape_state`; "
             "this is only available for datastores where "
-            "`is_on_regular_spatial_grid` is True."
+            "`is_on_rectilinear_grid` is True."
         )
 
-    def _check_on_regular_spatial_grid(self, operation: str) -> None:
+    def _check_on_rectilinear_grid(self, operation: str) -> None:
         """Guard an operation that requires a complete 2D ``x``/``y`` grid.
 
         Parameters
@@ -535,10 +536,10 @@ class BaseDatastore(abc.ABC):
         NotImplementedError
             If the datastore's grid points do not form a complete 2D grid.
         """
-        if not self.is_on_regular_spatial_grid:
+        if not self.is_on_rectilinear_grid:
             raise NotImplementedError(
                 f"`{operation}` requires the grid points to form a complete "
-                "2D grid (`is_on_regular_spatial_grid`); "
+                "2D grid (`is_on_rectilinear_grid`); "
                 f"{type(self).__name__} reports that they do not."
             )
 
@@ -572,13 +573,13 @@ class BaseDatastore(abc.ABC):
         Raises
         ------
         NotImplementedError
-            If the datastore is not on a regular spatial grid.
+            If the datastore is not on a rectilinear grid.
         """
         # Return original data if already unstacked (no grid_index dimension)
         if "grid_index" not in da_or_ds.dims:
             return da_or_ds
 
-        self._check_on_regular_spatial_grid("unstack_grid_coords")
+        self._check_on_rectilinear_grid("unstack_grid_coords")
 
         # Check whether `grid_index` is a multi-index
         if not isinstance(da_or_ds.indexes.get("grid_index"), MultiIndex):
@@ -641,13 +642,13 @@ class BaseDatastore(abc.ABC):
         Raises
         ------
         NotImplementedError
-            If the datastore is not on a regular spatial grid.
+            If the datastore is not on a rectilinear grid.
         """
         # Return original data if already stacked (has grid_index dimension)
         if "grid_index" in da_or_ds.dims:
             return da_or_ds
 
-        self._check_on_regular_spatial_grid("stack_grid_coords")
+        self._check_on_rectilinear_grid("stack_grid_coords")
 
         da_or_ds_stacked = da_or_ds.stack(grid_index=self.spatial_coordinates)
 

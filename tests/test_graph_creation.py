@@ -44,9 +44,9 @@ def test_graph_creation(datastore_name, graph_name):
     validator = _load_validator_module()
     datastore = init_datastore_example(datastore_name)
 
-    if not datastore.is_on_regular_spatial_grid:
+    if not datastore.is_on_rectilinear_grid:
         pytest.skip(
-            f"Skipping test for {datastore_name} as it is not a regular grid datastore."  # noqa: E501
+            f"Skipping test for {datastore_name} as it is not a rectilinear grid datastore."  # noqa: E501
         )
 
     if graph_name == "hierarchical":
@@ -94,9 +94,9 @@ def test_loaded_g2m_m2g_indices_in_bounds(datastore_name, graph_name):
     """
     datastore = init_datastore_example(datastore_name)
 
-    if not datastore.is_on_regular_spatial_grid:
+    if not datastore.is_on_rectilinear_grid:
         pytest.skip(
-            f"Skipping test for {datastore_name} as it is not a regular "
+            f"Skipping test for {datastore_name} as it is not a rectilinear "
             "grid datastore."
         )
 
@@ -240,9 +240,9 @@ def test_wmg_graph_creation(datastore_name, archetype):
     that conforms to the graph storage specification."""
     datastore = init_datastore_example(datastore_name)
 
-    if not datastore.is_on_regular_spatial_grid:
+    if not datastore.is_on_rectilinear_grid:
         pytest.skip(
-            f"Skipping test for {datastore_name} as it is not a regular "
+            f"Skipping test for {datastore_name} as it is not a rectilinear "
             "grid datastore."
         )
 

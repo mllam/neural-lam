@@ -275,10 +275,10 @@ There are currently two different datastores implemented in the codebase:
 If neither of these options fit your need you can create your own datastore by
 subclassing the `neural_lam.datastore.BaseDatastore` class and implementing the abstract methods.
 
-Datastores whose grid points form a complete 2D `x`/`y` grid set
-`is_on_regular_spatial_grid` to `True` and implement `grid_shape_state`. This
-can depend on the data, e.g. a domain-cropped `MDPDatastore` is not on a
-regular grid.
+Datastores whose grid points form a complete 2D `x`/`y` rectilinear grid (the
+spacing need not be uniform) set `is_on_rectilinear_grid` to `True` and
+implement `grid_shape_state`. This can depend on the data, e.g. a
+domain-cropped `MDPDatastore` is not on a rectilinear grid.
 
 
 ### MDP (mllam-data-prep) Datastore - `MDPDatastore`
