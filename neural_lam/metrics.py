@@ -1,6 +1,7 @@
 """Evaluation metrics shared across training and validation routines."""
 
 # Standard library
+import inspect
 from collections.abc import Callable
 
 # Third-party
@@ -140,7 +141,7 @@ def wmse(
 def mse(
     pred: torch.Tensor,
     target: torch.Tensor,
-    pred_std: torch.Tensor,
+    pred_std: torch.Tensor | None = None,
     mask: torch.Tensor | None = None,
     average_grid: bool = True,
     sum_vars: bool = True,
@@ -157,10 +158,10 @@ def mse(
     target : torch.Tensor
         Shape ``(..., N, num_variables)``. Ground-truth target. Dims: same as
         ``pred``.
-    pred_std : torch.Tensor
-        Shape ``(..., N, num_variables)`` or ``(num_variables,)``. Predicted
-        standard deviation (unused; ``pred_std`` is replaced by ones
-        internally).
+    pred_std : torch.Tensor or None, optional
+        Unused. Accepted so that a caller holding any metric can pass one
+        the same way; optional here, unlike in the metrics that score a
+        distribution. Default ``None``.
     mask : torch.Tensor or None, optional
         Shape ``(N,)``. Boolean mask over grid nodes. ``None`` uses all
         nodes.
@@ -176,9 +177,12 @@ def mse(
         ``(..., num_variables)``, ``(..., N)``, or ``(..., N, num_variables)``
         depending on ``average_grid`` and ``sum_vars``.
     """
-    # Replace pred_std with constant ones
-    return wmse(
-        pred, target, torch.ones_like(pred_std), mask, average_grid, sum_vars
+    entry_mse = torch.nn.functional.mse_loss(
+        pred, target, reduction="none"
+    )  # (..., num_grid_nodes, num_variables)
+
+    return mask_and_reduce_metric(
+        entry_mse, mask=mask, average_grid=average_grid, sum_vars=sum_vars
     )
 
 
@@ -238,7 +242,7 @@ def wmae(
 def mae(
     pred: torch.Tensor,
     target: torch.Tensor,
-    pred_std: torch.Tensor,
+    pred_std: torch.Tensor | None = None,
     mask: torch.Tensor | None = None,
     average_grid: bool = True,
     sum_vars: bool = True,
@@ -255,10 +259,10 @@ def mae(
     target : torch.Tensor
         Shape ``(..., N, num_variables)``. Ground-truth target. Dims: same as
         ``pred``.
-    pred_std : torch.Tensor
-        Shape ``(..., N, num_variables)`` or ``(num_variables,)``. Predicted
-        standard deviation (unused; ``pred_std`` is replaced by ones
-        internally).
+    pred_std : torch.Tensor or None, optional
+        Unused. Accepted so that a caller holding any metric can pass one
+        the same way; optional here, unlike in the metrics that score a
+        distribution. Default ``None``.
     mask : torch.Tensor or None, optional
         Shape ``(N,)``. Boolean mask over grid nodes. ``None`` uses all
         nodes.
@@ -274,9 +278,12 @@ def mae(
         ``(..., num_variables)``, ``(..., N)``, or ``(..., N, num_variables)``
         depending on ``average_grid`` and ``sum_vars``.
     """
-    # Replace pred_std with constant ones
-    return wmae(
-        pred, target, torch.ones_like(pred_std), mask, average_grid, sum_vars
+    entry_mae = torch.nn.functional.l1_loss(
+        pred, target, reduction="none"
+    )  # (..., num_grid_nodes, num_variables)
+
+    return mask_and_reduce_metric(
+        entry_mae, mask=mask, average_grid=average_grid, sum_vars=sum_vars
     )
 
 
@@ -386,7 +393,7 @@ def crps_gauss(
     )
 
 
-DEFINED_METRICS = {
+DEFINED_METRICS: dict[str, Callable[..., torch.Tensor]] = {
     "mse": mse,
     "mae": mae,
     "wmse": wmse,
@@ -394,3 +401,27 @@ DEFINED_METRICS = {
     "nll": nll,
     "crps_gauss": crps_gauss,
 }
+
+
+def requires_pred_std(metric: Callable[..., torch.Tensor]) -> bool:
+    """
+    Return whether ``metric`` needs a ``pred_std`` to be computed.
+
+    Lets a caller holding a metric decide whether it has to come up with a
+    standard deviation at all, rather than assuming every metric uses one.
+    Read off the signature, so declaring ``pred_std`` without a default is
+    the only place a metric states that it scores a distribution.
+
+    Parameters
+    ----------
+    metric : callable
+        A metric from ``DEFINED_METRICS``, e.g. as returned by
+        ``get_metric``.
+
+    Returns
+    -------
+    bool
+        True if ``metric`` takes ``pred_std`` as a required argument.
+    """
+    pred_std_param = inspect.signature(metric).parameters["pred_std"]
+    return pred_std_param.default is inspect.Parameter.empty
