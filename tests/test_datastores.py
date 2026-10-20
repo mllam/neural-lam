@@ -22,8 +22,8 @@
       with spatial dimensions stacked.
 - `config` (property): Return the configuration of the datastore.
 
-In addition, datastores on a regular spatial grid (`is_on_regular_spatial_grid`
-is `True`) must have the following methods and attributes:
+In addition, datastores on a rectilinear grid (`is_on_rectilinear_grid` is
+`True`) must have the following methods and attributes:
 - `get_xy_extent` (method): Return the extent of the x, y coordinates for a
         given category of data.
 - `get_xy` (method): Return the x, y coordinates of the dataset.
@@ -94,9 +94,9 @@ def test_datastore_grid_xy(datastore_name):
     tastore.grid_shape_state` property."""
     datastore = init_datastore_example(datastore_name)
 
-    if not datastore.is_on_regular_spatial_grid:
+    if not datastore.is_on_rectilinear_grid:
         pytest.skip(
-            "Skip grid_shape_state test for non-regular grid datastores"
+            "Skip grid_shape_state test for non-rectilinear grid datastores"
         )
 
     # check the shapes of the xy grid
@@ -220,7 +220,7 @@ def test_get_dataarray(datastore_name):
 
             assert isinstance(da, xr.DataArray)
             assert set(da.dims) == set(expected_dims)
-            if datastore.is_on_regular_spatial_grid:
+            if datastore.is_on_rectilinear_grid:
                 grid_shape = datastore.grid_shape_state
                 assert da.grid_index.size == grid_shape.x * grid_shape.y
 
@@ -303,7 +303,7 @@ def test_boundary_mask(datastore_name):
     assert da_mask.sum() > 0
     assert da_mask.sum() < da_mask.size
 
-    if datastore.is_on_regular_spatial_grid:
+    if datastore.is_on_rectilinear_grid:
         grid_shape = datastore.grid_shape_state
         assert datastore.boundary_mask.size == grid_shape.x * grid_shape.y
 
@@ -341,7 +341,7 @@ def test_get_xy_extent(datastore_name):
     the returned object is a tuple of the correct length."""
     datastore = init_datastore_example(datastore_name)
 
-    if not datastore.is_on_regular_spatial_grid:
+    if not datastore.is_on_rectilinear_grid:
         pytest.skip("Datastore does not implement `BaseCartesianDatastore`")
 
     extents = {}
@@ -363,7 +363,7 @@ def test_get_xy(datastore_name):
     """Check that the `datastore.get_xy` method is implemented."""
     datastore = init_datastore_example(datastore_name)
 
-    if not datastore.is_on_regular_spatial_grid:
+    if not datastore.is_on_rectilinear_grid:
         pytest.skip("Datastore does not implement `BaseCartesianDatastore`")
 
     for category in ["state", "forcing", "static"]:
@@ -392,7 +392,7 @@ def test_get_xy(datastore_name):
             shapes and values."""
             datastore = init_datastore_example(datastore_name)
 
-            if not datastore.is_on_regular_spatial_grid:
+            if not datastore.is_on_rectilinear_grid:
                 pytest.skip(
                     "Datastore does not implement `BaseCartesianDatastore`"
                 )
@@ -421,7 +421,7 @@ def test_get_projection(datastore_name):
     """Check that the `datastore.coords_projection` property is implemented."""
     datastore = init_datastore_example(datastore_name)
 
-    if not datastore.is_on_regular_spatial_grid:
+    if not datastore.is_on_rectilinear_grid:
         pytest.skip("Datastore does not implement `BaseCartesianDatastore`")
 
     assert isinstance(datastore.coords_projection, ccrs.Projection)
@@ -429,10 +429,10 @@ def test_get_projection(datastore_name):
 
 @pytest.mark.parametrize("datastore_name", DATASTORES.keys())
 def test_grid_shape_state(datastore_name):
-    """Check that the example datastores are on a regular grid whose
+    """Check that the example datastores are on a rectilinear grid whose
     `grid_shape_state` accounts for every grid point."""
     datastore = init_datastore_example(datastore_name)
-    assert datastore.is_on_regular_spatial_grid
+    assert datastore.is_on_rectilinear_grid
 
     grid_shape = datastore.grid_shape_state
     assert grid_shape.x > 0
@@ -446,7 +446,7 @@ def test_stacking_grid_coords(datastore_name, category):
     """Check that the `datastore.stack_grid_coords` method is implemented."""
     datastore = init_datastore_example(datastore_name)
 
-    if not datastore.is_on_regular_spatial_grid:
+    if not datastore.is_on_rectilinear_grid:
         pytest.skip("Datastore does not implement `BaseCartesianDatastore`")
 
     da_static = datastore.get_dataarray(category=category, split="train")
@@ -536,16 +536,16 @@ def test_get_standardized_da(datastore_name, category):
 
 
 @pytest.mark.requires_real_data
-def test_cropped_boundary_datastore_is_not_regular_grid():
-    """A domain-cropped datastore is not on a regular grid, so unstacking and
-    graph creation refuse it."""
+def test_cropped_boundary_datastore_is_not_rectilinear_grid():
+    """A domain-cropped datastore is not on a rectilinear grid, so unstacking
+    and graph creation refuse it."""
     datastore_boundary = init_datastore_boundary_example("mdp")
 
     xy = datastore_boundary.get_xy(category="forcing", stacked=True)
     assert xy.shape == (datastore_boundary.num_grid_points, 2)
     n_x, n_y = np.unique(xy[:, 0]).size, np.unique(xy[:, 1]).size
     assert datastore_boundary.num_grid_points < n_x * n_y
-    assert not datastore_boundary.is_on_regular_spatial_grid
+    assert not datastore_boundary.is_on_rectilinear_grid
 
     with pytest.raises(NotImplementedError, match="complete 2D grid"):
         _ = datastore_boundary.grid_shape_state
@@ -556,7 +556,7 @@ def test_cropped_boundary_datastore_is_not_regular_grid():
     with pytest.raises(NotImplementedError, match="complete 2D grid"):
         datastore_boundary.unstack_grid_coords(da_forcing)
 
-    with pytest.raises(NotImplementedError, match="regular spatial grid"):
+    with pytest.raises(NotImplementedError, match="rectilinear grid"):
         create_graph_from_datastore(
             datastore=datastore_boundary,
             output_root_path=str(datastore_boundary.root_path / "graph"),

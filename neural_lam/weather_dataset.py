@@ -179,6 +179,8 @@ class WeatherDataset(torch.utils.data.Dataset):
             ``ar_steps`` and forcing windows leave zero samples in ``split``,
             or if the state/forcing dimension order does not match the
             datastore's expected dimension order.
+        NotImplementedError
+            If ``datastore_boundary`` has ensemble forcing.
         """
         super().__init__()
 
@@ -207,6 +209,11 @@ class WeatherDataset(torch.utils.data.Dataset):
         self.da_boundary_forcing = None
         self._forecast_step_boundary = None
         if datastore_boundary is not None:
+            if datastore_boundary.has_ensemble_forcing:
+                raise NotImplementedError(
+                    "Boundary datastores with ensemble forcing are not "
+                    "supported yet."
+                )
             self.da_boundary_forcing = datastore_boundary.get_dataarray(
                 category="forcing", split=self.split
             )
@@ -226,9 +233,9 @@ class WeatherDataset(torch.utils.data.Dataset):
                 requested_max_lead=self._max_state_lead_used(),
             )
             self.da_state = apply_time_crop(self.da_state, crop_dim, crop_slice)
-            # Forecast forcing is indexed by position along `analysis_time`,
-            # so it has to be cropped together with the state.
-            if self.da_forcing is not None and self.datastore.is_forecast:
+            # Interior forcing shares the state's time axis and `__len__`
+            # counts samples on both by position, so crop them together.
+            if self.da_forcing is not None:
                 self.da_forcing = apply_time_crop(
                     self.da_forcing, crop_dim, crop_slice
                 )

@@ -528,7 +528,7 @@ class MDPDatastore(BaseDatastore):
     def _grid_xy_counts(self) -> tuple[int, int, int]:
         """Number of distinct ``x`` values, ``y`` values and ``(x, y)`` pairs,
         read from the coordinates since unstacking is gated on
-        `is_on_regular_spatial_grid`, which is derived from these.
+        `is_on_rectilinear_grid`, which is derived from these.
 
         Returns
         -------
@@ -556,10 +556,10 @@ class MDPDatastore(BaseDatastore):
         Raises
         ------
         NotImplementedError
-            If the datastore is not on a regular spatial grid, e.g. after
+            If the datastore is not on a rectilinear grid, e.g. after
             ``domain_cropping``. Use `num_grid_points` instead.
         """
-        self._check_on_regular_spatial_grid("grid_shape_state")
+        self._check_on_rectilinear_grid("grid_shape_state")
         n_x, n_y, _ = self._grid_xy_counts
         return CartesianGridShape(x=n_x, y=n_y)
 
@@ -574,7 +574,7 @@ class MDPDatastore(BaseDatastore):
             The category of the dataset (state/forcing/static).
         stacked : bool
             Whether to stack the x, y coordinates. `stacked=False` requires
-            `is_on_regular_spatial_grid`.
+            `is_on_rectilinear_grid`.
 
         Returns
         -------
@@ -583,13 +583,13 @@ class MDPDatastore(BaseDatastore):
             the value of `stacked`:
 
             * `stacked==True`: shape `(num_grid_nodes, 2)`, with
-              num_grid_nodes=N_x*N_y on a regular grid.
+              num_grid_nodes=N_x*N_y on a rectilinear grid.
             * `stacked==False`: shape `(N_x, N_y, 2)`
 
         """
         xdim, ydim = self.spatial_coordinates
 
-        if stacked and not self.is_on_regular_spatial_grid:
+        if stacked and not self.is_on_rectilinear_grid:
             # There is no x/y grid to unstack onto, so return the
             # coordinates of the grid points in `grid_index` order
             da_cat = self._ds[category]
@@ -657,11 +657,11 @@ class MDPDatastore(BaseDatastore):
         return coords
 
     @property
-    def is_on_regular_spatial_grid(self) -> bool:
+    def is_on_rectilinear_grid(self) -> bool:
         """Whether ``grid_index`` can be unstacked into a complete 2D
-        ``x``/``y`` grid, i.e. every combination of the distinct ``x`` and
-        ``y`` values is present exactly once. A datastore cropped with
-        ``domain_cropping`` is not.
+        ``x``/``y`` rectilinear grid, i.e. every combination of the distinct
+        ``x`` and ``y`` values is present exactly once. The spacing need not
+        be uniform. A datastore cropped with ``domain_cropping`` is not.
 
         Returns
         -------

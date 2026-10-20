@@ -127,7 +127,7 @@ def test_dataset_item_create_dataarray_from_tensor(datastore_name):
             da_target[dim].values, da_target_true[dim].values
         )
 
-    if datastore.is_on_regular_spatial_grid:
+    if datastore.is_on_rectilinear_grid:
         # test unstacking the grid coordinates
         da_target_unstacked = datastore.unstack_grid_coords(da_target)
         assert all(
@@ -151,7 +151,7 @@ def test_dataset_item_create_dataarray_from_tensor(datastore_name):
             da_target_single[dim].values, da_target_true[0][dim].values
         )
 
-    if datastore.is_on_regular_spatial_grid:
+    if datastore.is_on_rectilinear_grid:
         # test unstacking the grid coordinates
         da_target_single_unstacked = datastore.unstack_grid_coords(
             da_target_single
@@ -207,10 +207,10 @@ def test_single_batch(datastore_name, split):
                 archetype="keisler",
             )
 
-    if not datastore.is_on_regular_spatial_grid:
+    if not datastore.is_on_rectilinear_grid:
         with pytest.raises(NotImplementedError):
             _create_graph()
-        pytest.skip("Skipping on model-run on non-regular grid datastores")
+        pytest.skip("Skipping on model-run on non-rectilinear grid datastores")
 
     _create_graph()
 
@@ -487,7 +487,8 @@ def test_forecast_ensemble_len_scales_with_default_all_members():
     assert len(dataset_all) == len(dataset_single) * 3
 
 
-def test_boundary_datastore_shapes():
+@pytest.mark.parametrize("num_future_forcing_steps", [1, 2])
+def test_boundary_datastore_shapes(num_future_forcing_steps):
     """The boundary tensor has the boundary grid and windowed features."""
     n_timesteps = 20
     ar_steps = 3
@@ -505,7 +506,7 @@ def test_boundary_datastore_shapes():
         split="train",
         ar_steps=ar_steps,
         num_past_forcing_steps=1,
-        num_future_forcing_steps=1,
+        num_future_forcing_steps=num_future_forcing_steps,
         num_past_boundary_steps=num_past_boundary,
         num_future_boundary_steps=num_future_boundary,
         datastore_boundary=boundary_ds,
@@ -525,6 +526,10 @@ def test_boundary_datastore_shapes():
 
     assert not torch.isnan(boundary).any()
 
+    # The boundary crops the interior in time, the last sample's forcing
+    # window must still be in range
+    dataset[len(dataset) - 1]
+
 
 def test_boundary_datastore_none_gives_empty_boundary():
     """Without a boundary datastore the boundary tensor has no features."""
@@ -538,6 +543,17 @@ def test_boundary_datastore_none_gives_empty_boundary():
 
     _, _, _, boundary, _ = dataset[0]
     assert boundary.shape[-1] == 0
+
+
+def test_boundary_datastore_with_ensemble_forcing_raises():
+    """Ensemble boundary forcing is not supported yet."""
+    with pytest.raises(NotImplementedError, match="ensemble forcing"):
+        WeatherDataset(
+            datastore=DummyDatastore(n_grid_points=100, n_timesteps=20),
+            datastore_boundary=EnsembleDummyDatastore(
+                forcing_has_ensemble=True
+            ),
+        )
 
 
 @pytest.mark.requires_real_data

@@ -158,10 +158,10 @@ def run_simple_training(
 def test_training(datastore_name):
     datastore = init_datastore_example(datastore_name)
 
-    if not datastore.is_on_regular_spatial_grid:
+    if not datastore.is_on_rectilinear_grid:
         pytest.skip(
             f"Skipping test for {datastore_name} as "
-            f"it is not a regular grid datastore."
+            f"it is not a rectilinear grid datastore."
         )
 
     run_simple_training(datastore, set_output_std=False)

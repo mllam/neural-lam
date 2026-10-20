@@ -15,7 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Add `PersistencePredictor` baseline model (`--model persistence`) that returns the previous state unchanged, enabling standard evaluation of a persistence baseline through the existing pipeline [\#677](https://github.com/mllam/neural-lam/pull/677) @GiGiKoneti
 
-- Add optional boundary datastore support: `NeuralLAMConfig` now takes a named `datastores` dict. `WeatherDataset` loads boundary forcing from such a datastore and `__getitem__` returns a 5-tuple `(init_states, target_states, forcing, boundary, target_times)`. New CLI args `--num_past_boundary_steps` / `--num_future_boundary_steps` control the boundary forcing window. Expose `MDPDatastore`'s boundary-mask width as `n_boundary_points` on a `datastores.<name>` entry in `config.yaml`. New `is_on_regular_spatial_grid` property to `BaseDatastore`, reporting whether a datastore's grid points form a complete 2D grid. [\#635](https://github.com/mllam/neural-lam/pull/635) @sadamov
+- Add optional boundary datastore support: `NeuralLAMConfig` now takes a named `datastores` dict. `WeatherDataset` loads boundary forcing from such a datastore and `__getitem__` returns a 5-tuple `(init_states, target_states, forcing, boundary, target_times)`. New CLI args `--num_past_boundary_steps` / `--num_future_boundary_steps` control the boundary forcing window. Expose `MDPDatastore`'s boundary-mask width as `n_boundary_points` on a `datastores.<name>` entry in `config.yaml`. New `is_on_rectilinear_grid` property to `BaseDatastore`, reporting whether a datastore's grid points form a complete 2D grid. [\#635](https://github.com/mllam/neural-lam/pull/635) @sadamov
 
 - Support plotting boundary data from a separate boundary datastore in `vis.plot_on_axis` and `vis.plot_prediction` via optional `boundary_da` and `boundary_datastore` parameters. A new optional `plotting` section in `config.yaml` (`NeuralLAMConfig.plotting`) controls the overlay. [\#636](https://github.com/mllam/neural-lam/pull/636)
 
@@ -23,7 +23,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- Replace the single `datastore` config key with a named `datastores` mapping; a datastore's role now follows from the categories it provides, and existing configs must move their datastore under a named entry in `datastores:`. `BaseRegularGridDatastore` is removed and its members moved onto `BaseDatastore`, gated on the new `is_on_regular_spatial_grid` property. Datastores on a regular grid must set `is_on_regular_spatial_grid = True` and implement `grid_shape_state`; the gated members raise `NotImplementedError` otherwise [\#635](https://github.com/mllam/neural-lam/pull/635) @sadamov
+- Replace the single `datastore` config key with a named `datastores` mapping; a datastore's role now follows from the categories it provides, and existing configs must move their datastore under a named entry in `datastores:`. `BaseRegularGridDatastore` is removed and its members moved onto `BaseDatastore`, gated on the new `is_on_rectilinear_grid` property. Datastores on a rectilinear grid (complete 2D `x`/`y` grid, spacing need not be uniform) must set `is_on_rectilinear_grid = True` and implement `grid_shape_state`; the gated members raise `NotImplementedError` otherwise [\#635](https://github.com/mllam/neural-lam/pull/635) @sadamov
 
 ### Fixed
 

@@ -51,11 +51,11 @@ def plot_example_from_datastore(
     Raises
     ------
     NotImplementedError
-        If the datastore is not on a regular spatial grid.
+        If the datastore is not on a rectilinear grid.
     """
-    if not datastore.is_on_regular_spatial_grid:
+    if not datastore.is_on_rectilinear_grid:
         raise NotImplementedError(
-            "Plotting requires a datastore on a regular spatial grid."
+            "Plotting requires a datastore on a rectilinear grid."
         )
 
     da = datastore.get_dataarray(category=category, split=split)
