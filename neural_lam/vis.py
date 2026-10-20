@@ -427,7 +427,7 @@ def plot_on_axis(
     # Plot boundary data underneath interior data when provided
     if boundary_da is not None and boundary_datastore is not None:
         # Prefer per-point lat/lon carried on the boundary DataArray when
-        # available. Fall back to the datastore regular grid otherwise.
+        # available. Fall back to the datastore rectilinear grid otherwise.
         per_point_lats_lons = None
         for lon_name, lat_name in (("longitude", "latitude"), ("lon", "lat")):
             if (
@@ -450,20 +450,20 @@ def plot_on_axis(
         b_values_flat = np.asarray(boundary_da.values).ravel()
         # Use "forcing" category because boundary datastores will not have
         # state variables (e.g. ERA5 boundary with only forcing + static).
-        regular_grid = boundary_datastore.is_on_regular_spatial_grid
-        if regular_grid:
+        rectilinear_grid = boundary_datastore.is_on_rectilinear_grid
+        if rectilinear_grid:
             b_xy = boundary_datastore.get_xy("forcing", stacked=False)
             b_grid_shape = (b_xy.shape[0], b_xy.shape[1])
-            regular_grid = b_values_flat.size == int(np.prod(b_grid_shape))
+            rectilinear_grid = b_values_flat.size == int(np.prod(b_grid_shape))
 
-        if regular_grid:
+        if rectilinear_grid:
             b_lats_lons = boundary_datastore.get_lat_lon("forcing")
             b_lons = b_lats_lons[:, 0].reshape(b_grid_shape)
             b_lats = b_lats_lons[:, 1].reshape(b_grid_shape)
             b_values = b_values_flat.reshape(b_grid_shape)
         elif per_point_lats_lons is not None:
             # After convex-hull cropping the boundary is no longer a full
-            # rectangular grid. Recover a regular (lon, lat) grid by
+            # rectangular grid. Recover a rectilinear (lon, lat) grid by
             # rebuilding a multi-index from the per-point lat/lon aux
             # coords and unstacking;
             lon_name = (
