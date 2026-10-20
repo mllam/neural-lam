@@ -6,7 +6,6 @@ from pathlib import Path
 import pytest
 import pytorch_lightning as pl
 import torch
-import wandb
 
 # First-party
 from neural_lam import config as nlconfig
@@ -31,6 +30,8 @@ NUM_FUTURE_FORCING_STEPS = 1
 def run_simple_training(
     datastore,
     set_output_std,
+    tmp_path,
+    detect_anomaly=False,
     metrics_watch=None,
     var_leads_metrics_watch=None,
 ):
@@ -43,6 +44,10 @@ def run_simple_training(
         Datastore to load data from for training
     set_output_std : bool
         If --output_std should be set during training
+    tmp_path : pathlib.Path
+        Temporary directory for any Lightning output.
+    detect_anomaly : bool, default False
+        Whether PyTorch autograd anomaly detection should be enabled.
     """
     if metrics_watch is None:
         metrics_watch = []
@@ -73,9 +78,14 @@ def run_simple_training(
         # to support single-GPU machines
         devices=2 if torch.cuda.device_count() >= 2 else 1,
         log_every_n_steps=1,
-        # use `detect_anomaly` to ensure that we don't have NaNs popping up
-        # during training
-        detect_anomaly=True,
+        detect_anomaly=detect_anomaly,
+        limit_train_batches=2,
+        limit_val_batches=2,
+        num_sanity_val_steps=0,
+        default_root_dir=tmp_path,
+        enable_checkpointing=False,
+        logger=False,
+        enable_progress_bar=False,
     )
 
     graph_name = "1level"
@@ -94,7 +104,7 @@ def run_simple_training(
         ar_steps_train=3,
         ar_steps_eval=5,
         batch_size=2,
-        num_workers=1,
+        num_workers=0,
         num_past_forcing_steps=1,
         num_future_forcing_steps=1,
     )
@@ -138,13 +148,12 @@ def run_simple_training(
         metrics_watch=metrics_watch,
         var_leads_metrics_watch=var_leads_metrics_watch,
     )
-    wandb.init(mode="disabled")  # Disable wandb for offline test run
     trainer.fit(model=model, datamodule=data_module)
 
 
 @pytest.mark.requires_training
 @pytest.mark.parametrize("datastore_name", DATASTORES.keys())
-def test_training(datastore_name):
+def test_training(datastore_name, tmp_path):
     datastore = init_datastore_example(datastore_name)
 
     if not isinstance(datastore, BaseRegularGridDatastore):
@@ -153,14 +162,19 @@ def test_training(datastore_name):
             f"it is not a regular grid datastore."
         )
 
-    run_simple_training(datastore, set_output_std=False)
+    run_simple_training(
+        datastore,
+        set_output_std=False,
+        tmp_path=tmp_path,
+        detect_anomaly=datastore_name == DummyDatastore.SHORT_NAME,
+    )
 
 
 @pytest.mark.requires_training
 @pytest.mark.requires_real_data
-def test_training_output_std():
+def test_training_output_std(tmp_path):
     datastore = init_datastore_example("mdp")  # Test only with mdp datastore
-    run_simple_training(datastore, set_output_std=True)
+    run_simple_training(datastore, set_output_std=True, tmp_path=tmp_path)
 
 
 def test_all_gather_cat_single_device():
