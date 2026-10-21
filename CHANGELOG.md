@@ -43,6 +43,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Maintenance
 
+- Add automated PR claim check workflow (`pr-claim-check.yml`) and triage script to flag pull requests without a linked issue, competing PRs for the same issue, or unedited PR template placeholders [\#793](https://github.com/mllam/neural-lam/issues/793) @GiGiKoneti
+
 - Fix the GPU CI job silently running on CPU: use an NVIDIA `g4dn.xlarge` cirun instance instead of the AMD `g4ad.xlarge`, install `--extra gpu-cu128` to match the runner's CUDA 12.2 driver, assert `torch.cuda.is_available()`, and run only the GPU-relevant tests there [\#802](https://github.com/mllam/neural-lam/pull/802) @varma1221
 
 - Add a `lychee` pre-commit hook checking Markdown links and section anchors (config in `.github/lychee.toml`, run once per push in CI) and a PR-template reminder to update `CONTRIBUTING.md` / `AGENTS.md` [\#738](https://github.com/mllam/neural-lam/pull/738) @KumarShivam1908

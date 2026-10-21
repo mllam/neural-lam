@@ -1,0 +1,35 @@
+name: PR Claim Check
+
+on:
+  pull_request_target:
+    types: [opened, edited, synchronize]
+
+concurrency:
+  group: pr-claim-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+permissions:
+  pull-requests: write
+  issues: write
+
+jobs:
+  claim-check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout base branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.base.ref || 'main' }}
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Run PR claim check
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          python .github/scripts/pr_claim_check.py \
+            --repo "${{ github.repository }}" \
+            --pr "${{ github.event.pull_request.number }}"
