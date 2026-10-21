@@ -438,3 +438,83 @@ def test_step_predictor_invalid_clamping_limits(lower, upper):
 
     with pytest.raises(ValueError, match="must be smaller than upper"):
         predictor.prepare_clamping_params(datastore)
+
+
+@pytest.fixture(scope="module")
+def dummy_datastore_with_graphs():
+    """Create a DummyDatastore with both a 1-level flat graph and a
+    hierarchical graph."""
+    # Standard library
+    from pathlib import Path
+
+    # First-party
+    from neural_lam.create_graph_with_wmg import create_graph_from_datastore
+
+    ds = DummyDatastore()
+    for graph_name, archetype in [
+        ("1level", "keisler"),
+        ("hier", "hierarchical"),
+    ]:
+        graph_dir = Path(ds.root_path) / "graph" / graph_name
+        if not graph_dir.exists():
+            create_graph_from_datastore(
+                datastore=ds,
+                output_root_path=str(graph_dir),
+                archetype=archetype,
+            )
+    return ds
+
+
+def test_graph_lam_hierarchical_graph_raises_value_error(
+    dummy_datastore_with_graphs,
+):
+    """GraphLAM requires a flat graph; passing a hierarchical graph raises
+    ValueError."""
+    # First-party
+    from neural_lam.models.step_predictors.graph.graph_lam import GraphLAM
+
+    with pytest.raises(
+        ValueError,
+        match=(
+            "GraphLAM requires a flat mesh graph, but graph 'hier' is"
+            " hierarchical"
+        ),
+    ):
+        GraphLAM(
+            datastore=dummy_datastore_with_graphs,
+            graph_name="hier",
+            hidden_dim=4,
+            hidden_layers=1,
+            processor_layers=1,
+        )
+
+
+@pytest.mark.parametrize(
+    "model_name,expected_cls",
+    [
+        ("hi_lam", "HiLAM"),
+        ("hi_lam_parallel", "HiLAMParallel"),
+    ],
+)
+def test_hierarchical_models_flat_graph_raises_value_error(
+    dummy_datastore_with_graphs, model_name, expected_cls
+):
+    """Hierarchical models require a hierarchical graph; passing a flat graph
+    raises ValueError."""
+    # First-party
+    from neural_lam.models import MODELS
+
+    with pytest.raises(
+        ValueError,
+        match=(
+            f"{expected_cls} requires a hierarchical mesh graph, but graph"
+            " '1level' is flat"
+        ),
+    ):
+        MODELS[model_name](
+            datastore=dummy_datastore_with_graphs,
+            graph_name="1level",
+            hidden_dim=4,
+            hidden_layers=1,
+            processor_layers=1,
+        )
