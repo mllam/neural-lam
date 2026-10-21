@@ -812,28 +812,18 @@ class ForecasterModule(pl.LightningModule):
         prediction_rescaled = prediction * state_std + state_mean
         target_rescaled = target * state_std + state_mean
 
-        # Load boundary forcing for plotting (raw, unstandardized).
-        #
-        # Interior state variables are matched to boundary forcing fields via
-        # ``config.plotting.boundary_var_mapping``: a boundary overlay is drawn
-        # for state variable ``var_name`` when its mapped boundary feature is a
-        # forcing feature on the boundary datastore. State variables absent from
-        # the mapping fall back to matching a boundary forcing feature of the
-        # same name (e.g. DANRA ``u100m`` overlays ERA5 ``u100m``);
-        # Configs pickled in checkpoints from before `plotting` existed lack
-        # the section, fall back to its defaults.
+        # Configs pickled in checkpoints from before `plotting` existed lack it
         plotting_cfg = getattr(self.config, "plotting", PlottingConfig())
         boundary_var_mapping = plotting_cfg.boundary_var_mapping
         da_boundary_forcing = None
-        boundary_feature_names: set = set()
+        boundary_feature_names: set[str] = set()
         if self.datastore_boundary is not None:
             da_boundary_forcing = self.datastore_boundary.get_dataarray(
                 category="forcing", split=split, standardize=False
             )
-            if da_boundary_forcing is not None:
-                boundary_feature_names = set(
-                    self.datastore_boundary.get_vars_names("forcing")
-                )
+            boundary_feature_names = set(
+                self.datastore_boundary.get_vars_names("forcing")
+            )
 
         for pred_slice, target_slice, time_slice in zip(
             prediction_rescaled[:n_examples],
@@ -887,12 +877,8 @@ class ForecasterModule(pl.LightningModule):
                 }
 
             for t_i, _ in enumerate(zip(pred_slice, target_slice), start=1):
-                # Select boundary field for this timestep (if available).
-                # Use ``method="nearest"`` because the boundary cadence is
-                # often coarser than the interior (e.g. ERA5 6h vs DANRA
-                # 1h) and we want every interior step to show the closest
-                # available boundary state, not skip frames.
-                boundary_da_t = None
+                # Unmapped state variables fall back to the same name
+                boundary_fields = {}
                 if (
                     da_boundary_forcing is not None
                     and "time" in da_boundary_forcing.dims
@@ -900,24 +886,19 @@ class ForecasterModule(pl.LightningModule):
                     target_time = np.array(
                         time_slice[t_i - 1].cpu(), dtype="datetime64[ns]"
                     )
+                    # Nearest, as the boundary cadence is often coarser
+                    # (e.g. ERA5 6h vs DANRA 1h)
                     boundary_da_t = da_boundary_forcing.sel(
                         time=target_time, method="nearest"
                     )
-
-                def _boundary_for(var_name: str) -> xr.DataArray | None:
-                    """Return the boundary field for ``var_name`` if the
-                    boundary datastore exposes the mapped forcing feature
-                    (``boundary_var_mapping``, defaulting to the same name),
-                    else ``None``."""
-                    boundary_var = boundary_var_mapping.get(var_name, var_name)
-                    if (
-                        boundary_da_t is None
-                        or boundary_var not in boundary_feature_names
-                    ):
-                        return None
-                    return boundary_da_t.sel(
-                        forcing_feature=boundary_var
-                    ).squeeze()
+                    for var_name in self.datastore.get_vars_names("state"):
+                        boundary_var = boundary_var_mapping.get(
+                            var_name, var_name
+                        )
+                        if boundary_var in boundary_feature_names:
+                            boundary_fields[var_name] = boundary_da_t.sel(
+                                forcing_feature=boundary_var
+                            ).squeeze()
 
                 var_figs = [
                     vis.plot_prediction(
@@ -932,12 +913,8 @@ class ForecasterModule(pl.LightningModule):
                         da_target=da_target.isel(
                             state_feature=var_i, time=t_i - 1
                         ).squeeze(),
-                        boundary_da=boundary_field,
-                        boundary_datastore=(
-                            self.datastore_boundary
-                            if boundary_field is not None
-                            else None
-                        ),
+                        boundary_da=boundary_fields.get(var_name),
+                        boundary_datastore=self.datastore_boundary,
                         boundary_margin_degrees=(
                             plotting_cfg.boundary_margin_degrees
                         ),
@@ -949,7 +926,6 @@ class ForecasterModule(pl.LightningModule):
                             var_vranges,
                         )
                     )
-                    for boundary_field in (_boundary_for(var_name),)
                 ]
 
                 for var_name, fig in zip(

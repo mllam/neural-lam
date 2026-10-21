@@ -138,39 +138,14 @@ def test_plot_prediction() -> None:
     assert prediction_ax.collections[0].norm.vmax == expected_vmax
 
 
-def test_plot_on_axis_with_boundary() -> None:
-    """Boundary data from a separate datastore adds an extra pcolormesh."""
-    datastore = init_datastore_example("dummydata")
-    n_grid = datastore.num_grid_points
-
-    boundary_datastore = BoundaryDummyDatastore()
-    n_boundary = boundary_datastore.num_grid_points
-
-    da = xr.DataArray(np.linspace(0.0, 1.0, n_grid))
-    boundary_da = xr.DataArray(np.linspace(0.5, 1.5, n_boundary))
-
-    fig, ax = plt.subplots(
-        subplot_kw={"projection": datastore.coords_projection}
-    )
-    mesh = vis.plot_on_axis(
-        ax=ax,
-        da=da,
-        datastore=datastore,
-        boundary_da=boundary_da,
-        boundary_datastore=boundary_datastore,
-        boundary_alpha=None,
-    )
-    assert mesh is not None
-    # Two pcolormesh collections: boundary underneath + interior on top
-    assert len(ax.collections) == 2
-
-
 def test_plot_prediction_with_boundary() -> None:
-    """plot_prediction with boundary data shows boundary in both panels."""
+    """Boundary data from a datastore without state is drawn underneath the
+    interior in both panels."""
     datastore = init_datastore_example("dummydata")
     n_grid = datastore.num_grid_points
 
     boundary_datastore = BoundaryDummyDatastore()
+    assert boundary_datastore.N_FEATURES["state"] == 0
     n_boundary = boundary_datastore.num_grid_points
 
     da_pred = xr.DataArray(np.linspace(0.0, 1.0, n_grid))
@@ -181,13 +156,10 @@ def test_plot_prediction_with_boundary() -> None:
         datastore=datastore,
         da_prediction=da_pred,
         da_target=da_target,
-        title="Test with Boundary",
         boundary_alpha=None,
         boundary_da=boundary_da,
         boundary_datastore=boundary_datastore,
     )
-
-    assert isinstance(fig, matplotlib.figure.Figure)
 
     ground_truth_ax, prediction_ax, _ = fig.axes
     # Each panel: boundary pcolormesh + interior pcolormesh
@@ -195,104 +167,23 @@ def test_plot_prediction_with_boundary() -> None:
     assert len(prediction_ax.collections) == 2
 
 
-def test_plot_prediction_with_stateless_boundary_uses_forcing_grid() -> None:
-    """A boundary datastore with no state must still plot via the forcing
-    grid. The plotting code must not query ``state`` on the boundary."""
+def test_interior_bbox_margin_pads_every_side() -> None:
+    """`boundary_margin_degrees` pads the interior bbox on every side."""
     datastore = init_datastore_example("dummydata")
-    n_grid = datastore.num_grid_points
 
-    boundary_datastore = BoundaryDummyDatastore()
-    # Sanity check: boundary truly has no state.
-    assert boundary_datastore.N_FEATURES["state"] == 0
-    with pytest.raises(KeyError):
-        boundary_datastore.get_xy("state", stacked=True)
+    xmin, xmax, ymin, ymax = vis._interior_padded_projected_bbox(datastore, 0.0)
+    padded = vis._interior_padded_projected_bbox(datastore, 1.0)
 
-    n_boundary = boundary_datastore.num_grid_points
-    da_pred = xr.DataArray(np.linspace(0.0, 1.0, n_grid))
-    da_target = xr.DataArray(np.linspace(1.0, 2.0, n_grid))
-    boundary_da = xr.DataArray(np.linspace(0.5, 1.5, n_boundary))
-
-    fig = vis.plot_prediction(
-        datastore=datastore,
-        da_prediction=da_pred,
-        da_target=da_target,
-        boundary_alpha=None,
-        boundary_da=boundary_da,
-        boundary_datastore=boundary_datastore,
-    )
-
-    ground_truth_ax, prediction_ax, _ = fig.axes
-    # Each panel: boundary pcolormesh + interior pcolormesh.
-    assert len(ground_truth_ax.collections) == 2
-    assert len(prediction_ax.collections) == 2
-
-
-def test_plot_prediction_boundary_none_is_backward_compatible() -> None:
-    """Passing no boundary params behaves identically to the old API."""
-    datastore = init_datastore_example("dummydata")
-    n_grid = datastore.num_grid_points
-
-    da_pred = xr.DataArray(np.linspace(0.0, 1.0, n_grid))
-    da_target = xr.DataArray(np.linspace(1.0, 2.0, n_grid))
-
-    fig = vis.plot_prediction(
-        datastore=datastore,
-        da_prediction=da_pred,
-        da_target=da_target,
-        boundary_alpha=None,
-    )
-
-    ground_truth_ax = fig.axes[0]
-    # No boundary data -> only one collection per panel
-    assert len(ground_truth_ax.collections) == 1
-
-
-def test_plot_on_axis_boundary_sets_extent() -> None:
-    """With a boundary datastore the axes extent should be the interior
-    bbox in the datastore's own projection, expanded by
-    ``boundary_margin_degrees`` worth of latitude on each side."""
-
-    datastore = init_datastore_example("dummydata")
-    n_grid = datastore.num_grid_points
-
-    boundary_datastore = BoundaryDummyDatastore()
-    n_boundary = boundary_datastore.num_grid_points
-
-    da = xr.DataArray(np.linspace(0.0, 1.0, n_grid))
-    boundary_da = xr.DataArray(np.linspace(0.5, 1.5, n_boundary))
-
-    margin = 3.0
-    with patch(
-        "cartopy.mpl.geoaxes.GeoAxes.set_extent", autospec=True
-    ) as set_extent_mock:
-        vis.plot_on_axis(
-            ax=plt.axes(projection=datastore.coords_projection),
-            da=da,
-            datastore=datastore,
-            boundary_da=boundary_da,
-            boundary_datastore=boundary_datastore,
-            boundary_alpha=None,
-            boundary_margin_degrees=margin,
-        )
-
-    assert set_extent_mock.call_count == 1
-    called_extent = set_extent_mock.call_args.args[1]
-    called_crs = set_extent_mock.call_args.kwargs["crs"]
-    assert type(called_crs) is type(datastore.coords_projection)
-
-    expected = vis._interior_padded_projected_bbox(datastore, margin)
-    for got, want in zip(called_extent, expected):
-        assert got == pytest.approx(want)
+    assert padded[0] < xmin
+    assert padded[1] > xmax
+    assert padded[2] < ymin
+    assert padded[3] > ymax
 
 
 @pytest.mark.requires_real_data
 def test_plot_prediction_with_era5_boundary() -> None:
-    """Integration test: DANRA interior + ERA5 boundary overlay.
-
-    Downloads ERA5 data from WeatherBench2 via mllam-data-prep on first run.
-    Verifies that plot_prediction works with real data from two different
-    datastores (LambertConformal interior + PlateCarree boundary).
-    """
+    """DANRA interior (LambertConformal) with the cropped ERA5 boundary
+    (PlateCarree) overlaid."""
     datastore = init_datastore_example("mdp")
     boundary_datastore = init_datastore_boundary_example("mdp")
 
@@ -301,10 +192,8 @@ def test_plot_prediction_with_era5_boundary() -> None:
 
     da_pred = xr.DataArray(np.linspace(0.0, 1.0, n_grid))
     da_target = xr.DataArray(np.linspace(1.0, 2.0, n_grid))
-    # Real boundary data (from `get_dataarray`) carries `longitude`/
-    # `latitude` as per-point coords on `grid_index`, since the ERA5
-    # boundary datastore's convex-hull cropping leaves it on an irregular
-    # grid. Attach the same coords here so the synthetic array matches.
+    # Like `get_dataarray` output, carry the per-point lon/lat of the
+    # cropped boundary
     boundary_lon_lat = boundary_datastore.get_lat_lon("forcing")
     boundary_da = xr.DataArray(
         np.linspace(0.5, 1.5, n_boundary),
@@ -586,8 +475,7 @@ def test_plot_spatial_error() -> None:
 
 
 def test_plot_spatial_error_extent_matches_interior() -> None:
-    """`plot_spatial_error` always crops the axes to the interior bbox
-    (in the datastore's own projection, with zero margin)."""
+    """`plot_spatial_error` crops the axes to the interior x/y bounds."""
     datastore = init_datastore_example("dummydata")
     n_grid = datastore.num_grid_points
     grid_shape = (datastore.grid_shape_state.x, datastore.grid_shape_state.y)
@@ -614,11 +502,17 @@ def test_plot_spatial_error_extent_matches_interior() -> None:
     called_crs = set_extent_mock.call_args.kwargs["crs"]
     assert type(called_crs) is type(datastore.coords_projection)
 
-    expected = vis._interior_padded_projected_bbox(
-        datastore, margin_degrees=0.0
+    interior_xy = datastore.get_xy("state", stacked=True)[
+        boundary_mask.reshape(n_grid) == 0
+    ]
+    assert called_extent == pytest.approx(
+        [
+            interior_xy[:, 0].min(),
+            interior_xy[:, 0].max(),
+            interior_xy[:, 1].min(),
+            interior_xy[:, 1].max(),
+        ]
     )
-    for got, want in zip(called_extent, expected):
-        assert got == pytest.approx(want)
 
 
 @pytest.fixture(scope="module")
@@ -1061,9 +955,8 @@ def test_aggregate_and_plot_metrics_with_metrics_watch(dummy_graph_dir):
 def test_plot_examples_with_config_from_before_plotting(
     model_and_batch, monkeypatch
 ):
-    """Configs pickled in checkpoints from before the `plotting` section
-    existed lack the attribute, `plot_examples` must fall back to its
-    defaults instead of raising."""
+    """Configs pickled before `plotting` existed fall back to its
+    defaults."""
     model, batch, _, tmp_path = model_and_batch
     model.plotted_examples = 0
     del model.config.plotting

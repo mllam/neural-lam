@@ -130,8 +130,8 @@ class PlottingConfig:
     Attributes
     ----------
     boundary_margin_degrees : float
-        Lat/lon margin (in projection degrees) drawn around the interior
-        domain when a boundary datastore is configured. Defaults to 1.0.
+        Margin around the interior in degrees of latitude when a boundary
+        datastore is configured. Defaults to 1.0.
     boundary_var_mapping : dict[str, str]
         Optional mapping from interior state variable name to boundary
         forcing feature name for the overlay. State variables not listed

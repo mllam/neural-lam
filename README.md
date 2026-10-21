@@ -604,16 +604,11 @@ When a boundary datastore is configured in the `datastores` mapping of
 underneath the interior prediction and ground truth panels. The overlay is
 controlled by the optional `plotting` section in `config.yaml`:
 
-* `boundary_margin_degrees`: lat/lon margin (in projection degrees) drawn
-  around the interior domain (default `1.0`).
+* `boundary_margin_degrees`: margin around the interior in degrees of
+  latitude (default `1.0`).
 * `boundary_var_mapping`: maps interior state variable names to boundary
-  forcing feature names for the overlay.
-
-For each state variable plotted (e.g. `u100m`), the overlay is drawn only when
-its mapped boundary feature is a forcing feature on the boundary datastore.
-State variables absent from `boundary_var_mapping` fall back to matching a
-boundary forcing feature of the same name, so datastores that share variable
-names need no explicit mapping.
+  forcing feature names. Unmapped variables fall back to a boundary forcing
+  feature of the same name; without one no overlay is drawn.
 
 **Note:** While it is technically possible to use multiple GPUs for running evaluation, this is strongly discouraged. If using multiple devices the `DistributedSampler` will replicate some samples to make sure all devices have the same batch size, meaning that evaluation metrics will be unreliable.
 A possible workaround is to just use batch size 1 during evaluation.
