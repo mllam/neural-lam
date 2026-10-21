@@ -37,26 +37,6 @@ def test_mean_bias_error():
     assert torch.isclose(bias, torch.tensor(4.0))
 
 
-def test_radial_power_spectrum_2d_shape_and_values():
-    """Verify 2D radial FFT power spectrum calculation."""
-    constant_field = torch.ones(1, 32, 32)
-    psd_const, k_bins = metrics.radial_power_spectrum_2d(constant_field)
-
-    assert len(k_bins) == 16
-    assert psd_const.shape == (1, 16)
-    assert torch.allclose(psd_const, torch.zeros_like(psd_const), atol=1e-5)
-
-    y = torch.linspace(0, 2 * torch.pi, 32)
-    x = torch.linspace(0, 2 * torch.pi, 32)
-    grid_y, grid_x = torch.meshgrid(y, x, indexing="ij")
-    sine_field = torch.sin(4 * grid_x).unsqueeze(0)
-
-    psd_sine, k_bins = metrics.radial_power_spectrum_2d(sine_field)
-    assert psd_sine.shape == (1, 16)
-    peak_k = k_bins[torch.argmax(psd_sine[0])]
-    assert peak_k.item() == 4
-
-
 def test_dct_2d_transform_and_power_spectrum():
     """Verify 2D DCT-II transform and radially averaged DCT power spectrum."""
     field = torch.randn(2, 16, 16)

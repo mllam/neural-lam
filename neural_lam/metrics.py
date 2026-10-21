@@ -432,65 +432,6 @@ def mbe(
     )
 
 
-def radial_power_spectrum_2d(
-    field_2d: torch.Tensor,
-) -> tuple[torch.Tensor, torch.Tensor]:
-    """
-    Compute the 1D radially averaged power spectral density (PSD) from 2D
-    spatial fields using 2D FFT.
-
-    Parameters
-    ----------
-    field_2d : torch.Tensor
-        Spatial field with shape ``(..., Ny, Nx)``.
-
-    Returns
-    -------
-    tuple of (torch.Tensor, torch.Tensor)
-        - ``radial_psd``: Radially averaged power spectrum with shape
-          ``(..., num_wavenumbers)``.
-        - ``wavenumbers``: 1D tensor of integer wavenumber bin centers.
-    """
-    ny = field_2d.shape[-2]
-    nx = field_2d.shape[-1]
-
-    # Compute 2D discrete Fourier transform and shift zero frequency to center
-    fft_2d = torch.fft.fft2(field_2d)
-    fft_shifted = torch.fft.fftshift(fft_2d, dim=(-2, -1))
-    psd_2d = (torch.abs(fft_shifted) ** 2) / (ny * nx)
-
-    # Coordinate grids centered at zero frequency
-    y_freq = torch.arange(-ny // 2, ny - ny // 2, device=field_2d.device)
-    x_freq = torch.arange(-nx // 2, nx - nx // 2, device=field_2d.device)
-    grid_y, grid_x = torch.meshgrid(y_freq, x_freq, indexing="ij")
-    radial_dist = torch.sqrt(grid_y.float() ** 2 + grid_x.float() ** 2)
-
-    max_k = int(min(ny, nx) // 2)
-    k_bins = torch.arange(1, max_k + 1, device=field_2d.device)
-    radial_dist_int = torch.round(radial_dist).long()
-
-    # Average PSD over concentric wavenumber rings
-    psd_flat = psd_2d.reshape(-1, ny * nx)
-    dist_flat = radial_dist_int.flatten()
-
-    radial_psd_list = []
-    for k in k_bins:
-        ring_mask = dist_flat == k
-        if ring_mask.any():
-            ring_mean = psd_flat[:, ring_mask].mean(dim=-1)
-        else:
-            ring_mean = torch.zeros(
-                psd_flat.shape[0], device=field_2d.device, dtype=field_2d.dtype
-            )
-        radial_psd_list.append(ring_mean)
-
-    radial_psd_2d = torch.stack(radial_psd_list, dim=-1)
-    batch_shape = field_2d.shape[:-2]
-    radial_psd = radial_psd_2d.reshape(*batch_shape, max_k)
-
-    return radial_psd, k_bins
-
-
 class DiscreteCosineTransform2D:
     """
     Computes 2D Discrete Cosine Transform (DCT-II) for regional fields.
@@ -563,14 +504,21 @@ def dct_power_spectrum_2d(
         - ``k_centers``: 1D tensor of normalized wavenumber centers in [0, 0.5].
         - ``radial_psd``: 1D or batched tensor of power spectral density.
     """
-    h = field_2d.shape[-2]
-    w = field_2d.shape[-1]
-    dct_engine = DiscreteCosineTransform2D(h, w, device=field_2d.device)
-
     if mask is not None:
-        field_input = field_2d * mask
+        rows = torch.where(mask.any(dim=-1))[0]
+        cols = torch.where(mask.any(dim=-2))[0]
+        if len(rows) > 0 and len(cols) > 0:
+            field_input = field_2d[
+                ..., rows[0] : rows[-1] + 1, cols[0] : cols[-1] + 1
+            ]
+        else:
+            field_input = field_2d
     else:
         field_input = field_2d
+
+    h = field_input.shape[-2]
+    w = field_input.shape[-1]
+    dct_engine = DiscreteCosineTransform2D(h, w, device=field_2d.device)
 
     dct_coeffs = dct_engine(field_input)
     power = dct_coeffs**2

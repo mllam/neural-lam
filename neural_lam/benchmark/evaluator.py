@@ -3,6 +3,7 @@
 # Standard library
 import time
 from dataclasses import dataclass, field
+from typing import cast
 
 # Third-party
 import numpy as np
@@ -12,7 +13,7 @@ from torch.utils.data import DataLoader
 # Local
 from .. import metrics
 from ..datastore.base import BaseDatastore
-from ..models.module import ForecasterModule
+from ..models.module import Batch, ForecasterModule
 from ..weather_dataset import WeatherDataset
 
 
@@ -204,6 +205,10 @@ class ForecastBenchmark:
         batch_size: int = 1,
         buffer_width: int = 0,
         fss_kernel_sizes: list[int] | None = None,
+        num_past_forcing_steps: int = 1,
+        num_future_forcing_steps: int = 1,
+        num_past_boundary_steps: int = 1,
+        num_future_boundary_steps: int = 1,
         device: str | torch.device = "cpu",
     ) -> None:
         """
@@ -224,6 +229,14 @@ class ForecastBenchmark:
         fss_kernel_sizes : list of int or None, optional
             Kernel neighborhood sizes for Fractions Skill Score. Must be odd.
             Defaults to [1, 3, 7, 15, 31].
+        num_past_forcing_steps : int, default 1
+            Number of past forcing time steps.
+        num_future_forcing_steps : int, default 1
+            Number of future forcing time steps.
+        num_past_boundary_steps : int, default 1
+            Number of past boundary time steps.
+        num_future_boundary_steps : int, default 1
+            Number of future boundary time steps.
         device : str or torch.device, default "cpu"
             Computation device.
         """
@@ -236,12 +249,20 @@ class ForecastBenchmark:
         for k_sz in self.fss_kernel_sizes:
             if k_sz % 2 == 0:
                 raise ValueError(f"FSS kernel size must be odd, got {k_sz}.")
+        self.num_past_forcing_steps = num_past_forcing_steps
+        self.num_future_forcing_steps = num_future_forcing_steps
+        self.num_past_boundary_steps = num_past_boundary_steps
+        self.num_future_boundary_steps = num_future_boundary_steps
         self.device = torch.device(device)
 
         self.dataset = WeatherDataset(
             datastore=self.datastore,
             split=self.split,
             ar_steps=self.eval_steps,
+            num_past_forcing_steps=self.num_past_forcing_steps,
+            num_future_forcing_steps=self.num_future_forcing_steps,
+            num_past_boundary_steps=self.num_past_boundary_steps,
+            num_future_boundary_steps=self.num_future_boundary_steps,
         )
         self.dataloader = DataLoader(
             self.dataset,
@@ -298,7 +319,7 @@ class ForecastBenchmark:
     def evaluate(
         self,
         model: ForecasterModule,
-        max_batches: int | None = 2,
+        max_batches: int | None = None,
     ) -> BenchmarkScorecard:
         """
         Execute the evaluation benchmark on the provided model.
@@ -308,7 +329,8 @@ class ForecastBenchmark:
         model : ForecasterModule
             The trained model to evaluate.
         max_batches : int or None, optional
-            Maximum number of batches to evaluate. Defaults to 2 for speed.
+            Maximum number of batches to evaluate.
+            Defaults to None (full split).
 
         Returns
         -------
@@ -357,7 +379,13 @@ class ForecastBenchmark:
                 if max_batches is not None and b_idx >= max_batches:
                     break
 
-                batch = model.on_after_batch_transfer(batch, dataloader_idx=0)
+                batch_on_device = tuple(
+                    t.to(self.device) if isinstance(t, torch.Tensor) else t
+                    for t in batch
+                )
+                batch = model.on_after_batch_transfer(
+                    cast("Batch", batch_on_device), dataloader_idx=0
+                )
 
                 if torch.cuda.is_available() and self.device.type == "cuda":
                     torch.cuda.synchronize()
@@ -426,8 +454,9 @@ class ForecastBenchmark:
                         if not k_bins_out:
                             k_bins_out = k_centers.cpu().tolist()
 
-                        # FSS at 90th percentile threshold
-                        thresh = float(torch.quantile(t_2d, 0.90).item())
+                        # FSS at 90th percentile threshold over interior domain
+                        t_interior = t_2d[..., self.interior_mask_2d.bool()]
+                        thresh = float(torch.quantile(t_interior, 0.90).item())
                         for k_sz in self.fss_kernel_sizes:
                             fss_val = metrics.fractions_skill_score_2d(
                                 p_2d,
@@ -547,8 +576,15 @@ class ForecastBenchmark:
             float(np.mean(step_latencies_ms)) if step_latencies_ms else 0.0
         )
 
+        predictor_model = getattr(model.forecaster, "predictor", None)
+        model_name = (
+            predictor_model.__class__.__name__
+            if predictor_model is not None
+            else model.forecaster.__class__.__name__
+        )
+
         return BenchmarkScorecard(
-            model_name=model.forecaster.__class__.__name__,
+            model_name=model_name,
             num_rollout_steps=self.eval_steps,
             variables=self.var_names,
             lead_time_hours=lead_hours,

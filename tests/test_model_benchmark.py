@@ -72,7 +72,7 @@ def test_forecast_benchmark_with_dummy_datastore():
     assert isinstance(scorecard, BenchmarkScorecard)
     assert scorecard.is_stable is True
     assert scorecard.num_rollout_steps == eval_steps
-    assert scorecard.model_name == "ARForecaster"
+    assert scorecard.model_name == "GraphLAM"
     assert len(scorecard.variables) == len(datastore.get_vars_names("state"))
 
     for var in scorecard.variables:
@@ -178,7 +178,7 @@ def test_forecast_benchmark_danra():
     assert isinstance(scorecard, BenchmarkScorecard)
     assert scorecard.is_stable is True
     assert scorecard.num_rollout_steps == eval_steps
-    assert scorecard.model_name == "ARForecaster"
+    assert scorecard.model_name == "GraphLAM"
     assert len(scorecard.variables) == len(datastore.get_vars_names("state"))
     assert scorecard.mean_step_latency_ms >= 0.0
 
