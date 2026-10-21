@@ -79,8 +79,9 @@ python docs/notebooks/create_reduced_meps_dataset.py
 
 Run these commands from the repository root. The dataset-reduction notebook
 requires the `data/meps_example` dataset described in the
-[README](README.md#using-neural-lam). It creates output directories under
-`data/meps_example_reduced` and overwrites matching output files on reruns.
+[datastores guide](https://mllam.github.io/neural-lam/user-guide/datastores.html).
+It creates output directories under `data/meps_example_reduced` and
+overwrites matching output files on reruns.
 Use `--input-dir` and `--output-dir` to select other locations; with
 `marimo edit`, put notebook arguments after `--`.
 
