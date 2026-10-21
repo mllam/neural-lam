@@ -84,17 +84,7 @@ def test_static_edge_caching_numerical_parity(
     boundary = torch.randn(b_size, pred_steps, num_grid, num_state)
 
     # 1. Unroll with forecaster (static embedding caching enabled)
-    with patch.object(
-        predictor_cached.g2m_embedder,
-        "forward",
-        wraps=predictor_cached.g2m_embedder.forward,
-    ) as mock_g2m:
-        pred_cached, std_cached = forecaster_cached(
-            init_states, forcing, boundary
-        )
-        # Embedder should run exactly once across the multi-step rollout
-        assert mock_g2m.call_count == 1
-
+    pred_cached, std_cached = forecaster_cached(init_states, forcing, boundary)
     loss_cached = pred_cached.sum() + std_cached.sum()
     loss_cached.backward()
 
@@ -143,3 +133,105 @@ def test_static_edge_caching_numerical_parity(
         assert torch.allclose(p1.grad, p2.grad, atol=1e-6), (
             f"Gradient mismatch for parameter: {name1}"
         )
+
+
+@pytest.mark.parametrize(
+    ("model_class", "graph_name"),
+    [
+        (GraphLAM, "1level"),
+        (HiLAM, "hierarchical"),
+    ],
+)
+def test_every_embedder_called_only_once_per_rollout(
+    shared_env, model_class, graph_name
+):
+    """Verify every static embedder executes exactly once per rollout."""
+    datastore, _ = shared_env
+    predictor = model_class(
+        datastore=datastore,
+        graph_name=graph_name,
+        hidden_dim=8,
+        hidden_layers=1,
+        processor_layers=1,
+        num_past_forcing_steps=0,
+        num_future_forcing_steps=0,
+    )
+    forecaster = ARForecaster(predictor, datastore)
+
+    b_size = 1
+    pred_steps = 4
+    num_grid = datastore.num_grid_points
+    num_state = datastore.get_num_data_vars(category="state")
+    d_forcing = datastore.get_num_data_vars(category="forcing")
+
+    init_states = torch.randn(b_size, 2, num_grid, num_state)
+    forcing = torch.randn(b_size, pred_steps, num_grid, d_forcing)
+    boundary = torch.randn(b_size, pred_steps, num_grid, num_state)
+
+    # Collect all static embedders for the model architecture
+    embedders = [predictor.g2m_embedder, predictor.m2g_embedder]
+    if isinstance(predictor, GraphLAM):
+        embedders.extend([predictor.m2m_embedder, predictor.mesh_embedder])
+    else:
+        embedders.extend(predictor.mesh_embedders)
+        embedders.extend(predictor.mesh_same_embedders)
+        embedders.extend(predictor.mesh_up_embedders)
+        embedders.extend(predictor.mesh_down_embedders)
+
+    # Patch forward on every embedder
+    patches = [
+        patch.object(emb, "forward", wraps=emb.forward) for emb in embedders
+    ]
+    active_mocks = [p.start() for p in patches]
+    try:
+        forecaster(init_states, forcing, boundary)
+        for m in active_mocks:
+            assert m.call_count == 1
+    finally:
+        for p in patches:
+            p.stop()
+
+
+@pytest.mark.parametrize(
+    ("model_class", "graph_name"),
+    [
+        (GraphLAM, "1level"),
+        (HiLAM, "hierarchical"),
+    ],
+)
+def test_standalone_fallback_behavior(shared_env, model_class, graph_name):
+    """Verify predictor calls without static_embeddings compute on the fly."""
+    datastore, _ = shared_env
+    predictor = model_class(
+        datastore=datastore,
+        graph_name=graph_name,
+        hidden_dim=8,
+        hidden_layers=1,
+        processor_layers=1,
+        num_past_forcing_steps=0,
+        num_future_forcing_steps=0,
+        output_std=True,
+    )
+
+    b_size = 1
+    num_grid = datastore.num_grid_points
+    num_state = datastore.get_num_data_vars(category="state")
+    d_forcing = datastore.get_num_data_vars(category="forcing")
+
+    prev_prev = torch.randn(b_size, num_grid, num_state)
+    prev = torch.randn(b_size, num_grid, num_state)
+    forcing = torch.randn(b_size, num_grid, d_forcing)
+
+    # 1. Direct call without static_embeddings (defaults to None, on the fly)
+    out_default, std_default = predictor(prev, prev_prev, forcing)
+
+    # 2. Call with precomputed static embeddings
+    static_emb = predictor.embed_static_features()
+    out_precomputed, std_precomputed = predictor(
+        prev, prev_prev, forcing, static_embeddings=static_emb
+    )
+
+    assert torch.allclose(out_default, out_precomputed, atol=1e-6)
+    if std_default is not None:
+        assert std_precomputed is not None
+        assert torch.allclose(std_default, std_precomputed, atol=1e-6)
