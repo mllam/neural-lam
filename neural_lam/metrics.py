@@ -636,6 +636,11 @@ def fractions_skill_score_2d(
     torch.Tensor
         Fractions Skill Score in [0, 1].
     """
+    if kernel_size % 2 == 0:
+        raise ValueError(
+            f"Fractions skill score kernel_size must be odd, got {kernel_size}."
+        )
+
     if pred_field.ndim == 2:
         pred_in = pred_field.unsqueeze(0).unsqueeze(0)
         target_in = target_field.unsqueeze(0).unsqueeze(0)
@@ -678,57 +683,138 @@ def fractions_skill_score_2d(
     return 1.0 - (mse / (ref + 1e-8))
 
 
-def spectral_collapse_ratio(
+def log_spectral_distance(
     psd_model: torch.Tensor,
     psd_target: torch.Tensor,
+    eps: float = 1e-10,
 ) -> torch.Tensor:
     """
-    Compute Spectral Collapse Ratio (SCR = PSD_model / PSD_target).
-    Values < 0.5 indicate severe spatial blurring/smoothing.
+    Compute Log-Spectral Distance (LSD) between model and target power spectra.
+
+    LSD (dB) = sqrt( mean( (10 * log10( psd_target / psd_model ))^2 ) )
 
     Parameters
     ----------
     psd_model : torch.Tensor
-        Model power spectral density.
+        Model power spectral density. Shape ``(..., K)``.
     psd_target : torch.Tensor
-        Target / ground-truth power spectral density.
+        Target / ground-truth power spectral density. Shape ``(..., K)``.
+    eps : float, default 1e-10
+        Small constant to avoid division by zero or log of non-positive numbers.
 
     Returns
     -------
     torch.Tensor
-        Ratio of model to target spectral power.
+        Log-spectral distance in decibels (dB). Shape ``(...)``.
     """
-    return psd_model / (psd_target + 1e-8)
+    ratio = torch.clamp(psd_target, min=eps) / torch.clamp(psd_model, min=eps)
+    log_ratio = 10.0 * torch.log10(ratio)
+    return torch.sqrt(torch.mean(log_ratio**2, dim=-1))
 
 
-def hallucination_index(
-    scr_fine: float | torch.Tensor,
-    fss_fine: float | torch.Tensor,
-) -> float | torch.Tensor:
+def contingency_table(
+    pred: torch.Tensor,
+    target: torch.Tensor,
+    threshold: float,
+    mask: torch.Tensor | None = None,
+) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
     """
-    Compute Hallucination Index (HI = SCR_fine * (1.0 - FSS_fine)).
-    High spectral energy combined with low localized spatial skill flags
-    mislocated / generative hallucinations.
+    Compute hits, false alarms, misses, and correct negatives for a threshold.
 
     Parameters
     ----------
-    scr_fine : float or torch.Tensor
-        Spectral Collapse Ratio at fine scales.
-    fss_fine : float or torch.Tensor
-        Fractions Skill Score at fine scales.
+    pred : torch.Tensor
+        Model predictions.
+    target : torch.Tensor
+        Ground-truth targets.
+    threshold : float
+        Event exceedance threshold.
+    mask : torch.Tensor or None, optional
+        Boolean spatial mask.
 
     Returns
     -------
-    float or torch.Tensor
-        Hallucination Index in [0, 1+].
+    tuple of (torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor)
+        Hits (H), False Alarms (F), Misses (M), Correct Negatives (CN).
     """
-    return scr_fine * (1.0 - fss_fine)
+    pred_event = pred >= threshold
+    targ_event = target >= threshold
+
+    if mask is not None:
+        pred_event = pred_event[mask]
+        targ_event = targ_event[mask]
+
+    hits = (pred_event & targ_event).sum().float()
+    false_alarms = (pred_event & ~targ_event).sum().float()
+    misses = (~pred_event & targ_event).sum().float()
+    correct_negatives = (~pred_event & ~targ_event).sum().float()
+
+    return hits, false_alarms, misses, correct_negatives
+
+
+def frequency_bias(
+    pred: torch.Tensor,
+    target: torch.Tensor,
+    threshold: float,
+    mask: torch.Tensor | None = None,
+) -> torch.Tensor:
+    """
+    Compute Frequency Bias (FBIAS = (Hits + False Alarms) / (Hits + Misses)).
+
+    Parameters
+    ----------
+    pred : torch.Tensor
+        Model predictions.
+    target : torch.Tensor
+        Ground-truth targets.
+    threshold : float
+        Event exceedance threshold.
+    mask : torch.Tensor or None, optional
+        Boolean spatial mask.
+
+    Returns
+    -------
+    torch.Tensor
+        Frequency Bias ratio. 1.0 indicates unbiased frequency.
+    """
+    h, f, m, _ = contingency_table(pred, target, threshold, mask=mask)
+    return (h + f) / (h + m + 1e-8)
+
+
+def equitable_threat_score(
+    pred: torch.Tensor,
+    target: torch.Tensor,
+    threshold: float,
+    mask: torch.Tensor | None = None,
+) -> torch.Tensor:
+    """
+    Compute Equitable Threat Score (Gilbert Skill Score).
+
+    Parameters
+    ----------
+    pred : torch.Tensor
+        Model predictions.
+    target : torch.Tensor
+        Ground-truth targets.
+    threshold : float
+        Event exceedance threshold.
+    mask : torch.Tensor or None, optional
+        Boolean spatial mask.
+
+    Returns
+    -------
+    torch.Tensor
+        Equitable Threat Score in [-1/3, 1].
+    """
+    h, f, m, cn = contingency_table(pred, target, threshold, mask=mask)
+    total = h + f + m + cn
+    hits_random = ((h + m) * (h + f)) / (total + 1e-8)
+    return (h - hits_random) / (h + m + f - hits_random + 1e-8)
 
 
 DEFINED_METRICS = {
     "mse": mse,
     "mae": mae,
-    "mbe": mbe,
     "wmse": wmse,
     "wmae": wmae,
     "nll": nll,

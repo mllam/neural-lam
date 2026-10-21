@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- Add standardized forecast benchmarking and evaluation suite (`ForecastBenchmark`, `BenchmarkScorecard`) on DANRA with lead-time RMSE/Bias metrics, 2D DCT-II spectral power decomposition, scale-dependent Fractions Skill Score (FSS), and an interactive marimo evaluation notebook [\#722](https://github.com/mllam/neural-lam/pull/722) @GiGiKoneti
+- Add standardized forecast benchmarking and evaluation suite (`ForecastBenchmark`, `BenchmarkScorecard`) on DANRA with error decomposition ($RMSE^2 = ME^2 + STDE^2$), Log-Spectral Distance (LSD), 2D DCT-II power spectra, Fractions Skill Score (FSS), and a 5-question marimo verification notebook [\#722](https://github.com/mllam/neural-lam/pull/722) @GiGiKoneti
 
 - Add the `hello_world_danra.py` marimo tutorial (prepare the DANRA example data, build a graph, train and evaluate `graph_lam` on CPU, all through `neural_lam.api`), executed at docs build time so the docs page shows its outputs; `train_model` now exits non-zero on errors (`@logger.catch(reraise=True)`) [\#577](https://github.com/mllam/neural-lam/pull/577) @Sharkyii
 
