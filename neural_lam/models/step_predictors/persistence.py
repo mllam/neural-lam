@@ -1,5 +1,8 @@
 """Persistence baseline step predictor."""
 
+# Standard library
+from typing import Any
+
 # Third-party
 import torch
 from loguru import logger
@@ -63,6 +66,7 @@ class PersistencePredictor(StepPredictor):
         prev_state: torch.Tensor,
         prev_prev_state: torch.Tensor,
         forcing: torch.Tensor,
+        static_embeddings: Any | None = None,
     ) -> tuple[torch.Tensor, None]:
         """
         Return the previous state as the prediction.
@@ -78,6 +82,8 @@ class PersistencePredictor(StepPredictor):
         forcing : torch.Tensor
             Shape ``(B, num_grid_nodes, num_forcing_vars)``.
             External forcings (unused).
+        static_embeddings : Any | None, optional
+            Precomputed static embeddings (unused).
 
         Returns
         -------

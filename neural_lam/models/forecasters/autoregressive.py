@@ -116,13 +116,23 @@ class ARForecaster(Forecaster):
         pred_std_list = []
         pred_steps = forcing_features.shape[1]
 
+        static_embeddings = self.predictor.embed_static_features()
+
         for i in range(pred_steps):
             forcing = forcing_features[:, i]
             boundary_state = boundary_states[:, i]
 
-            pred_state, pred_std = self.predictor(
-                prev_state, prev_prev_state, forcing
-            )
+            if static_embeddings is not None:
+                pred_state, pred_std = self.predictor(
+                    prev_state,
+                    prev_prev_state,
+                    forcing,
+                    static_embeddings=static_embeddings,
+                )
+            else:
+                pred_state, pred_std = self.predictor(
+                    prev_state, prev_prev_state, forcing
+                )
 
             # Overwrite boundary with true state using ARForecaster's mask
             new_state = (

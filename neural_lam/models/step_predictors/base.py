@@ -2,6 +2,7 @@
 
 # Standard library
 from abc import ABC, abstractmethod
+from typing import Any
 
 # Third-party
 import torch
@@ -151,12 +152,26 @@ class StepPredictor(nn.Module, ABC):
         """
         return x.unsqueeze(0).expand(batch_size, -1, -1)
 
+    def embed_static_features(self) -> Any | None:
+        """
+        Embed static features (e.g. mesh and edge attributes) to be reused
+        across autoregressive rollout steps.
+
+        Returns
+        -------
+        Any or None
+            Precomputed static embeddings, or ``None`` if the predictor has
+            no static features to embed.
+        """
+        return None
+
     @abstractmethod
     def forward(
         self,
         prev_state: torch.Tensor,
         prev_prev_state: torch.Tensor,
         forcing: torch.Tensor,
+        static_embeddings: Any | None = None,
     ) -> tuple[torch.Tensor, torch.Tensor | None]:
         """
         Advance the state by one step:
