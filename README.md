@@ -122,25 +122,3 @@ See branches [`prob_model_lam`](https://github.com/mllam/neural-lam/tree/prob_mo
 See [CONTRIBUTING.md](CONTRIBUTING.md) for the full contributor guide.
 
 Join the [mllam Slack](https://kutt.to/mllam) or open a [GitHub issue](https://github.com/mllam/neural-lam/issues) to get in touch.
-al grid
-- `num_boundary_grid_nodes` - number of nodes in the flattened boundary spatial grid
-- `num_mesh_nodes` - number of mesh nodes; indexed as `num_mesh_nodes[l]` for hierarchical level `l`
-- `num_state_vars` - number of atmospheric state variables
-- `num_forcing_vars` - number of forcing input variables
-- `num_windowed_forcing_vars` - forcing variables stacked over the past/future forcing window
-- `num_windowed_boundary_vars` - boundary forcing variables stacked over the past/future boundary window
-- `num_variables` - generic variable dimension used in metric functions
-- `hidden_dim` - internal hidden representation size in GNN layers and MLPs
-- `input_dim` - input feature dimensionality to a layer before transformation
-- `num_mesh_static_vars` - number of static features per mesh node
-- `num_edges` - number of edges in a graph (g2m, m2g, same-level, up, down)
-- `num_send` - number of sender nodes in a message-passing step
-- `num_rec` - number of receiver nodes in a message-passing step
-
-# Development and Contributing
-See [CONTRIBUTING.md](CONTRIBUTING.md) for the full contributor guide: how to open an issue, set up a development environment, the code standards we follow, the checks to run before pushing, the pull-request and review process, and the community roadmap.
-
-# Contact
-If you are interested in machine learning models for LAM, have questions about the implementation or ideas for extending it, feel free to get in touch.
-There is an open [mllam slack channel](https://kutt.to/mllam) that anyone can join (after following the link you have to request to join, this is to avoid spam bots).
-You can also open a github issue on this page.
