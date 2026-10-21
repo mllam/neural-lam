@@ -508,7 +508,11 @@ def test_build_predictor_delegates_to_from_config():
 
     datastore = DummyDatastore()
     config = nlconfig.NeuralLAMConfig(
-        datastore=nlconfig.DatastoreSelection(kind="mdp", config_path="dummy")
+        datastores={
+            "interior": nlconfig.DatastoreSelection(
+                kind="mdp", config_path="dummy"
+            )
+        }
     )
     args = Namespace(graph="dummy")
 
@@ -570,9 +574,11 @@ def test_registered_model_train_and_val_step(model_name, graph_archetype):
         )
 
     config = nlconfig.NeuralLAMConfig(
-        datastore=nlconfig.DatastoreSelection(
-            kind="mdp", config_path=datastore.root_path
-        )
+        datastores={
+            "interior": nlconfig.DatastoreSelection(
+                kind="mdp", config_path=datastore.root_path
+            )
+        }
     )
 
     args = Namespace(
