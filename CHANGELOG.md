@@ -51,7 +51,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Speed up the training tests by trimming Lightning Trainer and DataLoader overhead, and test the spawned DataLoader workers separately [\#812](https://github.com/mllam/neural-lam/pull/812) @Karvy-Singh
 
-- Add automated PR claim check workflow (`pr-claim-check.yml`) and triage script to flag pull requests without a linked issue, competing PRs for the same issue, or unedited PR template placeholders [\#793](https://github.com/mllam/neural-lam/issues/793) @GiGiKoneti
+- Add automated PR claim check workflow (`pr-claim-check.yml`) and triage script to flag pull requests without a linked issue, competing PRs for the same issue, or unedited PR template placeholders [\#819](https://github.com/mllam/neural-lam/pull/819) @GiGiKoneti
 
 - Fix the GPU CI job silently running on CPU: use an NVIDIA `g4dn.xlarge` cirun instance instead of the AMD `g4ad.xlarge`, install `--extra gpu-cu128` to match the runner's CUDA 12.2 driver, assert `torch.cuda.is_available()`, and run only the GPU-relevant tests there [\#802](https://github.com/mllam/neural-lam/pull/802) @varma1221
 
