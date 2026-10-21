@@ -16,8 +16,8 @@ import xarray as xr
 from cartopy import crs as ccrs
 
 # First-party
+from neural_lam import api, vis
 from neural_lam import config as nlconfig
-from neural_lam import vis
 from neural_lam.create_graph import create_graph_from_datastore
 from neural_lam.models import ARForecaster, ForecasterModule, GraphLAM
 from neural_lam.utils import get_integer_time
@@ -980,4 +980,37 @@ def test_spatial_loss_maps_out_of_range_steps(tmp_path, dummy_graph_dir):
     assert len(model._test_spatial_steps) == 0
     assert len(model.spatial_loss_maps) == 0
 
+    plt.close("all")
+
+
+def test_plot_examples_short_eval_split(tmp_path):
+    """Plotting example predictions must not need more time steps than the
+    evaluation itself (#813). The test split here has 5 time steps: enough
+    for ar_steps_eval=2 with no forcing window, but fewer than the 6 a
+    default-configured WeatherDataset requires."""
+    datastore = DummyDatastore(n_grid_points=100, n_timesteps=5)
+    config = nlconfig.NeuralLAMConfig(
+        datastore=nlconfig.DatastoreSelection(
+            kind=datastore.SHORT_NAME, config_path=str(datastore.root_path)
+        )
+    )
+
+    eval_run = api.evaluate(
+        datastore=datastore,
+        config=config,
+        model="persistence",
+        eval="test",
+        ar_steps_eval=2,
+        val_steps_to_log=[1, 2],
+        num_past_forcing_steps=0,
+        num_future_forcing_steps=0,
+        n_example_pred=1,
+        create_gif=True,
+        num_workers=0,
+        batch_size=1,
+        devices=1,
+        runs_root=str(tmp_path / "runs"),
+        logger_run_name="eval_short_split",
+    )
+    assert eval_run.example_plots(1).exists()
     plt.close("all")
