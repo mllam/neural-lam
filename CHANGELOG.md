@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Add agent skills for common neural-lam workflows (`add-step-predictor`, `add-datastore`, `add-metric`, `add-loss`, `create-graph`, `smoke-train`, `prepare-pr`, `review-pr`) in `.agents/skills/` following the Agent Skills standard, with declarative pointers in `AGENTS.md` and `CLAUDE.md`, and an anti-rot CI test suite in `tests/test_skills.py` [\#792](https://github.com/mllam/neural-lam/pull/792) @Sharkyii
+
 - Add the `hello_world_danra.py` marimo tutorial (prepare the DANRA example data, build a graph, train and evaluate `graph_lam` on CPU, all through `neural_lam.api`), executed at docs build time so the docs page shows its outputs; `train_model` now exits non-zero on errors (`@logger.catch(reraise=True)`) [\#577](https://github.com/mllam/neural-lam/pull/577) @Sharkyii
 
 - Add a high-level programmatic Python API (`neural_lam.api`) exposing typed keyword-only `train`, `evaluate` and `create_graph` functions; `train` and `evaluate` return a `Run` handle with the run's checkpoint and plot paths. The training CLI now parses into the typed run config dataclasses (`ModelConfig`, `TrainRunConfig`, `DataConfig`, `ComputeConfig`, `LoggingConfig`) and calls the same `neural_lam.train_model.fit` [\#715](https://github.com/mllam/neural-lam/pull/715) @GiGiKoneti
