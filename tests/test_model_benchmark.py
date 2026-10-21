@@ -181,6 +181,15 @@ def test_forecast_benchmark_danra():
     assert scorecard.model_name == "GraphLAM"
     assert len(scorecard.variables) == len(datastore.get_vars_names("state"))
     assert scorecard.mean_step_latency_ms >= 0.0
+    assert scorecard.vector_wind_rmse is not None
+    assert len(scorecard.vector_wind_rmse) == eval_steps
+    assert len(scorecard.wind_threshold_metrics) > 0
 
-    passed, _ = scorecard.evaluate_verdict(mode="operational")
-    assert passed is True
+    # Research mode passes with advisory warnings
+    passed_research, _ = scorecard.evaluate_verdict(mode="research")
+    assert passed_research is True
+
+    # Untrained candidate fails operational wind frequency bias gating
+    passed_operational, msgs = scorecard.evaluate_verdict(mode="operational")
+    assert passed_operational is False
+    assert any("Wind Frequency Bias" in m for m in msgs)

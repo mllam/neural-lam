@@ -74,7 +74,8 @@ class BenchmarkScorecard:
             )
 
         if reference_scorecard is not None:
-            # Check RMSE skill: candidate must not be > 5% worse than reference
+            # Check RMSE skill: candidate must not degrade > 5% vs reference
+            # in any cell
             for var in self.variables:
                 if (
                     var in self.rmse_per_lead_time
@@ -82,13 +83,19 @@ class BenchmarkScorecard:
                 ):
                     cand_rmse = self.rmse_per_lead_time[var]
                     ref_rmse = reference_scorecard.rmse_per_lead_time[var]
-                    if cand_rmse and ref_rmse:
-                        avg_cand = float(np.mean(cand_rmse))
-                        avg_ref = float(np.mean(ref_rmse))
-                        if avg_ref > 0 and avg_cand > 1.05 * avg_ref:
+                    for step_idx, (c_val, r_val) in enumerate(
+                        zip(cand_rmse, ref_rmse)
+                    ):
+                        if r_val > 0 and c_val > 1.05 * r_val:
+                            lead_h = (
+                                f"{self.lead_time_hours[step_idx]:.0f}h"
+                                if step_idx < len(self.lead_time_hours)
+                                else f"step {step_idx + 1}"
+                            )
                             msg = (
-                                f"RMSE degraded on {var}: candidate "
-                                f"({avg_cand:.3f}) > 1.05 * ref ({avg_ref:.3f})"
+                                f"RMSE degraded on {var} at {lead_h}: "
+                                f"candidate ({c_val:.3f}) > 1.05 * "
+                                f"ref ({r_val:.3f})"
                             )
                             if mode == "operational":
                                 is_pass = False
@@ -185,6 +192,17 @@ class BenchmarkScorecard:
                 for i, w in enumerate(self.vector_wind_rmse)
             )
             lines.append(f"  [Vector Wind RMSE] -> {wind_str}")
+
+        if self.wind_threshold_metrics:
+            lines.append("  Wind Threshold Metrics (FBIAS / ETS):")
+            for thresh, metrics_dict in sorted(
+                self.wind_threshold_metrics.items()
+            ):
+                fb = metrics_dict.get("fbias", float("nan"))
+                ets = metrics_dict.get("ets", float("nan"))
+                lines.append(
+                    f"    {thresh:.0f} m/s -> FBIAS: {fb:.2f}, ETS: {ets:.3f}"
+                )
 
         return "\n".join(lines)
 
@@ -351,8 +369,29 @@ class ForecastBenchmark:
         }
         count_cells: dict[str, int] = {v: 0 for v in self.var_names}
 
-        # Vector wind evaluation
-        has_vector_wind = "u10m" in self.var_names and "v10m" in self.var_names
+        # Identify vector wind variables if present (e.g. u100m, u10m, u/v)
+        wind_pair: tuple[str, str] | None = None
+        for candidate_pair in [
+            ("u100m", "v100m"),
+            ("u10m", "v10m"),
+            ("u", "v"),
+        ]:
+            if (
+                candidate_pair[0] in self.var_names
+                and candidate_pair[1] in self.var_names
+            ):
+                wind_pair = candidate_pair
+                break
+
+        if wind_pair is None:
+            for v_name in self.var_names:
+                if v_name.startswith("u"):
+                    matching_v = "v" + v_name[1:]
+                    if matching_v in self.var_names:
+                        wind_pair = (v_name, matching_v)
+                        break
+
+        has_vector_wind = wind_pair is not None
         sum_sq_wind_error = torch.zeros(self.eval_steps, device=self.device)
         count_wind_cells = 0
 
@@ -468,9 +507,9 @@ class ForecastBenchmark:
                             fss_map[var][k_sz].append(float(fss_val.item()))
 
                 # Vector wind speed and threshold contingency
-                if has_vector_wind:
-                    u_idx = self.var_names.index("u10m")
-                    v_idx = self.var_names.index("v10m")
+                if has_vector_wind and wind_pair is not None:
+                    u_idx = self.var_names.index(wind_pair[0])
+                    v_idx = self.var_names.index(wind_pair[1])
                     u_p = pred_physical[..., u_idx]
                     u_t = target_physical[..., u_idx]
                     v_p = pred_physical[..., v_idx]
@@ -549,11 +588,13 @@ class ForecastBenchmark:
 
         fss_avg: dict[str, dict[int, list[float]]] = {}
         for var in self.var_names:
-            fss_avg[var] = {
-                k_sz: [float(np.mean(fss_map[var][k_sz]))]
-                for k_sz in self.fss_kernel_sizes
-                if fss_map[var][k_sz]
-            }
+            fss_avg[var] = {}
+            for k_sz in self.fss_kernel_sizes:
+                valid_scores = [
+                    s for s in fss_map[var][k_sz] if not np.isnan(s)
+                ]
+                if valid_scores:
+                    fss_avg[var][k_sz] = [float(np.mean(valid_scores))]
 
         # Wind threshold metrics (FBIAS, ETS)
         wind_threshold_metrics: dict[float, dict[str, float]] = {}

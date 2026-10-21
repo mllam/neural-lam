@@ -93,6 +93,18 @@ def test_fractions_skill_score_2d():
             field, target, threshold=10.0, kernel_size=2
         )
 
+    # Over-sized kernel exceeding interior mask -> NaN
+    tiny_mask = torch.zeros(10, 10)
+    tiny_mask[4:6, 4:6] = 1.0
+    fss_nan = metrics.fractions_skill_score_2d(
+        torch.zeros(10, 10),
+        torch.ones(10, 10),
+        threshold=0.5,
+        kernel_size=5,
+        mask=tiny_mask,
+    )
+    assert torch.isnan(fss_nan)
+
 
 def test_contingency_and_skill_scores():
     """Verify contingency table, Frequency Bias, and Equitable Threat Score."""

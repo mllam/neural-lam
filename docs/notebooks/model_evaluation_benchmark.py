@@ -71,8 +71,7 @@ def _(mo):
     example_dir = Path("tests/datastore_examples/mdp/danra_100m_winds")
     config_path = str(example_dir / "config.yaml")
 
-    config, datastores = load_config_and_datastore(config_path)
-    datastore = datastores["danra"]
+    config, datastore, _ = load_config_and_datastore(config_path)
 
     # Ensure single-level graph exists
     graph_name = "1level"

@@ -619,6 +619,8 @@ def fractions_skill_score_2d(
         valid_mask = (
             F.conv2d(mask_in, kernel, padding=padding) >= 1.0 - 1e-6
         ).float()
+        if valid_mask.sum() == 0:
+            return torch.tensor(float("nan"), device=pred_field.device)
         diff_sq = diff_sq * valid_mask
         ref_sq = ref_sq * valid_mask
         mask_sum = valid_mask.sum() * diff_sq.shape[0]
