@@ -1,113 +1,70 @@
 # Training and Evaluation
 
-## Training a model
+## Train Models
 
-```bash
-python -m neural_lam.train_model \
-    --config_path <config_path> \
-    --model <model> \
-    --graph <graph-name>
+Models can be trained using `python -m neural_lam.train_model --config_path <config_path>`.
+Run `python -m neural_lam.train_model --help` for a full list of training options.
+A few of the key ones are outlined below:
+
+* `--config_path`: Path to the configuration for neural-lam (for example in `data/myexperiment/config.yaml`).
+* `--model`: Which model to train
+* `--graph`: Which graph to use with the model
+* `--epochs`: Number of epochs to train for
+* `--processor_layers`: Number of GNN layers to use in the processing part of the model
+* `--ar_steps_train`: Number of time steps to unroll for when making predictions and computing the loss
+* `--ar_steps_eval`: Number of time steps to unroll for during validation steps
+
+Checkpoints of trained models are stored under `runs/<run-name>/checkpoints/`, alongside Lightning and logger outputs for the same run.
+The implemented models are:
+
+### Graph-LAM
+
+This is the basic graph-based LAM model.
+The encode-process-decode framework is used with a mesh graph in order to make one-step predictions.
+This model class is used both for the L1-LAM and GC-LAM models from the [paper](https://arxiv.org/abs/2309.17370), only with different graphs.
+
+To train 1L-LAM use
+```
+python -m neural_lam.train_model --model graph_lam --graph 1level ...
 ```
 
-Run `python -m neural_lam.train_model --help` for the full list of options.
-Key flags:
-
-| Flag | Description |
-|---|---|
-| `--config_path` | Path to the neural-lam config file |
-| `--model` | Model class: `graph_lam`, `hi_lam`, `hi_lam_parallel`, `persistence` |
-| `--graph` | Name of the graph to use (must match a directory under `graphs/`) |
-| `--epochs` | Number of training epochs |
-| `--processor_layers` | Number of GNN layers in the processor |
-| `--ar_steps_train` | Autoregressive steps for training loss |
-| `--ar_steps_eval` | Autoregressive steps during validation |
-
-Checkpoints are saved under `runs/<run-name>/checkpoints/`:
-
-- `min_val_loss.ckpt` — best validation loss checkpoint
-- `last.ckpt` — end-of-epoch rescue checkpoint (useful for HPC jobs)
-
-## Available models
-
-### Graph-LAM (`graph_lam`)
-
-Basic encode-process-decode model with a flat mesh graph. Used for both
-L1-LAM (single-level graph) and GC-LAM (multiscale graph).
-
-```bash
-python -m neural_lam.train_model \
-    --config_path <config> --model graph_lam --graph keisler
+To train GC-LAM use
+```
+python -m neural_lam.train_model --model graph_lam --graph multiscale ...
 ```
 
-### Hi-LAM (`hi_lam`)
+### Hi-LAM
 
-Hierarchical mesh graph with sequential message passing up and down through
-the hierarchy during processing.
+A version of Graph-LAM that uses a hierarchical mesh graph and performs sequential message passing through the hierarchy during processing.
 
-```bash
-python -m neural_lam.train_model \
-    --config_path <config> --model hi_lam --graph hierarchical
+To train Hi-LAM use
+```
+python -m neural_lam.train_model --model hi_lam --graph hierarchical ...
 ```
 
-### Hi-LAM-Parallel (`hi_lam_parallel`)
+### Hi-LAM-Parallel
 
-Variant of Hi-LAM where all message passing in the hierarchy (up, down,
-inter-level) runs in parallel.
+A version of Hi-LAM where all message passing in the hierarchical mesh (up, down, inter-level) is ran in parallel.
+Not included in the paper as initial experiments showed worse results than Hi-LAM, but could be interesting to try in more settings.
 
-```bash
-python -m neural_lam.train_model \
-    --config_path <config> --model hi_lam_parallel --graph hierarchical
+To train Hi-LAM-Parallel use
+```
+python -m neural_lam.train_model --model hi_lam_parallel --graph hierarchical ...
 ```
 
-### Persistence (`persistence`)
+### Persistence
 
-Trivial baseline that returns the previous state unchanged at each step.
-Has no learnable parameters so it must be evaluated directly without training:
+A trivial baseline model that returns the previous state unchanged at each step (`--model persistence`). Since it has no learnable parameters, it must be evaluated directly without training (e.g. `--eval val` or `--eval test`).
 
-```bash
-python -m neural_lam.train_model \
-    --eval val --config_path <config> --model persistence
+Checkpoint files for our models trained on the MEPS data are available upon request.
+
+### High Performance Computing
+
+The training script can be run on a cluster with multiple GPU-nodes. Neural LAM is set up to use PyTorch Lightning's `DDP` backend for distributed training.
+The code can be used on systems both with and without slurm. If the cluster has multiple nodes, set the `--num_nodes` argument accordingly.
+
+Using SLURM, the job can be started with `sbatch slurm_job.sh` with a shell script like the following.
 ```
-
-## Evaluating a model
-
-Evaluation reuses the same `train_model` entry point with the `--eval` flag:
-
-```bash
-python -m neural_lam.train_model \
-    --eval test \
-    --config_path <config> \
-    --model graph_lam \
-    --graph keisler \
-    --load runs/<run-name>/checkpoints/min_val_loss.ckpt
-```
-
-Use `--eval val` to evaluate on the validation set, `--eval test` for the test
-set. Key evaluation flags:
-
-| Flag | Description |
-|---|---|
-| `--load` | Path to a checkpoint file (`.ckpt`) |
-| `--n_example_pred` | Number of example predictions to plot |
-| `--ar_steps_eval` | Autoregressive steps during evaluation |
-
-> **Note:** Avoid using multiple GPUs for evaluation. The `DistributedSampler`
-> replicates samples to keep batch sizes equal across devices, making
-> evaluation metrics unreliable. Use a single GPU or batch size 1.
-
-## Multi-GPU and HPC training
-
-Neural-LAM uses PyTorch Lightning's DDP backend for distributed training.
-
-```bash
-python -m neural_lam.train_model \
-    --config_path <config> \
-    --num_nodes $SLURM_JOB_NUM_NODES
-```
-
-Example SLURM job script:
-
-```bash
 #!/bin/bash -l
 #SBATCH --job-name=Neural-LAM
 #SBATCH --time=24:00:00
@@ -121,6 +78,7 @@ Example SLURM job script:
 #SBATCH --output=runs/slurm_logs/neurallam_out_%j.log
 #SBATCH --error=runs/slurm_logs/neurallam_err_%j.log
 
+# Load necessary modules or activate environment, for example:
 conda activate neural-lam
 
 srun -ul python -m neural_lam.train_model \
@@ -128,24 +86,26 @@ srun -ul python -m neural_lam.train_model \
     --num_nodes $SLURM_JOB_NUM_NODES
 ```
 
-On a system without SLURM, select specific GPUs with `--devices`, e.g.
-`--devices 0 1` to use the first two GPUs.
+When using on a system without SLURM, where all GPU's are visible, it is possible to select a subset of GPU's to use for training with the `devices` cli argument, e.g. `--devices 0 1` to use the first 2 GPU's.
 
-> **DGX Spark / container compatibility:** see
-> [issue #163](https://github.com/mllam/neural-lam/issues/163) for known-working
-> and known-failing PyTorch / CUDA / container combinations.
+> **DGX Spark / container compatibility:** see [issue #163](https://github.com/mllam/neural-lam/issues/163) for a list of currently known-working and known-failing PyTorch / CUDA / container combinations on DGX Spark.
 
-## Python API
+## Evaluate Models
 
-Training and evaluation are also accessible programmatically via
-{py:mod}`neural_lam.api`:
+Evaluation is also done using `python -m neural_lam.train_model --config_path <config-path>`, but using the `--eval` option.
+Use `--eval val` to evaluate the model on the validation set and `--eval test` to evaluate on test data.
+Most of the training options are also relevant for evaluation.
+Some options specifically important for evaluation are:
 
-```python
-from neural_lam import api
+* `--load`: Path to model checkpoint file (`.ckpt`) to load parameters from
+* `--n_example_pred`: Number of example predictions to plot during evaluation.
+* `--ar_steps_eval`: Number of time steps to unroll for during evaluation
 
-run = api.train(config_path="data/config.yaml", model="graph_lam", graph="keisler")
-print(run.checkpoint_path)
-
-api.evaluate(config_path="data/config.yaml", model="graph_lam",
-             graph="keisler", load=run.checkpoint_path)
+A full evaluation example:
+```bash
+python -m neural_lam.train_model --eval test --config_path data/config.yaml --model graph_lam --graph keisler --load runs/<run-name>/checkpoints/min_val_loss.ckpt
 ```
+
+**Note:** While it is technically possible to use multiple GPUs for running evaluation, this is strongly discouraged. If using multiple devices the `DistributedSampler` will replicate some samples to make sure all devices have the same batch size, meaning that evaluation metrics will be unreliable.
+A possible workaround is to just use batch size 1 during evaluation.
+This issue stems from PyTorch Lightning. See for example [this PR](https://github.com/Lightning-AI/torchmetrics/pull/1886) for more discussion.

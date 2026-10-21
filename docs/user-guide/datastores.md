@@ -1,21 +1,43 @@
 # Configuration and Datastores
 
-## Configuration file
+Once `neural-lam` is installed you will be able to train/evaluate models. For this you will in general need two things:
 
-Every Neural-LAM command takes a `--config_path` argument pointing to a YAML
-configuration file (typically `config.yaml`). The directory containing this
-file becomes the root directory — all other paths (datastore config, graphs)
-are resolved relative to it.
+1. **Data to train/evaluate the model**. To represent this data we use a concept of
+   *datastores* in Neural-LAM. In brief, a datastore implements the process of loading data from disk in a
+   specific format (for example zarr or numpy files) by implementing an
+   interface that provides the data in a data-structure that can be used within
+   neural-lam. A datastore is used to create a `pytorch.Dataset`-derived
+   class that samples the data in time to create individual samples for
+   training, validation and testing.
+
+2. **The graph structure** is used to define message-passing GNN layers,
+   that are trained to emulate fluid flow in the atmosphere over time. The
+   graph structure is created for a specific datastore.
+
+Any command you run in neural-lam will include the path to a configuration file
+to be used (usually called `config.yaml`). This configuration file defines the
+path to the datastore configuration you wish to use and allows you to configure
+different aspects about the training and evaluation of the model.
+
+The path you provide to the neural-lam config (`config.yaml`) also sets the
+root directory relative to which all other paths are resolved, as in the parent
+directory of the config becomes the root directory. Both the datastore and
+graphs you generate are then stored in subdirectories of this root directory.
+Exactly how and where a specific datastore expects its source data to be stored
+and where it stores its derived data is up to the implementation of the
+datastore.
+
+In general the folder structure assumed in Neural-LAM is as follows (we will
+assume you placed `config.yaml` in a folder called `data`):
 
 ```
 data/
-├── config.yaml           - Neural-LAM configuration
-├── danra.datastore.yaml  - Datastore configuration (referred to from config.yaml)
-└── graphs/               - Generated graph files
+├── config.yaml           - Configuration file for neural-lam
+├── danra.datastore.yaml  - Configuration file for the datastore, referred to from config.yaml
+└── graphs/               - Directory containing graphs for training
 ```
 
-A minimal `config.yaml` looks like this:
-
+And the content of `config.yaml` could in this case look like:
 ```yaml
 datastore:
   kind: mdp
@@ -36,65 +58,132 @@ training:
       r2m: 1.0
 ```
 
-The config defines:
+For now the neural-lam config only defines few things:
 
-1. The kind of datastore and the path to its config.
-2. The weighting of different features in the loss function (defaults to equal weighting).
-3. Valid numerical ranges for each output feature (defaults to no clamping).
+1. The kind of datastore and the path to its config
+2. The weighting of different features in
+the loss function. If you don't define the state feature weighting it will default to
+weighting all features equally.
+3. Valid numerical range for output of each feature. The numerical range of all features default to $]-\infty, \infty[$.
 
-For the full configuration reference see {py:class}`neural_lam.config.NeuralLAMConfig`.
+(This example is taken from the `tests/datastore_examples/mdp` directory.)
 
-## Datastores
 
-A datastore loads data from disk in a specific format and presents it through
-a common interface that Neural-LAM uses for training and evaluation. There are
-currently two datastores implemented.
+Below follows instructions on how to use Neural-LAM to train and evaluate
+models, with details first given for each kind of datastore implemented
+and later the graph generation. Once `neural-lam` has been installed the
+general process is:
 
-### MDP datastore — `MDPDatastore`
+1. Run any pre-processing scripts to generate the necessary derived data that your chosen datastore requires
+2. Run graph-creation step
+3. Train the model
 
-The recommended datastore. Uses training-ready datasets in zarr format produced
-by [mllam-data-prep](https://github.com/mllam/mllam-data-prep), which can
-combine any number of xarray-readable sources and handles variable selection,
-dimension flattening, and normalisation statistics.
+## Data (the `DataStore` and `WeatherDataset` classes)
 
-Set `kind: mdp` in `config.yaml` and point `config_path` at a
-`mllam-data-prep` configuration file (e.g. `danra.datastore.yaml`). Neural-LAM
-writes the processed dataset to a `.zarr` file alongside that config on first
-run. To pre-process a large dataset (≥10 GB) before training, run:
+To enable flexibility in what input-data sources can be used with neural-lam,
+the input-data representation is split into two parts:
+
+1. A "datastore" (represented by instances of
+   [neural_lam.datastore.BaseDataStore](https://github.com/mllam/neural-lam/blob/main/neural_lam/datastore/base.py)) which
+   takes care of loading a given category (state, forcing or static) and split
+   (train/val/test) of data from disk and returning it as a `xarray.DataArray`.
+   The returned data-array is expected to have the spatial coordinates
+   flattened into a single `grid_index` dimension and all variables and vertical
+   levels stacked into a feature dimension (named as `{category}_feature`). The
+   datastore also provides information about the number, names and units of
+   variables in the data, the boundary mask, normalisation values and grid
+   information.
+
+2. A `pytorch.Dataset`-derived class (called
+   `neural_lam.weather_dataset.WeatherDataset`) which takes care of sampling in
+   time to create individual samples for training, validation and testing. The
+   `WeatherDataset` class is also responsible for normalising the values and
+   returning `torch.Tensor`-objects.
+
+There are currently two different datastores implemented in the codebase:
+
+1. `neural_lam.datastore.MDPDatastore` which represents loading of
+   *training-ready* datasets in zarr format created with the
+   [mllam-data-prep](https://github.com/mllam/mllam-data-prep) package.
+   Training-ready refers to the fact that this data has been transformed
+   (variables have been stacked, spatial coordinates have been flattened,
+   statistics for normalisation have been calculated, etc) to be ready for
+   training. `mllam-data-prep` can combine any number of datasets that can be
+   read with [xarray](https://github.com/pydata/xarray) and the processing can
+   either be done at run-time or as a pre-processing step before calling
+   neural-lam.
+
+2. `neural_lam.datastore.NpyFilesDatastoreMEPS` which reads MEPS data from
+   `.npy`-files in the format introduced in neural-lam `v0.1.0`. Note that this
+   datastore is specific to the format of the MEPS dataset, but can act as an
+   example for how to create similar numpy-based datastores.
+
+If neither of these options fit your need you can create your own datastore by
+subclassing the `neural_lam.datastore.BaseDataStore` class or
+`neural_lam.datastore.BaseRegularGridDatastore` class (if your data is stored on
+a regular grid) and implementing the abstract methods.
+
+
+### MDP (mllam-data-prep) Datastore - `MDPDatastore`
+
+With `MDPDatastore` (the mllam-data-prep datastore) all the selection,
+transformation and pre-calculation steps that are needed to go from
+for example gridded weather data to a format that is optimised for training
+in neural-lam, are done in a separate package called
+[mllam-data-prep](https://github.com/mllam/mllam-data-prep) rather than in
+neural-lam itself.
+Specifically, the `mllam-data-prep` datastore configuration (for example
+[danra.datastore.yaml](https://github.com/mllam/neural-lam/blob/main/tests/datastore_examples/mdp/danra_100m_winds/danra.datastore.yaml))
+specifies a) what source datasets to read from, b) what variables to select, c)
+what transformations of dimensions and variables to make, d) what statistics to
+calculate (for normalisation) and e) how to split the data into training,
+validation and test sets (see full details about the configuration specification
+in the [mllam-data-prep README](https://github.com/mllam/mllam-data-prep)).
+
+From a datastore configuration `mllam-data-prep` returns the transformed
+dataset as an `xr.Dataset` which is then written in zarr-format to disk by
+`neural-lam` when the datastore is first initiated (the path of the dataset is
+derived from the datastore config, so that from a config named `danra.datastore.yaml` the resulting dataset is stored in `danra.datastore.zarr`).
+You can also run `mllam-data-prep` directly to create the processed dataset by providing the path to the datastore configuration file:
 
 ```bash
 python -m mllam_data_prep --config data/danra.datastore.yaml
 ```
 
-For parallel processing across multiple CPU cores:
+If you will be working on a large dataset (on the order of 10GB or more) it
+could be beneficial to produce the processed `.zarr` dataset before using it
+in neural-lam so that you can do the processing across multiple CPU cores in parallel. This is done by including the `--dask-distributed-local-core-fraction` argument when calling mllam-data-prep to set the fraction of your system's CPU cores that should be used for processing (see the
+[mllam-data-prep
+README for details](https://github.com/mllam/mllam-data-prep?tab=readme-ov-file#creating-large-datasets-with-daskdistributed)).
+
+For example:
 
 ```bash
-python -m mllam_data_prep --config data/danra.datastore.yaml \
-    --dask-distributed-local-core-fraction 0.5
+python -m mllam_data_prep --config data/danra.datastore.yaml --dask-distributed-local-core-fraction 0.5
 ```
 
-See the [mllam-data-prep README](https://github.com/mllam/mllam-data-prep) for
-full configuration details.
+### NpyFiles MEPS Datastore - `NpyFilesDatastoreMEPS`
 
-### NpyFiles MEPS datastore — `NpyFilesDatastoreMEPS`
+Version `v0.1.0` of Neural-LAM was built to train from numpy-files from the
+MEPS weather forecasts dataset.
+To enable this functionality to live on in later versions of neural-lam we have
+built a datastore called `NpyFilesDatastoreMEPS` which implements functionality
+to read from these exact same numpy-files. At this stage this datastore class
+is very much tied to the MEPS dataset, but the code is written in a way where
+it quite easily could be adapted to work with numpy-based weather
+forecast/analysis files in future.
 
-Reads MEPS data from `.npy` files in the format introduced in Neural-LAM
-`v0.1.0`. Set `kind: npyfilesmeps` in `config.yaml`.
+The full MEPS dataset is available for download [here](https://nextcloud.liu.se/s/meps). See instructions in the file `README.txt` for how to download and extract the full dataset.
+Note that while this data works with the `NpyFilesDatastoreMEPS` datastore, the exact data loading in this setup differs somewhat from that used in earlier published papers using the dataset.
+For research reproducibility, see the exact corresponding branch for each publication (under [Publications](https://github.com/mllam/neural-lam#publications) in the README).
 
-The full MEPS dataset is available for [download here](https://nextcloud.liu.se/s/meps).
-A small example subset (`meps_example`) is available in `example_data.zip`
-from [Google Drive](https://drive.google.com/drive/folders/1N6ZT_mkfbdVloVsNs9T5YOrMtxd3jG-j?usp=sharing)
-— download and unzip in the neural-lam directory. This subset is too small to
-train useful models but is sufficient to verify your environment.
+A tiny subset of the MEPS data (named `meps_example`) is also available in `example_data.zip`, which can be downloaded from [here](https://drive.google.com/drive/folders/1N6ZT_mkfbdVloVsNs9T5YOrMtxd3jG-j?usp=sharing).
+Download the files and unzip in the neural-lam directory.
+Graphs used in the initial paper are also available for download at the same link (but can as easily be re-generated using `python -m neural_lam.create_graph`).
+Note that this subset is far too small to train any useful models, but all scripts can be run with it.
+It should thus be useful to make sure that your python environment is set up correctly and that all the code can be run without any issues.
 
-Before training you must generate normalisation statistics:
-
-```bash
-python -m neural_lam.datastore.npyfilesmeps.compute_standardization_stats \
-    <path-to-datastore-config>
-```
-
-Example `meps.datastore.yaml` and corresponding `config.yaml`:
+The following datastore configuration works with the MEPS dataset:
 
 ```yaml
 # meps.datastore.yaml
@@ -172,24 +261,17 @@ projection:
     - 63.3
 ```
 
+Which you can then use in a neural-lam configuration file like this:
+
 ```yaml
 # config.yaml
 datastore:
   kind: npyfilesmeps
   config_path: meps.datastore.yaml
-training:
-  state_feature_weighting:
-    __config_class__: ManualStateFeatureWeighting
-    weights:
-      u100m: 1.0
-      v100m: 1.0
 ```
 
-### Custom datastores
+For npy-file based datastores you must separately run the command that creates the variables used for standardization:
 
-Implement your own datastore by subclassing
-{py:class}`neural_lam.datastore.BaseDataStore` (or
-{py:class}`neural_lam.datastore.BaseRegularGridDatastore` for regular grids)
-and implementing the abstract methods. See
-[`neural_lam/datastore/base.py`](https://github.com/mllam/neural-lam/blob/main/neural_lam/datastore/base.py)
-for the full interface.
+```bash
+python -m neural_lam.datastore.npyfilesmeps.compute_standardization_stats <path-to-datastore-config>
+```

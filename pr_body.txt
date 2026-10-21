@@ -1,0 +1,8 @@
+﻿Closes #803
+
+## What changed
+- Trimmed all content already covered by the structured docs site (datastore details, full training flags, SLURM scripts, W&B/MLflow setup, graph format spec)
+- Kept all anchors referenced by CONTRIBUTING.md and AGENTS.md (#installing-neural-lam, #using-neural-lam, #modularity, #repository-structure, #dimension-glossary)
+- Added a repo map, docs link table, and fast-path install/train/evaluate commands
+- Preserved the '# Installing Neural-LAM' heading verbatim so the include splice in docs/getting-started/installation.md continues to work
+- Added CHANGELOG entry under Maintenance in [unreleased]
