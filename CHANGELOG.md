@@ -108,9 +108,7 @@ It also contains a number of smaller improvements, bug fixes and maintenance upd
 - Consolidate all training/evaluation run outputs (checkpoints, logger files, plots) into a single `runs/<run-name>/` directory instead of scattering across `saved_models/`, `lightning_logs/`, `wandb/`, and `mlruns/` [\#580](https://github.com/mllam/neural-lam/pull/580) @sudhansu-24
 
 ### Fixed
-
-- Raise `ValueError` instead of a bare `assert` when an `output_clamping` `lower` limit is not smaller than its `upper` limit in `StepPredictor.prepare_clamping_params`, so the check is no longer stripped under `python -O` [\#757](https://github.com/mllam/neural-lam/pull/757) @RudraDudhat2509
-
+- Correct README documentation of where state and forcing normalization occurs.
 - Derive the `plot_error_heatmap` lead-time axis label from a full unit-name
   lookup instead of `time_step_unit[0]`, which rendered `minutes`,
   `milliseconds` and `microseconds` all as "m" and `unknown` as "u"; the
