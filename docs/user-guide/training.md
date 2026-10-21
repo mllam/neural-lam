@@ -101,9 +101,15 @@ Some options specifically important for evaluation are:
 * `--n_example_pred`: Number of example predictions to plot during evaluation.
 * `--ar_steps_eval`: Number of time steps to unroll for during evaluation
 
-A full evaluation example:
+For example, for a `graph_lam` model trained on the `keisler` graph (`--model` and `--graph` must match the ones used for training):
+
 ```bash
-python -m neural_lam.train_model --eval test --config_path data/config.yaml --model graph_lam --graph keisler --load runs/<run-name>/checkpoints/min_val_loss.ckpt
+python -m neural_lam.train_model \
+    --eval test \
+    --config_path <config> \
+    --model graph_lam \
+    --graph keisler \
+    --load <checkpoint-path>
 ```
 
 **Note:** While it is technically possible to use multiple GPUs for running evaluation, this is strongly discouraged. If using multiple devices the `DistributedSampler` will replicate some samples to make sure all devices have the same batch size, meaning that evaluation metrics will be unreliable.

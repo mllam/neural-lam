@@ -101,7 +101,7 @@ def _(mo):
         r"""
     ## 1. Environment Setup
 
-    Set up the environment with [`uv`](https://docs.astral.sh/uv/) from the repository root (see the {doc}`installation guide <../getting-started/installation>`) and open this notebook with marimo:
+    Set up the environment with [`uv`](https://docs.astral.sh/uv/) from the repository root (see the [installation guide](https://mllam.github.io/neural-lam/getting-started/installation.html)) and open this notebook with marimo:
 
     ```bash
     uv sync --extra cpu --extra docs --group dev
@@ -191,9 +191,7 @@ def _(mo):
         r"""
     ## 3. Graph Generation
 
-    `neural-lam` uses a **graph** to define the message-passing structure of the GNN. `api.create_graph` builds it with [`weather-model-graphs`](https://github.com/mllam/weather-model-graphs). See the {doc}`graph creation guide <../user-guide/graphs>` for the available archetypes and their options.
-
-    For this Hello World example we use the **single-level `keisler` graph** — the lightest option, ideal for CPU.
+    `neural-lam` uses a **graph** to define the message-passing structure of the GNN. `api.create_graph` builds it with [`weather-model-graphs`](https://github.com/mllam/weather-model-graphs). For this Hello World example we use the **single-level `keisler` graph** — the lightest option, ideal for CPU. See the [graph creation guide](https://mllam.github.io/neural-lam/user-guide/graphs.html) for the other archetypes and the models they work with.
     """
     )
     return
@@ -322,11 +320,11 @@ def _(mo):
 
     ### 🔁 Use a larger / hierarchical graph
 
-    See the {doc}`graph creation guide <../user-guide/graphs>` for the other archetypes (`graphcast`, `hierarchical`) and the {doc}`training guide <../user-guide/training>` for the corresponding models (`graph_lam`, `hi_lam`). The {doc}`quickstart <../getting-started/quickstart>` shows the same steps on the command line.
+    For a production-quality run, switch to the hierarchical graph and the Hi-LAM model, see the [graph creation](https://mllam.github.io/neural-lam/user-guide/graphs.html) and [training](https://mllam.github.io/neural-lam/user-guide/training.html) guides. The [quickstart](https://mllam.github.io/neural-lam/getting-started/quickstart.html) shows the steps of this notebook on the command line.
 
     ### ⚡ Enable GPU training
 
-    See the {doc}`installation guide <../getting-started/installation>` for the GPU `uv sync` commands and CUDA variant options.
+    Re-create the environment with a CUDA build of PyTorch (see the [installation guide](https://mllam.github.io/neural-lam/getting-started/installation.html)) and remove the `CUDA_VISIBLE_DEVICES` line from the import cell, so that `devices` (default `auto`) picks up your GPU.
 
     ### 📦 Use larger / full DANRA data
 
@@ -334,7 +332,7 @@ def _(mo):
 
     ### 📊 Enable cloud logging with W&B
 
-    Remove the `WANDB_MODE` line in the import cell (or set it to `online`) and optionally pass `logger="wandb", logger_project="<your-project-name>"`. See the {doc}`logging guide <../user-guide/logging>` for W&B and MLflow options.
+    Remove the `WANDB_MODE` line in the import cell (or set it to `online`) and optionally pass `logger="wandb", logger_project="<your-project-name>"`. See the [logging guide](https://mllam.github.io/neural-lam/user-guide/logging.html) for W&B and MLflow options.
 
     ### 🔗 Further reading
 

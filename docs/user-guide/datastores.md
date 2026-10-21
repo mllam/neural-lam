@@ -3,7 +3,8 @@
 Once `neural-lam` is installed you will be able to train/evaluate models. For this you will in general need two things:
 
 1. **Data to train/evaluate the model**. To represent this data we use a concept of
-   *datastores* in Neural-LAM. In brief, a datastore implements the process of loading data from disk in a
+   *datastores* in Neural-LAM (see the [Data](#data-the-datastore-and-weatherdataset-classes) section for more details).
+   In brief, a datastore implements the process of loading data from disk in a
    specific format (for example zarr or numpy files) by implementing an
    interface that provides the data in a data-structure that can be used within
    neural-lam. A datastore is used to create a `pytorch.Dataset`-derived
@@ -34,14 +35,19 @@ assume you placed `config.yaml` in a folder called `data`):
 data/
 ├── config.yaml           - Configuration file for neural-lam
 ├── danra.datastore.yaml  - Configuration file for the datastore, referred to from config.yaml
-└── graphs/               - Directory containing graphs for training
+├── era5.datastore.yaml   - Optional second datastore, here providing boundary forcing
+└── graph/                - Directory containing graphs for training
 ```
 
 And the content of `config.yaml` could in this case look like:
 ```yaml
-datastore:
-  kind: mdp
-  config_path: danra.datastore.yaml
+datastores:
+  danra:
+    kind: mdp
+    config_path: danra.datastore.yaml
+  era5:  # optional; no `state` data, so used for input (boundary) only
+    kind: mdp
+    config_path: era5.datastore.yaml
 training:
   state_feature_weighting:
     __config_class__: ManualStateFeatureWeighting
@@ -60,31 +66,38 @@ training:
 
 For now the neural-lam config only defines few things:
 
-1. The kind of datastore and the path to its config
+1. A named mapping of datastores (`datastores`), each giving the kind of
+   datastore and the path to its config. Which one is the interior and which is
+   the boundary follows from the categories each provides, see [Data
+   categories](#data-categories) below.
 2. The weighting of different features in
 the loss function. If you don't define the state feature weighting it will default to
 weighting all features equally.
 3. Valid numerical range for output of each feature. The numerical range of all features default to $]-\infty, \infty[$.
 
-(This example is taken from the `tests/datastore_examples/mdp` directory.)
+(This example is taken from the
+`tests/datastore_examples/mdp/era5_1000hPa_danra_100m_winds` directory; the
+`tests/datastore_examples/mdp/danra_100m_winds` one next to it is the
+single-datastore version.)
 
 
-Below follows instructions on how to use Neural-LAM to train and evaluate
-models, with details first given for each kind of datastore implemented
-and later the graph generation. Once `neural-lam` has been installed the
+Below follows instructions for each kind of datastore implemented (see
+{doc}`graphs` for the graph generation and {doc}`training` for training and
+evaluation). Once `neural-lam` has been installed the
 general process is:
 
 1. Run any pre-processing scripts to generate the necessary derived data that your chosen datastore requires
 2. Run graph-creation step
 3. Train the model
 
+(data-the-datastore-and-weatherdataset-classes)=
 ## Data (the `DataStore` and `WeatherDataset` classes)
 
 To enable flexibility in what input-data sources can be used with neural-lam,
 the input-data representation is split into two parts:
 
 1. A "datastore" (represented by instances of
-   [neural_lam.datastore.BaseDataStore](https://github.com/mllam/neural-lam/blob/main/neural_lam/datastore/base.py)) which
+   [neural_lam.datastore.BaseDatastore](https://github.com/mllam/neural-lam/blob/main/neural_lam/datastore/base.py)) which
    takes care of loading a given category (state, forcing or static) and split
    (train/val/test) of data from disk and returning it as a `xarray.DataArray`.
    The returned data-array is expected to have the spatial coordinates
@@ -99,6 +112,33 @@ the input-data representation is split into two parts:
    time to create individual samples for training, validation and testing. The
    `WeatherDataset` class is also responsible for normalising the values and
    returning `torch.Tensor`-objects.
+
+Each interior `MDPDatastore` still has its own boundary mask - a rim of
+`n_boundary_points` grid cells (default 30) excluded from the loss and
+overwritten with ground truth in the prediction. This is independent of any
+pairing with a separate boundary datastore (below).
+Set `datastores.<name>.n_boundary_points` in `config.yaml` to 0 once boundary
+forcing comes from elsewhere. If there is no separate datastore with boundary
+forcing, `n_boundary_points > 0` can still be used to take boundary input from the
+interior state. Using both `n_boundary_points > 0` and a separate boundary datastore
+corresponds to taking two kinds of boundary inputs (from interior state and boundary
+datastore), and is not recommended unless you have a very specific setup.
+`NpyFilesDatastoreMEPS`'s boundary mask is fixed at data-preparation time and
+does not support this option.
+
+(data-categories)=
+### Data categories
+
+Each variable in a datastore belongs to one of three *categories*, which fix
+whether it is fed to the model as input, predicted as output, or both:
+
+| Category  | Model input | Model output | Description |
+|-----------|:-----------:|:------------:|-------------|
+| `state`   | ✓           | ✓            | Prognostic variables the model both reads and predicts (autoregressed forward in time). |
+| `forcing` | ✓           |              | Time-varying inputs known in advance (e.g. solar radiation, boundary forcing). |
+| `static`  | ✓           |              | Time-invariant inputs (e.g. orography, land-sea mask). |
+
+The categories also fix each datastore's role. A datastore with `state` data is the interior domain; one without is input-only, e.g. ERA5 boundary forcing for a LAM domain, whose forcing is windowed into an extra tensor per training sample. Exactly one interior datastore is required and at most one boundary datastore is supported.
 
 There are currently two different datastores implemented in the codebase:
 
@@ -119,9 +159,12 @@ There are currently two different datastores implemented in the codebase:
    example for how to create similar numpy-based datastores.
 
 If neither of these options fit your need you can create your own datastore by
-subclassing the `neural_lam.datastore.BaseDataStore` class or
-`neural_lam.datastore.BaseRegularGridDatastore` class (if your data is stored on
-a regular grid) and implementing the abstract methods.
+subclassing the `neural_lam.datastore.BaseDatastore` class and implementing the abstract methods.
+
+Datastores whose grid points form a complete 2D `x`/`y` rectilinear grid (the
+spacing need not be uniform) set `is_on_rectilinear_grid` to `True` and
+implement `grid_shape_state`. This can depend on the data, e.g. a
+domain-cropped `MDPDatastore` is not on a rectilinear grid.
 
 
 ### MDP (mllam-data-prep) Datastore - `MDPDatastore`
@@ -229,8 +272,8 @@ dataset:
   var_units:
   - Pa
   - Pa
-  - W/m²
-  - W/m²
+  - W/m\textsuperscript{2}
+  - W/m\textsuperscript{2}
   - "-"
   - "-"
   - K
@@ -241,9 +284,9 @@ dataset:
   - m/s
   - m/s
   - m/s
-  - kg/m²
-  - m²/s²
-  - m²/s²
+  - kg/m\textsuperscript{2}
+  - m\textsuperscript{2}/s\textsuperscript{2}
+  - m\textsuperscript{2}/s\textsuperscript{2}
   num_timesteps: 65
   num_ensemble_members: 2
   step_length: 3
@@ -265,9 +308,10 @@ Which you can then use in a neural-lam configuration file like this:
 
 ```yaml
 # config.yaml
-datastore:
-  kind: npyfilesmeps
-  config_path: meps.datastore.yaml
+datastores:
+  meps:
+    kind: npyfilesmeps
+    config_path: meps.datastore.yaml
 ```
 
 For npy-file based datastores you must separately run the command that creates the variables used for standardization:
