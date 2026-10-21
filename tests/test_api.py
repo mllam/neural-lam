@@ -20,9 +20,12 @@ def shared_env():
     """Module-scoped datastore and graphs fixture shared by API tests."""
     datastore = DummyDatastore(n_grid_points=100, n_timesteps=15)
     config = nlconfig.NeuralLAMConfig(
-        datastore=nlconfig.DatastoreSelection(
-            kind=datastore.SHORT_NAME, config_path=str(datastore.root_path)
-        )
+        datastores={
+            "main": nlconfig.DatastoreSelection(
+                kind=datastore.SHORT_NAME,
+                config_path=str(datastore.root_path),
+            )
+        }
     )
     api.create_graph(
         datastore=datastore,
@@ -197,9 +200,11 @@ def test_fit_config_datastore_validation():
     """Verify config and datastore must be provided together or via path."""
     ds = DummyDatastore(n_grid_points=25, n_timesteps=5)
     cfg = nlconfig.NeuralLAMConfig(
-        datastore=nlconfig.DatastoreSelection(
-            kind=ds.SHORT_NAME, config_path=str(ds.root_path)
-        )
+        datastores={
+            "main": nlconfig.DatastoreSelection(
+                kind=ds.SHORT_NAME, config_path=str(ds.root_path)
+            )
+        }
     )
     model_config = nlconfig.ModelConfig()
     train_config = nlconfig.TrainRunConfig()

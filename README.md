@@ -113,13 +113,18 @@ Canonical dimension names used in tensor shape annotations throughout the codeba
 
 - `B` - batch size
 - `pred_steps` - number of autoregressive prediction steps
+- `num_times` - number of time steps along the time axis of a raw or batched timeseries (a trailing `'`, e.g. `num_times'`, denotes a pre-subsampling / pre-differencing variant)
 - `num_grid_nodes` - number of nodes in the flattened spatial grid
+- `num_boundary_grid_nodes` - number of nodes in the flattened boundary spatial grid
 - `num_mesh_nodes` - number of mesh nodes; indexed as `num_mesh_nodes[l]` for hierarchical level `l`
 - `num_state_vars` - number of atmospheric state variables
 - `num_forcing_vars` - number of forcing input variables
+- `num_windowed_forcing_vars` - forcing variables stacked over the past/future forcing window
+- `num_windowed_boundary_vars` - boundary forcing variables stacked over the past/future boundary window
 - `num_variables` - generic variable dimension used in metric functions
 - `hidden_dim` - internal hidden representation size in GNN layers and MLPs
 - `input_dim` - input feature dimensionality to a layer before transformation
+- `num_mesh_static_vars` - number of static features per mesh node
 - `num_edges` - number of edges in a graph (g2m, m2g, same-level, up, down)
 - `num_send` - number of sender nodes in a message-passing step
 - `num_rec` - number of receiver nodes in a message-passing step

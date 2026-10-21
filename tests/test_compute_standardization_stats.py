@@ -69,7 +69,7 @@ class _FluxIsIndexDataset:
     def __getitem__(self, idx):
         state = torch.full((65, 1, 1), float(idx))
         forcing = torch.full((2, 3, 1), float(idx))
-        return state[:2], state[2:], forcing, torch.zeros(1)
+        return state[:2], state[2:], forcing, torch.zeros(0), torch.zeros(1)
 
 
 def _run_distributed_stats(rank, world_size, n_samples, config_path, init_path):
