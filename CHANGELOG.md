@@ -17,6 +17,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Add optional boundary datastore support: `NeuralLAMConfig` now takes a named `datastores` dict. `WeatherDataset` loads boundary forcing from such a datastore and `__getitem__` returns a 5-tuple `(init_states, target_states, forcing, boundary, target_times)`. New CLI args `--num_past_boundary_steps` / `--num_future_boundary_steps` control the boundary forcing window. Expose `MDPDatastore`'s boundary-mask width as `n_boundary_points` on a `datastores.<name>` entry in `config.yaml`. New `is_on_rectilinear_grid` property to `BaseDatastore`, reporting whether a datastore's grid points form a complete 2D grid. [\#635](https://github.com/mllam/neural-lam/pull/635) @sadamov
 
+- Support plotting boundary data from a separate boundary datastore in `vis.plot_on_axis` and `vis.plot_prediction` via optional `boundary_da` and `boundary_datastore` parameters. A new optional `plotting` section in `config.yaml` (`NeuralLAMConfig.plotting`) controls the overlay. [\#636](https://github.com/mllam/neural-lam/pull/636)
+
 - Add a Sphinx + `sphinx-autoapi` documentation site (intro, install, quickstart, auto-generated API reference) on `myst-parser` and `sphinx-book-theme`, published with GitHub Pages. Notebooks are now marimo `.py` files, exported to Markdown at docs build time [\#272](https://github.com/mllam/neural-lam/pull/272) @Mohit-Lakra
 
 ### Changed

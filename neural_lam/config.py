@@ -123,6 +123,28 @@ class TrainingConfig:
 
 
 @dataclasses.dataclass
+class PlottingConfig:
+    """
+    Configuration related to evaluation plotting.
+
+    Attributes
+    ----------
+    boundary_margin_degrees : float
+        Margin around the interior in degrees of latitude when a boundary
+        datastore is configured. Defaults to 1.0.
+    boundary_var_mapping : dict[str, str]
+        Optional mapping from interior state variable name to boundary
+        forcing feature name for the overlay. State variables not listed
+        fall back to matching a boundary forcing feature of the same name.
+    """
+
+    boundary_margin_degrees: float = 1.0
+    boundary_var_mapping: dict[str, str] = dataclasses.field(
+        default_factory=dict
+    )
+
+
+@dataclasses.dataclass
 class NeuralLAMConfig(dataclass_wizard.JSONWizard, dataclass_wizard.YAMLWizard):
     """
     Configuration for the Neural-LAM model and training pipeline.
@@ -142,10 +164,13 @@ class NeuralLAMConfig(dataclass_wizard.JSONWizard, dataclass_wizard.YAMLWizard):
     training : TrainingConfig
         Configuration for training the model, including loss function and
         feature-weighting strategy. Defaults to ``TrainingConfig()``.
+    plotting : PlottingConfig
+        The configuration for evaluation plotting.
     """
 
     datastores: dict[str, DatastoreSelection]
     training: TrainingConfig = dataclasses.field(default_factory=TrainingConfig)
+    plotting: PlottingConfig = dataclasses.field(default_factory=PlottingConfig)
 
     class _(dataclass_wizard.JSONWizard.Meta):
         """
@@ -206,8 +231,9 @@ def load_config_and_datastore(
     Raises
     ------
     InvalidConfigError
-        If not exactly one datastore provides `state` data, or if more than
-        one omits it.
+        If not exactly one datastore provides `state` data, if more than
+        one omits it, or if `plotting.boundary_var_mapping` maps to a feature
+        the boundary datastore does not provide.
     """
     with open(config_path, encoding="utf-8") as f:
         raw_config = yaml.safe_load(f)
@@ -258,6 +284,25 @@ def load_config_and_datastore(
 
     (datastore,) = interior_datastores.values()
     datastore_boundary = next(iter(boundary_datastores.values()), None)
+
+    # A mapped feature the boundary datastore does not provide would
+    # silently leave the overlay out of the evaluation plots.
+    boundary_features = (
+        set(datastore_boundary.get_vars_names(category="forcing"))
+        if datastore_boundary is not None
+        else set()
+    )
+    unknown = {
+        var: feature
+        for var, feature in config.plotting.boundary_var_mapping.items()
+        if feature not in boundary_features
+    }
+    if unknown:
+        raise InvalidConfigError(
+            "`plotting.boundary_var_mapping` maps to features that are not "
+            f"forcing features of the boundary datastore: {unknown}; "
+            f"available: {sorted(boundary_features)}."
+        )
 
     return (
         config,

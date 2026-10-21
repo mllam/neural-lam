@@ -1,19 +1,17 @@
 # Standard library
 import shutil
+from collections.abc import Iterator
 from datetime import timedelta
 from pathlib import Path
-from typing import Iterator
 from unittest.mock import MagicMock, patch
 
 # Third-party
-import matplotlib
 import matplotlib.figure
 import matplotlib.pyplot as plt
 import numpy as np
 import pytest
 import torch
 import xarray as xr
-from cartopy import crs as ccrs
 
 # First-party
 from neural_lam import config as nlconfig
@@ -22,8 +20,11 @@ from neural_lam.create_graph import create_graph_from_datastore
 from neural_lam.models import ARForecaster, ForecasterModule, GraphLAM
 from neural_lam.utils import get_integer_time
 from neural_lam.weather_dataset import WeatherDataset
-from tests.conftest import init_datastore_example
-from tests.dummy_datastore import DummyDatastore
+from tests.conftest import (
+    init_datastore_boundary_example,
+    init_datastore_example,
+)
+from tests.dummy_datastore import BoundaryDummyDatastore, DummyDatastore
 
 # Create output directory for test figures
 TEST_OUTPUT_DIR = Path(__file__).parent / "test_outputs" / "plotting"
@@ -118,7 +119,6 @@ def test_plot_prediction() -> None:
         title="Test Prediction",
         vrange=(expected_vmin, expected_vmax),
         boundary_alpha=None,
-        crop_to_interior=False,
     )
 
     assert isinstance(fig, matplotlib.figure.Figure)
@@ -136,6 +136,95 @@ def test_plot_prediction() -> None:
     assert ground_truth_ax.collections[0].norm.vmax == expected_vmax
     assert prediction_ax.collections[0].norm.vmin == expected_vmin
     assert prediction_ax.collections[0].norm.vmax == expected_vmax
+
+
+def test_plot_prediction_with_boundary() -> None:
+    """Boundary data from a datastore without state is drawn underneath the
+    interior in both panels."""
+    datastore = init_datastore_example("dummydata")
+    n_grid = datastore.num_grid_points
+
+    boundary_datastore = BoundaryDummyDatastore()
+    assert boundary_datastore.N_FEATURES["state"] == 0
+    n_boundary = boundary_datastore.num_grid_points
+
+    da_pred = xr.DataArray(np.linspace(0.0, 1.0, n_grid))
+    da_target = xr.DataArray(np.linspace(1.0, 2.0, n_grid))
+    boundary_da = xr.DataArray(np.linspace(0.5, 1.5, n_boundary))
+
+    fig = vis.plot_prediction(
+        datastore=datastore,
+        da_prediction=da_pred,
+        da_target=da_target,
+        boundary_alpha=None,
+        boundary_da=boundary_da,
+        boundary_datastore=boundary_datastore,
+    )
+
+    ground_truth_ax, prediction_ax, _ = fig.axes
+    # Each panel: boundary pcolormesh + interior pcolormesh
+    assert len(ground_truth_ax.collections) == 2
+    assert len(prediction_ax.collections) == 2
+
+
+def test_interior_bbox_margin_pads_every_side() -> None:
+    """`boundary_margin_degrees` pads the interior bbox on every side."""
+    datastore = init_datastore_example("dummydata")
+
+    xmin, xmax, ymin, ymax = vis._interior_padded_projected_bbox(datastore, 0.0)
+    padded = vis._interior_padded_projected_bbox(datastore, 1.0)
+
+    assert padded[0] < xmin
+    assert padded[1] > xmax
+    assert padded[2] < ymin
+    assert padded[3] > ymax
+
+
+@pytest.mark.requires_real_data
+def test_plot_prediction_with_era5_boundary() -> None:
+    """DANRA interior (LambertConformal) with the cropped ERA5 boundary
+    (PlateCarree) overlaid."""
+    datastore = init_datastore_example("mdp")
+    boundary_datastore = init_datastore_boundary_example("mdp")
+
+    n_grid = datastore.num_grid_points
+    n_boundary = boundary_datastore.num_grid_points
+
+    da_pred = xr.DataArray(np.linspace(0.0, 1.0, n_grid))
+    da_target = xr.DataArray(np.linspace(1.0, 2.0, n_grid))
+    # Like `get_dataarray` output, carry the per-point lon/lat of the
+    # cropped boundary
+    boundary_lon_lat = boundary_datastore.get_lat_lon("forcing")
+    boundary_da = xr.DataArray(
+        np.linspace(0.5, 1.5, n_boundary),
+        dims=["grid_index"],
+        coords={
+            "longitude": ("grid_index", boundary_lon_lat[:, 0]),
+            "latitude": ("grid_index", boundary_lon_lat[:, 1]),
+        },
+    )
+
+    fig = vis.plot_prediction(
+        datastore=datastore,
+        da_prediction=da_pred,
+        da_target=da_target,
+        title="DANRA + ERA5 boundary",
+        boundary_alpha=None,
+        boundary_da=boundary_da,
+        boundary_datastore=boundary_datastore,
+    )
+
+    assert isinstance(fig, matplotlib.figure.Figure)
+    ground_truth_ax, prediction_ax, _ = fig.axes
+    # Each panel: boundary pcolormesh + interior pcolormesh
+    assert len(ground_truth_ax.collections) == 2
+    assert len(prediction_ax.collections) == 2
+
+    fig.savefig(
+        TEST_OUTPUT_DIR / "danra_era5_boundary_overlay.png",
+        dpi=150,
+        bbox_inches="tight",
+    )
 
 
 def test_plot_error_map() -> None:
@@ -378,7 +467,6 @@ def test_plot_spatial_error() -> None:
         datastore=datastore,
         title="Test Spatial Error",
         boundary_alpha=None,
-        crop_to_interior=False,
     )
 
     assert isinstance(fig, matplotlib.figure.Figure)
@@ -386,8 +474,8 @@ def test_plot_spatial_error() -> None:
     assert fig.texts[0].get_text() == "Test Spatial Error"
 
 
-def test_plot_spatial_error_crop_to_interior_changes_extent() -> None:
-    """Check interior cropping forwards interior lon/lat bounds."""
+def test_plot_spatial_error_extent_matches_interior() -> None:
+    """`plot_spatial_error` crops the axes to the interior x/y bounds."""
     datastore = init_datastore_example("dummydata")
     n_grid = datastore.num_grid_points
     grid_shape = (datastore.grid_shape_state.x, datastore.grid_shape_state.y)
@@ -399,16 +487,6 @@ def test_plot_spatial_error_crop_to_interior_changes_extent() -> None:
     )
     datastore.__dict__.pop("boundary_mask", None)
 
-    lats_lons = datastore.get_lat_lon("state")
-    lons = lats_lons[:, 0].reshape(grid_shape)
-    lats = lats_lons[:, 1].reshape(grid_shape)
-    interior = boundary_mask == 0
-
-    expected_min_lon = float(lons[interior].min())
-    expected_max_lon = float(lons[interior].max())
-    expected_min_lat = float(lats[interior].min())
-    expected_max_lat = float(lats[interior].max())
-
     error = torch.linspace(0.0, 1.0, n_grid)
     with patch(
         "cartopy.mpl.geoaxes.GeoAxes.set_extent", autospec=True
@@ -417,18 +495,24 @@ def test_plot_spatial_error_crop_to_interior_changes_extent() -> None:
             error=error,
             datastore=datastore,
             boundary_alpha=None,
-            crop_to_interior=True,
         )
 
     assert set_extent_mock.call_count == 1
     called_extent = set_extent_mock.call_args.args[1]
     called_crs = set_extent_mock.call_args.kwargs["crs"]
+    assert type(called_crs) is type(datastore.coords_projection)
 
-    assert called_extent[0] == pytest.approx(expected_min_lon)
-    assert called_extent[1] == pytest.approx(expected_max_lon)
-    assert called_extent[2] == pytest.approx(expected_min_lat)
-    assert called_extent[3] == pytest.approx(expected_max_lat)
-    assert isinstance(called_crs, ccrs.PlateCarree)
+    interior_xy = datastore.get_xy("state", stacked=True)[
+        boundary_mask.reshape(n_grid) == 0
+    ]
+    assert called_extent == pytest.approx(
+        [
+            interior_xy[:, 0].min(),
+            interior_xy[:, 0].max(),
+            interior_xy[:, 1].min(),
+            interior_xy[:, 1].max(),
+        ]
+    )
 
 
 @pytest.fixture(scope="module")
@@ -862,6 +946,35 @@ def test_aggregate_and_plot_metrics_with_metrics_watch(dummy_graph_dir):
     )
 
     plt.close("all")
+
+
+@pytest.mark.parametrize(
+    "time_step,time_unit",
+    [(1, "hours")],
+)
+def test_plot_examples_with_config_from_before_plotting(
+    model_and_batch, monkeypatch
+):
+    """Configs pickled before `plotting` existed fall back to its
+    defaults."""
+    model, batch, _, tmp_path = model_and_batch
+    model.plotted_examples = 0
+    del model.config.plotting
+
+    class _SimpleLogger:
+        save_dir = str(tmp_path)
+
+    simple_logger = _SimpleLogger()
+    monkeypatch.setattr(
+        type(model), "logger", property(lambda self: simple_logger)
+    )
+
+    with torch.no_grad():
+        prediction, _, _, _ = model.common_step(batch)
+        model.plot_examples(
+            batch, n_examples=1, prediction=prediction, split="train"
+        )
+    assert model.plotted_examples == 1
 
 
 def test_spatial_loss_maps_out_of_range_steps(tmp_path, dummy_graph_dir):

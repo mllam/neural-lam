@@ -31,6 +31,21 @@ def test_config_serialization(state_weighting_config):
     assert c == c.from_yaml(c.to_yaml())
 
 
+def test_plotting_config_roundtrip():
+    c = nlconfig.NeuralLAMConfig(
+        datastores={
+            "danra": nlconfig.DatastoreSelection(kind="mdp", config_path=""),
+            "era5": nlconfig.DatastoreSelection(kind="mdp", config_path=""),
+        },
+        plotting=nlconfig.PlottingConfig(
+            boundary_margin_degrees=2.0,
+            boundary_var_mapping={"u100m": "u_component_of_wind1000hPa"},
+        ),
+    )
+
+    assert c == c.from_yaml(c.to_yaml())
+
+
 yaml_training_defaults = """
 datastores:
   main:
@@ -147,6 +162,26 @@ def test_load_config_and_datastore_rejects_two_boundaries(tmp_path):
 
     with pytest.raises(
         nlconfig.InvalidConfigError, match="At most one boundary datastore"
+    ):
+        nlconfig.load_config_and_datastore(str(config_path))
+
+
+@pytest.mark.requires_real_data
+def test_load_config_and_datastore_rejects_unknown_boundary_mapping(tmp_path):
+    """A `boundary_var_mapping` entry naming a feature the boundary
+    datastore does not provide would silently drop the overlay."""
+    danra = DATASTORE_EXAMPLES / "danra_100m_winds" / "danra.datastore.yaml"
+    era5 = BOUNDARY_EXAMPLE_DIR / "era5.datastore.yaml"
+    config_path = _write_config(tmp_path, {"danra": danra, "era5": era5})
+    with open(config_path, "a", encoding="utf-8") as f:
+        f.write(
+            "plotting:\n"
+            "  boundary_var_mapping:\n"
+            "    v100m: v_component_of_wind1000hPa\n"
+        )
+
+    with pytest.raises(
+        nlconfig.InvalidConfigError, match="v_component_of_wind1000hPa"
     ):
         nlconfig.load_config_and_datastore(str(config_path))
 
