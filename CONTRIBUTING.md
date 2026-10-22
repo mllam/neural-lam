@@ -152,7 +152,10 @@ label in the form `vX.Y.Z (proposed)`.
 2. Fill in the
    [pull request template](.github/pull_request_template.md) - it contains the
    full checklists for authors, reviewers, and assignees. Link the issue with
-   `closes #<N>` or `refs #<N>` in the PR body.
+   `closes #<N>` or `refs #<N>` in the PR body. An automated check labels PRs
+   `needs-triage` and comments when no issue is linked, the template is not
+   filled in, the claimed issue is closed or assigned to someone else, or an
+   older open PR already claims the same issue.
 3. Write commit messages in **imperative form** matching the existing
    `git log` style ("Add X" not "Added X"), and keep one concern per PR.
 4. PRs land via **squash-and-merge**: the PR title becomes the single commit

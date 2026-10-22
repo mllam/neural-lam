@@ -2,13 +2,14 @@ name: PR Claim Check
 
 on:
   pull_request_target:
-    types: [opened, edited, synchronize]
+    types: [opened, edited, reopened, synchronize]
 
 concurrency:
   group: pr-claim-${{ github.event.pull_request.number }}
   cancel-in-progress: true
 
 permissions:
+  contents: read
   pull-requests: write
   issues: write
 
@@ -16,10 +17,9 @@ jobs:
   claim-check:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout base branch
+      # pull_request_target checks out the default branch, never the PR head
+      - name: Checkout default branch
         uses: actions/checkout@v4
-        with:
-          ref: ${{ github.event.pull_request.base.ref || 'main' }}
 
       - name: Set up Python
         uses: actions/setup-python@v5
