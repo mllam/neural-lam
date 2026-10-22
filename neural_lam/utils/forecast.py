@@ -20,15 +20,14 @@ def create_forecast_dataset(
     category: str = "state",
     pred_std: torch.Tensor | np.ndarray | None = None,
     ensemble_members: np.ndarray | list[Any] | None = None,
+    split: str = "test",
 ) -> xr.Dataset:
     """
     Construct an xarray Dataset from weather forecast predictions.
 
-    The dimension order strictly adheres to
-    ``BaseDatastore.expected_dim_order``:
-    ``('analysis_time', 'elapsed_forecast_duration', 'grid_index',``
-    ``'{category}_feature')`` or with ``'ensemble_member'`` placed after
-    ``'elapsed_forecast_duration'`` when ensemble members are present.
+    The dimensions are ``('analysis_time', 'elapsed_forecast_duration',``
+    ``['ensemble_member',] 'grid_index', '{category}_feature')``, the order
+    ``BaseDatastore.expected_dim_order`` uses for forecast datastores.
 
     Parameters
     ----------
@@ -48,6 +47,8 @@ def create_forecast_dataset(
         Standard deviation predictions matching the prediction shape.
     ensemble_members : np.ndarray, list, or None, optional
         Ensemble member identifiers when predictions represent an ensemble.
+    split : str, default "test"
+        Data split from which to retrieve grid reference coordinates.
 
     Returns
     -------
@@ -59,9 +60,6 @@ def create_forecast_dataset(
     else:
         predictions_np = np.asarray(predictions)
 
-    if predictions_np.ndim == 3:
-        predictions_np = predictions_np[np.newaxis, ...]
-
     analysis_times_np = np.atleast_1d(
         np.asarray(analysis_times, dtype="datetime64[ns]")
     )
@@ -69,27 +67,16 @@ def create_forecast_dataset(
         np.asarray(elapsed_durations, dtype="timedelta64[ns]")
     )
 
-    ref_da = datastore.get_dataarray(category=category, split="test")
-    if ref_da is None:
-        ref_da = datastore.get_dataarray(category=category, split="val")
-    if ref_da is None:
-        ref_da = datastore.get_dataarray(category=category, split="train")
+    ref_da = datastore.get_dataarray(category=category, split=split)
     if ref_da is None:
         raise ValueError(
             f"Unable to retrieve reference DataArray for category '{category}'"
-            " from datastore."
+            f" and split '{split}' from datastore."
         )
 
     var_names = datastore.get_vars_names(category=category)
 
-    if (
-        predictions_np.ndim == 4
-        and ensemble_members is not None
-        and len(analysis_times_np) == 1
-    ):
-        predictions_np = predictions_np[np.newaxis, ...]
-
-    has_members = ensemble_members is not None or predictions_np.ndim == 5
+    has_members = predictions_np.ndim == 5
     if has_members:
         dims = (
             "analysis_time",
@@ -130,12 +117,11 @@ def create_forecast_dataset(
     )
 
     # Attach spatial coordinates from the reference datastore DataArray
-    if hasattr(ref_da, "coords"):
-        for coord_name, coord_val in ref_da.coords.items():
-            if str(coord_name) not in coords and set(coord_val.dims).issubset(
-                {"grid_index"}
-            ):
-                coords[str(coord_name)] = coord_val
+    for coord_name, coord_val in ref_da.coords.items():
+        if str(coord_name) not in coords and set(coord_val.dims).issubset(
+            {"grid_index"}
+        ):
+            coords[str(coord_name)] = coord_val
 
     da = xr.DataArray(
         predictions_np,
@@ -150,48 +136,8 @@ def create_forecast_dataset(
             pred_std_np = pred_std.detach().cpu().numpy()
         else:
             pred_std_np = np.asarray(pred_std)
+        ds[f"{category}_std"] = (dims, pred_std_np)
 
-        if pred_std_np.ndim == 1 and pred_std_np.shape[0] == len(var_names):
-            std_dims = (f"{category}_feature",)
-            std_coords = {f"{category}_feature": var_names}
-        elif has_members and pred_std_np.ndim == 4:
-            # Standard deviation computed across ensemble members
-            std_dims = (
-                "analysis_time",
-                "elapsed_forecast_duration",
-                "grid_index",
-                f"{category}_feature",
-            )
-            std_coords = {d: coords[d] for d in std_dims}
-        elif (
-            has_members
-            and pred_std_np.ndim == 3
-            and len(analysis_times_np) == 1
-        ):
-            pred_std_np = pred_std_np[np.newaxis, ...]
-            std_dims = (
-                "analysis_time",
-                "elapsed_forecast_duration",
-                "grid_index",
-                f"{category}_feature",
-            )
-            std_coords = {d: coords[d] for d in std_dims}
-        else:
-            if (
-                pred_std_np.ndim == predictions_np.ndim - 1
-                and len(analysis_times_np) == 1
-            ):
-                pred_std_np = pred_std_np[np.newaxis, ...]
-            std_dims = dims[: pred_std_np.ndim]
-            std_coords = {d: coords[d] for d in std_dims}
-
-        ds[f"{category}_std"] = xr.DataArray(
-            pred_std_np,
-            dims=std_dims,
-            coords=std_coords,
-        )
-
-    if hasattr(ref_da, "attrs"):
-        ds.attrs.update(ref_da.attrs)
+    ds.attrs.update(ref_da.attrs)
 
     return ds
