@@ -296,7 +296,7 @@ def test_smoke_train_workflow_execution(tmp_path: Path):
         num_workers=0,
         ar_steps_eval=2,
         val_steps_to_log=[1],
-        n_example_pred=0,
+        create_gif=True,
         runs_root=str(runs_root),
         logger_run_name="smoke_eval_skill_test",
     )

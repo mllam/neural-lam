@@ -14,7 +14,7 @@ The smoke-train workflow validates the entire Neural-LAM pipeline under strict c
 - **In-process datastore registration**: Explicitly maps `DATASTORES[DummyDatastore.SHORT_NAME] = DummyDatastore` so execution succeeds outside pytest harness fixtures.
 - **Hermetic directories**: Uses a temporary directory (`tempfile.TemporaryDirectory()`) for both graph generation and training runs, preventing filesystem pollution.
 - **Actual checkpoint reloading**: Verifies that the training run writes a checkpoint file to disk, and the evaluation step loads *that specific newly produced checkpoint* (rather than relying on pre-existing artifacts).
-- **Minimal evaluation side effects**: Disables example prediction saving and GIF rendering (`n_example_pred=0`) so evaluation executes fast without extraneous file generation.
+- **Evaluation directory initialization**: Passes `create_gif=True` so that the evaluation step initializes the plot directories and `self.logger.save_dir` even when W&B is disabled, allowing evaluation plots (`test_rmse.pdf`) to write successfully.
 - **CPU compatibility**: Fully runnable on CPU via `CUDA_VISIBLE_DEVICES=""`.
 
 ## 2. In-Process Python Workflow
@@ -93,7 +93,7 @@ with tempfile.TemporaryDirectory() as tmp_dir:
         num_workers=0,
         ar_steps_eval=2,
         val_steps_to_log=[1],
-        n_example_pred=0,
+        create_gif=True,
         runs_root=str(runs_root),
         logger_run_name="smoke_eval",
     )
