@@ -166,9 +166,7 @@ class GraphLAM(BaseGraphModel):
         return self.m2m_embedder(self.m2m_features)
 
     def process_step(
-        self,
-        mesh_rep: torch.Tensor,
-        processor_embeddings: torch.Tensor | None = None,
+        self, mesh_rep: torch.Tensor, processor_embeddings: torch.Tensor
     ) -> torch.Tensor:
         """
         Process the mesh representation through the flat message-passing
@@ -181,9 +179,9 @@ class GraphLAM(BaseGraphModel):
             representations. Dims: ``B`` is batch size, ``num_mesh_nodes`` is
             the number of mesh nodes, and ``hidden_dim`` is the hidden
             dimension.
-        processor_embeddings : torch.Tensor or None, optional
-            Precomputed embedded m2m edge features. If ``None``, will be
-            computed on the fly.
+        processor_embeddings : torch.Tensor
+            Shape ``(num_m2m_edges, hidden_dim)``. Embedded m2m edge
+            features from ``embed_static_processor_features``.
 
         Returns
         -------
@@ -192,8 +190,6 @@ class GraphLAM(BaseGraphModel):
             representations. Dims: same as ``mesh_rep``.
         """
         batch_size = mesh_rep.shape[0]
-        if processor_embeddings is None:
-            processor_embeddings = self.embed_static_processor_features()
         m2m_emb_expanded = self.expand_to_batch(
             processor_embeddings, batch_size
         )  # (B, num_edges, hidden_dim)

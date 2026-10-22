@@ -425,7 +425,6 @@ class BaseGraphEFM(StepPredictor):
         prev_state: torch.Tensor,
         prev_prev_state: torch.Tensor,
         forcing: torch.Tensor,
-        static_embeddings: Any | None = None,
     ) -> tuple[torch.Tensor, Optional[torch.Tensor]]:
         """
         Sample one time step prediction: embed features, sample the latent
@@ -441,8 +440,6 @@ class BaseGraphEFM(StepPredictor):
             Shape ``(B, num_grid_nodes, d_state)``. ``X_{t-1}``.
         forcing : torch.Tensor
             Shape ``(B, num_grid_nodes, d_forcing)``.
-        static_embeddings : Any | None, optional
-            Precomputed static embeddings (currently unused in GraphEFM).
 
         Returns
         -------

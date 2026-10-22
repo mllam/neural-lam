@@ -19,9 +19,13 @@ class ARForecaster(Forecaster):
 
     boundary_mask: torch.Tensor
     interior_mask: torch.Tensor
+    gradient_checkpointing: bool
 
     def __init__(
-        self, predictor: StepPredictor, datastore: BaseDatastore
+        self,
+        predictor: StepPredictor,
+        datastore: BaseDatastore,
+        gradient_checkpointing: bool = False,
     ) -> None:
         """
         Initialize the ARForecaster.
@@ -32,9 +36,16 @@ class ARForecaster(Forecaster):
             The predictor to use for each step.
         datastore : BaseDatastore
             The datastore providing grid metadata and boundary masks.
+        gradient_checkpointing : bool, default False
+            If True and in training mode, wrap each predictor call and the
+            static embedding operation in ``torch.utils.checkpoint`` so their
+            activations are recomputed in the backward pass instead of stored.
+            Lowers peak memory when unrolling more than one step, at the cost
+            of extra compute.
         """
         super().__init__()
         self.predictor = predictor
+        self.gradient_checkpointing = bool(gradient_checkpointing)
 
         # Register boundary/interior masks on the forecaster, not the predictor
         boundary_mask = (
@@ -116,22 +127,36 @@ class ARForecaster(Forecaster):
         pred_std_list = []
         pred_steps = forcing_features.shape[1]
 
-        static_embeddings = self.predictor.embed_static_features()
+        # Embed static features once and reuse them in every step
+        checkpointing = self.gradient_checkpointing and self.training
+        if checkpointing:
+            static_embeddings = torch.utils.checkpoint.checkpoint(
+                self.predictor.embed_static_features, use_reentrant=False
+            )
+        else:
+            static_embeddings = self.predictor.embed_static_features()
+        step_kwargs = (
+            {}
+            if static_embeddings is None
+            else {"static_embeddings": static_embeddings}
+        )
 
         for i in range(pred_steps):
             forcing = forcing_features[:, i]
             boundary_state = boundary_states[:, i]
 
-            if static_embeddings is not None:
-                pred_state, pred_std = self.predictor(
+            if checkpointing:
+                pred_state, pred_std = torch.utils.checkpoint.checkpoint(
+                    self.predictor,
                     prev_state,
                     prev_prev_state,
                     forcing,
-                    static_embeddings=static_embeddings,
+                    use_reentrant=False,
+                    **step_kwargs,
                 )
             else:
                 pred_state, pred_std = self.predictor(
-                    prev_state, prev_prev_state, forcing
+                    prev_state, prev_prev_state, forcing, **step_kwargs
                 )
 
             # Overwrite boundary with true state using ARForecaster's mask

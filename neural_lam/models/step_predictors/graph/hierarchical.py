@@ -171,7 +171,7 @@ class BaseHiGraphModel(BaseGraphModel):
     def embedd_mesh_nodes(self) -> torch.Tensor:
         """
         Embed static mesh node features for the bottom level only;
-        remaining levels are embedded at the start of ``process_step``.
+        remaining levels are embedded in ``embed_static_processor_features``.
 
         Returns
         -------
@@ -230,15 +230,12 @@ class BaseHiGraphModel(BaseGraphModel):
     def process_step(
         self,
         mesh_rep: torch.Tensor,
-        processor_embeddings: (
-            tuple[
-                list[torch.Tensor],
-                list[torch.Tensor],
-                list[torch.Tensor],
-                list[torch.Tensor],
-            ]
-            | None
-        ) = None,
+        processor_embeddings: tuple[
+            list[torch.Tensor],
+            list[torch.Tensor],
+            list[torch.Tensor],
+            list[torch.Tensor],
+        ],
     ) -> torch.Tensor:
         """
         Process the mesh representation across all hierarchy levels,
@@ -251,9 +248,9 @@ class BaseHiGraphModel(BaseGraphModel):
             node representations from the encoder. Dims: ``B`` is batch
             size, ``num_mesh_nodes[0]`` is the number of nodes at
             level 0, and ``hidden_dim`` is the hidden dimension.
-        processor_embeddings : tuple or None, optional
-            Precomputed static embeddings for the hierarchical processor.
-            If ``None``, will be computed on the fly.
+        processor_embeddings : tuple
+            Static node and edge embeddings of the hierarchy levels from
+            ``embed_static_processor_features``.
 
         Returns
         -------
@@ -263,37 +260,29 @@ class BaseHiGraphModel(BaseGraphModel):
         """
         batch_size = mesh_rep.shape[0]
 
-        if processor_embeddings is None:
-            processor_embeddings = self.embed_static_processor_features()
+        mesh_emb_levels, mesh_same_emb, mesh_up_emb, mesh_down_emb = (
+            processor_embeddings
+        )
 
-        (
-            mesh_emb_levels_raw,
-            mesh_same_rep_raw,
-            mesh_up_rep_raw,
-            mesh_down_rep_raw,
-        ) = processor_embeddings
-
-        # EMBED REMAINING MESH NODES (levels >= 1) -
         # Create list of mesh node representations for each level,
         # each of size (B, num_mesh_nodes[l], hidden_dim)
         mesh_rep_levels = [mesh_rep] + [
             self.expand_to_batch(node_emb, batch_size)
-            for node_emb in mesh_emb_levels_raw
+            for node_emb in mesh_emb_levels
         ]
 
-        # - EMBED EDGES -
-        # Embed edges, expand with batch dimension
+        # Expand edge embeddings with batch dimension
         mesh_same_rep = [
             self.expand_to_batch(edge_emb, batch_size)
-            for edge_emb in mesh_same_rep_raw
+            for edge_emb in mesh_same_emb
         ]
         mesh_up_rep = [
             self.expand_to_batch(edge_emb, batch_size)
-            for edge_emb in mesh_up_rep_raw
+            for edge_emb in mesh_up_emb
         ]
         mesh_down_rep = [
             self.expand_to_batch(edge_emb, batch_size)
-            for edge_emb in mesh_down_rep_raw
+            for edge_emb in mesh_down_emb
         ]
 
         # - MESH INIT. -

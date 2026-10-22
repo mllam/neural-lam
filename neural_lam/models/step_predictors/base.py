@@ -155,7 +155,9 @@ class StepPredictor(nn.Module, ABC):
     def embed_static_features(self) -> Any | None:
         """
         Embed static features (e.g. mesh and edge attributes) to be reused
-        across autoregressive rollout steps.
+        across autoregressive rollout steps. Predictors that return a value
+        here must accept it as the ``static_embeddings`` keyword argument
+        of ``forward``.
 
         Returns
         -------
@@ -171,7 +173,6 @@ class StepPredictor(nn.Module, ABC):
         prev_state: torch.Tensor,
         prev_prev_state: torch.Tensor,
         forcing: torch.Tensor,
-        static_embeddings: Any | None = None,
     ) -> tuple[torch.Tensor, torch.Tensor | None]:
         """
         Advance the state by one step:

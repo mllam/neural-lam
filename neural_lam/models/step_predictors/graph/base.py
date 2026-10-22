@@ -235,7 +235,7 @@ class BaseGraphModel(StepPredictor):
         return (mesh_emb, g2m_emb, m2g_emb, processor_emb)
 
     def process_step(
-        self, mesh_rep: torch.Tensor, processor_embeddings: Any | None = None
+        self, mesh_rep: torch.Tensor, processor_embeddings: Any
     ) -> torch.Tensor:
         """
         Process the mesh representation in the encode-process-decode
@@ -248,9 +248,9 @@ class BaseGraphModel(StepPredictor):
             representations. Dims: ``B`` is batch size,
             ``num_mesh_nodes`` is the number of mesh nodes, and ``hidden_dim``
             is the hidden dimension.
-        processor_embeddings : Any or None, optional
-            Precomputed static embeddings for the processor. If ``None``,
-            they will be computed on the fly.
+        processor_embeddings : Any
+            Static processor embeddings from
+            ``embed_static_processor_features``.
 
         Returns
         -------
@@ -294,6 +294,9 @@ class BaseGraphModel(StepPredictor):
             windows). Dims: ``B`` is batch size, ``num_grid_nodes`` is
             the number of spatial grid nodes, and ``num_forcing_vars`` is the
             forcing feature dimension.
+        static_embeddings : tuple or None, optional
+            Output of ``embed_static_features``, reused across rollout steps.
+            If ``None``, the static features are embedded in this call.
 
         Returns
         -------

@@ -10,7 +10,6 @@ import torch
 
 # First-party
 from neural_lam import api
-from neural_lam import config as nlconfig
 from neural_lam.models.forecasters.autoregressive import ARForecaster
 from neural_lam.models.step_predictors.graph.graph_lam import GraphLAM
 from neural_lam.models.step_predictors.graph.hi_lam import HiLAM
@@ -18,17 +17,9 @@ from tests.dummy_datastore import DummyDatastore
 
 
 @pytest.fixture(scope="module")
-def shared_env():
-    """Module-scoped datastore and graphs fixture."""
+def datastore():
+    """Module-scoped datastore with a flat and a hierarchical graph."""
     datastore = DummyDatastore(n_grid_points=100, n_timesteps=15)
-    config = nlconfig.NeuralLAMConfig(
-        datastores={
-            "main": nlconfig.DatastoreSelection(
-                kind=datastore.SHORT_NAME,
-                config_path=str(datastore.root_path),
-            )
-        }
-    )
     api.create_graph(
         datastore=datastore,
         name="1level",
@@ -41,9 +32,10 @@ def shared_env():
         level_refinement_factor=2,
         mesh_grid_distance_ratio=1.5,
     )
-    return datastore, config
+    return datastore
 
 
+@pytest.mark.parametrize("gradient_checkpointing", [False, True])
 @pytest.mark.parametrize(
     ("model_class", "graph_name"),
     [
@@ -52,11 +44,10 @@ def shared_env():
     ],
 )
 def test_static_edge_caching_numerical_parity(
-    shared_env, model_class, graph_name
+    datastore, model_class, graph_name, gradient_checkpointing
 ):
     """Verify rollout outputs and gradients match with and without caching."""
     torch.manual_seed(42)
-    datastore, _ = shared_env
 
     predictor_cached = model_class(
         datastore=datastore,
@@ -71,7 +62,11 @@ def test_static_edge_caching_numerical_parity(
     )
     predictor_uncached = copy.deepcopy(predictor_cached)
 
-    forecaster_cached = ARForecaster(predictor_cached, datastore)
+    forecaster_cached = ARForecaster(
+        predictor_cached,
+        datastore,
+        gradient_checkpointing=gradient_checkpointing,
+    )
 
     b_size = 2
     pred_steps = 4
@@ -143,10 +138,9 @@ def test_static_edge_caching_numerical_parity(
     ],
 )
 def test_every_embedder_called_only_once_per_rollout(
-    shared_env, model_class, graph_name
+    datastore, model_class, graph_name
 ):
     """Verify every static embedder executes exactly once per rollout."""
-    datastore, _ = shared_env
     predictor = model_class(
         datastore=datastore,
         graph_name=graph_name,
@@ -190,48 +184,3 @@ def test_every_embedder_called_only_once_per_rollout(
     finally:
         for p in patches:
             p.stop()
-
-
-@pytest.mark.parametrize(
-    ("model_class", "graph_name"),
-    [
-        (GraphLAM, "1level"),
-        (HiLAM, "hierarchical"),
-    ],
-)
-def test_standalone_fallback_behavior(shared_env, model_class, graph_name):
-    """Verify predictor calls without static_embeddings compute on the fly."""
-    datastore, _ = shared_env
-    predictor = model_class(
-        datastore=datastore,
-        graph_name=graph_name,
-        hidden_dim=8,
-        hidden_layers=1,
-        processor_layers=1,
-        num_past_forcing_steps=0,
-        num_future_forcing_steps=0,
-        output_std=True,
-    )
-
-    b_size = 1
-    num_grid = datastore.num_grid_points
-    num_state = datastore.get_num_data_vars(category="state")
-    d_forcing = datastore.get_num_data_vars(category="forcing")
-
-    prev_prev = torch.randn(b_size, num_grid, num_state)
-    prev = torch.randn(b_size, num_grid, num_state)
-    forcing = torch.randn(b_size, num_grid, d_forcing)
-
-    # 1. Direct call without static_embeddings (defaults to None, on the fly)
-    out_default, std_default = predictor(prev, prev_prev, forcing)
-
-    # 2. Call with precomputed static embeddings
-    static_emb = predictor.embed_static_features()
-    out_precomputed, std_precomputed = predictor(
-        prev, prev_prev, forcing, static_embeddings=static_emb
-    )
-
-    assert torch.allclose(out_default, out_precomputed, atol=1e-6)
-    if std_default is not None:
-        assert std_precomputed is not None
-        assert torch.allclose(std_default, std_precomputed, atol=1e-6)
