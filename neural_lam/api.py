@@ -464,7 +464,6 @@ def create_graph(
 
 
 def predict(
-    *,
     load: str,
     config_path: str | None = None,
     init_times: (
@@ -477,8 +476,8 @@ def predict(
         | None
     ) = None,
     lead_steps: int | None = None,
-    split: str = "test",
-    device: str | torch.device = "cpu",
+    split: Literal["train", "val", "test"] = "test",
+    device: str | torch.device = "auto",
     batch_size: int = 1,
     unstandardize: bool = True,
     return_target: bool = False,
@@ -486,7 +485,7 @@ def predict(
     config: NeuralLAMConfig | None = None,
     datastore: BaseDatastore | None = None,
     datastore_boundary: BaseDatastore | None = None,
-) -> xr.Dataset | tuple[xr.Dataset, xr.Dataset]:
+) -> xr.Dataset:
     """
     Generate weather forecast predictions using a trained model checkpoint.
 
@@ -498,29 +497,32 @@ def predict(
         Path to the Neural-LAM YAML configuration. Required if config or
         datastore is not provided.
     init_times : str, np.datetime64, list, slice, int, or None, optional
-        Forecast initialization time(s). Can be a timestamp string
-        (e.g. ``'2022-04-01T00:00:00'``), list of timestamps, timestamp slice,
-        integer sample index, or list of sample indices. If ``None`` (default),
-        uses the first available initialization time in the split.
+        Forecast initialization time(s), selected like ``.sel`` on the
+        ``analysis_time`` coordinate: a timestamp (e.g.
+        ``'2022-04-01T00:00:00'``), list of timestamps or timestamp slice
+        (inclusive). Integers, lists of integers and integer slices select
+        by position like ``.isel``. If ``None`` (default), uses the first
+        available initialization time in the split. ``analysis_time`` is the
+        time of the last initial state, i.e. not the launch time for forecast
+        datastores. For ensemble datastores only member 0 is used.
     lead_steps : int or None, optional
         Number of autoregressive forecast steps to rollout. Defaults to the
-        configured evaluation steps or 10.
-    split : str, default "test"
-        Data split to extract initial conditions and forcing from
-        (``'train'``, ``'val'``, or ``'test'``).
-    device : str or torch.device, default "cpu"
-        Compute device to perform inference on (e.g. ``'cpu'`` or ``'cuda'``).
+        checkpoint's ``ar_steps_eval``.
+    split : {"train", "val", "test"}, default "test"
+        Data split to extract initial conditions and forcing from.
+    device : str or torch.device, default "auto"
+        Compute device, e.g. ``'cpu'`` or ``'cuda'``. ``'auto'`` uses CUDA if
+        available, else CPU.
     batch_size : int, default 1
         Batch size for inference rollouts.
     unstandardize : bool, default True
         Whether to unstandardize predictions back into physical units using the
         dataset state mean and standard deviation.
     return_target : bool, default False
-        Whether to also return the ground-truth target states as a companion
-        dataset.
+        Whether to add the ground-truth states as ``state_target``.
     unstack_grid : bool, default False
         Whether to unstack the ``grid_index`` dimension into spatial grid
-        dimensions (e.g. ``x``, ``y``) for regular grid datastores.
+        dimensions (e.g. ``x``, ``y``). Requires a rectilinear grid datastore.
     config : NeuralLAMConfig or None, optional
         Loaded Neural-LAM configuration dataclass.
     datastore : BaseDatastore or None, optional
@@ -530,11 +532,11 @@ def predict(
 
     Returns
     -------
-    xr.Dataset or tuple of (xr.Dataset, xr.Dataset)
-        Forecast prediction dataset, or tuple of ``(predictions, targets)``
-        when ``return_target=True``.
+    xr.Dataset
+        Forecast as ``state`` (and ``state_std`` for models predicting it),
+        plus the ground truth as ``state_target`` if ``return_target=True``.
     """
-    if config is None or datastore is None:
+    if config is None and datastore is None:
         if config_path is None:
             raise ValueError(
                 "Either (config and datastore) or config_path must be provided."
@@ -542,6 +544,8 @@ def predict(
         config, datastore, datastore_boundary = load_config_and_datastore(
             config_path=config_path
         )
+    elif config is None or datastore is None:
+        raise ValueError("config and datastore must be provided together.")
 
     model = train_model_script.load_forecaster_module_from_checkpoint(
         ckpt_path=load,
@@ -549,211 +553,93 @@ def predict(
         datastore=datastore,
         datastore_boundary=datastore_boundary,
     )
+    if device == "auto":
+        device = "cuda" if torch.cuda.is_available() else "cpu"
     torch_device = torch.device(device)
     model.to(torch_device)
     model.eval()
 
+    args = model.hparams["args"]
     if lead_steps is None:
-        training_cfg = getattr(config, "training", None)
-        ar_steps_eval = getattr(training_cfg, "ar_steps_eval", None)
-        lead_steps = ar_steps_eval if ar_steps_eval is not None else 10
-
-    args = getattr(model.hparams, "args", None)
-    num_past = getattr(args, "num_past_forcing_steps", 1) if args else 1
-    num_future = getattr(args, "num_future_forcing_steps", 1) if args else 1
-    num_past_boundary = (
-        getattr(args, "num_past_boundary_steps", 1) if args else 1
-    )
-    num_future_boundary = (
-        getattr(args, "num_future_boundary_steps", 1) if args else 1
-    )
-    data_cfg = getattr(config, "data", None)
-    if data_cfg is not None:
-        num_past = getattr(data_cfg, "num_past_forcing_steps", num_past)
-        num_future = getattr(data_cfg, "num_future_forcing_steps", num_future)
-        num_past_boundary = getattr(
-            data_cfg, "num_past_boundary_steps", num_past_boundary
-        )
-        num_future_boundary = getattr(
-            data_cfg, "num_future_boundary_steps", num_future_boundary
-        )
+        lead_steps = args.ar_steps_eval
 
     dataset = WeatherDataset(
         datastore=datastore,
         split=split,
         ar_steps=lead_steps,
-        num_past_forcing_steps=num_past,
-        num_future_forcing_steps=num_future,
-        num_past_boundary_steps=num_past_boundary,
-        num_future_boundary_steps=num_future_boundary,
+        num_past_forcing_steps=args.num_past_forcing_steps,
+        num_future_forcing_steps=args.num_future_forcing_steps,
+        num_past_boundary_steps=getattr(args, "num_past_boundary_steps", 1),
+        num_future_boundary_steps=getattr(args, "num_future_boundary_steps", 1),
         datastore_boundary=datastore_boundary,
+        load_single_member=True,
     )
 
-    n_samples = len(dataset)
-    if n_samples == 0:
-        raise ValueError(
-            f"Dataset for split '{split}' with lead_steps={lead_steps} "
-            "contains 0 samples. Not enough time steps available."
-        )
-
-    n_members = (
-        dataset.da_state.ensemble_member.size
-        if hasattr(dataset.da_state, "ensemble_member")
-        else 1
+    # One sample per init time (load_single_member), so positions in
+    # `available` are sample indices
+    available = xr.DataArray(
+        np.arange(len(dataset)),
+        dims="analysis_time",
+        coords={"analysis_time": dataset._sample_window_times()[0]},
     )
-    base_init_times, _, _ = dataset._sample_window_times()
-    base_init_times = np.asarray(base_init_times, dtype="datetime64[ns]")
-
-    if datastore.is_ensemble and not dataset.load_single_member:
-        all_init_times = np.repeat(base_init_times, n_members)
-    else:
-        all_init_times = base_init_times
-
     if init_times is None:
-        selected_indices = [0]
-    elif isinstance(init_times, (int, np.integer)):
-        idx = int(init_times)
-        if not 0 <= idx < n_samples:
-            raise IndexError(
-                f"Sample index {idx} out of range [0, {n_samples - 1}]."
-            )
-        selected_indices = [idx]
-    elif isinstance(init_times, slice):
-        start_val = init_times.start
-        stop_val = init_times.stop
-        step_val = init_times.step or 1
-
-        if (start_val is None or isinstance(start_val, (int, np.integer))) and (
-            stop_val is None or isinstance(stop_val, (int, np.integer))
-        ):
-            selected_indices = list(range(n_samples)[init_times])
-        else:
-            start_dt = (
-                np.asarray(start_val, dtype="datetime64[ns]")
-                if start_val is not None
-                else None
-            )
-            stop_dt = (
-                np.asarray(stop_val, dtype="datetime64[ns]")
-                if stop_val is not None
-                else None
-            )
-            mask = np.ones(n_samples, dtype=bool)
-            if start_dt is not None:
-                mask &= all_init_times >= start_dt
-            if stop_dt is not None:
-                mask &= all_init_times <= stop_dt
-            selected_indices = np.where(mask)[0][::step_val].tolist()
-            if len(selected_indices) == 0:
-                raise ValueError(
-                    f"No samples match init_times slice '{init_times}'. "
-                    f"Available times range from {all_init_times[0]} to "
-                    f"{all_init_times[-1]}."
-                )
-    elif isinstance(init_times, (str, np.datetime64)):
-        target_dt = np.asarray(init_times, dtype="datetime64[ns]")
-        matches = np.where(all_init_times == target_dt)[0]
-        if len(matches) == 0:
-            raise ValueError(
-                f"Requested init_time '{init_times}' not found. "
-                f"Available init_times range from {all_init_times[0]} to "
-                f"{all_init_times[-1]}."
-            )
-        selected_indices = [int(matches[0])]
-    elif hasattr(init_times, "__iter__"):
-        selected_indices = []
-        for t in init_times:
-            if isinstance(t, (int, np.integer)):
-                idx = int(t)
-                if not 0 <= idx < n_samples:
-                    raise IndexError(
-                        f"Sample index {idx} out of range [0, {n_samples - 1}]."
-                    )
-                selected_indices.append(idx)
-            else:
-                target_dt = np.asarray(t, dtype="datetime64[ns]")
-                matches = np.where(all_init_times == target_dt)[0]
-                if len(matches) == 0:
-                    raise ValueError(
-                        f"Requested init_time '{t}' not found. "
-                        f"Available init_times range from {all_init_times[0]} "
-                        f"to {all_init_times[-1]}."
-                    )
-                selected_indices.append(int(matches[0]))
+        init_times = 0
+    if isinstance(init_times, slice):
+        bounds = [init_times.start, init_times.stop]
+    elif isinstance(init_times, list):
+        bounds = init_times
     else:
-        raise TypeError(f"Unsupported type for init_times: {type(init_times)}")
+        bounds = [init_times]
+    if all(b is None or isinstance(b, (int, np.integer)) for b in bounds):
+        selected = available.isel(analysis_time=init_times)
+    else:
+        selected = available.sel(analysis_time=init_times)
+    selected_indices = np.atleast_1d(selected.values).tolist()
+    if not selected_indices:
+        raise ValueError(
+            f"init_times={init_times!r} selects no init time in split "
+            f"'{split}' (available: {available.analysis_time.values[0]} to "
+            f"{available.analysis_time.values[-1]})."
+        )
 
     pred_list: list[torch.Tensor] = []
     target_list: list[torch.Tensor] = []
     pred_std_list: list[torch.Tensor] = []
-
     first_target_times: np.ndarray | None = None
 
-    for batch_start in range(0, len(selected_indices), batch_size):
-        batch_idxs = selected_indices[batch_start : batch_start + batch_size]
-        batch_samples = [dataset[i] for i in batch_idxs]
-
-        init_batch = torch.stack([s[0] for s in batch_samples], dim=0).to(
-            torch_device
-        )
-        target_batch = torch.stack([s[1] for s in batch_samples], dim=0).to(
-            torch_device
-        )
-        forcing_batch = torch.stack([s[2] for s in batch_samples], dim=0).to(
-            torch_device
-        )
-        boundary_batch = torch.stack([s[3] for s in batch_samples], dim=0).to(
-            torch_device
-        )
-        times_batch = torch.stack([s[4] for s in batch_samples], dim=0).to(
-            torch_device
-        )
-
-        if first_target_times is None:
-            first_target_times = (
-                times_batch[0].cpu().numpy().astype("datetime64[ns]")
+    with torch.inference_mode():
+        for start in range(0, len(selected_indices), batch_size):
+            batch_idxs = selected_indices[start : start + batch_size]
+            init, target, forcing, boundary, times = (
+                torch.stack(parts).to(torch_device)
+                for parts in zip(*(dataset[i] for i in batch_idxs))
             )
-
-        (
-            norm_init,
-            norm_target,
-            norm_forcing,
-            norm_boundary,
-            _,
-        ) = model.on_after_batch_transfer(
-            (
-                init_batch,
-                target_batch,
-                forcing_batch,
-                boundary_batch,
-                times_batch,
-            ),
-            dataloader_idx=0,
-        )
-
-        with torch.no_grad():
-            pred, pred_std = model.forecaster(
-                norm_init, norm_forcing, norm_target
+            if first_target_times is None:
+                first_target_times = (
+                    times[0].cpu().numpy().astype("datetime64[ns]")
+                )
+            pred, norm_target, pred_std, _ = model.common_step(
+                model.on_after_batch_transfer(
+                    (init, target, forcing, boundary, times), dataloader_idx=0
+                )
             )
+            if unstandardize:
+                pred = pred * model.state_std + model.state_mean
+                if pred_std is not None:
+                    pred_std = pred_std * model.state_std
+            else:
+                target = norm_target
 
-        if unstandardize:
-            pred = pred * model.state_std + model.state_mean
-            target_to_save = target_batch
+            pred_list.append(pred.cpu())
+            target_list.append(target.cpu())
             if pred_std is not None:
-                pred_std = pred_std * model.state_std
-        else:
-            target_to_save = norm_target
-
-        pred_list.append(pred.cpu())
-        target_list.append(target_to_save.cpu())
-        if pred_std is not None:
-            pred_std_list.append(pred_std.cpu())
+                pred_std_list.append(pred_std.cpu())
 
     all_preds = torch.cat(pred_list, dim=0)
     all_targets = torch.cat(target_list, dim=0)
     all_pred_stds = torch.cat(pred_std_list, dim=0) if pred_std_list else None
 
-    sel_analysis_times = all_init_times[selected_indices]
+    sel_analysis_times = available.analysis_time.values[selected_indices]
     assert first_target_times is not None
     first_init_time = sel_analysis_times[0]
     elapsed_durations = first_target_times - first_init_time
@@ -765,22 +651,14 @@ def predict(
         datastore=datastore,
         category="state",
         pred_std=all_pred_stds,
+        split=split,
     )
+
+    if return_target:
+        ds_pred["state_target"] = (ds_pred.state.dims, all_targets.numpy())
 
     if unstack_grid:
         ds_pred = datastore.unstack_grid_coords(ds_pred)
-
-    if return_target:
-        ds_target = create_forecast_dataset(
-            predictions=all_targets,
-            analysis_times=sel_analysis_times,
-            elapsed_durations=elapsed_durations,
-            datastore=datastore,
-            category="state",
-        )
-        if unstack_grid:
-            ds_target = datastore.unstack_grid_coords(ds_target)
-        return ds_pred, ds_target
 
     return ds_pred
 

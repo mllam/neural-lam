@@ -333,6 +333,7 @@ def test_create_forecast_dataset_unit(shared_env):
     assert list(ds_ens.ensemble_member.values) == ["m0", "m1", "m2", "m3"]
 
 
+@pytest.mark.requires_training
 def test_api_predict_and_init_times(shared_env, tmp_path):
     """
     Test api.predict end-to-end.
@@ -381,7 +382,7 @@ def test_api_predict_and_init_times(shared_env, tmp_path):
     assert not np.isnan(ds_pred.state.values).any()
 
     # 2. Prediction with return_target=True and unstandardize=False
-    ds_pred_std, ds_target_std = api.predict(
+    ds_pred_std = api.predict(
         load=ckpt_path,
         datastore=datastore,
         config=config,
@@ -389,8 +390,15 @@ def test_api_predict_and_init_times(shared_env, tmp_path):
         unstandardize=False,
         return_target=True,
     )
-    assert ds_pred_std.state.shape == ds_target_std.state.shape
-    assert not np.allclose(ds_pred.state.values, ds_pred_std.state.values)
+    assert ds_pred_std.state.shape == ds_pred_std.state_target.shape
+    stats = datastore.get_standardization_dataarray("state")
+    np.testing.assert_allclose(
+        (ds_pred_std.state * stats.state_std + stats.state_mean)
+        .transpose(*ds_pred.state.dims)
+        .values,
+        ds_pred.state.values,
+        rtol=1e-5,
+    )
 
     # 3. Test unstack_grid=True on regular grid
     ds_unstacked = api.predict(
@@ -408,29 +416,40 @@ def test_api_predict_and_init_times(shared_env, tmp_path):
     assert ds_unstacked.state.sizes["elapsed_forecast_duration"] == 2
     assert ds_unstacked.state.sizes["analysis_time"] == 1
 
-    # 4. Test init_times as string timestamp
-    avail_time_0 = str(ds_pred.analysis_time.values[0])
-    ds_by_str = api.predict(
+    # 4. Physical targets match the datastore at valid_time
+    da_target = api.predict(
         load=ckpt_path,
         datastore=datastore,
         config=config,
-        init_times=avail_time_0,
+        init_times=slice(1, 3),
         lead_steps=2,
+        return_target=True,
+    ).state_target
+    step = np.timedelta64(datastore.step_length)
+    times = da_target.analysis_time.values
+    assert times[0] == ds_pred.analysis_time.values[0] + step
+    np.testing.assert_array_equal(
+        da_target.elapsed_forecast_duration.values, [step, 2 * step]
     )
-    assert ds_by_str.analysis_time.values[0] == ds_pred.analysis_time.values[0]
-
-    # 5. Test init_times as integer index
-    ds_by_int = api.predict(
-        load=ckpt_path,
-        datastore=datastore,
-        config=config,
-        init_times=0,
-        lead_steps=2,
+    da_state = datastore.get_dataarray(category="state", split="test")
+    np.testing.assert_allclose(
+        da_target.values,
+        da_state.sel(time=da_target.valid_time).values,
     )
-    assert ds_by_int.analysis_time.values[0] == ds_pred.analysis_time.values[0]
 
-    # 6. Test invalid init_times raises informative ValueError
-    with pytest.raises(ValueError, match="Requested init_time .* not found"):
+    # 5. Timestamp list and (inclusive) timestamp slice select the same
+    for init_times in ([str(t) for t in times], slice(times[0], times[-1])):
+        ds_by_time = api.predict(
+            load=ckpt_path,
+            datastore=datastore,
+            config=config,
+            init_times=init_times,
+            lead_steps=2,
+        )
+        np.testing.assert_array_equal(ds_by_time.analysis_time.values, times)
+
+    # 6. Unknown init_times raise
+    with pytest.raises(KeyError):
         api.predict(
             load=ckpt_path,
             datastore=datastore,

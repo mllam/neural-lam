@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- Add `neural_lam.api.predict` for programmatic forecast rollouts returning standardized `xarray.Dataset` forecasts, supporting timestamp resolution (`init_times`), unstacking regular grids, unstandardization to physical units, target states comparison, and `neural_lam.utils.create_forecast_dataset` adhering to `BaseDatastore.expected_dim_order` [\#811](https://github.com/mllam/neural-lam/pull/811) @GiGiKoneti
+- Add `neural_lam.api.predict` to roll out a checkpoint from Python and return the forecasts (optionally with targets) as an `xarray.Dataset`, built with the new `create_forecast_dataset` helper [\#811](https://github.com/mllam/neural-lam/pull/811) @GiGiKoneti
 
 - Add the `hello_world_danra.py` marimo tutorial (prepare the DANRA example data, build a graph, train and evaluate `graph_lam` on CPU, all through `neural_lam.api`), executed at docs build time so the docs page shows its outputs; `train_model` now exits non-zero on errors (`@logger.catch(reraise=True)`) [\#577](https://github.com/mllam/neural-lam/pull/577) @Sharkyii
 
