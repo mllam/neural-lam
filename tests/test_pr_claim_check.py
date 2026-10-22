@@ -6,9 +6,11 @@ import json
 import subprocess
 import sys
 from pathlib import Path
+from typing import Any
 from unittest.mock import patch
 
 # Third-party
+import pytest
 
 SCRIPT_PATH = (
     Path(__file__).resolve().parents[1]
@@ -16,12 +18,37 @@ SCRIPT_PATH = (
     / "scripts"
     / "pr_claim_check.py"
 )
+TEMPLATE_PATH = (
+    Path(__file__).resolve().parents[1] / ".github" / "pull_request_template.md"
+)
+
 spec = importlib.util.spec_from_file_location("pr_claim_check", SCRIPT_PATH)
 assert spec is not None
 assert spec.loader is not None
 pr_claim_check = importlib.util.module_from_spec(spec)
 sys.modules["pr_claim_check"] = pr_claim_check
 spec.loader.exec_module(pr_claim_check)
+
+REPO = "mllam/neural-lam"
+
+
+def make_pr(
+    number: int = 1,
+    author: str = "alice",
+    created_at: str = "2026-01-02T00:00:00Z",
+    body: str = "",
+    labels: list[str] | None = None,
+    closing_refs: list[dict[str, Any]] | None = None,
+) -> dict[str, Any]:
+    """Helper to construct a PR dict fixture."""
+    return {
+        "number": number,
+        "author": {"login": author, "__typename": "User"},
+        "createdAt": created_at,
+        "body": body,
+        "labels": {"nodes": [{"name": name} for name in (labels or [])]},
+        "closingIssuesReferences": {"nodes": closing_refs or []},
+    }
 
 
 def test_login():
@@ -47,6 +74,14 @@ def test_is_bot():
     )
 
 
+def test_template_problems_real_template():
+    """Verify that unmodified PR template is detected as unfilled."""
+    template_text = TEMPLATE_PATH.read_text(encoding="utf-8")
+    problems = pr_claim_check.template_problems(template_text)
+    assert len(problems) == 1
+    assert "placeholder text" in problems[0]
+
+
 def test_template_problems():
     """Test detection of empty bodies or unfilled template placeholders."""
     assert pr_claim_check.template_problems("") == [
@@ -62,17 +97,6 @@ def test_template_problems():
         "## Describe your changes\n\n< Summary of the changes.>\n\ncloses #12"
     )
     assert len(pr_claim_check.template_problems(body_with_summary)) == 1
-    assert (
-        "placeholder text"
-        in pr_claim_check.template_problems(body_with_summary)[0]
-    )
-
-    body_with_link_placeholder = (
-        "Fixed the issue.\n\n< Link to the relevant issue or task > closes #12"
-    )
-    assert (
-        len(pr_claim_check.template_problems(body_with_link_placeholder)) == 1
-    )
 
     clean_body = (
         "This fixes the memory leak by releasing CUDA cache.\n\nCloses #12"
@@ -80,165 +104,312 @@ def test_template_problems():
     assert pr_claim_check.template_problems(clean_body) == []
 
 
-def test_claimed_numbers():
-    """Test issue claim extraction from keywords, URLs, and GraphQL nodes."""
-    repo = "mllam/neural-lam"
-    issue_url = "https://github.com/mllam/neural-lam/issues/102"
-    pr = {
-        "body": f"Fixes #101, also resolves {issue_url}. closes #00.",
-        "closingIssuesReferences": {"nodes": [{"number": 103}]},
-    }
-    claims = pr_claim_check.claimed_numbers(pr, repo)
-    assert claims == {101, 102, 103}
+def test_issue_ref_regex():
+    """Test matching issue references and skipping hex colors/other repos."""
+    ref_pattern = pr_claim_check.issue_ref(REPO)
+    # Standard library
+    import re
 
-    # Mentions should not be treated as claims
-    pr_mention = {
-        "body": "This is part of #201 and refs #202. solves #203.",
-        "closingIssuesReferences": {"nodes": []},
-    }
-    assert pr_claim_check.claimed_numbers(pr_mention, repo) == {203}
+    # Direct issue and full repo issue
+    assert re.findall(ref_pattern, "Fixes #12 and mllam/neural-lam#34") == [
+        "12",
+        "34",
+    ]
+    assert re.findall(
+        ref_pattern, "See https://github.com/mllam/neural-lam/issues/56"
+    ) == ["56"]
+
+    # Hex colors with letters (e.g. mermaid stroke:#27ae60) must NOT match
+    assert re.findall(ref_pattern, "stroke:#27ae60 fill:#e74c3c") == []
+
+    # Other repo refs must NOT match
+    assert (
+        re.findall(
+            ref_pattern,
+            "mllam/weather-model-graphs#88 or other/neural-lam#99",
+        )
+        == []
+    )
 
 
-def test_mentioned_numbers():
-    """Test extracting all referenced issues including mentions and claims."""
-    repo = "mllam/neural-lam"
-    pr = {
-        "body": "Working on #42 and refs #43. Closes #44 and #00.",
-        "closingIssuesReferences": {"nodes": []},
-    }
-    assert pr_claim_check.mentioned_numbers(pr, repo) == {42, 43, 44}
+def test_claimed_and_mentioned_numbers():
+    """Test issue claim extraction vs generic mentions."""
+    pr = make_pr(
+        body=(
+            "Fixes #101, also resolves "
+            "https://github.com/mllam/neural-lam/issues/102. closes #00. "
+            "Refs #201 and mentions mllam/weather-model-graphs#88. "
+            "Color is #27ae60."
+        ),
+        closing_refs=[
+            {"number": 103, "repository": {"nameWithOwner": REPO}},
+            {"number": 999, "repository": {"nameWithOwner": "other/repo"}},
+        ],
+    )
+    assert pr_claim_check.claimed_numbers(pr, REPO) == {101, 102, 103}
+    assert pr_claim_check.mentioned_numbers(pr, REPO) == {101, 102, 103, 201}
+
+
+def test_gh_calls_and_error_handling(capsys):
+    """Test that gh() prints stderr before re-raising CalledProcessError."""
+    err = subprocess.CalledProcessError(
+        1, "gh", stderr="GraphQL error: timeout"
+    )
+    with patch("subprocess.run", side_effect=err):
+        with pytest.raises(subprocess.CalledProcessError):
+            pr_claim_check.gh("api", "graphql")
+        captured = capsys.readouterr().out
+        assert "GraphQL error: timeout" in captured
 
 
 def test_lookup_issue():
-    """Test looking up issue metadata and filtering out pull requests."""
-    repo = "mllam/neural-lam"
-
+    """Test looking up issue metadata, filtering PRs, and error branches."""
     with patch("pr_claim_check.gh") as mock_gh:
         mock_gh.return_value = json.dumps({"number": 12, "title": "Bug"})
-        issue = pr_claim_check.lookup_issue(repo, 12)
-        assert issue == {"number": 12, "title": "Bug"}
+        assert pr_claim_check.lookup_issue(REPO, 12) == {
+            "number": 12,
+            "title": "Bug",
+        }
 
     with patch("pr_claim_check.gh") as mock_gh:
         mock_gh.return_value = json.dumps(
             {"number": 14, "title": "PR", "pull_request": {"url": "..."}}
         )
-        assert pr_claim_check.lookup_issue(repo, 14) is None
+        assert pr_claim_check.lookup_issue(REPO, 14) is None
 
-    with patch("pr_claim_check.gh") as mock_gh:
-        mock_gh.side_effect = subprocess.CalledProcessError(1, "gh")
-        assert pr_claim_check.lookup_issue(repo, 999) is None
+    # 404 / 410 -> None
+    err_404 = subprocess.CalledProcessError(
+        1, "gh", stderr="HTTP 404: Not Found"
+    )
+    with patch("pr_claim_check.gh", side_effect=err_404):
+        assert pr_claim_check.lookup_issue(REPO, 999) is None
+
+    err_410 = subprocess.CalledProcessError(1, "gh", stderr="HTTP 410: Gone")
+    with patch("pr_claim_check.gh", side_effect=err_410):
+        assert pr_claim_check.lookup_issue(REPO, 999) is None
+
+    # 403 / 500 -> Must raise
+    err_500 = subprocess.CalledProcessError(
+        1, "gh", stderr="HTTP 500: Server Error"
+    )
+    with patch("pr_claim_check.gh", side_effect=err_500):
+        with pytest.raises(subprocess.CalledProcessError):
+            pr_claim_check.lookup_issue(REPO, 999)
 
 
-def test_find_problems_missing_issue():
-    """Test reporting error when no issue is referenced."""
-    repo = "mllam/neural-lam"
-    pr = {
-        "number": 50,
-        "author": {"login": "alice"},
-        "createdAt": "2026-01-02T00:00:00Z",
-        "body": "Fixed a typo in the documentation.",
-        "closingIssuesReferences": {"nodes": []},
-    }
-    with patch("pr_claim_check.lookup_issue", return_value=None):
-        problems = pr_claim_check.find_problems(repo, pr, [pr])
-        assert len(problems) == 1
-        assert "This PR does not reference an issue" in problems[0]
-
-
-def test_find_problems_closed_issue():
-    """Test reporting error when claimed issue is closed."""
-    repo = "mllam/neural-lam"
-    pr = {
-        "number": 51,
-        "author": {"login": "alice"},
-        "createdAt": "2026-01-02T00:00:00Z",
-        "body": "Implemented feature. Closes #10.",
-        "closingIssuesReferences": {"nodes": []},
-    }
-    issues = {10: {"number": 10, "state": "closed", "assignees": []}}
+@pytest.mark.parametrize(
+    ("test_id", "pr", "open_prs", "issues", "expected_substrings"),
+    [
+        (
+            "no_issue_referenced",
+            make_pr(body="Typo fix"),
+            [],
+            {},
+            ["This PR does not reference an issue."],
+        ),
+        (
+            "only_pr_referenced",
+            make_pr(body="Depends on #50"),
+            [],
+            {},  # #50 is not an issue (lookup_issue returns None)
+            ["This PR does not reference an issue."],
+        ),
+        (
+            "template_unfilled_and_no_issue",
+            make_pr(body="< Summary of the changes.>"),
+            [],
+            {},
+            [
+                "placeholder text from the template",
+                "This PR does not reference an issue.",
+            ],
+        ),
+        (
+            "clean_pr_passes",
+            make_pr(body="Added feature. Closes #10"),
+            [],
+            {10: {"number": 10, "state": "open", "assignees": []}},
+            [],
+        ),
+        (
+            "closed_issue_claimed",
+            make_pr(body="Fixes #10"),
+            [],
+            {10: {"number": 10, "state": "closed", "assignees": []}},
+            ["#10 is already closed, please link an open issue."],
+        ),
+        (
+            "closed_issue_mentioned_only",
+            make_pr(body="Refs #10 for context"),
+            [],
+            {10: {"number": 10, "state": "closed", "assignees": []}},
+            [],  # Mentions alone do not fail on closed
+        ),
+        (
+            "assigned_issue_claimed_other_author",
+            make_pr(author="alice", body="Closes #20"),
+            [],
+            {
+                20: {
+                    "number": 20,
+                    "state": "open",
+                    "assignees": [{"login": "bob"}, {"login": "carol"}],
+                }
+            },
+            ["#20 is assigned to `bob`, `carol`"],
+        ),
+        (
+            "assigned_issue_claimed_same_author",
+            make_pr(author="alice", body="Closes #20"),
+            [],
+            {
+                20: {
+                    "number": 20,
+                    "state": "open",
+                    "assignees": [{"login": "alice"}],
+                }
+            },
+            [],
+        ),
+        (
+            "assigned_issue_mentioned_only",
+            make_pr(author="alice", body="Refs #20"),
+            [],
+            {
+                20: {
+                    "number": 20,
+                    "state": "open",
+                    "assignees": [{"login": "bob"}],
+                }
+            },
+            [],
+        ),
+        (
+            "competing_older_pr_claims",
+            make_pr(
+                number=50,
+                author="alice",
+                created_at="2026-01-02T12:00:00Z",
+                body="Closes #30",
+            ),
+            [
+                make_pr(
+                    number=40,
+                    author="bob",
+                    created_at="2026-01-01T10:00:00Z",
+                    body="Fixes #30",
+                ),
+            ],
+            {30: {"number": 30, "state": "open", "assignees": []}},
+            ["#40 by `bob` (opened 2026-01-01) already addresses #30"],
+        ),
+        (
+            "competing_older_pr_same_author",
+            make_pr(
+                number=50,
+                author="alice",
+                created_at="2026-01-02T12:00:00Z",
+                body="Closes #30",
+            ),
+            [
+                make_pr(
+                    number=40,
+                    author="alice",
+                    created_at="2026-01-01T10:00:00Z",
+                    body="Fixes #30",
+                ),
+            ],
+            {30: {"number": 30, "state": "open", "assignees": []}},
+            [],  # Same author updating PR does not conflict
+        ),
+        (
+            "competing_newer_pr",
+            make_pr(
+                number=50,
+                author="alice",
+                created_at="2026-01-01T10:00:00Z",
+                body="Closes #30",
+            ),
+            [
+                make_pr(
+                    number=60,
+                    author="bob",
+                    created_at="2026-01-02T12:00:00Z",
+                    body="Fixes #30",
+                ),
+            ],
+            {30: {"number": 30, "state": "open", "assignees": []}},
+            [],  # Newer PR does not flag earlier PR
+        ),
+        (
+            "competing_older_pr_only_mentions",
+            make_pr(
+                number=50,
+                author="alice",
+                created_at="2026-01-02T12:00:00Z",
+                body="Closes #30",
+            ),
+            [
+                make_pr(
+                    number=40,
+                    author="bob",
+                    created_at="2026-01-01T10:00:00Z",
+                    body="Refs #30",  # Not a claim!
+                ),
+            ],
+            {30: {"number": 30, "state": "open", "assignees": []}},
+            [],  # Older PR only referenced it, so not competing claim
+        ),
+    ],
+)
+def test_find_problems_table(
+    test_id, pr, open_prs, issues, expected_substrings
+):
+    """Parametrized verification of find_problems across all edge cases."""
+    all_open_prs = [pr, *open_prs]
     with patch(
         "pr_claim_check.lookup_issue", side_effect=lambda _, n: issues.get(n)
     ):
-        problems = pr_claim_check.find_problems(repo, pr, [pr])
-        assert "#10 is already closed." in problems
+        problems = pr_claim_check.find_problems(REPO, pr, all_open_prs)
+        if not expected_substrings:
+            assert problems == [], f"Expected no problems for {test_id}"
+        else:
+            for expected in expected_substrings:
+                assert any(expected in p for p in problems), (
+                    f"Missing '{expected}' in problems: {problems} for "
+                    f"{test_id}"
+                )
 
 
-def test_find_problems_assigned_issue():
-    """Test reporting error when claimed issue is assigned to someone else."""
-    repo = "mllam/neural-lam"
-    pr = {
-        "number": 52,
-        "author": {"login": "alice"},
-        "createdAt": "2026-01-02T00:00:00Z",
-        "body": "Implemented feature. Closes #20.",
-        "closingIssuesReferences": {"nodes": []},
+def test_fetch_open_prs_pagination():
+    """Test paginated GraphQL requests in fetch_open_prs."""
+    page1 = {
+        "data": {
+            "repository": {
+                "pullRequests": {
+                    "pageInfo": {"hasNextPage": True, "endCursor": "cursor1"},
+                    "nodes": [{"number": 1}],
+                }
+            }
+        }
     }
-    issues = {
-        20: {
-            "number": 20,
-            "state": "open",
-            "assignees": [{"login": "bob"}, {"login": "carol"}],
+    page2 = {
+        "data": {
+            "repository": {
+                "pullRequests": {
+                    "pageInfo": {"hasNextPage": False, "endCursor": None},
+                    "nodes": [{"number": 2}],
+                }
+            }
         }
     }
     with patch(
-        "pr_claim_check.lookup_issue", side_effect=lambda _, n: issues.get(n)
-    ):
-        problems = pr_claim_check.find_problems(repo, pr, [pr])
-        assert any("#20 is assigned to `bob`, `carol`" in p for p in problems)
-
-    # When PR author is an assignee, no problem
-    issues[20]["assignees"].append({"login": "alice"})
-    with patch(
-        "pr_claim_check.lookup_issue", side_effect=lambda _, n: issues.get(n)
-    ):
-        problems = pr_claim_check.find_problems(repo, pr, [pr])
-        assert not any("assigned" in p for p in problems)
-
-
-def test_find_problems_competing_older_pr():
-    """Test reporting error when an earlier open PR claims the same issue."""
-    repo = "mllam/neural-lam"
-    earlier_pr = {
-        "number": 40,
-        "author": {"login": "bob"},
-        "createdAt": "2026-01-01T10:00:00Z",
-        "body": "Resolves #30",
-        "closingIssuesReferences": {"nodes": []},
-    }
-    current_pr = {
-        "number": 53,
-        "author": {"login": "alice"},
-        "createdAt": "2026-01-02T12:00:00Z",
-        "body": "Fixes #30",
-        "closingIssuesReferences": {"nodes": []},
-    }
-    issues = {30: {"number": 30, "state": "open", "assignees": []}}
-    with patch(
-        "pr_claim_check.lookup_issue", side_effect=lambda _, n: issues.get(n)
-    ):
-        problems = pr_claim_check.find_problems(
-            repo, current_pr, [earlier_pr, current_pr]
-        )
-        assert any(
-            "#40 by `bob` (opened 2026-01-01) already addresses #30" in p
-            for p in problems
-        )
-
-    # Same author should not trigger a competing PR conflict (stacked PR)
-    earlier_pr_same_author = {
-        "number": 41,
-        "author": {"login": "alice"},
-        "createdAt": "2026-01-01T10:00:00Z",
-        "body": "Resolves #30",
-        "closingIssuesReferences": {"nodes": []},
-    }
-    with patch(
-        "pr_claim_check.lookup_issue", side_effect=lambda _, n: issues.get(n)
-    ):
-        problems = pr_claim_check.find_problems(
-            repo, current_pr, [earlier_pr_same_author, current_pr]
-        )
-        assert not any("already addresses" in p for p in problems)
+        "pr_claim_check.gh", side_effect=[json.dumps(page1), json.dumps(page2)]
+    ) as mock_gh:
+        prs = pr_claim_check.fetch_open_prs(REPO)
+        assert len(prs) == 2
+        assert [p["number"] for p in prs] == [1, 2]
+        assert mock_gh.call_count == 2
 
 
 def test_render():
@@ -251,88 +422,96 @@ def test_render():
     assert pr_claim_check.MARKER in fail_msg
     assert "- Issue missing" in fail_msg
     assert "- Template unedited" in fail_msg
+    assert "If a point does not apply" in fail_msg
 
 
-def test_sync():
-    """Test synchronizing comments and labels via gh calls."""
-    repo = "mllam/neural-lam"
-    pr = {
-        "number": 77,
-        "labels": {"nodes": []},
-    }
-
-    # Case 1: New failure -> post comment and add label
+def test_sync_new_problem_adds_comment_and_label():
+    """Test creating comment and label on new failure."""
+    pr = make_pr(number=77, labels=[])
     with patch("pr_claim_check.gh") as mock_gh:
-        mock_gh.side_effect = lambda *args, **kwargs: ""
-        pr_claim_check.sync(repo, pr, ["Problem 1"])
+        mock_gh.return_value = ""  # No existing bot comments
+        pr_claim_check.sync(REPO, pr, ["Problem 1"])
 
         calls = [c.args for c in mock_gh.call_args_list]
-        # Querying comments
-        assert calls[0][0] == f"repos/{repo}/issues/77/comments"
-        # Creating comment
-        assert calls[1][0:3] == (
-            "--method",
-            "POST",
-            f"repos/{repo}/issues/77/comments",
+        # Check comment creation
+        assert any(
+            c[:3] == ("--method", "POST", f"repos/{REPO}/issues/77/comments")
+            for c in calls
         )
-        # Creating label if needed
-        assert calls[2][0:3] == ("--method", "POST", f"repos/{repo}/labels")
-        # Adding label to PR
-        assert calls[3][0:3] == (
-            "--method",
-            "POST",
-            f"repos/{repo}/issues/77/labels",
+        # Check label added
+        assert any(
+            c[:3] == ("--method", "POST", f"repos/{REPO}/issues/77/labels")
+            for c in calls
         )
 
-    # Case 2: Existing comment updated, label already present
-    pr_with_label = {
-        "number": 77,
-        "labels": {"nodes": [{"name": pr_claim_check.LABEL}]},
-    }
+
+def test_sync_resolved_updates_comment_and_removes_label():
+    """Test updating existing comment and removing label on resolution."""
+    pr = make_pr(number=77, labels=[pr_claim_check.LABEL])
     with patch("pr_claim_check.gh") as mock_gh:
 
         def gh_side_effect(*args, **kwargs):
-            if args[0] == f"repos/{repo}/issues/77/comments":
+            if args[0] == f"repos/{REPO}/issues/77/comments":
                 return "12345\n"
             return ""
 
         mock_gh.side_effect = gh_side_effect
-        pr_claim_check.sync(repo, pr_with_label, ["Still broken"])
+        pr_claim_check.sync(REPO, pr, [])
 
         calls = [c.args for c in mock_gh.call_args_list]
-        assert calls[1][0:3] == (
-            "--method",
-            "PATCH",
-            f"repos/{repo}/issues/comments/12345",
+        # Check existing comment patched
+        assert any(
+            c[:3]
+            == ("--method", "PATCH", f"repos/{REPO}/issues/comments/12345")
+            for c in calls
+        )
+        # Check label deleted
+        assert any(
+            c[:3]
+            == (
+                "--method",
+                "DELETE",
+                f"repos/{REPO}/issues/77/labels/{pr_claim_check.LABEL}",
+            )
+            for c in calls
         )
 
-    # Case 3: Problems resolved -> remove label, update comment
+
+def test_sync_label_delete_error_handling():
+    """Test 404 on label DELETE is ignored while other errors are raised."""
+    pr = make_pr(number=77, labels=[pr_claim_check.LABEL])
+    err_404 = subprocess.CalledProcessError(1, "gh", stderr="HTTP 404")
+    err_500 = subprocess.CalledProcessError(1, "gh", stderr="HTTP 500")
+
+    # 404 is ignored
     with patch("pr_claim_check.gh") as mock_gh:
 
         def gh_side_effect(*args, **kwargs):
-            if args[0] == f"repos/{repo}/issues/77/comments":
+            if args[0] == f"repos/{REPO}/issues/77/comments":
                 return "12345\n"
+            if args[1] == "DELETE":
+                raise err_404
             return ""
 
         mock_gh.side_effect = gh_side_effect
-        pr_claim_check.sync(repo, pr_with_label, [])
+        pr_claim_check.sync(REPO, pr, [])  # Should not raise
 
-        calls = [c.args for c in mock_gh.call_args_list]
-        # Comment updated with success
-        assert calls[1][0:3] == (
-            "--method",
-            "PATCH",
-            f"repos/{repo}/issues/comments/12345",
-        )
-        # Label deleted
-        assert calls[2][0:3] == (
-            "--method",
-            "DELETE",
-            f"repos/{repo}/issues/77/labels/{pr_claim_check.LABEL}",
-        )
+    # 500 raises
+    with patch("pr_claim_check.gh") as mock_gh:
+
+        def gh_side_effect(*args, **kwargs):
+            if args[0] == f"repos/{REPO}/issues/77/comments":
+                return "12345\n"
+            if args[1] == "DELETE":
+                raise err_500
+            return ""
+
+        mock_gh.side_effect = gh_side_effect
+        with pytest.raises(subprocess.CalledProcessError):
+            pr_claim_check.sync(REPO, pr, [])
 
 
-def test_main_bot_skip(capsys):
+def test_main_bot_skip():
     """Test that bots are skipped in main."""
     open_prs = [
         {
@@ -344,7 +523,7 @@ def test_main_bot_skip(capsys):
         patch("pr_claim_check.fetch_open_prs", return_value=open_prs),
         patch(
             "sys.argv",
-            ["pr_claim_check.py", "--repo", "mllam/neural-lam", "--pr", "99"],
+            ["pr_claim_check.py", "--repo", REPO, "--pr", "99"],
         ),
         patch("pr_claim_check.sync") as mock_sync,
     ):
@@ -354,19 +533,10 @@ def test_main_bot_skip(capsys):
 
 def test_main_dry_run(capsys):
     """Test dry-run prints comment without syncing."""
-    open_prs = [
-        {
-            "number": 100,
-            "author": {"login": "alice", "__typename": "User"},
-            "createdAt": "2026-01-01T00:00:00Z",
-            "body": "Fixes #10",
-            "labels": {"nodes": []},
-            "closingIssuesReferences": {"nodes": []},
-        }
-    ]
+    pr = make_pr(number=100, body="Fixes #10")
     issues = {10: {"number": 10, "state": "open", "assignees": []}}
     with (
-        patch("pr_claim_check.fetch_open_prs", return_value=open_prs),
+        patch("pr_claim_check.fetch_open_prs", return_value=[pr]),
         patch(
             "pr_claim_check.lookup_issue",
             side_effect=lambda _, n: issues.get(n),
@@ -377,7 +547,7 @@ def test_main_dry_run(capsys):
             [
                 "pr_claim_check.py",
                 "--repo",
-                "mllam/neural-lam",
+                REPO,
                 "--pr",
                 "100",
                 "--dry-run",

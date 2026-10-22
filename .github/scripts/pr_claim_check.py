@@ -2,7 +2,7 @@
 Automated triage check for PRs without a linked issue or competing with others.
 
 Run by `.github/workflows/pr-claim-check.yml` on `pull_request_target`, so it
-always executes from the base branch and never runs code from the PR itself.
+always executes from the default branch and never runs code from the PR itself.
 """
 
 # Standard library
@@ -31,7 +31,9 @@ query($owner: String!, $name: String!, $cursor: String) {
         createdAt
         author { login __typename }
         labels(first: 20) { nodes { name } }
-        closingIssuesReferences(first: 20) { nodes { number } }
+        closingIssuesReferences(first: 20) {
+          nodes { number repository { nameWithOwner } }
+        }
       }
     }
   }
@@ -41,9 +43,13 @@ query($owner: String!, $name: String!, $cursor: String) {
 
 def gh(*args: str) -> str:
     """Run `gh api` with the given arguments and return its stdout."""
-    return subprocess.run(
-        ["gh", "api", *args], check=True, capture_output=True, text=True
-    ).stdout
+    try:
+        return subprocess.run(
+            ["gh", "api", *args], check=True, capture_output=True, text=True
+        ).stdout
+    except subprocess.CalledProcessError as err:
+        print(err.stderr)
+        raise
 
 
 def login(pr: dict[str, Any]) -> str:
@@ -101,15 +107,30 @@ def fetch_open_prs(repo: str) -> list[dict[str, Any]]:
         cursor = page["pageInfo"]["endCursor"]
 
 
+def issue_ref(repo: str) -> str:
+    """
+    Regex capturing N in `#N`, `<repo>#N` or an issue URL of ``repo``. Skips
+    other repos' `owner/name#N` and colours like `#27ae60`.
+    """
+    own = re.escape(repo)
+    return (
+        rf"(?:(?<![\w/])(?:{own})?#|https://github\.com/{own}/issues/)(\d+)\b"
+    )
+
+
 def claimed_numbers(pr: dict[str, Any], repo: str) -> set[int]:
     """
     Return the numbers a pull request claims to close: GitHub's closing
     references plus `closes/fixes/resolves/solves #N` in the body. Mentions
     such as "part of #N" or "refs #N" are not claims.
     """
-    ref = rf"(?:#|https://github\.com/{re.escape(repo)}/issues/)(\d+)"
+    ref = issue_ref(repo)
     closing_refs = (pr.get("closingIssuesReferences") or {}).get("nodes", [])
-    numbers = {n["number"] for n in closing_refs if "number" in n}
+    numbers = {
+        n["number"]
+        for n in closing_refs
+        if n.get("repository", {}).get("nameWithOwner") == repo
+    }
     numbers |= {
         int(n)
         for n in re.findall(
@@ -125,8 +146,9 @@ def claimed_numbers(pr: dict[str, Any], repo: str) -> set[int]:
 
 def mentioned_numbers(pr: dict[str, Any], repo: str) -> set[int]:
     """Return every issue/PR number the pull request mentions or claims."""
-    ref = rf"(?:#|https://github\.com/{re.escape(repo)}/issues/)(\d+)"
-    numbers = {int(n) for n in re.findall(ref, pr.get("body") or "")}
+    numbers = {
+        int(n) for n in re.findall(issue_ref(repo), pr.get("body") or "")
+    }
     numbers |= claimed_numbers(pr, repo)
     numbers.discard(0)
     return numbers
@@ -136,7 +158,11 @@ def lookup_issue(repo: str, number: int) -> dict[str, Any] | None:
     """Return issue ``number``, or None if it is a pull request or unknown."""
     try:
         issue = json.loads(gh(f"repos/{repo}/issues/{number}"))
-    except subprocess.CalledProcessError:
+    except subprocess.CalledProcessError as err:
+        # Only a missing or deleted issue is "unknown", anything else (rate
+        # limit, 5xx) must not turn into a "no issue linked" comment
+        if "HTTP 404" not in err.stderr and "HTTP 410" not in err.stderr:
+            raise
         return None
     return None if "pull_request" in issue else issue
 
@@ -163,7 +189,9 @@ def find_problems(
     for number in sorted(claimed_numbers(pr, repo) & issues.keys()):
         assignees = [a["login"] for a in issues[number].get("assignees", [])]
         if issues[number].get("state") == "closed":
-            problems.append(f"#{number} is already closed.")
+            problems.append(
+                f"#{number} is already closed, please link an open issue."
+            )
         elif assignees and login(pr) not in assignees:
             names = ", ".join(f"`{a}`" for a in assignees)
             problems.append(
@@ -194,7 +222,8 @@ def render(problems: list[str]) -> str:
     return (
         f"{MARKER}\nThanks for the PR! An automated check found something to "
         f"sort out before review:\n\n{items}\n\nThis comment updates when the "
-        "PR description changes. A maintainer will take it from here."
+        "PR is edited or pushed to. If a point does not apply, say so in a "
+        "comment and a maintainer will have a look."
     )
 
 
@@ -206,7 +235,8 @@ def sync(repo: str, pr: dict[str, Any], problems: list[str]) -> None:
         f"repos/{repo}/issues/{number}/comments",
         "--paginate",
         "--jq",
-        f'.[] | select(.body | startswith("{MARKER}")) | .id',
+        f'.[] | select(.user.login == "github-actions[bot]" and '
+        f'(.body | startswith("{MARKER}"))) | .id',
     ).split()
     if existing:
         gh(
@@ -256,8 +286,9 @@ def sync(repo: str, pr: dict[str, Any], problems: list[str]) -> None:
                 "DELETE",
                 f"repos/{repo}/issues/{number}/labels/{LABEL}",
             )
-        except subprocess.CalledProcessError:
-            pass
+        except subprocess.CalledProcessError as err:
+            if "HTTP 404" not in err.stderr:  # label already removed
+                raise
 
 
 def main() -> None:
