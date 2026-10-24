@@ -277,7 +277,7 @@ subclassing the `neural_lam.datastore.BaseDatastore` class and implementing the 
 
 Datastores whose grid points form a complete 2D `x`/`y` rectilinear grid (the
 spacing need not be uniform) set `is_on_rectilinear_grid` to `True` and
-implement `grid_shape_state`. This can depend on the data, e.g. a
+implement `rectilinear_grid_shape`. This can depend on the data, e.g. a
 domain-cropped `MDPDatastore` is not on a rectilinear grid.
 
 
@@ -405,7 +405,7 @@ dataset:
   num_ensemble_members: 2
   step_length: 3
   remove_state_features_with_index: [15]
-grid_shape_state:
+rectilinear_grid_shape:
 - 268
 - 238
 projection:

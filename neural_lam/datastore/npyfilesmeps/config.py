@@ -68,7 +68,19 @@ class NpyDatastoreConfig(dataclass_wizard.YAMLWizard):
         projection: An instance of Projection containing projection details.
 
     """
-
     dataset: Dataset
-    grid_shape_state: list[int]
-    projection: Projection
+    rectilinear_grid_shape: list[int] | None = None
+    grid_shape_state: list[int] | None = None
+    projection: Projection | None = None
+
+    def __post_init__(self):
+        if self.rectilinear_grid_shape is None:
+            self.rectilinear_grid_shape = self.grid_shape_state
+        elif (
+            self.grid_shape_state is not None
+            and self.rectilinear_grid_shape != self.grid_shape_state
+        ):
+            raise ValueError(
+                "Both `rectilinear_grid_shape` and deprecated "
+                "`grid_shape_state` were supplied with different values."
+            )

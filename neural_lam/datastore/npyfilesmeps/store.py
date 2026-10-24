@@ -710,7 +710,7 @@ class NpyFilesDatastoreMEPS(BaseDatastore):
         arr_shape = arr.shape
 
         assert arr_shape[0] == 2, "Expected 2D array"
-        grid_shape = self.grid_shape_state
+        grid_shape = self.rectilinear_grid_shape
         assert arr_shape[1:] == (grid_shape.y, grid_shape.x), "Unexpected shape"
 
         arr = arr.transpose(2, 1, 0)
@@ -733,7 +733,7 @@ class NpyFilesDatastoreMEPS(BaseDatastore):
         return self._step_length
 
     @cached_property
-    def grid_shape_state(self) -> CartesianGridShape:
+    def rectilinear_grid_shape(self) -> CartesianGridShape:
         """The shape of the cartesian grid for the state variables.
 
         Returns
@@ -742,7 +742,7 @@ class NpyFilesDatastoreMEPS(BaseDatastore):
             The shape of the cartesian grid for the state variables.
 
         """
-        ny, nx = self.config.grid_shape_state
+        ny, nx = self.config.rectilinear_grid_shape
         return CartesianGridShape(x=nx, y=ny)
 
     @cached_property
