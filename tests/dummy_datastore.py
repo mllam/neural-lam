@@ -465,7 +465,7 @@ class DummyDatastore(BaseDatastore):
         return self._num_grid_points
 
     @cached_property
-    def grid_shape_state(self) -> CartesianGridShape:
+    def rectilinear_grid_shape(self) -> CartesianGridShape:
         """The shape of the grid for the state variables.
 
         Returns
@@ -841,7 +841,7 @@ def set_framed_boundary(
     datastore: DummyDatastore, width: int = 1
 ) -> np.ndarray:
     """Replace the random boundary mask with a frame of `width` cells."""
-    shape = (datastore.grid_shape_state.x, datastore.grid_shape_state.y)
+    shape = (datastore.rectilinear_grid_shape.x, datastore.rectilinear_grid_shape.y)
     mask = np.ones(shape, dtype=int)
     mask[width:-width, width:-width] = 0
     # `grid_index` is the stacked ("x", "y") dimension, so a C-order flatten

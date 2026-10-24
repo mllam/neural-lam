@@ -409,8 +409,8 @@ def plot_on_axis(
 
     lats_lons = datastore.get_lat_lon("state")
     grid_shape = (
-        datastore.grid_shape_state.x,
-        datastore.grid_shape_state.y,
+        datastore.rectilinear_grid_shape.x,
+        datastore.rectilinear_grid_shape.y,
     )
     lons = lats_lons[:, 0].reshape(grid_shape)
     lats = lats_lons[:, 1].reshape(grid_shape)
