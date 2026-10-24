@@ -267,7 +267,7 @@ def load_graph(
     # Load static node features
     mesh_static_features = loads_file(
         "mesh_features.pt"
-    )  # List of (N_mesh[l], num_mesh_static_vars)
+    )  # List of (num_mesh_nodes[l], num_mesh_static_vars)
 
     graph_spec_version = load_graph_spec_version()
     if graph_spec_version not in {

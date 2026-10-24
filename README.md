@@ -667,6 +667,10 @@ Canonical dimension names used in tensor shape annotations throughout the codeba
 - `input_dim` - input feature dimensionality to a layer before transformation
 - `num_mesh_static_vars` - number of static features per mesh node
 - `num_edges` - number of edges in a graph (g2m, m2g, same-level, up, down)
+- `num_edges_level` - number of edges in a single mesh level (m2m) or between two consecutive mesh levels (mesh_up, mesh_down), indexed by level `l`
+- `num_edge_features` - number of features per edge (currently 3: edge length, and x and y displacement)
+- `grid_size_x` - number of grid points along the x axis of a rectilinear grid
+- `grid_size_y` - number of grid points along the y axis of a rectilinear grid
 - `num_send` - number of sender nodes in a message-passing step
 - `num_rec` - number of receiver nodes in a message-passing step
 
