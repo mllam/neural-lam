@@ -41,6 +41,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Fix flux standardization statistics weighting for short final batches and exclude distributed padding samples [\#782](https://github.com/mllam/neural-lam/pull/782) @Karvy-Singh
 
+- Fix `WeatherDataset.create_dataarray_from_tensor` always looking up the `state_feature` coordinate, so it now also works for `category="forcing"` and `category="static"`, and expose `WeatherDataset.da_static` [\#309](https://github.com/mllam/neural-lam/pull/309) @Jayant-kernel
+
 ### Maintenance
 
 - Fix the GPU CI job silently running on CPU: use an NVIDIA `g4dn.xlarge` cirun instance instead of the AMD `g4ad.xlarge`, install `--extra gpu-cu128` to match the runner's CUDA 12.2 driver, assert `torch.cuda.is_available()`, and run only the GPU-relevant tests there [\#802](https://github.com/mllam/neural-lam/pull/802) @varma1221
