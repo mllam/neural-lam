@@ -379,7 +379,7 @@ def create_graph(
     - m2m_edge_index.pt  list of [2, num_edges_level], length==n_levels
     - m2m_features.pt    list of [num_edges_level, num_edge_features],
                          length==n_levels
-    - mesh_features.pt   list of [num_mesh_nodes_level, num_mesh_static_vars],
+    - mesh_features.pt   list of [num_mesh_nodes[l], num_mesh_static_vars],
                          length==n_levels
 
     where
@@ -394,7 +394,7 @@ def create_graph(
       num_mesh_static_vars:
             number of static features per mesh node (currently
             num_mesh_static_vars==2, for x and y)
-      num_mesh_nodes_level:
+        num_mesh_nodes[l]:
             number of nodes in the mesh at a given level
 
     And in addition for hierarchical graphs:
