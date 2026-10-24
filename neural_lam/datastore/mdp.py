@@ -583,8 +583,8 @@ class MDPDatastore(BaseDatastore):
             the value of `stacked`:
 
             * `stacked==True`: shape `(num_grid_nodes, 2)`, with
-              num_grid_nodes=N_x*N_y on a rectilinear grid.
-            * `stacked==False`: shape `(N_x, N_y, 2)`
+              num_grid_nodes = grid_size_x * grid_size_y on a rectilinear grid.
+            * `stacked==False`: shape `(grid_size_x, grid_size_y, 2)`
 
         """
         xdim, ydim = self.spatial_coordinates

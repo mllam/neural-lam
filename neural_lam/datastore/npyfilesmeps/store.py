@@ -699,13 +699,13 @@ class NpyFilesDatastoreMEPS(BaseDatastore):
             returned differently based on the value of `stacked`:
 
             * `stacked==True`: shape `(n_grid_points, 2)` where
-              n_grid_points=N_x*N_y.
-            * `stacked==False`: shape `(N_x, N_y, 2)`
+              n_grid_points=grid_size_x*grid_size_y.
+            * `stacked==False`: shape `(grid_size_x, grid_size_y, 2)`
 
         """
 
-        # the array on disk has shape [2, N_y, N_x], where dimension 0
-        # contains the [x,y] coordinate pairs for each grid point
+        # the array on disk has shape [2, grid_size_y, grid_size_x], where
+        # dimension 0 contains the [x,y] coordinate pairs for each grid point
         arr = np.load(self.root_path / "static" / "nwp_xy.npy")
         arr_shape = arr.shape
 
