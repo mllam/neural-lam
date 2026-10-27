@@ -55,7 +55,8 @@ class BaseLatentEncoder(nn.Module):
         Parameters
         ----------
         grid_rep : torch.Tensor
-            Shape ``(B, num_grid_nodes, hidden_dim)``. Grid input representation.
+            Shape ``(B, num_grid_nodes, hidden_dim)``. Grid input
+            representation.
         **kwargs
             Additional inputs used by concrete encoders (e.g. graph
             embeddings).
