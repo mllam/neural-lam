@@ -141,9 +141,9 @@ class HiGraphLatentEncoder(BaseLatentEncoder):
         graph_emb : dict
             Embedded graph node and edge features, with at least entries
             ``mesh``: list of ``(B, num_mesh_nodes[l], hidden_dim)``,
-            ``g2m``: ``(B, M_g2m, hidden_dim)``,
-            ``m2m``: list of ``(B, M_m2m[l], hidden_dim)`` and
-            ``mesh_up``: list of ``(B, M_up[l], hidden_dim)``.
+            ``g2m``: ``(B, num_edges_g2m, hidden_dim)``,
+            ``m2m``: list of ``(B, num_edges_m2m[l], hidden_dim)`` and
+            ``mesh_up``: list of ``(B, num_edges_mesh_up[l], hidden_dim)``.
         **kwargs
             Ignored.
 
