@@ -94,7 +94,8 @@ class GraphLatentEncoder(BaseLatentEncoder):
         Parameters
         ----------
         grid_rep : torch.Tensor
-            Shape ``(B, num_grid_nodes, hidden_dim)``. Grid input representation.
+            Shape ``(B, num_grid_nodes, hidden_dim)``. Grid input
+            representation.
         graph_emb : dict
             Embedded graph node and edge features, with at least entries
             ``mesh``: ``(B, num_mesh_nodes, hidden_dim)``,
