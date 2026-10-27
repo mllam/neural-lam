@@ -664,6 +664,7 @@ Canonical dimension names used in tensor shape annotations throughout the codeba
 - `num_windowed_boundary_vars` - boundary forcing variables stacked over the past/future boundary window
 - `num_variables` - generic variable dimension used in metric functions
 - `hidden_dim` - internal hidden representation size in GNN layers and MLPs
+- `latent_dim` - dimensionality of the Graph-EFM latent variable
 - `input_dim` - input feature dimensionality to a layer before transformation
 - `num_mesh_static_vars` - number of static features per mesh node
 - `num_edges` - number of edges in a graph (g2m, m2g, same-level, up, down)
