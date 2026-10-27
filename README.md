@@ -667,9 +667,9 @@ Canonical dimension names used in tensor shape annotations throughout the codeba
 - `latent_dim` - dimensionality of the Graph-EFM latent variable
 - `input_dim` - input feature dimensionality to a layer before transformation
 - `num_mesh_static_vars` - number of static features per mesh node
-- `num_edges` - number of edges in a graph (g2m, m2g, same-level, up, down)
-- `num_edges_level` - number of edges in a single mesh level (m2m) or between two consecutive mesh levels (mesh_up, mesh_down), indexed by level `l`
-- `num_edge_features` - number of features per edge (currently 3: edge length, and x and y displacement)
+- `num_edges` - number of edges in a generic edge set, e.g. in message-passing layers
+- `num_edges_<set>` - number of edges in a specific edge set, `<set>` being one of `g2m`, `m2g`, `m2m`, `mesh_up`, `mesh_down`; indexed as e.g. `num_edges_m2m[l]` for the per-level lists of a hierarchical graph
+- `num_edge_features` - number of static features per edge
 - `grid_size_x` - number of grid points along the x axis of a rectilinear grid
 - `grid_size_y` - number of grid points along the y axis of a rectilinear grid
 - `num_send` - number of sender nodes in a message-passing step
