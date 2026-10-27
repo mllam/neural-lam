@@ -6,12 +6,12 @@ import matplotlib.pyplot as plt
 
 # Local
 from . import DATASTORES, init_datastore
-from .base import BaseRegularGridDatastore
+from .base import BaseDatastore
 
 
 def plot_example_from_datastore(
     category: str,
-    datastore: BaseRegularGridDatastore,
+    datastore: BaseDatastore,
     col_dim: str,
     split: str = "train",
     standardize: bool = True,
@@ -47,7 +47,17 @@ def plot_example_from_datastore(
     -------
     Figure
         Matplotlib figure object.
+
+    Raises
+    ------
+    NotImplementedError
+        If the datastore is not on a rectilinear grid.
     """
+    if not datastore.is_on_rectilinear_grid:
+        raise NotImplementedError(
+            "Plotting requires a datastore on a rectilinear grid."
+        )
+
     da = datastore.get_dataarray(category=category, split=split)
     assert da is not None
     if standardize:
@@ -184,10 +194,6 @@ if __name__ == "__main__":
         datastore_kind=datastore_kind,
         config_path=args.datastore_config_path,
     )
-    # Standard library
-    from typing import cast
-
-    datastore = cast("BaseRegularGridDatastore", datastore)
 
     plot_example_from_datastore(
         args.category,

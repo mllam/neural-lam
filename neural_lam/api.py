@@ -18,7 +18,7 @@ from .config import (
     load_config_and_datastore,
 )
 from .create_graph_with_wmg import create_graph_from_datastore
-from .datastore.base import BaseDatastore, BaseRegularGridDatastore
+from .datastore.base import BaseDatastore
 from .train_model import Run
 
 
@@ -65,9 +65,12 @@ def train(
     var_leads_metrics_watch: dict[int, list[int]] | str | None = None,
     num_past_forcing_steps: int = 1,
     num_future_forcing_steps: int = 1,
+    num_past_boundary_steps: int = 1,
+    num_future_boundary_steps: int = 1,
     load_single_member: bool = False,
     config: NeuralLAMConfig | None = None,
     datastore: BaseDatastore | None = None,
+    datastore_boundary: BaseDatastore | None = None,
 ) -> Run:
     """
     Train a Neural-LAM model programmatically.
@@ -157,12 +160,18 @@ def train(
         Number of past forcing timesteps.
     num_future_forcing_steps : int, default 1
         Number of future forcing timesteps.
+    num_past_boundary_steps : int, default 1
+        Number of past boundary forcing timesteps.
+    num_future_boundary_steps : int, default 1
+        Number of future boundary forcing timesteps.
     load_single_member : bool, default False
         Whether to load only a single ensemble member.
     config : NeuralLAMConfig or None, optional
         Pre-loaded NeuralLAMConfig object.
     datastore : BaseDatastore or None, optional
         Pre-initialized Datastore instance.
+    datastore_boundary : BaseDatastore or None, optional
+        Pre-initialized boundary Datastore instance.
 
     Returns
     -------
@@ -220,6 +229,8 @@ def train(
     data_config = DataConfig(
         num_past_forcing_steps=num_past_forcing_steps,
         num_future_forcing_steps=num_future_forcing_steps,
+        num_past_boundary_steps=num_past_boundary_steps,
+        num_future_boundary_steps=num_future_boundary_steps,
         num_workers=num_workers,
         load_single_member=load_single_member,
     )
@@ -246,6 +257,7 @@ def train(
         logging_config=logging_config,
         config=config,
         datastore=datastore,
+        datastore_boundary=datastore_boundary,
         config_path=config_path,
     )
 
@@ -285,9 +297,12 @@ def evaluate(
     var_leads_metrics_watch: dict[int, list[int]] | str | None = None,
     num_past_forcing_steps: int = 1,
     num_future_forcing_steps: int = 1,
+    num_past_boundary_steps: int = 1,
+    num_future_boundary_steps: int = 1,
     load_single_member: bool = False,
     config: NeuralLAMConfig | None = None,
     datastore: BaseDatastore | None = None,
+    datastore_boundary: BaseDatastore | None = None,
 ) -> Run:
     """
     Evaluate a Neural-LAM model checkpoint programmatically.
@@ -349,6 +364,8 @@ def evaluate(
     data_config = DataConfig(
         num_past_forcing_steps=num_past_forcing_steps,
         num_future_forcing_steps=num_future_forcing_steps,
+        num_past_boundary_steps=num_past_boundary_steps,
+        num_future_boundary_steps=num_future_boundary_steps,
         num_workers=num_workers,
         load_single_member=load_single_member,
     )
@@ -375,6 +392,7 @@ def evaluate(
         logging_config=logging_config,
         config=config,
         datastore=datastore,
+        datastore_boundary=datastore_boundary,
         config_path=config_path,
     )
 
@@ -422,12 +440,7 @@ def create_graph(
             raise ValueError(
                 "Either datastore or config_path must be provided."
             )
-        _, datastore = load_config_and_datastore(config_path=config_path)
-
-    if not isinstance(datastore, BaseRegularGridDatastore):
-        raise TypeError(
-            f"Expected BaseRegularGridDatastore, got {type(datastore)}"
-        )
+        _, datastore, _ = load_config_and_datastore(config_path=config_path)
 
     if output_root_path is None:
         output_root_path = os.path.join(datastore.root_path, "graph", name)

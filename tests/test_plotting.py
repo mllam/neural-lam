@@ -479,10 +479,12 @@ def model_and_batch(tmp_path, time_step, time_unit, dummy_graph_dir):
 
     # Create config.
     config = nlconfig.NeuralLAMConfig(
-        datastore=nlconfig.DatastoreSelection(
-            kind=datastore.SHORT_NAME,
-            config_path=datastore.root_path,
-        ),
+        datastores={
+            "main": nlconfig.DatastoreSelection(
+                kind=datastore.SHORT_NAME,
+                config_path=datastore.root_path,
+            )
+        },
     )
 
     # Create model
@@ -563,7 +565,7 @@ def test_plot_examples_integration_saves_figure(
     )
 
     # Generate prediction
-    (init_states, target, forcing_features, _batch_times) = batch
+    (init_states, target, forcing_features, _boundary, _batch_times) = batch
     prediction, _ = model.forecaster(init_states, forcing_features, target)
 
     # Rescale to original data scale
@@ -585,7 +587,7 @@ def test_plot_examples_integration_saves_figure(
     # Get first example.
     pred_slice = prediction_rescaled[0].detach()
     target_slice = target_rescaled[0].detach()
-    time_slice = batch[3][0]
+    time_slice = batch[4][0]
 
     # Create DataArrays.
     dataset = WeatherDataset(datastore=datastore, split="train")
@@ -746,10 +748,12 @@ def test_create_metric_log_dict_with_metrics_watch(dummy_graph_dir):
     shutil.copytree(dummy_graph_dir, datastore.root_path / "graph" / "1level")
 
     config = nlconfig.NeuralLAMConfig(
-        datastore=nlconfig.DatastoreSelection(
-            kind=datastore.SHORT_NAME,
-            config_path=datastore.root_path,
-        ),
+        datastores={
+            "main": nlconfig.DatastoreSelection(
+                kind=datastore.SHORT_NAME,
+                config_path=datastore.root_path,
+            )
+        },
     )
 
     model = _build_metrics_watch_module(datastore, config)
@@ -799,10 +803,12 @@ def test_aggregate_and_plot_metrics_with_metrics_watch(dummy_graph_dir):
     shutil.copytree(dummy_graph_dir, datastore.root_path / "graph" / "1level")
 
     config = nlconfig.NeuralLAMConfig(
-        datastore=nlconfig.DatastoreSelection(
-            kind=datastore.SHORT_NAME,
-            config_path=datastore.root_path,
-        ),
+        datastores={
+            "main": nlconfig.DatastoreSelection(
+                kind=datastore.SHORT_NAME,
+                config_path=datastore.root_path,
+            )
+        },
     )
 
     model = _build_metrics_watch_module(datastore, config)
@@ -870,10 +876,12 @@ def test_spatial_loss_maps_out_of_range_steps(tmp_path, dummy_graph_dir):
     shutil.copytree(dummy_graph_dir, datastore.root_path / "graph" / "1level")
 
     config = nlconfig.NeuralLAMConfig(
-        datastore=nlconfig.DatastoreSelection(
-            kind=datastore.SHORT_NAME,
-            config_path=datastore.root_path,
-        ),
+        datastores={
+            "main": nlconfig.DatastoreSelection(
+                kind=datastore.SHORT_NAME,
+                config_path=datastore.root_path,
+            )
+        },
     )
 
     predictor = GraphLAM(
@@ -936,6 +944,7 @@ def test_spatial_loss_maps_out_of_range_steps(tmp_path, dummy_graph_dir):
     dummy_batch = (
         torch.zeros(batch_size, 1, num_grid_nodes, num_state_vars),
         target,
+        torch.zeros(batch_size, 1, num_grid_nodes, 0),
         torch.zeros(batch_size, 1, num_grid_nodes, 0),
         torch.zeros(batch_size, dtype=torch.long),
     )
