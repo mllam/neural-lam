@@ -168,6 +168,76 @@ class TestPropagationNetStructure:
         aggr_mlp_first = pnet.aggr_mlp[0]
         assert aggr_mlp_first.in_features == 2 * d_h
 
+    @pytest.mark.parametrize("gnn_class", [InteractionNet, PropagationNet])
+    @pytest.mark.parametrize("hidden_layers", [0, 1, 3])
+    @pytest.mark.parametrize("chunked", [False, True])
+    @pytest.mark.parametrize("update_edges", [False, True])
+    def test_hidden_dim_only_controls_hidden_layers(
+        self, gnn_class, hidden_layers, chunked, update_edges
+    ):
+        """Hidden width must not change node or edge representation width."""
+        n_send, n_rec = 3, 2
+        input_dim, hidden_dim = 4, 8
+        edge_index = _make_fully_connected_edge_index(n_send, n_rec)
+        n_edges = edge_index.shape[1]
+
+        chunk_kwargs = (
+            {
+                "edge_chunk_sizes": [2, 4],
+                "aggr_chunk_sizes": [1, 1],
+            }
+            if chunked
+            else {}
+        )
+
+        gnn = gnn_class(
+            edge_index,
+            input_dim=input_dim,
+            hidden_dim=hidden_dim,
+            hidden_layers=hidden_layers,
+            update_edges=update_edges,
+            **chunk_kwargs,
+        )
+
+        for mlp, first_dim in (
+            (gnn.edge_mlp, 3 * input_dim),
+            (gnn.aggr_mlp, 2 * input_dim),
+        ):
+            expected_dims = (
+                [first_dim] + [hidden_dim] * hidden_layers + [input_dim]
+            )
+            mlps = mlp.mlps if chunked else [mlp]
+
+            for sub_mlp in mlps:
+                linear_layers = [
+                    layer
+                    for layer in sub_mlp
+                    if isinstance(layer, torch.nn.Linear)
+                ]
+                actual_dims = [
+                    (layer.in_features, layer.out_features)
+                    for layer in linear_layers
+                ]
+                assert actual_dims == list(
+                    zip(expected_dims[:-1], expected_dims[1:])
+                )
+
+        result = gnn(
+            torch.randn(n_send, input_dim),
+            torch.randn(n_rec, input_dim),
+            torch.randn(n_edges, input_dim),
+        )
+
+        if update_edges:
+            rec_out, edge_out = result
+            assert edge_out.shape == (n_edges, input_dim)
+            assert torch.isfinite(edge_out).all()
+        else:
+            rec_out = result
+
+        assert rec_out.shape == (n_rec, input_dim)
+        assert torch.isfinite(rec_out).all()
+
     def test_node_index_offset_convention(self):
         """After construction, sender indices in edge_index should be
         offset by num_rec so that receivers are [0, num_rec) and senders
