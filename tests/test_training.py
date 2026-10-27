@@ -172,8 +172,8 @@ def test_training(datastore_name):
     run_simple_training(
         datastore,
         set_output_std=False,
-        # the sanity check runs the same code for every datastore, so the
-        # cheapest one is enough to cover it
+        # the sanity loop is the validation that already runs for every
+        # datastore after the train batches, minus the logging
         sanity_check=datastore_name == DummyDatastore.SHORT_NAME,
     )
 

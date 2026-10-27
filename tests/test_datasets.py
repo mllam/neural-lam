@@ -263,6 +263,9 @@ def test_single_batch(datastore_name, split):
     batch_device = [part.to(device_name) for part in batch]
     model_device.training_step(batch_device)
 
+    # the training tests only load 2 batches, so check the end of each split
+    dataset[len(dataset) - 1]
+
 
 @pytest.mark.parametrize(
     "dataset_config",
@@ -343,23 +346,27 @@ def test_dataset_pickle_roundtrip(datastore_name):
 
 
 def test_dataloader_spawn_worker():
-    """Load a batch through a spawned DataLoader worker, the path training
-    takes whenever ``num_workers > 0`` (the default)."""
+    """Load a batch with boundary forcing through a spawned DataLoader
+    worker, the path training takes whenever ``num_workers > 0`` (the
+    default)."""
     data_module = WeatherDataModule(
-        datastore=DummyDatastore(),
+        datastore=DummyDatastore(n_grid_points=100, n_timesteps=20),
+        datastore_boundary=BoundaryDummyDatastore(
+            n_grid_points=25, n_timesteps=20
+        ),
         ar_steps_train=2,
         ar_steps_eval=2,
         batch_size=2,
         num_workers=1,
     )
     data_module.setup("fit")
-    assert data_module.multiprocessing_context == "spawn"
+    loader = data_module.train_dataloader()
+    assert loader.multiprocessing_context.get_start_method() == "spawn"
 
-    init_states, target_states, forcing, target_times = next(
-        iter(data_module.train_dataloader())
-    )
+    init_states, target_states, _, boundary, _ = next(iter(loader))
     assert init_states.shape[:2] == (2, 2)
     assert target_states.shape[:2] == (2, 2)
+    assert boundary.shape[:3] == (2, 2, 25)
 
 
 def test_ensemble_len_scales_with_default_all_members():
@@ -623,3 +630,7 @@ def test_boundary_datastore_example_shapes():
     assert boundary.shape[2] == n_boundary_forcing * boundary_window
     assert target_times.shape == (ar_steps,)
     assert not torch.isnan(boundary).any()
+
+    # The boundary crops the interior in time, the last sample's boundary
+    # window must still be in range
+    dataset[len(dataset) - 1]
