@@ -15,7 +15,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Add `PersistencePredictor` baseline model (`--model persistence`) that returns the previous state unchanged, enabling standard evaluation of a persistence baseline through the existing pipeline [\#677](https://github.com/mllam/neural-lam/pull/677) @GiGiKoneti
 
+- Add optional boundary datastore support: `NeuralLAMConfig` now takes a named `datastores` dict. `WeatherDataset` loads boundary forcing from such a datastore and `__getitem__` returns a 5-tuple `(init_states, target_states, forcing, boundary, target_times)`. New CLI args `--num_past_boundary_steps` / `--num_future_boundary_steps` control the boundary forcing window. Expose `MDPDatastore`'s boundary-mask width as `n_boundary_points` on a `datastores.<name>` entry in `config.yaml`. New `is_on_rectilinear_grid` property to `BaseDatastore`, reporting whether a datastore's grid points form a complete 2D grid. [\#635](https://github.com/mllam/neural-lam/pull/635) @sadamov
+
 - Add a Sphinx + `sphinx-autoapi` documentation site (intro, install, quickstart, auto-generated API reference) on `myst-parser` and `sphinx-book-theme`, published with GitHub Pages. Notebooks are now marimo `.py` files, exported to Markdown at docs build time [\#272](https://github.com/mllam/neural-lam/pull/272) @Mohit-Lakra
+
+### Changed
+
+- Replace the single `datastore` config key with a named `datastores` mapping; a datastore's role now follows from the categories it provides, and existing configs must move their datastore under a named entry in `datastores:`. `BaseRegularGridDatastore` is removed and its members moved onto `BaseDatastore`, gated on the new `is_on_rectilinear_grid` property. Datastores on a rectilinear grid (complete 2D `x`/`y` grid, spacing need not be uniform) must set `is_on_rectilinear_grid = True` and implement `grid_shape_state`; the gated members raise `NotImplementedError` otherwise [\#635](https://github.com/mllam/neural-lam/pull/635) @sadamov
 
 ### Fixed
 
@@ -36,6 +42,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Fix flux standardization statistics weighting for short final batches and exclude distributed padding samples [\#782](https://github.com/mllam/neural-lam/pull/782) @Karvy-Singh
 
 ### Maintenance
+
+- Speed up the training tests by trimming Lightning Trainer and DataLoader overhead, and test the spawned DataLoader workers separately [\#812](https://github.com/mllam/neural-lam/pull/812) @Karvy-Singh
 
 - Fix the GPU CI job silently running on CPU: use an NVIDIA `g4dn.xlarge` cirun instance instead of the AMD `g4ad.xlarge`, install `--extra gpu-cu128` to match the runner's CUDA 12.2 driver, assert `torch.cuda.is_available()`, and run only the GPU-relevant tests there [\#802](https://github.com/mllam/neural-lam/pull/802) @varma1221
 

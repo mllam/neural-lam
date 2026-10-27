@@ -6,16 +6,17 @@ from pathlib import Path
 import pytest
 import pytorch_lightning as pl
 import torch
-import wandb
 
 # First-party
 from neural_lam import config as nlconfig
 from neural_lam.create_graph_with_wmg import create_graph_from_datastore
 from neural_lam.datastore import DATASTORES
-from neural_lam.datastore.base import BaseRegularGridDatastore
 from neural_lam.models import ARForecaster, ForecasterModule, GraphLAM
 from neural_lam.weather_dataset import WeatherDataModule
-from tests.conftest import init_datastore_example
+from tests.conftest import (
+    init_datastore_boundary_example,
+    init_datastore_example,
+)
 from tests.dummy_datastore import DummyDatastore, set_framed_boundary
 
 # Model architecture defaults for tests
@@ -31,18 +32,24 @@ NUM_FUTURE_FORCING_STEPS = 1
 def run_simple_training(
     datastore,
     set_output_std,
+    sanity_check=False,
     metrics_watch=None,
     var_leads_metrics_watch=None,
+    datastore_boundary=None,
 ):
     """
     Run one epoch of a simple model training setup using the given datastore.
 
     Parameters
     ----------
-    datastore : BaseRegularGridDatastore
+    datastore : BaseDatastore
         Datastore to load data from for training
     set_output_std : bool
         If --output_std should be set during training
+    sanity_check : bool, default False
+        Whether to run Lightning's sanity validation steps before training.
+    datastore_boundary : BaseDatastore, optional
+        Boundary datastore to load boundary forcing from during training
     """
     if metrics_watch is None:
         metrics_watch = []
@@ -76,6 +83,12 @@ def run_simple_training(
         # use `detect_anomaly` to ensure that we don't have NaNs popping up
         # during training
         detect_anomaly=True,
+        limit_train_batches=2,
+        limit_val_batches=2,
+        num_sanity_val_steps=2 if sanity_check else 0,
+        enable_checkpointing=False,
+        logger=False,
+        enable_progress_bar=False,
     )
 
     graph_name = "1level"
@@ -91,18 +104,21 @@ def run_simple_training(
 
     data_module = WeatherDataModule(
         datastore=datastore,
+        datastore_boundary=datastore_boundary,
         ar_steps_train=3,
         ar_steps_eval=5,
         batch_size=2,
-        num_workers=1,
+        num_workers=0,
         num_past_forcing_steps=1,
         num_future_forcing_steps=1,
     )
 
     config = nlconfig.NeuralLAMConfig(
-        datastore=nlconfig.DatastoreSelection(
-            kind=datastore.SHORT_NAME, config_path=datastore.root_path
-        )
+        datastores={
+            "main": nlconfig.DatastoreSelection(
+                kind=datastore.SHORT_NAME, config_path=datastore.root_path
+            )
+        }
     )
 
     # Build predictor and forecaster externally, then inject into
@@ -130,6 +146,7 @@ def run_simple_training(
         forecaster=forecaster,
         config=config,
         datastore=datastore,
+        datastore_boundary=datastore_boundary,
         loss="mse",
         lr=1.0e-3,
         restore_opt=False,
@@ -138,7 +155,6 @@ def run_simple_training(
         metrics_watch=metrics_watch,
         var_leads_metrics_watch=var_leads_metrics_watch,
     )
-    wandb.init(mode="disabled")  # Disable wandb for offline test run
     trainer.fit(model=model, datamodule=data_module)
 
 
@@ -147,13 +163,19 @@ def run_simple_training(
 def test_training(datastore_name):
     datastore = init_datastore_example(datastore_name)
 
-    if not isinstance(datastore, BaseRegularGridDatastore):
+    if not datastore.is_on_rectilinear_grid:
         pytest.skip(
             f"Skipping test for {datastore_name} as "
-            f"it is not a regular grid datastore."
+            f"it is not a rectilinear grid datastore."
         )
 
-    run_simple_training(datastore, set_output_std=False)
+    run_simple_training(
+        datastore,
+        set_output_std=False,
+        # the sanity loop is the validation that already runs for every
+        # datastore after the train batches, minus the logging
+        sanity_check=datastore_name == DummyDatastore.SHORT_NAME,
+    )
 
 
 @pytest.mark.requires_training
@@ -161,6 +183,19 @@ def test_training(datastore_name):
 def test_training_output_std():
     datastore = init_datastore_example("mdp")  # Test only with mdp datastore
     run_simple_training(datastore, set_output_std=True)
+
+
+@pytest.mark.requires_training
+@pytest.mark.requires_real_data
+def test_training_with_boundary():
+    """One epoch of training with a boundary datastore."""
+    datastore = init_datastore_example("mdp")
+    datastore_boundary = init_datastore_boundary_example("mdp")
+    run_simple_training(
+        datastore,
+        set_output_std=False,
+        datastore_boundary=datastore_boundary,
+    )
 
 
 def test_all_gather_cat_single_device():
@@ -253,10 +288,12 @@ def test_test_step_excludes_boundary_from_spatial_loss(tmp_path):
         )
 
     config = nlconfig.NeuralLAMConfig(
-        datastore=nlconfig.DatastoreSelection(
-            kind=datastore.SHORT_NAME,
-            config_path=datastore.root_path,
-        ),
+        datastores={
+            "main": nlconfig.DatastoreSelection(
+                kind=datastore.SHORT_NAME,
+                config_path=datastore.root_path,
+            )
+        }
     )
 
     predictor = GraphLAM(
