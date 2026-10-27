@@ -1037,7 +1037,7 @@ class GraphEFMMultiScale(BaseGraphEFM):
         -------
         dict
             Entries ``mesh``: ``(B, num_mesh_nodes, hidden_dim)`` and
-            ``m2m``: ``(B, M_m2m, hidden_dim)``.
+            ``m2m``: ``(B, num_edges_m2m, hidden_dim)``.
         """
         return {
             "mesh": self.expand_to_batch(
