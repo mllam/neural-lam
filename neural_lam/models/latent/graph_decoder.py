@@ -124,9 +124,9 @@ class GraphLatentDecoder(BaseGraphLatentDecoder):
             mesh-to-grid step.
         graph_emb : dict
             Embedded static graph node and edge features, with at least
-            the entries ``g2m``: ``(B, M_g2m, hidden_dim)``,
-            ``m2m``: ``(B, M_m2m, hidden_dim)`` and
-            ``m2g``: ``(B, M_m2g, hidden_dim)``.
+            the entries ``g2m``: ``(B, num_edges_g2m, hidden_dim)``,
+            ``m2m``: ``(B, num_edges_m2m, hidden_dim)`` and
+            ``m2g``: ``(B, num_edges_m2g, hidden_dim)``.
 
         Returns
         -------
