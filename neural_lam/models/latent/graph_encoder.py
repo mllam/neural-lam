@@ -99,8 +99,8 @@ class GraphLatentEncoder(BaseLatentEncoder):
         graph_emb : dict
             Embedded graph node and edge features, with at least entries
             ``mesh``: ``(B, num_mesh_nodes, hidden_dim)``,
-            ``g2m``: ``(B, M_g2m, hidden_dim)`` and
-            ``m2m``: ``(B, M_m2m, hidden_dim)``.
+            ``g2m``: ``(B, num_edges_g2m, hidden_dim)`` and
+            ``m2m``: ``(B, num_edges_m2m, hidden_dim)``.
         **kwargs
             Ignored.
 
