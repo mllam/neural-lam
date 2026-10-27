@@ -411,7 +411,7 @@ class BaseGraphEFM(StepPredictor):
         graph_emb = {
             "g2m": self.expand_to_batch(
                 self.g2m_embedder(self.g2m_features), batch_size
-            ),  # (B, M_g2m, hidden_dim)
+            ),  # (B, num_edges_g2m, hidden_dim)
             "m2g": self.expand_to_batch(
                 self.m2g_embedder(self.m2g_features), batch_size
             ),  # (B, M_m2g, hidden_dim)
