@@ -232,8 +232,9 @@ def load_config_and_datastore(
     ------
     InvalidConfigError
         If not exactly one datastore provides `state` data, if more than
-        one omits it, or if `plotting.boundary_var_mapping` maps to a feature
-        the boundary datastore does not provide.
+        one omits it, or if `plotting.boundary_var_mapping` maps from a
+        variable the interior datastore does not provide as state or to a
+        feature the boundary datastore does not provide as forcing.
     """
     with open(config_path, encoding="utf-8") as f:
         raw_config = yaml.safe_load(f)
@@ -285,8 +286,9 @@ def load_config_and_datastore(
     (datastore,) = interior_datastores.values()
     datastore_boundary = next(iter(boundary_datastores.values()), None)
 
-    # A mapped feature the boundary datastore does not provide would
-    # silently leave the overlay out of the evaluation plots.
+    # An unknown state variable or boundary feature would silently leave
+    # the overlay out of the evaluation plots.
+    state_vars = set(datastore.get_vars_names(category="state"))
     boundary_features = (
         set(datastore_boundary.get_vars_names(category="forcing"))
         if datastore_boundary is not None
@@ -295,13 +297,15 @@ def load_config_and_datastore(
     unknown = {
         var: feature
         for var, feature in config.plotting.boundary_var_mapping.items()
-        if feature not in boundary_features
+        if var not in state_vars or feature not in boundary_features
     }
     if unknown:
         raise InvalidConfigError(
-            "`plotting.boundary_var_mapping` maps to features that are not "
-            f"forcing features of the boundary datastore: {unknown}; "
-            f"available: {sorted(boundary_features)}."
+            "`plotting.boundary_var_mapping` must map interior state "
+            "variables to forcing features of the boundary datastore, "
+            f"unknown entries: {unknown}; state variables: "
+            f"{sorted(state_vars)}, boundary features: "
+            f"{sorted(boundary_features)}."
         )
 
     return (

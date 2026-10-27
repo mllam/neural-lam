@@ -362,15 +362,13 @@ def plot_on_axis(
     ax_title: str | None = None,
     cmap: str | matplotlib.colors.Colormap = "plasma",
     boundary_alpha: float | None = None,
+    crop_to_interior: bool = False,
     boundary_da: xr.DataArray | None = None,
     boundary_datastore: BaseDatastore | None = None,
     boundary_margin_degrees: float = 1.0,
 ) -> matplotlib.collections.QuadMesh:
     """
     Plot weather state on a projection-aware axis using datastore metadata.
-
-    The axes are cropped to the interior, padded by
-    ``boundary_margin_degrees`` when ``boundary_da`` is given.
 
     Parameters
     ----------
@@ -390,6 +388,9 @@ def plot_on_axis(
         Colormap to use for plotting.
     boundary_alpha : float, optional
         If provided, overlay boundary mask with given alpha transparency.
+    crop_to_interior : bool, optional
+        If True, crop the plot to the interior region, padded by
+        ``boundary_margin_degrees`` when ``boundary_da`` is given.
     boundary_da : xarray.DataArray, optional
         Boundary data from a separate boundary datastore. Shape
         ``(num_boundary_grid_nodes,)``. Plotted underneath the interior data
@@ -425,52 +426,20 @@ def plot_on_axis(
         if "x" in boundary_da.dims and "y" in boundary_da.dims:
             boundary_da = boundary_da.transpose("x", "y")
 
-        b_values_flat = np.asarray(boundary_da.values).ravel()
-        # Boundary datastores may have no state, so use the forcing grid
-        rectilinear_grid = boundary_datastore.is_on_rectilinear_grid
-        if rectilinear_grid:
-            b_xy = boundary_datastore.get_xy("forcing", stacked=False)
-            b_grid_shape = (b_xy.shape[0], b_xy.shape[1])
-            rectilinear_grid = b_values_flat.size == int(np.prod(b_grid_shape))
-        lon_lat_names = next(
-            (
-                names
-                for names in (("longitude", "latitude"), ("lon", "lat"))
-                if set(names) <= set(boundary_da.coords)
-            ),
-            None,
-        )
-
-        if rectilinear_grid:
-            b_lats_lons = boundary_datastore.get_lat_lon("forcing")
-            b_lons = b_lats_lons[:, 0].reshape(b_grid_shape)
-            b_lats = b_lats_lons[:, 1].reshape(b_grid_shape)
-            b_values = b_values_flat.reshape(b_grid_shape)
-        elif lon_lat_names is not None:
-            # A cropped boundary is no full grid, unstack its per-point
-            # lon/lat coords instead
-            lon_name, lat_name = lon_lat_names
-            grid_dim = boundary_da.dims[-1]
-            da_unstacked = boundary_da.set_index(
-                {grid_dim: [lon_name, lat_name]}
-            ).unstack([grid_dim])
-            b_lons, b_lats = np.meshgrid(
-                da_unstacked[lon_name].values,
-                da_unstacked[lat_name].values,
-                indexing="ij",
-            )
-            b_values = da_unstacked.transpose(lon_name, lat_name).values
-        else:
-            raise ValueError(
-                "Boundary data is not on a complete x/y grid and has no "
-                "per-point `latitude`/`longitude` (or `lat`/`lon`) coords."
-            )
+        # Boundary datastores may have no state, so use the forcing grid.
+        # A cropped boundary is no complete grid, so place its points on the
+        # grid of its distinct x/y values, NaN where cropped away.
+        b_xy = boundary_datastore.get_xy("forcing", stacked=True)
+        b_xs, x_idx = np.unique(b_xy[:, 0], return_inverse=True)
+        b_ys, y_idx = np.unique(b_xy[:, 1], return_inverse=True)
+        b_values = np.full((b_xs.size, b_ys.size), np.nan)
+        b_values[x_idx, y_idx] = np.asarray(boundary_da.values).ravel()
 
         ax.pcolormesh(
-            b_lons,
-            b_lats,
-            b_values,
-            transform=ccrs.PlateCarree(),
+            b_xs,
+            b_ys,
+            b_values.T,
+            transform=boundary_datastore.coords_projection,
             vmin=vmin,
             vmax=vmax,
             cmap=cmap,
@@ -522,11 +491,12 @@ def plot_on_axis(
             shading="auto",
         )
 
-    margin_deg = boundary_margin_degrees if boundary_da is not None else 0.0
-    xmin, xmax, ymin, ymax = _interior_padded_projected_bbox(
-        datastore, margin_deg
-    )
-    ax.set_extent([xmin, xmax, ymin, ymax], crs=datastore.coords_projection)
+    if crop_to_interior:
+        margin_deg = boundary_margin_degrees if boundary_da is not None else 0.0
+        xmin, xmax, ymin, ymax = _interior_padded_projected_bbox(
+            datastore, margin_deg
+        )
+        ax.set_extent([xmin, xmax, ymin, ymax], crs=datastore.coords_projection)
 
     if ax_title:
         ax.set_title(ax_title, size=_TITLE_SIZE)
@@ -749,11 +719,11 @@ def plot_prediction(
     title: str | None = None,
     vrange: tuple[float, float] | None = None,
     boundary_alpha: float = 0.7,
+    crop_to_interior: bool = True,
     colorbar_label: str = "",
     boundary_da: xr.DataArray | None = None,
     boundary_datastore: BaseDatastore | None = None,
     boundary_margin_degrees: float = 1.0,
-    crop_to_interior: bool | None = None,
 ) -> matplotlib.figure.Figure:
     """
     Plot an example prediction alongside the ground truth.
@@ -774,6 +744,10 @@ def plot_prediction(
         also cover ``boundary_da`` when it is provided.
     boundary_alpha : float, optional
         Alpha transparency for the boundary mask overlay (default 0.7).
+    crop_to_interior : bool, optional
+        If True, crop the axes to the interior region, padded by
+        ``boundary_margin_degrees`` when ``boundary_da`` is given
+        (default True).
     colorbar_label : str, optional
         Label for the shared colorbar.
     boundary_da : xarray.DataArray, optional
@@ -792,14 +766,6 @@ def plot_prediction(
     matplotlib.figure.Figure
         The completed two-panel prediction figure.
     """
-    if crop_to_interior is not None:
-        warnings.warn(
-            "`crop_to_interior` is deprecated and ignored, the axes are "
-            "always cropped to the interior.",
-            DeprecationWarning,
-            stacklevel=2,
-        )
-
     if vrange is None:
         vmin = float(min(da_prediction.min(), da_target.min()))
         vmax = float(max(da_prediction.max(), da_target.max()))
@@ -833,6 +799,7 @@ def plot_prediction(
             ax_title=subtitle,
             cmap="viridis",
             boundary_alpha=boundary_alpha,
+            crop_to_interior=crop_to_interior,
             boundary_da=boundary_da,
             boundary_datastore=boundary_datastore,
             boundary_margin_degrees=boundary_margin_degrees,
@@ -864,8 +831,8 @@ def plot_spatial_error(
     title: str | None = None,
     vrange: tuple[float, float] | None = None,
     boundary_alpha: float = 0.7,
+    crop_to_interior: bool = True,
     colorbar_label: str = "",
-    crop_to_interior: bool | None = None,
 ) -> matplotlib.figure.Figure:
     """
     Plot a spatially resolved error map on a projection-aware axis.
@@ -883,6 +850,8 @@ def plot_spatial_error(
         Explicit value range ``(vmin, vmax)`` for the color scale.
     boundary_alpha : float, optional
         Alpha transparency for the boundary overlay (default 0.7).
+    crop_to_interior : bool, optional
+        If True, crop the axes to the interior region (default True).
     colorbar_label : str, optional
         Label for the colorbar.
 
@@ -891,14 +860,6 @@ def plot_spatial_error(
     matplotlib.figure.Figure
         Figure handle containing the plotted map.
     """
-    if crop_to_interior is not None:
-        warnings.warn(
-            "`crop_to_interior` is deprecated and ignored, the axes are "
-            "always cropped to the interior.",
-            DeprecationWarning,
-            stacklevel=2,
-        )
-
     error_np = error.detach().cpu().numpy()
 
     if vrange is None:
@@ -923,6 +884,7 @@ def plot_spatial_error(
         vmax=vmax,
         cmap="OrRd",
         boundary_alpha=boundary_alpha,
+        crop_to_interior=crop_to_interior,
     )
 
     cbar = fig.colorbar(

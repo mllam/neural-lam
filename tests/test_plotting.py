@@ -119,6 +119,7 @@ def test_plot_prediction() -> None:
         title="Test Prediction",
         vrange=(expected_vmin, expected_vmax),
         boundary_alpha=None,
+        crop_to_interior=False,
     )
 
     assert isinstance(fig, matplotlib.figure.Figure)
@@ -165,6 +166,39 @@ def test_plot_prediction_with_boundary() -> None:
     # Each panel: boundary pcolormesh + interior pcolormesh
     assert len(ground_truth_ax.collections) == 2
     assert len(prediction_ax.collections) == 2
+
+
+def test_plot_prediction_with_cropped_projected_boundary() -> None:
+    """A boundary cropped to a frame on a projected grid is drawn on the
+    grid of its distinct x/y values, not one cell per lon/lat pair."""
+    datastore = init_datastore_example("dummydata")
+    n_grid = datastore.num_grid_points
+
+    boundary_datastore = BoundaryDummyDatastore()
+    full_xy = boundary_datastore.get_xy("forcing", stacked=False)
+    n_x, n_y, _ = full_xy.shape
+    frame = np.ones((n_x, n_y), dtype=bool)
+    frame[2:-2, 2:-2] = False
+    frame_xy = full_xy[frame]
+
+    da_pred = xr.DataArray(np.linspace(0.0, 1.0, n_grid))
+    da_target = xr.DataArray(np.linspace(1.0, 2.0, n_grid))
+    boundary_da = xr.DataArray(np.linspace(0.5, 1.5, len(frame_xy)))
+
+    with patch.object(boundary_datastore, "get_xy", return_value=frame_xy):
+        fig = vis.plot_prediction(
+            datastore=datastore,
+            da_prediction=da_pred,
+            da_target=da_target,
+            boundary_alpha=None,
+            boundary_da=boundary_da,
+            boundary_datastore=boundary_datastore,
+        )
+
+    boundary_mesh = fig.axes[0].collections[0]
+    b_values = np.ma.filled(boundary_mesh.get_array().astype(float), np.nan)
+    assert b_values.size == n_x * n_y
+    assert np.isfinite(b_values).sum() == len(frame_xy)
 
 
 def test_interior_bbox_margin_pads_every_side() -> None:
@@ -467,6 +501,7 @@ def test_plot_spatial_error() -> None:
         datastore=datastore,
         title="Test Spatial Error",
         boundary_alpha=None,
+        crop_to_interior=False,
     )
 
     assert isinstance(fig, matplotlib.figure.Figure)
@@ -474,8 +509,9 @@ def test_plot_spatial_error() -> None:
     assert fig.texts[0].get_text() == "Test Spatial Error"
 
 
-def test_plot_spatial_error_extent_matches_interior() -> None:
-    """`plot_spatial_error` crops the axes to the interior x/y bounds."""
+def test_plot_spatial_error_crop_to_interior_changes_extent() -> None:
+    """Interior cropping sets the extent to the interior x/y bounds, and
+    `crop_to_interior=False` leaves the extent alone."""
     datastore = init_datastore_example("dummydata")
     n_grid = datastore.num_grid_points
     grid_shape = (datastore.grid_shape_state.x, datastore.grid_shape_state.y)
@@ -495,6 +531,15 @@ def test_plot_spatial_error_extent_matches_interior() -> None:
             error=error,
             datastore=datastore,
             boundary_alpha=None,
+            crop_to_interior=False,
+        )
+        assert set_extent_mock.call_count == 0
+
+        vis.plot_spatial_error(
+            error=error,
+            datastore=datastore,
+            boundary_alpha=None,
+            crop_to_interior=True,
         )
 
     assert set_extent_mock.call_count == 1

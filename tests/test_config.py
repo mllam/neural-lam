@@ -167,22 +167,26 @@ def test_load_config_and_datastore_rejects_two_boundaries(tmp_path):
 
 
 @pytest.mark.requires_real_data
-def test_load_config_and_datastore_rejects_unknown_boundary_mapping(tmp_path):
-    """A `boundary_var_mapping` entry naming a feature the boundary
-    datastore does not provide would silently drop the overlay."""
+@pytest.mark.parametrize(
+    "entry,unknown",
+    [
+        ("v100m: v_component_of_wind1000hPa", "v_component_of_wind1000hPa"),
+        ("u100mm: u_component_of_wind1000hPa", "u100mm"),
+    ],
+)
+def test_load_config_and_datastore_rejects_unknown_boundary_mapping(
+    tmp_path, entry, unknown
+):
+    """A `boundary_var_mapping` entry naming a state variable the interior
+    or a feature the boundary datastore does not provide would silently
+    drop the overlay."""
     danra = DATASTORE_EXAMPLES / "danra_100m_winds" / "danra.datastore.yaml"
     era5 = BOUNDARY_EXAMPLE_DIR / "era5.datastore.yaml"
     config_path = _write_config(tmp_path, {"danra": danra, "era5": era5})
     with open(config_path, "a", encoding="utf-8") as f:
-        f.write(
-            "plotting:\n"
-            "  boundary_var_mapping:\n"
-            "    v100m: v_component_of_wind1000hPa\n"
-        )
+        f.write(f"plotting:\n  boundary_var_mapping:\n    {entry}\n")
 
-    with pytest.raises(
-        nlconfig.InvalidConfigError, match="v_component_of_wind1000hPa"
-    ):
+    with pytest.raises(nlconfig.InvalidConfigError, match=unknown):
         nlconfig.load_config_and_datastore(str(config_path))
 
 
