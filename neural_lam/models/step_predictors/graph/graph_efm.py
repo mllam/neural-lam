@@ -1045,5 +1045,5 @@ class GraphEFMMultiScale(BaseGraphEFM):
             ),  # (B, num_mesh_nodes, hidden_dim)
             "m2m": self.expand_to_batch(
                 self.m2m_embedder(self.m2m_features), batch_size
-            ),  # (B, M_m2m, hidden_dim)
+            ),  # (B, num_edges_m2m, hidden_dim)
         }
