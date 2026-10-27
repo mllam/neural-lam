@@ -372,12 +372,12 @@ def create_graph(
 
     Creates the following files for all graphs:
 
-    - g2m_edge_index.pt  [2, num_edges]
-    - g2m_features.pt    [num_edges, num_edge_features]
-    - m2g_edge_index.pt  [2, num_edges]
-    - m2g_features.pt    [num_edges, num_edge_features]
-    - m2m_edge_index.pt  list of [2, num_edges_level], length==n_levels
-    - m2m_features.pt    list of [num_edges_level, num_edge_features],
+    - g2m_edge_index.pt  [2, num_edges_g2m]
+    - g2m_features.pt    [num_edges_g2m, num_edge_features]
+    - m2g_edge_index.pt  [2, num_edges_m2g]
+    - m2g_features.pt    [num_edges_m2g, num_edge_features]
+    - m2m_edge_index.pt  list of [2, num_edges_m2m[l]], length==n_levels
+    - m2m_features.pt    list of [num_edges_m2m[l], num_edge_features],
                          length==n_levels
     - mesh_features.pt   list of [num_mesh_nodes[l], num_mesh_static_vars],
                          length==n_levels
