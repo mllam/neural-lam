@@ -466,12 +466,12 @@ class DummyDatastore(BaseDatastore):
 
     @cached_property
     def rectilinear_grid_shape(self) -> CartesianGridShape:
-        """The shape of the grid for the state variables.
+        """The shape of the rectilinear grid, shared by all categories.
 
         Returns
         -------
         CartesianGridShape:
-            The shape of the grid for the state variables, which has `x` and
+            The shape of the rectilinear grid, shared by all categories, which has `x` and
             `y` attributes.
         """
 

@@ -546,12 +546,12 @@ class MDPDatastore(BaseDatastore):
 
     @cached_property
     def rectilinear_grid_shape(self) -> CartesianGridShape:
-        """The shape of the cartesian grid for the state variables.
+        """The shape of the rectilinear grid, shared by all categories.
 
         Returns
         -------
         CartesianGridShape
-            The shape of the cartesian grid for the state variables.
+            The shape of the rectilinear grid, shared by all categories.
 
         Raises
         ------

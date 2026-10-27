@@ -405,7 +405,7 @@ dataset:
   num_ensemble_members: 2
   step_length: 3
   remove_state_features_with_index: [15]
-rectilinear_grid_shape:
+grid_shape_state:
 - 268
 - 238
 projection:

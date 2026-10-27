@@ -3,7 +3,7 @@
 
 - `root_path` (property): Root path of the datastore.
 - `step_length` (property): Length of the time step in hours.
-- `rectilinear_grid_shape` (property): Shape of the grid for the state variables.
+- `rectilinear_grid_shape` (property): Shape of the rectilinear grid.
 - `get_xy` (method): Return the x, y coordinates of the dataset.
 - `coords_projection` (property): Projection object for the coordinates.
 - `get_vars_units` (method): Get the units of the variables in the given
@@ -28,7 +28,7 @@ In addition, datastores on a rectilinear grid (`is_on_rectilinear_grid` is
         given category of data.
 - `get_xy` (method): Return the x, y coordinates of the dataset.
 - `coords_projection` (property): Projection object for the coordinates.
-- `rectilinear_grid_shape` (property): Shape of the grid for the state variables.
+- `rectilinear_grid_shape` (property): Shape of the rectilinear grid.
 - `stack_grid_coords` (method): Stack the grid coordinates of the dataset
 
 """
@@ -96,7 +96,7 @@ def test_datastore_grid_xy(datastore_name):
 
     if not datastore.is_on_rectilinear_grid:
         pytest.skip(
-            "Skip rectilinear_grid_shape test for non-rectilinear grid datastores"
+            "Skip rectilinear_grid_shape test for non-rectilinear datastores"
         )
 
     # check the shapes of the xy grid

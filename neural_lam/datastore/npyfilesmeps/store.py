@@ -734,15 +734,15 @@ class NpyFilesDatastoreMEPS(BaseDatastore):
 
     @cached_property
     def rectilinear_grid_shape(self) -> CartesianGridShape:
-        """The shape of the cartesian grid for the state variables.
+        """The shape of the rectilinear grid, shared by all categories.
 
         Returns
         -------
         CartesianGridShape
-            The shape of the cartesian grid for the state variables.
+            The shape of the rectilinear grid, shared by all categories.
 
         """
-        ny, nx = self.config.rectilinear_grid_shape
+        ny, nx = self.config.grid_shape_state
         return CartesianGridShape(x=nx, y=ny)
 
     @cached_property
