@@ -335,6 +335,109 @@ def test_mdp_boundary_mask_n_boundary_points(n_boundary_points):
     )
 
 
+def _write_mdp_grid_config(tmp_path, x_dim, y_dim, grid_index_dims):
+    """Write a 10 x 8 grid zarr with dims (time, x_dim, y_dim) and an
+    mllam-data-prep config stacking `grid_index` from `grid_index_dims`."""
+    n_times = 24
+    time = np.datetime64("2022-04-01T00:00") + np.arange(
+        n_times
+    ) * np.timedelta64(3, "h")
+    rng = np.random.default_rng(0)
+    xr.Dataset(
+        {"t2m": (("time", x_dim, y_dim), rng.random((n_times, 10, 8)))},
+        coords={
+            "time": time,
+            x_dim: np.linspace(0.0, 9.0, 10),
+            y_dim: np.linspace(50.0, 57.0, 8),
+        },
+    ).to_zarr(tmp_path / "input.zarr", mode="w")
+
+    config = {
+        "schema_version": "v0.5.0",
+        "dataset_version": "v0.1.0",
+        "output": {
+            "variables": {"state": ["time", "grid_index", "state_feature"]},
+            "coord_ranges": {
+                "time": {
+                    "start": "2022-04-01T00:00",
+                    "end": "2022-04-03T21:00",
+                    "step": "PT3H",
+                }
+            },
+            "splitting": {
+                "dim": "time",
+                "splits": {
+                    "train": {
+                        "start": "2022-04-01T00:00",
+                        "end": "2022-04-02T00:00",
+                        "compute_statistics": {
+                            "ops": ["mean", "std", "diff_mean", "diff_std"],
+                            "dims": ["grid_index", "time"],
+                        },
+                    },
+                    "val": {
+                        "start": "2022-04-02T03:00",
+                        "end": "2022-04-03T00:00",
+                    },
+                    "test": {
+                        "start": "2022-04-03T03:00",
+                        "end": "2022-04-03T21:00",
+                    },
+                },
+            },
+        },
+        "inputs": {
+            "surface": {
+                "path": str(tmp_path / "input.zarr"),
+                "dims": ["time", x_dim, y_dim],
+                "variables": ["t2m"],
+                "dim_mapping": {
+                    "time": {"method": "rename", "dim": "time"},
+                    "grid_index": {"method": "stack", "dims": grid_index_dims},
+                    "state_feature": {
+                        "method": "stack_variables_by_var_name",
+                        "name_format": "{var_name}",
+                    },
+                },
+                "target_output_variable": "state",
+            }
+        },
+        "extra": {"projection": {"class_name": "PlateCarree", "kwargs": {}}},
+    }
+    config_path = tmp_path / "grid.datastore.yaml"
+    config_path.write_text(yaml.safe_dump(config))
+    return config_path
+
+
+@pytest.mark.requires_real_data
+def test_mdp_geographic_spatial_coordinates(tmp_path):
+    """`MDPDatastore` must work when `grid_index` is stacked from dimensions
+    not named x/y, e.g. a regular longitude/latitude grid."""
+    config_path = _write_mdp_grid_config(
+        tmp_path, "longitude", "latitude", ["longitude", "latitude"]
+    )
+    datastore = MDPDatastore(config_path=config_path, n_boundary_points=2)
+
+    assert list(datastore.spatial_coordinates) == ["longitude", "latitude"]
+    assert datastore.grid_shape_state.x == 10
+    assert datastore.grid_shape_state.y == 8
+    assert datastore.get_dataarray("state", split="train") is not None
+    # 10 x 8 grid with a 2-point frame leaves a 6 x 4 interior
+    assert int(datastore.boundary_mask.sum()) == 10 * 8 - 6 * 4
+
+
+@pytest.mark.requires_real_data
+@pytest.mark.parametrize(
+    "x_dim, y_dim", [("x", "y"), ("longitude", "latitude")]
+)
+def test_mdp_reversed_spatial_coordinates_raises(tmp_path, x_dim, y_dim):
+    """Stacking `grid_index` y-first would silently swap x and y in
+    `grid_shape_state`, `get_xy` and `get_xy_extent`, so it must raise."""
+    config_path = _write_mdp_grid_config(tmp_path, x_dim, y_dim, [y_dim, x_dim])
+    with pytest.raises(ValueError, match="x-like dimension must come first"):
+        MDPDatastore(config_path=config_path)
+
+
 @pytest.mark.parametrize("datastore_name", DATASTORES.keys())
 def test_get_xy_extent(datastore_name):
     """Check that the `datastore.get_xy_extent` method is implemented and that

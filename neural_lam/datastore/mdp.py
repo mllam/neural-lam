@@ -144,6 +144,18 @@ class MDPDatastore(BaseDatastore):
 
         if dim_order is None:
             raise ValueError("Could not determine dim_order from inputs.")
+        # get_xy and grid_shape_state treat the first dimension as x
+        if dim_order[0] in ("y", "lat", "latitude") and dim_order[1] in (
+            "x",
+            "lon",
+            "longitude",
+        ):
+            raise ValueError(
+                f"`grid_index` is stacked from {list(dim_order)}, but the "
+                "x-like dimension must come first, e.g. "
+                f"{[dim_order[1], dim_order[0]]}. Reorder `dim_mapping."
+                "grid_index.dims` in the datastore config."
+            )
         self.spatial_coordinates = dim_order
 
     def _config_for_creation(self) -> mdp.Config:
@@ -451,8 +463,7 @@ class MDPDatastore(BaseDatastore):
         n = self._n_boundary_points
         interior_slice = slice(n, -n) if n > 0 else slice(None)
         ds_unstacked["boundary_mask"] = da_domain_allzero.isel(
-            x=interior_slice,
-            y=interior_slice,
+            {dim: interior_slice for dim in self.spatial_coordinates}
         )
         ds_unstacked["boundary_mask"] = ds_unstacked.boundary_mask.fillna(
             1
