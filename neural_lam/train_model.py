@@ -171,7 +171,7 @@ def load_forecaster_module_from_checkpoint(
     ForecasterModule
         The restored module.
     """
-    ckpt = torch.load(ckpt_path, weights_only=False)
+    ckpt = torch.load(ckpt_path, map_location="cpu", weights_only=False)
     args = ckpt["hyper_parameters"]["args"]
     predictor_class = MODELS[args.model]
     predictor = build_predictor(predictor_class, args, config, datastore)
