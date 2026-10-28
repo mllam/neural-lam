@@ -399,18 +399,17 @@ def create_graph(
 
     And in addition for hierarchical graphs:
 
-    - mesh_up_edge_index.pt: list of [2, num_edges_level],
+    - mesh_up_edge_index.pt: list of [2, num_edges_mesh_up[l]],
       length==n_levels-1
-    - mesh_up_features.pt: list of [num_edges, num_edge_features],
-        length==n_levels-1
-    - mesh_down_edge_index.pt: list of [2, num_edges_level],
+    - mesh_up_features.pt: list of [num_edges_mesh_up[l], num_edge_features],
       length==n_levels-1
-    - mesh_down_features.pt: list of [num_edges, num_edge_features],
-        length==n_levels-1
-
-    where num_edges_level is the number of edges in the graph from
-    mesh-to-mesh between two consecutive levels (list index corresponds index
-    of lower level)
+    - mesh_down_edge_index.pt: list of [2, num_edges_mesh_down[l]],
+      length==n_levels-1
+    - mesh_down_features.pt: list of [num_edges_mesh_down[l],
+      num_edge_features], length==n_levels-1
+    where num_edges_mesh_up[l] and num_edges_mesh_down[l] are the number of
+    edges in the graph from mesh-to-mesh between levels l and l+1 (list index
+    corresponds to the index of the lower level)
 
 
     Parameters
