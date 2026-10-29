@@ -146,3 +146,15 @@ def test_unsupported_logger_raises_value_error():
         setup_training_logger(
             datastore, args, run_name="my-run", run_dir="runs/my-run"
         )
+
+
+def test_create_graph_with_wmg_cli_missing_config_path():
+    """create_graph_with_wmg.cli raises ValueError when --config_path is
+    missing."""
+    # First-party
+    from neural_lam.create_graph_with_wmg import cli
+
+    with pytest.raises(
+        ValueError, match="Specify your config with --config_path"
+    ):
+        cli([])
