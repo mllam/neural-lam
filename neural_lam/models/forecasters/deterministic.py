@@ -125,6 +125,14 @@ class BaseDeterministicForecaster(BaseForecaster):
             If ``self.loss`` needs a std, the forecast carries none of its
             own and no ``per_var_std`` fallback is available; see
             ``_resolve_pred_std``.
+
+        Notes
+        -----
+        Customize the deterministic objective by overriding
+        ``compute_loss_from_forecast``. ``DeterministicForecastingModule``
+        calls that method directly for its per-step training, validation
+        and test losses. Overriding only ``compute_training_loss`` does not
+        change those losses.
         """
         prediction, pred_std = self(
             init_states, forcing_features, target_states

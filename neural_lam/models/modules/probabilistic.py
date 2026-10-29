@@ -57,8 +57,9 @@ class ProbabilisticForecastingModule(BaseForecastingModule):
         Parameters
         ----------
         forecaster : BaseProbabilisticForecaster
-            The forecaster to evaluate. Its ``forward`` must return an
-            ensemble, since validation and testing score a sampled one.
+            The forecaster to evaluate. Its ``forward`` returns one sampled
+            forecast; ``sample_ensemble`` draws the ensemble evaluated
+            during validation and testing.
         config : NeuralLAMConfig
             Configuration object for the neural LAM model.
         datastore : BaseDatastore

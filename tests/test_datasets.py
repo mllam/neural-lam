@@ -1,4 +1,5 @@
 # Standard library
+import pickle
 from pathlib import Path
 
 # Third-party
@@ -12,7 +13,7 @@ from neural_lam import config as nlconfig
 from neural_lam.create_graph_with_wmg import create_graph_from_datastore
 from neural_lam.datastore import DATASTORES
 from neural_lam.models import DeterministicForecastingModule
-from neural_lam.weather_dataset import WeatherDataset
+from neural_lam.weather_dataset import WeatherDataModule, WeatherDataset
 from tests.conftest import (
     init_datastore_boundary_example,
     init_datastore_example,
@@ -263,6 +264,9 @@ def test_single_batch(datastore_name, split):
     batch_device = [part.to(device_name) for part in batch]
     model_device.training_step(batch_device)
 
+    # the training tests only load 2 batches, so check the end of each split
+    dataset[len(dataset) - 1]
+
 
 @pytest.mark.parametrize(
     "dataset_config",
@@ -326,6 +330,44 @@ def test_dataset_out_of_range_raises_index_error():
     # corresponding positive index.
     dataset[-1]
     dataset[n - 1]
+
+
+@pytest.mark.parametrize("datastore_name", DATASTORES.keys())
+def test_dataset_pickle_roundtrip(datastore_name):
+    """With ``num_workers > 0`` `WeatherDataModule` uses the "spawn" start
+    method, which pickles the dataset, including its datastore, into every
+    worker process."""
+    datastore = init_datastore_example(datastore_name)
+    dataset = WeatherDataset(datastore=datastore, split="train", ar_steps=2)
+
+    restored = pickle.loads(pickle.dumps(dataset))  # noqa: S301
+
+    for original, roundtripped in zip(dataset[0], restored[0]):
+        assert torch.equal(original, roundtripped)
+
+
+def test_dataloader_spawn_worker():
+    """Load a batch with boundary forcing through a spawned DataLoader
+    worker, the path training takes whenever ``num_workers > 0`` (the
+    default)."""
+    data_module = WeatherDataModule(
+        datastore=DummyDatastore(n_grid_points=100, n_timesteps=20),
+        datastore_boundary=BoundaryDummyDatastore(
+            n_grid_points=25, n_timesteps=20
+        ),
+        ar_steps_train=2,
+        ar_steps_eval=2,
+        batch_size=2,
+        num_workers=1,
+    )
+    data_module.setup("fit")
+    loader = data_module.train_dataloader()
+    assert loader.multiprocessing_context.get_start_method() == "spawn"
+
+    init_states, target_states, _, boundary, _ = next(iter(loader))
+    assert init_states.shape[:2] == (2, 2)
+    assert target_states.shape[:2] == (2, 2)
+    assert boundary.shape[:3] == (2, 2, 25)
 
 
 def test_ensemble_len_scales_with_default_all_members():
@@ -589,3 +631,7 @@ def test_boundary_datastore_example_shapes():
     assert boundary.shape[2] == n_boundary_forcing * boundary_window
     assert target_times.shape == (ar_steps,)
     assert not torch.isnan(boundary).any()
+
+    # The boundary crops the interior in time, the last sample's boundary
+    # window must still be in range
+    dataset[len(dataset) - 1]

@@ -122,15 +122,10 @@ class BaseProbabilisticARForecaster(BaseProbabilisticForecaster):
     Probabilistic forecaster sampling each forecast auto-regressively.
 
     Each call to the wrapped predictor draws a fresh sample of the next
-    state, so one unrolling is one member and ``sample_ensemble`` gets
-    independent trajectories for free.
+    state, so one unrolling is one member.
 
     It supplies no training objective, and so remains abstract in
-    ``compute_training_loss``. There is no default that fits every
-    stochastic model: scoring the ensemble mean with a pointwise metric
-    only rewards the mean being right, giving the model no incentive to
-    keep a calibrated spread, and risks training it to collapse the
-    ensemble to a point estimate. Concrete subclasses define an objective
+    ``compute_training_loss``. Concrete subclasses define an objective
     appropriate to how they are meant to be trained (e.g. an ensemble
     scoring rule such as CRPS, or a variational objective), along with
     whatever configuration that objective needs.
