@@ -101,7 +101,7 @@ def _(mo):
         r"""
     ## 1. Environment Setup
 
-    Set up the environment with [`uv`](https://docs.astral.sh/uv/) from the repository root (see "Installing Neural-LAM" in the [README](https://github.com/mllam/neural-lam/blob/main/README.md)) and open this notebook with marimo:
+    Set up the environment with [`uv`](https://docs.astral.sh/uv/) from the repository root (see the [installation guide](https://mllam.github.io/neural-lam/getting-started/installation.html)) and open this notebook with marimo:
 
     ```bash
     uv sync --extra cpu --extra docs --group dev
@@ -191,15 +191,7 @@ def _(mo):
         r"""
     ## 3. Graph Generation
 
-    `neural-lam` uses a **graph** to define the message-passing structure of the GNN. `api.create_graph` builds it with [`weather-model-graphs`](https://github.com/mllam/weather-model-graphs) from one of these archetypes:
-
-    | Archetype      | Mesh                       | Model                  |
-    |----------------|----------------------------|------------------------|
-    | `keisler`      | Single level               | `graph_lam` (this notebook) |
-    | `graphcast`    | Multi-scale, flattened     | `graph_lam`            |
-    | `hierarchical` | Hierarchy of mesh levels   | `hi_lam`, `hi_lam_parallel` |
-
-    For this Hello World example we use the **single-level `keisler` graph** — the lightest option, ideal for CPU.
+    `neural-lam` uses a **graph** to define the message-passing structure of the GNN. `api.create_graph` builds it with [`weather-model-graphs`](https://github.com/mllam/weather-model-graphs). For this Hello World example we use the **single-level `keisler` graph** — the lightest option, ideal for CPU. See the [graph creation guide](https://mllam.github.io/neural-lam/user-guide/graphs.html) for the other archetypes and the models they work with.
     """
     )
     return
@@ -328,31 +320,11 @@ def _(mo):
 
     ### 🔁 Use a larger / hierarchical graph
 
-    For a production-quality run, switch to the hierarchical graph and the Hi-LAM model:
-
-    ```python
-    api.create_graph(
-        config_path="<your_config.yaml>",
-        name="hierarchical",
-        archetype="hierarchical",
-    )
-    api.train(
-        config_path="<your_config.yaml>",
-        model="hi_lam",
-        graph="hierarchical",
-        epochs=200,
-    )
-    ```
-
-    The same steps are available on the command line as `python -m neural_lam.create_graph_with_wmg` and `python -m neural_lam.train_model`.
+    For a production-quality run, switch to the hierarchical graph and the Hi-LAM model, see the [graph creation](https://mllam.github.io/neural-lam/user-guide/graphs.html) and [training](https://mllam.github.io/neural-lam/user-guide/training.html) guides. The [quickstart](https://mllam.github.io/neural-lam/getting-started/quickstart.html) shows the steps of this notebook on the command line.
 
     ### ⚡ Enable GPU training
 
-    Re-create the environment with a CUDA build of PyTorch and remove the `CUDA_VISIBLE_DEVICES` line from the import cell, so that `devices` (default `auto`) picks up your GPU:
-    ```bash
-    uv sync --extra gpu        # CUDA 13.0
-    # or: uv sync --extra gpu-cu128   # CUDA 12.8
-    ```
+    Re-create the environment with a CUDA build of PyTorch (see the [installation guide](https://mllam.github.io/neural-lam/getting-started/installation.html)) and remove the `CUDA_VISIBLE_DEVICES` line from the import cell, so that `devices` (default `auto`) picks up your GPU.
 
     ### 📦 Use larger / full DANRA data
 
@@ -360,11 +332,11 @@ def _(mo):
 
     ### 📊 Enable cloud logging with W&B
 
-    Remove the `WANDB_MODE` line in the import cell (or set it to `online`) and optionally pass `logger="wandb", logger_project="<your-project-name>"`.
+    Remove the `WANDB_MODE` line in the import cell (or set it to `online`) and optionally pass `logger="wandb", logger_project="<your-project-name>"`. See the [logging guide](https://mllam.github.io/neural-lam/user-guide/logging.html) for W&B and MLflow options.
 
     ### 🔗 Further reading
 
-    - [neural-lam README](https://github.com/mllam/neural-lam)
+    - [User guide](https://mllam.github.io/neural-lam/user-guide/datastores.html): datastores, graphs, training, logging
     - [mllam-data-prep](https://github.com/mllam/mllam-data-prep)
     - [Graph-based Neural Weather Prediction for Limited Area Modeling (NeurIPS 2023 CCAI workshop)](https://arxiv.org/abs/2309.17370)
     - [Probabilistic Weather Forecasting with Hierarchical GNNs (NeurIPS 2024)](https://arxiv.org/abs/2406.04759)
