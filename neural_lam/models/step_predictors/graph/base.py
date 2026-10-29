@@ -121,6 +121,7 @@ class BaseGraphModel(StepPredictor):
             graph_name,
             mesh_node_features_scaling=grid_xy_max_span,
         )
+        self.check_graph_type(graph_name)
 
         # Specify dimensions of data
         self.num_mesh_nodes, _ = self.get_num_mesh()
@@ -342,3 +343,16 @@ class BaseGraphModel(StepPredictor):
         new_state = self.get_clamped_new_state(rescaled_delta_mean, prev_state)
 
         return new_state, pred_std
+
+    def check_graph_type(self, graph_name: str) -> None:
+        """
+        Verify the loaded graph has the structure required by the model.
+
+        Subclasses should override this method to check whether they require
+        a flat or hierarchical mesh graph.
+
+        Parameters
+        ----------
+        graph_name : str
+            Name of the graph directory that was loaded.
+        """
