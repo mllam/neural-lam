@@ -990,9 +990,12 @@ def test_plot_examples_short_eval_split(tmp_path):
     default-configured WeatherDataset requires."""
     datastore = DummyDatastore(n_grid_points=100, n_timesteps=5)
     config = nlconfig.NeuralLAMConfig(
-        datastore=nlconfig.DatastoreSelection(
-            kind=datastore.SHORT_NAME, config_path=str(datastore.root_path)
-        )
+        datastores={
+            "main": nlconfig.DatastoreSelection(
+                kind=datastore.SHORT_NAME,
+                config_path=str(datastore.root_path),
+            )
+        }
     )
 
     eval_run = api.evaluate(
