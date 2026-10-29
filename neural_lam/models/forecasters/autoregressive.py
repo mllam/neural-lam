@@ -19,9 +19,13 @@ class ARForecaster(Forecaster):
 
     boundary_mask: torch.Tensor
     interior_mask: torch.Tensor
+    gradient_checkpointing: bool
 
     def __init__(
-        self, predictor: StepPredictor, datastore: BaseDatastore
+        self,
+        predictor: StepPredictor,
+        datastore: BaseDatastore,
+        gradient_checkpointing: bool = False,
     ) -> None:
         """
         Initialize the ARForecaster.
@@ -32,9 +36,15 @@ class ARForecaster(Forecaster):
             The predictor to use for each step.
         datastore : BaseDatastore
             The datastore providing grid metadata and boundary masks.
+        gradient_checkpointing : bool, default False
+            If True and in training mode, wrap each predictor call in
+            ``torch.utils.checkpoint`` so its activations are recomputed in
+            the backward pass instead of stored. Lowers peak memory when
+            unrolling more than one step, at the cost of extra compute.
         """
         super().__init__()
         self.predictor = predictor
+        self.gradient_checkpointing = bool(gradient_checkpointing)
 
         # Register boundary/interior masks on the forecaster, not the predictor
         boundary_mask = (
@@ -120,9 +130,18 @@ class ARForecaster(Forecaster):
             forcing = forcing_features[:, i]
             boundary_state = boundary_states[:, i]
 
-            pred_state, pred_std = self.predictor(
-                prev_state, prev_prev_state, forcing
-            )
+            if self.gradient_checkpointing and self.training:
+                pred_state, pred_std = torch.utils.checkpoint.checkpoint(
+                    self.predictor,
+                    prev_state,
+                    prev_prev_state,
+                    forcing,
+                    use_reentrant=False,
+                )
+            else:
+                pred_state, pred_std = self.predictor(
+                    prev_state, prev_prev_state, forcing
+                )
 
             # Overwrite boundary with true state using ARForecaster's mask
             new_state = (
