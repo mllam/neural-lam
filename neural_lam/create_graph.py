@@ -383,19 +383,15 @@ def create_graph(
                          length==n_levels
 
     where
-      num_edge_features:
-            number of features per edge (currently num_edge_features==3, for
-            edge-length, x and y)
-        num_edges:
-            number of grid-to-mesh or mesh-to-grid edges
-        num_edges_level:
-            number of edges in the graph from mesh-to-mesh at a given level
-            (list index corresponds to the level)
-      num_mesh_static_vars:
-            number of static features per mesh node (currently
-            num_mesh_static_vars==2, for x and y)
-        num_mesh_nodes[l]:
-            number of nodes in the mesh at a given level
+
+    - ``num_edge_features``: number of features per edge (currently
+      num_edge_features==3, for edge-length, x and y)
+    - ``num_edges``: number of grid-to-mesh or mesh-to-grid edges
+    - ``num_edges_level``: number of edges in the graph from mesh-to-mesh at a
+      given level (list index corresponds to the level)
+    - ``num_mesh_static_vars``: number of static features per mesh node
+      (currently num_mesh_static_vars==2, for x and y)
+    - ``num_mesh_nodes[l]``: number of nodes in the mesh at a given level
 
     And in addition for hierarchical graphs:
 
@@ -407,9 +403,10 @@ def create_graph(
       length==n_levels-1
     - mesh_down_features.pt: list of [num_edges_mesh_down[l],
       num_edge_features], length==n_levels-1
-    where num_edges_mesh_up[l] and num_edges_mesh_down[l] are the number of
-    edges in the graph from mesh-to-mesh between levels l and l+1 (list index
-    corresponds to the index of the lower level)
+
+    where ``num_edges_mesh_up[l]`` and ``num_edges_mesh_down[l]`` are the
+    number of edges in the graph from mesh-to-mesh between levels l and l+1
+    (list index corresponds to the index of the lower level).
 
 
     Parameters
