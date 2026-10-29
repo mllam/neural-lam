@@ -53,20 +53,26 @@ class BufferList(nn.Module):
 
         Raises
         ------
+        TypeError
+            If ``key`` is neither an integer nor a slice.
         IndexError
             If ``key`` is an out-of-range integer.
         """
         # Unpack slice indices and call recursively for each position
         if isinstance(key, slice):
             return [self[i] for i in range(*key.indices(len(self)))]
+        if not isinstance(key, int):
+            raise TypeError(
+                f"BufferList indices must be integers or slices, "
+                f"not {type(key).__name__}"
+            )
         # Support negative indexing (e.g. buffer_list[-1] -> last element)
-        if key < 0:
-            key += len(self)
-        if not (0 <= key < len(self)):
+        norm_key = key + len(self) if key < 0 else key
+        if not (0 <= norm_key < len(self)):
             raise IndexError(
                 f"index {key} out of range for BufferList of length {len(self)}"
             )
-        return getattr(self, f"b{key}")
+        return getattr(self, f"b{norm_key}")
 
     def __len__(self) -> int:
         """Return the number of registered buffers."""
@@ -90,7 +96,10 @@ class BufferList(nn.Module):
         BufferList
             The modified BufferList.
         """
-        return self.__imul__(1.0 / other)
+        for buffer_tensor in self:
+            buffer_tensor /= other
+
+        return self
 
     def __imul__(self, other: float | torch.Tensor) -> "BufferList":
         """
