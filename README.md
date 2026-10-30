@@ -178,6 +178,11 @@ training:
       r2m: 0
     upper:
       r2m: 1.0
+plotting:  # optional, controls the boundary overlay in evaluation plots
+  boundary_margin_degrees: 1.0
+  boundary_var_mapping:  # interior state var -> boundary forcing feature
+    u100m: u_component_of_wind1000hPa
+    v100m: v_component_of_wind1000hPa
 ```
 
 For now the neural-lam config only defines few things:
@@ -593,6 +598,17 @@ Some options specifically important for evaluation are:
 * `--load`: Path to model checkpoint file (`.ckpt`) to load parameters from
 * `--n_example_pred`: Number of example predictions to plot during evaluation.
 * `--ar_steps_eval`: Number of time steps to unroll for during evaluation
+
+When a boundary datastore is configured in the `datastores` mapping of
+`config.yaml`, evaluation plots will overlay the boundary forcing data
+underneath the interior prediction and ground truth panels. The overlay is
+controlled by the optional `plotting` section in `config.yaml`:
+
+* `boundary_margin_degrees`: margin around the interior in degrees of
+  latitude (default `1.0`).
+* `boundary_var_mapping`: maps interior state variable names to boundary
+  forcing feature names. Unmapped variables fall back to a boundary forcing
+  feature of the same name; without one no overlay is drawn.
 
 **Note:** While it is technically possible to use multiple GPUs for running evaluation, this is strongly discouraged. If using multiple devices the `DistributedSampler` will replicate some samples to make sure all devices have the same batch size, meaning that evaluation metrics will be unreliable.
 A possible workaround is to just use batch size 1 during evaluation.

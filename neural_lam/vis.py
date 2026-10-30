@@ -363,6 +363,9 @@ def plot_on_axis(
     cmap: str | matplotlib.colors.Colormap = "plasma",
     boundary_alpha: float | None = None,
     crop_to_interior: bool = False,
+    boundary_da: xr.DataArray | None = None,
+    boundary_datastore: BaseDatastore | None = None,
+    boundary_margin_degrees: float = 1.0,
 ) -> matplotlib.collections.QuadMesh:
     """
     Plot weather state on a projection-aware axis using datastore metadata.
@@ -386,7 +389,18 @@ def plot_on_axis(
     boundary_alpha : float, optional
         If provided, overlay boundary mask with given alpha transparency.
     crop_to_interior : bool, optional
-        If True, crop the plot to the interior region.
+        If True, crop the plot to the interior region, padded by
+        ``boundary_margin_degrees`` when ``boundary_da`` is given.
+    boundary_da : xarray.DataArray, optional
+        Boundary data from a separate boundary datastore. Shape
+        ``(num_boundary_grid_nodes,)``. Plotted underneath the interior data
+        with reduced opacity.
+    boundary_datastore : BaseDatastore, optional
+        Datastore providing grid metadata for the boundary data.
+        Required when ``boundary_da`` is given.
+    boundary_margin_degrees : float, optional
+        Margin around the interior in degrees of latitude when
+        ``boundary_da`` is given (default 1.0).
 
     Returns
     -------
@@ -406,6 +420,32 @@ def plot_on_axis(
     gl.right_labels = False
     gl.xlabel_style = {"size": _TICK_SIZE}
     gl.ylabel_style = {"size": _TICK_SIZE}
+
+    # Plot boundary data underneath interior data when provided
+    if boundary_da is not None and boundary_datastore is not None:
+        if "x" in boundary_da.dims and "y" in boundary_da.dims:
+            boundary_da = boundary_da.transpose("x", "y")
+
+        # Boundary datastores may have no state, so use the forcing grid.
+        # A cropped boundary is no complete grid, so place its points on the
+        # grid of its distinct x/y values, NaN where cropped away.
+        b_xy = boundary_datastore.get_xy("forcing", stacked=True)
+        b_xs, x_idx = np.unique(b_xy[:, 0], return_inverse=True)
+        b_ys, y_idx = np.unique(b_xy[:, 1], return_inverse=True)
+        b_values = np.full((b_xs.size, b_ys.size), np.nan)
+        b_values[x_idx, y_idx] = np.asarray(boundary_da.values).ravel()
+
+        ax.pcolormesh(
+            b_xs,
+            b_ys,
+            b_values.T,
+            transform=boundary_datastore.coords_projection,
+            vmin=vmin,
+            vmax=vmax,
+            cmap=cmap,
+            shading="auto",
+            alpha=0.5,
+        )
 
     lats_lons = datastore.get_lat_lon("state")
     grid_shape = (
@@ -452,24 +492,11 @@ def plot_on_axis(
         )
 
     if crop_to_interior:
-        # Calculate extent of interior
-        mask_da = datastore.boundary_mask
-        mask_values = mask_da.values
-        if mask_values.ndim == 2 and mask_values.shape[1] == 1:
-            mask_values = mask_values[:, 0]
-        mask_2d = mask_values.reshape(grid_shape)
-
-        interior_points = mask_2d == 0
-        if np.any(interior_points):
-            interior_lons = lons[interior_points]
-            interior_lats = lats[interior_points]
-
-            min_lon, max_lon = interior_lons.min(), interior_lons.max()
-            min_lat, max_lat = interior_lats.min(), interior_lats.max()
-
-            ax.set_extent(
-                [min_lon, max_lon, min_lat, max_lat], crs=ccrs.PlateCarree()
-            )
+        margin_deg = boundary_margin_degrees if boundary_da is not None else 0.0
+        xmin, xmax, ymin, ymax = _interior_padded_projected_bbox(
+            datastore, margin_deg
+        )
+        ax.set_extent([xmin, xmax, ymin, ymax], crs=datastore.coords_projection)
 
     if ax_title:
         ax.set_title(ax_title, size=_TITLE_SIZE)
@@ -630,6 +657,60 @@ def plot_error_map(
     return plot_error_heatmap(errors, datastore=datastore, title=title)
 
 
+def _interior_padded_projected_bbox(
+    datastore: BaseDatastore, margin_degrees: float
+) -> tuple[float, float, float, float]:
+    """Return ``(xmin, xmax, ymin, ymax)`` of the interior in the
+    datastore's projection, padded by ``margin_degrees`` of latitude
+    (converted to projection units at the interior centre)."""
+    lats_lons = datastore.get_lat_lon("state")
+    grid_shape = (datastore.grid_shape_state.x, datastore.grid_shape_state.y)
+    lons = lats_lons[:, 0].reshape(grid_shape)
+    lats = lats_lons[:, 1].reshape(grid_shape)
+
+    mask = datastore.boundary_mask.values
+    if mask.ndim == 2 and mask.shape[1] == 1:
+        mask = mask[:, 0]
+    mask_2d = mask.reshape(grid_shape)
+    interior = mask_2d == 0
+    if not np.any(interior):
+        interior = np.ones_like(mask_2d, dtype=bool)
+
+    interior_lons = lons[interior]
+    interior_lats = lats[interior]
+
+    proj = datastore.coords_projection
+    xyz = proj.transform_points(
+        ccrs.PlateCarree(), interior_lons, interior_lats
+    )
+    xs, ys = xyz[:, 0], xyz[:, 1]
+
+    ref_lon = float(interior_lons.mean())
+    ref_lat = float(interior_lats.mean())
+    p0 = proj.transform_point(ref_lon, ref_lat, ccrs.PlateCarree())
+    p1 = proj.transform_point(ref_lon, ref_lat + 1.0, ccrs.PlateCarree())
+    margin_proj = margin_degrees * abs(p1[1] - p0[1])
+
+    return (
+        float(xs.min() - margin_proj),
+        float(xs.max() + margin_proj),
+        float(ys.min() - margin_proj),
+        float(ys.max() + margin_proj),
+    )
+
+
+def _interior_extent_aspect(
+    datastore: BaseDatastore, margin_degrees: float
+) -> float:
+    """Width/height ratio of the padded interior bbox."""
+    xmin, xmax, ymin, ymax = _interior_padded_projected_bbox(
+        datastore, margin_degrees
+    )
+    width = xmax - xmin
+    height = ymax - ymin
+    return float(width / height) if height > 0 else 1.0
+
+
 @matplotlib.rc_context(utils.fractional_plot_bundle(1))
 def plot_prediction(
     datastore: BaseDatastore,
@@ -640,6 +721,9 @@ def plot_prediction(
     boundary_alpha: float = 0.7,
     crop_to_interior: bool = True,
     colorbar_label: str = "",
+    boundary_da: xr.DataArray | None = None,
+    boundary_datastore: BaseDatastore | None = None,
+    boundary_margin_degrees: float = 1.0,
 ) -> matplotlib.figure.Figure:
     """
     Plot an example prediction alongside the ground truth.
@@ -655,14 +739,27 @@ def plot_prediction(
     title : str, optional
         Overall figure title.
     vrange : tuple of (float, float), optional
-        ``(vmin, vmax)`` for the shared colour scale. Inferred from data
-        if not given.
+        ``(vmin, vmax)`` for the shared colour scale. Inferred from
+        ``da_prediction`` and ``da_target`` if not given, extended to
+        also cover ``boundary_da`` when it is provided.
     boundary_alpha : float, optional
-        Alpha transparency for the boundary overlay (default 0.7).
+        Alpha transparency for the boundary mask overlay (default 0.7).
     crop_to_interior : bool, optional
-        If True, crop the axes to the interior region (default True).
+        If True, crop the axes to the interior region, padded by
+        ``boundary_margin_degrees`` when ``boundary_da`` is given
+        (default True).
     colorbar_label : str, optional
         Label for the shared colorbar.
+    boundary_da : xarray.DataArray, optional
+        Boundary field from a separate boundary datastore. Shape
+        ``(num_boundary_grid_nodes,)``. Plotted underneath with reduced
+        opacity.
+    boundary_datastore : BaseDatastore, optional
+        Datastore providing grid metadata for the boundary data.
+        Required when ``boundary_da`` is given.
+    boundary_margin_degrees : float, optional
+        Margin around the interior in degrees of latitude when
+        ``boundary_da`` is given (default 1.0).
 
     Returns
     -------
@@ -672,20 +769,28 @@ def plot_prediction(
     if vrange is None:
         vmin = float(min(da_prediction.min(), da_target.min()))
         vmax = float(max(da_prediction.max(), da_target.max()))
+        if boundary_da is not None:
+            vmin = min(vmin, float(boundary_da.min()))
+            vmax = max(vmax, float(boundary_da.max()))
     else:
         vmin, vmax = vrange
 
+    margin = boundary_margin_degrees if boundary_da is not None else 0.0
+    panel_aspect = _interior_extent_aspect(datastore, margin)
+    panel_height = 6.0
+    panel_width = max(3.0, panel_height * panel_aspect)
     fig, axes = plt.subplots(
         1,
         2,
-        figsize=(13, 6),
+        figsize=(2 * panel_width + 1.0, panel_height + 1.2),
         subplot_kw={"projection": datastore.coords_projection},
     )
 
+    interior_mesh = None
     for ax, da, subtitle in zip(
         axes, (da_target, da_prediction), ("Ground Truth", "Prediction")
     ):
-        plot_on_axis(
+        interior_mesh = plot_on_axis(
             ax=ax,
             da=da,
             datastore=datastore,
@@ -695,13 +800,17 @@ def plot_prediction(
             cmap="viridis",
             boundary_alpha=boundary_alpha,
             crop_to_interior=crop_to_interior,
+            boundary_da=boundary_da,
+            boundary_datastore=boundary_datastore,
+            boundary_margin_degrees=boundary_margin_degrees,
         )
 
     if title:
         fig.suptitle(title, size=_TITLE_SIZE)
 
+    assert interior_mesh is not None
     cbar = fig.colorbar(
-        axes[0].collections[0],
+        interior_mesh,
         ax=axes,
         orientation="horizontal",
         location="bottom",
@@ -759,8 +868,11 @@ def plot_spatial_error(
     else:
         vmin, vmax = vrange
 
+    aspect = _interior_extent_aspect(datastore, margin_degrees=0.0)
+    height = 6.0
+    width = max(3.0, height * aspect)
     fig, ax = plt.subplots(
-        figsize=(6.5, 6),
+        figsize=(width, height),
         subplot_kw={"projection": datastore.coords_projection},
     )
 

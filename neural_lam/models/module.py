@@ -18,7 +18,7 @@ from neural_lam.utils import get_integer_time
 
 # Local
 from .. import metrics, vis
-from ..config import NeuralLAMConfig
+from ..config import NeuralLAMConfig, PlottingConfig
 from ..datastore.base import BaseDatastore
 from ..loss_weighting import get_state_feature_weighting
 from ..weather_dataset import WeatherDataset
@@ -152,6 +152,7 @@ class ForecasterModule(pl.LightningModule):
         self.save_hyperparameters(
             ignore=["datastore", "datastore_boundary", "forecaster"]
         )
+        self.config = config
         self.datastore = datastore
         self.datastore_boundary = datastore_boundary
         self.forecaster = forecaster
@@ -811,6 +812,19 @@ class ForecasterModule(pl.LightningModule):
         prediction_rescaled = prediction * state_std + state_mean
         target_rescaled = target * state_std + state_mean
 
+        # Configs pickled in checkpoints from before `plotting` existed lack it
+        plotting_cfg = getattr(self.config, "plotting", PlottingConfig())
+        boundary_var_mapping = plotting_cfg.boundary_var_mapping
+        da_boundary_forcing = None
+        boundary_feature_names: set[str] = set()
+        if self.datastore_boundary is not None:
+            da_boundary_forcing = self.datastore_boundary.get_dataarray(
+                category="forcing", split=split, standardize=False
+            )
+            boundary_feature_names = set(
+                self.datastore_boundary.get_vars_names("forcing")
+            )
+
         for pred_slice, target_slice, time_slice in zip(
             prediction_rescaled[:n_examples],
             target_rescaled[:n_examples],
@@ -863,6 +877,29 @@ class ForecasterModule(pl.LightningModule):
                 }
 
             for t_i, _ in enumerate(zip(pred_slice, target_slice), start=1):
+                # Unmapped state variables fall back to the same name
+                boundary_fields = {}
+                if (
+                    da_boundary_forcing is not None
+                    and "time" in da_boundary_forcing.dims
+                ):
+                    target_time = np.array(
+                        time_slice[t_i - 1].cpu(), dtype="datetime64[ns]"
+                    )
+                    # Nearest, as the boundary cadence is often coarser
+                    # (e.g. ERA5 6h vs DANRA 1h)
+                    boundary_da_t = da_boundary_forcing.sel(
+                        time=target_time, method="nearest"
+                    )
+                    for var_name in self.datastore.get_vars_names("state"):
+                        boundary_var = boundary_var_mapping.get(
+                            var_name, var_name
+                        )
+                        if boundary_var in boundary_feature_names:
+                            boundary_fields[var_name] = boundary_da_t.sel(
+                                forcing_feature=boundary_var
+                            ).squeeze()
+
                 var_figs = [
                     vis.plot_prediction(
                         datastore=self.datastore,
@@ -876,6 +913,11 @@ class ForecasterModule(pl.LightningModule):
                         da_target=da_target.isel(
                             state_feature=var_i, time=t_i - 1
                         ).squeeze(),
+                        boundary_da=boundary_fields.get(var_name),
+                        boundary_datastore=self.datastore_boundary,
+                        boundary_margin_degrees=(
+                            plotting_cfg.boundary_margin_degrees
+                        ),
                     )
                     for var_i, (var_name, var_unit, var_vrange) in enumerate(
                         zip(
