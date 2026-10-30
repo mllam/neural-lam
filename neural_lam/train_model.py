@@ -553,6 +553,12 @@ def fit(
     Run
         Object containing paths to run outputs and saved checkpoints.
     """
+    if train_config.val_interval < 1:
+        raise ValueError(
+            f"val_interval must be at least 1, got {train_config.val_interval}"
+            ". Adjust --val_interval."
+        )
+
     for phase, max_steps in [
         ("train", train_config.ar_steps_train),
         ("val", train_config.ar_steps_eval),
