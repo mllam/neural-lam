@@ -277,3 +277,43 @@ def test_old_create_graph_deprecation_warning(datastore_name):
         ]
         assert len(deprecation_warnings) >= 1
         assert "create_graph_with_wmg" in str(deprecation_warnings[0].message)
+
+
+@pytest.mark.parametrize("hierarchical", [True, False])
+def test_create_graph_small_grid_raises_value_error(hierarchical, tmp_path):
+    """create_graph raises ValueError when grid is too small to generate mesh
+    levels (#329)."""
+    # Third-party
+    import numpy as np
+
+    # First-party
+    from neural_lam.create_graph import create_graph
+
+    xy = np.random.rand(3, 3, 2)
+    with pytest.raises(ValueError, match="No mesh levels were generated"):
+        create_graph(
+            graph_dir_path=str(tmp_path / "test_graph"),
+            xy=xy,
+            hierarchical=hierarchical,
+        )
+
+
+@pytest.mark.parametrize("hierarchical", [True, False])
+def test_create_graph_zero_max_levels_raises_value_error(
+    hierarchical, tmp_path
+):
+    """create_graph raises ValueError when n_max_levels <= 0 (#329)."""
+    # Third-party
+    import numpy as np
+
+    # First-party
+    from neural_lam.create_graph import create_graph
+
+    xy = np.random.rand(10, 10, 2)
+    with pytest.raises(ValueError, match="No mesh levels were generated"):
+        create_graph(
+            graph_dir_path=str(tmp_path / "test_graph"),
+            xy=xy,
+            hierarchical=hierarchical,
+            n_max_levels=0,
+        )
