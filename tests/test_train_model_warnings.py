@@ -51,6 +51,7 @@ def test_eval_without_load_warning(eval_val, load_val, expect_warning):
     mock_args.var_leads_metrics_watch = "{}"
     mock_args.ar_steps_eval = 10
     mock_args.ar_steps_train = 10
+    mock_args.val_interval = 1
 
     with patch(
         "neural_lam.train_model.ArgumentParser.parse_args",
@@ -82,6 +83,7 @@ def test_create_gif_forwarded_to_forecaster_module():
     mock_args.var_leads_metrics_watch = "{}"
     mock_args.ar_steps_eval = 10
     mock_args.ar_steps_train = 10
+    mock_args.val_interval = 1
     mock_args.create_gif = True
     mock_args.devices = ["auto"]
     mock_args.model = "graph_lam"
@@ -161,11 +163,15 @@ def test_create_gif_forwarded_to_forecaster_module():
             ["--var_leads_metrics_watch", '{"0": [1]}'],
             "but metrics_watch is not set",
         ),
+        (["--val_interval", "5"], None),
+        (["--val_interval", "0"], "val_interval must be at least 1, got 0"),
+        (["--val_interval", "-1"], "val_interval must be at least 1, got -1"),
     ],
 )
 def test_steps_to_log_validation(cli_args, match_err):
-    """ValueError must be raised if a step is outside [1, rollout length]
-    or only one of metrics_watch and var_leads_metrics_watch is set."""
+    """ValueError must be raised if a step is outside [1, rollout length],
+    only one of metrics_watch and var_leads_metrics_watch is set, or
+    val_interval is below 1."""
     if match_err is None:
         # The checks run before load_config_and_datastore, so hitting the
         # SystemExit sentinel means every step was accepted
