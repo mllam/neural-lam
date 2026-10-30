@@ -3,6 +3,7 @@ predictors, for hierarchical (GraphEFM) and flat (GraphEFMMultiScale) mesh
 graphs."""
 
 # Standard library
+from argparse import Namespace
 from typing import Any, Dict, Optional
 
 # Third-party
@@ -477,6 +478,50 @@ class BaseGraphEFM(StepPredictor):
         # (B, num_grid_nodes, num_state_vars)
 
         return pred_mean, pred_std
+
+    @classmethod
+    def from_config(
+        cls,
+        args: Namespace,
+        config: Any,
+        datastore: BaseDatastore,
+    ) -> "BaseGraphEFM":
+        """
+        Instantiate a Graph-EFM predictor from CLI arguments, configuration,
+        and datastore.
+
+        Parameters
+        ----------
+        args : argparse.Namespace
+            Parsed command-line arguments.
+        config : NeuralLAMConfig
+            Root configuration for the training session.
+        datastore : BaseDatastore
+            Datastore providing grid metadata and variables.
+
+        Returns
+        -------
+        BaseGraphEFM
+            Instantiated Graph-EFM predictor.
+        """
+        kwargs: dict[str, Any] = dict(
+            datastore=datastore,
+            graph_name=getattr(args, "graph", "hierarchical"),
+            hidden_dim=getattr(args, "hidden_dim", 64),
+            hidden_layers=getattr(args, "hidden_layers", 1),
+            latent_dim=getattr(args, "latent_dim", None),
+            num_past_forcing_steps=getattr(args, "num_past_forcing_steps", 1),
+            num_future_forcing_steps=getattr(
+                args, "num_future_forcing_steps", 1
+            ),
+            output_std=getattr(args, "output_std", False),
+            output_clamping_lower=config.training.output_clamping.lower,
+            output_clamping_upper=config.training.output_clamping.upper,
+            g2m_gnn_type=getattr(args, "g2m_gnn_type", "InteractionNet"),
+        )
+        if hasattr(args, "m2g_gnn_type"):
+            kwargs["m2g_gnn_type"] = args.m2g_gnn_type
+        return cls(**kwargs)
 
 
 class GraphEFM(BaseGraphEFM):

@@ -438,3 +438,193 @@ def test_step_predictor_invalid_clamping_limits(lower, upper):
 
     with pytest.raises(ValueError, match="must be smaller than upper"):
         predictor.prepare_clamping_params(datastore)
+
+
+# ---------------------------------------------------------------------------
+# Issue #791: Model & Datastore Registries and from_config factory method
+# ---------------------------------------------------------------------------
+
+
+def test_register_model_decorator():
+    """Verify register_model registers classes and rejects duplicate names."""
+    # First-party
+    from neural_lam.models import MODELS, register_model
+
+    @register_model("mock_test_model")
+    class DummyTestModel(StepPredictor):
+        pass
+
+    assert "mock_test_model" in MODELS
+    assert MODELS["mock_test_model"] is DummyTestModel
+
+    with pytest.raises(ValueError, match="already registered"):
+
+        @register_model("mock_test_model")
+        class AnotherDummyModel(StepPredictor):
+            pass
+
+    # Clean up test registry entry
+    del MODELS["mock_test_model"]
+
+
+def test_register_datastore_decorator():
+    """Verify register_datastore registers classes and rejects duplicates."""
+    # First-party
+    from neural_lam.datastore import DATASTORES, register_datastore
+    from neural_lam.datastore.base import BaseDatastore
+
+    @register_datastore("mock_test_ds")
+    class DummyTestDS(BaseDatastore):
+        pass
+
+    assert "mock_test_ds" in DATASTORES
+    assert DATASTORES["mock_test_ds"] is DummyTestDS
+
+    with pytest.raises(ValueError, match="already registered"):
+
+        @register_datastore("mock_test_ds")
+        class AnotherDummyDS(BaseDatastore):
+            pass
+
+    # Clean up test registry entry
+    del DATASTORES["mock_test_ds"]
+
+
+def test_build_predictor_delegates_to_from_config():
+    """build_predictor delegates to from_config on the predictor class."""
+    # First-party
+    from neural_lam.train_model import build_predictor
+
+    class CustomPredictor(StepPredictor):
+        called_from_config = False
+
+        def forward(self, prev_state, prev_prev_state, forcing):
+            return prev_state, None
+
+        @classmethod
+        def from_config(cls, args, config, datastore):
+            cls.called_from_config = True
+            return cls(datastore=datastore)
+
+    datastore = DummyDatastore()
+    config = nlconfig.NeuralLAMConfig(
+        datastores={
+            "interior": nlconfig.DatastoreSelection(
+                kind="mdp", config_path="dummy"
+            )
+        }
+    )
+    args = Namespace(graph="dummy")
+
+    inst = build_predictor(CustomPredictor, args, config, datastore)
+    assert CustomPredictor.called_from_config is True
+    assert isinstance(inst, CustomPredictor)
+
+
+def test_graphefm_registered_in_models():
+    """GraphEFM and GraphEFMMultiScale must be registered in MODELS."""
+    # First-party
+    from neural_lam.models import MODELS
+    from neural_lam.models.step_predictors.graph.graph_efm import (
+        GraphEFM,
+        GraphEFMMultiScale,
+    )
+
+    assert "graph_efm" in MODELS
+    assert MODELS["graph_efm"] is GraphEFM
+    assert "graph_efm_multiscale" in MODELS
+    assert MODELS["graph_efm_multiscale"] is GraphEFMMultiScale
+
+
+@pytest.mark.parametrize(
+    "model_name,graph_archetype",
+    [
+        ("graph_lam", "keisler"),
+        ("hi_lam", "hierarchical"),
+        ("hi_lam_parallel", "hierarchical"),
+        ("persistence", "keisler"),
+    ],
+)
+def test_registered_model_train_and_val_step(model_name, graph_archetype):
+    """
+    Verify each registered model builds from config and completes train/val
+    steps.
+    """
+    # Standard library
+    from pathlib import Path
+
+    # Third-party
+    from torch.utils.data import DataLoader
+
+    # First-party
+    from neural_lam.create_graph_with_wmg import create_graph_from_datastore
+    from neural_lam.models import MODELS, ARForecaster, ForecasterModule
+    from neural_lam.train_model import build_predictor
+    from neural_lam.weather_dataset import WeatherDataset
+
+    datastore = DummyDatastore(n_timesteps=10)
+    graph_name = f"test_{graph_archetype}"
+    graph_dir = Path(datastore.root_path) / "graph" / graph_name
+
+    if not graph_dir.exists():
+        create_graph_from_datastore(
+            datastore=datastore,
+            output_root_path=str(graph_dir),
+            archetype=graph_archetype,
+        )
+
+    config = nlconfig.NeuralLAMConfig(
+        datastores={
+            "interior": nlconfig.DatastoreSelection(
+                kind="mdp", config_path=datastore.root_path
+            )
+        }
+    )
+
+    args = Namespace(
+        graph=graph_name,
+        hidden_dim=4,
+        hidden_layers=1,
+        processor_layers=2,
+        mesh_aggr="sum",
+        mesh_up_gnn_type="InteractionNet",
+        mesh_down_gnn_type="InteractionNet",
+        num_past_forcing_steps=1,
+        num_future_forcing_steps=1,
+        output_std=False,
+        loss="mse",
+        restore_opt=False,
+        n_example_pred=1,
+        val_steps_to_log=[1],
+        metrics_watch=[],
+        var_leads_metrics_watch={},
+        lr=1e-3,
+    )
+
+    predictor = build_predictor(MODELS[model_name], args, config, datastore)
+    forecaster = ARForecaster(predictor, datastore=datastore)
+
+    module = ForecasterModule(
+        forecaster=forecaster,
+        config=config,
+        datastore=datastore,
+        loss=args.loss,
+        restore_opt=args.restore_opt,
+        n_example_pred=args.n_example_pred,
+        val_steps_to_log=args.val_steps_to_log,
+        metrics_watch=args.metrics_watch,
+        var_leads_metrics_watch=args.var_leads_metrics_watch,
+        lr=args.lr,
+    )
+
+    dataset = WeatherDataset(datastore=datastore, split="train", ar_steps=2)
+    loader = DataLoader(dataset, batch_size=2)
+    batch = next(iter(loader))
+
+    # Execute training step
+    loss = module.training_step(batch)
+    assert loss is not None
+    assert not torch.isnan(loss)
+
+    # Execute validation step (returns None, logs internally)
+    module.validation_step(batch, batch_idx=0)
