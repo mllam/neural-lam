@@ -1,5 +1,8 @@
 """Abstract base class for latent encoders."""
 
+# Standard library
+from typing import Any
+
 # Third-party
 import torch
 from torch import distributions as tdists
@@ -17,7 +20,7 @@ class BaseLatentEncoder(nn.Module):
     with ``output_dist="diagonal"`` both mean and a positive std are output.
     """
 
-    def __init__(self, latent_dim, output_dist="isotropic"):
+    def __init__(self, latent_dim: int, output_dist: str = "isotropic") -> None:
         """
         Set up output dimensionality for the chosen distribution type.
 
@@ -43,14 +46,17 @@ class BaseLatentEncoder(nn.Module):
                 f"Unknown encoder output distribution: {output_dist}"
             )
 
-    def compute_dist_params(self, grid_rep, *args, **kwargs):
+    def compute_dist_params(
+        self, grid_rep: torch.Tensor, *args: Any, **kwargs: Any
+    ) -> torch.Tensor:
         """
         Compute raw distribution parameters from the grid representation.
 
         Parameters
         ----------
         grid_rep : torch.Tensor
-            Shape ``(B, num_grid_nodes, d_h)``. Grid input representation.
+            Shape ``(B, num_grid_nodes, hidden_dim)``. Grid input
+            representation.
         **kwargs
             Additional inputs used by concrete encoders (e.g. graph
             embeddings).
@@ -63,14 +69,15 @@ class BaseLatentEncoder(nn.Module):
         """
         raise NotImplementedError("compute_dist_params not implemented")
 
-    def forward(self, grid_rep, **kwargs):
+    def forward(self, grid_rep: torch.Tensor, **kwargs: Any) -> tdists.Normal:
         """
         Compute the Gaussian distribution over the latent variable.
 
         Parameters
         ----------
         grid_rep : torch.Tensor
-            Shape ``(B, num_grid_nodes, d_h)``. Grid input representation.
+            Shape ``(B, num_grid_nodes, hidden_dim)``. Grid input
+            representation.
         **kwargs
             Additional inputs forwarded to :meth:`compute_dist_params`.
 

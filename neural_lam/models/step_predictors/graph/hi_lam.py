@@ -264,11 +264,11 @@ class HiLAM(BaseHiGraphModel):
             ``hidden_dim`` is the hidden dimension.
         mesh_same_rep : list of torch.Tensor
             One tensor per level, each of shape
-            ``(B, num_edges[l], hidden_dim)``. Same-level edge
+            ``(B, num_edges_m2m[l], hidden_dim)``. Same-level edge
             representations.
         mesh_down_rep : list of torch.Tensor
             One tensor per inter-level gap, each of shape
-            ``(B, num_edges[l], hidden_dim)``. Downward edge
+            ``(B, num_edges_mesh_down[l], hidden_dim)``. Downward edge
             representations from level ``l+1`` to ``l``.
         down_gnns : nn.ModuleList
             GNNs for downward edges, one per inter-level gap.
@@ -335,12 +335,12 @@ class HiLAM(BaseHiGraphModel):
             ``hidden_dim`` is the hidden dimension.
         mesh_same_rep : list of torch.Tensor
             One tensor per level, each of shape
-            ``(B, num_edges[l], hidden_dim)``. Same-level edge
+            ``(B, num_edges_m2m[l], hidden_dim)``. Same-level edge
             representations.
         mesh_up_rep : list of torch.Tensor
             One tensor per inter-level gap, each of shape
-            ``(B, num_edges[l], hidden_dim)``. Upward edge representations from
-            level ``l`` to ``l+1``.
+            ``(B, num_edges_mesh_up[l], hidden_dim)``. Upward edge
+            representations from level ``l`` to ``l+1``.
         up_gnns : nn.ModuleList
             GNNs for upward edges, one per inter-level gap.
         same_gnns : nn.ModuleList
@@ -410,14 +410,16 @@ class HiLAM(BaseHiGraphModel):
             ``hidden_dim`` is the hidden dimension.
         mesh_same_rep : list of torch.Tensor
             One tensor per level, each of shape
-            ``(B, num_edges[l], hidden_dim)``. Same-level edge
+            ``(B, num_edges_m2m[l], hidden_dim)``. Same-level edge
             representations.
         mesh_up_rep : list of torch.Tensor
             One tensor per inter-level gap, each of shape
-            ``(B, num_edges[l], hidden_dim)``. Upward edge representations.
+            ``(B, num_edges_mesh_up[l], hidden_dim)``. Upward edge
+            representations.
         mesh_down_rep : list of torch.Tensor
             One tensor per inter-level gap, each of shape
-            ``(B, num_edges[l], hidden_dim)``. Downward edge representations.
+            ``(B, num_edges_mesh_down[l], hidden_dim)``. Downward edge
+            representations.
 
         Returns
         -------
@@ -436,8 +438,8 @@ class HiLAM(BaseHiGraphModel):
                 mesh_rep_levels,
                 mesh_same_rep,
                 mesh_down_rep,
-                cast(nn.ModuleList, down_gnns),
-                cast(nn.ModuleList, down_same_gnns),
+                cast("nn.ModuleList", down_gnns),
+                cast("nn.ModuleList", down_same_gnns),
             )
 
             # Up
@@ -445,8 +447,8 @@ class HiLAM(BaseHiGraphModel):
                 mesh_rep_levels,
                 mesh_same_rep,
                 mesh_up_rep,
-                cast(nn.ModuleList, up_gnns),
-                cast(nn.ModuleList, up_same_gnns),
+                cast("nn.ModuleList", up_gnns),
+                cast("nn.ModuleList", up_same_gnns),
             )
 
         # NOTE: We return all, even though only down edges really are used

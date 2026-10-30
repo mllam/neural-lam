@@ -1,4 +1,5 @@
 # Standard library
+import shutil
 from datetime import timedelta
 from pathlib import Path
 from typing import Iterator
@@ -18,7 +19,11 @@ from cartopy import crs as ccrs
 from neural_lam import config as nlconfig
 from neural_lam import vis
 from neural_lam.create_graph import create_graph_from_datastore
-from neural_lam.models import ARForecaster, ForecasterModule, GraphLAM
+from neural_lam.models import (
+    DeterministicARForecaster,
+    DeterministicForecastingModule,
+    GraphLAM,
+)
 from neural_lam.utils import get_integer_time
 from neural_lam.weather_dataset import WeatherDataset
 from tests.conftest import init_datastore_example
@@ -430,8 +435,22 @@ def test_plot_spatial_error_crop_to_interior_changes_extent() -> None:
     assert isinstance(called_crs, ccrs.PlateCarree)
 
 
+@pytest.fixture(scope="module")
+def dummy_graph_dir(tmp_path_factory):
+    """Build the dummy ``1level`` graph once. Every ``DummyDatastore`` has the
+    same grid but its own root dir, so tests copy this instead of rebuilding.
+    """
+    graph_dir_path = tmp_path_factory.mktemp("graph") / "1level"
+    create_graph_from_datastore(
+        datastore=DummyDatastore(),
+        output_root_path=str(graph_dir_path),
+        n_max_levels=1,
+    )
+    return graph_dir_path
+
+
 @pytest.fixture
-def model_and_batch(tmp_path, time_step, time_unit):
+def model_and_batch(tmp_path, time_step, time_unit, dummy_graph_dir):
     """Setup a model and dataset for testing plot_examples."""
     # Create timedelta with specified step length.
     step_length_kwargs = {time_unit: time_step}
@@ -460,26 +479,21 @@ def model_and_batch(tmp_path, time_step, time_unit):
         num_future_forcing_steps = 0
         var_leads_metrics_watch = {}
 
-    # Create graph files if they do not already exist.
-    graph_dir_path = Path(datastore.root_path) / "graph" / "1level"
-    if not graph_dir_path.exists():
-        create_graph_from_datastore(
-            datastore=datastore,
-            output_root_path=str(graph_dir_path),
-            n_max_levels=1,
-        )
+    shutil.copytree(dummy_graph_dir, datastore.root_path / "graph" / "1level")
 
     # Create config.
     config = nlconfig.NeuralLAMConfig(
-        datastore=nlconfig.DatastoreSelection(
-            kind=datastore.SHORT_NAME,
-            config_path=datastore.root_path,
-        ),
+        datastores={
+            "main": nlconfig.DatastoreSelection(
+                kind=datastore.SHORT_NAME,
+                config_path=datastore.root_path,
+            )
+        },
     )
 
     # Create model
     # First-party
-    from neural_lam.models import MODELS, ARForecaster
+    from neural_lam.models import MODELS, DeterministicARForecaster
 
     args = ModelArgs()
     predictor_class = MODELS["graph_lam"]
@@ -496,13 +510,14 @@ def model_and_batch(tmp_path, time_step, time_unit):
         output_clamping_lower=config.training.output_clamping.lower,
         output_clamping_upper=config.training.output_clamping.upper,
     )
-    forecaster = ARForecaster(predictor, datastore=datastore)
+    forecaster = DeterministicARForecaster(
+        predictor, datastore=datastore, config=config, loss=args.loss
+    )
 
-    model = ForecasterModule(
+    model = DeterministicForecastingModule(
         forecaster=forecaster,
         config=config,
         datastore=datastore,
-        loss=args.loss,
         restore_opt=args.restore_opt,
         n_example_pred=args.n_example_pred,
         val_steps_to_log=args.val_steps_to_log,
@@ -547,15 +562,15 @@ def test_plot_examples_integration_saves_figure(
     model.plotted_examples = 0
 
     # Verify that the model correctly inferred time step from the datastore.
-    assert (
-        model.time_step_int == time_step
-    ), f"Expected time_step_int={time_step}, got {model.time_step_int}"
-    assert (
-        model.time_step_unit == time_unit
-    ), f"Expected time_step_unit={time_unit}, got {model.time_step_unit}"
+    assert model.time_step_int == time_step, (
+        f"Expected time_step_int={time_step}, got {model.time_step_int}"
+    )
+    assert model.time_step_unit == time_unit, (
+        f"Expected time_step_unit={time_unit}, got {model.time_step_unit}"
+    )
 
     # Generate prediction
-    (init_states, target, forcing_features, _batch_times) = batch
+    (init_states, target, forcing_features, _boundary, _batch_times) = batch
     prediction, _ = model.forecaster(init_states, forcing_features, target)
 
     # Rescale to original data scale
@@ -577,7 +592,7 @@ def test_plot_examples_integration_saves_figure(
     # Get first example.
     pred_slice = prediction_rescaled[0].detach()
     target_slice = target_rescaled[0].detach()
-    time_slice = batch[3][0]
+    time_slice = batch[4][0]
 
     # Create DataArrays.
     dataset = WeatherDataset(datastore=datastore, split="train")
@@ -694,7 +709,7 @@ def test_plot_examples_gif_integration(model_and_batch, monkeypatch):
 # Shared ModelArgs for metrics_watch regression tests (issue #302).
 # Kept at module level to avoid copy-paste duplication across tests.
 def _build_metrics_watch_module(datastore, config):
-    """Build a ForecasterModule wired for metrics_watch tests."""
+    """Build a DeterministicForecastingModule wired for metrics_watch tests."""
     predictor = GraphLAM(
         datastore=datastore,
         graph_name="1level",
@@ -708,12 +723,13 @@ def _build_metrics_watch_module(datastore, config):
         output_clamping_lower=config.training.output_clamping.lower,
         output_clamping_upper=config.training.output_clamping.upper,
     )
-    forecaster = ARForecaster(predictor, datastore)
-    return ForecasterModule(
+    forecaster = DeterministicARForecaster(
+        predictor, datastore, config=config, loss="mse"
+    )
+    return DeterministicForecastingModule(
         forecaster=forecaster,
         config=config,
         datastore=datastore,
-        loss="mse",
         lr=1.0e-3,
         restore_opt=False,
         n_example_pred=1,
@@ -723,7 +739,7 @@ def _build_metrics_watch_module(datastore, config):
     )
 
 
-def test_create_metric_log_dict_with_metrics_watch(tmp_path):
+def test_create_metric_log_dict_with_metrics_watch(dummy_graph_dir):
     """
     Regression test for issue #302: AssertionError when using --metrics_watch.
 
@@ -735,19 +751,15 @@ def test_create_metric_log_dict_with_metrics_watch(tmp_path):
     datastore = DummyDatastore()
     num_state_vars = datastore.get_num_data_vars(category="state")
 
-    graph_dir_path = Path(datastore.root_path) / "graph" / "1level"
-    if not graph_dir_path.exists():
-        create_graph_from_datastore(
-            datastore=datastore,
-            output_root_path=str(graph_dir_path),
-            n_max_levels=1,
-        )
+    shutil.copytree(dummy_graph_dir, datastore.root_path / "graph" / "1level")
 
     config = nlconfig.NeuralLAMConfig(
-        datastore=nlconfig.DatastoreSelection(
-            kind=datastore.SHORT_NAME,
-            config_path=datastore.root_path,
-        ),
+        datastores={
+            "main": nlconfig.DatastoreSelection(
+                kind=datastore.SHORT_NAME,
+                config_path=datastore.root_path,
+            )
+        },
     )
 
     model = _build_metrics_watch_module(datastore, config)
@@ -774,14 +786,14 @@ def test_create_metric_log_dict_with_metrics_watch(tmp_path):
 
     # Verify figure entries are plt.Figure and scalar entries are tensors
     for key, value in log_dict.items():
-        assert isinstance(
-            value, (plt.Figure, torch.Tensor)
-        ), f"Unexpected value type for key '{key}': {type(value)}"
+        assert isinstance(value, (plt.Figure, torch.Tensor)), (
+            f"Unexpected value type for key '{key}': {type(value)}"
+        )
 
     plt.close("all")
 
 
-def test_aggregate_and_plot_metrics_with_metrics_watch(tmp_path):
+def test_aggregate_and_plot_metrics_with_metrics_watch(dummy_graph_dir):
     """
     Integration test for issue #302: exercises the full watched-metrics path
     through aggregate_and_plot_metrics(), which is the exact crash site of the
@@ -794,19 +806,15 @@ def test_aggregate_and_plot_metrics_with_metrics_watch(tmp_path):
     datastore = DummyDatastore()
     num_state_vars = datastore.get_num_data_vars(category="state")
 
-    graph_dir_path = Path(datastore.root_path) / "graph" / "1level"
-    if not graph_dir_path.exists():
-        create_graph_from_datastore(
-            datastore=datastore,
-            output_root_path=str(graph_dir_path),
-            n_max_levels=1,
-        )
+    shutil.copytree(dummy_graph_dir, datastore.root_path / "graph" / "1level")
 
     config = nlconfig.NeuralLAMConfig(
-        datastore=nlconfig.DatastoreSelection(
-            kind=datastore.SHORT_NAME,
-            config_path=datastore.root_path,
-        ),
+        datastores={
+            "main": nlconfig.DatastoreSelection(
+                kind=datastore.SHORT_NAME,
+                config_path=datastore.root_path,
+            )
+        },
     )
 
     model = _build_metrics_watch_module(datastore, config)
@@ -858,5 +866,125 @@ def test_aggregate_and_plot_metrics_with_metrics_watch(tmp_path):
         f"Expected key '{expected_key}' in logged scalars, "
         f"got keys: {list(logged_scalars.keys())}"
     )
+
+    plt.close("all")
+
+
+def test_spatial_loss_maps_out_of_range_steps(tmp_path, dummy_graph_dir):
+    """
+    Regression test for issue #747.
+
+    Verify that out-of-range steps in val_steps_to_log are excluded from spatial
+    loss maps and that remaining valid steps are correctly associated with their
+    loss maps and saved filenames in on_test_epoch_end without misalignment.
+    """
+    datastore = DummyDatastore()
+    shutil.copytree(dummy_graph_dir, datastore.root_path / "graph" / "1level")
+
+    config = nlconfig.NeuralLAMConfig(
+        datastores={
+            "main": nlconfig.DatastoreSelection(
+                kind=datastore.SHORT_NAME,
+                config_path=datastore.root_path,
+            )
+        },
+    )
+
+    predictor = GraphLAM(
+        datastore=datastore,
+        graph_name="1level",
+        hidden_dim=4,
+        hidden_layers=1,
+        processor_layers=1,
+        mesh_aggr="sum",
+        num_past_forcing_steps=0,
+        num_future_forcing_steps=0,
+        output_std=False,
+        output_clamping_lower=config.training.output_clamping.lower,
+        output_clamping_upper=config.training.output_clamping.upper,
+    )
+    forecaster = DeterministicARForecaster(
+        predictor, datastore, config=config, loss="mse"
+    )
+    model = DeterministicForecastingModule(
+        forecaster=forecaster,
+        config=config,
+        datastore=datastore,
+        lr=1.0e-3,
+        restore_opt=False,
+        n_example_pred=0,
+        val_steps_to_log=[100, -1, 0, 1, 2],
+    )
+
+    # Mock the trainer to simulate rank-0 single-process execution
+    mock_trainer = MagicMock()
+    mock_trainer.is_global_zero = True
+    mock_trainer.sanity_checking = False
+    mock_trainer.current_epoch = 0
+    model._trainer = mock_trainer
+
+    mock_logger = MagicMock()
+    mock_logger.save_dir = str(tmp_path)
+    mock_trainer.logger = mock_logger
+
+    model.all_gather_cat = lambda x: x
+
+    # Simulate test_step with rollout length 2; steps -1, 0 (non-positive)
+    # and 100 (exceeds rollout) must be filtered out, keeping steps 1 and 2
+    batch_size = 1
+    pred_steps = 2
+    num_grid_nodes = datastore.num_grid_points
+    num_state_vars = datastore.get_num_data_vars(category="state")
+
+    prediction = torch.zeros(
+        batch_size, pred_steps, num_grid_nodes, num_state_vars
+    )
+    prediction[:, 1] = 1.0  # only step 2 has a non-zero error
+    target = torch.zeros(batch_size, pred_steps, num_grid_nodes, num_state_vars)
+    pred_std = None  # This predictor does not output a standard deviation.
+    time_step_loss = torch.zeros(pred_steps)
+
+    model._compute_prediction_and_loss = MagicMock(
+        return_value=(prediction, target, pred_std, time_step_loss)
+    )
+
+    dummy_batch = (
+        torch.zeros(batch_size, 1, num_grid_nodes, num_state_vars),
+        target,
+        torch.zeros(batch_size, 1, num_grid_nodes, 0),
+        torch.zeros(batch_size, 1, num_grid_nodes, 0),
+        torch.zeros(batch_size, dtype=torch.long),
+    )
+
+    model.test_step(dummy_batch, batch_idx=0)
+    model.on_test_epoch_end()
+
+    # Verify generated PDF files
+    pdf_dir = tmp_path / "spatial_loss_maps"
+    generated_pdfs = sorted(p.name for p in pdf_dir.glob("*.pdf"))
+    assert generated_pdfs == ["loss_t1.pdf", "loss_t2.pdf"]
+    assert not (pdf_dir / "loss_t100.pdf").exists()
+
+    # Verify logged figure titles match retained steps
+    t, unit = model.time_step_int, model.time_step_unit
+    titles = [
+        call.kwargs["images"][0].get_suptitle()
+        for call in mock_logger.log_image.call_args_list
+        if call.kwargs["key"].startswith("test_loss")
+    ]
+    assert titles == [
+        f"Test loss, t=1 ({t} {unit})",
+        f"Test loss, t=2 ({2 * t} {unit})",
+    ]
+
+    # Verify the maps are in the same order as the titles and filenames
+    mean_spatial_loss = torch.load(tmp_path / "mean_spatial_loss.pt")
+    interior = model.interior_mask_bool
+    assert (mean_spatial_loss[0, interior] == 0).all()
+    assert (mean_spatial_loss[1, interior] > 0).all()
+
+    # Verify clean slate after on_test_epoch_end
+    assert len(model._test_spatial_steps) == 0
+    assert len(model.spatial_loss_maps) == 0
 
     plt.close("all")

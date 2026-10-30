@@ -1,6 +1,7 @@
 """Constructors for neural-network building blocks."""
 
 # Third-party
+import torch
 import torch_geometric as pyg
 from torch import nn
 
@@ -41,12 +42,12 @@ def make_mlp(blueprint: list[int], layer_norm: bool = True) -> nn.Sequential:
 
 
 def make_gnn_seq(
-    edge_index,
-    num_gnn_layers,
-    hidden_layers,
-    hidden_dim,
-    gnn_type="InteractionNet",
-):
+    edge_index: torch.Tensor,
+    num_gnn_layers: int,
+    hidden_layers: int,
+    hidden_dim: int,
+    gnn_type: str = "InteractionNet",
+) -> nn.Module:
     """
     Build a sequential stack of GNN layers that propagates both node and
     edge representations.
@@ -57,7 +58,7 @@ def make_gnn_seq(
     Parameters
     ----------
     edge_index : torch.Tensor
-        Shape ``(2, M)``. Edge index of the edges that the GNN layers
+        Shape ``(2, num_edges)``. Edge index of the edges that the GNN layers
         operate on.
     num_gnn_layers : int
         Number of stacked GNN layers; must be at least 1. Callers that

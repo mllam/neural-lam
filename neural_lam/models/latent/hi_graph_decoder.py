@@ -1,6 +1,10 @@
 """Latent decoder for hierarchical graphs."""
 
+# Standard library
+from typing import Any
+
 # Third-party
+import torch
 from torch import nn
 
 # First-party
@@ -29,38 +33,38 @@ class HiGraphLatentDecoder(BaseGraphLatentDecoder):
 
     def __init__(
         self,
-        g2m_edge_index,
-        m2m_edge_index,
-        m2g_edge_index,
-        mesh_up_edge_index,
-        mesh_down_edge_index,
-        hidden_dim,
-        latent_dim,
-        num_state_vars,
-        intra_level_layers,
-        hidden_layers=1,
-        g2m_gnn_type="InteractionNet",
-        m2g_gnn_type="InteractionNet",
-        output_std=True,
-    ):
+        g2m_edge_index: torch.Tensor,
+        m2m_edge_index: utils.BufferList,
+        m2g_edge_index: torch.Tensor,
+        mesh_up_edge_index: utils.BufferList,
+        mesh_down_edge_index: utils.BufferList,
+        hidden_dim: int,
+        latent_dim: int,
+        num_state_vars: int,
+        intra_level_layers: int,
+        hidden_layers: int = 1,
+        g2m_gnn_type: str = "InteractionNet",
+        m2g_gnn_type: str = "InteractionNet",
+        output_std: bool = True,
+    ) -> None:
         """
         Set up the g2m, m2g, mesh-up/-down and intra-level GNNs.
 
         Parameters
         ----------
         g2m_edge_index : torch.Tensor
-            Shape ``(2, M_g2m)``. Edge index of grid-to-mesh edges.
+            Shape ``(2, num_edges_g2m)``. Edge index of grid-to-mesh edges.
         m2m_edge_index : BufferList
             Per-level edge indices of intra-level mesh edges, each of shape
-            ``(2, M_m2m[l])``.
+            ``(2, num_edges_m2m[l])``.
         m2g_edge_index : torch.Tensor
-            Shape ``(2, M_m2g)``. Edge index of mesh-to-grid edges.
+            Shape ``(2, num_edges_m2g)``. Edge index of mesh-to-grid edges.
         mesh_up_edge_index : BufferList
             Per-level edge indices of upward inter-level mesh edges, each of
-            shape ``(2, M_up[l])``.
+            shape ``(2, num_edges_mesh_up[l])``.
         mesh_down_edge_index : BufferList
             Per-level edge indices of downward inter-level mesh edges, each
-            of shape ``(2, M_down[l])``.
+            of shape ``(2, num_edges_mesh_down[l])``.
         hidden_dim : int
             Dimensionality of internal node and edge representations.
         latent_dim : int
@@ -175,41 +179,46 @@ class HiGraphLatentDecoder(BaseGraphLatentDecoder):
         )
 
     def combine_with_latent(
-        self, original_grid_rep, latent_rep, residual_grid_rep, graph_emb
-    ):
+        self,
+        original_grid_rep: torch.Tensor,
+        latent_rep: torch.Tensor,
+        residual_grid_rep: torch.Tensor,
+        graph_emb: dict[str, Any],
+    ) -> torch.Tensor:
         """
         Hierarchical up-then-down fusion of grid and latent reps.
 
         Parameters
         ----------
         original_grid_rep : torch.Tensor
-            Shape ``(B, num_grid_nodes, d_h)``. Embedded grid input
+            Shape ``(B, num_grid_nodes, hidden_dim)``. Embedded grid input
             features, used as the sender representation in the
             grid-to-mesh step that initializes the bottom mesh level.
         latent_rep : torch.Tensor
-            Shape ``(B, num_mesh_nodes[L], d_h)``. Latent sample embedded
-            to ``d_h``, defined on the top mesh level ``L``. It is used as
-            the receiver representation of the last upward step, fusing
-            the latent in at the top of the hierarchy.
+            Shape ``(B, num_mesh_nodes[L], hidden_dim)``. Latent sample
+            embedded to ``hidden_dim``, defined on the top mesh level
+            ``L``. It is used as the receiver representation of the last
+            upward step, fusing the latent in at the top of the hierarchy.
         residual_grid_rep : torch.Tensor
-            Shape ``(B, num_grid_nodes, d_h)``. Residually updated grid
-            representation, used as the receiver representation in the
-            mesh-to-grid step.
+            Shape ``(B, num_grid_nodes, hidden_dim)``. Residually updated
+            grid representation, used as the receiver representation in
+            the mesh-to-grid step.
         graph_emb : dict
             Embedded static graph node and edge features, with at least
             the entries
-            ``mesh``: list of ``(B, num_mesh_nodes[l], d_h)``,
-            ``g2m``: ``(B, M_g2m, d_h)``,
-            ``m2m``: list of ``(B, M_m2m[l], d_h)``,
-            ``mesh_up``: list of ``(B, M_up[l], d_h)``,
-            ``mesh_down``: list of ``(B, M_down[l], d_h)`` and
-            ``m2g``: ``(B, M_m2g, d_h)``, where ``l`` indexes the mesh
-            levels from bottom (0) to top (``L``).
+            ``mesh``: list of ``(B, num_mesh_nodes[l], hidden_dim)``,
+            ``g2m``: ``(B, num_edges_g2m, hidden_dim)``,
+            ``m2m``: list of ``(B, num_edges_m2m[l], hidden_dim)``,
+            ``mesh_up``: list of ``(B, num_edges_mesh_up[l], hidden_dim)``,
+            ``mesh_down``: list of
+            ``(B, num_edges_mesh_down[l], hidden_dim)`` and
+            ``m2g``: ``(B, num_edges_m2g, hidden_dim)``, where ``l`` indexes the
+            mesh levels from bottom (0) to top (``L``).
 
         Returns
         -------
         torch.Tensor
-            Shape ``(B, num_grid_nodes, d_h)``. Combined grid
+            Shape ``(B, num_grid_nodes, hidden_dim)``. Combined grid
             representation, incorporating both the grid input and the
             latent sample.
         """

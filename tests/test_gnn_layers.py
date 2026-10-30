@@ -2,13 +2,14 @@
 from pathlib import Path
 
 # Third-party
+import pytest
 import torch
 
 # First-party
 from neural_lam import config as nlconfig
 from neural_lam.create_graph import create_graph_from_datastore
 from neural_lam.gnn_layers import InteractionNet, PropagationNet
-from neural_lam.models import MODELS, ARForecaster
+from neural_lam.models import MODELS, DeterministicARForecaster
 from tests.conftest import init_datastore_example
 
 
@@ -73,7 +74,7 @@ def _build_model_and_data(
         output_clamping_upper=config.training.output_clamping.upper,
         **gnn_kwargs,
     )
-    forecaster = ARForecaster(predictor, datastore)
+    forecaster = DeterministicARForecaster(predictor, datastore, config=config)
 
     B = 2
     num_grid_nodes = predictor.num_grid_nodes
@@ -94,10 +95,12 @@ def _get_datastore_and_config(graph_name):
     """Create a datastore with graph already built."""
     datastore = init_datastore_example("mdp")
     config = nlconfig.NeuralLAMConfig(
-        datastore=nlconfig.DatastoreSelection(
-            kind=datastore.SHORT_NAME,
-            config_path=datastore.root_path,
-        )
+        datastores={
+            "main": nlconfig.DatastoreSelection(
+                kind=datastore.SHORT_NAME,
+                config_path=datastore.root_path,
+            )
+        }
     )
 
     # Ensure graph exists
@@ -216,8 +219,10 @@ class TestPropagationNetForwardPass:
             p_out = pnet(send_rep, rec_rep, edge_rep)
 
             if update_edges:
-                assert isinstance(i_out, tuple) and len(i_out) == 2
-                assert isinstance(p_out, tuple) and len(p_out) == 2
+                assert isinstance(i_out, tuple)
+                assert len(i_out) == 2
+                assert isinstance(p_out, tuple)
+                assert len(p_out) == 2
                 assert i_out[0].shape == p_out[0].shape == (n_rec, d_h)
                 assert i_out[1].shape == p_out[1].shape == (n_edges, d_h)
             else:
@@ -338,7 +343,8 @@ class TestEdgeUpdateBehavior:
         edge_rep = torch.randn(n_edges, d_h)
 
         result = pnet(send_rep, rec_rep, edge_rep)
-        assert isinstance(result, tuple) and len(result) == 2
+        assert isinstance(result, tuple)
+        assert len(result) == 2
         assert result[0].shape == (n_rec, d_h)
         assert result[1].shape == (n_edges, d_h)
 
@@ -711,12 +717,12 @@ class TestNumericalStability:
                 send_rep, current_rec, current_edge
             )
 
-        assert torch.isfinite(
-            current_rec
-        ).all(), "Receiver reps contain non-finite values after deep stacking"
-        assert torch.isfinite(
-            current_edge
-        ).all(), "Edge reps contain non-finite values after deep stacking"
+        assert torch.isfinite(current_rec).all(), (
+            "Receiver reps contain non-finite values after deep stacking"
+        )
+        assert torch.isfinite(current_edge).all(), (
+            "Edge reps contain non-finite values after deep stacking"
+        )
 
     def test_high_degree_stability(self):
         """With many incoming edges per receiver, mean aggregation should
@@ -743,6 +749,7 @@ class TestNumericalStability:
 #
 
 
+@pytest.mark.requires_real_data
 class TestDefaultBehaviorUnchanged:
     """Tests that with default GNN types, models use InteractionNet
     (backward compatibility). All tests use deterministic models only."""
@@ -865,6 +872,7 @@ class TestDefaultBehaviorUnchanged:
 #
 
 
+@pytest.mark.requires_real_data
 class TestHierarchicalIntegration:
     """Tests for GNN type selection in hierarchical deterministic models."""
 

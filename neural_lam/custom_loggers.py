@@ -2,11 +2,10 @@
 
 # Standard library
 import os
+from pathlib import Path
 
 # Third-party
 import matplotlib.pyplot as plt
-import mlflow
-import mlflow.pytorch
 import pytorch_lightning as pl
 from loguru import logger
 
@@ -52,6 +51,10 @@ class CustomMLFlowLogger(pl.loggers.MLFlowLogger):
         self._save_dir = save_dir
         os.makedirs(self._save_dir, exist_ok=True)
 
+        # mlflow is heavy and only needed with --logger mlflow
+        # Third-party
+        import mlflow
+
         mlflow.start_run(run_id=self.run_id, log_system_metrics=True)
         mlflow.set_tag("mlflow.runName", run_name)
         mlflow.log_param("run_id", self.run_id)
@@ -95,10 +98,12 @@ class CustomMLFlowLogger(pl.loggers.MLFlowLogger):
 
         Raises
         ------
-        SystemExit
-            If AWS credentials for the MLflow artifact store are missing.
+        botocore.exceptions.NoCredentialsError
+            If AWS credentials for the MLflow artifact store are missing;
+            re-raised for the caller to handle.
         """
         # Third-party
+        import mlflow
         from botocore.exceptions import NoCredentialsError
         from PIL import Image
 
@@ -118,5 +123,5 @@ class CustomMLFlowLogger(pl.loggers.MLFlowLogger):
                 logger.error("Error logging image\nSet AWS credentials")
                 raise
             finally:
-                if os.path.exists(temporary_image):
-                    os.remove(temporary_image)
+                if Path(temporary_image).exists():
+                    Path(temporary_image).unlink()
