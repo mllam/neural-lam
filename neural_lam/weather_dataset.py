@@ -205,6 +205,12 @@ class WeatherDataset(torch.utils.data.Dataset):
         self.da_forcing = self.datastore.get_dataarray(
             category="forcing", split=self.split
         )
+        # Static features are not used during sample construction
+        # (`__getitem__`) but `create_dataarray_from_tensor(category="static")`
+        # needs the static coordinate metadata, so cache it here too.
+        self.da_static = self.datastore.get_dataarray(
+            category="static", split=None
+        )
 
         self.da_boundary_forcing = None
         self._forecast_step_boundary = None
@@ -1064,9 +1070,11 @@ class WeatherDataset(torch.utils.data.Dataset):
         ----------
         tensor : torch.Tensor
             The tensor to construct the DataArray from, this assumed to have
-            the same dimension ordering as returned by the __getitem__ method
-            (i.e. time, grid_index, {category}_feature). The tensor will be
-            copied to the CPU before constructing the DataArray.
+            dimensions (time, grid_index, {category}_feature), as for the
+            states returned by the __getitem__ method. Windowed forcing from
+            __getitem__ is not supported, its feature dimension has size
+            num_forcing_vars * window. The tensor will be copied to the CPU
+            before constructing the DataArray.
         time : datetime.datetime or list[datetime.datetime]
             The time or times of the tensor.
         category : str
@@ -1106,12 +1114,13 @@ class WeatherDataset(torch.utils.data.Dataset):
                 f"{len(tensor.shape)}"
             )
 
-        da_datastore_state = getattr(self, f"da_{category}")
-        da_grid_index = da_datastore_state.grid_index
-        da_state_feature = da_datastore_state.state_feature
+        da_datastore = getattr(self, f"da_{category}")
+        da_grid_index = da_datastore.grid_index
+        feature_coord_name = f"{category}_feature"
+        da_category_feature = da_datastore[feature_coord_name]
 
         coords = {
-            f"{category}_feature": da_state_feature,
+            feature_coord_name: da_category_feature,
             "grid_index": da_grid_index,
         }
         if add_time_as_dim:
@@ -1125,10 +1134,10 @@ class WeatherDataset(torch.utils.data.Dataset):
 
         for grid_coord in ["x", "y"]:
             if (
-                grid_coord in da_datastore_state.coords
+                grid_coord in da_datastore.coords
                 and grid_coord not in da.coords
             ):
-                da.coords[grid_coord] = da_datastore_state[grid_coord]
+                da.coords[grid_coord] = da_datastore[grid_coord]
 
         if not add_time_as_dim:
             da.coords["time"] = time

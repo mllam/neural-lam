@@ -60,7 +60,7 @@ class SinglePointDummyDatastore(BaseDatastore):
                 return None
             values = self._forcing_data
         else:
-            raise NotImplementedError(category)
+            return None
 
         if self.is_forecast:
             da = xr.DataArray(

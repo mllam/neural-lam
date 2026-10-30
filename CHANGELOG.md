@@ -45,6 +45,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Fix flux standardization statistics weighting for short final batches and exclude distributed padding samples [\#782](https://github.com/mllam/neural-lam/pull/782) @Karvy-Singh
 
+- Fix `WeatherDataset.create_dataarray_from_tensor` always looking up the `state_feature` coordinate, so it now also works for `category="forcing"` and `category="static"`, and expose `WeatherDataset.da_static` [\#309](https://github.com/mllam/neural-lam/pull/309) @Jayant-kernel
+
 ### Maintenance
 
 - Speed up the training tests by trimming Lightning Trainer and DataLoader overhead, and test the spawned DataLoader workers separately [\#812](https://github.com/mllam/neural-lam/pull/812) @Karvy-Singh
