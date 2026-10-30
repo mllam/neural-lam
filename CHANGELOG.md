@@ -31,7 +31,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Fix `InteractionNet` and `PropagationNet` dimension mismatches when `hidden_dim` differs from `input_dim` [\#836](https://github.com/mllam/neural-lam/pull/836) @Karvy-Singh
 
-- Raise a `ValueError` for `--val_interval` below 1 in `train_model.fit`; `0` previously crashed with a `ZeroDivisionError` inside Lightning after the model was built, and negative values were silently accepted [\#NNN](https://github.com/mllam/neural-lam/pull/NNN) @nikhil3495
+- Raise a `ValueError` for `--val_interval` below 1 in `train_model.fit`; `0` previously crashed with a `ZeroDivisionError` inside Lightning after the model was built, and negative values were silently accepted [\#847](https://github.com/mllam/neural-lam/pull/847) @nikhil3495
 
 - Fix shifted test spatial loss map titles and `spatial_loss_maps/loss_t{n}.pdf` filenames when `val_steps_to_log` contains steps outside the evaluation rollout [\#752](https://github.com/mllam/neural-lam/pull/752) @vikramsingh920
 
