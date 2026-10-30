@@ -299,13 +299,22 @@ class SplitMLPs(nn.Module):
 
         Raises
         ------
-        AssertionError
-            If the number of ``mlps`` and ``chunk_sizes`` differ.
+        ValueError
+            If ``mlps`` or ``chunk_sizes`` is empty, if their lengths differ,
+            or if any chunk size is non-positive.
         """
         super().__init__()
-        assert len(mlps) == len(chunk_sizes), (
-            "Number of MLPs must match the number of chunks"
-        )
+        if not mlps or not chunk_sizes:
+            raise ValueError("mlps and chunk_sizes must not be empty.")
+        if len(mlps) != len(chunk_sizes):
+            raise ValueError(
+                f"Number of MLPs ({len(mlps)}) must match the number of "
+                f"chunks ({len(chunk_sizes)})."
+            )
+        if any(size <= 0 for size in chunk_sizes):
+            raise ValueError(
+                f"All chunk sizes must be positive integers, got {chunk_sizes}."
+            )
 
         self.mlps = nn.ModuleList(mlps)
         self.chunk_sizes = chunk_sizes

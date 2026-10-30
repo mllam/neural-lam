@@ -8,7 +8,11 @@ import torch
 # First-party
 from neural_lam import config as nlconfig
 from neural_lam.create_graph import create_graph_from_datastore
-from neural_lam.gnn_layers import InteractionNet, PropagationNet
+from neural_lam.gnn_layers import (
+    InteractionNet,
+    PropagationNet,
+    SplitMLPs,
+)
 from neural_lam.models import MODELS, ARForecaster
 from tests.conftest import init_datastore_example
 
@@ -1062,3 +1066,65 @@ class TestHierarchicalIntegration:
             init_states.shape[3],
         )
         assert out.shape == expected_shape
+
+
+#
+# Section K: SplitMLPs Tests
+#
+
+
+class TestSplitMLPs:
+    """Unit tests for SplitMLPs layer."""
+
+    def test_split_mlps_forward(self):
+        """SplitMLPs should process chunks along dim -2 and concatenate."""
+        mlps = [
+            torch.nn.Linear(4, 4),
+            torch.nn.Linear(4, 4),
+        ]
+        chunk_sizes = [3, 5]
+        layer = SplitMLPs(mlps, chunk_sizes)
+
+        x = torch.randn(2, 8, 4)
+        out = layer(x)
+
+        assert out.shape == (2, 8, 4)
+        expected_chunk_0 = mlps[0](x[:, :3, :])
+        expected_chunk_1 = mlps[1](x[:, 3:, :])
+        expected = torch.cat([expected_chunk_0, expected_chunk_1], dim=-2)
+        assert torch.allclose(out, expected)
+
+    def test_split_mlps_empty_mlps_raises_value_error(self):
+        """Empty mlps list should raise ValueError."""
+        with pytest.raises(
+            ValueError, match="mlps and chunk_sizes must not be empty"
+        ):
+            SplitMLPs(mlps=[], chunk_sizes=[2])
+
+    def test_split_mlps_empty_chunk_sizes_raises_value_error(self):
+        """Empty chunk_sizes list should raise ValueError."""
+        with pytest.raises(
+            ValueError, match="mlps and chunk_sizes must not be empty"
+        ):
+            SplitMLPs(mlps=[torch.nn.Identity()], chunk_sizes=[])
+
+    def test_split_mlps_mismatched_lengths_raises_value_error(self):
+        """Mismatched mlps and chunk_sizes should raise ValueError."""
+        mlps = [torch.nn.Identity(), torch.nn.Identity()]
+        chunk_sizes = [2, 3, 4]
+        with pytest.raises(
+            ValueError,
+            match=r"Number of MLPs \(2\) must match the number of chunks",
+        ):
+            SplitMLPs(mlps, chunk_sizes)
+
+    @pytest.mark.parametrize("invalid_chunk_sizes", [[0, 2], [-1, 3], [2, 0]])
+    def test_split_mlps_non_positive_chunk_sizes_raises_value_error(
+        self, invalid_chunk_sizes
+    ):
+        """Non-positive chunk sizes should raise ValueError."""
+        mlps = [torch.nn.Identity()] * len(invalid_chunk_sizes)
+        with pytest.raises(
+            ValueError, match=r"All chunk sizes must be positive integers"
+        ):
+            SplitMLPs(mlps, invalid_chunk_sizes)
