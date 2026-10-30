@@ -594,8 +594,8 @@ class MDPDatastore(BaseDatastore):
             the value of `stacked`:
 
             * `stacked==True`: shape `(num_grid_nodes, 2)`, with
-              num_grid_nodes=N_x*N_y on a rectilinear grid.
-            * `stacked==False`: shape `(N_x, N_y, 2)`
+              num_grid_nodes = grid_size_x * grid_size_y on a rectilinear grid.
+            * `stacked==False`: shape `(grid_size_x, grid_size_y, 2)`
 
         """
         xdim, ydim = self.spatial_coordinates
@@ -650,7 +650,7 @@ class MDPDatastore(BaseDatastore):
         -------
         np.ndarray
             The longitude, latitude coordinates of the dataset
-            with shape `[n_grid_points, 2]`.
+            with shape `[num_grid_nodes, 2]`.
         """
         # Check first if lat/lon saved in ds
         lookup_ds = self._ds

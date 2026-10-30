@@ -43,11 +43,11 @@ class GraphLatentDecoder(BaseGraphLatentDecoder):
         Parameters
         ----------
         g2m_edge_index : torch.Tensor
-            Shape ``(2, M_g2m)``. Edge index of grid-to-mesh edges.
+            Shape ``(2, num_edges_g2m)``. Edge index of grid-to-mesh edges.
         m2m_edge_index : torch.Tensor
-            Shape ``(2, M_m2m)``. Edge index of mesh-to-mesh edges.
+            Shape ``(2, num_edges_m2m)``. Edge index of mesh-to-mesh edges.
         m2g_edge_index : torch.Tensor
-            Shape ``(2, M_m2g)``. Edge index of mesh-to-grid edges.
+            Shape ``(2, num_edges_m2g)``. Edge index of mesh-to-grid edges.
         hidden_dim : int
             Dimensionality of internal node and edge representations.
         latent_dim : int
@@ -110,27 +110,28 @@ class GraphLatentDecoder(BaseGraphLatentDecoder):
         Parameters
         ----------
         original_grid_rep : torch.Tensor
-            Shape ``(B, num_grid_nodes, d_h)``. Embedded grid input
+            Shape ``(B, num_grid_nodes, hidden_dim)``. Embedded grid input
             features, used as the sender representation in the
             grid-to-mesh step.
         latent_rep : torch.Tensor
-            Shape ``(B, num_mesh_nodes, d_h)``. Latent sample embedded to
-            ``d_h``, used as the initial mesh node representation (the
-            receiver in the grid-to-mesh step), so all mesh processing
-            starts from the latent.
+            Shape ``(B, num_mesh_nodes, hidden_dim)``. Latent sample
+            embedded to ``hidden_dim``, used as the initial mesh node
+            representation (the receiver in the grid-to-mesh step), so all
+            mesh processing starts from the latent.
         residual_grid_rep : torch.Tensor
-            Shape ``(B, num_grid_nodes, d_h)``. Residually updated grid
-            representation, used as the receiver representation in the
+            Shape ``(B, num_grid_nodes, hidden_dim)``. Residually updated
+            grid representation, used as the receiver representation in the
             mesh-to-grid step.
         graph_emb : dict
             Embedded static graph node and edge features, with at least
-            the entries ``g2m``: ``(B, M_g2m, d_h)``,
-            ``m2m``: ``(B, M_m2m, d_h)`` and ``m2g``: ``(B, M_m2g, d_h)``.
+            the entries ``g2m``: ``(B, num_edges_g2m, hidden_dim)``,
+            ``m2m``: ``(B, num_edges_m2m, hidden_dim)`` and
+            ``m2g``: ``(B, num_edges_m2g, hidden_dim)``.
 
         Returns
         -------
         torch.Tensor
-            Shape ``(B, num_grid_nodes, d_h)``. Combined grid
+            Shape ``(B, num_grid_nodes, hidden_dim)``. Combined grid
             representation, incorporating both the grid input and the
             latent sample.
         """
