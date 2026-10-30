@@ -258,7 +258,7 @@ class BaseHiGraphModel(BaseGraphModel):
                 new_node_rep  # (B, num_mesh_nodes[l], hidden_dim)
             )
             mesh_up_rep[level_l - 1] = (
-                new_edge_rep  # (B, num_edges[l-1], hidden_dim)
+                new_edge_rep  # (B, num_edges_mesh_up[l-1], hidden_dim)
             )
 
         # - PROCESSOR -
@@ -316,16 +316,16 @@ class BaseHiGraphModel(BaseGraphModel):
             ``hidden_dim`` is the hidden dimension.
         mesh_same_rep : list of torch.Tensor
             One tensor per level, each of shape
-            ``(B, num_edges[l], hidden_dim)``. Same-level edge
-            representations. ``num_edges[l]`` is the edge count at
+            ``(B, num_edges_m2m[l], hidden_dim)``. Same-level edge
+            representations. ``num_edges_m2m[l]`` is the edge count at
             level ``l``.
         mesh_up_rep : list of torch.Tensor
             One tensor per inter-level gap, each of shape
-            ``(B, num_edges[l], hidden_dim)``. Upward edge representations from
-            level ``l`` to ``l+1``.
+            ``(B, num_edges_mesh_up[l], hidden_dim)``. Upward edge
+            representations from level ``l`` to ``l+1``.
         mesh_down_rep : list of torch.Tensor
             One tensor per inter-level gap, each of shape
-            ``(B, num_edges[l], hidden_dim)``. Downward edge
+            ``(B, num_edges_mesh_down[l], hidden_dim)``. Downward edge
             representations from level ``l+1`` to ``l``.
 
         Returns
