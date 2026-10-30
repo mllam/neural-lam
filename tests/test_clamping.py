@@ -10,12 +10,12 @@ from neural_lam import config as nlconfig
 from neural_lam.create_graph_with_wmg import create_graph_from_datastore
 from neural_lam.datastore.mdp import MDPDatastore
 from neural_lam.models import GraphLAM
+from neural_lam.models.step_predictors.base import StepPredictor
 from tests.conftest import init_datastore_example
-
-# Clamping is checked on a model built on the mdp example datastore
-pytestmark = pytest.mark.requires_real_data
+from tests.dummy_datastore import DummyDatastore
 
 
+@pytest.mark.requires_real_data
 def test_clamping():
     datastore = init_datastore_example(MDPDatastore.SHORT_NAME)
 
@@ -296,3 +296,188 @@ def test_clamping():
         .all()
         .item()
     )
+
+
+class DummyStepPredictor(StepPredictor):
+    """
+    Concrete StepPredictor for testing clamping without graph setup.
+    """
+
+    def forward(
+        self,
+        prev_state: torch.Tensor,
+        prev_prev_state: torch.Tensor,
+        forcing: torch.Tensor,
+    ) -> tuple[torch.Tensor, torch.Tensor | None]:
+        return prev_state, None
+
+
+@pytest.fixture
+def dummy_datastore():
+    """Create a minimal DummyDatastore for clamping unit tests."""
+    return DummyDatastore(n_grid_points=4, n_timesteps=2)
+
+
+def test_clamping_unknown_features_raises(dummy_datastore):
+    """
+    Test that specifying limits for non-existent features raises ValueError.
+    """
+    model_lower = DummyStepPredictor(
+        dummy_datastore,
+        output_clamping_lower={"unknown_feature": 0.0},
+    )
+    with pytest.raises(
+        ValueError,
+        match="State feature limits were provided for unknown features",
+    ):
+        model_lower.prepare_clamping_params(dummy_datastore)
+
+    model_upper = DummyStepPredictor(
+        dummy_datastore,
+        output_clamping_upper={"non_existent": 1.0},
+    )
+    with pytest.raises(
+        ValueError,
+        match="State feature limits were provided for unknown features",
+    ):
+        model_upper.prepare_clamping_params(dummy_datastore)
+
+
+def test_clamping_lower_ge_upper_raises(dummy_datastore):
+    """
+    Test that lower limit greater than or equal to upper raises ValueError.
+    """
+    model_gt = DummyStepPredictor(
+        dummy_datastore,
+        output_clamping_lower={"state_feat_0": 5.0},
+        output_clamping_upper={"state_feat_0": 2.0},
+    )
+    with pytest.raises(
+        ValueError,
+        match='Invalid clamping limits for feature "state_feat_0"',
+    ):
+        model_gt.prepare_clamping_params(dummy_datastore)
+
+    model_eq = DummyStepPredictor(
+        dummy_datastore,
+        output_clamping_lower={"state_feat_0": 3.0},
+        output_clamping_upper={"state_feat_0": 3.0},
+    )
+    with pytest.raises(
+        ValueError,
+        match='Invalid clamping limits for feature "state_feat_0"',
+    ):
+        model_eq.prepare_clamping_params(dummy_datastore)
+
+
+@pytest.mark.parametrize("val", [float("nan"), float("inf"), float("-inf")])
+def test_clamping_non_finite_lower_limit_raises(dummy_datastore, val):
+    """Test that non-finite lower clamping limits raise ValueError."""
+    model = DummyStepPredictor(
+        dummy_datastore,
+        output_clamping_lower={"state_feat_0": val},
+    )
+    with pytest.raises(
+        ValueError,
+        match=(
+            "Lower clamping limit for feature 'state_feat_0' must be a "
+            "finite number"
+        ),
+    ):
+        model.prepare_clamping_params(dummy_datastore)
+
+
+@pytest.mark.parametrize("val", [float("nan"), float("inf"), float("-inf")])
+def test_clamping_non_finite_upper_limit_raises(dummy_datastore, val):
+    """Test that non-finite upper clamping limits raise ValueError."""
+    model = DummyStepPredictor(
+        dummy_datastore,
+        output_clamping_upper={"state_feat_0": val},
+    )
+    with pytest.raises(
+        ValueError,
+        match=(
+            "Upper clamping limit for feature 'state_feat_0' must be a "
+            "finite number"
+        ),
+    ):
+        model.prepare_clamping_params(dummy_datastore)
+
+
+def test_clamping_infinite_bounds_both_raises(dummy_datastore):
+    """Test that infinite bounds for both lower and upper raise ValueError."""
+    model = DummyStepPredictor(
+        dummy_datastore,
+        output_clamping_lower={"state_feat_0": float("-inf")},
+        output_clamping_upper={"state_feat_0": float("inf")},
+    )
+    with pytest.raises(
+        ValueError,
+        match=(
+            "Lower clamping limit for feature 'state_feat_0' must be a "
+            "finite number"
+        ),
+    ):
+        model.prepare_clamping_params(dummy_datastore)
+
+
+@pytest.mark.parametrize("val", ["0.0", None, True, False, [1.0]])
+def test_clamping_non_numeric_lower_limit_raises(dummy_datastore, val):
+    """Test that non-numeric lower clamping limits raise ValueError."""
+    model = DummyStepPredictor(
+        dummy_datastore,
+        output_clamping_lower={"state_feat_0": val},
+    )
+    with pytest.raises(
+        ValueError,
+        match=(
+            "Lower clamping limit for feature 'state_feat_0' must be a "
+            "finite number"
+        ),
+    ):
+        model.prepare_clamping_params(dummy_datastore)
+
+
+@pytest.mark.parametrize("val", ["1.0", None, True, False, [1.0]])
+def test_clamping_non_numeric_upper_limit_raises(dummy_datastore, val):
+    """Test that non-numeric upper clamping limits raise ValueError."""
+    model = DummyStepPredictor(
+        dummy_datastore,
+        output_clamping_upper={"state_feat_0": val},
+    )
+    with pytest.raises(
+        ValueError,
+        match=(
+            "Upper clamping limit for feature 'state_feat_0' must be a "
+            "finite number"
+        ),
+    ):
+        model.prepare_clamping_params(dummy_datastore)
+
+
+def test_clamping_valid_limits_setup_and_forward(dummy_datastore):
+    """Test valid clamping limits setup and get_clamped_new_state forward."""
+    model = DummyStepPredictor(
+        dummy_datastore,
+        output_clamping_lower={"state_feat_0": 0.0, "state_feat_1": -5.0},
+        output_clamping_upper={"state_feat_1": 5.0, "state_feat_2": 10.0},
+    )
+    model.prepare_clamping_params(dummy_datastore)
+
+    # feat 0: lower only -> softplus_lower (clamp_lower_idx)
+    # feat 1: lower and upper -> sigmoid (clamp_lower_upper_idx)
+    # feat 2: upper only -> softplus_upper (clamp_upper_idx)
+    assert model.clamp_lower_idx.tolist() == [0]
+    assert model.clamp_lower_upper_idx.tolist() == [1]
+    assert model.clamp_upper_idx.tolist() == [2]
+
+    # Verify get_clamped_new_state runs and produces finite outputs
+    batch_size = 2
+    num_nodes = dummy_datastore.num_grid_points
+    num_vars = len(dummy_datastore.get_vars_names(category="state"))
+    prev_state = torch.zeros(batch_size, num_nodes, num_vars)
+    state_delta = torch.ones(batch_size, num_nodes, num_vars)
+
+    new_state = model.get_clamped_new_state(state_delta, prev_state)
+    assert new_state.shape == (batch_size, num_nodes, num_vars)
+    assert torch.isfinite(new_state).all().item()
