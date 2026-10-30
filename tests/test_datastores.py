@@ -458,6 +458,33 @@ def test_stacking_grid_coords(datastore_name, category):
     xr.testing.assert_equal(da_static, da_static_test)
 
 
+def test_stack_grid_coords_non_feature_and_compound_category():
+    """`stack_grid_coords` supports arrays without a feature dimension and
+    dimensions with multi-word category names (e.g. boundary_forcing)."""
+    # First-party
+    from tests.dummy_datastore import DummyDatastore
+
+    ds = DummyDatastore(n_grid_points=100)
+    coords = ds.spatial_coordinates
+
+    # 1. Array with time and spatial coords but no {category}_feature
+    da_no_feat = xr.DataArray(np.zeros((5, 10, 10)), dims=("time", *coords))
+    stacked_no_feat = ds.stack_grid_coords(da_no_feat)
+    assert stacked_no_feat.dims == ("time", "grid_index")
+
+    # 2. Array with compound category feature name
+    da_compound = xr.DataArray(
+        np.zeros((5, 10, 10, 2)),
+        dims=("time", *coords, "boundary_forcing_feature"),
+    )
+    stacked_compound = ds.stack_grid_coords(da_compound)
+    assert stacked_compound.dims == (
+        "time",
+        "grid_index",
+        "boundary_forcing_feature",
+    )
+
+
 @pytest.mark.parametrize("datastore_name", DATASTORES.keys())
 def test_dataarray_shapes(datastore_name):
     datastore = init_datastore_example(datastore_name)
