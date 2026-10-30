@@ -60,6 +60,11 @@ def init_datastore(
     if n_boundary_points is None:
         return DatastoreClass(config_path=config_path)
 
+    if n_boundary_points < 0:
+        raise ValueError(
+            f"n_boundary_points must be non-negative, got {n_boundary_points}"
+        )
+
     if DatastoreClass is not MDPDatastore:
         raise ValueError(
             "`n_boundary_points` is only supported for "
