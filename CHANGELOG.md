@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Add deterministic and probabilistic forecaster/module interfaces with
+  shared autoregressive unrolling and forecaster-owned training objectives.
+  [\#700](https://github.com/mllam/neural-lam/pull/700) @Sir-Sloth-The-Lazy
+
 - Add the `hello_world_danra.py` marimo tutorial (prepare the DANRA example data, build a graph, train and evaluate `graph_lam` on CPU, all through `neural_lam.api`), executed at docs build time so the docs page shows its outputs; `train_model` now exits non-zero on errors (`@logger.catch(reraise=True)`) [\#577](https://github.com/mllam/neural-lam/pull/577) @Sharkyii
 
 - Add a high-level programmatic Python API (`neural_lam.api`) exposing typed keyword-only `train`, `evaluate` and `create_graph` functions; `train` and `evaluate` return a `Run` handle with the run's checkpoint and plot paths. The training CLI now parses into the typed run config dataclasses (`ModelConfig`, `TrainRunConfig`, `DataConfig`, `ComputeConfig`, `LoggingConfig`) and calls the same `neural_lam.train_model.fit` [\#715](https://github.com/mllam/neural-lam/pull/715) @GiGiKoneti
@@ -70,6 +74,7 @@ It also contains a number of smaller improvements, bug fixes and maintenance upd
 
 - Add `--train_steps_to_log` CLI option to log training loss for individual unroll steps, and deduplicate common prediction and loss computation steps across loops [\#675](https://github.com/mllam/neural-lam/pull/675) @GiGiKoneti
 
+
 - Add `PropagationNet` GNN layer that incentivises directional message
   propagation from sender to receiver nodes, and expose it alongside
   `InteractionNet` through four new CLI arguments (`--g2m_gnn_type`,
@@ -89,18 +94,18 @@ It also contains a number of smaller improvements, bug fixes and maintenance upd
 ### Changed
 
 - Move data normalization from CPU (`WeatherDataset`) to GPU
-  (`ForecasterModule.on_after_batch_transfer`) for improved performance and
+  (`BaseForecastingModule.on_after_batch_transfer`) for improved performance and
   multi-GPU compatibility. `WeatherDataset` / `WeatherDataModule` no longer
   take a `standardize` argument.
   [\#239](https://github.com/mllam/neural-lam/pull/239) @Sharkyii
 
-- Split `ARModel` into `ForecasterModule`, `Forecaster` and
+- Split `ARModel` into `BaseForecastingModule`, `Forecaster` and
   `StepPredictor`, and reorganise `neural_lam.models` to mirror the new
   hierarchy (`forecasters/`, `step_predictors/`, `step_predictors/graph/`).
   Decouple `NeuralLAMConfig` from the predictor stack: `StepPredictor` and
   the graph-based predictors now take `output_clamping_lower` /
   `output_clamping_upper` dicts directly instead of the full config, so
-  `NeuralLAMConfig` no longer propagates below `ForecasterModule`.
+  `NeuralLAMConfig` no longer propagates below `BaseForecastingModule`.
   [\#208](https://github.com/mllam/neural-lam/pull/208)
   @Sir-Sloth-The-Lazy
 
