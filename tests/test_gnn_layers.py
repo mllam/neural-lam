@@ -168,6 +168,34 @@ class TestPropagationNetStructure:
         aggr_mlp_first = pnet.aggr_mlp[0]
         assert aggr_mlp_first.in_features == 2 * d_h
 
+    @pytest.mark.parametrize("gnn_class", [InteractionNet, PropagationNet])
+    @pytest.mark.parametrize("hidden_layers", [0, 2])
+    def test_hidden_dim_only_sets_hidden_width(self, gnn_class, hidden_layers):
+        """hidden_dim only sets the MLP hidden width, outputs keep input_dim."""
+        n_send, n_rec, n_edges = 5, 4, 10
+        input_dim, hidden_dim = 4, 8
+        edge_index = _make_edge_index(n_send, n_rec, n_edges)
+        gnn = gnn_class(
+            edge_index,
+            input_dim=input_dim,
+            hidden_dim=hidden_dim,
+            hidden_layers=hidden_layers,
+        )
+
+        for mlp in (gnn.edge_mlp, gnn.aggr_mlp):
+            linears = [m for m in mlp if isinstance(m, torch.nn.Linear)]
+            assert [m.out_features for m in linears] == (
+                [hidden_dim] * hidden_layers + [input_dim]
+            )
+
+        rec_out, edge_out = gnn(
+            torch.randn(n_send, input_dim),
+            torch.randn(n_rec, input_dim),
+            torch.randn(n_edges, input_dim),
+        )
+        assert rec_out.shape == (n_rec, input_dim)
+        assert edge_out.shape == (n_edges, input_dim)
+
     def test_node_index_offset_convention(self):
         """After construction, sender indices in edge_index should be
         offset by num_rec so that receivers are [0, num_rec) and senders

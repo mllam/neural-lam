@@ -86,8 +86,12 @@ class InteractionNet(pyg.nn.MessagePassing):
         self.register_buffer("edge_index", edge_index, persistent=False)
 
         # Create MLPs
-        edge_mlp_recipe = [3 * input_dim] + [hidden_dim] * (hidden_layers + 1)
-        aggr_mlp_recipe = [2 * input_dim] + [hidden_dim] * (hidden_layers + 1)
+        edge_mlp_recipe = (
+            [3 * input_dim] + [hidden_dim] * hidden_layers + [input_dim]
+        )
+        aggr_mlp_recipe = (
+            [2 * input_dim] + [hidden_dim] * hidden_layers + [input_dim]
+        )
 
         if edge_chunk_sizes is None:
             self.edge_mlp = utils.make_mlp(edge_mlp_recipe)
