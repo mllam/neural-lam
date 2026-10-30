@@ -69,9 +69,9 @@ class BaseDatastore(abc.ABC):
     ----------------
     A datastore whose `grid_index` can be reshaped back into a complete 2D
     `x`/`y` grid, with possibly non-uniform spacing, should set
-    `is_on_rectilinear_grid` to `True` and implement `grid_shape_state`.
-    `grid_shape_state`, `stack_grid_coords` and `unstack_grid_coords` raise
-    `NotImplementedError` otherwise.
+    `is_on_rectilinear_grid` to `True` and implement `rectilinear_grid_shape`.
+    `rectilinear_grid_shape`, `stack_grid_coords` and `unstack_grid_coords` 
+    raise `NotImplementedError` otherwise.
     """
 
     is_ensemble: bool = False
@@ -386,8 +386,8 @@ class BaseDatastore(abc.ABC):
     def num_grid_points(self) -> int:
         """Return the number of grid points in the dataset.
 
-        Derived from `grid_shape_state`, so datastores not on a rectilinear
-        grid must override this.
+        Derived from `rectilinear_grid_shape`, so datastores not on a 
+        rectilinear grid must override this.
 
         Returns
         -------
@@ -404,9 +404,9 @@ class BaseDatastore(abc.ABC):
             raise NotImplementedError(
                 f"{type(self).__name__} is not on a rectilinear grid, "
                 "so `num_grid_points` cannot be derived from "
-                "`grid_shape_state` and must be overridden."
+                "`rectilinear_grid_shape` and must be overridden."
             )
-        return self.grid_shape_state.x * self.grid_shape_state.y
+        return self.rectilinear_grid_shape.x * self.rectilinear_grid_shape.y
 
     @cached_property
     @abc.abstractmethod
@@ -504,13 +504,13 @@ class BaseDatastore(abc.ABC):
         return False
 
     @cached_property
-    def grid_shape_state(self) -> CartesianGridShape:
-        """The shape of the grid for the state variables.
+    def rectilinear_grid_shape(self) -> CartesianGridShape:
+        """The shape of the rectilinear grid, shared by all categories.
 
         Returns
         -------
         CartesianGridShape:
-            The shape of the grid for the state variables, which has `x` and
+            The shape of the rectilinear grid, shared by all categories, which has `x` and
             `y` attributes.
 
         Raises
@@ -519,7 +519,7 @@ class BaseDatastore(abc.ABC):
             If the datastore is not on a rectilinear grid.
         """
         raise NotImplementedError(
-            f"{type(self).__name__} does not define `grid_shape_state`; "
+            f"{type(self).__name__} does not define `rectilinear_grid_shape`; "
             "this is only available for datastores where "
             "`is_on_rectilinear_grid` is True."
         )

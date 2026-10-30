@@ -545,13 +545,13 @@ class MDPDatastore(BaseDatastore):
         return np.unique(xs).size, np.unique(ys).size, n_pairs
 
     @cached_property
-    def grid_shape_state(self) -> CartesianGridShape:
-        """The shape of the cartesian grid for the state variables.
+    def rectilinear_grid_shape(self) -> CartesianGridShape:
+        """The shape of the rectilinear grid, shared by all categories.
 
         Returns
         -------
         CartesianGridShape
-            The shape of the cartesian grid for the state variables.
+            The shape of the rectilinear grid, shared by all categories.
 
         Raises
         ------
@@ -559,7 +559,7 @@ class MDPDatastore(BaseDatastore):
             If the datastore is not on a rectilinear grid, e.g. after
             ``domain_cropping``. Use `num_grid_points` instead.
         """
-        self._check_on_rectilinear_grid("grid_shape_state")
+        self._check_on_rectilinear_grid("rectilinear_grid_shape")
         n_x, n_y, _ = self._grid_xy_counts
         return CartesianGridShape(x=n_x, y=n_y)
 

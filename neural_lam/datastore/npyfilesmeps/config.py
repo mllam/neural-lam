@@ -68,7 +68,7 @@ class NpyDatastoreConfig(dataclass_wizard.YAMLWizard):
         projection: An instance of Projection containing projection details.
 
     """
-
     dataset: Dataset
     grid_shape_state: list[int]
     projection: Projection
+    

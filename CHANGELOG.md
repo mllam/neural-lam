@@ -552,3 +552,6 @@ This release introduces Datastores to represent input data from different source
 
 First tagged release of `neural-lam`, matching Oskarsson et al 2023 publication
 (<https://arxiv.org/abs/2309.17370>)
+
+- Rename datastore property `grid_shape_state` to `rectilinear_grid_shape`
+[\#826](https://github.com/mllam/neural-lam/pull/826) @raaj-2222

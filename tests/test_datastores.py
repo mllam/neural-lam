@@ -3,7 +3,7 @@
 
 - `root_path` (property): Root path of the datastore.
 - `step_length` (property): Length of the time step in hours.
-- `grid_shape_state` (property): Shape of the grid for the state variables.
+- `rectilinear_grid_shape` (property): Shape of the rectilinear grid.
 - `get_xy` (method): Return the x, y coordinates of the dataset.
 - `coords_projection` (property): Projection object for the coordinates.
 - `get_vars_units` (method): Get the units of the variables in the given
@@ -28,7 +28,7 @@ In addition, datastores on a rectilinear grid (`is_on_rectilinear_grid` is
         given category of data.
 - `get_xy` (method): Return the x, y coordinates of the dataset.
 - `coords_projection` (property): Projection object for the coordinates.
-- `grid_shape_state` (property): Shape of the grid for the state variables.
+- `rectilinear_grid_shape` (property): Shape of the rectilinear grid.
 - `stack_grid_coords` (method): Stack the grid coordinates of the dataset
 
 """
@@ -91,16 +91,16 @@ def test_step_length(datastore_name):
 def test_datastore_grid_xy(datastore_name):
     """Use the `datastore.get_xy` method to get the x, y coordinates of the
     dataset and check that the shape is correct against the `da
-    tastore.grid_shape_state` property."""
+    tastore.rectilinear_grid_shape` property."""
     datastore = init_datastore_example(datastore_name)
 
     if not datastore.is_on_rectilinear_grid:
         pytest.skip(
-            "Skip grid_shape_state test for non-rectilinear grid datastores"
+            "Skip rectilinear_grid_shape test for non-rectilinear datastores"
         )
 
     # check the shapes of the xy grid
-    grid_shape = datastore.grid_shape_state
+    grid_shape = datastore.rectilinear_grid_shape
     nx, ny = grid_shape.x, grid_shape.y
     for stacked in [True, False]:
         xy = datastore.get_xy("static", stacked=stacked)
@@ -221,7 +221,7 @@ def test_get_dataarray(datastore_name):
             assert isinstance(da, xr.DataArray)
             assert set(da.dims) == set(expected_dims)
             if datastore.is_on_rectilinear_grid:
-                grid_shape = datastore.grid_shape_state
+                grid_shape = datastore.rectilinear_grid_shape
                 assert da.grid_index.size == grid_shape.x * grid_shape.y
 
             n_features[split] = da[category + "_feature"].size
@@ -304,7 +304,7 @@ def test_boundary_mask(datastore_name):
     assert da_mask.sum() < da_mask.size
 
     if datastore.is_on_rectilinear_grid:
-        grid_shape = datastore.grid_shape_state
+        grid_shape = datastore.rectilinear_grid_shape
         assert datastore.boundary_mask.size == grid_shape.x * grid_shape.y
 
 
@@ -326,7 +326,7 @@ def test_mdp_boundary_mask_n_boundary_points(n_boundary_points):
         config_path=DATASTORES_EXAMPLES["mdp"],
         n_boundary_points=n_boundary_points,
     )
-    grid_shape = datastore.grid_shape_state
+    grid_shape = datastore.rectilinear_grid_shape
     n_interior = (grid_shape.x - 2 * n_boundary_points) * (
         grid_shape.y - 2 * n_boundary_points
     )
@@ -373,7 +373,7 @@ def test_get_xy(datastore_name):
         assert isinstance(xy_stacked, np.ndarray)
         assert isinstance(xy_unstacked, np.ndarray)
 
-        nx, ny = datastore.grid_shape_state.x, datastore.grid_shape_state.y
+        nx, ny = datastore.rectilinear_grid_shape.x, datastore.rectilinear_grid_shape.y
 
         # for stacked=True, the shape should be (n_grid_points, 2)
         assert xy_stacked.ndim == 2
@@ -397,7 +397,7 @@ def test_get_xy(datastore_name):
                     "Datastore does not implement `BaseCartesianDatastore`"
                 )
 
-            nx, ny = datastore.grid_shape_state.x, datastore.grid_shape_state.y
+            nx, ny = datastore.rectilinear_grid_shape.x, datastore.rectilinear_grid_shape.y
 
             lonlat = datastore.get_lat_lon(category="state")
             lonlat_grid = lonlat.reshape(nx, ny, 2)
@@ -428,13 +428,13 @@ def test_get_projection(datastore_name):
 
 
 @pytest.mark.parametrize("datastore_name", DATASTORES.keys())
-def test_grid_shape_state(datastore_name):
+def test_rectilinear_grid_shape(datastore_name):
     """Check that the example datastores are on a rectilinear grid whose
-    `grid_shape_state` accounts for every grid point."""
+    `rectilinear_grid_shape` accounts for every grid point."""
     datastore = init_datastore_example(datastore_name)
     assert datastore.is_on_rectilinear_grid
 
-    grid_shape = datastore.grid_shape_state
+    grid_shape = datastore.rectilinear_grid_shape
     assert grid_shape.x > 0
     assert grid_shape.y > 0
     assert grid_shape.x * grid_shape.y == datastore.num_grid_points
@@ -472,7 +472,7 @@ def test_dataarray_shapes(datastore_name):
 
     reshaped_tensor = (
         torch.tensor(static_da.to_numpy(), dtype=torch.float32)
-        .reshape(datastore.grid_shape_state.x, datastore.grid_shape_state.y)
+        .reshape(datastore.rectilinear_grid_shape.x, datastore.rectilinear_grid_shape.y)
         .squeeze()
     )
 
@@ -481,16 +481,16 @@ def test_dataarray_shapes(datastore_name):
 
     # Check the shapes
     assert unstacked_tensor.shape == (
-        datastore.grid_shape_state.x,
-        datastore.grid_shape_state.y,
+        datastore.rectilinear_grid_shape.x,
+        datastore.rectilinear_grid_shape.y,
     )
     assert reshaped_tensor.shape == (
-        datastore.grid_shape_state.x,
-        datastore.grid_shape_state.y,
+        datastore.rectilinear_grid_shape.x,
+        datastore.rectilinear_grid_shape.y,
     )
     assert diff.shape == (
-        datastore.grid_shape_state.x,
-        datastore.grid_shape_state.y,
+        datastore.rectilinear_grid_shape.x,
+        datastore.rectilinear_grid_shape.y,
     )
     # assert diff == 0 with tolerance 1e-6
     assert torch.allclose(diff, torch.zeros_like(diff), atol=1e-6)
@@ -548,7 +548,7 @@ def test_cropped_boundary_datastore_is_not_rectilinear_grid():
     assert not datastore_boundary.is_on_rectilinear_grid
 
     with pytest.raises(NotImplementedError, match="complete 2D grid"):
-        _ = datastore_boundary.grid_shape_state
+        _ = datastore_boundary.rectilinear_grid_shape
 
     da_forcing = datastore_boundary.get_dataarray(
         category="forcing", split="train"
