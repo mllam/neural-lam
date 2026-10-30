@@ -39,11 +39,10 @@ from .gnn_layers import GNN_TYPES
 from .models import (
     MODELS,
     BaseHiGraphModel,
-    HiLAM,
     DeterministicARForecaster,
     DeterministicForecastingModule,
+    HiLAM,
 )
-
 from .weather_dataset import WeatherDataModule
 
 if hasattr(torch.serialization, "add_safe_globals"):

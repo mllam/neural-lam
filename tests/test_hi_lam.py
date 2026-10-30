@@ -182,7 +182,6 @@ def test_mesh_down_step_supports_multi_layer_same_level_gnns():
         assert edges.shape == (1, 4, 8)
 
 
-
 def test_same_level_gnn_stack_backpropagates_gradients():
     """All layers in a same-level stack should receive gradients."""
     edge_index = _make_edge_index()
@@ -246,14 +245,12 @@ def test_mesh_up_step_supports_multi_layer_same_level_gnns():
 
     up_gnns = nn.ModuleList([DummyUpGNN(), DummyUpGNN()])
 
-    updated_nodes, updated_same_edges, updated_up_edges = (
-        model.mesh_up_step(
-            mesh_rep_levels,
-            mesh_same_rep,
-            mesh_up_rep,
-            up_gnns,
-            same_gnns,
-        )
+    updated_nodes, updated_same_edges, updated_up_edges = model.mesh_up_step(
+        mesh_rep_levels,
+        mesh_same_rep,
+        mesh_up_rep,
+        up_gnns,
+        same_gnns,
     )
 
     assert len(updated_nodes) == 3
@@ -268,6 +265,7 @@ def test_mesh_up_step_supports_multi_layer_same_level_gnns():
 
     for edges in updated_up_edges:
         assert edges.shape == (1, 4, 8)
+
 
 def test_constructor_defaults_to_one_same_level_layer_per_mesh_level():
     """Default configuration should use one same-level layer per mesh level."""
