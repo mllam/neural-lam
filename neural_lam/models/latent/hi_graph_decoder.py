@@ -53,18 +53,18 @@ class HiGraphLatentDecoder(BaseGraphLatentDecoder):
         Parameters
         ----------
         g2m_edge_index : torch.Tensor
-            Shape ``(2, M_g2m)``. Edge index of grid-to-mesh edges.
+            Shape ``(2, num_edges_g2m)``. Edge index of grid-to-mesh edges.
         m2m_edge_index : BufferList
             Per-level edge indices of intra-level mesh edges, each of shape
-            ``(2, M_m2m[l])``.
+            ``(2, num_edges_m2m[l])``.
         m2g_edge_index : torch.Tensor
-            Shape ``(2, M_m2g)``. Edge index of mesh-to-grid edges.
+            Shape ``(2, num_edges_m2g)``. Edge index of mesh-to-grid edges.
         mesh_up_edge_index : BufferList
             Per-level edge indices of upward inter-level mesh edges, each of
-            shape ``(2, M_up[l])``.
+            shape ``(2, num_edges_mesh_up[l])``.
         mesh_down_edge_index : BufferList
             Per-level edge indices of downward inter-level mesh edges, each
-            of shape ``(2, M_down[l])``.
+            of shape ``(2, num_edges_mesh_down[l])``.
         hidden_dim : int
             Dimensionality of internal node and edge representations.
         latent_dim : int

@@ -386,12 +386,13 @@ def create_graph(
 
     - ``num_edge_features``: number of features per edge (currently
       num_edge_features==3, for edge-length, x and y)
-    - ``num_edges``: number of grid-to-mesh or mesh-to-grid edges
-    - ``num_edges_level``: number of edges in the graph from mesh-to-mesh at a
-      given level (list index corresponds to the level)
+    - ``num_edges_g2m``: number of edges in the graph from grid-to-mesh
+    - ``num_edges_m2g``: number of edges in the graph from mesh-to-grid
+    - ``num_edges_m2m[l]``: number of edges in the graph from mesh-to-mesh at
+      level l
     - ``num_mesh_static_vars``: number of static features per mesh node
       (currently num_mesh_static_vars==2, for x and y)
-    - ``num_mesh_nodes[l]``: number of nodes in the mesh at a given level
+    - ``num_mesh_nodes[l]``: number of nodes in the mesh at level l
 
     And in addition for hierarchical graphs:
 
@@ -414,7 +415,7 @@ def create_graph(
     graph_dir_path : str
         Path to store the graph components.
     xy : np.ndarray
-        Grid coordinates, expected to be of shape (Nx, Ny, 2).
+        Grid coordinates, expected to be of shape (grid_size_x, grid_size_y, 2).
     n_max_levels : int
         Limit multi-scale mesh to given number of levels, from bottom up
         (default: None (no limit)).

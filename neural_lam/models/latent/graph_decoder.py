@@ -43,11 +43,11 @@ class GraphLatentDecoder(BaseGraphLatentDecoder):
         Parameters
         ----------
         g2m_edge_index : torch.Tensor
-            Shape ``(2, M_g2m)``. Edge index of grid-to-mesh edges.
+            Shape ``(2, num_edges_g2m)``. Edge index of grid-to-mesh edges.
         m2m_edge_index : torch.Tensor
-            Shape ``(2, M_m2m)``. Edge index of mesh-to-mesh edges.
+            Shape ``(2, num_edges_m2m)``. Edge index of mesh-to-mesh edges.
         m2g_edge_index : torch.Tensor
-            Shape ``(2, M_m2g)``. Edge index of mesh-to-grid edges.
+            Shape ``(2, num_edges_m2g)``. Edge index of mesh-to-grid edges.
         hidden_dim : int
             Dimensionality of internal node and edge representations.
         latent_dim : int

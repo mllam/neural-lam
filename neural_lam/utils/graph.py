@@ -49,7 +49,7 @@ def zero_index_m2g(
     Parameters
     ----------
     m2g_edge_index : torch.Tensor
-        Edge index tensor of shape (2, num_edges).
+        Edge index tensor of shape (2, num_edges_m2g).
     mesh_static_features : list of torch.Tensor
         Mesh node feature tensors.
     mesh_first : bool
@@ -103,7 +103,7 @@ def zero_index_g2m(
     Parameters
     ----------
     g2m_edge_index : torch.Tensor
-        Edge index tensor of shape (2, num_edges).
+        Edge index tensor of shape (2, num_edges_g2m).
     mesh_static_features : list of torch.Tensor
         Mesh node feature tensors.
     mesh_first : bool
@@ -305,9 +305,9 @@ def load_graph(
     # Load edges (edge_index)
     m2m_edge_index = BufferList(
         loads_file("m2m_edge_index.pt"), persistent=False
-    )  # List of (2, M_m2m[l])
-    g2m_edge_index = loads_file("g2m_edge_index.pt")  # (2, num_edges)
-    m2g_edge_index = loads_file("m2g_edge_index.pt")  # (2, num_edges)
+    )  # List of (2, num_edges_m2m[l])
+    g2m_edge_index = loads_file("g2m_edge_index.pt")  # (2, num_edges_g2m)
+    m2g_edge_index = loads_file("m2g_edge_index.pt")  # (2, num_edges_m2g)
 
     if should_zero_index_edge_indices:
         # Legacy graphs used a shifted node-index layout; normalize it on load.
@@ -334,10 +334,14 @@ def load_graph(
     hierarchical = n_levels > 1  # Not just single level mesh graph
 
     # Load static edge features
-    # List of (M_m2m[l], input_dim)
+    # List of (num_edges_m2m[l], num_edge_features)
     m2m_features = loads_file("m2m_features.pt")
-    g2m_features = loads_file("g2m_features.pt")  # (num_edges, input_dim)
-    m2g_features = loads_file("m2g_features.pt")  # (num_edges, input_dim)
+    g2m_features = loads_file(
+        "g2m_features.pt"
+    )  # (num_edges_g2m, num_edge_features)
+    m2g_features = loads_file(
+        "m2g_features.pt"
+    )  # (num_edges_m2g, num_edge_features)
 
     # Normalize by dividing with longest edge (found in m2m)
     longest_edge = max(
@@ -382,10 +386,10 @@ def load_graph(
 
         mesh_up_features = loads_file(
             "mesh_up_features.pt"
-        )  # List of (num_edges[l], input_dim)
+        )  # List of (num_edges_mesh_up[l], num_edge_features)
         mesh_down_features = loads_file(
             "mesh_down_features.pt"
-        )  # List of (num_edges[l], input_dim)
+        )  # List of (num_edges_mesh_down[l], num_edge_features)
 
         # Rescale
         mesh_up_features = BufferList(mesh_up_features, persistent=False)

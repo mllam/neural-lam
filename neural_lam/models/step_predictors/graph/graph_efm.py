@@ -319,7 +319,7 @@ class BaseGraphEFM(StepPredictor):
         prev_prev_state : torch.Tensor
             Shape ``(B, num_grid_nodes, num_state_vars)``. ``X_{t-1}``.
         forcing : torch.Tensor
-            Shape ``(B, num_grid_nodes, num_forcing_vars)``.
+            Shape ``(B, num_grid_nodes, num_windowed_forcing_vars)``.
         current_state : torch.Tensor
             Shape ``(B, num_grid_nodes, num_state_vars)``. ``X_{t+1}`` (target).
 
@@ -380,7 +380,7 @@ class BaseGraphEFM(StepPredictor):
         prev_prev_state : torch.Tensor
             Shape ``(B, num_grid_nodes, num_state_vars)``. ``X_{t-1}``.
         forcing : torch.Tensor
-            Shape ``(B, num_grid_nodes, num_forcing_vars)``.
+            Shape ``(B, num_grid_nodes, num_windowed_forcing_vars)``.
 
         Returns
         -------
@@ -439,7 +439,7 @@ class BaseGraphEFM(StepPredictor):
         prev_prev_state : torch.Tensor
             Shape ``(B, num_grid_nodes, num_state_vars)``. ``X_{t-1}``.
         forcing : torch.Tensor
-            Shape ``(B, num_grid_nodes, num_forcing_vars)``.
+            Shape ``(B, num_grid_nodes, num_windowed_forcing_vars)``.
 
         Returns
         -------

@@ -168,14 +168,16 @@ class HiLAMParallel(BaseHiGraphModel):
             ``hidden_dim`` is the hidden dimension.
         mesh_same_rep : list of torch.Tensor
             One tensor per level, each of shape
-            ``(B, num_edges[l], hidden_dim)``. Same-level edge
+            ``(B, num_edges_m2m[l], hidden_dim)``. Same-level edge
             representations.
         mesh_up_rep : list of torch.Tensor
             One tensor per inter-level gap, each of shape
-            ``(B, num_edges[l], hidden_dim)``. Upward edge representations.
+            ``(B, num_edges_mesh_up[l], hidden_dim)``. Upward edge
+            representations.
         mesh_down_rep : list of torch.Tensor
             One tensor per inter-level gap, each of shape
-            ``(B, num_edges[l], hidden_dim)``. Downward edge representations.
+            ``(B, num_edges_mesh_down[l], hidden_dim)``. Downward edge
+            representations.
 
         Returns
         -------

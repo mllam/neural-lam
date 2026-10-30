@@ -639,7 +639,7 @@ class MDPDatastore(BaseDatastore):
         -------
         np.ndarray
             The longitude, latitude coordinates of the dataset
-            with shape `[n_grid_points, 2]`.
+            with shape `[num_grid_nodes, 2]`.
         """
         # Check first if lat/lon saved in ds
         lookup_ds = self._ds
