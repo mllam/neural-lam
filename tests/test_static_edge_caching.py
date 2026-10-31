@@ -10,7 +10,7 @@ import torch
 
 # First-party
 from neural_lam import api
-from neural_lam.models.forecasters.autoregressive import ARForecaster
+from neural_lam.models.forecasters import DeterministicARForecaster
 from neural_lam.models.step_predictors.graph.graph_lam import GraphLAM
 from neural_lam.models.step_predictors.graph.hi_lam import HiLAM
 from tests.dummy_datastore import DummyDatastore
@@ -62,7 +62,7 @@ def test_static_edge_caching_numerical_parity(
     )
     predictor_uncached = copy.deepcopy(predictor_cached)
 
-    forecaster_cached = ARForecaster(
+    forecaster_cached = DeterministicARForecaster(
         predictor_cached,
         datastore,
         gradient_checkpointing=gradient_checkpointing,
@@ -150,7 +150,7 @@ def test_every_embedder_called_only_once_per_rollout(
         num_past_forcing_steps=0,
         num_future_forcing_steps=0,
     )
-    forecaster = ARForecaster(predictor, datastore)
+    forecaster = DeterministicARForecaster(predictor, datastore)
 
     b_size = 1
     pred_steps = 4
