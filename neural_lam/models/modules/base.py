@@ -19,7 +19,7 @@ from PIL import Image
 from neural_lam.utils import get_integer_time
 
 # Local
-from ... import vis
+from ... import migrations, vis
 from ...config import NeuralLAMConfig
 from ...datastore.base import BaseDatastore
 from ...weather_dataset import WeatherDataset
@@ -1021,6 +1021,22 @@ class BaseForecastingModule(pl.LightningModule, ABC):
         ``test_step``.
         """
 
+    def on_save_checkpoint(self, checkpoint: dict[str, Any]) -> None:
+        """
+        Stamp the checkpoint with the state dict schema version it was
+        saved with, so `on_load_checkpoint` knows which migrations (if
+        any) it needs to apply when this checkpoint is loaded again in a
+        future version of neural-lam.
+
+        Parameters
+        ----------
+        checkpoint : dict
+            The checkpoint dictionary about to be saved.
+        """
+        checkpoint["neural_lam_checkpoint_version"] = (
+            migrations.CURRENT_CHECKPOINT_VERSION
+        )
+
     def on_load_checkpoint(self, checkpoint: dict[str, Any]) -> None:
         """
         Perform actions when loading a checkpoint.
@@ -1031,48 +1047,20 @@ class BaseForecastingModule(pl.LightningModule, ABC):
         checkpoint : dict
             The loaded checkpoint dictionary.
         """
-        loaded_state_dict = checkpoint["state_dict"]
-
-        # 1. Broad namespace remap: for pre-refactor checkpoints
-        # The old ``ARModel`` was a flat LightningModule. Everything that
-        # belonged to the predictor needs to be moved to
-        # 'forecaster.predictor.', while 'per_var_std' (now owned by the
-        # forecaster itself) moves to 'forecaster.per_var_std' and
-        # 'interior_mask_bool' (still owned by the module) stays as-is.
-        old_keys = list(loaded_state_dict.keys())
-        for key in old_keys:
-            if key.startswith("forecaster.") or key == "interior_mask_bool":
-                continue
-            if key == "per_var_std":
-                loaded_state_dict["forecaster.per_var_std"] = (
-                    loaded_state_dict.pop(key)
-                )
-                continue
-            new_key = f"forecaster.predictor.{key}"
-            loaded_state_dict[new_key] = loaded_state_dict.pop(key)
-
-        # 2. Specific rename from g2m_gnn.grid_mlp -> encoding_grid_mlp
-        # Will be under forecaster.predictor due to the remap above, or
-        # already there if from a recent checkpoint before this rename.
-        if (
-            "forecaster.predictor.g2m_gnn.grid_mlp.0.weight"
-            in loaded_state_dict
-        ):
-            replace_keys = list(
-                filter(
-                    lambda key: key.startswith(
-                        "forecaster.predictor.g2m_gnn.grid_mlp"
-                    ),
-                    loaded_state_dict.keys(),
+        checkpoint_version = migrations.detect_checkpoint_version(checkpoint)
+        if checkpoint_version < migrations.CURRENT_CHECKPOINT_VERSION:
+            warnings.warn(
+                f"Checkpoint was saved with state dict schema version "
+                f"{checkpoint_version}, migrating to "
+                f"{migrations.CURRENT_CHECKPOINT_VERSION}. See "
+                "neural_lam/migrations.py for details."
+            )
+            checkpoint["state_dict"], checkpoint_version = (
+                migrations.apply_migrations(
+                    checkpoint["state_dict"], checkpoint_version
                 )
             )
-            for old_key in replace_keys:
-                new_key = old_key.replace(
-                    "forecaster.predictor.g2m_gnn.grid_mlp",
-                    "forecaster.predictor.encoding_grid_mlp",
-                )
-                loaded_state_dict[new_key] = loaded_state_dict[old_key]
-                del loaded_state_dict[old_key]
+            checkpoint["neural_lam_checkpoint_version"] = checkpoint_version
 
         if not self.restore_opt:
             opt = self.configure_optimizers()
